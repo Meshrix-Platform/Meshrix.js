@@ -241,7 +241,7 @@ export async function assertExplicitEffectCommands() : Promise<any> {
   const prior: any = await deniedPrior.runtime.execute(createExplicitEffectCommandInput({
     effectId: "eff.sc.prior",
     authorization: {
-      ...createExplicitEffectCommandInput().authorization,
+      ...(createExplicitEffectCommandInput().authorization as Record<string, any>),
       usePriorApprovalAsAuthority: true
     }
   }));
@@ -253,7 +253,7 @@ export async function assertExplicitEffectCommands() : Promise<any> {
   const preview: any = await runtime(recordingSink()).runtime.execute(createExplicitEffectCommandInput({
     effectId: "eff.sc.preview",
     authorization: {
-      ...createExplicitEffectCommandInput().authorization,
+      ...(createExplicitEffectCommandInput().authorization as Record<string, any>),
       strategyPreview: { effect: "allow" },
       usePreviewAsAuthority: true
     }

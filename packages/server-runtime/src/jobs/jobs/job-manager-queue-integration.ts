@@ -2,8 +2,34 @@ import { serverToken } from "#meshrix/product-api";
 import { cloneJob } from "./job-manager-projection.ts";
 import { persistJobMeta } from "./job-manager-persistence.ts";
 import { normalizeArchiveBatchId, RECOVERY_STAGE_MESSAGE } from "./job-manager-validation.ts";
+import { errorProperty, type ActiveJobController, type JobDocument } from "./contracts.ts";
+import type { createJobProjectionStore } from "./job-projection-store.ts";
 
-export function createJobManagerQueue(ctx?: any) : any {
+interface QueueEntry { jobId: string; [key: string]: unknown }
+interface QueueContext {
+  userDataPath: string;
+  processingEnabled: boolean;
+  activeControllers: Map<string, ActiveJobController>;
+  dispatchingJobIds: Set<string>;
+  jobs: Map<string, JobDocument>;
+  checkpointJobs: Map<string, string>;
+  jobProjectionStore: ReturnType<typeof createJobProjectionStore>;
+  durableWorkflows: {
+    recoverWorkflow(workflowId: string, input: { reason: string }): Promise<unknown>;
+  };
+  logJob(level: string, event: string, details?: Record<string, unknown>): void;
+  state: { closed: boolean; readyComplete: boolean };
+  checkpointTreeIdForJob(job: JobDocument): string;
+  workflowIdForJob(job: JobDocument): string;
+  ensureJobCheckpointTree(job: JobDocument): Promise<unknown>;
+  updateJobCheckpointNode(job: JobDocument, node: Record<string, unknown>): Promise<unknown>;
+  rememberActiveManifestJob(job: JobDocument): void;
+  forgetActiveManifestJob(job?: JobDocument | null): void;
+  startQueuedJob?: (entry: QueueEntry) => Promise<boolean>;
+  loadJobPayload(jobId: string): Promise<object | null>;
+}
+
+export function createJobManagerQueue(ctx: QueueContext) {
   const {
     userDataPath,
     processingEnabled,
@@ -23,24 +49,24 @@ export function createJobManagerQueue(ctx?: any) : any {
     forgetActiveManifestJob,
   } = ctx;
 
-  function cloneJobForApi(job?: any, options: Record<string, any> = {}) : any {
+  function cloneJobForApi(job?: JobDocument | null, options: { includeCheckpointFiles?: boolean } = {}) {
     return cloneJob(job, options);
   }
 
-  async function forEachActiveProjection(visit?: any) : Promise<any> {
-    let cursor: any = "";
+  async function forEachActiveProjection(visit: (job: JobDocument) => Promise<void>) {
+    let cursor = "";
     do {
-      const page: any = jobProjectionStore.listActive({ cursor, limit: 200 });
+      const page = jobProjectionStore.listActive({ cursor, limit: 200 });
       for (const job of page.items) {
-        await visit(job);
+        if (job) await visit(job);
       }
       cursor = page.nextCursor;
       if (page.done) break;
     } while (cursor);
   }
 
-  async function normalizeRecoveredJob(job?: any) : Promise<any> {
-    let changed: any = false;
+  async function normalizeRecoveredJob(job: JobDocument) {
+    let changed = false;
     if (!job.archiveBatchId && job.id) {
       job.archiveBatchId =
         normalizeArchiveBatchId(job) ||
@@ -61,13 +87,13 @@ export function createJobManagerQueue(ctx?: any) : any {
     return job;
   }
 
-  async function refreshPersistedJobs() : Promise<any> {
-    const knownIds: any = new Set<any>();
-    await forEachActiveProjection(async (projectedJob?: any) : Promise<any> => {
-      const job: any = await normalizeRecoveredJob(projectedJob);
+  async function refreshPersistedJobs() {
+    const knownIds = new Set<string>();
+    await forEachActiveProjection(async (projectedJob) => {
+      const job = await normalizeRecoveredJob(projectedJob);
       knownIds.add(job.id);
       if (job.checkpointTreeId && ["queued", "running"].includes(job.status)) {
-        await ensureJobCheckpointTree(job).catch(() : any => null);
+        await ensureJobCheckpointTree(job).catch(() => null);
         await updateJobCheckpointNode(job, {
           nodeId: "recovered-queue",
           parentId: "import-parse-job",
@@ -86,17 +112,17 @@ export function createJobManagerQueue(ctx?: any) : any {
       }
       if (["queued", "running"].includes(job.status)) {
         rememberActiveManifestJob(job);
-        await durableWorkflows.recoverWorkflow(job.workflowId, {
+        await durableWorkflows.recoverWorkflow(job.workflowId || workflowIdForJob(job), {
           reason: "job_manager_refresh_recovery"
-        }).catch(() : any => null);
+        }).catch(() => null);
       } else {
         forgetActiveManifestJob(job);
       }
     });
 
-    for (const jobId of [...jobs.keys()]) {
+    for (const jobId of Array.from(jobs.keys())) {
       if (!knownIds.has(jobId)) {
-        const current: any = jobs.get(jobId);
+        const current = jobs.get(jobId);
         jobs.delete(jobId);
         if (current?.checkpointId) {
           checkpointJobs.delete(current.checkpointId);
@@ -106,7 +132,7 @@ export function createJobManagerQueue(ctx?: any) : any {
     }
   }
 
-  async function runQueuedJob(entry?: any) : Promise<any> {
+  async function runQueuedJob(entry: QueueEntry) {
     if (!processingEnabled || state.closed || !entry?.jobId) {
       logJob("warn", "jobs.queue.dispatch.skipped", {
         jobId: entry?.jobId || "",
@@ -114,7 +140,7 @@ export function createJobManagerQueue(ctx?: any) : any {
       });
       return false;
     }
-    const queuedJob: any = jobs.get(entry.jobId);
+    const queuedJob = jobs.get(entry.jobId);
     if (!queuedJob || queuedJob.status !== "queued") {
       logJob("warn", "jobs.queue.dispatch.skipped", {
         jobId: entry.jobId,
@@ -133,31 +159,34 @@ export function createJobManagerQueue(ctx?: any) : any {
       uploadSessionId: queuedJob.uploadSessionId || ""
     });
     try {
+      if (!ctx.startQueuedJob) {
+        throw new Error("Job queue executor is unavailable.");
+      }
       return await ctx.startQueuedJob(entry);
     } finally {
       dispatchingJobIds.delete(entry.jobId);
     }
   }
 
-  async function recoverPersistedQueue() : Promise<any> {
+  async function recoverPersistedQueue() {
     logJob("info", "jobs.queue.recovery.started", {
       recoverActive: processingEnabled
     });
-    let persistedJobCount: any = 0;
-    let recoverableCount: any = 0;
-    await forEachActiveProjection(async (projectedJob?: any) : Promise<any> => {
-      const job: any = await normalizeRecoveredJob(projectedJob);
+    let persistedJobCount = 0;
+    let recoverableCount = 0;
+    await forEachActiveProjection(async (projectedJob) => {
+      const job = await normalizeRecoveredJob(projectedJob);
       persistedJobCount += 1;
       if (processingEnabled && ["queued", "running"].includes(job.status)) {
-        let payload: any = null;
-        let payloadInvalid: any = false;
+        let payload = null;
+        let payloadInvalid = false;
         try {
           payload = await ctx.loadJobPayload(job.id);
-        } catch (error: any) {
-          if (error?.name !== "JobPersistenceError") throw error;
+        } catch (error) {
+          if (errorProperty(error, "name") !== "JobPersistenceError") throw error;
           payloadInvalid = true;
         }
-        const recoveredAt: any = new Date().toISOString();
+        const recoveredAt = new Date().toISOString();
         if (payload) {
           job.status = "queued";
           job.stage = RECOVERY_STAGE_MESSAGE;
@@ -179,7 +208,7 @@ export function createJobManagerQueue(ctx?: any) : any {
         }
       }
       if (job.checkpointTreeId && ["queued", "running"].includes(job.status)) {
-        await ensureJobCheckpointTree(job).catch(() : any => null);
+        await ensureJobCheckpointTree(job).catch(() => null);
         await updateJobCheckpointNode(job, {
           nodeId: "recovered-queue",
           parentId: "import-parse-job",
@@ -198,9 +227,9 @@ export function createJobManagerQueue(ctx?: any) : any {
       }
       rememberActiveManifestJob(job);
       if (["queued", "running"].includes(job.status)) {
-        await durableWorkflows.recoverWorkflow(job.workflowId, {
+        await durableWorkflows.recoverWorkflow(job.workflowId || workflowIdForJob(job), {
           reason: "job_manager_startup_recovery"
-        }).catch(() : any => null);
+        }).catch(() => null);
       }
     });
 

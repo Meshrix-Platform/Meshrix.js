@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import { ServerConfig } from "#meshrix/server-config";
 import {
@@ -25,13 +26,102 @@ import {
   tagFromRow,
   uniqueStrings
 } from "./tag-management-codec.ts";
+import type { EventRecord, JsonRecord, ProjectionRecord, TagRecord, TagPolicy } from "./tag-management-codec.ts";
 import { ensureTagManagementSchema } from "./tag-management-schema.ts";
 
 export { TAG_MANAGEMENT_PROTOCOL_VERSION } from "./tag-management-codec.ts";
 
-const changeHandlersByRoot: Map<string, Set<(event: Readonly<{ eventType: string }>) => void>> = new Map();
+const changeHandlersByRoot: Map<string, Set<ChangeHandler>> = new Map();
 
-function sharedChangeHandlers(rootPath: string): Set<(event: Readonly<{ eventType: string }>) => void> {
+export interface RoleRecord { roleId: string; label: string; description: string; system: boolean; enabled: boolean; scopes: string[]; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
+export interface TeamRecord { teamId: string; label: string; description: string; enabled: boolean; roleIds: string[]; departmentIds: string[]; memberUserIds: string[]; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
+export interface DepartmentRecord { departmentId: string; label: string; description: string; parentDepartmentId: string; enabled: boolean; roleIds: string[]; teamIds: string[]; memberUserIds: string[]; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
+export interface AgentGroupRecord { groupId: string; label: string; description: string; enabled: boolean; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
+export interface AgentBindingRecord { agentId: string; boundUserId: string; profileId: string; groupIds: string[]; enabled: boolean; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
+export interface ToolProfileRecord { id: string; label: string; agentType: string; toolsets: string[]; toolAllow: string[]; toolDeny: string[]; maxRisk: string; approvalPolicy: string; concurrencyLimit: number; sandboxPolicy: string; auditTags: string[]; enabled: boolean; [key: string]: unknown }
+export interface ProjectionInput { tagId?: string; entityType: string; entityId: string; payload?: unknown }
+interface StoreOptions { userDataPath?: string; rootPath?: string; db?: Database.Database | null }
+interface DatabaseStoreOptions { db: Database.Database; ownsDatabase: boolean; resolvedUserDataPath: string; resolvedRoot: string }
+interface EventInput { tagId?: string; entityType?: string; entityId?: string; payload?: unknown }
+export interface UpsertOptions extends JsonRecord { suppressEvent?: boolean; eventType?: string; entityType?: string; entityId?: string; scopePrerequisites?: unknown }
+interface OrganizationNode { nodeId: string; nodeType: string; parentId: string; name: string; organizationLevel?: number }
+interface OrganizationTag { tagId: string; kind: string; label: string; parentTagId: string; description: string; scopePrerequisites: string[] }
+interface OrganizationRole { roleId: string; name: string; scopeNodeId: string; scopeNodeType: string; managementActions: string[]; businessResourceActions: string[]; assignedSubjectIds: string[] }
+interface OrganizationGovernanceDraft extends JsonRecord { schemaVersion: string; templateKey: string; templateName: string; description: string; organizationDepth: number; nodes: OrganizationNode[]; tags: OrganizationTag[]; roles: OrganizationRole[] }
+export interface OrganizationGovernanceSnapshot extends OrganizationGovernanceDraft { protocolVersion: string; configured: boolean; revision: number; publishedAt: string }
+interface OrganizationGovernanceErrorOptions { statusCode?: number; currentRevision?: number }
+interface OrganizationGovernanceError extends Error { code: string; statusCode: number; currentRevision?: number }
+interface GovernanceOwnershipRow { entityType: string; entityId: string }
+type ChangeHandler = (event: Readonly<{ eventType: string }>) => void;
+
+function record(value: unknown): JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function organizationGovernanceDraft(value: unknown): OrganizationGovernanceDraft | null {
+  const source = objectOrNull(value);
+  if (!source || !Array.isArray(source.nodes) || !Array.isArray(source.tags) || !Array.isArray(source.roles)) return null;
+  const nodes: OrganizationNode[] = [];
+  const tags: OrganizationTag[] = [];
+  const roles: OrganizationRole[] = [];
+  for (const item of source.nodes) {
+    const node = objectOrNull(item);
+    if (!node || typeof node.nodeId !== "string" || typeof node.nodeType !== "string" ||
+        typeof node.parentId !== "string" || typeof node.name !== "string") return null;
+    nodes.push({
+      nodeId: node.nodeId,
+      nodeType: node.nodeType,
+      parentId: node.parentId,
+      name: node.name,
+      ...(typeof node.organizationLevel === "number" ? { organizationLevel: node.organizationLevel } : {})
+    });
+  }
+  for (const item of source.tags) {
+    const tag = objectOrNull(item);
+    if (!tag || typeof tag.tagId !== "string" || typeof tag.kind !== "string" || typeof tag.label !== "string" ||
+        typeof tag.parentTagId !== "string" || typeof tag.description !== "string" || !Array.isArray(tag.scopePrerequisites)) return null;
+    tags.push({
+      tagId: tag.tagId,
+      kind: tag.kind,
+      label: tag.label,
+      parentTagId: tag.parentTagId,
+      description: tag.description,
+      scopePrerequisites: uniqueStrings(tag.scopePrerequisites)
+    });
+  }
+  for (const item of source.roles) {
+    const role = objectOrNull(item);
+    if (!role || typeof role.roleId !== "string" || typeof role.name !== "string" ||
+        typeof role.scopeNodeId !== "string" || typeof role.scopeNodeType !== "string" || !Array.isArray(role.managementActions)) return null;
+    roles.push({
+      roleId: role.roleId,
+      name: role.name,
+      scopeNodeId: role.scopeNodeId,
+      scopeNodeType: role.scopeNodeType,
+      managementActions: uniqueStrings(role.managementActions),
+      businessResourceActions: uniqueStrings(role.businessResourceActions),
+      assignedSubjectIds: uniqueStrings(role.assignedSubjectIds)
+    });
+  }
+  if (typeof source.schemaVersion !== "string" || typeof source.templateKey !== "string" ||
+      typeof source.templateName !== "string" || typeof source.description !== "string") return null;
+  return {
+    schemaVersion: source.schemaVersion,
+    templateKey: source.templateKey,
+    templateName: source.templateName,
+    description: source.description,
+    organizationDepth: Number(source.organizationDepth || 0),
+    nodes,
+    tags,
+    roles
+  };
+}
+
+function sharedChangeHandlers(rootPath: string): Set<ChangeHandler> {
   let handlers = changeHandlersByRoot.get(rootPath);
   if (!handlers) {
     handlers = new Set();
@@ -40,32 +130,32 @@ function sharedChangeHandlers(rootPath: string): Set<(event: Readonly<{ eventTyp
   return handlers;
 }
 
-function roleTagId(roleId?: any) : any {
+function roleTagId(roleId?: unknown): string {
   return `role:${normalizeIdSegment(roleId, "role")}`;
 }
 
-function teamTagId(teamId?: any) : any {
+function teamTagId(teamId?: unknown): string {
   return `group:team:${normalizeIdSegment(teamId, "team")}`;
 }
 
-function departmentTagId(departmentId?: any) : any {
+function departmentTagId(departmentId?: unknown): string {
   return `group:department:${normalizeIdSegment(departmentId, "department")}`;
 }
 
-function agentGroupTagId(groupId?: any) : any {
+function agentGroupTagId(groupId?: unknown): string {
   return `group:agent:${normalizeIdSegment(groupId, "agent-group")}`;
 }
 
-function agentBindingTagId(agentId?: any) : any {
+function agentBindingTagId(agentId?: unknown): string {
   return `character:agent:${normalizeIdSegment(agentId, "agent")}`;
 }
 
-function toolProfileTagId(profileId?: any) : any {
+function toolProfileTagId(profileId?: unknown): string {
   return `character:tool-profile:${normalizeIdSegment(profileId, "profile")}`;
 }
 
-function normalizeRole(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const roleId: any = normalizeIdSegment(input.roleId || input.id || fallback.roleId, "role");
+function normalizeRole(input: JsonRecord = {}, fallback: JsonRecord = {}): RoleRecord {
+  const roleId = normalizeIdSegment(input.roleId || input.id || fallback.roleId, "role");
   return {
     roleId,
     label: String(input.label || input.name || fallback.label || roleId).trim(),
@@ -79,8 +169,8 @@ function normalizeRole(input: Record<string, any> = {}, fallback: Record<string,
   };
 }
 
-function normalizeTeam(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const teamId: any = normalizeIdSegment(input.teamId || input.id || fallback.teamId, "team");
+function normalizeTeam(input: JsonRecord = {}, fallback: JsonRecord = {}): TeamRecord {
+  const teamId = normalizeIdSegment(input.teamId || input.id || fallback.teamId, "team");
   return {
     teamId,
     label: String(input.label || input.name || fallback.label || teamId).trim(),
@@ -95,8 +185,8 @@ function normalizeTeam(input: Record<string, any> = {}, fallback: Record<string,
   };
 }
 
-function normalizeDepartment(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const departmentId: any = normalizeIdSegment(input.departmentId || input.id || fallback.departmentId, "department");
+function normalizeDepartment(input: JsonRecord = {}, fallback: JsonRecord = {}): DepartmentRecord {
+  const departmentId = normalizeIdSegment(input.departmentId || input.id || fallback.departmentId, "department");
   return {
     departmentId,
     label: String(input.label || input.name || fallback.label || departmentId).trim(),
@@ -112,8 +202,8 @@ function normalizeDepartment(input: Record<string, any> = {}, fallback: Record<s
   };
 }
 
-function normalizeAgentGroup(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const groupId: any = normalizeIdSegment(input.groupId || input.id || fallback.groupId, "agent-group");
+function normalizeAgentGroup(input: JsonRecord = {}, fallback: JsonRecord = {}): AgentGroupRecord {
+  const groupId = normalizeIdSegment(input.groupId || input.id || fallback.groupId, "agent-group");
   return {
     groupId,
     label: String(input.label || input.name || fallback.label || groupId).trim(),
@@ -125,8 +215,8 @@ function normalizeAgentGroup(input: Record<string, any> = {}, fallback: Record<s
   };
 }
 
-function normalizeAgentBinding(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const agentId: any = normalizeIdSegment(input.agentId || input.id || input.profileId || fallback.agentId, "agent");
+function normalizeAgentBinding(input: JsonRecord = {}, fallback: JsonRecord = {}): AgentBindingRecord {
+  const agentId = normalizeIdSegment(input.agentId || input.id || input.profileId || fallback.agentId, "agent");
   return {
     agentId,
     boundUserId: String(input.boundUserId || input.userId || fallback.boundUserId || "").trim(),
@@ -139,8 +229,8 @@ function normalizeAgentBinding(input: Record<string, any> = {}, fallback: Record
   };
 }
 
-function normalizeToolProfile(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const id: any = normalizeIdSegment(input.id || input.profileId || fallback.id, "profile");
+function normalizeToolProfile(input: JsonRecord = {}, fallback: JsonRecord = {}): ToolProfileRecord {
+  const id = normalizeIdSegment(input.id || input.profileId || fallback.id, "profile");
   return {
     id,
     label: String(input.label || input.name || fallback.label || id).trim(),
@@ -157,7 +247,7 @@ function normalizeToolProfile(input: Record<string, any> = {}, fallback: Record<
   };
 }
 
-export function getTagManagementDatabasePath(userDataPath: any = "") : any {
+export function getTagManagementDatabasePath(userDataPath = ""): string {
   return path.join(userDataPath || ServerConfig.getDataDir(), "security", "tag-management", "tag-management.sqlite");
 }
 
@@ -165,15 +255,15 @@ export function createTagManagementStore({
   userDataPath = "",
   rootPath = "",
   db: injectedDatabase = null
-}: Record<string, any> = {}) : any {
-  const resolvedUserDataPath: any = path.resolve(userDataPath || ServerConfig.getDataDir());
-  const resolvedRoot: any = rootPath ||
+}: StoreOptions = {}) {
+  const resolvedUserDataPath = path.resolve(userDataPath || ServerConfig.getDataDir());
+  const resolvedRoot = rootPath ||
     path.join(resolvedUserDataPath, "security", "tag-management");
   if (!injectedDatabase) {
     fs.mkdirSync(resolvedRoot, { recursive: true, mode: 0o700 });
   }
-  const db: any = injectedDatabase || openSqliteDatabase(path.join(resolvedRoot, "tag-management.sqlite"));
-  const ownsDatabase: any = !injectedDatabase;
+  const db = injectedDatabase || openSqliteDatabase(path.join(resolvedRoot, "tag-management.sqlite"));
+  const ownsDatabase = !injectedDatabase;
   try {
     return createTagManagementStoreFromDatabase({
       db,
@@ -181,7 +271,7 @@ export function createTagManagementStore({
       resolvedUserDataPath,
       resolvedRoot
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (ownsDatabase) {
       try {
         db.close();
@@ -198,13 +288,13 @@ function createTagManagementStoreFromDatabase({
   ownsDatabase,
   resolvedUserDataPath,
   resolvedRoot
-}: Record<string, any>) : any {
-  let closed: any = false;
+}: DatabaseStoreOptions) {
+  let closed = false;
   const changeHandlers = sharedChangeHandlers(String(resolvedRoot));
-  const ownedChangeHandlers = new Set<(event: Readonly<{ eventType: string }>) => void>();
+  const ownedChangeHandlers = new Set<ChangeHandler>();
   ensureTagManagementSchema(db);
 
-  const tagUpsert: any = db.prepare(`
+  const tagUpsert = db.prepare(`
     INSERT INTO tag_management_tags (
       tag_id, kind, label, description, parent_tag_id, enabled, system, status,
       scope_prerequisites_json, metadata_json, created_at, updated_at
@@ -221,7 +311,7 @@ function createTagManagementStoreFromDatabase({
       metadata_json = excluded.metadata_json,
       updated_at = excluded.updated_at
   `);
-  const projectionUpsert: any = db.prepare(`
+  const projectionUpsert = db.prepare(`
     INSERT INTO tag_management_projections (
       tag_id, entity_type, entity_id, payload_json, updated_at
     ) VALUES (?, ?, ?, ?, ?)
@@ -230,7 +320,7 @@ function createTagManagementStoreFromDatabase({
       updated_at = excluded.updated_at
   `);
 
-  function appendEvent(eventType?: any, { tagId = "", entityType = "", entityId = "", payload = {} }: Record<string, any> = {}) : any {
+  function appendEvent(eventType: string, { tagId = "", entityType = "", entityId = "", payload = {} }: EventInput = {}): void {
     db.prepare(`
       INSERT INTO tag_management_events (event_id, tag_id, entity_type, entity_id, event_type, payload_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -244,13 +334,13 @@ function createTagManagementStoreFromDatabase({
     }
   }
 
-  function getTag(tagId?: any) : any {
+  function getTag(tagId?: unknown): TagRecord | null {
     return tagFromRow(db.prepare("SELECT * FROM tag_management_tags WHERE tag_id = ?").get(String(tagId || "")));
   }
 
-  function listTags({ kind = "", includeArchived = true, status = "", parentTagId = undefined }: Record<string, any> = {}) : any {
-    const clauses: any[] = [];
-    const params: any[] = [];
+  function listTags({ kind = "", includeArchived = true, status = "", parentTagId = undefined }: { kind?: string; includeArchived?: boolean; status?: string; parentTagId?: string } = {}): TagRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
     if (kind) {
       clauses.push("kind = ?");
       params.push(String(kind));
@@ -266,27 +356,25 @@ function createTagManagementStoreFromDatabase({
       clauses.push("parent_tag_id = ?");
       params.push(String(parentTagId || ""));
     }
-    const where: any = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     return db.prepare(`SELECT * FROM tag_management_tags ${where} ORDER BY kind ASC, parent_tag_id ASC, tag_id ASC`)
       .all(...params)
-      .map(tagFromRow);
+      .map(tagFromRow).filter((tag): tag is TagRecord => tag !== null);
   }
 
-  function assertParentAllowed(tagId?: any, parentTagId?: any) : any {
+  function assertParentAllowed(tagId: string, parentTagId: string): void {
     assertTagParentChangeAllowed({ getTag, tagId, parentTagId });
   }
 
-  function canonicalTagInput(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-    const kind: any = normalizeKind(input.kind || fallback.kind || "custom");
-    const tagId: any = normalizeTagId(input.tagId || input.id || fallback.tagId, kind);
-    const parentTagId: any = String(input.parentTagId ?? fallback.parentTagId ?? "").trim();
+  function canonicalTagInput(input: JsonRecord = {}, fallback: JsonRecord = {}) {
+    const kind = normalizeKind(input.kind || fallback.kind || "custom");
+    const tagId = normalizeTagId(input.tagId || input.id || fallback.tagId, kind);
+    const parentTagId = String(input.parentTagId ?? fallback.parentTagId ?? "").trim();
     assertParentAllowed(tagId, parentTagId);
-    const status: any = normalizeStatus(input.status, fallback.status || ACTIVE_STATUS);
-    const incomingEnabled: any = input.enabled ?? fallback.enabled ?? true;
-    const enabled: any = status === ARCHIVED_STATUS ? false : incomingEnabled !== false;
-    const metadata: Record<string, any> = {
-      ...(objectOrNull(input.metadata) || objectOrNull(fallback.metadata) || {})
-    };
+    const status = normalizeStatus(input.status, fallback.status || ACTIVE_STATUS);
+    const incomingEnabled = input.enabled ?? fallback.enabled ?? true;
+    const enabled = status === ARCHIVED_STATUS ? false : incomingEnabled !== false;
+    const metadata = objectOrNull(input.metadata) || objectOrNull(fallback.metadata) || {};
     return {
       tagId,
       kind,
@@ -303,10 +391,10 @@ function createTagManagementStoreFromDatabase({
     };
   }
 
-  function upsertTag(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = getTag(input.tagId || input.id);
-    const tag: any = canonicalTagInput(input, existing || {});
-    const before: any = existing ? JSON.stringify({
+  function upsertTag(input: JsonRecord = {}, options: UpsertOptions = {}): TagRecord {
+    const existing = getTag(input.tagId || input.id);
+    const tag = canonicalTagInput(input, record(existing));
+    const before = existing ? JSON.stringify({
       kind: existing.kind,
       label: existing.label,
       description: existing.description,
@@ -331,8 +419,9 @@ function createTagManagementStoreFromDatabase({
       tag.createdAt,
       tag.updatedAt
     );
-    const saved: any = getTag(tag.tagId);
-    const after: any = JSON.stringify({
+    const saved = getTag(tag.tagId);
+    if (!saved) throw new Error("Tag upsert did not return a durable row.");
+    const after = JSON.stringify({
       kind: saved.kind,
       label: saved.label,
       description: saved.description,
@@ -354,28 +443,29 @@ function createTagManagementStoreFromDatabase({
     return saved;
   }
 
-  function archiveTag(tagId?: any, input: Record<string, any> = {}) : any {
-    const existing: any = getTag(tagId);
+  function archiveTag(tagId?: unknown, input: JsonRecord = {}): TagRecord {
+    const existing = getTag(tagId);
     if (!existing) {
       throw new Error(`Unknown tag: ${tagId}`);
     }
     if (existing.system) {
       throw new Error("System tags cannot be archived.");
     }
-    const saved: any = upsertTag({
+    const metadata = record(existing.metadata);
+    const saved = upsertTag({
       ...existing,
       enabled: false,
       status: ARCHIVED_STATUS,
       metadata: {
-        ...existing.metadata,
-        archiveReason: String(input.reason || existing.metadata?.archiveReason || "").trim()
+        ...metadata,
+        archiveReason: String(input.reason || metadata.archiveReason || "").trim()
       }
     }, { eventType: "archive" });
     return saved;
   }
 
-  function restoreTag(tagId?: any) : any {
-    const existing: any = getTag(tagId);
+  function restoreTag(tagId?: unknown): TagRecord {
+    const existing = getTag(tagId);
     if (!existing) {
       throw new Error(`Unknown tag: ${tagId}`);
     }
@@ -386,19 +476,21 @@ function createTagManagementStoreFromDatabase({
     }, { eventType: "restore" });
   }
 
-  function getEffectiveScopePrerequisites(tagId?: any) : any {
+  function getEffectiveScopePrerequisites(tagId?: unknown) {
     return effectiveScopePrerequisitesForTag({ getTag, tagId });
   }
 
-  function canonicalProjections(...collections: any[]) : any {
-    const projectionsByKey: any = new Map<any, any>();
+  function canonicalProjections(...collections: unknown[]): ProjectionInput[] {
+    const projectionsByKey = new Map<string, ProjectionInput>();
     for (const collection of collections) {
       for (const item of Array.isArray(collection) ? collection : []) {
-        if (!item?.entityType || !item?.entityId) continue;
-        const projection: Record<string, any> = {
-          entityType: String(item.entityType),
-          entityId: String(item.entityId),
-          payload: objectOrNull(item.payload) || {}
+        const itemRecord = record(item);
+        if (!itemRecord.entityType || !itemRecord.entityId) continue;
+        const projection: ProjectionInput = {
+          tagId: String(itemRecord.tagId || ""),
+          entityType: String(itemRecord.entityType),
+          entityId: String(itemRecord.entityId),
+          payload: objectOrNull(itemRecord.payload) || {}
         };
         projectionsByKey.set(`${projection.entityType}\u0000${projection.entityId}`, projection);
       }
@@ -406,10 +498,13 @@ function createTagManagementStoreFromDatabase({
     return [...projectionsByKey.values()];
   }
 
-  function upsertProjection({ tagId, entityType, entityId, payload = {} }: Record<string, any> = {}) : any {
-    const normalizedTagId: any = String(tagId || "").trim();
-    const normalizedEntityType: any = String(entityType || "").trim();
-    const normalizedEntityId: any = String(entityId || "").trim();
+  function upsertProjection(
+    { tagId = "", entityType = "", entityId = "", payload = {} }: Partial<ProjectionInput> = {},
+    { suppressEvent = false }: { suppressEvent?: boolean } = {}
+  ): ProjectionRecord | null {
+    const normalizedTagId = String(tagId || "").trim();
+    const normalizedEntityType = String(entityType || "").trim();
+    const normalizedEntityId = String(entityId || "").trim();
     if (!normalizedTagId || !normalizedEntityType || !normalizedEntityId) {
       throw new Error("Tag projection requires tagId, entityType, and entityId.");
     }
@@ -428,30 +523,32 @@ function createTagManagementStoreFromDatabase({
       entityId: normalizedEntityId,
       payload
     });
-    appendEvent("projection-upserted", {
-      tagId: normalizedTagId,
-      entityType: normalizedEntityType,
-      entityId: normalizedEntityId,
-      payload
-    });
+    if (!suppressEvent) {
+      appendEvent("projection-upserted", {
+        tagId: normalizedTagId,
+        entityType: normalizedEntityType,
+        entityId: normalizedEntityId,
+        payload
+      });
+    }
     return getProjection(normalizedEntityType, normalizedEntityId);
   }
 
-  function rememberProjectionOnTag(tagId?: any, projection?: any) : any {
-    const tag: any = getTag(tagId);
+  function rememberProjectionOnTag(tagId: unknown, projection: ProjectionInput): void {
+    const tag = getTag(tagId);
     if (!tag) {
       return;
     }
-    const metadata: any = objectOrNull(tag.metadata) || {};
-    const existing: any = Array.isArray(metadata.projections)
+    const metadata = objectOrNull(tag.metadata) || {};
+    const existing = Array.isArray(metadata.projections)
       ? metadata.projections
       : [];
-    const projections: any = canonicalProjections(existing, [projection]);
+    const projections = canonicalProjections(existing, [projection]);
     db.prepare("UPDATE tag_management_tags SET metadata_json = ?, updated_at = ? WHERE tag_id = ?")
       .run(stringifyJson({ ...metadata, projections }, {}), nowIso(), tagId);
   }
 
-  function getProjection(entityType?: any, entityId?: any) : any {
+  function getProjection(entityType?: unknown, entityId?: unknown): ProjectionRecord | null {
     return projectionFromRow(db.prepare(`
       SELECT * FROM tag_management_projections
       WHERE entity_type = ? AND entity_id = ?
@@ -460,13 +557,13 @@ function createTagManagementStoreFromDatabase({
     `).get(String(entityType || ""), String(entityId || "")));
   }
 
-  function hasProjection(entityType?: any, entityId?: any) : any {
+  function hasProjection(entityType?: unknown, entityId?: unknown): boolean {
     return Boolean(getProjection(entityType, entityId));
   }
 
-  function listProjections({ entityType = "", kind = "", includeArchived = true }: Record<string, any> = {}) : any {
-    const clauses: any[] = ["1 = 1"];
-    const params: any[] = [];
+  function listProjections({ entityType = "", kind = "", includeArchived = true }: { entityType?: string; kind?: string; includeArchived?: boolean } = {}): ProjectionRecord[] {
+    const clauses: string[] = ["1 = 1"];
+    const params: Array<string | number> = [];
     if (entityType) {
       clauses.push("p.entity_type = ?");
       params.push(String(entityType));
@@ -485,13 +582,13 @@ function createTagManagementStoreFromDatabase({
       JOIN tag_management_tags t ON t.tag_id = p.tag_id
       WHERE ${clauses.join(" AND ")}
       ORDER BY p.entity_type ASC, p.entity_id ASC
-    `).all(...params).map(projectionFromRow);
+    `).all(...params).map(projectionFromRow).filter((projection): projection is ProjectionRecord => projection !== null);
   }
 
-  function upsertProjectedTag({ tag, entityType, entityId, payload, options = {} }: Record<string, any>) : any {
-    const existingMetadata: any = objectOrNull(getTag(tag.tagId)?.metadata) || {};
-    const incomingMetadata: any = objectOrNull(tag.metadata) || {};
-    const metadata: Record<string, any> = {
+  function upsertProjectedTag<Payload extends JsonRecord>({ tag, entityType, entityId, payload, options = {} }: { tag: JsonRecord; entityType: string; entityId: string; payload: Payload; options?: UpsertOptions }): Payload {
+    const existingMetadata = objectOrNull(getTag(tag.tagId)?.metadata) || {};
+    const incomingMetadata = objectOrNull(tag.metadata) || {};
+    const metadata: JsonRecord = {
       ...existingMetadata,
       ...incomingMetadata,
       projections: canonicalProjections(
@@ -500,7 +597,7 @@ function createTagManagementStoreFromDatabase({
         [{ entityType, entityId, payload }]
       )
     };
-    const savedTag: any = upsertTag({
+    const savedTag = upsertTag({
       ...tag,
       metadata
     }, {
@@ -508,17 +605,21 @@ function createTagManagementStoreFromDatabase({
       entityType,
       entityId
     });
-    upsertProjection({ tagId: savedTag.tagId, entityType, entityId, payload });
+    if (!savedTag) throw new Error("Projected tag upsert failed.");
+    upsertProjection(
+      { tagId: savedTag.tagId, entityType, entityId, payload },
+      { suppressEvent: options.suppressEvent }
+    );
     return payload;
   }
 
-  function projectionPayload(entityType?: any, entityId?: any) : any {
-    return getProjection(entityType, entityId)?.payload || null;
+  function projectionPayload(entityType?: unknown, entityId?: unknown): JsonRecord | null {
+    return objectOrNull(getProjection(entityType, entityId)?.payload);
   }
 
-  function upsertAuthorizationRole(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = projectionPayload("authorization.role", input.roleId || input.id);
-    const role: any = normalizeRole(input, existing || {});
+  function upsertAuthorizationRole(input: JsonRecord = {}, options: UpsertOptions = {}): RoleRecord {
+    const existing = projectionPayload("authorization.role", input.roleId || input.id);
+    const role = normalizeRole(input, existing || {});
     return upsertProjectedTag({
       tag: {
         tagId: roleTagId(role.roleId),
@@ -536,19 +637,20 @@ function createTagManagementStoreFromDatabase({
     });
   }
 
-  function listAuthorizationRoles({ includeDisabled = true }: Record<string, any> = {}) : any {
+  function listAuthorizationRoles({ includeDisabled = true }: { includeDisabled?: boolean } = {}): RoleRecord[] {
     return listProjections({ entityType: "authorization.role", includeArchived: includeDisabled })
-      .map((projection?: any) : any => projection.payload)
-      .filter((role?: any) : any => includeDisabled || role.enabled !== false);
+      .map((projection) => normalizeRole(record(projection.payload), record(projection.payload)))
+      .filter((role) => includeDisabled || role.enabled !== false);
   }
 
-  function getAuthorizationRole(roleId?: any) : any {
-    return projectionPayload("authorization.role", normalizeIdSegment(roleId, "role"));
+  function getAuthorizationRole(roleId?: unknown): RoleRecord | null {
+    const payload = projectionPayload("authorization.role", normalizeIdSegment(roleId, "role"));
+    return payload ? normalizeRole(payload, payload) : null;
   }
 
-  function upsertAuthorizationTeam(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = projectionPayload("authorization.team", input.teamId || input.id);
-    const team: any = normalizeTeam(input, existing || {});
+  function upsertAuthorizationTeam(input: JsonRecord = {}, options: UpsertOptions = {}): TeamRecord {
+    const existing = projectionPayload("authorization.team", input.teamId || input.id);
+    const team = normalizeTeam(input, existing || {});
     return upsertProjectedTag({
       tag: {
         tagId: teamTagId(team.teamId),
@@ -565,19 +667,20 @@ function createTagManagementStoreFromDatabase({
     });
   }
 
-  function listAuthorizationTeams({ includeDisabled = true }: Record<string, any> = {}) : any {
+  function listAuthorizationTeams({ includeDisabled = true }: { includeDisabled?: boolean } = {}): TeamRecord[] {
     return listProjections({ entityType: "authorization.team", includeArchived: includeDisabled })
-      .map((projection?: any) : any => projection.payload)
-      .filter((team?: any) : any => includeDisabled || team.enabled !== false);
+      .map((projection) => normalizeTeam(record(projection.payload), record(projection.payload)))
+      .filter((team) => includeDisabled || team.enabled !== false);
   }
 
-  function getAuthorizationTeam(teamId?: any) : any {
-    return projectionPayload("authorization.team", normalizeIdSegment(teamId, "team"));
+  function getAuthorizationTeam(teamId?: unknown): TeamRecord | null {
+    const payload = projectionPayload("authorization.team", normalizeIdSegment(teamId, "team"));
+    return payload ? normalizeTeam(payload, payload) : null;
   }
 
-  function upsertAuthorizationDepartment(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = projectionPayload("authorization.department", input.departmentId || input.id);
-    const department: any = normalizeDepartment(input, existing || {});
+  function upsertAuthorizationDepartment(input: JsonRecord = {}, options: UpsertOptions = {}): DepartmentRecord {
+    const existing = projectionPayload("authorization.department", input.departmentId || input.id);
+    const department = normalizeDepartment(input, existing || {});
     return upsertProjectedTag({
       tag: {
         tagId: departmentTagId(department.departmentId),
@@ -594,19 +697,20 @@ function createTagManagementStoreFromDatabase({
     });
   }
 
-  function listAuthorizationDepartments({ includeDisabled = true }: Record<string, any> = {}) : any {
+  function listAuthorizationDepartments({ includeDisabled = true }: { includeDisabled?: boolean } = {}): DepartmentRecord[] {
     return listProjections({ entityType: "authorization.department", includeArchived: includeDisabled })
-      .map((projection?: any) : any => projection.payload)
-      .filter((department?: any) : any => includeDisabled || department.enabled !== false);
+      .map((projection) => normalizeDepartment(record(projection.payload), record(projection.payload)))
+      .filter((department) => includeDisabled || department.enabled !== false);
   }
 
-  function getAuthorizationDepartment(departmentId?: any) : any {
-    return projectionPayload("authorization.department", normalizeIdSegment(departmentId, "department"));
+  function getAuthorizationDepartment(departmentId?: unknown): DepartmentRecord | null {
+    const payload = projectionPayload("authorization.department", normalizeIdSegment(departmentId, "department"));
+    return payload ? normalizeDepartment(payload, payload) : null;
   }
 
-  function upsertAuthorizationAgentGroup(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = projectionPayload("authorization.agent-group", input.groupId || input.id);
-    const group: any = normalizeAgentGroup(input, existing || {});
+  function upsertAuthorizationAgentGroup(input: JsonRecord = {}, options: UpsertOptions = {}): AgentGroupRecord {
+    const existing = projectionPayload("authorization.agent-group", input.groupId || input.id);
+    const group = normalizeAgentGroup(input, existing || {});
     return upsertProjectedTag({
       tag: {
         tagId: agentGroupTagId(group.groupId),
@@ -623,19 +727,20 @@ function createTagManagementStoreFromDatabase({
     });
   }
 
-  function listAuthorizationAgentGroups({ includeDisabled = true }: Record<string, any> = {}) : any {
+  function listAuthorizationAgentGroups({ includeDisabled = true }: { includeDisabled?: boolean } = {}): AgentGroupRecord[] {
     return listProjections({ entityType: "authorization.agent-group", includeArchived: includeDisabled })
-      .map((projection?: any) : any => projection.payload)
-      .filter((group?: any) : any => includeDisabled || group.enabled !== false);
+      .map((projection) => normalizeAgentGroup(record(projection.payload), record(projection.payload)))
+      .filter((group) => includeDisabled || group.enabled !== false);
   }
 
-  function getAuthorizationAgentGroup(groupId?: any) : any {
-    return projectionPayload("authorization.agent-group", normalizeIdSegment(groupId, "agent-group"));
+  function getAuthorizationAgentGroup(groupId?: unknown): AgentGroupRecord | null {
+    const payload = projectionPayload("authorization.agent-group", normalizeIdSegment(groupId, "agent-group"));
+    return payload ? normalizeAgentGroup(payload, payload) : null;
   }
 
-  function upsertAuthorizationAgentBinding(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = projectionPayload("authorization.agent-binding", input.agentId || input.id || input.profileId);
-    const binding: any = normalizeAgentBinding(input, existing || {});
+  function upsertAuthorizationAgentBinding(input: JsonRecord = {}, options: UpsertOptions = {}): AgentBindingRecord {
+    const existing = projectionPayload("authorization.agent-binding", input.agentId || input.id || input.profileId);
+    const binding = normalizeAgentBinding(input, existing || {});
     return upsertProjectedTag({
       tag: {
         tagId: agentBindingTagId(binding.agentId),
@@ -652,19 +757,20 @@ function createTagManagementStoreFromDatabase({
     });
   }
 
-  function listAuthorizationAgentBindings({ includeDisabled = true }: Record<string, any> = {}) : any {
+  function listAuthorizationAgentBindings({ includeDisabled = true }: { includeDisabled?: boolean } = {}): AgentBindingRecord[] {
     return listProjections({ entityType: "authorization.agent-binding", includeArchived: includeDisabled })
-      .map((projection?: any) : any => projection.payload)
-      .filter((binding?: any) : any => includeDisabled || binding.enabled !== false);
+      .map((projection) => normalizeAgentBinding(record(projection.payload), record(projection.payload)))
+      .filter((binding) => includeDisabled || binding.enabled !== false);
   }
 
-  function getAuthorizationAgentBinding(agentId?: any) : any {
-    return projectionPayload("authorization.agent-binding", normalizeIdSegment(agentId, "agent"));
+  function getAuthorizationAgentBinding(agentId?: unknown): AgentBindingRecord | null {
+    const payload = projectionPayload("authorization.agent-binding", normalizeIdSegment(agentId, "agent"));
+    return payload ? normalizeAgentBinding(payload, payload) : null;
   }
 
-  function upsertToolProfile(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const existing: any = projectionPayload("operation-permission.profile", input.id || input.profileId);
-    const profile: any = normalizeToolProfile(input, existing || {});
+  function upsertToolProfile(input: JsonRecord = {}, options: UpsertOptions = {}): ToolProfileRecord {
+    const existing = projectionPayload("operation-permission.profile", input.id || input.profileId);
+    const profile = normalizeToolProfile(input, existing || {});
     return upsertProjectedTag({
       tag: {
         tagId: toolProfileTagId(profile.id),
@@ -681,16 +787,17 @@ function createTagManagementStoreFromDatabase({
     });
   }
 
-  function listToolProfiles({ includeDisabled = false }: Record<string, any> = {}) : any {
+  function listToolProfiles({ includeDisabled = false }: { includeDisabled?: boolean } = {}): ToolProfileRecord[] {
     return listProjections({ entityType: "operation-permission.profile", includeArchived: includeDisabled })
-      .map((projection?: any) : any => projection.payload)
-      .filter((profile?: any) : any => includeDisabled || profile.enabled !== false);
+      .map((projection) => normalizeToolProfile(record(projection.payload), record(projection.payload)))
+      .filter((profile) => includeDisabled || profile.enabled !== false);
   }
 
-  function seedToolProfiles(profiles: any = []) : any {
-    let created: any = 0;
-    for (const profile of Array.isArray(profiles) ? profiles : []) {
-      const id: any = String(profile?.id || profile?.profileId || "").trim();
+  function seedToolProfiles(profiles: unknown = []): { created: number } {
+    let created = 0;
+    for (const source of Array.isArray(profiles) ? profiles : []) {
+      const profile = record(source);
+      const id = String(profile.id || profile.profileId || "").trim();
       if (!id || hasProjection("operation-permission.profile", id)) {
         continue;
       }
@@ -700,15 +807,21 @@ function createTagManagementStoreFromDatabase({
     return { created };
   }
 
-  function rebuildProjections() : any {
+  function rebuildProjections(): { count: number } {
     db.prepare("DELETE FROM tag_management_projections").run();
-    let count: any = 0;
+    let count = 0;
     for (const tag of listTags({ includeArchived: true })) {
-      const projectionsByKey: any = new Map<any, any>();
-      if (Array.isArray(tag.metadata?.projections)) {
-        for (const projection of tag.metadata.projections) {
-          if (projection?.entityType && projection?.entityId) {
-            projectionsByKey.set(`${projection.entityType}\u0000${projection.entityId}`, projection);
+      const projectionsByKey = new Map<string, ProjectionInput>();
+      const metadata = record(tag.metadata);
+      if (Array.isArray(metadata.projections)) {
+        for (const source of metadata.projections) {
+          const projection = record(source);
+          if (typeof projection.entityType === "string" && typeof projection.entityId === "string") {
+            projectionsByKey.set(`${projection.entityType}\u0000${projection.entityId}`, {
+              entityType: projection.entityType,
+              entityId: projection.entityId,
+              payload: projection.payload
+            });
           }
         }
       }
@@ -726,9 +839,9 @@ function createTagManagementStoreFromDatabase({
     return { count };
   }
 
-  function listEvents({ limit = 100, tagId = "", eventType = "" }: Record<string, any> = {}) : any {
-    const clauses: any[] = [];
-    const params: any[] = [];
+  function listEvents({ limit = 100, tagId = "", eventType = "" }: { limit?: number; tagId?: string; eventType?: string } = {}): EventRecord[] {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
     if (tagId) {
       clauses.push("tag_id = ?");
       params.push(String(tagId));
@@ -737,40 +850,40 @@ function createTagManagementStoreFromDatabase({
       clauses.push("event_type = ?");
       params.push(String(eventType));
     }
-    const where: any = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     params.push(Math.max(1, Math.min(Number(limit || 100), 500)));
     return db.prepare(`
       SELECT * FROM tag_management_events
       ${where}
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(...params).map(eventFromRow);
+    `).all(...params).map(eventFromRow).filter((event): event is EventRecord => event !== null);
   }
 
-  function getPolicyRevision() : any {
-    const row: any = db.prepare(`
+  function getPolicyRevision(): { protocolVersion: string; revision: number; updatedAt: string } {
+    const row = record(db.prepare(`
       SELECT count(*) AS revision, max(created_at) AS updated_at
       FROM tag_management_events
-    `).get();
+    `).get());
     return {
       protocolVersion: TAG_MANAGEMENT_PROTOCOL_VERSION,
       revision: Number(row?.revision || 0),
-      updatedAt: row?.updated_at || ""
+      updatedAt: stringValue(row.updated_at)
     };
   }
 
-  function organizationGovernanceError(code?: any, message?: any, options: Record<string, any> = {}) : any {
-    const error: Error & Record<string, any> = new Error(message);
+  function organizationGovernanceError(code: string, message: string, options: OrganizationGovernanceErrorOptions = {}): OrganizationGovernanceError {
+    const error = new Error(message) as OrganizationGovernanceError;
     error.code = code;
     error.statusCode = Number(options.statusCode || 409);
     if (Number.isInteger(options.currentRevision)) error.currentRevision = options.currentRevision;
     return error;
   }
 
-  function getOrganizationGovernance() : any {
-    const metadata: any = db.prepare(
+  function getOrganizationGovernance(): OrganizationGovernanceSnapshot {
+    const metadata = objectOrNull(db.prepare(
       "SELECT * FROM organization_governance_snapshot WHERE singleton_id = 1"
-    ).get();
+    ).get());
     if (!metadata) {
       throw organizationGovernanceError(
         "organization_governance_unavailable",
@@ -778,7 +891,7 @@ function createTagManagementStoreFromDatabase({
         { statusCode: 503 }
       );
     }
-    if (!Boolean(metadata.configured)) {
+    if (!metadata.configured) {
       return {
         protocolVersion: "v0.0.1:authorization:organization-governance-1",
         schemaVersion: "v0.0.1:authorization:organization-template-1",
@@ -794,44 +907,47 @@ function createTagManagementStoreFromDatabase({
         publishedAt: ""
       };
     }
-    const nodes: any[] = db.prepare(
+    const nodes: OrganizationNode[] = db.prepare(
       "SELECT * FROM organization_governance_nodes ORDER BY ordinal ASC"
-    ).all().map((row?: any) : any => ({
-      nodeId: row.node_id,
-      nodeType: row.node_type,
-      parentId: row.parent_id,
-      name: row.name,
-      ...(row.organization_level === null ? {} : { organizationLevel: Number(row.organization_level) })
-    }));
-    const tags: any[] = db.prepare(`
+    ).all().map((value) => {
+      const row = record(value);
+      return {
+        nodeId: stringValue(row.node_id),
+        nodeType: stringValue(row.node_type),
+        parentId: stringValue(row.parent_id),
+        name: stringValue(row.name),
+        ...(row.organization_level === null ? {} : { organizationLevel: Number(row.organization_level) })
+      };
+    });
+    const tags: OrganizationTag[] = db.prepare(`
       SELECT tag.* FROM organization_governance_template_ownership owner
       JOIN tag_management_tags tag ON tag.tag_id = owner.entity_id
       WHERE owner.entity_type = 'tag'
       ORDER BY tag.tag_id ASC
-    `).all().map((row?: any) : any => {
-      const tag: any = tagFromRow(row);
+    `).all().map((row) => tagFromRow(row)).filter((tag): tag is TagRecord => tag !== null).map((tag) => {
       return {
         tagId: tag.tagId,
         kind: tag.kind,
         label: tag.label,
         parentTagId: tag.parentTagId,
         description: tag.description,
-        scopePrerequisites: tag.scopePrerequisites
+        scopePrerequisites: uniqueStrings(tag.scopePrerequisites)
       };
     });
-    const roles: any[] = db.prepare(`
+    const roles: OrganizationRole[] = db.prepare(`
       SELECT projection.payload_json FROM organization_governance_template_ownership owner
       JOIN tag_management_projections projection
         ON projection.entity_type = 'authorization.role' AND projection.entity_id = owner.entity_id
       WHERE owner.entity_type = 'role'
       ORDER BY owner.entity_id ASC
-    `).all().map((row?: any) : any => {
-      const payload: any = parseJson(row.payload_json, {});
+    `).all().map((value) => {
+      const row = record(value);
+      const payload = record(parseJson(row.payload_json, {}));
       return {
-        roleId: payload.roleId,
-        name: payload.name,
-        scopeNodeId: payload.scopeNodeId,
-        scopeNodeType: payload.scopeNodeType,
+        roleId: stringValue(payload.roleId),
+        name: stringValue(payload.name),
+        scopeNodeId: stringValue(payload.scopeNodeId),
+        scopeNodeType: stringValue(payload.scopeNodeType),
         managementActions: uniqueStrings(payload.managementActions),
         businessResourceActions: [],
         assignedSubjectIds: []
@@ -839,23 +955,23 @@ function createTagManagementStoreFromDatabase({
     });
     return {
       protocolVersion: "v0.0.1:authorization:organization-governance-1",
-      schemaVersion: metadata.schema_version,
+      schemaVersion: stringValue(metadata.schema_version),
       configured: true,
       revision: Number(metadata.revision),
-      templateKey: metadata.template_key,
-      templateName: metadata.template_name,
-      description: metadata.description,
+      templateKey: stringValue(metadata.template_key),
+      templateName: stringValue(metadata.template_name),
+      description: stringValue(metadata.description),
       organizationDepth: Number(metadata.organization_depth),
       nodes,
       tags,
       roles,
-      publishedAt: metadata.published_at
+      publishedAt: stringValue(metadata.published_at)
     };
   }
 
-  const publishOrganizationGovernanceTransaction: any = db.transaction(
-    (draft?: any, expectedRevision?: any, publishedAt?: any) : any => {
-      const current: any = getOrganizationGovernance();
+  const publishOrganizationGovernanceTransaction = db.transaction(
+    (draft: OrganizationGovernanceDraft, expectedRevision: number, publishedAt: string): OrganizationGovernanceSnapshot => {
+      const current = getOrganizationGovernance();
       if (current.revision !== expectedRevision) {
         throw organizationGovernanceError(
           "organization_governance_revision_conflict",
@@ -863,13 +979,16 @@ function createTagManagementStoreFromDatabase({
           { currentRevision: current.revision }
         );
       }
-      const ownershipRows: any[] = db.prepare(
+      const ownershipRows: GovernanceOwnershipRow[] = db.prepare(
         "SELECT entity_type, entity_id FROM organization_governance_template_ownership"
-      ).all();
-      const ownedTags: any = new Set<any>(ownershipRows.filter((row?: any) : any => row.entity_type === "tag")
-        .map((row?: any) : any => row.entity_id));
-      const ownedRoles: any = new Set<any>(ownershipRows.filter((row?: any) : any => row.entity_type === "role")
-        .map((row?: any) : any => row.entity_id));
+      ).all().map((value) => {
+        const row = record(value);
+        return { entityType: stringValue(row.entity_type), entityId: stringValue(row.entity_id) };
+      });
+      const ownedTags = new Set(ownershipRows.filter((row) => row.entityType === "tag")
+        .map((row) => row.entityId));
+      const ownedRoles = new Set(ownershipRows.filter((row) => row.entityType === "role")
+        .map((row) => row.entityId));
       for (const tag of draft.tags) {
         if (getTag(tag.tagId) && !ownedTags.has(tag.tagId)) {
           throw organizationGovernanceError(
@@ -878,8 +997,8 @@ function createTagManagementStoreFromDatabase({
           );
         }
       }
-      const draftTagsById: any = new Map<any, any>(
-        draft.tags.map((tag?: any) : any => [tag.tagId, tag])
+      const draftTagsById = new Map<string, OrganizationTag>(
+        draft.tags.map((tag) => [tag.tagId, tag])
       );
       for (const role of draft.roles) {
         if ((getAuthorizationRole(role.roleId) || getTag(roleTagId(role.roleId))) && !ownedRoles.has(role.roleId)) {
@@ -890,11 +1009,11 @@ function createTagManagementStoreFromDatabase({
         }
       }
 
-      const nextTagIds: any = new Set<any>(draft.tags.map((tag?: any) : any => tag.tagId));
-      const nextRoleIds: any = new Set<any>(draft.roles.map((role?: any) : any => role.roleId));
+      const nextTagIds = new Set(draft.tags.map((tag) => tag.tagId));
+      const nextRoleIds = new Set(draft.roles.map((role) => role.roleId));
       for (const tagId of ownedTags) {
         if (nextTagIds.has(tagId)) continue;
-        const existing: any = getTag(tagId);
+        const existing = getTag(tagId);
         if (!existing) continue;
         tagUpsert.run(
           existing.tagId, existing.kind, existing.label, existing.description, existing.parentTagId,
@@ -905,13 +1024,13 @@ function createTagManagementStoreFromDatabase({
       }
       for (const roleId of ownedRoles) {
         if (nextRoleIds.has(roleId)) continue;
-        const existing: any = getAuthorizationRole(roleId);
+        const existing = getAuthorizationRole(roleId);
         if (!existing) continue;
-        const disabled: any = { ...existing, enabled: false, businessResourceActions: [], assignedSubjectIds: [] };
+        const disabled: RoleRecord = { ...existing, enabled: false, businessResourceActions: [], assignedSubjectIds: [] };
         projectionUpsert.run(
           roleTagId(roleId), "authorization.role", roleId, stringifyJson(disabled, {}), publishedAt
         );
-        const roleTag: any = getTag(roleTagId(roleId));
+        const roleTag = getTag(roleTagId(roleId));
         if (roleTag) {
           tagUpsert.run(
             roleTag.tagId, roleTag.kind, roleTag.label, roleTag.description, roleTag.parentTagId,
@@ -924,12 +1043,12 @@ function createTagManagementStoreFromDatabase({
 
       db.prepare("DELETE FROM organization_governance_template_ownership").run();
       db.prepare("DELETE FROM organization_governance_nodes").run();
-      const insertNode: any = db.prepare(`
+      const insertNode = db.prepare(`
         INSERT INTO organization_governance_nodes (
           ordinal, node_id, node_type, parent_id, name, organization_level
         ) VALUES (?, ?, ?, ?, ?, ?)
       `);
-      const insertOwnership: any = db.prepare(`
+      const insertOwnership = db.prepare(`
         INSERT INTO organization_governance_template_ownership (entity_type, entity_id, template_key)
         VALUES (?, ?, ?)
       `);
@@ -940,7 +1059,7 @@ function createTagManagementStoreFromDatabase({
         );
       }
       for (const tag of draft.tags) {
-        const existing: any = getTag(tag.tagId);
+        const existing = getTag(tag.tagId);
         tagUpsert.run(
           tag.tagId, tag.kind, tag.label, tag.description, tag.parentTagId, 1, 0, ACTIVE_STATUS,
           stringifyJson(tag.scopePrerequisites, []),
@@ -950,7 +1069,7 @@ function createTagManagementStoreFromDatabase({
         insertOwnership.run("tag", tag.tagId, draft.templateKey);
       }
       for (const role of draft.roles) {
-        const rolePayload: any = {
+        const rolePayload: JsonRecord = {
           roleId: role.roleId,
           name: role.name,
           label: role.name,
@@ -967,9 +1086,16 @@ function createTagManagementStoreFromDatabase({
           createdAt: publishedAt,
           updatedAt: publishedAt
         };
-        const tagId: any = roleTagId(role.roleId);
-        const existingTag: any = getTag(tagId);
-        const scopeTag: any = draftTagsById.get(role.scopeNodeId);
+        const tagId = roleTagId(role.roleId);
+        const existingTag = getTag(tagId);
+        const scopeTag = draftTagsById.get(role.scopeNodeId);
+        if (!scopeTag) {
+          throw organizationGovernanceError(
+            "organization_governance_invalid",
+            "Organization role references an unknown scope tag.",
+            { statusCode: 400 }
+          );
+        }
         tagUpsert.run(
           tagId, "role", role.name, "", scopeTag.parentTagId, 1, 0, ACTIVE_STATUS,
           stringifyJson(role.managementActions, []),
@@ -1009,8 +1135,16 @@ function createTagManagementStoreFromDatabase({
     }
   );
 
-  function publishOrganizationGovernance(draft?: any, expectedRevision?: any) : any {
-    const snapshot: any = publishOrganizationGovernanceTransaction.immediate(
+  function publishOrganizationGovernance(input: unknown, expectedRevision: number): OrganizationGovernanceSnapshot {
+    const draft = organizationGovernanceDraft(input);
+    if (!draft) {
+      throw organizationGovernanceError(
+        "organization_governance_invalid",
+        "Organization governance draft is invalid.",
+        { statusCode: 400 }
+      );
+    }
+    const snapshot = publishOrganizationGovernanceTransaction.immediate(
       draft,
       expectedRevision,
       nowIso()
@@ -1027,11 +1161,10 @@ function createTagManagementStoreFromDatabase({
     protocolVersion: TAG_MANAGEMENT_PROTOCOL_VERSION,
     userDataPath: resolvedUserDataPath,
     rootPath: resolvedRoot,
-    db,
-    isClosed() : any {
+    isClosed(): boolean {
       return closed || db.open === false;
     },
-    close() : any {
+    close(): void {
       if (closed) return;
       for (const handler of ownedChangeHandlers) changeHandlers.delete(handler);
       ownedChangeHandlers.clear();
@@ -1047,11 +1180,11 @@ function createTagManagementStoreFromDatabase({
     getOrganizationGovernance,
     getAuthorizationTeam,
     getPolicyRevision,
-    registerChangeHandler(handler?: any) : any {
-      if (typeof handler !== "function") return () : any => {};
+    registerChangeHandler(handler?: ChangeHandler): () => boolean | void {
+      if (typeof handler !== "function") return (): void => {};
       changeHandlers.add(handler);
       ownedChangeHandlers.add(handler);
-      return () : any => {
+      return (): boolean => {
         ownedChangeHandlers.delete(handler);
         return changeHandlers.delete(handler);
       };

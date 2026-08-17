@@ -1,4 +1,7 @@
 import { evaluateGuardSet } from "../guards/guard-evaluator.ts";
+import type {
+  GuardEvaluator, GuardResult, JsonRecord, StateMachineDefinition, TransitionCell, TransitionInput
+} from "./state-machine-result-types.ts";
 
 export { ERROR_CODES } from "./state-machine-errors.ts";
 
@@ -12,12 +15,53 @@ export { ERROR_CODES } from "./state-machine-errors.ts";
  * @param {object} [options] - { guardEvaluator? }
  * @returns {{ ok, cell, guardResults, failedGuards, blockedBy, errorCode, message, allowedEvents, ambiguousCells }}
  */
-export function selectTransitionCell(definition?: any, input?: any, options: Record<string, any> = {}) : any {
-  const { entityId, currentStatus, eventType, actor, reason, metadata, operationId, traceId, auditId, checkpointNodeId, policyDecisionId, approvalId, now } = input;
-  const guardEvaluator: any = options.guardEvaluator;
+export interface SelectionResult extends JsonRecord {
+  ok: boolean; cell?: TransitionCell; guardResults?: GuardResult[]; failedGuards?: string[];
+  blockedBy?: string; errorCode?: string; message?: string; allowedEvents?: string[]; ambiguousCells?: string[];
+}
+interface CellGuardResult { ok: boolean; guardResults: GuardResult[]; failedGuards: string[]; blockedBy?: "guard" }
+interface GuardClassification { unknown: string[]; missingContext: string[]; blocked: string[] }
+interface EvaluatedCell { cellId: string; guards?: string[]; requiredGuards?: string[]; result: CellGuardResult }
 
-  const matchingCells: any = definition.totalMatrix.filter(
-    (cell?: any) : any => cell.from === currentStatus && cell.event === eventType
+function record(value: unknown): JsonRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
+}
+
+function definitionFrom(value: unknown): StateMachineDefinition | null {
+  const candidate = record(value);
+  if (!candidate || !Array.isArray(candidate.totalMatrix)) return null;
+  if (!candidate.totalMatrix.every((value) => {
+    const cell = record(value);
+    return cell && typeof cell.from === "string" && typeof cell.event === "string" && typeof cell.result === "string";
+  })) return null;
+  return candidate as unknown as StateMachineDefinition;
+}
+
+function inputFrom(value: unknown): TransitionInput | null {
+  const candidate = record(value);
+  if (!candidate || typeof candidate.currentStatus !== "string" || typeof candidate.eventType !== "string") return null;
+  return candidate as unknown as TransitionInput;
+}
+
+function guardResultsFrom(value: unknown): GuardResult[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const result = record(item);
+    return result && typeof result.guardId === "string" && typeof result.ok === "boolean"
+      ? [{ ...result, guardId: result.guardId, ok: result.ok, ...(typeof result.reason === "string" ? { reason: result.reason } : {}) }]
+      : [];
+  });
+}
+
+export function selectTransitionCell(definitionValue?: unknown, inputValue?: unknown, options: { guardEvaluator?: GuardEvaluator } = {}): SelectionResult {
+  const definition = definitionFrom(definitionValue);
+  const input = inputFrom(inputValue);
+  if (!definition || !input) return { ok: false, errorCode: "STATE_MACHINE_INVALID_INPUT", message: "State machine definition or transition input is invalid." };
+  const { currentStatus, eventType } = input;
+  const guardEvaluator = options.guardEvaluator;
+
+  const matchingCells = definition.totalMatrix.filter(
+    (cell) => cell.from === currentStatus && cell.event === eventType
   );
 
   if (matchingCells.length === 0) {
@@ -30,7 +74,7 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
   }
 
   if (matchingCells.length === 1) {
-    const cell: any = matchingCells[0];
+    const cell = matchingCells[0];
     if (cell.result === 'illegal_transition') {
       return {
         ok: false,
@@ -41,9 +85,9 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
       };
     }
 
-    const guardIds: any[] = [...(cell.guards || []), ...(cell.requiredGuards || [])];
+    const guardIds = [...(cell.guards || []), ...(cell.requiredGuards || [])];
     if (guardIds.length > 0) {
-      const guardResults: any = evaluateCellGuards(cell, input, guardEvaluator);
+      const guardResults = evaluateCellGuards(cell, input, guardEvaluator);
       if (!guardResults.ok) {
         return { ...guardResults, errorCode: classifyGuardFailureForCode(guardResults), allowedEvents: listAllowedEventsInner(definition, currentStatus) };
       }
@@ -54,7 +98,7 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
   }
 
   // Multi-cell disambiguation
-  const eligibleCells: any = matchingCells.filter((cell?: any) : any => cell.result !== 'illegal_transition');
+  const eligibleCells = matchingCells.filter((cell) => cell.result !== 'illegal_transition');
 
   if (eligibleCells.length === 0) {
     return {
@@ -65,10 +109,10 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
     };
   }
 
-  const guardedCells: any = eligibleCells.filter((cell?: any) : any =>
+  const guardedCells = eligibleCells.filter((cell) =>
     (cell.guards && cell.guards.length > 0) || (cell.requiredGuards && cell.requiredGuards.length > 0)
   );
-  const unguardedCells: any = eligibleCells.filter((cell?: any) : any =>
+  const unguardedCells = eligibleCells.filter((cell) =>
     (!cell.guards || cell.guards.length === 0) && (!cell.requiredGuards || cell.requiredGuards.length === 0)
   );
 
@@ -84,11 +128,11 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
     return { ok: true, cell: unguardedCells[0], guardResults: [] };
   }
 
-  let passedCells: any[] = [];
-  const allGuardResults: any[] = [];
+  const passedCells: TransitionCell[] = [];
+  const allGuardResults: EvaluatedCell[] = [];
 
   for (const cell of eligibleCells) {
-    const gr: any = evaluateCellGuards(cell, input, guardEvaluator);
+    const gr = evaluateCellGuards(cell, input, guardEvaluator);
     allGuardResults.push({ cellId: `${cell.from}-${cell.event}-${cell.to || 'self'}`, guards: cell.guards, requiredGuards: cell.requiredGuards, result: gr });
     if (gr.ok) {
       passedCells.push(cell);
@@ -96,11 +140,12 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
   }
 
   if (passedCells.length === 0) {
-    const allFailedGuards: any[] = [];
+    const allFailedGuards: string[] = [];
     for (const entry of allGuardResults) {
       allFailedGuards.push(...(entry.result.failedGuards || []));
     }
-    const classification: any = classifyFailedGuardsForSelect(allFailedGuards, allGuardResults.flatMap((g?: any) : any => g.result.guardResults || []));
+    const flattenedGuardResults = allGuardResults.flatMap((entry) => entry.result.guardResults);
+    const classification = classifyFailedGuardsForSelect(allFailedGuards, flattenedGuardResults);
     if (classification.unknown.length > 0) {
       return {
         ok: false,
@@ -109,7 +154,7 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
         blockedBy: "guard",
         failedGuards: classification.unknown,
         allowedEvents: listAllowedEventsInner(definition, currentStatus),
-        guardResults: guardSummaryInner(allGuardResults.flatMap((g?: any) : any => g.result.guardResults || []))
+        guardResults: guardSummaryInner(flattenedGuardResults)
       };
     }
     if (classification.missingContext.length > 0) {
@@ -120,7 +165,7 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
         blockedBy: "guard",
         failedGuards: classification.missingContext,
         allowedEvents: listAllowedEventsInner(definition, currentStatus),
-        guardResults: guardSummaryInner(allGuardResults.flatMap((g?: any) : any => g.result.guardResults || []))
+        guardResults: guardSummaryInner(flattenedGuardResults)
       };
     }
     return {
@@ -130,7 +175,7 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
       blockedBy: "guard",
       failedGuards: allFailedGuards,
       allowedEvents: listAllowedEventsInner(definition, currentStatus),
-      guardResults: guardSummaryInner(allGuardResults.flatMap((g?: any) : any => g.result.guardResults || []))
+      guardResults: guardSummaryInner(flattenedGuardResults)
     };
   }
 
@@ -139,39 +184,39 @@ export function selectTransitionCell(definition?: any, input?: any, options: Rec
       ok: false,
       errorCode: "STATE_MACHINE_AMBIGUOUS_TRANSITION",
       message: `Ambiguous transition: ${passedCells.length} guarded cells pass for ${currentStatus} -> ${eventType}.`,
-      ambiguousCells: passedCells.map((c?: any) : any => `${c.from}-${c.event}-${c.to || 'self'}`)
+      ambiguousCells: passedCells.map((cell) => `${cell.from}-${cell.event}-${cell.to || 'self'}`)
     };
   }
 
-  return { ok: true, cell: passedCells[0], guardResults: allGuardResults.filter((g?: any) : any => g.result.ok).flatMap((g?: any) : any => g.result.guardResults || []) };
+  return { ok: true, cell: passedCells[0], guardResults: allGuardResults.filter((entry) => entry.result.ok).flatMap((entry) => entry.result.guardResults) };
 }
 
-function evaluateCellGuards(cell?: any, input?: any, guardEvaluator?: any) : any {
-  const guardIds: any[] = [...(cell.guards || []), ...(cell.requiredGuards || [])];
+function evaluateCellGuards(cell: TransitionCell, input: TransitionInput, guardEvaluator?: GuardEvaluator): CellGuardResult {
+  const guardIds = [...(cell.guards || []), ...(cell.requiredGuards || [])];
   if (guardIds.length === 0) {
     return { ok: true, guardResults: [], failedGuards: [], blockedBy: undefined };
   }
 
-  const context: any = input.guardContext || {};
-  let guardResults: any;
+  const context = input.guardContext || {};
+  let guardResults: GuardResult[];
   if (guardEvaluator) {
-    guardResults = guardEvaluator(guardIds, context);
+    guardResults = guardResultsFrom(guardEvaluator(guardIds, context));
   } else {
-    guardResults = evaluateGuardSet(guardIds, context);
+    guardResults = guardResultsFrom(evaluateGuardSet(guardIds, context));
   }
 
-  const failed: any = guardResults.filter((r?: any) : any => !r.ok);
+  const failed = guardResults.filter((result) => !result.ok);
   return {
     ok: failed.length === 0,
     guardResults,
-    failedGuards: failed.map((r?: any) : any => r.guardId),
+    failedGuards: failed.map((result) => result.guardId),
     blockedBy: failed.length > 0 ? "guard" : undefined
   };
 }
 
-function classifyFailedGuardsForSelect(failedGuardIds?: any, guardResults?: any) : any {
-  const result: Record<string, any> = { unknown: [], missingContext: [], blocked: [] };
-  for (const g of guardResults || []) {
+function classifyFailedGuardsForSelect(_failedGuardIds: string[] = [], guardResults: GuardResult[] = []): GuardClassification {
+  const result: GuardClassification = { unknown: [], missingContext: [], blocked: [] };
+  for (const g of guardResults) {
     if (g.ok) continue;
     if (g.reason === 'unknown_guard') result.unknown.push(g.guardId);
     else if (g.reason === 'missing_context') result.missingContext.push(g.guardId);
@@ -180,9 +225,9 @@ function classifyFailedGuardsForSelect(failedGuardIds?: any, guardResults?: any)
   return result;
 }
 
-function classifyGuardFailureForCode(guardResult?: any) : any {
+function classifyGuardFailureForCode(guardResult?: CellGuardResult): string {
   if (!guardResult || !guardResult.guardResults) return "STATE_MACHINE_GUARD_BLOCKED";
-  const guardResults: any = guardResult.guardResults || [];
+  const guardResults = guardResult.guardResults || [];
   for (const g of guardResults) {
     if (g.ok) continue;
     if (g.reason === 'unknown_guard' || g.reason === 'no_runtime_predicate') return "STATE_MACHINE_GUARD_UNKNOWN";
@@ -191,19 +236,19 @@ function classifyGuardFailureForCode(guardResult?: any) : any {
   return "STATE_MACHINE_GUARD_BLOCKED";
 }
 
-function guardSummaryInner(guardResults?: any) : any {
+function guardSummaryInner(guardResults: GuardResult[] = []): GuardResult[] | undefined {
   if (!guardResults || guardResults.length === 0) return undefined;
-  return guardResults.map((r?: any) : any => ({
-    guardId: r.guardId,
-    ok: r.ok,
-    reason: r.reason
+  return guardResults.map((result) => ({
+    guardId: result.guardId,
+    ok: result.ok,
+    reason: result.reason
   }));
 }
 
-function listAllowedEventsInner(definition?: any, currentStatus?: any) : any {
+function listAllowedEventsInner(definition: StateMachineDefinition, currentStatus: string): string[] {
   return definition.totalMatrix
-    .filter((cell?: any) : any => cell.from === currentStatus && cell.result !== 'illegal_transition')
-    .map((cell?: any) : any => cell.event);
+    .filter((cell) => cell.from === currentStatus && cell.result !== 'illegal_transition')
+    .map((cell) => cell.event);
 }
 
 /**
@@ -212,14 +257,14 @@ function listAllowedEventsInner(definition?: any, currentStatus?: any) : any {
  *
  * @returns {{ ok, guardResults, failedGuards, blockedBy, reason, message }}
  */
-export function evaluateTransitionGuardsForValidatedDefinition(definition?: any, fromStatus?: any, eventType?: any, context: Record<string, any> = {}) : any {
-  const input: Record<string, any> = {
+export function evaluateTransitionGuardsForValidatedDefinition(definition: unknown, fromStatus: unknown, eventType: unknown, context: JsonRecord = {}) {
+  const input: JsonRecord = {
     currentStatus: fromStatus,
     eventType,
     guardContext: context
   };
 
-  const result: any = selectTransitionCell(definition, input);
+  const result = selectTransitionCell(definition, input);
 
   if (!result.ok) {
     return {

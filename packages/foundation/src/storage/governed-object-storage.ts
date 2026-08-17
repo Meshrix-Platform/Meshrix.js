@@ -1,4 +1,4 @@
-const BYTE_STORE_OPERATIONS: readonly any[] = Object.freeze([
+const BYTE_STORE_OPERATIONS: readonly string[] = Object.freeze([
   "putObject",
   "putObjectsFromFiles",
   "getObject",
@@ -7,7 +7,7 @@ const BYTE_STORE_OPERATIONS: readonly any[] = Object.freeze([
   "resolveStoredObjectPath",
 ]);
 
-const OWNERSHIP_OPERATIONS: readonly any[] = Object.freeze([
+const OWNERSHIP_OPERATIONS: readonly string[] = Object.freeze([
   "findObjectOwner",
   "listObjectStoragePathsByOwner",
   "deleteObjectRecordsByOwner",
@@ -18,7 +18,7 @@ const OWNERSHIP_OPERATIONS: readonly any[] = Object.freeze([
   "listPendingDeletionOperations",
 ]);
 
-export const GOVERNED_OBJECT_STORAGE_DISCIPLINE: Readonly<Record<string, any>> = Object.freeze({
+export const GOVERNED_OBJECT_STORAGE_DISCIPLINE = Object.freeze({
   id: "governed-object-storage",
   byteStore: Object.freeze({
     capabilityId: "object-store",
@@ -37,22 +37,31 @@ export const GOVERNED_OBJECT_STORAGE_DISCIPLINE: Readonly<Record<string, any>> =
   }),
 });
 
-function capabilityById(capabilities?: any, capabilityId?: any) : any {
-  return capabilities.find((entry?: any) : any => entry?.id === capabilityId) ?? null;
+interface StorageCapabilityDescriptor {
+  id?: unknown;
+  kind?: unknown;
+  operations?: unknown;
 }
 
-function operationsMatch(actual?: any, expected?: any) : any {
+function capabilityById(
+  capabilities: readonly StorageCapabilityDescriptor[],
+  capabilityId: string
+): StorageCapabilityDescriptor | null {
+  return capabilities.find((entry) => entry.id === capabilityId) ?? null;
+}
+
+function operationsMatch(actual: unknown, expected: readonly string[]): boolean {
   return Array.isArray(actual) &&
     actual.length === expected.length &&
-    expected.every((operation?: any, index?: any) : any => actual[index] === operation);
+    expected.every((operation, index) => actual[index] === operation);
 }
 
-export function assertGovernedObjectStorageCapabilities(capabilities?: any) : any {
+export function assertGovernedObjectStorageCapabilities(capabilities?: unknown): true {
   if (!Array.isArray(capabilities)) {
     throw new Error("Governed object storage capabilities must be an array.");
   }
-  const byteStore: any = capabilityById(capabilities, GOVERNED_OBJECT_STORAGE_DISCIPLINE.byteStore.capabilityId);
-  const ownership: any = capabilityById(
+  const byteStore = capabilityById(capabilities, GOVERNED_OBJECT_STORAGE_DISCIPLINE.byteStore.capabilityId);
+  const ownership = capabilityById(
     capabilities,
     GOVERNED_OBJECT_STORAGE_DISCIPLINE.ownershipAuthority.capabilityId,
   );

@@ -1,16 +1,20 @@
 import { runMigrations } from "../storage/sqlite-migrations.ts";
-const SQLITE_BASE_MIGRATION_REVISION: any = 1;
-const SQLITE_DEDUPE_MIGRATION_REVISION: any = 2;
-const SQLITE_SCHEDULING_MIGRATION_REVISION: any = 3;
-const SQLITE_EXPIRY_MIGRATION_REVISION: any = 5;
-const SQLITE_RETENTION_MIGRATION_REVISION: any = 7;
-const SQLITE_DEFINITION_IMMUTABILITY_MIGRATION_REVISION: any = 8;
-const SQLITE_CHECKPOINT_MIGRATION_REVISION: any = 9;
-const SQLITE_SINK_FENCE_MIGRATION_REVISION: any = 10;
-const SQLITE_VIRTUAL_FINISH_MIGRATION_REVISION: any = 11;
-const SQLITE_RETENTION_STATE_MIGRATION_REVISION: any = 12;
+import type Database from "better-sqlite3";
+const SQLITE_BASE_MIGRATION_REVISION = 1;
+const SQLITE_DEDUPE_MIGRATION_REVISION = 2;
+const SQLITE_SCHEDULING_MIGRATION_REVISION = 3;
+const SQLITE_EXPIRY_MIGRATION_REVISION = 5;
+const SQLITE_RETENTION_MIGRATION_REVISION = 7;
+const SQLITE_DEFINITION_IMMUTABILITY_MIGRATION_REVISION = 8;
+const SQLITE_CHECKPOINT_MIGRATION_REVISION = 9;
+const SQLITE_SINK_FENCE_MIGRATION_REVISION = 10;
+const SQLITE_VIRTUAL_FINISH_MIGRATION_REVISION = 11;
+const SQLITE_RETENTION_STATE_MIGRATION_REVISION = 12;
+interface ColumnRow {
+  name: string;
+}
 
-export function ensureSqliteWorkQueueSchema(db?: any) : any {
+export function ensureSqliteWorkQueueSchema(db: Database.Database): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -21,7 +25,8 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
   runMigrations(db, [
     {
       version: SQLITE_BASE_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         CREATE TABLE IF NOT EXISTS queue_definitions (
           queue_definition_id TEXT NOT NULL,
           queue_definition_version INTEGER NOT NULL,
@@ -151,11 +156,12 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
           updated_at_ms INTEGER NOT NULL,
           PRIMARY KEY (queue_definition_id, scope_key)
         );
-      `)
+      `),
     },
     {
       version: SQLITE_DEDUPE_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         DROP INDEX IF EXISTS idx_work_queue_dedupe_nonterminal;
 
         WITH ranked AS (
@@ -174,11 +180,12 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
         CREATE UNIQUE INDEX IF NOT EXISTS idx_work_queue_dedupe
           ON work_items(queue_definition_id, scope_key, dedupe_key)
           WHERE dedupe_key <> '';
-      `)
+      `),
     },
     {
       version: SQLITE_SCHEDULING_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         ALTER TABLE work_items ADD COLUMN priority_class TEXT NOT NULL DEFAULT 'normal';
         ALTER TABLE work_items ADD COLUMN tenant_id TEXT NOT NULL DEFAULT '';
         ALTER TABLE work_items ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '';
@@ -222,16 +229,21 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
             priority_class, level, parent_key
           )
         );
-      `)
+      `),
     },
     {
       version: SQLITE_EXPIRY_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => {
-        const columns: any = new Set<any>(
-          migrationDb.prepare("PRAGMA table_info(work_items)").all().map((column?: any) : any => column.name)
+      up: (migrationDb: Database.Database) => {
+        const columns = new Set<string>(
+          migrationDb
+            .prepare<[], ColumnRow>("PRAGMA table_info(work_items)")
+            .all()
+            .map((column) => column.name),
         );
         if (!columns.has("expires_at_ms")) {
-          migrationDb.exec("ALTER TABLE work_items ADD COLUMN expires_at_ms INTEGER NOT NULL DEFAULT 0;");
+          migrationDb.exec(
+            "ALTER TABLE work_items ADD COLUMN expires_at_ms INTEGER NOT NULL DEFAULT 0;",
+          );
         }
         migrationDb.exec(`
           DELETE FROM work_queue_fairness_cursors
@@ -240,35 +252,52 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
           CREATE INDEX IF NOT EXISTS idx_work_queue_work_expiry
             ON work_items(state, expires_at_ms);
         `);
-      }
+      },
     },
     {
       version: SQLITE_RETENTION_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => {
-        const columns: any = new Set<any>(
-          migrationDb.prepare("PRAGMA table_info(work_items)").all().map((column?: any) : any => column.name)
+      up: (migrationDb: Database.Database) => {
+        const columns = new Set<string>(
+          migrationDb
+            .prepare<[], ColumnRow>("PRAGMA table_info(work_items)")
+            .all()
+            .map((column) => column.name),
         );
-        if (["queue_definition_id", "state", "updated_at_ms", "work_item_id"].every((column?: any) : any => columns.has(column))) {
+        if (
+          [
+            "queue_definition_id",
+            "state",
+            "updated_at_ms",
+            "work_item_id",
+          ].every((column) => columns.has(column))
+        ) {
           migrationDb.exec(`
             CREATE INDEX IF NOT EXISTS idx_work_queue_retention
               ON work_items(queue_definition_id, state, updated_at_ms, work_item_id);
           `);
         }
-        const hasJournal: any = Boolean(migrationDb.prepare(`
+        const hasJournal = Boolean(
+          migrationDb
+            .prepare<[], { name: string }>(
+              `
           SELECT 1 AS present FROM sqlite_master
           WHERE type = 'table' AND name = 'work_queue_transition_journal'
-        `).get());
+        `,
+            )
+            .get(),
+        );
         if (hasJournal) {
           migrationDb.exec(`
             CREATE INDEX IF NOT EXISTS idx_work_queue_journal_queue_item
               ON work_queue_transition_journal(queue_definition_id, work_item_id, seq);
           `);
         }
-      }
+      },
     },
     {
       version: SQLITE_DEFINITION_IMMUTABILITY_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         ALTER TABLE queue_definitions RENAME TO queue_definitions_with_legacy_label_constraint;
 
         CREATE TABLE queue_definitions (
@@ -294,27 +323,34 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
 
         CREATE INDEX idx_work_queue_definition_label
           ON queue_definitions(label);
-      `)
+      `),
     },
     {
       version: SQLITE_CHECKPOINT_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => {
-        const columns: any = new Set<any>(
-          migrationDb.prepare("PRAGMA table_info(work_items)").all().map((column?: any) : any => column.name)
+      up: (migrationDb: Database.Database) => {
+        const columns = new Set<string>(
+          migrationDb
+            .prepare<[], ColumnRow>("PRAGMA table_info(work_items)")
+            .all()
+            .map((column) => column.name),
         );
         for (const [column, declaration] of [
           ["checkpoint_ref_json", "TEXT NOT NULL DEFAULT '{}'"],
           ["checkpoint_digest", "TEXT NOT NULL DEFAULT ''"],
           ["checkpoint_seq", "INTEGER NOT NULL DEFAULT 0"],
-          ["checkpoint_updated_at_ms", "INTEGER NOT NULL DEFAULT 0"]
+          ["checkpoint_updated_at_ms", "INTEGER NOT NULL DEFAULT 0"],
         ]) {
-          if (!columns.has(column)) migrationDb.exec(`ALTER TABLE work_items ADD COLUMN ${column} ${declaration};`);
+          if (!columns.has(column))
+            migrationDb.exec(
+              `ALTER TABLE work_items ADD COLUMN ${column} ${declaration};`,
+            );
         }
-      }
+      },
     },
     {
       version: SQLITE_SINK_FENCE_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         CREATE TABLE IF NOT EXISTS work_queue_sink_fences (
           work_item_id TEXT NOT NULL,
           generation INTEGER NOT NULL,
@@ -327,11 +363,12 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
 
         CREATE INDEX IF NOT EXISTS idx_work_queue_sink_fence_item
           ON work_queue_sink_fences(work_item_id, generation);
-      `)
+      `),
     },
     {
       version: SQLITE_VIRTUAL_FINISH_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         DROP TABLE IF EXISTS work_queue_fairness_cursors;
 
         CREATE TABLE IF NOT EXISTS work_queue_virtual_finish (
@@ -354,17 +391,18 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
           ON work_queue_virtual_finish(
             queue_definition_id, selector_scope_key, priority_class, virtual_finish
           );
-      `)
+      `),
     },
     {
       version: SQLITE_RETENTION_STATE_MIGRATION_REVISION,
-      up: (migrationDb?: any) : any => migrationDb.exec(`
+      up: (migrationDb: Database.Database) =>
+        migrationDb.exec(`
         CREATE TABLE IF NOT EXISTS work_queue_retention_state (
           queue_definition_id TEXT PRIMARY KEY,
           pending_transitions INTEGER NOT NULL DEFAULT 0,
           updated_at_ms INTEGER NOT NULL
         );
-      `)
-    }
+      `),
+    },
   ]);
 }

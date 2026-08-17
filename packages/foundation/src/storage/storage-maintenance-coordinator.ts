@@ -1,6 +1,65 @@
 import path from "node:path";
 
-const DEFAULT_EXECUTION_BUDGET: Readonly<Record<string, any>> = Object.freeze({
+export interface StorageExecutionBudget {
+  maxFiles: number;
+  maxBytes: number;
+  maxCleanupItems: number;
+  maxQueueDepth: number;
+  maxDurationMs: number;
+  bufferBytes: number;
+}
+
+export interface StorageWorkAmounts {
+  files?: number;
+  bytes?: number;
+  cleanupItems?: number;
+}
+
+export interface StorageWorkCounters {
+  files: number;
+  bytes: number;
+  cleanupItems: number;
+}
+
+export interface StorageWorkTracker {
+  readonly signal: AbortSignal | null;
+  readonly budget: Readonly<StorageExecutionBudget>;
+  readonly deadlineAt: number;
+  assertActive(): void;
+  assertFits(amounts?: StorageWorkAmounts): Readonly<StorageWorkCounters>;
+  consume(amounts?: StorageWorkAmounts): Readonly<StorageWorkCounters>;
+  snapshot(): Readonly<StorageWorkCounters>;
+}
+
+interface StorageExecutionHardLimits extends StorageExecutionBudget {
+  maxConcurrentMutationsPerRoot: number;
+  queueAllocationBytes: number;
+  queuedBufferProductBytes: number;
+}
+
+interface MaintenanceEntry {
+  kind: string;
+  task: (tracker: StorageWorkTracker) => unknown | Promise<unknown>;
+  budget: Readonly<StorageExecutionBudget>;
+  controller: AbortController;
+  enqueuedAt: number;
+  resolve(value: unknown): void;
+  reject(reason?: unknown): void;
+  callerSettled: boolean;
+  cancelled: boolean;
+  removeAbortListener: (() => void) | null;
+}
+
+interface MaintenanceLane {
+  root: string;
+  active: MaintenanceEntry | null;
+  fenced: boolean;
+  queue: FixedRingDeque<MaintenanceEntry>;
+}
+
+type StorageMaintenanceError = Error & { code: string; reasonCode: string };
+
+const DEFAULT_EXECUTION_BUDGET: Readonly<StorageExecutionBudget> = Object.freeze({
   maxFiles: 100_000,
   maxBytes: 1_099_511_627_776,
   maxCleanupItems: 100_000,
@@ -9,7 +68,7 @@ const DEFAULT_EXECUTION_BUDGET: Readonly<Record<string, any>> = Object.freeze({
   bufferBytes: 64 * 1024
 });
 
-export const STORAGE_EXECUTION_BUDGET_HARD_LIMITS: Readonly<Record<string, any>> = Object.freeze({
+export const STORAGE_EXECUTION_BUDGET_HARD_LIMITS: Readonly<StorageExecutionHardLimits> = Object.freeze({
   maxFiles: 1_000_000,
   maxBytes: 4 * 1024 * 1024 * 1024 * 1024,
   maxCleanupItems: 1_000_000,
@@ -21,20 +80,20 @@ export const STORAGE_EXECUTION_BUDGET_HARD_LIMITS: Readonly<Record<string, any>>
   queuedBufferProductBytes: 1024 * 1024 * 1024
 });
 
-const ARRAY_SLOT_BYTES: any = 8;
-const lanes: any = new Map<any, any>();
+const ARRAY_SLOT_BYTES = 8;
+const lanes = new Map<string, MaintenanceLane>();
 
-function maintenanceError(code?: any, message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
+function maintenanceError(code: string, message: string): StorageMaintenanceError {
+  const error = new Error(message) as StorageMaintenanceError;
   error.name = "StorageMaintenanceError";
   error.code = code;
   error.reasonCode = code;
   return error;
 }
 
-function boundedPositiveInteger(value?: any, fallback?: any, maximum?: any, field?: any) : any {
+function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, field: string): number {
   if (value === undefined || value === null || value === "") return fallback;
-  const number: any = Number(value);
+  const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1) {
     throw maintenanceError("storage_execution_budget_invalid", `${field} must be a positive safe integer.`);
   }
@@ -47,9 +106,11 @@ function boundedPositiveInteger(value?: any, fallback?: any, maximum?: any, fiel
   return number;
 }
 
-export function normalizeStorageExecutionBudget(value: Record<string, any> = {}) : any {
-  const source: any = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const normalized: Record<string, any> = {
+export function normalizeStorageExecutionBudget(value: unknown = {}): Readonly<StorageExecutionBudget> {
+  const source: Record<string, unknown> = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const normalized: StorageExecutionBudget = {
     maxFiles: boundedPositiveInteger(
       source.maxFiles,
       DEFAULT_EXECUTION_BUDGET.maxFiles,
@@ -87,8 +148,8 @@ export function normalizeStorageExecutionBudget(value: Record<string, any> = {})
       "bufferBytes"
     )
   };
-  const queueAllocationBytes: any = normalized.maxQueueDepth * ARRAY_SLOT_BYTES;
-  const queuedBufferProductBytes: any = normalized.maxQueueDepth * normalized.bufferBytes;
+  const queueAllocationBytes = normalized.maxQueueDepth * ARRAY_SLOT_BYTES;
+  const queuedBufferProductBytes = normalized.maxQueueDepth * normalized.bufferBytes;
   if (
     !Number.isSafeInteger(queueAllocationBytes) ||
     queueAllocationBytes > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queueAllocationBytes ||
@@ -103,12 +164,12 @@ export function normalizeStorageExecutionBudget(value: Record<string, any> = {})
   return Object.freeze(normalized);
 }
 
-class FixedRingDeque {
-  capacity: any;
-  head: any;
-  length: any;
-  values: any;
-  constructor(capacity?: any) {
+class FixedRingDeque<T> {
+  readonly capacity: number;
+  head: number;
+  length: number;
+  readonly values: Array<T | undefined>;
+  constructor(capacity: number) {
     if (
       !Number.isSafeInteger(capacity) ||
       capacity < 1 ||
@@ -121,34 +182,42 @@ class FixedRingDeque {
       );
     }
     this.capacity = capacity;
-    this.values = new Array(capacity);
+    this.values = Array.from({ length: capacity });
     this.head = 0;
     this.length = 0;
   }
 
-  push(value?: any) : any {
+  push(value: T): boolean {
     if (this.length >= this.capacity) return false;
     this.values[(this.head + this.length) % this.capacity] = value;
     this.length += 1;
     return true;
   }
 
-  shift() : any {
+  shift(): T | null {
     if (this.length === 0) return null;
-    const value: any = this.values[this.head];
+    const value = this.values[this.head];
     this.values[this.head] = undefined;
     this.head = (this.head + 1) % this.capacity;
     this.length -= 1;
-    return value;
+    return value ?? null;
   }
 }
 
-export function createStorageWorkTracker({ signal = null, budget = {}, startedAt = Date.now() }: Record<string, any> = {}) : any {
-  const limits: any = normalizeStorageExecutionBudget(budget);
-  const counters: Record<string, any> = { files: 0, bytes: 0, cleanupItems: 0 };
-  const deadlineAt: any = startedAt + limits.maxDurationMs;
+export function createStorageWorkTracker({
+  signal = null,
+  budget = {},
+  startedAt = Date.now()
+}: {
+  signal?: AbortSignal | null;
+  budget?: unknown;
+  startedAt?: number;
+} = {}): Readonly<StorageWorkTracker> {
+  const limits = normalizeStorageExecutionBudget(budget);
+  const counters: StorageWorkCounters = { files: 0, bytes: 0, cleanupItems: 0 };
+  const deadlineAt = startedAt + limits.maxDurationMs;
 
-  function assertActive() : any {
+  function assertActive(): void {
     if (signal?.aborted) {
       throw signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled.");
     }
@@ -157,10 +226,14 @@ export function createStorageWorkTracker({ signal = null, budget = {}, startedAt
     }
   }
 
-  function checkedNextCounters({ files = 0, bytes = 0, cleanupItems = 0 }: Record<string, any> = {}) : any {
+  function checkedNextCounters({
+    files = 0,
+    bytes = 0,
+    cleanupItems = 0
+  }: StorageWorkAmounts = {}): StorageWorkCounters {
     assertActive();
-    const next: Record<string, any> = { ...counters };
-    for (const [field, amount] of (Object.entries({ files, bytes, cleanupItems }) as [string, any][])) {
+    const next: StorageWorkCounters = { ...counters };
+    for (const [field, amount] of Object.entries({ files, bytes, cleanupItems }) as Array<[keyof StorageWorkCounters, number]>) {
       if (!Number.isSafeInteger(amount) || amount < 0) {
         throw maintenanceError("storage_execution_budget_invalid", `${field} consumption must be a non-negative safe integer.`);
       }
@@ -176,7 +249,7 @@ export function createStorageWorkTracker({ signal = null, budget = {}, startedAt
     return next;
   }
 
-  function consume(amounts: Record<string, any> = {}) : any {
+  function consume(amounts: StorageWorkAmounts = {}): Readonly<StorageWorkCounters> {
     Object.assign(counters, checkedNextCounters(amounts));
     return Object.freeze({ ...counters });
   }
@@ -186,35 +259,35 @@ export function createStorageWorkTracker({ signal = null, budget = {}, startedAt
     budget: limits,
     deadlineAt,
     assertActive,
-    assertFits(amounts: Record<string, any> = {}) : any {
+    assertFits(amounts: StorageWorkAmounts = {}): Readonly<StorageWorkCounters> {
       return Object.freeze(checkedNextCounters(amounts));
     },
     consume,
-    snapshot() : any {
+    snapshot(): Readonly<StorageWorkCounters> {
       return Object.freeze({ ...counters });
     }
   });
 }
 
-function normalizedRoot(value?: any) : any {
+function normalizedRoot(value?: string): string {
   return path.resolve(String(value || "."));
 }
 
-function rejectCaller(entry?: any, error?: any) : any {
+function rejectCaller(entry: MaintenanceEntry, error: unknown): void {
   if (entry.callerSettled) return;
   entry.callerSettled = true;
   entry.reject(error);
 }
 
-function settleCaller(entry?: any, method?: any, value?: any) : any {
+function resolveCaller(entry: MaintenanceEntry, value: unknown): void {
   if (entry.callerSettled) return;
   entry.callerSettled = true;
-  entry[method](value);
+  entry.resolve(value);
 }
 
-function beginNext(lane?: any) : any {
+function beginNext(lane: MaintenanceLane): void {
   if (lane.active) return;
-  let entry: any = lane.queue.shift();
+  let entry = lane.queue.shift();
   while (entry?.cancelled) {
     entry.removeAbortListener?.();
     entry = lane.queue.shift();
@@ -224,7 +297,7 @@ function beginNext(lane?: any) : any {
     return;
   }
   lane.active = entry;
-  const remainingMs: any = entry.enqueuedAt + entry.budget.maxDurationMs - Date.now();
+  const remainingMs = entry.enqueuedAt + entry.budget.maxDurationMs - Date.now();
   if (remainingMs <= 0) {
     rejectCaller(entry, maintenanceError("storage_operation_timeout", "Storage operation expired before admission."));
     lane.active = null;
@@ -232,26 +305,26 @@ function beginNext(lane?: any) : any {
     return;
   }
 
-  const timeout: any = setTimeout(() : any => {
-    const error: any = maintenanceError("storage_operation_timeout", "Storage operation exceeded its execution deadline.");
+  const timeout = setTimeout((): void => {
+    const error = maintenanceError("storage_operation_timeout", "Storage operation exceeded its execution deadline.");
     lane.fenced = true;
     entry.controller.abort(error);
     rejectCaller(entry, error);
   }, remainingMs);
   timeout.unref?.();
 
-  const tracker: any = createStorageWorkTracker({
+  const tracker = createStorageWorkTracker({
     signal: entry.controller.signal,
     budget: entry.budget,
     startedAt: entry.enqueuedAt
   });
   Promise.resolve()
-    .then(() : any => entry.task(tracker))
+    .then(() => entry.task(tracker))
     .then(
-      (result?: any) : any => settleCaller(entry, "resolve", result),
-      (error?: any) : any => settleCaller(entry, "reject", error)
+      (result) => resolveCaller(entry, result),
+      (error: unknown) => rejectCaller(entry, error)
     )
-    .finally(() : any => {
+    .finally(() => {
       clearTimeout(timeout);
       entry.removeAbortListener?.();
       lane.active = null;
@@ -260,23 +333,27 @@ function beginNext(lane?: any) : any {
     });
 }
 
-export function runStorageMaintenanceMutation(
-  storageRoot?: any,
-  task?: any,
-  { signal = null, budget = {}, kind = "storage.maintenance" }: Record<string, any> = {}
-) : any {
+export function runStorageMaintenanceMutation<T>(
+  storageRoot: string,
+  task: (tracker: StorageWorkTracker) => T | Promise<T>,
+  {
+    signal = null,
+    budget = {},
+    kind = "storage.maintenance"
+  }: { signal?: AbortSignal | null; budget?: unknown; kind?: string } = {}
+): Promise<T> {
   if (typeof task !== "function") {
     throw new TypeError("runStorageMaintenanceMutation requires a task function.");
   }
-  const root: any = normalizedRoot(storageRoot);
-  const normalizedBudget: any = normalizeStorageExecutionBudget(budget);
-  let lane: any = lanes.get(root);
+  const root = normalizedRoot(storageRoot);
+  const normalizedBudget = normalizeStorageExecutionBudget(budget);
+  let lane = lanes.get(root);
   if (!lane) {
     lane = {
       root,
       active: null,
       fenced: false,
-      queue: new FixedRingDeque(normalizedBudget.maxQueueDepth)
+      queue: new FixedRingDeque<MaintenanceEntry>(normalizedBudget.maxQueueDepth)
     };
     lanes.set(root, lane);
   }
@@ -293,30 +370,30 @@ export function runStorageMaintenanceMutation(
     return Promise.reject(signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled."));
   }
 
-  return new Promise((resolve?: any, reject?: any) : any => {
-    const controller: any = new AbortController();
-    const entry: Record<string, any> = {
+  return new Promise<T>((resolve, reject) => {
+    const controller = new AbortController();
+    const entry: MaintenanceEntry = {
       kind,
       task,
       budget: normalizedBudget,
       controller,
       enqueuedAt: Date.now(),
-      resolve,
+      resolve: (value: unknown) => resolve(value as T),
       reject,
       callerSettled: false,
       cancelled: false,
       removeAbortListener: null
     };
     if (signal) {
-      const onAbort: any = () : any => {
-        const error: any = signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled.");
+      const onAbort = (): void => {
+        const error: unknown = signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled.");
         entry.cancelled = lane.active !== entry;
         if (lane.active === entry) lane.fenced = true;
         controller.abort(error);
         rejectCaller(entry, error);
       };
       signal.addEventListener("abort", onAbort, { once: true });
-      entry.removeAbortListener = () : any => signal.removeEventListener("abort", onAbort);
+      entry.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
     }
     if (!lane.queue.push(entry)) {
       entry.removeAbortListener?.();
@@ -327,8 +404,8 @@ export function runStorageMaintenanceMutation(
   });
 }
 
-export function storageMaintenanceLaneStatus(storageRoot?: any) : any {
-  const lane: any = lanes.get(normalizedRoot(storageRoot));
+export function storageMaintenanceLaneStatus(storageRoot?: string): Readonly<{ active: boolean; fenced: boolean; queued: number }> {
+  const lane = lanes.get(normalizedRoot(storageRoot));
   return Object.freeze({
     active: Boolean(lane?.active),
     fenced: lane?.fenced === true,

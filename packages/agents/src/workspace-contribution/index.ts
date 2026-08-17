@@ -10,7 +10,7 @@ export {
   shallowObject,
   stableId,
   stableJson,
-  text
+  text,
 } from "./package-validation.ts";
 
 export {
@@ -22,17 +22,25 @@ export {
   ensurePrivateDirectoryChain,
   hardenStoredFile,
   storageRoot,
-  writeJsonSyncAtomic
+  writeJsonSyncAtomic,
 } from "./storage-helpers.ts";
 
-export {
-  createContributionRegistry
-} from "./contribution-core.ts";
+export { createContributionRegistry } from "./contribution-core.ts";
 
-export {
-  CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION
-} from "./lifecycle-definition.ts";
+export { CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION } from "./lifecycle-definition.ts";
 
-export {
-  buildContributionStatsDashboard
-} from "./stats-dashboard.ts";
+export { buildContributionStatsDashboard } from "./stats-dashboard.ts";
+
+export type {
+  AssetRecord,
+  AuditEvent,
+  Contribution,
+  ContributionEvent,
+  ContributionMetrics,
+  ContributionRegistryOptions,
+  ContributionType,
+  ContributionVisibility,
+  ExecutionReceipt,
+  LifecycleDefinition,
+  RegistryInput,
+} from "./types.ts";

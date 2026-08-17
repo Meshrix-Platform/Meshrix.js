@@ -1,12 +1,12 @@
 import { hashClientString, isServerToken, serverToken } from "#meshrix/product-api";
 
-function stringValue(value?: any) : any {
+function stringValue(value?: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function firstString(...values: any[]) : any {
+function firstString(...values: unknown[]): string {
   for (const value of values) {
-    const text: any = stringValue(value);
+    const text = stringValue(value);
     if (text) {
       return text;
     }
@@ -21,8 +21,15 @@ export function resolveArchiveBatchIdentity({
   checkpointId = "",
   manifestDigest = "",
   inputDigest = ""
-}: Record<string, any> = {}) : any {
-  const explicit: any = firstString(archiveBatchId, batchId, clientBatchId);
+}: {
+  archiveBatchId?: string;
+  batchId?: string;
+  clientBatchId?: string;
+  checkpointId?: string;
+  manifestDigest?: string;
+  inputDigest?: string;
+} = {}) {
+  const explicit = firstString(archiveBatchId, batchId, clientBatchId);
   if (explicit) {
     return {
       archiveBatchId: explicit,
@@ -35,7 +42,7 @@ export function resolveArchiveBatchIdentity({
     };
   }
 
-  const source: any = firstString(manifestDigest, inputDigest, checkpointId);
+  const source = firstString(manifestDigest, inputDigest, checkpointId);
   if (!source) {
     return {
       archiveBatchId: "",
@@ -44,8 +51,8 @@ export function resolveArchiveBatchIdentity({
     };
   }
 
-  const normalizedManifestDigest: any = stringValue(manifestDigest).toLowerCase();
-  const normalizedInputDigest: any = stringValue(inputDigest).toLowerCase();
+  const normalizedManifestDigest = stringValue(manifestDigest).toLowerCase();
+  const normalizedInputDigest = stringValue(inputDigest).toLowerCase();
   return {
     archiveBatchId: serverToken(
       "archive_batch",

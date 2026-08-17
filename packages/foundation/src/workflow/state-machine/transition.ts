@@ -1,5 +1,44 @@
 import { transitionState as coreTransition } from "./engine/state-machine-core.ts";
 
+interface MatrixCell {
+  from: string;
+  event: string;
+  result: string;
+  to?: string;
+}
+
+interface StateMachineDefinition {
+  totalMatrix?: MatrixCell[];
+  [key: string]: unknown;
+}
+
+interface StateContext {
+  entityId?: string;
+  currentStatus?: string;
+  [key: string]: unknown;
+}
+
+interface TransitionContext {
+  actor?: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+  operationId?: string;
+  traceId?: string;
+  auditId?: string;
+  checkpointNodeId?: string;
+  policyDecisionId?: string;
+  approvalId?: string;
+  now?: string | number | Date;
+  guardContext?: Record<string, unknown>;
+}
+
+interface TransitionOptions {
+  machine: StateMachineDefinition;
+  state: StateContext;
+  event: string;
+  context?: TransitionContext;
+}
+
 /**
  * Execute a state transition on a state machine.
  *
@@ -10,7 +49,7 @@ import { transitionState as coreTransition } from "./engine/state-machine-core.t
  * @param {object} [options.context] - Additional transition context
  * @returns {object} Transition result
  */
-export function transition({ machine, state, event, context = {} }: Record<string, any>) : any {
+export function transition({ machine, state, event, context = {} }: TransitionOptions) {
   if (!machine) {
     return {
       ok: false,
@@ -72,11 +111,11 @@ export function transition({ machine, state, event, context = {} }: Record<strin
  * @param {string} eventType - Event to check
  * @returns {boolean}
  */
-export function isTransitionAllowed(machine?: any, fromStatus?: any, eventType?: any) : any {
+export function isTransitionAllowed(machine?: StateMachineDefinition, fromStatus?: string, eventType?: string): boolean {
   if (!machine || !machine.totalMatrix) return false;
 
-  const cell: any = machine.totalMatrix.find(
-    (c?: any) : any => c.from === fromStatus && c.event === eventType
+  const cell = machine.totalMatrix.find(
+    (candidate) => candidate.from === fromStatus && candidate.event === eventType
   );
 
   return cell
@@ -91,16 +130,16 @@ export function isTransitionAllowed(machine?: any, fromStatus?: any, eventType?:
  * @param {string} fromStatus - Current status
  * @returns {string[]} Array of allowed event types
  */
-export function listAllowedEvents(machine?: any, fromStatus?: any) : any {
+export function listAllowedEvents(machine?: StateMachineDefinition, fromStatus?: string): string[] {
   if (!machine || !machine.totalMatrix) return [];
 
   return machine.totalMatrix
     .filter(
-      (c?: any) : any =>
-        c.from === fromStatus &&
-        c.result !== "illegal_transition"
+      (cell) =>
+        cell.from === fromStatus &&
+        cell.result !== "illegal_transition"
     )
-    .map((c?: any) : any => c.event);
+    .map((cell) => cell.event);
 }
 
 /**
@@ -112,12 +151,16 @@ export function listAllowedEvents(machine?: any, fromStatus?: any) : any {
  * @param {Array<{ event: string, context?: object }>} options.transitions - Transitions to execute
  * @returns {{ results: object[], finalState: object, ok: boolean }}
  */
-export function batchTransition({ machine, initialState, transitions }: Record<string, any>) : any {
-  const results: any[] = [];
-  let currentState: Record<string, any> = { ...initialState };
+export function batchTransition({ machine, initialState, transitions }: {
+  machine: StateMachineDefinition;
+  initialState: StateContext;
+  transitions: readonly { event: string; context?: TransitionContext }[];
+}) {
+  const results: Array<Record<string, unknown>> = [];
+  let currentState: StateContext = { ...initialState };
 
   for (const t of transitions) {
-    const result: any = transition({
+    const result = transition({
       machine,
       state: currentState,
       event: t.event,
@@ -132,10 +175,10 @@ export function batchTransition({ machine, initialState, transitions }: Record<s
       result,
     });
 
-    if (result.ok && result.toStatus) {
+    if (result.ok && typeof result.toStatus === "string" && result.toStatus) {
       currentState = { ...currentState, currentStatus: result.toStatus };
     }
   }
 
-  return { results, finalState: currentState, ok: results.every((r?: any) : any => r.ok) };
+  return { results, finalState: currentState, ok: results.every((result) => result.ok === true) };
 }

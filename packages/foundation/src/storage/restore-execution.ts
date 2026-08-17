@@ -15,12 +15,28 @@ import { createStorageWorkTracker } from "./storage-maintenance-coordinator.ts";
 import { createStorageRestorePlan } from "./restore-plan.ts";
 import { createStorageRestoreReport } from "./restore-report.ts";
 import { buildRestoreTransactionRecords } from "./restore-transaction-records.ts";
+import type {
+  RestoreEntry,
+  RestoreTransactionRecord
+} from "./restore-transaction-records.ts";
 import {
   executeDurableRestoreTransaction,
   reconcileStorageRestoreTransactionsSync
 } from "./restore-transaction.ts";
 
-function attachInternalPath(value?: any, property?: any, internalPath?: any) : any {
+type UnknownRecord = Record<string, unknown>;
+
+interface StorageWorkTracker {
+  assertActive(): void;
+  consume(value: { files?: number; bytes?: number; cleanupItems?: number }): void;
+}
+
+interface MaintenanceLock {
+  assertRestoreQuiesced(): Promise<void>;
+  release(): Promise<void>;
+}
+
+function attachInternalPath<T extends object>(value: T, property: PropertyKey, internalPath: string): T {
   Object.defineProperty(value, property, {
     value: internalPath,
     enumerable: false,
@@ -39,27 +55,36 @@ export async function restoreStorageBackup({
   signal = null,
   budget = {},
   executionContext = null
-}: Record<string, any> = {}) : Promise<any> {
-  const rootPath: any = path.resolve(userDataPath || ServerConfig.getDataDir());
-  const tracker: any = executionContext || createStorageWorkTracker({ signal, budget });
+}: {
+  userDataPath?: string;
+  backupId?: string;
+  dryRun?: boolean;
+  apply?: boolean;
+  includePaths?: readonly string[];
+  signal?: AbortSignal | null;
+  budget?: UnknownRecord;
+  executionContext?: StorageWorkTracker | null;
+} = {}): Promise<unknown> {
+  const rootPath = path.resolve(userDataPath || ServerConfig.getDataDir());
+  const tracker = executionContext || createStorageWorkTracker({ signal, budget }) as StorageWorkTracker;
   tracker.assertActive();
-  const shouldApply: any = dryRun === false && apply === true;
-  let maintenanceLock: any = null;
+  const shouldApply = dryRun === false && apply === true;
+  let maintenanceLock: MaintenanceLock | null = null;
   try {
     if (shouldApply) {
-      maintenanceLock = await acquireStorageMaintenanceLock(rootPath);
+      maintenanceLock = await acquireStorageMaintenanceLock(rootPath) as MaintenanceLock;
       await maintenanceLock.assertRestoreQuiesced();
       reconcileStorageRestoreTransactionsSync(rootPath);
     }
-    const manifest: any = await loadBackupManifest({ userDataPath: rootPath, backupId });
-    const plan: any = await createStorageRestorePlan({
+    const manifest = await loadBackupManifest({ userDataPath: rootPath, backupId });
+    const plan = await createStorageRestorePlan({
       rootPath,
       manifest,
       includePaths,
       executionContext: tracker
     });
     if (!shouldApply) return plan.previewReport;
-    const firstBlocked: any = plan.plannedActions.find((action?: any) : any => action.action === "blocked");
+    const firstBlocked = plan.plannedActions.find((action) => action.action === "blocked");
     if (firstBlocked) {
       throw storageError(
         "storage_restore_integrity_failed",
@@ -67,8 +92,8 @@ export async function restoreStorageBackup({
         { detailReasonCode: firstBlocked.reason }
       );
     }
-    const receiptId: any = `restore_${nowIso().replace(/[:.]/g, "-")}_${crypto.randomUUID().slice(0, 12)}`;
-    const report: any = createStorageRestoreReport({
+    const receiptId = `restore_${nowIso().replace(/[:.]/g, "-")}_${crypto.randomUUID().slice(0, 12)}`;
+    const report = createStorageRestoreReport({
       manifest,
       selectedEntries: plan.selectedEntries,
       plannedActions: plan.plannedActions,
@@ -76,29 +101,29 @@ export async function restoreStorageBackup({
       receiptId,
       restoreSemantics: plan.restoreSemantics
     });
-    const reportPath: any = path.join(
+    const reportPath = path.join(
       backupPath(rootPath, manifest.backupId),
       RESTORE_REPORT_DIR,
       `${receiptId}.json`
     );
-    const records: any = await buildRestoreTransactionRecords({
+    const records = await buildRestoreTransactionRecords({
       rootPath,
       entries: plan.selectedEntries,
       actions: plan.plannedActions
     });
     tracker.consume({ cleanupItems: records.length });
     tracker.assertActive();
-    const selectedEntryByPath: any = new Map<any, any>(
-      plan.selectedEntries.map((entry?: any) : any => [entry.relativePath, entry])
+    const selectedEntryByPath = new Map<string, RestoreEntry>(
+      plan.selectedEntries.map((entry) => [entry.relativePath, entry])
     );
-    const committedReportPath: any = await executeDurableRestoreTransaction({
+    const committedReportPath = await executeDurableRestoreTransaction({
       userDataPath: rootPath,
       backupId: manifest.backupId,
       receiptId,
       report,
       records,
-      stageInstall: async (record?: any, stagedPath?: any) : Promise<any> => {
-        const entry: any = selectedEntryByPath.get(record.relativePath);
+      stageInstall: async (record: RestoreTransactionRecord, stagedPath: string): Promise<void> => {
+        const entry = selectedEntryByPath.get(record.relativePath);
         if (!entry) {
           throw storageError(
             "storage_restore_transaction_invalid",
@@ -121,10 +146,10 @@ export async function restoreStorageBackup({
       );
     }
     return attachInternalPath(report, "reportPath", committedReportPath);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (isStorageError(error)) throw error;
     throw storageError("storage_restore_failed", "Storage restore could not be completed safely.", { cause: error });
   } finally {
-    await maintenanceLock?.release().catch(() : any => {});
+    await maintenanceLock?.release().catch(() => {});
   }
 }

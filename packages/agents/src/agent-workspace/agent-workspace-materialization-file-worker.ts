@@ -1,65 +1,147 @@
 import { fork } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
+import type { Hash } from "node:crypto";
 import fsSync from "node:fs";
+import type { BigIntStats } from "node:fs";
 import fs from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const PRIVATE_FILE_MODE: any = 0o600;
-const PRIVATE_DIRECTORY_MODE: any = 0o700;
-const MAX_CHUNK_BYTES: any = 64 * 1024;
-const REQUEST_TIMEOUT_MS: any = 30_000;
-const TEMP_LEAF_PATTERN: any =
+type PlainRecord = Record<string, unknown>;
+type Guard = (() => unknown | Promise<unknown>) | null;
+interface WorkerFailure extends Error {
+  code?: string;
+}
+export interface FsIdentity {
+  birthtimeNs: string;
+  dev: string;
+  ino: string;
+  mode: number;
+}
+interface WorkerConfiguration {
+  byteCount: number;
+  contentDigest: string;
+  parentIdentity: FsIdentity;
+  preparedContentVerified: boolean;
+  preparedIdentity: FsIdentity | null;
+  targetLeaf: string;
+  tempLeaf: string;
+}
+interface WorkerNames {
+  intentReservation: boolean;
+  temp: boolean;
+  target: boolean;
+}
+interface PendingRequest {
+  resolve(value: unknown): void;
+  reject(reason?: unknown): void;
+  timer: NodeJS.Timeout;
+}
+interface DirectoryWorkerOptions {
+  parentPath?: string;
+  parentIdentity?: unknown;
+  preparedContentVerified?: boolean;
+  preparedIdentity?: unknown;
+  targetLeaf?: unknown;
+  tempLeaf?: unknown;
+  contentDigest?: unknown;
+  byteCount?: unknown;
+}
+export interface MaterializationDirectoryWorker {
+  reserve(): Promise<{ preparedIdentity: FsIdentity }>;
+  write(chunk: Buffer): Promise<{ copiedBytes: number }>;
+  finish(): Promise<{ contentDigest: string; preparedIdentity: FsIdentity }>;
+  link(): Promise<{ linked: true; preparedIdentity: FsIdentity }>;
+  finishPublish(): Promise<{ published: true; preparedIdentity: FsIdentity }>;
+  verify(): Promise<{
+    byteCount: number;
+    contentDigest: string;
+    preparedIdentity: FsIdentity;
+    nlink: number;
+  }>;
+  inspectPublished(): Promise<{ preparedIdentity: FsIdentity; nlink: number }>;
+  inspectRecovery(): Promise<
+    WorkerNames & { preparedIdentity: FsIdentity | null }
+  >;
+  cleanup(): Promise<{ cleaned: true }>;
+  readChunks(): AsyncGenerator<Buffer, void, void>;
+  close(): Promise<void>;
+  terminate(): void;
+}
+function plainRecord(value: unknown): PlainRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as PlainRecord)
+    : null;
+}
+function failure(value: unknown): WorkerFailure | null {
+  return value instanceof Error ? (value as WorkerFailure) : null;
+}
+
+const PRIVATE_FILE_MODE = 0o600;
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const MAX_CHUNK_BYTES = 64 * 1024;
+const REQUEST_TIMEOUT_MS = 30_000;
+const TEMP_LEAF_PATTERN =
   /^\.meshrix-materialization-[A-Za-z0-9_-]{16,128}(?:\.tmp)?$/u;
 
-function requiredOpenFlag(name?: any) : any {
-  const value: any = (fsSync.constants as Record<string, any>)[name];
+function requiredOpenFlag(name: string): number {
+  const value = (fsSync.constants as Record<string, number | undefined>)[name];
   if (!Number.isInteger(value)) {
     throw workerError(
       "materialization_platform_unsupported",
-      `Required file-open flag ${name} is unavailable.`
+      `Required file-open flag ${name} is unavailable.`,
     );
   }
-  return value;
+  return Number(value);
 }
 
-function workerError(code?: any, message?: any) : any {
+function workerError(code: string, message: string): WorkerFailure {
   return Object.assign(new Error(message), { code });
 }
 
-function exactObject(value?: any, keys?: any) : any {
+function exactObject(
+  value: unknown,
+  keys: readonly string[],
+): value is PlainRecord {
   return Boolean(
     value &&
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.getPrototypeOf(value) === Object.prototype &&
-    Object.keys(value).sort().join("\0") === [...keys].sort().join("\0")
+    Object.keys(value).sort().join("\0") === [...keys].sort().join("\0"),
   );
 }
 
-function safeInteger(value?: any, label?: any) : any {
-  const number: any = Number(value);
+function safeInteger(value: unknown, label: string): number {
+  const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 0) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      `${label} is invalid.`
+      `${label} is invalid.`,
     );
   }
   return number;
 }
 
-function digest(value?: any, label?: any) : any {
-  const normalized: any = String(value || "").trim().toLowerCase();
+function digest(value: unknown, label: string): string {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!/^[a-f0-9]{64}$/u.test(normalized)) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      `${label} is invalid.`
+      `${label} is invalid.`,
     );
   }
   return normalized;
 }
 
-function leaf(value?: any, { temporary = false }: Record<string, any> = {}) : any {
-  const normalized: any = String(value || "");
+function leaf(
+  value: unknown,
+  { temporary = false }: { temporary?: boolean } = {},
+): string {
+  const normalized = String(value || "");
   if (
     !normalized ||
     normalized.length > 255 ||
@@ -72,48 +154,52 @@ function leaf(value?: any, { temporary = false }: Record<string, any> = {}) : an
   ) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      "Materialization leaf name is invalid."
+      "Materialization leaf name is invalid.",
     );
   }
   return normalized;
 }
 
-function statMode(stat?: any) : any {
+function statMode(stat: BigIntStats): number {
   return Number(
-    typeof stat.mode === "bigint"
-      ? stat.mode & 0o7777n
-      : stat.mode & 0o7777
+    typeof stat.mode === "bigint" ? stat.mode & 0o7777n : stat.mode & 0o7777,
   );
 }
 
-function statSize(stat?: any) : any {
+function statSize(stat: BigIntStats): bigint {
   return typeof stat.size === "bigint" ? stat.size : BigInt(stat.size);
 }
 
-function statIdentity(stat?: any) : any {
-  const birthtimeNs: any = typeof stat.birthtimeNs === "bigint"
-    ? stat.birthtimeNs
-    : BigInt(Math.max(0, Math.trunc(Number(stat.birthtimeMs || 0) * 1_000_000)));
+function statIdentity(stat: BigIntStats): FsIdentity {
+  const birthtimeNs =
+    typeof stat.birthtimeNs === "bigint"
+      ? stat.birthtimeNs
+      : BigInt(
+          Math.max(0, Math.trunc(Number(stat.birthtimeMs || 0) * 1_000_000)),
+        );
   return Object.freeze({
     birthtimeNs: String(birthtimeNs),
     dev: String(stat.dev),
     ino: String(stat.ino),
-    mode: statMode(stat)
+    mode: statMode(stat),
   });
 }
 
-function normalizeIdentity(value?: any, label: any = "Materialization identity") : any {
+function normalizeIdentity(
+  value: unknown,
+  label = "Materialization identity",
+): FsIdentity {
   if (!exactObject(value, ["birthtimeNs", "dev", "ino", "mode"])) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      `${label} is invalid.`
+      `${label} is invalid.`,
     );
   }
-  const normalized: Readonly<Record<string, any>> = Object.freeze({
+  const normalized: Readonly<FsIdentity> = Object.freeze({
     birthtimeNs: String(value.birthtimeNs || ""),
     dev: String(value.dev || ""),
     ino: String(value.ino || ""),
-    mode: safeInteger(value.mode, `${label} mode`)
+    mode: safeInteger(value.mode, `${label} mode`),
   });
   if (
     !/^\d+$/u.test(normalized.birthtimeNs) ||
@@ -122,14 +208,14 @@ function normalizeIdentity(value?: any, label: any = "Materialization identity")
   ) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      `${label} is invalid.`
+      `${label} is invalid.`,
     );
   }
   return normalized;
 }
 
-function sameIdentity(stat?: any, identity?: any) : any {
-  const observed: any = statIdentity(stat);
+function sameIdentity(stat: BigIntStats, identity: FsIdentity): boolean {
+  const observed = statIdentity(stat);
   return (
     observed.birthtimeNs === identity.birthtimeNs &&
     observed.dev === identity.dev &&
@@ -138,94 +224,91 @@ function sameIdentity(stat?: any, identity?: any) : any {
   );
 }
 
-function assertPrivateFile(stat?: any, {
-  identity = null,
-  byteCount = null,
-  nlink = null
-}: Record<string, any> = {}) : any {
+function assertPrivateFile(
+  stat: BigIntStats,
+  {
+    identity = null,
+    byteCount = null,
+    nlink = null,
+  }: {
+    identity?: FsIdentity | null;
+    byteCount?: number | null;
+    nlink?: number | null;
+  } = {},
+): void {
   if (
     !stat?.isFile?.() ||
     stat?.isSymbolicLink?.() ||
     statMode(stat) !== PRIVATE_FILE_MODE ||
-    (
-      Number.isInteger(process.geteuid?.()) &&
-      Number(stat.uid) !== process.geteuid?.()
-    ) ||
-    (
-      Number.isInteger(process.getegid?.()) &&
-      Number(stat.gid) !== process.getegid?.()
-    ) ||
+    (Number.isInteger(process.geteuid?.()) &&
+      Number(stat.uid) !== process.geteuid?.()) ||
+    (Number.isInteger(process.getegid?.()) &&
+      Number(stat.gid) !== process.getegid?.()) ||
     (identity && !sameIdentity(stat, identity)) ||
     (byteCount !== null && statSize(stat) !== BigInt(byteCount)) ||
     (nlink !== null && Number(stat.nlink) !== nlink)
   ) {
     throw workerError(
       "materialization_target_identity_mismatch",
-      "Materialization file identity is not exact."
+      "Materialization file identity is not exact.",
     );
   }
 }
 
-function assertPrivateParent(stat?: any, identity?: any) : any {
+function assertPrivateParent(stat: BigIntStats, identity: FsIdentity): void {
   if (
     !stat?.isDirectory?.() ||
     stat?.isSymbolicLink?.() ||
     statMode(stat) !== PRIVATE_DIRECTORY_MODE ||
-    (
-      Number.isInteger(process.geteuid?.()) &&
-      Number(stat.uid) !== process.geteuid?.()
-    ) ||
-    (
-      Number.isInteger(process.getegid?.()) &&
-      Number(stat.gid) !== process.getegid?.()
-    ) ||
+    (Number.isInteger(process.geteuid?.()) &&
+      Number(stat.uid) !== process.geteuid?.()) ||
+    (Number.isInteger(process.getegid?.()) &&
+      Number(stat.gid) !== process.getegid?.()) ||
     !sameIdentity(stat, identity)
   ) {
     throw workerError(
       "materialization_parent_identity_mismatch",
-      "Materialization parent identity is not exact."
+      "Materialization parent identity is not exact.",
     );
   }
 }
 
-async function lstatOrMissing(candidate?: any) : Promise<any> {
+async function lstatOrMissing(candidate: string): Promise<BigIntStats | null> {
   try {
     return await fs.lstat(candidate, { bigint: true });
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return null;
+  } catch (error: unknown) {
+    if (failure(error)?.code === "ENOENT") return null;
     throw error;
   }
 }
 
-async function hashHandle(handle?: any, guard: any = null) : Promise<any> {
-  const hash: any = createHash("sha256");
-  const buffer: any = Buffer.allocUnsafe(MAX_CHUNK_BYTES);
-  let position: any = 0;
+async function hashHandle(
+  handle: FileHandle,
+  guard: Guard = null,
+): Promise<{ byteCount: number; contentDigest: string }> {
+  const hash = createHash("sha256");
+  const buffer = Buffer.allocUnsafe(MAX_CHUNK_BYTES);
+  let position = 0;
   while (true) {
     await guard?.();
-    const result: any = await handle.read(
-      buffer,
-      0,
-      buffer.byteLength,
-      position
-    );
-    const bytesRead: any = Number(result?.bytesRead || 0);
+    const result = await handle.read(buffer, 0, buffer.byteLength, position);
+    const bytesRead = Number(result.bytesRead || 0);
     if (bytesRead === 0) break;
     hash.update(buffer.subarray(0, bytesRead));
     position += bytesRead;
   }
   return {
     byteCount: position,
-    contentDigest: hash.digest("hex")
+    contentDigest: hash.digest("hex"),
   };
 }
 
-async function syncCurrentDirectory() : Promise<any> {
-  const flags: any =
+async function syncCurrentDirectory(): Promise<void> {
+  const flags =
     requiredOpenFlag("O_RDONLY") |
     requiredOpenFlag("O_DIRECTORY") |
     requiredOpenFlag("O_NOFOLLOW");
-  const handle: any = await fs.open(".", flags);
+  const handle = await fs.open(".", flags);
   try {
     await handle.sync();
   } finally {
@@ -233,7 +316,7 @@ async function syncCurrentDirectory() : Promise<any> {
   }
 }
 
-function normalizeWorkerConfiguration(value?: any) : any {
+function normalizeWorkerConfiguration(value: unknown): WorkerConfiguration {
   if (
     !exactObject(value, [
       "byteCount",
@@ -242,24 +325,21 @@ function normalizeWorkerConfiguration(value?: any) : any {
       "preparedContentVerified",
       "preparedIdentity",
       "targetLeaf",
-      "tempLeaf"
+      "tempLeaf",
     ])
   ) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      "Materialization worker configuration is invalid."
+      "Materialization worker configuration is invalid.",
     );
   }
   if (
     typeof value.preparedContentVerified !== "boolean" ||
-    (
-      value.preparedContentVerified &&
-      value.preparedIdentity === null
-    )
+    (value.preparedContentVerified && value.preparedIdentity === null)
   ) {
     throw workerError(
       "materialization_file_worker_protocol_invalid",
-      "Materialization prepared-content state is invalid."
+      "Materialization prepared-content state is invalid.",
     );
   }
   return Object.freeze({
@@ -267,147 +347,174 @@ function normalizeWorkerConfiguration(value?: any) : any {
     contentDigest: digest(value.contentDigest, "Materialization digest"),
     parentIdentity: normalizeIdentity(
       value.parentIdentity,
-      "Materialization parent identity"
+      "Materialization parent identity",
     ),
     preparedContentVerified: value.preparedContentVerified,
-    preparedIdentity: value.preparedIdentity === null
-      ? null
-      : normalizeIdentity(
-          value.preparedIdentity,
-          "Materialization prepared identity"
-        ),
+    preparedIdentity:
+      value.preparedIdentity === null
+        ? null
+        : normalizeIdentity(
+            value.preparedIdentity,
+            "Materialization prepared identity",
+          ),
     targetLeaf: leaf(value.targetLeaf),
-    tempLeaf: leaf(value.tempLeaf, { temporary: true })
+    tempLeaf: leaf(value.tempLeaf, { temporary: true }),
   });
 }
 
-async function runChildWorker() : Promise<any> {
-  let configuration: any = null;
-  let fileHandle: any = null;
-  let fileIdentity: any = null;
-  let copiedBytes: any = 0;
-  let streamHash: any = createHash("sha256");
-  let linked: any = false;
-  let recoveryByteCount: any = null;
+async function runChildWorker(): Promise<void> {
+  let configuration: WorkerConfiguration;
+  let fileHandle: FileHandle | null = null;
+  let fileIdentity: FsIdentity | null = null;
+  let copiedBytes = 0;
+  let streamHash: Hash = createHash("sha256");
+  let linked = false;
+  let recoveryByteCount: number | null = null;
 
-  const closeHandle: any = async () : Promise<any> => {
-    const handle: any = fileHandle;
+  const closeHandle = async (): Promise<void> => {
+    const handle = fileHandle;
     fileHandle = null;
     await handle?.close?.();
   };
 
-  const assertCurrentParent: any = async () : Promise<any> => {
-    const parentStat: any = await fs.stat(".", { bigint: true });
+  const assertCurrentParent = async (): Promise<BigIntStats> => {
+    if (!configuration)
+      throw workerError(
+        "materialization_file_worker_protocol_invalid",
+        "Materialization worker is not configured.",
+      );
+    const parentStat = await fs.stat(".", { bigint: true });
     assertPrivateParent(parentStat, configuration.parentIdentity);
     return parentStat;
   };
 
-  const assertReservedTopology: any = async (byteCount: any = copiedBytes) : Promise<any> => {
+  const assertReservedTopology = async (
+    byteCount = copiedBytes,
+  ): Promise<BigIntStats> => {
+    if (!configuration || !fileHandle || !fileIdentity)
+      throw workerError(
+        "materialization_file_worker_protocol_invalid",
+        "Materialization worker is not reserved.",
+      );
     const [opened, parentStat, tempStat, targetStat] = await Promise.all([
       fileHandle.stat({ bigint: true }),
       fs.stat(".", { bigint: true }),
       lstatOrMissing(configuration.tempLeaf),
-      lstatOrMissing(configuration.targetLeaf)
+      lstatOrMissing(configuration.targetLeaf),
     ]);
     assertPrivateParent(parentStat, configuration.parentIdentity);
     if (!tempStat || targetStat) {
       throw workerError(
         "materialization_target_identity_mismatch",
-        "Reserved materialization names are not exact."
+        "Reserved materialization names are not exact.",
       );
     }
     for (const candidate of [opened, tempStat]) {
       assertPrivateFile(candidate, {
         identity: fileIdentity,
         byteCount,
-        nlink: 1
+        nlink: 1,
       });
     }
     return opened;
   };
 
-  const assertLinkedTopology: any = async () : Promise<any> => {
+  const assertLinkedTopology = async (): Promise<BigIntStats> => {
+    if (!configuration || !fileHandle || !fileIdentity)
+      throw workerError(
+        "materialization_file_worker_protocol_invalid",
+        "Materialization worker is not linked.",
+      );
     const [opened, parentStat, tempStat, targetStat] = await Promise.all([
       fileHandle.stat({ bigint: true }),
       fs.stat(".", { bigint: true }),
       lstatOrMissing(configuration.tempLeaf),
-      lstatOrMissing(configuration.targetLeaf)
+      lstatOrMissing(configuration.targetLeaf),
     ]);
     assertPrivateParent(parentStat, configuration.parentIdentity);
     if (!tempStat || !targetStat) {
       throw workerError(
         "materialization_target_identity_mismatch",
-        "Linked materialization names are not exact."
+        "Linked materialization names are not exact.",
       );
     }
     for (const candidate of [opened, tempStat, targetStat]) {
       assertPrivateFile(candidate, {
         identity: fileIdentity,
         byteCount: configuration.byteCount,
-        nlink: 2
+        nlink: 2,
       });
     }
     return opened;
   };
 
-  const assertPublishedTopology: any = async () : Promise<any> => {
+  const assertPublishedTopology = async (): Promise<BigIntStats> => {
+    if (!configuration || !fileHandle || !fileIdentity)
+      throw workerError(
+        "materialization_file_worker_protocol_invalid",
+        "Materialization worker is not published.",
+      );
     const [opened, parentStat, tempStat, targetStat] = await Promise.all([
       fileHandle.stat({ bigint: true }),
       fs.stat(".", { bigint: true }),
       lstatOrMissing(configuration.tempLeaf),
-      lstatOrMissing(configuration.targetLeaf)
+      lstatOrMissing(configuration.targetLeaf),
     ]);
     assertPrivateParent(parentStat, configuration.parentIdentity);
     if (tempStat || !targetStat) {
       throw workerError(
         "materialization_target_identity_mismatch",
-        "Published materialization names are not exact."
+        "Published materialization names are not exact.",
       );
     }
     for (const candidate of [opened, targetStat]) {
       assertPrivateFile(candidate, {
         identity: fileIdentity,
         byteCount: configuration.byteCount,
-        nlink: 1
+        nlink: 1,
       });
     }
     return opened;
   };
 
-  const openRecoveryHandle: any = async () : Promise<any> => {
+  const openRecoveryHandle = async (): Promise<WorkerNames> => {
+    if (!configuration)
+      throw workerError(
+        "materialization_file_worker_protocol_invalid",
+        "Materialization worker is not configured.",
+      );
     await assertCurrentParent();
-    const tempStat: any = await lstatOrMissing(configuration.tempLeaf);
-    const targetStat: any = await lstatOrMissing(configuration.targetLeaf);
-    const present: any = [
+    const tempStat = await lstatOrMissing(configuration.tempLeaf);
+    const targetStat = await lstatOrMissing(configuration.targetLeaf);
+    const present: Array<[string, BigIntStats]> = [
       [configuration.tempLeaf, tempStat],
-      [configuration.targetLeaf, targetStat]
-    ].filter(([, stat]: any[]) : any => stat);
-    const recoveryIdentity: any =
-      configuration.preparedIdentity || fileIdentity;
+      [configuration.targetLeaf, targetStat],
+    ].filter((entry): entry is [string, BigIntStats] => entry[1] !== null);
+    const recoveryIdentity = configuration.preparedIdentity || fileIdentity;
     if (!recoveryIdentity) {
       if (targetStat) {
         throw workerError(
           "materialization_recovery_identity_missing",
-          "An unowned materialization inode is present."
+          "An unowned materialization inode is present.",
         );
       }
       if (!tempStat) {
         return {
           intentReservation: false,
           temp: false,
-          target: false
+          target: false,
         };
       }
       throw workerError(
         "materialization_recovery_identity_missing",
-        "An identityless materialization inode cannot be adopted."
+        "An identityless materialization inode cannot be adopted.",
       );
     }
     if (present.length === 0) {
       return {
         intentReservation: false,
         temp: false,
-        target: false
+        target: false,
       };
     }
     if (
@@ -417,21 +524,21 @@ async function runChildWorker() : Promise<any> {
     ) {
       throw workerError(
         "materialization_target_identity_mismatch",
-        "An unverified reservation cannot own the publication target."
+        "An unverified reservation cannot own the publication target.",
       );
     }
-    const requiredLinks: any = present.length;
-    const exactRecoveryBytes: any = configuration.preparedIdentity &&
-      configuration.preparedContentVerified
-      ? configuration.byteCount
-      : configuration.preparedIdentity
-        ? null
-        : copiedBytes;
+    const requiredLinks = present.length;
+    const exactRecoveryBytes =
+      configuration.preparedIdentity && configuration.preparedContentVerified
+        ? configuration.byteCount
+        : configuration.preparedIdentity
+          ? null
+          : copiedBytes;
     for (const [, stat] of present) {
       assertPrivateFile(stat, {
         identity: recoveryIdentity,
         byteCount: exactRecoveryBytes,
-        nlink: requiredLinks
+        nlink: requiredLinks,
       });
       if (
         exactRecoveryBytes === null &&
@@ -439,30 +546,32 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_target_identity_mismatch",
-          "Reserved materialization size exceeds its binding."
+          "Reserved materialization size exceeds its binding.",
         );
       }
     }
-    recoveryByteCount = exactRecoveryBytes ??
-      Number(statSize(present[0][1]));
+    recoveryByteCount = exactRecoveryBytes ?? Number(statSize(present[0][1]));
     await closeHandle();
-    const flags: any =
-      requiredOpenFlag("O_RDONLY") |
-      requiredOpenFlag("O_NOFOLLOW");
+    const flags = requiredOpenFlag("O_RDONLY") | requiredOpenFlag("O_NOFOLLOW");
     fileHandle = await fs.open(present[0][0], flags);
-    const openedStat: any = await fileHandle.stat({ bigint: true });
+    const openedStat = await fileHandle.stat({ bigint: true });
     assertPrivateFile(openedStat, {
       identity: recoveryIdentity,
       byteCount: recoveryByteCount,
-      nlink: requiredLinks
+      nlink: requiredLinks,
     });
-    const assertRecoveryTopology: any = async () : Promise<any> => {
+    const assertRecoveryTopology = async (): Promise<void> => {
+      if (!configuration || !fileHandle)
+        throw workerError(
+          "materialization_file_worker_protocol_invalid",
+          "Materialization recovery handle is unavailable.",
+        );
       const [currentOpened, parentStat, currentTemp, currentTarget] =
         await Promise.all([
           fileHandle.stat({ bigint: true }),
           fs.stat(".", { bigint: true }),
           lstatOrMissing(configuration.tempLeaf),
-          lstatOrMissing(configuration.targetLeaf)
+          lstatOrMissing(configuration.targetLeaf),
         ]);
       assertPrivateParent(parentStat, configuration.parentIdentity);
       if (
@@ -471,20 +580,22 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_target_identity_mismatch",
-          "Materialization recovery names changed while opening."
+          "Materialization recovery names changed while opening.",
         );
       }
-      for (const candidate of [currentTemp, currentTarget].filter(Boolean)) {
+      for (const candidate of [currentTemp, currentTarget].filter(
+        (value): value is BigIntStats => value !== null,
+      )) {
         assertPrivateFile(candidate, {
           identity: recoveryIdentity,
           byteCount: recoveryByteCount,
-          nlink: requiredLinks
+          nlink: requiredLinks,
         });
       }
       assertPrivateFile(currentOpened, {
         identity: recoveryIdentity,
         byteCount: recoveryByteCount,
-        nlink: requiredLinks
+        nlink: requiredLinks,
       });
     };
     await assertRecoveryTopology();
@@ -492,10 +603,7 @@ async function runChildWorker() : Promise<any> {
       configuration.preparedIdentity &&
       configuration.preparedContentVerified
     ) {
-      const observed: any = await hashHandle(
-        fileHandle,
-        assertRecoveryTopology
-      );
+      const observed = await hashHandle(fileHandle, assertRecoveryTopology);
       await assertRecoveryTopology();
       if (
         observed.byteCount !== configuration.byteCount ||
@@ -503,7 +611,7 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_upload_digest_mismatch",
-          "Recovered materialization content is not exact."
+          "Recovered materialization content is not exact.",
         );
       }
     }
@@ -511,48 +619,50 @@ async function runChildWorker() : Promise<any> {
     return {
       intentReservation: false,
       temp: Boolean(tempStat),
-      target: Boolean(targetStat)
+      target: Boolean(targetStat),
     };
   };
 
-  const handlers: Readonly<Record<string, any>> = Object.freeze({
-    async configure(payload?: any) : Promise<any> {
+  const handlers: Readonly<
+    Record<string, (payload: unknown) => Promise<unknown>>
+  > = Object.freeze({
+    async configure(payload: unknown) {
       if (configuration) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization worker is already configured."
+          "Materialization worker is already configured.",
         );
       }
       configuration = normalizeWorkerConfiguration(payload);
-      const parentStat: any = await fs.stat(".", { bigint: true });
+      const parentStat = await fs.stat(".", { bigint: true });
       assertPrivateParent(parentStat, configuration.parentIdentity);
       return { parentIdentity: statIdentity(parentStat) };
     },
-    async reserve(payload?: any) : Promise<any> {
+    async reserve(payload: unknown) {
       if (!exactObject(payload, [])) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization reserve request is invalid."
+          "Materialization reserve request is invalid.",
         );
       }
       if (!configuration || fileHandle) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization worker cannot reserve an inode."
+          "Materialization worker cannot reserve an inode.",
         );
       }
       await assertCurrentParent();
       const [existingTemp, existingTarget] = await Promise.all([
         lstatOrMissing(configuration.tempLeaf),
-        lstatOrMissing(configuration.targetLeaf)
+        lstatOrMissing(configuration.targetLeaf),
       ]);
       if (existingTemp || existingTarget) {
         throw workerError(
           "materialization_target_identity_mismatch",
-          "Materialization names must be absent before reservation."
+          "Materialization names must be absent before reservation.",
         );
       }
-      const flags: any =
+      const flags =
         requiredOpenFlag("O_RDWR") |
         requiredOpenFlag("O_CREAT") |
         requiredOpenFlag("O_EXCL") |
@@ -561,22 +671,22 @@ async function runChildWorker() : Promise<any> {
         fileHandle = await fs.open(
           configuration.tempLeaf,
           flags,
-          PRIVATE_FILE_MODE
+          PRIVATE_FILE_MODE,
         );
         await fileHandle.chmod(PRIVATE_FILE_MODE);
-        const stat: any = await fileHandle.stat({ bigint: true });
+        const stat = await fileHandle.stat({ bigint: true });
         assertPrivateFile(stat, { byteCount: 0, nlink: 1 });
         fileIdentity = statIdentity(stat);
         copiedBytes = 0;
         streamHash = createHash("sha256");
         await assertReservedTopology(0);
         return { preparedIdentity: fileIdentity };
-      } catch (error: any) {
-        await closeHandle().catch(() : any => {});
+      } catch (error: unknown) {
+        await closeHandle().catch(() => {});
         throw error;
       }
     },
-    async write(payload?: any) : Promise<any> {
+    async write(payload: unknown) {
       if (
         !exactObject(payload, ["chunk"]) ||
         !Buffer.isBuffer(payload.chunk) ||
@@ -587,69 +697,63 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization write request is invalid."
+          "Materialization write request is invalid.",
         );
       }
-      if (
-        copiedBytes + payload.chunk.byteLength >
-        configuration.byteCount
-      ) {
+      if (copiedBytes + payload.chunk.byteLength > configuration.byteCount) {
         throw workerError(
           "materialization_upload_digest_mismatch",
-          "Materialization stream exceeded its byte bound."
+          "Materialization stream exceeded its byte bound.",
         );
       }
       await assertReservedTopology(copiedBytes);
-      let written: any = 0;
+      let written = 0;
       while (written < payload.chunk.byteLength) {
-        const result: any = await fileHandle.write(
+        const result = await fileHandle.write(
           payload.chunk,
           written,
           payload.chunk.byteLength - written,
-          null
+          null,
         );
-        const bytesWritten: any = Number(result?.bytesWritten || 0);
+        const bytesWritten = Number(result.bytesWritten || 0);
         if (
           bytesWritten < 1 ||
           bytesWritten > payload.chunk.byteLength - written
         ) {
           throw workerError(
             "materialization_write_incomplete",
-            "Materialization write made no progress."
+            "Materialization write made no progress.",
           );
         }
         written += bytesWritten;
       }
-      await assertReservedTopology(
-        copiedBytes + payload.chunk.byteLength
-      );
+      await assertReservedTopology(copiedBytes + payload.chunk.byteLength);
       streamHash.update(payload.chunk);
       copiedBytes += payload.chunk.byteLength;
       return { copiedBytes };
     },
-    async finish(payload?: any) : Promise<any> {
+    async finish(payload: unknown) {
       if (!exactObject(payload, []) || !fileHandle || linked) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization finish request is invalid."
+          "Materialization finish request is invalid.",
         );
       }
-      const observedDigest: any = streamHash.digest("hex");
+      const observedDigest = streamHash.digest("hex");
       if (
         copiedBytes !== configuration.byteCount ||
         observedDigest !== configuration.contentDigest
       ) {
         throw workerError(
           "materialization_upload_digest_mismatch",
-          "Materialization stream does not match its binding."
+          "Materialization stream does not match its binding.",
         );
       }
       await assertReservedTopology(configuration.byteCount);
       await fileHandle.sync();
       await assertReservedTopology(configuration.byteCount);
-      const descriptorContent: any = await hashHandle(
-        fileHandle,
-        () : any => assertReservedTopology(configuration.byteCount)
+      const descriptorContent = await hashHandle(fileHandle, () =>
+        assertReservedTopology(configuration.byteCount).then(() => undefined),
       );
       await assertReservedTopology(configuration.byteCount);
       if (
@@ -658,19 +762,19 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_upload_digest_mismatch",
-          "Materialization descriptor content does not match its binding."
+          "Materialization descriptor content does not match its binding.",
         );
       }
       return {
         contentDigest: observedDigest,
-        preparedIdentity: fileIdentity
+        preparedIdentity: fileIdentity,
       };
     },
-    async link(payload?: any) : Promise<any> {
+    async link(payload: unknown) {
       if (!exactObject(payload, []) || !fileHandle || linked) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization link request is invalid."
+          "Materialization link request is invalid.",
         );
       }
       await assertReservedTopology(configuration.byteCount);
@@ -679,11 +783,11 @@ async function runChildWorker() : Promise<any> {
       linked = true;
       return { linked: true, preparedIdentity: fileIdentity };
     },
-    async finishPublish(payload?: any) : Promise<any> {
+    async finishPublish(payload: unknown) {
       if (!exactObject(payload, []) || !fileHandle || !linked) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization publish request is invalid."
+          "Materialization publish request is invalid.",
         );
       }
       await assertLinkedTopology();
@@ -693,51 +797,37 @@ async function runChildWorker() : Promise<any> {
       await assertPublishedTopology();
       return { published: true, preparedIdentity: fileIdentity };
     },
-    async read(payload?: any) : Promise<any> {
-      if (
-        !exactObject(payload, ["length", "position"]) ||
-        !fileHandle
-      ) {
+    async read(payload: unknown) {
+      if (!exactObject(payload, ["length", "position"]) || !fileHandle) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization read request is invalid."
+          "Materialization read request is invalid.",
         );
       }
-      const position: any = safeInteger(payload.position, "Read position");
-      const length: any = Math.max(
+      const position = safeInteger(payload.position, "Read position");
+      const length = Math.max(
         1,
-        Math.min(
-          safeInteger(payload.length, "Read length"),
-          MAX_CHUNK_BYTES
-        )
+        Math.min(safeInteger(payload.length, "Read length"), MAX_CHUNK_BYTES),
       );
       await assertPublishedTopology();
-      const buffer: any = Buffer.allocUnsafe(length);
-      const result: any = await fileHandle.read(
-        buffer,
-        0,
-        length,
-        position
-      );
-      const bytesRead: any = Number(result?.bytesRead || 0);
+      const buffer = Buffer.allocUnsafe(length);
+      const result = await fileHandle.read(buffer, 0, length, position);
+      const bytesRead = Number(result.bytesRead || 0);
       await assertPublishedTopology();
       return {
         chunk: buffer.subarray(0, bytesRead),
-        eof: bytesRead === 0
+        eof: bytesRead === 0,
       };
     },
-    async verify(payload?: any) : Promise<any> {
+    async verify(payload: unknown) {
       if (!exactObject(payload, []) || !fileHandle) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization verify request is invalid."
+          "Materialization verify request is invalid.",
         );
       }
-      const stat: any = await assertPublishedTopology();
-      const observed: any = await hashHandle(
-        fileHandle,
-        assertPublishedTopology
-      );
+      const stat = await assertPublishedTopology();
+      const observed = await hashHandle(fileHandle, assertPublishedTopology);
       await assertPublishedTopology();
       if (
         observed.byteCount !== configuration.byteCount ||
@@ -745,110 +835,103 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_upload_digest_mismatch",
-          "Materialization file does not match its binding."
+          "Materialization file does not match its binding.",
         );
       }
       return {
         ...observed,
         preparedIdentity: fileIdentity,
-        nlink: Number(stat.nlink)
+        nlink: Number(stat.nlink),
       };
     },
-    async inspectPublished(payload?: any) : Promise<any> {
+    async inspectPublished(payload: unknown) {
       if (!exactObject(payload, []) || !fileHandle) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization publication inspection is invalid."
+          "Materialization publication inspection is invalid.",
         );
       }
-      const opened: any = await assertPublishedTopology();
+      const opened = await assertPublishedTopology();
       return {
         preparedIdentity: fileIdentity,
-        nlink: Number(opened.nlink)
+        nlink: Number(opened.nlink),
       };
     },
-    async inspectRecovery(payload?: any) : Promise<any> {
+    async inspectRecovery(payload: unknown) {
       if (!exactObject(payload, []) || !configuration) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization recovery request is invalid."
+          "Materialization recovery request is invalid.",
         );
       }
-      let names: any;
-      try {
-        names = await openRecoveryHandle();
-      } catch (error: any) {
-        throw error;
-      }
+      const names = await openRecoveryHandle();
       return {
         ...names,
-        preparedIdentity: fileIdentity
+        preparedIdentity: fileIdentity,
       };
     },
-    async cleanup(payload?: any) : Promise<any> {
+    async cleanup(payload: unknown) {
       if (!exactObject(payload, []) || !configuration) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization cleanup request is invalid."
+          "Materialization cleanup request is invalid.",
         );
       }
-      const names: any = await openRecoveryHandle();
+      const names = await openRecoveryHandle();
       if (names.target) {
-        const current: any = await openRecoveryHandle();
-        if (
-          current.target !== true ||
-          current.temp !== names.temp
-        ) {
+        const current = await openRecoveryHandle();
+        if (current.target !== true || current.temp !== names.temp) {
           throw workerError(
             "materialization_target_identity_mismatch",
-            "Materialization cleanup names changed."
+            "Materialization cleanup names changed.",
           );
         }
-        const stat: any = await fs.lstat(
-          configuration.targetLeaf,
-          { bigint: true }
-        );
+        const stat = await fs.lstat(configuration.targetLeaf, { bigint: true });
         assertPrivateFile(stat, {
           identity: fileIdentity,
           byteCount: configuration.preparedIdentity
             ? recoveryByteCount
             : copiedBytes,
-          nlink: Number(names.temp) + 1
+          nlink: Number(names.temp) + 1,
         });
         await fs.unlink(configuration.targetLeaf);
         await assertCurrentParent();
-        const [remainingTarget, remainingTemp, opened] =
-          await Promise.all([
-            lstatOrMissing(configuration.targetLeaf),
-            lstatOrMissing(configuration.tempLeaf),
-            fileHandle.stat({ bigint: true })
-          ]);
+        const [remainingTarget, remainingTemp, opened] = await Promise.all([
+          lstatOrMissing(configuration.targetLeaf),
+          lstatOrMissing(configuration.tempLeaf),
+          fileHandle!.stat({ bigint: true }),
+        ]);
         if (remainingTarget) {
           throw workerError(
             "materialization_target_identity_mismatch",
-            "Materialization target cleanup was not exact."
+            "Materialization target cleanup was not exact.",
           );
         }
         if (names.temp) {
+          if (!remainingTemp)
+            throw workerError(
+              "materialization_target_identity_mismatch",
+              "Materialization temporary name disappeared.",
+            );
           assertPrivateFile(remainingTemp, {
             identity: fileIdentity,
             byteCount: configuration.preparedIdentity
               ? recoveryByteCount
               : copiedBytes,
-            nlink: 1
+            nlink: 1,
           });
           assertPrivateFile(opened, {
             identity: fileIdentity,
             byteCount: configuration.preparedIdentity
               ? recoveryByteCount
               : copiedBytes,
-            nlink: 1
+            nlink: 1,
           });
         } else {
           if (remainingTemp) {
             throw workerError(
               "materialization_target_identity_mismatch",
-              "Materialization cleanup created an unexpected name."
+              "Materialization cleanup created an unexpected name.",
             );
           }
           assertPrivateFile(opened, {
@@ -856,42 +939,39 @@ async function runChildWorker() : Promise<any> {
             byteCount: configuration.preparedIdentity
               ? recoveryByteCount
               : copiedBytes,
-            nlink: 0
+            nlink: 0,
           });
         }
       }
       if (names.temp) {
-        const current: any = await openRecoveryHandle();
+        const current = await openRecoveryHandle();
         if (current.temp !== true || current.target !== false) {
           throw workerError(
             "materialization_target_identity_mismatch",
-            "Materialization cleanup names changed."
+            "Materialization cleanup names changed.",
           );
         }
-        const stat: any = await fs.lstat(
-          configuration.tempLeaf,
-          { bigint: true }
-        );
+        const stat = await fs.lstat(configuration.tempLeaf, { bigint: true });
         assertPrivateFile(stat, {
           identity: fileIdentity,
           byteCount: configuration.preparedIdentity
             ? recoveryByteCount
             : copiedBytes,
-          nlink: 1
+          nlink: 1,
         });
         await fs.unlink(configuration.tempLeaf);
         const [opened, parentStat, remainingTemp, remainingTarget] =
           await Promise.all([
-            fileHandle.stat({ bigint: true }),
+            fileHandle!.stat({ bigint: true }),
             fs.stat(".", { bigint: true }),
             lstatOrMissing(configuration.tempLeaf),
-            lstatOrMissing(configuration.targetLeaf)
+            lstatOrMissing(configuration.targetLeaf),
           ]);
         assertPrivateParent(parentStat, configuration.parentIdentity);
         if (remainingTemp || remainingTarget) {
           throw workerError(
             "materialization_target_identity_mismatch",
-            "Materialization temporary cleanup was not exact."
+            "Materialization temporary cleanup was not exact.",
           );
         }
         assertPrivateFile(opened, {
@@ -899,7 +979,7 @@ async function runChildWorker() : Promise<any> {
           byteCount: configuration.preparedIdentity
             ? recoveryByteCount
             : copiedBytes,
-          nlink: 0
+          nlink: 0,
         });
       }
       await syncCurrentDirectory();
@@ -907,21 +987,22 @@ async function runChildWorker() : Promise<any> {
       await closeHandle();
       return { cleaned: true };
     },
-    async close(payload?: any) : Promise<any> {
+    async close(payload: unknown) {
       if (!exactObject(payload, [])) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization close request is invalid."
+          "Materialization close request is invalid.",
         );
       }
       await closeHandle();
       return { closed: true };
-    }
+    },
   });
 
-  process.on("message", async (message?: any) : Promise<any> => {
-    const id: any = Number(message?.id);
-    const command: any = String(message?.command || "");
+  process.on("message", async (message: unknown): Promise<void> => {
+    const record = plainRecord(message);
+    const id = Number(record?.id);
+    const command = String(record?.command || "");
     try {
       if (
         !exactObject(message, ["command", "id", "payload"]) ||
@@ -931,20 +1012,20 @@ async function runChildWorker() : Promise<any> {
       ) {
         throw workerError(
           "materialization_file_worker_protocol_invalid",
-          "Materialization worker request is invalid."
+          "Materialization worker request is invalid.",
         );
       }
-      const result: any = await handlers[command](message.payload);
+      const result = await handlers[command](record!.payload);
       if (command === "close") {
-        await new Promise((resolve?: any) : any => {
+        await new Promise<void>((resolve) => {
           if (typeof process.send !== "function") {
             resolve();
             return;
           }
-          process.send({ id, ok: true, result }, () : any => resolve());
+          process.send({ id, ok: true, result }, () => resolve());
         });
         if (typeof process.disconnect === "function") {
-          await new Promise((resolve?: any) : any => {
+          await new Promise<void>((resolve) => {
             process.once("disconnect", resolve);
             process.disconnect();
           });
@@ -953,33 +1034,33 @@ async function runChildWorker() : Promise<any> {
         return;
       }
       process.send?.({ id, ok: true, result });
-    } catch (error: any) {
-      const observedCode: any = String(error?.code || "");
-      const controlled: any = observedCode.startsWith("materialization_");
+    } catch (error: unknown) {
+      const observed = failure(error);
+      const observedCode = String(observed?.code || "");
+      const controlled = observedCode.startsWith("materialization_");
       process.send?.({
         id: Number.isSafeInteger(id) ? id : 0,
         ok: false,
         error: {
-          code: (
-            controlled
-              ? observedCode
-              : "materialization_file_worker_syscall_failed"
+          code: (controlled
+            ? observedCode
+            : "materialization_file_worker_syscall_failed"
           ).slice(0, 128),
-          message: (
-            controlled
-              ? String(error?.message || "Materialization file worker failed.")
-              : "Materialization file worker syscall failed."
-          ).slice(0, 512)
-        }
+          message: (controlled
+            ? String(observed?.message || "Materialization file worker failed.")
+            : "Materialization file worker syscall failed."
+          ).slice(0, 512),
+        },
       });
     }
   });
 }
 
-function responseError(value?: any) : any {
+function responseError(value: unknown): WorkerFailure {
+  const record = plainRecord(value);
   return workerError(
-    String(value?.code || "materialization_file_worker_failed"),
-    String(value?.message || "Materialization file worker failed.")
+    String(record?.code || "materialization_file_worker_failed"),
+    String(record?.message || "Materialization file worker failed."),
   );
 }
 
@@ -991,35 +1072,35 @@ export async function createMaterializationDirectoryWorker({
   targetLeaf,
   tempLeaf,
   contentDigest,
-  byteCount
-}: Record<string, any> = {}) : Promise<any> {
-  const configuration: any = normalizeWorkerConfiguration({
+  byteCount,
+}: DirectoryWorkerOptions = {}): Promise<MaterializationDirectoryWorker> {
+  const configuration = normalizeWorkerConfiguration({
     byteCount,
     contentDigest,
     parentIdentity,
     preparedContentVerified,
     preparedIdentity,
     targetLeaf,
-    tempLeaf
+    tempLeaf,
   });
-  const child: any = fork(fileURLToPath(import.meta.url), [], {
+  const child: ChildProcess = fork(fileURLToPath(import.meta.url), [], {
     cwd: String(parentPath || ""),
     env: {
       LANG: "C",
-      MESHRIX_MATERIALIZATION_FILE_WORKER: "1"
+      MESHRIX_MATERIALIZATION_FILE_WORKER: "1",
     },
     execArgv: [],
     serialization: "advanced",
-    stdio: ["ignore", "ignore", "ignore", "ipc"]
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
   });
-  let nextId: any = 1;
-  let closed: any = false;
-  const pending: any = new Map<any, any>();
-  const childClosed: any = new Promise((resolve?: any) : any => {
+  let nextId = 1;
+  let closed = false;
+  const pending = new Map<number, PendingRequest>();
+  const childClosed = new Promise<void>((resolve) => {
     child.once("close", resolve);
   });
 
-  const rejectPending: any = (error?: any) : any => {
+  const rejectPending = (error: unknown): void => {
     for (const entry of pending.values()) {
       clearTimeout(entry.timer);
       entry.reject(error);
@@ -1027,9 +1108,10 @@ export async function createMaterializationDirectoryWorker({
     pending.clear();
   };
 
-  child.on("message", (message?: any) : any => {
-    const id: any = Number(message?.id);
-    const entry: any = pending.get(id);
+  child.on("message", (message: unknown) => {
+    const record = plainRecord(message);
+    const id = Number(record?.id);
+    const entry = pending.get(id);
     if (!entry) return;
     pending.delete(id);
     clearTimeout(entry.timer);
@@ -1037,97 +1119,120 @@ export async function createMaterializationDirectoryWorker({
       !exactObject(message, ["id", "ok", "result"]) &&
       !exactObject(message, ["error", "id", "ok"])
     ) {
-      entry.reject(workerError(
-        "materialization_file_worker_protocol_invalid",
-        "Materialization worker response is invalid."
-      ));
+      entry.reject(
+        workerError(
+          "materialization_file_worker_protocol_invalid",
+          "Materialization worker response is invalid.",
+        ),
+      );
       return;
     }
-    if (message.ok === true) entry.resolve(message.result);
-    else entry.reject(responseError(message.error));
+    if (record?.ok === true) entry.resolve(record.result);
+    else entry.reject(responseError(record?.error));
   });
-  child.on("error", () : any => {
-    rejectPending(workerError(
-      "materialization_file_worker_unavailable",
-      "Materialization file worker is unavailable."
-    ));
+  child.on("error", () => {
+    rejectPending(
+      workerError(
+        "materialization_file_worker_unavailable",
+        "Materialization file worker is unavailable.",
+      ),
+    );
   });
-  child.on("exit", (code?: any, signal?: any) : any => {
+  child.on("exit", (code, signal) => {
     closed = true;
-    rejectPending(workerError(
-      "materialization_file_worker_exited",
-      `Materialization file worker exited (${signal || code || 0}).`
-    ));
+    rejectPending(
+      workerError(
+        "materialization_file_worker_exited",
+        `Materialization file worker exited (${signal || code || 0}).`,
+      ),
+    );
   });
 
-  const request: any = (command?: any, payload: Record<string, any> = {}) : any => {
+  const request = (
+    command: string,
+    payload: PlainRecord = {},
+  ): Promise<unknown> => {
     if (closed || !child.connected) {
-      return Promise.reject(workerError(
-        "materialization_file_worker_exited",
-        "Materialization file worker is not connected."
-      ));
+      return Promise.reject(
+        workerError(
+          "materialization_file_worker_exited",
+          "Materialization file worker is not connected.",
+        ),
+      );
     }
-    const id: any = nextId;
+    const id = nextId;
     nextId += 1;
-    return new Promise((resolve?: any, reject?: any) : any => {
-      const timer: any = setTimeout(() : any => {
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
         pending.delete(id);
-        reject(workerError(
-          "materialization_file_worker_timeout",
-          "Materialization file worker timed out."
-        ));
+        reject(
+          workerError(
+            "materialization_file_worker_timeout",
+            "Materialization file worker timed out.",
+          ),
+        );
         child.kill("SIGKILL");
       }, REQUEST_TIMEOUT_MS);
       timer.unref?.();
       pending.set(id, { reject, resolve, timer });
-      child.send({ id, command, payload }, (error?: any) : any => {
+      child.send?.({ id, command, payload }, (error) => {
         if (!error) return;
-        const entry: any = pending.get(id);
+        const entry = pending.get(id);
         if (!entry) return;
         pending.delete(id);
         clearTimeout(entry.timer);
-        reject(workerError(
-          "materialization_file_worker_unavailable",
-          "Materialization file worker is unavailable."
-        ));
+        reject(
+          workerError(
+            "materialization_file_worker_unavailable",
+            "Materialization file worker is unavailable.",
+          ),
+        );
       });
     });
   };
 
   try {
-    const configured: any = await request("configure", configuration);
+    const configured = plainRecord(
+      await request("configure", { ...configuration }),
+    );
     if (
       JSON.stringify(configured?.parentIdentity) !==
       JSON.stringify(configuration.parentIdentity)
     ) {
       throw workerError(
         "materialization_parent_identity_mismatch",
-        "Materialization parent identity changed before worker binding."
+        "Materialization parent identity changed before worker binding.",
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     child.kill("SIGKILL");
     await childClosed;
     throw error;
   }
 
-  const api: Record<string, any> = {
-    reserve: () : any => request("reserve"),
-    write: (chunk?: any) : any => request("write", { chunk }),
-    finish: () : any => request("finish"),
-    link: () : any => request("link"),
-    finishPublish: () : any => request("finishPublish"),
-    verify: () : any => request("verify"),
-    inspectPublished: () : any => request("inspectPublished"),
-    inspectRecovery: () : any => request("inspectRecovery"),
-    cleanup: () : any => request("cleanup"),
-    async *readChunks() : AsyncGenerator<any, any, any> {
-      let position: any = 0;
+  const typedRequest = async <Result>(
+    command: string,
+    payload: PlainRecord = {},
+  ): Promise<Result> => (await request(command, payload)) as Result;
+  const api: MaterializationDirectoryWorker = {
+    reserve: () => typedRequest("reserve"),
+    write: (chunk) => typedRequest("write", { chunk }),
+    finish: () => typedRequest("finish"),
+    link: () => typedRequest("link"),
+    finishPublish: () => typedRequest("finishPublish"),
+    verify: () => typedRequest("verify"),
+    inspectPublished: () => typedRequest("inspectPublished"),
+    inspectRecovery: () => typedRequest("inspectRecovery"),
+    cleanup: () => typedRequest("cleanup"),
+    async *readChunks(): AsyncGenerator<Buffer, void, void> {
+      let position = 0;
       while (true) {
-        const result: any = await request("read", {
-          length: MAX_CHUNK_BYTES,
-          position
-        });
+        const result = plainRecord(
+          await request("read", {
+            length: MAX_CHUNK_BYTES,
+            position,
+          }),
+        );
         if (result?.eof === true) return;
         if (
           !Buffer.isBuffer(result?.chunk) ||
@@ -1136,14 +1241,14 @@ export async function createMaterializationDirectoryWorker({
         ) {
           throw workerError(
             "materialization_file_worker_protocol_invalid",
-            "Materialization worker emitted an invalid content chunk."
+            "Materialization worker emitted an invalid content chunk.",
           );
         }
         position += result.chunk.byteLength;
         yield result.chunk;
       }
     },
-    async close() : Promise<any> {
+    async close(): Promise<void> {
       if (closed) return;
       try {
         await request("close");
@@ -1152,11 +1257,11 @@ export async function createMaterializationDirectoryWorker({
         closed = true;
       }
     },
-    terminate() : any {
+    terminate(): void {
       if (closed) return;
       closed = true;
       child.kill("SIGKILL");
-    }
+    },
   };
   return Object.freeze(api);
 }
@@ -1165,5 +1270,5 @@ if (
   process.env.MESHRIX_MATERIALIZATION_FILE_WORKER === "1" &&
   typeof process.send === "function"
 ) {
-  void runChildWorker().catch(() : any => process.exit(1));
+  void runChildWorker().catch(() => process.exit(1));
 }

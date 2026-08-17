@@ -1,22 +1,23 @@
 import { REACHABLE_TRANSITION_RESULTS } from "../engine/state-machine-result-types.ts";
+import type { MatrixCell, StateMachineDefinition } from "./state-machine-definition-schema.ts";
 
-function groupMatrixCells(totalMatrix?: any) : any {
-  const groups: any = new Map<any, any>();
+function groupMatrixCells(totalMatrix: MatrixCell[]): Map<string, MatrixCell[]> {
+  const groups = new Map<string, MatrixCell[]>();
   for (const cell of totalMatrix) {
-    const key: any = `${cell.from}::${cell.event}`;
-    const cells: any = groups.get(key);
+    const key = `${cell.from}::${cell.event}`;
+    const cells = groups.get(key);
     if (cells) cells.push(cell);
     else groups.set(key, [cell]);
   }
   return groups;
 }
 
-export function assertMatrixTotality(definition?: any) : any {
-  const groups: any = groupMatrixCells(definition.totalMatrix);
-  const missing: any[] = [];
+export function assertMatrixTotality(definition: StateMachineDefinition): void {
+  const groups = groupMatrixCells(definition.totalMatrix);
+  const missing: string[] = [];
   for (const state of definition.states) {
     for (const event of definition.events) {
-      const key: any = `${state.id}::${event.id}`;
+      const key = `${state.id}::${event.id}`;
       if (!groups.has(key)) missing.push(key);
     }
   }
@@ -26,12 +27,12 @@ export function assertMatrixTotality(definition?: any) : any {
 
   for (const [key, cells] of groups) {
     if (cells.length === 1) continue;
-    const illegal: any = cells.filter((cell?: any) : any => cell.result === "illegal_transition");
-    const executable: any = cells.filter((cell?: any) : any => cell.result !== "illegal_transition");
+    const illegal = cells.filter((cell) => cell.result === "illegal_transition");
+    const executable = cells.filter((cell) => cell.result !== "illegal_transition");
     if (illegal.length > 1) {
       throw new Error(`Matrix cell ${key} contains duplicate illegal outcomes`);
     }
-    const unguarded: any = executable.filter((cell?: any) : any =>
+    const unguarded = executable.filter((cell) =>
       (cell.guards || []).length === 0 && (cell.requiredGuards || []).length === 0
     );
     if (unguarded.length > 0) {
@@ -40,33 +41,33 @@ export function assertMatrixTotality(definition?: any) : any {
   }
 }
 
-export function assertReachability(definition?: any) : any {
-  const reachable: any = new Set<any>([definition.initialState]);
-  const queue: any[] = [definition.initialState];
-  let cursor: any = 0;
+export function assertReachability(definition: StateMachineDefinition): void {
+  const reachable = new Set<string>([definition.initialState]);
+  const queue: string[] = [definition.initialState];
+  let cursor = 0;
   while (cursor < queue.length) {
-    const current: any = queue[cursor++];
+    const current = queue[cursor++];
     for (const cell of definition.totalMatrix) {
-      if (cell.from !== current || !REACHABLE_TRANSITION_RESULTS.includes(cell.result)) continue;
-      const target: any = cell.to || current;
+      if (cell.from !== current || !REACHABLE_TRANSITION_RESULTS.some((result) => result === cell.result)) continue;
+      const target = cell.to || current;
       if (!reachable.has(target)) {
         reachable.add(target);
         queue.push(target);
       }
     }
   }
-  const unreachable: any = definition.states
-    .filter((state?: any) : any => !state.externalEntryState && !reachable.has(state.id))
-    .map((state?: any) : any => state.id);
+  const unreachable = definition.states
+    .filter((state) => !state.externalEntryState && !reachable.has(state.id))
+    .map((state) => state.id);
   if (unreachable.length > 0) {
     throw new Error(`Reachability check failed. Unreachable states: ${unreachable.join(", ")}`);
   }
 }
 
-export function assertNonTerminalTransitions(definition?: any) : any {
+export function assertNonTerminalTransitions(definition: StateMachineDefinition): void {
   for (const state of definition.states) {
     if (state.terminal || state.passiveState || state.waitingStateWithTimeout) continue;
-    const hasOutgoing: any = definition.totalMatrix.some((cell?: any) : any =>
+    const hasOutgoing = definition.totalMatrix.some((cell) =>
       cell.from === state.id &&
       cell.to &&
       cell.to !== state.id &&
@@ -79,13 +80,13 @@ export function assertNonTerminalTransitions(definition?: any) : any {
   }
 }
 
-export function assertTerminalSemantics(definition?: any) : any {
-  const eventById: any = new Map<any, any>(definition.events.map((event?: any) : any => [event.id, event]));
-  const allowedTerminalEvents: any = new Set<any>(definition.allowedTerminalEvents || []);
+export function assertTerminalSemantics(definition: StateMachineDefinition): void {
+  const eventById = new Map(definition.events.map((event) => [event.id, event]));
+  const allowedTerminalEvents = new Set(definition.allowedTerminalEvents || []);
   for (const state of definition.states) {
     if (!state.terminal) continue;
-    for (const cell of definition.totalMatrix.filter((candidate?: any) : any => candidate.from === state.id)) {
-      const allowed: any = cell.result === "illegal_transition" ||
+    for (const cell of definition.totalMatrix.filter((candidate) => candidate.from === state.id)) {
+      const allowed = cell.result === "illegal_transition" ||
         cell.result === "ignored_idempotent_event" ||
         eventById.get(cell.event)?.idempotent === true ||
         allowedTerminalEvents.has(cell.event) ||
@@ -97,7 +98,7 @@ export function assertTerminalSemantics(definition?: any) : any {
   }
 }
 
-export function assertIllegalTransitionErrorCodes(definition?: any) : any {
+export function assertIllegalTransitionErrorCodes(definition: StateMachineDefinition): void {
   for (const cell of definition.totalMatrix) {
     if (cell.result === "illegal_transition" && !cell.errorCode) {
       throw new Error(`Illegal transition from '${cell.from}' on '${cell.event}' is missing 'errorCode'`);
@@ -105,9 +106,9 @@ export function assertIllegalTransitionErrorCodes(definition?: any) : any {
   }
 }
 
-export function assertCellReferences(definition?: any) : any {
-  const states: any = new Set<any>(definition.states.map((state?: any) : any => state.id));
-  const events: any = new Set<any>(definition.events.map((event?: any) : any => event.id));
+export function assertCellReferences(definition: StateMachineDefinition): void {
+  const states = new Set(definition.states.map((state) => state.id));
+  const events = new Set(definition.events.map((event) => event.id));
   for (const cell of definition.totalMatrix) {
     if (!states.has(cell.from)) {
       throw new Error(`Matrix cell references unknown state '${cell.from}' (from field)`);
@@ -121,8 +122,10 @@ export function assertCellReferences(definition?: any) : any {
   }
 }
 
-export function validateStateMachineTopology(definition?: any) : any {
-  const checks: any[] = [
+export interface TopologyValidationResult { ok: boolean; errors: string[]; }
+
+export function validateStateMachineTopology(definition: StateMachineDefinition): TopologyValidationResult {
+  const checks: Array<(definition: StateMachineDefinition) => void> = [
     assertMatrixTotality,
     assertReachability,
     assertNonTerminalTransitions,
@@ -130,12 +133,12 @@ export function validateStateMachineTopology(definition?: any) : any {
     assertIllegalTransitionErrorCodes,
     assertCellReferences,
   ];
-  const errors: any[] = [];
+  const errors: string[] = [];
   for (const check of checks) {
     try {
       check(definition);
-    } catch (error: any) {
-      errors.push(error.message);
+    } catch (error: unknown) {
+      errors.push(error instanceof Error ? error.message : String(error));
     }
   }
   return { ok: errors.length === 0, errors };

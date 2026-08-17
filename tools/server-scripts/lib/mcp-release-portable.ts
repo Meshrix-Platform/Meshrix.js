@@ -540,8 +540,8 @@ export async function createPortableBundle({
   const portablePackageJson: Record<string, any> = {
     ...packageJson,
     imports: {
-      ...packageJson.imports,
-      "#meshrix/contracts/*": "./vendor/contracts/*.ts"
+      "#meshrix/contracts/*": "./vendor/contracts/*.ts",
+      "#meshrix/protocols/*": "./vendor/protocols/*.ts"
     }
   };
   await fs.writeFile(
@@ -550,7 +550,8 @@ export async function createPortableBundle({
       private: true,
       type: "module",
       imports: {
-        "#meshrix/contracts/*": "./app/vendor/contracts/*.ts"
+        "#meshrix/contracts/*": "./app/vendor/contracts/*.ts",
+        "#meshrix/protocols/*": "./app/vendor/protocols/*.ts"
       }
     }, null, 2)}\n`,
     "utf8"
@@ -599,6 +600,25 @@ export async function createPortableBundle({
   await fs.copyFile(
     path.join(contractsSourceRoot, "src", "serialization", "canonical-json.ts"),
     portableCanonicalJsonPath
+  );
+  await fs.copyFile(
+    path.join(contractsSourceRoot, "src", "service-collaboration-contract.ts"),
+    path.join(portableContractsRoot, "service-collaboration-contract.ts")
+  );
+  const portableProtocolsRoot: any = path.join(appRoot, "vendor", "protocols");
+  await fs.mkdir(path.join(portableProtocolsRoot, "mcp", "adapter"), { recursive: true });
+  await fs.copyFile(
+    path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "http-mcp-adapter-constants.ts"),
+    path.join(portableProtocolsRoot, "mcp", "adapter", "http-mcp-adapter-constants.ts")
+  );
+  await fs.copyFile(
+    path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "mcp-release-targets.ts"),
+    path.join(portableProtocolsRoot, "mcp", "adapter", "mcp-release-targets.ts")
+  );
+  await fs.mkdir(path.join(portableProtocolsRoot, "mcp", "adapter", "gateway-installer"), { recursive: true });
+  await fs.copyFile(
+    path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "gateway-installer", "mcp-release-targets.ts"),
+    path.join(portableProtocolsRoot, "mcp", "adapter", "gateway-installer", "mcp-release-targets.ts")
   );
   const nativeInstallerRoot: any = path.join(connectorRoot, "..", "native-installer");
   const nativeInstallerFiles: any = windowsBundle

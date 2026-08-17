@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import { ensurePrivateDir } from "#meshrix/foundation/storage/private-file-atomic";
 import { ensurePrivateSqliteLocation } from "#meshrix/foundation/storage/private-sqlite";
@@ -7,48 +8,82 @@ import {
   normalizeManifestKey,
   SAFE_JOB_ID_PATTERN
 } from "./job-manager-validation.ts";
+import { errorProperty, isJobDocument, type JobDocument, type JobStatus } from "./contracts.ts";
 
-const SCHEMA_VERSION: any = 3;
-const TERMINAL_STATUSES: readonly any[] = Object.freeze(["completed", "failed", "cancelled"]);
-const DEFAULT_MAX_RECORDS: any = 100_000;
-const DEFAULT_MAX_ACTIVE_RECORDS: any = 10_000;
-const DEFAULT_MAX_METADATA_BYTES: any = 64 * 1024 * 1024;
-const DEFAULT_MAX_ARTIFACT_BYTES: any = 8 * 1024 * 1024 * 1024;
-const DEFAULT_MAX_JOB_METADATA_BYTES: any = 256 * 1024;
-const DEFAULT_MAX_PAYLOAD_BYTES: any = 64 * 1024 * 1024;
-const DEFAULT_MAX_RESULT_BYTES: any = 256 * 1024 * 1024;
-const DEFAULT_TERMINAL_RETENTION_MS: any = 30 * 24 * 60 * 60 * 1000;
-const DEFAULT_CLEANUP_BATCH: any = 64;
-const DEFAULT_BUSY_TIMEOUT_MS: any = 5_000;
-const MAX_PAGE_SIZE: any = 200;
-const MAX_ACCESS_VALUES: any = 100;
-const STATEMENT_CACHES: any = new WeakMap<object, any>();
+type SqliteValue = string | number | bigint | Buffer | null;
+type SqliteRow = Record<string, SqliteValue>;
+type SqliteBind = SqliteValue | Record<string, SqliteValue>;
+interface SqliteStatement {
+  run(...params: SqliteBind[]): Database.RunResult;
+  get(...params: SqliteBind[]): SqliteRow | undefined;
+  all(...params: SqliteBind[]): SqliteRow[];
+}
 
-function prepareCached(db?: any, sql?: any) : any {
-  let cache: any = STATEMENT_CACHES.get(db);
+interface ProjectionPolicyInput {
+  maxRecords?: number;
+  maxActiveRecords?: number;
+  maxMetadataBytes?: number;
+  maxArtifactBytes?: number;
+  maxJobMetadataBytes?: number;
+  maxPayloadBytes?: number;
+  maxResultBytes?: number;
+  terminalRetentionMs?: number;
+  cleanupBatch?: number;
+  busyTimeoutMs?: number;
+}
+
+interface JobAccessFilter {
+  principalIds?: readonly string[];
+  workspaceIds?: readonly string[];
+  jobIds?: readonly string[];
+}
+
+interface PageInput {
+  cursor?: string;
+  limit?: number;
+}
+
+const SCHEMA_VERSION = 3;
+const TERMINAL_STATUSES = Object.freeze(["completed", "failed", "cancelled"]);
+const DEFAULT_MAX_RECORDS = 100_000;
+const DEFAULT_MAX_ACTIVE_RECORDS = 10_000;
+const DEFAULT_MAX_METADATA_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_ARTIFACT_BYTES = 8 * 1024 * 1024 * 1024;
+const DEFAULT_MAX_JOB_METADATA_BYTES = 256 * 1024;
+const DEFAULT_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_RESULT_BYTES = 256 * 1024 * 1024;
+const DEFAULT_TERMINAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_CLEANUP_BATCH = 64;
+const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
+const MAX_PAGE_SIZE = 200;
+const MAX_ACCESS_VALUES = 100;
+const STATEMENT_CACHES = new WeakMap<Database.Database, Map<string, SqliteStatement>>();
+
+function prepareCached(db: Database.Database, sql: string): SqliteStatement {
+  let cache = STATEMENT_CACHES.get(db);
   if (!cache) {
-    cache = new Map<any, any>();
+    cache = new Map<string, SqliteStatement>();
     STATEMENT_CACHES.set(db, cache);
   }
-  let statement: any = cache.get(sql);
+  let statement = cache.get(sql);
   if (!statement) {
-    statement = db.prepare(sql);
+    statement = db.prepare(sql) as SqliteStatement;
     cache.set(sql, statement);
   }
   return statement;
 }
 
-function projectionError(code?: any, message?: any, statusCode: any = 500) : any {
+function projectionError(code: string, message: string, statusCode = 500) {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
-function positiveInteger(value?: any, fallback?: any, maximum: any = Number.MAX_SAFE_INTEGER) : any {
-  const parsed: any = Number(value);
+function positiveInteger(value: unknown, fallback: number, maximum = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
   return Math.min(parsed, maximum);
 }
 
-function normalizePolicy(policy: Record<string, any> = {}) : any {
+function normalizePolicy(policy: ProjectionPolicyInput = {}) {
   return Object.freeze({
     maxRecords: positiveInteger(policy.maxRecords, DEFAULT_MAX_RECORDS, 1_000_000),
     maxActiveRecords: positiveInteger(
@@ -99,25 +134,25 @@ function normalizePolicy(policy: Record<string, any> = {}) : any {
   });
 }
 
-function timestamp(value?: any, fallback: any = 0) : any {
-  const parsed: any = Date.parse(String(value || ""));
+function timestamp(value: unknown, fallback = 0) {
+  const parsed = Date.parse(String(value || ""));
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizeStatus(value?: any) : any {
-  const status: any = String(value || "");
+function normalizeStatus(value: unknown): JobStatus {
+  const status = String(value || "");
   if (!["queued", "running", ...TERMINAL_STATUSES].includes(status)) {
     throw projectionError(
       "job_projection_status_invalid",
       "Job projection status is invalid."
     );
   }
-  return status;
+  return status as JobStatus;
 }
 
-function serializeJob(job?: any, maxBytes?: any) : any {
-  const serialized: any = JSON.stringify(job);
-  const bytes: any = Buffer.byteLength(serialized);
+function serializeJob(job: JobDocument, maxBytes: number) {
+  const serialized = JSON.stringify(job);
+  const bytes = Buffer.byteLength(serialized);
   if (bytes > maxBytes) {
     throw projectionError(
       "job_projection_metadata_too_large",
@@ -128,27 +163,30 @@ function serializeJob(job?: any, maxBytes?: any) : any {
   return { serialized, bytes };
 }
 
-function rowToJob(row?: any) : any {
+function rowToJob(row: SqliteRow | undefined): JobDocument | null {
   if (!row) return null;
-  const job: any = JSON.parse(String(row.job_json));
+  const job: unknown = JSON.parse(String(row.job_json));
+  if (!isJobDocument(job)) {
+    throw projectionError("job_projection_record_invalid", "Job projection record is invalid.");
+  }
   return {
     ...job,
     id: String(row.id),
-    status: String(row.status)
+    status: normalizeStatus(row.status)
   };
 }
 
-function encodeCursor(createdAtMs?: any, id?: any) : any {
+function encodeCursor(createdAtMs: number, id: string) {
   return Buffer.from(
     JSON.stringify([Number(createdAtMs), String(id)]),
     "utf8"
   ).toString("base64url");
 }
 
-function decodeCursor(cursor?: any) : any {
+function decodeCursor(cursor?: string) {
   if (!cursor) return null;
   try {
-    const decoded: any = JSON.parse(
+    const decoded = JSON.parse(
       Buffer.from(String(cursor), "base64url").toString("utf8")
     );
     if (
@@ -165,10 +203,10 @@ function decodeCursor(cursor?: any) : any {
   }
 }
 
-function normalizedAccessValues(values?: any) : any {
-  const normalized: any[] = [...new Set<any>(
+function normalizedAccessValues(values?: readonly string[]) {
+  const normalized = [...new Set<string>(
     (Array.isArray(values) ? values : [])
-      .map((value?: any) : any => String(value || "").trim())
+      .map((value) => String(value || "").trim())
       .filter(Boolean)
   )];
   if (normalized.length > MAX_ACCESS_VALUES) {
@@ -181,16 +219,16 @@ function normalizedAccessValues(values?: any) : any {
   return normalized;
 }
 
-function accessPredicate(access?: any) : any {
+function accessPredicate(access?: JobAccessFilter | null) {
   if (!access) return { clause: "", params: [] };
-  const principals: any = normalizedAccessValues(access.principalIds);
-  const workspaceIds: any = normalizedAccessValues(access.workspaceIds);
-  const jobIds: any = normalizedAccessValues(access.jobIds);
-  const clauses: any[] = [];
-  const params: any[] = [];
-  const addValues: any = (column?: any, values?: any) : any => {
+  const principals = normalizedAccessValues(access.principalIds);
+  const workspaceIds = normalizedAccessValues(access.workspaceIds);
+  const jobIds = normalizedAccessValues(access.jobIds);
+  const clauses: string[] = [];
+  const params: string[] = [];
+  const addValues = (column: string, values: string[]) => {
     if (values.length === 0) return;
-    clauses.push(`${column} IN (${values.map(() : any => "?").join(",")})`);
+    clauses.push(`${column} IN (${values.map(() => "?").join(",")})`);
     params.push(...values);
   };
   addValues("id", jobIds);
@@ -202,14 +240,14 @@ function accessPredicate(access?: any) : any {
   };
 }
 
-function createSchema(db?: any) : any {
-  const requiredExistingTables: any = new Set<any>([
+function createSchema(db: Database.Database) {
+  const requiredExistingTables = new Set<string>([
     "job_projection_meta",
     "jobs",
     "job_status_counts",
     "job_artifact_journal"
   ]);
-  const existingTables: any = new Set<any>(
+  const existingTables = new Set<string>(
     prepareCached(db, `
       SELECT name
       FROM sqlite_master
@@ -221,18 +259,18 @@ function createSchema(db?: any) : any {
           'job_artifact_journal',
           'job_upload_cleanup_journal'
         )
-    `).all().map((entry?: any) : any => String(entry.name))
+    `).all().map((entry) => String((entry as SqliteRow).name))
   );
   if (
     existingTables.size !== 0 &&
-    [...requiredExistingTables].some((table?: any) : any => !existingTables.has(table))
+    [...requiredExistingTables].some((table) => !existingTables.has(table))
   ) {
     throw projectionError(
       "job_projection_schema_incomplete",
       "Job projection schema is incomplete."
     );
   }
-  const initializing: any = existingTables.size === 0;
+  const initializing = existingTables.size === 0;
   db.exec(`
     CREATE TABLE IF NOT EXISTS job_projection_meta (
       key TEXT PRIMARY KEY,
@@ -325,7 +363,7 @@ function createSchema(db?: any) : any {
     CREATE INDEX IF NOT EXISTS idx_job_upload_cleanup_created
       ON job_upload_cleanup_journal(created_at_ms,session_id);
   `);
-  const initialMeta: any[] = [
+  const initialMeta = [
     ["schema_version", SCHEMA_VERSION],
     ["metadata_bytes", 0],
     ["artifact_bytes", 0],
@@ -333,30 +371,30 @@ function createSchema(db?: any) : any {
     ["pending_delete_bytes", 0],
     ["revision", 0]
   ];
-  const statuses: any[] = ["queued", "running", ...TERMINAL_STATUSES];
+  const statuses = ["queued", "running", ...TERMINAL_STATUSES];
   if (initializing) {
-    const meta: any = prepareCached(db,
+    const meta = prepareCached(db,
       "INSERT INTO job_projection_meta(key,value) VALUES(?,?)"
     );
-    const count: any = prepareCached(db,
+    const count = prepareCached(db,
       "INSERT INTO job_status_counts(status,count) VALUES(?,0)"
     );
-    db.transaction(() : any => {
+    db.transaction(() => {
       for (const [key, value] of initialMeta) meta.run(key, value);
       for (const status of statuses) count.run(status);
     })();
   } else {
-    const metaKeys: any = new Set<any>(
+    const metaKeys = new Set<string>(
       prepareCached(db, "SELECT key FROM job_projection_meta").all()
-        .map((entry?: any) : any => String(entry.key))
+        .map((entry) => String((entry as SqliteRow).key))
     );
-    const countKeys: any = new Set<any>(
+    const countKeys = new Set<string>(
       prepareCached(db, "SELECT status FROM job_status_counts").all()
-        .map((entry?: any) : any => String(entry.status))
+        .map((entry) => String((entry as SqliteRow).status))
     );
     if (
-      initialMeta.some(([key]: any[]) : any => !metaKeys.has(key)) ||
-      statuses.some((status?: any) : any => !countKeys.has(status))
+      initialMeta.some(([key]) => !metaKeys.has(String(key))) ||
+      statuses.some((status) => !countKeys.has(status))
     ) {
       throw projectionError(
         "job_projection_meta_incomplete",
@@ -364,7 +402,7 @@ function createSchema(db?: any) : any {
       );
     }
   }
-  let version: any = Number(
+  let version = Number(
     prepareCached(db,
       "SELECT value FROM job_projection_meta WHERE key='schema_version'"
     ).get()?.value
@@ -461,14 +499,14 @@ function createSchema(db?: any) : any {
   `);
 }
 
-function readMeta(db?: any) : any {
-  const values: any = Object.fromEntries(
+function readMeta(db: Database.Database) {
+  const values = Object.fromEntries(
     prepareCached(db, "SELECT key,value FROM job_projection_meta").all()
-      .map((entry?: any) : any => [String(entry.key), Number(entry.value)])
+      .map((entry) => [String((entry as SqliteRow).key), Number((entry as SqliteRow).value)])
   );
-  const counts: any = Object.fromEntries(
+  const counts = Object.fromEntries(
     prepareCached(db, "SELECT status,count FROM job_status_counts").all()
-      .map((entry?: any) : any => [String(entry.status), Number(entry.count)])
+      .map((entry) => [String((entry as SqliteRow).status), Number((entry as SqliteRow).count)])
   );
   return {
     metadataBytes: Number(values.metadata_bytes || 0),
@@ -477,12 +515,12 @@ function readMeta(db?: any) : any {
     pendingDeleteBytes: Number(values.pending_delete_bytes || 0),
     revision: Number(values.revision || 0),
     counts,
-    totalCount: (Object.values(counts) as any[]).reduce((sum?: any, count?: any) : any => sum + count, 0),
+    totalCount: Object.values(counts).reduce((sum, count) => sum + Number(count), 0),
     activeCount: Number(counts.queued || 0) + Number(counts.running || 0)
   };
 }
 
-function queueDeletion(db?: any, row?: any, nowMs?: any) : any {
+function queueDeletion(db: Database.Database, row: SqliteRow, nowMs: number) {
   prepareCached(db, `
     INSERT OR IGNORE INTO job_artifact_journal(
       id,job_id,kind,final_ref,digest,byte_size,state,created_at_ms,
@@ -492,7 +530,7 @@ function queueDeletion(db?: any, row?: any, nowMs?: any) : any {
     `delete:${row.id}`,
     row.id,
     "delete_job",
-    path.posix.join("jobs", row.id),
+    path.posix.join("jobs", String(row.id)),
     "",
     Number(row.payload_bytes || 0) + Number(row.result_bytes || 0),
     "pending_delete",
@@ -502,23 +540,23 @@ function queueDeletion(db?: any, row?: any, nowMs?: any) : any {
 }
 
 function pruneForAdmission(
-  db?: any,
-  policy?: any,
-  incomingMetadataBytes?: any,
-  nowMs?: any,
+  db: Database.Database,
+  policy: ReturnType<typeof normalizePolicy>,
+  incomingMetadataBytes: number,
+  nowMs: number,
   {
     excludedJobId = "",
     reserveRecord = true
-  }: Record<string, any> = {}
-) : any {
-  let removed: any = 0;
-  const expiry: any = nowMs - policy.terminalRetentionMs;
+  }: { excludedJobId?: string; reserveRecord?: boolean } = {}
+) {
+  let removed = 0;
+  const expiry = nowMs - policy.terminalRetentionMs;
   while (removed < policy.cleanupBatch) {
-    const meta: any = readMeta(db);
-    const overCapacity: any =
+    const meta = readMeta(db);
+    const overCapacity =
       meta.totalCount + (reserveRecord ? 1 : 0) > policy.maxRecords ||
       meta.metadataBytes + incomingMetadataBytes > policy.maxMetadataBytes;
-    const row: any = overCapacity
+    const row = overCapacity
       ? prepareCached(db, `
           SELECT id,payload_bytes,result_bytes,finished_at_ms
           FROM jobs INDEXED BY idx_jobs_terminal_finished_id
@@ -543,10 +581,10 @@ function pruneForAdmission(
   return removed;
 }
 
-function bindJob(job?: any, serialized?: any, bytes?: any, existing: any = null) : any {
-  const createdAtMs: any = timestamp(job.createdAt, Date.now());
-  const updatedAtMs: any = timestamp(job.updatedAt, createdAtMs);
-  const status: any = normalizeStatus(job.status);
+function bindJob(job: JobDocument, serialized: string, bytes: number, existing: SqliteRow | null = null) {
+  const createdAtMs = timestamp(job.createdAt, Date.now());
+  const updatedAtMs = timestamp(job.updatedAt, createdAtMs);
+  const status = normalizeStatus(job.status);
   return {
     id: String(job.id || ""),
     status,
@@ -613,24 +651,28 @@ export function createJobProjectionStore({
   userDataPath,
   policy: requestedPolicy = {},
   now = Date.now
-}: Record<string, any> = {}) : any {
-  const policy: any = normalizePolicy(requestedPolicy);
-  const jobsRoot: any = path.join(userDataPath, "jobs");
+}: {
+  userDataPath: string;
+  policy?: ProjectionPolicyInput;
+  now?: () => number;
+}) {
+  const policy = normalizePolicy(requestedPolicy);
+  const jobsRoot = path.join(userDataPath, "jobs");
   ensurePrivateDir(jobsRoot);
-  const databasePath: any = path.join(jobsRoot, "jobs.sqlite");
+  const databasePath = path.join(jobsRoot, "jobs.sqlite");
   ensurePrivateSqliteLocation(databasePath);
-  const db: any = openSqliteDatabase(databasePath);
+  const db = openSqliteDatabase(databasePath);
   try {
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     db.pragma(`busy_timeout = ${policy.busyTimeoutMs}`);
     createSchema(db);
-  } catch (error: any) {
+  } catch (error) {
     db.close();
     throw error;
   }
 
-  const upsertTransaction: any = db.transaction((job?: any, allocateVersion?: any) : any => {
+  const upsertTransaction = db.transaction((job: JobDocument, allocateVersion: boolean) => {
     if (!job?.id || !SAFE_JOB_ID_PATTERN.test(String(job.id))) {
       return {
         error: projectionError(
@@ -639,24 +681,24 @@ export function createJobProjectionStore({
         )
       };
     }
-    const candidate: any = allocateVersion && job.versionGroupId
+    const candidate = allocateVersion && job.versionGroupId
       ? {
           ...job,
           versionNumber: Number(prepareCached(db, `
             SELECT COALESCE(MAX(version_number),0)+1 AS value
             FROM jobs
             WHERE version_group_id=?
-          `).get(String(job.versionGroupId)).value)
+          `).get(String(job.versionGroupId))?.value || 1)
         }
       : job;
     const { serialized, bytes } = serializeJob(
       candidate,
       policy.maxJobMetadataBytes
     );
-    const existing: any = prepareCached(db, "SELECT * FROM jobs WHERE id=?").get(job.id);
+    const existing = prepareCached(db, "SELECT * FROM jobs WHERE id=?").get(job.id);
     if (!existing) {
       pruneForAdmission(db, policy, bytes, now(), { reserveRecord: true });
-      const meta: any = readMeta(db);
+      const meta = readMeta(db);
       if (meta.totalCount + 1 > policy.maxRecords) {
         return {
           error: projectionError(
@@ -688,7 +730,7 @@ export function createJobProjectionStore({
         };
       }
     } else {
-      const meta: any = readMeta(db);
+      const meta = readMeta(db);
       if (
         !["queued", "running"].includes(String(existing.status)) &&
         ["queued", "running"].includes(String(candidate.status)) &&
@@ -730,7 +772,7 @@ export function createJobProjectionStore({
         }
       }
     }
-    const record: any = bindJob(candidate, serialized, bytes, existing);
+    const record = bindJob(candidate, serialized, bytes, existing);
     prepareCached(db, `
       INSERT INTO jobs(
         id,status,created_at_ms,updated_at_ms,finished_at_ms,
@@ -775,15 +817,15 @@ export function createJobProjectionStore({
     return { job: rowToJob(prepareCached(db, "SELECT * FROM jobs WHERE id=?").get(job.id)) };
   });
 
-  const deleteTransaction: any = db.transaction((jobId?: any) : any => {
-    const row: any = prepareCached(db, "SELECT * FROM jobs WHERE id=?").get(jobId);
+  const deleteTransaction = db.transaction((jobId: string) => {
+    const row = prepareCached(db, "SELECT * FROM jobs WHERE id=?").get(jobId);
     if (!row) return null;
     queueDeletion(db, row, now());
     return rowToJob(row);
   });
 
-  let closed: any = false;
-  const requireOpen: any = () : any => {
+  let closed = false;
+  const requireOpen = () => {
     if (closed) {
       throw projectionError(
         "job_projection_store_closed",
@@ -793,9 +835,9 @@ export function createJobProjectionStore({
     }
   };
 
-  function upsert(job?: any, { allocateVersion = false }: Record<string, any> = {}) : any {
+  function upsert(job: JobDocument, { allocateVersion = false }: { allocateVersion?: boolean } = {}) {
     requireOpen();
-    const result: any = upsertTransaction(job, allocateVersion);
+    const result = upsertTransaction(job, allocateVersion);
     if (result.error) throw result.error;
     return result.job;
   }
@@ -806,10 +848,14 @@ export function createJobProjectionStore({
     ownerSubjectId = "",
     statuses = [],
     access = null
-  }: Record<string, any> = {}) : any {
+  }: PageInput & {
+    ownerSubjectId?: string;
+    statuses?: JobStatus[];
+    access?: JobAccessFilter | null;
+  } = {}) {
     requireOpen();
-    const safeLimit: any = positiveInteger(limit, 50, MAX_PAGE_SIZE);
-    const decoded: any = decodeCursor(cursor);
+    const safeLimit = positiveInteger(limit, 50, MAX_PAGE_SIZE);
+    const decoded = decodeCursor(cursor);
     if (cursor && !decoded) {
       throw projectionError(
         "job_projection_cursor_invalid",
@@ -817,14 +863,14 @@ export function createJobProjectionStore({
         400
       );
     }
-    const normalizedStatuses: any[] = [...new Set<any>(
-      statuses.map(String).filter((status?: any) : any =>
+    const normalizedStatuses = [...new Set<string>(
+      statuses.map(String).filter((status) =>
         ["queued", "running", ...TERMINAL_STATUSES].includes(status)
       )
     )];
-    const params: any[] = [];
-    const clauses: any[] = [];
-    const accessFilter: any = accessPredicate(access);
+    const params = [];
+    const clauses = [];
+    const accessFilter = accessPredicate(access);
     if (accessFilter.clause) {
       clauses.push(accessFilter.clause);
       params.push(...accessFilter.params);
@@ -834,7 +880,7 @@ export function createJobProjectionStore({
       params.push(String(ownerSubjectId));
     }
     if (normalizedStatuses.length > 0) {
-      clauses.push(`status IN (${normalizedStatuses.map(() : any => "?").join(",")})`);
+      clauses.push(`status IN (${normalizedStatuses.map(() => "?").join(",")})`);
       params.push(...normalizedStatuses);
     }
     if (decoded) {
@@ -842,20 +888,20 @@ export function createJobProjectionStore({
       params.push(decoded.createdAtMs, decoded.createdAtMs, decoded.id);
     }
     params.push(safeLimit + 1);
-    const rows: any = prepareCached(db, `
+    const rows = prepareCached(db, `
       SELECT *
       FROM jobs
       ${clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : ""}
       ORDER BY created_at_ms DESC,id DESC
       LIMIT ?
     `).all(...params);
-    const hasMore: any = rows.length > safeLimit;
-    const pageRows: any = rows.slice(0, safeLimit);
-    const tail: any = pageRows.at(-1);
+    const hasMore = rows.length > safeLimit;
+    const pageRows = rows.slice(0, safeLimit);
+    const tail = pageRows.at(-1);
     return {
       items: pageRows.map(rowToJob),
       nextCursor: hasMore && tail
-        ? encodeCursor(tail.created_at_ms, tail.id)
+        ? encodeCursor(Number(tail.created_at_ms), String(tail.id))
         : "",
       done: !hasMore
     };
@@ -865,7 +911,7 @@ export function createJobProjectionStore({
     policy,
     databasePath,
     upsert,
-    create(job?: any) : any {
+    create(job: JobDocument) {
       requireOpen();
       if (prepareCached(db, "SELECT 1 FROM jobs WHERE id=?").get(job?.id)) {
         throw projectionError(
@@ -876,18 +922,18 @@ export function createJobProjectionStore({
       }
       return upsert(job, { allocateVersion: true });
     },
-    importJob(job?: any) : any {
+    importJob(job: JobDocument) {
       return upsert(job);
     },
-    get(jobId?: any) : any {
+    get(jobId?: string) {
       requireOpen();
       return rowToJob(
         prepareCached(db, "SELECT * FROM jobs WHERE id=?").get(String(jobId || ""))
       );
     },
-    getArtifactInfo(jobId?: any) : any {
+    getArtifactInfo(jobId?: string) {
       requireOpen();
-      const row: any = prepareCached(db, `
+      const row = prepareCached(db, `
         SELECT payload_ref,payload_digest,payload_bytes,
                result_ref,result_digest,result_bytes
         FROM jobs
@@ -903,7 +949,7 @@ export function createJobProjectionStore({
         resultBytes: Number(row.result_bytes || 0)
       };
     },
-    getByCheckpoint(checkpointId?: any) : any {
+    getByCheckpoint(checkpointId?: string) {
       requireOpen();
       return rowToJob(prepareCached(db, `
         SELECT *
@@ -913,7 +959,7 @@ export function createJobProjectionStore({
         LIMIT 1
       `).get(String(checkpointId || "")));
     },
-    getActiveManifest(manifestKey?: any, archiveBatchId: any = "") : any {
+    getActiveManifest(manifestKey?: string, archiveBatchId = "") {
       requireOpen();
       return rowToJob(prepareCached(db, `
         SELECT *
@@ -925,19 +971,19 @@ export function createJobProjectionStore({
       `).get(String(manifestKey || ""), String(archiveBatchId || "")));
     },
     list,
-    listActive({ cursor = "", limit = MAX_PAGE_SIZE }: Record<string, any> = {}) : any {
+    listActive({ cursor = "", limit = MAX_PAGE_SIZE }: PageInput = {}) {
       return list({
         cursor,
         limit,
         statuses: ["queued", "running"]
       });
     },
-    listQueued({ cursor = "", limit = 100, access = null }: Record<string, any> = {}) : any {
+    listQueued({ cursor = "", limit = 100, access = null }: PageInput & { access?: JobAccessFilter | null } = {}) {
       requireOpen();
-      const safeLimit: any = positiveInteger(limit, 100, MAX_PAGE_SIZE);
-      const normalizedCursor: any = String(cursor || "");
-      const accessFilter: any = accessPredicate(access);
-      const rows: any = prepareCached(db, `
+      const safeLimit = positiveInteger(limit, 100, MAX_PAGE_SIZE);
+      const normalizedCursor = String(cursor || "");
+      const accessFilter = accessPredicate(access);
+      const rows = prepareCached(db, `
         SELECT *
         FROM jobs
         WHERE status='queued'
@@ -950,19 +996,19 @@ export function createJobProjectionStore({
         ...accessFilter.params,
         safeLimit + 1
       );
-      const hasMore: any = rows.length > safeLimit;
-      const pageRows: any = rows.slice(0, safeLimit);
+      const hasMore = rows.length > safeLimit;
+      const pageRows = rows.slice(0, safeLimit);
       return {
         items: pageRows.map(rowToJob),
         nextCursor: hasMore ? String(pageRows.at(-1)?.id || "") : "",
         done: !hasMore
       };
     },
-    listOwnerships({ cursor = "", limit = 100 }: Record<string, any> = {}) : any {
-      const page: any = list({ cursor, limit });
+    listOwnerships({ cursor = "", limit = 100 }: PageInput = {}) {
+      const page = list({ cursor, limit });
       return {
         ...page,
-        items: page.items.map((job?: any) : any => ({
+        items: page.items.filter((job): job is JobDocument => job !== null).map((job) => ({
           jobId: job.id || "",
           archiveBatchId: job.archiveBatchId || "",
           ownerSubjectId:
@@ -972,11 +1018,11 @@ export function createJobProjectionStore({
         }))
       };
     },
-    getCounts() : any {
+    getCounts() {
       requireOpen();
       return readMeta(db);
     },
-    explainList({ ownerSubjectId = "" }: Record<string, any> = {}) : any {
+    explainList({ ownerSubjectId = "" }: { ownerSubjectId?: string } = {}) {
       requireOpen();
       if (ownerSubjectId) {
         return prepareCached(db, `
@@ -994,7 +1040,7 @@ export function createJobProjectionStore({
         LIMIT ?
       `).all(10);
     },
-    explainTerminalRetention({ overCapacity = false }: Record<string, any> = {}) : any {
+    explainTerminalRetention({ overCapacity = false }: { overCapacity?: boolean } = {}) {
       requireOpen();
       if (overCapacity) {
         return prepareCached(db, `
@@ -1023,19 +1069,26 @@ export function createJobProjectionStore({
       digest,
       byteSize,
       job = null
-    }: Record<string, any> = {}) : any {
+    }: {
+      jobId: string;
+      kind: "payload" | "result";
+      finalRef: string;
+      digest: string;
+      byteSize: number;
+      job?: JobDocument | null;
+    }) {
       requireOpen();
-      return db.transaction(() : any => {
-        const normalizedKind: any = String(kind || "");
-        const bytes: any = Number(byteSize);
-        const normalizedJobId: any = String(jobId || "");
-        const normalizedFinalRef: any = String(finalRef || "");
-        const expectedFinalRef: any = path.posix.join(
+      return db.transaction(() => {
+        const normalizedKind = String(kind || "");
+        const bytes = Number(byteSize);
+        const normalizedJobId = String(jobId || "");
+        const normalizedFinalRef = String(finalRef || "");
+        const expectedFinalRef = path.posix.join(
           "jobs",
           normalizedJobId,
           normalizedKind === "payload" ? "payload.json" : "result.json"
         );
-        const perArtifactLimit: any = normalizedKind === "payload"
+        const perArtifactLimit = normalizedKind === "payload"
           ? policy.maxPayloadBytes
           : policy.maxResultBytes;
         if (
@@ -1053,7 +1106,7 @@ export function createJobProjectionStore({
             413
           );
         }
-        const current: any = prepareCached(db,
+        const current = prepareCached(db,
           "SELECT payload_bytes,result_bytes FROM jobs WHERE id=?"
         ).get(normalizedJobId);
         if (!current) {
@@ -1063,10 +1116,10 @@ export function createJobProjectionStore({
             404
           );
         }
-        const existingBytes: any = normalizedKind === "payload"
+        const existingBytes = normalizedKind === "payload"
           ? Number(current.payload_bytes)
           : Number(current.result_bytes);
-        const meta: any = readMeta(db);
+        const meta = readMeta(db);
         if (
           meta.artifactBytes +
           meta.preparedArtifactBytes +
@@ -1081,8 +1134,8 @@ export function createJobProjectionStore({
             503
           );
         }
-        const journalId: any = randomUUID();
-        const journalJobJson: any = job
+        const journalId = randomUUID();
+        const journalJobJson = job
           ? serializeJob(job, policy.maxJobMetadataBytes).serialized
           : null;
         prepareCached(db, `
@@ -1104,10 +1157,10 @@ export function createJobProjectionStore({
         return { journalId };
       })();
     },
-    publishArtifact(journalId?: any) : any {
+    publishArtifact(journalId: string) {
       requireOpen();
-      return db.transaction(() : any => {
-        const journal: any = prepareCached(db,
+      return db.transaction(() => {
+        const journal = prepareCached(db,
           "SELECT * FROM job_artifact_journal WHERE id=?"
         ).get(journalId);
         if (!journal) return null;
@@ -1126,8 +1179,8 @@ export function createJobProjectionStore({
             kind: String(journal.kind)
           };
         }
-        const column: any = journal.kind === "payload" ? "payload" : "result";
-        const updated: any = prepareCached(db, `
+        const column = journal.kind === "payload" ? "payload" : "result";
+        const updated = prepareCached(db, `
           UPDATE jobs
           SET ${column}_ref=?,${column}_digest=?,${column}_bytes=?,
               revision=revision+1
@@ -1154,44 +1207,46 @@ export function createJobProjectionStore({
         };
       })();
     },
-    settleArtifact(journalId?: any) : any {
+    settleArtifact(journalId: string) {
       requireOpen();
       prepareCached(db, "DELETE FROM job_artifact_journal WHERE id=?").run(journalId);
     },
-    abortArtifact(journalId?: any) : any {
+    abortArtifact(journalId: string) {
       requireOpen();
       prepareCached(db, "DELETE FROM job_artifact_journal WHERE id=?").run(journalId);
     },
-    listArtifactJournal({ limit = DEFAULT_CLEANUP_BATCH }: Record<string, any> = {}) : any {
+    listArtifactJournal({ limit = DEFAULT_CLEANUP_BATCH }: { limit?: number } = {}) {
       requireOpen();
-      const safeLimit: any = positiveInteger(limit, DEFAULT_CLEANUP_BATCH, 1_024);
+      const safeLimit = positiveInteger(limit, DEFAULT_CLEANUP_BATCH, 1_024);
       return prepareCached(db, `
         SELECT *
         FROM job_artifact_journal
         ORDER BY created_at_ms ASC,id ASC
         LIMIT ?
-      `).all(safeLimit).map((entry?: any) : any => ({
-        journalId: String(entry.id),
-        jobId: String(entry.job_id),
-        kind: String(entry.kind),
-        finalRef: String(entry.final_ref),
-        digest: String(entry.digest),
-        byteSize: Number(entry.byte_size),
-        state: String(entry.state),
-        job: entry.journal_job_json
-          ? JSON.parse(String(entry.journal_job_json))
+      `).all(safeLimit).map((entry) => {
+        const row = entry as SqliteRow;
+        return ({
+        journalId: String(row.id),
+        jobId: String(row.job_id),
+        kind: String(row.kind),
+        finalRef: String(row.final_ref),
+        digest: String(row.digest),
+        byteSize: Number(row.byte_size),
+        state: String(row.state),
+        job: row.journal_job_json
+          ? JSON.parse(String(row.journal_job_json))
           : null
-      }));
+      });});
     },
     commitUploadCleanupJournal({
       jobId,
       receiptId,
       sessionId
-    }: Record<string, any> = {}) : any {
+    }: { jobId?: string; receiptId?: string; sessionId?: string } = {}) {
       requireOpen();
-      const normalizedJobId: any = String(jobId || "").trim();
-      const normalizedReceiptId: any = String(receiptId || "").trim();
-      const normalizedSessionId: any = String(sessionId || "").trim();
+      const normalizedJobId = String(jobId || "").trim();
+      const normalizedReceiptId = String(receiptId || "").trim();
+      const normalizedSessionId = String(sessionId || "").trim();
       if (
         !SAFE_JOB_ID_PATTERN.test(normalizedJobId) ||
         !/^upload_consumption_receipt_[a-f0-9]{32}$/u.test(
@@ -1206,8 +1261,8 @@ export function createJobProjectionStore({
         );
       }
       try {
-        return db.transaction(() : any => {
-          const existing: any = prepareCached(db, `
+        return db.transaction(() => {
+          const existing = prepareCached(db, `
             SELECT job_id,receipt_id,session_id,state
             FROM job_upload_cleanup_journal
             WHERE session_id=? OR job_id=? OR receipt_id=?
@@ -1254,10 +1309,10 @@ export function createJobProjectionStore({
             state: "pending"
           };
         })();
-      } catch (error: any) {
+      } catch (error) {
         if (
-          error?.code === "upload_cleanup_journal_conflict" ||
-          error?.code === "upload_cleanup_journal_input_invalid"
+          errorProperty(error, "code") === "upload_cleanup_journal_conflict" ||
+          errorProperty(error, "code") === "upload_cleanup_journal_input_invalid"
         ) {
           throw error;
         }
@@ -1269,59 +1324,62 @@ export function createJobProjectionStore({
     },
     listUploadCleanupJournal({
       limit = DEFAULT_CLEANUP_BATCH
-    }: Record<string, any> = {}) : any {
+    }: { limit?: number } = {}) {
       requireOpen();
-      const safeLimit: any = positiveInteger(limit, DEFAULT_CLEANUP_BATCH, 1_024);
+      const safeLimit = positiveInteger(limit, DEFAULT_CLEANUP_BATCH, 1_024);
       return prepareCached(db, `
         SELECT job_id,receipt_id,session_id,state
         FROM job_upload_cleanup_journal
         WHERE state='pending'
         ORDER BY created_at_ms ASC,session_id ASC
         LIMIT ?
-      `).all(safeLimit).map((entry?: any) : any => ({
-        jobId: String(entry.job_id),
-        receiptId: String(entry.receipt_id),
-        sessionId: String(entry.session_id),
-        state: String(entry.state)
-      }));
+      `).all(safeLimit).map((entry) => {
+        const row = entry as SqliteRow;
+        return {
+          jobId: String(row.job_id),
+          receiptId: String(row.receipt_id),
+          sessionId: String(row.session_id),
+          state: String(row.state)
+        };
+      });
     },
-    settleUploadCleanupJournal(sessionId?: any) : any {
+    settleUploadCleanupJournal(sessionId?: string) {
       requireOpen();
       return prepareCached(db, `
         DELETE FROM job_upload_cleanup_journal
         WHERE session_id=? AND state='pending'
       `).run(String(sessionId || "").trim()).changes;
     },
-    delete(jobId?: any) : any {
+    delete(jobId?: string) {
       requireOpen();
       return deleteTransaction(String(jobId || ""));
     },
-    maintain() : any {
+    maintain() {
       requireOpen();
-      const removed: any = db.transaction(() : any =>
+      const removed = db.transaction(() =>
         pruneForAdmission(db, policy, 0, now(), {
           reserveRecord: false
         })
       )();
       return {
         removed,
-        journalPending: prepareCached(db,
+        journalPending: Number(prepareCached(db,
           "SELECT COUNT(*) AS value FROM job_artifact_journal"
-        ).get().value
+        ).get()?.value || 0)
       };
     },
-    settleDeletion(jobId?: any) : any {
+    settleDeletion(jobId?: string) {
       requireOpen();
       prepareCached(db, `
         DELETE FROM job_artifact_journal
         WHERE job_id=? AND kind='delete_job'
       `).run(String(jobId || ""));
     },
-    checkpoint() : any {
+    checkpoint() {
       requireOpen();
       db.pragma("wal_checkpoint(TRUNCATE)");
     },
-    close() : any {
+    close() {
       if (closed) return;
       closed = true;
       db.close();
@@ -1329,4 +1387,4 @@ export function createJobProjectionStore({
   });
 }
 
-export const JOB_PROJECTION_SCHEMA_VERSION: any = SCHEMA_VERSION;
+export const JOB_PROJECTION_SCHEMA_VERSION = SCHEMA_VERSION;

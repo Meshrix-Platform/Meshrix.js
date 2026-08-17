@@ -8,7 +8,6 @@
  * @module foundation/concurrency/lock-manager
  */
 import {
-  LOCK_MANAGER_PROTOCOL,
   LockAcquireAbortedError,
   LockFencingError,
   LockManager,
@@ -20,10 +19,37 @@ import {
   IntrusiveWaitQueue,
   normalizeLockKey,
   positiveDuration,
-  positiveInteger,
   nonNegativeDuration,
-  throwIfAcquireAborted
+  throwIfAcquireAborted,
 } from "./lock-manager-contract.ts";
+import type {
+  DeadlineEntry,
+  IntrusiveWaitNode,
+  LockAcquireOptions,
+  LockHandle,
+  LockManagerConfig,
+  LockManagerMetrics,
+} from "./lock-manager-contract.ts";
+
+interface MemoryLockEntry {
+  handle: LockHandle;
+  timer: NodeJS.Timeout;
+}
+
+interface MemoryWaiter extends IntrusiveWaitNode<MemoryWaiter> {
+  resolve: (handle: LockHandle) => void;
+  reject: (reason: Error) => void;
+  deadlineEntry: DeadlineEntry | null;
+  active: boolean;
+  ttlMs: number;
+  signal?: AbortSignal;
+  onAbort: () => void;
+}
+
+interface MemoryLockMetrics extends LockManagerMetrics {
+  queueKeys: number;
+  waiterTimers: number;
+}
 
 export {
   LOCK_MANAGER_PROTOCOL,
@@ -33,7 +59,7 @@ export {
   LockManagerDestroyedError,
   LockQueueFullError,
   LockReleasedError,
-  LockTimeoutError
+  LockTimeoutError,
 } from "./lock-manager-contract.ts";
 
 /**
@@ -41,27 +67,38 @@ export {
  * Not suitable for multi-process/worker deployments.
  */
 export class MemoryLockManager extends LockManager {
-  _destroyed: any;
-  _locks: any;
-  _queues: any;
-  _waiterScheduler: any;
-  constructor(config: Record<string, any> = {}) {
+  _destroyed: boolean;
+  _locks: Map<string, MemoryLockEntry>;
+  _queues: Map<string, IntrusiveWaitQueue<MemoryWaiter>>;
+  _waiterScheduler: DeadlineScheduler;
+  constructor(config: LockManagerConfig = {}) {
     super({ ...config, backend: "memory" });
     /** @type {Map<string, { handle: LockHandle, timer: NodeJS.Timeout }>} */
-    this._locks = new Map<any, any>();
+    this._locks = new Map<string, MemoryLockEntry>();
     /** @type {Map<string, IntrusiveWaitQueue>} */
-    this._queues = new Map<any, any>();
+    this._queues = new Map<string, IntrusiveWaitQueue<MemoryWaiter>>();
     this._waiterScheduler = new DeadlineScheduler();
     this._destroyed = false;
   }
 
-  async acquire(key?: any, options: Record<string, any> = {}) : Promise<any> {
+  override async acquire(
+    key: string,
+    options: LockAcquireOptions = {},
+  ): Promise<LockHandle> {
     this._assertActive();
-    const lockKey: any = normalizeLockKey(key);
+    const lockKey = normalizeLockKey(key);
     throwIfAcquireAborted(options.signal, lockKey);
-    const ttlMs: any = positiveDuration(options.ttlMs, this.config.defaultTtlMs, "ttlMs");
-    const waitMs: any = nonNegativeDuration(options.waitMs, this.config.maxWaitMs, "waitMs");
-    const existing: any = this._locks.get(lockKey);
+    const ttlMs = positiveDuration(
+      options.ttlMs,
+      this.config.defaultTtlMs,
+      "ttlMs",
+    );
+    const waitMs = nonNegativeDuration(
+      options.waitMs,
+      this.config.maxWaitMs,
+      "waitMs",
+    );
+    const existing = this._locks.get(lockKey);
     if (existing && existing.handle.expiresAt.getTime() <= Date.now()) {
       this._expireHandle(lockKey, existing.handle);
     }
@@ -73,43 +110,57 @@ export class MemoryLockManager extends LockManager {
         throw new LockTimeoutError(lockKey, 0);
       }
 
-      const queue: any = this._queueFor(lockKey);
+      const queue = this._queueFor(lockKey);
       if (this._metrics.currentWaiting >= this.config.maxQueueDepth) {
         throw new LockQueueFullError(lockKey, this.config.maxQueueDepth);
       }
 
       this._metrics.currentWaiting++;
-      return new Promise((resolve?: any, reject?: any) : any => {
-        const waiter: Record<string, any> = {
+      return new Promise<LockHandle>((resolve, reject) => {
+        const waiter: MemoryWaiter = {
           resolve,
           reject,
+          previous: null,
+          next: null,
+          queue: null,
           deadlineEntry: null,
           active: true,
           ttlMs,
           signal: options.signal,
-          onAbort: null
+          onAbort: () => undefined,
         };
-        waiter.onAbort = () : any => {
+        waiter.onAbort = () => {
           if (!waiter.active) return;
           waiter.active = false;
           queue.remove(waiter);
-          this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
+          this._metrics.currentWaiting = Math.max(
+            0,
+            this._metrics.currentWaiting - 1,
+          );
           if (queue.size === 0) this._queues.delete(lockKey);
           this._waiterScheduler.cancel(waiter.deadlineEntry);
           reject(new LockAcquireAbortedError(lockKey));
         };
-        waiter.deadlineEntry = this._waiterScheduler.schedule(Date.now() + waitMs, () : any => {
-          if (!waiter.active) return;
-          waiter.active = false;
-          queue.remove(waiter);
-          this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
-          this._metrics.totalTimedOut++;
-          if (queue.size === 0) this._queues.delete(lockKey);
-          waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
-          reject(new LockTimeoutError(lockKey, waitMs));
-        });
+        waiter.deadlineEntry = this._waiterScheduler.schedule(
+          Date.now() + waitMs,
+          () => {
+            if (!waiter.active) return;
+            waiter.active = false;
+            queue.remove(waiter);
+            this._metrics.currentWaiting = Math.max(
+              0,
+              this._metrics.currentWaiting - 1,
+            );
+            this._metrics.totalTimedOut++;
+            if (queue.size === 0) this._queues.delete(lockKey);
+            waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
+            reject(new LockTimeoutError(lockKey, waitMs));
+          },
+        );
         queue.push(waiter);
-        waiter.signal?.addEventListener?.("abort", waiter.onAbort, { once: true });
+        waiter.signal?.addEventListener?.("abort", waiter.onAbort, {
+          once: true,
+        });
         if (waiter.signal?.aborted) waiter.onAbort();
       });
     }
@@ -117,10 +168,10 @@ export class MemoryLockManager extends LockManager {
     return this._createLockHandle(lockKey, ttlMs);
   }
 
-  async release(handle?: any) : Promise<any> {
+  override async release(handle: LockHandle): Promise<void> {
     if (!handle || handle.released) return;
 
-    const entry: any = this._locks.get(handle.lockKey);
+    const entry = this._locks.get(handle.lockKey);
     if (!entry) return;
 
     if (entry.handle.fencingToken !== handle.fencingToken) {
@@ -139,25 +190,25 @@ export class MemoryLockManager extends LockManager {
     this._promoteNext(handle.lockKey);
   }
 
-  async isLocked(key?: any) : Promise<any> {
+  override async isLocked(key: string): Promise<boolean> {
     this._assertActive();
-    const lockKey: any = normalizeLockKey(key);
-    const existing: any = this._locks.get(lockKey);
+    const lockKey = normalizeLockKey(key);
+    const existing = this._locks.get(lockKey);
     if (existing && existing.handle.expiresAt.getTime() <= Date.now()) {
       this._expireHandle(lockKey, existing.handle);
     }
     return this._locks.has(lockKey);
   }
 
-  getMetrics() : any {
+  override getMetrics(): MemoryLockMetrics {
     return {
       ...super.getMetrics(),
       queueKeys: this._queues.size,
-      waiterTimers: this._waiterScheduler.activeTimerCount
+      waiterTimers: this._waiterScheduler.activeTimerCount,
     };
   }
 
-  destroy() : any {
+  destroy(): void {
     if (this._destroyed) return;
     this._destroyed = true;
 
@@ -173,7 +224,8 @@ export class MemoryLockManager extends LockManager {
 
     for (const [key, queue] of this._queues) {
       while (queue.size > 0) {
-        const waiter: any = queue.shift();
+        const waiter = queue.shift();
+        if (!waiter) continue;
         waiter.active = false;
         this._waiterScheduler.cancel(waiter.deadlineEntry);
         waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
@@ -185,22 +237,26 @@ export class MemoryLockManager extends LockManager {
     this._waiterScheduler.close();
   }
 
-  _createLockHandle(key?: any, ttlMs: any = this.config.defaultTtlMs) : any {
-    const fencingToken: any = LockManager.fencingToken();
-    const now: any = new Date();
+  _createLockHandle(key: string, ttlMs = this.config.defaultTtlMs): LockHandle {
+    const fencingToken = LockManager.fencingToken();
+    const now = new Date();
 
-    const handle: Record<string, any> = {
+    const handle: LockHandle = {
       lockKey: key,
       fencingToken,
       acquiredAt: now,
       expiresAt: new Date(now.getTime() + ttlMs),
       released: false,
-      release: async () : Promise<any> => this.release(handle),
-      heartbeat: async (extendMs: any = this.config.defaultTtlMs) : Promise<any> => {
+      release: async (): Promise<void> => this.release(handle),
+      heartbeat: async (extendMs = this.config.defaultTtlMs): Promise<void> => {
         if (handle.released) throw new LockReleasedError(key);
-        const heartbeatTtlMs: any = positiveDuration(extendMs, this.config.defaultTtlMs, "extendMs");
+        const heartbeatTtlMs = positiveDuration(
+          extendMs,
+          this.config.defaultTtlMs,
+          "extendMs",
+        );
         // Reset the auto-expiry timer
-        const entry: any = this._locks.get(key);
+        const entry = this._locks.get(key);
         if (!entry || entry.handle.fencingToken !== handle.fencingToken) {
           handle.released = true;
           throw new LockReleasedError(key);
@@ -215,7 +271,7 @@ export class MemoryLockManager extends LockManager {
       },
     };
 
-    const timer: any = this._expiryTimer(key, handle, ttlMs);
+    const timer = this._expiryTimer(key, handle, ttlMs);
 
     this._locks.set(key, { handle, timer });
     this._metrics.totalAcquired++;
@@ -224,25 +280,28 @@ export class MemoryLockManager extends LockManager {
     return handle;
   }
 
-  _queueFor(key?: any) : any {
-    let queue: any = this._queues.get(key);
+  _queueFor(key: string): IntrusiveWaitQueue<MemoryWaiter> {
+    let queue = this._queues.get(key);
     if (!queue) {
-      queue = new IntrusiveWaitQueue();
+      queue = new IntrusiveWaitQueue<MemoryWaiter>();
       this._queues.set(key, queue);
     }
     return queue;
   }
 
-  _promoteNext(key?: any) : any {
-    const queue: any = this._queues.get(key);
+  _promoteNext(key: string): void {
+    const queue = this._queues.get(key);
     if (!queue) return;
     while (queue.size > 0) {
-      const next: any = queue.shift();
+      const next = queue.shift();
       if (!next?.active) continue;
       next.active = false;
       this._waiterScheduler.cancel(next.deadlineEntry);
       next.signal?.removeEventListener?.("abort", next.onAbort);
-      this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
+      this._metrics.currentWaiting = Math.max(
+        0,
+        this._metrics.currentWaiting - 1,
+      );
       if (queue.size === 0) this._queues.delete(key);
       next.resolve(this._createLockHandle(key, next.ttlMs));
       return;
@@ -250,17 +309,18 @@ export class MemoryLockManager extends LockManager {
     this._queues.delete(key);
   }
 
-  _expiryTimer(key?: any, handle?: any, ttlMs?: any) : any {
-    const timer: any = setTimeout(() : any => {
+  _expiryTimer(key: string, handle: LockHandle, ttlMs: number): NodeJS.Timeout {
+    const timer = setTimeout(() => {
       this._expireHandle(key, handle);
     }, ttlMs);
     if (timer.unref) timer.unref();
     return timer;
   }
 
-  _expireHandle(key?: any, handle?: any) : any {
-    const entry: any = this._locks.get(key);
-    if (!entry || entry.handle.fencingToken !== handle.fencingToken) return false;
+  _expireHandle(key: string, handle: LockHandle): boolean {
+    const entry = this._locks.get(key);
+    if (!entry || entry.handle.fencingToken !== handle.fencingToken)
+      return false;
     clearTimeout(entry.timer);
     this._locks.delete(key);
     handle.released = true;
@@ -270,21 +330,28 @@ export class MemoryLockManager extends LockManager {
     return true;
   }
 
-  _assertActive() : any {
-    if (this._destroyed) throw new LockManagerDestroyedError(this.config.backend);
+  _assertActive(): void {
+    if (this._destroyed)
+      throw new LockManagerDestroyedError(this.config.backend);
   }
 }
 
-export function createLockManager(config: Record<string, any> = {}) : any {
+export function createLockManager(config: LockManagerConfig = {}): LockManager {
   switch (requiredBackend(config)) {
     case "memory":
       return new MemoryLockManager(config);
     case "sqlite":
-      throw new Error("SQLite lock manager requires async ESM loading. Use createLockManagerAsync(config).");
+      throw new Error(
+        "SQLite lock manager requires async ESM loading. Use createLockManagerAsync(config).",
+      );
     case "postgres":
-      throw new Error("Postgres lock manager requires async ESM loading. Use createLockManagerAsync(config).");
+      throw new Error(
+        "Postgres lock manager requires async ESM loading. Use createLockManagerAsync(config).",
+      );
     default:
-      throw new Error(`Unsupported lock manager backend: ${String(config.backend)}.`);
+      throw new Error(
+        `Unsupported lock manager backend: ${String(config.backend)}.`,
+      );
   }
 }
 
@@ -293,7 +360,9 @@ export function createLockManager(config: Record<string, any> = {}) : any {
  * @param {LockManagerConfig} config
  * @returns {Promise<LockManager>}
  */
-export async function createLockManagerAsync(config: Record<string, any> = {}) : Promise<any> {
+export async function createLockManagerAsync(
+  config: LockManagerConfig = {},
+): Promise<LockManager> {
   switch (requiredBackend(config)) {
     case "memory":
       return new MemoryLockManager(config);
@@ -302,16 +371,20 @@ export async function createLockManagerAsync(config: Record<string, any> = {}) :
       return new SqliteLockManager(config);
     }
     case "postgres": {
-      const { PostgresLockManager } = await import("./postgres-lock-manager.ts");
+      const { PostgresLockManager } =
+        await import("./postgres-lock-manager.ts");
       return new PostgresLockManager(config);
     }
     default:
-      throw new Error(`Unsupported lock manager backend: ${String(config.backend)}.`);
+      throw new Error(
+        `Unsupported lock manager backend: ${String(config.backend)}.`,
+      );
   }
 }
 
-function requiredBackend(config?: any) : any {
-  const backend: any = String(config?.backend ?? "").trim();
-  if (!backend) throw new TypeError("Lock manager backend must be selected explicitly.");
+function requiredBackend(config: LockManagerConfig): string {
+  const backend = String(config.backend ?? "").trim();
+  if (!backend)
+    throw new TypeError("Lock manager backend must be selected explicitly.");
   return backend;
 }

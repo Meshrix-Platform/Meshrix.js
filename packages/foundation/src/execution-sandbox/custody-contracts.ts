@@ -1,45 +1,84 @@
 import { SANDBOX_PROVIDER_CONFORMANCE_SCHEMA, sandboxDigest } from "./contracts.ts";
 
-export const SANDBOX_CUSTODY_ENVELOPE_SCHEMA: any = "v0.0.1:execution-sandbox:opaque-custody-envelope-1";
-export const SANDBOX_CUSTODY_PROMOTION_SCHEMA: any = "v0.0.1:execution-sandbox:opaque-custody-promotion-1";
+export const SANDBOX_CUSTODY_ENVELOPE_SCHEMA = "v0.0.1:execution-sandbox:opaque-custody-envelope-1";
+export const SANDBOX_CUSTODY_PROMOTION_SCHEMA = "v0.0.1:execution-sandbox:opaque-custody-promotion-1";
 
-const DIGEST: any = /^[a-f0-9]{64}$/u;
-const HANDLE: any = /^custody:[A-Za-z0-9._-]{1,160}$/u;
+const DIGEST = /^[a-f0-9]{64}$/u;
+const HANDLE = /^custody:[A-Za-z0-9._-]{1,160}$/u;
 
-function text(value?: any, label?: any, max: any = 512) : any {
-  const normalized: any = String(value || "").trim();
+type UnknownRecord = Record<string, unknown>;
+
+export interface CustodyPromotionFile {
+  path: string;
+  custodyRef: string;
+  contentDigest: string;
+  envelopeDigest: string;
+  promotionSchemaVersion: typeof SANDBOX_CUSTODY_PROMOTION_SCHEMA;
+}
+
+export interface CustodyProviderReceipt {
+  schemaVersion: typeof SANDBOX_PROVIDER_CONFORMANCE_SCHEMA;
+  providerId: string;
+  policyRevision: string;
+  status: "passed";
+  digest: string;
+  expiresAt: string;
+}
+
+export interface CustodyPromotionRequest {
+  schemaVersion: typeof SANDBOX_CUSTODY_PROMOTION_SCHEMA;
+  handle: string;
+  contentDigest: string;
+  envelopeDigest: string;
+  authorizationRef: string;
+  approvalRef: string;
+  idempotencyKey: string;
+  subjectRef: string;
+  tenantRef: string;
+  workspaceRef: string;
+  policyRevision: string;
+  providerReceipt: Readonly<CustodyProviderReceipt>;
+  sandboxAvailable: true;
+}
+
+function record(value: unknown): value is UnknownRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function text(value: unknown, label: string, max = 512): string {
+  const normalized = String(value || "").trim();
   if (!normalized || normalized.length > max || normalized.includes("\0")) {
     throw new TypeError(`${label} must be a bounded non-empty string.`);
   }
   return normalized;
 }
 
-function optionalText(value?: any, label?: any, max: any = 512) : any {
-  const normalized: any = String(value || "").trim();
+function optionalText(value: unknown, label: string, max = 512): string {
+  const normalized = String(value || "").trim();
   if (normalized.length > max || normalized.includes("\0")) {
     throw new TypeError(`${label} must be a bounded string.`);
   }
   return normalized;
 }
 
-function digest(value?: any, label?: any) : any {
-  const normalized: any = text(value, label, 64).toLowerCase();
+function digest(value: unknown, label: string): string {
+  const normalized = text(value, label, 64).toLowerCase();
   if (!DIGEST.test(normalized)) throw new TypeError(`${label} must be a SHA-256 digest.`);
   return normalized;
 }
 
-export function normalizeCustodyHandle(value?: any) : any {
-  const normalized: any = text(value, "custody handle", 168);
+export function normalizeCustodyHandle(value: unknown): string {
+  const normalized = text(value, "custody handle", 168);
   if (!HANDLE.test(normalized)) throw new TypeError("Custody handle is invalid.");
   return normalized;
 }
 
-export function custodyPromotionSetDigest({ files }: Record<string, any> = {}) : any {
+export function custodyPromotionSetDigest({ files }: { files?: unknown } = {}): string {
   if (!Array.isArray(files) || files.length < 1 || files.length > 100) {
     throw new TypeError("Custody promotion files must be a non-empty bounded array.");
   }
-  const normalizedFiles: any = files.map((file?: any, index?: any) : any => {
-    if (!file || typeof file !== "object" || Array.isArray(file)) {
+  const normalizedFiles = files.map((file, index): Readonly<CustodyPromotionFile> => {
+    if (!record(file)) {
       throw new TypeError(`Custody promotion file ${index} must be an object.`);
     }
     if (file.promotionSchemaVersion !== SANDBOX_CUSTODY_PROMOTION_SCHEMA) {
@@ -52,8 +91,8 @@ export function custodyPromotionSetDigest({ files }: Record<string, any> = {}) :
       envelopeDigest: digest(file.envelopeDigest, `files[${index}].envelopeDigest`),
       promotionSchemaVersion: SANDBOX_CUSTODY_PROMOTION_SCHEMA
     });
-  }).sort((left?: any, right?: any) : any => left.path.localeCompare(right.path));
-  if (new Set<any>(normalizedFiles.map((file?: any) : any => file.path)).size !== normalizedFiles.length) {
+  }).sort((left, right) => left.path.localeCompare(right.path));
+  if (new Set(normalizedFiles.map((file) => file.path)).size !== normalizedFiles.length) {
     throw new TypeError("Custody promotion file paths must be unique.");
   }
   return sandboxDigest({
@@ -62,11 +101,19 @@ export function custodyPromotionSetDigest({ files }: Record<string, any> = {}) :
   });
 }
 
-export function custodyPromotionAuthorizationDigest({ promotionDigest, ownerBinding, governance }: Record<string, any> = {}) : any {
-  const owner: any = ownerBinding && typeof ownerBinding === "object" && !Array.isArray(ownerBinding)
+export function custodyPromotionAuthorizationDigest({
+  promotionDigest,
+  ownerBinding,
+  governance
+}: {
+  promotionDigest?: unknown;
+  ownerBinding?: unknown;
+  governance?: unknown;
+} = {}): string {
+  const owner: UnknownRecord = record(ownerBinding)
     ? ownerBinding
     : {};
-  const currentGovernance: any = governance && typeof governance === "object" && !Array.isArray(governance)
+  const currentGovernance: UnknownRecord = record(governance)
     ? governance
     : {};
   return sandboxDigest({
@@ -89,11 +136,14 @@ export function custodyPromotionAuthorizationDigest({ promotionDigest, ownerBind
   });
 }
 
-export function normalizeCustodyPromotionRequest(value: Record<string, any> = {}, { now = new Date() }: Record<string, any> = {}) : any {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+export function normalizeCustodyPromotionRequest(
+  value: unknown = {},
+  { now = new Date() }: { now?: Date } = {}
+): Readonly<CustodyPromotionRequest> {
+  if (!record(value)) {
     throw new TypeError("Custody promotion request must be an object.");
   }
-  const allowed: any = new Set<any>([
+  const allowed = new Set<string>([
     "schemaVersion", "handle", "contentDigest", "envelopeDigest", "authorizationRef",
     "approvalRef", "policyRevision", "providerReceipt", "sandboxAvailable", "idempotencyKey",
     "subjectRef", "tenantRef", "workspaceRef"
@@ -105,12 +155,12 @@ export function normalizeCustodyPromotionRequest(value: Record<string, any> = {}
     throw new TypeError("Custody promotion request schemaVersion is unsupported.");
   }
   if (value.sandboxAvailable !== true) throw new TypeError("Custody promotion requires a ready sandbox.");
-  const receipt: any = value.providerReceipt;
-  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+  const receipt = value.providerReceipt;
+  if (!record(receipt)) {
     throw new TypeError("Custody promotion requires a provider conformance receipt.");
   }
-  const policyRevision: any = text(value.policyRevision, "policyRevision", 256);
-  const expiresAtMs: any = Date.parse(String(receipt.expiresAt || ""));
+  const policyRevision = text(value.policyRevision, "policyRevision", 256);
+  const expiresAtMs = Date.parse(String(receipt.expiresAt || ""));
   if (
     receipt.schemaVersion !== SANDBOX_PROVIDER_CONFORMANCE_SCHEMA ||
     receipt.status !== "passed" ||

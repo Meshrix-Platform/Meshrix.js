@@ -44,37 +44,76 @@ import {
   projectConnectorMcpEnvelope
 } from "@meshrix/protocols/mcp/adapter/gateway-installer/connector-working-view";
 
-export const WORKSPACE_REFERENCE_MIGRATION_OWNED_MODULE: any =
+export const WORKSPACE_REFERENCE_MIGRATION_OWNED_MODULE =
   "packages/agents/src/agent-workspace/workspace-reference-migration.ts";
-export const WORKSPACE_REFERENCE_MIGRATION_AUTHORITY_ID: any = "WorkspaceReferenceMigration";
-export const WORKSPACE_REFERENCE_MIGRATION_SCHEMA_VERSION: any =
+export const WORKSPACE_REFERENCE_MIGRATION_AUTHORITY_ID = "WorkspaceReferenceMigration";
+export const WORKSPACE_REFERENCE_MIGRATION_SCHEMA_VERSION =
   "v0.0.1:workspace-reference-migration:state-1";
-export const WORKSPACE_REFERENCE_MIGRATION_REPORT_SCHEMA_VERSION: any =
+export const WORKSPACE_REFERENCE_MIGRATION_REPORT_SCHEMA_VERSION =
   "v0.0.1:workspace-reference-migration:report-1";
-export const WORKSPACE_REFERENCE_MIGRATION_CAPACITY_CERTIFIED: any = false;
-export const WORKSPACE_REFERENCE_MIGRATION_NON_CERTIFICATION_REASON: any =
+export const WORKSPACE_REFERENCE_MIGRATION_CAPACITY_CERTIFIED = false;
+export const WORKSPACE_REFERENCE_MIGRATION_NON_CERTIFICATION_REASON =
   CORE_CHANGE_SET_NON_CERTIFICATION_REASON;
 
-const PRIVATE_CACHE_HINT: any = Object.freeze({
+type JsonRecord = Record<string, unknown>;
+type EffectKind = "share" | "unshare" | "import" | "export" | "sandbox-apply" | "local-directory-mutation";
+interface WorkspaceAsset { assetId: string; entityId: string; handle: string; kind: string; resourceRef: string }
+export interface ResourceLink { uri: string; [key: string]: unknown }
+interface OpenState { workingSetId: string; head: number; cursor: unknown; resourceLinks: ResourceLink[]; [key: string]: unknown }
+interface AcknowledgeState { assignedHead: number; conflicts: unknown[]; changedEntityIds: string[]; [key: string]: unknown }
+interface CounterState { applyCalls: number; changeSetApplyCalls: number; [key: string]: number }
+interface Checkpoint { checkpointId: string; head: number; changeId?: string }
+interface Suggestion { suggestionId: string; entityId: string; attributionRef: string; head: number; writerCalls: number }
+interface CommitRequestState extends JsonRecord { workingSetId: string; handle: string; dirty: boolean; changeSet: JsonRecord | null }
+interface WorkspaceFileChangeSet extends JsonRecord { changeId: string; baselineHead: number; attributionRef: string; operations: JsonRecord[] }
+interface CoreAuthority {
+  id: string;
+  open(input?: JsonRecord): Promise<unknown>;
+  observe(input?: JsonRecord): Promise<unknown>;
+  commitTurn(value?: JsonRecord, lookup?: JsonRecord): Promise<unknown>;
+  rebase(input?: JsonRecord, lookup?: JsonRecord): Promise<unknown>;
+  resync(input?: JsonRecord, lookup?: JsonRecord): Promise<unknown>;
+  subscribe(input?: JsonRecord, lookup?: JsonRecord): Promise<unknown>;
+  seedDecoys(input?: JsonRecord): Readonly<{ catalogSize: number; connectedClients: number }>;
+  revoke(workingSetId?: unknown): boolean;
+  advanceGeneration(workingSetId?: unknown): number;
+  snapshotCounters(): Readonly<CounterState>;
+  inspect(workingSetId?: unknown): Readonly<JsonRecord>;
+  notificationFor(workingSetId?: unknown, entityId?: unknown): unknown;
+  rejectEffectCommand(value?: unknown): never;
+  close(): boolean;
+}
+interface WorkingView {
+  hydrate(input?: JsonRecord): unknown;
+  subscribe(input?: unknown): unknown;
+  currentGrant(): string;
+  observeLocal(input?: JsonRecord): unknown;
+  editLocal(input?: JsonRecord): unknown;
+  acceptRemote(value?: unknown): unknown;
+  queueCommit(value?: unknown): unknown;
+}
+interface MigrationOptions extends JsonRecord {
+  authority?: unknown; connector?: unknown; observer?: unknown; nowMs?: number | (() => number);
+}
+interface MigrationSession {
+  workingSetId: string; opened: OpenState | null; assets: WorkspaceAsset[];
+  handleByEntity: Map<string, string>; entityByHandle: Map<string, string>; assetByEntity: Map<string, WorkspaceAsset>;
+  checkpoints: Checkpoint[]; suggestions: Suggestion[]; connectorHead: number; observerHead: number;
+  suggestionWriterCalls: number; hostFileWrites: number; treeScans: number;
+  restoreReversesUnownedEffect: boolean; effectRouted: number; seq: number;
+}
+
+const PRIVATE_CACHE_HINT = Object.freeze({
   ttlMs: 60_000,
   cacheScope: "private"
 });
-const EFFECT_KINDS: readonly any[] = Object.freeze([
-  "share",
-  "unshare",
-  "import",
-  "export",
-  "sandbox-apply",
-  "local-directory-mutation"
-]);
+let factorySeq = 0;
 
-let factorySeq: any = 0;
-
-function asObject(value?: any) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function asObject(value?: unknown): JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
-function freezeSafe(value?: any) : any {
+function freezeSafe<Value extends JsonRecord>(value: Value): Readonly<Value> {
   if (containsForbiddenKeys(value)) {
     throw new Error("Workspace collaboration output cannot carry privacy or CRDT fields.");
   }
@@ -82,20 +121,20 @@ function freezeSafe(value?: any) : any {
   return Object.freeze(value);
 }
 
-function opaqueAssetId(index?: any) : any {
+function opaqueAssetId(index: number): string {
   return `ast.wrm.${index}`;
 }
 
-function opaqueEntityId(index?: any) : any {
+function opaqueEntityId(index: number): string {
   return `ent.wrm.file.${index}`;
 }
 
-function opaqueHandle(index?: any) : any {
+function opaqueHandle(index: number): string {
   return `hdl_wrm_${index}`;
 }
 
-function assertStableIdentity(value?: any) : any {
-  const identity: any = String(value || "");
+function assertStableIdentity(value?: unknown): string {
+  const identity = String(value || "");
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{1,126}$/u.test(identity)) {
     throw new TypeError("Workspace collaboration identity must be a stable opaque token.");
   }
@@ -105,14 +144,75 @@ function assertStableIdentity(value?: any) : any {
   return identity;
 }
 
-function defaultAssets(input: Record<string, any> = {}) : any {
-  const listed: any = Array.isArray(input.assets) && input.assets.length > 0
+function isCoreAuthority(value: unknown): value is CoreAuthority {
+  const candidate = asObject(value);
+  return typeof candidate.id === "string" && typeof candidate.open === "function" &&
+    typeof candidate.observe === "function" && typeof candidate.commitTurn === "function" &&
+    typeof candidate.resync === "function" && typeof candidate.subscribe === "function" &&
+    typeof candidate.snapshotCounters === "function" && typeof candidate.inspect === "function" &&
+    typeof candidate.notificationFor === "function" && typeof candidate.close === "function";
+}
+
+function isWorkingView(value: unknown): value is WorkingView {
+  const candidate = asObject(value);
+  return typeof candidate.hydrate === "function" && typeof candidate.subscribe === "function" &&
+    typeof candidate.currentGrant === "function" && typeof candidate.observeLocal === "function" &&
+    typeof candidate.editLocal === "function" && typeof candidate.acceptRemote === "function" &&
+    typeof candidate.queueCommit === "function";
+}
+
+function openState(value: unknown): OpenState | null {
+  const candidate = asObject(value);
+  if (typeof candidate.workingSetId !== "string" || typeof candidate.head !== "number" ||
+      !Object.hasOwn(candidate, "cursor") || !Array.isArray(candidate.resourceLinks)) return null;
+  const resourceLinks: ResourceLink[] = [];
+  for (const value of candidate.resourceLinks) {
+    const link = asObject(value);
+    if (typeof link.uri !== "string") return null;
+    resourceLinks.push({ ...link, uri: link.uri });
+  }
+  return { ...candidate, workingSetId: candidate.workingSetId, head: candidate.head, cursor: candidate.cursor, resourceLinks };
+}
+
+function acknowledgeState(value: unknown): AcknowledgeState | null {
+  const candidate = asObject(value);
+  if (typeof candidate.assignedHead !== "number" || !Array.isArray(candidate.conflicts) || !Array.isArray(candidate.changedEntityIds)) return null;
+  const changedEntityIds = candidate.changedEntityIds.filter((item): item is string => typeof item === "string");
+  if (changedEntityIds.length !== candidate.changedEntityIds.length) return null;
+  return {
+    ...candidate,
+    assignedHead: candidate.assignedHead,
+    conflicts: candidate.conflicts,
+    changedEntityIds
+  };
+}
+
+function commitRequestState(value: unknown): CommitRequestState | null {
+  const candidate = asObject(value);
+  if (typeof candidate.workingSetId !== "string" || typeof candidate.handle !== "string" ||
+      typeof candidate.dirty !== "boolean") return null;
+  const changeSet = candidate.changeSet === null ? null : asObject(candidate.changeSet);
+  if (candidate.dirty && typeof changeSet?.changeId !== "string") return null;
+  return { ...candidate, workingSetId: candidate.workingSetId, handle: candidate.handle, dirty: candidate.dirty, changeSet };
+}
+
+function effectKind(value: unknown): EffectKind {
+  switch (value) {
+    case "share": case "unshare": case "import": case "export":
+    case "sandbox-apply": case "local-directory-mutation": return value;
+    default: return "share";
+  }
+}
+
+function defaultAssets(input: JsonRecord = {}): WorkspaceAsset[] {
+  const listed: unknown[] = Array.isArray(input.assets) && input.assets.length > 0
     ? input.assets
     : [{ assetId: opaqueAssetId(1), kind: "workspace-file" }];
-  return listed.map((entry?: any, index?: any) : any => {
-    const assetId: any = assertStableIdentity(entry.assetId || opaqueAssetId(index + 1));
-    const entityId: any = assertStableIdentity(entry.entityId || opaqueEntityId(index + 1));
-    const handle: any = String(entry.handle || opaqueHandle(index + 1));
+  return listed.map((value, index) => {
+    const entry = asObject(value);
+    const assetId = assertStableIdentity(entry.assetId || opaqueAssetId(index + 1));
+    const entityId = assertStableIdentity(entry.entityId || opaqueEntityId(index + 1));
+    const handle = String(entry.handle || opaqueHandle(index + 1));
     if (!/^[A-Za-z0-9_-]{8,64}$/u.test(handle)) {
       throw new TypeError("Workspace collaboration Handle must be opaque.");
     }
@@ -120,14 +220,14 @@ function defaultAssets(input: Record<string, any> = {}) : any {
       assetId,
       entityId,
       handle,
-      kind: entry.kind || "workspace-file",
-      resourceRef: entry.resourceRef || `res.wrm.${index + 1}`
+      kind: String(entry.kind || "workspace-file"),
+      resourceRef: String(entry.resourceRef || `res.wrm.${index + 1}`)
     });
   });
 }
 
-export function createWorkspaceFileChangeSet(value: Record<string, any> = {}) : any {
-  return createCoreChangeSet({
+export function createWorkspaceFileChangeSet(value: JsonRecord = {}): WorkspaceFileChangeSet {
+  const changeSet = asObject(createCoreChangeSet({
     changeId: value.changeId,
     baselineHead: value.baselineHead,
     attributionRef: value.attributionRef || "attr.wrm.1",
@@ -140,15 +240,27 @@ export function createWorkspaceFileChangeSet(value: Record<string, any> = {}) : 
         payloadDigest: value.payloadDigest || CORE_CHANGE_SET_DEFAULT_DIGEST
       })
     ]
-  });
+  }));
+  const operations = Array.isArray(changeSet.operations) ? changeSet.operations.map(asObject) : [];
+  if (typeof changeSet.changeId !== "string" || typeof changeSet.baselineHead !== "number" ||
+      typeof changeSet.attributionRef !== "string" || operations.length === 0) {
+    throw new TypeError("Workspace file Change Set is invalid.");
+  }
+  return {
+    ...changeSet,
+    changeId: changeSet.changeId,
+    baselineHead: changeSet.baselineHead,
+    attributionRef: changeSet.attributionRef,
+    operations
+  };
 }
 
-export function createWorkspaceReferenceMigration(options: Record<string, any> = {}) : any {
+export function createWorkspaceReferenceMigration(options: MigrationOptions = {}) {
   factorySeq += 1;
-  const instanceId: any = String(options.instanceId || `wrm.${factorySeq}`);
-  const grantLookup: any = String(options.grantLookup || "gr.wrm.1");
-  const workingSetId: any = String(options.workingSetId || `ws.wrm.${factorySeq}`);
-  const core: any = options.authority || createCoreChangeSetAuthority({
+  const instanceId = String(options.instanceId || `wrm.${factorySeq}`);
+  const grantLookup = String(options.grantLookup || "gr.wrm.1");
+  const workingSetId = String(options.workingSetId || `ws.wrm.${factorySeq}`);
+  const authorityCandidate: unknown = options.authority || createCoreChangeSetAuthority({
     instanceId,
     principalRef: options.principalRef || "prin.wrm.1",
     grantRef: grantLookup,
@@ -157,27 +269,36 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     audienceRef: options.audienceRef || "aud.wrm.1",
     requestRef: options.requestRef || "req.wrm.1"
   });
+  if (!isCoreAuthority(authorityCandidate)) {
+    throw new TypeError("Workspace reference migration requires a Core authority provider.");
+  }
+  const core = authorityCandidate;
   if (core.id !== CORE_CHANGE_SET_AUTHORITY_ID) {
     throw new TypeError("Workspace reference migration requires the Core Change Set authority.");
   }
-  const seam: any = createAgentWorkspaceChangeSetSeam(core);
-  let nowMs: any = Number.isSafeInteger(options.nowMs) ? options.nowMs : 1_000;
-  const clock: any = typeof options.nowMs === "function" ? options.nowMs : () : any => nowMs;
-  const connector: any = options.connector || createConnectorWorkingView({
+  const seam = createAgentWorkspaceChangeSetSeam(core);
+  let nowMs = typeof options.nowMs === "number" && Number.isSafeInteger(options.nowMs) ? options.nowMs : 1_000;
+  const clock = typeof options.nowMs === "function" ? options.nowMs : (): number => nowMs;
+  const connectorCandidate: unknown = options.connector || createConnectorWorkingView({
     grantLookup,
     nowMs: clock
   });
-  const observer: any = options.observer || createConnectorWorkingView({
+  const observerCandidate: unknown = options.observer || createConnectorWorkingView({
     grantLookup: options.observerGrantLookup || "gr.wrm.observer",
     nowMs: clock
   });
-  const session: any = {
+  if (!isWorkingView(connectorCandidate) || !isWorkingView(observerCandidate)) {
+    throw new TypeError("Workspace reference migration requires valid connector working views.");
+  }
+  const connector = connectorCandidate;
+  const observer = observerCandidate;
+  const session: MigrationSession = {
     workingSetId,
     opened: null,
     assets: [],
-    handleByEntity: new Map<any, any>(),
-    entityByHandle: new Map<any, any>(),
-    assetByEntity: new Map<any, any>(),
+    handleByEntity: new Map(),
+    entityByHandle: new Map(),
+    assetByEntity: new Map(),
     checkpoints: [],
     suggestions: [],
     connectorHead: 0,
@@ -190,52 +311,52 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     seq: 0
   };
 
-  function requireOpen() : any {
+  function requireOpen(): OpenState {
     if (!session.opened) {
       throw new Error("Workspace collaboration Working Set is not open.");
     }
     return session.opened;
   }
 
-  function nextSeq(prefix?: any) : any {
+  function nextSeq(prefix: string): string {
     session.seq += 1;
     return `${prefix}.${session.seq}`;
   }
 
-  function entityForHandle(handle?: any) : any {
-    const entityId: any = session.entityByHandle.get(handle);
+  function entityForHandle(handle: string): string {
+    const entityId = session.entityByHandle.get(handle);
     if (!entityId) {
       throw new TypeError("Workspace collaboration Handle is not bound to a Resource.");
     }
     return entityId;
   }
 
-  async function hydratePeer(peer?: any, opened?: any, observed?: any) : Promise<any> {
-    const hydrated: any = peer.hydrate({
+  async function hydratePeer(peer: WorkingView, opened: OpenState, observed: unknown): Promise<JsonRecord> {
+    const hydrated = asObject(peer.hydrate({
       open: opened,
       observe: observed,
       grantLookup: peer.currentGrant()
-    });
+    }));
     if (hydrated.ok !== true) {
       throw new Error("Workspace collaboration peer could not observe confirmed Resources.");
     }
     return hydrated;
   }
 
-  function subscribePeer(peer?: any, opened?: any) : any {
-    const subscribed: any = peer.subscribe(createSubscribeRequest({
+  function subscribePeer(peer: WorkingView, opened: OpenState): JsonRecord {
+    const subscribed = asObject(peer.subscribe(createSubscribeRequest({
       workingSetId: opened.workingSetId,
       cursor: opened.cursor,
       cacheHint: PRIVATE_CACHE_HINT,
       notifications: [SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD]
-    }));
+    })));
     if (subscribed.ok !== true) {
       throw new Error("Workspace collaboration peer could not subscribe to Resource deltas.");
     }
     return subscribed;
   }
 
-  async function open(input: Record<string, any> = {}) : Promise<any> {
+  async function open(input: JsonRecord = {}) {
     if (SERVICE_COLLABORATION_SECOND_CORE_GENERATION_ALLOWED !== false) {
       throw new Error("Workspace collaboration cannot introduce a second Core generation.");
     }
@@ -244,18 +365,18 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
         throw new Error("Workspace collaboration lookup facts are not authority.");
       }
     }
-    const assets: any = defaultAssets(input);
-    const opened: any = await core.open({
+    const assets = defaultAssets(input);
+    const opened: unknown = await core.open({
       workingSetId,
       catalogSize: Number.isSafeInteger(input.catalogSize) ? input.catalogSize : 0,
       connectedClients: Number.isSafeInteger(input.connectedClients) ? input.connectedClients : 0,
-      entities: assets.map((asset?: any) : any => ({
+      entities: assets.map((asset) => ({
         entityId: asset.entityId,
         kind: asset.kind,
         handle: asset.handle
       }))
     });
-    const parsedOpen: any = parseOpenResponse(opened);
+    const parsedOpen = openState(parseOpenResponse(opened));
     if (!parsedOpen) {
       throw new TypeError("Workspace collaboration open must return a versioned Working Set.");
     }
@@ -271,11 +392,11 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     }
     session.connectorHead = parsedOpen.head;
     session.observerHead = parsedOpen.head;
-    const observed: any = await core.observe({
+    const observed: unknown = await core.observe({
       workingSetId,
       handle: assets[0].handle
     });
-    const parsedObserve: any = parseObserveResponse(observed);
+    const parsedObserve: unknown = parseObserveResponse(observed);
     if (!parsedObserve) {
       throw new TypeError("Workspace collaboration observe must return confirmed Resources.");
     }
@@ -298,7 +419,7 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
       coreStateGeneration: SERVICE_COLLABORATION_CORE_STATE_GENERATION,
       workingSetId,
       head: parsedOpen.head,
-      assets: assets.map((asset?: any) : any => Object.freeze({
+      assets: assets.map((asset) => Object.freeze({
         assetId: asset.assetId,
         entityId: asset.entityId,
         handle: asset.handle,
@@ -313,10 +434,10 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  function observeLocal(input: Record<string, any> = {}) : any {
+  function observeLocal(input: JsonRecord = {}) {
     requireOpen();
-    const handle: any = input.handle || session.assets[0].handle;
-    const local: any = connector.observeLocal({ handle });
+    const handle = String(input.handle || session.assets[0].handle);
+    const local = asObject(connector.observeLocal({ handle }));
     return Object.freeze({
       ok: local.ok === true,
       cacheHit: local.cacheHit === true,
@@ -329,17 +450,17 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  function suggest(input: Record<string, any> = {}) : any {
+  function suggest(input: JsonRecord = {}) {
     requireOpen();
-    const handle: any = input.handle || session.assets[0].handle;
-    const entityId: any = entityForHandle(handle);
-    const attributionRef: any = String(input.attributionRef || "attr.wrm.suggest");
-    const edited: any = connector.editLocal({ dirtyEntityIds: [entityId] });
+    const handle = String(input.handle || session.assets[0].handle);
+    const entityId = entityForHandle(handle);
+    const attributionRef = String(input.attributionRef || "attr.wrm.suggest");
+    const edited = asObject(connector.editLocal({ dirtyEntityIds: [entityId] }));
     session.suggestions.push(Object.freeze({
       suggestionId: nextSeq("sug.wrm"),
       entityId,
       attributionRef,
-      head: edited.confirmedHead,
+      head: Number(edited.confirmedHead || 0),
       writerCalls: 0
     }));
     return Object.freeze({
@@ -354,15 +475,15 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  async function fanout(ack?: any, entityId?: any) : Promise<any> {
-    const connectorAck: any = connector.acceptRemote(ack);
-    const observerAck: any = observer.acceptRemote(ack);
-    if (connectorAck.ok === true) session.connectorHead = connectorAck.assignedHead;
-    if (observerAck.ok === true) session.observerHead = observerAck.assignedHead;
-    const note: any = core.notificationFor(workingSetId, entityId);
+  async function fanout(ack: AcknowledgeState, entityId: string): Promise<unknown> {
+    const connectorAck = asObject(connector.acceptRemote(ack));
+    const observerAck = asObject(observer.acceptRemote(ack));
+    if (connectorAck.ok === true) session.connectorHead = Number(connectorAck.assignedHead || 0);
+    if (observerAck.ok === true) session.observerHead = Number(observerAck.assignedHead || 0);
+    const note = core.notificationFor(workingSetId, entityId);
     connector.acceptRemote(note);
     observer.acceptRemote(note);
-    const observed: any = await core.observe({
+    const observed: unknown = await core.observe({
       workingSetId,
       handle: session.handleByEntity.get(entityId)
     });
@@ -371,12 +492,12 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     return note;
   }
 
-  async function commitTurn(input: Record<string, any> = {}) : Promise<any> {
-    const opened: any = requireOpen();
-    const handle: any = input.handle || session.assets[0].handle;
-    const entityId: any = entityForHandle(handle);
-    const dirty: any = input.dirty === true;
-    const request: any = createCommitRequest({
+  async function commitTurn(input: JsonRecord = {}) {
+    requireOpen();
+    const handle = String(input.handle || session.assets[0].handle);
+    const entityId = entityForHandle(handle);
+    const dirty = input.dirty === true;
+    const request = commitRequestState(createCommitRequest({
       workingSetId,
       handle,
       dirty,
@@ -390,25 +511,26 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
           type: input.type || "insert"
         }))
         : null
-    });
+    }));
+    if (!request) throw new TypeError("Workspace collaboration commit request is invalid.");
     assertCommitTurn(request);
-    const queued: any = connector.queueCommit(request);
-    const before: any = core.snapshotCounters();
-    const ack: any = await seam.commitFileTurn(request);
-    const parsedAck: any = parseAcknowledge(ack);
+    const queued = asObject(connector.queueCommit(request));
+    const before = core.snapshotCounters();
+    const ack: unknown = await seam.commitFileTurn(request);
+    const parsedAck = acknowledgeState(parseAcknowledge(ack));
     if (!parsedAck) {
       throw new TypeError("Workspace collaboration commit must acknowledge through Core.");
     }
-    const after: any = core.snapshotCounters();
-    const applyDelta: any = after.applyCalls - before.applyCalls;
-    const changeSetDelta: any = after.changeSetApplyCalls - before.changeSetApplyCalls;
+    const after = core.snapshotCounters();
+    const applyDelta = after.applyCalls - before.applyCalls;
+    const changeSetDelta = after.changeSetApplyCalls - before.changeSetApplyCalls;
     if (dirty === true) {
       await fanout(parsedAck, entityId);
       if (parsedAck.conflicts.length === 0) {
         session.checkpoints.push(Object.freeze({
           checkpointId: `ckpt.wrm.${parsedAck.assignedHead}`,
           head: parsedAck.assignedHead,
-          changeId: request.changeSet.changeId
+          changeId: String(request.changeSet?.changeId || "")
         }));
       }
     } else {
@@ -434,7 +556,7 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  async function restoreAsNewChange(input: Record<string, any> = {}) : Promise<any> {
+  async function restoreAsNewChange(input: JsonRecord = {}) {
     requireOpen();
     if (input.rewindHistory === true || input.reverseEffect === true) {
       throw new Error("Workspace restore is a new Change Set and does not rewind history or Effect Commands.");
@@ -442,17 +564,17 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     if (SERVICE_COLLABORATION_LOCAL_ROLLBACK_REVERSES_EFFECT !== false) {
       throw new Error("Local rollback must not claim to reverse an unowned Effect Command.");
     }
-    const handle: any = input.handle || session.assets[0].handle;
-    const entityId: any = entityForHandle(handle);
-    const currentHead: any = core.inspect(workingSetId).head;
-    const checkpointId: any = String(input.checkpointId || session.checkpoints.at(-1)?.checkpointId || "ckpt.wrm.0");
-    const checkpoint: any = session.checkpoints.find((entry?: any) : any => entry.checkpointId === checkpointId)
+    const handle = String(input.handle || session.assets[0].handle);
+    const entityId = entityForHandle(handle);
+    const currentHead = Number(core.inspect(workingSetId).head || 0);
+    const checkpointId = String(input.checkpointId || session.checkpoints.at(-1)?.checkpointId || "ckpt.wrm.0");
+    const checkpoint = session.checkpoints.find((entry) => entry.checkpointId === checkpointId)
       || session.checkpoints[0];
     if (!checkpoint) {
       throw new Error("Workspace restore requires a recorded checkpoint identity.");
     }
-    const before: any = core.snapshotCounters();
-    const restored: any = await commitTurn({
+    const before = core.snapshotCounters();
+    const restored = await commitTurn({
       handle,
       dirty: true,
       changeId: input.changeId || nextSeq("chg.wrm.restore"),
@@ -462,7 +584,7 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
       attributionRef: input.attributionRef || "attr.wrm.restore",
       type: "update"
     });
-    const after: any = core.snapshotCounters();
+    const after = core.snapshotCounters();
     session.restoreReversesUnownedEffect = false;
     return freezeSafe({
       ok: restored.ok === true,
@@ -479,18 +601,18 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  function routeEffect(input: Record<string, any> = {}) : any {
+  function routeEffect(input: JsonRecord = {}) {
     requireOpen();
-    const kind: any = EFFECT_KINDS.includes(input.kind) ? input.kind : "share";
+    const kind = effectKind(input.kind);
     void kind;
-    const before: any = core.snapshotCounters();
-    let rejected: any = false;
+    const before = core.snapshotCounters();
+    let rejected = false;
     try {
       rejectEffectCommand({ family: "effect-command" });
     } catch {
       rejected = true;
     }
-    const command: any = createEffectCommand({
+    const command = asObject(createEffectCommand({
       effectId: input.effectId || nextSeq("eff.wrm"),
       idempotency: "idempotent",
       principalLookup: input.principalLookup || "prin.wrm.1",
@@ -504,9 +626,9 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
       resultState: "accepted",
       auditRef: input.auditRef || "audt.wrm.1",
       compensationRef: null
-    });
+    }));
     session.effectRouted += 1;
-    const after: any = core.snapshotCounters();
+    const after = core.snapshotCounters();
     return freezeSafe({
       ok: rejected === true,
       family: command.family,
@@ -517,17 +639,17 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  async function resyncDeltas(input: Record<string, any> = {}) : Promise<any> {
-    const opened: any = requireOpen();
-    const handle: any = input.handle || session.assets[0].handle;
-    const cursor: any = input.cursor || opened.cursor;
-    const resync: any = await core.resync({
+  async function resyncDeltas(input: JsonRecord = {}) {
+    const opened = requireOpen();
+    const handle = String(input.handle || session.assets[0].handle);
+    const cursor = input.cursor || opened.cursor;
+    const resync: unknown = await core.resync({
       workingSetId,
       handle,
       cursor
     });
-    const parsed: any = parseResyncResponse(resync);
-    if (!parsed) {
+    const parsed = asObject(parseResyncResponse(resync));
+    if (typeof parsed.outcome !== "string" || typeof parsed.head !== "number") {
       throw new TypeError("Workspace collaboration resync must return bounded deltas.");
     }
     connector.acceptRemote(parsed);
@@ -545,22 +667,23 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  function peers() : any {
-    const inspected: any = session.opened ? core.inspect(workingSetId) : { head: 0 };
+  function peers() {
+    const inspected = session.opened ? core.inspect(workingSetId) : { head: 0 };
+    const coreHead = Number(inspected.head || 0);
     return Object.freeze({
-      coreHead: inspected.head,
+      coreHead,
       connectorHead: session.connectorHead,
       observerHead: session.observerHead,
-      converged: inspected.head === session.connectorHead && inspected.head === session.observerHead,
+      converged: coreHead === session.connectorHead && coreHead === session.observerHead,
       treeScans: session.treeScans,
       hostFileWrites: session.hostFileWrites,
       suggestionWriterCalls: session.suggestionWriterCalls
     });
   }
 
-  function fallback() : any {
-    const descriptor: any = createFallbackDescriptor();
-    const selected: any = selectProtocolPath(true);
+  function fallback() {
+    const descriptor: unknown = createFallbackDescriptor();
+    const selected = asObject(selectProtocolPath(true));
     if (selected.coreStateGeneration !== SERVICE_COLLABORATION_CORE_STATE_GENERATION) {
       throw new Error("Workspace collaboration fallback must retain one Core state generation.");
     }
@@ -572,9 +695,9 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     });
   }
 
-  function snapshot() : any {
-    const counters: any = core.snapshotCounters();
-    const facts: any = Object.freeze({
+  function snapshot() {
+    const counters = core.snapshotCounters();
+    const facts = Object.freeze({
       schemaVersion: WORKSPACE_REFERENCE_MIGRATION_SCHEMA_VERSION,
       coreStateGeneration: SERVICE_COLLABORATION_CORE_STATE_GENERATION,
       authorityId: WORKSPACE_REFERENCE_MIGRATION_AUTHORITY_ID,
@@ -587,9 +710,6 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
       applyCalls: counters.applyCalls,
       changeSetApplyCalls: counters.changeSetApplyCalls,
       effectRouted: session.effectRouted,
-      suggestionWriterCalls: session.suggestionWriterCalls,
-      hostFileWrites: session.hostFileWrites,
-      treeScans: session.treeScans,
       restoreReversesUnownedEffect: session.restoreReversesUnownedEffect,
       checkpointCount: session.checkpoints.length,
       suggestionCount: session.suggestions.length,
@@ -601,7 +721,7 @@ export function createWorkspaceReferenceMigration(options: Record<string, any> =
     return facts;
   }
 
-  function close() : any {
+  function close(): boolean {
     core.close();
     session.opened = null;
     session.handleByEntity.clear();

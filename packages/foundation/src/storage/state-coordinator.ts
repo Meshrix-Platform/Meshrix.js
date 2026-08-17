@@ -2,14 +2,117 @@ import crypto from "node:crypto";
 import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { FileHandle } from "node:fs/promises";
 import {
   getRuntimeLogger,
   summarizeError
 } from "../observability/runtime-logger.ts";
 
-let defaultStateMutationDispatcher: any = null;
-export const STATE_MUTATION_TIMEOUT_MS: any = 60_000;
-export const STATE_MUTATION_POLICY: Readonly<Record<string, any>> = Object.freeze({
+type UnknownRecord = Record<string, unknown>;
+type StateMutationError = Error & { code: string };
+type StateLogger = {
+  debug?: (event: string, fields?: UnknownRecord) => void;
+  error?: (event: string, fields?: UnknownRecord) => void;
+} | null;
+
+export interface StateMutationContext {
+  readonly signal: AbortSignal;
+  assertActive(): void;
+}
+
+export interface StateMutationPolicy {
+  maxQueuedPerLane: number;
+  maxQueuedGlobal: number;
+  maxActiveLanes: number;
+  defaultQueueWaitTimeoutMs: number;
+  maxQueueWaitTimeoutMs: number;
+  defaultExecutionTimeoutMs: number;
+  maxExecutionTimeoutMs: number;
+  maxKeyBytes: number;
+}
+
+interface StateMutationOptions {
+  logger?: StateLogger;
+  metadata?: UnknownRecord;
+  signal?: AbortSignal | null;
+  timeoutMs?: unknown;
+  queueWaitTimeoutMs?: unknown;
+}
+
+interface JsonWriteOptions {
+  metadata?: UnknownRecord;
+  trailingNewline?: boolean;
+  ignoreMissingParent?: boolean;
+}
+
+interface AtomicWriteOptions {
+  encoding?: BufferEncoding;
+  mode?: number;
+  flag?: string | number;
+  ignoreMissingParent?: boolean;
+  onTempFileReady?: ((paths: { filePath: string; tempPath: string; parentDirectory: string }) => void | Promise<void>) | null;
+  kind?: string;
+  metadata?: UnknownRecord;
+}
+
+type AtomicWriteInput = string | AtomicWriteOptions;
+
+interface MutationEntry {
+  task: (context: StateMutationContext) => unknown | Promise<unknown>;
+  logger: StateLogger;
+  signal: AbortSignal | null;
+  queuedAt: number;
+  timeoutMs: number;
+  queueWaitTimeoutMs: number;
+  resolve(value: unknown): void;
+  reject(error: unknown): void;
+  queuedCreditHeld: boolean;
+  slot: number;
+  queueWaitTimer: NodeJS.Timeout | null;
+  detachQueuedAbort: (() => void) | null;
+}
+
+interface MutationLane {
+  active: MutationEntry | null;
+  poison: MutationEntry | null;
+  queue: BoundedMutationDeque<MutationEntry>;
+  idle: Deferred<void>;
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+}
+
+interface StateMutationCoordinator {
+  readonly policy: Readonly<StateMutationPolicy>;
+  queueStateMutation<T = unknown>(
+    key: unknown,
+    task: (context: StateMutationContext) => T | Promise<T>,
+    options?: StateMutationOptions
+  ): Promise<T>;
+  waitForStateIdle(key: unknown): Promise<void>;
+  snapshot(): Readonly<{
+    laneCount: number;
+    activeCount: number;
+    fencedCount: number;
+    queuedCount: number;
+    capacity: Readonly<StateMutationPolicy>;
+    reasonCounts: Readonly<Record<string, number>>;
+  }>;
+}
+
+interface DequeOperation {
+  operation: string;
+  steps: number;
+  size: number;
+  capacity: number;
+}
+
+let defaultStateMutationDispatcher: StateMutationDispatcher | null = null;
+export const STATE_MUTATION_TIMEOUT_MS = 60_000;
+export const STATE_MUTATION_POLICY: Readonly<StateMutationPolicy> = Object.freeze({
   maxQueuedPerLane: 256,
   maxQueuedGlobal: 4_096,
   maxActiveLanes: 2_048,
@@ -19,69 +122,69 @@ export const STATE_MUTATION_POLICY: Readonly<Record<string, any>> = Object.freez
   maxExecutionTimeoutMs: 300_000,
   maxKeyBytes: 4_096
 });
-const PRIVATE_DIRECTORY_MODE: any = 0o700;
-const PRIVATE_FILE_MODE: any = 0o600;
-const WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES: any = new Set<any>(["EACCES", "EINVAL", "ENOTSUP", "EPERM"]);
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
+const WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES = new Set<string>(["EACCES", "EINVAL", "ENOTSUP", "EPERM"]);
 
-function stateMutationError(code?: any, message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
+function stateMutationError(code: string, message: string): StateMutationError {
+  const error = new Error(message) as StateMutationError;
   error.code = code;
   return error;
 }
 
-function timeoutError() : any {
+function timeoutError(): StateMutationError {
   return stateMutationError(
     "STATE_MUTATION_TIMEOUT",
     "State mutation timed out before it reached a safe terminal state."
   );
 }
 
-function fencedError() : any {
+function fencedError(): StateMutationError {
   return stateMutationError(
     "STATE_MUTATION_QUEUE_FENCED",
     "State mutation queue is fenced by an indeterminate earlier mutation."
   );
 }
 
-function schedulerError(code?: any, message?: any) : any {
+function schedulerError(code: string, message: string): StateMutationError {
   return stateMutationError(code, message);
 }
 
-function queueAbortedError() : any {
+function queueAbortedError(): StateMutationError {
   return schedulerError(
     "STATE_MUTATION_QUEUE_ABORTED",
     "State mutation was cancelled before execution."
   );
 }
 
-function activeAbortedError() : any {
+function activeAbortedError(): StateMutationError {
   return schedulerError(
     "STATE_MUTATION_ABORTED",
     "State mutation was cancelled while executing."
   );
 }
 
-function normalizeKey(key?: any) : any {
+function normalizeKey(key: unknown): string {
   return String(key || "default");
 }
 
-function positiveIntegerAtMost(value?: any, fallback?: any, maximum?: any) : any {
-  const numeric: any = Number(value);
+function positiveIntegerAtMost(value: unknown, fallback: number, maximum: number): number {
+  const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 1
     ? Math.min(Math.floor(numeric), maximum)
     : fallback;
 }
 
-function lowerPolicyLimit(value?: any, hardLimit?: any) : any {
+function lowerPolicyLimit(value: unknown, hardLimit: number): number {
   return positiveIntegerAtMost(value, hardLimit, hardLimit);
 }
 
-function normalizeStateMutationPolicy(input: Record<string, any> = {}) : any {
-  const maxQueueWaitTimeoutMs: any = lowerPolicyLimit(
+function normalizeStateMutationPolicy(input: UnknownRecord = {}): Readonly<StateMutationPolicy> {
+  const maxQueueWaitTimeoutMs = lowerPolicyLimit(
     input.maxQueueWaitTimeoutMs,
     STATE_MUTATION_POLICY.maxQueueWaitTimeoutMs
   );
-  const maxExecutionTimeoutMs: any = lowerPolicyLimit(
+  const maxExecutionTimeoutMs = lowerPolicyLimit(
     input.maxExecutionTimeoutMs,
     STATE_MUTATION_POLICY.maxExecutionTimeoutMs
   );
@@ -118,39 +221,39 @@ function normalizeStateMutationPolicy(input: Record<string, any> = {}) : any {
   });
 }
 
-function createDeferred() : any {
-  let resolve: any;
-  let reject: any;
-  let settled: any = false;
-  const promise: any = new Promise((resolvePromise?: any, rejectPromise?: any) : any => {
-    resolve = (value?: any) : any => {
+function createDeferred<T = unknown>(): Deferred<T> {
+  let resolve: (value: T) => void = () => {};
+  let reject: (error: unknown) => void = () => {};
+  let settled = false;
+  const promise = new Promise<T>((resolvePromise, rejectPromise): void => {
+    resolve = (value: T): void => {
       if (settled) return;
       settled = true;
       resolvePromise(value);
     };
-    reject = (error?: any) : any => {
+    reject = (error: unknown): void => {
       if (settled) return;
       settled = true;
       rejectPromise(error);
     };
   });
-  promise.catch(() : any => undefined);
+  promise.catch((): undefined => undefined);
   return Object.freeze({ promise, resolve, reject });
 }
 
-export class BoundedMutationDeque {
-  capacity: any;
-  free: any;
-  head: any;
-  next: any;
-  onOperation: any;
-  operationCounts: any;
-  previous: any;
-  size: any;
-  tail: any;
-  values: any;
-  constructor(capacity?: any, { onOperation = null }: Record<string, any> = {}) {
-    const normalizedCapacity: any = Number(capacity);
+export class BoundedMutationDeque<T = unknown> {
+  readonly capacity: number;
+  readonly free: number[];
+  head: number;
+  readonly next: Int32Array;
+  readonly onOperation: ((operation: Readonly<DequeOperation>) => void) | null;
+  readonly operationCounts: Record<string, number>;
+  readonly previous: Int32Array;
+  size: number;
+  tail: number;
+  readonly values: Array<T | undefined>;
+  constructor(capacity: unknown, { onOperation = null }: { onOperation?: ((operation: Readonly<DequeOperation>) => void) | null } = {}) {
+    const normalizedCapacity = Number(capacity);
     if (!Number.isSafeInteger(normalizedCapacity) || normalizedCapacity < 1) {
       throw new TypeError("BoundedMutationDeque capacity must be a positive safe integer.");
     }
@@ -158,20 +261,20 @@ export class BoundedMutationDeque {
     this.size = 0;
     this.head = -1;
     this.tail = -1;
-    this.values = new Array(normalizedCapacity);
+    this.values = Array.from({ length: normalizedCapacity });
     this.next = new Int32Array(normalizedCapacity);
     this.previous = new Int32Array(normalizedCapacity);
     this.next.fill(-1);
     this.previous.fill(-1);
-    this.free = new Array(normalizedCapacity);
-    for (let index: any = 0; index < normalizedCapacity; index += 1) {
+    this.free = Array.from({ length: normalizedCapacity });
+    for (let index = 0; index < normalizedCapacity; index += 1) {
       this.free[index] = normalizedCapacity - index - 1;
     }
     this.onOperation = typeof onOperation === "function" ? onOperation : null;
     this.operationCounts = { enqueue: 0, dequeue: 0, remove: 0 };
   }
 
-  #record(operation?: any) : any {
+  #record(operation: string): void {
     this.operationCounts[operation] += 1;
     this.onOperation?.(Object.freeze({
       operation,
@@ -181,14 +284,14 @@ export class BoundedMutationDeque {
     }));
   }
 
-  #unlink(slot?: any) : any {
-    const previous: any = this.previous[slot];
-    const next: any = this.next[slot];
+  #unlink(slot: number): T | undefined {
+    const previous = this.previous[slot];
+    const next = this.next[slot];
     if (previous === -1) this.head = next;
     else this.next[previous] = next;
     if (next === -1) this.tail = previous;
     else this.previous[next] = previous;
-    const value: any = this.values[slot];
+    const value = this.values[slot];
     this.values[slot] = undefined;
     this.next[slot] = -1;
     this.previous[slot] = -1;
@@ -197,10 +300,11 @@ export class BoundedMutationDeque {
     return value;
   }
 
-  enqueue(value?: any) : any {
+  enqueue(value: T): number {
     this.#record("enqueue");
     if (this.size >= this.capacity) return -1;
-    const slot: any = this.free.pop();
+    const slot = this.free.pop();
+    if (slot === undefined) return -1;
     this.values[slot] = value;
     this.previous[slot] = this.tail;
     this.next[slot] = -1;
@@ -211,20 +315,20 @@ export class BoundedMutationDeque {
     return slot;
   }
 
-  dequeue() : any {
+  dequeue(): T | undefined {
     this.#record("dequeue");
     if (this.head === -1) return undefined;
     return this.#unlink(this.head);
   }
 
-  remove(slot?: any) : any {
+  remove(slot: number): T | undefined {
     this.#record("remove");
     if (!Number.isSafeInteger(slot) || slot < 0 || slot >= this.capacity) return undefined;
     if (this.values[slot] === undefined) return undefined;
     return this.#unlink(slot);
   }
 
-  snapshot() : any {
+  snapshot(): Readonly<{ capacity: number; size: number; backingSlots: number; operationCounts: Readonly<Record<string, number>> }> {
     return Object.freeze({
       capacity: this.capacity,
       size: this.size,
@@ -238,21 +342,25 @@ export function createStateMutationCoordinator({
   policy: policyInput = {},
   onOperation = null,
   loggerProvider = getRuntimeLogger
-}: Record<string, any> = {}) : any {
-  const policy: any = normalizeStateMutationPolicy(policyInput);
-  const lanes: any = new Map<any, any>();
-  const reasonCounts: any = Object.create(null);
-  const resolveLogger: any = typeof loggerProvider === "function"
+}: {
+  policy?: UnknownRecord;
+  onOperation?: ((operation: Readonly<DequeOperation>) => void) | null;
+  loggerProvider?: StateLogger | (() => StateLogger);
+} = {}): StateMutationCoordinator {
+  const policy = normalizeStateMutationPolicy(policyInput);
+  const lanes = new Map<string, MutationLane>();
+  const reasonCounts: Record<string, number> = Object.create(null) as Record<string, number>;
+  const resolveLogger: () => StateLogger = typeof loggerProvider === "function"
     ? loggerProvider
-    : () : any => loggerProvider || null;
-  let queuedCount: any = 0;
+    : (): StateLogger => loggerProvider || null;
+  let queuedCount = 0;
 
-  function noteReason(code?: any) : any {
+  function noteReason(code?: string): void {
     if (!code) return;
     reasonCounts[code] = Number(reasonCounts[code] || 0) + 1;
   }
 
-  function rejectWith(logger?: any, event?: any, error?: any, fields: Record<string, any> = {}) : any {
+  function rejectWith(logger: StateLogger, event: string, error: StateMutationError, fields: UnknownRecord = {}): Promise<never> {
     noteReason(error.code);
     logger?.error?.(event, {
       ...fields,
@@ -262,7 +370,7 @@ export function createStateMutationCoordinator({
     return Promise.reject(error);
   }
 
-  function releaseQueuedEntry(entry?: any) : any {
+  function releaseQueuedEntry(entry: MutationEntry): void {
     if (!entry.queuedCreditHeld) return;
     entry.queuedCreditHeld = false;
     queuedCount -= 1;
@@ -272,28 +380,28 @@ export function createStateMutationCoordinator({
     entry.detachQueuedAbort = null;
   }
 
-  function settleLaneIfIdle(key?: any, lane?: any) : any {
+  function settleLaneIfIdle(key: string, lane: MutationLane): boolean {
     if (lane.active || lane.poison || lane.queue.size > 0) return false;
     if (lanes.get(key) === lane) lanes.delete(key);
     lane.idle.resolve();
     return true;
   }
 
-  function rejectQueuedMutations(key?: any, lane?: any) : any {
-    let entry: any;
+  function rejectQueuedMutations(key: string, lane: MutationLane): void {
+    let entry: MutationEntry | undefined;
     while ((entry = lane.queue.dequeue()) !== undefined) {
       entry.slot = -1;
       releaseQueuedEntry(entry);
-      const error: any = fencedError();
+      const error = fencedError();
       noteReason(error.code);
       entry.reject(error);
     }
     settleLaneIfIdle(key, lane);
   }
 
-  function startNextMutation(key?: any, lane?: any) : any {
+  function startNextMutation(key: string, lane: MutationLane): void {
     if (lane.active || lane.poison) return;
-    const entry: any = lane.queue.dequeue();
+    const entry = lane.queue.dequeue();
     if (!entry) {
       settleLaneIfIdle(key, lane);
       return;
@@ -301,7 +409,7 @@ export function createStateMutationCoordinator({
     entry.slot = -1;
     releaseQueuedEntry(entry);
     if (entry.signal?.aborted) {
-      const error: any = queueAbortedError();
+      const error = queueAbortedError();
       noteReason(error.code);
       entry.reject(error);
       startNextMutation(key, lane);
@@ -309,12 +417,12 @@ export function createStateMutationCoordinator({
     }
 
     lane.active = entry;
-    const logger: any = entry.logger;
-    const startedAt: any = Date.now();
-    const abortController: any = new AbortController();
-    let terminalError: any = null;
-    let executionTimer: any = null;
-    let detachActiveAbort: any = null;
+    const logger = entry.logger;
+    const startedAt = Date.now();
+    const abortController = new AbortController();
+    let terminalError: unknown = null;
+    let executionTimer: NodeJS.Timeout | null = null;
+    let detachActiveAbort: (() => void) | null = null;
 
     logger?.debug?.("state.queue.started", {
       waitedMs: startedAt - entry.queuedAt,
@@ -322,16 +430,16 @@ export function createStateMutationCoordinator({
       laneCount: lanes.size
     });
 
-    const context: Readonly<Record<string, any>> = Object.freeze({
+    const context: Readonly<StateMutationContext> = Object.freeze({
       signal: abortController.signal,
-      assertActive() : any {
+      assertActive(): void {
         if (abortController.signal.aborted) {
           throw abortController.signal.reason || fencedError();
         }
       }
     });
 
-    const fenceActiveEntry: any = (error?: any, event?: any) : any => {
+    const fenceActiveEntry = (error: StateMutationError, event: string): void => {
       if (lane.active !== entry || terminalError) return;
       terminalError = error;
       lane.poison = entry;
@@ -348,30 +456,30 @@ export function createStateMutationCoordinator({
       });
     };
 
-    executionTimer = setTimeout(() : any => {
+    executionTimer = setTimeout((): void => {
       fenceActiveEntry(timeoutError(), "state.queue.timed_out");
     }, entry.timeoutMs);
     executionTimer.unref?.();
 
     if (entry.signal) {
-      const abortActive: any = () : any => {
+      const abortActive = (): void => {
         fenceActiveEntry(activeAbortedError(), "state.queue.aborted");
       };
       entry.signal.addEventListener("abort", abortActive, { once: true });
-      detachActiveAbort = () : any => entry.signal.removeEventListener("abort", abortActive);
+      detachActiveAbort = (): void => entry.signal?.removeEventListener("abort", abortActive);
       if (entry.signal.aborted) abortActive();
     }
 
     Promise.resolve()
-      .then(() : any => entry.task(context))
-      .then((result?: any) : any => {
+      .then(() => entry.task(context))
+      .then((result: unknown): void => {
         if (terminalError) return;
         logger?.debug?.("state.queue.completed", {
           waitedMs: startedAt - entry.queuedAt,
           durationMs: Date.now() - startedAt
         });
         entry.resolve(result);
-      }, (error?: any) : any => {
+      }, (error: unknown): void => {
         if (terminalError) return;
         logger?.error?.("state.queue.failed", {
           waitedMs: startedAt - entry.queuedAt,
@@ -380,7 +488,7 @@ export function createStateMutationCoordinator({
         });
         entry.reject(error);
       })
-      .finally(() : any => {
+      .finally((): void => {
         if (executionTimer) clearTimeout(executionTimer);
         detachActiveAbort?.();
         if (lane.active !== entry) return;
@@ -395,12 +503,16 @@ export function createStateMutationCoordinator({
       });
   }
 
-  function queueStateMutation(key?: any, task?: any, options: Record<string, any> = {}) : any {
+  function queueStateMutation<T = unknown>(
+    key: unknown,
+    task: (context: StateMutationContext) => T | Promise<T>,
+    options: StateMutationOptions = {}
+  ): Promise<T> {
     if (typeof task !== "function") {
       throw new TypeError("queueStateMutation requires a task function.");
     }
-    const normalizedKey: any = normalizeKey(key);
-    const logger: any = options.logger || resolveLogger();
+    const normalizedKey = normalizeKey(key);
+    const logger = options.logger || resolveLogger();
     if (Buffer.byteLength(normalizedKey, "utf8") > policy.maxKeyBytes) {
       return rejectWith(
         logger,
@@ -412,7 +524,7 @@ export function createStateMutationCoordinator({
       return rejectWith(logger, "state.queue.rejected", queueAbortedError());
     }
 
-    let lane: any = lanes.get(normalizedKey);
+    let lane = lanes.get(normalizedKey);
     if (lane?.poison) {
       return rejectWith(logger, "state.queue.rejected", fencedError());
     }
@@ -450,7 +562,7 @@ export function createStateMutationCoordinator({
       );
     }
 
-    let createdLane: any = false;
+    let createdLane = false;
     if (!lane) {
       createdLane = true;
       lane = {
@@ -462,23 +574,23 @@ export function createStateMutationCoordinator({
       lanes.set(normalizedKey, lane);
     }
 
-    const queuedAt: any = Date.now();
-    const timeoutMs: any = positiveIntegerAtMost(
+    const queuedAt = Date.now();
+    const timeoutMs = positiveIntegerAtMost(
       options.timeoutMs,
       policy.defaultExecutionTimeoutMs,
       policy.maxExecutionTimeoutMs
     );
-    const queueWaitTimeoutMs: any = positiveIntegerAtMost(
+    const queueWaitTimeoutMs = positiveIntegerAtMost(
       options.queueWaitTimeoutMs,
       policy.defaultQueueWaitTimeoutMs,
       policy.maxQueueWaitTimeoutMs
     );
 
     queuedCount += 1;
-    let entry: any;
-    const operation: any = new Promise((resolve?: any, reject?: any) : any => {
+    let entry: MutationEntry | undefined;
+    const operation = new Promise<unknown>((resolve, reject): void => {
       entry = {
-        task,
+        task: task as (context: StateMutationContext) => unknown | Promise<unknown>,
         logger,
         signal: options.signal || null,
         queuedAt,
@@ -493,9 +605,11 @@ export function createStateMutationCoordinator({
       };
     });
 
-    entry.slot = lane.queue.enqueue(entry);
-    if (entry.slot < 0) {
-      releaseQueuedEntry(entry);
+    if (!entry) throw new Error("State mutation entry was not initialized.");
+    const queuedEntry = entry;
+    queuedEntry.slot = lane.queue.enqueue(queuedEntry);
+    if (queuedEntry.slot < 0) {
+      releaseQueuedEntry(queuedEntry);
       if (createdLane) settleLaneIfIdle(normalizedKey, lane);
       return rejectWith(
         logger,
@@ -507,14 +621,14 @@ export function createStateMutationCoordinator({
       );
     }
 
-    const cancelQueued: any = (error?: any, event?: any) : any => {
-      if (entry.slot < 0) return false;
-      const removed: any = lane.queue.remove(entry.slot);
+    const cancelQueued = (error: StateMutationError, event: string): boolean => {
+      if (queuedEntry.slot < 0) return false;
+      const removed = lane.queue.remove(queuedEntry.slot);
       if (!removed) return false;
-      entry.slot = -1;
-      releaseQueuedEntry(entry);
+      queuedEntry.slot = -1;
+      releaseQueuedEntry(queuedEntry);
       noteReason(error.code);
-      entry.reject(error);
+      queuedEntry.reject(error);
       logger?.error?.(event, {
         queuedCount,
         laneCount: lanes.size,
@@ -525,7 +639,7 @@ export function createStateMutationCoordinator({
       return true;
     };
 
-    entry.queueWaitTimer = setTimeout(() : any => {
+    queuedEntry.queueWaitTimer = setTimeout((): void => {
       cancelQueued(
         schedulerError(
           "STATE_MUTATION_QUEUE_WAIT_TIMEOUT",
@@ -534,12 +648,12 @@ export function createStateMutationCoordinator({
         "state.queue.wait_timed_out"
       );
     }, queueWaitTimeoutMs);
-    entry.queueWaitTimer.unref?.();
+    queuedEntry.queueWaitTimer.unref?.();
 
-    if (entry.signal) {
-      const abortQueued: any = () : any => cancelQueued(queueAbortedError(), "state.queue.queue_aborted");
-      entry.signal.addEventListener("abort", abortQueued, { once: true });
-      entry.detachQueuedAbort = () : any => entry.signal.removeEventListener("abort", abortQueued);
+    if (queuedEntry.signal) {
+      const abortQueued = (): void => { cancelQueued(queueAbortedError(), "state.queue.queue_aborted"); };
+      queuedEntry.signal.addEventListener("abort", abortQueued, { once: true });
+      queuedEntry.detachQueuedAbort = (): void => queuedEntry.signal?.removeEventListener("abort", abortQueued);
     }
 
     logger?.debug?.("state.queue.enqueued", {
@@ -548,25 +662,32 @@ export function createStateMutationCoordinator({
       laneCount: lanes.size
     });
     startNextMutation(normalizedKey, lane);
-    return operation;
+    return operation as Promise<T>;
   }
 
-  function waitForStateIdle(key?: any) : any {
-    const normalizedKey: any = normalizeKey(key);
+  function waitForStateIdle(key: unknown): Promise<void> {
+    const normalizedKey = normalizeKey(key);
     if (Buffer.byteLength(normalizedKey, "utf8") > policy.maxKeyBytes) {
       return Promise.reject(
         schedulerError("STATE_MUTATION_KEY_TOO_LARGE", "State mutation key exceeds its byte limit.")
       );
     }
-    const lane: any = lanes.get(normalizedKey);
+    const lane = lanes.get(normalizedKey);
     if (!lane) return Promise.resolve();
     if (lane.poison) return Promise.reject(fencedError());
     return lane.idle.promise;
   }
 
-  function snapshot() : any {
-    let activeCount: any = 0;
-    let fencedCount: any = 0;
+  function snapshot(): Readonly<{
+    laneCount: number;
+    activeCount: number;
+    fencedCount: number;
+    queuedCount: number;
+    capacity: Readonly<StateMutationPolicy>;
+    reasonCounts: Readonly<Record<string, number>>;
+  }> {
+    let activeCount = 0;
+    let fencedCount = 0;
     for (const lane of lanes.values()) {
       if (lane.active) activeCount += 1;
       if (lane.poison) fencedCount += 1;
@@ -589,48 +710,88 @@ export function createStateMutationCoordinator({
   });
 }
 
-const defaultStateMutationCoordinator: any = createStateMutationCoordinator();
+const defaultStateMutationCoordinator: StateMutationCoordinator = createStateMutationCoordinator();
 
-export function queueStateMutation(key?: any, task?: any, options: Record<string, any> = {}) : any {
+export function queueStateMutation<T = unknown>(
+  key: unknown,
+  task: (context: StateMutationContext) => T | Promise<T>,
+  options: StateMutationOptions = {}
+): Promise<T> {
   return defaultStateMutationCoordinator.queueStateMutation(key, task, options);
 }
 
-export function stateMutationSchedulerSnapshot() : any {
+export function stateMutationSchedulerSnapshot(): Readonly<{
+  laneCount: number;
+  activeCount: number;
+  fencedCount: number;
+  queuedCount: number;
+  capacity: Readonly<StateMutationPolicy>;
+  reasonCounts: Readonly<Record<string, number>>;
+}> {
   return defaultStateMutationCoordinator.snapshot();
 }
 
-export function createStateMutationDispatcher({ logger = null, coordinator = null }: Record<string, any> = {}) : any {
-  const currentLogger: any = () : any => logger || getRuntimeLogger();
-  const mutationCoordinator: any = coordinator || defaultStateMutationCoordinator;
+interface StateMutationDispatcher {
+  mutate<T = unknown>(input?: {
+    key?: unknown;
+    kind?: string;
+    metadata?: UnknownRecord;
+    task?: (context: StateMutationContext) => T | Promise<T>;
+    signal?: AbortSignal | null;
+    queueWaitTimeoutMs?: unknown;
+    timeoutMs?: unknown;
+  }): Promise<T>;
+  writeJson(filePath: string, value: unknown, options?: JsonWriteOptions & { kind?: string }): Promise<void | boolean>;
+  appendJsonLine(filePath: string, value: unknown, options?: { kind?: string }): Promise<void>;
+}
 
-  async function mutate({
+export function createStateMutationDispatcher({
+  logger = null,
+  coordinator = null
+}: {
+  logger?: StateLogger;
+  coordinator?: StateMutationCoordinator | null;
+} = {}): StateMutationDispatcher {
+  const currentLogger = (): StateLogger => logger || (getRuntimeLogger() as unknown as StateLogger);
+  const mutationCoordinator = coordinator || defaultStateMutationCoordinator;
+
+  async function mutate<T = unknown>({
     key = "default",
     kind = "state.mutation",
+    metadata: _metadata,
     task,
     signal = null,
     queueWaitTimeoutMs,
     timeoutMs
-  }: Record<string, any> = {}) : Promise<any> {
+  }: {
+    key?: unknown;
+    kind?: string;
+    metadata?: UnknownRecord;
+    task?: (context: StateMutationContext) => T | Promise<T>;
+    signal?: AbortSignal | null;
+    queueWaitTimeoutMs?: unknown;
+    timeoutMs?: unknown;
+  } = {}): Promise<T> {
     if (typeof task !== "function") {
       throw new TypeError("StateMutationDispatcher.mutate requires a task function.");
     }
-    const normalizedKey: any = normalizeKey(key);
+    const normalizedKey = normalizeKey(key);
     currentLogger()?.debug?.("state.dispatch.enqueued", {
       mutationKind: kind
     });
-    return mutationCoordinator.queueStateMutation(normalizedKey, async (mutationContext?: any) : Promise<any> => {
-      const startedAt: any = Date.now();
+    return mutationCoordinator.queueStateMutation(normalizedKey, async (mutationContext): Promise<T> => {
+      const startedAt = Date.now();
       currentLogger()?.debug?.("state.dispatch.started", {
         mutationKind: kind
       });
       try {
-        const result: any = await task(mutationContext);
+        const result = await task(mutationContext);
         currentLogger()?.debug?.("state.dispatch.completed", {
           mutationKind: kind,
           durationMs: Date.now() - startedAt
         });
         return result;
-      } catch (error: any) {
+      } catch (error: unknown) {
         currentLogger()?.error?.("state.dispatch.failed", {
           mutationKind: kind,
           durationMs: Date.now() - startedAt,
@@ -648,43 +809,55 @@ export function createStateMutationDispatcher({ logger = null, coordinator = nul
 
   return {
     mutate,
-    async writeJson(filePath?: any, value?: any, options: Record<string, any> = {}) : Promise<any> {
+    async writeJson(filePath: string, value: unknown, options: JsonWriteOptions & { kind?: string } = {}): Promise<void | boolean> {
       return mutate({
         key: stateFileKey(filePath),
         kind: options.kind || "state.file.write_json",
-        task: () : any => atomicWriteJson(filePath, value, options)
+        task: (): Promise<void | boolean> => atomicWriteJson(filePath, value, options)
       });
     },
-    async appendJsonLine(filePath?: any, value?: any, options: Record<string, any> = {}) : Promise<any> {
+    async appendJsonLine(filePath: string, value: unknown, options: { kind?: string } = {}): Promise<void> {
       return mutate({
         key: stateFileKey(filePath),
         kind: options.kind || "state.file.append_jsonl",
-        task: () : any => appendJsonLine(filePath, value)
+        task: (): Promise<void> => appendJsonLine(filePath, value)
       });
     }
   };
 }
 
-export function getStateMutationDispatcher() : any {
+export function getStateMutationDispatcher(): StateMutationDispatcher {
   if (!defaultStateMutationDispatcher) {
     defaultStateMutationDispatcher = createStateMutationDispatcher();
   }
   return defaultStateMutationDispatcher;
 }
 
-export function mutateState(input: Record<string, any> = {}) : any {
+export function mutateState<T = unknown>(input: {
+  key?: unknown;
+  kind?: string;
+  metadata?: UnknownRecord;
+  task?: (context: StateMutationContext) => T | Promise<T>;
+  signal?: AbortSignal | null;
+  queueWaitTimeoutMs?: unknown;
+  timeoutMs?: unknown;
+} = {}): Promise<T> {
   return getStateMutationDispatcher().mutate(input);
 }
 
-export function waitForStateIdle(key?: any) : any {
+export function waitForStateIdle(key: unknown): Promise<void> {
   return defaultStateMutationCoordinator.waitForStateIdle(key);
 }
 
-export function stateFileKey(filePath?: any) : any {
+export function stateFileKey(filePath: string): string {
   return `file:${path.resolve(filePath)}`;
 }
 
-function normalizeAtomicWriteOptions(options: any = "utf8") : any {
+function normalizeAtomicWriteOptions(options: AtomicWriteInput = "utf8"): {
+  writeOptions: string | { encoding?: BufferEncoding; mode?: number; flag?: string | number };
+  ignoreMissingParent: boolean;
+  onTempFileReady: AtomicWriteOptions["onTempFileReady"];
+} {
   if (typeof options === "string" || options == null) {
     return {
       writeOptions: options || "utf8",
@@ -704,16 +877,18 @@ function normalizeAtomicWriteOptions(options: any = "utf8") : any {
   };
 }
 
-function isUnsupportedDirectorySync(error?: any) : any {
-  return process.platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES.has(error?.code);
+function isUnsupportedDirectorySync(error: unknown): boolean {
+  return process.platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES.has(
+    error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : ""
+  );
 }
 
-async function ensurePrivateStateDirectory(directoryPath?: any) : Promise<any> {
-  const missingDirectories: any[] = [];
-  let current: any = path.resolve(directoryPath);
+async function ensurePrivateStateDirectory(directoryPath: string): Promise<void> {
+  const missingDirectories: string[] = [];
+  let current = path.resolve(directoryPath);
   while (true) {
     try {
-      const stat: any = await fs.lstat(current);
+      const stat = await fs.lstat(current);
       if (!stat.isDirectory() || stat.isSymbolicLink()) {
         throw stateMutationError(
           "STATE_DIRECTORY_PATH_INVALID",
@@ -721,10 +896,11 @@ async function ensurePrivateStateDirectory(directoryPath?: any) : Promise<any> {
         );
       }
       break;
-    } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
+    } catch (error: unknown) {
+      const code = error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : "";
+      if (code !== "ENOENT") throw error;
       missingDirectories.push(current);
-      const parent: any = path.dirname(current);
+      const parent = path.dirname(current);
       if (parent === current) throw error;
       current = parent;
     }
@@ -732,7 +908,7 @@ async function ensurePrivateStateDirectory(directoryPath?: any) : Promise<any> {
   await fs.mkdir(directoryPath, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   try {
     await fs.chmod(directoryPath, PRIVATE_DIRECTORY_MODE);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySync(error)) throw error;
   }
   for (const createdDirectory of missingDirectories.reverse()) {
@@ -740,42 +916,50 @@ async function ensurePrivateStateDirectory(directoryPath?: any) : Promise<any> {
   }
 }
 
-async function syncStateDirectory(directoryPath?: any) : Promise<any> {
-  let handle: any = null;
+async function syncStateDirectory(directoryPath: string): Promise<void> {
+  let handle: FileHandle | null = null;
   try {
     handle = await fs.open(directoryPath, "r");
     await handle.sync();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySync(error)) throw error;
   } finally {
     await handle?.close();
   }
 }
 
-async function directoryExists(directoryPath?: any) : Promise<any> {
+async function directoryExists(directoryPath: string): Promise<boolean> {
   try {
-    const stat: any = await fs.stat(directoryPath);
+    const stat = await fs.stat(directoryPath);
     return stat.isDirectory();
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error: unknown) {
+    const code = error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : "";
+    if (code === "ENOENT") {
       return false;
     }
     throw error;
   }
 }
 
-export async function atomicWriteFile(filePath?: any, data?: any, options: any = "utf8") : Promise<any> {
-  const parentDirectory: any = path.dirname(filePath);
+export async function atomicWriteFile(
+  filePath: string,
+  data: string | Uint8Array,
+  options: AtomicWriteInput = "utf8"
+): Promise<boolean> {
+  const parentDirectory = path.dirname(filePath);
   const { writeOptions, ignoreMissingParent, onTempFileReady } = normalizeAtomicWriteOptions(options);
   await ensurePrivateStateDirectory(parentDirectory);
-  const tempPath: any = path.join(
+  const tempPath = path.join(
     parentDirectory,
     `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
   );
-  let handle: any = null;
+  let handle: FileHandle | null = null;
   try {
     handle = await fs.open(tempPath, "wx", PRIVATE_FILE_MODE);
-    await handle.writeFile(data, writeOptions);
+    await handle.writeFile(
+      data,
+      writeOptions as Parameters<FileHandle["writeFile"]>[1]
+    );
     await handle.sync();
     await handle.close();
     handle = null;
@@ -785,60 +969,66 @@ export async function atomicWriteFile(filePath?: any, data?: any, options: any =
     await fs.rename(tempPath, filePath);
     try {
       await fs.chmod(filePath, PRIVATE_FILE_MODE);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!isUnsupportedDirectorySync(error)) throw error;
     }
     await syncStateDirectory(parentDirectory);
     return true;
-  } catch (error: any) {
-    await handle?.close().catch(() : any => null);
-    await fs.rm(tempPath, { force: true }).catch(() : any => null);
-    if (ignoreMissingParent && error?.code === "ENOENT" && !(await directoryExists(parentDirectory))) {
+  } catch (error: unknown) {
+    await handle?.close().catch((): void => {});
+    await fs.rm(tempPath, { force: true }).catch((): void => {});
+    const code = error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : "";
+    if (ignoreMissingParent && code === "ENOENT" && !(await directoryExists(parentDirectory))) {
       return false;
     }
     throw error;
   }
 }
 
-export async function atomicWriteJson(filePath?: any, value?: any, { trailingNewline = true, ignoreMissingParent = false }: Record<string, any> = {}) : Promise<any> {
-  const payload: any = `${JSON.stringify(value, null, 2)}${trailingNewline ? "\n" : ""}`;
+export async function atomicWriteJson(
+  filePath: string,
+  value: unknown,
+  { trailingNewline = true, ignoreMissingParent = false }: JsonWriteOptions = {}
+): Promise<boolean> {
+  const payload = `${JSON.stringify(value, null, 2)}${trailingNewline ? "\n" : ""}`;
   return atomicWriteFile(filePath, payload, { encoding: "utf8", ignoreMissingParent });
 }
 
-export async function atomicWriteJsonThroughState(filePath?: any, value?: any, options: Record<string, any> = {}) : Promise<any> {
+export async function atomicWriteJsonThroughState(filePath: string, value: unknown, options: JsonWriteOptions & { kind?: string } = {}): Promise<void | boolean> {
   return getStateMutationDispatcher().writeJson(filePath, value, options);
 }
 
-export async function readJsonFile(filePath?: any, fallback: any = undefined) : Promise<any> {
+export async function readJsonFile(filePath: string, fallback: unknown = undefined): Promise<unknown> {
   try {
-    const content: any = await fs.readFile(filePath, "utf8");
+    const content = await fs.readFile(filePath, "utf8");
     if (!content.trim()) {
       return fallback;
     }
     return JSON.parse(content);
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error: unknown) {
+    const code = error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : "";
+    if (code === "ENOENT") {
       return fallback;
     }
     throw error;
   }
 }
 
-async function truncateTornJsonLineTail(handle?: any) : Promise<any> {
-  const stat: any = await handle.stat();
+async function truncateTornJsonLineTail(handle: FileHandle): Promise<void> {
+  const stat = await handle.stat();
   if (!stat.isFile()) {
     throw stateMutationError("STATE_JSONL_PATH_INVALID", "JSONL state must be a regular file.");
   }
-  let cursor: any = Number(stat.size || 0);
+  let cursor = Number(stat.size || 0);
   if (cursor === 0) return;
-  const chunk: any = Buffer.allocUnsafe(64 * 1024);
+  const chunk = Buffer.allocUnsafe(64 * 1024);
   while (cursor > 0) {
-    const start: any = Math.max(0, cursor - chunk.length);
-    const length: any = cursor - start;
+    const start = Math.max(0, cursor - chunk.length);
+    const length = cursor - start;
     const { bytesRead } = await handle.read(chunk, 0, length, start);
-    for (let index: any = bytesRead - 1; index >= 0; index -= 1) {
+    for (let index = bytesRead - 1; index >= 0; index -= 1) {
       if (chunk[index] !== 0x0a) continue;
-      const durableBoundary: any = start + index + 1;
+      const durableBoundary = start + index + 1;
       if (durableBoundary < Number(stat.size)) {
         await handle.truncate(durableBoundary);
         await handle.sync();
@@ -851,31 +1041,32 @@ async function truncateTornJsonLineTail(handle?: any) : Promise<any> {
   await handle.sync();
 }
 
-export async function appendJsonLine(filePath?: any, value?: any) : Promise<any> {
-  const parentDirectory: any = path.dirname(filePath);
+export async function appendJsonLine(filePath: string, value: unknown): Promise<void> {
+  const parentDirectory = path.dirname(filePath);
   await ensurePrivateStateDirectory(parentDirectory);
   try {
-    const existing: any = await fs.lstat(filePath);
+    const existing = await fs.lstat(filePath);
     if (!existing.isFile() || existing.isSymbolicLink()) {
       throw stateMutationError("STATE_JSONL_PATH_INVALID", "JSONL state must be a regular file.");
     }
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") throw error;
+  } catch (error: unknown) {
+    const code = error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : "";
+    if (code !== "ENOENT") throw error;
   }
-  const flags: any = fsNative.constants.O_APPEND |
+  const flags = fsNative.constants.O_APPEND |
     fsNative.constants.O_CREAT |
     fsNative.constants.O_RDWR |
     (fsNative.constants.O_NOFOLLOW || 0);
-  let handle: any = null;
+  let handle: FileHandle | null = null;
   try {
     handle = await fs.open(filePath, flags, PRIVATE_FILE_MODE);
-    const stat: any = await handle.stat();
+    const stat = await handle.stat();
     if (!stat.isFile()) {
       throw stateMutationError("STATE_JSONL_PATH_INVALID", "JSONL state must be a regular file.");
     }
     try {
       await handle.chmod(PRIVATE_FILE_MODE);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!isUnsupportedDirectorySync(error)) throw error;
     }
     await truncateTornJsonLineTail(handle);
@@ -885,15 +1076,15 @@ export async function appendJsonLine(filePath?: any, value?: any) : Promise<any>
     handle = null;
     await syncStateDirectory(parentDirectory);
   } finally {
-    await handle?.close().catch(() : any => null);
+    await handle?.close().catch((): void => {});
   }
 }
 
-export async function appendJsonLineSerialized(filePath?: any, value?: any) : Promise<any> {
-  return queueStateMutation(stateFileKey(filePath), () : any => appendJsonLine(filePath, value));
+export async function appendJsonLineSerialized(filePath: string, value: unknown): Promise<void> {
+  return queueStateMutation(stateFileKey(filePath), (): Promise<void> => appendJsonLine(filePath, value));
 }
 
-export function setBoundedMapEntry(map?: any, key?: any, value?: any, maxEntries?: any) : any {
+export function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
   if (!map || typeof map.set !== "function") {
     return;
   }
@@ -901,9 +1092,10 @@ export function setBoundedMapEntry(map?: any, key?: any, value?: any, maxEntries
     map.delete(key);
   }
   map.set(key, value);
-  const safeMax: any = Math.max(1, Number(maxEntries || 1));
+  const safeMax = Math.max(1, Number(maxEntries || 1));
   while (map.size > safeMax) {
-    const oldestKey: any = map.keys().next().value;
+    const oldestKey = map.keys().next().value;
+    if (oldestKey === undefined) break;
     map.delete(oldestKey);
   }
 }

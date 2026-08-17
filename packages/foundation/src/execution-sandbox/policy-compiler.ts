@@ -4,8 +4,57 @@ import {
   sandboxApprovalRequestDigest,
   sandboxDigest
 } from "./contracts.ts";
+import type {
+  SandboxCapabilities,
+  SandboxExecutionRequest,
+  SandboxGovernance
+} from "./contracts.ts";
 
-const PROVIDER_CLASSES: any = new Set<any>([
+type UnknownRecord = Record<string, unknown>;
+
+interface EnabledSandboxConfiguration {
+  state: "enabled";
+  providerMode: "automatic" | "explicit";
+  providerId: string;
+  profileId: string;
+  policyRevision: string;
+  allowedProviderClasses: readonly string[];
+  receiptRequirement: string;
+}
+
+type SandboxConfiguration =
+  | Readonly<EnabledSandboxConfiguration>
+  | Readonly<{ state: "unconfigured" | "invalid" | "disabled" }>;
+
+export interface SandboxBackendDescriptor {
+  id: string;
+  providerClass: string;
+  healthy: boolean;
+  enforcedRestrictions: readonly string[];
+}
+
+export interface SandboxAdmissionPolicy {
+  backendId: string;
+  profileId: string;
+  policyRevision: string;
+  receiptRequirement: string;
+  workload: Readonly<{
+    runtimeKind: unknown;
+    image: string;
+    command: readonly string[];
+    entryPoint: string;
+  }>;
+  capabilities: Readonly<SandboxCapabilities>;
+  resources: Readonly<Record<string, number>>;
+  trustDomain: string;
+  requestDigest: string;
+}
+
+export type SandboxAdmission =
+  | Readonly<{ admitted: false; reasonCode: string; detail: string }>
+  | Readonly<{ admitted: true; policy: Readonly<SandboxAdmissionPolicy>; policyDigest: string }>;
+
+const PROVIDER_CLASSES = new Set<string>([
   "rootless-podman",
   "podman",
   "rootless-docker",
@@ -13,7 +62,7 @@ const PROVIDER_CLASSES: any = new Set<any>([
   "registered-container",
   "registered-vm"
 ]);
-const CONFIG_FIELDS: any = new Set<any>([
+const CONFIG_FIELDS = new Set<string>([
   "enabled",
   "providerMode",
   "providerId",
@@ -22,7 +71,7 @@ const CONFIG_FIELDS: any = new Set<any>([
   "receiptRequirement",
   "allowedProviderClasses"
 ]);
-const PROFILE_FIELDS: any = new Set<any>([
+const PROFILE_FIELDS = new Set<string>([
   "id",
   "policyRevision",
   "workloads",
@@ -32,44 +81,44 @@ const PROFILE_FIELDS: any = new Set<any>([
   "receiptRequirement"
 ]);
 
-function plainObject(value?: any) : any {
+function plainObject(value: unknown): value is UnknownRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function deny(reasonCode?: any, detail: any = "") : any {
+function deny(reasonCode: string, detail = ""): Readonly<{ admitted: false; reasonCode: string; detail: string }> {
   return Object.freeze({ admitted: false, reasonCode, detail });
 }
 
-function boundedPositive(value?: any) : any {
-  const number: any = Number(value);
+function boundedPositive(value: unknown): number {
+  const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
-function stringSet(value?: any) : any {
-  return new Set<any>(Array.isArray(value) ? value.map((entry?: any) : any => String(entry || "").trim()).filter(Boolean) : []);
+function stringSet(value: unknown): Set<string> {
+  return new Set(Array.isArray(value) ? value.map((entry) => String(entry || "").trim()).filter(Boolean) : []);
 }
 
-function intersectRequested(requested?: any, allowed?: any) : any {
-  const allowedSet: any = stringSet(allowed);
-  return requested.filter((item?: any) : any => allowedSet.has(item));
+function intersectRequested(requested: readonly string[], allowed: unknown): string[] {
+  const allowedSet = stringSet(allowed);
+  return requested.filter((item) => allowedSet.has(item));
 }
 
-export function normalizeSandboxConfiguration(value?: any) : any {
+export function normalizeSandboxConfiguration(value: unknown): SandboxConfiguration {
   if (value === undefined || value === null) return Object.freeze({ state: "unconfigured" });
   if (!plainObject(value)) return Object.freeze({ state: "invalid" });
   for (const field of Object.keys(value)) {
     if (!CONFIG_FIELDS.has(field)) return Object.freeze({ state: "invalid" });
   }
   if (value.enabled !== true) return Object.freeze({ state: "disabled" });
-  const providerMode: any = String(value.providerMode || "").trim();
-  const providerId: any = String(value.providerId || "").trim();
-  const profileId: any = String(value.profileId || "").trim();
-  const policyRevision: any = String(value.policyRevision || "").trim();
-  const receiptRequirement: any = String(value.receiptRequirement || "").trim();
-  const allowedProviderClasses: any = Array.isArray(value.allowedProviderClasses)
-    ? [...new Set<any>(value.allowedProviderClasses.map((entry?: any) : any => String(entry || "").trim()))]
+  const providerMode = String(value.providerMode || "").trim();
+  const providerId = String(value.providerId || "").trim();
+  const profileId = String(value.profileId || "").trim();
+  const policyRevision = String(value.policyRevision || "").trim();
+  const receiptRequirement = String(value.receiptRequirement || "").trim();
+  const allowedProviderClasses = Array.isArray(value.allowedProviderClasses)
+    ? [...new Set(value.allowedProviderClasses.map((entry) => String(entry || "").trim()))]
     : [];
   if (
     !["automatic", "explicit"].includes(providerMode) ||
@@ -78,14 +127,14 @@ export function normalizeSandboxConfiguration(value?: any) : any {
     !profileId ||
     !policyRevision ||
     allowedProviderClasses.length === 0 ||
-    allowedProviderClasses.some((entry?: any) : any => !PROVIDER_CLASSES.has(entry)) ||
+    allowedProviderClasses.some((entry) => !PROVIDER_CLASSES.has(entry)) ||
     receiptRequirement !== CONTROLLED_SANDBOX_FINAL_RECEIPT_ID
   ) {
     return Object.freeze({ state: "invalid" });
   }
   return Object.freeze({
     state: "enabled",
-    providerMode,
+    providerMode: providerMode as "automatic" | "explicit",
     providerId,
     profileId,
     policyRevision,
@@ -102,8 +151,16 @@ export function compileSandboxAdmission({
   selectedBackendId = "",
   currentGovernance = request?.governance,
   now = new Date()
-}: Record<string, any> = {}) : any {
-  const config: any = normalizeSandboxConfiguration(configuration);
+}: {
+  request: Readonly<SandboxExecutionRequest>;
+  configuration?: unknown;
+  profile?: unknown;
+  backendDescriptor?: SandboxBackendDescriptor | null;
+  selectedBackendId?: string;
+  currentGovernance?: Readonly<SandboxGovernance>;
+  now?: Date;
+}): SandboxAdmission {
+  const config = normalizeSandboxConfiguration(configuration);
   if (config.state === "unconfigured") return deny(SANDBOX_DENIAL_REASONS.UNCONFIGURED);
   if (config.state === "disabled") return deny(SANDBOX_DENIAL_REASONS.DISABLED);
   if (config.state !== "enabled") return deny(SANDBOX_DENIAL_REASONS.CONFIGURATION_INVALID);
@@ -115,7 +172,7 @@ export function compileSandboxAdmission({
     String(profile.id || "") !== config.profileId ||
     String(profile.policyRevision || "") !== config.policyRevision
   ) return deny(SANDBOX_DENIAL_REASONS.CONFIGURATION_INVALID);
-  const backendId: any = String(selectedBackendId || "").trim();
+  const backendId = String(selectedBackendId || "").trim();
   if (
     !backendId ||
     !backendDescriptor ||
@@ -127,7 +184,7 @@ export function compileSandboxAdmission({
   }
   if (backendDescriptor.healthy !== true) return deny(SANDBOX_DENIAL_REASONS.BACKEND_UNHEALTHY);
 
-  const governance: any = currentGovernance || {};
+  const governance = currentGovernance || request.governance;
   if (
     governance.authorized !== true ||
     !String(governance.grantRef || "").trim() ||
@@ -177,11 +234,11 @@ export function compileSandboxAdmission({
     String(profile.receiptRequirement || "") !== config.receiptRequirement
   ) return deny(SANDBOX_DENIAL_REASONS.CONFIGURATION_INVALID);
 
-  const workload: any = plainObject(profile.workloads) ? profile.workloads[request.workloadKind] : null;
+  const workload = plainObject(profile.workloads) ? profile.workloads[request.workloadKind] : null;
   if (!plainObject(workload) || workload.runtimeKind !== request.artifact.runtimeKind) {
     return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
   }
-  const artifactDigests: any = stringSet(workload.artifactDigests);
+  const artifactDigests = stringSet(workload.artifactDigests);
   if (
     artifactDigests.size === 0 ||
     !artifactDigests.has(request.artifact.digest) ||
@@ -189,8 +246,8 @@ export function compileSandboxAdmission({
   ) {
     return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
   }
-  const allowedCapabilities: any = plainObject(profile.capabilities) ? profile.capabilities : {};
-  const narrowed: Record<string, any> = {
+  const allowedCapabilities: UnknownRecord = plainObject(profile.capabilities) ? profile.capabilities : {};
+  const narrowed: SandboxCapabilities = {
     filesystem: intersectRequested(request.capabilities.filesystem, allowedCapabilities.filesystem),
     network: intersectRequested(request.capabilities.network, allowedCapabilities.network),
     tools: intersectRequested(request.capabilities.tools, allowedCapabilities.tools),
@@ -202,12 +259,12 @@ export function compileSandboxAdmission({
       Number.isSafeInteger(Number(allowedCapabilities.subprocesses)) ? Number(allowedCapabilities.subprocesses) : 0
     )
   };
-  for (const field of ["filesystem", "network", "tools", "secretRefs"]) {
+  for (const field of ["filesystem", "network", "tools", "secretRefs"] as const) {
     if (narrowed[field].length !== request.capabilities[field].length) {
       return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
     }
   }
-  for (const field of ["clock", "randomness"]) {
+  for (const field of ["clock", "randomness"] as const) {
     if (request.capabilities[field] === true && narrowed[field] !== true) {
       return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
     }
@@ -216,15 +273,15 @@ export function compileSandboxAdmission({
     return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
   }
 
-  const resourceLimits: any = plainObject(profile.resourceLimits) ? profile.resourceLimits : {};
-  const resources: Record<string, any> = {};
-  for (const [field, requested] of (Object.entries(request.resources) as [string, any][])) {
-    const limit: any = boundedPositive(resourceLimits[field]);
+  const resourceLimits: UnknownRecord = plainObject(profile.resourceLimits) ? profile.resourceLimits : {};
+  const resources: Record<string, number> = {};
+  for (const [field, requested] of Object.entries(request.resources)) {
+    const limit = boundedPositive(resourceLimits[field]);
     if (!limit || requested > limit) return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
     resources[field] = requested;
   }
-  const backendCapabilities: any = stringSet(backendDescriptor.enforcedRestrictions);
-  const requiredRestrictions: any[] = [
+  const backendCapabilities = stringSet(backendDescriptor.enforcedRestrictions);
+  const requiredRestrictions: string[] = [
     "filesystem",
     "process",
     "network",
@@ -235,11 +292,11 @@ export function compileSandboxAdmission({
     "cleanup",
     "cross-trust-domain"
   ];
-  if (requiredRestrictions.some((entry?: any) : any => !backendCapabilities.has(entry))) {
+  if (requiredRestrictions.some((entry) => !backendCapabilities.has(entry))) {
     return deny(SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED);
   }
 
-  const policy: Readonly<Record<string, any>> = Object.freeze({
+  const policy: Readonly<SandboxAdmissionPolicy> = Object.freeze({
     backendId,
     profileId: config.profileId,
     policyRevision: profile.policyRevision,

@@ -33,6 +33,8 @@
   },
   "imports": {
     "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
-    "#meshrix/contracts/serialization/canonical-json": "@meshrix/contracts/serialization/canonical-json"
+    "#meshrix/contracts/serialization/canonical-json": "@meshrix/contracts/serialization/canonical-json",
+    "#meshrix/contracts/service-collaboration-contract": "@meshrix/contracts/service-collaboration-contract",
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants": "@meshrix/protocols/mcp/adapter/http-mcp-adapter-constants"
   }
 }

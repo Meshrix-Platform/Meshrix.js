@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "../../storage/sqlite-database.ts";
 import {
   ensurePrivateSqliteLocation,
@@ -285,17 +286,17 @@ function ensureSchema(db: SqliteDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_authorization_denied_tenant ON authorization_denied_requests(tenant_id);
   `);
 
-  runMigrations(db, [
+  runMigrations(db as unknown as Database.Database, [
     {
       version: 1,
-      up: (d: SqliteDatabase) => {
-        migrateAuthorizationDeniedReferences(d);
+      up: (d: Database.Database) => {
+        migrateAuthorizationDeniedReferences(d as unknown as SqliteDatabase);
       }
     },
     {
       version: 2,
-      up: (d: SqliteDatabase) => {
-        migrateAuthorizationDeniedReferences(d);
+      up: (d: Database.Database) => {
+        migrateAuthorizationDeniedReferences(d as unknown as SqliteDatabase);
         d.exec(`
           CREATE UNIQUE INDEX IF NOT EXISTS idx_authorization_denied_decision_unique
           ON authorization_denied_requests(decision_id)

@@ -1,4 +1,4 @@
-export const WORK_QUEUE_STORE_ADAPTER_METHODS: readonly any[] = Object.freeze([
+export const WORK_QUEUE_STORE_ADAPTER_METHODS = Object.freeze([
   "enqueue",
   "claim",
   "complete",
@@ -16,17 +16,29 @@ export const WORK_QUEUE_STORE_ADAPTER_METHODS: readonly any[] = Object.freeze([
   "reconcileInDoubt",
   "inspect",
   "rebuildProjection"
-]);
+] as const);
 
-export const WORK_QUEUE_BACKGROUND_WRITE_METHODS: readonly any[] = Object.freeze([
+export const WORK_QUEUE_BACKGROUND_WRITE_METHODS = Object.freeze([
   "writeFallbackCoordinatorState",
   "writeSnapshotState",
   "writeCompactionState",
   "writeInternalHealthState"
-]);
+] as const);
 
-export function validateWorkQueueStoreAdapterShape(adapter?: any) : any {
-  const missing: any[] = [];
+type StoreAdapterMethod = typeof WORK_QUEUE_STORE_ADAPTER_METHODS[number];
+type BackgroundWriteMethod = typeof WORK_QUEUE_BACKGROUND_WRITE_METHODS[number];
+interface ShapeValidation<Method extends string> {
+  ok: boolean;
+  missing: Method[];
+  errors: string[];
+}
+
+function callableProperty(value: object, property: string): boolean {
+  return typeof (value as Record<string, unknown>)[property] === "function";
+}
+
+export function validateWorkQueueStoreAdapterShape(adapter?: unknown): ShapeValidation<StoreAdapterMethod> {
+  const missing: StoreAdapterMethod[] = [];
   if (!adapter || typeof adapter !== "object") {
     return {
       ok: false,
@@ -36,7 +48,7 @@ export function validateWorkQueueStoreAdapterShape(adapter?: any) : any {
   }
 
   for (const method of WORK_QUEUE_STORE_ADAPTER_METHODS) {
-    if (typeof adapter[method] !== "function") {
+    if (!callableProperty(adapter, method)) {
       missing.push(method);
     }
   }
@@ -44,12 +56,12 @@ export function validateWorkQueueStoreAdapterShape(adapter?: any) : any {
   return {
     ok: missing.length === 0,
     missing,
-    errors: missing.map((method?: any) : any => `Missing store adapter method: ${method}`)
+    errors: missing.map((method) => `Missing store adapter method: ${method}`)
   };
 }
 
-export function validateQueueBackgroundWriteAspectShape(aspect?: any) : any {
-  const missing: any[] = [];
+export function validateQueueBackgroundWriteAspectShape(aspect?: unknown): ShapeValidation<BackgroundWriteMethod> {
+  const missing: BackgroundWriteMethod[] = [];
   if (!aspect || typeof aspect !== "object") {
     return {
       ok: false,
@@ -59,7 +71,7 @@ export function validateQueueBackgroundWriteAspectShape(aspect?: any) : any {
   }
 
   for (const method of WORK_QUEUE_BACKGROUND_WRITE_METHODS) {
-    if (typeof aspect[method] !== "function") {
+    if (!callableProperty(aspect, method)) {
       missing.push(method);
     }
   }
@@ -67,6 +79,6 @@ export function validateQueueBackgroundWriteAspectShape(aspect?: any) : any {
   return {
     ok: missing.length === 0,
     missing,
-    errors: missing.map((method?: any) : any => `Missing background write aspect method: ${method}`)
+    errors: missing.map((method) => `Missing background write aspect method: ${method}`)
   };
 }

@@ -17,6 +17,96 @@ import {
   stripExecutableMode
 } from "./agent-workspace-support.ts";
 
+export interface SyncRecord { [key: string]: unknown; }
+interface SyncInput extends SyncRecord { leaseGuard?: () => Promise<void> | void; }
+export interface WorkspaceRecord extends SyncRecord { workspaceId: string; }
+type WorkspaceAccess =
+  | { ok: true; workspace: WorkspaceRecord }
+  | { ok: false; workspace?: WorkspaceRecord; status?: number; error?: string };
+interface ResolvedWorkspacePath { absolutePath: string; relativePath: string; }
+interface LocalDirectorySource { sourcePath: string; mount?: { mountRef?: string }; }
+interface SyncFile {
+  relativePath: string; sizeBytes: number; contentSha256: string; absolutePath?: string;
+  sourceRelativePath?: string;
+}
+type SyncActionKind = "create" | "write" | "replace" | "delete" | "noop";
+export interface SyncAction {
+  action: SyncActionKind; targetPath: string; sizeBytes: number; contentSha256: string;
+  sourceRelativePath?: string;
+}
+interface SyncSummary { create: number; write: number; delete: number; noop: number; changed: number; applied?: number; }
+export interface SyncPlan {
+  protocolVersion: string; ok: true; dryRun: boolean; workspaceId: string; targetPath: string;
+  mountRef: string; deleteExtraneous: boolean; sourceFileCount: number; targetFileCount: number;
+  actions: SyncAction[]; summary: SyncSummary;
+}
+export interface SyncFailure extends Record<string, unknown> { ok: false; status?: number; code?: string; error?: string; }
+interface SyncError extends Error { code?: string; status?: number; }
+interface ContentHandle { read(): Promise<Buffer> | Buffer; byteLength?: number; contentSha256?: string; }
+interface SnapshotEntry extends SyncRecord {
+  relativePath: string; exists: boolean; content?: Buffer; contentHandle?: ContentHandle;
+  contentSha256: string; byteLength: number; encoding: string;
+}
+interface WorkspaceSnapshot {
+  basePath: string; stateRoot: string; stateEventAnchor: SyncRecord;
+  deleteExtraneous: boolean; localDirectorySnapshots: SyncRecord[]; files: SnapshotEntry[];
+}
+export interface RestoreAction extends SyncRecord { action: SyncActionKind; scope?: string; path: string; }
+interface RestorePreimage extends SyncRecord {
+  exists: boolean; contentCid?: string; contentSha256?: string; byteLength?: number;
+}
+interface LocalRestoreResult extends SyncRecord {
+  actions?: RestoreAction[]; appliedActions?: RestoreAction[]; stateMutations?: SyncRecord[];
+  mutations?: SyncRecord[]; contentRefs?: unknown[]; rollbackSnapshot?: SyncRecord;
+}
+interface StoredContent extends SyncRecord {
+  cid?: string; rootCid?: string; payloadHash?: string; byteLength?: number;
+  metadata?: SyncRecord; contentRefs?: unknown[];
+}
+interface CasBlock { bytes?: Buffer; value?: { manifestType?: string; entries?: SyncRecord[] }; }
+interface MerkleState extends SyncRecord {
+  cas: { getBlock(cid: string): Promise<CasBlock | null>; putBlock?(content: Buffer, input: SyncRecord): Promise<StoredContent> };
+  stateCommit?: {
+    begin(input: SyncRecord): Promise<SyncRecord>;
+    verifyRestoreLineage?(input: SyncRecord): Promise<unknown>;
+    restoreRoot?(input: SyncRecord): Promise<SyncRecord>;
+  };
+  eventLog?: { listEvents(scope: unknown, input: SyncRecord): Promise<SyncRecord[]> };
+}
+interface FileStateApi extends SyncRecord {
+  decodeWorkspaceFileContent(entry: SyncRecord): Promise<Buffer> | Buffer;
+  filePayloadMetadata(file: SyncRecord): SyncRecord;
+  archiveWorkspacePath(workspace: WorkspaceRecord, relativePath: string, input: SyncRecord): Promise<StoredContent | null>;
+  commitWorkspaceFileState(input: SyncRecord): Promise<SyncRecord>;
+  recordWorkspaceFileCheckpoint(input: SyncRecord): Promise<SyncRecord>;
+  workspaceStateScope(workspace: WorkspaceRecord): unknown;
+  buildWorkspaceFileSnapshotFromStateRoot(workspace: WorkspaceRecord, stateRoot: unknown): Promise<SyncRecord>;
+}
+interface SyncApiOptions {
+  merkleState?: MerkleState | null;
+  workspaceForStorage(input: SyncRecord): WorkspaceAccess;
+  resolveWorkspacePath(workspace: WorkspaceRecord, relativePath: string, options?: SyncRecord): ResolvedWorkspacePath;
+  resolveLocalDirectorySource(input: SyncRecord, workspace: WorkspaceRecord, options?: SyncRecord): LocalDirectorySource;
+  listWorkspaceFiles(input: SyncRecord): Promise<({ ok: true; files: SyncFile[] } | SyncFailure) & SyncRecord>;
+  updateWorkspaceTimeStmt: { run(iso: string, workspaceId: string): unknown };
+  fileStateApi: FileStateApi;
+  restoreLocalDirectoryPreimage?: ((input: SyncRecord) => Promise<LocalRestoreResult>) | null;
+  rollbackLocalDirectoryMutation?: ((input: SyncRecord) => Promise<LocalRestoreResult>) | null;
+}
+
+function syncErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function syncErrorDetails(error: unknown): { code?: string; status?: number } {
+  if (!error || typeof error !== "object") return {};
+  const candidate = error as { code?: unknown; status?: unknown };
+  return {
+    ...(typeof candidate.code === "string" ? { code: candidate.code } : {}),
+    ...(typeof candidate.status === "number" ? { status: candidate.status } : {})
+  };
+}
+
 export function createAgentWorkspaceSyncApi({
   merkleState = null,
   workspaceForStorage,
@@ -27,7 +117,7 @@ export function createAgentWorkspaceSyncApi({
   fileStateApi,
   restoreLocalDirectoryPreimage = null,
   rollbackLocalDirectoryMutation = null
-}: Record<string, any> = {}) : any {
+}: SyncApiOptions) {
   const {
     decodeWorkspaceFileContent,
     filePayloadMetadata,
@@ -36,24 +126,24 @@ export function createAgentWorkspaceSyncApi({
     recordWorkspaceFileCheckpoint
   } = fileStateApi;
 
-  function sandboxMutationOrigin(input: Record<string, any> = {}, { requireApproval = false }: Record<string, any> = {}) : any {
-    const sandboxReceiptDigest: any = normalizeSha256(input.sandboxReceiptDigest || "");
+  function sandboxMutationOrigin(input: SyncRecord = {}, { requireApproval = false }: { requireApproval?: boolean } = {}) {
+    const sandboxReceiptDigest = normalizeSha256(input.sandboxReceiptDigest || "");
     if (!sandboxReceiptDigest) return null;
-    const sandboxBindings: any = asObject(input.sandboxBindings);
-    const calculatedReceiptDigest: any = crypto
+    const sandboxBindings = asObject(input.sandboxBindings);
+    const calculatedReceiptDigest = crypto
       .createHash("sha256")
       .update(JSON.stringify(sandboxBindings))
       .digest("hex");
     if (calculatedReceiptDigest !== sandboxReceiptDigest) {
-      const error: Error & Record<string, any> = new Error("Sandbox receipt binding does not match its declared digest.");
+      const error: SyncError = new Error("Sandbox receipt binding does not match its declared digest.");
       error.code = "sandbox_receipt_binding_mismatch";
       error.status = 409;
       throw error;
     }
-    const previewDigest: any = normalizeSha256(input.previewDigest || "");
-    const approvalBindingDigest: any = normalizeSha256(input.approvalBindingDigest || "");
+    const previewDigest = normalizeSha256(input.previewDigest || "");
+    const approvalBindingDigest = normalizeSha256(input.approvalBindingDigest || "");
     if (requireApproval && (!previewDigest || !approvalBindingDigest)) {
-      const error: Error & Record<string, any> = new Error("Sandbox output commit requires preview and approval bindings.");
+      const error: SyncError = new Error("Sandbox output commit requires preview and approval bindings.");
       error.code = "sandbox_output_approval_binding_required";
       error.status = 409;
       throw error;
@@ -66,7 +156,10 @@ export function createAgentWorkspaceSyncApi({
     };
   }
 
-  function sandboxMutationReceipt({ mutationOrigin, preimage, stateCommit, checkpoint }: Record<string, any> = {}) : any {
+  function sandboxMutationReceipt({ mutationOrigin, preimage, stateCommit, checkpoint }: {
+    mutationOrigin?: SyncRecord | null; preimage?: SyncRecord | null;
+    stateCommit?: SyncRecord | null; checkpoint?: SyncRecord | null;
+  } = {}) {
     if (!mutationOrigin) return null;
     if (
       !preimage ||
@@ -76,12 +169,12 @@ export function createAgentWorkspaceSyncApi({
       !normalizeSha256(mutationOrigin.previewDigest || "") ||
       !normalizeSha256(mutationOrigin.approvalBindingDigest || "")
     ) {
-      const error: Error & Record<string, any> = new Error("Workspace sandbox mutation receipt could not be persisted with its transaction.");
+      const error: SyncError = new Error("Workspace sandbox mutation receipt could not be persisted with its transaction.");
       error.code = "workspace_sandbox_mutation_receipt_incomplete";
       error.status = 503;
       throw error;
     }
-    const receipt: Record<string, any> = {
+    const receipt = {
       schemaVersion: "v0.0.1:workspace:sandbox-mutation-receipt-1",
       sandboxReceiptDigest: mutationOrigin.sandboxReceiptDigest,
       previewDigest: mutationOrigin.previewDigest,
@@ -97,32 +190,32 @@ export function createAgentWorkspaceSyncApi({
       receiptDigest: crypto.createHash("sha256").update(JSON.stringify(receipt)).digest("hex")
     };
   }
-  function scanDirectoryForWorkspaceSync(root?: any, {
+  function scanDirectoryForWorkspaceSync(root: string, {
     rootRelativePath = "",
     maxFiles = 2000
-  }: Record<string, any> = {}) : any {
-    const resolvedRoot: any = path.resolve(root);
+  }: { rootRelativePath?: string; maxFiles?: number } = {}): SyncFile[] {
+    const resolvedRoot = path.resolve(root);
     if (!fs.existsSync(resolvedRoot)) {
       throw new Error("本机目录不存在。");
     }
-    const rootStat: any = fs.lstatSync(resolvedRoot);
+    const rootStat = fs.lstatSync(resolvedRoot);
     if (rootStat.isSymbolicLink()) {
       throw new Error("不允许同步符号链接目录。");
     }
     if (!rootStat.isDirectory()) {
       throw new Error("sourcePath 必须是本机目录。");
     }
-    const files: any[] = [];
-    const visit: any = (absoluteDir?: any, relativeDir?: any) : any => {
-      const entries: any = fs.readdirSync(absoluteDir, { withFileTypes: true })
-        .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+    const files: SyncFile[] = [];
+    const visit = (absoluteDir: string, relativeDir: string): void => {
+      const entries = fs.readdirSync(absoluteDir, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name));
       for (const entry of entries) {
         if (entry.name.startsWith(".")) {
           throw new Error(`不允许同步以 . 开头的路径：${relativeDir ? `${relativeDir}/` : ""}${entry.name}`);
         }
-        const childAbsolutePath: any = path.join(absoluteDir, entry.name);
-        const childRelativePath: any = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-        const stat: any = fs.lstatSync(childAbsolutePath);
+        const childAbsolutePath = path.join(absoluteDir, entry.name);
+        const childRelativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+        const stat = fs.lstatSync(childAbsolutePath);
         if (stat.isSymbolicLink()) {
           throw new Error(`不允许同步符号链接：${childRelativePath}`);
         }
@@ -136,14 +229,14 @@ export function createAgentWorkspaceSyncApi({
         if (files.length >= maxFiles) {
           throw new Error(`同步文件数量超过限制：${maxFiles}`);
         }
-        const targetRelativePath: any = rootRelativePath
+        const targetRelativePath = rootRelativePath
           ? joinWorkspaceRelativePath(rootRelativePath, childRelativePath)
           : normalizeWorkspaceRelativePath(childRelativePath, { allowEmpty: false });
         assertWorkspaceFileContentPolicy({
           relativePath: targetRelativePath,
           sizeBytes: stat.size
         });
-        const content: any = fs.readFileSync(childAbsolutePath);
+        const content = fs.readFileSync(childAbsolutePath);
         assertWorkspaceFileContentPolicy({
           relativePath: targetRelativePath,
           contentBuffer: content,
@@ -162,26 +255,26 @@ export function createAgentWorkspaceSyncApi({
     return files;
   }
 
-  function scanWorkspaceFilesForSync(workspace?: any, basePath: any = "", maxFiles: any = 2000) : any {
-    const base: any = resolveWorkspacePath(workspace, basePath, { allowEmpty: true });
+  function scanWorkspaceFilesForSync(workspace: WorkspaceRecord, basePath = "", maxFiles = 2000): SyncFile[] {
+    const base = resolveWorkspacePath(workspace, basePath, { allowEmpty: true });
     if (!fs.existsSync(base.absolutePath)) {
       return [];
     }
-    const stat: any = fs.lstatSync(base.absolutePath);
+    const stat = fs.lstatSync(base.absolutePath);
     if (stat.isSymbolicLink()) {
       throw new Error("工作空间同步目标不能是符号链接。");
     }
     if (!stat.isDirectory()) {
       throw new Error("工作空间同步目标必须是目录。");
     }
-    const files: any[] = [];
-    const visit: any = (absoluteDir?: any, relativeDir?: any) : any => {
-      const entries: any = fs.readdirSync(absoluteDir, { withFileTypes: true })
-        .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+    const files: SyncFile[] = [];
+    const visit = (absoluteDir: string, relativeDir: string): void => {
+      const entries = fs.readdirSync(absoluteDir, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name));
       for (const entry of entries) {
-        const childAbsolutePath: any = path.join(absoluteDir, entry.name);
-        const childRelativePath: any = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-        const stat: any = fs.lstatSync(childAbsolutePath);
+        const childAbsolutePath = path.join(absoluteDir, entry.name);
+        const childRelativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+        const stat = fs.lstatSync(childAbsolutePath);
         if (stat.isSymbolicLink()) {
           throw new Error(`工作空间内存在不允许同步的符号链接：${childRelativePath}`);
         }
@@ -195,9 +288,9 @@ export function createAgentWorkspaceSyncApi({
         if (files.length >= maxFiles) {
           throw new Error(`工作空间同步文件数量超过限制：${maxFiles}`);
         }
-        const normalizedPath: any = normalizeWorkspaceRelativePath(childRelativePath, { allowEmpty: false });
-        const finalRelativePath: any = basePath ? joinWorkspaceRelativePath(basePath, normalizedPath) : normalizedPath;
-        const content: any = fs.readFileSync(childAbsolutePath);
+        const normalizedPath = normalizeWorkspaceRelativePath(childRelativePath, { allowEmpty: false });
+        const finalRelativePath = basePath ? joinWorkspaceRelativePath(basePath, normalizedPath) : normalizedPath;
+        const content = fs.readFileSync(childAbsolutePath);
         assertWorkspaceFileContentPolicy({
           relativePath: finalRelativePath,
           contentBuffer: content,
@@ -214,39 +307,39 @@ export function createAgentWorkspaceSyncApi({
     return files;
   }
 
-  function localDirectorySyncPlan(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const access: any = workspaceForStorage(input);
+  function localDirectorySyncPlan(input: SyncRecord = {}, options: SyncRecord = {}): SyncPlan | SyncFailure {
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    let source: any;
+    let source: LocalDirectorySource;
     try {
       source = resolveLocalDirectorySource(input, access.workspace, options);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: syncErrorMessage(error) };
     }
-    const sourcePath: any = source.sourcePath;
-    let targetPath: any;
+    const sourcePath = source.sourcePath;
+    let targetPath: string;
     try {
       targetPath = normalizeWorkspaceRelativePath(input.targetPath || input.path || "", { allowEmpty: true });
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: syncErrorMessage(error) };
     }
-    const maxFiles: any = Math.max(1, Math.min(Number(input.maxFiles || input.limit || 2000), 10000));
-    const deleteExtraneous: any = input.deleteExtraneous === true || input.prune === true;
-    let sourceFiles: any, targetFiles: any;
+    const maxFiles = Math.max(1, Math.min(Number(input.maxFiles || input.limit || 2000), 10000));
+    const deleteExtraneous = input.deleteExtraneous === true || input.prune === true;
+    let sourceFiles: SyncFile[], targetFiles: SyncFile[];
     try {
       sourceFiles = scanDirectoryForWorkspaceSync(sourcePath, { rootRelativePath: targetPath, maxFiles });
       targetFiles = scanWorkspaceFilesForSync(access.workspace, targetPath, maxFiles);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: syncErrorMessage(error) };
     }
-    const targetByPath: any = new Map<any, any>(targetFiles.map((file?: any) : any => [file.relativePath, file]));
-    const sourceByPath: any = new Map<any, any>(sourceFiles.map((file?: any) : any => [file.relativePath, file]));
-    const actions: any[] = [];
+    const targetByPath = new Map(targetFiles.map((file) => [file.relativePath, file]));
+    const sourceByPath = new Map(sourceFiles.map((file) => [file.relativePath, file]));
+    const actions: SyncAction[] = [];
     for (const source of sourceFiles) {
-      const current: any = targetByPath.get(source.relativePath);
-      const action: any = !current
+      const current = targetByPath.get(source.relativePath);
+      const action: SyncActionKind = !current
         ? "create"
         : current.contentSha256 === source.contentSha256
           ? "noop"
@@ -271,7 +364,7 @@ export function createAgentWorkspaceSyncApi({
         }
       }
     }
-    const changedActions: any = actions.filter((action?: any) : any => action.action !== "noop");
+    const changedActions = actions.filter((action) => action.action !== "noop");
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
       ok: true,
@@ -284,17 +377,17 @@ export function createAgentWorkspaceSyncApi({
       targetFileCount: targetFiles.length,
       actions,
       summary: {
-        create: actions.filter((action?: any) : any => action.action === "create").length,
-        write: actions.filter((action?: any) : any => action.action === "write").length,
-        delete: actions.filter((action?: any) : any => action.action === "delete").length,
-        noop: actions.filter((action?: any) : any => action.action === "noop").length,
+        create: actions.filter((action) => action.action === "create").length,
+        write: actions.filter((action) => action.action === "write").length,
+        delete: actions.filter((action) => action.action === "delete").length,
+        noop: actions.filter((action) => action.action === "noop").length,
         changed: changedActions.length
       }
     };
   }
 
-  async function applyLocalDirectorySync(input: Record<string, any> = {}) : Promise<any> {
-    const operationId: any = String(input.operationId || "").trim();
+  async function applyLocalDirectorySync(input: SyncRecord = {}) {
+    const operationId = String(input.operationId || "").trim();
     if (!operationId) {
       return {
         ok: false,
@@ -303,37 +396,37 @@ export function createAgentWorkspaceSyncApi({
         error: "Local-directory synchronization requires an explicit operationId."
       };
     }
-    const access: any = workspaceForStorage(input);
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    const plan: any = localDirectorySyncPlan(input);
+    const plan = localDirectorySyncPlan(input);
     if (!plan.ok) {
       return plan;
     }
     if (input.dryRun === true) {
       return plan;
     }
-    let source: any;
+    let source: LocalDirectorySource;
     try {
       source = resolveLocalDirectorySource(input, access.workspace);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: syncErrorMessage(error) };
     }
-    const sourcePath: any = source.sourcePath;
-    const sourceFiles: any = scanDirectoryForWorkspaceSync(sourcePath, {
+    const sourcePath = source.sourcePath;
+    const sourceFiles = scanDirectoryForWorkspaceSync(sourcePath, {
       rootRelativePath: plan.targetPath,
       maxFiles: Math.max(1, Math.min(Number(input.maxFiles || input.limit || 2000), 10000))
     });
-    const sourceByTarget: any = new Map<any, any>(sourceFiles.map((file?: any) : any => [file.relativePath, file]));
-    const mutations: any[] = [];
-    const contentRefs: any[] = [];
-    const appliedActions: any[] = [];
+    const sourceByTarget = new Map(sourceFiles.map((file) => [file.relativePath, file]));
+    const mutations: SyncRecord[] = [];
+    const contentRefs: unknown[] = [];
+    const appliedActions: SyncAction[] = [];
     for (const action of plan.actions) {
       if (action.action === "noop") {
         continue;
       }
-      const target: any = resolveWorkspacePath(access.workspace, action.targetPath, { allowEmpty: false });
+      const target = resolveWorkspacePath(access.workspace, action.targetPath, { allowEmpty: false });
       if (action.action === "delete") {
         if (fs.existsSync(target.absolutePath)) {
           fs.rmSync(target.absolutePath, { force: true });
@@ -342,28 +435,28 @@ export function createAgentWorkspaceSyncApi({
         appliedActions.push(action);
         continue;
       }
-      const source: any = sourceByTarget.get(action.targetPath);
+      const source = sourceByTarget.get(action.targetPath);
       if (!source) {
         return { ok: false, status: 409, error: `同步源文件消失：${action.sourceRelativePath || action.targetPath}` };
       }
-      const content: any = fs.readFileSync(source.absolutePath);
+      const content = fs.readFileSync(source.absolutePath!);
       try {
         assertWorkspaceFileContentPolicy({
           relativePath: target.relativePath,
           contentBuffer: content,
           sizeBytes: source.sizeBytes
         });
-      } catch (error: any) {
-        return { ok: false, status: 400, error: error.message };
+      } catch (error: unknown) {
+        return { ok: false, status: 400, error: syncErrorMessage(error) };
       }
       fs.mkdirSync(path.dirname(target.absolutePath), { recursive: true });
       fs.writeFileSync(target.absolutePath, content);
       stripExecutableMode(target.absolutePath);
-      const archived: any = await archiveWorkspacePath(access.workspace, target.relativePath, {
+      const archived = await archiveWorkspacePath(access.workspace, target.relativePath, {
         operationId
       });
-      const stat: any = fs.statSync(target.absolutePath);
-      const file: any = fileMetadataFromStat({
+      const stat = fs.statSync(target.absolutePath);
+      const file: SyncRecord = fileMetadataFromStat({
         workspaceId: access.workspace.workspaceId,
         relativePath: target.relativePath,
         absolutePath: target.absolutePath,
@@ -380,12 +473,12 @@ export function createAgentWorkspaceSyncApi({
             contentCid: archived?.metadata?.contentCid || ""
           }
         });
-        contentRefs.push(...(archived.contentRefs || []));
+        contentRefs.push(...asArray(archived.contentRefs));
       }
       appliedActions.push(action);
     }
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId,
       mutations,
@@ -398,7 +491,7 @@ export function createAgentWorkspaceSyncApi({
         summary: plan.summary
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId,
       stateCommit,
@@ -419,30 +512,30 @@ export function createAgentWorkspaceSyncApi({
     };
   }
 
-  async function decodeWorkspaceSnapshotContent(entry: Record<string, any> = {}) : Promise<any> {
+  async function decodeWorkspaceSnapshotContent(entry: SyncRecord = {}): Promise<Buffer> {
     if (entry.contentCid || entry.cid) {
       if (!merkleState) {
         throw new Error("文件快照引用 CAS contentCid，但 Merkle State 基座不可用。");
       }
-      const seen: any = new Set<any>();
-      const decodeCid: any = async (cid?: any) : Promise<any> => {
-        const normalizedCid: any = String(cid || "");
+      const seen = new Set<string>();
+      const decodeCid = async (cid?: unknown): Promise<Buffer> => {
+        const normalizedCid = String(cid || "");
         if (!normalizedCid || seen.has(normalizedCid) || seen.size >= 100_000) {
           throw new Error("Workspace snapshot CAS manifest is cyclic or exceeds its bound.");
         }
         seen.add(normalizedCid);
-        const block: any = await merkleState.cas.getBlock(normalizedCid);
+        const block = await merkleState.cas.getBlock(normalizedCid);
         if (!block) {
           throw new Error(`文件快照内容块不存在：${normalizedCid}`);
         }
         if (block.value?.manifestType !== "meshrix.merkle-dag.manifest") {
           return Buffer.from(block.bytes || []);
         }
-        const chunks: any[] = [];
-        const manifestEntries: any = asArray(block.value.entries)
+        const chunks: Buffer[] = [];
+        const manifestEntries = asArray<SyncRecord>(block.value.entries)
           .slice()
-          .sort((left?: any, right?: any) : any =>
-            Number(left?.metadata?.chunkIndex ?? 0) - Number(right?.metadata?.chunkIndex ?? 0) ||
+          .sort((left, right) =>
+            Number(asObject(left.metadata).chunkIndex ?? 0) - Number(asObject(right.metadata).chunkIndex ?? 0) ||
             String(left?.key || left?.path || "").localeCompare(String(right?.key || right?.path || ""))
           );
         for (const manifestEntry of manifestEntries) {
@@ -455,24 +548,25 @@ export function createAgentWorkspaceSyncApi({
     return decodeWorkspaceFileContent(entry);
   }
 
-  async function readWorkspaceSnapshotEntryContent(entry: Record<string, any> = {}) : Promise<any> {
-    const content: any = entry.contentHandle && typeof entry.contentHandle.read === "function"
-      ? await entry.contentHandle.read()
+  async function readWorkspaceSnapshotEntryContent(entry: SyncRecord = {}) {
+    const contentHandle = entry.contentHandle as ContentHandle | undefined;
+    const content = contentHandle && typeof contentHandle.read === "function"
+      ? await contentHandle.read()
       : Buffer.isBuffer(entry.content)
         ? entry.content
         : await decodeWorkspaceSnapshotContent(entry);
     if (!Buffer.isBuffer(content)) {
       throw new Error("Workspace snapshot content handle must return a Buffer.");
     }
-    const expectedByteLength: any = Number(entry.byteLength ?? entry.sizeBytes ?? content.length);
+    const expectedByteLength = Number(entry.byteLength ?? entry.sizeBytes ?? content.length);
     if (!Number.isSafeInteger(expectedByteLength) || expectedByteLength < 0) {
       throw new Error("Workspace snapshot byte length is invalid.");
     }
     if (content.length !== expectedByteLength) {
       throw new Error("Workspace snapshot content size does not match its declared byte length.");
     }
-    const contentSha256: any = sha256Buffer(content);
-    const expectedSha256: any = normalizeSha256(
+    const contentSha256 = sha256Buffer(content);
+    const expectedSha256 = normalizeSha256(
       entry.contentSha256 || entry.sha256 || entry.expectedSha256 || ""
     );
     if (expectedSha256 && expectedSha256 !== contentSha256) {
@@ -485,35 +579,36 @@ export function createAgentWorkspaceSyncApi({
     };
   }
 
-  async function normalizeWorkspaceFileSnapshot(input: Record<string, any> = {}) : Promise<any> {
-    let snapshot: any = asObject(input.snapshot || input.workspaceFileSnapshot || input.fileSnapshot || input);
+  async function normalizeWorkspaceFileSnapshot(input: SyncRecord = {}): Promise<WorkspaceSnapshot> {
+    let snapshot: SyncRecord = asObject(input.snapshot || input.workspaceFileSnapshot || input.fileSnapshot || input);
     if (
       snapshot.incremental === true &&
       snapshot.stateRoot &&
       asArray(input.stateRootAllowedOperationIds).length > 0
     ) {
-      snapshot = await fileStateApi.buildWorkspaceFileSnapshotFromStateRoot(
-        workspaceForStorage(input).workspace,
-        snapshot.stateRoot
-      );
+      const access = workspaceForStorage(input);
+      if (!access.ok) {
+        throw new Error(access.error || "Workspace snapshot access is unavailable.");
+      }
+      snapshot = await fileStateApi.buildWorkspaceFileSnapshotFromStateRoot(access.workspace, snapshot.stateRoot);
     }
-    const basePath: any = normalizeWorkspaceRelativePath(snapshot.basePath || snapshot.rootPath || input.basePath || "", { allowEmpty: true });
-    const rawFiles: any = asArray(snapshot.files || snapshot.entries || input.files);
-    const localDirectorySnapshots: any = asArray(snapshot.localDirectorySnapshots || snapshot.mountSnapshots);
-    const validateOpaqueContent: any = input.dryRun === true || input.preview === true;
-    const files: any[] = [];
+    const basePath = normalizeWorkspaceRelativePath(snapshot.basePath || snapshot.rootPath || input.basePath || "", { allowEmpty: true });
+    const rawFiles = asArray<SyncRecord>(snapshot.files || snapshot.entries || input.files);
+    const localDirectorySnapshots = asArray<SyncRecord>(snapshot.localDirectorySnapshots || snapshot.mountSnapshots);
+    const validateOpaqueContent = input.dryRun === true || input.preview === true;
+    const files: SnapshotEntry[] = [];
     for (const entry of rawFiles) {
-      const rawRelativePath: any = normalizeWorkspaceRelativePath(
+      const rawRelativePath = normalizeWorkspaceRelativePath(
         entry.path || entry.relativePath || entry.filePath || entry.name || "",
         { allowEmpty: false }
       );
-      const relativePath: any = basePath && rawRelativePath !== basePath && !rawRelativePath.startsWith(`${basePath}/`)
+      const relativePath = basePath && rawRelativePath !== basePath && !rawRelativePath.startsWith(`${basePath}/`)
         ? joinWorkspaceRelativePath(basePath, rawRelativePath)
         : rawRelativePath;
       if (path.posix.basename(relativePath).startsWith(".")) {
         throw new Error("不允许恢复以 . 开头的文件。");
       }
-      const exists: any = entry.exists !== false && entry.deleted !== true && entry.tombstone !== true;
+      const exists = entry.exists !== false && entry.deleted !== true && entry.tombstone !== true;
       if (!exists) {
         files.push({
           relativePath,
@@ -525,11 +620,12 @@ export function createAgentWorkspaceSyncApi({
         });
         continue;
       }
-      const hasContentHandle: any = entry.contentHandle && typeof entry.contentHandle.read === "function";
-      let verified: any;
+      const contentHandle = entry.contentHandle as ContentHandle | undefined;
+      const hasContentHandle = contentHandle && typeof contentHandle.read === "function";
+      let verified: { content?: Buffer; contentSha256: string; byteLength: number };
       if (hasContentHandle && !validateOpaqueContent) {
-        const byteLength: any = Number(entry.byteLength ?? entry.sizeBytes);
-        const contentSha256: any = normalizeSha256(
+        const byteLength = Number(entry.byteLength ?? entry.sizeBytes);
+        const contentSha256 = normalizeSha256(
           entry.contentSha256 || entry.sha256 || entry.expectedSha256 || ""
         );
         if (
@@ -537,12 +633,12 @@ export function createAgentWorkspaceSyncApi({
           byteLength < 0 ||
           !contentSha256 ||
           (
-            entry.contentHandle.byteLength !== undefined &&
-            Number(entry.contentHandle.byteLength) !== byteLength
+            contentHandle.byteLength !== undefined &&
+            Number(contentHandle.byteLength) !== byteLength
           ) ||
           (
-            entry.contentHandle.contentSha256 !== undefined &&
-            normalizeSha256(entry.contentHandle.contentSha256) !== contentSha256
+            contentHandle.contentSha256 !== undefined &&
+            normalizeSha256(contentHandle.contentSha256) !== contentSha256
           )
         ) {
           throw new Error("Workspace snapshot content handle metadata is invalid.");
@@ -565,7 +661,7 @@ export function createAgentWorkspaceSyncApi({
         relativePath,
         exists: true,
         ...(hasContentHandle
-          ? { contentHandle: entry.contentHandle }
+          ? { contentHandle }
           : { content: verified.content }),
         contentSha256: verified.contentSha256,
         byteLength: verified.byteLength,
@@ -582,35 +678,38 @@ export function createAgentWorkspaceSyncApi({
     };
   }
 
-  async function restoreWorkspaceFiles(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function restoreWorkspaceFiles(input: SyncInput = {}) {
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    let snapshot: any;
+    let snapshot: WorkspaceSnapshot;
     try {
       snapshot = await normalizeWorkspaceFileSnapshot(input);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: syncErrorMessage(error) };
     }
-    const dryRun: any = input.dryRun === true || input.preview === true;
-    let mutationOrigin: any;
+    const dryRun = input.dryRun === true || input.preview === true;
+    let mutationOrigin: SyncRecord | null;
     try {
       mutationOrigin = sandboxMutationOrigin(input, {
         requireApproval: !dryRun
       });
-    } catch (error: any) {
-      return { ok: false, status: Number(error?.status || 409), error: error.message, code: error.code };
+    } catch (error: unknown) {
+      const syncError = error as SyncError;
+      return { ok: false, status: Number(syncError.status || 409), error: syncErrorMessage(error), code: syncError.code };
     }
-    const requestedBy: any = String(input.createdBy || input.actorUserId || input.agentId || "").trim();
+    const requestedBy = String(input.createdBy || input.actorUserId || input.agentId || "").trim();
     if (
       snapshot.localDirectorySnapshots.length > 0 &&
       (typeof restoreLocalDirectoryPreimage !== "function" || typeof rollbackLocalDirectoryMutation !== "function")
     ) {
       return { ok: false, status: 503, error: "本机目录 checkpoint 恢复接口不可用。" };
     }
-    const desiredByPath: any = new Map<any, any>(snapshot.files.map((entry?: any) : any => [entry.relativePath, entry]));
-    const existing: any = await listWorkspaceFiles({
+    const restoreDirectory = restoreLocalDirectoryPreimage;
+    const rollbackDirectory = rollbackLocalDirectoryMutation;
+    const desiredByPath = new Map(snapshot.files.map((entry) => [entry.relativePath, entry]));
+    const existing = await listWorkspaceFiles({
       ...input,
       workspaceId: access.workspace.workspaceId,
       path: snapshot.basePath,
@@ -624,10 +723,10 @@ export function createAgentWorkspaceSyncApi({
     if (!existing.ok) {
       return existing;
     }
-    const existingByPath: any = new Map<any, any>(existing.files.map((file?: any) : any => [file.relativePath, file]));
-    const sandboxActions: any[] = [];
+    const existingByPath = new Map(existing.files.map((file) => [file.relativePath, file]));
+    const sandboxActions: RestoreAction[] = [];
     for (const entry of snapshot.files) {
-      const current: any = existingByPath.get(entry.relativePath);
+      const current = existingByPath.get(entry.relativePath);
       if (!entry.exists) {
         sandboxActions.push({
           action: current ? "delete" : "noop",
@@ -637,7 +736,7 @@ export function createAgentWorkspaceSyncApi({
         });
         continue;
       }
-      const action: any = !current
+      const action: SyncActionKind = !current
         ? "create"
         : current.contentSha256 === entry.contentSha256
           ? "noop"
@@ -663,30 +762,31 @@ export function createAgentWorkspaceSyncApi({
         }
       }
     }
-    const localPlans: any[] = [];
+    const localPlans: LocalRestoreResult[] = [];
     try {
       for (const localSnapshot of snapshot.localDirectorySnapshots) {
         if (String(localSnapshot.workspaceId || access.workspace.workspaceId) !== access.workspace.workspaceId) {
           return { ok: false, status: 403, error: "本机目录 checkpoint 不属于当前工作空间。" };
         }
-        localPlans.push(await restoreLocalDirectoryPreimage({
+        localPlans.push(await restoreDirectory!({
           workspace: access.workspace,
           snapshot: localSnapshot,
           dryRun: true
         }));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const syncError = error as SyncError;
       return {
         ok: false,
-        status: Math.max(400, Number(error?.status || 400) || 400),
-        error: String(error?.code || "").startsWith("local_directory_")
-          ? error.message
+        status: Math.max(400, Number(syncError.status || 400) || 400),
+        error: String(syncError.code || "").startsWith("local_directory_")
+          ? syncErrorMessage(error)
           : "本机目录 checkpoint 预览失败。"
       };
     }
-    const actions: any[] = [
+    const actions: RestoreAction[] = [
       ...sandboxActions,
-      ...localPlans.flatMap((plan?: any) : any => plan.actions || [])
+      ...localPlans.flatMap((plan) => plan.actions || [])
     ];
     if (dryRun) {
       return {
@@ -703,24 +803,24 @@ export function createAgentWorkspaceSyncApi({
         actions,
         appliedActions: [],
         summary: {
-          create: actions.filter((action?: any) : any => action.action === "create").length,
-          write: actions.filter((action?: any) : any => action.action === "write" || action.action === "replace").length,
-          delete: actions.filter((action?: any) : any => action.action === "delete").length,
-          noop: actions.filter((action?: any) : any => action.action === "noop").length,
+          create: actions.filter((action) => action.action === "create").length,
+          write: actions.filter((action) => action.action === "write" || action.action === "replace").length,
+          delete: actions.filter((action) => action.action === "delete").length,
+          noop: actions.filter((action) => action.action === "noop").length,
           applied: 0
         },
         ...(mutationOrigin ? { mutationOrigin } : {})
       };
     }
 
-    const sandboxApplied: any[] = [];
-    const sandboxPreimages: any = new Map<any, any>();
-    const localApplied: any[] = [];
-    let stateCommit: any = null;
-    const restoreStartState: any = await merkleState?.stateCommit?.begin?.({ scope: fileStateApi.workspaceStateScope(access.workspace) });
-    const restoreStartEvents: any = await merkleState?.eventLog?.listEvents?.(fileStateApi.workspaceStateScope(access.workspace), { limit: 1 }) || [];
+    const sandboxApplied: RestoreAction[] = [];
+    const sandboxPreimages = new Map<string, RestorePreimage>();
+    const localApplied: LocalRestoreResult[] = [];
+    let stateCommit: SyncRecord | null = null;
+    const restoreStartState = await merkleState?.stateCommit?.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
+    const restoreStartEvents = await merkleState?.eventLog?.listEvents(fileStateApi.workspaceStateScope(access.workspace), { limit: 1 }) || [];
     try {
-      const stateRootAllowedOperationIds: any = asArray(input.stateRootAllowedOperationIds).map(String).filter(Boolean);
+      const stateRootAllowedOperationIds = asArray(input.stateRootAllowedOperationIds).map(String).filter(Boolean);
       if (snapshot.stateRoot && stateRootAllowedOperationIds.length > 0) {
         await input.leaseGuard?.();
         await merkleState?.stateCommit?.verifyRestoreLineage?.({
@@ -732,7 +832,7 @@ export function createAgentWorkspaceSyncApi({
         await input.leaseGuard?.();
       }
       for (const localSnapshot of snapshot.localDirectorySnapshots) {
-        localApplied.push(await restoreLocalDirectoryPreimage({
+        localApplied.push(await restoreDirectory!({
           workspace: access.workspace,
           snapshot: localSnapshot,
           dryRun: false
@@ -740,10 +840,10 @@ export function createAgentWorkspaceSyncApi({
       }
       for (const action of sandboxActions) {
         await input.leaseGuard?.();
-        const entry: any = desiredByPath.get(action.path);
+        const entry = desiredByPath.get(action.path);
         if (action.action === "noop") {
           if (entry?.contentHandle && typeof entry.contentHandle.read === "function") {
-            const verified: any = await readWorkspaceSnapshotEntryContent(entry);
+            const verified = await readWorkspaceSnapshotEntryContent(entry);
             assertWorkspaceFileContentPolicy({
               relativePath: action.path,
               contentBuffer: verified.content,
@@ -753,26 +853,21 @@ export function createAgentWorkspaceSyncApi({
           await input.leaseGuard?.();
           continue;
         }
-        let resolved: any;
-        try {
-          resolved = resolveWorkspacePath(access.workspace, action.path);
-        } catch (error: any) {
-          throw error;
-        }
+        const resolved = resolveWorkspacePath(access.workspace, action.path);
         if (!sandboxPreimages.has(action.path)) {
           try {
-            const handle: any = await fsPromises.open(resolved.absolutePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+            const handle = await fsPromises.open(resolved.absolutePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
             try {
-              const stat: any = await handle.stat();
+              const stat = await handle.stat();
               if (!stat.isFile()) throw new Error("Workspace restore target is not a regular file.");
               if (!merkleState?.cas?.putBlock) {
-                const error: Error & Record<string, any> = new Error("Workspace restore preimage authority is unavailable.");
+                const error: SyncError = new Error("Workspace restore preimage authority is unavailable.");
                 error.code = "workspace_restore_preimage_unavailable";
                 error.status = 503;
                 throw error;
               }
-              const content: any = await handle.readFile();
-              const block: any = await merkleState.cas.putBlock(content, {
+              const content = await handle.readFile();
+              const block = await merkleState.cas.putBlock(content, {
                 codec: "raw",
                 metadata: {
                   workspaceId: access.workspace.workspaceId,
@@ -789,8 +884,8 @@ export function createAgentWorkspaceSyncApi({
             } finally {
               await handle.close();
             }
-          } catch (preimageError: any) {
-            if (preimageError?.code !== "ENOENT") throw preimageError;
+          } catch (preimageError: unknown) {
+            if ((preimageError as NodeJS.ErrnoException).code !== "ENOENT") throw preimageError;
             sandboxPreimages.set(action.path, { exists: false, content: null });
           }
         }
@@ -800,7 +895,7 @@ export function createAgentWorkspaceSyncApi({
           await input.leaseGuard?.();
           continue;
         }
-        const verified: any = await readWorkspaceSnapshotEntryContent(entry);
+        const verified = await readWorkspaceSnapshotEntryContent(entry);
         assertWorkspaceFileContentPolicy({
           relativePath: action.path,
           contentBuffer: verified.content,
@@ -812,8 +907,8 @@ export function createAgentWorkspaceSyncApi({
         sandboxApplied.push(action);
         await input.leaseGuard?.();
       }
-      const localAppliedActions: any = localApplied.flatMap((result?: any) : any => result.appliedActions || []);
-      const applied: any[] = [...sandboxApplied, ...localAppliedActions];
+      const localAppliedActions = localApplied.flatMap((result) => result.appliedActions || []);
+      const applied: RestoreAction[] = [...sandboxApplied, ...localAppliedActions];
       if (applied.length > 0) {
         updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
       }
@@ -829,9 +924,9 @@ export function createAgentWorkspaceSyncApi({
       } catch {
         // Logging must not turn a completed restore into a failed operation.
       }
-      const commitMutations: any = localApplied.flatMap((result?: any) : any => result.stateMutations || []);
-      const commitRefs: any = localApplied.flatMap((result?: any) : any => result.contentRefs || []);
-      const workspacePreimageFiles: any[] = [];
+      const commitMutations: SyncRecord[] = localApplied.flatMap((result) => result.stateMutations || []);
+      const commitRefs: unknown[] = localApplied.flatMap((result) => result.contentRefs || []);
+      const workspacePreimageFiles: SyncRecord[] = [];
       for (const [relativePath, preimage] of sandboxPreimages) {
         if (!preimage?.exists) {
           workspacePreimageFiles.push({ path: relativePath, exists: false });
@@ -855,7 +950,7 @@ export function createAgentWorkspaceSyncApi({
           });
           continue;
         }
-        const archived: any = await archiveWorkspacePath(access.workspace, action.path, {
+        const archived = await archiveWorkspacePath(access.workspace, action.path, {
           operationId: input.operationId || "workspace.checkpoint.restore",
           contentBuffer: desiredByPath.get(action.path)?.content
         });
@@ -867,7 +962,7 @@ export function createAgentWorkspaceSyncApi({
             valueRef: archived.rootCid,
             metadata: archived.metadata
           });
-          commitRefs.push(...archived.contentRefs);
+          commitRefs.push(...(archived.contentRefs || []));
         }
       }
       stateCommit = applied.length > 0 || mutationOrigin
@@ -886,10 +981,10 @@ export function createAgentWorkspaceSyncApi({
           }
         })
         : null;
-      const currentState: any = snapshot.stateRoot && stateRootAllowedOperationIds.length > 0
+      const currentState = snapshot.stateRoot && stateRootAllowedOperationIds.length > 0
         ? await merkleState?.stateCommit?.begin?.({ scope: fileStateApi.workspaceStateScope(access.workspace) })
         : null;
-      if (snapshot.stateRoot && stateRootAllowedOperationIds.length > 0 && currentState?.currentRoot !== snapshot.stateRoot && typeof merkleState?.stateCommit?.restoreRoot === "function") {
+      if (snapshot.stateRoot && stateRootAllowedOperationIds.length > 0 && currentState && currentState.currentRoot !== snapshot.stateRoot && typeof merkleState?.stateCommit?.restoreRoot === "function") {
         await input.leaseGuard?.();
         stateCommit = await merkleState.stateCommit.restoreRoot({
           scope: fileStateApi.workspaceStateScope(access.workspace),
@@ -908,22 +1003,22 @@ export function createAgentWorkspaceSyncApi({
         await input.leaseGuard?.();
       }
       if (applied.length > 0 && !stateCommit?.commitId) {
-        const error: Error & Record<string, any> = new Error("checkpoint restore 状态提交不可用。");
+        const error: SyncError = new Error("checkpoint restore 状态提交不可用。");
         error.code = "local_directory_state_commit_unavailable";
         error.status = 503;
         throw error;
       }
-      const restorePreimageSnapshot: any = workspacePreimageFiles.length > 0 || localApplied.length > 0 || mutationOrigin
+      const restorePreimageSnapshot: SyncRecord | null = workspacePreimageFiles.length > 0 || localApplied.length > 0 || mutationOrigin
         ? {
             schemaVersion: "v0.0.1:workspace:file-restore-snapshot-1",
             workspaceId: access.workspace.workspaceId,
             basePath: "",
             deleteExtraneous: false,
             files: workspacePreimageFiles,
-            localDirectorySnapshots: localApplied.map((result?: any) : any => result.rollbackSnapshot)
+            localDirectorySnapshots: localApplied.map((result) => result.rollbackSnapshot)
           }
         : null;
-      const checkpoint: any = stateCommit
+      const checkpoint = stateCommit
         ? await recordWorkspaceFileCheckpoint({
           workspace: access.workspace,
           operationId: input.operationId || "workspace.checkpoint.restore",
@@ -936,12 +1031,12 @@ export function createAgentWorkspaceSyncApi({
         })
         : null;
       if (stateCommit && localApplied.length > 0 && !checkpoint?.nodeId) {
-        const error: Error & Record<string, any> = new Error("checkpoint restore 节点提交不可用。");
+        const error: SyncError = new Error("checkpoint restore 节点提交不可用。");
         error.code = "local_directory_checkpoint_unavailable";
         error.status = 503;
         throw error;
       }
-      const mutationReceipt: any = sandboxMutationReceipt({
+      const mutationReceipt = sandboxMutationReceipt({
         mutationOrigin,
         preimage: restorePreimageSnapshot,
         stateCommit,
@@ -962,25 +1057,27 @@ export function createAgentWorkspaceSyncApi({
         appliedActions: applied,
         ...(mutationReceipt ? { mutationReceipt } : {}),
         summary: {
-          create: actions.filter((action?: any) : any => action.action === "create").length,
-          write: actions.filter((action?: any) : any => action.action === "write" || action.action === "replace").length,
-          delete: actions.filter((action?: any) : any => action.action === "delete").length,
-          noop: actions.filter((action?: any) : any => action.action === "noop").length,
+          create: actions.filter((action) => action.action === "create").length,
+          write: actions.filter((action) => action.action === "write" || action.action === "replace").length,
+          delete: actions.filter((action) => action.action === "delete").length,
+          noop: actions.filter((action) => action.action === "noop").length,
           applied: applied.length
         },
         ...(mutationOrigin ? { mutationOrigin } : {})
       };
-    } catch (error: any) {
-      let rollbackFailed: any = false;
-      const compensationMutations: any[] = [];
-      const compensationRefs: any[] = [];
+    } catch (error: unknown) {
+      let rollbackFailed = false;
+      const compensationMutations: SyncRecord[] = [];
+      const compensationRefs: unknown[] = [];
       for (const action of [...sandboxApplied].reverse()) {
         try {
           await input.leaseGuard?.();
-          const resolved: any = resolveWorkspacePath(access.workspace, action.path);
-          const preimage: any = sandboxPreimages.get(action.path);
+          const resolved = resolveWorkspacePath(access.workspace, action.path);
+          const preimage = sandboxPreimages.get(action.path);
           if (preimage?.exists) {
-            const block: any = await merkleState?.cas?.getBlock?.(preimage.contentCid);
+            const block = preimage.contentCid
+              ? await merkleState?.cas?.getBlock(preimage.contentCid)
+              : null;
             if (
               !block ||
               !Buffer.isBuffer(block.bytes) ||
@@ -1002,7 +1099,7 @@ export function createAgentWorkspaceSyncApi({
       }
       for (const result of [...localApplied].reverse()) {
         try {
-          const projection: any = await rollbackLocalDirectoryMutation({
+          const projection = await rollbackDirectory!({
             workspace: access.workspace,
             snapshot: result.rollbackSnapshot
           });
@@ -1014,7 +1111,7 @@ export function createAgentWorkspaceSyncApi({
       }
       if (!rollbackFailed && stateCommit?.commitId && compensationMutations.length > 0) {
         try {
-          const compensation: any = await commitWorkspaceFileState({
+          const compensation = await commitWorkspaceFileState({
             workspace: access.workspace,
             operationId: `${input.operationId || "workspace.checkpoint.restore"}.rollback`,
             mutations: compensationMutations,
@@ -1034,7 +1131,7 @@ export function createAgentWorkspaceSyncApi({
       }
       if (!rollbackFailed && restoreStartState?.currentRoot && typeof merkleState?.stateCommit?.restoreRoot === "function") {
         try {
-          const current: any = await merkleState.stateCommit.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
+          const current = await merkleState.stateCommit.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
           if (current.currentRoot !== restoreStartState.currentRoot) {
             await merkleState.stateCommit.restoreRoot({
               scope: fileStateApi.workspaceStateScope(access.workspace),
@@ -1053,11 +1150,12 @@ export function createAgentWorkspaceSyncApi({
           rollbackFailed = true;
         }
       }
+      const failure = syncErrorDetails(error);
       return {
         ok: false,
         compensated: !rollbackFailed,
-        status: rollbackFailed ? 500 : Math.max(400, Number(error?.status || 500) || 500),
-        code: rollbackFailed ? "workspace_restore_compensation_failed" : String(error?.code || "workspace_restore_failed"),
+        status: rollbackFailed ? 500 : Math.max(400, failure.status || 500),
+        code: rollbackFailed ? "workspace_restore_compensation_failed" : failure.code || "workspace_restore_failed",
         error: rollbackFailed
           ? "本机目录 checkpoint 恢复失败，且无法恢复 apply 前状态。"
           : "本机目录 checkpoint 恢复未完成，已恢复 apply 前状态。"

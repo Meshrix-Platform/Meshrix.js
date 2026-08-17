@@ -1,4 +1,5 @@
 import { BUILTIN_COMPACTION_STRATEGIES, CONTEXT_COMPACTION_PROTOCOL_VERSION } from "./constants.ts";
+import type { CompactionStrategyDescriptor } from "./constants.ts";
 import {
   asArray,
   asObject,
@@ -7,33 +8,102 @@ import {
   redactCompactionValue,
   redactText
 } from "./validation.ts";
+import type { CompactionPolicy } from "./validation.ts";
 import { compactToBudget } from "./projection.ts";
 
-export function publicStrategyConfig(policy: Record<string, any> = {}) : any {
-  const strategy: any = asObject(policy.strategy);
-  const params: any = asObject(strategy.params);
+export interface StrategyConfigSummary {
+  id: string;
+  paramKeys: string[];
+}
+
+export interface NormalizedStrategySummaryResult {
+  [key: string]: unknown;
+  summary: string;
+  structured: unknown;
+}
+
+export interface NormalizedStrategyOutput {
+  [key: string]: unknown;
+  executionMode: string;
+  summaryResult: NormalizedStrategySummaryResult;
+  degradedReasons: unknown[];
+  modelEvents: unknown[];
+  memoryEvents: unknown[];
+  preprocessingEvents: unknown[];
+  adapter: unknown;
+}
+
+export interface StandardStrategyInput {
+  protocolVersion: string;
+  strategy: {
+    id: string;
+    params: unknown;
+  };
+  sessionId: string;
+  source: string;
+  profileId: string;
+  budget: Record<string, unknown>;
+  triggerReason: string;
+  sourceTokens: number;
+  targetTokens: number;
+  sourceHash: string;
+  compactedRange: Record<string, unknown>;
+  runtimeState: unknown;
+  messages: unknown[];
+  compactedMessages: unknown[];
+  keptMessages: unknown[];
+  helpers: {
+    estimateTokens: (value?: unknown) => number;
+    compactToBudget: (text?: unknown, targetTokens?: unknown) => string;
+    redactText: (value?: unknown) => string;
+    redactValue: (value?: unknown, depth?: number) => unknown;
+  };
+}
+
+export interface ContextCompactionStrategyAdapter {
+  adapterProtocolVersion: string;
+  id: string;
+  label: string;
+  run(context?: Record<string, unknown>): Promise<NormalizedStrategyOutput>;
+}
+
+export interface ContextCompactionStrategyAdapterOptions {
+  id?: unknown;
+  label?: unknown;
+  inputAdapter?: ((context: Record<string, unknown>) => unknown) | null;
+  run?: unknown;
+  outputAdapter?: ((output: unknown, context: Record<string, unknown>, input: unknown) => unknown | Promise<unknown>) | null;
+}
+
+export interface ListedCompactionStrategy extends CompactionStrategyDescriptor {
+  custom?: boolean;
+}
+
+export function publicStrategyConfig(policy: CompactionPolicy | Record<string, unknown> = {}) : StrategyConfigSummary {
+  const strategy: Record<string, unknown> = asObject(asObject(policy).strategy);
+  const params: Record<string, unknown> = asObject(strategy.params);
   return {
     id: String(strategy.id || "").trim(),
     paramKeys: Object.keys(params).sort()
   };
 }
 
-export function normalizeStrategyOutput(raw: Record<string, any> = {}, context: Record<string, any> = {}, fallbackStrategy: any = "") : any {
-  const output: any = asObject(raw);
-  const summaryResult: any = asObject(output.summaryResult);
-  const summary: any = String(
+export function normalizeStrategyOutput(raw: unknown = {}, context: Record<string, unknown> = {}, fallbackStrategy = "") : NormalizedStrategyOutput {
+  const output: Record<string, unknown> = asObject(raw);
+  const summaryResult: Record<string, unknown> = asObject(output.summaryResult);
+  const summary: string = String(
     summaryResult.summary ||
       output.summary ||
       output.text ||
       output.content ||
-      output.result?.summary ||
-      output.result?.text ||
+      asObject(output.result).summary ||
+      asObject(output.result).text ||
       ""
   ).trim();
   if (!summary) {
     throw new Error("context_compaction_strategy_summary_missing");
   }
-  const targetTokens: any = Number(context.targetTokens ?? context.policy?.summaryReserveTokens);
+  const targetTokens: number = Number(context.targetTokens ?? asObject(context.policy).summaryReserveTokens);
   if (!Number.isFinite(targetTokens) || targetTokens <= 0) {
     throw new Error("context_profile_config_required:compactionPolicy.summaryReserveTokens");
   }
@@ -43,7 +113,7 @@ export function normalizeStrategyOutput(raw: Record<string, any> = {}, context: 
         output.mode ||
         output.strategy ||
         fallbackStrategy ||
-        context.policy?.strategy?.id ||
+        (asObject(context.policy).strategy as Record<string, unknown>)?.id ||
         "custom"
     ),
     summaryResult: {
@@ -53,7 +123,7 @@ export function normalizeStrategyOutput(raw: Record<string, any> = {}, context: 
         summaryResult.structured ||
           output.structured ||
           output.data ||
-          output.result?.structured ||
+          asObject(output.result).structured ||
           {}
       )
     },
@@ -65,28 +135,28 @@ export function normalizeStrategyOutput(raw: Record<string, any> = {}, context: 
   };
 }
 
-export function standardStrategyInput(context: Record<string, any> = {}) : any {
-  const policy: any = asObject(context.policy);
-  const strategy: any = asObject(policy.strategy);
+export function standardStrategyInput(context: Record<string, unknown> = {}) : StandardStrategyInput {
+  const policy: Record<string, unknown> = asObject(context.policy);
+  const strategy: Record<string, unknown> = asObject(policy.strategy);
   return {
     protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
     strategy: {
       id: String(strategy.id || "").trim(),
       params: redactCompactionValue(asObject(strategy.params))
     },
-    sessionId: context.sessionId || "",
-    source: context.source || "",
-    profileId: context.profile?.profileId || "",
-    budget: context.budget || {},
-    triggerReason: context.triggerReason || "",
-    sourceTokens: context.sourceTokens || 0,
-    targetTokens: context.targetTokens || 0,
-    sourceHash: context.sourceHash || "",
-    compactedRange: context.compactedRange || {},
+    sessionId: String(context.sessionId || ""),
+    source: String(context.source || ""),
+    profileId: String(asObject(context.profile).profileId || ""),
+    budget: asObject(context.budget),
+    triggerReason: String(context.triggerReason || ""),
+    sourceTokens: Number(context.sourceTokens || 0),
+    targetTokens: Number(context.targetTokens || 0),
+    sourceHash: String(context.sourceHash || ""),
+    compactedRange: asObject(context.compactedRange),
     runtimeState: redactCompactionValue(context.runtimeState || {}),
-    messages: context.messages || [],
-    compactedMessages: context.compactedMessages || [],
-    keptMessages: context.keptOriginal || [],
+    messages: asArray(context.messages),
+    compactedMessages: asArray(context.compactedMessages),
+    keptMessages: asArray(context.keptOriginal),
     helpers: Object.freeze({
       estimateTokens: estimateContextTokens,
       compactToBudget,
@@ -102,23 +172,26 @@ export function createContextCompactionStrategyAdapter({
   inputAdapter = null,
   run,
   outputAdapter = null
-}: Record<string, any> = {}) : any {
-  const rawId: any = String(id || "").trim();
+}: ContextCompactionStrategyAdapterOptions = {}) : ContextCompactionStrategyAdapter {
+  const rawId: string = String(id || "").trim();
   if (!rawId) {
     throw new Error("context_compaction_strategy_id_required");
   }
-  const normalizedId: any = normalizeStrategyId(rawId);
-  if (typeof run !== "function") {
+  const normalizedId: string = normalizeStrategyId(rawId);
+  const runStrategy = typeof run === "function"
+    ? run as (input: unknown, context: Record<string, unknown>) => unknown | Promise<unknown>
+    : null;
+  if (!runStrategy) {
     throw new Error(`context_compaction_strategy_run_required:${normalizedId}`);
   }
   return Object.freeze({
     adapterProtocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
     id: normalizedId,
     label: String(label || normalizedId),
-    async run(context: Record<string, any> = {}) : Promise<any> {
-      const strategyInput: any = typeof inputAdapter === "function" ? inputAdapter(context) : standardStrategyInput(context);
-      const rawOutput: any = await run(strategyInput, context);
-      const output: any = typeof outputAdapter === "function"
+    async run(context: Record<string, unknown> = {}) : Promise<NormalizedStrategyOutput> {
+      const strategyInput: unknown = typeof inputAdapter === "function" ? inputAdapter(context) : standardStrategyInput(context);
+      const rawOutput: unknown = await runStrategy(strategyInput, context);
+      const output: unknown = typeof outputAdapter === "function"
         ? await outputAdapter(rawOutput, context, strategyInput)
         : rawOutput;
       return normalizeStrategyOutput(output, context, normalizedId);
@@ -126,16 +199,16 @@ export function createContextCompactionStrategyAdapter({
   });
 }
 
-export function listContextCompactionStrategies(extraStrategies: any = []) : any {
-  const custom: any = asArray(extraStrategies)
-    .map((item?: any) : any => typeof item === "string" ? item : item?.id)
+export function listContextCompactionStrategies(extraStrategies: unknown = []) : ListedCompactionStrategy[] {
+  const custom: ListedCompactionStrategy[] = asArray(extraStrategies)
+    .map((item?: unknown) : string => typeof item === "string" ? item : String(asObject(item).id || ""))
     .filter(Boolean)
-    .map((id?: any) : any => Object.freeze({
+    .map((id: string) : ListedCompactionStrategy => Object.freeze({
       id: normalizeStrategyId(id),
       label: String(id),
       custom: true
     }));
-  const byId: any = new Map<any, any>();
+  const byId: Map<string, ListedCompactionStrategy> = new Map<string, ListedCompactionStrategy>();
   for (const strategy of [...BUILTIN_COMPACTION_STRATEGIES, ...custom]) {
     byId.set(strategy.id, strategy);
   }

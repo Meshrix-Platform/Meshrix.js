@@ -1,27 +1,65 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveWithin } from "#meshrix/product-api";
+import type { JobDocument } from "./jobs/contracts.ts";
 
-const SAFE_PATH_SEGMENT_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+interface DeletionState {
+  jobId: string;
+  jobDirectory: string;
+  objectRootPath: string;
+  objectBatchPath?: string;
+  storageObjectPaths: string[];
+  runtimeDeleted?: boolean;
+  metadataDeleted?: boolean;
+  artifactsDeleted?: boolean;
+  deletedJob?: JobDocument | null;
+}
 
-function safePathSegment(value?: any, label: any = "path segment") : any {
-  const text: any = String(value || "").trim();
+interface DeletionOperation {
+  operationId: string;
+  ownerId: string;
+  jobId?: string;
+  status: string;
+  state?: DeletionState;
+}
+
+interface StorageDeletionPort {
+  getObjectOwnerArtifactPaths(ownerId: string): { objectRootPath: string; objectBatchPath?: string };
+  listObjectStoragePathsByOwner(ownerId: string): string[];
+  updateDeletionOperation(operationId: string, patch: { status: string; state: DeletionState; error?: string }): DeletionOperation;
+  deleteObjectRecordsByOwner(ownerId: string): void;
+  deleteDeletionOperation(operationId: string): void;
+  findObjectOwner(ownerId: string): { archiveBatchId?: string; jobId?: string } | null;
+  getDeletionOperationByOwnerId(ownerId: string): DeletionOperation | null;
+  upsertDeletionOperation(operation: Omit<DeletionOperation, "operationId">): DeletionOperation;
+  listPendingDeletionOperations(): DeletionOperation[];
+}
+
+interface DeletionJobManager {
+  deleteJob(jobId: string): Promise<JobDocument | null>;
+  getJob(jobId: string): Promise<JobDocument | null>;
+}
+
+const SAFE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+function safePathSegment(value: unknown, label = "path segment") {
+  const text = String(value || "").trim();
   if (!SAFE_PATH_SEGMENT_PATTERN.test(text) || text === "." || text === ".." || text.includes("/") || text.includes("\\") || text.includes("\0")) {
     throw new Error(`Invalid ${label}.`);
   }
   return text;
 }
 
-function getJobDirectory(userDataPath?: any, jobId?: any) : any {
+function getJobDirectory(userDataPath: string, jobId: unknown) {
   return path.join(userDataPath, "jobs", safePathSegment(jobId, "job id"));
 }
 
-function pathWithinRoot(candidatePath?: any, rootPath?: any) : any {
-  const relative: any = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+function pathWithinRoot(candidatePath: string, rootPath: string) {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
   return relative === "" || (relative && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-async function realpathOrResolved(candidatePath?: any) : Promise<any> {
+async function realpathOrResolved(candidatePath: string) {
   try {
     return await fs.realpath(candidatePath);
   } catch {
@@ -29,23 +67,23 @@ async function realpathOrResolved(candidatePath?: any) : Promise<any> {
   }
 }
 
-async function assertManagedDeletionPath(targetPath?: any, allowedRoots: any = []) : Promise<any> {
-  const selectedPath: any = path.resolve(String(targetPath || ""));
-  const roots: any = allowedRoots
-    .map((root?: any) : any => String(root || "").trim())
+async function assertManagedDeletionPath(targetPath: string, allowedRoots: string[] = []) {
+  const selectedPath = path.resolve(String(targetPath || ""));
+  const roots = allowedRoots
+    .map((root) => String(root || "").trim())
     .filter(Boolean)
-    .map((root?: any) : any => path.resolve(root));
-  if (!roots.some((root?: any) : any => pathWithinRoot(selectedPath, root))) {
+    .map((root) => path.resolve(root));
+  if (!roots.some((root) => pathWithinRoot(selectedPath, root))) {
     throw new Error("删除路径不在受管数据目录内，已拒绝。");
   }
-  const realRoots: any = await Promise.all(roots.map(realpathOrResolved));
-  const realParent: any = await realpathOrResolved(path.dirname(selectedPath));
-  if (!realRoots.some((root?: any) : any => pathWithinRoot(realParent, root))) {
+  const realRoots = await Promise.all(roots.map(realpathOrResolved));
+  const realParent = await realpathOrResolved(path.dirname(selectedPath));
+  if (!realRoots.some((root) => pathWithinRoot(realParent, root))) {
     throw new Error("删除路径父目录不在受管数据目录内，已拒绝。");
   }
 }
 
-async function removePath(targetPath?: any, { allowedRoots = [] }: Record<string, any> = {}) : Promise<any> {
+async function removePath(targetPath: string | undefined, { allowedRoots = [] }: { allowedRoots?: string[] } = {}) {
   if (!targetPath) {
     return;
   }
@@ -57,11 +95,11 @@ async function removePath(targetPath?: any, { allowedRoots = [] }: Record<string
   });
 }
 
-async function removeEmptyParentDirectories(startPath?: any, stopPath?: any) : Promise<any> {
-  let currentPath: any = startPath;
+async function removeEmptyParentDirectories(startPath: string, stopPath: string) {
+  let currentPath = startPath;
   while (currentPath && currentPath !== stopPath && pathWithinRoot(currentPath, stopPath)) {
     try {
-      const entries: any = await fs.readdir(currentPath);
+      const entries = await fs.readdir(currentPath);
       if (entries.length > 0) {
         return;
       }
@@ -73,44 +111,52 @@ async function removeEmptyParentDirectories(startPath?: any, stopPath?: any) : P
   }
 }
 
-async function removeStorageObjectFiles({ userDataPath, objectRootPath, storageObjectPaths = [] }: Record<string, any>) : Promise<any> {
+async function removeStorageObjectFiles({ userDataPath, objectRootPath, storageObjectPaths = [] }: {
+  userDataPath: string;
+  objectRootPath: string;
+  storageObjectPaths?: string[];
+}) {
   for (const relativePath of storageObjectPaths) {
     if (!relativePath) {
       continue;
     }
-    const objectPath: any = resolveWithin(userDataPath, relativePath);
+    const objectPath = resolveWithin(userDataPath, relativePath);
     await fs.rm(objectPath, { force: true });
     await removeEmptyParentDirectories(path.dirname(objectPath), objectRootPath);
   }
 }
 
-function mergeStorageObjectPaths(...pathGroups: any[]) : any {
-  return [...new Set<any>(pathGroups
-    .flatMap((paths?: any) : any => Array.isArray(paths) ? paths : [])
-    .map((relativePath?: any) : any => String(relativePath || "").trim())
+function mergeStorageObjectPaths(...pathGroups: Array<readonly string[] | undefined>) {
+  return [...new Set<string>(pathGroups
+    .flatMap((paths) => Array.isArray(paths) ? paths : [])
+    .map((relativePath) => String(relativePath || "").trim())
     .filter(Boolean))];
 }
 
-export function createBatchDeletionCoordinator({ userDataPath, jobManager, storageProvider }: Record<string, any>) : any {
-  const jobsRootPath: any = path.join(userDataPath, "jobs");
-  const fallbackObjectRootPath: any = path.join(userDataPath, "objects");
+export function createBatchDeletionCoordinator({ userDataPath, jobManager, storageProvider }: {
+  userDataPath: string;
+  jobManager: DeletionJobManager;
+  storageProvider: StorageDeletionPort;
+}) {
+  const jobsRootPath = path.join(userDataPath, "jobs");
+  const fallbackObjectRootPath = path.join(userDataPath, "objects");
 
-  async function executeOperation(operation?: any) : Promise<any> {
-    let current: any = operation;
-    const ownerId: any = current.ownerId;
-    const jobId: any = current.jobId || current.state?.jobId || ownerId;
-    const artifactPaths: any = storageProvider.getObjectOwnerArtifactPaths(ownerId);
-    const state: Record<string, any> = {
+  async function executeOperation(operation: DeletionOperation) {
+    let current = operation;
+    const ownerId = current.ownerId;
+    const jobId = current.jobId || current.state?.jobId || ownerId;
+    const artifactPaths = storageProvider.getObjectOwnerArtifactPaths(ownerId);
+    const state = {
       jobId,
       jobDirectory: getJobDirectory(userDataPath, jobId),
       objectRootPath: artifactPaths.objectRootPath,
       storageObjectPaths: storageProvider.listObjectStoragePathsByOwner(ownerId),
-      ...(current.state || {})
+      ...current.state
     };
     state.storageObjectPaths = mergeStorageObjectPaths(state.storageObjectPaths);
 
     if (!state.runtimeDeleted) {
-      const deletedJob: any = await jobManager.deleteJob(state.jobId || ownerId);
+      const deletedJob = await jobManager.deleteJob(state.jobId || ownerId);
       state.deletedJob = deletedJob || null;
       state.runtimeDeleted = true;
       current = storageProvider.updateDeletionOperation(current.operationId, {
@@ -120,7 +166,7 @@ export function createBatchDeletionCoordinator({ userDataPath, jobManager, stora
     }
 
     if (!state.metadataDeleted) {
-      const latestArtifactPaths: any = storageProvider.getObjectOwnerArtifactPaths(ownerId);
+      const latestArtifactPaths = storageProvider.getObjectOwnerArtifactPaths(ownerId);
       state.objectRootPath = latestArtifactPaths.objectRootPath || state.objectRootPath;
       state.objectBatchPath = latestArtifactPaths.objectBatchPath || state.objectBatchPath;
       state.storageObjectPaths = mergeStorageObjectPaths(
@@ -163,17 +209,17 @@ export function createBatchDeletionCoordinator({ userDataPath, jobManager, stora
   }
 
   return {
-    async deleteBatch(batchId?: any) : Promise<any> {
-      const existingJob: any = await jobManager.getJob(batchId);
-      const requestedOwner: any = storageProvider.findObjectOwner(batchId);
-      const effectiveOwnerId: any = existingJob?.archiveBatchId || requestedOwner?.archiveBatchId || batchId;
-      const objectOwner: any = storageProvider.findObjectOwner(effectiveOwnerId) || requestedOwner;
-      const effectiveJobId: any = existingJob?.id || objectOwner?.jobId || batchId;
-      const existing: any = storageProvider.getDeletionOperationByOwnerId(effectiveOwnerId);
+    async deleteBatch(batchId: string) {
+      const existingJob = await jobManager.getJob(batchId);
+      const requestedOwner = storageProvider.findObjectOwner(batchId);
+      const effectiveOwnerId = existingJob?.archiveBatchId || requestedOwner?.archiveBatchId || batchId;
+      const objectOwner = storageProvider.findObjectOwner(effectiveOwnerId) || requestedOwner;
+      const effectiveJobId = existingJob?.id || objectOwner?.jobId || batchId;
+      const existing = storageProvider.getDeletionOperationByOwnerId(effectiveOwnerId);
       if (!existing && !existingJob && !objectOwner) {
         return null;
       }
-      const operation: any =
+      const operation =
         existing ||
         storageProvider.upsertDeletionOperation({
           ownerId: effectiveOwnerId,
@@ -192,12 +238,16 @@ export function createBatchDeletionCoordinator({ userDataPath, jobManager, stora
 
       try {
         return await executeOperation(operation);
-      } catch (error: any) {
-        const latest: any = storageProvider.getDeletionOperationByOwnerId(effectiveOwnerId) || operation;
+      } catch (error) {
+        const latest = storageProvider.getDeletionOperationByOwnerId(effectiveOwnerId) || operation;
         storageProvider.updateDeletionOperation(operation.operationId, {
           status:
             latest.state?.metadataDeleted ? "artifact_cleanup_pending" : "metadata_pending",
           state: {
+            jobId: latest.state?.jobId || effectiveJobId,
+            jobDirectory: latest.state?.jobDirectory || getJobDirectory(userDataPath, effectiveJobId),
+            objectRootPath: latest.state?.objectRootPath || fallbackObjectRootPath,
+            storageObjectPaths: latest.state?.storageObjectPaths || [],
             ...latest.state
           },
           error: error instanceof Error ? error.message : "删除失败"
@@ -205,8 +255,8 @@ export function createBatchDeletionCoordinator({ userDataPath, jobManager, stora
         throw error;
       }
     },
-    async resumePendingDeletions() : Promise<any> {
-      const operations: any = storageProvider.listPendingDeletionOperations();
+    async resumePendingDeletions() {
+      const operations = storageProvider.listPendingDeletionOperations();
       for (const operation of operations) {
         try {
           await executeOperation(operation);

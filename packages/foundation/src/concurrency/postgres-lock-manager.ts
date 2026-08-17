@@ -9,7 +9,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import pg from "pg";
+import pg, { type PoolConfig } from "pg";
 
 import {
   LockAcquireAbortedError,
@@ -20,12 +20,18 @@ import {
   LockReleasedError,
   LockTimeoutError,
   DeadlineScheduler,
-  IntrusiveWaitQueue
+  IntrusiveWaitQueue,
+  type DeadlineEntry,
+  type IntrusiveWaitNode,
+  type LockAcquireOptions,
+  type LockHandle,
+  type LockManagerConfig,
+  type LockManagerMetrics,
 } from "./lock-manager-contract.ts";
 
 const { Pool } = pg;
 
-const SCHEMA_SQL: any = `
+const SCHEMA_SQL = `
 CREATE SEQUENCE IF NOT EXISTS _meshrix_lock_fence_sequence AS BIGINT;
 CREATE TABLE IF NOT EXISTS _meshrix_lock_leases (
   namespace TEXT NOT NULL,
@@ -41,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_meshrix_lock_leases_expires
   ON _meshrix_lock_leases (expires_at);
 `;
 
-const ACQUIRE_SQL: any = `
+const ACQUIRE_SQL = `
 WITH database_time AS MATERIALIZED (
   SELECT clock_timestamp() AS now_at
 ), acquired AS (
@@ -65,28 +71,28 @@ SELECT owner_id, fencing_token, acquired_at, expires_at,
 FROM acquired
 `;
 
-const INSPECT_SQL: any = `
+const INSPECT_SQL = `
 SELECT EXISTS (
   SELECT 1 FROM _meshrix_lock_leases
   WHERE namespace = $1 AND lock_key = $2 AND expires_at > clock_timestamp()
 ) AS locked
 `;
 
-const RELEASE_SQL: any = `
+const RELEASE_SQL = `
 DELETE FROM _meshrix_lock_leases
 WHERE namespace = $1 AND lock_key = $2 AND owner_id = $3
   AND fencing_token = $4::bigint AND expires_at > clock_timestamp()
 RETURNING fencing_token::text
 `;
 
-const EXPIRE_SQL: any = `
+const EXPIRE_SQL = `
 DELETE FROM _meshrix_lock_leases
 WHERE namespace = $1 AND lock_key = $2 AND owner_id = $3
   AND fencing_token = $4::bigint AND expires_at <= clock_timestamp()
 RETURNING fencing_token::text
 `;
 
-const HEARTBEAT_SQL: any = `
+const HEARTBEAT_SQL = `
 WITH database_time AS MATERIALIZED (
   SELECT clock_timestamp() AS now_at
 )
@@ -103,36 +109,133 @@ RETURNING expires_at,
 class PoolWaitTimeoutError extends Error {}
 class BackendQueryTimeoutError extends Error {}
 
+type QueryValue = string | number | boolean | Date | null;
+type LeaseOutcome = "released" | "expired";
+interface QueryResult<Row> {
+  rows: Row[];
+}
+interface PgClient {
+  query<Row>(text: string, values?: QueryValue[]): Promise<QueryResult<Row>>;
+  release(destroy?: boolean): void;
+}
+interface PgPool {
+  options?: { max?: number };
+  connect(): Promise<PgClient>;
+  end(): Promise<void>;
+  on(event: "error", listener: (error: Error) => void): PgPool;
+  off?(event: "error", listener: (error: Error) => void): PgPool;
+  removeListener?(event: "error", listener: (error: Error) => void): PgPool;
+}
+interface PostgresConfig extends LockManagerConfig {
+  pool?: PgPool;
+  pgConfig?: PoolConfig;
+  connectionString?: string;
+  namespace?: string;
+  retryIntervalMs?: number;
+  queryTimeoutMs?: number;
+  maxPoolCredits?: number;
+}
+interface AcquireRow {
+  fencing_token: string;
+  acquired_at: Date;
+  expires_at: Date;
+  lease_ms: string;
+}
+interface InspectRow {
+  locked: boolean;
+}
+interface FenceRow {
+  fencing_token: string;
+}
+interface HeartbeatRow {
+  expires_at: Date;
+  lease_ms: string;
+}
+interface PoolCredit {
+  released: boolean;
+}
+interface LocalNode extends IntrusiveWaitNode<LocalNode> {
+  active: boolean;
+  promoted: boolean;
+  deadlineEntry: DeadlineEntry | null;
+  onAbort: (() => void) | null;
+  resolve: (node: LocalNode) => void;
+  reject: (error: Error) => void;
+  signal?: AbortSignal;
+}
+interface CreditNode extends IntrusiveWaitNode<CreditNode> {
+  active: boolean;
+  deadlineEntry: DeadlineEntry | null;
+  onAbort: (() => void) | null;
+  resolve: (credit: PoolCredit) => void;
+  reject: (error: Error) => void;
+  signal?: AbortSignal;
+}
+interface Entry {
+  closing: Promise<void> | null;
+  finalized: boolean;
+  handle: LockHandle;
+  heartbeatTask: Promise<void> | null;
+  ownerId: string;
+  pendingHeartbeatTtlMs: number;
+  rawFence: string;
+  timer: NodeJS.Timeout | null;
+}
+interface BuildHandleOptions {
+  lockKey: string;
+  ownerId: string;
+  fencingToken: string;
+  rawFence: string;
+  acquiredAt: Date;
+  expiresAt: Date;
+  ttlMs: number;
+}
+interface OperationOptions {
+  ignoreDestroy?: boolean;
+  signal?: AbortSignal;
+  lockKey?: string;
+}
+interface ExtendedMetrics extends LockManagerMetrics {
+  queueKeys: number;
+  waiterTimers: number;
+  activePoolCredits: number;
+  waitingPoolCredits: number;
+  maxPoolCredits: number;
+}
+interface Race<T> {
+  promise: Promise<T>;
+  cleanup(): void;
+}
+
 export class PostgresLockBackendError extends Error {
-  name: any;
-  operation: any;
-  constructor(operation?: any) {
+  override name = "PostgresLockBackendError";
+  operation: string;
+  constructor(operation: string) {
     super(`PostgreSQL lock backend failed during ${operation}.`);
-    this.name = "PostgresLockBackendError";
     this.operation = operation;
   }
 }
 
 export class PostgresLockManager extends LockManager {
-  _activePoolCredits: any;
-  _clientCredits: any;
-  _destroyController: any;
-  _destroyPromise: any;
-  _destroyed: any;
-  _entries: any;
-  _ownsPool: any;
-  _pendingAcquires: any;
-  _poolErrorListener: any;
-  _poolErrorListenerAttached: any;
-  _localQueues: any;
-  _poolCreditQueue: any;
-  _schemaReady: any;
-  _scheduler: any;
-  namespace: any;
-  pool: any;
-  queryTimeoutMs: any;
-  maxPoolCredits: any;
-  retryIntervalMs: any;
+  _activePoolCredits: number;
+  _clientCredits: WeakMap<PgClient, PoolCredit>;
+  _destroyController: AbortController;
+  _destroyPromise: Promise<void> | null;
+  _destroyed: boolean;
+  _entries: Map<string, Entry>;
+  _ownsPool: boolean;
+  _pendingAcquires: Set<Promise<LockHandle>>;
+  _poolErrorListener: (error: Error) => void;
+  _poolErrorListenerAttached: boolean;
+  _localQueues: Map<string, IntrusiveWaitQueue<LocalNode>>;
+  _poolCreditQueue: IntrusiveWaitQueue<CreditNode>;
+  _schemaReady: Promise<void> | null;
+  _scheduler: DeadlineScheduler;
+  namespace: string;
+  pool: PgPool;
+  queryTimeoutMs: number;
+  maxPoolCredits: number;
+  retryIntervalMs: number;
   /**
    * @param {object} config
    * @param {object} [config.pool] - Injected node-postgres Pool-compatible object.
@@ -141,22 +244,33 @@ export class PostgresLockManager extends LockManager {
    * @param {string} [config.namespace=meshrix] - Advisory lock key namespace.
    * @param {number} [config.retryIntervalMs=50] - Non-blocking retry cadence.
    */
-  constructor(config: Record<string, any> = {}) {
+  constructor(config: PostgresConfig = {}) {
     super({ ...config, backend: "postgres" });
-    this.namespace = normalizeLockKey(config.namespace ?? "meshrix", "Lock namespace");
-    this.retryIntervalMs = positiveDuration(config.retryIntervalMs, 50, "retryIntervalMs");
-    this.queryTimeoutMs = positiveDuration(config.queryTimeoutMs, 5000, "queryTimeoutMs");
+    this.namespace = normalizeLockKey(
+      config.namespace ?? "meshrix",
+      "Lock namespace",
+    );
+    this.retryIntervalMs = positiveDuration(
+      config.retryIntervalMs,
+      50,
+      "retryIntervalMs",
+    );
+    this.queryTimeoutMs = positiveDuration(
+      config.queryTimeoutMs,
+      5000,
+      "queryTimeoutMs",
+    );
     this.maxPoolCredits = positiveInteger(
       config.maxPoolCredits,
       Number(config.pool?.options?.max) || 16,
-      "maxPoolCredits"
+      "maxPoolCredits",
     );
-    this._entries = new Map<any, any>();
-    this._pendingAcquires = new Set<any>();
-    this._localQueues = new Map<any, any>();
+    this._entries = new Map();
+    this._pendingAcquires = new Set();
+    this._localQueues = new Map();
     this._poolCreditQueue = new IntrusiveWaitQueue();
     this._activePoolCredits = 0;
-    this._clientCredits = new WeakMap<any, any>();
+    this._clientCredits = new WeakMap();
     this._schemaReady = null;
     this._scheduler = new DeadlineScheduler();
     this._destroyed = false;
@@ -168,35 +282,41 @@ export class PostgresLockManager extends LockManager {
       if (
         typeof config.pool.connect !== "function" ||
         typeof config.pool.on !== "function" ||
-        (typeof config.pool.off !== "function" && typeof config.pool.removeListener !== "function")
+        (typeof config.pool.off !== "function" &&
+          typeof config.pool.removeListener !== "function")
       ) {
         throw new TypeError(
-          "PostgresLockManager pool must expose connect() and EventEmitter listener methods."
+          "PostgresLockManager pool must expose connect() and EventEmitter listener methods.",
         );
       }
       this.pool = config.pool;
     } else {
-      const pgConfig: any = config.pgConfig
+      const pgConfig: PoolConfig | null = config.pgConfig
         ? { ...config.pgConfig }
         : config.connectionString
           ? { connectionString: config.connectionString }
           : null;
       if (!pgConfig) {
-        throw new Error("PostgresLockManager requires pool, pgConfig, or connectionString.");
+        throw new Error(
+          "PostgresLockManager requires pool, pgConfig, or connectionString.",
+        );
       }
       pgConfig.connectionTimeoutMillis ??= this.queryTimeoutMs;
       this.pool = new Pool(pgConfig);
     }
-    this._poolErrorListener = () : any => {
+    this._poolErrorListener = () => {
       this._metrics.totalBackendErrors++;
     };
     this.pool.on("error", this._poolErrorListener);
     this._poolErrorListenerAttached = true;
   }
 
-  async acquire(key?: any, options: Record<string, any> = {}) : Promise<any> {
+  override async acquire(
+    key: string,
+    options: LockAcquireOptions = {},
+  ): Promise<LockHandle> {
     this._assertActive();
-    const pending: any = this._acquire(key, options);
+    const pending = this._acquire(key, options);
     this._pendingAcquires.add(pending);
     try {
       return await pending;
@@ -205,52 +325,88 @@ export class PostgresLockManager extends LockManager {
     }
   }
 
-  async _acquire(key?: any, options: Record<string, any> = {}) : Promise<any> {
+  async _acquire(
+    key: string,
+    options: LockAcquireOptions = {},
+  ): Promise<LockHandle> {
     this._assertActive();
-    const lockKey: any = normalizeLockKey(key);
+    const lockKey = normalizeLockKey(key);
     throwIfAcquireAborted(options.signal, lockKey);
-    const waitMs: any = nonNegativeDuration(options.waitMs, this.config.maxWaitMs, "waitMs");
-    const localQueue: any = this._localQueues.get(lockKey);
-    if (localQueue?.size >= this.config.maxQueueDepth) {
+    const waitMs = nonNegativeDuration(
+      options.waitMs,
+      this.config.maxWaitMs,
+      "waitMs",
+    );
+    const localQueue = this._localQueues.get(lockKey);
+    if (localQueue && localQueue.size >= this.config.maxQueueDepth) {
       throw new LockQueueFullError(lockKey, this.config.maxQueueDepth);
     }
     if (this._metrics.currentWaiting >= this.config.maxTotalQueueDepth) {
       throw new LockQueueFullError(lockKey, this.config.maxTotalQueueDepth);
     }
-    const deadline: any = Date.now() + waitMs;
+    const deadline = Date.now() + waitMs;
     this._metrics.currentWaiting++;
-    let turn: any = null;
+    let turn = null;
     try {
-      turn = await this._waitForLocalTurn(lockKey, deadline, options.signal, waitMs);
+      turn = await this._waitForLocalTurn(
+        lockKey,
+        deadline,
+        options.signal,
+        waitMs,
+      );
       return await this._acquireLeader(lockKey, {
         ...options,
-        waitMs: Math.max(0, deadline - Date.now())
+        waitMs: Math.max(0, deadline - Date.now()),
       });
     } finally {
       if (turn) this._releaseLocalTurn(lockKey, turn);
-      this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
+      this._metrics.currentWaiting = Math.max(
+        0,
+        this._metrics.currentWaiting - 1,
+      );
     }
   }
 
-  async _acquireLeader(lockKey?: any, options: Record<string, any> = {}) : Promise<any> {
+  async _acquireLeader(
+    lockKey: string,
+    options: LockAcquireOptions = {},
+  ): Promise<LockHandle> {
     this._assertActive();
     throwIfAcquireAborted(options.signal, lockKey);
-    const ttlMs: any = positiveDuration(options.ttlMs, this.config.defaultTtlMs, "ttlMs");
-    const waitMs: any = nonNegativeDuration(options.waitMs, this.config.maxWaitMs, "waitMs");
+    const ttlMs = positiveDuration(
+      options.ttlMs,
+      this.config.defaultTtlMs,
+      "ttlMs",
+    );
+    const waitMs = nonNegativeDuration(
+      options.waitMs,
+      this.config.maxWaitMs,
+      "waitMs",
+    );
 
-    const deadline: any = Date.now() + waitMs;
-    let client: any = null;
-    let destroyClient: any = false;
+    const deadline = Date.now() + waitMs;
+    let client = null;
+    let destroyClient = false;
     try {
       while (true) {
-        const ownerId: any = randomUUID();
-        const attemptDeadline: any = waitMs === 0
-          ? Date.now() + this.queryTimeoutMs
-          : Math.min(deadline, Date.now() + this.queryTimeoutMs);
+        const ownerId = randomUUID();
+        const attemptDeadline =
+          waitMs === 0
+            ? Date.now() + this.queryTimeoutMs
+            : Math.min(deadline, Date.now() + this.queryTimeoutMs);
         try {
-          client = await this._connectBefore(attemptDeadline, options.signal, lockKey);
-          await this._ensureSchema(client, attemptDeadline, options.signal, lockKey);
-        } catch (error: any) {
+          client = await this._connectBefore(
+            attemptDeadline,
+            options.signal,
+            lockKey,
+          );
+          await this._ensureSchema(
+            client,
+            attemptDeadline,
+            options.signal,
+            lockKey,
+          );
+        } catch (error) {
           if (error instanceof LockManagerDestroyedError) throw error;
           if (error instanceof LockAcquireAbortedError) throw error;
           if (error instanceof PoolWaitTimeoutError) {
@@ -261,17 +417,17 @@ export class PostgresLockManager extends LockManager {
           throw new PostgresLockBackendError("connect");
         }
 
-        let row: any;
+        let row: AcquireRow | undefined;
         try {
-          const result: any = await this._queryBefore(
+          const result = await this._queryBefore<AcquireRow>(
             client,
             ACQUIRE_SQL,
             [this.namespace, lockKey, ownerId, ttlMs],
             attemptDeadline,
-            { signal: options.signal, lockKey }
+            { signal: options.signal, lockKey },
           );
-          row = result.rows?.[0] || {};
-        } catch (error: any) {
+          row = result.rows[0];
+        } catch (error) {
           destroyClient = true;
           if (error instanceof LockManagerDestroyedError) throw error;
           if (error instanceof LockAcquireAbortedError) throw error;
@@ -292,26 +448,30 @@ export class PostgresLockManager extends LockManager {
           throw new LockAcquireAbortedError(lockKey);
         }
 
-        if (row.fencing_token) {
-          const rawFence: any = String(row.fencing_token).trim();
+        if (row?.fencing_token) {
+          const rawFence = String(row.fencing_token).trim();
           if (!rawFence) {
             destroyClient = true;
             this._metrics.totalBackendErrors++;
             throw new PostgresLockBackendError("fencing");
           }
-          const acquiredAt: any = new Date(row.acquired_at);
-          const expiresAt: any = new Date(row.expires_at);
-          const leaseMs: any = positiveDuration(Number(row.lease_ms), ttlMs, "leaseMs");
+          const acquiredAt = new Date(row.acquired_at);
+          const expiresAt = new Date(row.expires_at);
+          const leaseMs = positiveDuration(
+            Number(row.lease_ms),
+            ttlMs,
+            "leaseMs",
+          );
           this._releaseClient(client, false);
           client = null;
-          const handle: any = this._buildHandle({
+          const handle = this._buildHandle({
             lockKey,
             ownerId,
             fencingToken: `fence_postgres_${rawFence}`,
             rawFence,
             acquiredAt,
             expiresAt,
-            ttlMs: leaseMs
+            ttlMs: leaseMs,
           });
           this._metrics.totalAcquired++;
           this._metrics.currentActive++;
@@ -328,7 +488,7 @@ export class PostgresLockManager extends LockManager {
         await this._waitForRetry(
           Math.min(this.retryIntervalMs, Math.max(1, deadline - Date.now())),
           options.signal,
-          lockKey
+          lockKey,
         );
       }
     } finally {
@@ -336,26 +496,34 @@ export class PostgresLockManager extends LockManager {
     }
   }
 
-  _waitForLocalTurn(lockKey?: any, deadline?: any, signal?: any, waitMs?: any) : any {
-    let queue: any = this._localQueues.get(lockKey);
+  _waitForLocalTurn(
+    lockKey: string,
+    deadline: number,
+    signal: AbortSignal | undefined,
+    waitMs: number,
+  ): Promise<LocalNode> {
+    let queue = this._localQueues.get(lockKey);
     if (!queue) {
       queue = new IntrusiveWaitQueue();
       this._localQueues.set(lockKey, queue);
     }
-    let resolve: any;
-    let reject: any;
-    const promise: any = new Promise((accepted?: any, rejected?: any) : any => {
+    let resolve!: (node: LocalNode) => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<LocalNode>((accepted, rejected) => {
       resolve = accepted;
       reject = rejected;
     });
-    const node: any = {
+    const node: LocalNode = {
       active: true,
       promoted: false,
       deadlineEntry: null,
       onAbort: null,
       resolve,
       reject,
-      signal
+      signal,
+      previous: null,
+      next: null,
+      queue: null,
     };
     queue.push(node);
     if (queue.head === node) {
@@ -367,17 +535,17 @@ export class PostgresLockManager extends LockManager {
       if (queue.size === 0) this._localQueues.delete(lockKey);
       return Promise.reject(new LockTimeoutError(lockKey, waitMs));
     }
-    const rejectPending: any = (error?: any) : any => {
+    const rejectPending = (error: Error): void => {
       if (!node.active) return;
       node.active = false;
       queue.remove(node);
       this._scheduler.cancel(node.deadlineEntry);
-      node.signal?.removeEventListener?.("abort", node.onAbort);
+      if (node.onAbort) node.signal?.removeEventListener("abort", node.onAbort);
       if (queue.size === 0) this._localQueues.delete(lockKey);
       reject(error);
     };
-    node.onAbort = () : any => rejectPending(new LockAcquireAbortedError(lockKey));
-    node.deadlineEntry = this._scheduler.schedule(deadline, () : any => {
+    node.onAbort = () => rejectPending(new LockAcquireAbortedError(lockKey));
+    node.deadlineEntry = this._scheduler.schedule(deadline, () => {
       this._metrics.totalTimedOut++;
       rejectPending(new LockTimeoutError(lockKey, waitMs));
     });
@@ -386,12 +554,12 @@ export class PostgresLockManager extends LockManager {
     return promise;
   }
 
-  _releaseLocalTurn(lockKey?: any, node?: any) : any {
-    const queue: any = this._localQueues.get(lockKey);
+  _releaseLocalTurn(lockKey: string, node: LocalNode): void {
+    const queue = this._localQueues.get(lockKey);
     if (!queue || queue.head !== node) return;
     node.active = false;
     queue.remove(node);
-    const next: any = queue.head;
+    const next = queue.head;
     if (!next) {
       this._localQueues.delete(lockKey);
       return;
@@ -399,13 +567,13 @@ export class PostgresLockManager extends LockManager {
     next.active = false;
     next.promoted = true;
     this._scheduler.cancel(next.deadlineEntry);
-    next.signal?.removeEventListener?.("abort", next.onAbort);
+    if (next.onAbort) next.signal?.removeEventListener("abort", next.onAbort);
     next.resolve(next);
   }
 
-  async release(handle?: any) : Promise<any> {
+  override async release(handle: LockHandle): Promise<void> {
     if (!handle || handle.released) return;
-    const entry: any = this._entries.get(handle.lockKey);
+    const entry = this._entries.get(handle.lockKey);
     if (!entry) {
       handle.released = true;
       return;
@@ -419,26 +587,29 @@ export class PostgresLockManager extends LockManager {
     return entry.closing;
   }
 
-  async isLocked(key?: any) : Promise<any> {
+  override async isLocked(key: string): Promise<boolean> {
     this._assertActive();
-    const lockKey: any = normalizeLockKey(key);
+    const lockKey = normalizeLockKey(key);
     if (this._entries.has(lockKey)) return true;
 
-    const deadline: any = Date.now() + this.config.maxWaitMs;
-    let client: any = null;
-    let destroyClient: any = false;
+    const deadline = Date.now() + this.config.maxWaitMs;
+    let client = null;
+    let destroyClient = false;
     try {
-      const attemptDeadline: any = Math.min(deadline, Date.now() + this.queryTimeoutMs);
+      const attemptDeadline = Math.min(
+        deadline,
+        Date.now() + this.queryTimeoutMs,
+      );
       client = await this._connectBefore(attemptDeadline);
       await this._ensureSchema(client, attemptDeadline);
-      const result: any = await this._queryBefore(
+      const result = await this._queryBefore<InspectRow>(
         client,
         INSPECT_SQL,
         [this.namespace, lockKey],
-        attemptDeadline
+        attemptDeadline,
       );
       return result.rows?.[0]?.locked === true;
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof LockManagerDestroyedError) throw error;
       if (error instanceof PostgresLockBackendError) throw error;
       this._metrics.totalBackendErrors++;
@@ -449,31 +620,32 @@ export class PostgresLockManager extends LockManager {
     }
   }
 
-  getMetrics() : any {
+  override getMetrics(): ExtendedMetrics {
     return {
       ...super.getMetrics(),
       queueKeys: this._localQueues.size,
       waiterTimers: this._scheduler.activeTimerCount,
       activePoolCredits: this._activePoolCredits,
       waitingPoolCredits: this._poolCreditQueue.size,
-      maxPoolCredits: this.maxPoolCredits
+      maxPoolCredits: this.maxPoolCredits,
     };
   }
 
-  destroy() : any {
+  destroy(): Promise<void> {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
     this._destroyController.abort();
-    const destroyedError: any = new LockManagerDestroyedError(this.config.backend);
+    const destroyedError = new LockManagerDestroyedError(this.config.backend);
     for (const [lockKey, queue] of this._localQueues) {
-      let node: any = queue.head;
+      let node = queue.head;
       while (node) {
-        const next: any = node.next;
+        const next = node.next;
         if (!node.promoted) {
           node.active = false;
           queue.remove(node);
           this._scheduler.cancel(node.deadlineEntry);
-          node.signal?.removeEventListener?.("abort", node.onAbort);
+          if (node.onAbort)
+            node.signal?.removeEventListener("abort", node.onAbort);
           node.reject(destroyedError);
         }
         node = next;
@@ -481,10 +653,11 @@ export class PostgresLockManager extends LockManager {
       if (queue.size === 0) this._localQueues.delete(lockKey);
     }
     while (this._poolCreditQueue.size > 0) {
-      const node: any = this._poolCreditQueue.shift();
+      const node = this._poolCreditQueue.shift();
+      if (!node) continue;
       node.active = false;
       this._scheduler.cancel(node.deadlineEntry);
-      node.signal?.removeEventListener?.("abort", node.onAbort);
+      if (node.onAbort) node.signal?.removeEventListener("abort", node.onAbort);
       node.reject(destroyedError);
     }
     this._scheduler.close();
@@ -492,12 +665,15 @@ export class PostgresLockManager extends LockManager {
     return this._destroyPromise;
   }
 
-  async _finishDestroy() : Promise<any> {
-    await Promise.allSettled([...this._pendingAcquires]);
-    await Promise.all([...this._entries.values()].map((entry?: any) : any => {
-      if (!entry.closing) entry.closing = this._beginEntryClose(entry, "released", false);
-      return entry.closing;
-    }));
+  async _finishDestroy(): Promise<void> {
+    await Promise.allSettled(this._pendingAcquires);
+    await Promise.all(
+      [...this._entries.values()].map((entry) => {
+        if (!entry.closing)
+          entry.closing = this._beginEntryClose(entry, "released", false);
+        return entry.closing;
+      }),
+    );
     if (this._ownsPool) {
       try {
         await this._poolEndBefore();
@@ -511,27 +687,36 @@ export class PostgresLockManager extends LockManager {
     }
   }
 
-  _detachPoolErrorListener() : any {
+  _detachPoolErrorListener(): void {
     if (!this._poolErrorListenerAttached) return;
     this._poolErrorListenerAttached = false;
     if (typeof this.pool.off === "function") {
       this.pool.off("error", this._poolErrorListener);
     } else {
-      this.pool.removeListener("error", this._poolErrorListener);
+      this.pool.removeListener?.("error", this._poolErrorListener);
     }
   }
 
-  _buildHandle({ lockKey, ownerId, fencingToken, rawFence, acquiredAt, expiresAt, ttlMs }: Record<string, any>) : any {
-    const handle: Record<string, any> = {
+  _buildHandle({
+    lockKey,
+    ownerId,
+    fencingToken,
+    rawFence,
+    acquiredAt,
+    expiresAt,
+    ttlMs,
+  }: BuildHandleOptions): LockHandle {
+    const handle: LockHandle = {
       lockKey,
       fencingToken,
       acquiredAt,
       expiresAt,
       released: false,
-      release: async () : Promise<any> => this.release(handle),
-      heartbeat: async (extendMs: any = this.config.defaultTtlMs) : Promise<any> => this._heartbeatEntry(entry, extendMs)
+      release: async () => this.release(handle),
+      heartbeat: async (extendMs = this.config.defaultTtlMs) =>
+        this._heartbeatEntry(entry, extendMs),
     };
-    const entry: Record<string, any> = {
+    const entry: Entry = {
       closing: null,
       finalized: false,
       handle,
@@ -546,7 +731,7 @@ export class PostgresLockManager extends LockManager {
     return handle;
   }
 
-  async _heartbeatEntry(entry?: any, extendMs?: any) : Promise<any> {
+  async _heartbeatEntry(entry: Entry, extendMs: number): Promise<void> {
     const { handle } = entry;
     if (handle.released) throw new LockReleasedError(handle.lockKey);
     if (
@@ -557,30 +742,39 @@ export class PostgresLockManager extends LockManager {
       handle.released = true;
       throw new LockReleasedError(handle.lockKey);
     }
-    const heartbeatTtlMs: any = positiveDuration(
+    const heartbeatTtlMs = positiveDuration(
       extendMs,
       this.config.defaultTtlMs,
-      "extendMs"
+      "extendMs",
     );
-    entry.pendingHeartbeatTtlMs = Math.max(entry.pendingHeartbeatTtlMs, heartbeatTtlMs);
+    entry.pendingHeartbeatTtlMs = Math.max(
+      entry.pendingHeartbeatTtlMs,
+      heartbeatTtlMs,
+    );
     if (entry.heartbeatTask) return entry.heartbeatTask;
-    const heartbeatTask: any = (async () : Promise<any> => {
+    const heartbeatTask = (async () => {
       try {
-        const result: any = await this._leaseQuery(
+        const result = await this._leaseQuery<HeartbeatRow>(
           HEARTBEAT_SQL,
-          [this.namespace, handle.lockKey, entry.ownerId, entry.rawFence, entry.pendingHeartbeatTtlMs],
+          [
+            this.namespace,
+            handle.lockKey,
+            entry.ownerId,
+            entry.rawFence,
+            entry.pendingHeartbeatTtlMs,
+          ],
           Date.now() + this.queryTimeoutMs,
-          { ignoreDestroy: true }
+          { ignoreDestroy: true },
         );
-        const row: any = result.rows?.[0];
+        const row = result.rows?.[0];
         if (!row) {
           this._finalizeEntry(entry, "expired");
           throw new LockReleasedError(handle.lockKey);
         }
-        const leaseMs: any = positiveDuration(
+        const leaseMs = positiveDuration(
           Number(row.lease_ms),
           entry.pendingHeartbeatTtlMs,
-          "leaseMs"
+          "leaseMs",
         );
         handle.expiresAt = new Date(row.expires_at);
         this._resetExpiryTimer(entry, leaseMs);
@@ -590,7 +784,8 @@ export class PostgresLockManager extends LockManager {
         this._finalizeEntry(entry, "expired");
         throw new PostgresLockBackendError("heartbeat");
       }
-      if (entry.finalized || entry.closing) throw new LockReleasedError(handle.lockKey);
+      if (entry.finalized || entry.closing)
+        throw new LockReleasedError(handle.lockKey);
     })();
     entry.heartbeatTask = heartbeatTask;
     try {
@@ -603,34 +798,44 @@ export class PostgresLockManager extends LockManager {
     }
   }
 
-  _resetExpiryTimer(entry?: any, ttlMs?: any) : any {
+  _resetExpiryTimer(entry: Entry, ttlMs: number): void {
     if (entry.timer) clearTimeout(entry.timer);
-    entry.timer = setTimeout(() : any => {
-      if (!entry.closing) entry.closing = this._beginEntryClose(entry, "expired", false);
+    entry.timer = setTimeout(() => {
+      if (!entry.closing)
+        entry.closing = this._beginEntryClose(entry, "expired", false);
       void entry.closing;
     }, ttlMs);
     if (entry.timer.unref) entry.timer.unref();
   }
 
-  async _beginEntryClose(entry?: any, outcome?: any, surfaceFailure?: any) : Promise<any> {
-    const heartbeatTask: any = entry.heartbeatTask;
-    if (heartbeatTask) await heartbeatTask.catch(() : any => {});
+  async _beginEntryClose(
+    entry: Entry,
+    outcome: LeaseOutcome,
+    surfaceFailure: boolean,
+  ): Promise<void> {
+    const heartbeatTask = entry.heartbeatTask;
+    if (heartbeatTask) await heartbeatTask.catch(() => {});
     if (entry.finalized) return;
     return this._unlockEntry(entry, outcome, surfaceFailure);
   }
 
-  async _unlockEntry(entry?: any, outcome?: any, surfaceFailure?: any) : Promise<any> {
+  async _unlockEntry(
+    entry: Entry,
+    outcome: LeaseOutcome,
+    surfaceFailure: boolean,
+  ): Promise<void> {
     if (entry.finalized) return;
-    let failed: any = false;
+    let failed = false;
     try {
-      const sql: any = outcome === "expired" ? EXPIRE_SQL : RELEASE_SQL;
-      const result: any = await this._leaseQuery(
+      const sql = outcome === "expired" ? EXPIRE_SQL : RELEASE_SQL;
+      const result = await this._leaseQuery<FenceRow>(
         sql,
         [this.namespace, entry.handle.lockKey, entry.ownerId, entry.rawFence],
         Date.now() + this.queryTimeoutMs,
-        { ignoreDestroy: this._destroyed }
+        { ignoreDestroy: this._destroyed },
       );
-      if (!result.rows?.[0]?.fencing_token && outcome === "released") outcome = "expired";
+      if (!result.rows?.[0]?.fencing_token && outcome === "released")
+        outcome = "expired";
     } catch {
       failed = true;
     }
@@ -639,7 +844,7 @@ export class PostgresLockManager extends LockManager {
     if (failed && surfaceFailure) throw new PostgresLockBackendError("release");
   }
 
-  _finalizeEntry(entry?: any, outcome?: any) : any {
+  _finalizeEntry(entry: Entry, outcome: LeaseOutcome): void {
     if (entry.finalized) return;
     entry.finalized = true;
     if (entry.timer) clearTimeout(entry.timer);
@@ -652,16 +857,21 @@ export class PostgresLockManager extends LockManager {
     else this._metrics.totalExpired++;
   }
 
-  async _ensureSchema(client?: any, deadline?: any, signal: any = null, lockKey: any = "") : Promise<any> {
+  async _ensureSchema(
+    client: PgClient,
+    deadline: number,
+    signal?: AbortSignal,
+    lockKey = "",
+  ): Promise<void> {
     if (!this._schemaReady) {
-      const initializing: any = this._queryBefore(
+      const initializing = this._queryBefore<never>(
         client,
         SCHEMA_SQL,
         [],
         deadline,
-        { signal, lockKey }
-      ).then(() : any => undefined);
-      const ready: any = initializing.catch((error?: any) : any => {
+        { signal, lockKey },
+      ).then(() => undefined);
+      const ready = initializing.catch((error: Error) => {
         if (this._schemaReady === ready) this._schemaReady = null;
         throw error;
       });
@@ -670,23 +880,25 @@ export class PostgresLockManager extends LockManager {
     return this._schemaReady;
   }
 
-  async _leaseQuery(
-    text?: any,
-    values?: any,
-    deadline: any = Date.now() + this.queryTimeoutMs,
-    { ignoreDestroy = false, signal = null, lockKey = "" }: Record<string, any> = {}
-  ) : Promise<any> {
-    let client: any = null;
-    let destroyClient: any = false;
+  async _leaseQuery<Row>(
+    text: string,
+    values: QueryValue[],
+    deadline = Date.now() + this.queryTimeoutMs,
+    { ignoreDestroy = false, signal, lockKey = "" }: OperationOptions = {},
+  ): Promise<QueryResult<Row>> {
+    let client: PgClient | null = null;
+    let destroyClient = false;
     try {
-      client = await this._connectBefore(deadline, signal, lockKey, { ignoreDestroy });
+      client = await this._connectBefore(deadline, signal, lockKey, {
+        ignoreDestroy,
+      });
       await this._ensureSchema(client, deadline, signal, lockKey);
-      return await this._queryBefore(client, text, values, deadline, {
+      return await this._queryBefore<Row>(client, text, values, deadline, {
         ignoreDestroy,
         signal,
-        lockKey
+        lockKey,
       });
-    } catch (error: any) {
+    } catch (error) {
       destroyClient = Boolean(client);
       throw error;
     } finally {
@@ -695,11 +907,11 @@ export class PostgresLockManager extends LockManager {
   }
 
   _acquirePoolCredit(
-    deadline?: any,
-    signal: any = null,
-    lockKey: any = "",
-    { ignoreDestroy = false }: Record<string, any> = {}
-  ) : any {
+    deadline: number,
+    signal?: AbortSignal,
+    lockKey = "",
+    { ignoreDestroy = false }: OperationOptions = {},
+  ): Promise<PoolCredit> {
     throwIfAcquireAborted(signal, lockKey);
     if (this._destroyed && !ignoreDestroy) {
       return Promise.reject(new LockManagerDestroyedError(this.config.backend));
@@ -709,27 +921,32 @@ export class PostgresLockManager extends LockManager {
       return Promise.resolve({ released: false });
     }
     if (this._poolCreditQueue.size >= this.config.maxTotalQueueDepth) {
-      return Promise.reject(new LockQueueFullError(lockKey, this.config.maxTotalQueueDepth));
+      return Promise.reject(
+        new LockQueueFullError(lockKey, this.config.maxTotalQueueDepth),
+      );
     }
-    return new Promise((resolve?: any, reject?: any) : any => {
-      const node: any = {
+    return new Promise<PoolCredit>((resolve, reject) => {
+      const node: CreditNode = {
         active: true,
         deadlineEntry: null,
         onAbort: null,
         reject,
         resolve,
-        signal
+        signal,
+        previous: null,
+        next: null,
+        queue: null,
       };
-      const rejectPending: any = (error?: any) : any => {
+      const rejectPending = (error: Error): void => {
         if (!node.active) return;
         node.active = false;
         this._poolCreditQueue.remove(node);
         this._scheduler.cancel(node.deadlineEntry);
-        signal?.removeEventListener?.("abort", node.onAbort);
+        if (node.onAbort) signal?.removeEventListener("abort", node.onAbort);
         reject(error);
       };
-      node.onAbort = () : any => rejectPending(new LockAcquireAbortedError(lockKey));
-      node.deadlineEntry = this._scheduler.schedule(deadline, () : any => {
+      node.onAbort = () => rejectPending(new LockAcquireAbortedError(lockKey));
+      node.deadlineEntry = this._scheduler.schedule(deadline, () => {
         rejectPending(new PoolWaitTimeoutError());
       });
       this._poolCreditQueue.push(node);
@@ -738,240 +955,281 @@ export class PostgresLockManager extends LockManager {
     });
   }
 
-  _releasePoolCredit(token?: any) : any {
+  _releasePoolCredit(token: PoolCredit | undefined): void {
     if (!token || token.released) return;
     token.released = true;
     this._activePoolCredits = Math.max(0, this._activePoolCredits - 1);
     while (this._poolCreditQueue.size > 0 && !this._destroyed) {
-      const node: any = this._poolCreditQueue.shift();
+      const node = this._poolCreditQueue.shift();
       if (!node?.active) continue;
       node.active = false;
       this._scheduler.cancel(node.deadlineEntry);
-      node.signal?.removeEventListener?.("abort", node.onAbort);
+      if (node.onAbort) node.signal?.removeEventListener("abort", node.onAbort);
       this._activePoolCredits += 1;
       node.resolve({ released: false });
       break;
     }
   }
 
-  _releaseClient(client?: any, destroy?: any) : any {
-    const credit: any = this._clientCredits.get(client);
+  _releaseClient(client: PgClient, destroy: boolean): void {
+    const credit = this._clientCredits.get(client);
     this._clientCredits.delete(client);
     releasePoolClient(client, destroy);
     this._releasePoolCredit(credit);
   }
 
   async _connectBefore(
-    deadline?: any,
-    signal: any = null,
-    lockKey: any = "",
-    { ignoreDestroy = false }: Record<string, any> = {}
-  ) : Promise<any> {
+    deadline: number,
+    signal?: AbortSignal,
+    lockKey = "",
+    { ignoreDestroy = false }: OperationOptions = {},
+  ): Promise<PgClient> {
     throwIfAcquireAborted(signal, lockKey);
-    const credit: any = await this._acquirePoolCredit(deadline, signal, lockKey, { ignoreDestroy });
-    const pending: any = Promise.resolve().then(() : any => this.pool.connect());
-    const remaining: any = Math.max(0, deadline - Date.now());
-    let timeout: any;
-    const timeoutPromise: any = new Promise((_?: any, reject?: any) : any => {
-      timeout = setTimeout(() : any => reject(new PoolWaitTimeoutError()), remaining);
+    const credit = await this._acquirePoolCredit(deadline, signal, lockKey, {
+      ignoreDestroy,
     });
-    const destroyRace: any = ignoreDestroy ? null : createSignalRace(
-      this._destroyController.signal,
-      () : any => new LockManagerDestroyedError(this.config.backend)
-    );
-    const abortRace: any = createAbortRace(signal, lockKey);
+    const pending = Promise.resolve().then(() => this.pool.connect());
+    const remaining = Math.max(0, deadline - Date.now());
+    let timeout: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => reject(new PoolWaitTimeoutError()), remaining);
+    });
+    const destroyRace = ignoreDestroy
+      ? null
+      : createSignalRace(
+          this._destroyController.signal,
+          () => new LockManagerDestroyedError(this.config.backend),
+        );
+    const abortRace = createAbortRace(signal, lockKey);
     try {
-      const client: any = await Promise.race([
+      const client = await Promise.race([
         pending,
         timeoutPromise,
         ...(destroyRace ? [destroyRace.promise] : []),
-        ...(abortRace ? [abortRace.promise] : [])
+        ...(abortRace ? [abortRace.promise] : []),
       ]);
       this._clientCredits.set(client, credit);
       return client;
-    } catch (error: any) {
+    } catch (error) {
       this._releasePoolCredit(credit);
       if (
         error instanceof PoolWaitTimeoutError ||
         error instanceof LockManagerDestroyedError ||
         error instanceof LockAcquireAbortedError
       ) {
-        void pending.then((client?: any) : any => releasePoolClient(client, false), () : any => undefined);
+        void pending.then(
+          (client) => releasePoolClient(client, false),
+          () => undefined,
+        );
       }
       throw error;
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       destroyRace?.cleanup();
       abortRace?.cleanup();
     }
   }
 
-  async _queryBefore(
-    client?: any,
-    text?: any,
-    values?: any,
-    deadline?: any,
-    { ignoreDestroy = false, signal = null, lockKey = "" }: Record<string, any> = {}
-  ) : Promise<any> {
+  async _queryBefore<Row>(
+    client: PgClient,
+    text: string,
+    values: QueryValue[],
+    deadline: number,
+    { ignoreDestroy = false, signal, lockKey = "" }: OperationOptions = {},
+  ): Promise<QueryResult<Row>> {
     if (this._destroyed && !ignoreDestroy) {
       throw new LockManagerDestroyedError(this.config.backend);
     }
     throwIfAcquireAborted(signal, lockKey);
-    const pending: any = Promise.resolve().then(() : any => client.query(text, values));
-    const remaining: any = Math.max(0, deadline - Date.now());
-    let timeout: any;
-    const timeoutPromise: any = new Promise((_?: any, reject?: any) : any => {
-      timeout = setTimeout(() : any => reject(new BackendQueryTimeoutError()), remaining);
+    const pending = Promise.resolve().then(() =>
+      client.query<Row>(text, values),
+    );
+    const remaining = Math.max(0, deadline - Date.now());
+    let timeout: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(
+        () => reject(new BackendQueryTimeoutError()),
+        remaining,
+      );
     });
-    const destroyRace: any = ignoreDestroy
+    const destroyRace = ignoreDestroy
       ? null
       : createSignalRace(
           this._destroyController.signal,
-          () : any => new LockManagerDestroyedError(this.config.backend)
+          () => new LockManagerDestroyedError(this.config.backend),
         );
-    const abortRace: any = createAbortRace(signal, lockKey);
+    const abortRace = createAbortRace(signal, lockKey);
     try {
       return await Promise.race([
         pending,
         timeoutPromise,
         ...(destroyRace ? [destroyRace.promise] : []),
-        ...(abortRace ? [abortRace.promise] : [])
+        ...(abortRace ? [abortRace.promise] : []),
       ]);
-    } catch (error: any) {
+    } catch (error) {
       if (
         error instanceof BackendQueryTimeoutError ||
         error instanceof LockManagerDestroyedError ||
         error instanceof LockAcquireAbortedError
       ) {
-        void pending.catch(() : any => undefined);
+        void pending.catch(() => undefined);
       }
       throw error;
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       destroyRace?.cleanup();
       abortRace?.cleanup();
     }
   }
 
-  async _waitForRetry(ms?: any, signal: any = null, lockKey: any = "") : Promise<any> {
+  async _waitForRetry(
+    ms: number,
+    signal?: AbortSignal,
+    lockKey = "",
+  ): Promise<void> {
     throwIfAcquireAborted(signal, lockKey);
-    const abortRace: any = createAbortRace(signal, lockKey);
-    const destroyRace: any = createSignalRace(
+    const abortRace = createAbortRace(signal, lockKey);
+    const destroyRace = createSignalRace(
       this._destroyController.signal,
-      () : any => new LockManagerDestroyedError(this.config.backend)
+      () => new LockManagerDestroyedError(this.config.backend),
     );
-    const retryTimer: any = createTimerRace(ms);
+    const retryTimer = createTimerRace(ms);
     try {
       await Promise.race([
         retryTimer.promise,
-        destroyRace.promise,
-        ...(abortRace ? [abortRace.promise] : [])
+        destroyRace!.promise,
+        ...(abortRace ? [abortRace.promise] : []),
       ]);
     } finally {
       retryTimer.cleanup();
-      destroyRace.cleanup();
+      destroyRace!.cleanup();
       abortRace?.cleanup();
     }
   }
 
-  async _poolEndBefore() : Promise<any> {
-    const pending: any = Promise.resolve().then(() : any => this.pool.end());
-    let timeout: any;
-    const timeoutPromise: any = new Promise((_?: any, reject?: any) : any => {
-      timeout = setTimeout(() : any => reject(new BackendQueryTimeoutError()), this.queryTimeoutMs);
+  async _poolEndBefore(): Promise<void> {
+    const pending = Promise.resolve().then(() => this.pool.end());
+    let timeout: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(
+        () => reject(new BackendQueryTimeoutError()),
+        this.queryTimeoutMs,
+      );
     });
     try {
       return await Promise.race([pending, timeoutPromise]);
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof BackendQueryTimeoutError) {
         void pending.then(
-          () : any => this._detachPoolErrorListener(),
-          () : any => this._detachPoolErrorListener()
+          () => this._detachPoolErrorListener(),
+          () => this._detachPoolErrorListener(),
         );
       }
       throw error;
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
     }
   }
 
-  _assertActive() : any {
-    if (this._destroyed) throw new LockManagerDestroyedError(this.config.backend);
+  _assertActive(): void {
+    if (this._destroyed)
+      throw new LockManagerDestroyedError(this.config.backend);
   }
 }
 
-function releasePoolClient(client?: any, destroy?: any) : any {
+function releasePoolClient(client: PgClient, destroy: boolean): void {
   try {
-    client.release?.(Boolean(destroy));
+    client.release(Boolean(destroy));
   } catch {
     // The pool may already have discarded a disconnected client.
   }
 }
 
-function normalizeLockKey(key?: any, label: any = "Lock key") : any {
-  const normalized: any = String(key ?? "").trim();
+function normalizeLockKey(key: string, label = "Lock key"): string {
+  const normalized = String(key ?? "").trim();
   if (!normalized) throw new TypeError(`${label} must be a non-empty string.`);
   return normalized;
 }
 
-function positiveDuration(value?: any, fallback?: any, label?: any) : any {
-  const normalized: any = value ?? fallback;
+function positiveDuration(
+  value: number | undefined,
+  fallback: number,
+  label: string,
+): number {
+  const normalized = value ?? fallback;
   if (!Number.isFinite(normalized) || normalized <= 0) {
     throw new TypeError(`${label} must be a positive finite number.`);
   }
   return normalized;
 }
 
-function positiveInteger(value?: any, fallback?: any, label?: any) : any {
-  const normalized: any = value ?? fallback;
+function positiveInteger(
+  value: number | undefined,
+  fallback: number,
+  label: string,
+): number {
+  const normalized = value ?? fallback;
   if (!Number.isSafeInteger(normalized) || normalized <= 0) {
     throw new TypeError(`${label} must be a positive safe integer.`);
   }
   return normalized;
 }
 
-function nonNegativeDuration(value?: any, fallback?: any, label?: any) : any {
-  const normalized: any = value ?? fallback;
+function nonNegativeDuration(
+  value: number | undefined,
+  fallback: number,
+  label: string,
+): number {
+  const normalized = value ?? fallback;
   if (!Number.isFinite(normalized) || normalized < 0) {
     throw new TypeError(`${label} must be a non-negative finite number.`);
   }
   return normalized;
 }
 
-function throwIfAcquireAborted(signal?: any, key?: any) : any {
+function throwIfAcquireAborted(
+  signal: AbortSignal | undefined,
+  key: string,
+): void {
   if (signal?.aborted) throw new LockAcquireAbortedError(key);
 }
 
-function createTimerRace(ms?: any) : any {
-  let timer: any = null;
-  const promise: any = new Promise((resolve?: any) : any => {
+function createTimerRace(ms: number): Race<void> {
+  let timer: NodeJS.Timeout | null = null;
+  const promise = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, ms);
     timer.unref?.();
   });
   return {
     promise,
-    cleanup() : any {
+    cleanup(): void {
       if (timer) clearTimeout(timer);
-    }
+    },
   };
 }
 
-function createAbortRace(signal?: any, key?: any) : any {
-  return createSignalRace(signal, () : any => new LockAcquireAbortedError(key));
+function createAbortRace(
+  signal: AbortSignal | undefined,
+  key: string,
+): Race<never> | null {
+  return createSignalRace(signal, () => new LockAcquireAbortedError(key));
 }
 
-function createSignalRace(signal?: any, errorFactory?: any) : any {
-  if (!signal?.addEventListener) return null;
-  let onAbort: any;
-  const promise: any = new Promise((_?: any, reject?: any) : any => {
-    onAbort = () : any => reject(errorFactory());
+function createSignalRace(
+  signal: AbortSignal | undefined,
+  errorFactory: () => Error,
+): Race<never> | null {
+  if (!signal) return null;
+  let onAbort: (() => void) | undefined;
+  const promise = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(errorFactory());
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) onAbort();
   });
   return {
     promise,
-    cleanup() : any {
-      signal.removeEventListener?.("abort", onAbort);
-    }
+    cleanup(): void {
+      if (onAbort) signal.removeEventListener("abort", onAbort);
+    },
   };
 }

@@ -1,13 +1,107 @@
+interface StateDefinition {
+  id: string;
+  terminal?: boolean;
+}
+interface EventDefinition {
+  id: string;
+  riskLevel?: string;
+}
+interface MatrixCell {
+  from: string;
+  event: string;
+  to?: string;
+  result: string;
+  guards?: string[];
+  requiredGuards?: string[];
+}
+interface StateMachineDefinition {
+  machineId: string;
+  entityType?: string;
+  version?: string;
+  description?: string;
+  initialState: string;
+  states: StateDefinition[];
+  events: EventDefinition[];
+  totalMatrix: MatrixCell[];
+  invariants?: unknown[];
+  proofObligations?: unknown[];
+}
+interface TransitionCellDoc {
+  result: string;
+  to: string;
+  guards: string[];
+  requiredGuards: string[];
+}
+type TransitionTableRow = { from: string } & Record<
+  string,
+  string | TransitionCellDoc
+>;
+
+function isStateDefinition(value: unknown): value is StateDefinition {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "id" in value &&
+    typeof value.id === "string"
+  );
+}
+
+function isEventDefinition(value: unknown): value is EventDefinition {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "id" in value &&
+    typeof value.id === "string"
+  );
+}
+
+function isMatrixCell(value: unknown): value is MatrixCell {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "from" in value &&
+    typeof value.from === "string" &&
+    "event" in value &&
+    typeof value.event === "string" &&
+    "result" in value &&
+    typeof value.result === "string"
+  );
+}
+
+function definitionRecord(value: unknown): StateMachineDefinition {
+  if (!value) {
+    throw new Error("Definition is required");
+  }
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("machineId" in value) ||
+    typeof value.machineId !== "string" ||
+    !("initialState" in value) ||
+    typeof value.initialState !== "string" ||
+    !("states" in value) ||
+    !Array.isArray(value.states) ||
+    !("events" in value) ||
+    !Array.isArray(value.events) ||
+    !("totalMatrix" in value) ||
+    !Array.isArray(value.totalMatrix) ||
+    !value.states.every(isStateDefinition) ||
+    !value.events.every(isEventDefinition) ||
+    !value.totalMatrix.every(isMatrixCell)
+  ) {
+    throw new TypeError("Definition is invalid");
+  }
+  return value as StateMachineDefinition;
+}
+
 /**
  * Generate structured documentation metadata from a state machine definition.
  *
  * @param {object} definition - State machine definition
  * @returns {object} Documentation metadata
  */
-export function exportStateMachineDocs(definition?: any) : any {
-  if (!definition) {
-    throw new Error("Definition is required");
-  }
+export function exportStateMachineDocs(value?: unknown) {
+  const definition = definitionRecord(value);
 
   return {
     machineId: definition.machineId,
@@ -35,30 +129,29 @@ export function exportStateMachineDocs(definition?: any) : any {
  * @param {object} definition
  * @returns {Array<{ id: string, isInitial: boolean, isTerminal: boolean, incomingEvents: string[], outgoingEvents: string[] }>}
  */
-function generateStateDocs(definition?: any) : any {
-  const states: any = definition.states || [];
+function generateStateDocs(definition: StateMachineDefinition) {
+  const states = definition.states;
 
-  return states.map((state?: any) : any => {
-    const incomingEvents: any = (definition.totalMatrix || [])
+  return states.map((state) => {
+    const incomingEvents = definition.totalMatrix
       .filter(
-        (cell?: any) : any =>
-          cell.to === state.id && cell.result !== "illegal_transition"
+        (cell) => cell.to === state.id && cell.result !== "illegal_transition",
       )
-      .map((cell?: any) : any => cell.event);
+      .map((cell) => cell.event);
 
-    const outgoingEvents: any = (definition.totalMatrix || [])
+    const outgoingEvents = definition.totalMatrix
       .filter(
-        (cell?: any) : any =>
-          cell.from === state.id && cell.result !== "illegal_transition"
+        (cell) =>
+          cell.from === state.id && cell.result !== "illegal_transition",
       )
-      .map((cell?: any) : any => cell.event);
+      .map((cell) => cell.event);
 
     return {
       id: state.id,
       isInitial: state.id === definition.initialState,
       isTerminal: !!state.terminal,
-      incomingEvents: [...new Set<any>(incomingEvents)],
-      outgoingEvents: [...new Set<any>(outgoingEvents)],
+      incomingEvents: [...new Set(incomingEvents)],
+      outgoingEvents: [...new Set(outgoingEvents)],
     };
   });
 }
@@ -69,24 +162,25 @@ function generateStateDocs(definition?: any) : any {
  * @param {object} definition
  * @returns {Array<{ id: string, riskLevel: string, allowedFrom: string[], guardCount: number }>}
  */
-function generateEventDocs(definition?: any) : any {
-  const events: any = definition.events || [];
+function generateEventDocs(definition: StateMachineDefinition) {
+  const events = definition.events;
 
-  return events.map((event?: any) : any => {
-    const cells: any = (definition.totalMatrix || []).filter(
-      (cell?: any) : any => cell.event === event.id && cell.result !== "illegal_transition"
+  return events.map((event) => {
+    const cells = definition.totalMatrix.filter(
+      (cell) => cell.event === event.id && cell.result !== "illegal_transition",
     );
 
-    const allowedFrom: any = cells.map((cell?: any) : any => cell.from);
-    const guardCount: any = cells.reduce(
-      (sum?: any, cell?: any) : any => sum + (cell.guards || []).length + (cell.requiredGuards || []).length,
-      0
+    const allowedFrom = cells.map((cell) => cell.from);
+    const guardCount = cells.reduce(
+      (sum, cell) =>
+        sum + (cell.guards || []).length + (cell.requiredGuards || []).length,
+      0,
     );
 
     return {
       id: event.id,
       riskLevel: event.riskLevel || "low",
-      allowedFrom: [...new Set<any>(allowedFrom)],
+      allowedFrom: [...new Set(allowedFrom)],
       guardCount,
     };
   });
@@ -98,16 +192,17 @@ function generateEventDocs(definition?: any) : any {
  * @param {object} definition
  * @returns {object} Transition table with rows and columns
  */
-function generateTransitionTable(definition?: any) : any {
-  const states: any = (definition.states || []).map((s?: any) : any => s.id);
-  const events: any = (definition.events || []).map((e?: any) : any => e.id);
-  const matrix: any = definition.totalMatrix || [];
+function generateTransitionTable(definition: StateMachineDefinition) {
+  const states = definition.states.map((state) => state.id);
+  const events = definition.events.map((event) => event.id);
+  const matrix = definition.totalMatrix;
 
-  const rows: any = states.map((fromState?: any) : any => {
-    const row: Record<string, any> = { from: fromState };
+  const rows = states.map((fromState): TransitionTableRow => {
+    const row: TransitionTableRow = { from: fromState };
     for (const event of events) {
-      const cell: any = matrix.find(
-        (c?: any) : any => c.from === fromState && c.event === event
+      const cell = matrix.find(
+        (candidate) =>
+          candidate.from === fromState && candidate.event === event,
       );
       if (cell) {
         row[event] = {
@@ -135,16 +230,18 @@ function generateTransitionTable(definition?: any) : any {
  * @param {object} definition
  * @returns {object} State diagram summary
  */
-function generateStateDiagramSummary(definition?: any) : any {
-  const states: any = definition.states || [];
+function generateStateDiagramSummary(definition: StateMachineDefinition) {
+  const states = definition.states;
 
-  const initialState: any = definition.initialState;
-  const terminalStates: any = states.filter((s?: any) : any => s.terminal).map((s?: any) : any => s.id);
+  const initialState = definition.initialState;
+  const terminalStates = states
+    .filter((state) => state.terminal)
+    .map((state) => state.id);
 
   // Extract transitions as edges
-  const edges: any = (definition.totalMatrix || [])
-    .filter((cell?: any) : any => cell.to && cell.result !== "illegal_transition")
-    .map((cell?: any) : any => ({
+  const edges = definition.totalMatrix
+    .filter((cell) => cell.to && cell.result !== "illegal_transition")
+    .map((cell) => ({
       from: cell.from,
       to: cell.to,
       event: cell.event,
@@ -166,9 +263,9 @@ function generateStateDiagramSummary(definition?: any) : any {
  * @param {object} definition
  * @returns {number}
  */
-function countGuards(definition?: any) : any {
-  const guardSet: any = new Set<any>();
-  for (const cell of definition.totalMatrix || []) {
+function countGuards(definition: StateMachineDefinition): number {
+  const guardSet = new Set<string>();
+  for (const cell of definition.totalMatrix) {
     for (const g of cell.guards || []) {
       guardSet.add(g);
     }

@@ -7,30 +7,82 @@ import {
   normalizeStructuredQueueScope
 } from "./definitions.ts";
 import { resolveQueueMaxInFlight } from "./policies.ts";
+import type { StructuredQueueScope } from "./definitions.ts";
 
-export const QUEUE_DEFINITION_REGISTRY_VERSION: any = "v0.0.1:workflow:work-queue-definition-registry-1";
+export const QUEUE_DEFINITION_REGISTRY_VERSION = "v0.0.1:workflow:work-queue-definition-registry-1";
 
-const DEFAULT_QUEUE_DEFINITION_VERSION: any = 1;
+const DEFAULT_QUEUE_DEFINITION_VERSION = 1;
 
-function toText(value?: any) : any {
+interface QueueRecord { [key: string]: unknown }
+interface QueueRoute extends QueueRecord {}
+type QueueDefinitionState = "active" | "disabled" | "deprecated";
+type ScopeValidator = (input: { scope: StructuredQueueScope; queueDefinition: QueueDefinition }) => boolean | QueueRecord | null | undefined;
+type DedupeNormalizer = (input: { dedupeKey: unknown; scope: StructuredQueueScope; queueDefinition: QueueDefinition }) => string;
+
+function isScopeValidator(value: unknown): value is ScopeValidator { return typeof value === "function"; }
+function isDedupeNormalizer(value: unknown): value is DedupeNormalizer { return typeof value === "function"; }
+export interface QueueDefinition extends QueueRecord {
+  queueDefinitionId: string;
+  queueDefinitionVersion: number;
+  label: string;
+  lifecycleState: QueueDefinitionState;
+  ownerCapability: string;
+  allowDeprecatedEnqueue: boolean;
+  labelHistory: readonly string[];
+  structuredScopeValidation: ScopeValidator | null;
+  dedupeKeyNormalizer: DedupeNormalizer | null;
+  metadata: Readonly<QueueRecord>;
+  policy: QueueRecord;
+  routes: QueueRoute[];
+  definitionDigest: string;
+  registeredAt: string;
+  protocolVersion: string;
+}
+interface NormalizedDefinitionInput {
+  queueDefinitionId: string;
+  explicitIdentity: boolean;
+  label: string;
+  ownerCapability: string;
+  lifecycleState: QueueDefinitionState;
+  allowDeprecatedEnqueue: boolean;
+  explicitVersion: number | null;
+  structuredScopeValidation: ScopeValidator | null;
+  dedupeKeyNormalizer: DedupeNormalizer | null;
+  metadata: QueueRecord;
+  policy: QueueRecord;
+  routes: QueueRoute[];
+}
+
+function toText(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
+function asObject(value: unknown, fallback: QueueRecord = {}): QueueRecord {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value
+    ? Object.fromEntries(Object.entries(value))
     : fallback;
 }
 
-function asArray(value: any = []) : any {
-  return Array.isArray(value) ? value : [];
+function asStringArray(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) throw new Error("Queue definition label history must be a string array.");
+  return value;
 }
 
-function nowIso() : any {
+function asRoutes(value: unknown): QueueRoute[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("Queue definition routes must be an array.");
+  return value.map((entry) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) throw new Error("Queue definition route must be an object.");
+    return Object.fromEntries(Object.entries(entry));
+  });
+}
+
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function deterministicStringify(value?: any) : any {
+function deterministicStringify(value?: unknown): string {
   if (value === undefined) return "u";
   if (value === null) return "n";
   if (typeof value === "string") return `s:${JSON.stringify(value)}`;
@@ -44,31 +96,32 @@ function deterministicStringify(value?: any) : any {
     return `t:${value.toISOString()}`;
   }
   if (typeof value === "object") {
-    return `o:{${Object.keys(value).sort().map((key?: any) : any => `${JSON.stringify(key)}=${deterministicStringify(value[key])}`).join(",")}}`;
+    const record = asObject(value);
+    return `o:{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}=${deterministicStringify(record[key])}`).join(",")}}`;
   }
   throw new TypeError(`Unsupported queue dedupe key value type: ${typeof value}`);
 }
 
-export function stableQueueDefinitionId({ label, ownerCapability }: Record<string, any> = {}) : any {
-  const normalizedLabel: any = normalizeQueueLabel(label);
-  const normalizedOwner: any = toText(ownerCapability || "system");
+export function stableQueueDefinitionId({ label, ownerCapability }: { label?: unknown; ownerCapability?: unknown } = {}): string {
+  const normalizedLabel = normalizeQueueLabel(label);
+  const normalizedOwner = toText(ownerCapability || "system");
   if (!normalizedOwner) {
     throw new Error("Queue definition owner capability is required.");
   }
-  const slug: any = `${normalizedOwner}.${normalizedLabel}`
+  const slug = `${normalizedOwner}.${normalizedLabel}`
     .toLowerCase()
     .replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-+|-+$/gu, "")
     .slice(0, 48) || "queue";
-  const digest: any = crypto.createHash("sha256")
+  const digest = crypto.createHash("sha256")
     .update(`${normalizedOwner}\0${normalizedLabel}`)
     .digest("hex")
     .slice(0, 16);
   return `wqdef_${slug}_${digest}`;
 }
 
-export function queueDefinitionDigest(definition: Record<string, any> = {}) : any {
-  const metadata: Record<string, any> = { ...asObject(definition.metadata) };
+export function queueDefinitionDigest(definition: QueueRecord = {}): string {
+  const metadata: QueueRecord = { ...asObject(definition.metadata) };
   delete metadata.definitionDigest;
   return crypto.createHash("sha256")
     .update(deterministicStringify({
@@ -78,50 +131,54 @@ export function queueDefinitionDigest(definition: Record<string, any> = {}) : an
       lifecycleState: toText(definition.lifecycleState),
       ownerCapability: toText(definition.ownerCapability),
       allowDeprecatedEnqueue: definition.allowDeprecatedEnqueue === true,
-      labelHistory: asArray(definition.labelHistory),
+      labelHistory: asStringArray(definition.labelHistory),
       metadata,
       policy: asObject(definition.policy),
-      routes: asArray(definition.routes)
+      routes: asRoutes(definition.routes)
     }))
     .digest("hex");
 }
 
-export function normalizeQueueDedupeKey(value?: any) : any {
+export function normalizeQueueDedupeKey(value?: unknown): string {
   if (value === undefined || value === null || value === "") {
     return "";
   }
   return crypto.createHash("sha256").update(deterministicStringify(value)).digest("hex");
 }
 
-function asPositiveInt(value?: any, fallback: any = DEFAULT_QUEUE_DEFINITION_VERSION) : any {
+function asPositiveInt(value: unknown, fallback: null): number | null;
+function asPositiveInt(value?: unknown, fallback?: number): number;
+function asPositiveInt(value: unknown, fallback: number | null = DEFAULT_QUEUE_DEFINITION_VERSION): number | null {
   if (value === undefined || value === null) {
     return fallback;
   }
-  const text: any = String(value).trim();
+  const text = String(value).trim();
   if (!text) {
     return fallback;
   }
-  const parsed: any = Number.parseInt(text, 10);
+  const parsed = Number.parseInt(text, 10);
   if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
     throw new Error("Queue definition version must be a positive integer.");
   }
   return parsed;
 }
 
-function latestVersion(entries: any = []) : any {
+function latestVersion(entries: readonly QueueDefinition[] = []): number {
   if (!entries.length) {
     return 0;
   }
   return entries[entries.length - 1].queueDefinitionVersion;
 }
 
-function normalizeScopeWithValidator({ definition, scope, structuredScopeValidation }: Record<string, any>) : any {
-  const defaultScope: any = normalizeStructuredQueueScope(scope);
+function normalizeScopeWithValidator({ definition, scope, structuredScopeValidation }: {
+  definition: QueueDefinition; scope?: QueueRecord; structuredScopeValidation: ScopeValidator | null;
+}): StructuredQueueScope {
+  const defaultScope = normalizeStructuredQueueScope(scope);
   if (typeof structuredScopeValidation !== "function") {
     return defaultScope;
   }
 
-  const candidate: any = structuredScopeValidation({
+  const candidate = structuredScopeValidation({
     scope: defaultScope,
     queueDefinition: definition
   });
@@ -138,9 +195,11 @@ function normalizeScopeWithValidator({ definition, scope, structuredScopeValidat
   return normalizeStructuredQueueScope(candidate);
 }
 
-function normalizeDedupeInput({ dedupeKey, definition, scope, dedupeKeyNormalizer }: Record<string, any>) : any {
+function normalizeDedupeInput({ dedupeKey, definition, scope, dedupeKeyNormalizer }: {
+  dedupeKey?: unknown; definition: QueueDefinition; scope: StructuredQueueScope; dedupeKeyNormalizer: DedupeNormalizer | null;
+}): string {
   if (typeof dedupeKeyNormalizer === "function") {
-    const normalized: any = dedupeKeyNormalizer({
+    const normalized = dedupeKeyNormalizer({
       dedupeKey,
       scope,
       queueDefinition: definition
@@ -153,12 +212,12 @@ function normalizeDedupeInput({ dedupeKey, definition, scope, dedupeKeyNormalize
   return normalizeQueueDedupeKey(dedupeKey);
 }
 
-function normalizeQueueDefinitionPolicy(value: Record<string, any> = {}) : any {
-  const source: any = asObject(value);
+function normalizeQueueDefinitionPolicy(value: unknown = {}): QueueRecord {
+  const source = asObject(value);
   if (!Object.prototype.hasOwnProperty.call(source, "maxInFlight")) {
     return source;
   }
-  const maxInFlight: any = resolveQueueMaxInFlight(source.maxInFlight);
+  const maxInFlight: { limit: number; normalizedRequested: number; hardLimit: number; clamped: boolean } = resolveQueueMaxInFlight(source.maxInFlight);
   return {
     ...source,
     maxInFlight: maxInFlight.limit,
@@ -168,13 +227,15 @@ function normalizeQueueDefinitionPolicy(value: Record<string, any> = {}) : any {
   };
 }
 
-function normalizeQueueDefinitionShape(input: Record<string, any> = {}, overrides: Record<string, any> = {}) : any {
-  const source: any = asObject(input);
-  const label: any = normalizeQueueLabel(source.label || source.name || source.queueName || source.intent);
-  const ownerCapability: any = toText(source.ownerCapability || source.owner || source.capability || "system");
-  const explicitIdentity: any = ["queueDefinitionId", "id", "queueId", "idAlias", "idempotentId"]
-    .some((key?: any) : any => toText(source[key]));
-  const queueDefinitionId: any = toText(
+function normalizeQueueDefinitionShape(input: QueueRecord = {}, overrides: {
+  structuredScopeValidation?: ScopeValidator | null; dedupeKeyNormalizer?: DedupeNormalizer | null;
+} = {}): NormalizedDefinitionInput {
+  const source = asObject(input);
+  const label = normalizeQueueLabel(source.label || source.name || source.queueName || source.intent);
+  const ownerCapability = toText(source.ownerCapability || source.owner || source.capability || "system");
+  const explicitIdentity = ["queueDefinitionId", "id", "queueId", "idAlias", "idempotentId"]
+    .some((key) => Boolean(toText(source[key])));
+  const queueDefinitionId = toText(
     source.queueDefinitionId ||
     source.id ||
     source.queueId ||
@@ -182,18 +243,18 @@ function normalizeQueueDefinitionShape(input: Record<string, any> = {}, override
     source.idempotentId ||
     stableQueueDefinitionId({ label, ownerCapability })
   );
-  const lifecycleState: any = toText(source.lifecycleState || QUEUE_DEFINITION_STATES.ACTIVE);
-  const allowDeprecatedEnqueue: any = source.allowDeprecatedEnqueue === true;
-  const versionValue: any = source.queueDefinitionVersion ?? source.version;
-  const explicitVersion: any = source.queueDefinitionVersion === undefined && source.version === undefined
+  const lifecycleState = toText(source.lifecycleState || QUEUE_DEFINITION_STATES.ACTIVE);
+  const allowDeprecatedEnqueue = source.allowDeprecatedEnqueue === true;
+  const versionValue = source.queueDefinitionVersion ?? source.version;
+  const explicitVersion = source.queueDefinitionVersion === undefined && source.version === undefined
     ? null
     : asPositiveInt(versionValue, null);
-  const structuredScopeValidation: any = typeof source.structuredScopeValidation === "function"
+  const structuredScopeValidation: ScopeValidator | null = isScopeValidator(source.structuredScopeValidation)
     ? source.structuredScopeValidation
     : typeof overrides.structuredScopeValidation === "function"
       ? overrides.structuredScopeValidation
       : null;
-  const dedupeKeyNormalizer: any = typeof source.dedupeKeyNormalizer === "function"
+  const dedupeKeyNormalizer: DedupeNormalizer | null = isDedupeNormalizer(source.dedupeKeyNormalizer)
     ? source.dedupeKeyNormalizer
     : typeof overrides.dedupeKeyNormalizer === "function"
       ? overrides.dedupeKeyNormalizer
@@ -205,7 +266,7 @@ function normalizeQueueDefinitionShape(input: Record<string, any> = {}, override
   if (!ownerCapability) {
     throw new Error("Queue definition owner capability is required.");
   }
-  if (!(Object.values(QUEUE_DEFINITION_STATES) as any[]).includes(lifecycleState)) {
+  if (lifecycleState !== "active" && lifecycleState !== "disabled" && lifecycleState !== "deprecated") {
     throw new Error(`Unknown queue definition lifecycle state: ${lifecycleState}`);
   }
 
@@ -221,38 +282,38 @@ function normalizeQueueDefinitionShape(input: Record<string, any> = {}, override
     dedupeKeyNormalizer,
     metadata: asObject(source.metadata),
     policy: normalizeQueueDefinitionPolicy(source.policy),
-    routes: asArray(source.routes)
+    routes: asRoutes(source.routes)
   };
 }
 
-function freezeDefinition(definition?: any) : any {
+function freezeDefinition<T extends object>(definition: T): Readonly<T> {
   return Object.freeze(definition);
 }
 
 export function createQueueDefinitionRegistry({
   structuredScopeValidation = null,
   dedupeKeyNormalizer = null
-}: Record<string, any> = {}) : any {
-  const byId: any = new Map<any, any>();
-  const byLabel: any = new Map<any, any>();
+}: { structuredScopeValidation?: ScopeValidator | null; dedupeKeyNormalizer?: DedupeNormalizer | null } = {}) {
+  const byId = new Map<string, QueueDefinition[]>();
+  const byLabel = new Map<string, QueueDefinition>();
 
-  function assertLabelBelongsToDefinition(label?: any, queueDefinitionId?: any) : any {
-    const existing: any = byLabel.get(label);
+  function assertLabelBelongsToDefinition(label: string, queueDefinitionId: string): void {
+    const existing = byLabel.get(label);
     if (existing && existing.queueDefinitionId !== queueDefinitionId) {
       throw new Error(`Queue definition label is already in use: ${label}`);
     }
   }
 
-  function getVersions(queueDefinitionId?: any) : any {
+  function getVersions(queueDefinitionId: string): QueueDefinition[] {
     return byId.get(queueDefinitionId) || [];
   }
 
-  function registerQueueDefinition(input: Record<string, any> = {}) : any {
-    const definitionInput: any = normalizeQueueDefinitionShape(input, {
+  function registerQueueDefinition(input: QueueRecord = {}): QueueDefinition {
+    const definitionInput = normalizeQueueDefinitionShape(input, {
       structuredScopeValidation,
       dedupeKeyNormalizer
     });
-    const versions: any = getVersions(definitionInput.queueDefinitionId);
+    const versions = getVersions(definitionInput.queueDefinitionId);
     if (versions.length > 0 && definitionInput.explicitIdentity !== true) {
       throw new Error(`Queue definition label is already in use: ${definitionInput.label}`);
     }
@@ -261,27 +322,27 @@ export function createQueueDefinitionRegistry({
       definitionInput.queueDefinitionId
     );
 
-    const nextVersion: any = definitionInput.explicitVersion === null
+    const nextVersion = definitionInput.explicitVersion === null
       ? latestVersion(versions) + 1
       : definitionInput.explicitVersion;
 
-    if (versions.length && versions.some((version?: any) : any => version.queueDefinitionVersion === nextVersion)) {
+    if (versions.length && versions.some((version) => version.queueDefinitionVersion === nextVersion)) {
       throw new Error(`Queue definition version ${nextVersion} already exists for ${definitionInput.queueDefinitionId}.`);
     }
     if (definitionInput.explicitVersion !== null && latestVersion(versions) >= nextVersion) {
       throw new Error(`Queue definition version must be greater than existing latest for ${definitionInput.queueDefinitionId}.`);
     }
 
-    const previous: any = versions.length ? versions[versions.length - 1] : null;
+    const previous = versions.length ? versions[versions.length - 1] : null;
     if (previous && previous.ownerCapability !== definitionInput.ownerCapability) {
       throw new Error(`Queue definition owner cannot change for ${definitionInput.queueDefinitionId}.`);
     }
-    const labelHistory: any = previous
+    const labelHistory = previous
       ? previous.label === definitionInput.label
         ? previous.labelHistory
         : [...previous.labelHistory, previous.label]
       : [];
-    const definitionShape: Record<string, any> = {
+    const definitionShape = {
       queueDefinitionId: definitionInput.queueDefinitionId,
       queueDefinitionVersion: nextVersion,
       label: definitionInput.label,
@@ -295,8 +356,8 @@ export function createQueueDefinitionRegistry({
       policy: definitionInput.policy,
       routes: definitionInput.routes
     };
-    const definitionDigest: any = queueDefinitionDigest(definitionShape);
-    const definition: any = freezeDefinition({
+    const definitionDigest = queueDefinitionDigest(definitionShape);
+    const definition: QueueDefinition = freezeDefinition({
       ...definitionShape,
       metadata: Object.freeze({
         ...definitionInput.metadata,
@@ -316,13 +377,14 @@ export function createQueueDefinitionRegistry({
     queueDefinitionId = "",
     queueDefinitionVersion,
     label
-  }: Record<string, any> = {}) : any {
-    const byLabelMatch: any = label ? byLabel.get(normalizeQueueLabel(label)) : null;
-    const targetId: any = toText(queueDefinitionId || byLabelMatch?.queueDefinitionId);
+  }: { queueDefinitionId?: unknown; queueDefinitionVersion?: unknown; label?: unknown } = {}): QueueDefinition {
+    const normalizedLabel = label ? normalizeQueueLabel(label) : "";
+    const byLabelMatch = normalizedLabel ? byLabel.get(normalizedLabel) : undefined;
+    const targetId = toText(queueDefinitionId || byLabelMatch?.queueDefinitionId);
     if (!targetId) {
       throw new Error("Queue definition resolution requires queueDefinitionId or label.");
     }
-    const versions: any = getVersions(targetId);
+    const versions = getVersions(targetId);
     if (!versions.length) {
       throw new Error(`Queue definition unresolved: ${targetId}`);
     }
@@ -335,8 +397,8 @@ export function createQueueDefinitionRegistry({
       return versions[versions.length - 1];
     }
 
-    const requestedVersion: any = asPositiveInt(queueDefinitionVersion);
-    const matched: any = versions.find((entry?: any) : any => entry.queueDefinitionVersion === requestedVersion);
+    const requestedVersion = asPositiveInt(queueDefinitionVersion);
+    const matched = versions.find((entry) => entry.queueDefinitionVersion === requestedVersion);
     if (!matched) {
       throw new Error(`Queue definition unresolved: ${targetId} version ${requestedVersion}`);
     }
@@ -350,9 +412,9 @@ export function createQueueDefinitionRegistry({
     scope,
     dedupeKey,
     allowDeprecatedEnqueue = false
-  }: Record<string, any> = {}) : any {
-    const definition: any = resolveQueueDefinition({ queueDefinitionId, queueDefinitionVersion, label });
-    const normalizedScope: any = normalizeScopeWithValidator({
+  }: { queueDefinitionId?: unknown; queueDefinitionVersion?: unknown; label?: unknown; scope?: QueueRecord; dedupeKey?: unknown; allowDeprecatedEnqueue?: boolean } = {}) {
+    const definition = resolveQueueDefinition({ queueDefinitionId, queueDefinitionVersion, label });
+    const normalizedScope = normalizeScopeWithValidator({
       definition,
       scope,
       structuredScopeValidation: definition.structuredScopeValidation
@@ -377,9 +439,9 @@ export function createQueueDefinitionRegistry({
     });
   }
 
-  function listDefinitions() : any {
-    const all: any = [...byId.values()].flatMap((versions?: any) : any => versions);
-    return all.map((definition?: any) : any => ({
+  function listDefinitions() {
+    const all = [...byId.values()].flatMap((versions) => versions);
+    return all.map((definition) => ({
       queueDefinitionId: definition.queueDefinitionId,
       queueDefinitionVersion: definition.queueDefinitionVersion,
       label: definition.label,
@@ -388,7 +450,7 @@ export function createQueueDefinitionRegistry({
     }));
   }
 
-  function describe() : any {
+  function describe() {
     return {
       protocolVersion: QUEUE_DEFINITION_REGISTRY_VERSION,
       definitionCount: byLabel.size,
@@ -396,8 +458,8 @@ export function createQueueDefinitionRegistry({
     };
   }
 
-  function normalizeDedupeKeyForDefinition(definition?: any, inputScope?: any, inputDedupeKey?: any) : any {
-    const normalizedScope: any = normalizeScopeWithValidator({
+  function normalizeDedupeKeyForDefinition(definition: QueueDefinition, inputScope?: QueueRecord, inputDedupeKey?: unknown): string {
+    const normalizedScope = normalizeScopeWithValidator({
       definition,
       scope: inputScope,
       structuredScopeValidation: definition.structuredScopeValidation

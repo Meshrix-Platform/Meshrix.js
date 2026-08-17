@@ -2,51 +2,118 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
+import type { BigIntStats, Dirent } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "./sqlite-database.ts";
 import { ServerConfig } from "#meshrix/server-config";
 import { backupRoot as resolveBackupRoot } from "./backup-contract.ts";
 
-const TRANSACTION_SCHEMA_VERSION: any = "v0.0.1:schema:definition-1";
-const TRANSACTION_PROTOCOL: any = "v0.0.1:storage:restore-transaction-1";
-const TRANSACTION_DIRECTORY: any = "tmp";
-const JOURNAL_FILE: any = "restore-transaction.json";
-const STAGED_FILES_DIRECTORY: any = "files";
-const ROLLBACK_DIRECTORY: any = "rollback";
-const STAGED_RECEIPT_FILE: any = "restore-receipt.json";
-const RESTORE_REPORT_DIRECTORY: any = "restore-reports";
-const SQLITE_SIDECAR_SUFFIXES: readonly any[] = Object.freeze(["-wal", "-shm", "-journal"]);
-const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
-const UUID_PATTERN: any = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const BACKUP_ID_PATTERN: any = /^backup_[A-Za-z0-9_.-]+$/u;
-const RECEIPT_ID_PATTERN: any = /^restore_[A-Za-z0-9_.-]+$/u;
-const EXCLUDED_TARGET_ROOTS: any = new Set<any>(["backups", "locks", "logs", TRANSACTION_DIRECTORY]);
-const PHASES: any = new Set<any>(["prepared", "rollback-required", "commit-complete"]);
+type JsonRecord = Record<string, unknown>;
+type RestoreOperation = "install" | "delete";
+type RestorePhase = "prepared" | "rollback-required" | "commit-complete";
+type RestoreError = Error & { code: string; reasonCode: string };
 
-function isSqliteTarget(relativePath: any = "") : any {
-  const value: any = String(relativePath || "").toLowerCase();
+interface RestoreRecord {
+  relativePath: string;
+  operation: RestoreOperation;
+  hadOriginal: boolean;
+  previousBytes: number;
+  previousSha256: string;
+  installedBytes: number;
+  installedSha256: string;
+  sqlite: boolean;
+}
+
+interface RestoreJournal {
+  schemaVersion: typeof TRANSACTION_SCHEMA_VERSION;
+  protocol: typeof TRANSACTION_PROTOCOL;
+  transactionId: string;
+  backupId: string;
+  receiptId: string;
+  receiptSha256: string;
+  phase: RestorePhase;
+  records: readonly RestoreRecord[];
+}
+
+interface TransactionPaths {
+  temporaryRoot: string;
+  pendingRoot: string;
+  transactionRoot: string;
+}
+
+interface TransactionContents {
+  journalPath: string;
+  stagedFilesRoot: string;
+  rollbackRoot: string;
+  stagedReceiptPath: string;
+}
+
+interface FileIntegrity {
+  bytes: number;
+  sha256: string;
+}
+
+interface RestoreExecutionOptions {
+  userDataPath?: string;
+  backupId?: unknown;
+  receiptId?: unknown;
+  report?: unknown;
+  records?: readonly (JsonRecord | RestoreRecord)[];
+  stageInstall?: (record: RestoreRecord, stagedPath: string) => Promise<void>;
+}
+
+const TRANSACTION_SCHEMA_VERSION = "v0.0.1:schema:definition-1";
+const TRANSACTION_PROTOCOL = "v0.0.1:storage:restore-transaction-1";
+const TRANSACTION_DIRECTORY = "tmp";
+const JOURNAL_FILE = "restore-transaction.json";
+const STAGED_FILES_DIRECTORY = "files";
+const ROLLBACK_DIRECTORY = "rollback";
+const STAGED_RECEIPT_FILE = "restore-receipt.json";
+const RESTORE_REPORT_DIRECTORY = "restore-reports";
+const SQLITE_SIDECAR_SUFFIXES: readonly string[] = Object.freeze(["-wal", "-shm", "-journal"]);
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const BACKUP_ID_PATTERN = /^backup_[A-Za-z0-9_.-]+$/u;
+const RECEIPT_ID_PATTERN = /^restore_[A-Za-z0-9_.-]+$/u;
+const EXCLUDED_TARGET_ROOTS = new Set<string>(["backups", "locks", "logs", TRANSACTION_DIRECTORY]);
+const PHASES = new Set<RestorePhase>(["prepared", "rollback-required", "commit-complete"]);
+
+function record(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as JsonRecord
+    : {};
+}
+
+function errorCode(error: unknown): string {
+  return String(record(error).code || "");
+}
+
+function isSqliteTarget(relativePath: unknown = ""): boolean {
+  const value = String(relativePath || "").toLowerCase();
   return value.endsWith(".sqlite") || value.endsWith(".sqlite3") || value.endsWith(".db");
 }
 
-function transactionError(code?: any, message?: any, cause?: any) : any {
-  const error: Error & Record<string, any> = new Error(message, cause ? { cause } : undefined);
+function transactionError(code: string, message: string, cause?: unknown): RestoreError {
+  const error = new Error(message, cause ? { cause } : undefined) as RestoreError;
   error.name = "StorageRestoreTransactionError";
   error.code = code;
   error.reasonCode = code;
   return error;
 }
 
-function storageRoot(userDataPath: any = "") : any {
+function storageRoot(userDataPath = ""): string {
   return path.resolve(userDataPath || ServerConfig.getDataDir());
 }
 
-function isWithin(candidatePath?: any, rootPath?: any) : any {
-  const relative: any = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relative === "" || (relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+function isWithin(candidatePath: string, rootPath: string): boolean {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function normalizeTargetRelativePath(value: any = "") : any {
-  const selected: any = String(value || "").replace(/\\/g, "/");
-  const segments: any = selected.split("/");
+function normalizeTargetRelativePath(value: unknown = ""): string {
+  const selected = String(value || "").replace(/\\/g, "/");
+  const segments = selected.split("/");
   if (
     !selected ||
     selected.startsWith("/") ||
@@ -63,15 +130,15 @@ function normalizeTargetRelativePath(value: any = "") : any {
   return selected;
 }
 
-function normalizeRecord(record: Record<string, any> = {}) : any {
-  const relativePath: any = normalizeTargetRelativePath(record.relativePath);
-  const operation: any = String(record.operation || "");
-  const hadOriginal: any = record.hadOriginal === true;
-  const previousBytes: any = Number(record.previousBytes || 0);
-  const previousSha256: any = String(record.previousSha256 || "").toLowerCase();
-  const installedBytes: any = Number(record.installedBytes || 0);
-  const installedSha256: any = String(record.installedSha256 || "").toLowerCase();
-  const sqlite: any = record.sqlite === true;
+function normalizeRecord(source: JsonRecord | RestoreRecord = {}): RestoreRecord {
+  const relativePath = normalizeTargetRelativePath(source.relativePath);
+  const operation = String(source.operation || "");
+  const hadOriginal = source.hadOriginal === true;
+  const previousBytes = Number(source.previousBytes || 0);
+  const previousSha256 = String(source.previousSha256 || "").toLowerCase();
+  const installedBytes = Number(source.installedBytes || 0);
+  const installedSha256 = String(source.installedSha256 || "").toLowerCase();
+  const sqlite = source.sqlite === true;
   if (
     !["install", "delete"].includes(operation) ||
     !Number.isSafeInteger(previousBytes) ||
@@ -91,7 +158,7 @@ function normalizeRecord(record: Record<string, any> = {}) : any {
   }
   return {
     relativePath,
-    operation,
+    operation: operation as RestoreOperation,
     hadOriginal,
     previousBytes,
     previousSha256,
@@ -101,32 +168,32 @@ function normalizeRecord(record: Record<string, any> = {}) : any {
   };
 }
 
-function validateJournal(value?: any, expectedTransactionId: any = "") : any {
-  const transactionId: any = String(value?.transactionId || "");
-  const backupId: any = String(value?.backupId || "");
-  const receiptId: any = String(value?.receiptId || "");
-  const phase: any = String(value?.phase || "");
-  const receiptSha256: any = String(value?.receiptSha256 || "").toLowerCase();
+function validateJournal(value: unknown, expectedTransactionId = ""): RestoreJournal {
+  const source = record(value);
+  const transactionId = String(source.transactionId || "");
+  const backupId = String(source.backupId || "");
+  const receiptId = String(source.receiptId || "");
+  const phase = String(source.phase || "");
+  const receiptSha256 = String(source.receiptSha256 || "").toLowerCase();
   if (
-    !value ||
-    value.schemaVersion !== TRANSACTION_SCHEMA_VERSION ||
-    value.protocol !== TRANSACTION_PROTOCOL ||
+    source.schemaVersion !== TRANSACTION_SCHEMA_VERSION ||
+    source.protocol !== TRANSACTION_PROTOCOL ||
     !UUID_PATTERN.test(transactionId) ||
     (expectedTransactionId && transactionId !== expectedTransactionId) ||
     !BACKUP_ID_PATTERN.test(backupId) ||
     !RECEIPT_ID_PATTERN.test(receiptId) ||
-    !PHASES.has(phase) ||
+    !PHASES.has(phase as RestorePhase) ||
     !SHA256_PATTERN.test(receiptSha256) ||
-    !Array.isArray(value.records)
+    !Array.isArray(source.records)
   ) {
     throw transactionError(
       "storage_restore_journal_invalid",
       "A restore transaction journal is missing required durable metadata."
     );
   }
-  const seen: any = new Set<any>();
-  const records: any = value.records.map((record?: any) : any => {
-    const normalized: any = normalizeRecord(record);
+  const seen = new Set<string>();
+  const records = source.records.map((item: unknown): RestoreRecord => {
+    const normalized = normalizeRecord(record(item));
     if (seen.has(normalized.relativePath)) {
       throw transactionError(
         "storage_restore_journal_invalid",
@@ -143,13 +210,13 @@ function validateJournal(value?: any, expectedTransactionId: any = "") : any {
     backupId,
     receiptId,
     receiptSha256,
-    phase,
-    records
+    phase: phase as RestorePhase,
+    records: Object.freeze(records)
   };
 }
 
-function transactionPaths(rootPath?: any, transactionId?: any) : any {
-  const temporaryRoot: any = path.join(rootPath, TRANSACTION_DIRECTORY);
+function transactionPaths(rootPath: string, transactionId: string): TransactionPaths {
+  const temporaryRoot = path.join(rootPath, TRANSACTION_DIRECTORY);
   return {
     temporaryRoot,
     pendingRoot: path.join(temporaryRoot, `.storage-restore-${transactionId}.preparing`),
@@ -157,7 +224,7 @@ function transactionPaths(rootPath?: any, transactionId?: any) : any {
   };
 }
 
-function pathsInsideTransaction(transactionRoot?: any) : any {
+function pathsInsideTransaction(transactionRoot: string): TransactionContents {
   return {
     journalPath: path.join(transactionRoot, JOURNAL_FILE),
     stagedFilesRoot: path.join(transactionRoot, STAGED_FILES_DIRECTORY),
@@ -166,46 +233,46 @@ function pathsInsideTransaction(transactionRoot?: any) : any {
   };
 }
 
-async function syncDirectory(directoryPath?: any) : Promise<any> {
-  let handle: any = null;
+async function syncDirectory(directoryPath: string): Promise<void> {
+  let handle: FileHandle | null = null;
   try {
     handle = await fsPromises.open(directoryPath, fs.constants.O_RDONLY);
     await handle.sync();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySyncError(error)) throw error;
   } finally {
-    await handle?.close().catch(() : any => {});
+    await handle?.close().catch((): void => {});
   }
 }
 
-function syncDirectorySync(directoryPath?: any) : any {
-  let descriptor: any = null;
+function syncDirectorySync(directoryPath: string): void {
+  let descriptor: number | null = null;
   try {
     descriptor = fs.openSync(directoryPath, fs.constants.O_RDONLY);
     fs.fsyncSync(descriptor);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySyncError(error)) throw error;
   } finally {
     if (descriptor !== null) fs.closeSync(descriptor);
   }
 }
 
-function isUnsupportedDirectorySyncError(error?: any) : any {
+function isUnsupportedDirectorySyncError(error: unknown): boolean {
   return process.platform === "win32" &&
-    ["EACCES", "EINVAL", "ENOTSUP", "EPERM"].includes(error?.code);
+    ["EACCES", "EINVAL", "ENOTSUP", "EPERM"].includes(errorCode(error));
 }
 
-async function syncDirectoryHierarchy(directoryPath?: any, boundaryPath?: any) : Promise<any> {
-  const boundary: any = path.resolve(boundaryPath);
-  const selected: any = path.resolve(directoryPath);
+async function syncDirectoryHierarchy(directoryPath: string, boundaryPath: string): Promise<void> {
+  const boundary = path.resolve(boundaryPath);
+  const selected = path.resolve(directoryPath);
   if (!isWithin(selected, boundary)) {
     throw transactionError(
       "storage_restore_transaction_boundary_invalid",
       "A restore transaction directory escaped its durable boundary."
     );
   }
-  const chain: any[] = [];
-  let current: any = selected;
+  const chain: string[] = [];
+  let current = selected;
   while (true) {
     chain.push(current);
     if (current === boundary) break;
@@ -214,17 +281,17 @@ async function syncDirectoryHierarchy(directoryPath?: any, boundaryPath?: any) :
   for (const item of chain.reverse()) await syncDirectory(item);
 }
 
-function syncDirectoryHierarchySync(directoryPath?: any, boundaryPath?: any) : any {
-  const boundary: any = path.resolve(boundaryPath);
-  const selected: any = path.resolve(directoryPath);
+function syncDirectoryHierarchySync(directoryPath: string, boundaryPath: string): void {
+  const boundary = path.resolve(boundaryPath);
+  const selected = path.resolve(directoryPath);
   if (!isWithin(selected, boundary)) {
     throw transactionError(
       "storage_restore_recovery_failed",
       "A restore recovery directory escaped its durable boundary."
     );
   }
-  const chain: any[] = [];
-  let current: any = selected;
+  const chain: string[] = [];
+  let current = selected;
   while (true) {
     chain.push(current);
     if (current === boundary) break;
@@ -233,8 +300,8 @@ function syncDirectoryHierarchySync(directoryPath?: any, boundaryPath?: any) : a
   for (const item of chain.reverse()) syncDirectorySync(item);
 }
 
-async function syncDirectoryTree(directoryPath?: any) : Promise<any> {
-  const entries: any = await fsPromises.readdir(directoryPath, { withFileTypes: true });
+async function syncDirectoryTree(directoryPath: string): Promise<void> {
+  const entries: Dirent[] = await fsPromises.readdir(directoryPath, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isSymbolicLink()) {
       throw transactionError(
@@ -247,9 +314,9 @@ async function syncDirectoryTree(directoryPath?: any) : Promise<any> {
   await syncDirectory(directoryPath);
 }
 
-async function ensurePrivateDirectory(directoryPath?: any) : Promise<any> {
+async function ensurePrivateDirectory(directoryPath: string): Promise<void> {
   await fsPromises.mkdir(directoryPath, { recursive: true, mode: 0o700 });
-  const stat: any = await fsPromises.lstat(directoryPath);
+  const stat = await fsPromises.lstat(directoryPath);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw transactionError(
       "storage_restore_transaction_boundary_invalid",
@@ -259,10 +326,10 @@ async function ensurePrivateDirectory(directoryPath?: any) : Promise<any> {
   await fsPromises.chmod(directoryPath, 0o700);
 }
 
-async function writeJsonDurable(filePath?: any, value?: any) : Promise<any> {
+async function writeJsonDurable(filePath: string, value: unknown): Promise<void> {
   await ensurePrivateDirectory(path.dirname(filePath));
-  const temporaryPath: any = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`);
-  let handle: any = null;
+  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`);
+  let handle: FileHandle | null = null;
   try {
     handle = await fsPromises.open(temporaryPath, "wx", 0o600);
     await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -271,15 +338,15 @@ async function writeJsonDurable(filePath?: any, value?: any) : Promise<any> {
     handle = null;
     await fsPromises.rename(temporaryPath, filePath);
     await syncDirectory(path.dirname(filePath));
-  } catch (error: any) {
-    await handle?.close().catch(() : any => {});
-    await fsPromises.rm(temporaryPath, { force: true }).catch(() : any => {});
+  } catch (error: unknown) {
+    await handle?.close().catch((): void => {});
+    await fsPromises.rm(temporaryPath, { force: true }).catch((): void => {});
     throw error;
   }
 }
 
-async function syncFile(filePath?: any) : Promise<any> {
-  const handle: any = await fsPromises.open(filePath, "r+");
+async function syncFile(filePath: string): Promise<void> {
+  const handle = await fsPromises.open(filePath, "r+");
   try {
     await handle.sync();
   } finally {
@@ -287,19 +354,19 @@ async function syncFile(filePath?: any) : Promise<any> {
   }
 }
 
-function readJsonSafeSync(filePath?: any) : any {
-  let descriptor: any = null;
+function readJsonSafeSync(filePath: string): unknown {
+  let descriptor: number | null = null;
   try {
     descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-    const before: any = fs.fstatSync(descriptor, { bigint: true });
+    const before: BigIntStats = fs.fstatSync(descriptor, { bigint: true });
     if (!before.isFile()) throw new Error("not a regular file");
-    const parsed: any = JSON.parse(fs.readFileSync(descriptor, "utf8"));
-    const after: any = fs.fstatSync(descriptor, { bigint: true });
-    const beforeSignature: any = [before.dev, before.ino, before.size, before.mtimeNs, before.ctimeNs].join(":");
-    const afterSignature: any = [after.dev, after.ino, after.size, after.mtimeNs, after.ctimeNs].join(":");
+    const parsed: unknown = JSON.parse(fs.readFileSync(descriptor, "utf8"));
+    const after: BigIntStats = fs.fstatSync(descriptor, { bigint: true });
+    const beforeSignature = [before.dev, before.ino, before.size, before.mtimeNs, before.ctimeNs].join(":");
+    const afterSignature = [after.dev, after.ino, after.size, after.mtimeNs, after.ctimeNs].join(":");
     if (beforeSignature !== afterSignature) throw new Error("journal changed during inspection");
     return parsed;
-  } catch (error: any) {
+  } catch (error: unknown) {
     throw transactionError(
       "storage_restore_journal_invalid",
       "A restore transaction journal could not be read safely.",
@@ -310,29 +377,29 @@ function readJsonSafeSync(filePath?: any) : any {
   }
 }
 
-function inspectRegularFileSync(filePath?: any) : any {
-  let descriptor: any = null;
-  const buffer: any = Buffer.allocUnsafe(64 * 1024);
+function inspectRegularFileSync(filePath: string): FileIntegrity {
+  let descriptor: number | null = null;
+  const buffer = Buffer.allocUnsafe(64 * 1024);
   try {
     descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-    const before: any = fs.fstatSync(descriptor, { bigint: true });
+    const before: BigIntStats = fs.fstatSync(descriptor, { bigint: true });
     if (!before.isFile()) {
       throw transactionError(
         "storage_restore_recovery_failed",
         "A restore recovery target is not a regular file."
       );
     }
-    const hash: any = crypto.createHash("sha256");
-    let bytes: any = 0;
+    const hash = crypto.createHash("sha256");
+    let bytes = 0;
     while (true) {
-      const count: any = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      const count = fs.readSync(descriptor, buffer, 0, buffer.length, null);
       if (count === 0) break;
       hash.update(buffer.subarray(0, count));
       bytes += count;
     }
-    const after: any = fs.fstatSync(descriptor, { bigint: true });
-    const beforeSignature: any = [before.dev, before.ino, before.size, before.mtimeNs, before.ctimeNs].join(":");
-    const afterSignature: any = [after.dev, after.ino, after.size, after.mtimeNs, after.ctimeNs].join(":");
+    const after: BigIntStats = fs.fstatSync(descriptor, { bigint: true });
+    const beforeSignature = [before.dev, before.ino, before.size, before.mtimeNs, before.ctimeNs].join(":");
+    const afterSignature = [after.dev, after.ino, after.size, after.mtimeNs, after.ctimeNs].join(":");
     if (beforeSignature !== afterSignature || bytes !== Number(after.size)) {
       throw transactionError(
         "storage_restore_recovery_failed",
@@ -345,8 +412,8 @@ function inspectRegularFileSync(filePath?: any) : any {
   }
 }
 
-function assertExpectedFileSync(filePath?: any, bytes?: any, sha256?: any) : any {
-  const integrity: any = inspectRegularFileSync(filePath);
+function assertExpectedFileSync(filePath: string, bytes: number, sha256: string): void {
+  const integrity = inspectRegularFileSync(filePath);
   if (integrity.bytes !== bytes || integrity.sha256 !== sha256) {
     throw transactionError(
       "storage_restore_recovery_failed",
@@ -355,29 +422,29 @@ function assertExpectedFileSync(filePath?: any, bytes?: any, sha256?: any) : any
   }
 }
 
-function pathExistsSync(filePath?: any) : any {
+function pathExistsSync(filePath: string): boolean {
   try {
     fs.accessSync(filePath);
     return true;
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return false;
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") return false;
     throw error;
   }
 }
 
-function assertSafeTargetParentSync(rootPath?: any, targetPath?: any) : any {
+function assertSafeTargetParentSync(rootPath: string, targetPath: string): void {
   if (!isWithin(targetPath, rootPath)) {
     throw transactionError(
       "storage_restore_recovery_failed",
       "A restore recovery target escaped the storage root."
     );
   }
-  const relativeParent: any = path.relative(rootPath, path.dirname(targetPath));
-  let currentPath: any = rootPath;
+  const relativeParent = path.relative(rootPath, path.dirname(targetPath));
+  let currentPath = rootPath;
   for (const segment of relativeParent.split(path.sep).filter(Boolean)) {
     currentPath = path.join(currentPath, segment);
     if (!pathExistsSync(currentPath)) break;
-    const stat: any = fs.lstatSync(currentPath);
+    const stat = fs.lstatSync(currentPath);
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
       throw transactionError(
         "storage_restore_recovery_failed",
@@ -387,10 +454,10 @@ function assertSafeTargetParentSync(rootPath?: any, targetPath?: any) : any {
   }
 }
 
-function removeSafeFileSync(rootPath?: any, targetPath?: any) : any {
+function removeSafeFileSync(rootPath: string, targetPath: string): void {
   if (!pathExistsSync(targetPath)) return;
   assertSafeTargetParentSync(rootPath, targetPath);
-  const stat: any = fs.lstatSync(targetPath);
+  const stat = fs.lstatSync(targetPath);
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw transactionError(
       "storage_restore_recovery_failed",
@@ -401,8 +468,8 @@ function removeSafeFileSync(rootPath?: any, targetPath?: any) : any {
   syncDirectorySync(path.dirname(targetPath));
 }
 
-function verifySqliteAndRemoveVerificationSidecarsSync(rootPath?: any, targetPath?: any) : any {
-  let database: any = null;
+function verifySqliteAndRemoveVerificationSidecarsSync(rootPath: string, targetPath: string): void {
+  let database: Database.Database | null = null;
   try {
     database = openSqliteDatabase(targetPath, { readonly: true, fileMustExist: true, timeout: 5_000 });
     if (String(database.pragma("quick_check", { simple: true }) || "").toLowerCase() !== "ok") {
@@ -419,9 +486,9 @@ function verifySqliteAndRemoveVerificationSidecarsSync(rootPath?: any, targetPat
   }
 }
 
-function verifyCommittedRecordsSync(rootPath?: any, records?: any) : any {
+function verifyCommittedRecordsSync(rootPath: string, records: readonly RestoreRecord[]): void {
   for (const record of records) {
-    const targetPath: any = path.join(rootPath, record.relativePath);
+    const targetPath = path.join(rootPath, record.relativePath);
     assertSafeTargetParentSync(rootPath, targetPath);
     if (record.operation === "delete") {
       if (pathExistsSync(targetPath)) {
@@ -443,11 +510,11 @@ function verifyCommittedRecordsSync(rootPath?: any, records?: any) : any {
   }
 }
 
-function rollbackRecordsSync(rootPath?: any, transactionRoot?: any, records?: any) : any {
+function rollbackRecordsSync(rootPath: string, transactionRoot: string, records: readonly RestoreRecord[]): void {
   const { rollbackRoot } = pathsInsideTransaction(transactionRoot);
   for (const record of [...records].reverse()) {
-    const targetPath: any = path.join(rootPath, record.relativePath);
-    const rollbackPath: any = path.join(rollbackRoot, record.relativePath);
+    const targetPath = path.join(rootPath, record.relativePath);
+    const rollbackPath = path.join(rollbackRoot, record.relativePath);
     assertSafeTargetParentSync(rootPath, targetPath);
     if (pathExistsSync(rollbackPath)) {
       assertExpectedFileSync(rollbackPath, record.previousBytes, record.previousSha256);
@@ -473,12 +540,12 @@ function rollbackRecordsSync(rootPath?: any, transactionRoot?: any, records?: an
   }
 }
 
-function finalizeCommittedTransactionSync(rootPath?: any, transactionRoot?: any, journal?: any) : any {
+function finalizeCommittedTransactionSync(rootPath: string, transactionRoot: string, journal: RestoreJournal): string {
   verifyCommittedRecordsSync(rootPath, journal.records);
   const { stagedReceiptPath } = pathsInsideTransaction(transactionRoot);
-  const selectedBackupRoot: any = resolveBackupRoot(rootPath);
-  const reportRoot: any = path.join(selectedBackupRoot, journal.backupId, RESTORE_REPORT_DIRECTORY);
-  const reportPath: any = path.join(reportRoot, `${journal.receiptId}.json`);
+  const selectedBackupRoot = resolveBackupRoot(rootPath);
+  const reportRoot = path.join(selectedBackupRoot, journal.backupId, RESTORE_REPORT_DIRECTORY);
+  const reportPath = path.join(reportRoot, `${journal.receiptId}.json`);
   assertSafeTargetParentSync(selectedBackupRoot, reportPath);
   fs.mkdirSync(reportRoot, { recursive: true, mode: 0o700 });
   syncDirectoryHierarchySync(reportRoot, selectedBackupRoot);
@@ -509,8 +576,8 @@ function finalizeCommittedTransactionSync(rootPath?: any, transactionRoot?: any,
   return reportPath;
 }
 
-function reconcileTransactionSync(rootPath?: any, transactionRoot?: any, expectedTransactionId?: any) : any {
-  const stat: any = fs.lstatSync(transactionRoot);
+function reconcileTransactionSync(rootPath: string, transactionRoot: string, expectedTransactionId?: string): string {
+  const stat = fs.lstatSync(transactionRoot);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw transactionError(
       "storage_restore_recovery_failed",
@@ -518,7 +585,7 @@ function reconcileTransactionSync(rootPath?: any, transactionRoot?: any, expecte
     );
   }
   const { journalPath } = pathsInsideTransaction(transactionRoot);
-  const journal: any = validateJournal(readJsonSafeSync(journalPath), expectedTransactionId);
+  const journal = validateJournal(readJsonSafeSync(journalPath), expectedTransactionId);
   if (journal.phase === "prepared") {
     fs.rmSync(transactionRoot, { recursive: true, force: true });
     syncDirectorySync(path.dirname(transactionRoot));
@@ -534,23 +601,23 @@ function reconcileTransactionSync(rootPath?: any, transactionRoot?: any, expecte
   return "finalized";
 }
 
-export function reconcileStorageRestoreTransactionsSync(userDataPath: any = "") : any {
-  const rootPath: any = storageRoot(userDataPath);
-  const temporaryRoot: any = path.join(rootPath, TRANSACTION_DIRECTORY);
-  let entries: any[] = [];
+export function reconcileStorageRestoreTransactionsSync(userDataPath = ""): Readonly<{ reconciled: number }> {
+  const rootPath = storageRoot(userDataPath);
+  const temporaryRoot = path.join(rootPath, TRANSACTION_DIRECTORY);
+  let entries: Dirent[] = [];
   try {
     entries = fs.readdirSync(temporaryRoot, { withFileTypes: true });
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return Object.freeze({ reconciled: 0 });
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") return Object.freeze({ reconciled: 0 });
     throw transactionError(
       "storage_restore_recovery_failed",
       "Restore transaction recovery could not inspect its durable journal root.",
       error
     );
   }
-  let reconciled: any = 0;
-  for (const entry of entries.sort((left?: any, right?: any) : any => left.name.localeCompare(right.name))) {
-    const pendingMatch: any = /^\.storage-restore-([0-9a-f-]+)\.preparing$/iu.exec(entry.name);
+  let reconciled = 0;
+  for (const entry of entries.sort((left, right): number => left.name.localeCompare(right.name))) {
+    const pendingMatch = /^\.storage-restore-([0-9a-f-]+)\.preparing$/iu.exec(entry.name);
     if (
       entry.name.startsWith(".storage-restore-") &&
       entry.name.endsWith(".preparing") &&
@@ -568,8 +635,8 @@ export function reconcileStorageRestoreTransactionsSync(userDataPath: any = "") 
           "A pending restore transaction directory has an invalid durable identity."
         );
       }
-      const pendingRoot: any = path.join(temporaryRoot, entry.name);
-      const stat: any = fs.lstatSync(pendingRoot);
+      const pendingRoot = path.join(temporaryRoot, entry.name);
+      const stat = fs.lstatSync(pendingRoot);
       if (!stat.isDirectory() || stat.isSymbolicLink()) {
         throw transactionError(
           "storage_restore_recovery_failed",
@@ -581,7 +648,7 @@ export function reconcileStorageRestoreTransactionsSync(userDataPath: any = "") 
       reconciled += 1;
       continue;
     }
-    const match: any = /^storage-restore-([0-9a-f-]+)$/iu.exec(entry.name);
+    const match = /^storage-restore-([0-9a-f-]+)$/iu.exec(entry.name);
     if (entry.name.startsWith("storage-restore-") && !match) {
       throw transactionError(
         "storage_restore_recovery_failed",
@@ -601,10 +668,18 @@ export function reconcileStorageRestoreTransactionsSync(userDataPath: any = "") 
   return Object.freeze({ reconciled });
 }
 
-async function moveOriginalToRollback({ rootPath, rollbackRoot, record }: Record<string, any>) : Promise<any> {
-  const targetPath: any = path.join(rootPath, record.relativePath);
+async function moveOriginalToRollback({
+  rootPath,
+  rollbackRoot,
+  record
+}: {
+  rootPath: string;
+  rollbackRoot: string;
+  record: RestoreRecord;
+}): Promise<void> {
+  const targetPath = path.join(rootPath, record.relativePath);
   if (!record.hadOriginal) return;
-  const rollbackPath: any = path.join(rollbackRoot, record.relativePath);
+  const rollbackPath = path.join(rollbackRoot, record.relativePath);
   await ensurePrivateDirectory(path.dirname(rollbackPath));
   await syncDirectoryHierarchy(path.dirname(rollbackPath), rollbackRoot);
   await fsPromises.rename(targetPath, rollbackPath);
@@ -615,14 +690,14 @@ async function moveOriginalToRollback({ rootPath, rollbackRoot, record }: Record
   await syncDirectory(path.dirname(targetPath));
 }
 
-async function assertPreimageUnchanged(rootPath?: any, record?: any) : Promise<any> {
-  const targetPath: any = path.join(rootPath, record.relativePath);
+async function assertPreimageUnchanged(rootPath: string, record: RestoreRecord): Promise<void> {
+  const targetPath = path.join(rootPath, record.relativePath);
   assertSafeTargetParentSync(rootPath, targetPath);
-  let exists: any = true;
+  let exists = true;
   try {
     await fsPromises.access(targetPath);
-  } catch (error: any) {
-    if (error?.code === "ENOENT") exists = false;
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") exists = false;
     else throw error;
   }
   if (!record.hadOriginal) {
@@ -640,7 +715,7 @@ async function assertPreimageUnchanged(rootPath?: any, record?: any) : Promise<a
       "A restore target changed after preview."
     );
   }
-  const integrity: any = inspectRegularFileSync(targetPath);
+  const integrity = inspectRegularFileSync(targetPath);
   if (integrity.bytes !== record.previousBytes || integrity.sha256 !== record.previousSha256) {
     throw transactionError(
       "restore_target_changed",
@@ -656,11 +731,11 @@ export async function executeDurableRestoreTransaction({
   report,
   records = [],
   stageInstall
-}: Record<string, any> = {}) : Promise<any> {
-  const rootPath: any = storageRoot(userDataPath);
-  const transactionId: any = crypto.randomUUID();
-  const selectedBackupId: any = String(backupId || "");
-  const selectedReceiptId: any = String(receiptId || "");
+}: RestoreExecutionOptions = {}): Promise<string> {
+  const rootPath = storageRoot(userDataPath);
+  const transactionId = crypto.randomUUID();
+  const selectedBackupId = String(backupId || "");
+  const selectedReceiptId = String(receiptId || "");
   if (!BACKUP_ID_PATTERN.test(selectedBackupId) || !RECEIPT_ID_PATTERN.test(selectedReceiptId)) {
     throw transactionError(
       "storage_restore_transaction_invalid",
@@ -670,17 +745,18 @@ export async function executeDurableRestoreTransaction({
   if (typeof stageInstall !== "function") {
     throw new TypeError("stageInstall must be a function.");
   }
-  const normalizedRecords: any = records.map(normalizeRecord);
-  if (new Set<any>(normalizedRecords.map((record?: any) : any => record.relativePath)).size !== normalizedRecords.length) {
+  const installer = stageInstall;
+  const normalizedRecords = records.map((item): RestoreRecord => normalizeRecord(item));
+  if (new Set<string>(normalizedRecords.map((item): string => item.relativePath)).size !== normalizedRecords.length) {
     throw transactionError(
       "storage_restore_transaction_invalid",
       "A restore transaction contains duplicate mutation targets."
     );
   }
-  const roots: any = transactionPaths(rootPath, transactionId);
-  const pendingPaths: any = pathsInsideTransaction(roots.pendingRoot);
-  const finalPaths: any = pathsInsideTransaction(roots.transactionRoot);
-  let published: any = false;
+  const roots = transactionPaths(rootPath, transactionId);
+  const pendingPaths = pathsInsideTransaction(roots.pendingRoot);
+  const finalPaths = pathsInsideTransaction(roots.transactionRoot);
+  let published = false;
   try {
     await ensurePrivateDirectory(roots.temporaryRoot);
     await syncDirectory(rootPath);
@@ -688,10 +764,10 @@ export async function executeDurableRestoreTransaction({
     await ensurePrivateDirectory(pendingPaths.rollbackRoot);
     for (const record of normalizedRecords) {
       if (record.operation !== "install") continue;
-      const stagedPath: any = path.join(pendingPaths.stagedFilesRoot, record.relativePath);
-      await stageInstall(record, stagedPath);
+      const stagedPath = path.join(pendingPaths.stagedFilesRoot, record.relativePath);
+      await installer(record, stagedPath);
       await syncFile(stagedPath);
-      const integrity: any = inspectRegularFileSync(stagedPath);
+      const integrity = inspectRegularFileSync(stagedPath);
       if (integrity.bytes !== record.installedBytes || integrity.sha256 !== record.installedSha256) {
         throw transactionError(
           "storage_restore_staging_failed",
@@ -700,8 +776,8 @@ export async function executeDurableRestoreTransaction({
       }
     }
     await writeJsonDurable(pendingPaths.stagedReceiptPath, report);
-    const receiptIntegrity: any = inspectRegularFileSync(pendingPaths.stagedReceiptPath);
-    const journal: any = validateJournal({
+    const receiptIntegrity = inspectRegularFileSync(pendingPaths.stagedReceiptPath);
+    const journal = validateJournal({
       schemaVersion: TRANSACTION_SCHEMA_VERSION,
       protocol: TRANSACTION_PROTOCOL,
       transactionId,
@@ -717,11 +793,11 @@ export async function executeDurableRestoreTransaction({
     await syncDirectory(roots.temporaryRoot);
     published = true;
 
-    const rollbackJournal: Record<string, any> = { ...journal, phase: "rollback-required" };
+    const rollbackJournal: RestoreJournal = { ...journal, phase: "rollback-required" };
     await writeJsonDurable(finalPaths.journalPath, rollbackJournal);
     for (const record of normalizedRecords) await assertPreimageUnchanged(rootPath, record);
     for (const record of normalizedRecords) {
-      const targetPath: any = path.join(rootPath, record.relativePath);
+      const targetPath = path.join(rootPath, record.relativePath);
       await moveOriginalToRollback({ rootPath, rollbackRoot: finalPaths.rollbackRoot, record });
       if (record.operation === "install") {
         await ensurePrivateDirectory(path.dirname(targetPath));
@@ -732,13 +808,14 @@ export async function executeDurableRestoreTransaction({
       }
     }
     verifyCommittedRecordsSync(rootPath, normalizedRecords);
-    await writeJsonDurable(finalPaths.journalPath, { ...rollbackJournal, phase: "commit-complete" });
+    const committedJournal: RestoreJournal = { ...rollbackJournal, phase: "commit-complete" };
+    await writeJsonDurable(finalPaths.journalPath, committedJournal);
     return finalizeCommittedTransactionSync(
       rootPath,
       roots.transactionRoot,
-      { ...rollbackJournal, phase: "commit-complete" }
+      committedJournal
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     try {
       if (published && pathExistsSync(roots.transactionRoot)) {
         reconcileTransactionSync(rootPath, roots.transactionRoot, transactionId);
@@ -746,14 +823,14 @@ export async function executeDurableRestoreTransaction({
         await fsPromises.rm(roots.pendingRoot, { recursive: true, force: true });
         if (pathExistsSync(roots.temporaryRoot)) await syncDirectory(roots.temporaryRoot);
       }
-    } catch (recoveryError: any) {
+    } catch (recoveryError: unknown) {
       throw transactionError(
         "storage_restore_recovery_failed",
         "Storage restore recovery could not establish a complete generation.",
         recoveryError
       );
     }
-    if (error?.name === "StorageRestoreTransactionError") throw error;
+    if (record(error).name === "StorageRestoreTransactionError") throw error;
     throw transactionError(
       "storage_restore_commit_failed",
       "Storage restore failed and the prior state was restored.",

@@ -13,7 +13,11 @@
  * @layer server-runtime/state
  */
 
-import { validateTagStoreProvider } from "#meshrix/foundation/security/authorization/tag-store.port";
+import {
+  validateTagStoreProvider,
+  type TagStoreProvider,
+  type TagStoreProviderRegistry
+} from "#meshrix/foundation/security/authorization/tag-store.port";
 
 /**
  * Creates a tag store adapter that wraps the runtime tag-management implementation
@@ -23,12 +27,10 @@ import { validateTagStoreProvider } from "#meshrix/foundation/security/authoriza
  * @param {string} options.userDataPath - User data directory path
  * @returns {Promise<import("#meshrix/foundation/security/authorization/tag-store.port").TagStoreProvider>}
  */
-export async function createTagStoreAdapter({ userDataPath }: Record<string, any>) : Promise<any> {
-  const mod: any = await import("./tag-management-store.ts");
-  const TagManagementStore: any = mod.TagManagementStore || mod.default;
-
-  const store: any = TagManagementStore.createTagManagementStore(userDataPath);
-  const validation: any = validateTagStoreProvider(store);
+export async function createTagStoreAdapter({ userDataPath }: { userDataPath: string }): Promise<TagStoreProvider> {
+  const { createTagManagementStore } = await import("./tag-management-store.ts");
+  const store = createTagManagementStore({ userDataPath });
+  const validation = validateTagStoreProvider(store);
 
   if (!validation.valid) {
     throw new Error(
@@ -37,7 +39,7 @@ export async function createTagStoreAdapter({ userDataPath }: Record<string, any
     );
   }
 
-  return store;
+  return store as TagStoreProvider;
 }
 
 /**
@@ -47,13 +49,13 @@ export async function createTagStoreAdapter({ userDataPath }: Record<string, any
  * @param {object} [options]
  * @param {string} [options.userDataPath] - Optional; provider set via adapter
  */
-export async function registerTagStoreProvider(registry?: any, options: Record<string, any> = {}) : Promise<any> {
+export async function registerTagStoreProvider(registry: TagStoreProviderRegistry, options: { userDataPath?: string } = {}): Promise<void> {
   if (!registry || typeof registry.setProvider !== "function") {
     throw new Error("registerTagStoreProvider: registry must have setProvider method");
   }
 
   if (options.userDataPath) {
-    const adapter: any = await createTagStoreAdapter({ userDataPath: options.userDataPath });
+    const adapter = await createTagStoreAdapter({ userDataPath: options.userDataPath });
     registry.setProvider(adapter);
   }
   // If no userDataPath is provided, the registry will contain no provider

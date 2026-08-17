@@ -1,33 +1,183 @@
 import { computeDeterministicRetryDelay } from "./policies.ts";
 import {
   assertLegalWorkQueueTransition,
-  WORK_QUEUE_STATES
+  WORK_QUEUE_STATES as RAW_WORK_QUEUE_STATES
 } from "../workflow/state-machine/work-queue/state-machine.ts";
-import { asInt, getPolicy, jsonString, nowFrom, parseJson, rowToWorkItem, toText } from "./store-serialization.ts";
+import { asInt, getPolicy, jsonString as serializeJsonString, nowFrom, parseJson, rowToWorkItem, toText } from "./store-serialization.ts";
 import { WorkQueueCapacityError } from "./scheduling.ts";
 
-export function createSqliteWorkQueueRuntime({ statements, timeSource, identityGenerator, resolvedPolicy }: Record<string, any>) : any {
-  function policyForRow(row?: any) : any {
-    const definition: any = statements.getDefinitionPolicy.get(
+const WORK_QUEUE_STATES = RAW_WORK_QUEUE_STATES as Readonly<Record<string, string>>;
+
+export type SqliteValue = string | number | bigint | Buffer | null;
+export type SqliteBindings = Readonly<Record<string, SqliteValue>>;
+
+export interface WorkQueueRow {
+  [key: string]: unknown;
+  work_item_id: string;
+  queue_definition_id: string;
+  queue_definition_version: number;
+  state: string;
+  scope_key: string;
+  scope_json: string;
+  dedupe_key: string;
+  owner_ref_json: string;
+  payload_ref_json: string;
+  payload_kind: string;
+  available_at_ms: number;
+  expires_at_ms: number;
+  attempt: number;
+  max_attempts: number;
+  lease_id: string;
+  lease_seq: number;
+  leased_by_worker_id: string;
+  lease_expires_at_ms: number;
+  fallback_task_id: string;
+  last_error_json: string;
+  policy_version: string;
+  priority: number;
+  priority_class: string;
+  tenant_id: string;
+  workspace_id: string;
+  project_id: string;
+  concurrency_key: string;
+  route_version: string;
+  checkpoint_ref_json: string;
+  checkpoint_digest: string;
+  checkpoint_seq: number;
+  checkpoint_updated_at_ms: number;
+  created_at_ms: number;
+  updated_at_ms: number;
+  last_transition_seq: number;
+}
+
+function jsonString(value: unknown, fallback: unknown): string {
+  return serializeJsonString(value, fallback) ?? "null";
+}
+
+interface SqliteResultRow extends WorkQueueRow {
+  count: number;
+  pending_transitions: number;
+  policy_json: string;
+  sink_id: string;
+  status: string;
+  effect_id: string;
+  total: number;
+  mode: string;
+  reason: string;
+  actor_json: string;
+  transition: string;
+}
+
+export interface SqliteRunResult {
+  changes: number;
+  lastInsertRowid: number | bigint;
+}
+
+export interface WorkQueueStatement {
+  get(...parameters: Array<SqliteBindings | SqliteValue>): SqliteResultRow | undefined;
+  all(...parameters: Array<SqliteBindings | SqliteValue>): SqliteResultRow[];
+  run(...parameters: Array<SqliteBindings | SqliteValue>): SqliteRunResult;
+  run(parameters: WorkQueueRow): SqliteRunResult;
+}
+
+export type WorkQueueStatements = Readonly<Record<string, WorkQueueStatement>>;
+
+export interface QueueIdentityGenerator {
+  journalEntryId(): string;
+}
+
+export interface QueuePolicy {
+  capacity: Readonly<Record<string, number>> & { maxFailed: number };
+  retention: {
+    cleanupBatchSize: number;
+    maxTransitionsPerWorkItem: number;
+    maxJournalEntries: number;
+    maxTerminalItems: number;
+  };
+  fairness: {
+    agingIntervalMs: number; agingBatchSize: number;
+    minReservedLeasesPerPartition: number; reservationScanLimit: number;
+  };
+  retryBackoff: Parameters<typeof computeDeterministicRetryDelay>[0];
+  fallbackRetry: { maxAttempts: number };
+  maxAttempts: number;
+  leaseTimeoutMs: number;
+  policyVersion: string;
+}
+
+export interface QueueTimeSourceLike { nowMs(): number }
+
+interface RuntimeOptions {
+  statements: WorkQueueStatements;
+  timeSource: QueueTimeSourceLike;
+  identityGenerator: QueueIdentityGenerator;
+  resolvedPolicy: QueuePolicy;
+}
+
+export type ProjectionPatch = Partial<Pick<WorkQueueRow,
+  "state" | "available_at_ms" | "attempt" | "max_attempts" | "lease_id" |
+  "lease_seq" | "leased_by_worker_id" | "lease_expires_at_ms" |
+  "fallback_task_id" | "last_error_json" | "updated_at_ms">>;
+
+export interface TransitionInput {
+  row: WorkQueueRow;
+  transition: string;
+  toState: string;
+  patch?: ProjectionPatch;
+  nowMs: number;
+  operationId?: unknown;
+  actor?: unknown;
+  reason?: unknown;
+  policyVersion?: unknown;
+}
+
+export interface RuntimeQuery {
+  nowMs?: number;
+  queueDefinitionId?: string;
+  scopeKey?: string;
+  workItemId?: string;
+  limit?: number;
+}
+
+export interface BackgroundWriteInput {
+  nowMs?: unknown; entityId?: unknown; workItemId?: unknown; snapshotId?: unknown;
+  healthKey?: unknown; backgroundWriteId?: unknown; state?: unknown; value?: unknown;
+  status?: unknown; attempt?: unknown; nextRetryAtMs?: unknown; lastError?: unknown;
+}
+
+export interface SqliteWorkQueueRuntime {
+  appendTransitionInternal(input: TransitionInput & { fromState?: string | null; leaseId?: string; leaseSeq?: number; decision?: unknown }): number;
+  transitionProjection(input: TransitionInput): WorkQueueRow;
+  recordBackgroundWrite(aspectType?: unknown, input?: BackgroundWriteInput): { backgroundWriteId: string; aspectType: unknown; entityId: string; committedAtMs: number };
+  expireEligibleLocked(input?: RuntimeQuery): unknown[];
+  materializeDelayedLocked(input?: RuntimeQuery): unknown[];
+  recoverExpiredLeasesLocked(input?: RuntimeQuery): unknown[];
+  reconcileInDoubtLocked(input?: RuntimeQuery): unknown[];
+  requireLeasedRow(workItemId?: unknown, leaseId?: unknown, nowMs?: number, options?: { allowExpired?: boolean }): WorkQueueRow;
+}
+
+export function createSqliteWorkQueueRuntime({ statements, timeSource, identityGenerator, resolvedPolicy }: RuntimeOptions): SqliteWorkQueueRuntime {
+  function policyForRow(row: WorkQueueRow): QueuePolicy {
+    const definition = statements.getDefinitionPolicy.get(
       row.queue_definition_id,
       row.queue_definition_version
     );
-    const override: any = parseJson(definition?.policy_json, {});
+    const override = parseJson(definition?.policy_json, {}) as Partial<QueuePolicy>;
     return getPolicy({
       ...resolvedPolicy,
       ...override,
-      capacity: { ...resolvedPolicy.capacity, ...(override.capacity || {}) },
-      retention: { ...resolvedPolicy.retention, ...(override.retention || {}) }
+      capacity: { ...resolvedPolicy.capacity, ...override.capacity },
+      retention: { ...resolvedPolicy.retention, ...override.retention }
     });
   }
 
-  function boundedCount(statement?: any, parameters?: any, limit?: any) : any {
+  function boundedCount(statement: WorkQueueStatement, parameters: SqliteBindings, limit: number): number {
     return Number(statement.get({ ...parameters, limit: Number(limit) + 1 })?.count || 0);
   }
 
-  function insertRetentionSnapshot(row?: any, nowMs?: any) : any {
+  function insertRetentionSnapshot(row: WorkQueueRow, nowMs: number): number {
     statements.deleteJournalByWorkItem.run(row.work_item_id);
-    const result: any = statements.insertJournal.run({
+    const result = statements.insertJournal.run({
       journal_entry_id: identityGenerator.journalEntryId(),
       work_item_id: row.work_item_id,
       queue_definition_id: row.queue_definition_id,
@@ -45,16 +195,16 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       created_at_ms: nowMs,
       adopted_time_ms: nowMs
     });
-    const seq: any = Number(result.lastInsertRowid);
+    const seq = Number(result.lastInsertRowid);
     statements.updateLastTransitionSeq.run({ seq, work_item_id: row.work_item_id, updated_at_ms: nowMs });
     return seq;
   }
 
-  function compactWorkJournal(workItemId?: any, nowMs?: any, { force = false }: Record<string, any> = {}) : any {
-    const row: any = statements.getWorkItem.get(workItemId);
+  function compactWorkJournal(workItemId: string, nowMs: number, { force = false }: { force?: boolean } = {}): boolean {
+    const row = statements.getWorkItem.get(workItemId);
     if (!row) return false;
     const { retention } = policyForRow(row);
-    const count: any = Number(statements.countJournalByWorkItem.get(workItemId)?.count || 0);
+    const count = Number(statements.countJournalByWorkItem.get(workItemId)?.count || 0);
     if (count <= 1 || (!force && count <= retention.maxTransitionsPerWorkItem)) {
       return false;
     }
@@ -62,8 +212,8 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     return true;
   }
 
-  function deleteTerminalRows(queueDefinitionId?: any, excludeWorkItemId?: any, limit?: any) : any {
-    const rows: any = statements.oldestTerminalItems.all({
+  function deleteTerminalRows(queueDefinitionId: string, excludeWorkItemId: string, limit: number): number {
+    const rows = statements.oldestTerminalItems.all({
       queue_definition_id: queueDefinitionId,
       completed_state: WORK_QUEUE_STATES.COMPLETED,
       cancelled_state: WORK_QUEUE_STATES.CANCELLED,
@@ -79,7 +229,7 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     return rows.length;
   }
 
-  function retentionMaintenanceThreshold(retention?: any) : any {
+  function retentionMaintenanceThreshold(retention: QueuePolicy["retention"]): number {
     return Math.max(1, Math.min(
       asInt(retention.cleanupBatchSize, 1),
       asInt(retention.maxTransitionsPerWorkItem, 1),
@@ -87,11 +237,11 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     ));
   }
 
-  function maintainRetentionAfterAppend(row?: any, nowMs?: any) : any {
+  function maintainRetentionAfterAppend(row: WorkQueueRow, nowMs: number): boolean {
     const { retention } = policyForRow(row);
-    const queueDefinitionId: any = row.queue_definition_id;
-    const threshold: any = retentionMaintenanceThreshold(retention);
-    const pending: any = Number(statements.incrementRetentionState.get({
+    const queueDefinitionId = row.queue_definition_id;
+    const threshold = retentionMaintenanceThreshold(retention);
+    const pending = Number(statements.incrementRetentionState.get({
       queue_definition_id: queueDefinitionId,
       updated_at_ms: nowMs
     })?.pending_transitions || 0);
@@ -101,11 +251,11 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       threshold,
       updated_at_ms: nowMs
     });
-    const terminalCount: any = [
+    const terminalCount = [
       WORK_QUEUE_STATES.COMPLETED,
       WORK_QUEUE_STATES.CANCELLED,
       WORK_QUEUE_STATES.EXPIRED
-    ].reduce((total?: any, state?: any) : any => total + boundedCount(
+    ].reduce((total, state) => total + boundedCount(
       statements.countRetainedState,
       { queue_definition_id: queueDefinitionId, state },
       retention.maxTerminalItems
@@ -118,7 +268,7 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       );
     }
 
-    let journalCount: any = boundedCount(
+    let journalCount = boundedCount(
       statements.countJournalByQueue,
       { queue_definition_id: queueDefinitionId },
       retention.maxJournalEntries
@@ -132,12 +282,12 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       );
     }
     if (journalCount >= retention.maxJournalEntries) {
-      const candidates: any = statements.oldestJournalCandidates.all({
+      const candidates = statements.oldestJournalCandidates.all({
         queue_definition_id: queueDefinitionId,
         exclude_work_item_id: row.work_item_id,
         limit: retention.cleanupBatchSize * retention.maxTransitionsPerWorkItem
       });
-      const unique: any = new Set<any>(candidates.map((candidate?: any) : any => candidate.work_item_id));
+      const unique = new Set(candidates.map((candidate) => candidate.work_item_id));
       for (const workItemId of [...unique].slice(0, retention.cleanupBatchSize)) {
         compactWorkJournal(workItemId, nowMs, { force: true });
       }
@@ -148,22 +298,22 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       );
     }
     if (journalCount >= retention.maxJournalEntries) {
-      const currentCount: any = Number(statements.countJournalByWorkItem.get(row.work_item_id)?.count || 0);
+      const currentCount = Number(statements.countJournalByWorkItem.get(row.work_item_id)?.count || 0);
       if (currentCount > 1 && compactWorkJournal(row.work_item_id, nowMs, { force: true })) return true;
       throw new WorkQueueCapacityError("queue_journal_retention", retention.maxJournalEntries);
     }
     return false;
   }
 
-  function makeFailedCapacityRoom(row?: any, nowMs?: any) : any {
+  function makeFailedCapacityRoom(row: WorkQueueRow): void {
     const { capacity, retention } = policyForRow(row);
-    let failedCount: any = boundedCount(
+    let failedCount = boundedCount(
       statements.countRetainedState,
       { queue_definition_id: row.queue_definition_id, state: WORK_QUEUE_STATES.FAILED },
       capacity.maxFailed
     );
     if (failedCount < capacity.maxFailed) return;
-    const candidates: any = statements.oldestFailedItems.all({
+    const candidates = statements.oldestFailedItems.all({
       queue_definition_id: row.queue_definition_id,
       state: WORK_QUEUE_STATES.FAILED,
       exclude_work_item_id: row.work_item_id,
@@ -197,9 +347,14 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     reason = "",
     policyVersion = "",
     decision = {}
-  }: Record<string, any>) : any {
+  }: TransitionInput & {
+    fromState?: string | null;
+    leaseId?: string;
+    leaseSeq?: number;
+    decision?: unknown;
+  }): number {
     assertLegalWorkQueueTransition({ transition, fromState: fromState ?? null, toState });
-    const result: any = statements.insertJournal.run({
+    const result = statements.insertJournal.run({
       journal_entry_id: identityGenerator.journalEntryId(),
       work_item_id: row.work_item_id,
       queue_definition_id: row.queue_definition_id,
@@ -217,16 +372,16 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       created_at_ms: nowMs,
       adopted_time_ms: nowMs
     });
-    const seq: any = Number(result.lastInsertRowid);
+    const seq = Number(result.lastInsertRowid);
     statements.updateLastTransitionSeq.run({ seq, work_item_id: row.work_item_id, updated_at_ms: nowMs });
-    const workJournalCompacted: any = compactWorkJournal(row.work_item_id, nowMs);
-    const queueRetentionMaintained: any = maintainRetentionAfterAppend(row, nowMs);
+    const workJournalCompacted = compactWorkJournal(row.work_item_id, nowMs);
+    const queueRetentionMaintained = maintainRetentionAfterAppend(row, nowMs);
     return workJournalCompacted || queueRetentionMaintained ?
       Number(statements.getWorkItem.get(row.work_item_id)?.last_transition_seq || seq) : seq;
   }
 
-  function applyProjectionPatch(row?: any, patch: Record<string, any> = {}) : any {
-    const updated: Record<string, any> = {
+  function applyProjectionPatch(row: WorkQueueRow, patch: ProjectionPatch = {}): WorkQueueRow {
+    const updated: WorkQueueRow = {
       ...row,
       ...patch,
       work_item_id: row.work_item_id,
@@ -247,18 +402,18 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       last_error_json: updated.last_error_json || "{}",
       updated_at_ms: updated.updated_at_ms
     });
-    return statements.getWorkItem.get(updated.work_item_id);
+    return statements.getWorkItem.get(updated.work_item_id) ?? updated;
   }
 
-  function transitionProjection({ row, transition, toState, patch = {}, nowMs, operationId, actor, reason, policyVersion }: Record<string, any>) : any {
+  function transitionProjection({ row, transition, toState, patch = {}, nowMs, operationId, actor, reason, policyVersion }: TransitionInput): WorkQueueRow {
     if (toState === WORK_QUEUE_STATES.FAILED && row.state !== WORK_QUEUE_STATES.FAILED) {
-      makeFailedCapacityRoom(row, nowMs);
+      makeFailedCapacityRoom(row);
     }
-    const fromState: any = row.state;
-    const journalLeaseId: any = transition === "claim" ? patch.lease_id : row.lease_id || patch.lease_id || "";
-    const journalLeaseSeq: any = transition === "claim" ? patch.lease_seq : row.lease_seq || patch.lease_seq || 0;
-    const nextRow: any = applyProjectionPatch(row, { ...patch, state: toState, updated_at_ms: nowMs });
-    const seq: any = appendTransitionInternal({
+    const fromState = row.state;
+    const journalLeaseId = transition === "claim" ? patch.lease_id : row.lease_id || patch.lease_id || "";
+    const journalLeaseSeq = transition === "claim" ? patch.lease_seq : row.lease_seq || patch.lease_seq || 0;
+    const nextRow = applyProjectionPatch(row, { ...patch, state: toState, updated_at_ms: nowMs });
+    const seq = appendTransitionInternal({
       row: nextRow,
       transition,
       fromState,
@@ -273,16 +428,16 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       decision: { projectionPatch: { ...patch, state: toState, updated_at_ms: nowMs } }
     });
     statements.updateLastTransitionSeq.run({ seq, work_item_id: row.work_item_id, updated_at_ms: nowMs });
-    return statements.getWorkItem.get(row.work_item_id);
+    return statements.getWorkItem.get(row.work_item_id) ?? nextRow;
   }
 
-  function recordBackgroundWrite(aspectType?: any, input: Record<string, any> = {}) : any {
-    const nowMs: any = nowFrom(timeSource, input.nowMs);
-    const entityId: any = toText(input.entityId || input.workItemId || input.snapshotId || input.healthKey || aspectType);
-    const backgroundWriteId: any = toText(input.backgroundWriteId || `${aspectType}:${entityId}`);
+  function recordBackgroundWrite(aspectType?: unknown, input: BackgroundWriteInput = {}) {
+    const nowMs = nowFrom(timeSource, input.nowMs);
+    const entityId = toText(input.entityId || input.workItemId || input.snapshotId || input.healthKey || aspectType);
+    const backgroundWriteId = toText(input.backgroundWriteId || `${String(aspectType)}:${entityId}`);
     statements.insertBackgroundWrite.run({
       background_write_id: backgroundWriteId,
-      aspect_type: aspectType,
+      aspect_type: toText(aspectType),
       entity_id: entityId,
       state_json: jsonString(input.state || input.value || input, {}),
       status: toText(input.status || "committed"),
@@ -295,8 +450,8 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     return { backgroundWriteId, aspectType, entityId, committedAtMs: nowMs };
   }
 
-  function expireEligibleLocked({ nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: Record<string, any> = {}) : any {
-    const rows: any = statements.expiredWorkItems.all({
+  function expireEligibleLocked({ nowMs = timeSource.nowMs(), queueDefinitionId = "", scopeKey = "", limit = 1000 }: RuntimeQuery = {}): unknown[] {
+    const rows = statements.expiredWorkItems.all({
       queued_state: WORK_QUEUE_STATES.QUEUED,
       retry_wait_state: WORK_QUEUE_STATES.RETRY_WAIT,
       running_state: WORK_QUEUE_STATES.RUNNING,
@@ -306,7 +461,7 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       scope_key: toText(scopeKey),
       limit: Math.max(1, asInt(limit, 1000))
     });
-    return rows.map((row?: any) : any => rowToWorkItem(transitionProjection({
+    return rows.map((row) => rowToWorkItem(transitionProjection({
       row,
       transition: "expire",
       toState: WORK_QUEUE_STATES.EXPIRED,
@@ -321,15 +476,15 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     })));
   }
 
-  function materializeDelayedLocked({ nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: Record<string, any> = {}) : any {
-    const rows: any = statements.materializeDelayed.all({
+  function materializeDelayedLocked({ nowMs = timeSource.nowMs(), queueDefinitionId = "", scopeKey = "", limit = 1000 }: RuntimeQuery = {}): unknown[] {
+    const rows = statements.materializeDelayed.all({
       state: WORK_QUEUE_STATES.RETRY_WAIT,
       now_ms: nowMs,
       queue_definition_id: toText(queueDefinitionId),
       scope_key: toText(scopeKey),
       limit: Math.max(1, asInt(limit, 1000))
     });
-    return rows.map((row?: any) : any => rowToWorkItem(transitionProjection({
+    return rows.map((row) => rowToWorkItem(transitionProjection({
       row,
       transition: "delay_matured",
       toState: WORK_QUEUE_STATES.QUEUED,
@@ -339,17 +494,17 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     })));
   }
 
-  function recoverExpiredLeasesLocked({ nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: Record<string, any> = {}) : any {
-    const rows: any = statements.expiredLeases.all({
+  function recoverExpiredLeasesLocked({ nowMs = timeSource.nowMs(), queueDefinitionId = "", scopeKey = "", limit = 1000 }: RuntimeQuery = {}): unknown[] {
+    const rows = statements.expiredLeases.all({
       state: WORK_QUEUE_STATES.RUNNING,
       now_ms: nowMs,
       queue_definition_id: toText(queueDefinitionId),
       scope_key: toText(scopeKey),
       limit: Math.max(1, asInt(limit, 1000))
     });
-    const recovered: any[] = [];
+    const recovered: unknown[] = [];
     for (const row of rows) {
-      const updated: any = transitionProjection({
+      const updated = transitionProjection({
         row,
         transition: "lease_expired",
         toState: WORK_QUEUE_STATES.IN_DOUBT,
@@ -369,8 +524,8 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     return recovered;
   }
 
-  function reconcileInDoubtLocked({ nowMs, queueDefinitionId = "", scopeKey = "", workItemId = "", limit = 1000 }: Record<string, any> = {}) : any {
-    const rows: any = statements.inDoubtCandidates.all({
+  function reconcileInDoubtLocked({ nowMs = timeSource.nowMs(), queueDefinitionId = "", scopeKey = "", workItemId = "", limit = 1000 }: RuntimeQuery = {}): unknown[] {
+    const rows = statements.inDoubtCandidates.all({
       state: WORK_QUEUE_STATES.IN_DOUBT,
       now_ms: nowMs,
       queue_definition_id: toText(queueDefinitionId),
@@ -378,23 +533,23 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       work_item_id: toText(workItemId),
       limit: Math.max(1, asInt(limit, 1000))
     });
-    const reconciled: any[] = [];
+    const reconciled: unknown[] = [];
     for (const row of rows) {
-      const receipts: any[] = statements.readSinkFence.all({
+      const receipts = statements.readSinkFence.all({
         work_item_id: row.work_item_id,
         generation: Number(row.lease_seq || 0)
       });
-      const terminalReceipt: any = receipts.find((receipt?: any) : any =>
+      const terminalReceipt = receipts.find((receipt) =>
         ["complete", "fail"].includes(String(receipt.sink_id || "")) &&
         receipt.status === "settled"
       );
       if (!terminalReceipt) {
         continue;
       }
-      const toState: any = terminalReceipt.sink_id === "complete"
+      const toState = terminalReceipt.sink_id === "complete"
         ? WORK_QUEUE_STATES.COMPLETED
         : WORK_QUEUE_STATES.FAILED;
-      const updated: any = transitionProjection({
+      const updated = transitionProjection({
         row,
         transition: "termination_acknowledged",
         toState,
@@ -418,8 +573,8 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     return reconciled;
   }
 
-  function requireLeasedRow(workItemId?: any, leaseId?: any, nowMs: any = timeSource.nowMs(), { allowExpired = false }: Record<string, any> = {}) : any {
-    const row: any = statements.getWorkItem.get(toText(workItemId));
+  function requireLeasedRow(workItemId?: unknown, leaseId?: unknown, nowMs = timeSource.nowMs(), { allowExpired = false }: { allowExpired?: boolean } = {}): WorkQueueRow {
+    const row = statements.getWorkItem.get(toText(workItemId));
     if (!row) {
       throw new Error(`Work item not found: ${workItemId}`);
     }

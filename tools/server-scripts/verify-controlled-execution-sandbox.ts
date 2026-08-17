@@ -335,6 +335,11 @@ function assertZeroExecutionSideEffects(counters?: any) : any {
   assert.equal(counters.cancel, 0);
 }
 
+function admissionReason(admission: { admitted: boolean; reasonCode?: string }): string {
+  assert.equal(admission.admitted, false);
+  return String(admission.reasonCode || "");
+}
+
 async function denialScenario(root: any, {
   configuration,
   backendBehavior = "success",
@@ -371,7 +376,7 @@ export async function runControlledExecutionSandboxVerification({
   verifyOpaqueCustody = true
 }: Record<string, any> = {}) : Promise<any> {
   assert.deepEqual(normalizeSandboxConfiguration(undefined), { state: "unconfigured" });
-  assert.equal(compileSandboxAdmission({ request: requestFixture(), configuration: undefined }).reasonCode, SANDBOX_DENIAL_REASONS.UNCONFIGURED);
+  assert.equal(admissionReason(compileSandboxAdmission({ request: requestFixture(), configuration: undefined })), SANDBOX_DENIAL_REASONS.UNCONFIGURED);
 
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-controlled-sandbox-verifier-"));
   const checks: Record<string, any> = {};
@@ -417,34 +422,34 @@ export async function runControlledExecutionSandboxVerification({
     const expiredApprovalRequest: any = requestFixture({
       governance: { approvalExpiresAt: "2020-01-01T00:00:00.000Z" }
     });
-    assert.equal(compileSandboxAdmission({
+    assert.equal(admissionReason(compileSandboxAdmission({
       request: expiredApprovalRequest,
       configuration: enabledConfiguration(),
       profile: profileFixture(),
       backendDescriptor: successBackend.descriptor(),
       selectedBackendId: "fixture-backend",
       currentGovernance: expiredApprovalRequest.governance
-    }).reasonCode, SANDBOX_DENIAL_REASONS.APPROVAL_STALE);
+    })), SANDBOX_DENIAL_REASONS.APPROVAL_STALE);
     const tamperedApprovalRequest: any = normalizeSandboxExecutionRequest({
       ...successRequest,
       artifact: { ...successRequest.artifact, digest: sha256("tampered-controlled-sandbox-artifact") }
     });
-    assert.equal(compileSandboxAdmission({
+    assert.equal(admissionReason(compileSandboxAdmission({
       request: tamperedApprovalRequest,
       configuration: enabledConfiguration(),
       profile: profileFixture(),
       backendDescriptor: successBackend.descriptor(),
       selectedBackendId: "fixture-backend",
       currentGovernance: tamperedApprovalRequest.governance
-    }).reasonCode, SANDBOX_DENIAL_REASONS.APPROVAL_STALE);
-    assert.equal(compileSandboxAdmission({
+    })), SANDBOX_DENIAL_REASONS.APPROVAL_STALE);
+    assert.equal(admissionReason(compileSandboxAdmission({
       request: successRequest,
       configuration: enabledConfiguration(),
       profile: profileFixture(),
       backendDescriptor: successBackend.descriptor(),
       selectedBackendId: "fixture-backend",
       currentGovernance: { ...successRequest.governance, authorized: false }
-    }).reasonCode, SANDBOX_DENIAL_REASONS.AUTHORIZATION_MISSING);
+    })), SANDBOX_DENIAL_REASONS.AUTHORIZATION_MISSING);
     checks.approvalDigestExpiryAndHardDenyEnforced = true;
     const successBroker: any = brokerFixture({
       root: path.join(root, "success"),

@@ -1,24 +1,83 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
+import type { BigIntStats } from "node:fs";
 import path from "node:path";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 
 import {
-  normalizeSha256,
   normalizeWorkspaceRelativePath,
   nowIso
 } from "./agent-workspace-support.ts";
 import {
   createMaterializationDirectoryWorker
 } from "./agent-workspace-materialization-file-worker.ts";
+import type { MaterializationDirectoryWorker } from "./agent-workspace-materialization-file-worker.ts";
 import {
   issueAgentWorkspaceMaterializationPort
 } from "./agent-workspace-materialization-brand.ts";
 
-const MAX_STREAM_WINDOW_BYTES: any = 64 * 1024;
-const PRIVATE_FILE_MODE: any = 0o600;
-const PRIVATE_DIRECTORY_MODE: any = 0o700;
-const UNSAFE_INODE_TOPOLOGY_CODES: any = new Set<any>([
+type PlainRecord = Record<string, unknown>;
+interface MaterializationFailure extends Error { code?: string; status?: number; statusCode?: number }
+interface ControlledFailure { ok: false; status: number; code: string; error: string }
+interface FsIdentity { birthtimeNs: string; dev: string; ino: string; mode: number; byteCount?: number; contentDigest?: string }
+interface StateEventAnchor { eventHash: string; offset: number }
+interface MaterializationBinding {
+  bindingDigest: string; byteCount: number; contentDigest: string; expectedWorkspaceRevision: string;
+  logicalTarget: string; operationId: string; requestRef: string; workspaceId: string;
+}
+interface PublicationDescriptor {
+  byteCount: number; contentDigest: string; intentDigest: string; logicalTargetDigest: string;
+  parentFingerprint: string; parentIdentity: FsIdentity; preparedIdentity: FsIdentity | null;
+  priorRevision: string; proofDigest: string; publicationId: string; reservationDigest: string;
+  stateEventAnchor: StateEventAnchor; stateOperationId: string; targetStateDigest: string; tempLeafRef: string;
+}
+interface GuardOptions { leaseGuard?: (() => boolean | void | Promise<boolean | void>) | null; signal?: AbortSignal | null }
+interface WorkspaceRecord { workspaceId: string; [key: string]: unknown }
+interface ArchiveRecord { rootCid: string; contentRefs: unknown[]; metadata?: PlainRecord }
+interface StateMutation { action: string; key: string; valueRef?: string; metadata?: PlainRecord }
+interface StateCommitRecord {
+  commitId?: string; operationId: string; beforeRoot: string; afterRoot: string; eventHash?: string;
+  mutations?: StateMutation[]; contentRefs?: unknown[]; payload?: PlainRecord;
+}
+interface EventRecord {
+  eventHash: string; offset: number; operationId?: string; prevEventHash?: string; beforeRoot?: string;
+  afterRoot?: string; payload?: PlainRecord; contentRefs?: unknown[];
+}
+interface SnapshotRecord { workspaceId?: string; stateRoot?: string; stateEventAnchor?: unknown; files?: PlainRecord[]; [key: string]: unknown }
+interface MaterializationInput extends GuardOptions {
+  publication?: unknown; preimage?: unknown;
+  claimPublicationAuthority?: () => Promise<AsyncIterable<unknown>>;
+  recordTempReserved?: (publication: PublicationDescriptor) => Promise<unknown>;
+  recordPublicationPrepared?: (publication: PublicationDescriptor) => Promise<unknown>;
+  [hook: `after${string}`]: ((payload: PlainRecord) => void | Promise<void>) | undefined;
+}
+interface FileStateApi {
+  workspaceStateScope(workspace: WorkspaceRecord): string;
+  archiveWorkspaceFileSource(workspace: WorkspaceRecord, logicalTarget: string, options: PlainRecord): Promise<ArchiveRecord>;
+  commitWorkspaceFileState(input: PlainRecord): Promise<StateCommitRecord>;
+  recordWorkspaceFileCheckpoint(input: PlainRecord): Promise<{ nodeId?: string }>;
+  compactStateCommit(commit: StateCommitRecord): StateCommitRecord;
+}
+interface MaterializationDependencies {
+  workspaceForMaterialization(input: { workspaceId: string }): { ok?: boolean; code?: string; status?: number; workspace: WorkspaceRecord };
+  workspaceFsRoot(workspace: WorkspaceRecord): string;
+  workspaceFileRevision(input: { workspaceId: string }): Promise<{ ok?: boolean; code?: string; status?: number; revision?: string }>;
+  captureWorkspaceMaterializationSnapshot(input: PlainRecord): Promise<{ ok?: boolean; snapshot?: SnapshotRecord }>;
+  withWorkspaceMutation<T>(workspaceId: string, task: () => T | Promise<T>): Promise<T>;
+  fileStateApi: FileStateApi;
+  merkleState: {
+    stateCommit: { begin(input: PlainRecord): Promise<{ currentRoot: string }>; commit(...args: unknown[]): Promise<unknown>; getCommitByEventHash(input: PlainRecord): Promise<StateCommitRecord | null> };
+    eventLog: { getEvent(scope: string, offset: number): Promise<EventRecord | null>; listEvents(scope: string, options: PlainRecord): Promise<EventRecord[]>; verifyPartition(scope: string): Promise<{ ok?: boolean }> };
+    merkleIndex: { get(root: string, key: string): Promise<{ valueRef?: string; metadata?: PlainRecord } | null> };
+  };
+  updateWorkspaceTimeStmt?: { run(...args: unknown[]): unknown };
+}
+interface BoundTarget { anchor: StateEventAnchor; currentRevision: string; parentFingerprint: string; parentIdentity: FsIdentity; targetStateDigest: string }
+
+const MAX_STREAM_WINDOW_BYTES = 64 * 1024;
+const PRIVATE_FILE_MODE = 0o600;
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const UNSAFE_INODE_TOPOLOGY_CODES = new Set<string>([
   "EISDIR",
   "EINVAL",
   "ENODEV",
@@ -26,16 +85,16 @@ const UNSAFE_INODE_TOPOLOGY_CODES: any = new Set<any>([
   "ENXIO",
   "materialization_file_worker_syscall_failed"
 ]);
-const TARGET_FINGERPRINT_VERSION: any =
+const TARGET_FINGERPRINT_VERSION =
   "v0.0.1:agent-workspace:materialization-target-fingerprint-2";
-const PUBLICATION_INTENT_VERSION: any =
+const PUBLICATION_INTENT_VERSION =
   "v0.0.1:agent-workspace:materialization-publication-intent-2";
-const PUBLICATION_RESERVATION_VERSION: any =
+const PUBLICATION_RESERVATION_VERSION =
   "v0.0.1:agent-workspace:materialization-publication-reservation-1";
-const PUBLICATION_PROOF_VERSION: any =
+const PUBLICATION_PROOF_VERSION =
   "v0.0.1:agent-workspace:materialization-publication-proof-2";
 
-function materializationError(code?: any, status?: any, message?: any) : any {
+function materializationError(code: string, status: number, message: string): MaterializationFailure {
   return Object.assign(new Error(message), {
     code,
     status,
@@ -43,29 +102,31 @@ function materializationError(code?: any, status?: any, message?: any) : any {
   });
 }
 
-function controlledFailure(error?: any, fallbackCode: any = "workspace_materialization_failed") : any {
+function controlledFailure(error: unknown, fallbackCode = "workspace_materialization_failed"): Readonly<ControlledFailure> {
+  const failure = error !== null && typeof error === "object" ? error as MaterializationFailure : null;
   return Object.freeze({
     ok: false,
-    status: Number(error?.status || error?.statusCode || 500),
-    code: String(error?.code || fallbackCode),
-    error: String(error?.message || "Workspace materialization failed.")
+    status: Number(failure?.status || failure?.statusCode || 500),
+    code: String(failure?.code || fallbackCode),
+    error: String(failure?.message || "Workspace materialization failed.")
   });
 }
 
-function isControlledError(error?: any) : any {
+function isControlledError(error: unknown): error is MaterializationFailure {
+  const failure = error !== null && typeof error === "object" ? error as MaterializationFailure : null;
   return Boolean(
-    error?.code &&
-    Number.isInteger(Number(error?.status || error?.statusCode))
+    failure?.code &&
+    Number.isInteger(Number(failure?.status || failure?.statusCode))
   );
 }
 
-function fingerprint(value?: any) : any {
+function fingerprint(value: unknown): string {
   return createHash("sha256")
     .update(canonicalJson(value))
     .digest("hex");
 }
 
-function exactObject(value?: any, keys?: any) : any {
+function exactObject(value: unknown, keys: readonly string[]): value is PlainRecord {
   return Boolean(
     value &&
     typeof value === "object" &&
@@ -75,8 +136,8 @@ function exactObject(value?: any, keys?: any) : any {
   );
 }
 
-function normalizeDigest(value?: any, label: any = "Content digest") : any {
-  const digest: any = String(value || "").trim().toLowerCase();
+function normalizeDigest(value: unknown, label = "Content digest"): string {
+  const digest = String(value || "").trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/u.test(digest)) {
     throw materializationError(
       "materialization_binding_invalid",
@@ -87,12 +148,15 @@ function normalizeDigest(value?: any, label: any = "Content digest") : any {
   return digest;
 }
 
-function boundedId(value?: any, label?: any) : any {
-  const normalized: any = String(value || "").trim();
+function boundedId(value: unknown, label: string): string {
+  const normalized = String(value || "").trim();
   if (
     !normalized ||
     normalized.length > 768 ||
-    /[\u0000-\u001f\u007f]/u.test(normalized)
+    [...normalized].some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint <= 0x1f || codePoint === 0x7f;
+    })
   ) {
     throw materializationError(
       "materialization_binding_invalid",
@@ -103,8 +167,8 @@ function boundedId(value?: any, label?: any) : any {
   return normalized;
 }
 
-function normalizeByteCount(value?: any) : any {
-  const byteCount: any = Number(value);
+function normalizeByteCount(value: unknown): number {
+  const byteCount = Number(value);
   if (!Number.isSafeInteger(byteCount) || byteCount < 0) {
     throw materializationError(
       "materialization_binding_invalid",
@@ -115,7 +179,7 @@ function normalizeByteCount(value?: any) : any {
   return byteCount;
 }
 
-function normalizeLogicalTarget(value?: any) : any {
+function normalizeLogicalTarget(value: unknown): string {
   if (
     typeof value !== "string" ||
     value !== value.trim() ||
@@ -127,7 +191,7 @@ function normalizeLogicalTarget(value?: any) : any {
       "The logical target must be a normalized workspace-relative path."
     );
   }
-  let normalized: any;
+  let normalized: string;
   try {
     normalized = normalizeWorkspaceRelativePath(
       value,
@@ -140,10 +204,10 @@ function normalizeLogicalTarget(value?: any) : any {
       "The logical target must be a normalized workspace-relative path."
     );
   }
-  const segments: any = value.split("/");
+  const segments = value.split("/");
   if (
     normalized !== value ||
-    segments.some((segment?: any) : any =>
+    segments.some((segment) =>
       !segment ||
       segment === "." ||
       segment === ".." ||
@@ -160,8 +224,8 @@ function normalizeLogicalTarget(value?: any) : any {
   return normalized;
 }
 
-function normalizeTempLeaf(value?: any) : any {
-  const normalized: any = String(value || "");
+function normalizeTempLeaf(value: unknown): string {
+  const normalized = String(value || "");
   if (
     !/^\.meshrix-materialization-[A-Za-z0-9_-]{16,128}(?:\.tmp)?$/u
       .test(normalized) ||
@@ -179,7 +243,7 @@ function normalizeTempLeaf(value?: any) : any {
   return normalized;
 }
 
-function statMode(stat?: any) : any {
+function statMode(stat: BigIntStats): number {
   return Number(
     typeof stat.mode === "bigint"
       ? stat.mode & 0o7777n
@@ -187,8 +251,8 @@ function statMode(stat?: any) : any {
   );
 }
 
-function statIdentity(stat?: any) : any {
-  const birthtimeNs: any = typeof stat.birthtimeNs === "bigint"
+function statIdentity(stat: BigIntStats): Readonly<FsIdentity> {
+  const birthtimeNs = typeof stat.birthtimeNs === "bigint"
     ? stat.birthtimeNs
     : BigInt(Math.max(
         0,
@@ -202,7 +266,7 @@ function statIdentity(stat?: any) : any {
   });
 }
 
-function normalizeFsIdentity(value?: any, label?: any, { requirePrivateFile = false }: Record<string, any> = {}) : any {
+function normalizeFsIdentity(value: unknown, label: string, { requirePrivateFile = false }: { requirePrivateFile?: boolean } = {}): Readonly<FsIdentity> {
   if (
     !exactObject(value, ["birthtimeNs", "dev", "ino", "mode"]) &&
     !exactObject(
@@ -223,7 +287,7 @@ function normalizeFsIdentity(value?: any, label?: any, { requirePrivateFile = fa
       `${label} is invalid.`
     );
   }
-  const normalized: Record<string, any> = {
+  const normalized: FsIdentity = {
     birthtimeNs: String(value.birthtimeNs || ""),
     dev: String(value.dev || ""),
     ino: String(value.ino || ""),
@@ -253,8 +317,8 @@ function normalizeFsIdentity(value?: any, label?: any, { requirePrivateFile = fa
   return Object.freeze(normalized);
 }
 
-function workerIdentity(value?: any, label?: any) : any {
-  const identity: any = normalizeFsIdentity(value, label);
+function workerIdentity(value: unknown, label: string): Readonly<FsIdentity> {
+  const identity = normalizeFsIdentity(value, label);
   return Object.freeze({
     birthtimeNs: identity.birthtimeNs,
     dev: identity.dev,
@@ -263,7 +327,7 @@ function workerIdentity(value?: any, label?: any) : any {
   });
 }
 
-function sameIdentity(left?: any, right?: any) : any {
+function sameIdentity(left?: FsIdentity | null, right?: FsIdentity | null): boolean {
   return Boolean(
     left &&
     right &&
@@ -274,7 +338,7 @@ function sameIdentity(left?: any, right?: any) : any {
   );
 }
 
-async function guardAttempt({ leaseGuard = null, signal = null }: Record<string, any> = {}) : Promise<any> {
+async function guardAttempt({ leaseGuard = null, signal = null }: GuardOptions = {}): Promise<void> {
   if (signal?.aborted) {
     throw materializationError(
       "materialization_cancelled",
@@ -283,7 +347,7 @@ async function guardAttempt({ leaseGuard = null, signal = null }: Record<string,
     );
   }
   if (typeof leaseGuard === "function") {
-    const result: any = await leaseGuard();
+    const result = await leaseGuard();
     if (result === false) {
       throw materializationError(
         "materialization_fenced",
@@ -301,16 +365,16 @@ async function guardAttempt({ leaseGuard = null, signal = null }: Record<string,
   }
 }
 
-async function lstatOrMissing(candidate?: any) : Promise<any> {
+async function lstatOrMissing(candidate: string): Promise<BigIntStats | null> {
   try {
     return await fs.lstat(candidate, { bigint: true });
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return null;
+  } catch (error: unknown) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
 }
 
-function assertPrivateDirectory(stat?: any) : any {
+function assertPrivateDirectory(stat: BigIntStats | null): asserts stat is BigIntStats {
   if (
     !stat?.isDirectory?.() ||
     stat?.isSymbolicLink?.() ||
@@ -332,22 +396,22 @@ function assertPrivateDirectory(stat?: any) : any {
   }
 }
 
-async function inspectTargetChain(rootPath?: any, logicalTarget?: any) : Promise<any> {
-  const root: any = path.resolve(rootPath);
-  const segments: any = logicalTarget.split("/");
-  const parentSegments: any = segments.slice(0, -1);
-  const rootStat: any = await lstatOrMissing(root);
+async function inspectTargetChain(rootPath: string, logicalTarget: string) {
+  const root = path.resolve(rootPath);
+  const segments = logicalTarget.split("/");
+  const parentSegments = segments.slice(0, -1);
+  const rootStat = await lstatOrMissing(root);
   assertPrivateDirectory(rootStat);
-  const parentStates: any[] = [{
+  const parentStates: Array<FsIdentity & { depth: number; nameDigest: string }> = [{
     depth: 0,
     nameDigest: fingerprint("workspace-root"),
     ...statIdentity(rootStat)
   }];
-  let current: any = root;
-  let missingFrom: any = -1;
-  for (let index: any = 0; index < parentSegments.length; index += 1) {
+  let current = root;
+  let missingFrom = -1;
+  for (let index = 0; index < parentSegments.length; index += 1) {
     current = path.join(current, parentSegments[index]);
-    const stat: any = await lstatOrMissing(current);
+    const stat = await lstatOrMissing(current);
     if (!stat) {
       missingFrom = index;
       break;
@@ -359,24 +423,24 @@ async function inspectTargetChain(rootPath?: any, logicalTarget?: any) : Promise
       ...statIdentity(stat)
     });
   }
-  const targetPath: any = path.join(root, ...segments);
-  const targetStat: any = missingFrom < 0
+  const targetPath = path.join(root, ...segments);
+  const targetStat = missingFrom < 0
     ? await lstatOrMissing(targetPath)
     : null;
-  const parentIdentity: any = parentStates.at(-1);
-  const normalizedParentIdentity: Readonly<Record<string, any>> = Object.freeze({
+  const parentIdentity = parentStates.at(-1)!;
+  const normalizedParentIdentity: Readonly<FsIdentity> = Object.freeze({
     birthtimeNs: parentIdentity.birthtimeNs,
     dev: parentIdentity.dev,
     ino: parentIdentity.ino,
     mode: parentIdentity.mode
   });
-  const parentFingerprint: any = fingerprint({
+  const parentFingerprint = fingerprint({
     version: TARGET_FINGERPRINT_VERSION,
     logicalTargetDigest: fingerprint(logicalTarget),
     missingParentDepth: missingFrom,
     parentStates
   });
-  const targetStateDigest: any = fingerprint({
+  const targetStateDigest = fingerprint({
     version: TARGET_FINGERPRINT_VERSION,
     parentFingerprint,
     target: targetStat
@@ -399,7 +463,7 @@ async function inspectTargetChain(rootPath?: any, logicalTarget?: any) : Promise
   });
 }
 
-function normalizeStateEventAnchor(value?: any) : any {
+function normalizeStateEventAnchor(value: unknown): Readonly<StateEventAnchor> {
   if (!exactObject(value, ["eventHash", "offset"])) {
     throw materializationError(
       "materialization_binding_invalid",
@@ -407,8 +471,8 @@ function normalizeStateEventAnchor(value?: any) : any {
       "The state event anchor is invalid."
     );
   }
-  const offset: any = Number(value.offset);
-  const eventHash: any = String(value.eventHash || "")
+  const offset = Number(value.offset);
+  const eventHash = String(value.eventHash || "")
     .trim()
     .toLowerCase()
     .replace(/^sha256:/u, "");
@@ -426,7 +490,7 @@ function normalizeStateEventAnchor(value?: any) : any {
   return Object.freeze({ eventHash, offset });
 }
 
-function normalizeBinding(input?: any) : any {
+function normalizeBinding(input: unknown): Readonly<MaterializationBinding> {
   if (
     !exactObject(
       input,
@@ -466,7 +530,7 @@ function normalizeBinding(input?: any) : any {
   });
 }
 
-function publicationIntentDigest(publication?: any) : any {
+function publicationIntentDigest(publication: Omit<PublicationDescriptor, "intentDigest"> | PublicationDescriptor): string {
   return fingerprint({
     version: PUBLICATION_INTENT_VERSION,
     publicationId: publication.publicationId,
@@ -483,8 +547,13 @@ function publicationIntentDigest(publication?: any) : any {
   });
 }
 
-function normalizePublicationIntent(value?: any, binding?: any, target?: any, anchor?: any) : any {
-  const expectedKeys: any[] = [
+function normalizePublicationIntent(
+  value: unknown,
+  binding: MaterializationBinding,
+  target: { parentFingerprint: string; parentIdentity: FsIdentity; targetStateDigest: string },
+  anchor: StateEventAnchor
+): Readonly<PublicationDescriptor> {
+  const expectedKeys: string[] = [
     "byteCount",
     "contentDigest",
     "intentDigest",
@@ -508,9 +577,10 @@ function normalizePublicationIntent(value?: any, binding?: any, target?: any, an
       "Publication intent is not a closed descriptor."
     );
   }
-  const publication: Record<string, any> = {
+  const publication: PublicationDescriptor = {
     byteCount: normalizeByteCount(value.byteCount),
     contentDigest: normalizeDigest(value.contentDigest),
+    intentDigest: "",
     logicalTargetDigest: normalizeDigest(
       value.logicalTargetDigest,
       "Logical target digest"
@@ -576,8 +646,8 @@ function normalizePublicationIntent(value?: any, binding?: any, target?: any, an
   return Object.freeze(publication);
 }
 
-function preparedIdentityFromReserved(reserved?: any, publication?: any) : any {
-  const identity: any = normalizeFsIdentity(
+function preparedIdentityFromReserved(reserved: unknown, publication: PublicationDescriptor): Readonly<FsIdentity> {
+  const identity = normalizeFsIdentity(
     reserved,
     "Reserved inode identity",
     { requirePrivateFile: true }
@@ -589,7 +659,7 @@ function preparedIdentityFromReserved(reserved?: any, publication?: any) : any {
   });
 }
 
-function publicationReservationDigest(publication?: any, preparedIdentity?: any) : any {
+function publicationReservationDigest(publication: PublicationDescriptor, preparedIdentity: FsIdentity): string {
   return fingerprint({
     version: PUBLICATION_RESERVATION_VERSION,
     intentDigest: publication.intentDigest,
@@ -597,7 +667,7 @@ function publicationReservationDigest(publication?: any, preparedIdentity?: any)
   });
 }
 
-function publicationProofDigest(publication?: any) : any {
+function publicationProofDigest(publication: PublicationDescriptor): string {
   return fingerprint({
     version: PUBLICATION_PROOF_VERSION,
     intentDigest: publication.intentDigest,
@@ -606,8 +676,8 @@ function publicationProofDigest(publication?: any) : any {
   });
 }
 
-function reservedPublication(publication?: any, reservedIdentity?: any) : any {
-  const preparedIdentity: any = preparedIdentityFromReserved(
+function reservedPublication(publication: PublicationDescriptor, reservedIdentity: unknown): Readonly<PublicationDescriptor> {
+  const preparedIdentity = preparedIdentityFromReserved(
     reservedIdentity,
     publication
   );
@@ -622,15 +692,15 @@ function reservedPublication(publication?: any, reservedIdentity?: any) : any {
   });
 }
 
-function preparedPublication(publication?: any) : any {
+function preparedPublication(publication: PublicationDescriptor): Readonly<PublicationDescriptor> {
   return Object.freeze({
     ...publication,
     proofDigest: publicationProofDigest(publication)
   });
 }
 
-function normalizeRecoveryPublication(value?: any, binding?: any) : any {
-  const expectedKeys: any[] = [
+function normalizeRecoveryPublication(value: unknown, binding: MaterializationBinding): Readonly<PublicationDescriptor> {
+  const expectedKeys: string[] = [
     "byteCount",
     "contentDigest",
     "intentDigest",
@@ -654,7 +724,7 @@ function normalizeRecoveryPublication(value?: any, binding?: any) : any {
       "Recovery publication is unavailable."
     );
   }
-  const base: Record<string, any> = {
+  const base: PublicationDescriptor = {
     byteCount: normalizeByteCount(value.byteCount),
     contentDigest: normalizeDigest(value.contentDigest),
     intentDigest: normalizeDigest(value.intentDigest, "Intent digest"),
@@ -671,7 +741,10 @@ function normalizeRecoveryPublication(value?: any, binding?: any) : any {
       "Parent identity"
     ),
     priorRevision: boundedId(value.priorRevision, "Prior revision"),
+    preparedIdentity: null,
+    proofDigest: "",
     publicationId: boundedId(value.publicationId, "Publication identity"),
+    reservationDigest: "",
     stateEventAnchor: normalizeStateEventAnchor(value.stateEventAnchor),
     stateOperationId: boundedId(
       value.stateOperationId,
@@ -714,7 +787,7 @@ function normalizeRecoveryPublication(value?: any, binding?: any) : any {
       proofDigest: ""
     });
   }
-  const preparedIdentity: any = normalizeFsIdentity(
+  const preparedIdentity = normalizeFsIdentity(
     value.preparedIdentity,
     "Prepared inode identity",
     { requirePrivateFile: true }
@@ -729,7 +802,7 @@ function normalizeRecoveryPublication(value?: any, binding?: any) : any {
       "Prepared inode identity does not match its content binding."
     );
   }
-  const reserved: Readonly<Record<string, any>> = Object.freeze({
+  const reserved: Readonly<PublicationDescriptor> = Object.freeze({
     ...base,
     preparedIdentity,
     reservationDigest: publicationReservationDigest(
@@ -746,7 +819,7 @@ function normalizeRecoveryPublication(value?: any, binding?: any) : any {
     );
   }
   if (!value.proofDigest) return reserved;
-  const prepared: any = preparedPublication(reserved);
+  const prepared = preparedPublication(reserved);
   if (prepared.proofDigest !== String(value.proofDigest || "")) {
     throw materializationError(
       "materialization_publication_wal_mismatch",
@@ -757,7 +830,11 @@ function normalizeRecoveryPublication(value?: any, binding?: any) : any {
   return prepared;
 }
 
-async function requireExactAck(callback?: any, publication?: any, stage?: any) : Promise<any> {
+async function requireExactAck(
+  callback: ((publication: PublicationDescriptor) => Promise<unknown>) | undefined,
+  publication: PublicationDescriptor,
+  stage: string
+): Promise<void> {
   if (typeof callback !== "function") {
     throw materializationError(
       "materialization_publication_wal_unavailable",
@@ -765,8 +842,10 @@ async function requireExactAck(callback?: any, publication?: any, stage?: any) :
       `The ${stage} publication journal is unavailable.`
     );
   }
-  const acknowledged: any = await callback(publication);
-  const candidate: any = acknowledged?.publication || acknowledged;
+  const acknowledged = await callback(publication);
+  const candidate = acknowledged !== null && typeof acknowledged === "object" && "publication" in acknowledged
+    ? acknowledged.publication
+    : acknowledged;
   if (
     !candidate ||
     canonicalJson(candidate) !== canonicalJson(publication)
@@ -779,7 +858,7 @@ async function requireExactAck(callback?: any, publication?: any, stage?: any) :
   }
 }
 
-function bufferView(value?: any) : any {
+function bufferView(value: unknown): Buffer {
   if (Buffer.isBuffer(value)) return value;
   if (ArrayBuffer.isView(value)) {
     return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
@@ -797,7 +876,10 @@ async function copyBoundedStream({
   byteCount,
   guard,
   afterFirstWrite = null
-}: Record<string, any>) : Promise<any> {
+}: {
+  stream: AsyncIterable<unknown>; worker: MaterializationDirectoryWorker; byteCount: number;
+  guard: GuardOptions; afterFirstWrite?: ((input: { copiedBytes: number }) => void | Promise<void>) | null;
+}): Promise<void> {
   if (!stream || typeof stream[Symbol.asyncIterator] !== "function") {
     throw materializationError(
       "materialization_stream_required",
@@ -805,16 +887,16 @@ async function copyBoundedStream({
       "An authorized custody stream is required."
     );
   }
-  let copied: any = 0;
+  let copied = 0;
   for await (const value of stream) {
-    const chunk: any = bufferView(value);
+    const chunk = bufferView(value);
     for (
-      let offset: any = 0;
+      let offset = 0;
       offset < chunk.byteLength;
       offset += MAX_STREAM_WINDOW_BYTES
     ) {
       await guardAttempt(guard);
-      const window: any = chunk.subarray(
+      const window = chunk.subarray(
         offset,
         Math.min(
           chunk.byteLength,
@@ -844,11 +926,11 @@ async function copyBoundedStream({
   }
 }
 
-async function* guardedArchiveChunks(worker?: any, guard?: any) : AsyncGenerator<any, any, any> {
-  const iterator: any = worker.readChunks()[Symbol.asyncIterator]();
+async function* guardedArchiveChunks(worker: MaterializationDirectoryWorker, guard: GuardOptions): AsyncGenerator<Buffer, void, void> {
+  const iterator = worker.readChunks()[Symbol.asyncIterator]();
   while (true) {
     await guardAttempt(guard);
-    const next: any = await iterator.next();
+    const next = await iterator.next();
     await guardAttempt(guard);
     if (next.done) return;
     yield next.value;
@@ -861,7 +943,7 @@ function incrementalCheckpointSnapshot({
   stateCommit,
   archived,
   publication
-}: Record<string, any>) : any {
+}: { workspace: WorkspaceRecord; logicalTarget: string; stateCommit: StateCommitRecord; archived: ArchiveRecord; publication: PublicationDescriptor }) {
   return Object.freeze({
     schemaVersion: "v0.0.1:workspace:file-incremental-checkpoint-1",
     workspaceId: workspace.workspaceId,
@@ -884,7 +966,7 @@ function exactPublicationPayload({
   logicalTarget,
   publication,
   archived
-}: Record<string, any>) : any {
+}: { workspace: WorkspaceRecord; logicalTarget: string; publication: PublicationDescriptor; archived: ArchiveRecord }) {
   return Object.freeze({
     action: "file.materialize",
     archiveContentRefsDigest: fingerprint(archived.contentRefs || []),
@@ -904,10 +986,10 @@ function isExactPublicationEvent({
   workspace,
   logicalTarget,
   publication
-}: Record<string, any>) : any {
+}: { event: EventRecord | null; workspace: WorkspaceRecord; logicalTarget: string; publication: PublicationDescriptor }): boolean {
   if (!event || !publication?.proofDigest) return false;
-  const payload: any = event.payload;
-  const expectedKeys: any[] = [
+  const payload = event.payload;
+  const expectedKeys: string[] = [
     "action",
     "archiveContentRefsDigest",
     "archiveRootCid",
@@ -939,7 +1021,7 @@ function isExactPublicationEvent({
   );
 }
 
-function requireDependencies(dependencies?: any) : any {
+function requireDependencies(dependencies: Partial<MaterializationDependencies>): asserts dependencies is MaterializationDependencies {
   for (const [name, value] of [
     ["workspaceForMaterialization", dependencies.workspaceForMaterialization],
     ["workspaceFsRoot", dependencies.workspaceFsRoot],
@@ -984,8 +1066,8 @@ function requireDependencies(dependencies?: any) : any {
   }
 }
 
-async function strictAccess(binding?: any, dependencies?: any) : Promise<any> {
-  const access: any = dependencies.workspaceForMaterialization({
+async function strictAccess(binding: MaterializationBinding, dependencies: MaterializationDependencies) {
+  const access = dependencies.workspaceForMaterialization({
     workspaceId: binding.workspaceId
   });
   if (!access?.ok) {
@@ -995,12 +1077,12 @@ async function strictAccess(binding?: any, dependencies?: any) : Promise<any> {
       "The materialization workspace is unavailable."
     );
   }
-  const rootPath: any = dependencies.workspaceFsRoot(access.workspace);
+  const rootPath = dependencies.workspaceFsRoot(access.workspace);
   return { access, rootPath, workspace: access.workspace };
 }
 
-async function strictRevision(binding?: any, dependencies?: any) : Promise<any> {
-  const result: any = await dependencies.workspaceFileRevision({
+async function strictRevision(binding: MaterializationBinding, dependencies: MaterializationDependencies): Promise<string> {
+  const result = await dependencies.workspaceFileRevision({
     workspaceId: binding.workspaceId
   });
   if (!result?.ok || !result.revision) {
@@ -1013,8 +1095,8 @@ async function strictRevision(binding?: any, dependencies?: any) : Promise<any> 
   return String(result.revision);
 }
 
-async function latestAnchor(workspace?: any, dependencies?: any) : Promise<any> {
-  const events: any = await dependencies.merkleState.eventLog.listEvents(
+async function latestAnchor(workspace: WorkspaceRecord, dependencies: MaterializationDependencies): Promise<Readonly<StateEventAnchor> | null> {
+  const events = await dependencies.merkleState.eventLog.listEvents(
     dependencies.fileStateApi.workspaceStateScope(workspace),
     { limit: 1 }
   );
@@ -1026,13 +1108,13 @@ async function latestAnchor(workspace?: any, dependencies?: any) : Promise<any> 
     : null;
 }
 
-async function inspectBoundTarget(binding?: any, dependencies?: any, guard: Record<string, any> = {}) : Promise<any> {
+async function inspectBoundTarget(binding: MaterializationBinding, dependencies: MaterializationDependencies, guard: GuardOptions = {}): Promise<Readonly<BoundTarget>> {
   await guardAttempt(guard);
   const { rootPath, workspace } = await strictAccess(
     binding,
     dependencies
   );
-  const revision: any = await strictRevision(binding, dependencies);
+  const revision = await strictRevision(binding, dependencies);
   if (revision !== binding.expectedWorkspaceRevision) {
     throw materializationError(
       "materialization_stale_revision",
@@ -1040,7 +1122,7 @@ async function inspectBoundTarget(binding?: any, dependencies?: any, guard: Reco
       "Workspace materialization revision is stale."
     );
   }
-  const target: any = await inspectTargetChain(
+  const target = await inspectTargetChain(
     rootPath,
     binding.logicalTarget
   );
@@ -1058,7 +1140,7 @@ async function inspectBoundTarget(binding?: any, dependencies?: any, guard: Reco
       "The workspace materialization target must be missing."
     );
   }
-  const anchor: any = await latestAnchor(workspace, dependencies);
+  const anchor = await latestAnchor(workspace, dependencies);
   if (!anchor) {
     throw materializationError(
       "materialization_revision_uninitialized",
@@ -1076,21 +1158,21 @@ async function inspectBoundTarget(binding?: any, dependencies?: any, guard: Reco
   });
 }
 
-async function captureBoundPreimage(binding?: any, dependencies?: any, guard: Record<string, any> = {}) : Promise<any> {
-  const before: any = await inspectBoundTarget(
+async function captureBoundPreimage(binding: MaterializationBinding, dependencies: MaterializationDependencies, guard: GuardOptions = {}) {
+  const before = await inspectBoundTarget(
     binding,
     dependencies,
     guard
   );
-  const captured: any =
+  const captured =
     await dependencies.captureWorkspaceMaterializationSnapshot({
       workspaceId: binding.workspaceId,
       logicalTarget: binding.logicalTarget,
       leaseGuard: guard.leaseGuard
     });
-  const snapshot: any = captured?.snapshot;
-  const files: any = Array.isArray(snapshot?.files) ? snapshot.files : [];
-  const entry: any = files[0] || null;
+  const snapshot = captured?.snapshot;
+  const files = Array.isArray(snapshot?.files) ? snapshot.files : [];
+  const entry = files[0] || null;
   if (
     captured?.ok !== true ||
     snapshot?.workspaceId !== binding.workspaceId ||
@@ -1110,7 +1192,7 @@ async function captureBoundPreimage(binding?: any, dependencies?: any, guard: Re
       "Workspace materialization preimage is incomplete."
     );
   }
-  const after: any = await inspectBoundTarget(
+  const after = await inspectBoundTarget(
     binding,
     dependencies,
     guard
@@ -1135,12 +1217,12 @@ async function captureBoundPreimage(binding?: any, dependencies?: any, guard: Re
 }
 
 async function assertBoundTargetUnchanged(
-  binding?: any,
-  expected?: any,
-  dependencies?: any,
-  guard?: any
-) : Promise<any> {
-  const current: any = await inspectBoundTarget(
+  binding: MaterializationBinding,
+  expected: BoundTarget,
+  dependencies: MaterializationDependencies,
+  guard: GuardOptions
+): Promise<void> {
+  const current = await inspectBoundTarget(
     binding,
     dependencies,
     guard
@@ -1161,11 +1243,11 @@ async function assertBoundTargetUnchanged(
 }
 
 async function materializeBoundStream(
-  binding?: any,
-  input?: any,
-  dependencies?: any
-) : Promise<any> {
-  const guard: Record<string, any> = {
+  binding: MaterializationBinding,
+  input: MaterializationInput,
+  dependencies: MaterializationDependencies
+) {
+  const guard: GuardOptions = {
     leaseGuard: input.leaseGuard,
     signal: input.signal
   };
@@ -1173,25 +1255,25 @@ async function materializeBoundStream(
     binding,
     dependencies
   );
-  const target: any = await inspectBoundTarget(
+  const target = await inspectBoundTarget(
     binding,
     dependencies,
     guard
   );
-  const inspected: any = await inspectTargetChain(
+  const inspected = await inspectTargetChain(
     rootPath,
     binding.logicalTarget
   );
-  const publication: any = normalizePublicationIntent(
+  const publication = normalizePublicationIntent(
     input.publication,
     binding,
     inspected,
     target.anchor
   );
-  let currentPublication: any = publication;
-  let worker: any = null;
-  let stateCommit: any = null;
-  let stateCommitAttempted: any = false;
+  let currentPublication: Readonly<PublicationDescriptor> = publication;
+  let worker: MaterializationDirectoryWorker | null = null;
+  let stateCommit: StateCommitRecord | null = null;
+  let stateCommitAttempted = false;
   try {
     await assertBoundTargetUnchanged(
       binding,
@@ -1221,9 +1303,9 @@ async function materializeBoundStream(
         "Current workspace publication authority is required."
       );
     }
-    const authorizedStream: any =
+    const authorizedStream =
       await input.claimPublicationAuthority();
-    const reserved: any = await worker.reserve();
+    const reserved = await worker.reserve();
     await input.afterTempInodeReservedBeforeWal?.({
       intentDigest: publication.intentDigest,
       publicationId: publication.publicationId,
@@ -1248,7 +1330,7 @@ async function materializeBoundStream(
       worker,
       byteCount: currentPublication.byteCount,
       guard,
-      afterFirstWrite: ({ copiedBytes }: Record<string, any>) : any =>
+      afterFirstWrite: ({ copiedBytes }) =>
         input.afterFirstChunkWrittenBeforeContinue?.({
           copiedBytes,
           publicationId: currentPublication.publicationId,
@@ -1256,7 +1338,7 @@ async function materializeBoundStream(
         })
     });
     await guardAttempt(guard);
-    const finished: any = await worker.finish();
+    const finished = await worker.finish();
     if (
       !sameIdentity(
         finished.preparedIdentity,
@@ -1302,7 +1384,7 @@ async function materializeBoundStream(
       stateOperationId: currentPublication.stateOperationId
     });
     await guardAttempt(guard);
-    const currentParent: any = await inspectTargetChain(
+    const currentParent = await inspectTargetChain(
       rootPath,
       binding.logicalTarget
     );
@@ -1324,7 +1406,7 @@ async function materializeBoundStream(
         "Workspace parent changed during descriptor-bound publication."
       );
     }
-    const preArchiveVerification: any = await worker.verify();
+    const preArchiveVerification = await worker.verify();
     if (
       preArchiveVerification.contentDigest !==
         currentPublication.contentDigest ||
@@ -1342,7 +1424,7 @@ async function materializeBoundStream(
       );
     }
     await guardAttempt(guard);
-    const archived: any =
+    const archived =
       await dependencies.fileStateApi.archiveWorkspaceFileSource(
         workspace,
         binding.logicalTarget,
@@ -1355,13 +1437,13 @@ async function materializeBoundStream(
           }
         }
       );
-    const payload: any = exactPublicationPayload({
+    const payload = exactPublicationPayload({
       workspace,
       logicalTarget: binding.logicalTarget,
       publication: currentPublication,
       archived
     });
-    const verified: any = await worker.verify();
+    const verified = await worker.verify();
     if (
       verified.contentDigest !== currentPublication.contentDigest ||
       verified.byteCount !== currentPublication.byteCount ||
@@ -1414,7 +1496,7 @@ async function materializeBoundStream(
       );
     }
     await guardAttempt(guard);
-    const checkpoint: any =
+    const checkpoint =
       await dependencies.fileStateApi.recordWorkspaceFileCheckpoint({
         workspace,
         operationId: currentPublication.stateOperationId,
@@ -1436,7 +1518,7 @@ async function materializeBoundStream(
         "Workspace materialization checkpoint is incomplete."
       );
     }
-    const durableNames: any = await worker.inspectPublished();
+    const durableNames = await worker.inspectPublished();
     if (
       durableNames.nlink !== 1 ||
       !sameIdentity(
@@ -1455,7 +1537,7 @@ async function materializeBoundStream(
       nowIso(),
       workspace.workspaceId
     );
-    const finalVerification: any = await worker.verify();
+    const finalVerification = await worker.verify();
     if (
       finalVerification.contentDigest !==
         currentPublication.contentDigest ||
@@ -1493,8 +1575,8 @@ async function materializeBoundStream(
       proofDigest: currentPublication.proofDigest,
       stateCommit
     });
-  } catch (error: any) {
-    if (error?.abrupt === true) {
+  } catch (error: unknown) {
+    if (error !== null && typeof error === "object" && "abrupt" in error && error.abrupt === true) {
       worker?.terminate?.();
       throw error;
     }
@@ -1504,12 +1586,13 @@ async function materializeBoundStream(
       currentPublication.preparedIdentity &&
       worker
     ) {
+      const cleanupWorker = worker;
       await guardAttempt(guard)
-        .then(() : any => worker.cleanup())
-        .catch(() : any => {});
+        .then(() => cleanupWorker.cleanup())
+        .catch(() => {});
     }
     if (
-      UNSAFE_INODE_TOPOLOGY_CODES.has(String(error?.code || ""))
+      UNSAFE_INODE_TOPOLOGY_CODES.has(error !== null && typeof error === "object" && "code" in error ? String(error.code || "") : "")
     ) {
       throw materializationError(
         "materialization_rollback_incomplete",
@@ -1519,22 +1602,23 @@ async function materializeBoundStream(
     }
     throw error;
   } finally {
-    await worker?.close?.().catch(() : any => {});
+    await worker?.close?.().catch(() => {});
   }
 }
 
-function preimageProvesMissingTarget(binding?: any, preimage?: any) : any {
-  const snapshot: any = preimage?.snapshot &&
-    typeof preimage.snapshot === "object"
-    ? preimage.snapshot
-    : preimage;
-  const files: any = Array.isArray(snapshot?.files) ? snapshot.files : [];
-  const entry: any = files.find(
-    (candidate?: any) : any =>
+function preimageProvesMissingTarget(binding: MaterializationBinding, preimage: unknown): SnapshotRecord | null {
+  const record = preimage !== null && typeof preimage === "object" ? preimage as PlainRecord : null;
+  const snapshot: SnapshotRecord | null = record?.snapshot && typeof record.snapshot === "object"
+    ? record.snapshot as SnapshotRecord
+    : record as SnapshotRecord | null;
+  if (!snapshot) return null;
+  const files = Array.isArray(snapshot.files) ? snapshot.files : [];
+  const entry = files.find(
+    (candidate) =>
       String(candidate?.relativePath || candidate?.path || "") ===
       binding.logicalTarget
   );
-  return Boolean(
+  return (
     snapshot?.workspaceId === binding.workspaceId &&
     snapshot?.stateRoot === binding.expectedWorkspaceRevision &&
     entry?.exists === false &&
@@ -1545,16 +1629,16 @@ function preimageProvesMissingTarget(binding?: any, preimage?: any) : any {
 }
 
 async function recoverBoundPublication(
-  binding?: any,
-  input?: any,
-  dependencies?: any
-) : Promise<any> {
-  const guard: Record<string, any> = {
+  binding: MaterializationBinding,
+  input: MaterializationInput,
+  dependencies: MaterializationDependencies
+) {
+  const guard: GuardOptions = {
     leaseGuard: input.leaseGuard,
     signal: input.signal
   };
   await guardAttempt(guard);
-  const snapshot: any = preimageProvesMissingTarget(
+  const snapshot = preimageProvesMissingTarget(
     binding,
     input.preimage
   );
@@ -1565,11 +1649,11 @@ async function recoverBoundPublication(
       "Workspace materialization preimage cannot be proven."
     ));
   }
-  const publication: any = normalizeRecoveryPublication(
+  const publication = normalizeRecoveryPublication(
     input.publication,
     binding
   );
-  const snapshotAnchor: any = normalizeStateEventAnchor(
+  const snapshotAnchor = normalizeStateEventAnchor(
     snapshot.stateEventAnchor
   );
   if (
@@ -1586,7 +1670,7 @@ async function recoverBoundPublication(
     binding,
     dependencies
   );
-  const inspected: any = await inspectTargetChain(
+  const inspected = await inspectTargetChain(
     rootPath,
     binding.logicalTarget
   );
@@ -1604,15 +1688,15 @@ async function recoverBoundPublication(
       "Workspace materialization parent identity changed."
     ));
   }
-  const scope: any = dependencies.fileStateApi.workspaceStateScope(workspace);
-  const event: any = await dependencies.merkleState.eventLog.getEvent(
+  const scope = dependencies.fileStateApi.workspaceStateScope(workspace);
+  const event = await dependencies.merkleState.eventLog.getEvent(
     scope,
     publication.stateEventAnchor.offset + 1
   );
-  const currentState: any = await dependencies.merkleState.stateCommit.begin({
+  const currentState = await dependencies.merkleState.stateCommit.begin({
     scope
   });
-  let worker: any;
+  let worker: MaterializationDirectoryWorker | undefined;
   try {
     worker = await createMaterializationDirectoryWorker({
       parentPath: inspected.parentPath,
@@ -1634,7 +1718,7 @@ async function recoverBoundPublication(
         dependencies.merkleState.eventLog.verifyPartition(scope),
         dependencies.merkleState.eventLog.listEvents(scope, { limit: 1 })
       ]);
-      const latestEvent: any = latestEvents[0] || null;
+      const latestEvent = latestEvents[0] || null;
       if (
         partitionVerification?.ok !== true ||
         !latestEvent ||
@@ -1653,13 +1737,21 @@ async function recoverBoundPublication(
           "Workspace materialization event lineage is ambiguous."
         ));
       }
-      const currentEntry: any =
+      const eventPayload = event.payload;
+      if (!eventPayload) {
+        return controlledFailure(materializationError(
+          "materialization_rollback_incomplete",
+          409,
+          "Committed workspace materialization event payload is unavailable."
+        ));
+      }
+      const currentEntry =
         await dependencies.merkleState.merkleIndex.get(
           currentState.currentRoot,
           binding.logicalTarget
         );
       if (
-        currentEntry?.valueRef !== event.payload.archiveRootCid ||
+        currentEntry?.valueRef !== eventPayload.archiveRootCid ||
         currentEntry?.metadata?.contentSha256 !==
           publication.contentDigest ||
         Number(currentEntry?.metadata?.sizeBytes) !==
@@ -1673,7 +1765,7 @@ async function recoverBoundPublication(
           "Committed workspace materialization membership is not exact."
         ));
       }
-      const names: any = await worker.inspectRecovery();
+      const names = await worker.inspectRecovery();
       if (names.target !== true || names.temp === true) {
         return controlledFailure(materializationError(
           "materialization_rollback_incomplete",
@@ -1681,7 +1773,7 @@ async function recoverBoundPublication(
           "Committed workspace materialization inode is not exact."
         ));
       }
-      const verified: any = await worker.verify();
+      const verified = await worker.verify();
       if (
         verified.contentDigest !== publication.contentDigest ||
         verified.byteCount !== publication.byteCount ||
@@ -1693,7 +1785,7 @@ async function recoverBoundPublication(
           "Committed workspace materialization content is not exact."
         ));
       }
-      const stateCommit: any =
+      const stateCommit =
         await dependencies.merkleState.stateCommit.getCommitByEventHash({
           scope,
           eventHash: event.eventHash
@@ -1712,15 +1804,15 @@ async function recoverBoundPublication(
           "Committed workspace materialization receipt is incomplete."
         ));
       }
-      const mutation: any = stateCommit.mutations?.find(
-        (candidate?: any) : any =>
+      const mutation = stateCommit.mutations?.find(
+        (candidate) =>
           candidate.action === "put" &&
           candidate.key === binding.logicalTarget
       );
       if (
         !mutation?.valueRef ||
-        event.payload.archiveRootCid !== mutation.valueRef ||
-        event.payload.archiveContentRefsDigest !==
+        eventPayload.archiveRootCid !== mutation.valueRef ||
+        eventPayload.archiveContentRefsDigest !==
           fingerprint(stateCommit.contentRefs || []) ||
         canonicalJson(event.contentRefs || []) !==
           canonicalJson(stateCommit.contentRefs || [])
@@ -1731,7 +1823,7 @@ async function recoverBoundPublication(
           "Committed workspace materialization mutation is incomplete."
         ));
       }
-      const archived: Record<string, any> = {
+      const archived: ArchiveRecord = {
         rootCid: mutation.valueRef,
         contentRefs: stateCommit.contentRefs || [],
         metadata: {
@@ -1740,7 +1832,7 @@ async function recoverBoundPublication(
         }
       };
       await guardAttempt(guard);
-      const checkpoint: any =
+      const checkpoint =
         await dependencies.fileStateApi.recordWorkspaceFileCheckpoint({
           workspace,
           operationId: publication.stateOperationId,
@@ -1763,7 +1855,7 @@ async function recoverBoundPublication(
           "Committed workspace materialization checkpoint is incomplete."
         ));
       }
-      const finalVerification: any = await worker.verify();
+      const finalVerification = await worker.verify();
       if (
         finalVerification.contentDigest !== publication.contentDigest ||
         finalVerification.byteCount !== publication.byteCount ||
@@ -1805,7 +1897,7 @@ async function recoverBoundPublication(
         "Pre-commit workspace materialization root is ambiguous."
       ));
     }
-    const names: any = await worker.inspectRecovery();
+    const names = await worker.inspectRecovery();
     if (
       !publication.preparedIdentity &&
       (
@@ -1826,7 +1918,7 @@ async function recoverBoundPublication(
       disposition: "retry",
       workspaceRevision: publication.priorRevision
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (isControlledError(error)) return controlledFailure(error);
     return controlledFailure(materializationError(
       "materialization_rollback_incomplete",
@@ -1834,47 +1926,47 @@ async function recoverBoundPublication(
       "Workspace materialization recovery could not be proven."
     ));
   } finally {
-    await worker?.close?.().catch(() : any => {});
+    await worker?.close?.().catch(() => {});
   }
 }
 
-function createBoundRequestPort(binding?: any, dependencies?: any) : any {
+function createBoundRequestPort(binding: MaterializationBinding, dependencies: MaterializationDependencies) {
   return Object.freeze({
-    getRevision: async () : Promise<any> => strictRevision(binding, dependencies),
-    async inspectTarget(options: Record<string, any> = {}) : Promise<any> {
+    getRevision: async () => strictRevision(binding, dependencies),
+    async inspectTarget(options: GuardOptions = {}) {
       try {
         return Object.freeze({
           ok: true,
           ...await inspectBoundTarget(binding, dependencies, options)
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (isControlledError(error)) return controlledFailure(error);
         throw error;
       }
     },
-    async capturePreimage(options: Record<string, any> = {}) : Promise<any> {
+    async capturePreimage(options: GuardOptions = {}) {
       try {
         return await captureBoundPreimage(
           binding,
           dependencies,
           options
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (isControlledError(error)) return controlledFailure(error);
         throw error;
       }
     },
-    materialize(input: Record<string, any> = {}) : any {
+    materialize(input: MaterializationInput = {}) {
       return materializeBoundStream(binding, input, dependencies);
     },
-    async recover(input: Record<string, any> = {}) : Promise<any> {
+    async recover(input: MaterializationInput = {}) {
       try {
         return await recoverBoundPublication(
           binding,
           input,
           dependencies
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (isControlledError(error)) {
           return controlledFailure(error);
         }
@@ -1885,20 +1977,20 @@ function createBoundRequestPort(binding?: any, dependencies?: any) : any {
 }
 
 export function createAgentWorkspaceMaterializationPort(
-  dependencies: Record<string, any> = {}
-) : any {
+  dependencies: Partial<MaterializationDependencies> = {}
+) {
   requireDependencies(dependencies);
-  const port: Readonly<Record<string, any>> = Object.freeze({
-    async withRequest(input?: any, task?: any) : Promise<any> {
+  const port = Object.freeze({
+    async withRequest<T>(input: unknown, task: ((port: ReturnType<typeof createBoundRequestPort>) => T | Promise<T>) | undefined): Promise<T> {
       if (typeof task !== "function") {
         throw new TypeError(
           "Workspace materialization request task is required."
         );
       }
-      const binding: any = normalizeBinding(input);
+      const binding = normalizeBinding(input);
       return dependencies.withWorkspaceMutation(
         binding.workspaceId,
-        () : any => task(createBoundRequestPort(binding, dependencies))
+        () => task(createBoundRequestPort(binding, dependencies))
       );
     }
   });

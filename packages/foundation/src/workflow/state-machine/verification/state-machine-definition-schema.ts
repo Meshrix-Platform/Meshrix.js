@@ -1,6 +1,24 @@
 import { VALID_TRANSITION_RESULTS } from "../engine/state-machine-result-types.ts";
 
-const ACCEPTANCE_PROOF_CONTRACTS: Readonly<Record<string, any>> = Object.freeze({
+export interface StateDefinition { id: string; terminal?: boolean; externalEntryState?: boolean; waitingStateWithTimeout?: boolean; passiveState?: boolean; }
+export interface EventDefinition { id: string; idempotent?: boolean; riskLevel?: "low" | "medium" | "high"; }
+export interface MatrixCell {
+  from: string; event: string; result: string; to?: string; errorCode?: string;
+  allowedReopenTransition?: boolean; guards?: string[]; requiredGuards?: string[];
+  sideEffects?: string[]; proofObligations?: string[];
+}
+export interface ProofMapping { obligationId: string; method: string; params?: Record<string, unknown>; }
+export interface StateMachineDefinition {
+  machineId: string; entityType: string; version: string; description: string; initialState: string;
+  states: StateDefinition[]; events: EventDefinition[]; totalMatrix: MatrixCell[];
+  invariants: string[]; proofObligations: string[]; proofMappings?: ProofMapping[];
+  guardRegistryRefs?: string[]; allowedTerminalEvents?: string[]; acceptance?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface AcceptanceProofContract { method: string; params: readonly string[]; role?: string; }
+
+const ACCEPTANCE_PROOF_CONTRACTS: Readonly<Record<string, AcceptanceProofContract>> = Object.freeze({
   "PO-ACCEPTANCE-REGISTRY-LINK": Object.freeze({
     method: "registry_entry_matches_machine",
     params: Object.freeze(["registryPath", "capabilityId", "machineId"])
@@ -25,7 +43,17 @@ const ACCEPTANCE_PROOF_CONTRACTS: Readonly<Record<string, any>> = Object.freeze(
   })
 });
 
-function requireExactString(record?: any, key?: any, expected: any = null) : any {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requireStringArray(value: unknown, field: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
+    throw new Error(`${field} must be an array of non-empty strings`);
+  }
+}
+
+function requireExactString(record: Record<string, unknown>, key: string, expected: string | null = null): void {
   if (typeof record?.[key] !== "string" || !record[key].trim()) {
     throw new Error(`capability acceptance field '${key}' must be a non-empty string`);
   }
@@ -34,9 +62,9 @@ function requireExactString(record?: any, key?: any, expected: any = null) : any
   }
 }
 
-function checkCapabilityAcceptanceDefinition(def?: any) : any {
-  const acceptance: any = def.acceptance;
-  if (!acceptance || typeof acceptance !== "object" || Array.isArray(acceptance)) {
+function checkCapabilityAcceptanceDefinition(def: StateMachineDefinition): void {
+  const acceptance = def.acceptance;
+  if (!isRecord(acceptance)) {
     throw new Error("capability acceptance definition requires acceptance metadata");
   }
   requireExactString(acceptance, "capabilityId");
@@ -49,26 +77,26 @@ function checkCapabilityAcceptanceDefinition(def?: any) : any {
     throw new Error("capability acceptance machineId must match acceptance.capabilityId");
   }
 
-  const obligations: any = new Set<any>(def.proofObligations || []);
-  const mappings: any = new Map<any, any>();
+  const obligations = new Set(def.proofObligations);
+  const mappings = new Map<string, ProofMapping>();
   for (const mapping of def.proofMappings || []) {
     if (mappings.has(mapping.obligationId)) {
       throw new Error(`duplicate proof mapping for '${mapping.obligationId}'`);
     }
     mappings.set(mapping.obligationId, mapping);
   }
-  for (const [obligationId, contract] of (Object.entries(ACCEPTANCE_PROOF_CONTRACTS) as [string, any][])) {
+  for (const [obligationId, contract] of Object.entries(ACCEPTANCE_PROOF_CONTRACTS)) {
     if (!obligations.has(obligationId)) {
       throw new Error(`capability acceptance proof obligation '${obligationId}' is required`);
     }
-    const mapping: any = mappings.get(obligationId);
+    const mapping = mappings.get(obligationId);
     if (!mapping || mapping.method !== contract.method) {
       throw new Error(`proof obligation '${obligationId}' must use method '${contract.method}'`);
     }
-    const params: any = mapping.params || {};
-    const actualKeys: any = Object.keys(params).sort();
-    const expectedKeys: any = [...contract.params].sort();
-    if (actualKeys.length !== expectedKeys.length || actualKeys.some((key?: any, index?: any) : any => key !== expectedKeys[index])) {
+    const params = mapping.params || {};
+    const actualKeys = Object.keys(params).sort();
+    const expectedKeys = [...contract.params].sort();
+    if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
       throw new Error(`proof method '${contract.method}' must declare exactly: ${expectedKeys.join(", ")}`);
     }
     for (const key of expectedKeys) requireExactString(params, key);
@@ -80,7 +108,7 @@ function checkCapabilityAcceptanceDefinition(def?: any) : any {
     throw new Error("capability acceptance proof obligations and mappings must match the canonical contract exactly");
   }
 
-  const expectedParams: Record<string, any> = {
+  const expectedParams: Record<string, Record<string, unknown>> = {
     "PO-ACCEPTANCE-REGISTRY-LINK": {
       registryPath: acceptance.registryPath,
       capabilityId: acceptance.capabilityId,
@@ -100,31 +128,31 @@ function checkCapabilityAcceptanceDefinition(def?: any) : any {
     },
     "PO-ACCEPTANCE-PRIVACY-SAFE-EVIDENCE": { reportPath: acceptance.reportPath }
   };
-  for (const [obligationId, params] of (Object.entries(expectedParams) as [string, any][])) {
-    if (JSON.stringify(mappings.get(obligationId).params) !== JSON.stringify(params)) {
+  for (const [obligationId, params] of Object.entries(expectedParams)) {
+    if (JSON.stringify(mappings.get(obligationId)?.params) !== JSON.stringify(params)) {
       throw new Error(`proof obligation '${obligationId}' parameters do not match acceptance metadata`);
     }
   }
 
-  const verificationEvent: any = def.events.find((event?: any) : any => event.id === "capability_verifiers_pass");
+  const verificationEvent = def.events.find((event) => event.id === "capability_verifiers_pass");
   if (verificationEvent?.riskLevel !== "high") {
     throw new Error("capability_verifiers_pass must be classified as high risk");
   }
-  const verificationCell: any = def.totalMatrix.find((cell?: any) : any =>
+  const verificationCell = def.totalMatrix.find((cell) =>
     cell.from === "implemented" && cell.event === "capability_verifiers_pass"
   );
   if (verificationCell?.result !== "requires_external_receipt" ||
-      !(verificationCell.sideEffects || []).some((item?: any) : any => item.includes("receipt"))) {
+      !(verificationCell.sideEffects || []).some((item) => item.includes("receipt"))) {
     throw new Error("implemented capability verification must require a verification receipt");
   }
 }
 
-export function checkDefinitionSchema(def?: any) : any {
-  if (!def || typeof def !== "object" || Array.isArray(def)) {
+export function checkDefinitionSchema(def: unknown): boolean {
+  if (!isRecord(def)) {
     throw new Error("definition must be a JSON object");
   }
 
-  const requiredStringFields: any[] = ["machineId", "entityType", "version", "description", "initialState"];
+  const requiredStringFields = ["machineId", "entityType", "version", "description", "initialState"] as const;
   for (const field of requiredStringFields) {
     if (typeof def[field] !== "string" || !def[field].trim()) {
       throw new Error(`definition field '${field}' must be a non-empty string`);
@@ -179,7 +207,7 @@ export function checkDefinitionSchema(def?: any) : any {
   if (!Array.isArray(def.totalMatrix)) {
     throw new Error("definition field 'totalMatrix' must be an array");
   }
-  const validResults: any = VALID_TRANSITION_RESULTS;
+  const validResults = VALID_TRANSITION_RESULTS;
   for (const cell of def.totalMatrix) {
     if (typeof cell !== "object" || Array.isArray(cell) || !cell) {
       throw new Error("matrix cell must be a JSON object");
@@ -222,11 +250,11 @@ export function checkDefinitionSchema(def?: any) : any {
         }
       }
     }
-    if (cell.sideEffects !== undefined && !Array.isArray(cell.sideEffects)) {
-      throw new Error("matrix cell 'sideEffects' must be an array of strings");
+    if (cell.sideEffects !== undefined) {
+      requireStringArray(cell.sideEffects, "matrix cell 'sideEffects'");
     }
-    if (cell.proofObligations !== undefined && !Array.isArray(cell.proofObligations)) {
-      throw new Error("matrix cell 'proofObligations' must be an array of strings");
+    if (cell.proofObligations !== undefined) {
+      requireStringArray(cell.proofObligations, "matrix cell 'proofObligations'");
     }
   }
 
@@ -265,14 +293,21 @@ export function checkDefinitionSchema(def?: any) : any {
       if (typeof mapping.method !== "string" || !mapping.method.trim()) {
         throw new Error("proofMapping 'method' must be a non-empty string");
       }
-      if (mapping.params !== undefined && (typeof mapping.params !== "object" || mapping.params === null)) {
+      if (mapping.params !== undefined && !isRecord(mapping.params)) {
         throw new Error("proofMapping 'params' must be an object");
       }
     }
   }
 
+  if (def.guardRegistryRefs !== undefined) {
+    requireStringArray(def.guardRegistryRefs, "definition field 'guardRegistryRefs'");
+  }
+  if (def.allowedTerminalEvents !== undefined) {
+    requireStringArray(def.allowedTerminalEvents, "definition field 'allowedTerminalEvents'");
+  }
+
   if (def.entityType === "capability_acceptance") {
-    checkCapabilityAcceptanceDefinition(def);
+    checkCapabilityAcceptanceDefinition(def as StateMachineDefinition);
   }
 
   return true;

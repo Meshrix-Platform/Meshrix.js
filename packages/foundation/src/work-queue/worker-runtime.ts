@@ -1,60 +1,103 @@
 import { queueIdentityGenerator } from "./identity.ts";
 import { systemQueueTimeSource } from "./time-source.ts";
 
-export const WORK_QUEUE_HANDLER_MAX_DURATION_MS: any = 15 * 60 * 1000;
+export const WORK_QUEUE_HANDLER_MAX_DURATION_MS = 15 * 60 * 1000;
 
-function toText(value?: any) : any {
+interface QueueRecord { [key: string]: unknown }
+interface QueueLease extends QueueRecord { leaseId: string; expiresAtMs?: number }
+interface QueueCheckpoint extends QueueRecord { checkpointSeq?: number }
+interface QueueWorkItem extends QueueRecord {
+  workItemId: string; queueDefinitionId: string; queueDefinitionVersion?: number; payloadKind?: string;
+  payloadRef?: unknown; ownerRef?: unknown; checkpoint?: QueueCheckpoint;
+}
+interface StoreResult extends QueueRecord { progressed?: boolean; interrupted?: boolean; lease?: QueueLease; workItem?: QueueWorkItem }
+type StoreOperation = (input: QueueRecord) => Promise<StoreResult>;
+interface QueueStore {
+  claim: StoreOperation; complete: StoreOperation; retry: StoreOperation; cancelRunning: StoreOperation;
+  fail: StoreOperation; progress: StoreOperation; checkpoint: StoreOperation; markInDoubt: StoreOperation;
+}
+interface QueueIdentityGenerator { workerId(): string }
+interface QueueTimeSource { nowMs(): number }
+class QueueRuntimeError extends Error {
+  override name = "QueueWorkerRuntimeError";
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+interface QueueLogger { error?(event: string, facts: object): void }
+interface QueueHandler {
+  (input: { workItem: QueueWorkItem; lease: QueueLease; payloadRef?: unknown; ownerRef?: unknown }, context: WorkerContext): Promise<unknown> | unknown;
+  terminable?: boolean;
+}
+interface WorkerContext extends QueueRecord {
+  workerId: string; timeSource: QueueTimeSource; workItem: QueueWorkItem; readonly lease: QueueLease;
+  readonly checkpoint: QueueCheckpoint | null; signal: AbortSignal; payloadRef?: unknown; ownerRef?: unknown;
+  renewLease(input?: QueueRecord): Promise<StoreResult>; progress(input?: QueueRecord): Promise<StoreResult>;
+  saveCheckpoint(checkpointRef?: unknown, input?: QueueRecord): Promise<StoreResult>;
+  complete(input?: QueueRecord): Promise<StoreResult>; retry(input?: QueueRecord): Promise<StoreResult>;
+  cancelRunning(input?: QueueRecord): Promise<StoreResult>; fail(input?: QueueRecord): Promise<StoreResult>;
+}
+interface QueueOutcome extends QueueRecord { action: string; reason?: string; delayMs?: number; retryAfterMs?: number; error?: unknown; lastError?: unknown; reasonDetails?: unknown; extendMs?: number }
+
+function isQueueRecord(value: unknown): value is QueueRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isQueueRuntimeError(value: unknown): value is QueueRuntimeError {
+  return value instanceof Error && isQueueRecord(value) && typeof value.code === "string";
+}
+
+function toText(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function asObject(value: unknown, fallback: QueueRecord = {}): QueueRecord {
+  return isQueueRecord(value) ? value : fallback;
 }
 
-function asPositiveInt(value?: any, fallback: any = 1) : any {
-  const parsed: any = Number(value);
+function asPositiveInt(value: unknown, fallback = 1): number {
+  const parsed = Number(value);
   return Math.max(1, Number.isFinite(parsed) ? Math.trunc(parsed) : fallback);
 }
 
-function normalizeHandlerMap(handlers: Record<string, any> = {}) : any {
+function normalizeHandlerMap(handlers: QueueHandler | Map<string, QueueHandler> | Record<string, QueueHandler> = {}): Map<string, QueueHandler> {
   if (typeof handlers === "function") {
-    return new Map<any, any>([["*", handlers]]);
+    return new Map([["*", handlers]]);
   }
   if (handlers instanceof Map) {
-    return new Map<any, any>(handlers);
+    return new Map(handlers);
   }
-  return new Map<any, any>((Object.entries(asObject(handlers)) as [string, any][]));
+  return new Map(Object.entries(handlers));
 }
 
-function summarizeError(error?: any) : any {
+function summarizeError(error?: unknown) {
   if (!error) {
     return {};
   }
   return {
-    name: error.name || "Error",
-    message: error.message || String(error),
-    code: error.code || "",
-    stack: typeof error.stack === "string" ? error.stack.split("\n").slice(0, 8).join("\n") : ""
+    name: error instanceof Error ? error.name : "Error",
+    message: error instanceof Error ? error.message : String(error),
+    code: isQueueRecord(error) ? toText(error.code) : "",
+    stack: error instanceof Error && typeof error.stack === "string" ? error.stack.split("\n").slice(0, 8).join("\n") : ""
   };
 }
 
-function queueRuntimeError(code?: any, message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
-  error.name = "QueueWorkerRuntimeError";
-  error.code = code;
-  return error;
+function queueRuntimeError(code: string, message: string): QueueRuntimeError {
+  return new QueueRuntimeError(code, message);
 }
 
-function normalizeOutcome(outcome?: any) : any {
-  const canonicalActions: any = new Set<any>(["completed", "retry", "cancelled", "failed", "progress"]);
+function normalizeOutcome(outcome?: unknown): QueueOutcome {
+  const canonicalActions = new Set(["completed", "retry", "cancelled", "failed", "progress"]);
   if (typeof outcome === "string") {
-    const action: any = toText(outcome).toLowerCase();
+    const action = toText(outcome).toLowerCase();
     if (canonicalActions.has(action)) {
       return { action };
     }
   }
-  if (outcome && typeof outcome === "object" && !Array.isArray(outcome)) {
-    const action: any = toText(outcome.action).toLowerCase();
+  if (isQueueRecord(outcome)) {
+    const action = toText(outcome.action).toLowerCase();
     if (canonicalActions.has(action)) {
       return { ...outcome, action };
     }
@@ -62,11 +105,11 @@ function normalizeOutcome(outcome?: any) : any {
   throw new Error("Queue worker outcome action must be one of: completed, retry, cancelled, failed, progress.");
 }
 
-function handlerKey(workItem?: any) : any {
+function handlerKey(workItem: QueueWorkItem): string[] {
   return [
-    workItem.queueDefinitionId,
+    toText(workItem.queueDefinitionId),
     `${workItem.queueDefinitionId}@${workItem.queueDefinitionVersion}`,
-    workItem.payloadKind,
+    toText(workItem.payloadKind),
     "*"
   ];
 }
@@ -83,18 +126,24 @@ export function createQueueWorkerRuntime({
   leaseRenewIntervalMs = 0,
   maxHandlerDurationMs = WORK_QUEUE_HANDLER_MAX_DURATION_MS,
   logger = null
-}: Record<string, any> = {}) : any {
+}: {
+  store?: QueueStore; handlers?: QueueHandler | Map<string, QueueHandler> | Record<string, QueueHandler>; workerId?: unknown;
+  identityGenerator?: QueueIdentityGenerator; timeSource?: QueueTimeSource; fallbackCoordinator?: { runFallback(input: QueueRecord): Promise<unknown> } | null;
+  errorExplainer?: ((input: QueueRecord) => unknown) | null; enableErrorExplanation?: boolean; leaseRenewIntervalMs?: unknown;
+  maxHandlerDurationMs?: unknown; logger?: QueueLogger | null;
+} = {}) {
   if (!store || typeof store.claim !== "function") {
     throw new Error("Queue Worker Runtime requires a work queue store.");
   }
-  const registeredHandlers: any = normalizeHandlerMap(handlers);
-  const runtimeWorkerId: any = toText(workerId || identityGenerator.workerId());
-  const runtimeHandlerDurationLimitMs: any = asPositiveInt(
+  const queueStore = store;
+  const registeredHandlers = normalizeHandlerMap(handlers);
+  const runtimeWorkerId = toText(workerId || identityGenerator.workerId());
+  const runtimeHandlerDurationLimitMs = asPositiveInt(
     maxHandlerDurationMs,
     WORK_QUEUE_HANDLER_MAX_DURATION_MS
   );
 
-  function registerHandler(key?: any, handler?: any) : any {
+  function registerHandler(key: unknown, handler: QueueHandler) {
     if (typeof handler !== "function") {
       throw new Error("Queue worker handler must be a function.");
     }
@@ -102,14 +151,14 @@ export function createQueueWorkerRuntime({
     return { key: toText(key || "*") };
   }
 
-  function unregisterHandler(key?: any) : any {
-    const normalizedKey: any = toText(key || "*");
+  function unregisterHandler(key?: unknown) {
+    const normalizedKey = toText(key || "*");
     return { key: normalizedKey, removed: registeredHandlers.delete(normalizedKey) };
   }
 
-  function resolveHandler(workItem?: any) : any {
+  function resolveHandler(workItem: QueueWorkItem): QueueHandler {
     for (const key of handlerKey(workItem)) {
-      const handler: any = registeredHandlers.get(key);
+      const handler = registeredHandlers.get(key);
       if (handler) {
         return handler;
       }
@@ -117,13 +166,13 @@ export function createQueueWorkerRuntime({
     throw new Error(`No queue worker handler registered for ${workItem.queueDefinitionId}.`);
   }
 
-  function explainError(error?: any, context: Record<string, any> = {}) : any {
-    const summary: any = summarizeError(error);
+  function explainError(error: unknown, context: QueueRecord = {}) {
+    const summary = summarizeError(error);
     if (!enableErrorExplanation || typeof errorExplainer !== "function") {
       return summary;
     }
     try {
-      const explanation: any = errorExplainer({
+      const explanation = errorExplainer({
         error,
         summary,
         ...context
@@ -132,7 +181,7 @@ export function createQueueWorkerRuntime({
         ...summary,
         explanation: asObject(explanation, { value: explanation })
       };
-    } catch (explanationError: any) {
+    } catch (explanationError: unknown) {
       return {
         ...summary,
         explanationError: summarizeError(explanationError)
@@ -140,11 +189,11 @@ export function createQueueWorkerRuntime({
     }
   }
 
-  async function applyOutcome({ workItem, lease, outcome, actor }: Record<string, any>) : Promise<any> {
-    const normalized: any = normalizeOutcome(outcome);
-    const action: any = toText(normalized.action).toLowerCase();
+  async function applyOutcome({ workItem, lease, outcome, actor }: { workItem: QueueWorkItem; lease: QueueLease; outcome: unknown; actor: QueueRecord }): Promise<StoreResult> {
+    const normalized = normalizeOutcome(outcome);
+    const action = toText(normalized.action).toLowerCase();
     if (action === "completed") {
-      return store.complete({
+      return queueStore.complete({
         workItemId: workItem.workItemId,
         leaseId: lease.leaseId,
         actor,
@@ -152,7 +201,7 @@ export function createQueueWorkerRuntime({
       });
     }
     if (action === "retry") {
-      return store.retry({
+      return queueStore.retry({
         workItemId: workItem.workItemId,
         leaseId: lease.leaseId,
         delayMs: normalized.delayMs ?? normalized.retryAfterMs,
@@ -162,7 +211,7 @@ export function createQueueWorkerRuntime({
       });
     }
     if (action === "cancelled") {
-      return store.cancelRunning({
+      return queueStore.cancelRunning({
         workItemId: workItem.workItemId,
         leaseId: lease.leaseId,
         actor,
@@ -171,7 +220,7 @@ export function createQueueWorkerRuntime({
       });
     }
     if (action === "failed") {
-      return store.fail({
+      return queueStore.fail({
         workItemId: workItem.workItemId,
         leaseId: lease.leaseId,
         actor,
@@ -180,7 +229,7 @@ export function createQueueWorkerRuntime({
       });
     }
     if (action === "progress") {
-      return store.progress({
+      return queueStore.progress({
         workItemId: workItem.workItemId,
         leaseId: lease.leaseId,
         extendMs: normalized.extendMs,
@@ -191,38 +240,41 @@ export function createQueueWorkerRuntime({
     throw new Error(`Unknown queue worker outcome action: ${normalized.action}`);
   }
 
-  async function runLeased({ workItem, lease, handler = null, actor = {}, signal = null }: Record<string, any> = {}) : Promise<any> {
-    const resolvedHandler: any = handler || resolveHandler(workItem);
-    let settled: any = false;
-    let activeLease: Record<string, any> = { ...lease };
-    let activeCheckpoint: any = workItem.checkpoint || null;
-    let leaseLostError: any = null;
-    let renewalPromise: any = Promise.resolve();
-    let renewalTimer: any = null;
-    let handlerTimer: any = null;
-    let stopped: any = false;
-    const executionController: any = new AbortController();
-    const abortFromCaller: any = () : any => {
+  async function runLeased({ workItem, lease, handler = null, actor = {}, signal = null }: {
+    workItem?: QueueWorkItem; lease?: QueueLease; handler?: QueueHandler | null; actor?: QueueRecord; signal?: AbortSignal | null;
+  } = {}) {
+    if (!workItem || !lease) throw new Error("Queue worker requires a work item and lease.");
+    const resolvedHandler = handler || resolveHandler(workItem);
+    let settled = false;
+    let activeLease: QueueLease = { ...lease };
+    let activeCheckpoint: QueueCheckpoint | null = workItem.checkpoint || null;
+    let leaseLostError: QueueRuntimeError | null = null;
+    let renewalPromise: Promise<StoreResult> = Promise.resolve({});
+    let renewalTimer: ReturnType<typeof setTimeout> | null = null;
+    let handlerTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const executionController = new AbortController();
+    const abortFromCaller = (): void => {
       if (!executionController.signal.aborted) {
         executionController.abort(signal?.reason || queueRuntimeError("queue_worker_aborted", "Queue worker execution was aborted."));
       }
     };
     signal?.addEventListener?.("abort", abortFromCaller, { once: true });
     if (signal?.aborted) abortFromCaller();
-    const runtimeActor: Record<string, any> = {
+    const runtimeActor: QueueRecord = {
       workerId: runtimeWorkerId,
       ...actor
     };
 
-    const renewLease: any = async (input: Record<string, any> = {}) : Promise<any> => {
+    const renewLease = async (input: QueueRecord = {}): Promise<StoreResult> => {
       if (settled || stopped) {
         throw queueRuntimeError("queue_worker_settled", "Cannot renew a settled queue work item.");
       }
       if (executionController.signal.aborted) {
         throw executionController.signal.reason || queueRuntimeError("queue_worker_aborted", "Queue worker execution was aborted.");
       }
-      renewalPromise = renewalPromise.then(async () : Promise<any> => {
-        const renewed: any = await store.progress({
+      renewalPromise = renewalPromise.then(async () => {
+        const renewed = await queueStore.progress({
           ...input,
           workItemId: workItem.workItemId,
           leaseId: activeLease.leaseId,
@@ -237,8 +289,8 @@ export function createQueueWorkerRuntime({
       });
       try {
         return await renewalPromise;
-      } catch (error: any) {
-        leaseLostError = error?.code === "queue_lease_lost"
+      } catch (error: unknown) {
+        leaseLostError = isQueueRuntimeError(error) && error.code === "queue_lease_lost"
           ? error
           : queueRuntimeError("queue_lease_lost", "Queue worker lease renewal failed.");
         if (!executionController.signal.aborted) executionController.abort(leaseLostError);
@@ -246,28 +298,28 @@ export function createQueueWorkerRuntime({
       }
     };
 
-    const initialRemainingMs: any = Math.max(1, Number(activeLease.expiresAtMs || 0) - Number(timeSource.nowMs()));
-    const requestedRenewInterval: any = Number(leaseRenewIntervalMs || 0);
-    const renewalInterval: any = Math.max(
+    const initialRemainingMs = Math.max(1, Number(activeLease.expiresAtMs || 0) - Number(timeSource.nowMs()));
+    const requestedRenewInterval = Number(leaseRenewIntervalMs || 0);
+    const renewalInterval = Math.max(
       10,
       Math.min(
         initialRemainingMs,
         requestedRenewInterval > 0 ? Math.trunc(requestedRenewInterval) : Math.max(10, Math.trunc(initialRemainingMs / 3))
       )
     );
-    const scheduleRenewal: any = () : any => {
+    const scheduleRenewal = (): void => {
       if (stopped || settled || executionController.signal.aborted) return;
-      renewalTimer = setTimeout(() : any => {
+      renewalTimer = setTimeout(() => {
         renewalTimer = null;
         void renewLease({ extendMs: initialRemainingMs, reason: "lease_renewal" })
           .then(scheduleRenewal)
-          .catch(() : any => {});
+          .catch(() => {});
       }, renewalInterval);
       renewalTimer.unref?.();
     };
     scheduleRenewal();
 
-    handlerTimer = setTimeout(() : any => {
+    handlerTimer = setTimeout(() => {
       if (!executionController.signal.aborted) {
         executionController.abort(queueRuntimeError(
           "queue_handler_timeout",
@@ -275,8 +327,8 @@ export function createQueueWorkerRuntime({
         ));
       }
     }, runtimeHandlerDurationLimitMs);
-    const executionAborted: any = new Promise((_?: any, reject?: any) : any => {
-      const rejectAborted: any = () : any => reject(
+    const executionAborted = new Promise<never>((_resolve, reject) => {
+      const rejectAborted = (): void => reject(
         executionController.signal.reason ||
         queueRuntimeError("queue_worker_aborted", "Queue worker execution was aborted.")
       );
@@ -284,31 +336,31 @@ export function createQueueWorkerRuntime({
       else executionController.signal.addEventListener("abort", rejectAborted, { once: true });
     });
 
-    const context: Record<string, any> = {
+    const context: WorkerContext = {
       workerId: runtimeWorkerId,
       timeSource,
       workItem,
-      get lease() : any {
+      get lease(): QueueLease {
         return { ...activeLease };
       },
-      get checkpoint() : any {
+      get checkpoint(): QueueCheckpoint | null {
         return activeCheckpoint ? { ...activeCheckpoint } : null;
       },
       signal: executionController.signal,
       payloadRef: workItem.payloadRef,
       ownerRef: workItem.ownerRef,
       renewLease,
-      async progress(input: Record<string, any> = {}) : Promise<any> {
+      async progress(input: QueueRecord = {}): Promise<StoreResult> {
         if (settled) {
           throw new Error("Cannot progress a settled queue work item.");
         }
         return renewLease(input);
       },
-      async saveCheckpoint(checkpointRef?: any, input: Record<string, any> = {}) : Promise<any> {
+      async saveCheckpoint(checkpointRef?: unknown, input: QueueRecord = {}): Promise<StoreResult> {
         if (settled) {
           throw new Error("Cannot checkpoint a settled queue work item.");
         }
-        const result: any = await store.checkpoint({
+        const result = await queueStore.checkpoint({
           ...input,
           workItemId: workItem.workItemId,
           leaseId: activeLease.leaseId,
@@ -316,51 +368,51 @@ export function createQueueWorkerRuntime({
           expectedCheckpointSeq: input.expectedCheckpointSeq ?? activeCheckpoint?.checkpointSeq ?? 0,
           actor: input.actor || runtimeActor
         });
-        activeCheckpoint = result.workItem.checkpoint;
+        activeCheckpoint = result.workItem?.checkpoint || null;
         return result;
       },
-      async complete(input: Record<string, any> = {}) : Promise<any> {
+      async complete(input: QueueRecord = {}): Promise<StoreResult> {
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
         settled = true;
-        return store.complete({
+        return queueStore.complete({
           ...input,
           workItemId: workItem.workItemId,
           leaseId: activeLease.leaseId,
           actor: input.actor || runtimeActor
         });
       },
-      async retry(input: Record<string, any> = {}) : Promise<any> {
+      async retry(input: QueueRecord = {}): Promise<StoreResult> {
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
         settled = true;
-        return store.retry({
+        return queueStore.retry({
           ...input,
           workItemId: workItem.workItemId,
           leaseId: activeLease.leaseId,
           actor: input.actor || runtimeActor
         });
       },
-      async cancelRunning(input: Record<string, any> = {}) : Promise<any> {
+      async cancelRunning(input: QueueRecord = {}): Promise<StoreResult> {
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
         settled = true;
-        return store.cancelRunning({
+        return queueStore.cancelRunning({
           ...input,
           workItemId: workItem.workItemId,
           leaseId: activeLease.leaseId,
           actor: input.actor || runtimeActor
         });
       },
-      async fail(input: Record<string, any> = {}) : Promise<any> {
+      async fail(input: QueueRecord = {}): Promise<StoreResult> {
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
         settled = true;
-        return store.fail({
+        return queueStore.fail({
           ...input,
           workItemId: workItem.workItemId,
           leaseId: activeLease.leaseId,
@@ -370,7 +422,7 @@ export function createQueueWorkerRuntime({
     };
 
     try {
-      const outcome: any = await Promise.race([
+      const outcome = await Promise.race([
         resolvedHandler({
           workItem,
           lease: activeLease,
@@ -384,7 +436,7 @@ export function createQueueWorkerRuntime({
       }
       await renewLease({ extendMs: initialRemainingMs, reason: "handler_terminal_fence" });
       settled = true;
-      const result: any = await applyOutcome({
+      const result = await applyOutcome({
         workItem,
         lease: activeLease,
         outcome,
@@ -395,7 +447,7 @@ export function createQueueWorkerRuntime({
         workItemId: workItem.workItemId,
         result
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger?.error?.("queue.worker.handler.failed", {
         workerId: runtimeWorkerId,
         workItemId: workItem.workItemId,
@@ -406,16 +458,16 @@ export function createQueueWorkerRuntime({
       }
       if (executionController.signal.aborted) {
         settled = true;
-        const explained: any = explainError(error, { workItem, lease: activeLease });
-        const provablyTerminable: any = resolvedHandler?.terminable === true;
+        const explained = explainError(error, { workItem, lease: activeLease });
+        const provablyTerminable = resolvedHandler.terminable === true;
         try {
           if (provablyTerminable) {
-            const result: any = await store.retry({
+            const result = await queueStore.retry({
               workItemId: workItem.workItemId,
               leaseId: activeLease.leaseId,
               delayMs: 0,
               actor: runtimeActor,
-              reason: error?.code === "queue_handler_timeout" ? "handler_timeout" : "handler_interrupted",
+              reason: isQueueRecord(error) && error.code === "queue_handler_timeout" ? "handler_timeout" : "handler_interrupted",
               error: explained
             });
             return {
@@ -426,11 +478,11 @@ export function createQueueWorkerRuntime({
               result
             };
           }
-          const inDoubt: any = await store.markInDoubt({
+          const inDoubt = await queueStore.markInDoubt({
             workItemId: workItem.workItemId,
             leaseId: activeLease.leaseId,
             actor: runtimeActor,
-            reason: error?.code === "queue_handler_timeout" ? "handler_timeout_unconfirmed" : "handler_interrupted_unconfirmed",
+            reason: isQueueRecord(error) && error.code === "queue_handler_timeout" ? "handler_timeout_unconfirmed" : "handler_interrupted_unconfirmed",
             error: {
               type: "handler_unconfirmed",
               ...explained
@@ -449,9 +501,9 @@ export function createQueueWorkerRuntime({
         }
       }
       settled = true;
-      const explained: any = explainError(error, { workItem, lease: activeLease });
+      const explained = explainError(error, { workItem, lease: activeLease });
       if (fallbackCoordinator && typeof fallbackCoordinator.runFallback === "function") {
-        const result: any = await fallbackCoordinator.runFallback({
+        const result = await fallbackCoordinator.runFallback({
           workItem,
           lease: activeLease,
           workItemId: workItem.workItemId,
@@ -469,7 +521,7 @@ export function createQueueWorkerRuntime({
           result
         };
       }
-      const result: any = await store.retry({
+      const result = await queueStore.retry({
         workItemId: workItem.workItemId,
         leaseId: activeLease.leaseId,
         actor: runtimeActor,
@@ -488,7 +540,7 @@ export function createQueueWorkerRuntime({
       if (renewalTimer) clearTimeout(renewalTimer);
       if (handlerTimer) clearTimeout(handlerTimer);
       signal?.removeEventListener?.("abort", abortFromCaller);
-      await renewalPromise.catch(() : any => {});
+      await renewalPromise.catch(() => {});
     }
   }
 

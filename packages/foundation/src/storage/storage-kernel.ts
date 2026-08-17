@@ -17,16 +17,57 @@ import { BACKUP_RESTORE_PROTOCOL_VERSION } from "./backup-contract.ts";
 import { reconcileStorageBackupCatalogSync } from "./backup-catalog.ts";
 import { reconcileStorageRetentionTransactionsSync } from "./backup-retention.ts";
 import { reconcileStorageRestoreTransactionsSync } from "./restore-transaction.ts";
+import type Database from "better-sqlite3";
 
-function countRows(db?: any, tableName?: any) : any {
+type SchemaContributor =
+  | ((db: Database.Database) => void)
+  | { initialize(db: Database.Database): void };
+
+interface StorageRuntimeLease {
+  release(): void;
+}
+
+export interface StorageKernelSummary extends Record<string, unknown> {
+  databasePath: string;
+  objectRootPath: string;
+  databaseExists: true;
+  objectFileCount: number;
+  objectBytes: number;
+  objectCount: number;
+  ownedObjectCount: number;
+  deletionOperationCount: number;
+  opaqueCustodyArtifactCount: number;
+  opaqueCustodyPromotionCount: number;
+}
+
+interface StorageRowSummary {
+  objectCount: number;
+  ownedObjectCount: number;
+  deletionOperationCount: number;
+  opaqueCustodyArtifactCount: number;
+  opaqueCustodyPromotionCount: number;
+}
+
+export interface StorageKernel {
+  readonly databasePath: string;
+  readonly objectRootPath: string;
+  readonly db: Database.Database;
+  readonly closed: boolean;
+  getStorageSummary(): StorageKernelSummary;
+  getUpgradePreflight(): unknown;
+  close(): void;
+}
+
+function countRows(db: Database.Database, tableName: string): number {
   try {
-    return db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get()?.count || 0;
+    const row = db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get();
+    return row && typeof row === "object" && "count" in row ? Number(row.count || 0) : 0;
   } catch {
     return 0;
   }
 }
 
-function summarizeStorageRows(db?: any) : any {
+function summarizeStorageRows(db: Database.Database): StorageRowSummary {
   return {
     objectCount: countRows(db, "storage_objects"),
     ownedObjectCount: countRows(db, "storage_object_owners"),
@@ -36,18 +77,18 @@ function summarizeStorageRows(db?: any) : any {
   };
 }
 
-function summarizeFiles(rootPath?: any) : any {
-  let fileCount: any = 0;
-  let bytes: any = 0;
-  function walk(currentPath?: any) : any {
-    let entries: any[] = [];
+function summarizeFiles(rootPath: string): { fileCount: number; bytes: number } {
+  let fileCount = 0;
+  let bytes = 0;
+  function walk(currentPath: string): void {
+    let entries: fs.Dirent[] = [];
     try {
       entries = fs.readdirSync(currentPath, { withFileTypes: true });
     } catch {
       return;
     }
     for (const entry of entries) {
-      const absolutePath: any = path.join(currentPath, entry.name);
+      const absolutePath = path.join(currentPath, entry.name);
       if (entry.isDirectory()) {
         walk(absolutePath);
       } else if (entry.isFile()) {
@@ -67,10 +108,13 @@ function summarizeFiles(rootPath?: any) : any {
 export function createStorageKernel({
   userDataPath,
   schemaContributors = []
-}: Record<string, any> = {}) : any {
-  const databasePath: any = getStorageDatabasePath(userDataPath);
-  const runtimeLease: any = acquireStorageRuntimeLease(userDataPath);
-  let db: any = null;
+}: {
+  userDataPath?: string;
+  schemaContributors?: readonly SchemaContributor[];
+} = {}): StorageKernel {
+  const databasePath = getStorageDatabasePath(userDataPath);
+  const runtimeLease = acquireStorageRuntimeLease(userDataPath) as StorageRuntimeLease;
+  const dbHolder: { current: Database.Database | null } = { current: null };
   try {
     reconcileStorageRestoreTransactionsSync(userDataPath);
     reconcileStorageRetentionTransactionsSync({ userDataPath });
@@ -80,14 +124,14 @@ export function createStorageKernel({
     });
     ensurePrivateDir(getObjectRootPath(userDataPath));
     ensurePrivateSqliteLocation(databasePath);
-    withPrivateFileCreationMask(() : any => {
-      db = openSqliteDatabase(databasePath);
-      initializeStorageSchema(db, { schemaContributors });
+    withPrivateFileCreationMask(() => {
+      dbHolder.current = openSqliteDatabase(databasePath);
+      initializeStorageSchema(dbHolder.current, { schemaContributors });
       ensurePrivateSqliteLocation(databasePath);
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     try {
-      db?.close?.();
+      dbHolder.current?.close();
     } catch {
       // Preserve the initialization failure while still attempting local cleanup.
     }
@@ -95,40 +139,45 @@ export function createStorageKernel({
     throw error;
   }
 
-  let closed: any = false;
+  const database = dbHolder.current;
+  if (!database) {
+    runtimeLease.release();
+    throw new Error("Storage database initialization did not produce a database handle.");
+  }
+  let closed = false;
 
   return Object.freeze({
-    get databasePath() : any {
+    get databasePath(): string {
       return getStorageDatabasePath(userDataPath);
     },
-    get objectRootPath() : any {
+    get objectRootPath(): string {
       return getObjectRootPath(userDataPath);
     },
-    get db() : any {
-      return db;
+    get db(): Database.Database {
+      return database;
     },
-    get closed() : any {
+    get closed(): boolean {
       return closed;
     },
-    getStorageSummary() : any {
-      const files: any = summarizeFiles(getObjectRootPath(userDataPath));
+    getStorageSummary(): StorageKernelSummary {
+      const files = summarizeFiles(getObjectRootPath(userDataPath));
       return {
         databasePath: getStorageDatabasePath(userDataPath),
         objectRootPath: getObjectRootPath(userDataPath),
         databaseExists: true,
         objectFileCount: files.fileCount,
         objectBytes: files.bytes,
-        ...summarizeStorageRows(db)
+        ...summarizeStorageRows(database)
       };
     },
-    getUpgradePreflight() : any {
-      return inspectStorageSchemaCompatibility(db);
+    getUpgradePreflight(): unknown {
+      return inspectStorageSchemaCompatibility(database);
     },
-    close() : any {
+    close(): void {
       if (closed) return;
       closed = true;
       try {
-        db.close();
+        database.close();
       } finally {
         runtimeLease.release();
       }

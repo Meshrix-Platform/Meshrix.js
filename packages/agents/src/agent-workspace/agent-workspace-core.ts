@@ -4,14 +4,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { workspaceIntegerLimit } from "./agent-workspace-limits.ts";
 
-export const AGENT_WORKSPACE_PROTOCOL_VERSION: any = "v0.0.1:workspace:agent-workspace-1";
-export const AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION: any = "v0.0.1:workspace:context-bundle-1";
-export const AGENT_SESSION_THREAD_VERSION: any = "v0.0.1:agent:session-thread-1";
-export const CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES: any = workspaceIntegerLimit(
+export const AGENT_WORKSPACE_PROTOCOL_VERSION = "v0.0.1:workspace:agent-workspace-1";
+export const AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION = "v0.0.1:workspace:context-bundle-1";
+export const AGENT_SESSION_THREAD_VERSION = "v0.0.1:agent:session-thread-1";
+export const CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES = workspaceIntegerLimit(
   "MESHRIX_AGENT_WORKSPACE_CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES",
   { defaultValue: 2 * 1024 * 1024, minimum: 1024, maximum: 64 * 1024 * 1024 }
 );
-export const CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES: any = workspaceIntegerLimit(
+export const CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES = workspaceIntegerLimit(
   "MESHRIX_AGENT_WORKSPACE_CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES",
   {
     defaultValue: 16 * 1024 * 1024,
@@ -19,11 +19,11 @@ export const CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES: any = workspaceIntegerLimit(
     maximum: 256 * 1024 * 1024
   }
 );
-export const WORKSPACE_FILE_MAX_BYTES: any = workspaceIntegerLimit(
+export const WORKSPACE_FILE_MAX_BYTES = workspaceIntegerLimit(
   "MESHRIX_AGENT_WORKSPACE_FILE_MAX_BYTES",
   { defaultValue: 8 * 1024 * 1024, minimum: 1024, maximum: 64 * 1024 * 1024 }
 );
-export const DANGEROUS_WORKSPACE_EXTENSIONS: any = new Set<any>([
+export const DANGEROUS_WORKSPACE_EXTENSIONS = new Set<string>([
   ".app",
   ".bat",
   ".bash",
@@ -57,7 +57,7 @@ export const DANGEROUS_WORKSPACE_EXTENSIONS: any = new Set<any>([
   ".wsf",
   ".zsh"
 ]);
-export const ARCHIVE_WORKSPACE_EXTENSIONS: any[] = [
+export const ARCHIVE_WORKSPACE_EXTENSIONS: string[] = [
   ".7z",
   ".gz",
   ".rar",
@@ -68,7 +68,7 @@ export const ARCHIVE_WORKSPACE_EXTENSIONS: any[] = [
   ".zip"
 ];
 
-export const ACCEPTED_SUBMISSION_TYPES: any = new Set<any>([
+export const ACCEPTED_SUBMISSION_TYPES = new Set<string>([
   "evidenceCard",
   "evidenceRef",
   "claim",
@@ -83,55 +83,57 @@ export const ACCEPTED_SUBMISSION_TYPES: any = new Set<any>([
   "taxonomyChange"
 ]);
 
-export const REVIEW_ONLY_TYPES: any = new Set<any>([
+export const REVIEW_ONLY_TYPES = new Set<string>([
   "canonicalChange",
   "entityMerge",
   "relationChange",
   "taxonomyChange"
 ]);
 
-export function nowIso() : any {
+export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function asArray(value?: any) : any {
-  return Array.isArray(value) ? value : [];
+export function asArray<T = unknown>(value?: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
 }
 
-export function asObject(value?: any) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+export function asObject(value?: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-export function uniqueStrings(values: any = []) : any {
-  return [...new Set<any>(values.map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+export function uniqueStrings(values: readonly unknown[] = []): string[] {
+  return [...new Set<string>(values.map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
-export function parseJson(value?: any, fallback: Record<string, any> = {}) : any {
+export function parseJson<T>(value: unknown, fallback: T): T {
   try {
-    return value ? JSON.parse(value) : fallback;
+    return value ? JSON.parse(String(value)) as T : fallback;
   } catch {
     return fallback;
   }
 }
 
-export function stringifyJson(value?: any, fallback: Record<string, any> = {}) : any {
+export function stringifyJson(value?: unknown, fallback: unknown = {}): string {
   return JSON.stringify(value === undefined ? fallback : value);
 }
 
-export function stableHash(...parts: any[]) : any {
+export function stableHash(...parts: unknown[]): string {
   return crypto
     .createHash("sha256")
-    .update(parts.map((part?: any) : any => String(part ?? "")).join("\n"))
+    .update(parts.map((part) => String(part ?? "")).join("\n"))
     .digest("hex");
 }
 
 
-export function stableId(prefix: any, ...parts: any[]) : any {
+export function stableId(prefix: unknown, ...parts: unknown[]): string {
   return `${prefix}_${stableHash(prefix, ...parts).slice(0, 24)}`;
 }
 
-export function normalizeWorkspaceRelativePath(value?: any, options: Record<string, any> = {}) : any {
-  const raw: any = String(value || "").replace(/\\/g, "/").trim();
+export function normalizeWorkspaceRelativePath(value?: unknown, options: { allowEmpty?: boolean } = {}): string {
+  const raw = String(value || "").replace(/\\/g, "/").trim();
   if (!raw || raw === ".") {
     if (options.allowEmpty) {
       return "";
@@ -141,7 +143,7 @@ export function normalizeWorkspaceRelativePath(value?: any, options: Record<stri
   if (raw.includes("\0") || raw.startsWith("/") || /^[A-Za-z]:\//.test(raw)) {
     throw new Error("路径必须是工作空间相对路径。");
   }
-  const normalized: any = path.posix.normalize(raw);
+  const normalized = path.posix.normalize(raw);
   if (!normalized || normalized === ".") {
     if (options.allowEmpty) {
       return "";
@@ -154,15 +156,15 @@ export function normalizeWorkspaceRelativePath(value?: any, options: Record<stri
   return normalized.replace(/^\/+/, "");
 }
 
-export function workspaceFileExtension(relativePath: any = "") : any {
-  const lower: any = String(relativePath || "").toLowerCase();
-  const archiveExtension: any = ARCHIVE_WORKSPACE_EXTENSIONS.find((extension?: any) : any => lower.endsWith(extension));
+export function workspaceFileExtension(relativePath: unknown = ""): string {
+  const lower = String(relativePath || "").toLowerCase();
+  const archiveExtension = ARCHIVE_WORKSPACE_EXTENSIONS.find((extension) => lower.endsWith(extension));
   return archiveExtension || path.posix.extname(lower);
 }
 
-export function hasExecutableMagic(buffer: any = Buffer.alloc(0)) : any {
+export function hasExecutableMagic(buffer: Buffer = Buffer.alloc(0)): boolean {
   if (buffer.length >= 4) {
-    const head4: any = buffer.subarray(0, 4).toString("hex");
+    const head4 = buffer.subarray(0, 4).toString("hex");
     if (["7f454c46", "feedface", "feedfacf", "cefaedfe", "cffaedfe", "cafebabe"].includes(head4)) {
       return true;
     }
@@ -173,7 +175,7 @@ export function hasExecutableMagic(buffer: any = Buffer.alloc(0)) : any {
   return false;
 }
 
-export function hasArchiveMagic(buffer: any = Buffer.alloc(0)) : any {
+export function hasArchiveMagic(buffer: Buffer = Buffer.alloc(0)): boolean {
   if (buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && [0x03, 0x05, 0x07].includes(buffer[2])) {
     return true;
   }
@@ -190,9 +192,9 @@ export function assertWorkspaceFileContentPolicy({
   relativePath,
   contentBuffer = Buffer.alloc(0),
   sizeBytes = contentBuffer.length
-}: Record<string, any> = {}) : any {
-  const normalizedPath: any = normalizeWorkspaceRelativePath(relativePath, { allowEmpty: false });
-  const extension: any = workspaceFileExtension(normalizedPath);
+}: { relativePath?: unknown; contentBuffer?: Buffer; sizeBytes?: number } = {}): void {
+  const normalizedPath = normalizeWorkspaceRelativePath(relativePath, { allowEmpty: false });
+  const extension = workspaceFileExtension(normalizedPath);
   if (Number(sizeBytes || 0) > WORKSPACE_FILE_MAX_BYTES) {
     throw new Error("文件超过工作空间单文件大小限制。");
   }
@@ -213,9 +215,9 @@ export function assertWorkspaceFileContentPolicy({
   }
 }
 
-export function stripExecutableMode(absolutePath?: any) : any {
+export function stripExecutableMode(absolutePath: fs.PathLike): void {
   try {
-    const stat: any = fs.lstatSync(absolutePath);
+    const stat = fs.lstatSync(absolutePath);
     if (stat.isFile() && (stat.mode & 0o111)) {
       fs.chmodSync(absolutePath, stat.mode & 0o666);
     }
@@ -224,36 +226,39 @@ export function stripExecutableMode(absolutePath?: any) : any {
   }
 }
 
-export function joinWorkspaceRelativePath(...parts: any[]) : any {
+export function joinWorkspaceRelativePath(...parts: unknown[]): string {
   return normalizeWorkspaceRelativePath(
-    parts.map((part?: any) : any => String(part || "").replace(/\\/g, "/").trim()).filter(Boolean).join("/"),
+    parts.map((part) => String(part || "").replace(/\\/g, "/").trim()).filter(Boolean).join("/"),
     { allowEmpty: false }
   );
 }
 
-export function sha256Buffer(buffer?: any) : any {
+export function sha256Buffer(buffer: crypto.BinaryLike): string {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-export function normalizeSha256(value: any = "") : any {
+export function normalizeSha256(value: unknown = ""): string {
   return String(value || "").replace(/^sha256:/, "").trim();
 }
 
-export function splitPatchTextLines(text?: any) : any {
-  const normalized: any = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const finalNewline: any = normalized.endsWith("\n");
-  const body: any = finalNewline ? normalized.slice(0, -1) : normalized;
+export function splitPatchTextLines(text?: unknown): { lines: string[]; finalNewline: boolean } {
+  const normalized = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const finalNewline = normalized.endsWith("\n");
+  const body = finalNewline ? normalized.slice(0, -1) : normalized;
   return {
     lines: body ? body.split("\n") : [],
     finalNewline
   };
 }
 
-export function parseUnifiedPatch(patchText: any = "") : any {
-  const hunks: any[] = [];
-  let current: any = null;
+interface UnifiedPatchHunk { oldStart: number; lines: string[] }
+interface ReplacementHunk { oldText?: unknown; search?: unknown; before?: unknown; newText?: unknown; replace?: unknown; after?: unknown; replaceAll?: boolean }
+
+export function parseUnifiedPatch(patchText: unknown = ""): UnifiedPatchHunk[] {
+  const hunks: UnifiedPatchHunk[] = [];
+  let current: UnifiedPatchHunk | null = null;
   for (const line of String(patchText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")) {
-    const header: any = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    const header = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
     if (header) {
       current = {
         oldStart: Number(header[1]),
@@ -268,7 +273,7 @@ export function parseUnifiedPatch(patchText: any = "") : any {
     if (line.startsWith("\\ No newline")) {
       continue;
     }
-    if (/^[ +\-]/.test(line)) {
+    if (/^[- +]/.test(line)) {
       current.lines.push(line);
     }
   }
@@ -278,26 +283,26 @@ export function parseUnifiedPatch(patchText: any = "") : any {
   return hunks;
 }
 
-export function assertPatchLineMatches(actual?: any, expected?: any, lineNumber?: any) : any {
+export function assertPatchLineMatches(actual: unknown, expected: unknown, lineNumber: number): void {
   if (actual !== expected) {
     throw new Error(`patch hunk 与当前文件不匹配：第 ${lineNumber} 行。`);
   }
 }
 
-export function applyUnifiedPatchText(sourceText?: any, patchText?: any) : any {
-  const source: any = splitPatchTextLines(sourceText);
-  const output: any[] = [];
-  let cursor: any = 0;
+export function applyUnifiedPatchText(sourceText?: unknown, patchText?: unknown): string {
+  const source = splitPatchTextLines(sourceText);
+  const output: string[] = [];
+  let cursor = 0;
   for (const hunk of parseUnifiedPatch(patchText)) {
-    const start: any = Math.max(0, hunk.oldStart - 1);
+    const start = Math.max(0, hunk.oldStart - 1);
     if (start < cursor) {
       throw new Error("patch hunk 顺序重叠或倒退。");
     }
     output.push(...source.lines.slice(cursor, start));
-    let oldCursor: any = start;
+    let oldCursor = start;
     for (const entry of hunk.lines) {
-      const prefix: any = entry[0];
-      const line: any = entry.slice(1);
+      const prefix = entry[0];
+      const line = entry.slice(1);
       if (prefix === " ") {
         assertPatchLineMatches(source.lines[oldCursor], line, oldCursor + 1);
         output.push(line);
@@ -315,12 +320,12 @@ export function applyUnifiedPatchText(sourceText?: any, patchText?: any) : any {
   return `${output.join("\n")}${source.finalNewline ? "\n" : ""}`;
 }
 
-export function applyReplacementHunks(sourceText?: any, hunks: any = []) : any {
-  let nextText: any = String(sourceText || "");
-  let appliedCount: any = 0;
+export function applyReplacementHunks(sourceText: unknown, hunks: readonly ReplacementHunk[] = []): string {
+  let nextText = String(sourceText || "");
+  let appliedCount = 0;
   for (const hunk of hunks) {
-    const oldText: any = String(hunk.oldText ?? hunk.search ?? hunk.before ?? "");
-    const newText: any = String(hunk.newText ?? hunk.replace ?? hunk.after ?? "");
+    const oldText = String(hunk.oldText ?? hunk.search ?? hunk.before ?? "");
+    const newText = String(hunk.newText ?? hunk.replace ?? hunk.after ?? "");
     if (!oldText) {
       throw new Error("replacement hunk 必须提供 oldText/search。");
     }
@@ -328,7 +333,7 @@ export function applyReplacementHunks(sourceText?: any, hunks: any = []) : any {
       throw new Error("replacement hunk 与当前文件不匹配。");
     }
     if (hunk.replaceAll === true) {
-      const before: any = nextText;
+      const before = nextText;
       nextText = nextText.split(oldText).join(newText);
       appliedCount += before === nextText ? 0 : 1;
     } else {
@@ -342,58 +347,59 @@ export function applyReplacementHunks(sourceText?: any, hunks: any = []) : any {
   return nextText;
 }
 
-export function optionalLimit(value?: any, max: any = 500) : any {
+export function optionalLimit(value?: unknown, max = 500): number | null {
   if (value === undefined || value === null || value === false) {
     return null;
   }
-  const numeric: any = Number(value);
+  const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) {
     return null;
   }
   return Math.max(1, Math.min(Math.floor(numeric), max));
 }
 
-export function normalizeText(value?: any) : any {
+export function normalizeText(value?: unknown): string {
   return String(value || "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-export function boundedInteger(value?: any, fallback?: any, min: any = 0, max: any = 1000) : any {
-  const numeric: any = Number(value);
+export function boundedInteger(value: unknown, fallback: number, min = 0, max = 1000): number {
+  const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return fallback;
   }
   return Math.max(min, Math.min(max, Math.floor(numeric)));
 }
 
-export function truncateText(value?: any, maxChars: any = 800) : any {
-  const text: any = normalizeText(value);
-  const limit: any = boundedInteger(maxChars, 800, 0, 10000);
+export function truncateText(value?: unknown, maxChars: unknown = 800): string {
+  const text = normalizeText(value);
+  const limit = boundedInteger(maxChars, 800, 0, 10000);
   if (limit <= 0 || text.length <= limit) {
     return text;
   }
   return `${text.slice(0, Math.max(0, limit - 15))}...<truncated>`;
 }
 
-export function normalizeEvidenceRefs(value?: any, payload: Record<string, any> = {}) : any {
-  const refs: any = [
+export function normalizeEvidenceRefs(value?: unknown, payload: Record<string, unknown> = {}): string[] {
+  const refs = [
     ...asArray(value),
     ...asArray(payload.evidenceRefs),
     payload.evidenceId,
     payload.sourceEvidenceId
   ]
-    .map((item?: any) : any => {
+    .map((item) => {
       if (!item) {
         return "";
       }
       if (typeof item === "string") {
         return item.trim();
       }
-      return String(item.evidenceId || item.id || item.ref || "").trim();
+      const record = asObject(item);
+      return String(record.evidenceId || record.id || record.ref || "").trim();
     })
     .filter(Boolean);
-  return [...new Set<any>(refs)];
+  return [...new Set<string>(refs)];
 }
 
 export { stableJson };

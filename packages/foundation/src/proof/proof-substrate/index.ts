@@ -23,62 +23,298 @@ import {
   verifyProofBundle,
   verifyProofEnvelope
 } from "pactium";
+import type {
+  PactiumCore,
+  PactiumProofBundle,
+  PactiumProofEnvelope,
+  PactiumProofVerificationOptions,
+  PactiumRecord,
+  PactiumStoragePort,
+  PactiumVerificationFailure,
+  PactiumVerificationResult
+} from "pactium";
 import { serverToken } from "#meshrix/client-strings";
 import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
 } from "../../checkpoint/tree/pactium-runtime.ts";
+import type { MeshrixPactiumRuntime } from "../../checkpoint/tree/types.ts";
 
-export const OPERATION_PROOF_SUBSTRATE_PROTOCOL_VERSION: any = "v0.0.1:operation:proof-substrate-2";
-export const OPERATION_PROOF_SUBSTRATE_PROTOCOL: any = PACTIUM_PROTOCOL;
-export const OPERATION_PROOF_SUBSTRATE_PROVIDER: any = "pactium.operation-proof-substrate";
-export const OPERATION_PROOF_SIGNER_SECRET_FILE_ENV: any =
+type ProofField = string | number | boolean | null | ProofField[] | ProofRecord;
+
+interface ProofRecord {
+  [key: string]: ProofField | undefined;
+  operation?: ProofRecord;
+  input?: ProofRecord;
+  subject?: ProofRecord;
+  risk?: ProofRecord;
+  policy?: ProofField;
+  policyDecision?: ProofField;
+  policyEvidence?: ProofField;
+  result?: ProofRecord;
+  output?: ProofRecord;
+  state?: ProofRecord;
+  targetRef?: ProofRecord;
+  proof?: ProofRecord;
+  pactium?: ProofRecord;
+  entry?: ProofRecord;
+  user?: ProofRecord;
+  metadata?: ProofRecord;
+  evidence?: ProofRecord;
+  factRef?: ProofRecord;
+  fact?: ProofRecord;
+  outcome?: ProofRecord;
+  extensions?: ProofRecord[];
+  criticalExtensions?: string[];
+  warnings?: ProofField[];
+  receiptRefs?: ProofField[];
+  hostEvidenceRefs?: ProofField[];
+  causalityRefs?: ProofField[];
+  stateMutations?: ProofRecord[];
+  mutations?: ProofRecord[];
+  scopes?: string[];
+  index?: ProofRecord[];
+}
+
+interface MeshrixSigner {
+  readonly signerId: string;
+  readonly algorithm: string;
+  sign(message?: string): Promise<string>;
+  verify(message?: string, signature?: string): Promise<boolean>;
+  verifyFor?(input: { signerId?: string; algorithm?: string; message?: string; signature?: string }): Promise<boolean>;
+  close(): void;
+}
+
+interface ProofExtension extends ProofRecord {
+  name: string;
+  critical?: boolean;
+  valueRef?: string;
+  metadata?: ProofRecord;
+}
+
+interface PortableBlock {
+  protocol?: ProofField;
+  cid: string;
+  codec?: ProofField;
+  kind?: ProofField;
+  refs: ProofField[];
+  byteLength: number;
+  payloadHash: string;
+  bytes: Buffer;
+  payloadBase64: string;
+}
+
+interface PortableBundleResolver {
+  get(cid?: string): PortableBlock | null;
+}
+
+interface MaterialBlock {
+  bytes?: Uint8Array;
+  payloadBase64?: string;
+}
+
+interface MeshrixVerificationOptions {
+  bundle?: PactiumProofBundle;
+  coreEnvelopeResult?: PactiumVerificationResult;
+  supportedCriticalExtensions?: string[];
+  proofVerifiers?: PactiumRecord;
+  requireAllProofs?: boolean;
+  verifierManifest?: PactiumRecord;
+  trustedManifest?: PactiumRecord;
+  ledgerHeadSignatures?: PactiumRecord[];
+  trustPolicy?: string;
+  requireFullStateMutationProofs?: boolean;
+  maxProofLeafEntries?: number;
+  maxProofBytes?: number;
+  failOnProofSizeWarning?: boolean;
+  maxHeaderSize?: number;
+  maxBlockSize?: number;
+  evidencePolicy?: string;
+}
+
+interface MeshrixAspectOptions {
+  pactium: PactiumCore;
+  storage: PactiumStoragePort;
+  evidencePolicy?: string;
+  signer?: MeshrixSigner | false | null;
+  signerSecret?: string;
+}
+
+interface ProofRuntime {
+  core: PactiumCore;
+  storage: PactiumStoragePort;
+  close(): Promise<void>;
+}
+
+function requireProofRuntime(value: unknown): ProofRuntime {
+  if (!isUnknownRecord(value)) {
+    throw new Error("Pactium runtime is unavailable.");
+  }
+  const core = value.core;
+  const storage = value.storage;
+  const close = value.close;
+  if (
+    !isUnknownRecord(core) || typeof core.beginOperationIntent !== "function" ||
+    !isUnknownRecord(storage) || typeof storage.close !== "function" ||
+    typeof close !== "function"
+  ) {
+    throw new Error("Pactium runtime does not expose the required proof and storage ports.");
+  }
+  return value as unknown as ProofRuntime;
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+interface RepairPlanner {
+  plan(failures: PactiumVerificationFailure[]): PactiumRecord;
+}
+
+function requireRepairPlanner(value: PactiumRecord): RepairPlanner {
+  if (typeof value.plan !== "function") {
+    throw new Error("Pactium repair planner does not expose plan().");
+  }
+  return value as PactiumRecord & RepairPlanner;
+}
+
+function asProofExtensions(value: unknown): ProofExtension[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is ProofExtension =>
+    isProofRecord(item) && typeof item.name === "string"
+  );
+}
+
+interface ProofEnvelopeView {
+  factId?: string;
+  envelopeId?: string;
+  receiptId?: string;
+  factRef?: PactiumRecord;
+  ledgerHead?: unknown;
+  replayed?: boolean;
+  disposition?: string;
+  envelopeKind?: string;
+  extensions?: unknown[];
+  criticalExtensions?: string[];
+}
+
+interface OperationProofEntry extends ProofRecord {
+  ledgerEventId: string;
+  operationId: string;
+  workspaceId: string;
+  status: string;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string;
+  failedAt: string;
+  error: string;
+  assetRef?: string;
+  auditId?: string;
+  resultDigest?: string;
+  receiptRefs?: ProofField[];
+  warnings?: ProofField[];
+  proof: ProofRecord;
+  pactium: ProofRecord;
+}
+
+function isOperationProofEntry(value: unknown): value is OperationProofEntry {
+  return isProofRecord(value) &&
+    typeof value.ledgerEventId === "string" &&
+    typeof value.operationId === "string" &&
+    typeof value.workspaceId === "string" &&
+    typeof value.status === "string" &&
+    typeof value.idempotencyKey === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string" &&
+    typeof value.completedAt === "string" &&
+    typeof value.failedAt === "string" &&
+    typeof value.error === "string" &&
+    isProofRecord(value.proof) && isProofRecord(value.pactium);
+}
+
+function requireProofBundle(value: unknown): PactiumProofBundle {
+  if (
+    !isUnknownRecord(value) || value.bundleType !== "pactium.proof-bundle.indexed" ||
+    typeof value.protocol !== "string" || typeof value.schema !== "string" ||
+    typeof value.bundleHash !== "string" || !isUnknownRecord(value.envelope)
+  ) {
+    throw new Error("Pactium Proof Bundle is malformed.");
+  }
+  return value as unknown as PactiumProofBundle;
+}
+
+function isProofRecord(value: unknown): value is ProofRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export const OPERATION_PROOF_SUBSTRATE_PROTOCOL_VERSION = "v0.0.1:operation:proof-substrate-2";
+export const OPERATION_PROOF_SUBSTRATE_PROTOCOL = PACTIUM_PROTOCOL;
+export const OPERATION_PROOF_SUBSTRATE_PROVIDER = "pactium.operation-proof-substrate";
+export const OPERATION_PROOF_SIGNER_SECRET_FILE_ENV =
   "MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE";
-export const OPERATION_PROOF_SUBSTRATE_MODES: Readonly<Record<string, any>> = Object.freeze({
+export const OPERATION_PROOF_SUBSTRATE_MODES = Object.freeze({
   PACTIUM: "pactium"
-});
+} as const);
 
-const DEFAULT_EVIDENCE_POLICY: any = "development";
-const SIGNER_SECRET_PATTERN: any = /^[0-9a-f]{64}$/u;
-const MESHRIX_ASPECT_PROTOCOL: any = "pactium.v0.3.meshrix-aspect";
-const MESHRIX_POLICY_EXTENSION: any = "meshrix.policy";
-const MESHRIX_WORKSPACE_EFFECT_EXTENSION: any = "meshrix.workspaceEffect";
-const MESHRIX_SIGNATURE_EXTENSION: any = "meshrix.signature";
-const MESHRIX_CRITICAL_EXTENSIONS: readonly any[] = Object.freeze([
+const DEFAULT_EVIDENCE_POLICY = "development";
+const SIGNER_SECRET_PATTERN = /^[0-9a-f]{64}$/u;
+const MESHRIX_ASPECT_PROTOCOL = "pactium.v0.3.meshrix-aspect";
+const MESHRIX_POLICY_EXTENSION = "meshrix.policy";
+const MESHRIX_WORKSPACE_EFFECT_EXTENSION = "meshrix.workspaceEffect";
+const MESHRIX_SIGNATURE_EXTENSION = "meshrix.signature";
+const MESHRIX_CRITICAL_EXTENSIONS: readonly string[] = Object.freeze([
   MESHRIX_POLICY_EXTENSION,
   MESHRIX_WORKSPACE_EFFECT_EXTENSION
 ]);
-const MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS: readonly any[] = Object.freeze([
+const MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS: readonly string[] = Object.freeze([
   ...MESHRIX_CRITICAL_EXTENSIONS,
   MESHRIX_SIGNATURE_EXTENSION
 ]);
 
-function nowIso() : any {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function text(value?: any, fallback: any = "") : any {
-  const normalized: any = String(value ?? "").trim();
+function text(value: unknown, fallback = ""): string {
+  const normalized = String(value ?? "").trim();
   return normalized || fallback;
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function asObject(value: unknown): ProofRecord;
+function asObject(value: unknown, fallback: ProofRecord): ProofRecord;
+function asObject(value: unknown, fallback: null): ProofRecord | null;
+function asObject(value: unknown, fallback: ProofRecord | null = {}): ProofRecord | null {
+  return isProofRecord(value) ? value : fallback;
 }
 
-function asArray(value?: any) : any {
-  return Array.isArray(value) ? value : [];
+function asArray(value: unknown): ProofField[] {
+  return Array.isArray(value) ? value.filter(isProofField) : [];
 }
 
-function hmac(secret?: any, value?: any) : any {
+function isProofField(value: unknown): value is ProofField {
+  return value === null || ["string", "number", "boolean"].includes(typeof value) ||
+    (Array.isArray(value) && value.every(isProofField)) ||
+    (isProofRecord(value) && Object.values(value).every((item) => item === undefined || isProofField(item)));
+}
+
+function hmac(secret: string | Buffer, value: unknown): string {
   return createHmac("sha256", secret)
     .update(String(value || ""))
     .digest("hex");
 }
 
-function publicKeyFromPrivateKey(privateKey?: any) : any {
+function publicKeyFromPrivateKey(privateKey: string): string | Buffer {
   if (!privateKey) return "";
   return createPublicKey(privateKey).export({ type: "spki", format: "pem" });
+}
+
+interface MeshrixSignerOptions {
+  signerId?: string;
+  secret?: string | Buffer;
+  algorithm?: string;
+  privateKey?: string;
+  publicKey?: string;
 }
 
 export function createMeshrixSigner({
@@ -87,16 +323,16 @@ export function createMeshrixSigner({
   algorithm = "",
   privateKey = "",
   publicKey = ""
-}: Record<string, any> = {}) : any {
-  const resolvedAlgorithm: any = text(algorithm, privateKey || publicKey ? "ed25519" : "hmac-sha256");
+}: MeshrixSignerOptions = {}): MeshrixSigner {
+  const resolvedAlgorithm = text(algorithm, privateKey || publicKey ? "ed25519" : "hmac-sha256");
   if (resolvedAlgorithm === "ed25519") {
-    const verifierPublicKey: any = publicKey || publicKeyFromPrivateKey(privateKey);
+    const verifierPublicKey = publicKey || publicKeyFromPrivateKey(privateKey);
     return Object.freeze({
       protocol: MESHRIX_ASPECT_PROTOCOL,
       signerId,
       algorithm: "ed25519",
       publicKey: verifierPublicKey,
-      async sign(message?: any) : Promise<any> {
+      async sign(message = "") {
         if (!privateKey) {
           throw new Error("Ed25519 Meshrix.js signer requires a privateKey for signing.");
         }
@@ -106,7 +342,7 @@ export function createMeshrixSigner({
           privateKey
         ).toString("base64")}`;
       },
-      async verify(message?: any, signature?: any) : Promise<any> {
+      async verify(message = "", signature = "") {
         if (!verifierPublicKey || !String(signature || "").startsWith("ed25519:")) {
           return false;
         }
@@ -117,7 +353,7 @@ export function createMeshrixSigner({
           Buffer.from(String(signature).slice("ed25519:".length), "base64")
         );
       },
-      close() : any {
+      close()  {
         // Key ownership remains with the injected asymmetric signer config.
       }
     });
@@ -125,28 +361,28 @@ export function createMeshrixSigner({
   if (resolvedAlgorithm !== "hmac-sha256") {
     throw new Error(`Unsupported Meshrix.js signer algorithm: ${resolvedAlgorithm}`);
   }
-  const retainedSecret: any = Buffer.isBuffer(secret)
+  const retainedSecret = Buffer.isBuffer(secret)
     ? Buffer.from(secret)
     : Buffer.from(String(secret || ""), "utf8");
-  let closed: any = false;
-  const assertOpen: any = () : any => {
+  let closed = false;
+  const assertOpen = ()  => {
     if (closed) throw new Error("Meshrix.js signer is closed.");
   };
   return Object.freeze({
     protocol: MESHRIX_ASPECT_PROTOCOL,
     signerId,
     algorithm: "hmac-sha256",
-    async sign(message?: any) : Promise<any> {
+    async sign(message = "") {
       assertOpen();
       return `hmac-sha256:${hmac(retainedSecret, message)}`;
     },
-    async verify(message?: any, signature?: any) : Promise<any> {
+    async verify(message = "", signature = "") {
       assertOpen();
-      const expected: any = Buffer.from(`hmac-sha256:${hmac(retainedSecret, message)}`);
-      const actual: any = Buffer.from(String(signature || ""));
+      const expected = Buffer.from(`hmac-sha256:${hmac(retainedSecret, message)}`);
+      const actual = Buffer.from(String(signature || ""));
       return actual.length === expected.length && timingSafeEqual(actual, expected);
     },
-    close() : any {
+    close()  {
       if (closed) return;
       closed = true;
       retainedSecret.fill(0);
@@ -154,22 +390,27 @@ export function createMeshrixSigner({
   });
 }
 
+interface MeshrixSignerKeyRingOptions {
+  active?: MeshrixSigner;
+  verification?: MeshrixSigner[];
+}
+
 export function createMeshrixSignerKeyRing({
   active,
   verification = []
-}: Record<string, any> = {}) : any {
+}: MeshrixSignerKeyRingOptions = {}) {
   if (!active || typeof active.sign !== "function" || typeof active.verify !== "function") {
     throw proofConfigurationError(
       "operation_proof_signer_keyring_active_required",
       "Meshrix.js operation-proof signer key ring requires one active signer."
     );
   }
-  const all: any[] = [active, ...asArray(verification)];
-  const byIdentity: any = new Map<any, any>();
+  const all: MeshrixSigner[] = [active, ...verification];
+  const byIdentity = new Map<string, MeshrixSigner>();
   for (const signer of all) {
-    const signerId: any = text(signer?.signerId);
-    const algorithm: any = text(signer?.algorithm);
-    const identity: any = `${signerId}\0${algorithm}`;
+    const signerId = text(signer?.signerId);
+    const algorithm = text(signer?.algorithm);
+    const identity = `${signerId}\0${algorithm}`;
     if (
       !signerId ||
       !algorithm ||
@@ -183,8 +424,8 @@ export function createMeshrixSignerKeyRing({
     }
     byIdentity.set(identity, signer);
   }
-  let closed: any = false;
-  const assertOpen: any = () : any => {
+  let closed = false;
+  const assertOpen = ()  => {
     if (closed) {
       throw proofConfigurationError(
         "operation_proof_signer_keyring_closed",
@@ -197,70 +438,79 @@ export function createMeshrixSignerKeyRing({
     signerId: active.signerId,
     algorithm: active.algorithm,
     verificationKeyCount: byIdentity.size,
-    async sign(message?: any) : Promise<any> {
+    async sign(message = "") {
       assertOpen();
       return active.sign(message);
     },
-    async verify(message?: any, signature?: any) : Promise<any> {
+    async verify(message = "", signature = "") {
       assertOpen();
       return active.verify(message, signature);
     },
-    async verifyFor({ signerId = "", algorithm = "", message = "", signature = "" }: Record<string, any> = {}) : Promise<any> {
+    async verifyFor({ signerId = "", algorithm = "", message = "", signature = "" }: {
+      signerId?: string; algorithm?: string; message?: string; signature?: string;
+    } = {}) {
       assertOpen();
-      const signer: any = byIdentity.get(`${text(signerId)}\0${text(algorithm)}`);
+      const signer = byIdentity.get(`${text(signerId)}\0${text(algorithm)}`);
       return signer ? signer.verify(message, signature) : false;
     },
-    close() : any {
+    close()  {
       if (closed) return;
       closed = true;
-      for (const signer of new Set<any>(all)) signer?.close?.();
+      for (const signer of new Set(all)) signer.close();
       byIdentity.clear();
     }
   });
 }
 
-function cleanValue(value?: any) : any {
-  return toCanonicalSafeValue(value);
+function cleanValue(value: unknown): ProofField {
+  const cleaned = toCanonicalSafeValue(value);
+  return isProofField(cleaned) ? cleaned : null;
 }
 
-function normalizeMode(value: any = "") : any {
-  const mode: any = text(value).toLowerCase();
+function cleanRecord(value: unknown): ProofRecord {
+  return asObject(cleanValue(value));
+}
+
+function normalizeMode(value: unknown = ""): string {
+  const mode = text(value).toLowerCase();
   if (!mode || mode === OPERATION_PROOF_SUBSTRATE_MODES.PACTIUM) {
     return OPERATION_PROOF_SUBSTRATE_MODES.PACTIUM;
   }
   throw new Error("Operation Proof Substrate only supports Pactium-backed mode.");
 }
 
-function env(name?: any) : any {
+function env(name: string): string {
   return text(process.env[name]);
 }
 
-function proofConfigurationError(code?: any, message?: any) : any {
+function proofConfigurationError(code: string, message: string): Error & { code: string } {
   return Object.assign(new Error(message), { code });
 }
 
-function pathIsWithin(parent?: any, child?: any) : any {
-  const relative: any = path.relative(path.resolve(parent), path.resolve(child));
+function pathIsWithin(parent: string, child: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
   return relative === "" ||
     (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
-function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: Record<string, any> = {}) : any {
-  const configuredPath: any = text(signerSecretFile);
+function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: {
+  dataDir?: string; signerSecretFile?: string;
+} = {}) {
+  const configuredPath = text(signerSecretFile);
   if (!configuredPath || !path.isAbsolute(configuredPath)) {
     throw proofConfigurationError(
       "operation_proof_signer_secret_file_required",
       "Meshrix.js operation-proof signer secret file is not configured.",
     );
   }
-  let stat: any;
-  let keyRealPath: any = "";
-  let dataRealPath: any = path.resolve(dataDir);
+  let stat;
+  let keyRealPath = "";
+  let dataRealPath = path.resolve(dataDir);
   try {
     stat = fs.lstatSync(configuredPath);
     keyRealPath = fs.realpathSync(configuredPath);
     try {
-      dataRealPath = fs.realpathSync(path.resolve(dataDir));
+    dataRealPath = fs.realpathSync(path.resolve(dataDir));
     } catch {
       // A fresh governed data directory may not exist before startup.
     }
@@ -281,10 +531,10 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
       "Meshrix.js operation-proof signer secret custody is invalid.",
     );
   }
-  let bytes: any;
+  let bytes;
   try {
     bytes = fs.readFileSync(keyRealPath);
-    const encoded: any = bytes.toString("utf8").trim();
+    const encoded = bytes.toString("utf8").trim();
     if (
       !SIGNER_SECRET_PATTERN.test(encoded) ||
       !(
@@ -298,8 +548,8 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
       );
     }
     return encoded;
-  } catch (error: any) {
-    if (String(error?.code || "").startsWith("operation_proof_signer_")) {
+  } catch (error: unknown) {
+    if (isErrorWithCode(error) && error.code.startsWith("operation_proof_signer_")) {
       throw error;
     }
     throw proofConfigurationError(
@@ -311,17 +561,25 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
   }
 }
 
-function runtimeOperationProofOptions(runtimeOptions: Record<string, any> = {}) : any {
+function isErrorWithCode(value: unknown): value is Error & { code: string } {
+  return value instanceof Error && "code" in value && typeof value.code === "string";
+}
+
+function runtimeOperationProofOptions(runtimeOptions: ProofRecord = {}): ProofRecord {
   return asObject(runtimeOptions.operationProof || runtimeOptions.operationProofSubstrate || runtimeOptions.pactiumProof);
 }
 
-function resolveMode({ mode = "", runtimeOptions = {} }: Record<string, any> = {}) : any {
-  const options: any = runtimeOperationProofOptions(runtimeOptions);
+function resolveMode({ mode = "", runtimeOptions = {} }: {
+  mode?: string; runtimeOptions?: ProofRecord;
+} = {}): string {
+  const options = runtimeOperationProofOptions(runtimeOptions);
   return normalizeMode(mode || options.mode || env("MESHRIX_OPERATION_PROOF_MODE"));
 }
 
-function resolveEvidencePolicy({ evidencePolicy = "", runtimeOptions = {} }: Record<string, any> = {}) : any {
-  const options: any = runtimeOperationProofOptions(runtimeOptions);
+function resolveEvidencePolicy({ evidencePolicy = "", runtimeOptions = {} }: {
+  evidencePolicy?: string; runtimeOptions?: ProofRecord;
+} = {}): string {
+  const options = runtimeOperationProofOptions(runtimeOptions);
   return text(
     evidencePolicy ||
     options.evidencePolicy ||
@@ -335,13 +593,13 @@ function resolveSignerSecret({
   signerSecret = "",
   runtimeOptions = {},
   dataDir = "",
-}: Record<string, any> = {}) : any {
-  const options: any = runtimeOperationProofOptions(runtimeOptions);
-  const directSecret: any = text(
+}: { signerSecret?: string; runtimeOptions?: ProofRecord; dataDir?: string } = {}): string {
+  const options = runtimeOperationProofOptions(runtimeOptions);
+  const directSecret = text(
     signerSecret ||
     options.signerSecret
   );
-  const signerSecretFile: any = text(
+  const signerSecretFile = text(
     options.signerSecretFile ||
     env(OPERATION_PROOF_SIGNER_SECRET_FILE_ENV)
   );
@@ -358,13 +616,15 @@ function resolveSignerSecret({
   );
 }
 
-function signerConfigured({ signer = null, signerSecret = "", evidencePolicy = "" }: Record<string, any> = {}) : any {
+function signerConfigured({ signer = null, signerSecret = "", evidencePolicy = "" }: {
+  signer?: MeshrixSigner | false | null; signerSecret?: string; evidencePolicy?: string;
+} = {}): boolean {
   if (evidencePolicy !== "production") return true;
   if (signer === false) return false;
   return Boolean(signer) || text(signerSecret) !== "";
 }
 
-function normalizeWorkspaceId(input: Record<string, any> = {}) : any {
+function normalizeWorkspaceId(input: ProofRecord = {})  {
   return text(
     input.workspaceId ||
     input.workspace ||
@@ -377,11 +637,11 @@ function normalizeWorkspaceId(input: Record<string, any> = {}) : any {
   );
 }
 
-function normalizeOperationId(input: Record<string, any> = {}) : any {
+function normalizeOperationId(input: ProofRecord = {})  {
   return text(input.operationId || input.operation?.id || input.id, "operation.unknown");
 }
 
-function normalizeIdempotencyKey(input: Record<string, any> = {}) : any {
+function normalizeIdempotencyKey(input: ProofRecord = {})  {
   return text(
     input.idempotencyKey ||
     input["idempotency-key"] ||
@@ -391,7 +651,7 @@ function normalizeIdempotencyKey(input: Record<string, any> = {}) : any {
   );
 }
 
-function entryIdFromEnvelope(input: Record<string, any> = {}, envelope?: any) : any {
+function entryIdFromEnvelope(input: ProofRecord = {}, envelope?: ProofEnvelopeView): string {
   return text(envelope?.factRef?.ledgerEventId) || serverToken(
     "operation_proof",
     normalizeWorkspaceId(input),
@@ -402,13 +662,13 @@ function entryIdFromEnvelope(input: Record<string, any> = {}, envelope?: any) : 
   );
 }
 
-function normalizeEntry(input: Record<string, any> = {}, envelope?: any) : any {
-  const at: any = text(input.createdAt, nowIso());
-  const ledgerEventId: any = entryIdFromEnvelope(input, envelope);
-  const storedInput: any = asObject(input.input);
-  const storedSubject: any = asObject(input.subject);
-  const storedRisk: any = asObject(input.risk);
-  const storedPolicy: any = asObject(input.policyDecision || input.policyEvidence);
+function normalizeEntry(input: ProofRecord = {}, envelope?: ProofEnvelopeView): OperationProofEntry {
+  const at = text(input.createdAt, nowIso());
+  const ledgerEventId = entryIdFromEnvelope(input, envelope);
+  const storedInput = asObject(input.input);
+  const storedSubject = asObject(input.subject);
+  const storedRisk = asObject(input.risk);
+  const storedPolicy = asObject(input.policyDecision || input.policyEvidence);
   return {
     protocol: PACTIUM_PROTOCOL,
     schema: PACTIUM_SCHEMA_VERSION,
@@ -432,7 +692,7 @@ function normalizeEntry(input: Record<string, any> = {}, envelope?: any) : any {
       "meshrix.policy-evidence",
       cleanValue(storedPolicy)
     ),
-    warnings: asArray(input.warnings).map((warning?: any) : any => cleanValue(warning)),
+    warnings: asArray(input.warnings).map((warning?)  => cleanValue(warning)),
     receiptRefs: [],
     createdAt: at,
     updatedAt: at,
@@ -450,13 +710,13 @@ function normalizeEntry(input: Record<string, any> = {}, envelope?: any) : any {
       intentEnvelopeId: text(envelope?.envelopeId),
       intentLedgerEventId: text(envelope?.factRef?.ledgerEventId),
       intentLedgerIndex: Number(envelope?.factRef?.ledgerIndex ?? -1),
-      ledgerHead: envelope?.ledgerHead || null
+      ledgerHead: cleanValue(envelope?.ledgerHead)
     }
   };
 }
 
-function normalizeReceiptEntry(input: Record<string, any> = {}, envelope?: any) : any {
-  const at: any = text(input.createdAt, nowIso());
+function normalizeReceiptEntry(input: ProofRecord = {}, envelope?: ProofEnvelopeView): OperationProofEntry {
+  const at = text(input.createdAt, nowIso());
   return {
     protocol: PACTIUM_PROTOCOL,
     schema: PACTIUM_SCHEMA_VERSION,
@@ -468,7 +728,7 @@ function normalizeReceiptEntry(input: Record<string, any> = {}, envelope?: any) 
     workspaceId: normalizeWorkspaceId(input),
     semantic: text(input.semantic),
     status: text(input.status, "succeeded"),
-    outcomeKind: text(input.outcomeKind, input.status || "succeeded"),
+    outcomeKind: text(input.outcomeKind, text(input.status, "succeeded")),
     idempotencyKey: normalizeIdempotencyKey(input),
     changeDigest: text(input.changeDigest),
     resultDigest: text(input.resultHash || input.resultDigest),
@@ -491,17 +751,22 @@ function normalizeReceiptEntry(input: Record<string, any> = {}, envelope?: any) 
       receiptEnvelopeId: text(envelope?.envelopeId),
       receiptLedgerEventId: text(envelope?.factRef?.ledgerEventId),
       receiptLedgerIndex: Number(envelope?.factRef?.ledgerIndex ?? -1),
-      ledgerHead: envelope?.ledgerHead || null
+      ledgerHead: cleanValue(envelope?.ledgerHead)
     }
   };
 }
 
-function mergeCompletion(entry?: any, patch: Record<string, any> = {}, envelope?: any, failed: any = false) : any {
-  const at: any = text(
+function mergeCompletion(
+  entry: OperationProofEntry,
+  patch: ProofRecord = {},
+  envelope?: ProofEnvelopeView,
+  failed = false
+): OperationProofEntry {
+  const at = text(
     patch.completedAt || patch.createdAt,
     nowIso()
   );
-  const status: any = text(patch.status, failed ? "failed" : "succeeded");
+  const status = text(patch.status, failed ? "failed" : "succeeded");
   return {
     ...entry,
     ledgerEventId: text(
@@ -515,7 +780,7 @@ function mergeCompletion(entry?: any, patch: Record<string, any> = {}, envelope?
     auditId: text(patch.auditId, entry.auditId || ""),
     warnings: [
       ...asArray(entry.warnings),
-      ...asArray(patch.warnings).map((warning?: any) : any => cleanValue(warning))
+      ...asArray(patch.warnings).map((warning?)  => cleanValue(warning))
     ],
     error: failed || status === "failed" || status === "denied"
       ? text(patch.error, entry.error || (status === "denied" ? "operation denied" : "operation failed"))
@@ -533,12 +798,12 @@ function mergeCompletion(entry?: any, patch: Record<string, any> = {}, envelope?
       outcomeEnvelopeId: text(envelope?.envelopeId),
       outcomeLedgerEventId: text(envelope?.factRef?.ledgerEventId),
       outcomeLedgerIndex: Number(envelope?.factRef?.ledgerIndex ?? -1),
-      ledgerHead: envelope?.ledgerHead || entry.pactium?.ledgerHead || null
+      ledgerHead: cleanValue(envelope?.ledgerHead || entry.pactium?.ledgerHead)
     }
   };
 }
 
-function locatorEnvelope(factId?: any, locator: Record<string, any> = {}) : any {
+function locatorEnvelope(factId: unknown, locator: ProofRecord = {}): ProofEnvelopeView {
   return {
     factId: text(factId),
     envelopeId: text(locator.envelopeId),
@@ -550,76 +815,75 @@ function locatorEnvelope(factId?: any, locator: Record<string, any> = {}) : any 
   };
 }
 
-function outcomeEvidenceProjection(outcome: Record<string, any> = {}) : any {
-  const source: any = asObject(outcome);
-  const hostEvidenceRefs: any = asArray(source.hostEvidenceRefs)
-    .map((value?: any) : any => text(value))
+function outcomeEvidenceProjection(outcome: ProofRecord = {})  {
+  const source = asObject(outcome);
+  const hostEvidenceRefs = asArray(source.hostEvidenceRefs)
+    .map((value) => text(value))
     .filter(Boolean);
-  const auditRef: any = hostEvidenceRefs.find((value?: any) : any =>
+  const auditRef = hostEvidenceRefs.find((value) =>
     value.startsWith("audit:")
   ) || "";
   return {
     auditId: auditRef.slice("audit:".length),
-    receiptRefs: hostEvidenceRefs.filter((value?: any) : any =>
+    receiptRefs: hostEvidenceRefs.filter((value) =>
       !value.startsWith("audit:")
     )
   };
 }
 
-async function readLedgerEntryByEventId(core?: any, ledgerEventId?: any) : Promise<any> {
-  const eventId: any = text(ledgerEventId);
+async function readLedgerEntryByEventId(core: PactiumCore, ledgerEventId: unknown): Promise<PactiumRecord | null> {
+  const eventId = text(ledgerEventId);
   if (!eventId) return null;
-  const pointer: any = await core.readProtocolObject("ledger-event", eventId, null);
-  if (!Number.isInteger(Number(pointer?.index))) return null;
+  const pointer = asObject(await core.readProtocolObject("ledger-event", eventId, null), null);
+  if (!pointer || !Number.isInteger(Number(pointer.index))) return null;
   return core.readLedgerLeaf(Number(pointer.index));
 }
 
-async function projectLedgerEntry(core?: any, ledgerEntry?: any) : Promise<any> {
-  const fact: any = asObject(ledgerEntry?.fact, null);
+async function projectLedgerEntry(core: PactiumCore, ledgerEntry: PactiumRecord | null): Promise<OperationProofEntry | null> {
+  const fact = asObject(ledgerEntry?.fact, null);
   if (!fact) return null;
   if (fact.factType === "operation.receipt") {
-    const locator: any = await core.lookupReceipt(fact.receiptId);
-    return normalizeReceiptEntry(fact, locatorEnvelope(fact.receiptId, locator));
+    const locator = await core.lookupReceipt(text(fact.receiptId));
+    return normalizeReceiptEntry(fact, locatorEnvelope(fact.receiptId, asObject(locator)));
   }
   if (fact.factType === "operation.intent") {
-    const intentLocator: any = await core.lookupOpenIntent(fact.intentId);
-    const entry: any = normalizeEntry(fact, locatorEnvelope(fact.intentId, intentLocator));
-    const outcomeLocator: any = await core.lookupOutcome(fact.intentId);
-    const evidence: any = outcomeEvidenceProjection(
-      outcomeLocator.outcome
-    );
-    return outcomeLocator.exists && outcomeLocator.outcome
+    const intentLocator = await core.lookupOpenIntent(text(fact.intentId));
+    const entry = normalizeEntry(fact, locatorEnvelope(fact.intentId, asObject(intentLocator)));
+    const outcomeLocator = await core.lookupOutcome(text(fact.intentId));
+    const outcome = asObject(outcomeLocator.outcome, null);
+    const evidence = outcomeEvidenceProjection(outcome ?? {});
+    return outcomeLocator.exists && outcome
       ? mergeCompletion(
           entry,
           {
-            status: outcomeLocator.outcome.status,
-            outcomeKind: outcomeLocator.outcome.status,
-            completedAt: outcomeLocator.outcome.createdAt,
+            status: outcome.status,
+            outcomeKind: outcome.status,
+            completedAt: outcome.createdAt,
             auditId: evidence.auditId,
             receiptRefs: evidence.receiptRefs
           },
-          locatorEnvelope(outcomeLocator.outcome.outcomeId, outcomeLocator),
-          outcomeLocator.outcome.status === "failed"
+          locatorEnvelope(outcome.outcomeId, asObject(outcomeLocator)),
+          outcome.status === "failed"
         )
       : entry;
   }
   if (fact.factType === "operation.outcome") {
-    const intentLocator: any = await core.lookupOpenIntent(fact.intentId);
-    const outcomeLocator: any = await core.lookupOutcome(fact.intentId);
-    const intentLedgerEntry: any = await readLedgerEntryByEventId(
+    const intentLocator = await core.lookupOpenIntent(text(fact.intentId));
+    const outcomeLocator = await core.lookupOutcome(text(fact.intentId));
+    const intentLedgerEntry = await readLedgerEntryByEventId(
       core,
       intentLocator.ledgerEventId
     );
-    const intentFact: any = asObject(intentLedgerEntry?.fact, null);
+    const intentFact = asObject(intentLedgerEntry?.fact, null);
     if (
       intentFact &&
       intentFact.factType === "operation.intent"
     ) {
-      const evidence: any = outcomeEvidenceProjection(fact);
+      const evidence = outcomeEvidenceProjection(fact);
       return mergeCompletion(
         normalizeEntry(
           intentFact,
-          locatorEnvelope(intentFact.intentId, intentLocator)
+          locatorEnvelope(intentFact.intentId, asObject(intentLocator))
         ),
         {
           status: fact.status,
@@ -628,11 +892,11 @@ async function projectLedgerEntry(core?: any, ledgerEntry?: any) : Promise<any> 
           auditId: evidence.auditId,
           receiptRefs: evidence.receiptRefs
         },
-        locatorEnvelope(fact.outcomeId, outcomeLocator),
+        locatorEnvelope(fact.outcomeId, asObject(outcomeLocator)),
         fact.status === "failed"
       );
     }
-    const at: any = text(fact.createdAt, nowIso());
+    const at = text(fact.createdAt, nowIso());
     return {
       protocol: PACTIUM_PROTOCOL,
       schema: PACTIUM_SCHEMA_VERSION,
@@ -646,6 +910,9 @@ async function projectLedgerEntry(core?: any, ledgerEntry?: any) : Promise<any> 
       createdAt: at,
       updatedAt: at,
       completedAt: at,
+      failedAt: fact.status === "failed" ? at : "",
+      error: "",
+      idempotencyKey: text(fact.idempotencyKey),
       proof: { mode: OPERATION_PROOF_SUBSTRATE_MODES.PACTIUM, lifecycle: "two-stage", terminal: true },
       pactium: {
         intentId: text(fact.intentId),
@@ -659,18 +926,18 @@ async function projectLedgerEntry(core?: any, ledgerEntry?: any) : Promise<any> 
   return null;
 }
 
-async function loadProjectedEntry(core?: any, ledgerEventId?: any) : Promise<any> {
+async function loadProjectedEntry(core: PactiumCore, ledgerEventId: unknown): Promise<OperationProofEntry | null> {
   return projectLedgerEntry(core, await readLedgerEntryByEventId(core, ledgerEventId));
 }
 
-function outcomeStatus({ status = "", failed = false, denied = false }: Record<string, any> = {}) : any {
+function outcomeStatus({ status = "", failed = false, denied = false }: ProofRecord = {})  {
   if (denied) return "denied";
   if (failed) return "failed";
   return text(status, "succeeded");
 }
 
-function buildPolicyEvidence(input: Record<string, any> = {}) : any {
-  return cleanValue({
+function buildPolicyEvidence(input: ProofRecord = {}): ProofRecord {
+  return cleanRecord({
     operationId: normalizeOperationId(input),
     workspaceId: normalizeWorkspaceId(input),
     subject: asObject(input.subject),
@@ -681,8 +948,8 @@ function buildPolicyEvidence(input: Record<string, any> = {}) : any {
   });
 }
 
-function buildWorkspaceEffectEvidence(input: Record<string, any> = {}) : any {
-  return cleanValue({
+function buildWorkspaceEffectEvidence(input: ProofRecord = {}): ProofRecord {
+  return cleanRecord({
     operationId: normalizeOperationId(input),
     workspaceId: normalizeWorkspaceId(input),
     result: asObject(input.result || input.output),
@@ -693,7 +960,7 @@ function buildWorkspaceEffectEvidence(input: Record<string, any> = {}) : any {
   });
 }
 
-function envelopeIdForEntry(entry: Record<string, any> = {}, kind: any = "outcome") : any {
+function envelopeIdForEntry(entry: ProofRecord = {}, kind = "outcome")  {
   if (kind === "intent") {
     return text(entry.pactium?.intentEnvelopeId);
   }
@@ -704,7 +971,7 @@ function envelopeIdForEntry(entry: Record<string, any> = {}, kind: any = "outcom
   );
 }
 
-function receiptResultFor(input: Record<string, any> = {}, status: any = "succeeded") : any {
+function receiptResultFor(input: ProofRecord = {}, status = "succeeded")  {
   return cleanValue({
     outcomeKind: text(input.outcomeKind, status),
     statusCode: Number(input.statusCode || 0),
@@ -715,22 +982,22 @@ function receiptResultFor(input: Record<string, any> = {}, status: any = "succee
   });
 }
 
-function canExportProofBundle({ actor = null }: Record<string, any> = {}) : any {
-  if (!actor) return false;
+function canExportProofBundle({ actor = null }: ProofRecord = {})  {
+  if (!isProofRecord(actor)) return false;
   if (actor.type === "system" || actor.system === true) return true;
-  const scopes: any = new Set<any>(asArray(actor.scopes || actor.user?.scopes).map(String));
+  const scopes = new Set<string>(asArray(actor.scopes || actor.user?.scopes).map(String));
   return scopes.has("proof:export") || scopes.has("runtime:admin") || scopes.has("console:admin");
 }
 
-function decodeBundleVarint(bytes?: any, offset: any = 0) : any {
-  let value: any = 0;
-  let shift: any = 0;
-  let cursor: any = offset;
+function decodeBundleVarint(bytes: Uint8Array, offset = 0): { value: number; nextOffset: number } {
+  let value = 0;
+  let shift = 0;
+  let cursor = offset;
   if (!Number.isSafeInteger(cursor) || cursor < 0) {
     throw new Error("Bundle varint offset is invalid.");
   }
   while (cursor < bytes.length) {
-    const byte: any = bytes[cursor];
+    const byte = bytes[cursor];
     value += (byte & 0x7f) * (2 ** shift);
     cursor += 1;
     if ((byte & 0x80) === 0) {
@@ -743,31 +1010,35 @@ function decodeBundleVarint(bytes?: any, offset: any = 0) : any {
   throw new Error("Bundle varint is truncated.");
 }
 
-function createPortableBundleBlockResolver(bundle?: any, options: Record<string, any> = {}) : any {
+function createPortableBundleBlockResolver(
+  bundle?: PactiumProofBundle,
+  options: MeshrixVerificationOptions = {}
+): PortableBundleResolver | null {
   if (!bundle?.binaryBase64 || !Array.isArray(bundle?.index)) return null;
-  const maxHeaderSize: any = Number(options.maxHeaderSize || 16 * 1024);
-  const maxBlockSize: any = Number(options.maxBlockSize || 64 * 1024 * 1024);
-  const bytes: any = Buffer.from(String(bundle.binaryBase64), "base64");
-  const index: any = new Map<any, any>();
-  const cache: any = new Map<any, any>();
+  const maxHeaderSize = Number(options.maxHeaderSize || 16 * 1024);
+  const maxBlockSize = Number(options.maxBlockSize || 64 * 1024 * 1024);
+  const bytes = Buffer.from(String(bundle.binaryBase64), "base64");
+  const index = new Map<string, ProofRecord>();
+  const cache = new Map<string, PortableBlock | null>();
   for (const item of bundle.index) {
-    const cid: any = text(item?.cid);
+    const cid = text(item?.cid);
     if (!cid || index.has(cid)) continue;
     index.set(cid, asObject(item));
   }
 
   return Object.freeze({
-    get(cid?: any) : any {
-      const key: any = text(cid);
+    get(cid = "") {
+      const key = text(cid);
       if (!key || !index.has(key)) return null;
-      if (cache.has(key)) return cache.get(key);
-      const item: any = index.get(key);
-      let block: any = null;
+      if (cache.has(key)) return cache.get(key) ?? null;
+      const item = index.get(key);
+      if (!item) return null;
+      let block: PortableBlock | null = null;
       try {
-        const offset: any = Number(item.offset);
-        const recordLength: any = Number(item.recordLength);
-        const headerLength: any = Number(item.headerLength);
-        const payloadLength: any = Number(item.byteLength);
+        const offset = Number(item.offset);
+        const recordLength = Number(item.recordLength);
+        const headerLength = Number(item.headerLength);
+        const payloadLength = Number(item.byteLength);
         if (
           !Number.isSafeInteger(offset) || offset < 0 ||
           !Number.isSafeInteger(recordLength) || recordLength <= 0 ||
@@ -776,14 +1047,14 @@ function createPortableBundleBlockResolver(bundle?: any, options: Record<string,
         ) {
           throw new Error("Bundle index bounds are invalid.");
         }
-        const decoded: any = decodeBundleVarint(bytes, offset);
+        const decoded = decodeBundleVarint(bytes, offset);
         if (decoded.value !== recordLength || recordLength !== headerLength + payloadLength) {
           throw new Error("Bundle record length is invalid.");
         }
-        const payloadStart: any = decoded.nextOffset + headerLength;
-        const payloadEnd: any = payloadStart + payloadLength;
+        const payloadStart = decoded.nextOffset + headerLength;
+        const payloadEnd = payloadStart + payloadLength;
         if (payloadEnd > bytes.length) throw new Error("Bundle record exceeds the binary payload.");
-        const header: any = asObject(canonicalDecode(bytes.subarray(decoded.nextOffset, payloadStart)));
+        const header = asObject(canonicalDecode(bytes.subarray(decoded.nextOffset, payloadStart)));
         if (
           header.cid !== key ||
           header.payloadHash !== item.payloadHash ||
@@ -791,8 +1062,8 @@ function createPortableBundleBlockResolver(bundle?: any, options: Record<string,
         ) {
           throw new Error("Bundle record header does not match its index entry.");
         }
-        const payloadBytes: any = bytes.subarray(payloadStart, payloadEnd);
-        const payloadHash: any = `sha256:${createHash("sha256").update(payloadBytes).digest("hex")}`;
+        const payloadBytes = bytes.subarray(payloadStart, payloadEnd);
+        const payloadHash = `sha256:${createHash("sha256").update(payloadBytes).digest("hex")}`;
         if (payloadHash !== item.payloadHash || cidForBytes(payloadBytes) !== key) {
           throw new Error("Bundle record payload does not match its content address.");
         }
@@ -816,46 +1087,60 @@ function createPortableBundleBlockResolver(bundle?: any, options: Record<string,
   });
 }
 
-function indexExtensionsByName(extensions?: any) : any {
-  const index: any = new Map<any, any>();
-  for (const extension of asArray(extensions)) {
-    const name: any = text(extension?.name);
+function indexExtensionsByName(extensions: unknown): Map<string, ProofExtension[]> {
+  const index = new Map<string, ProofExtension[]>();
+  for (const extension of asProofExtensions(extensions)) {
+    const name = text(extension.name);
     if (!name) continue;
-    if (!index.has(name)) index.set(name, []);
-    index.get(name).push(extension);
+    const group = index.get(name) ?? [];
+    group.push(extension);
+    index.set(name, group);
   }
   return index;
 }
 
-async function resolveMaterialBlock({ core, cid, bundleResolver }: Record<string, any>) : Promise<any> {
-  return bundleResolver?.get(cid) || core.resolveBlock(cid);
+async function resolveMaterialBlock({ core, cid, bundleResolver }: {
+  core: PactiumCore; cid: string; bundleResolver: PortableBundleResolver | null;
+}): Promise<MaterialBlock | null> {
+  const portable = bundleResolver?.get(cid);
+  if (portable) return portable;
+  const stored = await core.resolveBlock(cid);
+  if (!stored) return null;
+  return {
+    ...(stored.bytes instanceof Uint8Array ? { bytes: stored.bytes } : {}),
+    payloadBase64: text(stored.payloadBase64)
+  };
 }
 
-function materializeMeshrixEvidenceExtension({ name, evidence, metadata = {} }: Record<string, any>) : any {
-  const normalizedEvidence: any = cleanValue(evidence || {});
+function materializeMeshrixEvidenceExtension({ name, evidence, metadata = {} }: {
+  name: string; evidence: unknown; metadata?: ProofRecord;
+}): ProofExtension {
+  const normalizedEvidence = cleanValue(evidence || {});
   return {
     name,
     critical: true,
-    value: {
+    value: cleanRecord({
       protocol: MESHRIX_ASPECT_PROTOCOL,
       evidenceType: name,
       evidenceVersion: "v2",
       evidence: normalizedEvidence,
       evidenceHash: protocolHash("meshrix.critical-evidence", normalizedEvidence),
-      metadata: cleanValue(asObject(metadata))
-    },
+      metadata: cleanRecord(metadata)
+    }),
     metadata: {
       evidenceHash: protocolHash("meshrix.critical-evidence", normalizedEvidence)
     }
   };
 }
 
-function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome" }: Record<string, any>) : any {
-  const rawPolicyEvidence: any = input.policyEvidence ||
+function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome" }: {
+  input?: ProofRecord; entry?: OperationProofEntry | null; phase?: string;
+}): ProofExtension[] {
+  const rawPolicyEvidence = asObject(input.policyEvidence ||
     input.policyDecision ||
     (entry?.policyDigest ? { policyDigest: entry.policyDigest } : null) ||
-    buildPolicyEvidence({ ...asObject(entry), ...input });
-  const policyEvidence: any = cleanValue({
+    buildPolicyEvidence({ ...asObject(entry), ...input }));
+  const policyEvidence = cleanValue({
     evidenceType: "policy-digest",
     operationId: normalizeOperationId(input),
     workspaceId: normalizeWorkspaceId(input),
@@ -863,7 +1148,7 @@ function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outc
     reasonCode: text(rawPolicyEvidence?.reasonCode || rawPolicyEvidence?.reason),
     policyDigest: protocolHash("meshrix.policy-evidence", cleanValue(rawPolicyEvidence))
   });
-  const rawWorkspaceEffectEvidence: any = input.workspaceEffectEvidence ||
+  const rawWorkspaceEffectEvidence = input.workspaceEffectEvidence ||
     input.effectEvidence ||
     input.workspaceEffect ||
     buildWorkspaceEffectEvidence({
@@ -871,7 +1156,7 @@ function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outc
       ...input,
       status: input.status || entry?.status || ""
     });
-  const workspaceEffectEvidence: any = cleanValue({
+  const workspaceEffectEvidence = cleanValue({
     evidenceType: "workspace-effect-digest",
     operationId: normalizeOperationId(input),
     workspaceId: normalizeWorkspaceId(input),
@@ -879,7 +1164,7 @@ function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outc
     receiptRefs: asArray(input.receiptRefs).map(String).filter(Boolean).slice(0, 64),
     effectDigest: protocolHash("meshrix.workspace-effect-evidence", cleanValue(rawWorkspaceEffectEvidence))
   });
-  const policyExtension: any = materializeMeshrixEvidenceExtension({
+  const policyExtension = materializeMeshrixEvidenceExtension({
       name: MESHRIX_POLICY_EXTENSION,
       evidence: policyEvidence,
       metadata: {
@@ -899,23 +1184,23 @@ function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outc
   ];
 }
 
-function meshrixMeshEnvelopeSigningHash(envelope?: any) : any {
+function meshrixMeshEnvelopeSigningHash(envelope?: PactiumProofEnvelope): string {
   return protocolHash("proof.envelope.signing", {
     ...asObject(envelope),
     envelopeId: undefined,
     replayed: false,
     disposition: undefined,
-    extensions: asArray(envelope?.extensions).filter(
-      (extension?: any) : any => extension?.name !== MESHRIX_SIGNATURE_EXTENSION
+    extensions: asProofExtensions(envelope?.extensions).filter(
+      (extension) => extension.name !== MESHRIX_SIGNATURE_EXTENSION
     )
   });
 }
 
-function finalizeMeshrixEnvelopeExtensions(signer?: any) : any {
+function finalizeMeshrixEnvelopeExtensions(signer?: MeshrixSigner | null) {
   if (!signer) return null;
-  return async (envelope?: any) : Promise<any> => {
-    const signedEnvelopeHash: any = meshrixMeshEnvelopeSigningHash(envelope);
-    const signature: any = await signer.sign(signedEnvelopeHash);
+  return async (envelope: PactiumProofEnvelope) => {
+    const signedEnvelopeHash = meshrixMeshEnvelopeSigningHash(envelope);
+    const signature = await signer.sign(signedEnvelopeHash);
     return [{
       name: MESHRIX_SIGNATURE_EXTENSION,
       critical: false,
@@ -932,33 +1217,30 @@ function finalizeMeshrixEnvelopeExtensions(signer?: any) : any {
 
 function createMeshrixAspect({
   pactium: core,
-  storage,
+  storage: _storage,
   evidencePolicy = "production",
   signer = null,
   signerSecret = ""
-}: Record<string, any> = {}) : any {
-  if (!core || !storage) {
-    throw new Error("Meshrix.js proof aspect requires Pactium core and storage ports.");
-  }
-  const hasExplicitSignerSecret: any = text(signerSecret) !== "";
-  const resolvedSigner: any = signer === false
+}: MeshrixAspectOptions) {
+  const hasExplicitSignerSecret = text(signerSecret) !== "";
+  const resolvedSigner = signer === false
     ? null
     : signer || (hasExplicitSignerSecret || evidencePolicy !== "production"
       ? createMeshrixSigner({ secret: signerSecret || "meshrix-development-signer" })
       : null);
-  const ownsSigner: any = !signer && Boolean(resolvedSigner);
-  const genericRepairPlanner: any = createRepairPlanner();
+  const ownsSigner = !signer && Boolean(resolvedSigner);
+  const genericRepairPlanner = requireRepairPlanner(createRepairPlanner());
 
-  function assertProductionReady() : any {
+  function assertProductionReady()  {
     if (evidencePolicy === "production" && !resolvedSigner) {
       throw new Error("Meshrix.js production evidence policy requires an explicit signer or signerSecret.");
     }
   }
 
-  async function recordWorkspaceOperation(input: Record<string, any> = {}) : Promise<any> {
-    const workspaceId: any = text(input.workspaceId || input.scope, "default");
-    const policyEvidence: any = input.policyEvidence ?? input.policy;
-    const effectEvidence: any = input.workspaceEffectEvidence ?? input.effectEvidence ?? input.workspaceEffect;
+  async function recordWorkspaceOperation(input: ProofRecord = {})  {
+    const workspaceId = text(input.workspaceId || input.scope, "default");
+    const policyEvidence = input.policyEvidence ?? input.policy;
+    const effectEvidence = input.workspaceEffectEvidence ?? input.effectEvidence ?? input.workspaceEffect;
     if (evidencePolicy === "production" && !policyEvidence) {
       throw new Error("Meshrix.js production evidence policy requires policy evidence.");
     }
@@ -966,15 +1248,15 @@ function createMeshrixAspect({
       throw new Error("Meshrix.js production evidence policy requires workspace effect evidence.");
     }
     assertProductionReady();
-    const compactInput: Record<string, any> = {
+    const compactInput: ProofRecord = {
       ...input,
       workspaceId,
       policyEvidence: policyEvidence || { missing: true, policy: "opportunistic" },
       workspaceEffectEvidence: effectEvidence || { missing: true, policy: "opportunistic" }
     };
-    const intentEvidenceExtensions: any = meshrixMeshEvidenceExtensions({ input: compactInput, phase: "intent" });
-    const outcomeEvidenceExtensions: any = meshrixMeshEvidenceExtensions({ input: compactInput, phase: "outcome" });
-    const batch: any = await core.recordOperations([{
+    const intentEvidenceExtensions = meshrixMeshEvidenceExtensions({ input: compactInput, phase: "intent" });
+    const outcomeEvidenceExtensions = meshrixMeshEvidenceExtensions({ input: compactInput, phase: "outcome" });
+    const batch = await core.recordOperations([{
       operationId: normalizeOperationId(input),
       workspaceId,
       idempotencyKey: normalizeIdempotencyKey(input),
@@ -1006,32 +1288,38 @@ function createMeshrixAspect({
     return batch.envelopes[0];
   }
 
-  async function verifyMeshrixEnvelope(envelope?: any, options: Record<string, any> = {}) : Promise<any> {
-    const bundleResolver: any = createPortableBundleBlockResolver(options.bundle, options);
-    const decodedMaterial: any = new Map<any, any>();
-    async function resolveDecodedMaterial(cid?: any) : Promise<any> {
-      const key: any = text(cid);
+  async function verifyMeshrixEnvelope(
+    envelope: PactiumProofEnvelope,
+    options: MeshrixVerificationOptions = {}
+  ) {
+    const bundleResolver = createPortableBundleBlockResolver(options.bundle, options);
+    const decodedMaterial = new Map<string, { block: MaterialBlock | null; value: ProofRecord | null }>();
+    async function resolveDecodedMaterial(cid: unknown) {
+      const key = text(cid);
       if (!key) return { block: null, value: null };
-      if (decodedMaterial.has(key)) return decodedMaterial.get(key);
-      const block: any = await resolveMaterialBlock({ core, cid: key, bundleResolver });
-      let value: any = null;
+      const cached = decodedMaterial.get(key);
+      if (cached) return cached;
+      const block = await resolveMaterialBlock({ core, cid: key, bundleResolver });
+      let value: ProofRecord | null = null;
       try {
         value = block
-          ? canonicalDecode(block.bytes || Buffer.from(String(block.payloadBase64 || ""), "base64"))
+          ? asObject(canonicalDecode(
+              block.bytes || Buffer.from(String(block.payloadBase64 || ""), "base64")
+            ), null)
           : null;
       } catch {
         value = null;
       }
-      const result: Record<string, any> = { block, value };
+      const result = { block, value };
       decodedMaterial.set(key, result);
       return result;
     }
 
-    const effectiveTrustPolicy: any = evidencePolicy === "production"
+    const effectiveTrustPolicy = evidencePolicy === "production"
       ? PACTIUM_TRUST_POLICIES.trustedManifestRequired
       : options.trustPolicy || PACTIUM_TRUST_POLICIES.selfCarriedManifest;
-    const coreResult: any = options.coreEnvelopeResult || await verifyProofEnvelope(envelope, ({
-      storage: { getBlock: (cid?: any) : any => core.resolveBlock(cid) },
+    const coreResult: PactiumVerificationResult = options.coreEnvelopeResult || await verifyProofEnvelope(envelope, ({
+      storage: { getBlock: (cid: string) => core.resolveBlock(cid) },
       bundle: options.bundle || null,
       supportedCriticalExtensions: [...MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS],
       proofVerifiers: options.proofVerifiers || {},
@@ -1044,17 +1332,17 @@ function createMeshrixAspect({
       maxProofLeafEntries: Number(options.maxProofLeafEntries || 0),
       maxProofBytes: Number(options.maxProofBytes || 0),
       failOnProofSizeWarning: options.failOnProofSizeWarning === true
-    } as any));
-    const failures: any[] = [...asArray(coreResult.failures)];
-    const extensions: any = asArray(envelope?.extensions);
-    const extensionIndex: any = indexExtensionsByName(extensions);
-    const criticalNames: any = new Set<any>(asArray(envelope?.criticalExtensions).map(String));
+    } as PactiumProofVerificationOptions));
+    const failures: PactiumVerificationFailure[] = [...coreResult.failures];
+    const extensions = asProofExtensions(envelope.extensions);
+    const extensionIndex = indexExtensionsByName(extensions);
+    const criticalNames = new Set(envelope.criticalExtensions);
 
-    const requiredCriticalExtensions: any = envelope?.envelopeKind === "operation-intent"
+    const requiredCriticalExtensions = envelope?.envelopeKind === "operation-intent"
       ? [MESHRIX_POLICY_EXTENSION]
       : MESHRIX_CRITICAL_EXTENSIONS;
     for (const required of requiredCriticalExtensions) {
-      const extension: any = extensionIndex.get(required)?.[0] || null;
+      const extension = extensionIndex.get(required)?.[0] || null;
       if (!extension) {
         failures.push(createVerificationFailure({
           layer: "meshrix",
@@ -1075,11 +1363,11 @@ function createMeshrixAspect({
     }
 
     for (const name of [MESHRIX_POLICY_EXTENSION, MESHRIX_WORKSPACE_EFFECT_EXTENSION]) {
-      for (const extension of asArray(extensionIndex.get(name))) {
+      for (const extension of extensionIndex.get(name) ?? []) {
         const { value } = await resolveDecodedMaterial(extension.valueRef);
-        const evidence: any = asObject(value?.evidence, null);
-        const evidenceHash: any = text(value?.evidenceHash || extension.metadata?.evidenceHash);
-        const expectedEvidenceHash: any = evidence
+        const evidence = asObject(value?.evidence, null);
+        const evidenceHash = text(value?.evidenceHash || extension.metadata?.evidenceHash);
+        const expectedEvidenceHash = evidence
           ? protocolHash("meshrix.critical-evidence", cleanValue(evidence))
           : "";
         if (value?.protocol !== MESHRIX_ASPECT_PROTOCOL || value?.evidenceVersion !== "v2" ||
@@ -1100,7 +1388,7 @@ function createMeshrixAspect({
       }
     }
 
-    const signatureExtension: any = extensionIndex.get(MESHRIX_SIGNATURE_EXTENSION)?.[0] || null;
+    const signatureExtension = extensionIndex.get(MESHRIX_SIGNATURE_EXTENSION)?.[0] || null;
     if (evidencePolicy === "production" && !resolvedSigner) {
       failures.push(createVerificationFailure({
         layer: "meshrix.signing",
@@ -1164,12 +1452,12 @@ function createMeshrixAspect({
       } else if (!(await (
         typeof resolvedSigner.verifyFor === "function"
           ? resolvedSigner.verifyFor({
-              signerId: value.signerId,
-              algorithm: value.algorithm,
-              message: value.signedEnvelopeHash,
-              signature: value.signature
+              signerId: text(value.signerId),
+              algorithm: text(value.algorithm),
+              message: text(value.signedEnvelopeHash),
+              signature: text(value.signature)
             })
-          : resolvedSigner.verify(value.signedEnvelopeHash, value.signature)
+          : resolvedSigner.verify(text(value.signedEnvelopeHash), text(value.signature))
       ))) {
         failures.push(createVerificationFailure({
           layer: "meshrix.signing",
@@ -1193,7 +1481,7 @@ function createMeshrixAspect({
       protocol: PACTIUM_PROTOCOL,
       aspect: MESHRIX_ASPECT_PROTOCOL,
       envelopeId: envelope?.envelopeId || "",
-      ok: failures.filter((failure?: any) : any => failure.severity !== "warning").length === 0,
+      ok: failures.filter((failure) => failure.severity !== "warning").length === 0,
       proofStructurallyValid: coreResult.proofStructurallyValid,
       ledgerHeadSignatureValid: coreResult.ledgerHeadSignatureValid,
       ledgerHeadTrusted: coreResult.ledgerHeadTrusted,
@@ -1212,22 +1500,25 @@ function createMeshrixAspect({
     };
   }
 
-  async function verifyMeshrixBundle(bundle?: any, options: Record<string, any> = {}) : Promise<any> {
-    const supportedCriticalExtensions: any[] = [
-      ...new Set<any>([
+  async function verifyMeshrixBundle(
+    bundle: PactiumProofBundle,
+    options: MeshrixVerificationOptions = {}
+  ) {
+    const supportedCriticalExtensions = [
+      ...new Set<string>([
         ...MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS,
-        ...asArray(options.supportedCriticalExtensions)
+        ...(options.supportedCriticalExtensions ?? [])
       ])
     ];
-    const trustPolicy: any = evidencePolicy === "production"
+    const trustPolicy = evidencePolicy === "production"
       ? PACTIUM_TRUST_POLICIES.trustedManifestRequired
       : options.trustPolicy || PACTIUM_TRUST_POLICIES.selfCarriedManifest;
-    const bundleResult: any = await verifyProofBundle(bundle, {
+    const bundleResult = await verifyProofBundle(bundle, {
       ...options,
       trustPolicy,
       supportedCriticalExtensions
     });
-    const envelopeResult: any = await verifyMeshrixEnvelope(bundle?.envelope || {}, {
+    const envelopeResult = await verifyMeshrixEnvelope(bundle.envelope, {
       ...options,
       trustPolicy,
       bundle,
@@ -1237,21 +1528,22 @@ function createMeshrixAspect({
       protocol: PACTIUM_PROTOCOL,
       aspect: MESHRIX_ASPECT_PROTOCOL,
       ok: bundleResult.ok && envelopeResult.ok,
-      failures: [...asArray(bundleResult.failures), ...asArray(envelopeResult.failures)],
+      failures: [...bundleResult.failures, ...envelopeResult.failures],
       bundle: bundleResult,
       envelope: envelopeResult
     };
   }
 
-  function planRepair(failures: any = []) : any {
-    const plan: any = genericRepairPlanner.plan(failures);
+  function planRepair(failures: PactiumVerificationFailure[] = []) {
+    const plan = genericRepairPlanner.plan(failures);
     return {
       ...plan,
-      tasks: asArray(plan.tasks).map((task?: any, index?: any) : any => {
-        const failure: any = asArray(failures)[index] || {};
+      tasks: asArray(plan.tasks).map((task, index) => {
+        const failure = failures[index];
+        if (!failure) return task;
         return String(failure.layer || "").startsWith("meshrix") ||
           String(failure.code || "").startsWith("missing_meshrix_")
-          ? { ...task, action: "request-host-evidence" }
+          ? { ...asObject(task), action: "request-host-evidence" }
           : task;
       })
     };
@@ -1273,13 +1565,44 @@ function createMeshrixAspect({
     verifyMeshrixBundle,
     verifyBundle: verifyMeshrixBundle,
     planRepair,
-    close() : any {
+    close()  {
       if (ownsSigner) resolvedSigner?.close?.();
     },
     getWorkspaceProjection: core.getWorkspaceProjection,
     proveWorkspaceMembership: core.proveWorkspaceMembership,
     exportProofBundle: core.exportProofBundle
   });
+}
+
+interface OperationProofSubstrateOptions {
+  userDataPath?: string;
+  dataDir?: string;
+  pactiumRuntime?: MeshrixPactiumRuntime | null;
+  runtimeOptions?: ProofRecord;
+  mode?: string;
+  evidencePolicy?: string;
+  signer?: MeshrixSigner | false | null;
+  signerSecret?: string;
+}
+
+interface AcceptanceReportDigest {
+  path?: string;
+  schemaVersion?: string;
+  contentHash?: string;
+}
+
+interface AcceptanceEvidenceInput {
+  reportDigests?: AcceptanceReportDigest[];
+  evidenceContext?: ProofRecord;
+  releaseId?: string;
+  actor?: ProofRecord;
+}
+
+interface PlanReceiptEvidenceInput {
+  plan?: string;
+  receiptDigest?: string;
+  context?: ProofRecord;
+  actor?: ProofRecord;
 }
 
 export function createOperationProofSubstrate({
@@ -1291,11 +1614,11 @@ export function createOperationProofSubstrate({
   evidencePolicy = "",
   signer = null,
   signerSecret = ""
-}: Record<string, any> = {}) : any {
-  const resolvedDataDir: any = resolveMeshrixPactiumDataDir(userDataPath || dataDir);
-  const resolvedMode: any = resolveMode({ mode, runtimeOptions });
-  const resolvedEvidencePolicy: any = resolveEvidencePolicy({ evidencePolicy, runtimeOptions });
-  const resolvedSignerSecret: any = resolveSignerSecret({
+}: OperationProofSubstrateOptions = {}) {
+  const resolvedDataDir = resolveMeshrixPactiumDataDir(userDataPath || dataDir);
+  const resolvedMode = resolveMode({ mode, runtimeOptions });
+  const resolvedEvidencePolicy = resolveEvidencePolicy({ evidencePolicy, runtimeOptions });
+  const resolvedSignerSecret = resolveSignerSecret({
     signerSecret,
     runtimeOptions,
     dataDir: resolvedDataDir,
@@ -1310,36 +1633,37 @@ export function createOperationProofSubstrate({
       "Meshrix.js production operation-proof evidence requires a configured signer.",
     );
   }
-  const ownsPactiumRuntime: any = !pactiumRuntime;
-  const runtime: any = normalizeMeshrixPactiumRuntime({
+  const ownsPactiumRuntime = !pactiumRuntime;
+  const runtimeCandidate: unknown = normalizeMeshrixPactiumRuntime({
     userDataPath: resolvedDataDir,
     dataDir: resolvedDataDir,
     pactiumRuntime
   });
-  const core: any = runtime.core;
-  const storage: any = runtime.storage;
-  const aspect: any = createMeshrixAspect({
+  const runtime = requireProofRuntime(runtimeCandidate);
+  const core = runtime.core;
+  const storage = runtime.storage;
+  const aspect = createMeshrixAspect({
     pactium: core,
     storage,
     evidencePolicy: resolvedEvidencePolicy,
     signer,
     signerSecret: resolvedSignerSecret
   });
-  const productionVerifiable: any = Boolean(resolvedEvidencePolicy === "production" && signerConfigured({
+  const productionVerifiable = Boolean(resolvedEvidencePolicy === "production" && signerConfigured({
     signer,
     signerSecret: resolvedSignerSecret,
     evidencePolicy: resolvedEvidencePolicy
   }));
-  const defaultVerificationTrustPolicy: any = resolvedEvidencePolicy === "production"
+  const defaultVerificationTrustPolicy = resolvedEvidencePolicy === "production"
     ? PACTIUM_TRUST_POLICIES.trustedManifestRequired
     : PACTIUM_TRUST_POLICIES.selfCarriedManifest;
 
-  async function beginLifecycle(input: Record<string, any> = {}) : Promise<any> {
+  async function beginLifecycle(input: ProofRecord = {})  {
     aspect.assertProductionReady();
-    const operationId: any = normalizeOperationId(input);
-    const workspaceId: any = normalizeWorkspaceId(input);
-    const idempotencyKey: any = normalizeIdempotencyKey(input);
-    const evidenceExtensions: any = meshrixMeshEvidenceExtensions({
+    const operationId = normalizeOperationId(input);
+    const workspaceId = normalizeWorkspaceId(input);
+    const idempotencyKey = normalizeIdempotencyKey(input);
+    const evidenceExtensions = meshrixMeshEvidenceExtensions({
       input: {
         ...input,
         operationId,
@@ -1348,7 +1672,7 @@ export function createOperationProofSubstrate({
       },
       phase: "intent"
     });
-    const envelope: any = await core.beginOperationIntent({
+    const envelope = await core.beginOperationIntent({
       operationId,
       workspaceId,
       idempotencyKey,
@@ -1368,7 +1692,7 @@ export function createOperationProofSubstrate({
       finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)
     });
     if (envelope.replayed) {
-      const existing: any = await loadProjectedEntry(core, envelope.factRef?.ledgerEventId);
+      const existing = await loadProjectedEntry(core, envelope.factRef?.ledgerEventId);
       if (existing) {
         existing.proof = {
           ...asObject(existing.proof),
@@ -1379,7 +1703,7 @@ export function createOperationProofSubstrate({
         return { ...existing, replayed: true };
       }
     }
-    const entry: any = normalizeEntry({
+    const entry = normalizeEntry({
       ...input,
       operationId,
       workspaceId,
@@ -1394,18 +1718,20 @@ export function createOperationProofSubstrate({
     return entry;
   }
 
-  async function finishLifecycle(input: Record<string, any> = {}) : Promise<any> {
+  async function finishLifecycle(input: ProofRecord = {})  {
     aspect.assertProductionReady();
-    const ledgerEventId: any = text(input.ledgerEventId || input.entry?.ledgerEventId);
-    const entry: any = input.entry?.ledgerEventId ? input.entry : await loadProjectedEntry(core, ledgerEventId);
+    const ledgerEventId = text(input.ledgerEventId || input.entry?.ledgerEventId);
+    const entry = isOperationProofEntry(input.entry)
+      ? input.entry
+      : await loadProjectedEntry(core, ledgerEventId);
     if (!entry) {
       throw new Error("operation proof entry missing");
     }
     if (!entry.pactium?.intentId) {
       throw new Error("operation proof intent missing");
     }
-    const status: any = outcomeStatus(input);
-    const evidenceExtensions: any = meshrixMeshEvidenceExtensions({
+    const status = outcomeStatus(input);
+    const evidenceExtensions = meshrixMeshEvidenceExtensions({
       input: {
         ...input,
         status
@@ -1413,7 +1739,7 @@ export function createOperationProofSubstrate({
       entry,
       phase: "outcome"
     });
-    const envelope: any = await core.appendOperationOutcome({
+    const envelope = await core.appendOperationOutcome({
       intentId: entry.pactium.intentId,
       status,
       outcomeIdempotencyKey: input.outcomeIdempotencyKey || input.idempotencyKey || `${entry.idempotencyKey}:outcome`,
@@ -1442,13 +1768,13 @@ export function createOperationProofSubstrate({
       finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)
     });
     if (envelope.replayed === true) {
-      const existing: any = await loadProjectedEntry(
+      const existing = await loadProjectedEntry(
         core,
         entry.pactium?.intentLedgerEventId ||
           entry.ledgerEventId
       );
-      const durableEntry: any = existing || entry;
-      const canonicalEntry: Record<string, any> = {
+      const durableEntry = existing || entry;
+      const canonicalEntry: OperationProofEntry = {
         ...durableEntry,
         proof: {
           ...asObject(durableEntry.proof),
@@ -1477,18 +1803,18 @@ export function createOperationProofSubstrate({
     return mergeCompletion(entry, { ...input, status }, envelope, input.failed === true || status === "failed");
   }
 
-  async function recordReceipt(input: Record<string, any> = {}) : Promise<any> {
+  async function recordReceipt(input: ProofRecord = {}): Promise<OperationProofEntry> {
     aspect.assertProductionReady();
-    const operationId: any = normalizeOperationId(input);
-    const workspaceId: any = normalizeWorkspaceId(input);
-    const profile: any = text(input.profile, "receipt");
-    const status: any = outcomeStatus(input);
-    const evidenceExtensions: any = meshrixMeshEvidenceExtensions({
+    const operationId = normalizeOperationId(input);
+    const workspaceId = normalizeWorkspaceId(input);
+    const profile = text(input.profile, "receipt") === "on-change" ? "on-change" : "receipt";
+    const status = outcomeStatus(input);
+    const evidenceExtensions = meshrixMeshEvidenceExtensions({
       input: { ...input, operationId, workspaceId, status },
       phase: "receipt"
     });
-    const receiptResult: any = receiptResultFor(input, status);
-    const envelope: any = await core.recordOperationReceipt({
+    const receiptResult = receiptResultFor(input, status);
+    const envelope = await core.recordOperationReceipt({
       operationId,
       workspaceId,
       profile,
@@ -1504,6 +1830,7 @@ export function createOperationProofSubstrate({
       finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)
     });
     if (envelope.disposition === "unchanged") {
+      const at = nowIso();
       return {
         protocol: PACTIUM_PROTOCOL,
         schema: PACTIUM_SCHEMA_VERSION,
@@ -1515,6 +1842,12 @@ export function createOperationProofSubstrate({
         disposition: "unchanged",
         replayed: false,
         ledgerEventId: "",
+        idempotencyKey: normalizeIdempotencyKey(input),
+        createdAt: at,
+        updatedAt: at,
+        completedAt: at,
+        failedAt: "",
+        error: "",
         proof: { profile, lifecycle: "single-terminal", terminal: true },
         pactium: {
           receiptId: text(envelope.receiptId),
@@ -1522,7 +1855,7 @@ export function createOperationProofSubstrate({
         }
       };
     }
-    const entry: any = normalizeReceiptEntry({
+    const entry = normalizeReceiptEntry({
       ...input,
       operationId,
       workspaceId,
@@ -1539,31 +1872,35 @@ export function createOperationProofSubstrate({
     return entry;
   }
 
-  async function exportProofBundleForEntry(input: Record<string, any> = {}) : Promise<any> {
-    const actor: any = input.actor || { type: "system" };
+  async function exportProofBundleForEntry(input: ProofRecord = {})  {
+    const actor = input.actor || { type: "system" };
     if (!canExportProofBundle({ actor })) {
       throw new Error("Proof Bundle Export requires proof:export, runtime:admin, console:admin, or system actor.");
     }
-    const entry: any = input.entry || await loadProjectedEntry(core, input.ledgerEventId);
+    const entry = isOperationProofEntry(input.entry)
+      ? input.entry
+      : await loadProjectedEntry(core, input.ledgerEventId);
     if (!entry) {
       throw new Error("operation proof entry missing");
     }
-    const envelopeId: any = text(input.envelopeId) || envelopeIdForEntry(entry, input.kind || "outcome");
+    const envelopeId = text(input.envelopeId) || envelopeIdForEntry(entry, text(input.kind, "outcome"));
     if (!envelopeId) {
       throw new Error("operation proof envelope missing");
     }
-    return core.exportProofBundle(envelopeId, input.options || {});
+    return core.exportProofBundle(envelopeId, asObject(input.options));
   }
 
-  async function verifyReceipt(input: Record<string, any> = {}) : Promise<any> {
-    const bundle: any = input.bundle || await exportProofBundleForEntry({
-      ...input,
-      actor: input.actor || { type: "system" }
-    });
-    const result: any = await aspect.verifyBundle(bundle, {
+  async function verifyReceipt(input: ProofRecord = {})  {
+    const bundle = input.bundle
+      ? requireProofBundle(input.bundle)
+      : await exportProofBundleForEntry({
+          ...input,
+          actor: input.actor || { type: "system" }
+        });
+    const result = await aspect.verifyBundle(bundle, {
       requireAllProofs: input.requireAllProofs !== false,
       trustPolicy: defaultVerificationTrustPolicy,
-      ...(input.options || {})
+      ...asObject(input.options)
     });
     return {
       ...result,
@@ -1590,10 +1927,10 @@ export function createOperationProofSubstrate({
     beginLifecycle,
     finishLifecycle,
     recordReceipt,
-    denyLifecycle(input: Record<string, any> = {}) : any {
+    denyLifecycle(input: ProofRecord = {})  {
       return finishLifecycle({ ...input, status: "denied", denied: true });
     },
-    recordWorkspaceOperation(input: Record<string, any> = {}) : any {
+    recordWorkspaceOperation(input: ProofRecord = {})  {
       return aspect.recordWorkspaceOperation({
         ...input,
         workspaceId: normalizeWorkspaceId(input),
@@ -1601,31 +1938,33 @@ export function createOperationProofSubstrate({
         workspaceEffectEvidence: input.workspaceEffectEvidence || buildWorkspaceEffectEvidence(input)
       });
     },
-    async recordAcceptanceEvidence({ reportDigests = [], evidenceContext = {}, releaseId = "", actor = { type: "system" } }: Record<string, any> = {}) : Promise<any> {
+    async recordAcceptanceEvidence({
+      reportDigests = [], evidenceContext = {}, releaseId = "", actor = { type: "system" }
+    }: AcceptanceEvidenceInput = {}) {
       if (!releaseId) {
         throw new Error("releaseId is required for acceptance evidence anchoring");
       }
       if (!Array.isArray(reportDigests) || reportDigests.length === 0) {
         throw new Error("reportDigests must be a non-empty array");
       }
-      const workspaceId: any = `release:${String(releaseId)}`;
-      const operationId: any = `acceptance.anchor.${String(releaseId)}`;
-      const commitment: any = cleanValue({
+      const workspaceId = `release:${String(releaseId)}`;
+      const operationId = `acceptance.anchor.${String(releaseId)}`;
+      const commitment = cleanValue({
         kind: "acceptance-evidence",
         releaseId: String(releaseId),
-        reportDigests: reportDigests.map((digest?: any) : any => ({
+        reportDigests: reportDigests.map((digest) => ({
           path: String(digest.path || ""),
           schemaVersion: String(digest.schemaVersion || ""),
           contentHash: String(digest.contentHash || "")
-        })).sort((left?: any, right?: any) : any => left.path.localeCompare(right.path)),
+        })).sort((left, right) => left.path.localeCompare(right.path)),
         evidenceContext: cleanValue(asObject(evidenceContext))
       });
-      const entry: any = await recordReceipt({
+      const entry = await recordReceipt({
         profile: "receipt",
         operationId,
         workspaceId,
         idempotencyKey: operationId,
-        subject: cleanValue(asObject(actor)),
+        subject: cleanRecord(actor),
         status: "succeeded",
         commitment
       });
@@ -1638,26 +1977,28 @@ export function createOperationProofSubstrate({
         resultDigest: text(entry?.resultDigest)
       };
     },
-    async recordPlanReceiptEvidence({ plan = "", receiptDigest = "", context = {}, actor = { type: "system" } }: Record<string, any> = {}) : Promise<any> {
-      const normalizedPlan: any = text(plan);
-      const normalizedDigest: any = text(receiptDigest);
+    async recordPlanReceiptEvidence({
+      plan = "", receiptDigest = "", context = {}, actor = { type: "system" }
+    }: PlanReceiptEvidenceInput = {}) {
+      const normalizedPlan = text(plan);
+      const normalizedDigest = text(receiptDigest);
       if (!normalizedPlan || !/^([a-f0-9]{64})$/u.test(normalizedDigest)) {
         throw new Error("plan and sha256 receiptDigest are required for Plan receipt anchoring");
       }
-      const workspaceId: any = `plan-receipt:${normalizedPlan}`;
-      const operationId: any = `plan.receipt.anchor.${normalizedDigest}`;
-      const commitment: any = cleanValue({
+      const workspaceId = `plan-receipt:${normalizedPlan}`;
+      const operationId = `plan.receipt.anchor.${normalizedDigest}`;
+      const commitment = cleanValue({
         kind: "plan-final-receipt",
         plan: normalizedPlan,
         receiptDigest: normalizedDigest,
         context: cleanValue(asObject(context))
       });
-      const entry: any = await recordReceipt({
+      const entry = await recordReceipt({
         profile: "receipt",
         operationId,
         workspaceId,
         idempotencyKey: operationId,
-        subject: cleanValue(asObject(actor)),
+        subject: cleanRecord(actor),
         status: "succeeded",
         commitment
       });
@@ -1670,16 +2011,16 @@ export function createOperationProofSubstrate({
         resultDigest: text(entry?.resultDigest)
       };
     },
-    async verifyReceiptCommitment({ ledgerEventId = "", commitment = {} }: Record<string, any> = {}) : Promise<any> {
-      const entry: any = await loadProjectedEntry(core, ledgerEventId);
+    async verifyReceiptCommitment({ ledgerEventId = "", commitment = {} }: ProofRecord = {})  {
+      const entry = await loadProjectedEntry(core, ledgerEventId);
       if (!entry || !entry.resultDigest) {
         return { ok: false, reason: "receipt-commitment-unavailable" };
       }
-      const expectedResultDigest: any = protocolHash(
+      const expectedResultDigest = protocolHash(
         "operation.receipt.result",
         receiptResultFor({ commitment }, "succeeded")
       );
-      const ok: any = entry.resultDigest === expectedResultDigest;
+      const ok = entry.resultDigest === expectedResultDigest;
       return {
         ok,
         reason: ok ? "verified-receipt-commitment" : "receipt-commitment-mismatch",
@@ -1687,30 +2028,30 @@ export function createOperationProofSubstrate({
       };
     },
     verifyReceipt,
-    async verifyEnvelope(envelope?: any, options: Record<string, any> = {}) : Promise<any> {
+    async verifyEnvelope(envelope: PactiumProofEnvelope, options: MeshrixVerificationOptions = {}) {
       return aspect.verifyEnvelope(envelope, {
         trustPolicy: defaultVerificationTrustPolicy,
         ...options
       });
     },
-    async verifyBundle(bundle?: any, options: Record<string, any> = {}) : Promise<any> {
+    async verifyBundle(bundle: PactiumProofBundle, options: MeshrixVerificationOptions = {}) {
       return aspect.verifyBundle(bundle, {
         trustPolicy: defaultVerificationTrustPolicy,
         ...options
       });
     },
     exportProofBundle: exportProofBundleForEntry,
-    getWorkspaceProjection(workspaceId: any = "default") : any {
+    getWorkspaceProjection(workspaceId = "default")  {
       return core.getWorkspaceProjection(workspaceId);
     },
-    proveWorkspaceMembership(input: Record<string, any> = {}) : any {
+    proveWorkspaceMembership(input: ProofRecord = {})  {
       return core.proveWorkspaceMembership(input);
     },
-    planRecovery(input: Record<string, any> = {}) : any {
+    planRecovery(input: ProofRecord = {})  {
       return core.planRecovery(input);
     },
-    async doctor() : Promise<any> {
-      const pactiumDoctor: any = await core.doctor();
+    async doctor()  {
+      const pactiumDoctor = await core.doctor();
       return {
         ...pactiumDoctor,
         protocolVersion: OPERATION_PROOF_SUBSTRATE_PROTOCOL_VERSION,
@@ -1722,7 +2063,7 @@ export function createOperationProofSubstrate({
         verificationAvailable: true
       };
     },
-    health() : any {
+    health()  {
       return {
         ok: true,
         protocolVersion: OPERATION_PROOF_SUBSTRATE_PROTOCOL_VERSION,
@@ -1735,7 +2076,7 @@ export function createOperationProofSubstrate({
         dataDir: resolvedDataDir
       };
     },
-    listCapabilities() : any {
+    listCapabilities()  {
       return {
         protocolVersion: OPERATION_PROOF_SUBSTRATE_PROTOCOL_VERSION,
         provider: OPERATION_PROOF_SUBSTRATE_PROVIDER,
@@ -1777,32 +2118,33 @@ export function createOperationProofSubstrate({
         ]
       };
     },
-    getReceipt(ledgerEventId?: any) : any {
+    getReceipt(ledgerEventId?: string) {
       return loadProjectedEntry(core, ledgerEventId);
     },
-    async listReceipts({ limit = 100 }: Record<string, any> = {}) : Promise<any> {
-      const normalizedLimit: any = Math.max(1, Math.min(Number(limit || 100), 10000));
-      const head: any = await core.readLedgerHead();
-      const entries: any[] = [];
-      for (let index: any = Number(head?.size || 0) - 1; index >= 0 && entries.length < normalizedLimit; index -= 1) {
-        const ledgerEntry: any = await core.readLedgerLeaf(index);
-        if (!["operation.outcome", "operation.receipt"].includes(text(ledgerEntry?.fact?.factType))) continue;
-        const projected: any = await projectLedgerEntry(core, ledgerEntry);
+    async listReceipts({ limit = 100 }: ProofRecord = {})  {
+      const normalizedLimit = Math.max(1, Math.min(Number(limit || 100), 10000));
+      const head = await core.readLedgerHead();
+      const entries = [];
+      for (let index = Number(head?.size || 0) - 1; index >= 0 && entries.length < normalizedLimit; index -= 1) {
+        const ledgerEntry = await core.readLedgerLeaf(index);
+        const ledgerFact = asObject(ledgerEntry?.fact, null);
+        if (!ledgerFact || !["operation.outcome", "operation.receipt"].includes(text(ledgerFact.factType))) continue;
+        const projected = await projectLedgerEntry(core, ledgerEntry);
         if (projected) entries.push(projected);
       }
       return entries;
     },
-    async close() : Promise<any> {
-      let failure: any = null;
+    async close()  {
+      let failure = null;
       try {
         aspect.close?.();
-      } catch (error: any) {
+      } catch (error) {
         failure = error;
       }
       if (ownsPactiumRuntime) {
         try {
           await (runtime.close?.() || Promise.resolve());
-        } catch (error: any) {
+        } catch (error) {
           failure ||= error;
         }
       }

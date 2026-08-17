@@ -61,8 +61,17 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("model-gateway-admission", "Model Gateway admission verification", "foundation", nodeCommand(["--test", "services/model-gateway/test/admission.test.mjs"]), "", ["model-gateway", "admission"], { timeoutMs: 2 * 60 * 1000 }),
   command("model-gateway-usage-accounting", "Model Gateway usage accounting verification", "foundation", nodeCommand(["--test", "services/model-gateway/test/persistence.test.mjs"]), "", ["model-gateway", "usage-accounting"], { timeoutMs: 2 * 60 * 1000 }),
   command("model-gateway-adapter", "Model Gateway adapter and detachment verification", "foundation", npmRun("server:verify:model-gateway-detachment"), "", ["model-gateway", "adapter", "detachment"], { timeoutMs: 2 * 60 * 1000 }),
+  command("gateway-boundary-final", "Mandatory dual-Gateway and detached lifecycle final boundary", "foundation", nodeCommand(["tools/server-scripts/gateway-boundary-final.ts"]), "build/reports/gateway-boundary-final.json", ["gateway", "traffic-model", "console-selection", "detachment", "maintenance"], { timeoutMs: 2 * 60 * 1000 }),
   command("external-gateway-plugin", "External Gateway runtime plugin verification", "foundation", npmRun("server:verify:external-gateway"), "", ["external-gateway", "plugin", "production-controls"], { timeoutMs: 2 * 60 * 1000 }),
-  command("agent-self-maintenance-plugin", "Independent Agent self-maintenance plugin verification", "foundation", nodeCommand(["tools/server-scripts/verify-agent-self-maintenance-runtime.ts"]), "", ["agent", "self-maintenance", "plugin"], { timeoutMs: 2 * 60 * 1000 }),
+  command("agent-self-maintenance-plugin", "Independent Agent self-maintenance plugin verification", "foundation", nodeCommand(["tools/server-scripts/verify-agent-self-maintenance-runtime.ts"]), "", ["agent", "self-maintenance", "plugin"], {
+    ownedReports: [
+      "build/reports/maintenance-plugin-config-only.json",
+      "build/reports/maintenance-plugin-one-way-meshrix-control.json",
+      "build/reports/maintenance-plugin-direct-model-gateway.json",
+      "build/reports/maintenance-plugin-backend-unreachable.json"
+    ],
+    timeoutMs: 2 * 60 * 1000
+  }),
   command("integration-task-supervisor", "Optional integration lifecycle isolation", "foundation", npmRun("server:verify:integration-task-supervisor"), "build/reports/integration-task-supervisor.json", ["integration-lifecycle", "startup-isolation", "shutdown-isolation"], { timeoutMs: 2 * 60 * 1000 }),
   command("workspace-asset-management", "Core workspace assets and governance verification", "foundation", nodeCommand(["tools/server-scripts/verify-workspace-asset-management.ts"]), "", ["workspace-assets", "workspace-governance"], { timeoutMs: 2 * 60 * 1000 }),
 

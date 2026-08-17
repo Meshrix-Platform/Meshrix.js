@@ -27,7 +27,7 @@ import {
   parseResourceUpdatedNotification,
   parseResyncResponse,
   parseSubscribeRequest
-} from "@meshrix/contracts/service-collaboration-contract";
+} from "#meshrix/contracts/service-collaboration-contract";
 
 export const CONNECTOR_WORKING_VIEW_OWNED_MODULE: any =
   "packages/protocols/mcp/adapter/gateway-installer/connector-working-view.ts";

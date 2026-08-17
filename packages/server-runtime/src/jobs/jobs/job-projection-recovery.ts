@@ -8,32 +8,37 @@ import {
   getJobsRootPath,
   SAFE_JOB_ID_PATTERN
 } from "./job-manager-validation.ts";
+import { errorProperty } from "./contracts.ts";
+import type { createJobProjectionStore } from "./job-projection-store.ts";
 
-function recoveryError(code?: any, message?: any) : any {
+type ProjectionStore = ReturnType<typeof createJobProjectionStore>;
+type ArtifactJournalEntry = ReturnType<ProjectionStore["listArtifactJournal"]>[number];
+
+function recoveryError(code: string, message: string) {
   return Object.assign(new Error(message), { code });
 }
 
-async function exists(filePath?: any) : Promise<any> {
+async function exists(filePath: string) {
   try {
     await fs.access(filePath);
     return true;
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return false;
+  } catch (error) {
+    if (errorProperty(error, "code") === "ENOENT") return false;
     throw error;
   }
 }
 
-async function digestFile(filePath?: any, maxBytes?: any) : Promise<any> {
-  const stat: any = await fs.stat(filePath);
+async function digestFile(filePath: string, maxBytes: number) {
+  const stat = await fs.stat(filePath);
   if (!stat.isFile() || stat.size > maxBytes) {
     throw recoveryError(
       "job_projection_artifact_too_large",
       "Job artifact exceeds its recovery byte limit."
     );
   }
-  const hash: any = createHash("sha256");
-  let bytes: any = 0;
-  const stream: any = fsNative.createReadStream(filePath, {
+  const hash = createHash("sha256");
+  let bytes = 0;
+  const stream = fsNative.createReadStream(filePath, {
     highWaterMark: 64 * 1024
   });
   for await (const chunk of stream) {
@@ -50,7 +55,7 @@ async function digestFile(filePath?: any, maxBytes?: any) : Promise<any> {
   return { digest: hash.digest("hex"), byteSize: bytes };
 }
 
-function expectedArtifactPath(userDataPath?: any, entry?: any) : any {
+function expectedArtifactPath(userDataPath: string, entry: ArtifactJournalEntry) {
   if (!SAFE_JOB_ID_PATTERN.test(entry.jobId)) {
     throw recoveryError(
       "job_projection_journal_identity_invalid",
@@ -69,9 +74,13 @@ export async function reconcileJobProjectionArtifacts({
   userDataPath,
   projectionStore,
   limit = projectionStore.policy.cleanupBatch
-}: Record<string, any> = {}) : Promise<any> {
-  const entries: any = projectionStore.listArtifactJournal({ limit });
-  let reconciled: any = 0;
+}: {
+  userDataPath: string;
+  projectionStore: ProjectionStore;
+  limit?: number;
+}) {
+  const entries = projectionStore.listArtifactJournal({ limit });
+  let reconciled = 0;
   for (const entry of entries) {
     if (entry.kind === "delete_job") {
       if (!SAFE_JOB_ID_PATTERN.test(entry.jobId)) {
@@ -88,7 +97,7 @@ export async function reconcileJobProjectionArtifacts({
       reconciled += 1;
       continue;
     }
-    const filePath: any = expectedArtifactPath(userDataPath, entry);
+    const filePath = expectedArtifactPath(userDataPath, entry);
     if (!await exists(filePath)) {
       if (entry.state === "prepared") {
         projectionStore.abortArtifact(entry.journalId);
@@ -100,10 +109,10 @@ export async function reconcileJobProjectionArtifacts({
         "Published job artifact is missing."
       );
     }
-    const maximum: any = entry.kind === "payload"
+    const maximum = entry.kind === "payload"
       ? projectionStore.policy.maxPayloadBytes
       : projectionStore.policy.maxResultBytes;
-    const artifact: any = await digestFile(filePath, maximum);
+    const artifact = await digestFile(filePath, maximum);
     if (artifact.digest !== entry.digest || artifact.byteSize !== entry.byteSize) {
       throw recoveryError(
         "job_projection_artifact_digest_mismatch",

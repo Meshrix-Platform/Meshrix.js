@@ -1,6 +1,10 @@
-import { runMigrations } from "@meshrix/foundation/storage/sqlite-migrations";
+import {
+  runMigrations,
+  type SqliteMigration
+} from "@meshrix/foundation/storage/sqlite-migrations";
+import type Database from "better-sqlite3";
 
-function createCurrentAgentWorkspaceSchema(db?: any) : any {
+function createCurrentAgentWorkspaceSchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS aw_workspaces (
       workspace_id TEXT PRIMARY KEY,
@@ -157,41 +161,41 @@ function createCurrentAgentWorkspaceSchema(db?: any) : any {
   `);
 }
 
-const AGENT_WORKSPACE_MIGRATIONS: readonly any[] = Object.freeze([
+const AGENT_WORKSPACE_MIGRATIONS: readonly SqliteMigration[] = Object.freeze([
   Object.freeze({
     version: 1,
     up: createCurrentAgentWorkspaceSchema
   })
 ]);
 
-export function ensureAgentWorkspaceSchema(db?: any) : any {
+export function ensureAgentWorkspaceSchema(db: Database.Database): void {
   runMigrations(db, AGENT_WORKSPACE_MIGRATIONS);
 }
 
-export function prepareAgentWorkspaceStatements(db?: any) : any {
-  const insertWorkspaceStmt: any = db.prepare(`
+export function prepareAgentWorkspaceStatements(db: Database.Database): Record<string, Database.Statement> {
+  const insertWorkspaceStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_workspaces (
       workspace_id, title, objective, status, owner_user_id, metadata_json, created_at, updated_at, fs_path
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const selectWorkspaceStmt: any = db.prepare("SELECT * FROM aw_workspaces WHERE workspace_id = ?");
-  const listWorkspacesStmt: any = db.prepare("SELECT * FROM aw_workspaces ORDER BY updated_at DESC LIMIT ?");
-  const listWorkspacesByStatusStmt: any = db.prepare("SELECT * FROM aw_workspaces WHERE status = ? ORDER BY updated_at DESC LIMIT ?");
-  const insertRunStmt: any = db.prepare(`
+  const selectWorkspaceStmt = db.prepare("SELECT * FROM aw_workspaces WHERE workspace_id = ?");
+  const listWorkspacesStmt = db.prepare("SELECT * FROM aw_workspaces ORDER BY updated_at DESC LIMIT ?");
+  const listWorkspacesByStatusStmt = db.prepare("SELECT * FROM aw_workspaces WHERE status = ? ORDER BY updated_at DESC LIMIT ?");
+  const insertRunStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_runs (
       run_id, workspace_id, run_type, status, input_json, steps_json, coverage_json,
       artifact_ids_json, error, degraded, created_at, updated_at, started_at, completed_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const selectRunStmt: any = db.prepare("SELECT * FROM aw_runs WHERE run_id = ?");
-  const updateWorkspaceTimeStmt: any = db.prepare("UPDATE aw_workspaces SET updated_at = ? WHERE workspace_id = ?");
-  const selectSubmissionStmt: any = db.prepare("SELECT * FROM aw_submissions WHERE submission_id = ?");
-  const updateSubmissionStatusStmt: any = db.prepare("UPDATE aw_submissions SET status = ?, gate_json = ?, updated_at = ? WHERE submission_id = ?");
-  const selectIssueStmt: any = db.prepare("SELECT * FROM aw_issues WHERE issue_id = ?");
-  const updateIssueStatusStmt: any = db.prepare("UPDATE aw_issues SET status = ?, payload_json = ?, updated_at = ? WHERE issue_id = ?");
-  const selectLockStmt: any = db.prepare("SELECT * FROM aw_locks WHERE lock_id = ?");
-  const selectTargetLockStmt: any = db.prepare("SELECT * FROM aw_locks WHERE workspace_id = ? AND target_type = ? AND target_id = ?");
-  const insertLockStmt: any = db.prepare(`
+  const selectRunStmt = db.prepare("SELECT * FROM aw_runs WHERE run_id = ?");
+  const updateWorkspaceTimeStmt = db.prepare("UPDATE aw_workspaces SET updated_at = ? WHERE workspace_id = ?");
+  const selectSubmissionStmt = db.prepare("SELECT * FROM aw_submissions WHERE submission_id = ?");
+  const updateSubmissionStatusStmt = db.prepare("UPDATE aw_submissions SET status = ?, gate_json = ?, updated_at = ? WHERE submission_id = ?");
+  const selectIssueStmt = db.prepare("SELECT * FROM aw_issues WHERE issue_id = ?");
+  const updateIssueStatusStmt = db.prepare("UPDATE aw_issues SET status = ?, payload_json = ?, updated_at = ? WHERE issue_id = ?");
+  const selectLockStmt = db.prepare("SELECT * FROM aw_locks WHERE lock_id = ?");
+  const selectTargetLockStmt = db.prepare("SELECT * FROM aw_locks WHERE workspace_id = ? AND target_type = ? AND target_id = ?");
+  const insertLockStmt = db.prepare(`
     INSERT INTO aw_locks (
       lock_id, workspace_id, target_type, target_id, owner_agent_id, expires_at, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -201,20 +205,20 @@ export function prepareAgentWorkspaceStatements(db?: any) : any {
       expires_at = excluded.expires_at,
       created_at = excluded.created_at
   `);
-  const deleteLockStmt: any = db.prepare("DELETE FROM aw_locks WHERE lock_id = ?");
-  const deleteExpiredLocksStmt: any = db.prepare("DELETE FROM aw_locks WHERE expires_at <= ?");
-  const selectDuplicateStmt: any = db.prepare(`
+  const deleteLockStmt = db.prepare("DELETE FROM aw_locks WHERE lock_id = ?");
+  const deleteExpiredLocksStmt = db.prepare("DELETE FROM aw_locks WHERE expires_at <= ?");
+  const selectDuplicateStmt = db.prepare(`
     SELECT * FROM aw_submissions
     WHERE workspace_id = ? AND type = ? AND duplicate_key = ? AND status != 'rejected'
     LIMIT 1
   `);
-  const insertSubmissionStmt: any = db.prepare(`
+  const insertSubmissionStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_submissions (
       submission_id, workspace_id, run_id, agent_id, type, status, confidence, duplicate_key,
       payload_json, evidence_refs_json, gate_json, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertPrivateStmt: any = db.prepare(`
+  const insertPrivateStmt = db.prepare(`
     INSERT INTO aw_private_state (
       id, workspace_id, run_id, agent_id, summary, state_json, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -223,66 +227,66 @@ export function prepareAgentWorkspaceStatements(db?: any) : any {
       state_json = excluded.state_json,
       updated_at = excluded.updated_at
   `);
-  const insertArtifactStmt: any = db.prepare(`
+  const insertArtifactStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_artifacts (
       artifact_id, workspace_id, run_id, level, title, content, citations_json,
       coverage_json, revision, status, created_by, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertIssueStmt: any = db.prepare(`
+  const insertIssueStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_issues (
       issue_id, workspace_id, run_id, type, status, severity, title,
       payload_json, evidence_refs_json, created_by, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertDecisionStmt: any = db.prepare(`
+  const insertDecisionStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_decisions (
       decision_id, workspace_id, run_id, status, title, payload_json, created_by, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertSessionStmt: any = db.prepare(`
+  const insertSessionStmt = db.prepare(`
     INSERT OR REPLACE INTO aw_sessions (
       session_id, workspace_id, title, objective, status, parent_session_id, forked_from_event_id,
       branch_index, lineage_json, context_json, metadata_json, created_by, created_at, updated_at,
       last_event_id, event_count, append_only
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const selectSessionStmt: any = db.prepare("SELECT * FROM aw_sessions WHERE session_id = ?");
-  const listSessionsStmt: any = db.prepare("SELECT * FROM aw_sessions ORDER BY updated_at DESC LIMIT ?");
-  const listSessionsByStatusStmt: any = db.prepare("SELECT * FROM aw_sessions WHERE status = ? ORDER BY updated_at DESC LIMIT ?");
-  const listSessionsByWorkspaceStmt: any = db.prepare("SELECT * FROM aw_sessions WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ?");
-  const listSessionsByWorkspaceStatusStmt: any = db.prepare(
+  const selectSessionStmt = db.prepare("SELECT * FROM aw_sessions WHERE session_id = ?");
+  const listSessionsStmt = db.prepare("SELECT * FROM aw_sessions ORDER BY updated_at DESC LIMIT ?");
+  const listSessionsByStatusStmt = db.prepare("SELECT * FROM aw_sessions WHERE status = ? ORDER BY updated_at DESC LIMIT ?");
+  const listSessionsByWorkspaceStmt = db.prepare("SELECT * FROM aw_sessions WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ?");
+  const listSessionsByWorkspaceStatusStmt = db.prepare(
     "SELECT * FROM aw_sessions WHERE workspace_id = ? AND status = ? ORDER BY updated_at DESC LIMIT ?"
   );
-  const selectWorkspaceRootSessionStmt: any = db.prepare(
+  const selectWorkspaceRootSessionStmt = db.prepare(
     "SELECT * FROM aw_sessions WHERE workspace_id = ? AND parent_session_id = '' ORDER BY created_at ASC LIMIT 1"
   );
-  const countChildSessionsStmt: any = db.prepare(
+  const countChildSessionsStmt = db.prepare(
     "SELECT COUNT(*) AS count FROM aw_sessions WHERE parent_session_id = ?"
   );
-  const insertSessionEventStmt: any = db.prepare(`
+  const insertSessionEventStmt = db.prepare(`
     INSERT INTO aw_session_events (
       event_id, session_id, workspace_id, parent_event_id, event_type, title, summary,
       payload_json, created_by, created_at, sequence
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const selectSessionEventStmt: any = db.prepare("SELECT * FROM aw_session_events WHERE event_id = ?");
-  const selectSessionEventsStmt: any = db.prepare(
+  const selectSessionEventStmt = db.prepare("SELECT * FROM aw_session_events WHERE event_id = ?");
+  const selectSessionEventsStmt = db.prepare(
     "SELECT * FROM aw_session_events WHERE session_id = ? ORDER BY sequence ASC LIMIT ?"
   );
-  const selectSessionEventsUntilStmt: any = db.prepare(
+  const selectSessionEventsUntilStmt = db.prepare(
     "SELECT * FROM aw_session_events WHERE session_id = ? AND sequence <= ? ORDER BY sequence ASC"
   );
-  const selectLastSessionEventStmt: any = db.prepare(
+  const selectLastSessionEventStmt = db.prepare(
     "SELECT * FROM aw_session_events WHERE session_id = ? ORDER BY sequence DESC LIMIT 1"
   );
-  const selectMaxSessionSequenceStmt: any = db.prepare(
+  const selectMaxSessionSequenceStmt = db.prepare(
     "SELECT COALESCE(MAX(sequence), 0) AS sequence FROM aw_session_events WHERE session_id = ?"
   );
-  const updateSessionStatsStmt: any = db.prepare(
+  const updateSessionStatsStmt = db.prepare(
     "UPDATE aw_sessions SET last_event_id = ?, event_count = ?, updated_at = ? WHERE session_id = ?"
   );
-  const updateSessionStatusStmt: any = db.prepare(
+  const updateSessionStatusStmt = db.prepare(
     "UPDATE aw_sessions SET status = ?, updated_at = ? WHERE session_id = ?"
   );
 
