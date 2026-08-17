@@ -1,5 +1,6 @@
 import { validateStateMachineDefinition } from "../engine/state-machine-core.ts";
 import { checkDefinitionSchema } from "./state-machine-definition-schema.ts";
+import type { ProofMapping, StateMachineDefinition } from "./state-machine-definition-schema.ts";
 import {
   assertCellReferences,
   assertIllegalTransitionErrorCodes,
@@ -21,64 +22,102 @@ import { HIGH_RISK_PROTECTION_RESULTS } from "../engine/state-machine-result-typ
  * @param {boolean} options.throwOnError If true, throws an Error on first check failure
  * @returns {Object} Verification report structure
  */
-export function verifyMachineDefinition(def?: any, options: Record<string, any> = {}) : any {
-  const relativePath: any = options.relativePath || "unknown";
-  const throwOnError: any = options.throwOnError !== false;
+export interface MachineVerificationOptions { relativePath?: string; throwOnError?: boolean; }
+export interface VerificationCheck { id: string; status: "passed" | "failed"; error?: string; }
+export interface MachineVerificationReport {
+  machineId: string; version: string; ok: boolean; completenessLevel: "C3";
+  stateCount: number; eventCount: number; matrixCellCount: number; checks: VerificationCheck[];
+}
 
-  const checks: any[] = [];
+interface CoreValidationError { message: string; }
+interface CoreValidationResult { ok: boolean; errors: CoreValidationError[]; }
 
-  const addCheck: any = (id?: any, checkFn?: any) : any => {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeCoreValidationResult(value: unknown): CoreValidationResult {
+  if (!value || typeof value !== "object") {
+    return { ok: false, errors: [{ message: "Core validator returned an invalid result" }] };
+  }
+  const candidate = value as { ok?: unknown; errors?: unknown };
+  const errors = Array.isArray(candidate.errors)
+    ? candidate.errors.map((entry) => {
+        if (entry && typeof entry === "object" && "message" in entry && typeof entry.message === "string") {
+          return { message: entry.message };
+        }
+        return { message: String(entry) };
+      })
+    : [];
+  return { ok: candidate.ok === true, errors };
+}
+
+export function verifyMachineDefinition(def: unknown, options: MachineVerificationOptions = {}): MachineVerificationReport {
+  const relativePath = options.relativePath || "unknown";
+  const throwOnError = options.throwOnError !== false;
+
+  const checks: VerificationCheck[] = [];
+
+  const addCheck = (id: string, checkFn: () => void): boolean => {
     try {
       checkFn();
       checks.push({ id, status: "passed" });
       return true;
-    } catch (err: any) {
-      checks.push({ id, status: "failed", error: err.message });
+    } catch (err: unknown) {
+      const message = errorMessage(err);
+      checks.push({ id, status: "failed", error: message });
       if (throwOnError) {
-        throw new Error(`[${relativePath}] Check '${id}' failed: ${err.message}`);
+        throw new Error(`[${relativePath}] Check '${id}' failed: ${message}`);
       }
       return false;
     }
   };
 
   // 1. Schema check
-  const schemaOk: any = addCheck("C1-schema-validation", () : any => {
-    checkDefinitionSchema(def);
+  let definition: StateMachineDefinition | undefined;
+  const schemaOk = addCheck("C1-schema-validation", () => {
+    if (!checkDefinitionSchema(def)) throw new Error("definition schema validation failed");
+    definition = def as StateMachineDefinition;
   });
-  if (!schemaOk && throwOnError) return; // Stop if schema fails and throwing
+  if (!schemaOk || !definition) {
+    return {
+      machineId: "", version: "", ok: false, completenessLevel: "C3",
+      stateCount: 0, eventCount: 0, matrixCellCount: 0, checks
+    };
+  }
+  const machineDefinition = definition;
 
   // 2. Core validation
-  const coreOk: any = addCheck("C2-core-validation", () : any => {
-    const result: any = validateStateMachineDefinition(def);
+  addCheck("C2-core-validation", () => {
+    const result = normalizeCoreValidationResult(validateStateMachineDefinition(machineDefinition));
     if (!result.ok) {
-      throw new Error(`Core validation failed: ${result.errors.map((e?: any) : any => e.message).join('; ')}`);
+      throw new Error(`Core validation failed: ${result.errors.map((error) => error.message).join('; ')}`);
     }
   });
-  if (!coreOk && throwOnError) return;
 
-  const { machineId, version, initialState, states, events, totalMatrix, invariants, proofObligations } = def;
+  const { machineId, states, events, totalMatrix, invariants, proofObligations } = machineDefinition;
   // 3. Matrix Totality check
-  addCheck("C2-matrix-totality", () : any => assertMatrixTotality(def));
+  addCheck("C2-matrix-totality", () => assertMatrixTotality(machineDefinition));
 
   // 4. Reachability check (BFS)
-  addCheck("C3-reachability", () : any => assertReachability(def));
+  addCheck("C3-reachability", () => assertReachability(machineDefinition));
 
   // 5. Non-terminal outgoing transition check
-  addCheck("C3-non-terminal-transitions", () : any => assertNonTerminalTransitions(def));
+  addCheck("C3-non-terminal-transitions", () => assertNonTerminalTransitions(machineDefinition));
 
   // 6. Terminal check (outgoing transitions rules)
-  addCheck("C3-terminal-statuses", () : any => assertTerminalSemantics(def));
+  addCheck("C3-terminal-statuses", () => assertTerminalSemantics(machineDefinition));
 
   // 7. Illegal transition errorCode check
-  addCheck("C2-illegal-transition-error-codes", () : any => assertIllegalTransitionErrorCodes(def));
+  addCheck("C2-illegal-transition-error-codes", () => assertIllegalTransitionErrorCodes(machineDefinition));
 
   // 8. High-risk transition check
-  addCheck("C3-high-risk-guards", () : any => {
+  addCheck("C3-high-risk-guards", () => {
     for (const cell of totalMatrix) {
-      const eventDef: any = events.find((e?: any) : any => e.id === cell.event);
+      const eventDef = events.find((event) => event.id === cell.event);
       if (eventDef?.riskLevel === "high" && cell.result !== "illegal_transition" && cell.result !== "ignored_idempotent_event") {
-        const hasGuard: any =
-          HIGH_RISK_PROTECTION_RESULTS.includes(cell.result) ||
+        const hasGuard =
+          HIGH_RISK_PROTECTION_RESULTS.some((result) => result === cell.result) ||
           (cell.guards && cell.guards.length > 0) ||
           (cell.requiredGuards && cell.requiredGuards.length > 0);
         if (!hasGuard) {
@@ -86,24 +125,24 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
         }
         // requires_external_receipt must have receipt-related sideEffects or proofObligations
         if (cell.result === "requires_external_receipt") {
-          const hasReceiptEvidence: any =
-            (cell.sideEffects || []).some((se?: any) : any => se.includes("receipt") || se.includes("external") || se.includes("proof")) ||
-            (cell.proofObligations || []).some((po?: any) : any => po.includes("receipt") || po.includes("external") || po.includes("proof"));
+          const hasReceiptEvidence =
+            (cell.sideEffects || []).some((item) => item.includes("receipt") || item.includes("external") || item.includes("proof")) ||
+            (cell.proofObligations || []).some((item) => item.includes("receipt") || item.includes("external") || item.includes("proof"));
           if (!hasReceiptEvidence) {
             throw new Error(`High-risk event '${cell.event}' with requires_external_receipt must define receipt-related sideEffects or proofObligations`);
           }
         }
         // deferred_async_transition must have async-related sideEffects or proofObligations
         if (cell.result === "deferred_async_transition") {
-          const hasAsyncEvidence: any =
-            (cell.sideEffects || []).some((se?: any) : any => se.includes("async") || se.includes("resume") || se.includes("deferred")) ||
-            (cell.proofObligations || []).some((po?: any) : any => po.includes("async") || po.includes("resume") || po.includes("deferred"));
+          const hasAsyncEvidence =
+            (cell.sideEffects || []).some((item) => item.includes("async") || item.includes("resume") || item.includes("deferred")) ||
+            (cell.proofObligations || []).some((item) => item.includes("async") || item.includes("resume") || item.includes("deferred"));
           if (!hasAsyncEvidence) {
             throw new Error(`High-risk event '${cell.event}' with deferred_async_transition must define async/resume-related sideEffects or proofObligations`);
           }
         }
         // Verify no staticOnly guards on high-risk transitions
-        const allGuards: any[] = [...(cell.guards || []), ...(cell.requiredGuards || [])];
+        const allGuards = [...(cell.guards || []), ...(cell.requiredGuards || [])];
         for (const g of allGuards) {
           if (isStaticOnlyGuard(g)) {
             throw new Error(`High-risk event '${cell.event}' cannot use staticOnly guard '${g}'. staticOnly guards may not gate high-risk runtime transitions.`);
@@ -117,8 +156,8 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 8b. Guard registry validation (guards AND requiredGuards)
-  addCheck("C3-guard-registry", () : any => {
-    const allGuardIds: any = new Set<any>(listAllGuardIds());
+  addCheck("C3-guard-registry", () => {
+    const allGuardIds = new Set(listAllGuardIds());
     for (const cell of totalMatrix) {
       for (const guardId of (cell.guards || [])) {
         if (!allGuardIds.has(guardId)) {
@@ -134,7 +173,7 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 8b2. staticOnly guards must not appear in runtime guard fields
-  addCheck("C3-guard-staticOnly-isolation", () : any => {
+  addCheck("C3-guard-staticOnly-isolation", () => {
     for (const cell of totalMatrix) {
       for (const guardId of (cell.guards || [])) {
         if (isStaticOnlyGuard(guardId)) {
@@ -150,12 +189,12 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 8c. Guard proof obligation coverage for high-risk events
-  addCheck("C3-guard-proof-obligation", () : any => {
-    const guardObligations: any = (def.proofObligations || []).filter((po?: any) : any => po.startsWith("PO-READY-"));
+  addCheck("C3-guard-proof-obligation", () => {
+    const guardObligations = machineDefinition.proofObligations.filter((obligation) => obligation.startsWith("PO-READY-"));
     if (guardObligations.length === 0) return;
-    for (const guardId of (def.guardRegistryRefs || [])) {
-      const hasMapping: any = (def.proofMappings || []).some(
-        (m?: any) : any => m.method === "guard_validation_by_risk" && m.params.guardId === guardId
+    for (const guardId of (machineDefinition.guardRegistryRefs || [])) {
+      const hasMapping = (machineDefinition.proofMappings || []).some(
+        (mapping) => mapping.method === "guard_validation_by_risk" && mapping.params?.guardId === guardId
       );
       if (!hasMapping) {
         throw new Error(`Guard '${guardId}' referenced in guardRegistryRefs has no proof obligation mapping in 'proofMappings'.`);
@@ -164,20 +203,20 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 8d. Cell reference validity: from/to must reference known states, event must reference known events
-  addCheck("C3-cell-reference-validity", () : any => assertCellReferences(def));
+  addCheck("C3-cell-reference-validity", () => assertCellReferences(machineDefinition));
 
   // 8e. Duplicate cell guard disambiguation check
-  addCheck("C3-cell-disambiguation", () : any => assertMatrixTotality(def));
+  addCheck("C3-cell-disambiguation", () => assertMatrixTotality(machineDefinition));
 
   // 8f. requires_external_receipt must have sideEffects or proofObligations referencing receipt
-  addCheck("C3-external-receipt-evidence", () : any => {
+  addCheck("C3-external-receipt-evidence", () => {
     for (const cell of totalMatrix) {
       if (cell.result === "requires_external_receipt") {
-        const hasReceiptSideEffect: any = (cell.sideEffects || []).some((se?: any) : any =>
-          se.includes("receipt") || se.includes("external") || se.includes("proof")
+        const hasReceiptSideEffect = (cell.sideEffects || []).some((item) =>
+          item.includes("receipt") || item.includes("external") || item.includes("proof")
         );
-        const hasReceiptProof: any = (cell.proofObligations || []).some((po?: any) : any =>
-          po.includes("receipt") || po.includes("external") || po.includes("proof")
+        const hasReceiptProof = (cell.proofObligations || []).some((item) =>
+          item.includes("receipt") || item.includes("external") || item.includes("proof")
         );
         if (!hasReceiptSideEffect && !hasReceiptProof) {
           throw new Error(`Cell with 'requires_external_receipt' from '${cell.from}' on '${cell.event}' must define receipt-related sideEffects or proofObligations.`);
@@ -187,13 +226,13 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 8g. deferred_async_transition must have sideEffects referencing async or resume
-  addCheck("C3-deferred-async-evidence", () : any => {
+  addCheck("C3-deferred-async-evidence", () => {
     for (const cell of totalMatrix) {
       if (cell.result === "deferred_async_transition") {
-        const hasAsyncEvidence: any = (cell.sideEffects || []).some((se?: any) : any =>
-          se.includes("async") || se.includes("resume") || se.includes("deferred")
-        ) || (cell.proofObligations || []).some((po?: any) : any =>
-          po.includes("async") || po.includes("resume") || po.includes("deferred")
+        const hasAsyncEvidence = (cell.sideEffects || []).some((item) =>
+          item.includes("async") || item.includes("resume") || item.includes("deferred")
+        ) || (cell.proofObligations || []).some((item) =>
+          item.includes("async") || item.includes("resume") || item.includes("deferred")
         );
         if (!hasAsyncEvidence) {
           throw new Error(`Cell with 'deferred_async_transition' from '${cell.from}' on '${cell.event}' must define async/resume-related sideEffects or proofObligations.`);
@@ -203,8 +242,8 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 9. Invariants check
-  addCheck("C3-invariants-identification", () : any => {
-    const machinePrefix: any = machineId.split(".")[0].toUpperCase();
+  addCheck("C3-invariants-identification", () => {
+    const machinePrefix = machineId.split(".")[0].toUpperCase();
     for (const inv of invariants) {
       if (!inv.startsWith("SM-GOV-") && !inv.startsWith(`SM-${machinePrefix}-`)) {
         throw new Error(`Invariant '${inv}' does not conform to naming specification 'SM-GOV-xxx' or 'SM-${machinePrefix}-xxx'`);
@@ -213,10 +252,10 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 10. Proof obligations and mappings check
-  addCheck("C3-proof-obligations-mapping", () : any => {
-    const mappings: any = def.proofMappings || [];
+  addCheck("C3-proof-obligations-mapping", () => {
+    const mappings: ProofMapping[] = machineDefinition.proofMappings || [];
     for (const po of proofObligations) {
-      const hasMapping: any = mappings.some((m?: any) : any => m.obligationId === po);
+      const hasMapping = mappings.some((mapping) => mapping.obligationId === po);
       if (!hasMapping) {
         throw new Error(`Proof obligation '${po}' is missing mapping details in 'proofMappings'`);
       }
@@ -224,9 +263,9 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
   });
 
   // 11. Secret-like scan and absolute path scan
-  addCheck("C3-secret-hygiene-scan", () : any => {
-    const authorizationPattern: any = /Authorization/i;
-    const forbiddenPatterns: any[] = [
+  addCheck("C3-secret-hygiene-scan", () => {
+    const authorizationPattern = /Authorization/i;
+    const forbiddenPatterns: RegExp[] = [
       /api_key/i,
       /secret/i,
       /token/i,
@@ -237,34 +276,34 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
       /-----BEGIN/i
     ];
 
-    const absolutePathPatterns: any[] = [
+    const absolutePathPatterns: RegExp[] = [
       /\/Users\//i,
       /\/home\//i,
       /[a-zA-Z]:\\/i
     ];
 
-    function isStructuralReferencePath(path: any = "") : any {
-      return /\.machineId$/u.test(path) ||
-        /\.entityType$/u.test(path) ||
-        /\.version$/u.test(path) ||
-        /\.id$/u.test(path) ||
-        /\.from$/u.test(path) ||
-        /\.to$/u.test(path) ||
-        /\.event$/u.test(path) ||
-        /\.errorCode$/u.test(path) ||
-        /\.obligationId$/u.test(path) ||
-        /\.method$/u.test(path) ||
-        /\.capabilityId$/u.test(path) ||
-        /\.planPath$/u.test(path) ||
-        /\.checkpointPath$/u.test(path) ||
-        /\.reportPath$/u.test(path) ||
-        /\.verifier$/u.test(path) ||
-        /\.platformReducerCommand$/u.test(path) ||
+    function isStructuralReferencePath(path: string = ""): boolean {
+      return path.endsWith(".machineId") ||
+        path.endsWith(".entityType") ||
+        path.endsWith(".version") ||
+        path.endsWith(".id") ||
+        path.endsWith(".from") ||
+        path.endsWith(".to") ||
+        path.endsWith(".event") ||
+        path.endsWith(".errorCode") ||
+        path.endsWith(".obligationId") ||
+        path.endsWith(".method") ||
+        path.endsWith(".capabilityId") ||
+        path.endsWith(".planPath") ||
+        path.endsWith(".checkpointPath") ||
+        path.endsWith(".reportPath") ||
+        path.endsWith(".verifier") ||
+        path.endsWith(".platformReducerCommand") ||
         /\.invariants\.\d+$/u.test(path) ||
         /\.proofObligations\.\d+$/u.test(path);
     }
 
-    function scanSensitive(obj?: any, path: any = "root") : any {
+    function scanSensitive(obj: unknown, path: string = "root"): void {
       if (typeof obj === "string") {
         for (const pattern of absolutePathPatterns) {
           if (pattern.test(obj)) {
@@ -285,20 +324,23 @@ export function verifyMachineDefinition(def?: any, options: Record<string, any> 
             throw new Error(`Sensitive pattern matched: value '${obj}' at '${path}' contains secret-like content.`);
           }
         }
-      } else if (obj && typeof obj === "object") {
-        for (const key of Object.keys(obj)) {
-          scanSensitive(obj[key], `${path}.${key}`);
+      } else if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        const record = obj as Record<string, unknown>;
+        for (const key of Object.keys(record)) {
+          scanSensitive(record[key], `${path}.${key}`);
         }
+      } else if (Array.isArray(obj)) {
+        obj.forEach((value, index) => scanSensitive(value, `${path}.${index}`));
       }
     }
-    scanSensitive(def);
+    scanSensitive(machineDefinition);
   });
 
-  const ok: any = checks.every((c?: any) : any => c.status === "passed");
+  const ok = checks.every((check) => check.status === "passed");
 
   return {
-    machineId: def.machineId,
-    version: def.version,
+    machineId: machineDefinition.machineId,
+    version: machineDefinition.version,
     ok,
     completenessLevel: "C3",
     stateCount: states?.length || 0,

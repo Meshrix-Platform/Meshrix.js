@@ -10,18 +10,22 @@
  * @param {Array} [options.history] - Transition history
  * @returns {{ ok: boolean, results: Array<{ invariant: string, ok: boolean, message: string }>, errors: string[] }}
  */
-export function assertInvariants({ definition, state, history = [] }: Record<string, any>) : any {
+export function assertInvariants({ definition, state, history = [] }: {
+  definition: MachineDefinition;
+  state?: MachineState;
+  history?: readonly unknown[];
+}) {
   if (!definition) {
     return { ok: false, results: [], errors: ["Definition is required"] };
   }
 
-  const results: any[] = [];
-  const errors: any[] = [];
+  const results: InvariantResult[] = [];
+  const errors: string[] = [];
 
   // Basic state validity check — current status must exist in the definition
   if (state && state.currentStatus) {
-    const validState: any = definition.states
-      ? definition.states.some((s?: any) : any => s.id === state.currentStatus)
+    const validState = definition.states
+      ? definition.states.some((candidate) => candidate.id === state.currentStatus)
       : false;
     if (!validState) {
       errors.push(
@@ -37,18 +41,19 @@ export function assertInvariants({ definition, state, history = [] }: Record<str
 
   for (const invariantId of definition.invariants) {
     try {
-      const result: any = evaluateInvariant(invariantId, definition, state, history);
+      const result = evaluateInvariant(invariantId, definition, state, history);
       results.push(result);
       if (!result.ok) {
         errors.push(`Invariant '${invariantId}' failed: ${result.message}`);
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       results.push({
         invariant: invariantId,
         ok: false,
-        message: `Invariant evaluation error: ${err.message}`,
+        message: `Invariant evaluation error: ${message}`,
       });
-      errors.push(`Invariant '${invariantId}' evaluation error: ${err.message}`);
+      errors.push(`Invariant '${invariantId}' evaluation error: ${message}`);
     }
   }
 
@@ -76,7 +81,12 @@ export function assertInvariants({ definition, state, history = [] }: Record<str
  * @param {Array} history
  * @returns {{ invariant: string, ok: boolean, message: string }}
  */
-function evaluateInvariant(invariantId?: any, definition?: any, state?: any, history?: any) : any {
+function evaluateInvariant(
+  invariantId: string,
+  definition: MachineDefinition,
+  _state?: MachineState,
+  _history?: readonly unknown[]
+): InvariantResult {
   // Generic invariants
   if (invariantId.endsWith("-001") || invariantId.includes("REACHABLE")) {
     return checkInitialStateReachable(definition);
@@ -101,7 +111,7 @@ function evaluateInvariant(invariantId?: any, definition?: any, state?: any, his
 /**
  * Check that the initial state is reachable (trivially true for initial state).
  */
-function checkInitialStateReachable(definition?: any) : any {
+function checkInitialStateReachable(definition: MachineDefinition): InvariantResult {
   return {
     invariant: "SM_001",
     ok: true,
@@ -112,15 +122,15 @@ function checkInitialStateReachable(definition?: any) : any {
 /**
  * Check that no terminal state has outgoing transitions.
  */
-function checkTerminalStateNoOutgoing(definition?: any) : any {
-  const terminalStates: any = definition.states
-    .filter((s?: any) : any => s.terminal)
-    .map((s?: any) : any => s.id);
+function checkTerminalStateNoOutgoing(definition: MachineDefinition): InvariantResult {
+  const terminalStates = definition.states
+    .filter((state) => state.terminal)
+    .map((state) => state.id);
 
-  const violations: any[] = [];
+  const violations: string[] = [];
   for (const terminal of terminalStates) {
-    const outgoing: any = definition.totalMatrix.filter(
-      (cell?: any) : any => cell.from === terminal
+    const outgoing = definition.totalMatrix.filter(
+      (cell) => cell.from === terminal
         && cell.result !== "illegal_transition"
         && cell.result !== "ignored_idempotent_event"
     );
@@ -149,19 +159,20 @@ function checkTerminalStateNoOutgoing(definition?: any) : any {
 /**
  * Check that all states are reachable from the initial state via BFS.
  */
-function checkAllStatesReachable(definition?: any) : any {
-  const stateIds: any = new Set<any>(definition.states.map((s?: any) : any => s.id));
-  const reachable: any = new Set<any>([definition.initialState]);
-  const queue: any[] = [definition.initialState];
-  const visited: any = new Set<any>();
+function checkAllStatesReachable(definition: MachineDefinition): InvariantResult {
+  const stateIds = new Set<string>(definition.states.map((state) => state.id));
+  const reachable = new Set<string>([definition.initialState]);
+  const queue: string[] = [definition.initialState];
+  const visited = new Set<string>();
 
   while (queue.length > 0) {
-    const current: any = queue.shift();
+    const current = queue.shift();
+    if (current === undefined) continue;
     if (visited.has(current)) continue;
     visited.add(current);
 
-    const transitions: any = definition.totalMatrix.filter(
-      (cell?: any) : any => cell.from === current && cell.result !== "illegal_transition" && cell.to
+    const transitions = definition.totalMatrix.filter(
+      (cell) => cell.from === current && cell.result !== "illegal_transition" && cell.to
     );
 
     for (const t of transitions) {
@@ -172,7 +183,7 @@ function checkAllStatesReachable(definition?: any) : any {
     }
   }
 
-  const unreachable: any = [...stateIds].filter((id?: any) : any => !reachable.has(id));
+  const unreachable = [...stateIds].filter((id) => !reachable.has(id));
 
   if (unreachable.length > 0) {
     return {
@@ -192,15 +203,15 @@ function checkAllStatesReachable(definition?: any) : any {
 /**
  * Check that all state-event combinations have a matrix entry.
  */
-function checkMatrixCompleteness(definition?: any) : any {
-  const matrixKeys: any = new Set<any>(
-    definition.totalMatrix.map((cell?: any) : any => `${cell.from}::${cell.event}`)
+function checkMatrixCompleteness(definition: MachineDefinition): InvariantResult {
+  const matrixKeys = new Set<string>(
+    definition.totalMatrix.map((cell) => `${cell.from}::${cell.event}`)
   );
 
-  const missing: any[] = [];
+  const missing: string[] = [];
   for (const state of definition.states) {
     for (const event of definition.events) {
-      const key: any = `${state.id}::${event.id}`;
+      const key = `${state.id}::${event.id}`;
       if (!matrixKeys.has(key)) {
         missing.push(key);
       }
@@ -221,3 +232,16 @@ function checkMatrixCompleteness(definition?: any) : any {
     message: `Total matrix is complete (${matrixKeys.size} entries)`,
   };
 }
+interface StateDefinition { id: string; terminal?: boolean }
+interface EventDefinition { id: string }
+interface MatrixCell { from: string; event: string; result: string; to?: string }
+interface MachineDefinition {
+  machineId?: string;
+  initialState: string;
+  states: StateDefinition[];
+  events: EventDefinition[];
+  totalMatrix: MatrixCell[];
+  invariants?: string[];
+}
+interface MachineState { entityId?: string; currentStatus?: string }
+interface InvariantResult { invariant: string; ok: boolean; message: string }

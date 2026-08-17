@@ -1,13 +1,36 @@
-import { STATE_MACHINE_GUARDS, isGuardRuntimeSafe, isStaticOnlyGuard } from "./guard-registry.ts";
+import {
+  STATE_MACHINE_GUARDS,
+  isGuardRuntimeSafe,
+  type StateMachineGuardDefinition
+} from "./guard-registry.ts";
 
-export function evaluateGuard(guardId?: any, context: Record<string, any> = {}) : any {
-  const guardDef: any = STATE_MACHINE_GUARDS[guardId];
+type GuardContext = Record<string, unknown>;
+export interface GuardEvaluationResult extends Record<string, unknown> {
+  ok: boolean;
+  guardId: string;
+  reason: string;
+  message?: string;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function asRecords(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.map(asRecord) : [];
+}
+
+export function evaluateGuard(guardId: unknown, context: GuardContext = {}): GuardEvaluationResult {
+  const normalizedGuardId = String(guardId || "");
+  const guardDef = STATE_MACHINE_GUARDS[normalizedGuardId];
   if (!guardDef) {
     return {
       ok: false,
-      guardId,
+      guardId: normalizedGuardId,
       reason: "unknown_guard",
-      message: `Guard '${guardId}' is not registered.`
+      message: `Guard '${normalizedGuardId}' is not registered.`
     };
   }
 
@@ -15,32 +38,36 @@ export function evaluateGuard(guardId?: any, context: Record<string, any> = {}) 
     if (context[required] === undefined) {
       return {
         ok: false,
-        guardId,
+        guardId: normalizedGuardId,
         reason: "missing_context",
-        message: `Guard '${guardId}' requires context field '${required}'.`
+        message: `Guard '${normalizedGuardId}' requires context field '${required}'.`
       };
     }
   }
 
-  if (!isGuardRuntimeSafe(guardId)) {
+  if (!isGuardRuntimeSafe(normalizedGuardId)) {
     return {
       ok: false,
-      guardId,
+      guardId: normalizedGuardId,
       reason: guardDef.runtimeMode === "staticOnly" ? "static_only_guard" : "no_runtime_predicate",
-      message: `Guard '${guardId}' is marked ${guardDef.runtimeMode || 'without runtime predicate'} and cannot be used for runtime enforcement.`
+      message: `Guard '${normalizedGuardId}' is marked ${guardDef.runtimeMode || 'without runtime predicate'} and cannot be used for runtime enforcement.`
     };
   }
 
-  return evaluateGuardPredicate(guardId, guardDef, context);
+  return evaluateGuardPredicate(normalizedGuardId, guardDef, context);
 }
 
-function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : any {
+function evaluateGuardPredicate(
+  guardId: string,
+  _guardDef: StateMachineGuardDefinition,
+  context: GuardContext
+): GuardEvaluationResult {
   switch (guardId) {
     case "policyAllowed":
     case "require_policy": {
-      const pd: any = context.policyDecision;
-      const decision: any = pd?.decision || pd?.status;
-      if (pd?.allowed === true || decision === "allow") {
+      const policyDecision = asRecord(context.policyDecision);
+      const decision = policyDecision.decision || policyDecision.status;
+      if (policyDecision.allowed === true || decision === "allow") {
         return { ok: true, guardId, reason: "policy_allow" };
       }
       return {
@@ -48,14 +75,14 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
         guardId,
         reason: "policy_not_allowed",
         message: `Guard '${guardId}': policyDecision does not allow this transition.`,
-        policyDecision: { allowed: pd?.allowed, decision, status: pd?.status }
+        policyDecision: { allowed: policyDecision.allowed, decision, status: policyDecision.status }
       };
     }
 
     case "approvalApproved":
     case "require_approval": {
-      const ar: any = context.approvalRecord;
-      if (ar?.status === "approved") {
+      const approvalRecord = asRecord(context.approvalRecord);
+      if (approvalRecord.status === "approved") {
         return { ok: true, guardId, reason: "approval_approved" };
       }
       return {
@@ -63,13 +90,13 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
         guardId,
         reason: "approval_not_approved",
         message: `Guard '${guardId}': approval record is not in approved state.`,
-        approvalRecord: { status: ar?.status }
+        approvalRecord: { status: approvalRecord.status }
       };
     }
 
     case "require_architect_approval": {
-      const ar: any = context.approvalRecord;
-      if (!ar) {
+      const approvalRecord = asRecord(context.approvalRecord);
+      if (Object.keys(approvalRecord).length === 0) {
         return {
           ok: false,
           guardId,
@@ -77,21 +104,21 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
           message: "Architect approval record is missing."
         };
       }
-      if (ar.status !== "approved") {
+      if (approvalRecord.status !== "approved") {
         return {
           ok: false,
           guardId,
           reason: "architect_approval_not_approved",
           message: "Architect approval record is not in approved state.",
-          approvalRecord: { status: ar.status }
+          approvalRecord: { status: approvalRecord.status }
         };
       }
-      const hasArchitectRole: any =
-        ar.role === "architect" ||
-        ar.approverRole === "architect" ||
-        ar.scope === "architect" ||
-        ar.type === "architect_approval" ||
-        ar.architectApproved === true;
+      const hasArchitectRole =
+        approvalRecord.role === "architect" ||
+        approvalRecord.approverRole === "architect" ||
+        approvalRecord.scope === "architect" ||
+        approvalRecord.type === "architect_approval" ||
+        approvalRecord.architectApproved === true;
       if (!hasArchitectRole) {
         return {
           ok: false,
@@ -104,9 +131,9 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "require_admin": {
-      const sp: any = context.subjectPermissions || {};
-      const roles: any = Array.isArray(sp.roles) ? sp.roles : [];
-      if (sp.admin === true || roles.includes("owner")) {
+      const subjectPermissions = asRecord(context.subjectPermissions);
+      const roles = Array.isArray(subjectPermissions.roles) ? subjectPermissions.roles : [];
+      if (subjectPermissions.admin === true || roles.includes("owner")) {
         return { ok: true, guardId, reason: "admin_authorized" };
       }
       return {
@@ -118,8 +145,8 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "appendOnly": {
-      const existing: any = context.existingState;
-      if (existing === undefined) {
+      const existingState = asRecord(context.existingState);
+      if (context.existingState === undefined) {
         return {
           ok: false,
           guardId,
@@ -127,7 +154,7 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
           message: "Guard 'appendOnly' requires existingState context to verify no deletion/overwrite."
         };
       }
-      if (existing._deleted === true || existing._overwritten === true || context.operationType === "delete" || context.operationType === "overwrite") {
+      if (existingState._deleted === true || existingState._overwritten === true || context.operationType === "delete" || context.operationType === "overwrite") {
         return {
           ok: false,
           guardId,
@@ -139,8 +166,8 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "treeExists": {
-      const ts: any = context.treeState;
-      if (!ts || ts.status === "non-existent" || ts.deleted === true) {
+      const treeState = asRecord(context.treeState);
+      if (Object.keys(treeState).length === 0 || treeState.status === "non-existent" || treeState.deleted === true) {
         return {
           ok: false,
           guardId,
@@ -152,8 +179,8 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "nodeExists": {
-      const ns: any = context.nodeState;
-      if (!ns || ns.status === "non-existent" || ns.deleted === true) {
+      const nodeState = asRecord(context.nodeState);
+      if (Object.keys(nodeState).length === 0 || nodeState.status === "non-existent" || nodeState.deleted === true) {
         return {
           ok: false,
           guardId,
@@ -165,8 +192,8 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "previewGenerated": {
-      const ps: any = context.previewState;
-      if (!ps || ps.generated !== true) {
+      const previewState = asRecord(context.previewState);
+      if (previewState.generated !== true) {
         return {
           ok: false,
           guardId,
@@ -178,8 +205,8 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "require_ledger": {
-      const or: any = context.operationRecord;
-      if (!or) {
+      const operationRecord = asRecord(context.operationRecord);
+      if (Object.keys(operationRecord).length === 0) {
         return {
           ok: false,
           guardId,
@@ -187,21 +214,21 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
           message: "Operation ledger entry is missing."
         };
       }
-      if (or.status !== "started" && or.status !== "completed" && or.status !== "active") {
+      if (operationRecord.status !== "started" && operationRecord.status !== "completed" && operationRecord.status !== "active") {
         return {
           ok: false,
           guardId,
           reason: "ledger_not_acceptable",
-          message: `Operation ledger status '${or.status}' is not acceptable.`,
-          operationRecord: { status: or.status }
+          message: `Operation ledger status '${operationRecord.status}' is not acceptable.`,
+          operationRecord: { status: operationRecord.status }
         };
       }
       return { ok: true, guardId, reason: "ledger_acceptable" };
     }
 
     case "require_audit": {
-      const ar: any = context.auditRecord;
-      if (!ar) {
+      const auditRecord = asRecord(context.auditRecord);
+      if (Object.keys(auditRecord).length === 0) {
         return {
           ok: false,
           guardId,
@@ -209,21 +236,21 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
           message: "Audit record is missing for this transition."
         };
       }
-      if (ar.status === "rejected" || ar.status === "deleted" || ar.status === "corrupted") {
+      if (auditRecord.status === "rejected" || auditRecord.status === "deleted" || auditRecord.status === "corrupted") {
         return {
           ok: false,
           guardId,
           reason: "audit_not_acceptable",
-          message: `Audit record status '${ar.status}' is not acceptable.`,
-          auditRecord: { status: ar.status }
+          message: `Audit record status '${auditRecord.status}' is not acceptable.`,
+          auditRecord: { status: auditRecord.status }
         };
       }
       return { ok: true, guardId, reason: "audit_acceptable" };
     }
 
     case "require_adoption_policy": {
-      const ap: any = context.adoptionPolicy;
-      if (!ap) {
+      const adoptionPolicy = asRecord(context.adoptionPolicy);
+      if (Object.keys(adoptionPolicy).length === 0) {
         return {
           ok: false,
           guardId,
@@ -231,7 +258,7 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
           message: "Adoption policy context is missing."
         };
       }
-      if (ap.compliant !== true) {
+      if (adoptionPolicy.compliant !== true) {
         return {
           ok: false,
           guardId,
@@ -247,41 +274,42 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     }
 
     case "require_p0_passed_or_waived": {
-      const report: any = context.readinessReport || { scopes: [] };
-      const failedP0: any = (report.scopes || []).filter(
-        (scope?: any) : any =>
+      const report = asRecord(context.readinessReport);
+      const failedP0 = asRecords(report.scopes).filter(
+        (scope) =>
           scope.productionRequired === true &&
-          !["passed", "waived"].includes(scope.status)
+          !["passed", "waived"].includes(String(scope.status || ""))
       );
       if (failedP0.length > 0) {
         return {
           ok: false,
           guardId,
           reason: "p0_scope_not_passed_or_waived",
-          failedScopes: failedP0.map((s?: any) : any => s.scopeId),
-          message: `Guard '${guardId}': P0 scopes not passed or waived: ${failedP0.map((s?: any) : any => s.scopeId).join(', ')}.`
+          failedScopes: failedP0.map((scope) => scope.scopeId),
+          message: `Guard '${guardId}': P0 scopes not passed or waived: ${failedP0.map((scope) => scope.scopeId).join(', ')}.`
         };
       }
       return { ok: true, guardId, reason: "p0_passed_or_waived" };
     }
 
     case "require_baseline_v0_1_scopes_resolved": {
-      const report: any = context.readinessReport || { scopes: [] };
-      const failedBaseline: any = (report.scopes || []).filter(
-        (scope?: any) : any =>
+      const report = asRecord(context.readinessReport);
+      const scopes = asRecords(report.scopes);
+      const failedBaseline = scopes.filter(
+        (scope) =>
           scope.baselineV0_1Required === true &&
-          !["passed", "waived"].includes(scope.status)
+          !["passed", "waived"].includes(String(scope.status || ""))
       );
-      const unclassified: any = (report.scopes || []).filter(
-        (scope?: any) : any => !scope.status
+      const unclassified = scopes.filter(
+        (scope) => !scope.status
       );
       if (failedBaseline.length > 0) {
         return {
           ok: false,
           guardId,
           reason: "baseline_scope_not_passed",
-          failedScopes: failedBaseline.map((s?: any) : any => s.scopeId),
-          message: `Guard '${guardId}': Baseline scopes not passed: ${failedBaseline.map((s?: any) : any => s.scopeId).join(', ')}.`
+          failedScopes: failedBaseline.map((scope) => scope.scopeId),
+          message: `Guard '${guardId}': Baseline scopes not passed: ${failedBaseline.map((scope) => scope.scopeId).join(', ')}.`
         };
       }
       if (unclassified.length > 0) {
@@ -289,8 +317,8 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
           ok: false,
           guardId,
           reason: "scope_unclassified",
-          unclassifiedScopes: unclassified.map((s?: any) : any => s.scopeId),
-          message: `Guard '${guardId}': Unclassified scopes: ${unclassified.map((s?: any) : any => s.scopeId).join(', ')}.`
+          unclassifiedScopes: unclassified.map((scope) => scope.scopeId),
+          message: `Guard '${guardId}': Unclassified scopes: ${unclassified.map((scope) => scope.scopeId).join(', ')}.`
         };
       }
       return { ok: true, guardId, reason: "baseline_resolved" };
@@ -307,9 +335,9 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
   }
 }
 
-export function evaluateGuardSet(guardIds?: any, context: Record<string, any> = {}) : any {
-  const results: any[] = [];
-  for (const guardId of guardIds) {
+export function evaluateGuardSet(guardIds: unknown, context: GuardContext = {}): GuardEvaluationResult[] {
+  const results: GuardEvaluationResult[] = [];
+  for (const guardId of Array.isArray(guardIds) ? guardIds : []) {
     results.push(evaluateGuard(guardId, context));
   }
   return results;

@@ -24,8 +24,8 @@ export const WORKSPACE_CONTEXT_OPERATION_DEFINITIONS: readonly any[] = Object.fr
         type: "object",
         required: ["sourcePath", "targetPath"],
         properties: {
-          sourcePath: { type: "string", aliases: ["from"] },
-          targetPath: { type: "string", aliases: ["to", "path"] },
+          sourcePath: { type: "string" },
+          targetPath: { type: "string" },
           overwrite: { type: "boolean" }
         }
       },

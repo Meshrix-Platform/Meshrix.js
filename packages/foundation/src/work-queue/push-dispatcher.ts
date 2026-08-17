@@ -3,23 +3,43 @@ import {
   resolveQueueMaxInFlight
 } from "./policies.ts";
 
-function toText(value?: any) : any {
+interface QueueWorkItem { workItemId: string; state?: string; [key: string]: unknown }
+interface QueueClaimEvent { [key: string]: unknown }
+interface QueueLease { leaseId?: string; [key: string]: unknown }
+interface ClaimedWork { workItem: QueueWorkItem; lease: QueueLease }
+interface ClaimResult {
+  claimed?: ClaimedWork[]; recovered?: QueueClaimEvent[]; matured?: QueueClaimEvent[]; failed?: QueueWorkItem[]; expired?: QueueWorkItem[]; control?: object | null;
+}
+interface DispatchInput {
+  signal?: AbortSignal; batchSize?: unknown; batch?: unknown; queueDefinitionId?: unknown; scope?: object;
+  schedulingScope?: object; workerId?: unknown; actor?: object; [key: string]: unknown;
+}
+interface QueueStore {
+  claim(input: DispatchInput & { batchSize: number }): Promise<ClaimResult>;
+  inspect(input: { workItemId: string; queueDefinitionId: unknown; scope: object }): Promise<{ workItem?: QueueWorkItem }>;
+}
+interface WorkerRuntime { workerId?: string; runLeased?(input: { workItem: QueueWorkItem; lease: QueueLease; actor?: object; signal: AbortSignal }): Promise<unknown> }
+interface PeerDispatcher { dispatchOnce?: (input: DispatchInput) => unknown; offer?: (input: DispatchInput) => unknown }
+interface InFlightEntry { promise: Promise<unknown>; executionController: AbortController }
+interface QueueLogger { error?(event: string, facts: object): void }
+
+function toText(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function asInt(value?: any, fallback: any = 0) : any {
-  const parsed: any = Number(value);
+function asInt(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
-function summarizeError(error?: any) : any {
+function summarizeError(error?: unknown) {
   if (!error) {
     return {};
   }
   return {
-    name: error.name || "Error",
-    message: error.message || String(error),
-    code: error.code || ""
+    name: error instanceof Error ? error.name : "Error",
+    message: error instanceof Error ? error.message : String(error),
+    code: typeof error === "object" && error !== null && "code" in error ? String(error.code ?? "") : ""
   };
 }
 
@@ -33,30 +53,36 @@ export function createQueuePushDispatcher({
   peerSelector = null,
   onTerminal = null,
   logger = null
-}: Record<string, any> = {}) : any {
+}: {
+  store?: QueueStore; workerRuntime?: WorkerRuntime; queueDefinitionId?: unknown; scope?: object; workerId?: unknown;
+  maxInFlight?: unknown; peerSelector?: ((input: DispatchInput & { status: object; reason: string }) => Promise<PeerDispatcher | null>) | null;
+  onTerminal?: ((input: { workItem: QueueWorkItem; source: unknown }) => Promise<void> | void) | null; logger?: QueueLogger | null;
+} = {}) {
   if (!store || typeof store.claim !== "function") {
     throw new Error("Queue Push Dispatcher requires a work queue store.");
   }
   if (!workerRuntime || typeof workerRuntime.runLeased !== "function") {
     throw new Error("Queue Push Dispatcher requires Queue Worker Runtime.");
   }
+  const queueStore = store;
+  const queueWorkerRuntime = workerRuntime as WorkerRuntime & Required<Pick<WorkerRuntime, "runLeased">>;
 
-  const dispatcherQueueDefinitionId: any = toText(queueDefinitionId);
-  const dispatcherWorkerId: any = toText(workerId || workerRuntime.workerId || "push-dispatcher");
-  const inFlight: any = new Map<any, any>();
-  const creditLimitConfig: any = resolveQueueMaxInFlight(maxInFlight, {
+  const dispatcherQueueDefinitionId = toText(queueDefinitionId);
+  const dispatcherWorkerId = toText(workerId || workerRuntime.workerId || "push-dispatcher");
+  const inFlight = new Map<string, InFlightEntry>();
+  const creditLimitConfig: { limit: number; normalizedRequested: number; hardLimit: number; clamped: boolean } = resolveQueueMaxInFlight(maxInFlight, {
     fallback: DEFAULT_QUEUE_POLICY.maxInFlight || 1000
   });
-  const creditLimit: any = creditLimitConfig.limit;
-  const terminalStates: any = new Set<any>(["completed", "failed", "cancelled", "expired"]);
-  let reserved: any = 0;
+  const creditLimit = creditLimitConfig.limit;
+  const terminalStates = new Set(["completed", "failed", "cancelled", "expired"]);
+  let reserved = 0;
 
-  async function notifyTerminal(workItem?: any, source?: any) : Promise<any> {
-    if (typeof onTerminal !== "function" || !terminalStates.has(workItem?.state)) return;
+  async function notifyTerminal(workItem: QueueWorkItem | undefined, source: unknown): Promise<void> {
+    if (!workItem || typeof onTerminal !== "function" || !terminalStates.has(workItem.state ?? "")) return;
     await onTerminal({ workItem, source });
   }
 
-  function status() : any {
+  function status() {
     return {
       queueDefinitionId: dispatcherQueueDefinitionId,
       workerId: dispatcherWorkerId,
@@ -70,11 +96,11 @@ export function createQueuePushDispatcher({
     };
   }
 
-  async function handoffToPeer(input: Record<string, any> = {}) : Promise<any> {
+  async function handoffToPeer(input: DispatchInput = {}): Promise<unknown> {
     if (typeof peerSelector !== "function") {
       return null;
     }
-    const peer: any = await peerSelector({
+    const peer = await peerSelector({
       ...input,
       status: status(),
       reason: "local_backpressure"
@@ -94,7 +120,7 @@ export function createQueuePushDispatcher({
     };
   }
 
-  async function dispatchOnce(input: Record<string, any> = {}) : Promise<any> {
+  async function dispatchOnce(input: DispatchInput = {}) {
     if (input.signal?.aborted) {
       return {
         dispatched: 0,
@@ -105,10 +131,10 @@ export function createQueuePushDispatcher({
         reason: "dispatch_signal_aborted"
       };
     }
-    const requestedBatch: any = Math.max(1, asInt(input.batchSize ?? input.batch ?? 1, 1));
-    const batchSize: any = Math.min(requestedBatch, Math.max(0, creditLimit - reserved - inFlight.size));
+    const requestedBatch = Math.max(1, asInt(input.batchSize ?? input.batch ?? 1, 1));
+    const batchSize = Math.min(requestedBatch, Math.max(0, creditLimit - reserved - inFlight.size));
     if (batchSize <= 0) {
-      const peer: any = await handoffToPeer(input);
+      const peer = await handoffToPeer(input);
       return {
         dispatched: 0,
         claimed: [],
@@ -124,9 +150,9 @@ export function createQueuePushDispatcher({
     // Reserve credit synchronously before the first await so that
     // reserved + inFlight never exceeds the credit limit.
     reserved += batchSize;
-    let claim: any;
+    let claim: ClaimResult;
     try {
-      claim = await store.claim({
+      claim = await queueStore.claim({
         ...input,
         queueDefinitionId: input.queueDefinitionId || dispatcherQueueDefinitionId,
         scope: input.scope || scope,
@@ -134,7 +160,7 @@ export function createQueuePushDispatcher({
         workerId: input.workerId || dispatcherWorkerId,
         batchSize
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       reserved = Math.max(0, reserved - batchSize);
       throw error;
     }
@@ -143,21 +169,21 @@ export function createQueuePushDispatcher({
     for (const workItem of [...(claim.failed || []), ...(claim.expired || [])]) {
       await notifyTerminal(workItem, "claim");
     }
-    const started: any[] = [];
+    const started: Array<{ workItemId: string; lease: QueueLease }> = [];
     for (const leased of claim.claimed || []) {
-      const workItemId: any = leased.workItem.workItemId;
-      const executionController: any = new AbortController();
-      const abortFromCaller: any = () : any => executionController.abort(input.signal?.reason);
+      const workItemId = leased.workItem.workItemId;
+      const executionController = new AbortController();
+      const abortFromCaller = (): void => executionController.abort(input.signal?.reason);
       input.signal?.addEventListener?.("abort", abortFromCaller, { once: true });
-      const promise: any = Promise.resolve()
-        .then(() : any => workerRuntime.runLeased({
+      const promise = Promise.resolve()
+        .then(() => queueWorkerRuntime.runLeased({
           workItem: leased.workItem,
           lease: leased.lease,
           actor: input.actor,
           signal: executionController.signal
         }))
-        .then(async (result?: any) : Promise<any> => {
-          const inspection: any = await store.inspect({
+        .then(async (result: unknown) => {
+          const inspection = await queueStore.inspect({
             workItemId,
             queueDefinitionId: input.queueDefinitionId || dispatcherQueueDefinitionId,
             scope: input.scope || scope
@@ -165,7 +191,7 @@ export function createQueuePushDispatcher({
           await notifyTerminal(inspection.workItem, "worker");
           return result;
         })
-        .catch((error?: any) : any => {
+        .catch((error: unknown) => {
           logger?.error?.("queue.push.dispatch.failed", {
             workItemId,
             error: summarizeError(error)
@@ -176,7 +202,7 @@ export function createQueuePushDispatcher({
             error: summarizeError(error)
           };
         })
-        .finally(() : any => {
+        .finally(() => {
           input.signal?.removeEventListener?.("abort", abortFromCaller);
           inFlight.delete(workItemId);
         });
@@ -200,23 +226,23 @@ export function createQueuePushDispatcher({
     };
   }
 
-  async function drain({ timeoutMs = 30_000 }: Record<string, any> = {}) : Promise<any> {
-    const startedAt: any = Date.now();
+  async function drain({ timeoutMs = 30_000 }: { timeoutMs?: number } = {}) {
+    const startedAt = Date.now();
     while (inFlight.size > 0) {
-      const remainingMs: any = Math.max(0, Number(timeoutMs) - (Date.now() - startedAt));
+      const remainingMs = Math.max(0, Number(timeoutMs) - (Date.now() - startedAt));
       if (remainingMs <= 0) {
         return {
           drained: false,
           inFlight: inFlight.size
         };
       }
-      let timer: any = null;
-      const outcome: any = await Promise.race([
-        Promise.allSettled([...inFlight.values()].map((entry?: any) : any => entry.promise)).then(() : any => "settled"),
-        new Promise((resolve?: any) : any => {
-          timer = setTimeout(() : any => resolve("deadline"), remainingMs);
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const outcome = await Promise.race([
+        Promise.allSettled([...inFlight.values()].map((entry) => entry.promise)).then((): "settled" => "settled"),
+        new Promise<"deadline">((resolve) => {
+          timer = setTimeout(() => resolve("deadline"), remainingMs);
         })
-      ]).finally(() : any => {
+      ]).finally(() => {
         if (timer) clearTimeout(timer);
       });
       if (outcome === "deadline" && inFlight.size > 0) {
@@ -232,8 +258,8 @@ export function createQueuePushDispatcher({
     };
   }
 
-  function cancel(workItemId?: any, reason: any = null) : any {
-    const entry: any = inFlight.get(toText(workItemId));
+  function cancel(workItemId?: unknown, reason: unknown = null) {
+    const entry = inFlight.get(toText(workItemId));
     if (!entry) return { signalled: false, inFlight: false };
     if (!entry.executionController.signal.aborted) {
       entry.executionController.abort(reason || new Error("Queue work cancellation requested."));

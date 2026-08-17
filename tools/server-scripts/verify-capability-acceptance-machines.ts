@@ -205,10 +205,10 @@ function verifyCapability(entry?: any, pluginRuntimeReduction?: any, activeFeatu
   } else {
     try {
       definition = readJson(definitionPath);
-      machineReport = verifyMachineDefinition(definition, {
+      (machineReport = verifyMachineDefinition(definition, {
         throwOnError: false,
         relativePath: toPosixRelative(definitionPath)
-      });
+      }) as unknown as Record<string, any>);
     } catch (error: any) {
       addFinding(
         findings,

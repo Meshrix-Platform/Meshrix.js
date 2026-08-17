@@ -1,61 +1,109 @@
-import { computeDeterministicRetryDelay } from "./policies.ts";
 import {
   assertLegalWorkQueueTransition,
   WORK_QUEUE_STATES
 } from "../workflow/state-machine/work-queue/state-machine.ts";
 import { asInt, getPolicy, nowFrom, parseJson, rowToWorkItem, toText } from "./store-serialization.ts";
 import { WorkQueueCapacityError } from "./scheduling.ts";
+import type { Pool, PoolClient, QueryResultRow } from "pg";
 
-export async function queryOne(client?: any, sql?: any, params: any = []) : Promise<any> {
-  const result: any = await client.query(sql, params);
+interface WorkItemRow extends QueryResultRow {
+  work_item_id: string; queue_definition_id: string; queue_definition_version: number;
+  state: string; lease_id: string; lease_seq: number; leased_by_worker_id: string;
+  lease_expires_at_ms: number; policy_version: string; available_at_ms: number;
+  attempt: number; max_attempts: number; fallback_task_id: string;
+  last_error_json: unknown; updated_at_ms: number;
+}
+interface QueuePolicySection { [key: string]: number; }
+interface RetryPolicySection { [key: string]: string | number; }
+interface QueuePolicy {
+  [key: string]: unknown;
+  capacity: QueuePolicySection; retention: QueuePolicySection; retryBackoff?: RetryPolicySection;
+  policyVersion?: string;
+}
+interface RuntimeIdentityGenerator { journalEntryId(): string; }
+interface RuntimeTimeSource { nowMs(): number; }
+interface RuntimeConfig {
+  timeSource: RuntimeTimeSource; identityGenerator: RuntimeIdentityGenerator; resolvedPolicy: QueuePolicy;
+}
+interface CountRow extends QueryResultRow { count: string | number; }
+interface SequenceRow extends QueryResultRow { seq: string | number; last_transition_seq: string | number; }
+interface PolicyRow extends QueryResultRow { policy_json: unknown; }
+interface RetentionStateRow extends QueryResultRow { pending_transitions: string | number; }
+interface SinkReceiptRow extends QueryResultRow { sink_id: string; effect_id: string; status: string; }
+type WorkItemPatch = Partial<WorkItemRow>;
+interface TransitionInput {
+  row: WorkItemRow; transition: string; toState: string; patch?: WorkItemPatch;
+  nowMs: number; operationId?: unknown; actor?: object; reason?: unknown; policyVersion?: unknown;
+}
+interface AppendTransitionInput extends TransitionInput {
+  fromState?: string | null; leaseId?: string; leaseSeq?: number; decision?: object;
+}
+interface SweepInput {
+  nowMs: number; queueDefinitionId?: unknown; scopeKey?: unknown; workItemId?: unknown; limit?: unknown;
+}
+interface BackgroundWriteInput {
+  nowMs?: unknown; entityId?: unknown; workItemId?: unknown; snapshotId?: unknown; healthKey?: unknown;
+  backgroundWriteId?: unknown; state?: unknown; value?: unknown; status?: unknown; attempt?: unknown;
+  nextRetryAtMs?: unknown; lastError?: unknown;
+}
+
+export async function queryOne<Row extends QueryResultRow = QueryResultRow>(
+  client: Pick<PoolClient, "query">,
+  sql: string,
+  params: readonly unknown[] = []
+): Promise<Row | null> {
+  const result = await client.query<Row>(sql, [...params]);
   return result.rows[0] || null;
 }
 
-export async function withTransaction(pool?: any, fn?: any) : Promise<any> {
-  const client: any = await pool.connect();
+export async function withTransaction<Result>(
+  pool: Pick<Pool, "connect">,
+  fn: (client: PoolClient) => Promise<Result>
+): Promise<Result> {
+  const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const result: any = await fn(client);
+    const result = await fn(client);
     await client.query("COMMIT");
     return result;
-  } catch (error: any) {
-    await client.query("ROLLBACK").catch(() : any => null);
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => null);
     throw error;
   } finally {
     client.release();
   }
 }
 
-export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, resolvedPolicy }: Record<string, any>) : any {
-  async function policyForRow(client?: any, row?: any) : Promise<any> {
-    const definition: any = await queryOne(client, `
+export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, resolvedPolicy }: RuntimeConfig) {
+  async function policyForRow(client: PoolClient, row: WorkItemRow): Promise<QueuePolicy> {
+    const definition = await queryOne<PolicyRow>(client, `
       SELECT policy_json FROM queue_definitions
       WHERE queue_definition_id = $1 AND queue_definition_version = $2
     `, [row.queue_definition_id, row.queue_definition_version]);
-    const override: any = parseJson(definition?.policy_json, {});
+    const override = parseJson(definition?.policy_json, {}) as Partial<QueuePolicy>;
     return getPolicy({
       ...resolvedPolicy,
       ...override,
-      capacity: { ...resolvedPolicy.capacity, ...(override.capacity || {}) },
-      retention: { ...resolvedPolicy.retention, ...(override.retention || {}) }
+      capacity: { ...resolvedPolicy.capacity, ...override.capacity },
+      retention: { ...resolvedPolicy.retention, ...override.retention }
     });
   }
 
-  async function lockQueueRetention(client?: any, queueDefinitionId?: any) : Promise<any> {
+  async function lockQueueRetention(client: PoolClient, queueDefinitionId?: unknown): Promise<void> {
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
       [String(queueDefinitionId || "")]
     );
   }
 
-  async function boundedCount(client?: any, sql?: any, params?: any, limit?: any) : Promise<any> {
-    const row: any = await queryOne(client, sql, [...params, Number(limit) + 1]);
+  async function boundedCount(client: PoolClient, sql: string, params: readonly unknown[], limit: unknown): Promise<number> {
+    const row = await queryOne<CountRow>(client, sql, [...params, Number(limit) + 1]);
     return Number(row?.count || 0);
   }
 
-  async function insertRetentionSnapshot(client?: any, row?: any, nowMs?: any) : Promise<any> {
+  async function insertRetentionSnapshot(client: PoolClient, row: WorkItemRow, nowMs: number): Promise<number> {
     await client.query("DELETE FROM work_queue_transition_journal WHERE work_item_id = $1", [row.work_item_id]);
-    const inserted: any = await queryOne(client, `
+    const inserted = await queryOne<SequenceRow>(client, `
       INSERT INTO work_queue_transition_journal (
         journal_entry_id, work_item_id, queue_definition_id, queue_definition_version,
         transition, from_state, to_state, lease_id, lease_seq, operation_id,
@@ -76,7 +124,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       JSON.stringify({ projectionRow: row }),
       nowMs
     ]);
-    const seq: any = Number(inserted.seq || 0);
+    const seq = Number(inserted?.seq || 0);
     await client.query(
       "UPDATE work_items SET last_transition_seq = $1, updated_at_ms = $2 WHERE work_item_id = $3",
       [seq, nowMs, row.work_item_id]
@@ -84,21 +132,21 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return seq;
   }
 
-  async function compactWorkJournal(client?: any, workItemId?: any, nowMs?: any, { force = false }: Record<string, any> = {}) : Promise<any> {
-    const countRow: any = await queryOne(client, `
+  async function compactWorkJournal(client: PoolClient, workItemId: unknown, nowMs: number, { force = false }: { force?: boolean } = {}): Promise<boolean> {
+    const countRow = await queryOne<CountRow>(client, `
       SELECT COUNT(*) AS count FROM work_queue_transition_journal WHERE work_item_id = $1
     `, [workItemId]);
-    const row: any = await queryOne(client, "SELECT * FROM work_items WHERE work_item_id = $1 FOR UPDATE SKIP LOCKED", [workItemId]);
+    const row = await queryOne<WorkItemRow>(client, "SELECT * FROM work_items WHERE work_item_id = $1 FOR UPDATE SKIP LOCKED", [workItemId]);
     if (!row) return false;
     const { retention } = await policyForRow(client, row);
-    const count: any = Number(countRow?.count || 0);
+    const count = Number(countRow?.count || 0);
     if (count <= 1 || (!force && count <= retention.maxTransitionsPerWorkItem)) return false;
     await insertRetentionSnapshot(client, row, nowMs);
     return true;
   }
 
-  async function deleteTerminalRows(client?: any, queueDefinitionId?: any, excludeWorkItemId?: any, limit?: any) : Promise<any> {
-    const selected: any = await client.query(`
+  async function deleteTerminalRows(client: PoolClient, queueDefinitionId: unknown, excludeWorkItemId: unknown, limit: unknown): Promise<number> {
+    const selected = await client.query<Pick<WorkItemRow, "work_item_id">>(`
       SELECT work_item_id FROM work_items
       WHERE queue_definition_id = $1
         AND state = ANY($2::text[])
@@ -111,7 +159,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       WORK_QUEUE_STATES.CANCELLED,
       WORK_QUEUE_STATES.EXPIRED
     ], excludeWorkItemId || "", Math.max(0, Number(limit) || 0)]);
-    const ids: any = selected.rows.map((row?: any) : any => row.work_item_id);
+    const ids = selected.rows.map((row) => row.work_item_id);
     if (ids.length === 0) return 0;
     await client.query("DELETE FROM work_queue_fallback_tasks WHERE work_item_id = ANY($1::text[])", [ids]);
     await client.query("DELETE FROM work_queue_transition_journal WHERE work_item_id = ANY($1::text[])", [ids]);
@@ -119,7 +167,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return ids.length;
   }
 
-  function retentionMaintenanceThreshold(retention?: any) : any {
+  function retentionMaintenanceThreshold(retention: QueuePolicySection): number {
     return Math.max(1, Math.min(
       asInt(retention.cleanupBatchSize, 1),
       asInt(retention.maxTransitionsPerWorkItem, 1),
@@ -127,10 +175,10 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     ));
   }
 
-  async function maintainRetentionAfterAppend(client?: any, row?: any, nowMs?: any) : Promise<any> {
+  async function maintainRetentionAfterAppend(client: PoolClient, row: WorkItemRow, nowMs: number): Promise<boolean> {
     const { retention } = await policyForRow(client, row);
-    const threshold: any = retentionMaintenanceThreshold(retention);
-    const state: any = await queryOne(client, `
+    const threshold = retentionMaintenanceThreshold(retention);
+    const state = await queryOne<RetentionStateRow>(client, `
       INSERT INTO work_queue_retention_state (
         queue_definition_id, pending_transitions, updated_at_ms
       ) VALUES ($1, 1, $2)
@@ -146,7 +194,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       SET pending_transitions = 0, updated_at_ms = $2
       WHERE queue_definition_id = $1 AND pending_transitions >= $3
     `, [row.queue_definition_id, nowMs, threshold]);
-    const terminalCount: any = await boundedCount(client, `
+    const terminalCount = await boundedCount(client, `
       SELECT COUNT(*) AS count FROM (
         SELECT 1 FROM work_items
         WHERE queue_definition_id = $1 AND state = ANY($2::text[])
@@ -165,20 +213,20 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
         Math.min(retention.cleanupBatchSize, terminalCount - retention.maxTerminalItems)
       );
     }
-    const countJournal: any = () : any => boundedCount(client, `
+    const countJournal = () => boundedCount(client, `
       SELECT COUNT(*) AS count FROM (
         SELECT 1 FROM work_queue_transition_journal
         WHERE queue_definition_id = $1
         LIMIT $2
       ) bounded
     `, [row.queue_definition_id], retention.maxJournalEntries);
-    let journalCount: any = await countJournal();
+    let journalCount = await countJournal();
     if (journalCount >= retention.maxJournalEntries) {
       await deleteTerminalRows(client, row.queue_definition_id, row.work_item_id, retention.cleanupBatchSize);
       journalCount = await countJournal();
     }
     if (journalCount >= retention.maxJournalEntries) {
-      const candidates: any = await client.query(`
+      const candidates = await client.query<Pick<WorkItemRow, "work_item_id">>(`
         SELECT work_item_id FROM work_queue_transition_journal
         WHERE queue_definition_id = $1 AND work_item_id <> $2
         ORDER BY seq ASC
@@ -188,14 +236,14 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
         row.work_item_id,
         retention.cleanupBatchSize * retention.maxTransitionsPerWorkItem
       ]);
-      const unique: any = new Set<any>(candidates.rows.map((candidate?: any) : any => candidate.work_item_id));
+      const unique = new Set(candidates.rows.map((candidate) => candidate.work_item_id));
       for (const workItemId of [...unique].slice(0, retention.cleanupBatchSize)) {
         await compactWorkJournal(client, workItemId, nowMs, { force: true });
       }
       journalCount = await countJournal();
     }
     if (journalCount >= retention.maxJournalEntries) {
-      const current: any = await queryOne(client, `
+      const current = await queryOne<CountRow>(client, `
         SELECT COUNT(*) AS count FROM work_queue_transition_journal WHERE work_item_id = $1
       `, [row.work_item_id]);
       if (Number(current?.count || 0) > 1 && await compactWorkJournal(client, row.work_item_id, nowMs, { force: true })) return true;
@@ -204,19 +252,19 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return false;
   }
 
-  async function makeFailedCapacityRoom(client?: any, row?: any, nowMs?: any) : Promise<any> {
+  async function makeFailedCapacityRoom(client: PoolClient, row: WorkItemRow, _nowMs: number): Promise<void> {
     const { capacity, retention } = await policyForRow(client, row);
     await lockQueueRetention(client, row.queue_definition_id);
-    const countFailed: any = () : any => boundedCount(client, `
+    const countFailed = () => boundedCount(client, `
       SELECT COUNT(*) AS count FROM (
         SELECT 1 FROM work_items
         WHERE queue_definition_id = $1 AND state = $2
         LIMIT $3
       ) bounded
     `, [row.queue_definition_id, WORK_QUEUE_STATES.FAILED], capacity.maxFailed);
-    let failedCount: any = await countFailed();
+    let failedCount = await countFailed();
     if (failedCount < capacity.maxFailed) return;
-    const selected: any = await client.query(`
+    const selected = await client.query<WorkItemRow>(`
       SELECT * FROM work_items
       WHERE queue_definition_id = $1 AND state = $2 AND work_item_id <> $3
       ORDER BY updated_at_ms ASC, work_item_id ASC
@@ -239,7 +287,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     }
   }
 
-  async function appendTransitionInternal(client: any, {
+  async function appendTransitionInternal(client: PoolClient, {
     row,
     transition,
     fromState,
@@ -252,9 +300,9 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     reason = "",
     policyVersion = "",
     decision = {}
-  }: Record<string, any>) : Promise<any> {
+  }: AppendTransitionInput): Promise<number> {
     assertLegalWorkQueueTransition({ transition, fromState: fromState ?? null, toState });
-    const inserted: any = await queryOne(client, `
+    const inserted = await queryOne<SequenceRow>(client, `
       INSERT INTO work_queue_transition_journal (
         journal_entry_id, work_item_id, queue_definition_id, queue_definition_version,
         transition, from_state, to_state, lease_id, lease_seq, operation_id,
@@ -279,7 +327,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       nowMs,
       nowMs
     ]);
-    const seq: any = Number(inserted.seq || 0);
+    const seq = Number(inserted?.seq || 0);
     await client.query(`
       UPDATE work_items
       SET last_transition_seq = $1,
@@ -287,21 +335,21 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       WHERE work_item_id = $3
     `, [seq, nowMs, row.work_item_id]);
     if (await maintainRetentionAfterAppend(client, row, nowMs)) {
-      const current: any = await queryOne(client, "SELECT last_transition_seq FROM work_items WHERE work_item_id = $1", [row.work_item_id]);
+      const current = await queryOne<SequenceRow>(client, "SELECT last_transition_seq FROM work_items WHERE work_item_id = $1", [row.work_item_id]);
       return Number(current?.last_transition_seq || seq);
     }
     return seq;
   }
 
-  async function applyProjectionPatch(client?: any, row?: any, patch: Record<string, any> = {}) : Promise<any> {
-    const updated: Record<string, any> = {
+  async function applyProjectionPatch(client: PoolClient, row: WorkItemRow, patch: WorkItemPatch = {}): Promise<WorkItemRow> {
+    const updated: WorkItemRow = {
       ...row,
       ...patch,
       work_item_id: row.work_item_id,
       queue_definition_id: row.queue_definition_id,
       queue_definition_version: row.queue_definition_version
     };
-    return queryOne(client, `
+    const result = await queryOne<WorkItemRow>(client, `
       UPDATE work_items
       SET state = $2,
           available_at_ms = $3,
@@ -330,16 +378,18 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       JSON.stringify(parseJson(updated.last_error_json, {})),
       updated.updated_at_ms
     ]);
+    if (!result) throw new Error(`Work item projection disappeared: ${row.work_item_id}`);
+    return result;
   }
 
-  async function transitionProjection(client: any, { row, transition, toState, patch = {}, nowMs, operationId, actor, reason, policyVersion }: Record<string, any>) : Promise<any> {
+  async function transitionProjection(client: PoolClient, { row, transition, toState, patch = {}, nowMs, operationId, actor, reason, policyVersion }: TransitionInput): Promise<WorkItemRow> {
     if (toState === WORK_QUEUE_STATES.FAILED && row.state !== WORK_QUEUE_STATES.FAILED) {
       await makeFailedCapacityRoom(client, row, nowMs);
     }
-    const fromState: any = row.state;
-    const journalLeaseId: any = transition === "claim" ? patch.lease_id : row.lease_id || patch.lease_id || "";
-    const journalLeaseSeq: any = transition === "claim" ? patch.lease_seq : row.lease_seq || patch.lease_seq || 0;
-    const nextRow: any = await applyProjectionPatch(client, row, { ...patch, state: toState, updated_at_ms: nowMs });
+    const fromState = row.state;
+    const journalLeaseId = transition === "claim" ? patch.lease_id : row.lease_id || patch.lease_id || "";
+    const journalLeaseSeq = transition === "claim" ? patch.lease_seq : row.lease_seq || patch.lease_seq || 0;
+    const nextRow = await applyProjectionPatch(client, row, { ...patch, state: toState, updated_at_ms: nowMs });
     await appendTransitionInternal(client, {
       row: nextRow,
       transition,
@@ -354,13 +404,15 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       policyVersion,
       decision: { projectionPatch: { ...patch, state: toState, updated_at_ms: nowMs } }
     });
-    return queryOne(client, "SELECT * FROM work_items WHERE work_item_id = $1", [row.work_item_id]);
+    const result = await queryOne<WorkItemRow>(client, "SELECT * FROM work_items WHERE work_item_id = $1", [row.work_item_id]);
+    if (!result) throw new Error(`Work item projection disappeared: ${row.work_item_id}`);
+    return result;
   }
 
-  async function recordBackgroundWriteInternal(client?: any, aspectType?: any, input: Record<string, any> = {}) : Promise<any> {
-    const nowMs: any = nowFrom(timeSource, input.nowMs);
-    const entityId: any = toText(input.entityId || input.workItemId || input.snapshotId || input.healthKey || aspectType);
-    const backgroundWriteId: any = toText(input.backgroundWriteId || `${aspectType}:${entityId}`);
+  async function recordBackgroundWriteInternal(client: PoolClient, aspectType: unknown, input: BackgroundWriteInput = {}) {
+    const nowMs = nowFrom(timeSource, input.nowMs);
+    const entityId = toText(input.entityId || input.workItemId || input.snapshotId || input.healthKey || aspectType);
+    const backgroundWriteId = toText(input.backgroundWriteId || `${aspectType}:${entityId}`);
     await client.query(`
       INSERT INTO work_queue_background_writes (
         background_write_id, aspect_type, entity_id, state_json, status,
@@ -390,8 +442,8 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return { backgroundWriteId, aspectType, entityId, committedAtMs: nowMs };
   }
 
-  async function expireEligibleLocked(client?: any, { nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: Record<string, any> = {}) : Promise<any> {
-    const rows: any = (await client.query(`
+  async function expireEligibleLocked(client: PoolClient, { nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: SweepInput): Promise<unknown[]> {
+    const rows = (await client.query<WorkItemRow>(`
       SELECT *
       FROM work_items
       WHERE state = ANY($1::text[])
@@ -408,12 +460,12 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       WORK_QUEUE_STATES.RUNNING,
       WORK_QUEUE_STATES.RECOVERED
     ], nowMs, toText(queueDefinitionId), toText(scopeKey), Math.max(1, asInt(limit, 1000))])).rows;
-    const expired: any[] = [];
+    const expired: unknown[] = [];
     for (const row of rows) {
-      const updated: any = await transitionProjection(client, {
+      const updated = await transitionProjection(client, {
         row,
         transition: "expire",
-        toState: WORK_QUEUE_STATES.EXPIRED,
+        toState: String(WORK_QUEUE_STATES.EXPIRED),
         patch: {
           available_at_ms: nowMs,
           lease_id: "",
@@ -428,8 +480,8 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return expired;
   }
 
-  async function materializeDelayedLocked(client?: any, { nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: Record<string, any> = {}) : Promise<any> {
-    const result: any = await client.query(`
+  async function materializeDelayedLocked(client: PoolClient, { nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: SweepInput): Promise<unknown[]> {
+    const result = await client.query<WorkItemRow>(`
       SELECT *
       FROM work_items
       WHERE state = $1
@@ -440,12 +492,12 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       LIMIT $5
       FOR UPDATE SKIP LOCKED
     `, [WORK_QUEUE_STATES.RETRY_WAIT, nowMs, toText(queueDefinitionId), toText(scopeKey), Math.max(1, asInt(limit, 1000))]);
-    const changed: any[] = [];
+    const changed: unknown[] = [];
     for (const row of result.rows) {
-      const updated: any = await transitionProjection(client, {
+      const updated = await transitionProjection(client, {
         row,
         transition: "delay_matured",
-        toState: WORK_QUEUE_STATES.QUEUED,
+        toState: String(WORK_QUEUE_STATES.QUEUED),
         patch: { available_at_ms: nowMs, lease_id: "", leased_by_worker_id: "", lease_expires_at_ms: 0 },
         nowMs,
         reason: "delay_matured"
@@ -455,8 +507,8 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return changed;
   }
 
-  async function recoverExpiredLeasesLocked(client?: any, { nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: Record<string, any> = {}) : Promise<any> {
-    const result: any = await client.query(`
+  async function recoverExpiredLeasesLocked(client: PoolClient, { nowMs, queueDefinitionId = "", scopeKey = "", limit = 1000 }: SweepInput): Promise<unknown[]> {
+    const result = await client.query<WorkItemRow>(`
       SELECT *
       FROM work_items
       WHERE state = $1
@@ -468,12 +520,12 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       LIMIT $5
       FOR UPDATE SKIP LOCKED
     `, [WORK_QUEUE_STATES.RUNNING, nowMs, toText(queueDefinitionId), toText(scopeKey), Math.max(1, asInt(limit, 1000))]);
-    const recovered: any[] = [];
+    const recovered: unknown[] = [];
     for (const row of result.rows) {
-      const updated: any = await transitionProjection(client, {
+      const updated = await transitionProjection(client, {
         row,
         transition: "lease_expired",
-        toState: WORK_QUEUE_STATES.IN_DOUBT,
+        toState: String(WORK_QUEUE_STATES.IN_DOUBT),
         patch: {
           last_error_json: {
             type: "lease_expired",
@@ -490,8 +542,8 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return recovered;
   }
 
-  async function reconcileInDoubtLocked(client?: any, { nowMs, queueDefinitionId = "", scopeKey = "", workItemId = "", limit = 1000 }: Record<string, any> = {}) : Promise<any> {
-    const result: any = await client.query(`
+  async function reconcileInDoubtLocked(client: PoolClient, { nowMs, queueDefinitionId = "", scopeKey = "", workItemId = "", limit = 1000 }: SweepInput): Promise<unknown[]> {
+    const result = await client.query<WorkItemRow>(`
       SELECT *
       FROM work_items
       WHERE state = $1
@@ -502,25 +554,25 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       LIMIT $5
       FOR UPDATE SKIP LOCKED
     `, [WORK_QUEUE_STATES.IN_DOUBT, toText(queueDefinitionId), toText(scopeKey), toText(workItemId), Math.max(1, asInt(limit, 1000))]);
-    const reconciled: any[] = [];
+    const reconciled: unknown[] = [];
     for (const row of result.rows) {
-      const receipts: any = await client.query(`
+      const receipts = await client.query<SinkReceiptRow>(`
         SELECT sink_id, effect_id, status
         FROM work_queue_sink_fences
         WHERE work_item_id = $1 AND generation = $2
         ORDER BY sink_id ASC
       `, [row.work_item_id, Number(row.lease_seq || 0)]);
-      const terminalReceipt: any = receipts.rows.find((receipt?: any) : any =>
+      const terminalReceipt = receipts.rows.find((receipt) =>
         ["complete", "fail"].includes(String(receipt.sink_id || "")) &&
         String(receipt.status || "") === "settled"
       );
       if (!terminalReceipt) {
         continue;
       }
-      const toState: any = terminalReceipt.sink_id === "complete"
+      const toState = String(terminalReceipt.sink_id === "complete"
         ? WORK_QUEUE_STATES.COMPLETED
-        : WORK_QUEUE_STATES.FAILED;
-      const updated: any = await transitionProjection(client, {
+        : WORK_QUEUE_STATES.FAILED);
+      const updated = await transitionProjection(client, {
         row,
         transition: "termination_acknowledged",
         toState,
@@ -544,8 +596,8 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return reconciled;
   }
 
-  async function requireLeasedRow(client?: any, workItemId?: any, leaseId?: any, nowMs: any = timeSource.nowMs(), { allowExpired = false }: Record<string, any> = {}) : Promise<any> {
-    const row: any = await queryOne(client, "SELECT * FROM work_items WHERE work_item_id = $1 FOR UPDATE", [toText(workItemId)]);
+  async function requireLeasedRow(client: PoolClient, workItemId: unknown, leaseId: unknown, nowMs = timeSource.nowMs(), { allowExpired = false }: { allowExpired?: boolean } = {}): Promise<WorkItemRow> {
+    const row = await queryOne<WorkItemRow>(client, "SELECT * FROM work_items WHERE work_item_id = $1 FOR UPDATE", [toText(workItemId)]);
     if (!row) {
       throw new Error(`Work item not found: ${workItemId}`);
     }

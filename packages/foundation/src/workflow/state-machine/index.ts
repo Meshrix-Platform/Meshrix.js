@@ -1,26 +1,125 @@
 import {
   validateStateMachineDefinition as coreValidate,
   validateExecutableStateMachineDefinition as coreValidateExec,
-  transitionState,
   isTerminalStatus,
   listAllowedEvents as coreListAllowed,
   assertStateMachineDefinition,
-  compileStateMachineDefinition,
   computeStateMachineDefinitionHash,
 } from "./engine/state-machine-core.ts";
 
-import { transition as transitionFn, batchTransition } from "./transition.ts";
-import { replayTransitions as replayFn, detectTampering, verifyTransitionSequence } from "./replay.ts";
+import { transition as transitionFn } from "./transition.ts";
+import { replayTransitions as replayFn } from "./replay.ts";
 import { assertInvariants as invariantsFn } from "./invariants.ts";
 import { exportStateMachineDocs as exportDocsFn } from "./export-docs.ts";
-export { loadDefinition, loadBuiltinDefinition, resolveDefinition, listBuiltinDefinitions, validateDefinition } from "./definition.ts";
-export { transition, isTransitionAllowed, listAllowedEvents, batchTransition } from "./transition.ts";
-export { replayTransitions, detectTampering, verifyTransitionSequence } from "./replay.ts";
+export {
+  loadDefinition,
+  loadBuiltinDefinition,
+  resolveDefinition,
+  listBuiltinDefinitions,
+  validateDefinition,
+} from "./definition.ts";
+export {
+  transition,
+  isTransitionAllowed,
+  listAllowedEvents,
+  batchTransition,
+} from "./transition.ts";
+export {
+  replayTransitions,
+  detectTampering,
+  verifyTransitionSequence,
+} from "./replay.ts";
 export { assertInvariants } from "./invariants.ts";
 export { exportStateMachineDocs } from "./export-docs.ts";
 
-export { ERROR_CODES, StateMachineError } from "./engine/state-machine-errors.ts";
+export {
+  ERROR_CODES,
+  StateMachineError,
+} from "./engine/state-machine-errors.ts";
 export { computeStateMachineDefinitionHash } from "./engine/state-machine-core.ts";
+
+type DataRecord = Record<string, unknown>;
+interface StateMachineDefinition extends DataRecord {
+  machineId: string;
+  initialState: string;
+  states: Array<{ id: string; terminal?: boolean }>;
+  events: Array<{ id: string }>;
+  totalMatrix: Array<{
+    from: string;
+    event: string;
+    result: string;
+    to?: string;
+  }>;
+  invariants?: string[];
+}
+interface StateContext extends DataRecord {
+  entityId?: string;
+  currentStatus?: string;
+}
+interface TransitionContext extends DataRecord {
+  actor?: string;
+  reason?: string;
+  metadata?: DataRecord;
+  operationId?: string;
+  traceId?: string;
+  auditId?: string;
+  checkpointNodeId?: string;
+  policyDecisionId?: string;
+  approvalId?: string;
+  now?: string | number | Date;
+  guardContext?: DataRecord;
+}
+interface ValidationError {
+  errorCode: string;
+  message: string;
+}
+interface ValidationResult {
+  ok: boolean;
+  errors: ValidationError[];
+}
+interface ReplayInput {
+  initialState?: unknown;
+  history?: unknown;
+}
+interface InvariantInput {
+  state?: StateContext;
+  history?: unknown[];
+}
+interface StateMachineFacade {
+  definition: StateMachineDefinition;
+  definitionHash: string;
+  machineId: string;
+  initialState(): { currentStatus: string };
+  transition(
+    state?: StateContext,
+    event?: string,
+    context?: TransitionContext,
+  ): unknown;
+  isTerminal(statusId?: string): boolean;
+  listAllowed(statusId?: string): string[];
+  replay(input: ReplayInput): unknown;
+  checkInvariants(input: InvariantInput): unknown;
+  toDocs(): unknown;
+  computeDefinitionHash(): string;
+}
+
+function isRecord(value: unknown): value is DataRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function executableDefinition(value: unknown): StateMachineDefinition {
+  if (
+    !isRecord(value) ||
+    typeof value.machineId !== "string" ||
+    typeof value.initialState !== "string" ||
+    !Array.isArray(value.states) ||
+    !Array.isArray(value.events) ||
+    !Array.isArray(value.totalMatrix)
+  ) {
+    throw new TypeError("State machine definition is invalid");
+  }
+  return value as StateMachineDefinition;
+}
 
 /**
  * Create a state machine instance from a definition.
@@ -28,20 +127,21 @@ export { computeStateMachineDefinitionHash } from "./engine/state-machine-core.t
  * @param {object} definition - State machine definition object
  * @returns {object} State machine instance
  */
-export function createStateMachine(definition?: any) : any {
-  if (!definition) {
+export function createStateMachine(value?: unknown): StateMachineFacade {
+  if (!value) {
     throw new Error("State machine definition is required");
   }
+  const definition = executableDefinition(value);
 
   // Validate definition
-  const validation: any = coreValidateExec(definition);
+  const validation: ValidationResult = coreValidateExec(definition);
   if (!validation.ok) {
     throw new Error(
-      `Invalid state machine definition: ${validation.errors.map((e?: any) : any => e.message).join("; ")}`
+      `Invalid state machine definition: ${validation.errors.map((error) => error.message).join("; ")}`,
     );
   }
 
-  const definitionHash: any = computeStateMachineDefinitionHash(definition);
+  const definitionHash: string = computeStateMachineDefinitionHash(definition);
 
   /**
    * Execute a transition on this machine.
@@ -51,7 +151,25 @@ export function createStateMachine(definition?: any) : any {
    * @param {object} [context] - Transition context
    * @returns {object} Transition result
    */
-  function transition(state?: any, event?: any, context: Record<string, any> = {}) : any {
+  function transition(
+    state?: StateContext,
+    event?: string,
+    context: TransitionContext = {},
+  ) {
+    if (!state) {
+      return {
+        ok: false,
+        errorCode: "STATE_MACHINE_UNKNOWN_STATUS",
+        message: "State context is required",
+      };
+    }
+    if (!event) {
+      return {
+        ok: false,
+        errorCode: "STATE_MACHINE_UNKNOWN_EVENT",
+        message: "Event type is required",
+      };
+    }
     return transitionFn({ machine: definition, state, event, context });
   }
 
@@ -60,7 +178,7 @@ export function createStateMachine(definition?: any) : any {
    *
    * @returns {object}
    */
-  function initialState() : any {
+  function initialState() {
     return { currentStatus: definition.initialState };
   }
 
@@ -70,7 +188,7 @@ export function createStateMachine(definition?: any) : any {
    * @param {string} statusId
    * @returns {boolean}
    */
-  function isTerminal(statusId?: any) : any {
+  function isTerminal(statusId?: string): boolean {
     return isTerminalStatus(definition, statusId);
   }
 
@@ -80,7 +198,7 @@ export function createStateMachine(definition?: any) : any {
    * @param {string} statusId
    * @returns {string[]}
    */
-  function listAllowed(statusId?: any) : any {
+  function listAllowed(statusId?: string): string[] {
     return coreListAllowed(definition, statusId);
   }
 
@@ -92,7 +210,7 @@ export function createStateMachine(definition?: any) : any {
    * @param {Array} options.history
    * @returns {object}
    */
-  function replay({ initialState: initState, history }: Record<string, any>) : any {
+  function replay({ initialState: initState, history }: ReplayInput) {
     return replayFn({ definition, initialState: initState, history });
   }
 
@@ -104,7 +222,7 @@ export function createStateMachine(definition?: any) : any {
    * @param {Array} [options.history]
    * @returns {object}
    */
-  function checkInvariants({ state, history = [] }: Record<string, any>) : any {
+  function checkInvariants({ state, history = [] }: InvariantInput) {
     return invariantsFn({ definition, state, history });
   }
 
@@ -113,7 +231,7 @@ export function createStateMachine(definition?: any) : any {
    *
    * @returns {object}
    */
-  function toDocs() : any {
+  function toDocs() {
     return exportDocsFn(definition);
   }
 
@@ -128,7 +246,7 @@ export function createStateMachine(definition?: any) : any {
     replay,
     checkInvariants,
     toDocs,
-    computeDefinitionHash: () : any => definitionHash,
+    computeDefinitionHash: () => definitionHash,
   };
 }
 
@@ -139,7 +257,9 @@ export function createStateMachine(definition?: any) : any {
  * @param {object} definition
  * @returns {{ ok: boolean, errors: Array<{ errorCode: string, message: string }> }}
  */
-export function validateStateMachineDefinition(definition?: any) : any {
+export function validateStateMachineDefinition(
+  definition?: unknown,
+): ValidationResult {
   return coreValidate(definition);
 }
 
@@ -149,7 +269,9 @@ export function validateStateMachineDefinition(definition?: any) : any {
  * @param {object} definition
  * @returns {{ ok: boolean, errors: Array<{ errorCode: string, message: string }> }}
  */
-export function validateExecutableStateMachineDefinition(definition?: any) : any {
+export function validateExecutableStateMachineDefinition(
+  definition?: unknown,
+): ValidationResult {
   return coreValidateExec(definition);
 }
 
@@ -158,6 +280,6 @@ export function validateExecutableStateMachineDefinition(definition?: any) : any
  *
  * @param {object} definition
  */
-export function assertValidDefinition(definition?: any) : any {
+export function assertValidDefinition(definition?: unknown): void {
   assertStateMachineDefinition(definition);
 }

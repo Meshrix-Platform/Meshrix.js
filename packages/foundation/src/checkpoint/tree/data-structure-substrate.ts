@@ -34,66 +34,67 @@ import {
   uniqueNormalizedStrings
 } from "./text-normalization-substrate.ts";
 import { createMeshrixPactiumRuntime, resolveMeshrixPactiumDataDir } from "./pactium-runtime.ts";
+import type { CheckpointProjectionInput } from "./types.ts";
 
-export const DATA_STRUCTURE_SUBSTRATE_PROTOCOL_VERSION: any = "v0.0.1:storage:data-structure-substrate-1";
+export const DATA_STRUCTURE_SUBSTRATE_PROTOCOL_VERSION = "v0.0.1:storage:data-structure-substrate-1";
 
 export {
   classifyProtocolStorageArtifact,
   PROTOCOL_STORAGE_CATEGORY
 };
 
-const storageArtifactClassifiers: readonly any[] = Object.freeze([
+const storageArtifactClassifiers: readonly typeof classifyProtocolStorageArtifact[] = Object.freeze([
   classifyProtocolStorageArtifact
 ]);
 
-function withUserDataPath(userDataPath?: any, input: Record<string, any> = {}) : any {
-  const next: any = input || {};
+function withUserDataPath(userDataPath: string, input: CheckpointProjectionInput = {}): CheckpointProjectionInput {
+  const next = input || {};
   return {
     ...next,
     userDataPath
   };
 }
 
-export function createDataStructureSubstrate({ userDataPath = "" }: Record<string, any> = {}) : any {
-  const dataDir: any = resolveMeshrixPactiumDataDir(userDataPath);
+export function createDataStructureSubstrate({ userDataPath = "" }: { userDataPath?: string } = {}) {
+  const dataDir = resolveMeshrixPactiumDataDir(userDataPath);
   assertCurrentDataDir({ dataDir });
-  const pactiumRuntime: any = createMeshrixPactiumRuntime({ dataDir });
-  const checkpointTreeProjection: Readonly<Record<string, any>> = Object.freeze({
+  const pactiumRuntime = createMeshrixPactiumRuntime({ dataDir });
+  const checkpointTreeProjection = Object.freeze({
     checkpointTreeId,
     checkpointTreeSummary,
-    deleteCheckpointTree(input: Record<string, any> = {}) : any {
+    deleteCheckpointTree(input: CheckpointProjectionInput = {}) {
       return deleteCheckpointTree({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    diffCheckpointTree(input: Record<string, any> = {}) : any {
+    diffCheckpointTree(input: CheckpointProjectionInput = {}) {
       return diffCheckpointTree({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    finishCheckpointTree(input: Record<string, any> = {}) : any {
+    finishCheckpointTree(input: CheckpointProjectionInput = {}) {
       return finishCheckpointTree({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    listCheckpointTrees(input: Record<string, any> = {}) : any {
+    listCheckpointTrees(input: CheckpointProjectionInput = {}) {
       return listCheckpointTrees({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    loadCheckpointTree(input: Record<string, any> = {}) : any {
+    loadCheckpointTree(input: CheckpointProjectionInput = {}) {
       return loadCheckpointTree({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    previewCheckpointRestore(input: Record<string, any> = {}) : any {
+    previewCheckpointRestore(input: CheckpointProjectionInput = {}) {
       return previewCheckpointRestore({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    queryCheckpointScope(input: Record<string, any> = {}) : any {
+    queryCheckpointScope(input: CheckpointProjectionInput = {}) {
       return queryCheckpointScope({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    restoreCheckpointTree(input: Record<string, any> = {}) : any {
+    restoreCheckpointTree(input: CheckpointProjectionInput = {}) {
       return restoreCheckpointTree({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    startCheckpointTree(input: Record<string, any> = {}) : any {
+    startCheckpointTree(input: CheckpointProjectionInput = {}) {
       return startCheckpointTree({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     },
-    upsertCheckpointNode(input: Record<string, any> = {}) : any {
+    upsertCheckpointNode(input: CheckpointProjectionInput = {}) {
       return upsertCheckpointNode({ ...withUserDataPath(dataDir, input), pactiumRuntime });
     }
   });
 
-  const textNormalizationSubstrate: Readonly<Record<string, any>> = Object.freeze({
+  const textNormalizationSubstrate = Object.freeze({
     clamp,
     clampLimit,
     escapeRegExp,
@@ -102,7 +103,7 @@ export function createDataStructureSubstrate({ userDataPath = "" }: Record<strin
     uniqueNormalizedStrings
   });
 
-  const merkleStateSubstrate: any = createPactiumStateSubstrate({ userDataPath: dataDir, pactiumRuntime });
+  const merkleStateSubstrate = createPactiumStateSubstrate({ userDataPath: dataDir, pactiumRuntime });
 
   return Object.freeze({
     protocol: PACTIUM_PROTOCOL,
@@ -120,10 +121,10 @@ export function createDataStructureSubstrate({ userDataPath = "" }: Record<strin
     merkleStateSubstrate,
     textNormalizationSubstrate,
     storageArtifactClassifiers,
-    close() : any {
+    close()  {
       return pactiumRuntime.close?.() || Promise.resolve();
     },
-    listCapabilities() : any {
+    listCapabilities()  {
       return {
         protocolVersion: DATA_STRUCTURE_SUBSTRATE_PROTOCOL_VERSION,
         provider: "pactium",

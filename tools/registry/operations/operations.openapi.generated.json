@@ -12522,17 +12522,10 @@
                     "type": "boolean"
                   },
                   "sourcePath": {
-                    "type": "string",
-                    "aliases": [
-                      "from"
-                    ]
+                    "type": "string"
                   },
                   "targetPath": {
-                    "type": "string",
-                    "aliases": [
-                      "to",
-                      "path"
-                    ]
+                    "type": "string"
                   },
                   "overwrite": {
                     "type": "boolean"

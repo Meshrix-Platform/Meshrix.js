@@ -15,17 +15,41 @@ import {
   normalizeVersionGroupId,
   shouldForceNewJobVersion
 } from "./job-manager-validation.ts";
+import { errorProperty, type ActiveJobController, type CodedError, type JobAccess, type JobDocument, type JobPayload, type QueueEntry } from "./contracts.ts";
+import type { createJobProjectionStore } from "./job-projection-store.ts";
 
-const MAX_QUEUED_JOB_IDS_IN_SUMMARY: any = 200;
+interface ApiContext {
+  userDataPath: string; processingEnabled: boolean; workerConcurrency: number;
+  jobs: Map<string, JobDocument>; checkpointJobs: Map<string, string>;
+  jobProjectionStore: ReturnType<typeof createJobProjectionStore>;
+  activeControllers: Map<string, ActiveJobController>;
+  durableWorkflows: Record<string, (...args: unknown[]) => Promise<unknown>>;
+  logJob(level: string, event: string, details?: Record<string, unknown>): void;
+  state: { closed: boolean }; ready: Promise<void>;
+  refreshPersistedJobs(): Promise<void>; publishJobEvent(job: JobDocument, type?: string): Promise<unknown>;
+  cloneJobForApi(job?: JobDocument | null, options?: { includeCheckpointFiles?: boolean }): JobDocument | null;
+  getActiveManifestJob(manifestKey: string, archiveBatchId?: string): JobDocument | null;
+  checkpointTreeIdForJob(job: JobDocument): string; workflowIdForJob(job: JobDocument): string;
+  ensureJobCheckpointTree(job: JobDocument, payload?: JobPayload | null): Promise<unknown>;
+  updateJobCheckpointNode(job: JobDocument, node: Record<string, unknown>): Promise<unknown>;
+  rememberActiveManifestJob(job: JobDocument): void; runQueuedJob(entry: QueueEntry): Promise<boolean>;
+  forgetActiveManifestJob(job?: JobDocument | null): void; publishDeletedJobEvent(job: JobDocument): Promise<unknown>;
+  failJob(jobId: string, message: string, stage: string): Promise<JobDocument | null>;
+  updateJob(jobId: string, patch: Partial<JobDocument>): Promise<JobDocument | null>;
+  commitTerminalThenScheduleUploadCleanup(input: Record<string, unknown>): Promise<unknown>;
+  loadJobPayload(jobId: string): Promise<JobPayload | null>; drainBackgroundTasks(): Promise<void>;
+}
 
-function jobMatchesAccess(job?: any, access?: any) : any {
+const MAX_QUEUED_JOB_IDS_IN_SUMMARY = 200;
+
+function jobMatchesAccess(job?: JobDocument | null, access?: JobAccess | null) {
   if (!access) return true;
-  const values: any = (input?: any) : any => new Set<any>(
+  const values = (input?: readonly string[]) => new Set<string>(
     (Array.isArray(input) ? input : []).map(String).filter(Boolean)
   );
-  const jobIds: any = values(access.jobIds);
+  const jobIds = values(access.jobIds);
   if (jobIds.has(String(job?.id || ""))) return true;
-  const workspaceIds: any = values(access.workspaceIds);
+  const workspaceIds = values(access.workspaceIds);
   if (
     workspaceIds.has(String(
       job?.workspaceId ||
@@ -37,7 +61,7 @@ function jobMatchesAccess(job?: any, access?: any) : any {
   ) {
     return true;
   }
-  const principals: any = values(access.principalIds);
+  const principals = values(access.principalIds);
   return [
     job?.ownerSubjectId,
     job?.ownerUserId,
@@ -48,10 +72,10 @@ function jobMatchesAccess(job?: any, access?: any) : any {
     job?.owner?.subjectId,
     job?.owner?.userId,
     job?.owner?.username
-  ].some((value?: any) : any => principals.has(String(value || "")));
+  ].some((value) => principals.has(String(value || "")));
 }
 
-export function createJobManagerApi(ctx?: any) : any {
+export function createJobManagerApi(ctx: ApiContext) {
   const {
     userDataPath,
     processingEnabled,
@@ -79,19 +103,18 @@ export function createJobManagerApi(ctx?: any) : any {
     failJob,
     updateJob,
     commitTerminalThenScheduleUploadCleanup,
-    loadJobPayload: loadJobPayloadFromContext,
     drainBackgroundTasks
   } = ctx;
 
-  let closePromise: any = null;
+  let closePromise: Promise<void> | null = null;
 
   return {
-    async commitTerminalThenScheduleUploadCleanup(input?: any) : Promise<any> {
+    async commitTerminalThenScheduleUploadCleanup(input: Record<string, unknown>) {
       await ready;
       return commitTerminalThenScheduleUploadCleanup(input);
     },
 
-    async createJob(payload?: any) : Promise<any> {
+    async createJob(payload: JobPayload) {
       logJob("info", "jobs.job.create.requested", {
         payload: summarizeForLog(payload)
       });
@@ -106,23 +129,24 @@ export function createJobManagerApi(ctx?: any) : any {
         await refreshPersistedJobs();
       }
 
-      const checkpointId: any = normalizeCheckpointId(payload);
-      const manifestKey: any = normalizeManifestKey(payload);
-      const archiveBatchId: any = normalizeArchiveBatchId(payload) || serverToken("archive_batch", checkpointId || manifestKey || randomUUID());
-      const forceNewVersion: any = shouldForceNewJobVersion(payload);
-      const versionGroupId: any = normalizeVersionGroupId(payload, {
+      const checkpointId = normalizeCheckpointId(payload);
+      const manifestKey = normalizeManifestKey(payload);
+      const archiveBatchId = normalizeArchiveBatchId(payload) || serverToken("archive_batch", checkpointId || manifestKey || randomUUID());
+      const forceNewVersion = shouldForceNewJobVersion(payload);
+      const versionGroupId = normalizeVersionGroupId(payload, {
         checkpointId,
         manifestKey,
         archiveBatchId
       });
-      const versionNumber: any = 1;
-      const parentJobId: any = normalizeParentJobId(payload);
-      const existingCheckpointJob: any = checkpointId
-        ? jobs.get(checkpointJobs.get(checkpointId)) ||
+      const versionNumber = 1;
+      const parentJobId = normalizeParentJobId(payload);
+      const checkpointJobId = checkpointId ? checkpointJobs.get(checkpointId) : undefined;
+      const existingCheckpointJob = checkpointId
+        ? (checkpointJobId ? jobs.get(checkpointJobId) : null) ||
           jobProjectionStore.getByCheckpoint(checkpointId)
         : null;
       if (!forceNewVersion && existingCheckpointJob) {
-        const existingJob: any = existingCheckpointJob;
+        const existingJob = existingCheckpointJob;
         if (canReuseJobForPayload(existingJob, payload)) {
           await publishJobEvent(existingJob, "jobs.job.reused");
           logJob("info", "jobs.job.create.reused", {
@@ -139,10 +163,10 @@ export function createJobManagerApi(ctx?: any) : any {
           reused: false
         });
       }
-      const existingManifestJob: any =
+      const existingManifestJob =
         getActiveManifestJob(manifestKey, archiveBatchId) ||
         jobProjectionStore.getActiveManifest(manifestKey, archiveBatchId);
-      if (!forceNewVersion && canReuseJobForPayload(existingManifestJob, payload)) {
+      if (!forceNewVersion && existingManifestJob && canReuseJobForPayload(existingManifestJob, payload)) {
         if (checkpointId) {
           checkpointJobs.set(checkpointId, existingManifestJob.id);
         }
@@ -155,9 +179,9 @@ export function createJobManagerApi(ctx?: any) : any {
         return cloneJobForApi(existingManifestJob);
       }
 
-      const now: any = new Date().toISOString();
-      const trace: any = traceDetails();
-      const job: Record<string, any> = {
+      const now = new Date().toISOString();
+      const trace = traceDetails();
+      const job: JobDocument = {
         id: randomUUID(),
         trace,
         status: "queued",
@@ -186,19 +210,20 @@ export function createJobManagerApi(ctx?: any) : any {
       job.workflowId = workflowIdForJob(job);
       try {
         Object.assign(job, jobProjectionStore.create(job));
-      } catch (error: any) {
-        const concurrent: any = manifestKey
+      } catch (error) {
+        const concurrent = manifestKey
           ? jobProjectionStore.getActiveManifest(manifestKey, archiveBatchId)
           : null;
         if (
-          String(error?.code || "").startsWith("SQLITE_CONSTRAINT") &&
+          String(errorProperty(error, "code") || "").startsWith("SQLITE_CONSTRAINT") &&
           !forceNewVersion &&
+          concurrent !== null &&
           canReuseJobForPayload(concurrent, payload)
         ) {
           await publishJobEvent(concurrent, "jobs.job.reused");
           return cloneJobForApi(concurrent);
         }
-        if (String(error?.code || "").startsWith("SQLITE_CONSTRAINT")) {
+        if (String(errorProperty(error, "code") || "").startsWith("SQLITE_CONSTRAINT")) {
           throw Object.assign(
             new Error("An active job already owns this manifest admission."),
             {
@@ -268,23 +293,23 @@ export function createJobManagerApi(ctx?: any) : any {
           payload,
           jobProjectionStore
         );
-      } catch (error: any) {
+      } catch (error) {
         await durableWorkflows.failWorkflow(
           job.workflowId,
           "Job admission failed."
-        ).catch(() : any => null);
+        ).catch(() => null);
         await deleteCheckpointTree({
           userDataPath,
           treeId: job.checkpointTreeId
-        }).catch(() : any => null);
+        }).catch(() => null);
         jobProjectionStore.delete(job.id);
-        const directoryRemoved: any = await fs.rm(
+        const directoryRemoved = await fs.rm(
           getJobDirectory(userDataPath, job.id),
           {
           recursive: true,
           force: true
           }
-        ).then(() : any => true, () : any => false);
+        ).then(() => true, () => false);
         if (directoryRemoved) {
           jobProjectionStore.settleDeletion(job.id);
         }
@@ -305,7 +330,7 @@ export function createJobManagerApi(ctx?: any) : any {
       return cloneJobForApi(job);
     },
 
-    async reparseJob(jobId?: any, options: Record<string, any> = {}) : Promise<any> {
+    async reparseJob(jobId: string, options: JobPayload = {}) {
       logJob("info", "jobs.job.reparse.requested", {
         jobId,
         options: summarizeForLog(options)
@@ -314,26 +339,26 @@ export function createJobManagerApi(ctx?: any) : any {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const sourceJob: any = jobs.get(jobId) || jobProjectionStore.get(jobId);
+      const sourceJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!sourceJob) {
         throw new Error("历史任务不存在，不能重新解析。");
       }
 
-      const sourcePayload: any = await loadJobPayload(
+      const sourcePayload = await loadJobPayload(
         userDataPath,
         sourceJob.id,
         jobProjectionStore
       );
-      const sourceResult: any = sourceJob.status === "completed"
-        ? await this.getJobResult(sourceJob.id).catch(() : any => null)
+      const sourceResult = sourceJob.status === "completed"
+        ? await this.getJobResult(sourceJob.id).catch(() => null)
         : null;
-      const sourceFiles: any = Array.isArray(sourceResult?.sourceFiles) ? sourceResult.sourceFiles : [];
-      const canonicalObjectSources: any[] = [];
-      const replayTextSections: any[] = [];
+      const sourceFiles = Array.isArray(sourceResult?.sourceFiles) ? sourceResult.sourceFiles : [];
+      const canonicalObjectSources = [];
+      const replayTextSections = [];
 
       for (const [index, source] of sourceFiles.entries()) {
-        const record: any = source && typeof source === "object" ? source : {};
-        const storageRelativePath: any = String(record.storageRelativePath || "").trim();
+        const record = source && typeof source === "object" ? source : {};
+        const storageRelativePath = String(record.storageRelativePath || "").trim();
         if (storageRelativePath) {
           try {
             canonicalObjectSources.push(normalizeCanonicalObjectSource({
@@ -365,18 +390,18 @@ export function createJobManagerApi(ctx?: any) : any {
           }
         }
 
-        const text: any = String(record.text || "").trim();
+        const text = String(record.text || "").trim();
         if (text) {
-          const name: any = String(record.originalFileName || record.name || `source-${index + 1}`);
+          const name = String(record.originalFileName || record.name || `source-${index + 1}`);
           replayTextSections.push(`# ${name}\n\n${text}`);
         }
       }
 
-      const replayInputText: any =
+      const replayInputText =
         replayTextSections.length > 0
           ? replayTextSections.join("\n\n---\n\n")
           : String(sourcePayload?.inputText || "").trim();
-      const hasReplayInput: any =
+      const hasReplayInput =
         canonicalObjectSources.length > 0 ||
           replayInputText.length > 0;
 
@@ -384,27 +409,29 @@ export function createJobManagerApi(ctx?: any) : any {
         throw new Error("历史任务没有保留可重新解析的原始文件或正文。请重新上传原文件后再解析。");
       }
 
-      const checkpointId: any = normalizeCheckpointId(sourcePayload || sourceJob);
-      const manifestKey: any = normalizeManifestKey(sourcePayload || sourceJob);
-      const versionGroupId: any = normalizeVersionGroupId(sourceJob.versionGroupId ? sourceJob : sourcePayload || sourceJob, {
+      const checkpointId = normalizeCheckpointId(sourcePayload || sourceJob);
+      const manifestKey = normalizeManifestKey(sourcePayload || sourceJob);
+      const versionGroupId = normalizeVersionGroupId(sourceJob.versionGroupId ? sourceJob : sourcePayload || sourceJob, {
         checkpointId,
         manifestKey,
         archiveBatchId: sourceJob.archiveBatchId || ""
       });
-      const archiveBatchId: any = serverToken("archive_batch", versionGroupId, randomUUID());
-      const checkpointReceipt: Record<string, any> = {
-        ...(sourcePayload?.checkpointReceipt || sourceJob.checkpointReceipt || {}),
+      const archiveBatchId = serverToken("archive_batch", versionGroupId, randomUUID());
+      const checkpointReceiptBase = sourcePayload?.checkpointReceipt || sourceJob.checkpointReceipt;
+      const checkpointBase = sourcePayload?.checkpoint;
+      const checkpointReceipt = {
+        ...checkpointReceiptBase,
         checkpointId,
         archiveBatchId,
         versionGroupId,
         reparseFromJobId: sourceJob.id
       };
-      const checkpoint: Record<string, any> = {
-        ...(sourcePayload?.checkpoint || {}),
+      const checkpoint = {
+        ...checkpointBase,
         checkpointId,
         archiveBatchId
       };
-      const reparsePayload: Record<string, any> = {
+      const reparsePayload = {
         inputText: canonicalObjectSources.length > 0
           ? ""
           : replayInputText,
@@ -426,7 +453,7 @@ export function createJobManagerApi(ctx?: any) : any {
         ownerTenantId: String(options?.ownerTenantId || sourceJob.ownerTenantId || sourcePayload?.ownerTenantId || "").trim(),
         workspaceId: String(options?.workspaceId || sourceJob.workspaceId || sourcePayload?.workspaceId || "").trim()
       };
-      const job: any = await this.createJob(reparsePayload);
+      const job = await this.createJob(reparsePayload);
       logJob("info", "jobs.job.reparse.created", {
         parentJobId: sourceJob.id,
         jobId: job?.id || "",
@@ -436,7 +463,10 @@ export function createJobManagerApi(ctx?: any) : any {
       return job;
     },
 
-    async dispatchQueuedJob(jobId?: any, options: Record<string, any> = {}) : Promise<any> {
+    async dispatchQueuedJob(jobId: string, options: {
+      jobId?: string; waitForCompletion?: boolean; payload?: JobPayload;
+      signal?: AbortSignal | null; leaseGuard?: ((input: { reason: string }) => Promise<void>) | null;
+    } = {}) {
       await ready;
       if (!processingEnabled) {
         throw new Error("后台任务执行器未启用，不能调度平台任务。");
@@ -444,11 +474,11 @@ export function createJobManagerApi(ctx?: any) : any {
       if (state.closed) {
         throw new Error("后台任务管理器已经关闭。");
       }
-      const normalizedJobId: any = String(jobId || options.jobId || "").trim();
+      const normalizedJobId = String(jobId || options.jobId || "").trim();
       if (!normalizedJobId) {
         throw new Error("jobId is required.");
       }
-      const currentJob: any = jobs.get(normalizedJobId) || null;
+      const currentJob = jobs.get(normalizedJobId) || null;
       if (!currentJob) {
         throw new Error(`任务不存在，不能调度：${normalizedJobId}`);
       }
@@ -460,7 +490,7 @@ export function createJobManagerApi(ctx?: any) : any {
           reason: `status_${currentJob.status || "unknown"}`
         };
       }
-      const payload: any = options.payload || await loadJobPayload(
+      const payload = options.payload || await loadJobPayload(
         userDataPath,
         normalizedJobId,
         jobProjectionStore
@@ -468,7 +498,7 @@ export function createJobManagerApi(ctx?: any) : any {
       if (!payload) {
         throw new Error(`任务缺少 payload，不能调度：${normalizedJobId}`);
       }
-      const completed: any = await runQueuedJob({
+      const completed = await runQueuedJob({
         jobId: normalizedJobId,
         payload,
         signal: options.signal || null,
@@ -481,7 +511,7 @@ export function createJobManagerApi(ctx?: any) : any {
       };
     },
 
-    async getJob(jobId?: any) : Promise<any> {
+    async getJob(jobId: string) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
@@ -491,19 +521,19 @@ export function createJobManagerApi(ctx?: any) : any {
       );
     },
 
-    async getJobWorkflow(jobId?: any) : Promise<any> {
+    async getJobWorkflow(jobId: string) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const currentJob: any = jobs.get(jobId) || jobProjectionStore.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!currentJob) {
         return null;
       }
       return durableWorkflows.getWorkflow(currentJob.workflowId || workflowIdForJob(currentJob));
     },
 
-    async listJobWorkflows(input: Record<string, any> = {}) : Promise<any> {
+    async listJobWorkflows(input: { cursor?: string; limit?: number } = {}) {
       await ready;
       return durableWorkflows.listWorkflows({
         ownerKind: "import_parse_job",
@@ -511,7 +541,7 @@ export function createJobManagerApi(ctx?: any) : any {
       });
     },
 
-    async listJobOwnerships({ cursor = "", limit = 100 }: Record<string, any> = {}) : Promise<any> {
+    async listJobOwnerships({ cursor = "", limit = 100 }: { cursor?: string; limit?: number } = {}) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
@@ -519,48 +549,48 @@ export function createJobManagerApi(ctx?: any) : any {
       return jobProjectionStore.listOwnerships({ cursor, limit });
     },
 
-    async listQueuedJobAdmissions({ cursor = "", limit = 100 }: Record<string, any> = {}) : Promise<any> {
+    async listQueuedJobAdmissions({ cursor = "", limit = 100 }: { cursor?: string; limit?: number } = {}) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const page: any = jobProjectionStore.listQueued({ cursor, limit });
+      const page = jobProjectionStore.listQueued({ cursor, limit });
       return {
         ...page,
-        items: page.items.map((job?: any) : any => cloneJobForApi(job))
+        items: page.items.map((job) => cloneJobForApi(job))
       };
     },
 
-    async listJobs({ cursor = "", limit = 50, access = null }: Record<string, any> = {}) : Promise<any> {
+    async listJobs({ cursor = "", limit = 50, access = null }: { cursor?: string; limit?: number; access?: JobAccess | null } = {}) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const safeLimit: any = Math.max(1, Math.min(200, Number(limit) || 50));
-      const activeJobIds: any = [...activeControllers.keys()].filter((jobId?: any) : any =>
+      const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+      const activeJobIds = [...activeControllers.keys()].filter((jobId) =>
         jobMatchesAccess(jobs.get(jobId), access)
       );
-      const page: any = jobProjectionStore.list({
+      const page = jobProjectionStore.list({
         cursor,
         limit: safeLimit,
         access
       });
-      const queuedPage: any = jobProjectionStore.listQueued({
+      const queuedPage = jobProjectionStore.listQueued({
         limit: MAX_QUEUED_JOB_IDS_IN_SUMMARY,
         access
       });
-      const projection: any = jobProjectionStore.getCounts();
-      const counts: any = access
+      const projection = jobProjectionStore.getCounts();
+      const counts = access
         ? Object.fromEntries(
             ["queued", "running", "completed", "failed", "cancelled"].map(
-              (status?: any) : any => [
+              (status) => [
                 status,
-                page.items.filter((job?: any) : any => job.status === status).length
+                page.items.filter((job) => job?.status === status).length
               ]
             )
           )
         : projection.counts;
-      const queuedJobIds: any = queuedPage.items.map((job?: any) : any => job.id);
+      const queuedJobIds = queuedPage.items.map((job) => job?.id).filter((id): id is string => Boolean(id));
 
       return {
         summary: {
@@ -581,41 +611,41 @@ export function createJobManagerApi(ctx?: any) : any {
               ? !queuedPage.done
               : Number(counts.queued || 0) > queuedJobIds.length
         },
-        items: page.items.map((job?: any) : any => cloneJobForApi(job)),
+        items: page.items.map((job) => cloneJobForApi(job)),
         nextCursor: page.nextCursor,
         done: page.done
       };
     },
 
-    async maintainHistory() : Promise<any> {
+    async maintainHistory() {
       await ready;
-      const maintenance: any = jobProjectionStore.maintain();
-      const reconciliation: any = await reconcileJobProjectionArtifacts({
+      const maintenance = jobProjectionStore.maintain();
+      const reconciliation = await reconcileJobProjectionArtifacts({
         userDataPath,
         projectionStore: jobProjectionStore
       });
       return { ...maintenance, ...reconciliation };
     },
 
-    async getJobByCheckpointId(checkpointId?: any) : Promise<any> {
+    async getJobByCheckpointId(checkpointId: string) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const normalized: any = normalizeCheckpointId(checkpointId);
-      const activeJobId: any = checkpointJobs.get(normalized);
+      const normalized = normalizeCheckpointId(checkpointId);
+      const activeJobId = checkpointJobs.get(normalized);
       return cloneJobForApi(
-        jobs.get(activeJobId) ||
+        (activeJobId ? jobs.get(activeJobId) : undefined) ||
         jobProjectionStore.getByCheckpoint(normalized)
       );
     },
 
-    async getJobResult(jobId?: any) : Promise<any> {
+    async getJobResult(jobId: string) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const currentJob: any = jobs.get(jobId) || jobProjectionStore.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
 
       if (!currentJob) {
         return null;
@@ -628,7 +658,7 @@ export function createJobManagerApi(ctx?: any) : any {
       return loadJobResult(userDataPath, jobId, jobProjectionStore);
     },
 
-    async deleteJob(jobId?: any) : Promise<any> {
+    async deleteJob(jobId: string) {
       logJob("warn", "jobs.job.delete.requested", {
         jobId
       });
@@ -636,7 +666,7 @@ export function createJobManagerApi(ctx?: any) : any {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const currentJob: any = jobs.get(jobId) || jobProjectionStore.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
 
       if (!currentJob) {
         logJob("warn", "jobs.job.delete.skipped", {
@@ -646,7 +676,7 @@ export function createJobManagerApi(ctx?: any) : any {
         return null;
       }
 
-      const deleteReturnJob: any = currentJob.status === "failed" && !currentJob.resultSummary && Number(currentJob.progressPercent || 0) <= 3
+      const deleteReturnJob: JobDocument = currentJob.status === "failed" && !currentJob.resultSummary && Number(currentJob.progressPercent || 0) <= 3
         ? {
             ...currentJob,
             status: "queued",
@@ -654,7 +684,7 @@ export function createJobManagerApi(ctx?: any) : any {
           }
         : currentJob;
 
-      const currentActiveController: any = activeControllers.get(jobId);
+      const currentActiveController = activeControllers.get(jobId);
       if (currentActiveController && typeof currentActiveController.delete === "function") {
         return currentActiveController.delete();
       }
@@ -663,7 +693,7 @@ export function createJobManagerApi(ctx?: any) : any {
         if (!processingEnabled) {
           throw new Error("任务由外部处理器执行，当前不能从 API 进程直接删除运行中的任务。");
         }
-        const activeController: any = activeControllers.get(jobId);
+        const activeController = activeControllers.get(jobId);
         if (!activeController || typeof activeController.delete !== "function") {
           throw new Error("运行中的任务当前不可删除。");
         }
@@ -683,10 +713,10 @@ export function createJobManagerApi(ctx?: any) : any {
         await deleteCheckpointTree({
           userDataPath,
           treeId: currentJob.checkpointTreeId
-        }).catch(() : any => null);
+        }).catch(() => null);
       }
       if (currentJob.status !== "completed") {
-        await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), "Job deleted.").catch(() : any => null);
+        await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), "Job deleted.").catch(() => null);
       }
       jobProjectionStore.delete(jobId);
       await fs.rm(getJobDirectory(userDataPath, jobId), {
@@ -703,28 +733,28 @@ export function createJobManagerApi(ctx?: any) : any {
       return cloneJobForApi(deleteReturnJob);
     },
 
-    async cancelJob(jobId?: any) : Promise<any> {
+    async cancelJob(jobId: string) {
       logJob("warn", "jobs.job.cancel.requested", { jobId });
       await ready;
       if (!processingEnabled) await refreshPersistedJobs();
-      const currentJob: any = jobs.get(jobId) || jobProjectionStore.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!currentJob) return null;
       if (["completed", "failed", "cancelled"].includes(currentJob.status)) {
         return cloneJobForApi(currentJob);
       }
-      const activeController: any = activeControllers.get(jobId);
+      const activeController = activeControllers.get(jobId);
       if (activeController?.cancel) return activeController.cancel();
       if (currentJob.status === "running") {
-        const error: Error & Record<string, any> = new Error("Running job cancellation is waiting for its queue execution fence.");
+        const error = new Error("Running job cancellation is waiting for its queue execution fence.") as CodedError;
         error.code = "job_cancellation_fence_required";
         throw error;
       }
-      const finishedAt: any = new Date().toISOString();
+      const finishedAt = new Date().toISOString();
       await durableWorkflows.failWorkflow(
         currentJob.workflowId || workflowIdForJob(currentJob),
         "Job cancelled."
-      ).catch(() : any => null);
-      const cancelledJob: any = await updateJob(jobId, {
+      ).catch(() => null);
+      const cancelledJob = await updateJob(jobId, {
         status: "cancelled",
         stage: "任务已取消",
         error: "",
@@ -734,30 +764,30 @@ export function createJobManagerApi(ctx?: any) : any {
       return cloneJobForApi(cancelledJob);
     },
 
-    async failJobFromQueue(jobId?: any, { stage = "队列执行失败", reason = "Queue execution failed." }: Record<string, any> = {}) : Promise<any> {
+    async failJobFromQueue(jobId: string, { stage = "队列执行失败", reason = "Queue execution failed." }: { stage?: string; reason?: string } = {}) {
       await ready;
       if (!processingEnabled) await refreshPersistedJobs();
-      const currentJob: any = jobs.get(jobId) || jobProjectionStore.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!currentJob) return null;
       if (["completed", "failed", "cancelled"].includes(currentJob.status)) {
         return cloneJobForApi(currentJob);
       }
-      const activeController: any = activeControllers.get(jobId);
+      const activeController = activeControllers.get(jobId);
       if (activeController?.fail) {
         return activeController.fail({ stage, errorMessage: reason });
       }
       return cloneJobForApi(await failJob(jobId, reason, stage));
     },
 
-    close() : any {
+    close() {
       if (closePromise) return closePromise;
       state.closed = true;
-      closePromise = (async () : Promise<any> => {
+      closePromise = (async () => {
         logJob("info", "jobs.manager.close.started", {});
         try {
           await ready;
           await Promise.all(
-            [...activeControllers.values()].map((activeController?: any) : any =>
+            [...activeControllers.values()].map((activeController) =>
               activeController.preserveForRecovery()
             )
           );
@@ -766,7 +796,7 @@ export function createJobManagerApi(ctx?: any) : any {
         } finally {
           jobProjectionStore.close();
         }
-      })().catch((error?: any) : any => {
+      })().catch((error: unknown) => {
         closePromise = null;
         throw error;
       });

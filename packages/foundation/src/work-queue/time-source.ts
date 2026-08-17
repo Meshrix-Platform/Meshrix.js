@@ -1,53 +1,64 @@
-export function createSystemQueueTimeSource() : any {
+export interface QueueTimeSource {
+  nowMs(): number;
+  nowDate(): Date;
+  nowIso(): string;
+}
+
+export interface ManualQueueTimeSource extends QueueTimeSource {
+  set(valueMs?: unknown): number;
+  advance(deltaMs?: unknown): number;
+}
+
+export function createSystemQueueTimeSource(): Readonly<QueueTimeSource> {
   return Object.freeze({
-    nowMs() : any {
+    nowMs(): number {
       return Date.now();
     },
-    nowDate() : any {
+    nowDate(): Date {
       return new Date(this.nowMs());
     },
-    nowIso() : any {
+    nowIso(): string {
       return this.nowDate().toISOString();
     }
   });
 }
 
-export function createFixedQueueTimeSource(value: any = 0) : any {
-  const fixedMs: any = Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
+export function createFixedQueueTimeSource(value: unknown = 0): Readonly<QueueTimeSource> {
+  const fixedMs = Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
   return Object.freeze({
-    nowMs() : any {
+    nowMs(): number {
       return fixedMs;
     },
-    nowDate() : any {
+    nowDate(): Date {
       return new Date(fixedMs);
     },
-    nowIso() : any {
+    nowIso(): string {
       return new Date(fixedMs).toISOString();
     }
   });
 }
 
-export function createManualQueueTimeSource(value: any = 0) : any {
-  let currentMs: any = Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
+export function createManualQueueTimeSource(value: unknown = 0): ManualQueueTimeSource {
+  let currentMs = Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
   return {
-    nowMs() : any {
+    nowMs(): number {
       return currentMs;
     },
-    nowDate() : any {
+    nowDate(): Date {
       return new Date(currentMs);
     },
-    nowIso() : any {
+    nowIso(): string {
       return new Date(currentMs).toISOString();
     },
-    set(valueMs?: any) : any {
+    set(valueMs?: unknown): number {
       currentMs = Math.trunc(Number(valueMs));
       return currentMs;
     },
-    advance(deltaMs?: any) : any {
+    advance(deltaMs?: unknown): number {
       currentMs += Math.trunc(Number(deltaMs));
       return currentMs;
     }
   };
 }
 
-export const systemQueueTimeSource: any = createSystemQueueTimeSource();
+export const systemQueueTimeSource = createSystemQueueTimeSource();

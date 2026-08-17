@@ -2,58 +2,22 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
-import { gzipSync } from "node:zlib";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
-import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
 import { queueStateMutation } from "@meshrix/foundation/storage/state-coordinator";
 import {
-  assertExistingLocalDirectoryWithinControlledRootsSync,
   assertPathWithinRootSync
 } from "@meshrix/foundation/security/local-path-boundary";
 import {
-  AGENT_SESSION_THREAD_VERSION,
-  AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION,
   AGENT_WORKSPACE_PROTOCOL_VERSION,
-  applyReplacementHunks,
-  applyUnifiedPatchText,
   asArray,
   asObject,
   assertWorkspaceFileContentPolicy,
-  buildWorkspaceHandoffMarkdown,
-  compactArtifact,
-  compactDecision,
-  compactIssue,
-  compactPrivateState,
-  compactRun,
-  compactSessionEvent,
-  compactSubmission,
-  compactWorkspaceLayer,
-  decodeWorkspaceContextBundle,
-  fileMetadataFromStat,
-  gateSubmission,
-  hydrateArtifact,
-  hydrateDecision,
-  hydrateIssue,
-  hydrateLock,
-  hydratePrivateState,
-  hydrateRun,
-  hydrateSession,
-  hydrateSessionEvent,
-  hydrateSubmission,
   hydrateWorkspace,
-  joinWorkspaceRelativePath,
-  normalizeSha256,
   normalizeWorkspaceRelativePath,
   nowIso,
-  optionalLimit,
-  parseJson,
-  sha256Buffer,
   stableHash,
   stableId,
-  stableJson,
-  stringifyJson,
-  stripExecutableMode,
-  truncateText,
   uniqueStrings
 } from "./agent-workspace-support.ts";
 import { createAgentWorkspaceLocalDirectoryApi } from "./agent-workspace-local-directory.ts";
@@ -84,12 +48,59 @@ export {
   WORKSPACE_REFERENCE_MIGRATION_OWNED_MODULE
 } from "./workspace-reference-migration.ts";
 
-function withOwnedAgentWorkspaceDatabase(databasePath?: any, construct?: any) : any {
-  let db: any = null;
+type JsonRecord = Record<string, unknown>;
+type FileReadOptions = NonNullable<Parameters<typeof createAgentWorkspaceFileReadApi>[0]>;
+type MaterializationOptions = NonNullable<Parameters<typeof createAgentWorkspaceMaterializationPort>[0]>;
+interface WorkspaceInput extends JsonRecord {
+  metadata?: JsonRecord;
+  state?: JsonRecord;
+  payload?: JsonRecord;
+  paths?: unknown[];
+  leaseGuard?: () => void | Promise<void>;
+  requireMissingPaths?: boolean;
+}
+interface CodedError extends Error { code: string; status: number }
+interface PrivateDirectoryAuthority { ensure(candidatePath: string): string }
+type WorkspaceRecord = NonNullable<ReturnType<typeof hydrateWorkspace>>;
+interface AgentWorkspaceOptions {
+  userDataPath: string;
+  merkleState?: (
+    NonNullable<Parameters<typeof createAgentWorkspaceFileStateApi>[0]["merkleState"]> &
+    NonNullable<MaterializationOptions["merkleState"]> &
+    SnapshotMerkleState
+  ) | null;
+  checkpointTreeApi?: (NonNullable<Parameters<typeof createAgentWorkspaceFileStateApi>[0]["checkpointTreeApi"]> & SnapshotCheckpointTree) | null;
+  defaultCanAccessAll?: boolean;
+  controlledLocalDirectoryHostEnabled?: boolean;
+  materializationRootAuthority?: object | null;
+}
+interface SnapshotMerkleState {
+  stateCommit: {
+    begin(input: JsonRecord): Promise<JsonRecord>;
+    commit(input: JsonRecord): Promise<JsonRecord>;
+  };
+  eventLog: { listEvents(scope: unknown, options?: JsonRecord): Promise<JsonRecord[]> };
+  cas: { putBlock(content: Buffer, metadata?: JsonRecord): Promise<JsonRecord> };
+}
+interface SnapshotCheckpointTree {
+  loadCheckpointTree(input: { treeId: string }): Promise<{ nodes?: Record<string, JsonRecord> } | null>;
+}
+type WorkspaceAccessResult =
+  | { ok: false; status: number; code?: string; error: string; workspace?: undefined }
+  | { ok: true; workspace: WorkspaceRecord; status?: undefined; code?: undefined; error?: undefined };
+
+function errorCode(error: unknown): string {
+  return error !== null && typeof error === "object" && "code" in error
+    ? String(error.code)
+    : "";
+}
+
+function withOwnedAgentWorkspaceDatabase<Result>(databasePath: string, construct: (db: Database.Database) => Result): Result {
+  let db: Database.Database | null = null;
   try {
     db = openSqliteDatabase(databasePath);
     return construct(db);
-  } catch (error: any) {
+  } catch (error: unknown) {
     try {
       db?.close?.();
     } catch {
@@ -99,15 +110,15 @@ function withOwnedAgentWorkspaceDatabase(databasePath?: any, construct?: any) : 
   }
 }
 
-function privateDirectoryError(code?: any, message?: any) : any {
+function privateDirectoryError(code: string, message: string): CodedError {
   return Object.assign(new Error(message), {
     code,
     status: 409
   });
 }
 
-function pathIsWithin(parentPath?: any, candidatePath?: any) : any {
-  const relative: any = path.relative(
+function pathIsWithin(parentPath: string, candidatePath: string): boolean {
+  const relative = path.relative(
     path.resolve(parentPath),
     path.resolve(candidatePath)
   );
@@ -118,22 +129,22 @@ function pathIsWithin(parentPath?: any, candidatePath?: any) : any {
   );
 }
 
-function privateDirectoryOpenFlags() : any {
+function privateDirectoryOpenFlags(): number {
   for (const flag of ["O_DIRECTORY", "O_NOFOLLOW", "O_RDONLY"]) {
-    if (!Number.isInteger((fs.constants as Record<string, any>)[flag])) {
+    if (!Number.isInteger((fs.constants as Record<string, number>)[flag])) {
       throw privateDirectoryError(
         "agent_workspace_platform_unsupported",
         "Agent workspace private directory flags are unavailable."
       );
     }
   }
-  return (fs.constants as Record<string, any>).O_RDONLY |
+  return (fs.constants as Record<string, number>).O_RDONLY |
     fs.constants.O_DIRECTORY |
     fs.constants.O_NOFOLLOW;
 }
 
-function assertPrivateDirectoryOwnership(stat?: any) : any {
-  const expectedUid: any = process.geteuid?.();
+function assertPrivateDirectoryOwnership(stat: fs.BigIntStats): void {
+  const expectedUid = process.geteuid?.();
   if (
     !stat.isDirectory() ||
     stat.isSymbolicLink() ||
@@ -149,13 +160,13 @@ function assertPrivateDirectoryOwnership(stat?: any) : any {
   }
 }
 
-function ensureConfiguredDataRoot(candidatePath?: any) : any {
-  const candidate: any = path.resolve(candidatePath);
-  const missing: any[] = [];
-  let current: any = candidate;
+function ensureConfiguredDataRoot(candidatePath: string): string {
+  const candidate = path.resolve(candidatePath);
+  const missing: string[] = [];
+  let current = candidate;
   while (true) {
     try {
-      const existing: any = fs.lstatSync(current, { bigint: true });
+      const existing = fs.lstatSync(current, { bigint: true });
       if (!existing.isDirectory() || existing.isSymbolicLink()) {
         throw privateDirectoryError(
           "agent_workspace_data_root_unsafe",
@@ -163,10 +174,10 @@ function ensureConfiguredDataRoot(candidatePath?: any) : any {
         );
       }
       break;
-    } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
+    } catch (error: unknown) {
+      if (errorCode(error) !== "ENOENT") throw error;
       missing.push(path.basename(current));
-      const parent: any = path.dirname(current);
+      const parent = path.dirname(current);
       if (parent === current) throw error;
       current = parent;
     }
@@ -175,18 +186,18 @@ function ensureConfiguredDataRoot(candidatePath?: any) : any {
     current = path.join(current, segment);
     try {
       fs.mkdirSync(current, { mode: 0o700 });
-    } catch (error: any) {
-      if (error?.code !== "EEXIST") throw error;
+    } catch (error: unknown) {
+      if (errorCode(error) !== "EEXIST") throw error;
     }
-    const created: any = fs.lstatSync(current, { bigint: true });
+    const created = fs.lstatSync(current, { bigint: true });
     assertPrivateDirectoryOwnership(created);
     if (process.platform !== "win32") {
-      const descriptor: any = fs.openSync(
+      const descriptor = fs.openSync(
         current,
         privateDirectoryOpenFlags()
       );
       try {
-        const opened: any = fs.fstatSync(descriptor, { bigint: true });
+        const opened = fs.fstatSync(descriptor, { bigint: true });
         assertPrivateDirectoryOwnership(opened);
         if (
           opened.dev !== created.dev ||
@@ -206,9 +217,9 @@ function ensureConfiguredDataRoot(candidatePath?: any) : any {
   return candidate;
 }
 
-function createPrivateDirectoryAuthority(trustedRootPath?: any) : any {
-  const trustedRoot: any = path.resolve(trustedRootPath);
-  const trustedStat: any = fs.lstatSync(trustedRoot, { bigint: true });
+function createPrivateDirectoryAuthority(trustedRootPath: string): PrivateDirectoryAuthority {
+  const trustedRoot = path.resolve(trustedRootPath);
+  const trustedStat = fs.lstatSync(trustedRoot, { bigint: true });
   assertPrivateDirectoryOwnership(trustedStat);
   if (
     process.platform !== "win32" &&
@@ -219,19 +230,19 @@ function createPrivateDirectoryAuthority(trustedRootPath?: any) : any {
       "Agent workspace data root must not be group- or world-writable."
     );
   }
-  const trustedRealPath: any = fs.realpathSync(trustedRoot);
+  const trustedRealPath = fs.realpathSync(trustedRoot);
 
-  const sealExistingDirectory: any = (candidatePath?: any) : any => {
-    const candidate: any = path.resolve(candidatePath);
-    const before: any = fs.lstatSync(candidate, { bigint: true });
+  const sealExistingDirectory = (candidatePath: string): string => {
+    const candidate = path.resolve(candidatePath);
+    const before = fs.lstatSync(candidate, { bigint: true });
     assertPrivateDirectoryOwnership(before);
     if (process.platform !== "win32") {
-      const descriptor: any = fs.openSync(
+      const descriptor = fs.openSync(
         candidate,
         privateDirectoryOpenFlags()
       );
       try {
-        const opened: any = fs.fstatSync(descriptor, { bigint: true });
+        const opened = fs.fstatSync(descriptor, { bigint: true });
         assertPrivateDirectoryOwnership(opened);
         if (
           opened.dev !== before.dev ||
@@ -243,7 +254,7 @@ function createPrivateDirectoryAuthority(trustedRootPath?: any) : any {
           );
         }
         fs.fchmodSync(descriptor, 0o700);
-        const sealed: any = fs.fstatSync(descriptor, { bigint: true });
+        const sealed = fs.fstatSync(descriptor, { bigint: true });
         if (Number(sealed.mode & 0o777n) !== 0o700) {
           throw privateDirectoryError(
             "agent_workspace_private_directory_mode",
@@ -254,7 +265,7 @@ function createPrivateDirectoryAuthority(trustedRootPath?: any) : any {
         fs.closeSync(descriptor);
       }
     }
-    const candidateRealPath: any = fs.realpathSync(candidate);
+    const candidateRealPath = fs.realpathSync(candidate);
     if (
       candidateRealPath === trustedRealPath ||
       !pathIsWithin(trustedRealPath, candidateRealPath)
@@ -268,8 +279,8 @@ function createPrivateDirectoryAuthority(trustedRootPath?: any) : any {
   };
 
   return Object.freeze({
-    ensure(candidatePath?: any) : any {
-      const candidate: any = path.resolve(candidatePath);
+    ensure(candidatePath: string): string {
+      const candidate = path.resolve(candidatePath);
       if (
         candidate === trustedRoot ||
         !pathIsWithin(trustedRoot, candidate)
@@ -279,14 +290,14 @@ function createPrivateDirectoryAuthority(trustedRootPath?: any) : any {
           "Agent workspace private directory escaped its data root."
         );
       }
-      const relative: any = path.relative(trustedRoot, candidate);
-      let current: any = trustedRoot;
+      const relative = path.relative(trustedRoot, candidate);
+      let current = trustedRoot;
       for (const segment of relative.split(path.sep).filter(Boolean)) {
         current = path.join(current, segment);
         try {
           fs.mkdirSync(current, { mode: 0o700 });
-        } catch (error: any) {
-          if (error?.code !== "EEXIST") throw error;
+        } catch (error: unknown) {
+          if (errorCode(error) !== "EEXIST") throw error;
         }
         sealExistingDirectory(current);
       }
@@ -302,7 +313,7 @@ export function createAgentWorkspace({
   defaultCanAccessAll = false,
   controlledLocalDirectoryHostEnabled = false,
   materializationRootAuthority = null
-}: Record<string, any>) : any {
+}: AgentWorkspaceOptions) {
   if (typeof controlledLocalDirectoryHostEnabled !== "boolean") {
     throw new TypeError("Controlled local-directory Host enablement must be a boolean.");
   }
@@ -311,15 +322,15 @@ export function createAgentWorkspace({
       materializationRootAuthority
     );
   }
-  const dataRootPath: any = ensureConfiguredDataRoot(userDataPath);
-  const privateDirectoryAuthority: any =
+  const dataRootPath = ensureConfiguredDataRoot(userDataPath);
+  const privateDirectoryAuthority =
     createPrivateDirectoryAuthority(dataRootPath);
-  const rootPath: any = path.join(dataRootPath, "agent-workspaces");
-  const foldersRootPath: any = path.join(rootPath, "folders");
+  const rootPath = path.join(dataRootPath, "agent-workspaces");
+  const foldersRootPath = path.join(rootPath, "folders");
   privateDirectoryAuthority.ensure(rootPath);
   privateDirectoryAuthority.ensure(foldersRootPath);
-  const ensurePrivateWorkspaceDirectory: any = (candidatePath?: any) : any => {
-    const candidate: any = path.resolve(candidatePath);
+  const ensurePrivateWorkspaceDirectory = (candidatePath: string): string => {
+    const candidate = path.resolve(candidatePath);
     if (
       candidate === path.resolve(foldersRootPath) ||
       !pathIsWithin(foldersRootPath, candidate)
@@ -331,8 +342,8 @@ export function createAgentWorkspace({
     }
     return privateDirectoryAuthority.ensure(candidate);
   };
-  const localDirectoryMountConfigPath: any = path.join(rootPath, "local-directory-mounts.json");
-  return withOwnedAgentWorkspaceDatabase(path.join(rootPath, "agent-workspace.sqlite"), (db?: any) : any => {
+  const localDirectoryMountConfigPath = path.join(rootPath, "local-directory-mounts.json");
+  return withOwnedAgentWorkspaceDatabase(path.join(rootPath, "agent-workspace.sqlite"), (db) => {
   db.pragma("journal_mode = WAL");
   ensureAgentWorkspaceSchema(db);
   const {
@@ -375,19 +386,19 @@ export function createAgentWorkspace({
     updateSessionStatsStmt,
     updateSessionStatusStmt
   } = prepareAgentWorkspaceStatements(db);
-  const selectWorkspaceRawStmt: any = db.prepare("SELECT * FROM aw_workspaces WHERE workspace_id = ?");
+  const selectWorkspaceRawStmt = db.prepare("SELECT * FROM aw_workspaces WHERE workspace_id = ?");
 
-  function workspaceSummary(workspaceId?: any) : any {
-    const runCount: any = db.prepare("SELECT COUNT(*) AS count FROM aw_runs WHERE workspace_id = ?").get(workspaceId)?.count || 0;
-    const submissionRows: any = db.prepare("SELECT status, COUNT(*) AS count FROM aw_submissions WHERE workspace_id = ? GROUP BY status").all(workspaceId);
-    const artifactCount: any = db.prepare("SELECT COUNT(*) AS count FROM aw_artifacts WHERE workspace_id = ?").get(workspaceId)?.count || 0;
-    const openIssueCount: any = db.prepare("SELECT COUNT(*) AS count FROM aw_issues WHERE workspace_id = ? AND status != 'resolved'").get(workspaceId)?.count || 0;
-    const activeLockCount: any = db.prepare("SELECT COUNT(*) AS count FROM aw_locks WHERE workspace_id = ? AND expires_at > ?").get(workspaceId, nowIso())?.count || 0;
-    const sessionCount: any = db.prepare("SELECT COUNT(*) AS count FROM aw_sessions WHERE workspace_id = ?").get(workspaceId)?.count || 0;
-    const submissionCounts: any = Object.fromEntries(submissionRows.map((row?: any) : any => [row.status, Number(row.count || 0)]));
+  function workspaceSummary(workspaceId: string) {
+    const runCount = (db.prepare<[{ workspaceId: string }], { count: number }>("SELECT COUNT(*) AS count FROM aw_runs WHERE workspace_id = @workspaceId").get({ workspaceId })?.count || 0);
+    const submissionRows = db.prepare<[string], { status: string; count: number }>("SELECT status, COUNT(*) AS count FROM aw_submissions WHERE workspace_id = ? GROUP BY status").all(workspaceId);
+    const artifactCount = db.prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM aw_artifacts WHERE workspace_id = ?").get(workspaceId)?.count || 0;
+    const openIssueCount = db.prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM aw_issues WHERE workspace_id = ? AND status != 'resolved'").get(workspaceId)?.count || 0;
+    const activeLockCount = db.prepare<[string, string], { count: number }>("SELECT COUNT(*) AS count FROM aw_locks WHERE workspace_id = ? AND expires_at > ?").get(workspaceId, nowIso())?.count || 0;
+    const sessionCount = db.prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM aw_sessions WHERE workspace_id = ?").get(workspaceId)?.count || 0;
+    const submissionCounts: Record<string, number> = Object.fromEntries(submissionRows.map((row) => [row.status, Number(row.count || 0)]));
     return {
       runCount: Number(runCount),
-      submissionCount: (Object.values(submissionCounts) as any[]).reduce((sum?: any, count?: any) : any => sum + count, 0),
+      submissionCount: Object.values(submissionCounts).reduce((sum, count) => sum + count, 0),
       acceptedSubmissionCount: submissionCounts.accepted || 0,
       reviewSubmissionCount: submissionCounts.needs_review || 0,
       artifactCount: Number(artifactCount),
@@ -397,9 +408,9 @@ export function createAgentWorkspace({
     };
   }
 
-  function workspaceAccess(input: Record<string, any> = {}) : any {
-    const metadata: any = asObject(input.metadata);
-    const actorIds: any = uniqueStrings([
+  function workspaceAccess(input: WorkspaceInput = {}) {
+    const metadata = asObject(input.metadata);
+    const actorIds = uniqueStrings([
       input.actorUserId,
       input.userId,
       input.subjectId,
@@ -409,10 +420,10 @@ export function createAgentWorkspace({
       metadata.subjectId,
       metadata.username
     ]);
-    const allowedWorkspaceIds: any = new Set<any>(uniqueStrings([
+    const allowedWorkspaceIds = new Set(uniqueStrings([
       ...asArray(input.allowedWorkspaceIds)
     ]));
-    const canAccessAll: any = input.canAccessAll === true || (defaultCanAccessAll === true && input.canAccessAll !== false);
+    const canAccessAll = input.canAccessAll === true || (defaultCanAccessAll === true && input.canAccessAll !== false);
     return {
       actorUserId: actorIds[0] || "",
       actorIds,
@@ -422,21 +433,21 @@ export function createAgentWorkspace({
     };
   }
 
-  function canAccessWorkspace(workspace?: any, input: Record<string, any> = {}) : any {
+  function canAccessWorkspace(workspace: WorkspaceRecord | null, input: WorkspaceInput = {}): boolean {
     if (!workspace) {
       return false;
     }
-    const access: any = workspaceAccess(input);
+    const access = workspaceAccess(input);
     if (access.canAccessAll) {
       return true;
     }
-    const workspaceId: any = String(workspace.workspaceId || "").trim();
+    const workspaceId = String(workspace.workspaceId || "").trim();
     if (workspaceId && access.allowedWorkspaceIds.has(workspaceId)) {
       return true;
     }
-    const metadata: any = asObject(workspace.metadata);
-    const ownerUserId: any = String(workspace.ownerUserId || metadata.ownerUserId || "").trim();
-    const allowedUserIds: any = uniqueStrings([
+    const metadata = asObject(workspace.metadata);
+    const ownerUserId = String(workspace.ownerUserId || metadata.ownerUserId || "").trim();
+    const allowedUserIds = uniqueStrings([
       ownerUserId,
       metadata.defaultAdminUserId,
       ...asArray(metadata.adminUserIds),
@@ -449,26 +460,28 @@ export function createAgentWorkspace({
     if (allowedUserIds.length === 0) {
       return false;
     }
-    return access.actorIds.some((actorId?: any) : any => allowedUserIds.includes(actorId));
+    return access.actorIds.some((actorId) => allowedUserIds.includes(actorId));
   }
 
-  function canAccessWorkspaceId(workspaceId?: any, input: Record<string, any> = {}) : any {
-    const workspace: any = hydrateWorkspace(selectWorkspaceStmt.get(String(workspaceId || "")));
+  function canAccessWorkspaceId(workspaceId: unknown, input: WorkspaceInput = {}): boolean {
+    const workspace = hydrateWorkspace(
+      selectWorkspaceStmt.get(String(workspaceId || "")) as Parameters<typeof hydrateWorkspace>[0]
+    );
     return canAccessWorkspace(workspace, input);
   }
 
-  function workspaceFsRoot(workspace?: any) : any {
-    const fsPath: any = workspace?.fsPath || path.join(rootPath, "folders", String(workspace?.workspaceId || ""));
-    const resolved: any = path.resolve(fsPath);
+  function workspaceFsRoot(workspace: WorkspaceRecord): string {
+    const fsPath = workspace?.fsPath || path.join(rootPath, "folders", String(workspace?.workspaceId || ""));
+    const resolved = path.resolve(fsPath);
     fs.mkdirSync(resolved, { recursive: true });
     return resolved;
   }
 
-  function workspaceFsRootForMaterialization(workspace?: any) : any {
-    const fsPath: any = workspace?.fsPath ||
+  function workspaceFsRootForMaterialization(workspace: WorkspaceRecord): string {
+    const fsPath = workspace?.fsPath ||
       path.join(rootPath, "folders", String(workspace?.workspaceId || ""));
-    const resolved: any = path.resolve(fsPath);
-    const foldersRoot: any = path.resolve(foldersRootPath);
+    const resolved = path.resolve(fsPath);
+    const foldersRoot = path.resolve(foldersRootPath);
     if (
       resolved === foldersRoot ||
       !resolved.startsWith(`${foldersRoot}${path.sep}`)
@@ -482,11 +495,11 @@ export function createAgentWorkspace({
       );
     }
     for (const candidate of [path.resolve(rootPath), foldersRoot, resolved]) {
-      let stat: any;
+      let stat: fs.BigIntStats;
       try {
         stat = fs.lstatSync(candidate, { bigint: true });
-      } catch (error: any) {
-        if (error?.code === "ENOENT") {
+      } catch (error: unknown) {
+        if (errorCode(error) === "ENOENT") {
           throw Object.assign(
             new Error("Workspace materialization root must already exist."),
             {
@@ -497,9 +510,9 @@ export function createAgentWorkspace({
         }
         throw error;
       }
-      const mode: any = Number(stat.mode & 0o7777n);
-      const expectedUid: any = process.geteuid?.();
-      const expectedGid: any = process.getegid?.();
+      const mode = Number(stat.mode & 0o7777n);
+      const expectedUid = process.geteuid?.();
+      const expectedGid = process.getegid?.();
       if (
         !stat.isDirectory() ||
         stat.isSymbolicLink() ||
@@ -522,8 +535,8 @@ export function createAgentWorkspace({
         );
       }
     }
-    const realFoldersRoot: any = fs.realpathSync(foldersRoot);
-    const realWorkspaceRoot: any = fs.realpathSync(resolved);
+    const realFoldersRoot = fs.realpathSync(foldersRoot);
+    const realWorkspaceRoot = fs.realpathSync(resolved);
     if (
       realWorkspaceRoot === realFoldersRoot ||
       !realWorkspaceRoot.startsWith(`${realFoldersRoot}${path.sep}`)
@@ -539,8 +552,8 @@ export function createAgentWorkspace({
     return resolved;
   }
 
-  function withWorkspaceMutation(workspaceId?: any, task?: any) : any {
-    const normalizedWorkspaceId: any = String(workspaceId || "").trim();
+  async function withWorkspaceMutation<Result>(workspaceId: unknown, task: () => Result | Promise<Result>): Promise<Result> {
+    const normalizedWorkspaceId = String(workspaceId || "").trim();
     if (!normalizedWorkspaceId || typeof task !== "function") {
       throw new TypeError("Workspace mutation identity and task are required.");
     }
@@ -550,10 +563,10 @@ export function createAgentWorkspace({
     );
   }
 
-  function resolveWorkspacePath(workspace?: any, relativePath: any = "", options: Record<string, any> = {}) : any {
-    const root: any = workspaceFsRoot(workspace);
-    const normalized: any = normalizeWorkspaceRelativePath(relativePath, { allowEmpty: options.allowEmpty === true });
-    const target: any = normalized ? path.resolve(root, ...normalized.split("/")) : root;
+  function resolveWorkspacePath(workspace: WorkspaceRecord, relativePath: unknown = "", options: { allowEmpty?: boolean; allowMissing?: boolean; requireExisting?: boolean; allowDirectory?: boolean; allowFile?: boolean } = {}) {
+    const root = workspaceFsRoot(workspace);
+    const normalized = normalizeWorkspaceRelativePath(relativePath, { allowEmpty: options.allowEmpty === true });
+    const target = normalized ? path.resolve(root, ...normalized.split("/")) : root;
     if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
       throw new Error("路径不能跳出工作空间。");
     }
@@ -572,9 +585,9 @@ export function createAgentWorkspace({
     };
   }
 
-  function workspaceForStorage(input: Record<string, any> = {}) : any {
-    const workspaceId: any = String(input.workspaceId || input.workspace_id || input.id || "").trim();
-    const workspace: any = hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId));
+  function workspaceForStorage(input: WorkspaceInput = {}): WorkspaceAccessResult {
+    const workspaceId = String(input.workspaceId || input.workspace_id || input.id || "").trim();
+    const workspace = hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId) as Parameters<typeof hydrateWorkspace>[0]);
     if (!workspace) {
       return { ok: false, status: 404, error: "工作空间不存在或不可访问。" };
     }
@@ -584,11 +597,11 @@ export function createAgentWorkspace({
     return { ok: true, workspace };
   }
 
-  function workspaceForMaterialization(input: Record<string, any> = {}) : any {
-    const rawWorkspaceId: any = typeof input.workspaceId === "string"
+  function workspaceForMaterialization(input: WorkspaceInput = {}): WorkspaceAccessResult {
+    const rawWorkspaceId = typeof input.workspaceId === "string"
       ? input.workspaceId
       : "";
-    const workspaceId: any = rawWorkspaceId.trim();
+    const workspaceId = rawWorkspaceId.trim();
     if (!workspaceId || workspaceId !== rawWorkspaceId) {
       return {
         ok: false,
@@ -597,7 +610,7 @@ export function createAgentWorkspace({
         error: "Workspace materialization requires one workspace identity."
       };
     }
-    const workspace: any = hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId));
+    const workspace = hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId) as Parameters<typeof hydrateWorkspace>[0]);
     if (!workspace) {
       return {
         ok: false,
@@ -609,9 +622,13 @@ export function createAgentWorkspace({
     return { ok: true, workspace };
   }
 
-  function createAccessReceipt({ workspaceId = "", operationId = "", path: receiptPath = "", action = "read" }: Record<string, any> = {}) : any {
-    const createdAt: any = nowIso();
-    const eventHash: any = stableHash("access-receipt", workspaceId, operationId, receiptPath, action, createdAt);
+  function createAccessReceipt(input: WorkspaceInput = {}) {
+    const workspaceId = String(input.workspaceId || "");
+    const operationId = String(input.operationId || "");
+    const receiptPath = String(input.path || "");
+    const action = String(input.action || "read");
+    const createdAt = nowIso();
+    const eventHash = stableHash("access-receipt", workspaceId, operationId, receiptPath, action, createdAt);
     return {
       protocolVersion: "v0.0.1:agent-workspace:access-receipt-1",
       receiptId: stableId("access_receipt", workspaceId, operationId, receiptPath, action, createdAt),
@@ -625,7 +642,7 @@ export function createAgentWorkspace({
     };
   }
 
-  const sessionApi: any = createAgentWorkspaceSessionApi({
+  const sessionApi = createAgentWorkspaceSessionApi({
     db,
     selectSessionStmt,
     selectSessionEventStmt,
@@ -646,7 +663,7 @@ export function createAgentWorkspace({
     updateSessionStatusStmt,
     canAccessWorkspaceId,
     canAccessWorkspace,
-    getWorkspaceRow: (workspaceId?: any) : any => selectWorkspaceRawStmt.get(String(workspaceId || ""))
+    getWorkspaceRow: (workspaceId?: unknown) => selectWorkspaceRawStmt.get(String(workspaceId || ""))
   });
   const {
     appendSessionEvent,
@@ -660,7 +677,7 @@ export function createAgentWorkspace({
     archiveSession
   } = sessionApi;
 
-  const recordsApi: any = createAgentWorkspaceRecordsApi({
+  const recordsApi = createAgentWorkspaceRecordsApi({
     db,
     rootPath,
     insertWorkspaceStmt,
@@ -691,7 +708,7 @@ export function createAgentWorkspace({
     canAccessWorkspaceId,
     ensureRootSessionForWorkspace,
     ensurePrivateWorkspaceDirectory
-  });
+  } as Parameters<typeof createAgentWorkspaceRecordsApi>[0]);
   const {
     listWorkspaces,
     createWorkspace,
@@ -707,7 +724,6 @@ export function createAgentWorkspace({
     updateIssue,
     createDecision,
     listRunArtifacts,
-    cleanupExpiredLocks,
     acquireLock,
     releaseLock,
     listLocks,
@@ -716,16 +732,22 @@ export function createAgentWorkspace({
     close
   } = recordsApi;
 
-  let readFileApi: any;
-  const fileStateApi: any = createAgentWorkspaceFileStateApi({
+  let readFileApi!: ReturnType<typeof createAgentWorkspaceFileReadApi>;
+  const readFileResolveWorkspacePath: NonNullable<FileReadOptions["resolveWorkspacePath"]> =
+    (workspace, relativePath, options) => resolveWorkspacePath(
+      workspace as WorkspaceRecord,
+      relativePath,
+      options
+    );
+  const fileStateApi = createAgentWorkspaceFileStateApi({
     merkleState,
     checkpointTreeApi,
     resolveWorkspacePath,
-    listWorkspaceFiles: (...args: any[]) : any => readFileApi.listWorkspaceFiles(...args)
-  });
+    listWorkspaceFiles: (...args: Parameters<typeof readFileApi.listWorkspaceFiles>) => readFileApi.listWorkspaceFiles(...args)
+  } as Parameters<typeof createAgentWorkspaceFileStateApi>[0]);
   readFileApi = createAgentWorkspaceFileReadApi({
     workspaceForStorage,
-    resolveWorkspacePath,
+    resolveWorkspacePath: readFileResolveWorkspacePath,
     createAccessReceipt,
     updateWorkspaceTimeStmt,
     fileStateApi,
@@ -739,13 +761,13 @@ export function createAgentWorkspace({
     openWorkspaceFileReadStream
   } = readFileApi;
 
-  const writeFileApi: any = createAgentWorkspaceFileWriteApi({
+  const writeFileApi = createAgentWorkspaceFileWriteApi({
     workspaceForStorage,
     resolveWorkspacePath,
     updateWorkspaceTimeStmt,
     createArtifact,
     fileStateApi
-  });
+  } as Parameters<typeof createAgentWorkspaceFileWriteApi>[0]);
   const {
     uploadWorkspaceFile: uploadWorkspaceFileUnlocked,
     writeWorkspaceFile: writeWorkspaceFileUnlocked,
@@ -753,56 +775,56 @@ export function createAgentWorkspace({
     deleteWorkspaceFile: deleteWorkspaceFileUnlocked,
     moveWorkspaceFile: moveWorkspaceFileUnlocked
   } = writeFileApi;
-  const serializeWorkspaceMutation: any = (method?: any) : any => (input: Record<string, any> = {}) : any =>
+  const serializeWorkspaceMutation = <Result>(method: (input: WorkspaceInput) => Result) => (input: WorkspaceInput = {}) =>
     withWorkspaceMutation(
       String(input.workspaceId || input.workspace_id || input.id || ""),
-      () : any => method(input)
+      () => method(input)
     );
-  const createWorkspaceFolder: any = serializeWorkspaceMutation(
+  const createWorkspaceFolder = serializeWorkspaceMutation(
     createWorkspaceFolderUnlocked
   );
-  const uploadWorkspaceFile: any = serializeWorkspaceMutation(
+  const uploadWorkspaceFile = serializeWorkspaceMutation(
     uploadWorkspaceFileUnlocked
   );
-  const writeWorkspaceFile: any = serializeWorkspaceMutation(
+  const writeWorkspaceFile = serializeWorkspaceMutation(
     writeWorkspaceFileUnlocked
   );
-  const patchWorkspaceFile: any = serializeWorkspaceMutation(
+  const patchWorkspaceFile = serializeWorkspaceMutation(
     patchWorkspaceFileUnlocked
   );
-  const deleteWorkspaceFile: any = serializeWorkspaceMutation(
+  const deleteWorkspaceFile = serializeWorkspaceMutation(
     deleteWorkspaceFileUnlocked
   );
-  const moveWorkspaceFile: any = serializeWorkspaceMutation(
+  const moveWorkspaceFile = serializeWorkspaceMutation(
     moveWorkspaceFileUnlocked
   );
 
-  async function workspaceRevisionForAccess(access?: any) : Promise<any> {
+  async function workspaceRevisionForAccess(access: Extract<WorkspaceAccessResult, { ok: true }>) {
     if (!merkleState?.stateCommit?.begin || !merkleState?.stateCommit?.commit) {
       return { ok: false, status: 503, error: "Workspace revision authority is unavailable." };
     }
-    const scope: any = fileStateApi.workspaceStateScope(access.workspace);
-    let state: any = await merkleState.stateCommit.begin({ scope });
+    const scope = fileStateApi.workspaceStateScope(access.workspace);
+    let state = await merkleState.stateCommit.begin({ scope });
     if (!String(state.currentRoot || "")) {
-      const initialized: any = await merkleState.stateCommit.commit({
+      const initialized = await merkleState.stateCommit.commit({
         scope,
         operationId: "workspace.revision.initialize",
         mutations: [],
         payload: { action: "revision.initialize", workspaceId: access.workspace.workspaceId }
       });
-      state = { currentRoot: initialized.afterRoot };
+      state = { currentRoot: asObject(initialized).afterRoot };
     }
     return { ok: true, workspaceId: access.workspace.workspaceId, revision: String(state.currentRoot || "") };
   }
 
-  async function workspaceFileRevision(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function workspaceFileRevision(input: WorkspaceInput = {}) {
+    const access = workspaceForStorage(input);
     if (!access.ok) return access;
     return workspaceRevisionForAccess(access);
   }
 
-  async function workspaceMaterializationRevision(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForMaterialization(input);
+  async function workspaceMaterializationRevision(input: WorkspaceInput = {}) {
+    const access = workspaceForMaterialization(input);
     if (!access.ok) return access;
     if (!merkleState?.stateCommit?.begin) {
       return {
@@ -812,10 +834,10 @@ export function createAgentWorkspace({
         error: "Workspace revision authority is unavailable."
       };
     }
-    const state: any = await merkleState.stateCommit.begin({
+    const state = await merkleState.stateCommit.begin({
       scope: fileStateApi.workspaceStateScope(access.workspace)
     });
-    const revision: any = String(state?.currentRoot || "");
+    const revision = String(state?.currentRoot || "");
     if (!revision) {
       return {
         ok: false,
@@ -831,37 +853,37 @@ export function createAgentWorkspace({
     };
   }
 
-  async function captureWorkspaceFileSnapshotForAccess(access?: any, input: Record<string, any> = {}) : Promise<any> {
-    const requestedPaths: any = uniqueStrings(asArray(input.paths).map((entry?: any) : any =>
+  async function captureWorkspaceFileSnapshotForAccess(access: Extract<WorkspaceAccessResult, { ok: true }>, input: WorkspaceInput = {}) {
+    const requestedPaths = uniqueStrings(asArray(input.paths).map((entry) =>
       normalizeWorkspaceRelativePath(entry, { allowEmpty: false })
     ));
-    let snapshot: any;
+    let snapshot: JsonRecord | Awaited<ReturnType<typeof fileStateApi.buildWorkspaceFileSnapshot>>;
     if (requestedPaths.length > 0) {
       if (!merkleState?.cas?.putBlock) {
         return { ok: false, status: 503, error: "Workspace snapshot authority is unavailable." };
       }
-      const files: any[] = [];
-      const state: any = await merkleState.stateCommit.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
-      const latestEvents: any = await merkleState.eventLog?.listEvents?.(fileStateApi.workspaceStateScope(access.workspace), { limit: 1 }) || [];
+      const files: JsonRecord[] = [];
+      const state = await merkleState.stateCommit.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
+      const latestEvents = await merkleState.eventLog?.listEvents(fileStateApi.workspaceStateScope(access.workspace), { limit: 1 }) || [];
       for (const relativePath of requestedPaths) {
         await input.leaseGuard?.();
-        let resolved: any;
+        let resolved: ReturnType<typeof resolveWorkspacePath>;
         try {
           resolved = resolveWorkspacePath(access.workspace, relativePath, { allowEmpty: false });
-        } catch (error: any) {
-          if (/symbolic link|符号链接/iu.test(String(error?.message || ""))) {
+        } catch (error: unknown) {
+          if (/symbolic link|符号链接/iu.test(error instanceof Error ? error.message : "")) {
             return { ok: false, status: 409, error: "Workspace snapshot target must not be a symbolic link." };
           }
           throw error;
         }
-        let handle: any;
+        let handle: fsPromises.FileHandle;
         try {
           handle = await fsPromises.open(resolved.absolutePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
-        } catch (error: any) {
-          if (error?.code === "ELOOP") {
+        } catch (error: unknown) {
+          if (errorCode(error) === "ELOOP") {
             return { ok: false, status: 409, error: "Workspace snapshot target must not be a symbolic link." };
           }
-          if (error?.code !== "ENOENT") throw error;
+          if (errorCode(error) !== "ENOENT") throw error;
           files.push({ relativePath, exists: false, contentCid: "", contentSha256: "", byteLength: 0, encoding: "base64" });
           await input.leaseGuard?.();
           continue;
@@ -875,8 +897,8 @@ export function createAgentWorkspace({
             error: "The workspace materialization target must be missing."
           };
         }
-        let stat: any;
-        let content: any;
+        let stat: fs.Stats;
+        let content: Buffer;
         try {
           stat = await handle.stat();
           if (!stat.isFile()) {
@@ -887,17 +909,17 @@ export function createAgentWorkspace({
           await handle.close();
         }
         assertWorkspaceFileContentPolicy({ relativePath, contentBuffer: content, sizeBytes: stat.size });
-        const block: any = await merkleState.cas.putBlock(content, {
+        const block = await merkleState.cas.putBlock(content, {
           codec: "raw",
           metadata: { workspaceId: access.workspace.workspaceId, relativePath, snapshot: true }
         });
         files.push({ relativePath, exists: true, contentCid: block.cid, contentSha256: block.payloadHash, byteLength: block.byteLength, encoding: "base64" });
         await input.leaseGuard?.();
       }
-      const finalState: any = await merkleState.stateCommit.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
-      const finalEvents: any = await merkleState.eventLog?.listEvents?.(fileStateApi.workspaceStateScope(access.workspace), { limit: 1 }) || [];
-      const firstEvent: any = latestEvents[0] || null;
-      const finalEvent: any = finalEvents[0] || null;
+      const finalState = await merkleState.stateCommit.begin({ scope: fileStateApi.workspaceStateScope(access.workspace) });
+      const finalEvents = await merkleState.eventLog?.listEvents(fileStateApi.workspaceStateScope(access.workspace), { limit: 1 }) || [];
+      const firstEvent = latestEvents[0] || null;
+      const finalEvent = finalEvents[0] || null;
       if (
         String(finalState.currentRoot || "") !== String(state.currentRoot || "") ||
         Number(finalEvent?.offset ?? -1) !== Number(firstEvent?.offset ?? -1) ||
@@ -918,7 +940,7 @@ export function createAgentWorkspace({
       };
     } else {
       snapshot = await fileStateApi.buildWorkspaceFileSnapshot(access.workspace, {
-        basePath: input.basePath || "",
+        basePath: String(input.basePath || ""),
         deleteExtraneous: input.deleteExtraneous !== false
       });
     }
@@ -927,28 +949,28 @@ export function createAgentWorkspace({
       : { ok: false, status: 503, error: "Workspace snapshot authority is unavailable." };
   }
 
-  async function captureWorkspaceFileSnapshot(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function captureWorkspaceFileSnapshot(input: WorkspaceInput = {}) {
+    const access = workspaceForStorage(input);
     if (!access.ok) return access;
     return captureWorkspaceFileSnapshotForAccess(access, input);
   }
 
-  async function captureWorkspaceMaterializationSnapshot(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForMaterialization(input);
+  async function captureWorkspaceMaterializationSnapshot(input: WorkspaceInput = {}) {
+    const access = workspaceForMaterialization(input);
     if (!access.ok) return access;
-    const logicalTarget: any = normalizeWorkspaceRelativePath(
+    const logicalTarget = normalizeWorkspaceRelativePath(
       input.logicalTarget,
       { allowEmpty: false }
     );
-    const revision: any = await workspaceMaterializationRevision({
+    const revision = await workspaceMaterializationRevision({
       workspaceId: access.workspace.workspaceId
     });
     if (!revision.ok) return revision;
-    const events: any = await merkleState?.eventLog?.listEvents?.(
+    const events = await merkleState?.eventLog?.listEvents(
       fileStateApi.workspaceStateScope(access.workspace),
       { limit: 1 }
     ) || [];
-    const anchor: any = events[0] || null;
+    const anchor = events[0] || null;
     if (
       !anchor ||
       String(anchor.afterRoot || "") !== revision.revision ||
@@ -989,34 +1011,37 @@ export function createAgentWorkspace({
   }
 
   if (materializationRootAuthority) {
+    const materializationWorkspaceForStorage = (input: { workspaceId: string }) =>
+      workspaceForMaterialization(input) as WorkspaceAccessResult & { workspace: WorkspaceRecord };
+    const materializationMerkleState: MaterializationOptions["merkleState"] = merkleState || undefined;
     bindAgentWorkspaceMaterializationRootPort(
       materializationRootAuthority,
-      () : any => createAgentWorkspaceMaterializationPort({
-        workspaceForMaterialization,
+      () => createAgentWorkspaceMaterializationPort({
+        workspaceForMaterialization: materializationWorkspaceForStorage,
         workspaceFsRoot: workspaceFsRootForMaterialization,
         workspaceFileRevision: workspaceMaterializationRevision,
         captureWorkspaceMaterializationSnapshot,
         withWorkspaceMutation,
         fileStateApi,
-        merkleState,
+        merkleState: materializationMerkleState,
         updateWorkspaceTimeStmt
-      })
+      } as Parameters<typeof createAgentWorkspaceMaterializationPort>[0])
     );
   }
 
-  let syncApi: any;
-  const localDirectoryApi: any = controlledLocalDirectoryHostEnabled
+  let syncApi!: ReturnType<typeof createAgentWorkspaceSyncApi>;
+  const localDirectoryApi = controlledLocalDirectoryHostEnabled
     ? createAgentWorkspaceLocalDirectoryApi({
         userDataPath,
         localDirectoryMountConfigPath,
         workspaceForStorage,
         createAccessReceipt,
-        localDirectorySyncPlan: (...args: any[]) : any => syncApi.localDirectorySyncPlan(...args),
+        localDirectorySyncPlan: (...args: Parameters<typeof syncApi.localDirectorySyncPlan>) => syncApi.localDirectorySyncPlan(...args),
         decodeWorkspaceFileContent: fileStateApi.decodeWorkspaceFileContent,
         updateWorkspaceTimeStmt,
         merkleState,
         fileStateApi
-      })
+      } as Parameters<typeof createAgentWorkspaceLocalDirectoryApi>[0])
     : null;
 
   syncApi = createAgentWorkspaceSyncApi({
@@ -1029,40 +1054,41 @@ export function createAgentWorkspace({
     fileStateApi,
     restoreLocalDirectoryPreimage: localDirectoryApi?.restoreLocalDirectoryPreimage,
     rollbackLocalDirectoryMutation: localDirectoryApi?.rollbackLocalDirectoryMutation
-  });
+  } as Parameters<typeof createAgentWorkspaceSyncApi>[0]);
   const {
     localDirectorySyncPlan,
     applyLocalDirectorySync: applyLocalDirectorySyncUnlocked,
     restoreWorkspaceFiles: restoreWorkspaceFilesUnlocked
   } = syncApi;
-  const applyLocalDirectorySync: any = serializeWorkspaceMutation(
+  const applyLocalDirectorySync = serializeWorkspaceMutation(
     applyLocalDirectorySyncUnlocked
   );
-  const restoreWorkspaceFiles: any = serializeWorkspaceMutation(
+  const restoreWorkspaceFiles = serializeWorkspaceMutation(
     restoreWorkspaceFilesUnlocked
   );
 
-  async function getWorkspaceSandboxMutationReceipt(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function getWorkspaceSandboxMutationReceipt(input: WorkspaceInput = {}) {
+    const access = workspaceForStorage(input);
     if (!access.ok) return access;
-    const commitId: any = String(input.commitId || input.stateCommitId || "").trim();
+    const commitId = String(input.commitId || input.stateCommitId || "").trim();
     if (!commitId || !checkpointTreeApi?.loadCheckpointTree || !merkleState?.eventLog?.listEvents) {
       return { ok: false, status: commitId ? 503 : 400, error: "Workspace mutation receipt authority is unavailable." };
     }
-    const treeId: any = fileStateApi.workspaceCheckpointTreeId(access.workspace);
-    const tree: any = await checkpointTreeApi.loadCheckpointTree({ treeId });
-    const checkpoint: any = tree?.nodes?.[`commit:${commitId}`] || null;
-    const metadata: any = asObject(checkpoint?.metadata);
-    const stateCommit: any = asObject(metadata.stateCommit);
-    const mutationOrigin: any = asObject(metadata.mutationOrigin);
-    const events: any = await merkleState.eventLog.listEvents(fileStateApi.workspaceStateScope(access.workspace), { limit: 10_000 });
-    const event: any = events.find((candidate?: any) : any =>
-      (stateCommit.eventId && String(candidate.eventId || "") === String(stateCommit.eventId)) ||
-      (stateCommit.eventHash && String(candidate.eventHash || "") === String(stateCommit.eventHash))
-    );
-    const eventOrigin: any = asObject(event?.payload?.mutationOrigin);
-    const supersededByCompensation: any = events.some((candidate?: any) : any =>
-      String(candidate?.payload?.failedCommitId || "") === commitId
+    const treeId = fileStateApi.workspaceCheckpointTreeId(access.workspace);
+    const tree = asObject(await checkpointTreeApi.loadCheckpointTree({ treeId }));
+    const checkpoint = asObject(asObject(tree.nodes)[`commit:${commitId}`]);
+    const metadata = asObject(checkpoint.metadata);
+    const stateCommit = asObject(metadata.stateCommit);
+    const mutationOrigin = asObject(metadata.mutationOrigin);
+    const events = await merkleState.eventLog.listEvents(fileStateApi.workspaceStateScope(access.workspace), { limit: 10_000 });
+    const event = events.find((candidate) => {
+      const eventRecord = asObject(candidate);
+      return (stateCommit.eventId && String(eventRecord.eventId || "") === String(stateCommit.eventId)) ||
+        (stateCommit.eventHash && String(eventRecord.eventHash || "") === String(stateCommit.eventHash));
+    });
+    const eventOrigin = asObject(asObject(event?.payload).mutationOrigin);
+    const supersededByCompensation = events.some((candidate) =>
+      String(asObject(candidate.payload).failedCommitId || "") === commitId
     );
     if (
       checkpoint?.status !== "completed" ||
@@ -1073,11 +1099,11 @@ export function createAgentWorkspace({
     ) {
       return { ok: false, status: 409, error: "Workspace mutation receipt history binding is incomplete." };
     }
-    const preimage: any = metadata.workspaceFilePreimageSnapshot || null;
+    const preimage = metadata.workspaceFilePreimageSnapshot || null;
     if (!preimage) {
       return { ok: false, status: 409, error: "Workspace mutation receipt preimage binding is missing." };
     }
-    const receipt: Record<string, any> = {
+    const receipt: JsonRecord = {
       schemaVersion: "v0.0.1:workspace:sandbox-mutation-receipt-1",
       sandboxReceiptDigest: mutationOrigin.sandboxReceiptDigest,
       previewDigest: mutationOrigin.previewDigest || "",
@@ -1102,7 +1128,7 @@ export function createAgentWorkspace({
    * Walk the parent chain upward and return an ordered array [root, ..., target].
    * Throws if a cycle is detected.
    */
-  const contextApi: any = createAgentWorkspaceContextApi({
+  const contextApi = createAgentWorkspaceContextApi({
     db,
     rootPath,
     selectWorkspaceRawStmt,
@@ -1129,7 +1155,7 @@ export function createAgentWorkspace({
     unshareWorkspace,
     deleteWorkspace: deleteWorkspaceUnlocked
   } = contextApi;
-  const deleteWorkspace: any = deleteWorkspaceUnlocked;
+  const deleteWorkspace = deleteWorkspaceUnlocked;
 
   return {
     protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -1165,7 +1191,7 @@ export function createAgentWorkspace({
     openWorkspaceFileReadStream,
     deleteWorkspaceFile,
     moveWorkspaceFile,
-    ...(controlledLocalDirectoryHostEnabled ? {
+    ...(localDirectoryApi ? {
       createLocalDirectoryMountSelection: localDirectoryApi.createLocalDirectoryMountSelection,
       connectLocalDirectory: localDirectoryApi.connectLocalDirectory,
       listLocalDirectoryMounts: localDirectoryApi.listLocalDirectoryMounts,
@@ -1180,10 +1206,10 @@ export function createAgentWorkspace({
       applyLocalDirectorySync
     } : {}),
     restoreWorkspaceFiles,
-    openWorkspaceCollaboration: (input: Record<string, any> = {}) : any =>
+    openWorkspaceCollaboration: (input: WorkspaceInput = {}) =>
       createWorkspaceReferenceMigration(input),
     getWorkspaceSandboxMutationReceipt,
-    getWorkspaceRefactorInstrumentation: () : any =>
+    getWorkspaceRefactorInstrumentation: () =>
       fileStateApi.getRefactorInstrumentation
         ? fileStateApi.getRefactorInstrumentation()
         : null,

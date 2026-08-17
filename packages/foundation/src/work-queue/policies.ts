@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
-export const WORK_QUEUE_LOCAL_MAX_IN_FLIGHT_HARD_LIMIT: any = 8192;
+export const WORK_QUEUE_LOCAL_MAX_IN_FLIGHT_HARD_LIMIT = 8192;
 
-export const DEFAULT_QUEUE_POLICY: Readonly<Record<string, any>> = Object.freeze({
+export const DEFAULT_QUEUE_POLICY = Object.freeze({
   policyVersion: "v0.0.1:workflow:work-queue-default-1",
   leaseTimeoutMs: 30_000,
   maxInFlight: 1000,
@@ -63,16 +63,19 @@ export const DEFAULT_QUEUE_POLICY: Readonly<Record<string, any>> = Object.freeze
   })
 });
 
-function asInt(value?: any, fallback: any = 0) : any {
-  const parsed: any = Number(value);
+function asInt(value?: unknown, fallback = 0): number {
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
-export function resolveQueueMaxInFlight(value?: any, { fallback = DEFAULT_QUEUE_POLICY.maxInFlight }: Record<string, any> = {}) : any {
-  const fallbackLimit: any = Math.max(1, asInt(fallback, DEFAULT_QUEUE_POLICY.maxInFlight));
-  const requested: any = asInt(value ?? fallbackLimit, fallbackLimit);
-  const normalizedRequested: any = Math.max(1, requested);
-  const limit: any = Math.min(normalizedRequested, WORK_QUEUE_LOCAL_MAX_IN_FLIGHT_HARD_LIMIT);
+export function resolveQueueMaxInFlight(
+  value?: unknown,
+  { fallback = DEFAULT_QUEUE_POLICY.maxInFlight }: { fallback?: unknown } = {}
+) {
+  const fallbackLimit = Math.max(1, asInt(fallback, DEFAULT_QUEUE_POLICY.maxInFlight));
+  const requested = asInt(value ?? fallbackLimit, fallbackLimit);
+  const normalizedRequested = Math.max(1, requested);
+  const limit = Math.min(normalizedRequested, WORK_QUEUE_LOCAL_MAX_IN_FLIGHT_HARD_LIMIT);
   return Object.freeze({
     requested,
     normalizedRequested,
@@ -82,7 +85,7 @@ export function resolveQueueMaxInFlight(value?: any, { fallback = DEFAULT_QUEUE_
   });
 }
 
-export function normalizeQueueMaxInFlight(value?: any, fallback: any = DEFAULT_QUEUE_POLICY.maxInFlight) : any {
+export function normalizeQueueMaxInFlight(value?: unknown, fallback: unknown = DEFAULT_QUEUE_POLICY.maxInFlight): number {
   return resolveQueueMaxInFlight(value, { fallback }).limit;
 }
 
@@ -91,9 +94,11 @@ export function computeDeterministicBackoff({
   initialDelayMs = DEFAULT_QUEUE_POLICY.retryBackoff.initialDelayMs,
   multiplier = DEFAULT_QUEUE_POLICY.retryBackoff.multiplier,
   maxDelayMs = DEFAULT_QUEUE_POLICY.retryBackoff.maxDelayMs
-}: Record<string, any> = {}) : any {
-  const safeAttempt: any = Math.max(1, Math.trunc(Number(attempt || 1)));
-  const delay: any = Number(initialDelayMs) * Math.pow(Number(multiplier), safeAttempt - 1);
+}: {
+  attempt?: unknown; initialDelayMs?: unknown; multiplier?: unknown; maxDelayMs?: unknown;
+} = {}): number {
+  const safeAttempt = Math.max(1, Math.trunc(Number(attempt || 1)));
+  const delay = Number(initialDelayMs) * Math.pow(Number(multiplier), safeAttempt - 1);
   return Math.min(Math.trunc(delay), Math.trunc(Number(maxDelayMs)));
 }
 
@@ -104,14 +109,18 @@ export function computeDeterministicRetryDelay({
   retrySeed = DEFAULT_QUEUE_POLICY.retryBackoff.retrySeed,
   maxJitterBps = DEFAULT_QUEUE_POLICY.retryBackoff.maxJitterBps,
   ...backoff
-}: Record<string, any> = {}) : any {
-  const baseDelayMs: any = computeDeterministicBackoff({ attempt, ...backoff });
-  const boundedJitterBps: any = Math.max(0, Math.min(10_000, asInt(maxJitterBps, 0)));
-  const jitterCeilingMs: any = Math.floor((baseDelayMs * boundedJitterBps) / 10_000);
+}: {
+  queueDefinitionId?: unknown; workItemId?: unknown; attempt?: unknown;
+  retrySeed?: unknown; maxJitterBps?: unknown; initialDelayMs?: unknown;
+  multiplier?: unknown; maxDelayMs?: unknown;
+} = {}): number {
+  const baseDelayMs = computeDeterministicBackoff({ attempt, ...backoff });
+  const boundedJitterBps = Math.max(0, Math.min(10_000, asInt(maxJitterBps, 0)));
+  const jitterCeilingMs = Math.floor((baseDelayMs * boundedJitterBps) / 10_000);
   if (jitterCeilingMs <= 0) return baseDelayMs;
-  const digest: any = createHash("sha256")
+  const digest = createHash("sha256")
     .update(`${retrySeed}\0${queueDefinitionId}\0${workItemId}\0${Math.max(1, asInt(attempt, 1))}`)
     .digest();
-  const jitterMs: any = digest.readUInt32BE(0) % (jitterCeilingMs + 1);
+  const jitterMs = digest.readUInt32BE(0) % (jitterCeilingMs + 1);
   return baseDelayMs + jitterMs;
 }

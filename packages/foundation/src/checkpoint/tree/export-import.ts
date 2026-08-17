@@ -14,18 +14,40 @@ import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
 } from "./pactium-runtime.ts";
+import type { PactiumRecord } from "pactium";
+import type { CheckpointEventProof, CheckpointNode, CheckpointTree, MeshrixPactiumRuntime } from "./types.ts";
+import { errorMessage, isRecord } from "./types.ts";
 
-function text(value?: any, fallback: any = "") : any {
-  const normalized: any = String(value ?? "").trim();
+interface ExportCheckpointTreeOptions {
+  userDataPath?: string;
+  treeId?: string;
+  pactiumRuntime?: MeshrixPactiumRuntime | null;
+}
+
+interface ImportCheckpointTreeOptions extends ExportCheckpointTreeOptions {
+  records?: unknown;
+  metadata?: unknown;
+  resumePolicy?: unknown;
+}
+
+function text(value: unknown, fallback = ""): string {
+  const normalized = String(value ?? "").trim();
   return normalized || fallback;
 }
 
-function asArray(value?: any) : any {
+function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function asObject(value: unknown, fallback: PactiumRecord = {}): PactiumRecord {
+  return isRecord(value) ? value : fallback;
+}
+
+function proofRefsFor(tree: CheckpointTree): CheckpointEventProof[] {
+  return tree.events.flatMap((event) => {
+    const proof = event.pactium;
+    return proof && (proof.ledgerEventId || proof.envelopeId) ? [proof] : [];
+  });
 }
 
 /**
@@ -41,10 +63,14 @@ export async function exportCheckpointTreeProjection({
   userDataPath = "",
   treeId = "",
   pactiumRuntime = null
-}: Record<string, any> = {}) : Promise<any> {
-  const dataDir: any = resolveMeshrixPactiumDataDir(userDataPath);
-  const runtime: any = normalizeMeshrixPactiumRuntime({ dataDir, pactiumRuntime });
-  const tree: any = await loadCheckpointTree({
+}: ExportCheckpointTreeOptions = {}): Promise<{
+  tree: CheckpointTree | null;
+  records: CheckpointNode[];
+  proofRefs: CheckpointEventProof[];
+}> {
+  const dataDir = resolveMeshrixPactiumDataDir(userDataPath);
+  const runtime = normalizeMeshrixPactiumRuntime({ dataDir, pactiumRuntime });
+  const tree = await loadCheckpointTree({
     userDataPath: dataDir,
     treeId,
     pactiumRuntime: runtime
@@ -52,10 +78,8 @@ export async function exportCheckpointTreeProjection({
   if (!tree) {
     return { tree: null, records: [], proofRefs: [] };
   }
-  const records: any = (Object.values(asObject(tree.nodes)) as any[]).map((node?: any) : any => ({ ...node }));
-  const proofRefs: any = asArray(tree.events)
-    .map((event?: any) : any => asObject(event?.pactium))
-    .filter((proof?: any) : any => text(proof.ledgerEventId) || text(proof.envelopeId));
+  const records = Object.values(tree.nodes).map((node) => ({ ...node }));
+  const proofRefs = proofRefsFor(tree);
   return { tree, records, proofRefs };
 }
 
@@ -78,22 +102,28 @@ export async function importCheckpointTreeProjection({
   metadata = {},
   resumePolicy = null,
   pactiumRuntime = null
-}: Record<string, any> = {}) : Promise<any> {
+}: ImportCheckpointTreeOptions = {}): Promise<{
+  imported: number;
+  skipped: number;
+  errors: Array<{ index: number; message: string }>;
+  tree: CheckpointTree;
+  proofRefs: CheckpointEventProof[];
+}> {
   if (!Array.isArray(records)) {
     throw new Error("records must be an array");
   }
-  const dataDir: any = resolveMeshrixPactiumDataDir(userDataPath);
-  const runtime: any = normalizeMeshrixPactiumRuntime({ dataDir, pactiumRuntime });
-  const normalizedTreeId: any = text(treeId);
+  const dataDir = resolveMeshrixPactiumDataDir(userDataPath);
+  const runtime = normalizeMeshrixPactiumRuntime({ dataDir, pactiumRuntime });
+  const normalizedTreeId = text(treeId);
   if (!normalizedTreeId) {
     throw new Error("treeId is required");
   }
 
-  let imported: any = 0;
-  let skipped: any = 0;
-  const errors: any[] = [];
+  let imported = 0;
+  let skipped = 0;
+  const errors: Array<{ index: number; message: string }> = [];
 
-  const tree: any = await startCheckpointTree({
+  const tree = await startCheckpointTree({
     userDataPath: dataDir,
     treeId: normalizedTreeId,
     rootNodeId: "root",
@@ -102,15 +132,15 @@ export async function importCheckpointTreeProjection({
       ...asObject(metadata),
       importSource: "checkpoint-tree-projection-import"
     },
-    resumePolicy: resumePolicy || undefined,
+    resumePolicy: isRecord(resumePolicy) ? resumePolicy : undefined,
     pactiumRuntime: runtime
   });
 
-  const existingNodeIds: any = new Set<any>(Object.keys(asObject(tree.nodes)));
+  const existingNodeIds = new Set(Object.keys(asObject(tree.nodes)));
 
-  for (let index: any = 0; index < records.length; index += 1) {
-    const record: any = asObject(records[index]);
-    const nodeId: any = text(record.nodeId || record.id);
+  for (let index = 0; index < records.length; index += 1) {
+    const record = asObject(records[index]);
+    const nodeId = text(record.nodeId || record.id);
     if (!nodeId) {
       errors.push({ index, message: "nodeId is required" });
       continue;
@@ -120,7 +150,7 @@ export async function importCheckpointTreeProjection({
       continue;
     }
     try {
-      const objectRefs: any = asArray(record.objectRefs);
+      const objectRefs = asArray(record.objectRefs);
       await upsertCheckpointNode({
         userDataPath: dataDir,
         treeId: normalizedTreeId,
@@ -139,24 +169,22 @@ export async function importCheckpointTreeProjection({
       });
       existingNodeIds.add(nodeId);
       imported += 1;
-    } catch (error: any) {
+    } catch (error: unknown) {
       errors.push({
         index,
-        message: `Upsert failed: ${error?.message || String(error)}`
+        message: `Upsert failed: ${errorMessage(error)}`
       });
     }
   }
 
-  const finished: any = await finishCheckpointTree({
+  const finished = await finishCheckpointTree({
     userDataPath: dataDir,
     treeId: normalizedTreeId,
     status: errors.length > 0 ? "failed" : "completed",
     pactiumRuntime: runtime
   });
 
-  const proofRefs: any = asArray(finished.events)
-    .map((event?: any) : any => asObject(event?.pactium))
-    .filter((proof?: any) : any => text(proof.ledgerEventId) || text(proof.envelopeId));
+  const proofRefs = proofRefsFor(finished);
 
   return {
     imported,

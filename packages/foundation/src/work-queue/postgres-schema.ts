@@ -1,6 +1,13 @@
-const POSTGRES_MIGRATION_REVISION: any = 12;
+interface PostgresSchemaPool {
+  query(sql: string): Promise<unknown>;
+}
 
-export async function ensurePostgresWorkQueueSchema(pool?: any) : Promise<any> {
+const POSTGRES_MIGRATION_REVISION = 12;
+
+export async function ensurePostgresWorkQueueSchema(pool?: PostgresSchemaPool): Promise<void> {
+  if (!pool || typeof pool.query !== "function") {
+    throw new TypeError("Postgres work queue schema pool is required.");
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS work_queue_schema_migrations (
       version INTEGER PRIMARY KEY,

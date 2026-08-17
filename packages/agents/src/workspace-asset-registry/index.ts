@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import {
   WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
@@ -32,21 +33,57 @@ import {
   stringifyJson,
   text
 } from "./support.ts";
+import type { UnknownRecord } from "./support.ts";
+
+interface AgentWorkspacePort {
+  listWorkspaces(input: UnknownRecord): unknown | Promise<unknown>;
+  listWorkspaceFiles(input: UnknownRecord): unknown | Promise<unknown>;
+}
+
+interface ContributionRegistryPort {
+  listContributions(): unknown | Promise<unknown>;
+}
+
+interface BackfillInput extends UnknownRecord {
+  agentWorkspace?: AgentWorkspacePort;
+  contributionRegistry?: ContributionRegistryPort;
+}
+
+interface BackfillSummary extends UnknownRecord {
+  files: number;
+  contributions: number;
+  codeChanges: number;
+  assets: unknown[];
+  count?: number;
+}
+
+export interface WorkspaceAssetRegistry {
+  readonly protocolVersion: typeof WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION;
+  readonly filePath: string;
+  recordAssetMutation(input?: UnknownRecord): UnknownRecord;
+  getAsset(input?: UnknownRecord): UnknownRecord | null;
+  listAssets(input?: UnknownRecord): UnknownRecord;
+  listReceipts(input?: UnknownRecord): UnknownRecord;
+  listLineage(input?: UnknownRecord): UnknownRecord;
+  backfill(input?: BackfillInput): Promise<UnknownRecord>;
+  isClosed(): boolean;
+  close(): void;
+}
 
 export {
   WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
   WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION
 } from "./support.ts";
 
-export function createWorkspaceAssetRegistry({ userDataPath = "", testHooks = {} }: Record<string, any> = {}) : any {
-  const filePath: any = dbPathFor(userDataPath);
+export function createWorkspaceAssetRegistry({ userDataPath = "" }: { userDataPath?: string } = {}): WorkspaceAssetRegistry {
+  const filePath = dbPathFor(userDataPath);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  let db: any = null;
+  let db: Database.Database | null = null;
   try {
-    db = openSqliteDatabase(filePath);
+    db = openSqliteDatabase(filePath) as Database.Database;
     ensureSchema(db);
-    return createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks });
-  } catch (error: any) {
+    return createWorkspaceAssetRegistryFromDatabase({ db, filePath });
+  } catch (error: unknown) {
     try {
       db?.close?.();
     } catch {
@@ -56,10 +93,10 @@ export function createWorkspaceAssetRegistry({ userDataPath = "", testHooks = {}
   }
 }
 
-function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {} }: Record<string, any>) : any {
-  let closed: any = false;
+function createWorkspaceAssetRegistryFromDatabase({ db, filePath }: { db: Database.Database; filePath: string }): WorkspaceAssetRegistry {
+  let closed = false;
 
-  const upsertAssetStmt: any = db.prepare(`
+  const upsertAssetStmt = db.prepare(`
     INSERT INTO workspace_assets (
       asset_ref, workspace_id, asset_kind, canonical_state, data_class,
       display_name, current_revision_ref, created_at, updated_at, metadata_json
@@ -78,7 +115,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       updated_at = excluded.updated_at,
       metadata_json = excluded.metadata_json
   `);
-  const insertRevisionStmt: any = db.prepare(`
+  const insertRevisionStmt = db.prepare(`
     INSERT INTO workspace_asset_revisions (
       revision_ref, asset_ref, workspace_id, source_ref_json, content_ref_json,
       target_ref_json, content_hash, byte_size, media_type, ledger_event_id,
@@ -90,7 +127,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       @checkpointRef, @state, @createdAt
     )
   `);
-  const upsertProjectionStmt: any = db.prepare(`
+  const upsertProjectionStmt = db.prepare(`
     INSERT INTO workspace_asset_projections (
       projection_ref, asset_ref, workspace_id, target_kind, target_ref_json,
       external_ref_json, status, receipt_refs_json, updated_at
@@ -106,7 +143,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       receipt_refs_json = excluded.receipt_refs_json,
       updated_at = excluded.updated_at
   `);
-  const insertReceiptStmt: any = db.prepare(`
+  const insertReceiptStmt = db.prepare(`
     INSERT OR IGNORE INTO workspace_asset_receipts (
       receipt_ref, asset_ref, workspace_id, ledger_event_id, downstream_operation_id,
       receipt_type, receipt_json, audit_id, created_at
@@ -116,39 +153,39 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       @receiptType, @receiptJson, @auditId, @createdAt
     )
   `);
-  const insertLinkStmt: any = db.prepare(`
+  const insertLinkStmt = db.prepare(`
     INSERT OR IGNORE INTO workspace_asset_links (
       link_ref, asset_ref, linked_ref, link_type, metadata_json, created_at
     )
     VALUES (@linkRef, @assetRef, @linkedRef, @linkType, @metadataJson, @createdAt)
   `);
-  const selectAssetStmt: any = db.prepare("SELECT * FROM workspace_assets WHERE asset_ref = ?");
-  const selectRevisionStmt: any = db.prepare("SELECT * FROM workspace_asset_revisions WHERE revision_ref = ?");
-  const listAssetRevisionsStmt: any = db.prepare(`
+  const selectAssetStmt = db.prepare<unknown[], UnknownRecord>("SELECT * FROM workspace_assets WHERE asset_ref = ?");
+  const selectRevisionStmt = db.prepare<unknown[], UnknownRecord>("SELECT * FROM workspace_asset_revisions WHERE revision_ref = ?");
+  const listAssetRevisionsStmt = db.prepare<unknown[], UnknownRecord>(`
     SELECT * FROM workspace_asset_revisions
     WHERE asset_ref = ?
     ORDER BY created_at DESC
     LIMIT ?
   `);
-  const listAssetProjectionsStmt: any = db.prepare(`
+  const listAssetProjectionsStmt = db.prepare<unknown[], UnknownRecord>(`
     SELECT * FROM workspace_asset_projections
     WHERE asset_ref = ?
     ORDER BY updated_at DESC
     LIMIT ?
   `);
-  const listAssetReceiptsStmt: any = db.prepare(`
+  const listAssetReceiptsStmt = db.prepare<unknown[], UnknownRecord>(`
     SELECT * FROM workspace_asset_receipts
     WHERE asset_ref = ?
     ORDER BY created_at DESC
     LIMIT ?
   `);
-  const listAssetLinksStmt: any = db.prepare(`
+  const listAssetLinksStmt = db.prepare<unknown[], UnknownRecord>(`
     SELECT * FROM workspace_asset_links
     WHERE asset_ref = ?
     ORDER BY created_at DESC
     LIMIT ?
   `);
-  const listAssetsStmt: any = db.prepare(`
+  const listAssetsStmt = db.prepare<UnknownRecord, UnknownRecord>(`
     SELECT * FROM workspace_assets
     WHERE (@workspaceId = '' OR workspace_id = @workspaceId)
       AND (@assetKind = '' OR asset_kind = @assetKind)
@@ -162,43 +199,16 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     ORDER BY updated_at DESC
     LIMIT @limit
   `);
-  const selectMaterializationHeadStmt: any = db.prepare(`
-    SELECT revision FROM workspace_materialization_heads WHERE workspace_id = ?
-  `);
-  const upsertMaterializationHeadStmt: any = db.prepare(`
-    INSERT INTO workspace_materialization_heads (workspace_id, revision, updated_at)
-    VALUES (@workspaceId, @revision, @updatedAt)
-    ON CONFLICT(workspace_id) DO UPDATE SET
-      revision = excluded.revision,
-      updated_at = excluded.updated_at
-  `);
-  const selectMaterializationStmt: any = db.prepare(`
-    SELECT * FROM workspace_job_materializations WHERE idempotency_key = ?
-  `);
-  const insertMaterializationStmt: any = db.prepare(`
-    INSERT INTO workspace_job_materializations (
-      idempotency_key, job_id, upload_receipt_ref, workspace_id, owner_subject_id,
-      operation_id, authorization_ref, approval_ref, checkpoint_ref, audit_ref,
-      expected_revision, current_revision, final_revision, status,
-      asset_ref, revision_ref, receipt_ref, created_at, updated_at
-    ) VALUES (
-      @idempotencyKey, @jobId, @uploadReceiptRef, @workspaceId, @ownerSubjectId,
-      @operationId, @authorizationRef, @approvalRef, @checkpointRef, @auditRef,
-      @expectedRevision, @currentRevision, @finalRevision, @status,
-      @assetRef, @revisionRef, @receiptRef, @createdAt, @updatedAt
-    )
-  `);
-
-  const mutationTx: any = db.transaction((input: Record<string, any> = {}) : any => {
-    const workspaceId: any = normalizeWorkspaceId(input);
-    const assetKind: any = normalizeAssetKind(input.assetKind || input.kind);
-    const canonicalState: any = normalizeCanonicalState(input.canonicalState || input.state);
-    const dataClass: any = text(input.dataClass || input.policy?.dataClass || "internal") || "internal";
-    const targetRef: any = asObject(input.targetRef || input.target);
-    const sourceRef: any = asObject(input.sourceRef || input.source);
-    const contentRef: any = contentRefFrom(input);
-    const targetKind: any = text(input.targetKind || targetRef.kind || sourceRef.kind || assetKind);
-    const assetRef: any = assetRefFrom({
+  const mutationTx = db.transaction((input: UnknownRecord = {}): UnknownRecord => {
+    const workspaceId = normalizeWorkspaceId(input);
+    const assetKind = normalizeAssetKind(input.assetKind || input.kind);
+    const canonicalState = normalizeCanonicalState(input.canonicalState || input.state);
+    const dataClass = text(input.dataClass || asObject(input.policy).dataClass || "internal") || "internal";
+    const targetRef = asObject(input.targetRef || input.target);
+    const sourceRef = asObject(input.sourceRef || input.source);
+    const contentRef = contentRefFrom(input);
+    const targetKind = text(input.targetKind || targetRef.kind || sourceRef.kind || assetKind);
+    const assetRef = assetRefFrom({
       ...input,
       workspaceId,
       assetKind,
@@ -206,18 +216,19 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       targetRef,
       sourceRef
     });
-    const ledgerEventId: any = text(input.ledgerEventId || input.ledgerId);
-    const checkpointRef: any = text(input.checkpointRef || input.checkpoint?.checkpointId || input.checkpoint?.nodeId || input.checkpoint?.checkpointNodeId || "");
-    const revisionRef: any = text(input.revisionRef) || revisionRefFrom({
+    const ledgerEventId = text(input.ledgerEventId || input.ledgerId);
+    const checkpoint = asObject(input.checkpoint);
+    const checkpointRef = text(input.checkpointRef || checkpoint.checkpointId || checkpoint.nodeId || checkpoint.checkpointNodeId || "");
+    const revisionRef = text(input.revisionRef) || revisionRefFrom({
       assetRef,
       ledgerEventId,
       checkpointRef,
       contentHash: contentRef.contentHash,
       state: canonicalState
     });
-    const timestamp: any = nowIso();
-    const displayName: any = displayNameFrom({ ...input, assetKind, targetRef, sourceRef });
-    const metadata: any = asObject(input.metadata);
+    const timestamp = nowIso();
+    const displayName = displayNameFrom({ ...input, assetKind, targetRef, sourceRef });
+    const metadata = asObject(input.metadata);
     upsertAssetStmt.run({
       assetRef,
       workspaceId,
@@ -246,11 +257,11 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       createdAt: timestamp
     });
 
-    const receiptRefs: any[] = [];
+    const receiptRefs: string[] = [];
     for (const item of receiptItemsFrom(input)) {
-      const receiptType: any = text(item.receiptType || item.type || "receipt") || "receipt";
-      const receipt: any = item.receipt !== undefined ? item.receipt : item;
-      const receiptRef: any = text(item.receiptRef) || receiptRefFrom({
+      const receiptType = text(item.receiptType || item.type || "receipt") || "receipt";
+      const receipt = item.receipt !== undefined ? item.receipt : item;
+      const receiptRef = text(item.receiptRef) || receiptRefFrom({
         assetRef,
         ledgerEventId,
         downstreamOperationId: input.downstreamOperationId,
@@ -272,7 +283,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
       receiptRefs.push(receiptRef);
     }
 
-    const projectionRef: any = text(input.projectionRef) || projectionRefFrom({
+    const projectionRef = text(input.projectionRef) || projectionRefFrom({
       assetRef,
       targetKind,
       targetRef,
@@ -292,15 +303,16 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
 
     for (const link of asArray(input.links)) {
       if (!link || typeof link !== "object") continue;
-      const linkedRef: any = text(link.linkedRef || link.assetRef || link.sourceRef || link.targetRef || "");
-      const linkType: any = text(link.linkType || link.type || "lineage");
+      const linkRecord = link as UnknownRecord;
+      const linkedRef = text(linkRecord.linkedRef || linkRecord.assetRef || linkRecord.sourceRef || linkRecord.targetRef || "");
+      const linkType = text(linkRecord.linkType || linkRecord.type || "lineage");
       if (!linkedRef || !linkType) continue;
       insertLinkStmt.run({
-        linkRef: text(link.linkRef) || linkRefFrom({ assetRef, linkedRef, linkType }),
+        linkRef: text(linkRecord.linkRef) || linkRefFrom({ assetRef, linkedRef, linkType }),
         assetRef,
         linkedRef,
         linkType,
-        metadataJson: stringifyJson(asObject(link.metadata)),
+        metadataJson: stringifyJson(asObject(linkRecord.metadata)),
         createdAt: timestamp
       });
     }
@@ -320,16 +332,16 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     };
   });
 
-  function recordAssetMutation(input: Record<string, any> = {}) : any {
+  function recordAssetMutation(input: UnknownRecord = {}): UnknownRecord {
     return mutationTx(input);
   }
 
-  function getAsset(input: Record<string, any> = {}) : any {
-    const assetRef: any = text(input.assetRef || input.assetId || input.id || input);
-    const asset: any = hydrateAsset(selectAssetStmt.get(assetRef));
+  function getAsset(input: UnknownRecord = {}): UnknownRecord | null {
+    const assetRef = text(input.assetRef || input.assetId || input.id || input);
+    const asset = hydrateAsset(selectAssetStmt.get(assetRef));
     if (!asset) return null;
-    const revisionLimit: any = Math.max(1, Math.min(Number(input.revisionLimit || 20), 100));
-    const projectionLimit: any = Math.max(1, Math.min(Number(input.projectionLimit || 20), 100));
+    const revisionLimit = Math.max(1, Math.min(Number(input.revisionLimit || 20), 100));
+    const projectionLimit = Math.max(1, Math.min(Number(input.projectionLimit || 20), 100));
     return {
       ...asset,
       revisions: listAssetRevisionsStmt.all(assetRef, revisionLimit).map(hydrateRevision),
@@ -339,9 +351,9 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     };
   }
 
-  function listAssets(input: Record<string, any> = {}) : any {
-    const limit: any = Math.max(1, Math.min(Number(input.limit || 100), 500));
-    const items: any = listAssetsStmt.all({
+  function listAssets(input: UnknownRecord = {}): UnknownRecord {
+    const limit = Math.max(1, Math.min(Number(input.limit || 100), 500));
+    const items = listAssetsStmt.all({
       workspaceId: normalizeWorkspaceId(input),
       assetKind: text(input.assetKind || ""),
       canonicalState: text(input.canonicalState || ""),
@@ -356,25 +368,25 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     };
   }
 
-  function listReceipts(input: Record<string, any> = {}) : any {
-    const assetRef: any = text(input.assetRef || input.assetId || input.id || "");
-    const limit: any = Math.max(1, Math.min(Number(input.limit || 100), 500));
+  function listReceipts(input: UnknownRecord = {}): UnknownRecord {
+    const assetRef = text(input.assetRef || input.assetId || input.id || "");
+    const limit = Math.max(1, Math.min(Number(input.limit || 100), 500));
     if (assetRef) {
-      const items: any = listAssetReceiptsStmt.all(assetRef, limit).map(hydrateReceipt);
+      const items = listAssetReceiptsStmt.all(assetRef, limit).map(hydrateReceipt);
       return {
         protocolVersion: WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
         items,
         count: items.length
       };
     }
-    const workspaceId: any = normalizeWorkspaceId(input);
-    const stmt: any = db.prepare(`
+    const workspaceId = normalizeWorkspaceId(input);
+    const stmt = db.prepare<UnknownRecord, UnknownRecord>(`
       SELECT * FROM workspace_asset_receipts
       WHERE (@workspaceId = '' OR workspace_id = @workspaceId)
       ORDER BY created_at DESC
       LIMIT @limit
     `);
-    const items: any = stmt.all({ workspaceId, limit }).map(hydrateReceipt);
+    const items = stmt.all({ workspaceId, limit }).map(hydrateReceipt);
     return {
       protocolVersion: WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
       items,
@@ -382,8 +394,8 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     };
   }
 
-  function listLineage(input: Record<string, any> = {}) : any {
-    const assetRef: any = text(input.assetRef || input.assetId || input.id || "");
+  function listLineage(input: UnknownRecord = {}): UnknownRecord {
+    const assetRef = text(input.assetRef || input.assetId || input.id || "");
     if (!assetRef) {
       return {
         protocolVersion: WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
@@ -391,7 +403,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
         count: 0
       };
     }
-    const items: any = listAssetLinksStmt.all(assetRef, Math.max(1, Math.min(Number(input.limit || 100), 500))).map(hydrateLink);
+    const items = listAssetLinksStmt.all(assetRef, Math.max(1, Math.min(Number(input.limit || 100), 500))).map(hydrateLink);
     return {
       protocolVersion: WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
       items,
@@ -399,14 +411,14 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     };
   }
 
-  async function backfill(input: Record<string, any> = {}) : Promise<any> {
-    const agentWorkspace: any = input.agentWorkspace;
-    const contributionRegistry: any = input.contributionRegistry;
-    const workspaceIdFilter: any = text(input.workspaceId || "");
-    const limit: any = Math.max(1, Math.min(Number(input.limit || 500), 5000));
-    const timestamp: any = nowIso();
-    const accessibleWorkspaceIds: any = new Set<any>();
-    const summary: Record<string, any> = {
+  async function backfill(input: BackfillInput = {}): Promise<UnknownRecord> {
+    const agentWorkspace = input.agentWorkspace;
+    const contributionRegistry = input.contributionRegistry;
+    const workspaceIdFilter = text(input.workspaceId || "");
+    const limit = Math.max(1, Math.min(Number(input.limit || 500), 5000));
+    const timestamp = nowIso();
+    const accessibleWorkspaceIds = new Set<string>();
+    const summary: BackfillSummary = {
       protocolVersion: WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
       registryProtocolVersion: WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION,
       ok: true,
@@ -418,7 +430,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     };
 
     if (agentWorkspace && typeof agentWorkspace.listWorkspaces === "function" && typeof agentWorkspace.listWorkspaceFiles === "function") {
-      const workspaceList: any = await maybeCall(() : any => agentWorkspace.listWorkspaces({
+      const workspaceList = asObject(await maybeCall<unknown>(() => agentWorkspace.listWorkspaces({
         actorUserId: input.actorUserId,
         userId: input.userId,
         subjectId: input.subjectId,
@@ -429,16 +441,19 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
         canAccessAll: input.canAccessAll === true,
         limit: Math.min(limit, 500),
         includeSummary: false
-      }), { workspaces: [] });
-      const workspaces: any = asArray(workspaceList?.workspaces)
-        .filter((workspace?: any) : any => !workspaceIdFilter || workspace.workspaceId === workspaceIdFilter);
+      }), { workspaces: [] }));
+      const workspaces = asArray(workspaceList.workspaces)
+        .filter((workspace): workspace is UnknownRecord => Boolean(workspace) && typeof workspace === "object" && !Array.isArray(workspace))
+        .filter((workspace) => !workspaceIdFilter || workspace.workspaceId === workspaceIdFilter);
       for (const workspace of workspaces) {
-        if (workspace?.workspaceId) {
-          accessibleWorkspaceIds.add(workspace.workspaceId);
+        const workspaceId = text(workspace.workspaceId);
+        if (workspaceId) {
+          accessibleWorkspaceIds.add(workspaceId);
         }
       }
       for (const workspace of workspaces) {
-        const filePayload: any = await maybeCall(() : any => agentWorkspace.listWorkspaceFiles({
+        const workspaceId = text(workspace.workspaceId);
+        const filePayload = asObject(await maybeCall<unknown>(() => agentWorkspace.listWorkspaceFiles({
           actorUserId: input.actorUserId,
           userId: input.userId,
           subjectId: input.subjectId,
@@ -447,16 +462,16 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
           scopes: input.scopes,
           allowedWorkspaceIds: input.allowedWorkspaceIds,
           canAccessAll: input.canAccessAll === true,
-          workspaceId: workspace.workspaceId,
+          workspaceId,
           recursive: true,
           includeDirectories: false,
           includeFiles: true,
           includeHash: true,
           limit
-        }), { files: [] });
+        }), { files: [] }));
         for (const file of normalizedFileItems(filePayload)) {
-          const registered: any = recordAssetMutation({
-            workspaceId: workspace.workspaceId,
+          const registered = recordAssetMutation({
+            workspaceId,
             assetKind: "file",
             canonicalState: "canonical",
             dataClass: "internal",
@@ -496,9 +511,10 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     }
 
     if (contributionRegistry && typeof contributionRegistry.listContributions === "function") {
-      const contributions: any = asArray(await maybeCall(() : any => contributionRegistry.listContributions(), []))
-        .filter((item?: any) : any => {
-          const contributionWorkspaceId: any = normalizeWorkspaceId(item);
+      const contributions = asArray(await maybeCall<unknown>(() => contributionRegistry.listContributions(), []))
+        .filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+        .filter((item) => {
+          const contributionWorkspaceId = normalizeWorkspaceId(item);
           if (!contributionWorkspaceId) {
             return false;
           }
@@ -509,7 +525,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
         })
         .slice(0, limit);
       for (const contribution of contributions) {
-        const contributionId: any = firstString(contribution.contributionId, contribution.id, contribution.assetId);
+        const contributionId = firstString(contribution.contributionId, contribution.id, contribution.assetId);
         if (!contributionId) continue;
         recordAssetMutation({
           workspaceId: normalizeWorkspaceId(contribution),
@@ -557,10 +573,10 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath, testHooks = {}
     listReceipts,
     listLineage,
     backfill,
-    isClosed() : any {
+    isClosed(): boolean {
       return closed || db.open === false;
     },
-    close() : any {
+    close(): void {
       if (closed || db.open === false) return;
       db.close();
       closed = true;

@@ -24,16 +24,17 @@ import { createTagManagementStore } from "../tag-management-store.ts";
  * @param {string} options.userDataPath - User data directory path for the SQLite database
  * @returns {import("#meshrix/foundation/security/authorization/tag-store.port").TagStoreProvider}
  */
-export function createTagStoreAdapter({ userDataPath = "" }: Record<string, any> = {}) : any {
-  if (!userDataPath) {
+export function createTagStoreAdapter({ userDataPath = "" }: Record<string, unknown> = {}) {
+  const resolvedUserDataPath = String(userDataPath || "").trim();
+  if (!resolvedUserDataPath) {
     throw new Error(
       "createTagStoreAdapter requires a userDataPath. " +
       "The tag management store cannot be initialised without a data directory."
     );
   }
 
-  const store: any = createTagManagementStore({ userDataPath });
-  const validation: any = validateTagStoreProvider(store);
+  const store = createTagManagementStore({ userDataPath: resolvedUserDataPath });
+  const validation = validateTagStoreProvider(store);
 
   if (!validation.valid) {
     throw new Error(

@@ -3,20 +3,24 @@ import path from "node:path";
 
 import { ensurePrivateDir } from "./private-file-atomic.ts";
 
-const SQLITE_PRIVATE_SUFFIXES: readonly any[] = Object.freeze(["", "-wal", "-shm", "-journal"]);
+const SQLITE_PRIVATE_SUFFIXES: readonly string[] = Object.freeze(["", "-wal", "-shm", "-journal"]);
 
-function privateSqliteError(message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
+function privateSqliteError(message: string): Error & { code: string } {
+  const error = new Error(message) as Error & { code: string };
   error.code = "private_sqlite_boundary_invalid";
   return error;
 }
 
-function enforcePrivateRegularFile(filePath?: any) : any {
-  let stat: any;
+function errorCode(error: unknown): string {
+  return error && typeof error === "object" && "code" in error ? String(error.code || "") : "";
+}
+
+function enforcePrivateRegularFile(filePath: string): void {
+  let stat: fs.Stats;
   try {
     stat = fs.lstatSync(filePath);
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return;
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") return;
     throw error;
   }
   if (!stat.isFile() || stat.isSymbolicLink()) {
@@ -25,8 +29,8 @@ function enforcePrivateRegularFile(filePath?: any) : any {
   fs.chmodSync(filePath, 0o600);
 }
 
-export function ensurePrivateSqliteLocation(databasePath?: any) : any {
-  const resolvedPath: any = path.resolve(String(databasePath || ""));
+export function ensurePrivateSqliteLocation(databasePath: unknown): string {
+  const resolvedPath = path.resolve(String(databasePath || ""));
   ensurePrivateDir(path.dirname(resolvedPath));
   for (const suffix of SQLITE_PRIVATE_SUFFIXES) {
     enforcePrivateRegularFile(`${resolvedPath}${suffix}`);
@@ -34,15 +38,15 @@ export function ensurePrivateSqliteLocation(databasePath?: any) : any {
   return resolvedPath;
 }
 
-export function withPrivateFileCreationMask(task?: any) : any {
+export function withPrivateFileCreationMask<T>(task: (() => T) | undefined): T {
   if (typeof task !== "function") {
     throw new TypeError("withPrivateFileCreationMask requires a task function.");
   }
-  let previousMask: any;
+  let previousMask: number;
   try {
     previousMask = process.umask(0o077);
-  } catch (error: any) {
-    if (error?.code === "ERR_WORKER_UNSUPPORTED_OPERATION") return task();
+  } catch (error: unknown) {
+    if (errorCode(error) === "ERR_WORKER_UNSUPPORTED_OPERATION") return task();
     throw error;
   }
   try {

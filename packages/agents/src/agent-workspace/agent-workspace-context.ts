@@ -5,12 +5,17 @@ import {
   CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES,
   asArray,
   asObject,
-  boundedInteger,
   normalizeText,
   truncateText
 } from "./agent-workspace-core.ts";
 
-export function submissionSummary(type?: any, payload?: any) : any {
+type ContextRecord = Record<string, unknown>;
+
+function records(value: unknown): ContextRecord[] {
+  return asArray<unknown>(value).map(asObject);
+}
+
+export function submissionSummary(type?: unknown, payload: ContextRecord = {}): string {
   return normalizeText(
     payload.claim ||
       payload.summary ||
@@ -22,7 +27,7 @@ export function submissionSummary(type?: any, payload?: any) : any {
   ).slice(0, 500);
 }
 
-export function compactWorkspaceLayer(workspace: Record<string, any> = {}) : any {
+export function compactWorkspaceLayer(workspace: ContextRecord = {}) {
   return {
     workspaceId: workspace.workspaceId,
     ownerUserId: workspace.ownerUserId || "",
@@ -38,7 +43,7 @@ export function compactWorkspaceLayer(workspace: Record<string, any> = {}) : any
   };
 }
 
-export function compactRun(run: Record<string, any> = {}) : any {
+export function compactRun(run: ContextRecord = {}) {
   return {
     runId: run.runId,
     runType: run.runType,
@@ -52,8 +57,9 @@ export function compactRun(run: Record<string, any> = {}) : any {
   };
 }
 
-export function compactSubmission(submission: Record<string, any> = {}) : any {
-  const payload: any = asObject(submission.payload);
+export function compactSubmission(submission: ContextRecord = {}) {
+  const payload = asObject(submission.payload);
+  const gate = asObject(submission.gate);
   return {
     submissionId: submission.submissionId,
     runId: submission.runId,
@@ -63,12 +69,12 @@ export function compactSubmission(submission: Record<string, any> = {}) : any {
     confidence: Number(submission.confidence || 0),
     summary: submissionSummary(submission.type, payload),
     evidenceRefs: asArray(submission.evidenceRefs),
-    gateReasons: asArray(submission.gate?.reasons),
+    gateReasons: asArray(gate.reasons),
     updatedAt: submission.updatedAt || ""
   };
 }
 
-export function compactArtifact(artifact: Record<string, any> = {}, options: Record<string, any> = {}) : any {
+export function compactArtifact(artifact: ContextRecord = {}, options: { contentPreviewChars?: unknown } = {}) {
   return {
     artifactId: artifact.artifactId,
     runId: artifact.runId,
@@ -83,7 +89,7 @@ export function compactArtifact(artifact: Record<string, any> = {}, options: Rec
   };
 }
 
-export function compactIssue(issue: Record<string, any> = {}) : any {
+export function compactIssue(issue: ContextRecord = {}) {
   return {
     issueId: issue.issueId,
     runId: issue.runId,
@@ -96,7 +102,7 @@ export function compactIssue(issue: Record<string, any> = {}) : any {
   };
 }
 
-export function compactDecision(decision: Record<string, any> = {}) : any {
+export function compactDecision(decision: ContextRecord = {}) {
   return {
     decisionId: decision.decisionId,
     runId: decision.runId,
@@ -107,7 +113,7 @@ export function compactDecision(decision: Record<string, any> = {}) : any {
   };
 }
 
-export function compactPrivateState(privateState: Record<string, any> = {}) : any {
+export function compactPrivateState(privateState: ContextRecord = {}) {
   return {
     id: privateState.id,
     runId: privateState.runId,
@@ -118,7 +124,7 @@ export function compactPrivateState(privateState: Record<string, any> = {}) : an
   };
 }
 
-export function compactSessionEvent(event: Record<string, any> = {}) : any {
+export function compactSessionEvent(event: ContextRecord = {}) {
   return {
     eventId: event.eventId,
     sequence: Number(event.sequence || 0),
@@ -130,20 +136,21 @@ export function compactSessionEvent(event: Record<string, any> = {}) : any {
   };
 }
 
-export function buildWorkspaceHandoffMarkdown(bundle: Record<string, any> = {}) : any {
-  const context: any = bundle.context || {};
-  const summary: any = bundle.summary || {};
-  const recent: any = bundle.recent || {};
-  const lines: any[] = [
+export function buildWorkspaceHandoffMarkdown(bundle: ContextRecord = {}): string {
+  const context = asObject(bundle.context);
+  const summary = asObject(bundle.summary);
+  const recent = asObject(bundle.recent);
+  const workspace = asObject(bundle.workspace);
+  const lines: string[] = [
     "# Workspace Context Bundle",
-    `workspaceId: ${bundle.workspace?.workspaceId || ""}`,
+    `workspaceId: ${workspace.workspaceId || ""}`,
     `generation: ${context.currentGeneration || 0}`,
     `contextFingerprint: ${context.contextFingerprint || ""}`,
     `contextProfileId: ${context.contextProfileId || ""}`,
     `modelAlias: ${context.modelAlias || ""}`,
     `toolGrantId: ${context.toolGrantId || ""}`,
     `gatewaySourceCount: ${asArray(context.gatewaySourceIds).length}`,
-    `chain: ${asArray(context.chainGenerations).map((item?: any) : any => `${item.workspaceId}@${item.generation}`).join(" -> ")}`,
+    `chain: ${records(context.chainGenerations).map((item) => `${item.workspaceId}@${item.generation}`).join(" -> ")}`,
     "",
     "## Summary",
     `runs: ${summary.runCount || 0}`,
@@ -153,52 +160,53 @@ export function buildWorkspaceHandoffMarkdown(bundle: Record<string, any> = {}) 
     `artifacts: ${summary.artifactCount || 0}`,
     "",
     "## Recent Runs",
-    ...asArray(recent.runs).map((run?: any) : any => `- ${run.runId} ${run.runType} ${run.status}`),
+    ...records(recent.runs).map((run) => `- ${run.runId} ${run.runType} ${run.status}`),
     "",
     "## Recent Artifacts",
-    ...asArray(recent.artifacts).map((artifact?: any) : any => `- ${artifact.artifactId} ${artifact.status} ${artifact.title}`),
+    ...records(recent.artifacts).map((artifact) => `- ${artifact.artifactId} ${artifact.status} ${artifact.title}`),
     "",
     "## Open Issues",
-    ...asArray(recent.issues)
-      .filter((issue?: any) : any => issue.status !== "resolved")
-      .map((issue?: any) : any => `- ${issue.issueId} ${issue.severity} ${issue.title}`)
+    ...records(recent.issues)
+      .filter((issue) => issue.status !== "resolved")
+      .map((issue) => `- ${issue.issueId} ${issue.severity} ${issue.title}`)
   ];
   return lines.join("\n");
 }
 
-export function decodeWorkspaceContextBundle(input: Record<string, any> = {}) : any {
-  const payload: any = asObject(input.contextBundle || input.context_bundle || input);
-  if (payload.bundle?.bundleVersion === AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION) {
-    return payload.bundle;
+export function decodeWorkspaceContextBundle(input: ContextRecord = {}): ContextRecord {
+  const payload = asObject(input.contextBundle || input.context_bundle || input);
+  const bundle = asObject(payload.bundle);
+  if (bundle.bundleVersion === AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION) {
+    return bundle;
   }
   if (payload.bundleVersion === AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION && payload.context) {
     return payload;
   }
-  const compressed: any = asObject(
+  const compressed = asObject(
     payload.compressed ||
       payload.compressedBundle ||
       payload.bundleCompressed ||
       payload.contextBundleCompressed
   );
-  const encoded: any = String(compressed.payload || payload.payload || "").trim();
-  const encoding: any = String(compressed.encoding || payload.encoding || "").trim().toLowerCase();
+  const encoded = String(compressed.payload || payload.payload || "").trim();
+  const encoding = String(compressed.encoding || payload.encoding || "").trim().toLowerCase();
   if (!encoded) {
     throw new Error("缺少工作空间上下文压缩包。");
   }
   if (!["gzip+base64", "base64+gzip"].includes(encoding)) {
     throw new Error("工作空间上下文压缩包编码不受支持。");
   }
-  const compressedBuffer: any = Buffer.from(encoded, "base64");
+  const compressedBuffer = Buffer.from(encoded, "base64");
   if (compressedBuffer.length > CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES) {
     throw new Error("工作空间上下文压缩包超过大小上限。");
   }
-  let decoded: any;
+  let decoded: Buffer;
   try {
     decoded = gunzipSync(compressedBuffer, {
       maxOutputLength: CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES + 1
     });
-  } catch (error: any) {
-    if (error?.code === "ERR_BUFFER_TOO_LARGE") {
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ERR_BUFFER_TOO_LARGE") {
       throw new Error("工作空间上下文压缩包超过大小上限。");
     }
     throw error;
@@ -206,6 +214,10 @@ export function decodeWorkspaceContextBundle(input: Record<string, any> = {}) : 
   if (decoded.length > CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES) {
     throw new Error("工作空间上下文压缩包超过大小上限。");
   }
-  const jsonText: any = decoded.toString("utf8");
-  return JSON.parse(jsonText);
+  const jsonText = decoded.toString("utf8");
+  const parsed: unknown = JSON.parse(jsonText);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("工作空间上下文压缩包必须包含对象。");
+  }
+  return parsed as ContextRecord;
 }

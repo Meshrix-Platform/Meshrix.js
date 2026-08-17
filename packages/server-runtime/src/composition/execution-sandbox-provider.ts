@@ -18,7 +18,6 @@ function selection(settings?: any) : any {
     receiptRequirement: String(settings.receiptRequirement || "").trim()
   };
 }
-
 export async function createConfiguredSandboxExecution({
   userDataPath,
   settings = null,

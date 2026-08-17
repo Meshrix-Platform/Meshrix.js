@@ -3,7 +3,6 @@ import path from "node:path";
 import { assertPathWithinRootSync } from "@meshrix/foundation/security/local-path-boundary";
 import {
   WORKSPACE_FILE_MAX_BYTES,
-  asArray,
   normalizeSha256,
   normalizeWorkspaceRelativePath,
   sha256Buffer,
@@ -18,8 +17,44 @@ import {
   writeFileAtomically
 } from "./agent-workspace-local-directory-safe-fs.ts";
 
-export const LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION: any = "v0.0.1:workspace:local-directory-preimage-1";
-export const LOCAL_DIRECTORY_PREIMAGE_MAX_BYTES: any = workspaceIntegerLimit(
+interface SnapshotError extends Error { code?: string; status?: number }
+interface WorkspaceIdentity { workspaceId?: string }
+type SnapshotState = "exists" | "missing";
+type SnapshotEntryType = "file" | "directory" | "missing";
+interface SnapshotEntry {
+  relativePath: string; state: SnapshotState; type: SnapshotEntryType; sizeBytes: number;
+  contentCid: string; contentSha256: string; mode: number;
+}
+interface MaterializedSnapshotEntry extends SnapshotEntry { content: Buffer }
+interface LocalDirectorySnapshot {
+  schemaVersion: string; workspaceId: string; mountRef: string; mountIdentityHash: string;
+  roots: string[]; entries: SnapshotEntry[]; totalBytes: number; entryCount: number; fingerprint: string;
+}
+interface SnapshotCapture { snapshot: LocalDirectorySnapshot }
+interface ResolvedMountPath {
+  root: string; relativePath: string; absolutePath: string; exists: boolean; stat: fs.Stats | null;
+  mount?: { mountRef?: string } | null;
+}
+interface CasBlock { cid: string; payloadHash?: string; bytes: Buffer }
+interface MerkleState { cas?: { putBlock(content: Buffer, options: Record<string, unknown>): Promise<CasBlock>; getBlock(cid: string): Promise<CasBlock | null> } }
+interface SnapshotApiOptions {
+  merkleState?: MerkleState | null;
+  resolveLocalDirectoryMountPath?: (input: Record<string, unknown>, workspace: WorkspaceIdentity, options: Record<string, boolean>) => ResolvedMountPath;
+  mountMutationKey?: (mountRef: string, relativePath: string) => string;
+}
+interface SnapshotAction { action: "create" | "replace" | "write" | "delete" | "noop"; scope: "localDir"; mountRef: string; path: string; expectedSha256?: string; currentSha256?: string }
+interface StateMutation { action: "put" | "delete"; key: string; valueRef?: string; metadata?: Record<string, unknown> }
+interface CaptureInput {
+  workspace: WorkspaceIdentity; input?: Record<string, unknown>; relativePaths?: readonly unknown[];
+  operationId?: string; fixedRoots?: boolean;
+}
+
+function errorStatus(error: unknown): number {
+  return error !== null && typeof error === "object" && "status" in error ? Number(error.status || 500) : 500;
+}
+
+export const LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION = "v0.0.1:workspace:local-directory-preimage-1";
+export const LOCAL_DIRECTORY_PREIMAGE_MAX_BYTES = workspaceIntegerLimit(
   "MESHRIX_AGENT_WORKSPACE_LOCAL_PREIMAGE_MAX_BYTES",
   {
     defaultValue: 64 * 1024 * 1024,
@@ -27,29 +62,29 @@ export const LOCAL_DIRECTORY_PREIMAGE_MAX_BYTES: any = workspaceIntegerLimit(
     maximum: 512 * 1024 * 1024
   }
 );
-export const LOCAL_DIRECTORY_PREIMAGE_MAX_ENTRIES: any = workspaceIntegerLimit(
+export const LOCAL_DIRECTORY_PREIMAGE_MAX_ENTRIES = workspaceIntegerLimit(
   "MESHRIX_AGENT_WORKSPACE_LOCAL_PREIMAGE_MAX_ENTRIES",
   { defaultValue: 5000, minimum: 1, maximum: 20000 }
 );
-export const LOCAL_DIRECTORY_PREIMAGE_MAX_ROOTS: any = 8;
+export const LOCAL_DIRECTORY_PREIMAGE_MAX_ROOTS = 8;
 
-function localSnapshotError(code?: any, message?: any, status: any = 400) : any {
-  const error: Error & Record<string, any> = new Error(message);
+function localSnapshotError(code: string, message: string, status = 400): SnapshotError {
+  const error: SnapshotError = new Error(message);
   error.code = code;
   error.status = status;
   return error;
 }
 
-function isPathWithin(relativePath?: any, rootPath?: any) : any {
+function isPathWithin(relativePath: string, rootPath: string): boolean {
   return relativePath === rootPath || relativePath.startsWith(`${rootPath}/`);
 }
 
-function dedupeRoots(values: any = []) : any {
-  const roots: any = [...new Set<any>(values.map((value?: any) : any => normalizeWorkspaceRelativePath(value, { allowEmpty: false })))]
-    .sort((left?: any, right?: any) : any => left.split("/").length - right.split("/").length || left.localeCompare(right));
-  const deduped: any[] = [];
+function dedupeRoots(values: readonly unknown[] = []): string[] {
+  const roots = [...new Set(values.map((value) => normalizeWorkspaceRelativePath(value, { allowEmpty: false })))]
+    .sort((left, right) => left.split("/").length - right.split("/").length || left.localeCompare(right));
+  const deduped: string[] = [];
   for (const root of roots) {
-    if (!deduped.some((parent?: any) : any => isPathWithin(root, parent))) {
+    if (!deduped.some((parent) => isPathWithin(root, parent))) {
       deduped.push(root);
     }
   }
@@ -63,8 +98,8 @@ function dedupeRoots(values: any = []) : any {
   return deduped;
 }
 
-function snapshotFingerprint(entries: any = []) : any {
-  return stableHash(JSON.stringify(entries.map((entry?: any) : any => ({
+function snapshotFingerprint(entries: readonly SnapshotEntry[] = []): string {
+  return stableHash(JSON.stringify(entries.map((entry) => ({
     relativePath: entry.relativePath,
     state: entry.state,
     type: entry.type,
@@ -74,15 +109,15 @@ function snapshotFingerprint(entries: any = []) : any {
   }))));
 }
 
-function firstMissingAncestor(root?: any, relativePath?: any) : any {
-  const segments: any = relativePath.split("/").filter(Boolean);
-  for (let index: any = 0; index < segments.length; index += 1) {
-    const candidateRelativePath: any = segments.slice(0, index + 1).join("/");
-    const candidateAbsolutePath: any = path.resolve(root, ...candidateRelativePath.split("/"));
+function firstMissingAncestor(root: string, relativePath: string): string {
+  const segments = relativePath.split("/").filter(Boolean);
+  for (let index = 0; index < segments.length; index += 1) {
+    const candidateRelativePath = segments.slice(0, index + 1).join("/");
+    const candidateAbsolutePath = path.resolve(root, ...candidateRelativePath.split("/"));
     if (!fs.existsSync(candidateAbsolutePath)) {
       return candidateRelativePath;
     }
-    const stat: any = fs.lstatSync(candidateAbsolutePath);
+    const stat = fs.lstatSync(candidateAbsolutePath);
     if (stat.isSymbolicLink()) {
       throw localSnapshotError(
         "local_directory_preimage_symlink",
@@ -99,11 +134,11 @@ function firstMissingAncestor(root?: any, relativePath?: any) : any {
   return relativePath;
 }
 
-function publicSnapshotEntry(entry: Record<string, any> = {}) : any {
+function publicSnapshotEntry(entry: Partial<SnapshotEntry> & { path?: string } = {}): SnapshotEntry {
   return {
-    relativePath: entry.relativePath,
-    state: entry.state,
-    type: entry.type,
+    relativePath: String(entry.relativePath || ""),
+    state: entry.state === "missing" ? "missing" : "exists",
+    type: entry.type === "file" || entry.type === "directory" || entry.type === "missing" ? entry.type : "missing",
     sizeBytes: Number(entry.sizeBytes || 0),
     contentCid: String(entry.contentCid || ""),
     contentSha256: String(entry.contentSha256 || ""),
@@ -111,7 +146,7 @@ function publicSnapshotEntry(entry: Record<string, any> = {}) : any {
   };
 }
 
-function assertSnapshotWorkspaceBinding(workspace: Record<string, any> = {}, snapshot: Record<string, any> = {}) : any {
+function assertSnapshotWorkspaceBinding(workspace: WorkspaceIdentity = {}, snapshot: Partial<LocalDirectorySnapshot> = {}): void {
   if (snapshot.schemaVersion !== LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION) {
     throw localSnapshotError("local_directory_preimage_schema_invalid", "本机目录 preimage schemaVersion 无效。");
   }
@@ -130,8 +165,11 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
   merkleState = null,
   resolveLocalDirectoryMountPath,
   mountMutationKey
-}: Record<string, any> = {}) : any {
-  function assertCasAvailable() : any {
+}: SnapshotApiOptions = {}) {
+  if (!resolveLocalDirectoryMountPath || !mountMutationKey) throw new TypeError("Local-directory snapshot dependencies are unavailable.");
+  const resolveMountPath = resolveLocalDirectoryMountPath;
+  const mutationKey = mountMutationKey;
+  function requireCas(): NonNullable<MerkleState["cas"]> {
     if (
       typeof merkleState?.cas?.putBlock !== "function" ||
       typeof merkleState?.cas?.getBlock !== "function"
@@ -142,10 +180,11 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
         503
       );
     }
+    return merkleState.cas;
   }
 
-  function resolveSnapshotPath(workspace?: any, mountRef?: any, relativePath?: any, options: Record<string, any> = {}) : any {
-    return resolveLocalDirectoryMountPath({ mountRef, path: relativePath }, workspace, {
+  function resolveSnapshotPath(workspace: WorkspaceIdentity, mountRef: string, relativePath: string, options: { allowMissing?: boolean; requireExisting?: boolean } = {}): ResolvedMountPath {
+    return resolveMountPath({ mountRef, path: relativePath }, workspace, {
       allowEmpty: false,
       allowMissing: options.allowMissing !== false,
       requireExisting: options.requireExisting === true,
@@ -154,13 +193,15 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     });
   }
 
-  async function scanRoots({ workspace, mountRef, roots, archive = false, operationId = "" }: Record<string, any> = {}) : Promise<any> {
+  async function scanRoots({ workspace, mountRef, roots, archive = false, operationId = "" }: {
+    workspace: WorkspaceIdentity; mountRef: string; roots: string[]; archive?: boolean; operationId?: string;
+  }): Promise<{ entries: SnapshotEntry[]; totalBytes: number; fingerprint: string }> {
     if (archive) {
-      assertCasAvailable();
+      requireCas();
     }
-    const entries: any[] = [];
-    let totalBytes: any = 0;
-    const pushEntry: any = (entry?: any) : any => {
+    const entries: SnapshotEntry[] = [];
+    let totalBytes = 0;
+    const pushEntry = (entry: SnapshotEntry): void => {
       if (entries.length >= LOCAL_DIRECTORY_PREIMAGE_MAX_ENTRIES) {
         throw localSnapshotError(
           "local_directory_preimage_entry_limit",
@@ -170,8 +211,8 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       }
       entries.push(entry);
     };
-    const visit: any = async (resolvedRoot?: any, absolutePath?: any, relativePath?: any) : Promise<any> => {
-      const bounded: any = assertPathWithinRootSync(resolvedRoot.root, absolutePath, {
+    const visit = async (resolvedRoot: ResolvedMountPath, absolutePath: string, relativePath: string): Promise<void> => {
+      const bounded = assertPathWithinRootSync(resolvedRoot.root, absolutePath, {
         label: "本机目录 preimage 路径",
         allowMissing: false,
         requireExisting: true,
@@ -179,7 +220,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
         allowFile: true,
         allowSpecial: false
       });
-      const stat: any = fs.lstatSync(bounded.absolutePath);
+      const stat = fs.lstatSync(bounded.absolutePath);
       if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) {
         throw localSnapshotError(
           "local_directory_preimage_special_file",
@@ -196,8 +237,8 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
           contentSha256: "",
           mode: stat.mode & 0o777
         });
-        const children: any = fs.readdirSync(bounded.absolutePath, { withFileTypes: true })
-          .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+        const children = fs.readdirSync(bounded.absolutePath, { withFileTypes: true })
+          .sort((left, right) => left.name.localeCompare(right.name));
         for (const child of children) {
           if (child.name.startsWith(".")) {
             throw localSnapshotError(
@@ -205,7 +246,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
               `本机目录 preimage 不允许以 . 开头的路径：${relativePath}/${child.name}。`
             );
           }
-          const childRelativePath: any = `${relativePath}/${child.name}`;
+          const childRelativePath = `${relativePath}/${child.name}`;
           await visit(resolvedRoot, path.join(bounded.absolutePath, child.name), childRelativePath);
         }
         return;
@@ -222,10 +263,10 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
           413
         );
       }
-      const contentSha256: any = sha256Buffer(content);
-      let contentCid: any = "";
+      const contentSha256 = sha256Buffer(content);
+      let contentCid = "";
       if (archive) {
-        const block: any = await merkleState.cas.putBlock(content, {
+        const block = await requireCas().putBlock(content, {
           codec: "raw",
           metadata: {
             workspaceId: workspace.workspaceId,
@@ -256,7 +297,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     };
 
     for (const root of roots) {
-      const resolved: any = resolveSnapshotPath(workspace, mountRef, root, { allowMissing: true });
+      const resolved = resolveSnapshotPath(workspace, mountRef, root, { allowMissing: true });
       if (!resolved.exists) {
         pushEntry({
           relativePath: root,
@@ -271,7 +312,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       }
       await visit(resolved, resolved.absolutePath, root);
     }
-    entries.sort((left?: any, right?: any) : any => left.relativePath.localeCompare(right.relativePath));
+    entries.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
     return {
       entries,
       totalBytes,
@@ -285,40 +326,40 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     relativePaths = [],
     operationId = "",
     fixedRoots = false
-  }: Record<string, any> = {}) : Promise<any> {
-    assertCasAvailable();
-    const requested: any = asArray(relativePaths).map((value?: any) : any =>
+  }: CaptureInput): Promise<SnapshotCapture> {
+    requireCas();
+    const requested = [...relativePaths].map((value) =>
       normalizeWorkspaceRelativePath(value, { allowEmpty: false })
     );
     if (requested.length === 0) {
       throw localSnapshotError("local_directory_preimage_paths_missing", "本机目录 preimage 缺少恢复路径。");
     }
-    const resolvedPaths: any = requested.map((relativePath?: any) : any =>
-      resolveLocalDirectoryMountPath({ ...input, path: relativePath }, workspace, {
+    const resolvedPaths = requested.map((relativePath) =>
+      resolveMountPath({ ...input, path: relativePath }, workspace, {
         allowEmpty: false,
         allowMissing: true,
         allowDirectory: true,
         allowFile: true
       })
     );
-    const mountRefs: any[] = [...new Set<any>(resolvedPaths.map((resolved?: any) : any => String(resolved.mount?.mountRef || "")))];
+    const mountRefs = [...new Set(resolvedPaths.map((resolved) => String(resolved.mount?.mountRef || "")))];
     if (mountRefs.length !== 1 || !mountRefs[0]) {
       throw localSnapshotError("local_directory_preimage_mount_mismatch", "本机目录 preimage 必须绑定一个 mountRef。");
     }
-    const mountRef: any = mountRefs[0];
-    const mountRoots: any[] = [...new Set<any>(resolvedPaths.map((resolved?: any) : any => resolved.root))];
+    const mountRef = mountRefs[0];
+    const mountRoots = [...new Set(resolvedPaths.map((resolved) => resolved.root))];
     if (mountRoots.length !== 1) {
       throw localSnapshotError("local_directory_preimage_mount_root_mismatch", "本机目录 preimage mount root 不一致。", 409);
     }
-    const roots: any = dedupeRoots(resolvedPaths.map((resolved?: any) : any =>
+    const roots = dedupeRoots(resolvedPaths.map((resolved) =>
       fixedRoots || resolved.exists
         ? resolved.relativePath
         : firstMissingAncestor(resolved.root, resolved.relativePath)
     ));
-    const scanned: any = await scanRoots({ workspace, mountRef, roots, archive: true, operationId });
-    const snapshot: Record<string, any> = {
+    const scanned = await scanRoots({ workspace, mountRef, roots, archive: true, operationId });
+    const snapshot: LocalDirectorySnapshot = {
       schemaVersion: LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION,
-      workspaceId: workspace.workspaceId,
+      workspaceId: String(workspace.workspaceId || ""),
       mountRef,
       mountIdentityHash: stableHash(mountRoots[0]),
       roots,
@@ -330,14 +371,14 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     return { snapshot };
   }
 
-  async function validateLocalDirectoryPreimage({ workspace, capture }: Record<string, any> = {}) : Promise<any> {
-    const snapshot: any = capture?.snapshot || capture;
+  async function validateLocalDirectoryPreimage({ workspace, capture }: { workspace: WorkspaceIdentity; capture: SnapshotCapture | LocalDirectorySnapshot }): Promise<true> {
+    const snapshot = "snapshot" in capture ? capture.snapshot : capture;
     assertSnapshotWorkspaceBinding(workspace, snapshot);
-    const resolvedIdentity: any = resolveSnapshotPath(workspace, snapshot.mountRef, dedupeRoots(snapshot.roots)[0], { allowMissing: true });
+    const resolvedIdentity = resolveSnapshotPath(workspace, snapshot.mountRef, dedupeRoots(snapshot.roots)[0], { allowMissing: true });
     if (snapshot.mountIdentityHash && stableHash(resolvedIdentity.root) !== snapshot.mountIdentityHash) {
       throw localSnapshotError("local_directory_preimage_mount_rebound", "本机目录 mount 在 preimage 后发生重新绑定。", 409);
     }
-    const scanned: any = await scanRoots({
+    const scanned = await scanRoots({
       workspace,
       mountRef: snapshot.mountRef,
       roots: dedupeRoots(snapshot.roots),
@@ -353,13 +394,13 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     return true;
   }
 
-  async function materializeSnapshot(snapshot: Record<string, any> = {}) : Promise<any> {
-    assertCasAvailable();
+  async function materializeSnapshot(snapshot: LocalDirectorySnapshot): Promise<MaterializedSnapshotEntry[]> {
+    requireCas();
     if (snapshot.schemaVersion !== LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION) {
       throw localSnapshotError("local_directory_preimage_schema_invalid", "本机目录 preimage schemaVersion 无效。");
     }
-    const roots: any = dedupeRoots(snapshot.roots);
-    const rawEntries: any = asArray(snapshot.entries);
+    const roots = dedupeRoots(snapshot.roots);
+    const rawEntries = snapshot.entries;
     if (
       rawEntries.length === 0 ||
       rawEntries.length > LOCAL_DIRECTORY_PREIMAGE_MAX_ENTRIES ||
@@ -367,19 +408,19 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     ) {
       throw localSnapshotError("local_directory_preimage_entry_count_invalid", "本机目录 preimage entryCount 无效。", 409);
     }
-    const entries: any[] = [];
-    const seenPaths: any = new Set<any>();
-    let totalBytes: any = 0;
+    const entries: MaterializedSnapshotEntry[] = [];
+    const seenPaths = new Set<string>();
+    let totalBytes = 0;
     for (const rawEntry of rawEntries) {
-      const entry: any = publicSnapshotEntry({
+      const entry = publicSnapshotEntry({
         ...rawEntry,
-        relativePath: normalizeWorkspaceRelativePath(rawEntry.relativePath || rawEntry.path || "", { allowEmpty: false })
+        relativePath: normalizeWorkspaceRelativePath(rawEntry.relativePath || "", { allowEmpty: false })
       });
       if (seenPaths.has(entry.relativePath)) {
         throw localSnapshotError("local_directory_preimage_entry_duplicate", "本机目录 preimage 包含重复路径。", 409);
       }
       seenPaths.add(entry.relativePath);
-      if (!roots.some((root?: any) : any => isPathWithin(entry.relativePath, root))) {
+      if (!roots.some((root) => isPathWithin(entry.relativePath, root))) {
         throw localSnapshotError("local_directory_preimage_entry_outside_root", "本机目录 preimage 条目超出恢复根。");
       }
       if (!Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o777) {
@@ -412,12 +453,12 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       ) {
         throw localSnapshotError("local_directory_preimage_file_entry_invalid", "本机目录 preimage file 条目无效。", 409);
       }
-      const block: any = await merkleState.cas.getBlock(entry.contentCid);
+      const block = await requireCas().getBlock(entry.contentCid);
       if (!block) {
         throw localSnapshotError("local_directory_preimage_content_missing", "本机目录 preimage CAS 内容不存在。", 409);
       }
-      const content: any = block.bytes;
-      const contentSha256: any = sha256Buffer(content);
+      const content = block.bytes;
+      const contentSha256 = sha256Buffer(content);
       if (
         normalizeSha256(contentSha256) !== normalizeSha256(entry.contentSha256) ||
         content.length !== entry.sizeBytes
@@ -433,33 +474,33 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     if (Number(snapshot.totalBytes) !== totalBytes) {
       throw localSnapshotError("local_directory_preimage_total_bytes_mismatch", "本机目录 preimage totalBytes 校验失败。", 409);
     }
-    const publicEntries: any = entries.map(publicSnapshotEntry).sort((left?: any, right?: any) : any => left.relativePath.localeCompare(right.relativePath));
+    const publicEntries = entries.map(publicSnapshotEntry).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
     if (snapshotFingerprint(publicEntries) !== snapshot.fingerprint) {
       throw localSnapshotError("local_directory_preimage_fingerprint_mismatch", "本机目录 preimage fingerprint 校验失败。", 409);
     }
-    return entries.sort((left?: any, right?: any) : any => left.relativePath.localeCompare(right.relativePath));
+    return entries.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
   }
 
-  async function applySnapshot({ workspace, snapshot, entries = null }: Record<string, any> = {}) : Promise<any> {
-    const materialized: any = entries || await materializeSnapshot(snapshot);
-    const roots: any = dedupeRoots(snapshot.roots);
-    for (const root of [...roots].sort((left?: any, right?: any) : any => right.length - left.length)) {
-      const resolved: any = resolveSnapshotPath(workspace, snapshot.mountRef, root, { allowMissing: true });
+  async function applySnapshot({ workspace, snapshot, entries = null }: { workspace: WorkspaceIdentity; snapshot: LocalDirectorySnapshot; entries?: MaterializedSnapshotEntry[] | null }): Promise<MaterializedSnapshotEntry[]> {
+    const materialized = entries || await materializeSnapshot(snapshot);
+    const roots = dedupeRoots(snapshot.roots);
+    for (const root of [...roots].sort((left, right) => right.length - left.length)) {
+      const resolved = resolveSnapshotPath(workspace, snapshot.mountRef, root, { allowMissing: true });
       if (resolved.exists) {
         removePathSafely(resolved.root, resolved.absolutePath, { recursive: true });
       }
     }
-    const existingEntries: any = materialized.filter((entry?: any) : any => entry.state !== "missing");
-    const directories: any = existingEntries
-      .filter((entry?: any) : any => entry.type === "directory")
-      .sort((left?: any, right?: any) : any => left.relativePath.split("/").length - right.relativePath.split("/").length);
+    const existingEntries = materialized.filter((entry) => entry.state !== "missing");
+    const directories = existingEntries
+      .filter((entry) => entry.type === "directory")
+      .sort((left, right) => left.relativePath.split("/").length - right.relativePath.split("/").length);
     for (const entry of directories) {
-      const resolved: any = resolveSnapshotPath(workspace, snapshot.mountRef, entry.relativePath, { allowMissing: true });
+      const resolved = resolveSnapshotPath(workspace, snapshot.mountRef, entry.relativePath, { allowMissing: true });
       ensureDirectorySafely(resolved.root, resolved.absolutePath, Number(entry.mode || 0o700) & 0o777);
       fs.chmodSync(resolved.absolutePath, Number(entry.mode || 0o700) & 0o777);
     }
-    for (const entry of existingEntries.filter((item?: any) : any => item.type === "file")) {
-      const resolved: any = resolveSnapshotPath(workspace, snapshot.mountRef, entry.relativePath, { allowMissing: true });
+    for (const entry of existingEntries.filter((item) => item.type === "file")) {
+      const resolved = resolveSnapshotPath(workspace, snapshot.mountRef, entry.relativePath, { allowMissing: true });
       writeFileAtomically(resolved.root, resolved.absolutePath, entry.content, entry.mode, {
         preserveExecutable: true
       });
@@ -467,12 +508,12 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     return materialized;
   }
 
-  function planSnapshotActions(snapshot?: any, currentSnapshot?: any) : any {
-    const desiredEntries: any = asArray(snapshot.entries).filter((entry?: any) : any => entry.state !== "missing");
-    const currentEntries: any = asArray(currentSnapshot.entries).filter((entry?: any) : any => entry.state !== "missing");
-    const desiredByPath: any = new Map<any, any>(desiredEntries.map((entry?: any) : any => [entry.relativePath, entry]));
-    const currentByPath: any = new Map<any, any>(currentEntries.map((entry?: any) : any => [entry.relativePath, entry]));
-    const actions: any[] = [];
+  function planSnapshotActions(snapshot: LocalDirectorySnapshot, currentSnapshot: LocalDirectorySnapshot): SnapshotAction[] {
+    const desiredEntries = snapshot.entries.filter((entry) => entry.state !== "missing");
+    const currentEntries = currentSnapshot.entries.filter((entry) => entry.state !== "missing");
+    const desiredByPath = new Map(desiredEntries.map((entry) => [entry.relativePath, entry]));
+    const currentByPath = new Map(currentEntries.map((entry) => [entry.relativePath, entry]));
+    const actions: SnapshotAction[] = [];
     for (const current of currentEntries) {
       if (!desiredByPath.has(current.relativePath)) {
         actions.push({
@@ -485,8 +526,8 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       }
     }
     for (const desired of desiredEntries) {
-      const current: any = currentByPath.get(desired.relativePath);
-      const action: any = !current
+      const current = currentByPath.get(desired.relativePath);
+      const action: SnapshotAction["action"] = !current
         ? "create"
         : current.type !== desired.type
           ? "replace"
@@ -507,22 +548,22 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
         actions.push({ action: "noop", scope: "localDir", mountRef: snapshot.mountRef, path: root });
       }
     }
-    return actions.sort((left?: any, right?: any) : any => left.path.localeCompare(right.path) || left.action.localeCompare(right.action));
+    return actions.sort((left, right) => left.path.localeCompare(right.path) || left.action.localeCompare(right.action));
   }
 
-  function stateProjectionForSnapshot(snapshot?: any, currentSnapshot: any = null) : any {
-    const mutations: any[] = [];
+  function stateProjectionForSnapshot(snapshot: LocalDirectorySnapshot, currentSnapshot: LocalDirectorySnapshot | null = null): { mutations: StateMutation[]; contentRefs: string[] } {
+    const mutations: StateMutation[] = [];
     if (currentSnapshot) {
-      for (const entry of [...asArray(currentSnapshot.entries)]
-        .filter((item?: any) : any => item.state !== "missing")
-        .sort((left?: any, right?: any) : any => right.relativePath.length - left.relativePath.length)) {
-        mutations.push({ action: "delete", key: mountMutationKey(snapshot.mountRef, entry.relativePath) });
+      for (const entry of [...currentSnapshot.entries]
+        .filter((item) => item.state !== "missing")
+        .sort((left, right) => right.relativePath.length - left.relativePath.length)) {
+        mutations.push({ action: "delete", key: mutationKey(snapshot.mountRef, entry.relativePath) });
       }
     }
-    for (const entry of asArray(snapshot.entries).filter((item?: any) : any => item.state !== "missing")) {
+    for (const entry of snapshot.entries.filter((item) => item.state !== "missing")) {
       mutations.push({
         action: "put",
-        key: mountMutationKey(snapshot.mountRef, entry.relativePath),
+        key: mutationKey(snapshot.mountRef, entry.relativePath),
         valueRef: entry.type === "file" ? entry.contentCid : "",
         metadata: entry.type === "file"
           ? { type: "file", sizeBytes: entry.sizeBytes, contentSha256: entry.contentSha256 }
@@ -531,20 +572,20 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     }
     return {
       mutations,
-      contentRefs: asArray(snapshot.entries).map((entry?: any) : any => entry.contentCid).filter(Boolean)
+      contentRefs: snapshot.entries.map((entry) => entry.contentCid).filter(Boolean)
     };
   }
 
-  async function restoreLocalDirectoryPreimage({ workspace, snapshot, dryRun = false }: Record<string, any> = {}) : Promise<any> {
+  async function restoreLocalDirectoryPreimage({ workspace, snapshot, dryRun = false }: { workspace: WorkspaceIdentity; snapshot: LocalDirectorySnapshot; dryRun?: boolean }) {
     assertSnapshotWorkspaceBinding(workspace, snapshot);
-    const resolvedIdentity: any = resolveSnapshotPath(workspace, snapshot.mountRef, dedupeRoots(snapshot.roots)[0], { allowMissing: true });
+    const resolvedIdentity = resolveSnapshotPath(workspace, snapshot.mountRef, dedupeRoots(snapshot.roots)[0], { allowMissing: true });
     if (snapshot.mountIdentityHash && stableHash(resolvedIdentity.root) !== snapshot.mountIdentityHash) {
       throw localSnapshotError("local_directory_preimage_mount_rebound", "本机目录 mount 与 checkpoint 绑定不一致。", 409);
     }
-    const desiredEntries: any = await materializeSnapshot(snapshot);
-    let currentCapture: any;
+    const desiredEntries = await materializeSnapshot(snapshot);
+    let currentCapture: SnapshotCapture;
     if (dryRun) {
-      const scanned: any = await scanRoots({
+      const scanned = await scanRoots({
         workspace,
         mountRef: snapshot.mountRef,
         roots: dedupeRoots(snapshot.roots),
@@ -553,7 +594,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       currentCapture = {
         snapshot: {
           schemaVersion: LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION,
-          workspaceId: workspace.workspaceId,
+          workspaceId: String(workspace.workspaceId || ""),
           mountRef: snapshot.mountRef,
           mountIdentityHash: stableHash(resolvedIdentity.root),
           roots: dedupeRoots(snapshot.roots),
@@ -572,7 +613,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
         fixedRoots: true
       });
     }
-    const actions: any = planSnapshotActions(snapshot, currentCapture.snapshot);
+    const actions = planSnapshotActions(snapshot, currentCapture.snapshot);
     if (dryRun) {
       return {
         ok: true,
@@ -581,10 +622,10 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
         actions,
         appliedActions: [],
         summary: {
-          create: actions.filter((action?: any) : any => action.action === "create").length,
-          write: actions.filter((action?: any) : any => action.action === "write" || action.action === "replace").length,
-          delete: actions.filter((action?: any) : any => action.action === "delete").length,
-          noop: actions.filter((action?: any) : any => action.action === "noop").length,
+          create: actions.filter((action) => action.action === "create").length,
+          write: actions.filter((action) => action.action === "write" || action.action === "replace").length,
+          delete: actions.filter((action) => action.action === "delete").length,
+          noop: actions.filter((action) => action.action === "noop").length,
           applied: 0
         }
       };
@@ -592,7 +633,7 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
     await validateLocalDirectoryPreimage({ workspace, capture: currentCapture });
     try {
       await applySnapshot({ workspace, snapshot, entries: desiredEntries });
-    } catch (error: any) {
+    } catch (error: unknown) {
       try {
         await applySnapshot({ workspace, snapshot: currentCapture.snapshot });
       } catch {
@@ -605,11 +646,11 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       throw localSnapshotError(
         "local_directory_restore_apply_failed",
         "本机目录恢复未完成，已恢复 apply 前状态。",
-        Number(error?.status || 500)
+        errorStatus(error)
       );
     }
-    const projection: any = stateProjectionForSnapshot(snapshot, currentCapture.snapshot);
-    const appliedActions: any = actions.filter((action?: any) : any => action.action !== "noop");
+    const projection = stateProjectionForSnapshot(snapshot, currentCapture.snapshot);
+    const appliedActions = actions.filter((action) => action.action !== "noop");
     return {
       ok: true,
       dryRun: false,
@@ -620,23 +661,23 @@ export function createAgentWorkspaceLocalDirectorySnapshotApi({
       stateMutations: projection.mutations,
       contentRefs: projection.contentRefs,
       summary: {
-        create: actions.filter((action?: any) : any => action.action === "create").length,
-        write: actions.filter((action?: any) : any => action.action === "write" || action.action === "replace").length,
-        delete: actions.filter((action?: any) : any => action.action === "delete").length,
-        noop: actions.filter((action?: any) : any => action.action === "noop").length,
+        create: actions.filter((action) => action.action === "create").length,
+        write: actions.filter((action) => action.action === "write" || action.action === "replace").length,
+        delete: actions.filter((action) => action.action === "delete").length,
+        noop: actions.filter((action) => action.action === "noop").length,
         applied: appliedActions.length
       }
     };
   }
 
-  async function rollbackLocalDirectoryMutation({ workspace, snapshot }: Record<string, any> = {}) : Promise<any> {
+  async function rollbackLocalDirectoryMutation({ workspace, snapshot }: { workspace: WorkspaceIdentity; snapshot: LocalDirectorySnapshot }) {
     assertSnapshotWorkspaceBinding(workspace, snapshot);
-    const entries: any = await materializeSnapshot(snapshot);
+    const entries = await materializeSnapshot(snapshot);
     await applySnapshot({ workspace, snapshot, entries });
     return stateProjectionForSnapshot(snapshot);
   }
 
-  function workspacePreimageSnapshot(snapshot?: any) : any {
+  function workspacePreimageSnapshot(snapshot: LocalDirectorySnapshot) {
     return {
       schemaVersion: "v0.0.1:workspace:file-restore-snapshot-1",
       workspaceId: snapshot.workspaceId,

@@ -1,36 +1,55 @@
 import { createJobPipeline } from "../job-pipeline.ts";
 import { createServerRuntime } from "#meshrix/product-api";
+import type { CodedError, JobPayload, JobResult } from "./contracts.ts";
+import type { UploadConsumptionStorageProvider } from "./contracts.ts";
 
-function noop() : any {}
+interface RunnerRuntimeOptions {
+  testHooks?: { jobDelayMs?: number };
+  [key: string]: unknown;
+}
 
-function getTestJobDelayMs(runtimeOptions: Record<string, any> = {}) : any {
-  const delayValue: any = runtimeOptions?.testHooks?.jobDelayMs;
-  const delay: any = Number(delayValue || 0);
+interface RunnerOptions {
+  onProgress?: (message: Record<string, unknown>) => void | Promise<void>;
+  jobId?: string;
+  batchId?: string;
+  runtimeOptions?: RunnerRuntimeOptions;
+  signal?: AbortSignal | null;
+  storageProvider?: UploadConsumptionStorageProvider;
+  uploadSessionStore?: {
+    resolveUploadSessionFiles(sessionId: string, input: { owner: Record<string, string> }): Promise<unknown>;
+  };
+}
+
+function noop() {}
+
+function getTestJobDelayMs(runtimeOptions: RunnerRuntimeOptions = {}) {
+  const delayValue = runtimeOptions?.testHooks?.jobDelayMs;
+  const delay = Number(delayValue || 0);
   return Number.isFinite(delay) && delay > 0 ? delay : 0;
 }
 
-function throwIfAborted(signal?: any) : any {
+function throwIfAborted(signal?: AbortSignal | null) {
   if (!signal?.aborted) return;
   if (signal.reason instanceof Error) throw signal.reason;
-  const error: Error & Record<string, any> = new Error("Job execution was cancelled.");
+  const error = new Error("Job execution was cancelled.") as CodedError;
   error.code = "job_execution_aborted";
   throw error;
 }
 
-function abortableDelay(delayMs?: any, signal?: any) : any {
+function abortableDelay(delayMs = 0, signal?: AbortSignal | null) {
   if (delayMs <= 0) return Promise.resolve();
   throwIfAborted(signal);
-  return new Promise((resolve?: any, reject?: any) : any => {
-    const timer: any = setTimeout(() : any => {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
       signal?.removeEventListener?.("abort", onAbort);
       resolve();
     }, delayMs);
-    const onAbort: any = () : any => {
+    const onAbort = () => {
       clearTimeout(timer);
       signal?.removeEventListener?.("abort", onAbort);
       try {
         throwIfAborted(signal);
-      } catch (error: any) {
+      } catch (error) {
         reject(error);
       }
     };
@@ -38,27 +57,27 @@ function abortableDelay(delayMs?: any, signal?: any) : any {
   });
 }
 
-export async function runSplitJob(userDataPath?: any, payload?: any, options: Record<string, any> = {}) : Promise<any> {
-  const reportProgress: any =
+export async function runSplitJob(userDataPath: string, payload: JobPayload, options: RunnerOptions = {}): Promise<JobResult> {
+  const reportProgress =
     typeof options.onProgress === "function" ? options.onProgress : noop;
-  const generatedAt: any = new Date().toISOString();
-  const jobId: any = String(options.jobId || options.batchId || generatedAt);
-  const testJobDelayMs: any = getTestJobDelayMs(options.runtimeOptions || {});
-  const signal: any = options.signal || null;
+  const generatedAt = new Date().toISOString();
+  const jobId = String(options.jobId || options.batchId || generatedAt);
+  const testJobDelayMs = getTestJobDelayMs(options.runtimeOptions || {});
+  const signal = options.signal || null;
   throwIfAborted(signal);
-  const storageProvider: any = options.storageProvider;
-  const uploadSessionStore: any = options.uploadSessionStore;
+  const storageProvider = options.storageProvider;
+  const uploadSessionStore = options.uploadSessionStore;
   if (
     !storageProvider ||
     typeof storageProvider.commitUploadConsumptionReceipt !== "function"
   ) {
-    const error: Error & Record<string, any> = new TypeError(
+    const error = new TypeError(
       "Job execution requires an already-composed storage provider."
-    );
+    ) as CodedError;
     error.code = "upload_session_storage_provider_unavailable";
     throw error;
   }
-  const runtime: any = await createServerRuntime({
+  const runtime = await createServerRuntime({
     userDataPath,
     runtimeOptions: options.runtimeOptions || {}
   });
@@ -68,7 +87,7 @@ export async function runSplitJob(userDataPath?: any, payload?: any, options: Re
     await abortableDelay(testJobDelayMs, signal);
     throwIfAborted(signal);
 
-    const pipeline: any = createJobPipeline({
+    const pipeline = createJobPipeline({
       userDataPath,
       payload,
       runtime,
@@ -79,8 +98,8 @@ export async function runSplitJob(userDataPath?: any, payload?: any, options: Re
       generatedAt,
       signal
     });
-    const context: any = pipeline.createContext();
-    const result: any = await pipeline.run(context);
+    const context = pipeline.createContext();
+    const result = await pipeline.run(context);
     throwIfAborted(signal);
     return result;
   } finally {

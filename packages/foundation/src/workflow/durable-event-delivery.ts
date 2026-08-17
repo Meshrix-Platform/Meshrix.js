@@ -1,6 +1,6 @@
 import { validateWorkQueueStoreAdapterShape } from "../work-queue/store-adapter-contract.ts";
 
-const OUTBOX_TRANSITION_METHODS: readonly any[] = Object.freeze([
+const OUTBOX_TRANSITION_METHODS = Object.freeze([
   "enqueue",
   "claim",
   "complete",
@@ -8,14 +8,14 @@ const OUTBOX_TRANSITION_METHODS: readonly any[] = Object.freeze([
   "recover",
 ]);
 
-const DISPATCHER_OPERATIONS: readonly any[] = Object.freeze([
+const DISPATCHER_OPERATIONS = Object.freeze([
   "dispatchOnce",
   "status",
   "drain",
   "cancel",
 ]);
 
-export const DURABLE_EVENT_DELIVERY_DISCIPLINE: Readonly<Record<string, any>> = Object.freeze({
+export const DURABLE_EVENT_DELIVERY_DISCIPLINE = Object.freeze({
   id: "durable-event-delivery",
   outbox: Object.freeze({
     journal: "work_queue_transition_journal",
@@ -35,29 +35,32 @@ export const DURABLE_EVENT_DELIVERY_DISCIPLINE: Readonly<Record<string, any>> = 
   }),
 });
 
-function operationsMatch(actual?: any, expected?: any) : any {
+function operationsMatch(actual: unknown, expected: readonly string[]): boolean {
   return Array.isArray(actual) &&
     actual.length === expected.length &&
-    expected.every((operation?: any, index?: any) : any => actual[index] === operation);
+    expected.every((operation, index) => actual[index] === operation);
 }
 
-function requireStoreClaim(store?: any) : any {
+type OperationFacade = Record<string, unknown>;
+interface DeliveryBoundaries { store?: OperationFacade; dispatcher?: OperationFacade }
+
+function requireStoreClaim(store: OperationFacade | undefined): asserts store is OperationFacade & { claim: (...args: unknown[]) => unknown } {
   if (!store || typeof store.claim !== "function") {
     throw new Error("Transactional outbox requires a work queue store with claim.");
   }
 }
 
-function requireDispatcherDispatch(dispatcher?: any) : any {
+function requireDispatcherDispatch(dispatcher: OperationFacade | undefined): asserts dispatcher is OperationFacade & { dispatchOnce: (...args: unknown[]) => unknown } {
   if (!dispatcher || typeof dispatcher.dispatchOnce !== "function") {
     throw new Error("Bounded durable delivery requires a push dispatcher with dispatchOnce.");
   }
 }
 
-export function assertDurableEventDeliveryBoundaries({ store, dispatcher }: Record<string, any> = {}) : any {
+export function assertDurableEventDeliveryBoundaries({ store, dispatcher }: DeliveryBoundaries = {}): true {
   requireStoreClaim(store);
   requireDispatcherDispatch(dispatcher);
 
-  const storeValidation: any = validateWorkQueueStoreAdapterShape(store);
+  const storeValidation = validateWorkQueueStoreAdapterShape(store);
   if (!storeValidation.ok) {
     throw new Error("Transactional outbox store adapter is incomplete.");
   }
@@ -77,7 +80,7 @@ export function assertDurableEventDeliveryBoundaries({ store, dispatcher }: Reco
   return true;
 }
 
-export function assertOutboxTransitionMethods(actualMethods?: any) : any {
+export function assertOutboxTransitionMethods(actualMethods?: unknown): true {
   if (!operationsMatch(actualMethods, DURABLE_EVENT_DELIVERY_DISCIPLINE.outbox.storeMethods)) {
     throw new Error("Transactional outbox transition methods changed without updating the delivery contract.");
   }

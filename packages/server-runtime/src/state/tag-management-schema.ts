@@ -1,4 +1,6 @@
-export function ensureTagManagementSchema(db?: any) : any {
+import type Database from "better-sqlite3";
+
+export function ensureTagManagementSchema(db: Database.Database): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -81,9 +83,9 @@ export function ensureTagManagementSchema(db?: any) : any {
     );
   `);
 
-  const migrationVersion: any = Number(db.pragma("user_version", { simple: true }) || 0);
+  const migrationVersion = Number(db.pragma("user_version", { simple: true }) || 0);
   if (migrationVersion < 1) {
-    db.transaction(() : any => {
+    db.transaction((): void => {
       db.prepare(`
         DELETE FROM tag_management_projections
         WHERE entity_type = 'authorization.role'

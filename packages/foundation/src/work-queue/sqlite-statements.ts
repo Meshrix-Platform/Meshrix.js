@@ -1,6 +1,7 @@
 import { WORK_QUEUE_STATES } from "../workflow/state-machine/work-queue/state-machine.ts";
+import type Database from "better-sqlite3";
 
-export function prepareSqliteWorkQueueStatements(database?: any) : any {
+export function prepareSqliteWorkQueueStatements(database: Database.Database): Record<string, Database.Statement> {
   return {
     insertDefinition: database.prepare(`
       INSERT INTO queue_definitions (
@@ -138,7 +139,9 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
           updated_at_ms = @updated_at_ms
       WHERE work_item_id = @work_item_id
     `),
-    getWorkItem: database.prepare("SELECT * FROM work_items WHERE work_item_id = ?"),
+    getWorkItem: database.prepare(
+      "SELECT * FROM work_items WHERE work_item_id = ?",
+    ),
     getDefinitionPolicy: database.prepare(`
       SELECT policy_json FROM queue_definitions
       WHERE queue_definition_id = ? AND queue_definition_version = ?
@@ -288,7 +291,9 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
     deleteFallbackTasksByWorkItem: database.prepare(`
       DELETE FROM work_queue_fallback_tasks WHERE work_item_id = ?
     `),
-    deleteWorkItem: database.prepare("DELETE FROM work_items WHERE work_item_id = ?"),
+    deleteWorkItem: database.prepare(
+      "DELETE FROM work_items WHERE work_item_id = ?",
+    ),
     countJournalByQueue: database.prepare(`
       SELECT COUNT(*) AS count FROM (
         SELECT 1 FROM work_queue_transition_journal
@@ -503,6 +508,6 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
       FROM work_queue_controls
       WHERE queue_definition_id = @queue_definition_id
         AND scope_key = @scope_key
-    `)
+    `),
   };
 }

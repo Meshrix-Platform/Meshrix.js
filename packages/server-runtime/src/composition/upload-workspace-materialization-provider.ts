@@ -136,7 +136,6 @@ function digest(value?: any) : any {
     .update(canonicalJson(value))
     .digest("hex");
 }
-
 function digestSchema() : any {
   return digest({
     version: SCHEMA_FINGERPRINT_VERSION,
@@ -3726,7 +3725,7 @@ export async function createUploadWorkspaceMaterializationProvider({
     });
   }
 
-  const workspacePort: Readonly<Record<string, any>> = Object.freeze({
+  const workspacePort = Object.freeze({
     withRequest(record?: any, task?: any) : any {
       if (typeof task !== "function") {
         throw new TypeError(

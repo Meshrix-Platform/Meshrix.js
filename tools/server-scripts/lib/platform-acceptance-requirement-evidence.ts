@@ -34,7 +34,7 @@ const mapping: Record<string, any> = {
   [rel(25)]: { commandIds: ["job-work-queue-ceiling-conformance", "mcp-gateway-load", "gateway-platform-profile", "production-readiness-gates"] },
   [rel(26)]: { commandIds: ["controlled-execution-sandbox", "controlled-execution-convergence-final"] },
   [rel(27)]: { commandIds: ["plugin-runtime", "npm-package-installability", "composition-source-package"] },
-  [rel(28)]: { commandIds: ["model-gateway-service", "model-gateway-adapter", "external-gateway-plugin", "surface-convergence"] },
+  [rel(28)]: { commandIds: ["model-gateway-service", "model-gateway-adapter", "gateway-boundary-final", "external-gateway-plugin", "surface-convergence"] },
   [rel(29)]: { commandIds: ["workspace-asset-management", "upload-workspace-materialization"] },
   [rel(30)]: { commandIds: ["better-plan", "repo-organization", "documentation-convergence"] },
   ...Object.fromEntries(Array.from({ length: 13 }, (_?: any, index?: any) : any => [

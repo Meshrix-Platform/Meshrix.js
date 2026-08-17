@@ -2,26 +2,32 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { isJsonRecord, type JsonRecord } from "./plan-types.ts";
 
-const VALIDATION_SCHEMA: any = "v0.0.1:meshrix:better-plan-validation-1";
-const TOOL_OVERRIDE: any = "MESHRIX_BETTER_PLAN_MANIFEST_TOOL";
+interface ToolResult { status: number | null; signal: NodeJS.Signals | null; stdout: string }
+interface ToolRequest { repoRoot: string; toolPath: string; args: string[]; env?: NodeJS.ProcessEnv }
+type RunTool = (request: ToolRequest) => ToolResult;
+interface ToolResolutionOptions {
+  env?: NodeJS.ProcessEnv;
+  homeDirectory?: string;
+  manifestToolPath?: string;
+}
+
+const VALIDATION_SCHEMA  = "v0.0.1:meshrix:better-plan-validation-1";
+const TOOL_OVERRIDE  = "MESHRIX_BETTER_PLAN_MANIFEST_TOOL";
 
 export class CanonicalBetterPlanToolError extends Error {
-  code: any;
-  name: any;
-  constructor(code?: any) {
+  code ;
+  name ;
+  constructor(code: string) {
     super(code);
     this.name = "CanonicalBetterPlanToolError";
     this.code = code;
   }
 }
 
-function isRecord(value?: any) : any {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isRetriableToolFailure(result?: any) : any {
-  if (!isRecord(result)) {
+function isRetriableToolFailure(result: unknown): result is ToolResult {
+  if (!isJsonRecord(result)) {
     return false;
   }
   if (result.status === 137) {
@@ -30,37 +36,43 @@ function isRetriableToolFailure(result?: any) : any {
   return result.status === null && result.signal === "SIGKILL";
 }
 
-async function invokeTool(runTool?: any, request?: any, { maxAttempts = 2, retryDelayMs = 50 }: Record<string, any> = {}) : Promise<any> {
-  let lastResult: any;
-  for (let attempt: any = 1; attempt <= maxAttempts; attempt += 1) {
+async function invokeTool(runTool: RunTool, request: ToolRequest, { maxAttempts = 2, retryDelayMs = 50 }: {
+  maxAttempts?: number;
+  retryDelayMs?: number;
+} = {}): Promise<ToolResult> {
+  let lastResult: ToolResult | undefined;
+  for (let attempt  = 1; attempt <= maxAttempts; attempt += 1) {
     lastResult = runTool(request);
     if (!isRetriableToolFailure(lastResult) || attempt === maxAttempts) {
       return lastResult;
     }
     if (retryDelayMs > 0) {
-      await new Promise((resolve?: any) : any => setTimeout(resolve, retryDelayMs));
+      await new Promise<void>((resolve) => setTimeout(resolve, retryDelayMs));
     }
   }
+  if (!lastResult) throw new CanonicalBetterPlanToolError("canonical_better_plan_tool_unreadable");
   return lastResult;
 }
 
-function parseJsonOutput(result?: any, code?: any, { allowNonZeroExit = false }: Record<string, any> = {}) : any {
-  if (!isRecord(result) || typeof result.stdout !== "string") {
+function parseJsonOutput(result: unknown, code: string, { allowNonZeroExit = false }: {
+  allowNonZeroExit?: boolean;
+} = {}): JsonRecord {
+  if (!isJsonRecord(result) || typeof result.stdout !== "string") {
     throw new CanonicalBetterPlanToolError(code);
   }
   if (result.status !== 0 && !allowNonZeroExit) {
     throw new CanonicalBetterPlanToolError(code);
   }
   try {
-    const parsed: any = JSON.parse(result.stdout);
-    if (!isRecord(parsed)) throw new Error("not an object");
+    const parsed  = JSON.parse(result.stdout);
+    if (!isJsonRecord(parsed)) throw new Error("not an object");
     return parsed;
   } catch {
     throw new CanonicalBetterPlanToolError(code);
   }
 }
 
-async function regularFile(candidate?: any) : Promise<any> {
+async function regularFile(candidate: string): Promise<boolean> {
   try {
     return (await fs.stat(candidate)).isFile();
   } catch {
@@ -72,33 +84,33 @@ export async function resolveCanonicalBetterPlanTool({
   env = process.env,
   homeDirectory = os.homedir(),
   manifestToolPath,
-}: Record<string, any> = {}) : Promise<any> {
-  const candidates: any = [
+}: ToolResolutionOptions = {}): Promise<string> {
+  const candidates  = [
     manifestToolPath,
     env[TOOL_OVERRIDE],
     path.join(env.CODEX_HOME || path.join(homeDirectory, ".codex"), "skills", "better-plan", "scripts", "manifest_tool.py"),
     path.join(homeDirectory, ".agents", "skills", "better-plan", "scripts", "manifest_tool.py"),
-  ].filter((candidate?: any) : any => typeof candidate === "string" && candidate.length > 0);
+  ].filter((candidate): candidate is string => typeof candidate === "string" && candidate.length > 0);
 
-  for (const candidate of [...new Set<any>(candidates.map((entry?: any) : any => path.resolve(entry)))]) {
+  for (const candidate of new Set(candidates.map((entry) => path.resolve(entry)))) {
     if (await regularFile(candidate)) return candidate;
   }
   throw new CanonicalBetterPlanToolError("canonical_better_plan_tool_unavailable");
 }
 
-function resolvePythonExecutable(env: any = process.env) : any {
+function resolvePythonExecutable(env: NodeJS.ProcessEnv = process.env): string {
   if (process.platform === "win32") {
     return "python";
   }
-  const configured: any = String(env.MESHRIX_BETTER_PLAN_PYTHON || "").trim();
+  const configured  = String(env.MESHRIX_BETTER_PLAN_PYTHON || "").trim();
   if (configured) {
     return configured;
   }
   return process.platform === "darwin" ? "/usr/bin/python3" : "python3";
 }
 
-function defaultRunTool({ repoRoot, toolPath, args, env = process.env }: Record<string, any>) : any {
-  const result: any = spawnSync(
+function defaultRunTool({ repoRoot, toolPath, args, env = process.env }: ToolRequest): ToolResult {
+  const result  = spawnSync(
     resolvePythonExecutable(env),
     [toolPath, ...args],
     {
@@ -116,12 +128,12 @@ function defaultRunTool({ repoRoot, toolPath, args, env = process.env }: Record<
   };
 }
 
-export function canonicalBetterPlanChecks({ validation }: Record<string, any> = {}) : any {
-  const validationAccepted: any =
+export function canonicalBetterPlanChecks({ validation }: { validation?: JsonRecord } = {}) {
+  const validationAccepted  =
     validation?.valid === true &&
     Array.isArray(validation.issues) &&
     validation.issues.length === 0;
-  const checks: Record<string, any> = {
+  const checks: Record<string, boolean> = {
     schema: validationAccepted,
     source: validationAccepted,
     label: validationAccepted,
@@ -130,30 +142,34 @@ export function canonicalBetterPlanChecks({ validation }: Record<string, any> = 
   };
   return {
     schema_version: VALIDATION_SCHEMA,
-    accepted: (Object.values(checks) as any[]).every(Boolean),
+    accepted: Object.values(checks).every(Boolean),
     checks,
   };
 }
 
-async function discoverCanonicalPlanRoots(repoRoot?: any, planRoot?: any) : Promise<any> {
-  const candidateRoot: any = path.resolve(repoRoot, planRoot);
-  const candidates: any[] = [candidateRoot];
+function errorCode(error: unknown): string {
+  return isJsonRecord(error) && typeof error.code === "string" ? error.code : "";
+}
+
+async function discoverCanonicalPlanRoots(repoRoot: string, planRoot: string): Promise<string[]> {
+  const candidateRoot  = path.resolve(repoRoot, planRoot);
+  const candidates  = [candidateRoot];
   try {
-    const entries: any[] = await fs.readdir(candidateRoot, { withFileTypes: true });
-    candidates.push(...entries.filter((entry?: any) : any => entry.isDirectory())
-      .map((entry?: any) : any => path.join(candidateRoot, entry.name)));
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") throw error;
+    const entries  = await fs.readdir(candidateRoot, { withFileTypes: true });
+    candidates.push(...entries.filter((entry)  => entry.isDirectory())
+      .map((entry)  => path.join(candidateRoot, entry.name)));
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") throw error;
   }
-  const roots: any[] = [];
+  const roots: string[] = [];
   for (const candidate of candidates) {
     try {
-      const manifest: any = JSON.parse(await fs.readFile(path.join(candidate, "Manifest.json"), "utf8"));
-      if (manifest?.schema === "better-plan.manifest/v3") {
+      const manifest  = JSON.parse(await fs.readFile(path.join(candidate, "Manifest.json"), "utf8"));
+      if (isJsonRecord(manifest) && manifest.schema === "better-plan.manifest/v3") {
         roots.push(path.relative(repoRoot, candidate).split(path.sep).join("/"));
       }
-    } catch (error: any) {
-      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    } catch (error: unknown) {
+      if (errorCode(error) !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
     }
   }
   if (roots.length === 0) {
@@ -167,21 +183,25 @@ export async function validateCanonicalBetterPlanWorkspace({
   planRoot = "docs/plans",
   runTool = defaultRunTool,
   ...toolOptions
-}: Record<string, any> = {}) : Promise<any> {
+}: ToolResolutionOptions & {
+  repoRoot?: string;
+  planRoot?: string;
+  runTool?: RunTool;
+} = {}) {
   if (typeof repoRoot !== "string" || repoRoot.length === 0) {
     throw new CanonicalBetterPlanToolError("canonical_better_plan_repo_root_missing");
   }
-  const toolPath: any = await resolveCanonicalBetterPlanTool(toolOptions);
-  const roots: any[] = await discoverCanonicalPlanRoots(repoRoot, planRoot);
-  const validations: any[] = [];
+  const toolPath  = await resolveCanonicalBetterPlanTool(toolOptions);
+  const roots  = await discoverCanonicalPlanRoots(repoRoot, planRoot);
+  const validations: JsonRecord[] = [];
   for (const root of roots) {
-    const result: any = await invokeTool(runTool, {
+    const result  = await invokeTool(runTool, {
       repoRoot,
       toolPath,
       args: ["validate", root, "--json"],
       env: toolOptions.env,
     });
-    const validation: any = parseJsonOutput(
+    const validation  = parseJsonOutput(
       result,
       "canonical_better_plan_validation_unreadable",
       { allowNonZeroExit: true },
@@ -193,8 +213,8 @@ export async function validateCanonicalBetterPlanWorkspace({
   }
   return canonicalBetterPlanChecks({
     validation: {
-      valid: validations.every((validation?: any) : any => validation.valid === true),
-      issues: validations.flatMap((validation?: any) : any => Array.isArray(validation.issues)
+      valid: validations.every((validation) => validation.valid === true),
+      issues: validations.flatMap((validation) => Array.isArray(validation.issues)
         ? validation.issues : ["invalid_validation_result"]),
     },
   });

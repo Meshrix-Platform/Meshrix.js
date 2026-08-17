@@ -1,20 +1,116 @@
 import fs from "node:fs";
 import path from "node:path";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
+import type Database from "better-sqlite3";
 
-export const MAX_MESHRIX_CLIENT_REGISTRATIONS: any = 2000;
+export const MAX_MESHRIX_CLIENT_REGISTRATIONS = 2000;
 // Internal capacity safety policy; it does not populate user discovery configuration.
-export const DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS: any = 15 * 60;
+export const DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS = 15 * 60;
+type AlignmentState =
+  | "unknown"
+  | "offline"
+  | "draining"
+  | "aligned"
+  | "outdated"
+  | "bootstrap-only";
+interface ClientState {
+  currentServiceUrl?: unknown;
+  desiredServiceUrl?: unknown;
+  currentJobServiceUrl?: unknown;
+}
+interface ClientRow {
+  client_id: string;
+  client_label: string;
+  app_version: string;
+  platform: string;
+  hostname: string;
+  bootstrap_url: string;
+  current_service_url: string;
+  desired_service_url: string;
+  current_job_service_url: string;
+  config_version: string;
+  alignment_state: string;
+  last_error: string;
+  busy: number;
+  last_job_id: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_seen_server_id: string;
+  updated_at: string;
+}
+interface CountRow {
+  count: number;
+}
+interface ClientItem {
+  clientId: string;
+  clientLabel: string;
+  appVersion: string;
+  platform: string;
+  hostname: string;
+  bootstrapUrl: string;
+  currentServiceUrl: string;
+  desiredServiceUrl: string;
+  currentJobServiceUrl: string;
+  configVersion: string;
+  alignmentState: AlignmentState;
+  connectionKind: string;
+  connectionMethod: string;
+  connectionState: "offline" | "unknown" | "active";
+  connectionStatusLabel: string;
+  supportsAlignment: true;
+  busy: boolean;
+  lastJobId: string;
+  lastError: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  lastSeenServerId: string;
+}
+interface CheckInInput extends Record<string, unknown> {
+  clientId: string;
+  clientLabel?: string;
+  appVersion?: string;
+  platform?: string;
+  hostname?: string;
+  bootstrapUrl?: string;
+  currentServiceUrl?: string;
+  desiredServiceUrl?: string;
+  currentJobServiceUrl?: string;
+  configVersion?: string;
+  busy?: boolean;
+  lastJobId?: string;
+  lastError?: string;
+  serverId?: string;
+  offlineAfterSeconds?: number;
+}
+interface ClientRegistryService {
+  recordClientCheckIn(input: CheckInInput): Record<string, unknown>;
+  listClientRegistrations(options?: { offlineAfterSeconds?: number }): {
+    summary: Record<string, number>;
+    items: ClientItem[];
+  };
+  findClientRegistration(options?: {
+    clientId?: string;
+    offlineAfterSeconds?: number;
+  }): ClientItem | null;
+  close(): void;
+}
+interface ServiceOptions {
+  userDataPath?: string;
+  db?: Database.Database | null;
+  maxClientRegistrations?: number;
+  registrationRetentionSeconds?: number;
+  now?: () => number;
+}
 
-function asBoolInt(value?: any) : any {
+function asBoolInt(value?: unknown): 0 | 1 {
   return value ? 1 : 0;
 }
 
-export function getClientRegistryDatabasePath(userDataPath?: any) : any {
+export function getClientRegistryDatabasePath(userDataPath = ""): string {
   return path.join(userDataPath, "client-state", "client-registry.sqlite");
 }
 
-export function initializeClientRegistrySchema(db?: any) : any {
+export function initializeClientRegistrySchema(db: Database.Database): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -48,15 +144,15 @@ export function initializeClientRegistrySchema(db?: any) : any {
   `);
 }
 
-function openClientRegistryDatabase(userDataPath?: any) : any {
-  const databasePath: any = getClientRegistryDatabasePath(userDataPath);
+function openClientRegistryDatabase(userDataPath = ""): Database.Database {
+  const databasePath = getClientRegistryDatabasePath(userDataPath);
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
-  let db: any = null;
+  let db: Database.Database | null = null;
   try {
     db = openSqliteDatabase(databasePath);
     initializeClientRegistrySchema(db);
     return db;
-  } catch (error: any) {
+  } catch (error: unknown) {
     try {
       db?.close?.();
     } catch {
@@ -67,24 +163,32 @@ function openClientRegistryDatabase(userDataPath?: any) : any {
 }
 
 function normalizeClientAlignmentState(
-  currentState?: any,
-  lastSeenAt?: any,
-  offlineAfterSeconds?: any,
-  observedAtMs: any = Date.now()
-) : any {
-  const currentServiceUrl: any = String(currentState?.currentServiceUrl || "").trim();
-  const desiredServiceUrl: any = String(currentState?.desiredServiceUrl || "").trim();
-  const currentJobServiceUrl: any = String(currentState?.currentJobServiceUrl || "").trim();
-  const ageSeconds: any = Math.max(
+  currentState: ClientState = {},
+  lastSeenAt?: unknown,
+  offlineAfterSeconds?: unknown,
+  observedAtMs = Date.now(),
+): AlignmentState {
+  const currentServiceUrl = String(currentState.currentServiceUrl || "").trim();
+  const desiredServiceUrl = String(currentState.desiredServiceUrl || "").trim();
+  const currentJobServiceUrl = String(
+    currentState.currentJobServiceUrl || "",
+  ).trim();
+  const observedLastSeenAt =
+    typeof lastSeenAt === "string" ||
+    typeof lastSeenAt === "number" ||
+    lastSeenAt instanceof Date
+      ? lastSeenAt
+      : 0;
+  const ageSeconds = Math.max(
     0,
-    Math.floor((observedAtMs - new Date(lastSeenAt || 0).getTime()) / 1000)
+    Math.floor((observedAtMs - new Date(observedLastSeenAt).getTime()) / 1000),
   );
 
   if (!lastSeenAt || !Number.isFinite(ageSeconds)) {
     return "unknown";
   }
 
-  const offlineThreshold: any = Number(offlineAfterSeconds || 0);
+  const offlineThreshold = Number(offlineAfterSeconds || 0);
   if (offlineThreshold > 0 && ageSeconds > offlineThreshold) {
     return "offline";
   }
@@ -93,11 +197,19 @@ function normalizeClientAlignmentState(
     return "draining";
   }
 
-  if (currentServiceUrl && desiredServiceUrl && currentServiceUrl === desiredServiceUrl) {
+  if (
+    currentServiceUrl &&
+    desiredServiceUrl &&
+    currentServiceUrl === desiredServiceUrl
+  ) {
     return "aligned";
   }
 
-  if (currentServiceUrl && desiredServiceUrl && currentServiceUrl !== desiredServiceUrl) {
+  if (
+    currentServiceUrl &&
+    desiredServiceUrl &&
+    currentServiceUrl !== desiredServiceUrl
+  ) {
     return "outdated";
   }
 
@@ -108,12 +220,12 @@ function normalizeClientAlignmentState(
   return "unknown";
 }
 
-function prepareClientRegistryStatements(database?: any) : any {
+function prepareClientRegistryStatements(database: Database.Database) {
   return {
-    selectClientRegistrationStmt: database.prepare(`
+    selectClientRegistrationStmt: database.prepare<[string], ClientRow>(`
       SELECT * FROM client_registrations WHERE client_id = ?
     `),
-    countClientRegistrationsStmt: database.prepare(`
+    countClientRegistrationsStmt: database.prepare<[], CountRow>(`
       SELECT COUNT(*) AS count FROM client_registrations
     `),
     pruneExpiredClientRegistrationsStmt: database.prepare(`
@@ -145,10 +257,10 @@ function prepareClientRegistryStatements(database?: any) : any {
         last_seen_server_id = excluded.last_seen_server_id,
         updated_at = excluded.updated_at
     `),
-    listClientRegistrationsStmt: database.prepare(`
+    listClientRegistrationsStmt: database.prepare<[], ClientRow>(`
       SELECT * FROM client_registrations
       ORDER BY last_seen_at DESC, client_id ASC
-    `)
+    `),
   };
 }
 
@@ -157,30 +269,34 @@ export function createClientRegistryService({
   db = null,
   maxClientRegistrations = MAX_MESHRIX_CLIENT_REGISTRATIONS,
   registrationRetentionSeconds = DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
-  now = Date.now
-}: Record<string, any> = {}) : any {
-  const database: any = db || openClientRegistryDatabase(userDataPath);
-  const ownsDatabase: any = !db;
-  const maxRegistrations: any = Math.max(
+  now = Date.now,
+}: ServiceOptions = {}): ClientRegistryService {
+  const database = db || openClientRegistryDatabase(userDataPath);
+  const ownsDatabase = !db;
+  const maxRegistrations = Math.max(
     1,
-    Math.floor(Number(maxClientRegistrations || MAX_MESHRIX_CLIENT_REGISTRATIONS) || MAX_MESHRIX_CLIENT_REGISTRATIONS)
+    Math.floor(
+      Number(maxClientRegistrations || MAX_MESHRIX_CLIENT_REGISTRATIONS) ||
+        MAX_MESHRIX_CLIENT_REGISTRATIONS,
+    ),
   );
-  const defaultRetentionSeconds: any = Math.max(
+  const defaultRetentionSeconds = Math.max(
     1,
     Math.floor(
       Number(
-        registrationRetentionSeconds || DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS
-      ) || DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS
-    )
+        registrationRetentionSeconds ||
+          DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
+      ) || DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
+    ),
   );
-  const currentTimeMs: any = () : any => {
-    const value: any = Number(typeof now === "function" ? now() : Date.now());
+  const currentTimeMs = (): number => {
+    const value = Number(typeof now === "function" ? now() : Date.now());
     return Number.isFinite(value) ? value : Date.now();
   };
-  let statements: any;
+  let statements: ReturnType<typeof prepareClientRegistryStatements>;
   try {
     statements = prepareClientRegistryStatements(database);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (ownsDatabase) {
       try {
         database.close();
@@ -195,7 +311,7 @@ export function createClientRegistryService({
     countClientRegistrationsStmt,
     pruneExpiredClientRegistrationsStmt,
     upsertClientRegistrationStmt,
-    listClientRegistrationsStmt
+    listClientRegistrationsStmt,
   } = statements;
 
   return {
@@ -214,21 +330,22 @@ export function createClientRegistryService({
       lastJobId = "",
       lastError = "",
       serverId = "",
-      offlineAfterSeconds = 0
-    }: Record<string, any>) : any {
-      const existing: any = selectClientRegistrationStmt.get(clientId);
-      const checkedInAtMs: any = currentTimeMs();
-      const checkedInAt: any = new Date(checkedInAtMs).toISOString();
-      const firstSeenAt: any = existing?.first_seen_at || checkedInAt;
+      offlineAfterSeconds = 0,
+    }: CheckInInput): Record<string, unknown> {
+      const existing = selectClientRegistrationStmt.get(String(clientId || ""));
+      const checkedInAtMs = currentTimeMs();
+      const checkedInAt = new Date(checkedInAtMs).toISOString();
+      const firstSeenAt = existing?.first_seen_at || checkedInAt;
       if (!existing) {
-        const offlineThreshold: any = Number(offlineAfterSeconds || 0);
-        let count: any = Number(countClientRegistrationsStmt.get()?.count || 0);
+        const offlineThreshold = Number(offlineAfterSeconds || 0);
+        let count = Number(countClientRegistrationsStmt.get()?.count || 0);
         if (count >= maxRegistrations) {
-          const expirationSeconds: any = Number.isFinite(offlineThreshold) && offlineThreshold > 0
-            ? offlineThreshold
-            : defaultRetentionSeconds;
-          const expiredCutoff: any = new Date(
-            checkedInAtMs - expirationSeconds * 1000
+          const expirationSeconds =
+            Number.isFinite(offlineThreshold) && offlineThreshold > 0
+              ? offlineThreshold
+              : defaultRetentionSeconds;
+          const expiredCutoff = new Date(
+            checkedInAtMs - expirationSeconds * 1000,
           ).toISOString();
           pruneExpiredClientRegistrationsStmt.run(expiredCutoff);
           count = Number(countClientRegistrationsStmt.get()?.count || 0);
@@ -238,19 +355,19 @@ export function createClientRegistryService({
             ok: false,
             statusCode: 429,
             code: "client_registration_capacity_exceeded",
-            error: "客户端登记容量已满，请等待离线记录过期后重试。"
+            error: "客户端登记容量已满，请等待离线记录过期后重试。",
           };
         }
       }
-      const alignmentState: any = normalizeClientAlignmentState(
+      const alignmentState = normalizeClientAlignmentState(
         {
           currentServiceUrl,
           desiredServiceUrl,
-          currentJobServiceUrl
+          currentJobServiceUrl,
         },
         checkedInAt,
         offlineAfterSeconds,
-        checkedInAtMs
+        checkedInAtMs,
       );
 
       upsertClientRegistrationStmt.run(
@@ -271,7 +388,7 @@ export function createClientRegistryService({
         firstSeenAt,
         checkedInAt,
         String(serverId || ""),
-        checkedInAt
+        checkedInAt,
       );
 
       return {
@@ -280,92 +397,112 @@ export function createClientRegistryService({
         alignmentState,
         connectionKind: "meshrix-client",
         connectionMethod: "meshrix-client 封装",
-        connectionState: alignmentState === "offline"
-          ? "offline"
-          : alignmentState === "unknown"
-            ? "unknown"
-            : "active",
-        connectionStatusLabel: "",
-        supportsAlignment: true,
-        firstSeenAt,
-        lastSeenAt: checkedInAt
-      };
-    },
-    listClientRegistrations({ offlineAfterSeconds = 0 }: Record<string, any> = {}) : any {
-      const observedAtMs: any = currentTimeMs();
-      const items: any = listClientRegistrationsStmt.all().map((row?: any) : any => {
-        const alignmentState: any = normalizeClientAlignmentState(
-          {
-            currentServiceUrl: row.current_service_url,
-            desiredServiceUrl: row.desired_service_url,
-            currentJobServiceUrl: row.current_job_service_url
-          },
-          row.last_seen_at,
-          offlineAfterSeconds,
-          observedAtMs
-        );
-
-        return {
-          clientId: row.client_id,
-          clientLabel: row.client_label || row.hostname || row.client_id,
-          appVersion: row.app_version || "",
-          platform: row.platform || "",
-          hostname: row.hostname || "",
-          bootstrapUrl: row.bootstrap_url || "",
-          currentServiceUrl: row.current_service_url || "",
-          desiredServiceUrl: row.desired_service_url || "",
-          currentJobServiceUrl: row.current_job_service_url || "",
-          configVersion: row.config_version || "",
-          alignmentState,
-          connectionKind: "meshrix-client",
-          connectionMethod: "meshrix-client 封装",
-          connectionState: alignmentState === "offline"
+        connectionState:
+          alignmentState === "offline"
             ? "offline"
             : alignmentState === "unknown"
               ? "unknown"
               : "active",
-          connectionStatusLabel: "",
-          supportsAlignment: true,
-          busy: Boolean(row.busy),
-          lastJobId: row.last_job_id || "",
-          lastError: row.last_error || "",
-          firstSeenAt: row.first_seen_at,
-          lastSeenAt: row.last_seen_at,
-          lastSeenServerId: row.last_seen_server_id || ""
-        };
-      });
+        connectionStatusLabel: "",
+        supportsAlignment: true,
+        firstSeenAt,
+        lastSeenAt: checkedInAt,
+      };
+    },
+    listClientRegistrations({
+      offlineAfterSeconds = 0,
+    }: { offlineAfterSeconds?: number } = {}) {
+      const observedAtMs = currentTimeMs();
+      const items: ClientItem[] = listClientRegistrationsStmt
+        .all()
+        .map((row) => {
+          const alignmentState = normalizeClientAlignmentState(
+            {
+              currentServiceUrl: row.current_service_url,
+              desiredServiceUrl: row.desired_service_url,
+              currentJobServiceUrl: row.current_job_service_url,
+            },
+            row.last_seen_at,
+            offlineAfterSeconds,
+            observedAtMs,
+          );
 
-      const summary: Record<string, any> = {
+          return {
+            clientId: row.client_id,
+            clientLabel: row.client_label || row.hostname || row.client_id,
+            appVersion: row.app_version || "",
+            platform: row.platform || "",
+            hostname: row.hostname || "",
+            bootstrapUrl: row.bootstrap_url || "",
+            currentServiceUrl: row.current_service_url || "",
+            desiredServiceUrl: row.desired_service_url || "",
+            currentJobServiceUrl: row.current_job_service_url || "",
+            configVersion: row.config_version || "",
+            alignmentState,
+            connectionKind: "meshrix-client",
+            connectionMethod: "meshrix-client 封装",
+            connectionState:
+              alignmentState === "offline"
+                ? "offline"
+                : alignmentState === "unknown"
+                  ? "unknown"
+                  : "active",
+            connectionStatusLabel: "",
+            supportsAlignment: true,
+            busy: Boolean(row.busy),
+            lastJobId: row.last_job_id || "",
+            lastError: row.last_error || "",
+            firstSeenAt: row.first_seen_at,
+            lastSeenAt: row.last_seen_at,
+            lastSeenServerId: row.last_seen_server_id || "",
+          };
+        });
+
+      const summary: Record<string, number> = {
         totalCount: items.length,
-        alignedCount: items.filter((item?: any) : any => item.alignmentState === "aligned").length,
-        outdatedCount: items.filter((item?: any) : any => item.alignmentState === "outdated").length,
-        drainingCount: items.filter((item?: any) : any => item.alignmentState === "draining").length,
-        bootstrapOnlyCount: items.filter((item?: any) : any => item.alignmentState === "bootstrap-only")
+        alignedCount: items.filter((item) => item.alignmentState === "aligned")
           .length,
-        offlineCount: items.filter((item?: any) : any => item.alignmentState === "offline").length,
-        unknownCount: items.filter((item?: any) : any => item.alignmentState === "unknown").length,
+        outdatedCount: items.filter(
+          (item) => item.alignmentState === "outdated",
+        ).length,
+        drainingCount: items.filter(
+          (item) => item.alignmentState === "draining",
+        ).length,
+        bootstrapOnlyCount: items.filter(
+          (item) => item.alignmentState === "bootstrap-only",
+        ).length,
+        offlineCount: items.filter((item) => item.alignmentState === "offline")
+          .length,
+        unknownCount: items.filter((item) => item.alignmentState === "unknown")
+          .length,
         meshrixClientCount: items.length,
         mcpPluginCount: 0,
-        alignableCount: items.length
+        alignableCount: items.length,
       };
 
       return {
         summary,
-        items
+        items,
       };
     },
-    findClientRegistration({ clientId = "", offlineAfterSeconds = 0 }: Record<string, any> = {}) : any {
-      const selectedClientId: any = String(clientId || "").trim();
+    findClientRegistration({
+      clientId = "",
+      offlineAfterSeconds = 0,
+    }: { clientId?: string; offlineAfterSeconds?: number } = {}) {
+      const selectedClientId = String(clientId || "").trim();
       if (!selectedClientId) {
         return null;
       }
-      return this.listClientRegistrations({ offlineAfterSeconds })
-        .items.find((item?: any) : any => item.clientId === selectedClientId) || null;
+      return (
+        this.listClientRegistrations({ offlineAfterSeconds }).items.find(
+          (item) => item.clientId === selectedClientId,
+        ) || null
+      );
     },
-    close() : any {
+    close(): void {
       if (ownsDatabase) {
         database.close();
       }
-    }
+    },
   };
 }

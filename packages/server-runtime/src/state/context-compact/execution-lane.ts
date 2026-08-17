@@ -5,14 +5,56 @@ export const CONTEXT_COMPACTION_WORKER_THRESHOLD_BYTES: number = 512 * 1024;
 
 export class ContextCompactionLaneError extends Error {
   code: string;
-  constructor(code?: any, message?: any) {
+  constructor(code?: string, message?: unknown) {
     super(String(message || code || "context_compaction_lane_failed"));
     this.name = "ContextCompactionLaneError";
     this.code = String(code || "context_compaction_lane_failed");
   }
 }
 
-export function conversationPayload(input: Record<string, any> = {}) : any {
+export interface ContextCompactionExecutionLaneOptions {
+  maxPending?: number;
+  maxPendingBytes?: number;
+  defaultDeadlineMs?: number;
+}
+
+export interface ContextCompactionNormalizeOptions {
+  bytes?: number;
+  deadlineMs?: number;
+}
+
+export interface ContextCompactionExecutionLaneStats {
+  pending: number;
+  pendingBytes: number;
+  maxPending: number;
+  maxPendingBytes: number;
+  closed: boolean;
+}
+
+export interface ContextCompactionExecutionLane {
+  normalize(payload: unknown, options?: ContextCompactionNormalizeOptions): Promise<unknown>;
+  close(): Promise<void>;
+  getStats(): ContextCompactionExecutionLaneStats;
+}
+
+interface LaneWorkerMessage {
+  id?: unknown;
+  ok?: unknown;
+  result?: unknown;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+interface PendingLaneEntry {
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+  timer: ReturnType<typeof setTimeout>;
+  bytes: number;
+}
+
+export function conversationPayload(input: Record<string, unknown> = {}) : Record<string, unknown> {
   if (Array.isArray(input.messages)) return { messages: input.messages };
   if (Array.isArray(input.transcript)) return { transcript: input.transcript };
   return {
@@ -23,8 +65,8 @@ export function conversationPayload(input: Record<string, any> = {}) : any {
   };
 }
 
-export function conversationPayloadBytes(input: Record<string, any> = {}) : number {
-  const payload: any = conversationPayload(input);
+export function conversationPayloadBytes(input: Record<string, unknown> = {}) : number {
+  const payload = conversationPayload(input);
   let bytes: number = 2;
   for (const [key, value] of Object.entries(payload)) {
     bytes += Buffer.byteLength(key, "utf8") + 4;
@@ -48,17 +90,17 @@ export function createContextCompactionExecutionLane({
   maxPending = 4,
   maxPendingBytes = 32 * 1024 * 1024,
   defaultDeadlineMs = 30_000
-}: Record<string, any> = {}) : any {
-  const worker: any = new Worker(new URL(
+}: ContextCompactionExecutionLaneOptions = {}) : ContextCompactionExecutionLane {
+  const worker = new Worker(new URL(
     `./execution-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
     import.meta.url
   ));
-  const pending: Map<number, any> = new Map();
+  const pending: Map<number, PendingLaneEntry> = new Map();
   let sequence: number = 0;
   let pendingBytes: number = 0;
   let closed: boolean = false;
 
-  function rejectAll(error?: any) : void {
+  function rejectAll(error?: unknown) : void {
     for (const entry of pending.values()) {
       clearTimeout(entry.timer);
       entry.reject(error);
@@ -67,8 +109,8 @@ export function createContextCompactionExecutionLane({
     pendingBytes = 0;
   }
 
-  worker.on("message", (message?: any) : any => {
-    const entry: any = pending.get(Number(message?.id));
+  worker.on("message", (message: LaneWorkerMessage) : void => {
+    const entry = pending.get(Number(message?.id));
     if (!entry) return;
     pending.delete(Number(message.id));
     pendingBytes -= entry.bytes;
@@ -76,26 +118,26 @@ export function createContextCompactionExecutionLane({
     if (message.ok) entry.resolve(message.result);
     else entry.reject(new ContextCompactionLaneError(message.error?.code, message.error?.message));
   });
-  worker.on("error", () : any => {
+  worker.on("error", () : void => {
     closed = true;
     rejectAll(new ContextCompactionLaneError("context_compaction_lane_crashed"));
   });
-  worker.on("exit", () : any => {
+  worker.on("exit", () : void => {
     closed = true;
     rejectAll(new ContextCompactionLaneError("context_compaction_lane_closed"));
   });
 
-  function normalize(payload: any, { bytes, deadlineMs = defaultDeadlineMs }: Record<string, any> = {}) : Promise<any> {
+  function normalize(payload: unknown, { bytes, deadlineMs = defaultDeadlineMs }: ContextCompactionNormalizeOptions = {}) : Promise<unknown> {
     if (closed) return Promise.reject(new ContextCompactionLaneError("context_compaction_lane_closed"));
-    const admittedBytes: number = Math.max(0, Number(bytes) || 0);
+    const admittedBytes = Math.max(0, Number(bytes) || 0);
     if (pending.size >= maxPending || pendingBytes + admittedBytes > maxPendingBytes) {
       return Promise.reject(new ContextCompactionLaneError("context_compaction_lane_capacity_exceeded"));
     }
-    const boundedDeadlineMs: number = Math.max(1, Math.min(Number(deadlineMs) || defaultDeadlineMs, 120_000));
-    const id: number = ++sequence;
-    return new Promise((resolve?: any, reject?: any) : any => {
-      const timer: any = setTimeout(() : any => {
-        const entry: any = pending.get(id);
+    const boundedDeadlineMs = Math.max(1, Math.min(Number(deadlineMs) || defaultDeadlineMs, 120_000));
+    const id = ++sequence;
+    return new Promise<unknown>((resolve: (value: unknown) => void, reject: (reason?: unknown) => void) : void => {
+      const timer = setTimeout(() : void => {
+        const entry = pending.get(id);
         if (!entry) return;
         pending.delete(id);
         pendingBytes -= entry.bytes;
@@ -113,7 +155,7 @@ export function createContextCompactionExecutionLane({
     });
   }
 
-  async function close() : Promise<any> {
+  async function close() : Promise<void> {
     if (closed) return;
     closed = true;
     rejectAll(new ContextCompactionLaneError("context_compaction_lane_closed"));
@@ -123,6 +165,6 @@ export function createContextCompactionExecutionLane({
   return Object.freeze({
     normalize,
     close,
-    getStats: () : any => Object.freeze({ pending: pending.size, pendingBytes, maxPending, maxPendingBytes, closed })
+    getStats: () : ContextCompactionExecutionLaneStats => Object.freeze({ pending: pending.size, pendingBytes, maxPending, maxPendingBytes, closed })
   });
 }

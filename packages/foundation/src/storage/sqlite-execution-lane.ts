@@ -1,16 +1,72 @@
 import { Worker } from "node:worker_threads";
 
 export class SqliteExecutionLaneError extends Error {
-  code: any;
-  constructor(code?: any, message?: any) {
+  readonly code: string;
+  details?: Readonly<Record<string, unknown>>;
+  remoteName?: string;
+  statusCode?: number;
+  field?: string;
+
+  constructor(code = "sqlite_lane_error", message?: string) {
     super(message || code);
     this.name = "SqliteExecutionLaneError";
     this.code = code;
   }
 }
 
-function byteLength(value?: any) : any {
-  return Buffer.byteLength(JSON.stringify(value ?? null));
+type DataRecord = Record<string, unknown>;
+type HostHandler = (payload: unknown) => unknown | Promise<unknown>;
+
+interface PendingEntry {
+  resolve(value: unknown): void;
+  reject(reason?: unknown): void;
+  timer: NodeJS.Timeout;
+  bytes: number;
+}
+
+export interface SqliteExecutionLaneStats {
+  owner: string;
+  pending: number;
+  pendingBytes: number;
+  maxPending: number;
+  maxPendingBytes: number;
+  writerWorkers: 0 | 1;
+  closed: boolean;
+  crashed: boolean;
+}
+
+export interface SqliteExecutionLane {
+  execute(command: string, payload?: unknown, options?: { deadlineMs?: number; revision?: number }): Promise<unknown>;
+  close(): Promise<void>;
+  getStats(): Readonly<SqliteExecutionLaneStats>;
+}
+
+export interface SqliteExecutionLaneOptions {
+  owner?: string;
+  workerUrl?: string | URL;
+  workerData?: unknown;
+  allowedCommands?: readonly string[];
+  hostHandlers?: Readonly<Record<string, HostHandler>>;
+  maxPending?: number;
+  maxPendingBytes?: number;
+  defaultDeadlineMs?: number;
+}
+
+function record(value: unknown): DataRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as DataRecord
+    : {};
+}
+
+function errorText(error: unknown, field: "name" | "code" | "message"): string {
+  const value = record(error)[field];
+  return typeof value === "string" ? value : "";
+}
+
+function byteLength(value?: unknown): number {
+  const serialized = JSON.stringify(value ?? null);
+  if (serialized === undefined) throw new TypeError("SQLite lane payload is not serializable.");
+  return Buffer.byteLength(serialized);
 }
 
 /**
@@ -27,21 +83,25 @@ export function createSqliteExecutionLane({
   maxPending = 1024,
   maxPendingBytes = 16 * 1024 * 1024,
   defaultDeadlineMs = 30_000
-}: Record<string, any> = {}) : any {
-  const allowed: any = new Set<any>(allowedCommands.map(String));
-  const hostHandlerByKind: any = new Map<any, any>(
-    Object.entries(hostHandlers || {}).filter(([, handler]: any) : any => typeof handler === "function")
+}: SqliteExecutionLaneOptions = {}): Readonly<SqliteExecutionLane> {
+  if (!(typeof workerUrl === "string" || workerUrl instanceof URL)) {
+    throw new TypeError("SQLite execution lane requires a worker URL.");
+  }
+  const selectedOwner = String(owner || "sqlite");
+  const allowed = new Set(allowedCommands.map(String));
+  const hostHandlerByKind = new Map<string, HostHandler>(
+    Object.entries(hostHandlers).filter((entry): entry is [string, HostHandler] => typeof entry[1] === "function")
   );
-  const worker: any = new Worker(workerUrl, { workerData });
-  const pending: any = new Map<any, any>();
-  let sequence: any = 0;
-  let pendingBytes: any = 0;
-  let closed: any = false;
-  let crashed: any = false;
-  let crashDetails: any = null;
+  const worker = new Worker(workerUrl, { workerData });
+  const pending = new Map<number, PendingEntry>();
+  let sequence = 0;
+  let pendingBytes = 0;
+  let closed = false;
+  let crashed = false;
+  let crashDetails: Readonly<Record<string, unknown>> | null = null;
 
-  function closedError() : any {
-    const error: any = new SqliteExecutionLaneError(
+  function closedError(): SqliteExecutionLaneError {
+    const error = new SqliteExecutionLaneError(
       crashed ? "sqlite_lane_crashed" : "sqlite_lane_closed",
       "SQLite execution lane is closed."
     );
@@ -49,7 +109,7 @@ export function createSqliteExecutionLane({
     return error;
   }
 
-  function rejectAll(error?: any) : any {
+  function rejectAll(error: unknown): void {
     for (const entry of pending.values()) {
       clearTimeout(entry.timer);
       entry.reject(error);
@@ -58,14 +118,15 @@ export function createSqliteExecutionLane({
     pendingBytes = 0;
   }
 
-  worker.on("message", async (message?: any) : Promise<any> => {
-    if (message?.type === "host-call") {
-      const kind: any = String(message.kind || "");
-      const handler: any = hostHandlerByKind.get(kind);
+  worker.on("message", async (message: unknown): Promise<void> => {
+    const incoming = record(message);
+    if (incoming.type === "host-call") {
+      const kind = String(incoming.kind || "");
+      const handler = hostHandlerByKind.get(kind);
       if (!handler) {
         worker.postMessage({
           type: "host-response",
-          id: message.id,
+          id: incoming.id,
           ok: false,
           error: {
             name: "SqliteExecutionLaneError",
@@ -76,82 +137,92 @@ export function createSqliteExecutionLane({
         return;
       }
       try {
-        const result: any = await handler(structuredClone(message.payload ?? {}));
-        worker.postMessage({ type: "host-response", id: message.id, ok: true, result });
-      } catch (error: any) {
+        const result = await handler(structuredClone(incoming.payload ?? {}));
+        worker.postMessage({ type: "host-response", id: incoming.id, ok: true, result });
+      } catch (error: unknown) {
+        const errorRecord = record(error);
         worker.postMessage({
           type: "host-response",
-          id: message.id,
+          id: incoming.id,
           ok: false,
           error: {
-            name: String(error?.name || "Error"),
-            code: String(error?.code || "sqlite_lane_host_command_failed"),
-            message: String(error?.message || "SQLite lane host command failed."),
-            statusCode: Number(error?.statusCode || error?.status || 0),
-            details: error?.details && typeof error.details === "object" ? error.details : {}
+            name: errorText(error, "name") || "Error",
+            code: errorText(error, "code") || "sqlite_lane_host_command_failed",
+            message: errorText(error, "message") || "SQLite lane host command failed.",
+            statusCode: Number(errorRecord.statusCode || errorRecord.status || 0),
+            details: record(errorRecord.details)
           }
         });
       }
       return;
     }
-    const entry: any = pending.get(message?.id);
+    const id = typeof incoming.id === "number" ? incoming.id : -1;
+    const entry = pending.get(id);
     if (!entry) return;
-    pending.delete(message.id);
+    pending.delete(id);
     pendingBytes -= entry.bytes;
     clearTimeout(entry.timer);
-    if (message.ok) entry.resolve(message.result);
+    if (incoming.ok) entry.resolve(incoming.result);
     else {
-      const error: any = new SqliteExecutionLaneError(message.error?.code || "sqlite_lane_command_failed", message.error?.message || "SQLite lane command failed.");
-      error.remoteName = String(message.error?.name || "Error");
-      error.details = message.error?.details && typeof message.error.details === "object"
-        ? Object.freeze({ ...message.error.details })
-        : Object.freeze({});
-      if (Number(message.error?.statusCode || 0) > 0) {
-        error.statusCode = Number(message.error.statusCode);
+      const remoteError = record(incoming.error);
+      const error = new SqliteExecutionLaneError(
+        String(remoteError.code || "sqlite_lane_command_failed"),
+        String(remoteError.message || "SQLite lane command failed.")
+      );
+      error.remoteName = String(remoteError.name || "Error");
+      error.details = Object.freeze({ ...record(remoteError.details) });
+      if (Number(remoteError.statusCode || 0) > 0) {
+        error.statusCode = Number(remoteError.statusCode);
       }
-      if (String(message.error?.field || "")) {
-        error.field = String(message.error.field);
+      if (String(remoteError.field || "")) {
+        error.field = String(remoteError.field);
       }
       entry.reject(error);
     }
   });
-  worker.on("error", (cause?: any) : any => {
+  worker.on("error", (cause: Error): void => {
     crashed = true;
     closed = true;
-    const error: any = new SqliteExecutionLaneError("sqlite_lane_crashed", "SQLite execution lane crashed.");
+    const error = new SqliteExecutionLaneError("sqlite_lane_crashed", "SQLite execution lane crashed.");
     error.cause = cause;
+    const causeCode = errorText(cause, "code");
     crashDetails = Object.freeze({
-      causeCode: /^[A-Z][A-Z0-9_]{1,79}$/u.test(String(cause?.code || ""))
-        ? String(cause.code)
+      causeCode: /^[A-Z][A-Z0-9_]{1,79}$/u.test(causeCode)
+        ? causeCode
         : "sqlite_worker_error",
-      owner: String(owner || "sqlite")
+      owner: selectedOwner
     });
     error.details = crashDetails;
     rejectAll(error);
   });
-  worker.on("exit", (code?: any) : any => {
+  worker.on("exit", (code: number): void => {
     if (!closed && code !== 0) crashed = true;
     closed = true;
     rejectAll(closedError());
   });
 
-  function execute(command?: any, payload: any = {}, options: Record<string, any> = {}) : any {
+  function execute(
+    command: string,
+    payload: unknown = {},
+    options: { deadlineMs?: number; revision?: number } = {}
+  ): Promise<unknown> {
     if (closed) return Promise.reject(closedError());
-    const kind: any = String(command || "");
+    const kind = String(command || "");
     if (!allowed.has(kind)) return Promise.reject(new SqliteExecutionLaneError("sqlite_lane_command_rejected"));
-    if (typeof payload === "function" || typeof payload?.sql === "string" || typeof payload?.path === "string") {
+    const payloadRecord = record(payload);
+    if (typeof payload === "function" || typeof payloadRecord.sql === "string" || typeof payloadRecord.path === "string") {
       return Promise.reject(new SqliteExecutionLaneError("sqlite_lane_payload_rejected"));
     }
-    const frozenPayload: any = structuredClone(payload);
-    const bytes: any = byteLength(frozenPayload);
+    const frozenPayload: unknown = structuredClone(payload);
+    const bytes = byteLength(frozenPayload);
     if (pending.size >= maxPending || pendingBytes + bytes > maxPendingBytes) {
       return Promise.reject(new SqliteExecutionLaneError("sqlite_lane_capacity_exceeded"));
     }
-    const deadlineMs: any = Math.max(1, Math.min(Number(options.deadlineMs || defaultDeadlineMs), 300_000));
-    const id: any = ++sequence;
-    return new Promise((resolve?: any, reject?: any) : any => {
-      const timer: any = setTimeout(() : any => {
-        const entry: any = pending.get(id);
+    const deadlineMs = Math.max(1, Math.min(Number(options.deadlineMs || defaultDeadlineMs), 300_000));
+    const id = ++sequence;
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout((): void => {
+        const entry = pending.get(id);
         if (!entry) return;
         pending.delete(id);
         pendingBytes -= entry.bytes;
@@ -162,7 +233,7 @@ export function createSqliteExecutionLane({
       pendingBytes += bytes;
       worker.postMessage(Object.freeze({
         id,
-        owner: String(owner || "sqlite"),
+        owner: selectedOwner,
         kind,
         payload: frozenPayload,
         deadlineAtMs: Date.now() + deadlineMs,
@@ -171,9 +242,9 @@ export function createSqliteExecutionLane({
     });
   }
 
-  async function close() : Promise<any> {
+  async function close(): Promise<void> {
     if (closed) return;
-    await execute("close", {}, { deadlineMs: defaultDeadlineMs }).catch(() : any => {});
+    await execute("close", {}, { deadlineMs: defaultDeadlineMs }).catch(() => {});
     closed = true;
     await worker.terminate();
   }
@@ -181,9 +252,9 @@ export function createSqliteExecutionLane({
   return Object.freeze({
     execute,
     close,
-    getStats() : any {
+    getStats(): Readonly<SqliteExecutionLaneStats> {
       return Object.freeze({
-        owner: String(owner || "sqlite"),
+        owner: selectedOwner,
         pending: pending.size,
         pendingBytes,
         maxPending,

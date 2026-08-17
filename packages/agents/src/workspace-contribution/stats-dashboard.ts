@@ -1,48 +1,142 @@
 import {
-  asArray,
   nowIso,
   refreshMetrics,
   shallowObject,
   text,
-  WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION
+  WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
 } from "./package-validation.ts";
+import {
+  type AssetRecordProjector,
+  type AuditEvent,
+  type Contribution,
+  isContribution,
+  type JsonObject,
+} from "./types.ts";
 
-function addCount(target?: any, key?: any, delta: any = 1) : any {
-  const normalized: any = text(key || "unknown") || "unknown";
+interface RankedRow extends JsonObject {
+  [key: string]: string | number;
+}
+interface ContributorRow extends RankedRow {
+  contributorId: string;
+  contributorKind: string;
+  contributionCount: number;
+  acceptedCount: number;
+  usageCount: number;
+  successfulUseCount: number;
+  downloadCount: number;
+  permissionRequestCount: number;
+  permissionGrantCount: number;
+  reviewCount: number;
+  rollbackCount: number;
+  revocationCount: number;
+  uniqueWorkspaceAdoptions: number;
+  rankScore: number;
+  contributionScore: number;
+}
+interface WorkspaceRow extends RankedRow {
+  workspaceId: string;
+  contributionCount: number;
+  usageCount: number;
+  successfulUseCount: number;
+  downloadCount: number;
+  adoptionCount: number;
+  permissionRequestCount: number;
+  permissionGrantCount: number;
+  rankScore: number;
+}
+export interface ContributionDashboardOptions {
+  items?: Contribution[];
+  auditEvents?: AuditEvent[];
+  protocolVersion?: string;
+  workspaceId?: string;
+  contributionType?: string;
+  assetRecordProjector?: AssetRecordProjector;
+}
+export interface ContributionDashboard extends JsonObject {
+  acceptedCount: number;
+  usageCount: number;
+  successfulUseCount: number;
+  uniqueWorkspaceAdoptions: number;
+  executionCount: number;
+  permissionRequestCount: number;
+  permissionGrantCount: number;
+  downloadCount: number;
+  reviewCount: number;
+  revocationCount: number;
+  rollbackCount: number;
+  contributionTypeBreakdown: JsonObject;
+  contributorBreakdown: JsonObject;
+}
+
+function addCount(
+  target: Record<string, number>,
+  key: unknown,
+  delta = 1,
+): void {
+  const normalized = text(key || "unknown") || "unknown";
   target[normalized] = (target[normalized] || 0) + Number(delta || 0);
 }
-
-function metricValue(contribution: Record<string, any> = {}, key: any = "") : any {
-  return Number(shallowObject(contribution.metrics)[key] || 0);
+function metricValue(
+  contribution: Contribution,
+  key: keyof Contribution["metrics"],
+): number {
+  return Number(contribution.metrics[key] || 0);
 }
-
-function contributionWorkspaceIds(contribution: Record<string, any> = {}) : any {
-  const workspaceIds: any = new Set<any>();
-  if (contribution.workspaceId) workspaceIds.add(text(contribution.workspaceId));
-  for (const event of asArray(contribution.usageEvents)) {
-    if (event?.workspaceId) workspaceIds.add(text(event.workspaceId));
-  }
-  for (const receipt of asArray(contribution.executionReceipts)) {
-    if (receipt?.workspaceId) workspaceIds.add(text(receipt.workspaceId));
-  }
-  for (const event of asArray(contribution.adoptions)) {
-    if (event?.targetWorkspaceId) workspaceIds.add(text(event.targetWorkspaceId));
-  }
-  for (const event of asArray(contribution.grants)) {
-    if (event?.targetWorkspaceId) workspaceIds.add(text(event.targetWorkspaceId));
-  }
-  return [...workspaceIds].filter(Boolean);
+function contributionWorkspaceIds(contribution: Contribution): string[] {
+  const ids = new Set<string>();
+  if (contribution.workspaceId) ids.add(contribution.workspaceId);
+  for (const event of contribution.usageEvents)
+    if (event.workspaceId) ids.add(text(event.workspaceId));
+  for (const receipt of contribution.executionReceipts)
+    if (receipt.workspaceId) ids.add(text(receipt.workspaceId));
+  for (const event of contribution.adoptions)
+    if (event.targetWorkspaceId) ids.add(text(event.targetWorkspaceId));
+  for (const event of contribution.grants)
+    if (event.targetWorkspaceId) ids.add(text(event.targetWorkspaceId));
+  return [...ids].filter(Boolean);
 }
-
-function topRows(rows: any = [], sortKey: any = "count", limit: any = 10) : any {
+function topRows<T extends RankedRow>(
+  rows: T[],
+  sortKey = "count",
+  limit = 10,
+): T[] {
   return rows
-    .sort((left?: any, right?: any) : any => {
-      const scoreDelta: any = Number(right[sortKey] || 0) - Number(left[sortKey] || 0);
+    .sort((left, right) => {
+      const scoreDelta =
+        Number(right[sortKey] || 0) - Number(left[sortKey] || 0);
       if (scoreDelta !== 0) return scoreDelta;
-      return String(left.id || left.contributorId || left.workspaceId || left.eventType || "")
-        .localeCompare(String(right.id || right.contributorId || right.workspaceId || right.eventType || ""));
+      return String(
+        left.id ||
+          left.contributorId ||
+          left.workspaceId ||
+          left.eventType ||
+          "",
+      ).localeCompare(
+        String(
+          right.id ||
+            right.contributorId ||
+            right.workspaceId ||
+            right.eventType ||
+            "",
+        ),
+      );
     })
     .slice(0, Math.max(1, Math.min(Number(limit || 10), 50)));
+}
+function asContribution(value: unknown): Contribution {
+  if (!isContribution(value))
+    throw new TypeError("Dashboard contribution is invalid.");
+  return value;
+}
+function asAuditEvent(value: unknown): AuditEvent {
+  const object = shallowObject(value);
+  return {
+    auditId: text(object.auditId),
+    eventType: text(object.eventType),
+    workspaceId: text(object.workspaceId),
+    payload: shallowObject(object.payload),
+    createdAt: text(object.createdAt),
+  };
 }
 
 export function buildContributionStatsDashboard({
@@ -51,28 +145,40 @@ export function buildContributionStatsDashboard({
   protocolVersion = WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
   workspaceId = "default",
   contributionType = "",
-  assetRecordProjector = undefined
-}: Record<string, any> = {}) : any {
-  const normalizedItems: any = asArray(items).map((item?: any) : any => refreshMetrics(
-    item,
-    typeof assetRecordProjector === "function" ? { assetRecordProjector } : {}
-  ));
-  const contributionIds: any = new Set<any>(normalizedItems.map((item?: any) : any => item.contributionId));
-  const relevantAuditEvents: any = asArray(auditEvents)
-    .filter((event?: any) : any => !contributionIds.size || contributionIds.has(text(event?.payload?.contributionId)));
-  const byType: Record<string, any> = {};
-  const contributorMap: any = new Map<any, any>();
-  const workspaceMap: any = new Map<any, any>();
-  const statusBreakdown: Record<string, any> = {};
-  const eventBreakdownMap: Record<string, any> = {};
-  const actionBreakdown: Record<string, any> = {};
-
-  function contributorRowFor(contribution: Record<string, any> = {}) : any {
-    const contributorId: any = text(contribution.contributorId || "anonymous") || "anonymous";
-    if (!contributorMap.has(contributorId)) {
-      contributorMap.set(contributorId, {
-        contributorId,
-        contributorKind: text(contribution.contributorKind || "agent") || "agent",
+  assetRecordProjector,
+}: ContributionDashboardOptions = {}): ContributionDashboard {
+  const normalizedItems = items
+    .map(asContribution)
+    .map((item) =>
+      refreshMetrics(
+        item,
+        assetRecordProjector ? { assetRecordProjector } : {},
+      ),
+    );
+  const contributionIds = new Set(
+    normalizedItems.map((item) => item.contributionId),
+  );
+  const relevantAuditEvents = auditEvents
+    .map(asAuditEvent)
+    .filter(
+      (event) =>
+        !contributionIds.size ||
+        contributionIds.has(text(event.payload.contributionId)),
+    );
+  const byType: Record<string, number> = {};
+  const statusBreakdown: Record<string, number> = {};
+  const eventBreakdownMap: Record<string, number> = {};
+  const actionBreakdown: Record<string, number> = {};
+  const contributorMap = new Map<string, ContributorRow>();
+  const workspaceMap = new Map<string, WorkspaceRow>();
+  const contributorRowFor = (contribution: Contribution): ContributorRow => {
+    const id = text(contribution.contributorId || "anonymous") || "anonymous";
+    let row = contributorMap.get(id);
+    if (!row) {
+      row = {
+        contributorId: id,
+        contributorKind:
+          text(contribution.contributorKind || "agent") || "agent",
         contributionCount: 0,
         acceptedCount: 0,
         usageCount: 0,
@@ -85,16 +191,17 @@ export function buildContributionStatsDashboard({
         revocationCount: 0,
         uniqueWorkspaceAdoptions: 0,
         rankScore: 0,
-        contributionScore: 0
-      });
+        contributionScore: 0,
+      };
+      contributorMap.set(id, row);
     }
-    return contributorMap.get(contributorId);
-  }
-
-  function workspaceRowFor(workspaceKey: any = "") : any {
-    const id: any = text(workspaceKey || "default") || "default";
-    if (!workspaceMap.has(id)) {
-      workspaceMap.set(id, {
+    return row;
+  };
+  const workspaceRowFor = (workspaceKey: unknown): WorkspaceRow => {
+    const id = text(workspaceKey || "default") || "default";
+    let row = workspaceMap.get(id);
+    if (!row) {
+      row = {
         workspaceId: id,
         contributionCount: 0,
         usageCount: 0,
@@ -103,102 +210,130 @@ export function buildContributionStatsDashboard({
         adoptionCount: 0,
         permissionRequestCount: 0,
         permissionGrantCount: 0,
-        rankScore: 0
-      });
+        rankScore: 0,
+      };
+      workspaceMap.set(id, row);
     }
-    return workspaceMap.get(id);
-  }
-
+    return row;
+  };
+  const contributorMetricKeys: (keyof Contribution["metrics"])[] = [
+    "acceptedCount",
+    "usageCount",
+    "successfulUseCount",
+    "downloadCount",
+    "permissionRequestCount",
+    "permissionGrantCount",
+    "reviewCount",
+    "rollbackCount",
+    "revocationCount",
+    "uniqueWorkspaceAdoptions",
+    "rankScore",
+  ];
   for (const contribution of normalizedItems) {
     addCount(byType, contribution.contributionType);
     addCount(statusBreakdown, contribution.status);
-    const contributor: any = contributorRowFor(contribution);
+    const contributor = contributorRowFor(contribution);
     contributor.contributionCount += 1;
-    for (const key of [
-      "acceptedCount",
-      "usageCount",
-      "successfulUseCount",
-      "downloadCount",
-      "permissionRequestCount",
-      "permissionGrantCount",
-      "reviewCount",
-      "rollbackCount",
-      "revocationCount",
-      "uniqueWorkspaceAdoptions",
-      "rankScore"
-    ]) {
-      contributor[key] += metricValue(contribution, key);
-    }
+    for (const key of contributorMetricKeys)
+      contributor[key] =
+        Number(contributor[key]) + metricValue(contribution, key);
     contributor.contributionScore =
       contributor.rankScore +
       contributor.acceptedCount +
       contributor.permissionGrantCount -
       contributor.rollbackCount -
       contributor.revocationCount;
-
-    for (const workspaceKey of contributionWorkspaceIds(contribution)) {
-      const workspace: any = workspaceRowFor(workspaceKey);
-      if (workspaceKey === contribution.workspaceId) workspace.contributionCount += 1;
-      workspace.rankScore += metricValue(contribution, "rankScore");
+    for (const id of contributionWorkspaceIds(contribution)) {
+      const row = workspaceRowFor(id);
+      if (id === contribution.workspaceId) row.contributionCount += 1;
+      row.rankScore += metricValue(contribution, "rankScore");
     }
-    for (const event of asArray(contribution.usageEvents)) {
-      const workspace: any = workspaceRowFor(event?.workspaceId || contribution.workspaceId);
-      workspace.usageCount += 1;
-      addCount(actionBreakdown, event?.action || "asset.used");
+    for (const event of contribution.usageEvents) {
+      workspaceRowFor(
+        event.workspaceId || contribution.workspaceId,
+      ).usageCount += 1;
+      addCount(actionBreakdown, event.action || "asset.used");
     }
-    for (const receipt of asArray(contribution.executionReceipts)) {
-      if (receipt?.status === "succeeded") {
-        workspaceRowFor(receipt?.workspaceId || contribution.workspaceId).successfulUseCount += 1;
-      }
-    }
-    for (const event of asArray(contribution.downloadEvents)) {
-      workspaceRowFor(event?.workspaceId || contribution.workspaceId).downloadCount += 1;
-    }
-    for (const event of asArray(contribution.adoptions)) {
-      workspaceRowFor(event?.targetWorkspaceId || contribution.workspaceId).adoptionCount += 1;
-    }
-    for (const event of asArray(contribution.permissionRequests)) {
-      workspaceRowFor(event?.targetWorkspaceId || contribution.workspaceId).permissionRequestCount += 1;
-    }
-    for (const event of asArray(contribution.grants)) {
-      workspaceRowFor(event?.targetWorkspaceId || contribution.workspaceId).permissionGrantCount += 1;
-    }
+    for (const receipt of contribution.executionReceipts)
+      if (receipt.status === "succeeded")
+        workspaceRowFor(
+          receipt.workspaceId || contribution.workspaceId,
+        ).successfulUseCount += 1;
+    for (const event of contribution.downloadEvents)
+      workspaceRowFor(
+        event.workspaceId || contribution.workspaceId,
+      ).downloadCount += 1;
+    for (const event of contribution.adoptions)
+      workspaceRowFor(
+        event.targetWorkspaceId || contribution.workspaceId,
+      ).adoptionCount += 1;
+    for (const event of contribution.permissionRequests)
+      workspaceRowFor(
+        event.targetWorkspaceId || contribution.workspaceId,
+      ).permissionRequestCount += 1;
+    for (const event of contribution.grants)
+      workspaceRowFor(
+        event.targetWorkspaceId || contribution.workspaceId,
+      ).permissionGrantCount += 1;
   }
-
-  for (const event of relevantAuditEvents) addCount(eventBreakdownMap, event?.eventType || "unknown");
-
-  const usageCount: any = normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "usageCount"), 0);
-  const successfulUseCount: any = normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "successfulUseCount"), 0);
-  const contributorRows: any = topRows([...contributorMap.values()], "contributionScore", 10);
-  const workspaceRows: any = topRows([...workspaceMap.values()], "usageCount", 10);
-  const eventBreakdown: any = topRows((Object.entries(eventBreakdownMap) as [string, any][]).map(([eventType, count]: any[]) : any => ({ eventType, count })), "count", 20);
-  const usageActionBreakdown: any = topRows((Object.entries(actionBreakdown) as [string, any][]).map(([action, count]: any[]) : any => ({ action, count })), "count", 20);
-
+  for (const event of relevantAuditEvents)
+    addCount(eventBreakdownMap, event.eventType || "unknown");
+  const total = (key: keyof Contribution["metrics"]): number =>
+    normalizedItems.reduce((sum, item) => sum + metricValue(item, key), 0);
+  const usageCount = total("usageCount");
+  const successfulUseCount = total("successfulUseCount");
+  const executionCount = total("executionCount");
+  const contributorRows = topRows(
+    [...contributorMap.values()],
+    "contributionScore",
+    10,
+  );
+  const workspaceRows = topRows([...workspaceMap.values()], "usageCount", 10);
+  const eventBreakdown = topRows(
+    Object.entries(eventBreakdownMap).map(([eventType, count]) => ({
+      eventType,
+      count,
+    })),
+    "count",
+    20,
+  );
+  const usageActionBreakdown = topRows(
+    Object.entries(actionBreakdown).map(([action, count]) => ({
+      action,
+      count,
+    })),
+    "count",
+    20,
+  );
   return {
     protocolVersion,
     dashboardSchemaVersion: "v0.0.1:workspace-contribution:dashboard-1",
     generatedAt: nowIso(),
     timeRange: "all",
     workspaceId,
-    contributionType: contributionType || "",
+    contributionType,
     contributionCount: normalizedItems.length,
-    acceptedCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "acceptedCount"), 0),
+    acceptedCount: total("acceptedCount"),
     usageCount,
     successfulUseCount,
-    successRate: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "executionCount"), 0) > 0
-      ? successfulUseCount / normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "executionCount"), 0)
-      : 0,
-    uniqueWorkspaceAdoptions: new Set<any>(normalizedItems.flatMap(contributionWorkspaceIds)).size,
-    executionCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "executionCount"), 0),
-    permissionRequestCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "permissionRequestCount"), 0),
-    permissionGrantCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "permissionGrantCount"), 0),
-    downloadCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "downloadCount"), 0),
-    reviewCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "reviewCount"), 0),
-    revocationCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "revocationCount"), 0),
-    rollbackCount: normalizedItems.reduce((sum?: any, item?: any) : any => sum + metricValue(item, "rollbackCount"), 0),
-    contributionTypeBreakdown: contributionType ? { [contributionType]: normalizedItems.length } : byType,
+    successRate: executionCount > 0 ? successfulUseCount / executionCount : 0,
+    uniqueWorkspaceAdoptions: new Set(
+      normalizedItems.flatMap(contributionWorkspaceIds),
+    ).size,
+    executionCount,
+    permissionRequestCount: total("permissionRequestCount"),
+    permissionGrantCount: total("permissionGrantCount"),
+    downloadCount: total("downloadCount"),
+    reviewCount: total("reviewCount"),
+    revocationCount: total("revocationCount"),
+    rollbackCount: total("rollbackCount"),
+    contributionTypeBreakdown: contributionType
+      ? { [contributionType]: normalizedItems.length }
+      : byType,
     statusBreakdown,
-    contributorBreakdown: Object.fromEntries([...contributorMap.entries()].map(([id, row]: any[]) : any => [id, row.contributionCount])),
+    contributorBreakdown: Object.fromEntries(
+      [...contributorMap].map(([id, row]) => [id, row.contributionCount]),
+    ),
     contributorRows,
     workspaceRows,
     eventBreakdown,
@@ -209,7 +344,7 @@ export function buildContributionStatsDashboard({
       workspaceCount: workspaceMap.size,
       topContributorId: contributorRows[0]?.contributorId || "",
       topWorkspaceId: workspaceRows[0]?.workspaceId || "",
-      eventTypeCount: eventBreakdown.length
-    }
+      eventTypeCount: eventBreakdown.length,
+    },
   };
 }
