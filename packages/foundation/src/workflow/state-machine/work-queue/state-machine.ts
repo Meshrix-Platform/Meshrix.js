@@ -1,4 +1,4 @@
-export const WORK_QUEUE_STATES: Readonly<Record<string, any>> = Object.freeze({
+export const WORK_QUEUE_STATES = Object.freeze({
   QUEUED: "queued",
   RUNNING: "running",
   IN_DOUBT: "in_doubt",
@@ -7,47 +7,74 @@ export const WORK_QUEUE_STATES: Readonly<Record<string, any>> = Object.freeze({
   FAILED: "failed",
   CANCELLED: "cancelled",
   EXPIRED: "expired",
-  RECOVERED: "recovered"
-});
+  RECOVERED: "recovered",
+} as const);
 
-export const WORK_QUEUE_TERMINAL_STATES: readonly any[] = Object.freeze([
-  WORK_QUEUE_STATES.COMPLETED,
-  WORK_QUEUE_STATES.CANCELLED,
-  WORK_QUEUE_STATES.EXPIRED
-]);
+export type WorkQueueState =
+  (typeof WORK_QUEUE_STATES)[keyof typeof WORK_QUEUE_STATES];
+interface WorkQueueTransitionDefinition {
+  readonly from: readonly (WorkQueueState | null)[];
+  readonly to: readonly WorkQueueState[];
+  readonly leaseBound?: boolean;
+  readonly fallback?: boolean;
+}
+interface WorkQueueTransitionInput {
+  transition?: unknown;
+  fromState?: unknown;
+  toState?: unknown;
+}
+interface WorkQueueTransitionMatrixCell {
+  readonly fromState: WorkQueueState;
+  readonly transition: string;
+  readonly legal: boolean;
+  readonly toStates: readonly WorkQueueState[];
+}
 
-export const WORK_QUEUE_SAFE_INTERVENTION_STATES: readonly any[] = Object.freeze([
-  WORK_QUEUE_STATES.QUEUED,
-  WORK_QUEUE_STATES.RETRY_WAIT,
-  WORK_QUEUE_STATES.FAILED,
-  WORK_QUEUE_STATES.RECOVERED,
-  WORK_QUEUE_STATES.COMPLETED,
-  WORK_QUEUE_STATES.CANCELLED,
-  WORK_QUEUE_STATES.EXPIRED
-]);
+export const WORK_QUEUE_TERMINAL_STATES: readonly WorkQueueState[] =
+  Object.freeze([
+    WORK_QUEUE_STATES.COMPLETED,
+    WORK_QUEUE_STATES.CANCELLED,
+    WORK_QUEUE_STATES.EXPIRED,
+  ]);
 
-export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.freeze({
+export const WORK_QUEUE_SAFE_INTERVENTION_STATES: readonly WorkQueueState[] =
+  Object.freeze([
+    WORK_QUEUE_STATES.QUEUED,
+    WORK_QUEUE_STATES.RETRY_WAIT,
+    WORK_QUEUE_STATES.FAILED,
+    WORK_QUEUE_STATES.RECOVERED,
+    WORK_QUEUE_STATES.COMPLETED,
+    WORK_QUEUE_STATES.CANCELLED,
+    WORK_QUEUE_STATES.EXPIRED,
+  ]);
+
+export const WORK_QUEUE_TRANSITIONS: Readonly<
+  Record<string, WorkQueueTransitionDefinition>
+> = Object.freeze({
   enqueue: Object.freeze({
     from: Object.freeze([null]),
-    to: Object.freeze([WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RETRY_WAIT])
+    to: Object.freeze([WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RETRY_WAIT]),
   }),
   retention_snapshot: Object.freeze({
     from: Object.freeze([null]),
-    to: Object.freeze((Object.values(WORK_QUEUE_STATES) as any[]))
+    to: Object.freeze(Object.values(WORK_QUEUE_STATES)),
   }),
   claim: Object.freeze({
-    from: Object.freeze([WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RECOVERED]),
-    to: Object.freeze([WORK_QUEUE_STATES.RUNNING])
+    from: Object.freeze([
+      WORK_QUEUE_STATES.QUEUED,
+      WORK_QUEUE_STATES.RECOVERED,
+    ]),
+    to: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
   }),
   progress: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
-    leaseBound: true
+    leaseBound: true,
   }),
   interrupt: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([WORK_QUEUE_STATES.IN_DOUBT]),
-    leaseBound: true
+    leaseBound: true,
   }),
   termination_acknowledged: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.IN_DOUBT]),
@@ -55,23 +82,23 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.FAILED,
-      WORK_QUEUE_STATES.COMPLETED
+      WORK_QUEUE_STATES.COMPLETED,
     ]),
-    leaseBound: true
+    leaseBound: true,
   }),
   complete: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([WORK_QUEUE_STATES.COMPLETED]),
-    leaseBound: true
+    leaseBound: true,
   }),
   retry: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
-      WORK_QUEUE_STATES.FAILED
+      WORK_QUEUE_STATES.FAILED,
     ]),
-    leaseBound: true
+    leaseBound: true,
   }),
   fail: Object.freeze({
     from: Object.freeze([
@@ -79,32 +106,28 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
       WORK_QUEUE_STATES.IN_DOUBT,
-      WORK_QUEUE_STATES.RECOVERED
+      WORK_QUEUE_STATES.RECOVERED,
     ]),
-    to: Object.freeze([WORK_QUEUE_STATES.FAILED])
+    to: Object.freeze([WORK_QUEUE_STATES.FAILED]),
   }),
   recover: Object.freeze({
-    from: Object.freeze([
-      WORK_QUEUE_STATES.FAILED
-    ]),
-    to: Object.freeze([
-      WORK_QUEUE_STATES.RECOVERED
-    ])
+    from: Object.freeze([WORK_QUEUE_STATES.FAILED]),
+    to: Object.freeze([WORK_QUEUE_STATES.RECOVERED]),
   }),
   lease_expired: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([WORK_QUEUE_STATES.IN_DOUBT]),
-    fallback: true
+    fallback: true,
   }),
   delay_matured: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RETRY_WAIT]),
     to: Object.freeze([WORK_QUEUE_STATES.QUEUED]),
-    fallback: true
+    fallback: true,
   }),
   cancel_running: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([WORK_QUEUE_STATES.CANCELLED]),
-    leaseBound: true
+    leaseBound: true,
   }),
   cancel: Object.freeze({
     from: Object.freeze([
@@ -112,9 +135,9 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
       WORK_QUEUE_STATES.IN_DOUBT,
-      WORK_QUEUE_STATES.RECOVERED
+      WORK_QUEUE_STATES.RECOVERED,
     ]),
-    to: Object.freeze([WORK_QUEUE_STATES.CANCELLED])
+    to: Object.freeze([WORK_QUEUE_STATES.CANCELLED]),
   }),
   expire: Object.freeze({
     from: Object.freeze([
@@ -122,9 +145,9 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
       WORK_QUEUE_STATES.IN_DOUBT,
-      WORK_QUEUE_STATES.RECOVERED
+      WORK_QUEUE_STATES.RECOVERED,
     ]),
-    to: Object.freeze([WORK_QUEUE_STATES.EXPIRED])
+    to: Object.freeze([WORK_QUEUE_STATES.EXPIRED]),
   }),
   requeue_recovered: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RECOVERED]),
@@ -132,91 +155,126 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.FAILED,
-      WORK_QUEUE_STATES.CANCELLED
-    ])
-  })
+      WORK_QUEUE_STATES.CANCELLED,
+    ]),
+  }),
 });
 
-export const WORK_QUEUE_STATE_MACHINE_PROOF_VERSION: any = "v0.0.1:workflow:work-queue-state-machine-proof-1";
+export const WORK_QUEUE_STATE_MACHINE_PROOF_VERSION =
+  "v0.0.1:workflow:work-queue-state-machine-proof-1";
 
-export function isWorkQueueState(value?: any) : any {
-  return (Object.values(WORK_QUEUE_STATES) as any[]).includes(value);
+export function isWorkQueueState(value?: unknown): value is WorkQueueState {
+  return Object.values(WORK_QUEUE_STATES).some((state) => state === value);
 }
 
-export function isTerminalWorkQueueState(value?: any) : any {
-  return WORK_QUEUE_TERMINAL_STATES.includes(value);
+export function isTerminalWorkQueueState(value?: unknown): boolean {
+  return isWorkQueueState(value) && WORK_QUEUE_TERMINAL_STATES.includes(value);
 }
 
-export function isSafeInterventionState(value?: any) : any {
-  return WORK_QUEUE_SAFE_INTERVENTION_STATES.includes(value);
+export function isSafeInterventionState(value?: unknown): boolean {
+  return (
+    isWorkQueueState(value) &&
+    WORK_QUEUE_SAFE_INTERVENTION_STATES.includes(value)
+  );
 }
 
-export function getWorkQueueTransition(transition?: any) : any {
-  return WORK_QUEUE_TRANSITIONS[String(transition || "")] || null;
+export function getWorkQueueTransition(
+  transition?: unknown,
+): WorkQueueTransitionDefinition | null {
+  const key = String(transition || "");
+  return Object.hasOwn(WORK_QUEUE_TRANSITIONS, key)
+    ? WORK_QUEUE_TRANSITIONS[key]
+    : null;
 }
 
-export function getAllowedTargetStates({ transition, fromState }: Record<string, any>) : any {
-  const definition: any = getWorkQueueTransition(transition);
-  if (!definition || !definition.from.includes(fromState ?? null)) {
+export function getAllowedTargetStates({
+  transition,
+  fromState,
+}: WorkQueueTransitionInput): WorkQueueState[] {
+  const definition = getWorkQueueTransition(transition);
+  const normalizedFromState =
+    fromState === null || fromState === undefined
+      ? null
+      : isWorkQueueState(fromState)
+        ? fromState
+        : undefined;
+  if (
+    !definition ||
+    normalizedFromState === undefined ||
+    !definition.from.includes(normalizedFromState)
+  ) {
     return [];
   }
   return [...definition.to];
 }
 
-export function isLegalWorkQueueTransition({ transition, fromState = null, toState }: Record<string, any>) : any {
-  const allowed: any = getAllowedTargetStates({ transition, fromState });
-  return allowed.includes(toState);
+export function isLegalWorkQueueTransition({
+  transition,
+  fromState = null,
+  toState,
+}: WorkQueueTransitionInput): boolean {
+  const allowed = getAllowedTargetStates({ transition, fromState });
+  return isWorkQueueState(toState) && allowed.includes(toState);
 }
 
-export function assertLegalWorkQueueTransition({ transition, fromState = null, toState }: Record<string, any>) : any {
+export function assertLegalWorkQueueTransition({
+  transition,
+  fromState = null,
+  toState,
+}: WorkQueueTransitionInput): true {
   if (isLegalWorkQueueTransition({ transition, fromState, toState })) {
     return true;
   }
-  const fromLabel: any = fromState === null || fromState === undefined ? "none" : String(fromState);
-  throw new Error(`Illegal work queue transition: ${transition} ${fromLabel} -> ${toState}`);
+  const fromLabel =
+    fromState === null || fromState === undefined ? "none" : String(fromState);
+  throw new Error(
+    `Illegal work queue transition: ${transition} ${fromLabel} -> ${toState}`,
+  );
 }
 
-export function describeWorkQueueStateMachine() : any {
+export function describeWorkQueueStateMachine() {
   return {
-    states: (Object.values(WORK_QUEUE_STATES) as any[]),
+    states: Object.values(WORK_QUEUE_STATES),
     terminalStates: [...WORK_QUEUE_TERMINAL_STATES],
     safeInterventionStates: [...WORK_QUEUE_SAFE_INTERVENTION_STATES],
     transitions: Object.fromEntries(
-      (Object.entries(WORK_QUEUE_TRANSITIONS) as [string, any][]).map(([name, definition]: any[]) : any => [
+      Object.entries(WORK_QUEUE_TRANSITIONS).map(([name, definition]) => [
         name,
         {
           from: [...definition.from],
           to: [...definition.to],
           leaseBound: definition.leaseBound === true,
-          fallback: definition.fallback === true
-        }
-      ])
-    )
+          fallback: definition.fallback === true,
+        },
+      ]),
+    ),
   };
 }
 
-export function buildWorkQueueTransitionMatrix() : any {
-  const states: any = (Object.values(WORK_QUEUE_STATES) as any[]);
-  const events: any = Object.keys(WORK_QUEUE_TRANSITIONS);
-  return states.flatMap((fromState?: any) : any =>
-    events.map((transition?: any) : any => {
-      const allowedTargets: any = getAllowedTargetStates({ transition, fromState });
+export function buildWorkQueueTransitionMatrix(): WorkQueueTransitionMatrixCell[] {
+  const states = Object.values(WORK_QUEUE_STATES);
+  const events = Object.keys(WORK_QUEUE_TRANSITIONS);
+  return states.flatMap((fromState) =>
+    events.map((transition) => {
+      const allowedTargets = getAllowedTargetStates({ transition, fromState });
       return Object.freeze({
         fromState,
         transition,
         legal: allowedTargets.length > 0,
-        toStates: Object.freeze(allowedTargets)
+        toStates: Object.freeze(allowedTargets),
       });
-    })
+    }),
   );
 }
 
-export function verifyWorkQueueStateMachineProof() : any {
-  const errors: any[] = [];
-  const states: any = (Object.values(WORK_QUEUE_STATES) as any[]);
-  const events: any = Object.keys(WORK_QUEUE_TRANSITIONS);
-  const matrix: any = buildWorkQueueTransitionMatrix();
-  const matrixKeys: any = new Set<any>(matrix.map((cell?: any) : any => `${cell.fromState}:${cell.transition}`));
+export function verifyWorkQueueStateMachineProof() {
+  const errors: string[] = [];
+  const states = Object.values(WORK_QUEUE_STATES);
+  const events = Object.keys(WORK_QUEUE_TRANSITIONS);
+  const matrix = buildWorkQueueTransitionMatrix();
+  const matrixKeys = new Set(
+    matrix.map((cell) => `${cell.fromState}:${cell.transition}`),
+  );
 
   for (const state of states) {
     for (const event of events) {
@@ -227,7 +285,9 @@ export function verifyWorkQueueStateMachineProof() : any {
   }
 
   for (const terminalState of WORK_QUEUE_TERMINAL_STATES) {
-    const legalTerminalExits: any = matrix.filter((cell?: any) : any => cell.fromState === terminalState && cell.legal);
+    const legalTerminalExits = matrix.filter(
+      (cell) => cell.fromState === terminalState && cell.legal,
+    );
     if (legalTerminalExits.length > 0) {
       errors.push(`Terminal state has legal exits: ${terminalState}`);
     }
@@ -237,25 +297,31 @@ export function verifyWorkQueueStateMachineProof() : any {
     if (isTerminalWorkQueueState(state)) {
       continue;
     }
-    const legalOutgoing: any = matrix.filter((cell?: any) : any => cell.fromState === state && cell.legal);
+    const legalOutgoing = matrix.filter(
+      (cell) => cell.fromState === state && cell.legal,
+    );
     if (legalOutgoing.length === 0) {
-      errors.push(`Non-terminal state has no legal outgoing transitions: ${state}`);
+      errors.push(
+        `Non-terminal state has no legal outgoing transitions: ${state}`,
+      );
     }
   }
 
   for (const cell of matrix) {
     if (!cell.legal && cell.toStates.length !== 0) {
-      errors.push(`Illegal matrix cell exposes target states: ${cell.fromState} x ${cell.transition}`);
+      errors.push(
+        `Illegal matrix cell exposes target states: ${cell.fromState} x ${cell.transition}`,
+      );
     }
     for (const toState of cell.toStates) {
       try {
         assertLegalWorkQueueTransition({
           transition: cell.transition,
           fromState: cell.fromState,
-          toState
+          toState,
         });
-      } catch (error: any) {
-        errors.push(error.message);
+      } catch (error: unknown) {
+        errors.push(error instanceof Error ? error.message : String(error));
       }
     }
   }
@@ -267,13 +333,13 @@ export function verifyWorkQueueStateMachineProof() : any {
     states: states.length,
     events: events.length,
     errors,
-    matrix
+    matrix,
   };
 }
 
-export function verifyWorkQueueStateMachine() : any {
-  const errors: any[] = [];
-  const states: any = new Set<any>((Object.values(WORK_QUEUE_STATES) as any[]));
+export function verifyWorkQueueStateMachine() {
+  const errors: string[] = [];
+  const states = new Set<WorkQueueState>(Object.values(WORK_QUEUE_STATES));
 
   for (const terminalState of WORK_QUEUE_TERMINAL_STATES) {
     if (!states.has(terminalState)) {
@@ -287,7 +353,7 @@ export function verifyWorkQueueStateMachine() : any {
     }
   }
 
-  for (const [name, definition] of (Object.entries(WORK_QUEUE_TRANSITIONS) as [string, any][])) {
+  for (const [name, definition] of Object.entries(WORK_QUEUE_TRANSITIONS)) {
     if (!Array.isArray(definition.from) || definition.from.length === 0) {
       errors.push(`Transition ${name} has no from states.`);
     }
@@ -313,6 +379,6 @@ export function verifyWorkQueueStateMachine() : any {
     ok: errors.length === 0,
     errors,
     machine: describeWorkQueueStateMachine(),
-    proof: verifyWorkQueueStateMachineProof()
+    proof: verifyWorkQueueStateMachineProof(),
   };
 }

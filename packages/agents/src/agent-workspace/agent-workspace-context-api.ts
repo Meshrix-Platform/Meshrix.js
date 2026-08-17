@@ -29,27 +29,82 @@ import {
   uniqueStrings
 } from "./agent-workspace-support.ts";
 
-export function createAgentWorkspaceContextApi({
-  db,
-  rootPath,
-  selectWorkspaceRawStmt,
-  selectSessionStmt,
-  canAccessWorkspace,
-  canAccessWorkspaceId,
-  workspaceAccess,
-  getWorkspace,
-  createRun,
-  createArtifact
-}: Record<string, any> = {}) : any {
-  function resolveWorkspaceChain(workspaceId?: any, _seen: any = new Set<any>()) : any {
+type JsonRecord = Record<string, unknown>;
+interface WorkspaceRow {
+  workspace_id: string; title: string; objective: string; status: string; owner_user_id?: string | null;
+  metadata_json?: string | null; created_at: string; updated_at: string; parent_workspace_id?: string | null;
+  profile_json?: string | null; owned_source_ids_json?: string | null; accessible_workspace_ids_json?: string | null;
+  current_generation?: number | null; fs_path?: string | null;
+}
+interface SessionRow {
+  session_id: string; workspace_id: string; title: string; objective?: string | null; status?: string | null;
+  parent_session_id?: string | null; forked_from_event_id?: string | null; branch_index?: number | null;
+  lineage_json?: string | null; context_json?: string | null; metadata_json?: string | null; created_by?: string | null;
+  created_at: string; updated_at: string; last_event_id?: string | null; event_count?: number | null; append_only?: number | null;
+}
+interface SharedWorkspaceRow { workspace_id: string; accessible_workspace_ids_json?: string | null }
+interface Statement<Row = unknown> { get(...parameters: unknown[]): Row | undefined; all(...parameters: unknown[]): Row[]; run(...parameters: unknown[]): unknown }
+interface ContextDatabase { prepare(sql: string): Statement; transaction<Args extends unknown[], Result>(fn: (...args: Args) => Result): (...args: Args) => Result }
+type Workspace = NonNullable<ReturnType<typeof hydrateWorkspace>>;
+interface GatewayScope { includeSourceIds: string[]; excludeSourceIds: string[] }
+export interface WorkspaceProfile extends JsonRecord { contextProfileId: string; toolGrantId: string; modelAlias: string; gatewayScope: GatewayScope }
+export interface WorkspaceContext extends JsonRecord {
+  protocolVersion: string; workspaceId: string; currentGeneration: number;
+  chainGenerations: Array<{ workspaceId: string; generation: number }>;
+  contextFingerprint: string; inheritanceChain: Array<{ workspaceId: string; title: string }>;
+  gatewaySourceIds: string[]; contextProfileId: string; toolGrantId: string; modelAlias: string;
+}
+interface WorkspaceAccess { canAccessAll?: boolean; [key: string]: unknown }
+export interface ContextBundle extends JsonRecord {
+  bundleVersion: string; generatedAt: string; context: WorkspaceContext; resolvedProfile: WorkspaceProfile;
+  recent: { runs: unknown[]; submissions: unknown[]; artifacts: unknown[]; issues: unknown[]; decisions: unknown[]; privateStates: unknown[] };
+  handoffMarkdown?: unknown;
+}
+
+function statement<Row>(value: unknown, name: string): Statement<Row> {
+  const candidate = asObject(value);
+  if (typeof candidate.get !== "function" || typeof candidate.all !== "function" || typeof candidate.run !== "function") {
+    throw new TypeError(`Agent workspace context dependency ${name} must be a SQLite statement.`);
+  }
+  return candidate as unknown as Statement<Row>;
+}
+
+function database(value: unknown): ContextDatabase {
+  const candidate = asObject(value);
+  if (typeof candidate.prepare !== "function" || typeof candidate.transaction !== "function") {
+    throw new TypeError("Agent workspace context dependency db must be a SQLite database.");
+  }
+  return candidate as unknown as ContextDatabase;
+}
+
+function provider<Provider extends (...args: never[]) => unknown>(value: unknown, name: string): Provider {
+  if (typeof value !== "function") throw new TypeError(`Agent workspace context dependency ${name} must be a function.`);
+  return value as Provider;
+}
+
+export function createAgentWorkspaceContextApi(dependencies: unknown = {}) {
+  const source = asObject(dependencies);
+  const db = database(source.db);
+  const rootPath = String(source.rootPath || "");
+  const selectWorkspaceRawStmt = statement<WorkspaceRow>(source.selectWorkspaceRawStmt, "selectWorkspaceRawStmt");
+  const selectSessionStmt = statement<SessionRow>(source.selectSessionStmt, "selectSessionStmt");
+  const canAccessWorkspace = provider<(workspace: Workspace | null, options: JsonRecord) => boolean>(source.canAccessWorkspace, "canAccessWorkspace");
+  const canAccessWorkspaceId = provider<(workspaceId: string, options: JsonRecord) => boolean>(source.canAccessWorkspaceId, "canAccessWorkspaceId");
+  const workspaceAccess = provider<(options: JsonRecord) => WorkspaceAccess>(source.workspaceAccess, "workspaceAccess");
+  const getWorkspace = provider<(options: JsonRecord) => JsonRecord | null>(source.getWorkspace, "getWorkspace");
+  const createRun = provider<(input: JsonRecord) => unknown>(source.createRun, "createRun");
+  const createArtifact = provider<(input: JsonRecord) => unknown>(source.createArtifact, "createArtifact");
+
+  function resolveWorkspaceChain(workspaceId?: unknown, _seen = new Set<unknown>()): Workspace[] {
     if (_seen.has(workspaceId)) {
       throw new Error(`工作空间继承链存在循环: ${Array.from(_seen).join(" → ")} → ${workspaceId}`);
     }
     _seen.add(workspaceId);
-    const row: any = selectWorkspaceRawStmt.get(workspaceId);
+    const row = selectWorkspaceRawStmt.get(workspaceId);
     if (!row) return [];
-    const ws: any = hydrateWorkspace(row);
-    const ancestors: any = ws.parentWorkspaceId
+    const ws = hydrateWorkspace(row);
+    if (!ws) return [];
+    const ancestors = ws.parentWorkspaceId
       ? resolveWorkspaceChain(ws.parentWorkspaceId, _seen)
       : [];
     return [...ancestors, ws];
@@ -59,30 +114,30 @@ export function createAgentWorkspaceContextApi({
    * Walk the chain root→target, merge profiles: child overrides parent scalars.
    * gatewayScope arrays are merged using + / - notation.
    */
-  function resolveWorkspaceProfile(workspaceId?: any) : any {
-    const chain: any = resolveWorkspaceChain(workspaceId);
-    let merged: Record<string, any> = {
+  function resolveWorkspaceProfile(workspaceId?: unknown): WorkspaceProfile {
+    const chain = resolveWorkspaceChain(workspaceId);
+    const merged: WorkspaceProfile = {
       contextProfileId: "",
       toolGrantId: "",
       modelAlias: "",
       gatewayScope: { includeSourceIds: [], excludeSourceIds: [] }
     };
     for (const ws of chain) {
-      const p: any = ws.profile || {};
-      if (p.contextProfileId) merged.contextProfileId = p.contextProfileId;
-      if (p.toolGrantId) merged.toolGrantId = p.toolGrantId;
-      if (p.modelAlias) merged.modelAlias = p.modelAlias;
-      const scope: any = p.gatewayScope || {};
+      const p = asObject(ws.profile);
+      if (p.contextProfileId) merged.contextProfileId = String(p.contextProfileId);
+      if (p.toolGrantId) merged.toolGrantId = String(p.toolGrantId);
+      if (p.modelAlias) merged.modelAlias = String(p.modelAlias);
+      const scope = asObject(p.gatewayScope);
       if (Array.isArray(scope.includeSourceIds)) {
         merged.gatewayScope.includeSourceIds = [
           ...merged.gatewayScope.includeSourceIds,
-          ...scope.includeSourceIds
+          ...uniqueStrings(scope.includeSourceIds)
         ];
       }
       if (Array.isArray(scope.excludeSourceIds)) {
         merged.gatewayScope.excludeSourceIds = [
           ...merged.gatewayScope.excludeSourceIds,
-          ...scope.excludeSourceIds
+          ...uniqueStrings(scope.excludeSourceIds)
         ];
       }
     }
@@ -100,30 +155,30 @@ export function createAgentWorkspaceContextApi({
    *
    * @returns {string[]} distinct source IDs
    */
-  function resolveWorkspaceSourceIds(workspaceId?: any, _visited: any = new Set<any>()) : any {
+  function resolveWorkspaceSourceIds(workspaceId?: unknown, _visited = new Set<unknown>()): string[] {
     if (_visited.has(workspaceId)) return [];  // break cycles in shared graph
     _visited.add(workspaceId);
 
-    const chain: any = resolveWorkspaceChain(workspaceId);
-    const sourceSet: any = new Set<any>();
-    const excludeSet: any = new Set<any>();
+    const chain = resolveWorkspaceChain(workspaceId);
+    const sourceSet = new Set<string>();
+    const excludeSet = new Set<string>();
 
     for (const ws of chain) {
       // Add each level's owned sources
-      for (const id of ws.ownedSourceIds) sourceSet.add(id);
+      for (const id of asArray(ws.ownedSourceIds)) sourceSet.add(String(id));
       // Apply explicit include/exclude in the profile at this level
-      const scope: any = (ws.profile || {}).gatewayScope || {};
-      for (const id of (scope.includeSourceIds || [])) sourceSet.add(id);
-      for (const id of (scope.excludeSourceIds || [])) excludeSet.add(id);
+      const scope = asObject(asObject(ws.profile).gatewayScope);
+      for (const id of asArray(scope.includeSourceIds)) sourceSet.add(String(id));
+      for (const id of asArray(scope.excludeSourceIds)) excludeSet.add(String(id));
     }
 
     // Remove explicitly excluded
     for (const id of excludeSet) sourceSet.delete(id);
 
     // Add sources from accessible (shared) workspaces
-    const target: any = chain[chain.length - 1];
+    const target = chain[chain.length - 1];
     if (target) {
-      for (const sharedId of target.accessibleWorkspaceIds) {
+      for (const sharedId of asArray(target.accessibleWorkspaceIds)) {
         for (const id of resolveWorkspaceSourceIds(sharedId, _visited)) {
           sourceSet.add(id);
         }
@@ -138,32 +193,34 @@ export function createAgentWorkspaceContextApi({
    * This is the single call an agent needs to set up its gateway context scope, context,
    * tool grant, and model routing.
    */
-  function getWorkspaceContext(workspaceId?: any, options: Record<string, any> = {}) : any {
-    const targetRow: any = selectWorkspaceRawStmt.get(String(workspaceId || ""));
+  function getWorkspaceContext(workspaceId?: unknown, value: unknown = {}): WorkspaceContext | null {
+    const options = asObject(value);
+    const resolvedWorkspaceId = String(workspaceId || "");
+    const targetRow = selectWorkspaceRawStmt.get(resolvedWorkspaceId);
     if (!canAccessWorkspace(hydrateWorkspace(targetRow), options)) {
       return null;
     }
-    const chain: any = resolveWorkspaceChain(workspaceId);
+    const chain = resolveWorkspaceChain(resolvedWorkspaceId);
     if (chain.length === 0) return null;
-    const profile: any = resolveWorkspaceProfile(workspaceId);
-    const sourceIds: any = resolveWorkspaceSourceIds(workspaceId);
-    const target: any = chain[chain.length - 1];
+    const profile = resolveWorkspaceProfile(resolvedWorkspaceId);
+    const sourceIds = resolveWorkspaceSourceIds(resolvedWorkspaceId);
+    const target = chain[chain.length - 1];
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
-      workspaceId,
+      workspaceId: resolvedWorkspaceId,
       sharingMode: "team-shared",
       currentGeneration: target.currentGeneration,
-      chainGenerations: chain.map((ws?: any) : any => ({
+      chainGenerations: chain.map((ws) => ({
         workspaceId: ws.workspaceId,
         generation: ws.currentGeneration
       })),
       contextFingerprint: stableHash(
         "workspace-context",
-        chain.map((ws?: any) : any => `${ws.workspaceId}:${ws.currentGeneration}`).join("|"),
+        chain.map((ws) => `${ws.workspaceId}:${ws.currentGeneration}`).join("|"),
         stringifyJson(profile),
         sourceIds.join("|")
       ),
-      inheritanceChain: chain.map((ws?: any) : any => ({
+      inheritanceChain: chain.map((ws) => ({
         workspaceId: ws.workspaceId,
         title: ws.title,
       })),
@@ -174,21 +231,22 @@ export function createAgentWorkspaceContextApi({
     };
   }
 
-  function getSessionContext(sessionId?: any, options: Record<string, any> = {}) : any {
-    const session: any = hydrateSession(selectSessionStmt.get(String(sessionId || "")));
+  function getSessionContext(sessionId?: unknown, value: unknown = {}) {
+    const options = asObject(value);
+    const session = hydrateSession(selectSessionStmt.get(String(sessionId || "")));
     if (!session || !canAccessWorkspaceId(session.workspaceId, options)) {
       return null;
     }
-    const workspaceContext: any = getWorkspaceContext(session.workspaceId, options);
+    const workspaceContext = getWorkspaceContext(session.workspaceId, options);
     if (!workspaceContext) {
       return null;
     }
-    const sessionContext: any = asObject(session.context);
-    const explicitSourceIds: any = asArray(sessionContext.gatewaySourceIds || sessionContext.sourceIds);
-    const contextProfileId: any = String(sessionContext.contextProfileId || workspaceContext.contextProfileId || "");
-    const modelAlias: any = String(sessionContext.modelAlias || sessionContext.alias || workspaceContext.modelAlias || "");
-    const toolGrantId: any = String(sessionContext.toolGrantId || sessionContext.grantId || workspaceContext.toolGrantId || "");
-    const gatewaySourceIds: any = explicitSourceIds.length ? explicitSourceIds : workspaceContext.gatewaySourceIds;
+    const sessionContext = asObject(session.context);
+    const explicitSourceIds = uniqueStrings(asArray(sessionContext.gatewaySourceIds || sessionContext.sourceIds));
+    const contextProfileId = String(sessionContext.contextProfileId || workspaceContext.contextProfileId || "");
+    const modelAlias = String(sessionContext.modelAlias || sessionContext.alias || workspaceContext.modelAlias || "");
+    const toolGrantId = String(sessionContext.toolGrantId || sessionContext.grantId || workspaceContext.toolGrantId || "");
+    const gatewaySourceIds = explicitSourceIds.length ? explicitSourceIds : workspaceContext.gatewaySourceIds;
     return {
       ...workspaceContext,
       workspaceContext,
@@ -223,17 +281,18 @@ export function createAgentWorkspaceContextApi({
     };
   }
 
-  function exportWorkspaceContextBundle(workspaceId?: any, options: Record<string, any> = {}) : any {
-    const context: any = getWorkspaceContext(workspaceId, options);
+  function exportWorkspaceContextBundle(workspaceId?: unknown, value: unknown = {}) {
+    const options = asObject(value);
+    const context = getWorkspaceContext(workspaceId, options);
     if (!context) {
       return null;
     }
-    const includePrivate: any = options.includePrivate === true;
-    const includeBundle: any = options.includeBundle !== false;
-    const compress: any = options.compress !== false;
-    const maxItems: any = boundedInteger(options.maxItems, 12, 1, 100);
-    const contentPreviewChars: any = boundedInteger(options.contentPreviewChars, 600, 0, 4000);
-    const snapshot: any = getWorkspace({
+    const includePrivate = options.includePrivate === true;
+    const includeBundle = options.includeBundle !== false;
+    const compress = options.compress !== false;
+    const maxItems = boundedInteger(options.maxItems, 12, 1, 100);
+    const contentPreviewChars = boundedInteger(options.contentPreviewChars, 600, 0, 4000);
+    const snapshot = getWorkspace({
       workspaceId,
       actorUserId: options.actorUserId,
       canAccessAll: options.canAccessAll,
@@ -249,13 +308,13 @@ export function createAgentWorkspaceContextApi({
     if (!snapshot) {
       return null;
     }
-    const chain: any = resolveWorkspaceChain(workspaceId);
-    const bundle: Record<string, any> = {
+    const chain = resolveWorkspaceChain(workspaceId);
+    const bundle: ContextBundle = {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
       bundleVersion: AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION,
       generatedAt: nowIso(),
-      workspace: compactWorkspaceLayer(snapshot.workspace),
-      summary: snapshot.summary || {},
+      workspace: compactWorkspaceLayer(asObject(snapshot.workspace)),
+      summary: asObject(snapshot.summary),
       context,
       resolvedProfile: resolveWorkspaceProfile(workspaceId),
       inheritanceChain: chain.map(compactWorkspaceLayer),
@@ -265,24 +324,24 @@ export function createAgentWorkspaceContextApi({
         contentPreviewChars
       },
       recent: {
-        runs: asArray(snapshot.runs).slice(0, maxItems).map(compactRun),
-        submissions: asArray(snapshot.submissions).slice(0, maxItems).map(compactSubmission),
+        runs: asArray(snapshot.runs).slice(0, maxItems).map((run) => compactRun(asObject(run))),
+        submissions: asArray(snapshot.submissions).slice(0, maxItems).map((submission) => compactSubmission(asObject(submission))),
         artifacts: asArray(snapshot.artifacts)
           .slice(0, maxItems)
-          .map((artifact?: any) : any => compactArtifact(artifact, { contentPreviewChars })),
-        issues: asArray(snapshot.issues).slice(0, maxItems).map(compactIssue),
-        decisions: asArray(snapshot.decisions).slice(0, maxItems).map(compactDecision),
+          .map((artifact) => compactArtifact(asObject(artifact), { contentPreviewChars })),
+        issues: asArray(snapshot.issues).slice(0, maxItems).map((issue) => compactIssue(asObject(issue))),
+        decisions: asArray(snapshot.decisions).slice(0, maxItems).map((decision) => compactDecision(asObject(decision))),
         privateStates: includePrivate
-          ? asArray(snapshot.privateStates).slice(0, maxItems).map(compactPrivateState)
+          ? asArray(snapshot.privateStates).slice(0, maxItems).map((privateState) => compactPrivateState(asObject(privateState)))
           : []
       }
     };
     bundle.handoffMarkdown = buildWorkspaceHandoffMarkdown(bundle);
 
-    const jsonText: any = stableJson(bundle);
-    const uncompressedBytes: any = Buffer.byteLength(jsonText, "utf8");
-    const compressedBuffer: any = compress ? gzipSync(Buffer.from(jsonText, "utf8")) : null;
-    const compressedBytes: any = compressedBuffer?.length || 0;
+    const jsonText = stableJson(bundle);
+    const uncompressedBytes = Buffer.byteLength(jsonText, "utf8");
+    const compressedBuffer = compress ? gzipSync(Buffer.from(jsonText, "utf8")) : null;
+    const compressedBytes = compressedBuffer?.length || 0;
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
       bundleVersion: AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION,
@@ -318,21 +377,23 @@ export function createAgentWorkspaceContextApi({
     };
   }
 
-  function restoreWorkspaceContextBundle(workspaceId?: any, input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const targetWorkspaceId: any = String(workspaceId || input.workspaceId || input.targetWorkspaceId || "").trim();
-    const targetRow: any = selectWorkspaceRawStmt.get(targetWorkspaceId);
+  function restoreWorkspaceContextBundle(workspaceId?: unknown, value: unknown = {}, optionValue: unknown = {}) {
+    const input = asObject(value);
+    const options = asObject(optionValue);
+    const targetWorkspaceId = String(workspaceId || input.workspaceId || input.targetWorkspaceId || "").trim();
+    const targetRow = selectWorkspaceRawStmt.get(targetWorkspaceId);
     if (!targetRow) {
       return { ok: false, error: "工作空间不存在" };
     }
-    const targetWorkspace: any = hydrateWorkspace(targetRow);
+    const targetWorkspace = hydrateWorkspace(targetRow);
     if (!canAccessWorkspace(targetWorkspace, options)) {
       return { ok: false, error: "工作空间不可访问" };
     }
 
-    let bundle: any;
+    let bundle: JsonRecord;
     try {
-      bundle = decodeWorkspaceContextBundle(input);
-    } catch (error: any) {
+      bundle = asObject(decodeWorkspaceContextBundle(input));
+    } catch (error: unknown) {
       return {
         ok: false,
         error: error instanceof Error ? error.message : "工作空间上下文压缩包解析失败。"
@@ -342,32 +403,34 @@ export function createAgentWorkspaceContextApi({
       return { ok: false, error: "工作空间上下文压缩包版本不匹配。" };
     }
 
-    const bundleHash: any = stableHash("workspace-context-bundle", stableJson(bundle));
-    const expectedHash: any = String(
+    const bundleHash = stableHash("workspace-context-bundle", stableJson(bundle));
+    const contextBundle = asObject(input.contextBundle);
+    const legacyContextBundle = asObject(input.context_bundle);
+    const expectedHash = String(
       input.bundleHash ||
         input.expectedBundleHash ||
-        input.contextBundle?.bundleHash ||
-        input.context_bundle?.bundleHash ||
+        contextBundle.bundleHash ||
+        legacyContextBundle.bundleHash ||
         ""
     ).trim();
     if (expectedHash && expectedHash !== bundleHash) {
       return { ok: false, error: "工作空间上下文压缩包 hash 校验失败。" };
     }
 
-    const context: any = asObject(bundle.context);
-    const resolvedProfile: any = asObject(bundle.resolvedProfile);
-    const profileGatewayScope: any = asObject(resolvedProfile.gatewayScope);
-    const requestedRestoredSourceIds: any = uniqueStrings(asArray(context.gatewaySourceIds).length
+    const context = asObject(bundle.context);
+    const resolvedProfile = asObject(bundle.resolvedProfile);
+    const profileGatewayScope = asObject(resolvedProfile.gatewayScope);
+    const requestedRestoredSourceIds = uniqueStrings(asArray(context.gatewaySourceIds).length
       ? asArray(context.gatewaySourceIds)
       : asArray(profileGatewayScope.includeSourceIds));
-    const currentlyAccessibleSourceIds: any = new Set<any>(resolveWorkspaceSourceIds(targetWorkspaceId));
-    const access: any = workspaceAccess(options);
-    const canImportRequestedSourceIds: any = access.canAccessAll === true;
-    const restoredSourceIds: any = canImportRequestedSourceIds
+    const currentlyAccessibleSourceIds = new Set(resolveWorkspaceSourceIds(targetWorkspaceId));
+    const access = workspaceAccess(options);
+    const canImportRequestedSourceIds = access.canAccessAll === true;
+    const restoredSourceIds = canImportRequestedSourceIds
       ? requestedRestoredSourceIds
-      : requestedRestoredSourceIds.filter((sourceId?: any) : any => currentlyAccessibleSourceIds.has(sourceId));
-    const skippedSourceIds: any = requestedRestoredSourceIds.filter((sourceId?: any) : any => !restoredSourceIds.includes(sourceId));
-    const profilePatch: Record<string, any> = {
+      : requestedRestoredSourceIds.filter((sourceId) => currentlyAccessibleSourceIds.has(sourceId));
+    const skippedSourceIds = requestedRestoredSourceIds.filter((sourceId) => !restoredSourceIds.includes(sourceId));
+    const profilePatch: JsonRecord = {
       ...resolvedProfile,
       contextProfileId: context.contextProfileId || resolvedProfile.contextProfileId || "",
       toolGrantId: context.toolGrantId || resolvedProfile.toolGrantId || "",
@@ -378,15 +441,16 @@ export function createAgentWorkspaceContextApi({
         excludeSourceIds: asArray(profileGatewayScope.excludeSourceIds)
       }
     };
-    const swapResult: any = hotSwapProfile(targetWorkspaceId, profilePatch, options);
+    const swapResult = hotSwapProfile(targetWorkspaceId, profilePatch, options);
     if (!swapResult.ok) {
       return swapResult;
     }
 
-    const sourceWorkspace: any = asObject(bundle.workspace);
-    const timestamp: any = nowIso();
-    const runId: any = stableId("context_restore_run", targetWorkspaceId, bundleHash);
-    const artifactId: any = stableId("context_restore_artifact", targetWorkspaceId, bundleHash);
+    const sourceWorkspace = asObject(bundle.workspace);
+    const timestamp = nowIso();
+    const runId = stableId("context_restore_run", targetWorkspaceId, bundleHash);
+    const artifactId = stableId("context_restore_artifact", targetWorkspaceId, bundleHash);
+    const recent = asObject(bundle.recent);
     createRun({
       runId,
       workspaceId: targetWorkspaceId,
@@ -414,15 +478,15 @@ export function createAgentWorkspaceContextApi({
         restoredProfile: Boolean(profilePatch.contextProfileId || profilePatch.modelAlias || profilePatch.toolGrantId),
         restoredGatewaySourceCount: restoredSourceIds.length,
         skippedGatewaySourceCount: skippedSourceIds.length,
-        restoredArtifactCount: asArray(bundle.recent?.artifacts).length,
-        restoredRunCount: asArray(bundle.recent?.runs).length
+        restoredArtifactCount: asArray(recent.artifacts).length,
+        restoredRunCount: asArray(recent.runs).length
       },
       artifactIds: [artifactId],
       startedAt: timestamp,
       completedAt: timestamp
     });
-    const handoffMarkdown: any = normalizeText(bundle.handoffMarkdown)
-      ? bundle.handoffMarkdown
+    const handoffMarkdown = normalizeText(bundle.handoffMarkdown)
+      ? String(bundle.handoffMarkdown)
       : buildWorkspaceHandoffMarkdown(bundle);
     createArtifact({
       artifactId,
@@ -467,7 +531,10 @@ export function createAgentWorkspaceContextApi({
     };
   }
 
-  function setWorkspaceParent(childId?: any, parentId?: any, options: Record<string, any> = {}) : any {
+  function setWorkspaceParent(childValue?: unknown, parentValue?: unknown, optionValue: unknown = {}) {
+    const childId = String(childValue || "");
+    const parentId = String(parentValue || "");
+    const options = asObject(optionValue);
     if (!selectWorkspaceRawStmt.get(childId)) {
       return { ok: false, error: "子工作空间不存在" };
     }
@@ -486,106 +553,123 @@ export function createAgentWorkspaceContextApi({
       } catch {
         return { ok: false, error: "设置会导致继承链循环" };
       }
-      const chainOfParent: any = resolveWorkspaceChain(parentId);
-      if (chainOfParent.some((ws?: any) : any => ws.workspaceId === childId)) {
+      const chainOfParent = resolveWorkspaceChain(parentId);
+      if (chainOfParent.some((ws) => ws.workspaceId === childId)) {
         return { ok: false, error: "设置会导致继承链循环" };
       }
     }
-    const ts: any = nowIso();
+    const ts = nowIso();
     db.prepare(
       "UPDATE aw_workspaces SET parent_workspace_id = ?, current_generation = current_generation + 1, updated_at = ? WHERE workspace_id = ?"
     ).run(parentId || null, ts, childId);
     return { ok: true, workspace: projectWorkspace(hydrateWorkspace(selectWorkspaceRawStmt.get(childId))) };
   }
 
-  function hotSwapProfile(workspaceId?: any, profilePatch?: any, options: Record<string, any> = {}) : any {
-    const row: any = selectWorkspaceRawStmt.get(workspaceId);
+  function hotSwapProfile(workspaceValue?: unknown, patchValue: unknown = {}, optionValue: unknown = {}) {
+    const workspaceId = String(workspaceValue || "");
+    const profilePatch = asObject(patchValue);
+    const options = asObject(optionValue);
+    const row = selectWorkspaceRawStmt.get(workspaceId);
     if (!row) return { ok: false, error: "工作空间不存在" };
     if (!canAccessWorkspace(hydrateWorkspace(row), options)) {
       return { ok: false, error: "工作空间不可访问" };
     }
-    const existing: any = hydrateWorkspace(row);
-    const existingProfile: any = existing.profile || {};
+    const existing = hydrateWorkspace(row);
+    if (!existing) return { ok: false, error: "工作空间不存在" };
+    const existingProfile = asObject(existing.profile);
 
-    const newProfile: Record<string, any> = {
+    const newProfile: JsonRecord = {
       ...existingProfile,
       ...profilePatch,
       gatewayScope: {
-        ...(existingProfile.gatewayScope || {}),
-        ...(profilePatch.gatewayScope || {}),
+        ...asObject(existingProfile.gatewayScope),
+        ...asObject(profilePatch.gatewayScope),
       }
     };
 
-    const ts: any = nowIso();
+    const ts = nowIso();
     db.prepare(
       "UPDATE aw_workspaces SET profile_json = ?, current_generation = current_generation + 1, updated_at = ? WHERE workspace_id = ?"
     ).run(stringifyJson(newProfile), ts, workspaceId);
 
-    const updated: any = hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId));
-    return { ok: true, workspace: projectWorkspace(updated), newGeneration: updated.currentGeneration };
+    const updated = hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId));
+    return { ok: true, workspace: projectWorkspace(updated), newGeneration: updated?.currentGeneration || 0 };
   }
 
-  function setOwnedSourceIds(workspaceId?: any, sourceIds?: any, options: Record<string, any> = {}) : any {
-    const row: any = selectWorkspaceRawStmt.get(workspaceId);
+  function setOwnedSourceIds(workspaceValue?: unknown, sourceIds?: unknown, optionValue: unknown = {}) {
+    const workspaceId = String(workspaceValue || "");
+    const options = asObject(optionValue);
+    const row = selectWorkspaceRawStmt.get(workspaceId);
     if (!row) return { ok: false, error: "工作空间不存在" };
     if (!canAccessWorkspace(hydrateWorkspace(row), options)) {
       return { ok: false, error: "工作空间不可访问" };
     }
-    const unique: any[] = [...new Set<any>(asArray(sourceIds).filter(Boolean))];
-    const ts: any = nowIso();
+    const unique = uniqueStrings(asArray(sourceIds));
+    const ts = nowIso();
     db.prepare(
       "UPDATE aw_workspaces SET owned_source_ids_json = ?, current_generation = current_generation + 1, updated_at = ? WHERE workspace_id = ?"
     ).run(stringifyJson(unique), ts, workspaceId);
     return { ok: true, workspace: projectWorkspace(hydrateWorkspace(selectWorkspaceRawStmt.get(workspaceId))) };
   }
 
-  function shareWorkspace(sourceId?: any, targetId?: any, options: Record<string, any> = {}) : any {
+  function shareWorkspace(sourceValue?: unknown, targetValue?: unknown, optionValue: unknown = {}) {
+    const sourceId = String(sourceValue || "");
+    const targetId = String(targetValue || "");
+    const options = asObject(optionValue);
     if (!selectWorkspaceRawStmt.get(sourceId)) return { ok: false, error: "来源工作空间不存在" };
-    const targetRow: any = selectWorkspaceRawStmt.get(targetId);
+    const targetRow = selectWorkspaceRawStmt.get(targetId);
     if (!targetRow) return { ok: false, error: "目标工作空间不存在" };
     if (!canAccessWorkspaceId(sourceId, options) || !canAccessWorkspace(hydrateWorkspace(targetRow), options)) {
       return { ok: false, error: "工作空间不可访问" };
     }
     if (sourceId === targetId) return { ok: false, error: "不能共享给自身" };
-    const target: any = hydrateWorkspace(targetRow);
-    const existing: any = new Set<any>(target.accessibleWorkspaceIds);
+    const target = hydrateWorkspace(targetRow);
+    if (!target) return { ok: false, error: "目标工作空间不存在" };
+    const existing = new Set(uniqueStrings(asArray(target.accessibleWorkspaceIds)));
     if (existing.has(sourceId)) return { ok: true, workspace: projectWorkspace(target), alreadyShared: true };
     existing.add(sourceId);
-    const ts: any = nowIso();
+    const ts = nowIso();
     db.prepare(
       "UPDATE aw_workspaces SET accessible_workspace_ids_json = ?, current_generation = current_generation + 1, updated_at = ? WHERE workspace_id = ?"
     ).run(JSON.stringify([...existing]), ts, targetId);
     return { ok: true, workspace: projectWorkspace(hydrateWorkspace(selectWorkspaceRawStmt.get(targetId))) };
   }
 
-  function unshareWorkspace(sourceId?: any, targetId?: any, options: Record<string, any> = {}) : any {
-    const targetRow: any = selectWorkspaceRawStmt.get(targetId);
+  function unshareWorkspace(sourceValue?: unknown, targetValue?: unknown, optionValue: unknown = {}) {
+    const sourceId = String(sourceValue || "");
+    const targetId = String(targetValue || "");
+    const options = asObject(optionValue);
+    const targetRow = selectWorkspaceRawStmt.get(targetId);
     if (!targetRow) return { ok: false, error: "目标工作空间不存在" };
     if (!canAccessWorkspaceId(sourceId, options) || !canAccessWorkspace(hydrateWorkspace(targetRow), options)) {
       return { ok: false, error: "工作空间不可访问" };
     }
-    const target: any = hydrateWorkspace(targetRow);
-    const updated: any = target.accessibleWorkspaceIds.filter((id?: any) : any => id !== sourceId);
-    if (updated.length === target.accessibleWorkspaceIds.length) {
+    const target = hydrateWorkspace(targetRow);
+    if (!target) return { ok: false, error: "目标工作空间不存在" };
+    const accessibleWorkspaceIds = uniqueStrings(asArray(target.accessibleWorkspaceIds));
+    const updated = accessibleWorkspaceIds.filter((id) => id !== sourceId);
+    if (updated.length === accessibleWorkspaceIds.length) {
       return { ok: true, workspace: projectWorkspace(target), wasShared: false };
     }
-    const ts: any = nowIso();
+    const ts = nowIso();
     db.prepare(
       "UPDATE aw_workspaces SET accessible_workspace_ids_json = ?, current_generation = current_generation + 1, updated_at = ? WHERE workspace_id = ?"
     ).run(JSON.stringify(updated), ts, targetId);
     return { ok: true, workspace: projectWorkspace(hydrateWorkspace(selectWorkspaceRawStmt.get(targetId))), wasShared: true };
   }
 
-  function deleteWorkspace(workspaceId?: any, options: Record<string, any> = {}) : any {
-    const workspaceRow: any = selectWorkspaceRawStmt.get(workspaceId);
-    const workspace: any = hydrateWorkspace(workspaceRow);
+  function deleteWorkspace(workspaceValue?: unknown, optionValue: unknown = {}) {
+    const workspaceId = String(workspaceValue || "");
+    const options = asObject(optionValue);
+    const workspaceRow = selectWorkspaceRawStmt.get(workspaceId);
+    const workspace = hydrateWorkspace(workspaceRow);
     if (!workspace || !canAccessWorkspace(workspace, options)) {
       return { ok: false, error: "工作空间不存在或无权限" };
     }
-    const foldersRoot: any = path.resolve(rootPath || "", "folders");
-    const fsPath: any = path.resolve(workspace.fsPath || "");
-    const relativeWorkspacePath: any = path.relative(foldersRoot, fsPath);
-    const expectedFolderName: any = stableId("workspace-folder", workspaceId);
+    const foldersRoot = path.resolve(rootPath || "", "folders");
+    const fsPath = path.resolve(workspace.fsPath || "");
+    const relativeWorkspacePath = path.relative(foldersRoot, fsPath);
+    const expectedFolderName = stableId("workspace-folder", workspaceId);
     if (!workspace.fsPath ||
         !relativeWorkspacePath ||
         relativeWorkspacePath.startsWith(`..${path.sep}`) ||
@@ -593,10 +677,10 @@ export function createAgentWorkspaceContextApi({
         relativeWorkspacePath !== expectedFolderName) {
       return { ok: false, error: "工作空间存储边界无效", code: "workspace_storage_boundary_invalid" };
     }
-    const parentPath: any = foldersRoot;
-    const deleteSuffix: any = stableId("delete", workspaceId, nowIso());
-    const quarantinePath: any = path.join(parentPath, `.${path.basename(fsPath)}.deleting-${deleteSuffix}`);
-    let movedToQuarantine: any = false;
+    const parentPath = foldersRoot;
+    const deleteSuffix = stableId("delete", workspaceId, nowIso());
+    const quarantinePath = path.join(parentPath, `.${path.basename(fsPath)}.deleting-${deleteSuffix}`);
+    let movedToQuarantine = false;
     try {
       if (fs.existsSync(fsPath)) {
         fs.renameSync(fsPath, quarantinePath);
@@ -607,16 +691,16 @@ export function createAgentWorkspaceContextApi({
     }
 
     try {
-      db.transaction(() : any => {
-      const sharedRows: any = db.prepare(
+      db.transaction((): void => {
+      const sharedRows = statement<SharedWorkspaceRow>(db.prepare(
         "SELECT workspace_id, accessible_workspace_ids_json FROM aw_workspaces WHERE workspace_id <> ?"
-      ).all(workspaceId);
-      const updateShared: any = db.prepare(
+      ), "sharedWorkspaceRows").all(workspaceId);
+      const updateShared = db.prepare(
         "UPDATE aw_workspaces SET accessible_workspace_ids_json = ?, current_generation = current_generation + 1, updated_at = ? WHERE workspace_id = ?"
       );
       for (const row of sharedRows) {
-        const current: any = asArray(JSON.parse(row.accessible_workspace_ids_json || "[]"));
-        const next: any = current.filter((id?: any) : any => id !== workspaceId);
+        const current = uniqueStrings(asArray(JSON.parse(row.accessible_workspace_ids_json || "[]")));
+        const next = current.filter((id) => id !== workspaceId);
         if (next.length !== current.length) updateShared.run(JSON.stringify(next), nowIso(), row.workspace_id);
       }
       db.prepare(

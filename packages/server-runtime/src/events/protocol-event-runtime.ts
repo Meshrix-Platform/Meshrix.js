@@ -8,13 +8,21 @@ interface ClosableEventBus {
   close(): void | Promise<void>;
 }
 
+interface ProtocolEventLogger {
+  debug?(message: string, details?: Record<string, unknown>): void;
+  warn?(message: string, details?: Record<string, unknown>): void;
+  error?(message: string, details?: Record<string, unknown>): void;
+}
+
+interface ProtocolEventBusFactoryOptions extends Record<string, unknown> {
+  eventStore: SqliteProtocolEventStore;
+  logger?: ProtocolEventLogger;
+}
+
 interface ProtocolEventRuntimeOptions<T extends ClosableEventBus> {
   userDataPath?: string;
-  logger?: unknown;
-  createEventBus: (options: {
-    eventStore: SqliteProtocolEventStore;
-    logger?: unknown;
-  } & Record<string, unknown>) => T;
+  logger?: ProtocolEventLogger;
+  createEventBus: (options: ProtocolEventBusFactoryOptions) => T;
   storePolicy?: Partial<ProtocolEventStorePolicy>;
   busPolicy?: Record<string, unknown>;
 }

@@ -1,4 +1,4 @@
-export function normalizeWhitespace(value?: any) : any {
+export function normalizeWhitespace(value: unknown = ""): string {
   return String(value || "")
     .replace(/\r/g, "\n")
     .replace(/[ \t]+\n/g, "\n")
@@ -8,8 +8,8 @@ export function normalizeWhitespace(value?: any) : any {
     .trim();
 }
 
-export function truncateText(value?: any, maxChars: any = 180) : any {
-  const normalized: any = normalizeWhitespace(value);
+export function truncateText(value: unknown = "", maxChars = 180): string {
+  const normalized = normalizeWhitespace(value);
 
   if (normalized.length <= maxChars) {
     return normalized;
@@ -18,12 +18,12 @@ export function truncateText(value?: any, maxChars: any = 180) : any {
   return `${normalized.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
 }
 
-export function clamp(value?: any, min?: any, max?: any) : any {
+export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function clampLimit(value?: any, fallback: any = 20, max: any = 200) : any {
-  const parsed: any = Number(value);
+export function clampLimit(value: unknown, fallback = 20, max = 200): number {
+  const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     return fallback;
   }
@@ -31,21 +31,21 @@ export function clampLimit(value?: any, fallback: any = 20, max: any = 200) : an
   return Math.min(parsed, max);
 }
 
-export function escapeRegExp(value?: any) : any {
+export function escapeRegExp(value: unknown = ""): string {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function uniqueNormalizedStrings(values: any = []) : any {
-  const seen: any = new Set<any>();
-  const output: any[] = [];
+export function uniqueNormalizedStrings(values: readonly unknown[] = []): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
 
   for (const value of values) {
-    const normalized: any = normalizeWhitespace(value);
+    const normalized = normalizeWhitespace(value);
     if (!normalized) {
       continue;
     }
 
-    const key: any = normalized.toLowerCase();
+    const key = normalized.toLowerCase();
     if (seen.has(key)) {
       continue;
     }

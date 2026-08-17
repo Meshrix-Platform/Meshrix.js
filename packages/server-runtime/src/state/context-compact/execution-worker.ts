@@ -1,8 +1,35 @@
 import { parentPort } from "node:worker_threads";
 import { normalizeConversationInput } from "./graph.ts";
 
-parentPort?.on("message", (message?: any) : any => {
-  const reply: any = { id: message?.id, ok: false };
+interface NormalizeCommand {
+  id: number;
+  kind: "normalize";
+  payload: Record<string, unknown>;
+  deadlineAtMs: number;
+}
+
+interface LaneReply {
+  id: number;
+  ok: boolean;
+  result?: unknown;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+function commandErrorCode(error: unknown, fallback: string): string {
+  if (typeof error !== "object" || error === null || !("code" in error)) return fallback;
+  return String((error as { code?: unknown }).code || fallback);
+}
+
+function commandErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error !== "object" || error === null || !("message" in error)) return fallback;
+  return String((error as { message?: unknown }).message || fallback);
+}
+
+parentPort?.on("message", (message: NormalizeCommand) : void => {
+  const reply: LaneReply = { id: message?.id, ok: false };
   try {
     if (message?.kind !== "normalize") {
       throw Object.assign(new Error("Context compaction command is not allowed."), {
@@ -16,10 +43,10 @@ parentPort?.on("message", (message?: any) : any => {
     }
     reply.result = normalizeConversationInput(message.payload);
     reply.ok = true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     reply.error = {
-      code: String(error?.code || "context_compaction_lane_command_failed"),
-      message: String(error?.message || "Context compaction command failed.")
+      code: commandErrorCode(error, "context_compaction_lane_command_failed"),
+      message: commandErrorMessage(error, "Context compaction command failed.")
     };
   }
   parentPort?.postMessage(reply);

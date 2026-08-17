@@ -10,7 +10,80 @@ import {
   parseJson
 } from "./agent-workspace-core.ts";
 
-export function hydrateWorkspace(row?: any) : any {
+type JsonObject = Record<string, unknown>;
+
+interface WorkspaceRow {
+  workspace_id: string;
+  title: string;
+  objective: string;
+  status: string;
+  owner_user_id?: string | null;
+  metadata_json?: string | null;
+  created_at: string;
+  updated_at: string;
+  parent_workspace_id?: string | null;
+  profile_json?: string | null;
+  owned_source_ids_json?: string | null;
+  accessible_workspace_ids_json?: string | null;
+  current_generation?: number | null;
+  fs_path?: string | null;
+}
+
+interface RunRow {
+  run_id: string; workspace_id: string; run_type: string; status: string;
+  input_json?: string | null; steps_json?: string | null; coverage_json?: string | null;
+  artifact_ids_json?: string | null; error: string; degraded?: number | null;
+  created_at: string; updated_at: string; started_at: string; completed_at: string;
+}
+
+interface SubmissionRow {
+  submission_id: string; workspace_id: string; run_id: string; agent_id: string;
+  type: string; status: string; confidence?: number | null; payload_json?: string | null;
+  evidence_refs_json?: string | null; gate_json?: string | null; created_at: string; updated_at: string;
+}
+
+interface PrivateStateRow {
+  id: string; workspace_id: string; run_id: string; agent_id: string; summary: string;
+  state_json?: string | null; updated_at: string;
+}
+
+interface ArtifactRow {
+  artifact_id: string; workspace_id: string; run_id: string; level: string; title: string;
+  content: string; citations_json?: string | null; coverage_json?: string | null;
+  revision?: number | null; status: string; created_by: string; created_at: string; updated_at: string;
+}
+
+interface IssueRow {
+  issue_id: string; workspace_id: string; run_id: string; type: string; status: string;
+  severity: string; title: string; payload_json?: string | null; evidence_refs_json?: string | null;
+  created_by: string; created_at: string; updated_at: string;
+}
+
+interface DecisionRow {
+  decision_id: string; workspace_id: string; run_id: string; status: string; title: string;
+  payload_json?: string | null; created_by: string; created_at: string; updated_at: string;
+}
+
+interface LockRow {
+  lock_id: string; workspace_id: string; target_type: string; target_id: string;
+  owner_agent_id: string; expires_at: string; created_at: string;
+}
+
+interface SessionRow {
+  session_id: string; workspace_id: string; title: string; objective?: string | null;
+  status?: string | null; parent_session_id?: string | null; forked_from_event_id?: string | null;
+  branch_index?: number | null; lineage_json?: string | null; context_json?: string | null;
+  metadata_json?: string | null; created_by?: string | null; created_at: string; updated_at: string;
+  last_event_id?: string | null; event_count?: number | null; append_only?: number | null;
+}
+
+interface SessionEventRow {
+  event_id: string; session_id: string; workspace_id: string; parent_event_id?: string | null;
+  event_type: string; title?: string | null; summary?: string | null; payload_json?: string | null;
+  created_by?: string | null; created_at: string; sequence?: number | null;
+}
+
+export function hydrateWorkspace(row?: WorkspaceRow | null) {
   if (!row) {
     return null;
   }
@@ -38,7 +111,7 @@ export function hydrateWorkspace(row?: any) : any {
  * Physical custody paths are an adapter concern and must never cross the
  * workspace API boundary.
  */
-export function projectWorkspace(workspace?: any) : any {
+export function projectWorkspace<T extends { fsPath?: string }>(workspace?: T | null): Omit<T, "fsPath"> | null {
   if (!workspace) {
     return null;
   }
@@ -46,11 +119,11 @@ export function projectWorkspace(workspace?: any) : any {
   return projected;
 }
 
-export function hydrateRun(row?: any, options: Record<string, any> = {}) : any {
+export function hydrateRun(row?: RunRow | null, options: { includeDetails?: boolean } = {}) {
   if (!row) {
     return null;
   }
-  const includeDetails: any = options.includeDetails !== false;
+  const includeDetails = options.includeDetails !== false;
   return {
     runId: row.run_id,
     workspaceId: row.workspace_id,
@@ -69,7 +142,7 @@ export function hydrateRun(row?: any, options: Record<string, any> = {}) : any {
   };
 }
 
-export function hydrateSubmission(row?: any) : any {
+export function hydrateSubmission(row?: SubmissionRow | null) {
   if (!row) {
     return null;
   }
@@ -89,7 +162,7 @@ export function hydrateSubmission(row?: any) : any {
   };
 }
 
-export function hydratePrivateState(row?: any) : any {
+export function hydratePrivateState(row?: PrivateStateRow | null) {
   if (!row) {
     return null;
   }
@@ -104,7 +177,7 @@ export function hydratePrivateState(row?: any) : any {
   };
 }
 
-export function hydrateArtifact(row?: any) : any {
+export function hydrateArtifact(row?: ArtifactRow | null) {
   if (!row) {
     return null;
   }
@@ -125,7 +198,7 @@ export function hydrateArtifact(row?: any) : any {
   };
 }
 
-export function hydrateIssue(row?: any) : any {
+export function hydrateIssue(row?: IssueRow | null) {
   if (!row) {
     return null;
   }
@@ -145,7 +218,7 @@ export function hydrateIssue(row?: any) : any {
   };
 }
 
-export function hydrateDecision(row?: any) : any {
+export function hydrateDecision(row?: DecisionRow | null) {
   if (!row) {
     return null;
   }
@@ -162,7 +235,7 @@ export function hydrateDecision(row?: any) : any {
   };
 }
 
-export function hydrateLock(row?: any) : any {
+export function hydrateLock(row?: LockRow | null) {
   if (!row) {
     return null;
   }
@@ -177,7 +250,7 @@ export function hydrateLock(row?: any) : any {
   };
 }
 
-export function hydrateSession(row?: any) : any {
+export function hydrateSession(row?: SessionRow | null) {
   if (!row) {
     return null;
   }
@@ -202,7 +275,7 @@ export function hydrateSession(row?: any) : any {
   };
 }
 
-export function hydrateSessionEvent(row?: any) : any {
+export function hydrateSessionEvent(row?: SessionEventRow | null) {
   if (!row) {
     return null;
   }
@@ -221,9 +294,15 @@ export function hydrateSessionEvent(row?: any) : any {
   };
 }
 
-export function fileMetadataFromStat({ workspaceId, relativePath, absolutePath, stat, includeHash = false }: Record<string, any>) : any {
-  const isFile: any = stat.isFile();
-  const metadata: Record<string, any> = {
+export function fileMetadataFromStat({ workspaceId, relativePath, absolutePath, stat, includeHash = false }: {
+  workspaceId: string;
+  relativePath: string;
+  absolutePath: string;
+  stat: fs.Stats;
+  includeHash?: boolean;
+}) {
+  const isFile = stat.isFile();
+  const metadata = {
     workspaceId,
     relativePath,
     name: path.posix.basename(relativePath) || "",
@@ -239,13 +318,17 @@ export function fileMetadataFromStat({ workspaceId, relativePath, absolutePath, 
   return metadata;
 }
 
-export function gateSubmission({ existingDuplicate = null, submission, writePolicy = {} }: Record<string, any>) : any {
-  const reasons: any[] = [];
-  const type: any = String(submission.type || "").trim();
-  const payload: any = asObject(submission.payload);
-  const evidenceRefs: any = normalizeEvidenceRefs(submission.evidenceRefs, payload);
-  const confidence: any = Math.max(0, Math.min(1, Number(submission.confidence || payload.confidence || 0)));
-  const allowedTypes: any = new Set<any>(asArray(writePolicy.allowedTypes).filter(Boolean));
+export function gateSubmission({ existingDuplicate = null, submission, writePolicy = {} }: {
+  existingDuplicate?: { submission_id?: string } | null;
+  submission: { type?: unknown; payload?: unknown; evidenceRefs?: unknown; confidence?: unknown };
+  writePolicy?: { allowedTypes?: unknown };
+}) {
+  const reasons: string[] = [];
+  const type = String(submission.type || "").trim();
+  const payload: JsonObject = asObject(submission.payload);
+  const evidenceRefs: unknown[] = normalizeEvidenceRefs(submission.evidenceRefs, payload);
+  const confidence = Math.max(0, Math.min(1, Number(submission.confidence || payload.confidence || 0)));
+  const allowedTypes = new Set<string>(asArray(writePolicy.allowedTypes).filter(Boolean).map(String));
 
   if (!ACCEPTED_SUBMISSION_TYPES.has(type)) {
     reasons.push("unsupported_type");
@@ -266,7 +349,7 @@ export function gateSubmission({ existingDuplicate = null, submission, writePoli
     reasons.push("canonical_change_requires_review");
   }
 
-  let status: any = "proposed";
+  let status = "proposed";
   if (type === "evidenceRef" && evidenceRefs.length > 0) {
     status = "accepted";
   }

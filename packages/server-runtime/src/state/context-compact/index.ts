@@ -13,15 +13,20 @@ import {
   redactCompactionValue,
   redactText
 } from "./validation.ts";
+import type { CompactionPolicy } from "./validation.ts";
 import { buildMessageGraph, chooseCompactionCutPoint, normalizeConversationInput } from "./graph.ts";
+import type { CompactionCutPoint, MessageGraph, NormalizedMessage } from "./graph.ts";
 import {
   buildCompactionQualityReport,
   buildReinjectionPayload,
   compactToBudget,
   microCompactMessages
 } from "./projection.ts";
+import type { MicroCompactionResult, QualityReport, ReinjectionPayload } from "./projection.ts";
 import { createBuiltinStrategyAdapters } from "./runtime-strategies.ts";
+import type { ContextCompactionStrategyAdapter } from "./strategies.ts";
 import { publicStrategyConfig } from "./strategies.ts";
+import type { ListedCompactionStrategy, NormalizedStrategyOutput, StrategyConfigSummary } from "./strategies.ts";
 import { appendJsonl, publicRecordFromResult, readJson, readJsonlTail, writeJson } from "./storage.ts";
 import {
   CONTEXT_COMPACTION_WORKER_THRESHOLD_BYTES,
@@ -29,6 +34,7 @@ import {
   conversationPayloadBytes,
   createContextCompactionExecutionLane
 } from "./execution-lane.ts";
+import type { ContextCompactionExecutionLane } from "./execution-lane.ts";
 
 export { CONTEXT_COMPACTION_PROTOCOL_VERSION } from "./constants.ts";
 export {
@@ -40,19 +46,132 @@ export {
 export { buildMessageGraph, chooseCompactionCutPoint } from "./graph.ts";
 export { createContextCompactionStrategyAdapter, listContextCompactionStrategies } from "./strategies.ts";
 
-const AGENT_MEMORY_PORT_METHODS: readonly any[] = Object.freeze([
+const AGENT_MEMORY_PORT_METHODS: readonly string[] = Object.freeze([
   "latestSessionMemory",
   "appendSessionMemory",
   "listSessionMemory",
   "clearSessionMemory"
 ]);
 
-function assertAgentMemoryPort(agentMemory?: any) : any {
-  if (!agentMemory || typeof agentMemory.sessionMemoryPath !== "string" ||
-      AGENT_MEMORY_PORT_METHODS.some((method?: any) : any => typeof agentMemory[method] !== "function")) {
+interface AgentMemoryPort {
+  sessionMemoryPath: string;
+  latestSessionMemory(input: Record<string, unknown>): unknown;
+  appendSessionMemory(input: Record<string, unknown>): unknown;
+  listSessionMemory(input: Record<string, unknown>): unknown;
+  clearSessionMemory(input: Record<string, unknown>): unknown;
+}
+
+function assertAgentMemoryPort(agentMemory?: unknown) : AgentMemoryPort {
+  const source: Record<string, unknown> = asObject(agentMemory);
+  if (typeof source.sessionMemoryPath !== "string" ||
+      AGENT_MEMORY_PORT_METHODS.some((method: string) : boolean => typeof source[method] !== "function")) {
     throw new TypeError("Context compaction requires an explicit AgentMemory port.");
   }
-  return agentMemory;
+  return agentMemory as AgentMemoryPort;
+}
+
+export interface ContextCompactionRuntimeOptions {
+  userDataPath: string;
+  modelCompressor?: unknown;
+  agentMemory?: unknown;
+  strategies?: unknown[];
+  compactionStrategies?: unknown[];
+}
+
+interface CompactionState {
+  protocolVersion: string;
+  modelFailureCount: number;
+  autoFailureCount: number;
+  circuitOpenUntil: string;
+  updatedAt: string;
+}
+
+export interface CompactionTokenReport extends Record<string, unknown> {
+  sourceTokens: number;
+  effectiveWindowTokens: number;
+  warningThresholdTokens: number;
+  autoCompactThresholdTokens: number;
+  hardThresholdTokens: number;
+  summaryTokens: number;
+  keptTokens: number;
+  reinjectionTokens: number;
+  savingsRatio: number;
+}
+
+export interface CompactionCircuitBreakerReport {
+  open: boolean;
+  modelFailureCount: number;
+  autoFailureCount: number;
+  openUntil: string;
+}
+
+export interface CompactionResult extends Record<string, unknown> {
+  protocolVersion: string;
+  status: string;
+  source: string;
+  sessionId: string;
+  profileId: string;
+  triggerReason: string;
+  shouldCompact: boolean;
+  compacted: boolean;
+  strategy: unknown;
+  executionMode: string;
+  degraded: boolean;
+  createdAt: string;
+  tokenReport: CompactionTokenReport;
+  circuitBreaker: CompactionCircuitBreakerReport;
+}
+
+export interface ListRecordsResult {
+  protocolVersion: string;
+  path: string;
+  records: unknown[];
+}
+
+export interface ListBoundariesResult {
+  protocolVersion: string;
+  path: string;
+  boundaries: unknown[];
+}
+
+export interface ListStrategiesResult {
+  protocolVersion: string;
+  strategies: ListedCompactionStrategy[];
+}
+
+export interface ResumeTranscriptResult {
+  protocolVersion: string;
+  resumed: boolean;
+  boundary?: Record<string, unknown>;
+  messages: Record<string, unknown>[];
+  skippedMessageCount?: number;
+}
+
+export interface ContextCompactionRuntime {
+  protocolVersion: string;
+  rootPath: string;
+  recordsPath: string;
+  boundariesPath: string;
+  sessionMemoryPath: string;
+  agentMemory: AgentMemoryPort;
+  statePath: string;
+  computeBudget: typeof computeCompactionBudget;
+  normalizePolicy: typeof normalizeCompactionPolicy;
+  chooseCutPoint: typeof chooseCompactionCutPoint;
+  buildMessageGraph: typeof buildMessageGraph;
+  preview(input?: Record<string, unknown>): Promise<CompactionResult & { preview: boolean }>;
+  run(input?: Record<string, unknown>): Promise<CompactionResult>;
+  maybeCompact(input?: Record<string, unknown>): Promise<CompactionResult>;
+  listRecords(input?: Record<string, unknown>): Promise<ListRecordsResult>;
+  listBoundaries(input?: Record<string, unknown>): Promise<ListBoundariesResult>;
+  listStrategies(): ListStrategiesResult;
+  listSessionMemory(input?: Record<string, unknown>): Promise<unknown>;
+  clearSessionMemory(input?: Record<string, unknown>): Promise<unknown>;
+  latestSessionMemory(input?: Record<string, unknown>): Promise<unknown>;
+  resumeTranscript(input?: Record<string, unknown>): ResumeTranscriptResult;
+  close(): Promise<void>;
+  estimateTokens: (value?: unknown) => number;
+  redactValue: (value?: unknown, depth?: number) => unknown;
 }
 
 export function createContextCompactionRuntime({
@@ -61,35 +180,35 @@ export function createContextCompactionRuntime({
   agentMemory = null,
   strategies = [],
   compactionStrategies = []
-}: Record<string, any>) : any {
-  const rootPath: any = path.join(userDataPath, "context-core");
-  const recordsPath: any = path.join(rootPath, "context-compaction-records.jsonl");
-  const boundariesPath: any = path.join(rootPath, "context-compaction-boundaries.jsonl");
-  const memoryStore: any = assertAgentMemoryPort(agentMemory);
-  const sessionMemoryPath: any = memoryStore.sessionMemoryPath;
-  const statePath: any = path.join(rootPath, "context-compaction-state.json");
-  let executionLane: any = null;
+}: ContextCompactionRuntimeOptions) : ContextCompactionRuntime {
+  const rootPath: string = path.join(userDataPath, "context-core");
+  const recordsPath: string = path.join(rootPath, "context-compaction-records.jsonl");
+  const boundariesPath: string = path.join(rootPath, "context-compaction-boundaries.jsonl");
+  const memoryStore: AgentMemoryPort = assertAgentMemoryPort(agentMemory);
+  const sessionMemoryPath: string = memoryStore.sessionMemoryPath;
+  const statePath: string = path.join(rootPath, "context-compaction-state.json");
+  let executionLane: ContextCompactionExecutionLane | null = null;
 
-  async function normalizeAdmittedConversation(input: Record<string, any> = {}) : Promise<any> {
+  async function normalizeAdmittedConversation(input: Record<string, unknown> = {}) : Promise<NormalizedMessage[]> {
     const bytes: number = conversationPayloadBytes(input);
     if (bytes <= CONTEXT_COMPACTION_WORKER_THRESHOLD_BYTES) return normalizeConversationInput(input);
-    executionLane ||= createContextCompactionExecutionLane();
-    return executionLane.normalize(conversationPayload(input), { bytes });
+    executionLane = executionLane || createContextCompactionExecutionLane();
+    return executionLane.normalize(conversationPayload(input), { bytes }) as Promise<NormalizedMessage[]>;
   }
 
-  async function getState() : Promise<any> {
-    const state: any = await readJson(statePath, {});
+  async function getState() : Promise<CompactionState> {
+    const state: Record<string, unknown> = asObject(await readJson(statePath, {}));
     return {
       protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
       modelFailureCount: Math.max(0, Number(state.modelFailureCount || 0)),
       autoFailureCount: Math.max(0, Number(state.autoFailureCount || 0)),
-      circuitOpenUntil: state.circuitOpenUntil || "",
-      updatedAt: state.updatedAt || ""
+      circuitOpenUntil: String(state.circuitOpenUntil || ""),
+      updatedAt: String(state.updatedAt || "")
     };
   }
 
-  async function saveState(patch: Record<string, any> = {}) : Promise<any> {
-    const state: Record<string, any> = {
+  async function saveState(patch: Record<string, unknown> = {}) : Promise<Record<string, unknown>> {
+    const state: Record<string, unknown> = {
       ...(await getState()),
       ...patch,
       protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
@@ -99,50 +218,50 @@ export function createContextCompactionRuntime({
     return state;
   }
 
-  async function resetFailureState() : Promise<any> {
+  async function resetFailureState() : Promise<Record<string, unknown>> {
     return saveState({ modelFailureCount: 0, autoFailureCount: 0, circuitOpenUntil: "" });
   }
 
-  async function registerModelFailure(policy?: any) : Promise<any> {
-    const state: any = await getState();
-    const modelFailureCount: any = state.modelFailureCount + 1;
-    const circuitOpenUntil: any = modelFailureCount >= policy.maxConsecutiveFailures
+  async function registerModelFailure(policy: CompactionPolicy) : Promise<Record<string, unknown>> {
+    const state: CompactionState = await getState();
+    const modelFailureCount: number = state.modelFailureCount + 1;
+    const circuitOpenUntil: string = modelFailureCount >= Number(policy.maxConsecutiveFailures || 0)
       ? new Date(Date.now() + 5 * 60 * 1000).toISOString()
       : state.circuitOpenUntil;
     return saveState({ modelFailureCount, circuitOpenUntil });
   }
 
-  async function registerAutoFailure(policy?: any) : Promise<any> {
-    const state: any = await getState();
-    const autoFailureCount: any = state.autoFailureCount + 1;
-    const circuitOpenUntil: any = autoFailureCount >= policy.maxConsecutiveFailures
+  async function registerAutoFailure(policy: CompactionPolicy) : Promise<Record<string, unknown>> {
+    const state: CompactionState = await getState();
+    const autoFailureCount: number = state.autoFailureCount + 1;
+    const circuitOpenUntil: string = autoFailureCount >= Number(policy.maxConsecutiveFailures || 0)
       ? new Date(Date.now() + 5 * 60 * 1000).toISOString()
       : state.circuitOpenUntil;
     return saveState({ autoFailureCount, circuitOpenUntil });
   }
 
-  async function latestSessionMemory({ sessionId = "", profileId = "", sourceHash = "" }: Record<string, any> = {}) : Promise<any> {
+  async function latestSessionMemory({ sessionId = "", profileId = "", sourceHash = "" }: Record<string, unknown> = {}) : Promise<unknown> {
     return memoryStore.latestSessionMemory({ sessionId, profileId, sourceHash });
   }
 
-  async function appendSessionMemory(entry: Record<string, any> = {}) : Promise<any> {
+  async function appendSessionMemory(entry: Record<string, unknown> = {}) : Promise<unknown> {
     return memoryStore.appendSessionMemory({
       ...entry,
       sourceProtocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION
     });
   }
 
-  async function listSessionMemory(input: Record<string, any> = {}) : Promise<any> {
+  async function listSessionMemory(input: Record<string, unknown> = {}) : Promise<unknown> {
     return memoryStore.listSessionMemory(input);
   }
 
-  async function clearSessionMemory(input: Record<string, any> = {}) : Promise<any> {
-    const result: any = await memoryStore.clearSessionMemory(input);
+  async function clearSessionMemory(input: Record<string, unknown> = {}) : Promise<unknown> {
+    const result: unknown = await memoryStore.clearSessionMemory(input);
     await resetFailureState();
     return result;
   }
 
-  const strategyAdapters: any = createBuiltinStrategyAdapters({
+  const strategyAdapters: Map<string, ContextCompactionStrategyAdapter> = createBuiltinStrategyAdapters({
     strategies,
     compactionStrategies,
     modelCompressor,
@@ -151,42 +270,42 @@ export function createContextCompactionRuntime({
     registerModelFailure
   });
 
-  function resolveStrategyAdapter(policy: Record<string, any> = {}) : any {
-    const strategyId: any = normalizeStrategyId(policy.strategy?.id);
-    const adapter: any = strategyAdapters.get(strategyId);
+  function resolveStrategyAdapter(policy: Record<string, unknown> = {}) : ContextCompactionStrategyAdapter {
+    const strategyId: string = normalizeStrategyId(asObject(policy.strategy).id);
+    const adapter: ContextCompactionStrategyAdapter | undefined = strategyAdapters.get(strategyId);
     if (!adapter) {
       throw new Error(`context_compaction_strategy_unknown:${strategyId}`);
     }
     return adapter;
   }
 
-  async function runConfiguredStrategy(context: Record<string, any> = {}) : Promise<any> {
-    const adapter: any = resolveStrategyAdapter(context.policy);
-    const result: any = await adapter.run(context);
+  async function runConfiguredStrategy(context: Record<string, unknown> = {}) : Promise<NormalizedStrategyOutput & { strategy: StrategyConfigSummary & { id: string; label: string } }> {
+    const adapter: ContextCompactionStrategyAdapter = resolveStrategyAdapter(asObject(context.policy));
+    const result: NormalizedStrategyOutput = await adapter.run(context);
     return {
       ...result,
       strategy: {
-        ...publicStrategyConfig(context.policy),
+        ...publicStrategyConfig(asObject(context.policy)),
         id: adapter.id,
         label: adapter.label || adapter.id
       }
     };
   }
 
-  async function compactMessages(input: Record<string, any> = {}) : Promise<any> {
-    const profile: any = asObject(input.profile);
-    const policy: any = normalizeCompactionPolicy(profile, input.compactionPolicy);
-    const budget: any = computeCompactionBudget(profile, policy);
-    const sessionId: any = String(input.sessionId || input.conversationId || input.threadId || "").trim();
-    const source: any = String(input.source || input.inputSource || "runtime");
-    const createdAt: any = nowIso();
-    const messages: any = await normalizeAdmittedConversation(input);
-    const sourceTokens: any = messages.reduce(
-      (total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0),
+  async function compactMessages(input: Record<string, unknown> = {}) : Promise<CompactionResult> {
+    const profile: Record<string, unknown> = asObject(input.profile);
+    const policy: CompactionPolicy = normalizeCompactionPolicy(profile, asObject(input.compactionPolicy));
+    const budget = computeCompactionBudget(profile, policy);
+    const sessionId: string = String(input.sessionId || input.conversationId || input.threadId || "").trim();
+    const source: string = String(input.source || input.inputSource || "runtime");
+    const createdAt: string = nowIso();
+    const messages: NormalizedMessage[] = await normalizeAdmittedConversation(input);
+    const sourceTokens: number = messages.reduce(
+      (total: number, message: NormalizedMessage) : number => total + Math.max(1, Number(message.tokenEstimate) || 0),
       0
     );
-    const graph: any = buildMessageGraph(messages);
-    const triggerReason: any =
+    const graph: MessageGraph = buildMessageGraph(messages);
+    const triggerReason: string =
       sourceTokens >= budget.hardThresholdTokens
         ? "hard_threshold"
         : sourceTokens >= budget.autoCompactThresholdTokens
@@ -194,10 +313,10 @@ export function createContextCompactionRuntime({
           : sourceTokens >= budget.warningThresholdTokens
             ? "warning_threshold"
             : "within_budget";
-    const force: any = input.force === true || input.manual === true;
-    const shouldCompact: any = force || (policy.enabled === true && sourceTokens >= budget.autoCompactThresholdTokens);
-    const state: any = await getState();
-    const circuitOpen: any = state.circuitOpenUntil && Date.parse(state.circuitOpenUntil) > Date.now();
+    const force: boolean = input.force === true || input.manual === true;
+    const shouldCompact: boolean = force || (policy.enabled === true && sourceTokens >= budget.autoCompactThresholdTokens);
+    const state: CompactionState = await getState();
+    const circuitOpen: boolean = Boolean(state.circuitOpenUntil && Date.parse(state.circuitOpenUntil) > Date.now());
 
     if (!shouldCompact) {
       return {
@@ -205,10 +324,11 @@ export function createContextCompactionRuntime({
         status: "skipped",
         source,
         sessionId,
-        profileId: profile.profileId || "",
+        profileId: String(profile.profileId || ""),
         triggerReason,
         shouldCompact: false,
         compacted: false,
+        degraded: false,
         strategy: publicStrategyConfig(policy),
         executionMode: "",
         createdAt,
@@ -224,7 +344,7 @@ export function createContextCompactionRuntime({
           savingsRatio: 0
         },
         circuitBreaker: {
-          open: Boolean(circuitOpen),
+          open: circuitOpen,
           modelFailureCount: state.modelFailureCount,
           autoFailureCount: state.autoFailureCount,
           openUntil: state.circuitOpenUntil
@@ -237,44 +357,44 @@ export function createContextCompactionRuntime({
     }
 
     try {
-      const cutPoint: any = chooseCompactionCutPoint(messages, { profile, policyPatch: policy });
-      const compactedMessages: any = graph.messages.slice(0, cutPoint.cutIndex);
-      const keptOriginal: any = graph.messages.slice(cutPoint.cutIndex);
-      const runtimeState: Record<string, any> = {
+      const cutPoint: CompactionCutPoint = chooseCompactionCutPoint(messages, { profile, policyPatch: policy });
+      const compactedMessages: NormalizedMessage[] = graph.messages.slice(0, cutPoint.cutIndex);
+      const keptOriginal: NormalizedMessage[] = graph.messages.slice(cutPoint.cutIndex);
+      const runtimeState: Record<string, unknown> = {
         ...asObject(input.runtimeState),
-        taskBrief: input.taskBrief || input.task || input.query || input.runtimeState?.taskBrief || "",
-        activePlan: input.activePlan || input.plan || input.runtimeState?.activePlan || null,
+        taskBrief: input.taskBrief || input.task || input.query || asObject(input.runtimeState).taskBrief || "",
+        activePlan: input.activePlan || input.plan || asObject(input.runtimeState).activePlan || null,
         gatewayReference:
           input.gatewayReference ||
-          input.runtimeState?.gatewayReference ||
+          asObject(input.runtimeState).gatewayReference ||
           ""
       };
-      const compactedRange: Record<string, any> = {
+      const compactedRange: Record<string, unknown> = {
         startIndex: compactedMessages[0]?.index ?? 0,
         endIndex: compactedMessages.at(-1)?.index ?? -1,
         startMessageId: compactedMessages[0]?.id || "",
         endMessageId: compactedMessages.at(-1)?.id || "",
         compactedMessageCount: compactedMessages.length
       };
-      const targetTokens: any = Math.min(
-        policy.summaryReserveTokens,
-        Math.floor(Math.max(sourceTokens, 1) * policy.deterministicTargetRatio)
+      const targetTokens: number = Math.min(
+        Number(policy.summaryReserveTokens || 0),
+        Math.floor(Math.max(sourceTokens, 1) * Number(policy.deterministicTargetRatio || 0))
       );
       if (!Number.isFinite(targetTokens) || targetTokens <= 0) {
         throw new Error("context_profile_config_required:compactionPolicy.deterministicTargetRatio");
       }
-      const sourceHash: any = hashValue({
+      const sourceHash: string = hashValue({
         sessionId,
         profileId: profile.profileId || "",
         compactedRange,
-        messageIds: compactedMessages.map((message?: any) : any => message.id),
+        messageIds: compactedMessages.map((message: NormalizedMessage) : string => message.id),
         sourceTokens,
         taskBrief: runtimeState.taskBrief || "",
         activePlan: runtimeState.activePlan || null,
         gatewayReference: runtimeState.gatewayReference || ""
       });
 
-      const strategyResult: any = await runConfiguredStrategy({
+      const strategyResult = await runConfiguredStrategy({
         input,
         profile,
         policy,
@@ -296,15 +416,15 @@ export function createContextCompactionRuntime({
         targetTokens,
         sourceHash
       });
-      const executionMode: any = strategyResult.executionMode || "deterministic-extractive";
-      const summaryResult: any = strategyResult.summaryResult;
-      const degradedReasons: any[] = [...asArray(strategyResult.degradedReasons)];
-      const modelEvents: any[] = [...asArray(strategyResult.modelEvents)];
-      const memoryEvents: any[] = [...asArray(strategyResult.memoryEvents)];
-      const preprocessingEvents: any[] = [...asArray(strategyResult.preprocessingEvents)];
-      const strategy: any = strategyResult.strategy || publicStrategyConfig(policy);
+      const executionMode: string = strategyResult.executionMode || "deterministic-extractive";
+      const summaryResult = strategyResult.summaryResult;
+      const degradedReasons: unknown[] = [...asArray(strategyResult.degradedReasons)];
+      const modelEvents: unknown[] = [...asArray(strategyResult.modelEvents)];
+      const memoryEvents: unknown[] = [...asArray(strategyResult.memoryEvents)];
+      const preprocessingEvents: unknown[] = [...asArray(strategyResult.preprocessingEvents)];
+      const strategy: unknown = strategyResult.strategy || publicStrategyConfig(policy);
 
-      const reinjection: any = buildReinjectionPayload({
+      const reinjection: ReinjectionPayload = buildReinjectionPayload({
         input,
         runtimeState,
         policy
@@ -313,29 +433,30 @@ export function createContextCompactionRuntime({
         degradedReasons.push("reinjection_budget_exceeded");
       }
 
-      const micro: any = microCompactMessages(keptOriginal, {
+      const micro: MicroCompactionResult = microCompactMessages(keptOriginal, {
         policy,
-        activeToolUseIds: input.activeToolUseIds || input.runtimeState?.activeToolUseIds || []
+        activeToolUseIds: asArray(input.activeToolUseIds || asObject(input.runtimeState).activeToolUseIds)
       });
-      const messagesToKeep: any = micro.messages;
-      const summary: any = redactText(summaryResult.summary || "");
-      const summaryTokens: any = estimateContextTokens(summary);
-      const keptTokens: any = messagesToKeep.reduce(
-        (total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0),
+      const messagesToKeep: NormalizedMessage[] = micro.messages;
+      const summary: string = redactText(summaryResult.summary || "");
+      const summaryTokens: number = estimateContextTokens(summary);
+      const keptTokens: number = messagesToKeep.reduce(
+        (total: number, message: NormalizedMessage) : number => total + Math.max(1, Number(message.tokenEstimate) || 0),
         0
       );
-      const reinjectionTokens: any = reinjection.usedTokens;
-      const finalTokens: any = summaryTokens + keptTokens + reinjectionTokens;
-      const tokenReport: Record<string, any> = {
+      const reinjectionTokens: number = reinjection.usedTokens;
+      const finalTokens: number = summaryTokens + keptTokens + reinjectionTokens;
+      const compactedSourceTokens: number = compactedMessages.reduce(
+        (total: number, message: NormalizedMessage) : number => total + Math.max(1, Number(message.tokenEstimate) || 0),
+        0
+      );
+      const tokenReport: CompactionTokenReport = {
         sourceTokens,
         effectiveWindowTokens: budget.effectiveWindowTokens,
         warningThresholdTokens: budget.warningThresholdTokens,
         autoCompactThresholdTokens: budget.autoCompactThresholdTokens,
         hardThresholdTokens: budget.hardThresholdTokens,
-        compactedSourceTokens: compactedMessages.reduce(
-          (total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0),
-          0
-        ),
+        compactedSourceTokens,
         summaryTokens,
         keptTokens,
         reinjectionTokens,
@@ -343,7 +464,7 @@ export function createContextCompactionRuntime({
         savedTokens: Math.max(0, sourceTokens - finalTokens),
         savingsRatio: Number((Math.max(0, sourceTokens - finalTokens) / Math.max(1, sourceTokens)).toFixed(6))
       };
-      const qualityReport: any = buildCompactionQualityReport({
+      const qualityReport: QualityReport = buildCompactionQualityReport({
         input,
         runtimeState,
         summary,
@@ -358,7 +479,7 @@ export function createContextCompactionRuntime({
             : "compaction_quality_failed"
         );
       }
-      const boundary: Record<string, any> = {
+      const boundary: Record<string, unknown> = {
         type: "compact_boundary",
         boundaryId: `context_boundary_${crypto.randomUUID()}`,
         profileId: profile.profileId || "",
@@ -374,7 +495,7 @@ export function createContextCompactionRuntime({
         degraded: degradedReasons.length > 0,
         createdAt
       };
-      const boundaryMessage: Record<string, any> = {
+      const boundaryMessage: Record<string, unknown> = {
         id: boundary.boundaryId,
         role: "system",
         type: "compact_boundary",
@@ -382,13 +503,13 @@ export function createContextCompactionRuntime({
         boundary,
         reinjection
       };
-      const result: Record<string, any> = {
+      const result: CompactionResult = {
         protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
         recordId: `context_compaction_${crypto.randomUUID()}`,
         status: "completed",
         source,
         sessionId,
-        profileId: profile.profileId || "",
+        profileId: String(profile.profileId || ""),
         triggerReason,
         shouldCompact: true,
         compacted: true,
@@ -412,7 +533,7 @@ export function createContextCompactionRuntime({
           dehydratedAttachmentCount: micro.dehydratedAttachments.length
         },
         circuitBreaker: {
-          open: Boolean(circuitOpen),
+          open: circuitOpen,
           modelFailureCount: (await getState()).modelFailureCount,
           autoFailureCount: (await getState()).autoFailureCount,
           openUntil: (await getState()).circuitOpenUntil
@@ -446,15 +567,15 @@ export function createContextCompactionRuntime({
         }
       }
       return result;
-    } catch (error: any) {
-      const nextState: any = await registerAutoFailure(policy);
-      const failed: Record<string, any> = {
+    } catch (error: unknown) {
+      const nextState: Record<string, unknown> = await registerAutoFailure(policy);
+      const failed: Record<string, unknown> = {
         protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
         recordId: `context_compaction_${crypto.randomUUID()}`,
         status: "failed",
         source,
         sessionId,
-        profileId: profile.profileId || "",
+        profileId: String(profile.profileId || ""),
         triggerReason,
         shouldCompact: true,
         compacted: false,
@@ -463,7 +584,7 @@ export function createContextCompactionRuntime({
         executionMode: "",
         error: error instanceof Error ? redactText(error.message) : "context_compaction_failed",
         circuitBreaker: {
-          open: Boolean(nextState.circuitOpenUntil && Date.parse(nextState.circuitOpenUntil) > Date.now()),
+          open: Boolean(nextState.circuitOpenUntil && Date.parse(String(nextState.circuitOpenUntil)) > Date.now()),
           modelFailureCount: nextState.modelFailureCount,
           autoFailureCount: nextState.autoFailureCount,
           openUntil: nextState.circuitOpenUntil
@@ -477,8 +598,8 @@ export function createContextCompactionRuntime({
     }
   }
 
-  async function preview(input: Record<string, any> = {}) : Promise<any> {
-    const result: any = await compactMessages({
+  async function preview(input: Record<string, unknown> = {}) : Promise<CompactionResult & { preview: boolean }> {
+    const result: CompactionResult = await compactMessages({
       ...input,
       persist: false,
       force: input.force === true || input.manual === true
@@ -489,19 +610,19 @@ export function createContextCompactionRuntime({
     };
   }
 
-  async function run(input: Record<string, any> = {}) : Promise<any> {
+  async function run(input: Record<string, unknown> = {}) : Promise<CompactionResult> {
     return compactMessages({
       ...input,
       force: input.force !== false
     });
   }
 
-  async function maybeCompact(input: Record<string, any> = {}) : Promise<any> {
+  async function maybeCompact(input: Record<string, unknown> = {}) : Promise<CompactionResult> {
     return compactMessages(input);
   }
 
-  async function listRecords(input: Record<string, any> = {}) : Promise<any> {
-    const records: any = await readJsonlTail(recordsPath, input.limit || 50);
+  async function listRecords(input: Record<string, unknown> = {}) : Promise<ListRecordsResult> {
+    const records: unknown[] = await readJsonlTail(recordsPath, Number(input.limit) || 50);
     return {
       protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
       path: recordsPath,
@@ -509,8 +630,8 @@ export function createContextCompactionRuntime({
     };
   }
 
-  async function listBoundaries(input: Record<string, any> = {}) : Promise<any> {
-    const records: any = await readJsonlTail(boundariesPath, input.limit || 50);
+  async function listBoundaries(input: Record<string, unknown> = {}) : Promise<ListBoundariesResult> {
+    const records: unknown[] = await readJsonlTail(boundariesPath, Number(input.limit) || 50);
     return {
       protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
       path: boundariesPath,
@@ -518,11 +639,11 @@ export function createContextCompactionRuntime({
     };
   }
 
-  function listStrategies() : any {
-    const builtinIds: any = new Set<any>(BUILTIN_COMPACTION_STRATEGIES.map((item?: any) : any => item.id));
+  function listStrategies() : ListStrategiesResult {
+    const builtinIds: Set<string> = new Set<string>(BUILTIN_COMPACTION_STRATEGIES.map((item) : string => item.id));
     return {
       protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
-      strategies: [...strategyAdapters.values()].map((adapter?: any) : any => ({
+      strategies: [...strategyAdapters.values()].map((adapter: ContextCompactionStrategyAdapter) : ListedCompactionStrategy => ({
         id: adapter.id,
         label: adapter.label || adapter.id,
         custom: !builtinIds.has(adapter.id)
@@ -530,11 +651,11 @@ export function createContextCompactionRuntime({
     };
   }
 
-  function resumeTranscript(input: Record<string, any> = {}) : any {
-    const messages: any = normalizeConversationInput(input);
-    let boundaryIndex: any = -1;
-    for (let index: any = messages.length - 1; index >= 0; index -= 1) {
-      if (messages[index].type === "compact_boundary" || messages[index].boundary?.type === "compact_boundary") {
+  function resumeTranscript(input: Record<string, unknown> = {}) : ResumeTranscriptResult {
+    const messages: NormalizedMessage[] = normalizeConversationInput(input);
+    let boundaryIndex: number = -1;
+    for (let index: number = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].type === "compact_boundary" || asObject(messages[index].boundary).type === "compact_boundary") {
         boundaryIndex = index;
         break;
       }
@@ -546,7 +667,7 @@ export function createContextCompactionRuntime({
         messages
       };
     }
-    const boundary: any = messages[boundaryIndex].boundary || {};
+    const boundary: Record<string, unknown> = asObject(messages[boundaryIndex].boundary);
     return {
       protocolVersion: CONTEXT_COMPACTION_PROTOCOL_VERSION,
       resumed: true,
@@ -587,7 +708,7 @@ export function createContextCompactionRuntime({
     clearSessionMemory,
     latestSessionMemory,
     resumeTranscript,
-    async close() : Promise<any> {
+    async close() : Promise<void> {
       await executionLane?.close?.();
       executionLane = null;
     },

@@ -5,6 +5,26 @@ import {
 } from "./backup-contract.ts";
 import { createStorageReceipt } from "./storage-evidence.ts";
 
+type RestoreActionKind = "create" | "replace" | "noop" | "delete" | "blocked";
+
+interface RestorePlannedAction {
+  action: RestoreActionKind;
+  integrityVerified?: boolean;
+}
+
+interface RestoreManifest extends Record<string, unknown> {
+  backupId: string;
+  files: unknown;
+}
+
+interface RestoreSummary {
+  create: number;
+  replace: number;
+  noop: number;
+  delete: number;
+  blocked: number;
+}
+
 export function createStorageRestoreReport({
   manifest,
   selectedEntries,
@@ -12,14 +32,21 @@ export function createStorageRestoreReport({
   shouldApply,
   receiptId = "",
   restoreSemantics
-}: Record<string, any>) : any {
-  const blocked: any = plannedActions.filter((action?: any) : any => action.action === "blocked").length;
-  const selectedBackupActions: any = plannedActions.filter((action?: any) : any => action.action !== "delete");
-  const summary: Record<string, any> = {
-    create: plannedActions.filter((action?: any) : any => action.action === "create").length,
-    replace: plannedActions.filter((action?: any) : any => action.action === "replace").length,
-    noop: plannedActions.filter((action?: any) : any => action.action === "noop").length,
-    delete: plannedActions.filter((action?: any) : any => action.action === "delete").length,
+}: {
+  manifest: RestoreManifest;
+  selectedEntries: readonly unknown[];
+  plannedActions: readonly RestorePlannedAction[];
+  shouldApply: boolean;
+  receiptId?: string;
+  restoreSemantics: unknown;
+}): Record<string, unknown> {
+  const blocked = plannedActions.filter((action) => action.action === "blocked").length;
+  const selectedBackupActions = plannedActions.filter((action) => action.action !== "delete");
+  const summary: RestoreSummary = {
+    create: plannedActions.filter((action) => action.action === "create").length,
+    replace: plannedActions.filter((action) => action.action === "replace").length,
+    noop: plannedActions.filter((action) => action.action === "noop").length,
+    delete: plannedActions.filter((action) => action.action === "delete").length,
     blocked
   };
   return {
@@ -34,7 +61,7 @@ export function createStorageRestoreReport({
     selectedFileCount: selectedEntries.length,
     integrity: {
       verified: blocked === 0,
-      verifiedFileCount: selectedBackupActions.filter((action?: any) : any => action.integrityVerified).length,
+      verifiedFileCount: selectedBackupActions.filter((action) => action.integrityVerified).length,
       failedFileCount: blocked
     },
     summary,

@@ -96,6 +96,7 @@ export async function createServerRuntime(options: Record<string, any> = {}) : P
   });
   return createCommonServerRuntime({
     ...options,
+    userDataPath: options.userDataPath,
     pluginHostPorts: { ...pluginHostPorts, artifactAuthority },
     builtinMountProviders: {}
   });

@@ -68,7 +68,10 @@ export class McpAgentFrameworkAdapterLayer implements DownstreamAspectLayer {
         transport: "client-config",
         targetRole: "downstream-client"
       },
-      commandProbe: publicCommandProbe(commandProbe),
+      commandProbe: publicCommandProbe({
+        found: commandProbe.found,
+        command: commandProbe.command
+      }),
       capabilities: {
         serverName: mcp.serverName,
         installMode: mcp.installMode,

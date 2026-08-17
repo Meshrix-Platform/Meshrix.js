@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
+import type Database from "better-sqlite3";
 import {
   hashClientString,
   serverToken
@@ -30,16 +31,134 @@ import {
 import { createManifestCandidateAuthorityPort } from "./storage-ports.ts";
 import { restoreStorageBackup } from "./restore-execution.ts";
 import { runStorageMaintenanceMutation } from "./storage-maintenance-coordinator.ts";
+import type { StorageArtifactClassifier } from "./backup-contract.ts";
+import type { StoredObjectRecord, StoredObjectReadStream } from "./object-store.ts";
+import type { StorageKernel, StorageKernelSummary } from "./storage-kernel.ts";
+import type { ServiceManifestStore } from "./service-manifest-store.ts";
 
-export const STORAGE_PROTOCOL_VERSION: any = "v0.0.1:storage:core-2";
-export const UPLOAD_CONSUMPTION_RECEIPT_SCHEMA_VERSION: any =
+type JsonRecord = Record<string, unknown>;
+type SqliteValue = string | number | Buffer | null;
+type StorageRow = Record<string, SqliteValue>;
+type StorageDatabase = Database.Database;
+type StorageError = Error & { code: string };
+
+interface ReceiptOwner {
+  tenantId: string;
+  subjectId: string;
+  userId: string;
+  username: string;
+}
+
+interface NormalizedReceipt {
+  sessionId: string;
+  ownerKey: string;
+  objects: readonly UploadConsumptionLogicalObject[];
+  custodyDescriptors: readonly JsonRecord[];
+  receiptDigest: string;
+  receiptId: string;
+}
+
+interface UploadConsumptionReceipt {
+  schemaVersion: string;
+  receiptId: string;
+  sessionId: string;
+  ownerKey: string;
+  objects: readonly UploadConsumptionLogicalObject[];
+  receiptDigest: string;
+}
+
+interface StoredObjectProviderRecord extends StoredObjectRecord {
+  fileName: string;
+}
+
+interface DeletionOperation {
+  operationId: string;
+  ownerId: string;
+  jobId: string;
+  status: string;
+  state: JsonRecord;
+  error: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StorageProviderOptions {
+  userDataPath?: string;
+  storageKernel?: StorageKernel | null;
+  artifactClassifiers?: unknown;
+  serviceManifestStore?: ServiceManifestStore | null;
+}
+
+interface RestoreExecutionContext {
+  assertActive(): void;
+  consume(value: { files?: number; bytes?: number; cleanupItems?: number }): void;
+}
+
+function optionalSignal(value: unknown): AbortSignal | null | undefined {
+  return value instanceof AbortSignal ? value : value === null ? null : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function stringList(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.codePointAt(0) || 0;
+    return code <= 31 || code === 127;
+  });
+}
+
+export interface StorageProvider {
+  readonly protocolVersion: typeof STORAGE_PROTOCOL_VERSION;
+  getStorageKernel(): StorageKernel | null;
+  getStorageSummary(): StorageKernelSummary | JsonRecord;
+  getUpgradePreflight(): unknown;
+  getDurableManifestWriterPort(): unknown;
+  getDurableManifestReaderPort(): unknown;
+  getDurableManifestCandidateAuthorityPort(): unknown;
+  getUploadConsumptionReceipt(receiptId: unknown): UploadConsumptionReceipt | null;
+  commitUploadConsumptionReceipt(input?: JsonRecord): Promise<UploadConsumptionReceipt>;
+  putObject(input?: JsonRecord): Promise<StoredObjectRecord>;
+  putObjectsFromFiles(inputs?: readonly JsonRecord[]): Promise<readonly StoredObjectRecord[]>;
+  getObject(objectId: unknown): StoredObjectProviderRecord | null;
+  findObjectOwner(ownerId: unknown): JsonRecord | null;
+  listObjectStoragePathsByOwner(ownerId: unknown): string[];
+  getObjectOwnerArtifactPaths(): JsonRecord;
+  deleteObjectRecordsByOwner(ownerId: unknown): number;
+  getDeletionOperationByOwnerId(ownerId: unknown): DeletionOperation | null;
+  upsertDeletionOperation(input?: JsonRecord): DeletionOperation | null;
+  updateDeletionOperation(operationId: unknown, patch?: JsonRecord): DeletionOperation | null;
+  deleteDeletionOperation(operationId: unknown): number;
+  listPendingDeletionOperations(): DeletionOperation[];
+  readObject(input?: JsonRecord): Promise<unknown>;
+  openObjectReadStream(input?: JsonRecord): StoredObjectReadStream | Promise<StoredObjectReadStream>;
+  openPrivateNoExecObjectReadStream(input?: JsonRecord): StoredObjectReadStream | Promise<StoredObjectReadStream>;
+  statObject(input?: JsonRecord): Promise<unknown>;
+  resolveStoredObjectPath(storageRelativePath: unknown): string;
+  runDoctor(): Promise<unknown>;
+  reconcile(input?: JsonRecord): Promise<unknown>;
+  listBackups(): Promise<unknown>;
+  createBackup(input?: JsonRecord): Promise<unknown>;
+  restoreBackupPreview(input?: JsonRecord): Promise<unknown>;
+  restoreBackup(input?: JsonRecord): Promise<unknown>;
+  applyBackupRetention(input?: JsonRecord): Promise<unknown>;
+  listCapabilities(): JsonRecord;
+}
+
+export const STORAGE_PROTOCOL_VERSION = "v0.0.1:storage:core-2";
+export const UPLOAD_CONSUMPTION_RECEIPT_SCHEMA_VERSION =
   "v0.0.1:storage:upload-consumption-receipt-1";
 
-const RECEIPT_OBJECT_ID_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u;
-const UPLOAD_SESSION_ID_PATTERN: any = /^upload_session_[a-f0-9]{32}$/u;
-const UPLOAD_RECEIPT_ID_PATTERN: any =
+const RECEIPT_OBJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u;
+const UPLOAD_SESSION_ID_PATTERN = /^upload_session_[a-f0-9]{32}$/u;
+const UPLOAD_RECEIPT_ID_PATTERN =
   /^upload_consumption_receipt_[a-f0-9]{32}$/u;
-const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 
 export type UploadConsumptionLogicalObject = Readonly<{
   objectId: string;
@@ -47,51 +166,57 @@ export type UploadConsumptionLogicalObject = Readonly<{
   byteSize: number;
 }>;
 
-function nowIso() : any {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function normalizeArtifactClassifiers(artifactClassifiers: any = []) : any {
+function normalizeArtifactClassifiers(artifactClassifiers: unknown = []): StorageArtifactClassifier[] {
   return Array.isArray(artifactClassifiers)
-    ? artifactClassifiers.filter((classifier?: any) : any => typeof classifier === "function")
+    ? artifactClassifiers.filter((classifier): classifier is StorageArtifactClassifier => typeof classifier === "function")
     : [];
 }
 
-function parseMetadata(value?: any) : any {
+function record(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as JsonRecord
+    : {};
+}
+
+function parseMetadata(value: unknown): JsonRecord {
   try {
-    const parsed: any = JSON.parse(String(value || "{}"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    return record(JSON.parse(String(value || "{}")));
   } catch {
     return {};
   }
 }
 
-function canonicalJson(value?: any) : any {
+function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) {
-    return `[${value.map((item?: any) : any => canonicalJson(item)).join(",")}]`;
+    return `[${value.map((item): string => canonicalJson(item)).join(",")}]`;
   }
   if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key?: any) : any =>
-      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+    const object = value as JsonRecord;
+    return `{${Object.keys(object).sort().map((key): string =>
+      `${JSON.stringify(key)}:${canonicalJson(object[key])}`
     ).join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 
-function uploadConsumptionError(code?: any, message?: any, cause: any = null) : any {
-  const error: Error & Record<string, any> = new Error(message, cause ? { cause } : undefined);
+function uploadConsumptionError(code: string, message: string, cause: unknown = null): StorageError {
+  const error = new Error(message, cause ? { cause } : undefined) as StorageError;
   error.code = code;
   return error;
 }
 
-function normalizeReceiptOwner(owner: Record<string, any> = {}) : any {
+function normalizeReceiptOwner(owner: JsonRecord = {}): ReceiptOwner {
   if (!owner || typeof owner !== "object" || Array.isArray(owner)) {
     throw uploadConsumptionError(
       "upload_consumption_receipt_invalid",
       "Upload consumption receipt owner is invalid."
     );
   }
-  const normalized: Record<string, any> = {
+  const normalized: ReceiptOwner = {
     tenantId: String(owner.tenantId || "").trim(),
     subjectId: String(owner.subjectId || "").trim(),
     userId: String(owner.userId || owner.subjectId || "").trim(),
@@ -99,8 +224,8 @@ function normalizeReceiptOwner(owner: Record<string, any> = {}) : any {
   };
   if (
     !normalized.subjectId ||
-    (Object.values(normalized) as any[]).some(
-      (value?: any) : any => value.length > 256 || /[\u0000-\u001f\u007f]/u.test(value)
+    Object.values(normalized).some(
+      (value): boolean => value.length > 256 || hasControlCharacter(value)
     )
   ) {
     throw uploadConsumptionError(
@@ -111,17 +236,17 @@ function normalizeReceiptOwner(owner: Record<string, any> = {}) : any {
   return normalized;
 }
 
-function normalizeReceiptInput(input: Record<string, any> = {}) : any {
-  const sessionId: any = String(input.sessionId || "").trim();
+function normalizeReceiptInput(input: JsonRecord = {}): NormalizedReceipt {
+  const sessionId = String(input.sessionId || "").trim();
   if (!UPLOAD_SESSION_ID_PATTERN.test(sessionId)) {
     throw uploadConsumptionError(
       "upload_consumption_receipt_invalid",
       "Upload consumption receipt session identity is invalid."
     );
   }
-  const owner: any = normalizeReceiptOwner(input.owner);
-  const custodyDescriptors: any = Array.isArray(input.custodyDescriptors)
-    ? input.custodyDescriptors
+  const owner = normalizeReceiptOwner(record(input.owner));
+  const custodyDescriptors: JsonRecord[] = Array.isArray(input.custodyDescriptors)
+    ? input.custodyDescriptors.map((descriptor): JsonRecord => record(descriptor))
     : [];
   if (
     Object.keys(input).sort().join(",") !==
@@ -134,9 +259,9 @@ function normalizeReceiptInput(input: Record<string, any> = {}) : any {
       "Upload consumption receipt custody descriptor list is invalid."
     );
   }
-  const seenObjectIds: any = new Set<any>();
-  const objects: UploadConsumptionLogicalObject[] = custodyDescriptors.map((descriptor?: any, index?: any) : any => {
-    const expectedKeys: any = [
+  const seenObjectIds = new Set<string>();
+  const objects: UploadConsumptionLogicalObject[] = custodyDescriptors.map((descriptor, index): UploadConsumptionLogicalObject => {
+    const expectedKeys: readonly string[] = [
       "byteSize",
       "contentDigest",
       "custodyRef",
@@ -144,21 +269,21 @@ function normalizeReceiptInput(input: Record<string, any> = {}) : any {
       "envelopeDigest",
       "resourceRef"
     ];
-    const custodyRef: any = String(descriptor?.custodyRef || "").trim();
-    const objectId: any = custodyRef.startsWith("custody:")
+    const custodyRef = String(descriptor.custodyRef || "").trim();
+    const objectId = custodyRef.startsWith("custody:")
       ? custodyRef.slice("custody:".length)
       : "";
-    const sha256: any = String(descriptor?.contentDigest || "").trim().toLowerCase();
-    const byteSize: any = Number(descriptor?.byteSize);
+    const sha256 = String(descriptor.contentDigest || "").trim().toLowerCase();
+    const byteSize = Number(descriptor.byteSize);
     if (
       Object.keys(descriptor || {}).sort().join(",") !==
         expectedKeys.join(",") ||
       !RECEIPT_OBJECT_ID_PATTERN.test(objectId) ||
       seenObjectIds.has(objectId) ||
       !SHA256_PATTERN.test(sha256) ||
-      !SHA256_PATTERN.test(String(descriptor?.envelopeDigest || "")) ||
-      descriptor?.custodyState !== "sealed_no_run" ||
-      descriptor?.resourceRef !== `upload-resource:${sessionId}:${index}` ||
+      !SHA256_PATTERN.test(String(descriptor.envelopeDigest || "")) ||
+      descriptor.custodyState !== "sealed_no_run" ||
+      descriptor.resourceRef !== `upload-resource:${sessionId}:${index}` ||
       !Number.isSafeInteger(byteSize) ||
       byteSize < 0
     ) {
@@ -170,11 +295,11 @@ function normalizeReceiptInput(input: Record<string, any> = {}) : any {
     seenObjectIds.add(objectId);
     return Object.freeze({ objectId, sha256, byteSize });
   });
-  const ownerKey: any = hashClientString(
+  const ownerKey = hashClientString(
     JSON.stringify(owner),
     "upload.session.owner"
   );
-  const receiptDigest: any = createHash("sha256")
+  const receiptDigest = createHash("sha256")
     .update(canonicalJson({
       schemaVersion: UPLOAD_CONSUMPTION_RECEIPT_SCHEMA_VERSION,
       sessionId,
@@ -192,7 +317,7 @@ function normalizeReceiptInput(input: Record<string, any> = {}) : any {
   };
 }
 
-function custodyObjectRow(db?: any, custodyRef?: any) : any {
+function custodyObjectRow(db: StorageDatabase | null | undefined, custodyRef: unknown): StorageRow | null {
   if (!db || !custodyRef) return null;
   return db.prepare(`
     SELECT staging.custody_ref,
@@ -222,10 +347,10 @@ function custodyObjectRow(db?: any, custodyRef?: any) : any {
       AND staging.state = 'sealed'
       AND artifacts.state = 'sealed'
     LIMIT 1
-  `).get(custodyRef) || null;
+  `).get(custodyRef) as StorageRow | undefined || null;
 }
 
-function receiptOwnerBindingDigest(owner?: any) : any {
+function receiptOwnerBindingDigest(owner: ReceiptOwner): string {
   return createHash("sha256")
     .update(canonicalJson({
       subjectId: owner.subjectId,
@@ -235,7 +360,7 @@ function receiptOwnerBindingDigest(owner?: any) : any {
     .digest("hex");
 }
 
-function receiptResourceBindingDigest(resourceRef?: any) : any {
+function receiptResourceBindingDigest(resourceRef: unknown): string {
   return createHash("sha256")
     .update(String(resourceRef || "").trim(), "utf8")
     .digest("hex");
@@ -246,9 +371,14 @@ function verifyCustodyDescriptorObject({
   logicalObject,
   owner,
   storageKernel
-}: Record<string, any>) : any {
-  const row: any = custodyObjectRow(
-    storageKernel?.db,
+}: {
+  descriptor: JsonRecord;
+  logicalObject: UploadConsumptionLogicalObject;
+  owner: ReceiptOwner;
+  storageKernel: StorageKernel;
+}): void {
+  const row = custodyObjectRow(
+    storageKernel.db,
     descriptor.custodyRef
   );
   if (
@@ -276,9 +406,9 @@ function verifyCustodyDescriptorObject({
   }
 }
 
-function uploadConsumptionReceiptFromRow(row?: any) : any {
+function uploadConsumptionReceiptFromRow(row: StorageRow | null | undefined): UploadConsumptionReceipt | null {
   if (!row) return null;
-  let objects: any;
+  let objects: unknown;
   try {
     objects = JSON.parse(String(row.objects_json || "[]"));
   } catch {
@@ -293,27 +423,30 @@ function uploadConsumptionReceiptFromRow(row?: any) : any {
       "Persisted upload consumption receipt is invalid."
     );
   }
-  const receipt: Record<string, any> = {
+  const receipt: UploadConsumptionReceipt = {
     schemaVersion: String(row.schema_version || ""),
     receiptId: String(row.receipt_id || ""),
     sessionId: String(row.session_id || ""),
     ownerKey: String(row.owner_key || ""),
-    objects: objects.map((object?: any) : any => ({
-      objectId: String(object?.objectId || ""),
-      sha256: String(object?.sha256 || ""),
-      byteSize: Number(object?.byteSize)
-    })),
+    objects: objects.map((item): UploadConsumptionLogicalObject => {
+      const object = record(item);
+      return {
+        objectId: String(object.objectId || ""),
+        sha256: String(object.sha256 || ""),
+        byteSize: Number(object.byteSize)
+      };
+    }),
     receiptDigest: String(row.receipt_digest || "")
   };
-  const objectShapeValid: any = receipt.objects.every((object?: any, index?: any) : any =>
-    Object.keys(objects[index] || {}).sort().join(",") ===
+  const objectShapeValid = receipt.objects.every((object, index): boolean =>
+    Object.keys(record(objects[index])).sort().join(",") ===
       "byteSize,objectId,sha256" &&
     RECEIPT_OBJECT_ID_PATTERN.test(object.objectId) &&
     SHA256_PATTERN.test(object.sha256) &&
     Number.isSafeInteger(object.byteSize) &&
     object.byteSize >= 0
   );
-  const expectedDigest: any = createHash("sha256")
+  const expectedDigest = createHash("sha256")
     .update(canonicalJson({
       schemaVersion: receipt.schemaVersion,
       sessionId: receipt.sessionId,
@@ -339,7 +472,7 @@ function uploadConsumptionReceiptFromRow(row?: any) : any {
   return receipt;
 }
 
-function uploadConsumptionReceiptRowBySession(db?: any, sessionId?: any) : any {
+function uploadConsumptionReceiptRowBySession(db: StorageDatabase | null | undefined, sessionId: string): StorageRow | null {
   if (!db) return null;
   return db.prepare(`
     SELECT receipt_id, session_id, schema_version, owner_key,
@@ -347,10 +480,10 @@ function uploadConsumptionReceiptRowBySession(db?: any, sessionId?: any) : any {
     FROM storage_upload_consumption_receipts
     WHERE session_id = ?
     LIMIT 1
-  `).get(sessionId) || null;
+  `).get(sessionId) as StorageRow | undefined || null;
 }
 
-function uploadConsumptionReceiptRowById(db?: any, receiptId?: any) : any {
+function uploadConsumptionReceiptRowById(db: StorageDatabase | null | undefined, receiptId: string): StorageRow | null {
   if (!db) return null;
   return db.prepare(`
     SELECT receipt_id, session_id, schema_version, owner_key,
@@ -358,10 +491,10 @@ function uploadConsumptionReceiptRowById(db?: any, receiptId?: any) : any {
     FROM storage_upload_consumption_receipts
     WHERE receipt_id = ?
     LIMIT 1
-  `).get(receiptId) || null;
+  `).get(receiptId) as StorageRow | undefined || null;
 }
 
-function receiptMatches(receipt?: any, normalized?: any) : any {
+function receiptMatches(receipt: UploadConsumptionReceipt | null, normalized: NormalizedReceipt): boolean {
   return Boolean(
     receipt &&
     receipt.schemaVersion === UPLOAD_CONSUMPTION_RECEIPT_SCHEMA_VERSION &&
@@ -373,7 +506,7 @@ function receiptMatches(receipt?: any, normalized?: any) : any {
   );
 }
 
-function storedObjectRow(db?: any, objectId?: any) : any {
+function storedObjectRow(db: StorageDatabase | null | undefined, objectId: string): StorageRow | null {
   if (!db || !objectId) return null;
   return db.prepare(`
     SELECT object_id, namespace, storage_rel_path, sha256, byte_size,
@@ -381,44 +514,49 @@ function storedObjectRow(db?: any, objectId?: any) : any {
     FROM storage_objects
     WHERE object_id = ?
     LIMIT 1
-  `).get(objectId) || null;
+  `).get(objectId) as StorageRow | undefined || null;
 }
 
-function storedObjectPathReferenced(db?: any, storageRelativePath?: any) : any {
+function storedObjectPathReferenced(db: StorageDatabase | null | undefined, storageRelativePath: string): boolean {
   if (!db || !storageRelativePath) return false;
   return Boolean(db.prepare(`
     SELECT 1 AS referenced
     FROM storage_objects
     WHERE storage_rel_path = ?
     LIMIT 1
-  `).get(storageRelativePath));
+  `).get(storageRelativePath) as StorageRow | undefined);
 }
 
-async function removeUnreferencedStoredObject(db?: any, userDataPath?: any, object: Record<string, any> = {}) : Promise<any> {
-  if (!object.storageRelativePath || storedObjectPathReferenced(db, object.storageRelativePath)) return;
+async function removeUnreferencedStoredObject(
+  db: StorageDatabase | null | undefined,
+  userDataPath: string,
+  object: { storageRelativePath?: unknown } = {}
+): Promise<void> {
+  const storageRelativePath = String(object.storageRelativePath || "");
+  if (!storageRelativePath || storedObjectPathReferenced(db, storageRelativePath)) return;
   await removeStoredObject({
     userDataPath,
-    storageRelativePath: object.storageRelativePath
-  }).catch(() : any => {});
+    storageRelativePath
+  }).catch((): void => {});
 }
 
-function objectFromRow(row?: any, input: Record<string, any> = {}) : any {
+function objectFromRow(row: StorageRow, input: JsonRecord = {}): StoredObjectProviderRecord {
   return {
-    objectId: row.object_id,
-    namespace: row.namespace,
+    objectId: String(row.object_id || ""),
+    namespace: String(row.namespace || ""),
     fileName: String(input.fileName || "object.bin"),
-    storageRelativePath: row.storage_rel_path,
-    sha256: row.sha256,
+    storageRelativePath: String(row.storage_rel_path || ""),
+    sha256: String(row.sha256 || ""),
     byteSize: Number(row.byte_size || 0),
-    mediaType: row.media_type,
+    mediaType: String(row.media_type || ""),
     metadata: parseMetadata(row.metadata_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    createdAt: String(row.created_at || ""),
+    updatedAt: String(row.updated_at || "")
   };
 }
 
-function ownerRow(db?: any, ownerId?: any) : any {
-  const normalizedOwnerId: any = String(ownerId || "").trim();
+function ownerRow(db: StorageDatabase | null | undefined, ownerId: unknown): StorageRow | null {
+  const normalizedOwnerId = String(ownerId || "").trim();
   if (!db || !normalizedOwnerId) return null;
   return db.prepare(`
     SELECT object_id, job_id, archive_batch_id, owner_subject_id,
@@ -427,26 +565,26 @@ function ownerRow(db?: any, ownerId?: any) : any {
     WHERE job_id = ? OR archive_batch_id = ?
     ORDER BY updated_at DESC, object_id ASC
     LIMIT 1
-  `).get(normalizedOwnerId, normalizedOwnerId) || null;
+  `).get(normalizedOwnerId, normalizedOwnerId) as StorageRow | undefined || null;
 }
 
-function publicOwnerRow(row?: any) : any {
+function publicOwnerRow(row: StorageRow | null): JsonRecord | null {
   return row
     ? {
-        objectId: row.object_id,
-        jobId: row.job_id,
-        archiveBatchId: row.archive_batch_id,
-        ownerSubjectId: row.owner_subject_id,
-        ownerUserId: row.owner_user_id,
-        ownerUsername: row.owner_username,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
+        objectId: String(row.object_id || ""),
+        jobId: String(row.job_id || ""),
+        archiveBatchId: String(row.archive_batch_id || ""),
+        ownerSubjectId: String(row.owner_subject_id || ""),
+        ownerUserId: String(row.owner_user_id || ""),
+        ownerUsername: String(row.owner_username || ""),
+        createdAt: String(row.created_at || ""),
+        updatedAt: String(row.updated_at || "")
       }
     : null;
 }
 
-function objectRowsByOwner(db?: any, ownerId?: any) : any {
-  const normalizedOwnerId: any = String(ownerId || "").trim();
+function objectRowsByOwner(db: StorageDatabase | null | undefined, ownerId: unknown): StorageRow[] {
+  const normalizedOwnerId = String(ownerId || "").trim();
   if (!db || !normalizedOwnerId) return [];
   return db.prepare(`
     SELECT objects.object_id, objects.namespace, objects.storage_rel_path,
@@ -457,25 +595,25 @@ function objectRowsByOwner(db?: any, ownerId?: any) : any {
       ON owners.object_id = objects.object_id
     WHERE owners.job_id = ? OR owners.archive_batch_id = ?
     ORDER BY objects.created_at ASC, objects.object_id ASC
-  `).all(normalizedOwnerId, normalizedOwnerId);
+  `).all(normalizedOwnerId, normalizedOwnerId) as StorageRow[];
 }
 
-function deletionOperationFromRow(row?: any) : any {
+function deletionOperationFromRow(row: StorageRow | null): DeletionOperation | null {
   if (!row) return null;
   return {
-    operationId: row.operation_id,
-    ownerId: row.owner_id,
-    jobId: row.job_id,
-    status: row.status,
+    operationId: String(row.operation_id || ""),
+    ownerId: String(row.owner_id || ""),
+    jobId: String(row.job_id || ""),
+    status: String(row.status || ""),
     state: parseMetadata(row.state_json),
-    error: row.error,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    error: String(row.error || ""),
+    createdAt: String(row.created_at || ""),
+    updatedAt: String(row.updated_at || "")
   };
 }
 
-function deletionOperationRowByOwner(db?: any, ownerId?: any) : any {
-  const normalizedOwnerId: any = String(ownerId || "").trim();
+function deletionOperationRowByOwner(db: StorageDatabase | null | undefined, ownerId: unknown): StorageRow | null {
+  const normalizedOwnerId = String(ownerId || "").trim();
   if (!db || !normalizedOwnerId) return null;
   return db.prepare(`
     SELECT operation_id, owner_id, job_id, status, state_json,
@@ -483,11 +621,11 @@ function deletionOperationRowByOwner(db?: any, ownerId?: any) : any {
     FROM storage_deletion_operations
     WHERE owner_id = ?
     LIMIT 1
-  `).get(normalizedOwnerId) || null;
+  `).get(normalizedOwnerId) as StorageRow | undefined || null;
 }
 
-function deletionOperationRowById(db?: any, operationId?: any) : any {
-  const normalizedOperationId: any = String(operationId || "").trim();
+function deletionOperationRowById(db: StorageDatabase | null | undefined, operationId: unknown): StorageRow | null {
+  const normalizedOperationId = String(operationId || "").trim();
   if (!db || !normalizedOperationId) return null;
   return db.prepare(`
     SELECT operation_id, owner_id, job_id, status, state_json,
@@ -495,12 +633,12 @@ function deletionOperationRowById(db?: any, operationId?: any) : any {
     FROM storage_deletion_operations
     WHERE operation_id = ?
     LIMIT 1
-  `).get(normalizedOperationId) || null;
+  `).get(normalizedOperationId) as StorageRow | undefined || null;
 }
 
-function existingObjectMatches(row?: any, input: Record<string, any> = {}) : any {
-  const expectedSha256: any = String(input.expectedSha256 || "").trim().toLowerCase();
-  const expectedByteSize: any = input.expectedByteSize === undefined || input.expectedByteSize === null
+function existingObjectMatches(row: StorageRow | null, input: JsonRecord = {}): boolean {
+  const expectedSha256 = String(input.expectedSha256 || "").trim().toLowerCase();
+  const expectedByteSize = input.expectedByteSize === undefined || input.expectedByteSize === null
     ? null
     : Number(input.expectedByteSize);
   return Boolean(
@@ -515,13 +653,23 @@ export function createStorageProvider({
   storageKernel = null,
   artifactClassifiers = [],
   serviceManifestStore = null
-}: Record<string, any> = {}) : any {
-  const storageArtifactClassifiers: any = normalizeArtifactClassifiers(artifactClassifiers);
-  let selectedServiceManifestStore: any = serviceManifestStore;
+}: StorageProviderOptions = {}): Readonly<StorageProvider> {
+  const storageArtifactClassifiers = normalizeArtifactClassifiers(artifactClassifiers);
+  let selectedServiceManifestStore: ServiceManifestStore | null = serviceManifestStore;
 
-  function manifestStore() : any {
+  function requireStorageKernel(): StorageKernel {
+    if (!storageKernel) {
+      throw uploadConsumptionError(
+        "storage_kernel_required",
+        "Storage kernel is required for this storage operation."
+      );
+    }
+    return storageKernel;
+  }
+
+  function manifestStore(): ServiceManifestStore {
     if (!selectedServiceManifestStore) {
-      const selectedStorageRoot: any = path.dirname(path.dirname(getStorageDatabasePath(userDataPath)));
+      const selectedStorageRoot = path.dirname(path.dirname(getStorageDatabasePath(userDataPath)));
       selectedServiceManifestStore = createServiceManifestStore({ storageRoot: selectedStorageRoot });
     }
     return selectedServiceManifestStore;
@@ -529,10 +677,10 @@ export function createStorageProvider({
 
   return Object.freeze({
     protocolVersion: STORAGE_PROTOCOL_VERSION,
-    getStorageKernel() : any {
+    getStorageKernel(): StorageKernel | null {
       return storageKernel;
     },
-    getStorageSummary() : any {
+    getStorageSummary(): StorageKernelSummary | JsonRecord {
       return storageKernel?.getStorageSummary?.() || {
         databasePath: getStorageDatabasePath(userDataPath),
         objectRootPath: getObjectRootPath(userDataPath),
@@ -546,7 +694,7 @@ export function createStorageProvider({
         objectBytes: 0
       };
     },
-    getUpgradePreflight() : any {
+    getUpgradePreflight(): unknown {
       return storageKernel?.getUpgradePreflight?.() || {
         ready: false,
         currentRevision: 0,
@@ -558,21 +706,21 @@ export function createStorageProvider({
         missingColumnCount: 0
       };
     },
-    getDurableManifestWriterPort() : any {
+    getDurableManifestWriterPort(): unknown {
       return manifestStore().writerPort;
     },
-    getDurableManifestReaderPort() : any {
+    getDurableManifestReaderPort(): unknown {
       return manifestStore().readerPort;
     },
-    getDurableManifestCandidateAuthorityPort() : any {
-      const store: any = manifestStore();
+    getDurableManifestCandidateAuthorityPort(): unknown {
+      const store = manifestStore();
       return createManifestCandidateAuthorityPort({
-        getCandidateSnapshot: store.getCandidateSnapshot,
-        acknowledgePublished: store.acknowledgePublished
+        getCandidateSnapshot: store.getCandidateSnapshot as unknown as (...arguments_: unknown[]) => unknown,
+        acknowledgePublished: store.acknowledgePublished as unknown as (...arguments_: unknown[]) => unknown
       });
     },
-    getUploadConsumptionReceipt(receiptId?: any) : any {
-      const normalizedReceiptId: any = String(receiptId || "").trim();
+    getUploadConsumptionReceipt(receiptId: unknown): UploadConsumptionReceipt | null {
+      const normalizedReceiptId = String(receiptId || "").trim();
       if (
         !UPLOAD_RECEIPT_ID_PATTERN.test(normalizedReceiptId) ||
         !storageKernel?.db
@@ -586,15 +734,15 @@ export function createStorageProvider({
         )
       );
     },
-    async commitUploadConsumptionReceipt(input: Record<string, any> = {}) : Promise<any> {
+    async commitUploadConsumptionReceipt(input: JsonRecord = {}): Promise<UploadConsumptionReceipt> {
       if (!storageKernel?.db) {
         throw uploadConsumptionError(
           "storage_kernel_required",
           "Storage kernel is required for a durable upload consumption receipt."
         );
       }
-      const normalized: any = normalizeReceiptInput(input);
-      const normalizedOwner: any = normalizeReceiptOwner(input.owner);
+      const normalized = normalizeReceiptInput(input);
+      const normalizedOwner = normalizeReceiptOwner(record(input.owner));
       for (const [index, descriptor] of normalized.custodyDescriptors.entries()) {
         verifyCustodyDescriptorObject({
           descriptor,
@@ -603,7 +751,7 @@ export function createStorageProvider({
           storageKernel
         });
       }
-      const persisted: any = uploadConsumptionReceiptFromRow(
+      const persisted = uploadConsumptionReceiptFromRow(
         uploadConsumptionReceiptRowBySession(
           storageKernel.db,
           normalized.sessionId
@@ -619,9 +767,8 @@ export function createStorageProvider({
         return persisted;
       }
 
-      try {
-        const commit: any = storageKernel.db.transaction(() : any => {
-          const concurrent: any = uploadConsumptionReceiptFromRow(
+      const commit = storageKernel.db.transaction((): UploadConsumptionReceipt => {
+          const concurrent = uploadConsumptionReceiptFromRow(
             uploadConsumptionReceiptRowBySession(
               storageKernel.db,
               normalized.sessionId
@@ -650,21 +797,31 @@ export function createStorageProvider({
             normalized.receiptDigest,
             nowIso()
           );
-          return uploadConsumptionReceiptFromRow(
+          const committed = uploadConsumptionReceiptFromRow(
             uploadConsumptionReceiptRowBySession(
               storageKernel.db,
               normalized.sessionId
             )
           );
-        });
+          if (!committed) {
+            throw uploadConsumptionError(
+              "upload_consumption_receipt_commit_failed",
+              "Upload consumption receipt was not visible after commit."
+            );
+          }
+          return committed;
+      });
 
         try {
           return commit();
-        } catch (error: any) {
-          if (error?.code === "upload_consumption_receipt_conflict") {
+        } catch (error: unknown) {
+          const code = error && typeof error === "object"
+            ? String((error as { code?: unknown }).code || "")
+            : "";
+          if (code === "upload_consumption_receipt_conflict") {
             throw error;
           }
-          const concurrent: any = uploadConsumptionReceiptFromRow(
+          const concurrent = uploadConsumptionReceiptFromRow(
             uploadConsumptionReceiptRowBySession(
               storageKernel.db,
               normalized.sessionId
@@ -686,38 +843,31 @@ export function createStorageProvider({
             error
           );
         }
-      } catch (error: any) {
-        throw error;
-      }
     },
-    async putObject(input: Record<string, any> = {}) : Promise<any> {
-      const storedObject: any = await putStoredObject({
+    async putObject(input: JsonRecord = {}): Promise<StoredObjectRecord> {
+      const storedObject = await putStoredObject({
         userDataPath,
         ...input
       });
       try {
         recordStoredObject(storageKernel?.db, storedObject);
         return storedObject;
-      } catch (error: any) {
+      } catch (error: unknown) {
         await removeUnreferencedStoredObject(storageKernel?.db, userDataPath, storedObject);
         throw error;
       }
     },
-    async putObjectsFromFiles(inputs: any = []) : Promise<any> {
-      if (!storageKernel?.db) {
-        const error: Error & Record<string, any> = new Error("Storage kernel is required for durable file persistence.");
-        error.code = "storage_kernel_required";
-        throw error;
-      }
-      const normalizedInputs: any = Array.isArray(inputs) ? inputs : [];
-      const stored: any[] = [];
-      const newlyCreated: any[] = [];
+    async putObjectsFromFiles(inputs: readonly JsonRecord[] = []): Promise<readonly StoredObjectRecord[]> {
+      const kernel = requireStorageKernel();
+      const normalizedInputs = Array.isArray(inputs) ? inputs : [];
+      const stored: StoredObjectRecord[] = [];
+      const newlyCreated: StoredObjectRecord[] = [];
       try {
         for (const input of normalizedInputs) {
-          const existing: any = storedObjectRow(storageKernel.db, input?.objectId);
+          const existing = storedObjectRow(kernel.db, String(input.objectId || ""));
           if (existing) {
             if (!existingObjectMatches(existing, input)) {
-              const error: Error & Record<string, any> = new Error("Stable storage object identity conflicts with persisted content.");
+              const error = new Error("Stable storage object identity conflicts with persisted content.") as StorageError;
               error.code = "storage_object_identity_conflict";
               throw error;
             }
@@ -730,68 +880,69 @@ export function createStorageProvider({
             stored.push(objectFromRow(existing, input));
             continue;
           }
-          const object: any = await putStoredObjectFromFile({
+          const object = await putStoredObjectFromFile({
             userDataPath,
             ...input
           });
           stored.push(object);
           newlyCreated.push(object);
         }
-        const persistBatch: any = storageKernel.db.transaction((objects?: any) : any => {
+        const persistBatch = kernel.db.transaction((objects: readonly StoredObjectRecord[]): void => {
           for (const object of objects) {
-            recordStoredObject(storageKernel.db, object);
+            recordStoredObject(kernel.db, object);
           }
         });
         persistBatch(stored);
         return stored;
-      } catch (error: any) {
-        await Promise.all(newlyCreated.map((object?: any) : any =>
-          removeUnreferencedStoredObject(storageKernel.db, userDataPath, object)
+      } catch (error: unknown) {
+        await Promise.all(newlyCreated.map((object): Promise<void> =>
+          removeUnreferencedStoredObject(kernel.db, userDataPath, object)
         ));
         throw error;
       }
     },
-    getObject(objectId?: any) : any {
-      const row: any = storedObjectRow(storageKernel?.db, String(objectId || "").trim());
+    getObject(objectId: unknown): StoredObjectProviderRecord | null {
+      const row = storedObjectRow(storageKernel?.db, String(objectId || "").trim());
       return row ? objectFromRow(row) : null;
     },
-    findObjectOwner(ownerId?: any) : any {
+    findObjectOwner(ownerId: unknown): JsonRecord | null {
       return publicOwnerRow(ownerRow(storageKernel?.db, ownerId));
     },
-    listObjectStoragePathsByOwner(ownerId?: any) : any {
+    listObjectStoragePathsByOwner(ownerId: unknown): string[] {
       return objectRowsByOwner(storageKernel?.db, ownerId)
-        .map((row?: any) : any => String(row.storage_rel_path || "").trim())
+        .map((row): string => String(row.storage_rel_path || "").trim())
         .filter(Boolean);
     },
-    getObjectOwnerArtifactPaths() : any {
+    getObjectOwnerArtifactPaths(): JsonRecord {
       return {
         objectRootPath: getObjectRootPath(userDataPath),
         objectBatchPath: ""
       };
     },
-    deleteObjectRecordsByOwner(ownerId?: any) : any {
-      const rows: any = objectRowsByOwner(storageKernel?.db, ownerId);
+    deleteObjectRecordsByOwner(ownerId: unknown): number {
+      const rows = objectRowsByOwner(storageKernel?.db, ownerId);
       if (rows.length === 0) return 0;
-      const removeRecords: any = storageKernel.db.transaction((objectIds?: any) : any => {
-        const statement: any = storageKernel.db.prepare("DELETE FROM storage_objects WHERE object_id = ?");
+      const removeRecords = storageKernel!.db.transaction((objectIds: readonly string[]): void => {
+        const statement = storageKernel!.db.prepare("DELETE FROM storage_objects WHERE object_id = ?");
         for (const objectId of objectIds) statement.run(objectId);
       });
-      removeRecords(rows.map((row?: any) : any => row.object_id));
+      removeRecords(rows.map((row): string => String(row.object_id || "")));
       return rows.length;
     },
-    getDeletionOperationByOwnerId(ownerId?: any) : any {
+    getDeletionOperationByOwnerId(ownerId: unknown): DeletionOperation | null {
       return deletionOperationFromRow(deletionOperationRowByOwner(storageKernel?.db, ownerId));
     },
-    upsertDeletionOperation(input: Record<string, any> = {}) : any {
-      const ownerId: any = String(input.ownerId || input.batchId || "").trim();
+    upsertDeletionOperation(input: JsonRecord = {}): DeletionOperation | null {
+      const ownerId = String(input.ownerId || input.batchId || "").trim();
       if (!ownerId) {
         throw new Error("Storage deletion owner id is required.");
       }
-      const existing: any = deletionOperationRowByOwner(storageKernel?.db, ownerId);
+      const existing = deletionOperationRowByOwner(storageKernel?.db, ownerId);
       if (existing) return deletionOperationFromRow(existing);
-      const operationId: any = String(input.operationId || randomUUID());
-      const timestamp: any = nowIso();
-      storageKernel.db.prepare(`
+      const kernel = requireStorageKernel();
+      const operationId = String(input.operationId || randomUUID());
+      const timestamp = nowIso();
+      kernel.db.prepare(`
         INSERT INTO storage_deletion_operations (
           operation_id, owner_id, job_id, status, state_json,
           error, created_at, updated_at
@@ -806,14 +957,15 @@ export function createStorageProvider({
         timestamp,
         timestamp
       );
-      return deletionOperationFromRow(deletionOperationRowById(storageKernel.db, operationId));
+      return deletionOperationFromRow(deletionOperationRowById(kernel.db, operationId));
     },
-    updateDeletionOperation(operationId?: any, patch: Record<string, any> = {}) : any {
-      const existing: any = deletionOperationFromRow(
+    updateDeletionOperation(operationId: unknown, patch: JsonRecord = {}): DeletionOperation | null {
+      const existing = deletionOperationFromRow(
         deletionOperationRowById(storageKernel?.db, operationId)
       );
       if (!existing) return null;
-      storageKernel.db.prepare(`
+      const kernel = requireStorageKernel();
+      kernel.db.prepare(`
         UPDATE storage_deletion_operations
         SET status = ?, state_json = ?, error = ?, updated_at = ?
         WHERE operation_id = ?
@@ -827,122 +979,124 @@ export function createStorageProvider({
         existing.operationId
       );
       return deletionOperationFromRow(
-        deletionOperationRowById(storageKernel.db, existing.operationId)
+        deletionOperationRowById(kernel.db, existing.operationId)
       );
     },
-    deleteDeletionOperation(operationId?: any) : any {
+    deleteDeletionOperation(operationId: unknown): number {
       return storageKernel?.db
         ?.prepare("DELETE FROM storage_deletion_operations WHERE operation_id = ?")
         .run(String(operationId || "").trim()).changes || 0;
     },
-    listPendingDeletionOperations() : any {
+    listPendingDeletionOperations(): DeletionOperation[] {
       if (!storageKernel?.db) return [];
       return storageKernel.db.prepare(`
         SELECT operation_id, owner_id, job_id, status, state_json,
                error, created_at, updated_at
         FROM storage_deletion_operations
         ORDER BY updated_at ASC, operation_id ASC
-      `).all().map(deletionOperationFromRow);
+      `).all().map((row): DeletionOperation | null => deletionOperationFromRow(row as StorageRow)).filter(
+        (operation): operation is DeletionOperation => operation !== null
+      );
     },
-    readObject(input: Record<string, any> = {}) : any {
+    readObject(input: JsonRecord = {}): Promise<unknown> {
       return readStoredObject({
         userDataPath,
         storageRelativePath: input.storageRelativePath || input.storage_rel_path || ""
       });
     },
-    openObjectReadStream(input: Record<string, any> = {}) : any {
+    openObjectReadStream(input: JsonRecord = {}): Promise<StoredObjectReadStream> {
       return openStoredObjectReadStream({
         userDataPath,
-        storageRelativePath: input.storageRelativePath || input.storage_rel_path || "",
-        signal: input.signal
+        storageRelativePath: String(input.storageRelativePath || input.storage_rel_path || ""),
+        signal: optionalSignal(input.signal) || undefined
       });
     },
-    openPrivateNoExecObjectReadStream(input: Record<string, any> = {}) : any {
+    openPrivateNoExecObjectReadStream(input: JsonRecord = {}): Promise<StoredObjectReadStream> {
       return openPrivateNoExecObjectReadStream({
         userDataPath,
-        storageRelativePath: input.storageRelativePath || "",
-        signal: input.signal
+        storageRelativePath: String(input.storageRelativePath || ""),
+        signal: optionalSignal(input.signal) || undefined
       });
     },
-    statObject(input: Record<string, any> = {}) : any {
+    statObject(input: JsonRecord = {}): Promise<unknown> {
       return statStoredObject({
         userDataPath,
         storageRelativePath: input.storageRelativePath || input.storage_rel_path || ""
       });
     },
-    resolveStoredObjectPath(storageRelativePath?: any) : any {
+    resolveStoredObjectPath(storageRelativePath: unknown): string {
       return resolveStoredObjectPath(userDataPath, storageRelativePath);
     },
-    runDoctor() : any {
+    runDoctor(): Promise<unknown> {
       return runStorageDoctor({ userDataPath });
     },
-    reconcile(input: Record<string, any> = {}) : any {
+    reconcile(input: JsonRecord = {}): Promise<unknown> {
       return reconcileStorage({
         userDataPath,
         apply: input.apply !== false,
         pruneOrphanObjects: input.pruneOrphanObjects === true
       });
     },
-    listBackups() : any {
+    listBackups(): Promise<unknown> {
       return listStorageBackups({ userDataPath });
     },
-    createBackup(input: Record<string, any> = {}) : any {
+    createBackup(input: JsonRecord = {}): Promise<unknown> {
       return runStorageMaintenanceMutation(
         userDataPath,
-        (executionContext?: any) : any => createStorageBackup({
+        (executionContext) => createStorageBackup({
           userDataPath,
-          label: input.label || "",
+          label: String(input.label || ""),
           retentionPolicy: input.retentionPolicy || input.retention || null,
           artifactClassifiers: storageArtifactClassifiers,
           executionContext
         }),
-        { signal: input.signal, budget: input.budget, kind: "storage.backup.create" }
+        { signal: optionalSignal(input.signal), budget: input.budget, kind: "storage.backup.create" }
       );
     },
-    restoreBackupPreview(input: Record<string, any> = {}) : any {
+    restoreBackupPreview(input: JsonRecord = {}): Promise<unknown> {
       return restoreStorageBackup({
         userDataPath,
-        backupId: input.backupId,
+        backupId: stringValue(input.backupId),
         dryRun: true,
-        includePaths: input.includePaths || [],
-        signal: input.signal,
-        budget: input.budget
+        includePaths: stringList(input.includePaths),
+        signal: optionalSignal(input.signal),
+        budget: record(input.budget)
       });
     },
-    restoreBackup(input: Record<string, any> = {}) : any {
-      const shouldApply: any = input.confirm === true || input.apply === true;
-      const execute: any = (executionContext: any = null) : any => restoreStorageBackup({
+    restoreBackup(input: JsonRecord = {}): Promise<unknown> {
+      const shouldApply = input.confirm === true || input.apply === true;
+      const execute = (executionContext: RestoreExecutionContext | null = null): Promise<unknown> => restoreStorageBackup({
         userDataPath,
-        backupId: input.backupId,
+        backupId: stringValue(input.backupId),
         dryRun: false,
         apply: shouldApply,
-        includePaths: input.includePaths || [],
-        signal: input.signal,
-        budget: input.budget,
+        includePaths: stringList(input.includePaths),
+        signal: optionalSignal(input.signal),
+        budget: record(input.budget),
         executionContext
       });
       return shouldApply
         ? runStorageMaintenanceMutation(
             userDataPath,
             execute,
-            { signal: input.signal, budget: input.budget, kind: "storage.backup.restore" }
+            { signal: optionalSignal(input.signal), budget: input.budget, kind: "storage.backup.restore" }
           )
         : execute();
     },
-    applyBackupRetention(input: Record<string, any> = {}) : any {
+    applyBackupRetention(input: JsonRecord = {}): Promise<unknown> {
       return runStorageMaintenanceMutation(
         userDataPath,
-        (executionContext?: any) : any => applyStorageBackupRetention({
+        (executionContext) => applyStorageBackupRetention({
           userDataPath,
           policy: input.policy,
-          now: input.now,
+          now: typeof input.now === "number" ? input.now : undefined,
           executionContext
         }),
-        { signal: input.signal, budget: input.budget, kind: "storage.backup.retention" }
+        { signal: optionalSignal(input.signal), budget: input.budget, kind: "storage.backup.retention" }
       );
     },
-    listCapabilities() : any {
-      const capabilities: any[] = [
+    listCapabilities(): JsonRecord {
+      const capabilities: JsonRecord[] = [
           {
             id: "storage-summary",
             kind: "projection",

@@ -8,19 +8,19 @@ import { fileURLToPath } from "node:url";
 
 import { ENTERPRISE_SINGLE_NODE_PROFILE } from "./plan-dependency-map.ts";
 
-const modulePath: any = fileURLToPath(import.meta.url);
-const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
-const PROFILE: any = ENTERPRISE_SINGLE_NODE_PROFILE;
-const ROOT: any = "end-to-end-release";
-const REPLACE_REFUSAL: any = "refusing to replace checkpoints or receipts";
-const DELIVERY_PROVENANCE_KEY: any = "delivery-provenance-substrate";
-const DELIVERY_TYPING_KEY: any = "delivery-typing-substrate";
-const DELIVERY_FEEDBACK_KEY: any = "delivery-feedback-substrate";
-const DELIVERY_ACCEPTANCE_REMAINDER_KEY: any = "delivery-acceptance-remainder";
-const DELIVERY_TYPING_REMAINDER_KEY: any = "delivery-typing-remainder";
-const DELIVERY_FEEDBACK_REMAINDER_KEY: any = "delivery-feedback-remainder";
+const modulePath  = fileURLToPath(import.meta.url);
+const defaultRepoRoot  = path.resolve(path.dirname(modulePath), "../..");
+const PROFILE  = ENTERPRISE_SINGLE_NODE_PROFILE;
+const ROOT  = "end-to-end-release";
+const REPLACE_REFUSAL  = "refusing to replace checkpoints or receipts";
+const DELIVERY_PROVENANCE_KEY  = "delivery-provenance-substrate";
+const DELIVERY_TYPING_KEY  = "delivery-typing-substrate";
+const DELIVERY_FEEDBACK_KEY  = "delivery-feedback-substrate";
+const DELIVERY_ACCEPTANCE_REMAINDER_KEY  = "delivery-acceptance-remainder";
+const DELIVERY_TYPING_REMAINDER_KEY  = "delivery-typing-remainder";
+const DELIVERY_FEEDBACK_REMAINDER_KEY  = "delivery-feedback-remainder";
 
-const GATEWAY_CANONICAL_OWNED_PATHS: readonly any[] = Object.freeze([
+const GATEWAY_CANONICAL_OWNED_PATHS: readonly string[] = Object.freeze([
   "package.json",
   "package-lock.json",
   "vitest.config.ts",
@@ -118,7 +118,7 @@ const GATEWAY_CANONICAL_OWNED_PATHS: readonly any[] = Object.freeze([
   "docs/protocols/PROTOCOLS.md",
 ]);
 
-const TYPING_SUBSTRATE_OWNED_PATHS: readonly any[] = Object.freeze([
+const TYPING_SUBSTRATE_OWNED_PATHS: readonly string[] = Object.freeze([
   ".oxlintrc.json",
   "tools/server-scripts/verify-no-explicit-any.ts",
   "packages/contracts/src/service-collaboration-contract.ts",
@@ -188,7 +188,7 @@ const TYPING_SUBSTRATE_OWNED_PATHS: readonly any[] = Object.freeze([
   "packages/foundation/src/security/authorization/universal-tag-policy.ts",
 ]);
 
-const TYPING_REMAINDER_OWNED_PATHS: readonly any[] = Object.freeze([
+const TYPING_REMAINDER_OWNED_PATHS: readonly string[] = Object.freeze([
   "packages/foundation/src/checkpoint",
   "packages/foundation/src/composition-management",
   "packages/foundation/src/concurrency",
@@ -245,40 +245,25 @@ const TYPING_REMAINDER_OWNED_PATHS: readonly any[] = Object.freeze([
   "tools/plan",
 ]);
 
-const BASELINE_REQUIREMENTS: readonly any[] = Object.freeze([
-  "REQ-REL-BASELINE",
-  "REQ-BASELINE-UPSTREAM-GATEWAY",
-  "REQ-BASELINE-DOWNSTREAM-MCP",
-  "REQ-BASELINE-STRATEGY-MANAGEMENT",
-  "REQ-BASELINE-ENTERPRISE-GOVERNANCE",
-  "REQ-BASELINE-CONSOLE-ADMINISTRATION",
-  "REQ-BASELINE-CONTAINER-DEPLOYMENT",
-  "REQ-BASELINE-STORAGE",
-  "REQ-BASELINE-JOBS",
-  "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING",
-  "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING",
-  "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE",
-]);
-
-function requireCondition(condition?: any, message?: any) : any {
+function requireCondition(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function sha256(value?: any) : any {
+function sha256(value: string): string {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
 }
 
-function stableId(label?: any) : any {
-  const digest: any = sha256(`meshrix-agent-service-efficiency:${label}`);
+function stableId(label: string): string {
+  const digest  = sha256(`meshrix-agent-service-efficiency:${label}`);
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
 
-function jsonText(value?: any) : any {
+function jsonText(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-function oxlintOwnedBatch(ownedPaths?: any) : any {
-  const lintPaths: any[] = ownedPaths.filter((entry?: any) : any =>
+function oxlintOwnedBatch(ownedPaths: readonly string[]): string {
+  const lintPaths = ownedPaths.filter((entry) =>
     entry !== ".oxlintrc.json" &&
     !String(entry).endsWith(".json") &&
     !String(entry).endsWith(".md") &&
@@ -286,8 +271,8 @@ function oxlintOwnedBatch(ownedPaths?: any) : any {
   return `npx --yes oxlint@1.78.0 -c .oxlintrc.json ${lintPaths.join(" ")}`;
 }
 
-function currentRevision(repoRoot?: any) : any {
-  const result: any = spawnSync("git", ["rev-parse", "HEAD"], {
+function currentRevision(repoRoot: string): string {
+  const result  = spawnSync("git", ["rev-parse", "HEAD"], {
     cwd: repoRoot,
     encoding: "utf8",
     windowsHide: true,
@@ -296,11 +281,24 @@ function currentRevision(repoRoot?: any) : any {
   return result.stdout.trim();
 }
 
-function criterion(text?: any) : any {
+function criterion(text: string) {
   return { checked: false, text };
 }
 
-function designContract({ ownedPaths, acceptancePaths, decisions = {} }: Record<string, any>) : any {
+interface DesignDecisions {
+  composition?: string;
+  algorithms?: string;
+  dataStructures?: string;
+  state?: string;
+  isolation?: string;
+  concurrency?: string;
+}
+
+function designContract({ ownedPaths, acceptancePaths, decisions = {} }: {
+  ownedPaths: readonly string[];
+  acceptancePaths: readonly string[];
+  decisions?: DesignDecisions;
+}) {
   return {
     artifact: `docs/plans/${ROOT}/Plan.md`,
     owned_paths: ownedPaths,
@@ -319,6 +317,27 @@ function designContract({ ownedPaths, acceptancePaths, decisions = {} }: Record<
     },
     test_seams: ["declared focused regression and exact final receipt boundary"],
   };
+}
+
+interface BaselineNodeInput {
+  key: string;
+  role: string;
+  code: string;
+  title: string;
+  goal: string;
+  description: string;
+  requirements: readonly string[];
+  acceptance: string;
+  prerequisites?: string[];
+  next?: string[];
+  target: string;
+  commands: string[];
+  paths: string[];
+  ownedPaths?: readonly string[];
+  acceptancePaths?: readonly string[];
+  difficulty?: string;
+  decisions?: DesignDecisions;
+  verificationProfile?: string;
 }
 
 function node({
@@ -340,10 +359,10 @@ function node({
   difficulty = "complex",
   decisions = {},
   verificationProfile = "code",
-}: Record<string, any>) : any {
-  const ownedPath: any = path.extname(target) ? target : `${target}/${key}.ts`;
-  const resolvedOwnedPaths: any[] = ownedPaths.length > 0 ? ownedPaths : [ownedPath];
-  const resolvedAcceptancePaths: any[] = acceptancePaths.length > 0
+}: BaselineNodeInput) {
+  const ownedPath  = path.extname(target) ? target : `${target}/${key}.ts`;
+  const resolvedOwnedPaths  = ownedPaths.length > 0 ? ownedPaths : [ownedPath];
+  const resolvedAcceptancePaths  = acceptancePaths.length > 0
     ? acceptancePaths
     : [`tests/acceptance/${key}.test.ts`];
   return {
@@ -382,26 +401,26 @@ function node({
   };
 }
 
-export function planNodes() : any[] {
-  const design: any = "efficiency-design";
-  const baseline: any = "interaction-cost-baseline";
-  const contract: any = "service-collaboration-contract";
-  const connector: any = "connector-working-view";
-  const core: any = "core-change-set-authority";
-  const effects: any = "explicit-effect-commands";
-  const workspace: any = "workspace-reference-migration";
-  const efficiency: any = "efficiency-profile";
-  const plugin: any = "plugin-console-isolation";
-  const operations: any = "enterprise-operations-closure";
-  const offline: any = "offline-delivery-closure";
-  const final: any = "functional-final";
-  const gatewayContract: any = "gateway-split-contract";
-  const modelGateway: any = "model-gateway-package";
-  const agentMaintenance: any = "agent-self-maintenance-runtime";
-  const externalGateway: any = "external-gateway-package";
-  const gatewayCanonical: any = "gateway-split-canonical-cutover";
-  const gatewayBoundaryFinal: any = "gateway-boundary-final";
-  const commonPaths: any[] = ["docs/plans", "tools/plan", "tools/server-scripts", "tests/vitest/server"];
+export function planNodes()  {
+  const design  = "efficiency-design";
+  const baseline  = "interaction-cost-baseline";
+  const contract  = "service-collaboration-contract";
+  const connector  = "connector-working-view";
+  const core  = "core-change-set-authority";
+  const effects  = "explicit-effect-commands";
+  const workspace  = "workspace-reference-migration";
+  const efficiency  = "efficiency-profile";
+  const plugin  = "plugin-console-isolation";
+  const operations  = "enterprise-operations-closure";
+  const offline  = "offline-delivery-closure";
+  const final  = "functional-final";
+  const gatewayContract  = "gateway-split-contract";
+  const modelGateway  = "model-gateway-package";
+  const agentMaintenance  = "agent-self-maintenance-runtime";
+  const externalGateway  = "external-gateway-package";
+  const gatewayCanonical  = "gateway-split-canonical-cutover";
+  const gatewayBoundaryFinal  = "gateway-boundary-final";
+  const commonPaths  = ["docs/plans", "tools/plan", "tools/server-scripts", "tests/vitest/server"];
 
   return [
     node({
@@ -924,7 +943,7 @@ export function planNodes() : any[] {
   ];
 }
 
-export function planMarkdown() : any {
+export function planMarkdown()  {
   return `# Agent MCP Dual-Gateway Pipeline And Optional Application Plan
 
 ## Current Outcome
@@ -1104,7 +1123,7 @@ Native host qualification, client-platform qualification, public-cloud qualifica
 `;
 }
 
-export function capabilities() : any[] {
+export function capabilities()  {
   return [
     {
       key: "meshrix",
@@ -1197,7 +1216,7 @@ export function capabilities() : any[] {
   ];
 }
 
-export function manifest() : any[] {
+export function manifest()  {
   return [{
     id: stableId(`manifest:${ROOT}`),
     status: "pending",
@@ -1216,7 +1235,7 @@ export function manifest() : any[] {
   }];
 }
 
-function dependencyMap(revision?: any) : any {
+function dependencyMap(revision: string) {
   return {
     schema_version: 3,
     generated_from_revision: revision,
@@ -1234,25 +1253,27 @@ function dependencyMap(revision?: any) : any {
   };
 }
 
-async function writeFile(root?: any, relativePath?: any, content?: any) : Promise<any> {
-  const target: any = path.join(root, relativePath);
+async function writeFile(root: string, relativePath: string, content: string): Promise<void> {
+  const target  = path.join(root, relativePath);
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, content, "utf8");
 }
 
-export async function buildCurrentPlanWorkspace({ repoRoot = defaultRepoRoot, outputRoot }: Record<string, any> = {}) : Promise<any> {
-  const resolvedRepoRoot: any = path.resolve(repoRoot);
-  const plansRoot: any = path.resolve(outputRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
+export async function buildCurrentPlanWorkspace({ repoRoot = defaultRepoRoot, outputRoot }: {
+  repoRoot?: string; outputRoot?: string;
+} = {}) {
+  const resolvedRepoRoot  = path.resolve(repoRoot);
+  const plansRoot  = path.resolve(outputRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
   requireCondition(
-    !(await fs.stat(plansRoot).then(() : any => true, () : any => false)),
+    !(await fs.stat(plansRoot).then(()  => true, ()  => false)),
     `Current release Plan already exists; ${REPLACE_REFUSAL}`,
   );
-  const revision: any = currentRevision(resolvedRepoRoot);
-  const stagingRoot: any = `${plansRoot}.initializing-${process.pid}`;
+  const revision  = currentRevision(resolvedRepoRoot);
+  const stagingRoot  = `${plansRoot}.initializing-${process.pid}`;
   await fs.rm(stagingRoot, { recursive: true, force: true });
   await fs.mkdir(stagingRoot, { recursive: true });
   try {
-    const nodes: any[] = planNodes();
+    const nodes  = planNodes();
     await writeFile(stagingRoot, "Capabilities.json", jsonText(capabilities()));
     await writeFile(stagingRoot, "Manifest.json", jsonText(manifest()));
     await writeFile(stagingRoot, "FutureGoals.md", `# Future Goals\n\nThese workflows begin after the current functional candidate is accepted.\n\n- Native Linux environment qualification for named amd64 and arm64 hosts.\n- Client platform qualification for macOS, Windows, and supported browser shells.\n- Public-cloud and independent clean-host recovery qualification.\n- Multi-node availability, forwarding, federation, hosted operation, and external identity-provider profiles.\n`);
@@ -1267,10 +1288,10 @@ export async function buildCurrentPlanWorkspace({ repoRoot = defaultRepoRoot, ou
   }
 }
 
-function parseArguments(argv: any[] = []) : any {
-  let repoRoot: any = defaultRepoRoot;
-  let outputRoot: any;
-  let index: any = 0;
+function parseArguments(argv: string[] = []): { repoRoot: string; outputRoot?: string } {
+  let repoRoot  = defaultRepoRoot;
+  let outputRoot ;
+  let index  = 0;
   if (argv[0] && !String(argv[0]).startsWith("--")) {
     repoRoot = path.resolve(argv[0]);
     index = 1;
@@ -1285,15 +1306,15 @@ function parseArguments(argv: any[] = []) : any {
   return { repoRoot, outputRoot };
 }
 
-async function main(argv: any = process.argv.slice(2)) : Promise<any> {
-  const result: any = await buildCurrentPlanWorkspace(parseArguments(argv));
+async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
+  const result  = await buildCurrentPlanWorkspace(parseArguments(argv));
   process.stdout.write(jsonText(result));
 }
 
-const isDirectRun: any = process.argv[1] && path.resolve(process.argv[1]) === modulePath;
+const isDirectRun  = process.argv[1] && path.resolve(process.argv[1]) === modulePath;
 if (isDirectRun) {
-  main().catch((error?: any) : any => {
-    process.stderr.write(`[plan-baseline] ${String(error?.message || error)}\n`);
+  main().catch((error: unknown) => {
+    process.stderr.write(`[plan-baseline] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }

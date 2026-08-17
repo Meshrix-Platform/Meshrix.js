@@ -12,12 +12,29 @@ import {
   persistJobMeta,
   persistJobTerminal
 } from "./job-manager-persistence.ts";
+import { cloneJob } from "./job-manager-projection.ts";
+import { errorProperty, type JobDocument, type JobPatch, type JobPayload, type JobResult } from "./contracts.ts";
+import type { createJobProjectionStore } from "./job-projection-store.ts";
 
-function uploadCleanupError(code?: any, message?: any, statusCode: any = 500) : any {
+interface CleanupEntry { jobId: string; receiptId: string; sessionId: string; state?: string }
+interface ArtifactContext {
+  userDataPath: string;
+  protocolEventBus: { publish(type: string, payload: object, metadata?: object): Promise<unknown> } | null;
+  durableWorkflows: Record<string, (...args: unknown[]) => Promise<unknown>>;
+  logJob(level: string, event: string, details?: Record<string, unknown>): void;
+  jobs: Map<string, JobDocument>;
+  checkpointJobs: Map<string, string>;
+  jobProjectionStore: ReturnType<typeof createJobProjectionStore>;
+  storageProvider: import("./contracts.ts").UploadConsumptionStorageProvider | null;
+  forgetActiveManifestJob(job?: JobDocument | null): void;
+  rememberActiveManifestJob(job: JobDocument): void;
+}
+
+function uploadCleanupError(code: string, message: string, statusCode = 500) {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
-export function createJobManagerArtifacts(ctx?: any) : any {
+export function createJobManagerArtifacts(ctx: ArtifactContext) {
   const {
     userDataPath,
     protocolEventBus,
@@ -29,7 +46,7 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     storageProvider
   } = ctx;
 
-  function retireTerminalJob(job?: any) : any {
+  function retireTerminalJob(job?: JobDocument | null) {
     if (!job || !["completed", "failed", "cancelled"].includes(job.status)) {
       return;
     }
@@ -38,20 +55,20 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     ctx.forgetActiveManifestJob(job);
   }
 
-  function checkpointTreeIdForJob(job?: any) : any {
+  function checkpointTreeIdForJob(job?: JobDocument | null) {
     return job?.checkpointTreeId || (job?.id ? checkpointTreeId("job", job.id) : "");
   }
 
-  function workflowIdForJob(job?: any) : any {
+  function workflowIdForJob(job?: JobDocument | null) {
     return job?.workflowId || (job?.id ? workflowId("import_parse_job", job.id) : "");
   }
 
-  async function ensureJobCheckpointTree(job?: any, payload: any = null) : Promise<any> {
+  async function ensureJobCheckpointTree(job: JobDocument, payload: JobPayload | null = null) {
     if (!job?.id) {
       return "";
     }
-    const treeId: any = checkpointTreeIdForJob(job);
-    const manifestKey: any = normalizeManifestKey(payload || job);
+    const treeId = checkpointTreeIdForJob(job);
+    const manifestKey = normalizeManifestKey(payload || job);
     await startCheckpointTree({
       userDataPath,
       treeId,
@@ -79,8 +96,8 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     return treeId;
   }
 
-  async function updateJobCheckpointNode(job?: any, node?: any) : Promise<any> {
-    const treeId: any = checkpointTreeIdForJob(job);
+  async function updateJobCheckpointNode(job: JobDocument, node: Record<string, unknown>) {
+    const treeId = checkpointTreeIdForJob(job);
     if (!treeId) {
       return null;
     }
@@ -88,11 +105,11 @@ export function createJobManagerArtifacts(ctx?: any) : any {
       userDataPath,
       treeId,
       ...node
-    }).catch(() : any => null);
+    }).catch(() => null);
   }
 
-  async function finishJobCheckpoint(job?: any, input: Record<string, any> = {}) : Promise<any> {
-    const treeId: any = checkpointTreeIdForJob(job);
+  async function finishJobCheckpoint(job: JobDocument, input: Record<string, unknown> = {}) {
+    const treeId = checkpointTreeIdForJob(job);
     if (!treeId) {
       return null;
     }
@@ -100,37 +117,37 @@ export function createJobManagerArtifacts(ctx?: any) : any {
       userDataPath,
       treeId,
       ...input
-    }).catch(() : any => null);
+    }).catch(() => null);
   }
 
-  async function publishJobEvent(job?: any, type: any = "jobs.job.updated") : Promise<any> {
+  async function publishJobEvent(job: JobDocument, type = "jobs.job.updated") {
     if (!protocolEventBus || typeof protocolEventBus.publish !== "function") {
       return null;
     }
     return protocolEventBus.publish(
       "jobs.job",
       {
-        job: ctx.cloneJobForApi(job)
+        job: cloneJob(job)
       },
       { type, trace: job.trace || null }
     );
   }
 
-  async function publishDeletedJobEvent(job?: any) : Promise<any> {
+  async function publishDeletedJobEvent(job: JobDocument) {
     if (!protocolEventBus || typeof protocolEventBus.publish !== "function") {
       return null;
     }
     return protocolEventBus.publish(
       "jobs.deleted",
       {
-        job: ctx.cloneJobForApi(job)
+        job: cloneJob(job)
       },
       { type: "jobs.deleted", trace: job.trace || null }
     );
   }
 
-  async function updateJob(jobId?: any, patch?: any) : Promise<any> {
-    const currentJob: any = jobs.get(jobId);
+  async function updateJob(jobId: string, patch: JobPatch) {
+    const currentJob = jobs.get(jobId);
 
     if (!currentJob) {
       logJob("warn", "jobs.job.update.skipped", {
@@ -142,7 +159,7 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     }
 
     const { eventType, ...jobPatch } = patch;
-    const nextJob: Record<string, any> = {
+    const nextJob: JobDocument = {
       ...currentJob,
       ...jobPatch,
       updatedAt: new Date().toISOString()
@@ -166,11 +183,11 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     return currentJob;
   }
 
-  async function commitJobTerminal(jobId?: any, patch?: any, result?: any) : Promise<any> {
-    const currentJob: any = jobs.get(jobId);
+  async function commitJobTerminal(jobId: string, patch: JobPatch, result: JobResult) {
+    const currentJob = jobs.get(jobId);
     if (!currentJob) return null;
     const { eventType, ...jobPatch } = patch;
-    const nextJob: Record<string, any> = {
+    const nextJob: JobDocument = {
       ...currentJob,
       ...jobPatch,
       status: "completed",
@@ -196,7 +213,7 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     return currentJob;
   }
 
-  async function requireDurableUploadReceipt(receiptId?: any, sessionId?: any) : Promise<any> {
+  async function requireDurableUploadReceipt(receiptId: string, sessionId: string) {
     if (
       typeof storageProvider?.getUploadConsumptionReceipt !== "function"
     ) {
@@ -206,7 +223,7 @@ export function createJobManagerArtifacts(ctx?: any) : any {
         503
       );
     }
-    const receipt: any = await storageProvider.getUploadConsumptionReceipt(
+    const receipt = await storageProvider.getUploadConsumptionReceipt(
       receiptId
     );
     if (
@@ -223,22 +240,22 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     return receipt;
   }
 
-  async function attemptUploadCleanup(entry?: any) : Promise<any> {
+  async function attemptUploadCleanup(entry: CleanupEntry) {
     try {
       await deleteUploadSession(userDataPath, entry.sessionId);
       jobProjectionStore.settleUploadCleanupJournal(entry.sessionId);
       return true;
-    } catch (error: any) {
+    } catch (error) {
       logJob("warn", "jobs.upload_session.cleanup.deferred", {
         jobId: entry.jobId,
-        reason: String(error?.code || "upload_session_cleanup_failed")
+        reason: String(errorProperty(error, "code") || "upload_session_cleanup_failed")
       });
       return false;
     }
   }
 
-  async function validateCleanupEntry(entry?: any) : Promise<any> {
-    const job: any = jobProjectionStore.get(entry.jobId);
+  async function validateCleanupEntry(entry: CleanupEntry) {
+    const job = jobProjectionStore.get(entry.jobId);
     if (
       !job ||
       job.status !== "completed" ||
@@ -247,11 +264,11 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     ) {
       return null;
     }
-    const result: any = await loadJobResult(
+    const result = await loadJobResult(
       userDataPath,
       entry.jobId,
       jobProjectionStore
-    ).catch(() : any => null);
+    ).catch(() => null);
     if (
       String(result?.uploadConsumptionReceiptId || "") !== entry.receiptId
     ) {
@@ -261,11 +278,11 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     return job;
   }
 
-  async function replayUploadCleanupJournal() : Promise<any> {
-    const entries: any = jobProjectionStore.listUploadCleanupJournal();
+  async function replayUploadCleanupJournal() {
+    const entries = jobProjectionStore.listUploadCleanupJournal();
     for (const entry of entries) {
       try {
-        const job: any = await validateCleanupEntry(entry);
+        const job = await validateCleanupEntry(entry);
         if (!job) {
           logJob("warn", "jobs.upload_session.cleanup.retained", {
             jobId: entry.jobId,
@@ -274,10 +291,10 @@ export function createJobManagerArtifacts(ctx?: any) : any {
           continue;
         }
         await attemptUploadCleanup(entry);
-      } catch (error: any) {
+      } catch (error) {
         logJob("warn", "jobs.upload_session.cleanup.retained", {
           jobId: entry.jobId,
-          reason: String(error?.code || "cleanup_revalidation_failed")
+          reason: String(errorProperty(error, "code") || "cleanup_revalidation_failed")
         });
       }
     }
@@ -289,11 +306,14 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     sessionId,
     terminalPatch = {},
     result = null
-  }: Record<string, any> = {}) : Promise<any> {
-    const normalizedJobId: any = String(jobId || "").trim();
-    const normalizedReceiptId: any = String(receiptId || "").trim();
-    const normalizedSessionId: any = String(sessionId || "").trim();
-    const currentJob: any =
+  }: {
+    jobId?: string; receiptId?: string; sessionId?: string;
+    terminalPatch?: JobPatch; result?: JobResult | null;
+  } = {}) {
+    const normalizedJobId = String(jobId || "").trim();
+    const normalizedReceiptId = String(receiptId || "").trim();
+    const normalizedSessionId = String(sessionId || "").trim();
+    const currentJob =
       jobs.get(normalizedJobId) ||
       jobProjectionStore.get(normalizedJobId);
     if (!currentJob) {
@@ -319,15 +339,15 @@ export function createJobManagerArtifacts(ctx?: any) : any {
       normalizedSessionId
     );
 
-    let terminalJob: any = currentJob;
+    let terminalJob = currentJob;
     if (currentJob.status !== "completed") {
-      const terminalResult: Record<string, any> = {
+      const terminalResult = {
         ...(result && typeof result === "object" && !Array.isArray(result)
           ? result
           : {}),
         uploadConsumptionReceiptId: normalizedReceiptId
       };
-      terminalJob = await commitJobTerminal(
+      const committedJob = await commitJobTerminal(
         normalizedJobId,
         {
           ...terminalPatch,
@@ -335,8 +355,12 @@ export function createJobManagerArtifacts(ctx?: any) : any {
         },
         terminalResult
       );
+      if (!committedJob) {
+        throw uploadCleanupError("job_missing", "Completed job is unavailable.", 404);
+      }
+      terminalJob = committedJob;
     } else {
-      const persistedResult: any = await loadJobResult(
+      const persistedResult = await loadJobResult(
         userDataPath,
         normalizedJobId,
         jobProjectionStore
@@ -355,7 +379,7 @@ export function createJobManagerArtifacts(ctx?: any) : any {
       }
     }
 
-    const journal: any = jobProjectionStore.commitUploadCleanupJournal({
+    const journal = jobProjectionStore.commitUploadCleanupJournal({
       jobId: normalizedJobId,
       receiptId: normalizedReceiptId,
       sessionId: normalizedSessionId
@@ -364,9 +388,9 @@ export function createJobManagerArtifacts(ctx?: any) : any {
     return terminalJob;
   }
 
-  async function failJob(jobId?: any, errorMessage?: any, stage?: any) : Promise<any> {
-    const finishedAt: any = new Date().toISOString();
-    const currentJob: any = ctx.jobs.get(jobId);
+  async function failJob(jobId: string, errorMessage: string, stage: string) {
+    const finishedAt = new Date().toISOString();
+    const currentJob = ctx.jobs.get(jobId);
     if (currentJob) {
       await updateJobCheckpointNode(currentJob, {
         nodeId: "job-failed",
@@ -387,15 +411,15 @@ export function createJobManagerArtifacts(ctx?: any) : any {
           progressPercent: Number(currentJob.progressPercent || 0)
         }
       });
-      await durableWorkflows.failActivity(currentJob.workflowId || workflowIdForJob(currentJob), "job-execution", errorMessage || stage || "Job failed.").catch(() : any => null);
-      await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), errorMessage || stage || "Job failed.").catch(() : any => null);
+      await durableWorkflows.failActivity(currentJob.workflowId || workflowIdForJob(currentJob), "job-execution", errorMessage || stage || "Job failed.").catch(() => null);
+      await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), errorMessage || stage || "Job failed.").catch(() => null);
     }
     logJob("error", "jobs.job.fail_requested", {
       jobId,
       stage,
       errorMessage
     });
-    const failedJob: any = await updateJob(jobId, {
+    const failedJob = await updateJob(jobId, {
       status: "failed",
       stage,
       error: errorMessage,

@@ -17,35 +17,93 @@ import {
   profilesEqual,
 } from "./plan-dependency-map.ts";
 import { resolveGitRepoRoot } from "../server-scripts/lib/source-tree-digest.ts";
+import {
+  type CheckpointNode,
+  type CheckpointPlatform,
+  type CheckpointsByDirectory,
+  type DependencyMap,
+  type DependencyMapPlan,
+  type FinalValidationBinding,
+  type JsonRecord,
+  type ManifestPlan,
+  type PlanProfile,
+  isCheckpointNode,
+  isCheckpointPlatform,
+  isCheckpointStatus,
+  hasControlCharacter,
+  isJsonRecord,
+} from "./plan-types.ts";
 
-const modulePath: any = fileURLToPath(import.meta.url);
-const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
+type PolicyErrorCode = string;
+type RepositoryClass = "core" | "external";
+type EdgeKind = "local" | "cross_plan_prerequisite" | "parent_contract" | "parent_integration";
+interface PlanState {
+  manifestPlan: ManifestPlan;
+  nodes: CheckpointNode[];
+  nodesById: Map<string, CheckpointNode>;
+  implementationRoots: CheckpointNode[];
+}
+interface NodeMetadata {
+  node: CheckpointNode;
+  planDirectory: string;
+  manifestPlan: ManifestPlan;
+  manifestIndex: number;
+  checkpointIndex: number;
+  repositoryClass: RepositoryClass;
+  profiles: Set<PlanProfile>;
+}
+export interface EligibleNodeProjection {
+  planDirectory: string;
+  nodeId: string;
+  status: CheckpointNode["status"];
+  role: string;
+  platform: CheckpointPlatform;
+  profiles: PlanProfile[];
+  manifestIndex: number;
+  checkpointIndex: number;
+  incomingDependencyCount: number;
+}
+export interface PlanExecutionEvaluation {
+  hostPlatform: Exclude<CheckpointPlatform, "any">;
+  selectedProfile: PlanProfile | null;
+  candidateCount: number;
+  eligible: EligibleNodeProjection[];
+  deferred: Array<EligibleNodeProjection & { reasons: string[]; incompleteDependencyCount: number }>;
+  deferredReasonCounts: Record<string, number>;
+  graph: { planCount: number; nodeCount: number; edgeCount: number };
+}
+export interface PlanExecutionInputs {
+  manifest: ManifestPlan[];
+  dependencyMap: DependencyMap;
+  checkpoints: Map<string, CheckpointNode[]>;
+}
 
-const HOST_PLATFORM_ALIASES: any = new Map<any, any>([
+const modulePath  = fileURLToPath(import.meta.url);
+const defaultRepoRoot  = path.resolve(path.dirname(modulePath), "../..");
+
+const HOST_PLATFORM_ALIASES = new Map<string, Exclude<CheckpointPlatform, "any">>([
   ["darwin", "macos"],
   ["macos", "macos"],
   ["win32", "windows"],
   ["windows", "windows"],
   ["linux", "linux"],
 ]);
-const NODE_PLATFORMS: any = new Set<any>(["any", "macos", "windows", "linux"]);
-const PLATFORM_PLAN_NAMES: any = new Set<any>(["macos", "windows", "linux"]);
-const CHECKPOINT_STATUSES: any = new Set<any>(["pending", "in_progress", "completed", "blocked", "skipped"]);
-const ELIGIBLE_STATUSES: any = new Set<any>(["pending", "in_progress"]);
-const STATUS_PRIORITY: any = new Map<any, any>([
+const PLATFORM_PLAN_NAMES  = new Set(["macos", "windows", "linux"]);
+const ELIGIBLE_STATUSES  = new Set(["pending", "in_progress"]);
+const STATUS_PRIORITY = new Map<CheckpointNode["status"], number>([
   ["in_progress", 0],
   ["pending", 1],
 ]);
-const SAFE_SEGMENT: any = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/u;
-const SAFE_ROLE: any = /^[a-z][a-z0-9_]*$/u;
-const MAX_DIRECTORY_LENGTH: any = 512;
-const MAX_NODE_ID_LENGTH: any = 256;
-const MAX_REPOSITORY_LENGTH: any = 256;
-const MAX_PLAN_COUNT: any = 256;
-const MAX_CHECKPOINT_COUNT: any = 4096;
-const MAX_EDGE_COUNT: any = 16_384;
+const SAFE_SEGMENT  = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/u;
+const SAFE_ROLE  = /^[a-z][a-z0-9_]*$/u;
+const MAX_DIRECTORY_LENGTH  = 512;
+const MAX_NODE_ID_LENGTH  = 256;
+const MAX_REPOSITORY_LENGTH  = 256;
+const MAX_PLAN_COUNT  = 256;
+const MAX_CHECKPOINT_COUNT  = 4096;
+const MAX_EDGE_COUNT  = 16_384;
 
-export const PLAN_EXECUTION_RESOURCE_DISCIPLINE: Readonly<Record<string, any>> = Object.freeze({
+export const PLAN_EXECUTION_RESOURCE_DISCIPLINE = Object.freeze({
   id: "plan-execution-eligibility",
   bounds: Object.freeze({
     maxDirectoryLength: MAX_DIRECTORY_LENGTH,
@@ -68,77 +126,78 @@ export const PLAN_EXECUTION_RESOURCE_DISCIPLINE: Readonly<Record<string, any>> =
 });
 
 export class PlanExecutionPolicyError extends Error {
-  code: any;
-  name: any;
-  constructor(code?: any, message?: any) {
+  code: PolicyErrorCode;
+  override name = "PlanExecutionPolicyError";
+  constructor(code: PolicyErrorCode, message: string) {
     super(`${code}: ${message}`);
-    this.name = "PlanExecutionPolicyError";
     this.code = code;
   }
 }
 
-function fail(code?: any, message?: any) : any {
+function fail(code: PolicyErrorCode, message: string): never {
   throw new PlanExecutionPolicyError(code, message);
 }
 
-function requireCondition(condition?: any, code?: any, message?: any) : any {
+function requireCondition(condition: unknown, code: PolicyErrorCode, message: string): asserts condition {
   if (!condition) {
     fail(code, message);
   }
 }
 
-function isRecord(value?: any) : any {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+function isRecord(value: unknown): value is JsonRecord {
+  return isJsonRecord(value);
 }
 
-function requireBoundedString(value: any, { code, message, maxLength = MAX_NODE_ID_LENGTH }: Record<string, any>) : any {
+function requireBoundedString(value: unknown, { code, message, maxLength = MAX_NODE_ID_LENGTH }: {
+  code: PolicyErrorCode; message: string; maxLength?: number;
+}): string {
   requireCondition(
-    typeof value === "string" && value.length > 0 && value.length <= maxLength && !/[\u0000-\u001f\u007f]/u.test(value),
+    typeof value === "string" && value.length > 0 && value.length <= maxLength && !hasControlCharacter(value),
     code,
     message,
   );
   return value;
 }
 
-function requireStringArray(value?: any, code?: any, message?: any) : any {
+function requireStringArray(value: unknown, code: PolicyErrorCode, message: string): string[] {
   requireCondition(Array.isArray(value), code, message);
-  const result: any = value.map((entry?: any) : any => requireBoundedString(entry, { code, message }));
-  requireCondition(new Set<any>(result).size === result.length, "invalid_graph", "checkpoint graph contains a duplicate reference");
+  const result = value.map((entry) => requireBoundedString(entry, { code, message }));
+  requireCondition(new Set(result).size === result.length, "invalid_graph", "checkpoint graph contains a duplicate reference");
   return result;
 }
 
-function requirePlanDirectory(value?: any, code: any = "invalid_manifest") : any {
-  const directory: any = requireBoundedString(value, {
+function requirePlanDirectory(value: unknown, code: PolicyErrorCode = "invalid_manifest"): string {
+  const directory  = requireBoundedString(value, {
     code,
     message: "plan directory is missing or malformed",
     maxLength: MAX_DIRECTORY_LENGTH,
   });
-  const segments: any = directory.split("/");
+  const segments  = directory.split("/");
   requireCondition(
     !directory.startsWith("/") &&
       segments.length > 0 &&
-      segments.every((segment?: any) : any => segment !== "." && segment !== ".." && SAFE_SEGMENT.test(segment)),
+      segments.every((segment) => segment !== "." && segment !== ".." && SAFE_SEGMENT.test(segment)),
     code,
     "plan directory is missing or malformed",
   );
   return directory;
 }
 
-function directParent(directory?: any) : any {
-  const separator: any = directory.lastIndexOf("/");
+function directParent(directory: string): string | null {
+  const separator  = directory.lastIndexOf("/");
   return separator < 0 ? null : directory.slice(0, separator);
 }
 
-function isAncestor(left?: any, right?: any) : any {
+function isAncestor(left: string, right: string): boolean {
   return right.startsWith(`${left}/`);
 }
 
-function classifyRepositoryTarget(repository?: any) : any {
+function classifyRepositoryTarget(repository: unknown): RepositoryClass {
   requireCondition(
     typeof repository === "string" &&
       repository.length > 0 &&
       repository.length <= MAX_REPOSITORY_LENGTH &&
-      !/[\u0000-\u001f\u007f\\]/u.test(repository),
+      !hasControlCharacter(repository) && !repository.includes("\\"),
     "malformed_repository",
     "checkpoint repository target is missing or malformed",
   );
@@ -147,37 +206,37 @@ function classifyRepositoryTarget(repository?: any) : any {
     return "core";
   }
 
-  const segments: any = repository.split("/");
+  const segments  = repository.split("/");
   requireCondition(
     !repository.startsWith("/") &&
       segments.length >= 2 &&
       segments.at(-1) === ".git" &&
-      segments.slice(0, -1).every((segment?: any) : any => segment === ".." || SAFE_SEGMENT.test(segment)),
+      segments.slice(0, -1).every((segment) => segment === ".." || SAFE_SEGMENT.test(segment)),
     "malformed_repository",
     "checkpoint repository target is missing or malformed",
   );
   return "external";
 }
 
-export function normalizeHostPlatform(platform?: any) : any {
-  const normalized: any = typeof platform === "string" ? HOST_PLATFORM_ALIASES.get(platform) : undefined;
+export function normalizeHostPlatform(platform: unknown): Exclude<CheckpointPlatform, "any"> {
+  const normalized  = typeof platform === "string" ? HOST_PLATFORM_ALIASES.get(platform) : undefined;
   requireCondition(normalized, "unknown_host_platform", "unknown host platform");
   return normalized;
 }
 
-function checkpointEntries(checkpoints?: any) : any {
+function checkpointEntries(checkpoints: unknown): Array<[string, unknown]> {
   if (checkpoints instanceof Map) {
     return [...checkpoints.entries()];
   }
   requireCondition(isRecord(checkpoints), "invalid_checkpoints", "checkpoints must be keyed by Plan directory");
-  return (Object.entries(checkpoints) as [string, any][]);
+  return Object.entries(checkpoints);
 }
 
-function hasLocalPath(state?: any, from?: any, to?: any) : any {
-  const seen: any = new Set<any>();
-  const queue: any[] = [from];
-  for (let cursor: any = 0; cursor < queue.length; cursor += 1) {
-    const current: any = queue[cursor];
+function hasLocalPath(state: PlanState, from: string, to: string): boolean {
+  const seen = new Set<string>();
+  const queue  = [from];
+  for (let cursor  = 0; cursor < queue.length; cursor += 1) {
+    const current  = queue[cursor];
     if (current === to) {
       return true;
     }
@@ -192,11 +251,11 @@ function hasLocalPath(state?: any, from?: any, to?: any) : any {
   return false;
 }
 
-function reverseReachableNodes(state?: any, terminalNodeId?: any) : any {
-  const reachable: any = new Set<any>();
-  const queue: any[] = [terminalNodeId];
-  for (let cursor: any = 0; cursor < queue.length; cursor += 1) {
-    const current: any = queue[cursor];
+function reverseReachableNodes(state: PlanState, terminalNodeId: string): Set<string> {
+  const reachable = new Set<string>();
+  const queue  = [terminalNodeId];
+  for (let cursor  = 0; cursor < queue.length; cursor += 1) {
+    const current  = queue[cursor];
     if (reachable.has(current)) {
       continue;
     }
@@ -208,12 +267,12 @@ function reverseReachableNodes(state?: any, terminalNodeId?: any) : any {
   return reachable;
 }
 
-function participatesInPlanFinal(node?: any, finalNode?: any) : any {
+function participatesInPlanFinal(node: CheckpointNode, finalNode: CheckpointNode): boolean {
   return node.status !== "skipped" &&
     (node.platform === "any" || node.platform === finalNode.platform);
 }
 
-function assertLocalPlatformDirection(prerequisite?: any, dependent?: any) : any {
+function assertLocalPlatformDirection(prerequisite: CheckpointNode, dependent: CheckpointNode): void {
   requireCondition(
     prerequisite.platform === "any" ||
       (dependent.platform !== "any" && prerequisite.platform === dependent.platform),
@@ -222,8 +281,8 @@ function assertLocalPlatformDirection(prerequisite?: any, dependent?: any) : any
   );
 }
 
-function assertAcceptedFinalReceipt(mapPlan?: any, finalNode?: any, finalBinding?: any) : any {
-  const receipt: any = acceptedFinalReceipt(mapPlan, finalNode.id);
+function assertAcceptedFinalReceipt(mapPlan: DependencyMapPlan, finalNode: CheckpointNode, finalBinding: FinalValidationBinding): void {
+  const receipt  = acceptedFinalReceipt(mapPlan, finalNode.id);
   requireCondition(isRecord(receipt), "invalid_final_receipt", "completed Plan final is missing its accepted final receipt");
   requireCondition(
     receipt.schema_version === RECEIPT_SCHEMA &&
@@ -246,7 +305,7 @@ function assertAcceptedFinalReceipt(mapPlan?: any, finalNode?: any, finalBinding
   }
 }
 
-function nodeProjection(metadata?: any, incoming?: any) : any {
+function nodeProjection(metadata: NodeMetadata, incoming: Map<string, Set<string>>): EligibleNodeProjection {
   return {
     planDirectory: metadata.planDirectory,
     nodeId: metadata.node.id,
@@ -256,28 +315,28 @@ function nodeProjection(metadata?: any, incoming?: any) : any {
     profiles: [...metadata.profiles],
     manifestIndex: metadata.manifestIndex,
     checkpointIndex: metadata.checkpointIndex,
-    incomingDependencyCount: incoming.get(metadata.node.id).size,
+    incomingDependencyCount: incoming.get(metadata.node.id)?.size ?? 0,
   };
 }
 
-function compareEligible(left?: any, right?: any) : any {
+function compareEligible(left: EligibleNodeProjection, right: EligibleNodeProjection): number {
   return (
-    STATUS_PRIORITY.get(left.status) - STATUS_PRIORITY.get(right.status) ||
+    (STATUS_PRIORITY.get(left.status) ?? Number.MAX_SAFE_INTEGER) - (STATUS_PRIORITY.get(right.status) ?? Number.MAX_SAFE_INTEGER) ||
     left.manifestIndex - right.manifestIndex ||
     left.checkpointIndex - right.checkpointIndex
   );
 }
 
-function assertAcyclic(outgoing?: any, incoming?: any) : any {
-  const indegree: any = new Map<any, any>([...incoming].map(([nodeId, sources]: any[]) : any => [nodeId, sources.size]));
-  const queue: any = [...indegree].filter(([, count]: any[]) : any => count === 0).map(([nodeId]: any[]) : any => nodeId);
-  let visited: any = 0;
+function assertAcyclic(outgoing: Map<string, Set<string>>, incoming: Map<string, Set<string>>): void {
+  const indegree  = new Map([...incoming].map(([nodeId, sources] )  => [nodeId, sources.size]));
+  const queue  = [...indegree].filter(([, count] )  => count === 0).map(([nodeId] )  => nodeId);
+  let visited  = 0;
 
-  for (let cursor: any = 0; cursor < queue.length; cursor += 1) {
-    const current: any = queue[cursor];
+  for (let cursor  = 0; cursor < queue.length; cursor += 1) {
+    const current  = queue[cursor];
     visited += 1;
-    for (const next of outgoing.get(current)) {
-      const remaining: any = indegree.get(next) - 1;
+    for (const next of outgoing.get(current) ?? []) {
+      const remaining = (indegree.get(next) ?? 0) - 1;
       indegree.set(next, remaining);
       if (remaining === 0) {
         queue.push(next);
@@ -296,69 +355,78 @@ export function evaluatePlanExecutionEligibility({
   hostPlatform,
   selectedProfile,
   requireAcceptedFinalReceipts = true,
-}: Record<string, any> = {}) : any {
-  const normalizedHostPlatform: any = normalizeHostPlatform(hostPlatform);
+}: {
+  manifest?: unknown;
+  dependencyMap?: unknown;
+  checkpoints?: CheckpointsByDirectory;
+  checkpointsByDirectory?: CheckpointsByDirectory;
+  hostPlatform?: unknown;
+  selectedProfile?: PlanProfile;
+  requireAcceptedFinalReceipts?: boolean;
+} = {}): PlanExecutionEvaluation {
+  const normalizedHostPlatform  = normalizeHostPlatform(hostPlatform);
   requireCondition(
     selectedProfile === undefined || PLAN_PROFILE_SET.has(selectedProfile),
     "unknown_profile",
     "unknown execution profile",
   );
-  const injectedCheckpoints: any = checkpoints ?? checkpointsByDirectory;
+  const injectedCheckpoints  = checkpoints ?? checkpointsByDirectory;
   requireCondition(
     checkpoints === undefined || checkpointsByDirectory === undefined || checkpoints === checkpointsByDirectory,
     "invalid_checkpoints",
     "multiple checkpoint collections were provided",
   );
   requireCondition(Array.isArray(manifest) && manifest.length > 0, "invalid_manifest", "Manifest must be a non-empty array");
+  let currentDependencyMap: DependencyMap;
   try {
-    assertCurrentDependencyMapShape(dependencyMap);
+    currentDependencyMap = assertCurrentDependencyMapShape(dependencyMap);
   } catch {
     fail("invalid_dependency_map", "DependencyMap schema or Plan entries are not current");
   }
-  const manifestByDirectory: any = new Map<any, any>();
-  const manifestIndexByDirectory: any = new Map<any, any>();
+  const manifestByDirectory = new Map<string, ManifestPlan>();
+  const manifestIndexByDirectory = new Map<string, number>();
   for (const [manifestIndex, manifestPlan] of manifest.entries()) {
-    requireCondition(isRecord(manifestPlan), "invalid_manifest", "Manifest Plan entry is malformed");
-    const directory: any = requirePlanDirectory(manifestPlan.directory);
+    requireCondition(isRecord(manifestPlan) && typeof manifestPlan.directory === "string" && typeof manifestPlan.checkpoints === "string", "invalid_manifest", "Manifest Plan entry is malformed");
+    const directory  = requirePlanDirectory(manifestPlan.directory);
     requireCondition(!manifestByDirectory.has(directory), "invalid_manifest", "Manifest contains a duplicate Plan directory");
     requireCondition(
       manifestPlan.checkpoints === `${directory}/Checkpoints.json`,
       "invalid_manifest",
       "Manifest checkpoint path does not match its Plan directory",
     );
-    manifestByDirectory.set(directory, manifestPlan);
+    manifestByDirectory.set(directory, { ...manifestPlan, directory, checkpoints: manifestPlan.checkpoints });
     manifestIndexByDirectory.set(directory, manifestIndex);
   }
 
-  const checkpointCollectionEntries: any = checkpointEntries(injectedCheckpoints);
+  const checkpointCollectionEntries  = checkpointEntries(injectedCheckpoints);
   requireCondition(
     checkpointCollectionEntries.length === manifest.length,
     "invalid_checkpoints",
     "checkpoint collection and Manifest Plan counts differ",
   );
-  const checkpointCollection: any = new Map<any, any>();
+  const checkpointCollection = new Map<string, unknown>();
   for (const [directoryValue, nodes] of checkpointCollectionEntries) {
-    const directory: any = requirePlanDirectory(directoryValue, "invalid_checkpoints");
+    const directory  = requirePlanDirectory(directoryValue, "invalid_checkpoints");
     requireCondition(manifestByDirectory.has(directory), "invalid_checkpoints", "checkpoint collection contains an unknown Plan");
     requireCondition(!checkpointCollection.has(directory), "invalid_checkpoints", "checkpoint collection contains a duplicate Plan");
     checkpointCollection.set(directory, nodes);
   }
   requireCondition(
-    [...manifestByDirectory.keys()].every((directory?: any) : any => checkpointCollection.has(directory)),
+    [...manifestByDirectory.keys()].every((directory) => checkpointCollection.has(directory)),
     "invalid_checkpoints",
     "checkpoint collection is missing a Manifest Plan",
   );
 
-  const mapByDirectory: any = new Map<any, any>();
-  for (const mapPlan of dependencyMap.plans) {
+  const mapByDirectory = new Map<string, DependencyMapPlan>();
+  for (const mapPlan of currentDependencyMap.plans) {
     requireCondition(isRecord(mapPlan), "invalid_dependency_map", "DependencyMap Plan entry is malformed");
-    const directory: any = requirePlanDirectory(mapPlan.directory, "invalid_dependency_map");
+    const directory  = requirePlanDirectory(mapPlan.directory, "invalid_dependency_map");
     requireCondition(!mapByDirectory.has(directory), "invalid_dependency_map", "DependencyMap contains a duplicate Plan directory");
     requireCondition(mapPlan.parent === null || typeof mapPlan.parent === "string", "invalid_dependency_map", "Plan parent is malformed");
     if (mapPlan.parent !== null) {
       requirePlanDirectory(mapPlan.parent, "invalid_dependency_map");
     }
-    let bindings: any;
+    let bindings: FinalValidationBinding[];
     try {
       bindings = finalValidationBindings(mapPlan);
       acceptedFinalReceiptEntries(mapPlan);
@@ -372,17 +440,17 @@ export function evaluatePlanExecutionEligibility({
       });
     }
     requireCondition(Array.isArray(mapPlan.children), "invalid_dependency_map", "Plan children must be an array");
-    const children: any = mapPlan.children.map((child?: any) : any => requirePlanDirectory(child, "invalid_dependency_map"));
-    requireCondition(new Set<any>(children).size === children.length, "invalid_graph", "Plan contains a duplicate child reference");
+    const children = mapPlan.children.map((child) => requirePlanDirectory(child, "invalid_dependency_map"));
+    requireCondition(new Set(children).size === children.length, "invalid_graph", "Plan contains a duplicate child reference");
     requireCondition(
       Array.isArray(mapPlan.prerequisite_receipts),
       "invalid_dependency_map",
       "Plan prerequisite receipts must be an array",
     );
-    const receiptKeys: any = mapPlan.prerequisite_receipts.map((receipt?: any) : any => {
+    const receiptKeys = mapPlan.prerequisite_receipts.map((receipt) => {
       requireCondition(isRecord(receipt), "invalid_dependency_map", "cross-Plan receipt is malformed");
-      const plan: any = requirePlanDirectory(receipt.plan, "invalid_dependency_map");
-      const nodeId: any = requireBoundedString(receipt.node_id, {
+      const plan  = requirePlanDirectory(receipt.plan, "invalid_dependency_map");
+      const nodeId  = requireBoundedString(receipt.node_id, {
         code: "invalid_dependency_map",
         message: "cross-Plan receipt node is missing",
       });
@@ -391,7 +459,7 @@ export function evaluatePlanExecutionEligibility({
         "invalid_dependency_map",
         "cross-Plan receipt kind is invalid",
       );
-      let receiptProfiles: any;
+      let receiptProfiles: PlanProfile[];
       try {
         receiptProfiles = normalizePlanProfiles(receipt.profiles, "invalid");
       } catch {
@@ -399,11 +467,11 @@ export function evaluatePlanExecutionEligibility({
       }
       return `${plan}\u0000${nodeId}\u0000${receipt.kind}\u0000${receiptProfiles.join(",")}`;
     });
-    requireCondition(new Set<any>(receiptKeys).size === receiptKeys.length, "invalid_graph", "Plan contains a duplicate prerequisite receipt");
+    requireCondition(new Set(receiptKeys).size === receiptKeys.length, "invalid_graph", "Plan contains a duplicate prerequisite receipt");
     mapByDirectory.set(directory, mapPlan);
   }
   requireCondition(
-    [...mapByDirectory.keys()].every((directory?: any) : any => manifestByDirectory.has(directory)),
+    [...mapByDirectory.keys()].every((directory) => manifestByDirectory.has(directory)),
     "invalid_graph",
     "DependencyMap contains a Plan absent from Manifest",
   );
@@ -412,37 +480,38 @@ export function evaluatePlanExecutionEligibility({
     if (mapByDirectory.has(directory)) {
       continue;
     }
-    const draftNodes: any = checkpointCollection.get(directory);
+    const draftNodes  = checkpointCollection.get(directory);
     requireCondition(
       manifestPlan.status === "pending" &&
         Array.isArray(draftNodes) && draftNodes.length > 0 &&
-        draftNodes.every((node?: any) : any => isRecord(node) && node.status === "pending"),
+        draftNodes.every((node) => isRecord(node) && node.status === "pending"),
       "invalid_graph",
       "A Manifest-only Plan must remain an entirely pending draft until it is integrated into DependencyMap",
     );
   }
 
-  const planStates: any = new Map<any, any>();
-  const globalNodeMetadata: any = new Map<any, any>();
-  const parentIntegrationNodeIds: any = new Set<any>(
-    dependencyMap.plans.flatMap((plan?: any) : any =>
-      (plan.parent_integrations ?? []).map((binding?: any) : any => binding.parent_node_id)),
+  const planStates = new Map<string, PlanState>();
+  const globalNodeMetadata = new Map<string, NodeMetadata>();
+  const parentIntegrationNodeIds  = new Set(
+    currentDependencyMap.plans.flatMap((plan) =>
+      plan.parent_integrations.map((binding) => binding.parent_node_id)),
   );
   for (const [directory] of mapByDirectory) {
-    const manifestPlan: any = manifestByDirectory.get(directory);
-    const nodes: any = checkpointCollection.get(directory);
+    const manifestPlan  = manifestByDirectory.get(directory);
+    requireCondition(manifestPlan, "invalid_manifest", "DependencyMap Plan is absent from Manifest");
+    const nodes  = checkpointCollection.get(directory);
     requireCondition(Array.isArray(nodes) && nodes.length > 0, "invalid_checkpoints", "Plan checkpoints must be a non-empty array");
-    const nodesById: any = new Map<any, any>();
-    const platformPlan: any = PLATFORM_PLAN_NAMES.has(path.posix.basename(directory)) ? path.posix.basename(directory) : null;
+    const nodesById = new Map<string, CheckpointNode>();
+    const platformPlan  = PLATFORM_PLAN_NAMES.has(path.posix.basename(directory)) ? path.posix.basename(directory) : null;
 
     for (const [checkpointIndex, node] of nodes.entries()) {
       requireCondition(isRecord(node), "invalid_checkpoints", "checkpoint entry is malformed");
-      const nodeId: any = requireBoundedString(node.id, { code: "invalid_checkpoints", message: "checkpoint node id is missing" });
+      const nodeId  = requireBoundedString(node.id, { code: "invalid_checkpoints", message: "checkpoint node id is missing" });
       requireCondition(!nodesById.has(nodeId), "invalid_graph", "Plan contains a duplicate checkpoint node id");
       requireCondition(!globalNodeMetadata.has(nodeId), "invalid_graph", "checkpoint node id is not globally unique");
-      requireCondition(CHECKPOINT_STATUSES.has(node.status), "invalid_graph", "checkpoint status is unknown");
+      requireCondition(isCheckpointStatus(node.status), "invalid_graph", "checkpoint status is unknown");
       requireCondition(typeof node.role === "string" && SAFE_ROLE.test(node.role), "invalid_graph", "checkpoint role is malformed");
-      requireCondition(NODE_PLATFORMS.has(node.platform), "unknown_platform", "unknown checkpoint platform");
+      requireCondition(isCheckpointPlatform(node.platform), "unknown_platform", "unknown checkpoint platform");
       if (platformPlan !== null) {
         requireCondition(
           node.platform === platformPlan,
@@ -451,42 +520,52 @@ export function evaluatePlanExecutionEligibility({
         );
       }
       requireCondition(isRecord(node.commit), "malformed_repository", "checkpoint repository target is missing or malformed");
-      const repositoryClass: any = classifyRepositoryTarget(node.commit.repository);
-      const prerequisites: any = requireStringArray(
+      const repositoryClass  = classifyRepositoryTarget(node.commit.repository);
+      requireCondition(typeof node.commit.repository === "string", "malformed_repository", "checkpoint repository target is missing or malformed");
+      const prerequisites  = requireStringArray(
         node.prerequisites,
         "invalid_graph",
         "checkpoint prerequisites must be a string array",
       );
-      const next: any = requireStringArray(node.next, "invalid_graph", "checkpoint next references must be a string array");
-      const normalizedNode: Record<string, any> = { ...node, prerequisites, next };
-      const metadata: Record<string, any> = {
+      const next  = requireStringArray(node.next, "invalid_graph", "checkpoint next references must be a string array");
+      const normalizedNode: CheckpointNode = {
+        ...node,
+        id: nodeId,
+        status: node.status,
+        role: node.role,
+        platform: node.platform,
+        commit: { ...node.commit, repository: node.commit.repository },
+        prerequisites,
+        next,
+      };
+      const metadata: NodeMetadata = {
         node: normalizedNode,
         planDirectory: directory,
         manifestPlan,
-        manifestIndex: manifestIndexByDirectory.get(directory),
+        manifestIndex: manifestIndexByDirectory.get(directory)!,
         checkpointIndex,
         repositoryClass,
-        profiles: new Set<any>(),
+        profiles: new Set<PlanProfile>(),
       };
       nodesById.set(nodeId, normalizedNode);
       globalNodeMetadata.set(nodeId, metadata);
     }
 
-    const localRoots: any = [...nodesById.values()].filter((node?: any) : any => node.prerequisites.length === 0);
+    const localRoots = [...nodesById.values()].filter((node) => node.prerequisites.length === 0);
     requireCondition(localRoots.length === 1, "invalid_graph", "Plan must have exactly one local root checkpoint");
     planStates.set(directory, { manifestPlan, nodes: [...nodesById.values()], nodesById, implementationRoots: [] });
   }
 
-  const incoming: any = new Map<any, any>([...globalNodeMetadata.keys()].map((nodeId?: any) : any => [nodeId, new Set<any>()]));
-  const outgoing: any = new Map<any, any>([...globalNodeMetadata.keys()].map((nodeId?: any) : any => [nodeId, new Set<any>()]));
-  const edgeKinds: any = new Map<any, any>();
-  const addEdge: any = (from?: any, to?: any, kind?: any) : any => {
+  const incoming = new Map<string, Set<string>>([...globalNodeMetadata.keys()].map((nodeId) => [nodeId, new Set<string>()]));
+  const outgoing = new Map<string, Set<string>>([...globalNodeMetadata.keys()].map((nodeId) => [nodeId, new Set<string>()]));
+  const edgeKinds = new Map<string, Set<EdgeKind>>();
+  const addEdge = (from: string, to: string, kind: EdgeKind): void => {
     requireCondition(globalNodeMetadata.has(from), "unknown_reference", "checkpoint edge has an unknown source reference");
     requireCondition(globalNodeMetadata.has(to), "unknown_reference", "checkpoint edge has an unknown target reference");
-    const edgeKey: any = `${from}\u0000${to}`;
-    outgoing.get(from).add(to);
-    incoming.get(to).add(from);
-    const kinds: any = edgeKinds.get(edgeKey) ?? new Set<any>();
+    const edgeKey  = `${from}\u0000${to}`;
+    outgoing.get(from)!.add(to);
+    incoming.get(to)!.add(from);
+    const kinds = edgeKinds.get(edgeKey) ?? new Set<EdgeKind>();
     kinds.add(kind);
     edgeKinds.set(edgeKey, kinds);
   };
@@ -495,9 +574,11 @@ export function evaluatePlanExecutionEligibility({
     for (const node of state.nodes) {
       for (const prerequisite of node.prerequisites) {
         requireCondition(state.nodesById.has(prerequisite), "unknown_reference", "unknown local prerequisite reference");
-        assertLocalPlatformDirection(state.nodesById.get(prerequisite), node);
+        const prerequisiteNode = state.nodesById.get(prerequisite);
+        requireCondition(prerequisiteNode, "unknown_reference", "unknown local prerequisite reference");
+        assertLocalPlatformDirection(prerequisiteNode, node);
         requireCondition(
-          state.nodesById.get(prerequisite).next.includes(node.id),
+          prerequisiteNode.next.includes(node.id),
           "invalid_graph",
           "local prerequisite edge is not reciprocal with next",
         );
@@ -505,8 +586,10 @@ export function evaluatePlanExecutionEligibility({
       }
       for (const next of node.next) {
         requireCondition(state.nodesById.has(next), "unknown_reference", "unknown local next reference");
+        const nextNode = state.nodesById.get(next);
+        requireCondition(nextNode, "unknown_reference", "unknown local next reference");
         requireCondition(
-          state.nodesById.get(next).prerequisites.includes(node.id),
+          nextNode.prerequisites.includes(node.id),
           "invalid_graph",
           "local next edge is not reciprocal with prerequisites",
         );
@@ -514,43 +597,44 @@ export function evaluatePlanExecutionEligibility({
     }
 
     state.implementationRoots = state.nodes.filter(
-      (node?: any) : any =>
+      (node) =>
         node.role === "implementation" &&
-        node.prerequisites.every((prerequisite?: any) : any => state.nodesById.get(prerequisite).role !== "implementation"),
+        node.prerequisites.every((prerequisite) => state.nodesById.get(prerequisite)?.role !== "implementation"),
     );
     requireCondition(state.implementationRoots.length > 0, "invalid_graph", "Plan has no implementation entry checkpoint");
 
-    const mapPlan: any = mapByDirectory.get(directory);
+    const mapPlan  = mapByDirectory.get(directory);
     for (const binding of finalValidationBindings(mapPlan)) {
-      const finalNode: any = state.nodesById.get(binding.node_id);
+      const finalNode  = state.nodesById.get(binding.node_id);
       requireCondition(finalNode?.role === "final_validation", "unknown_reference", "declared final-validation checkpoint is invalid");
       requireCondition(finalNode.next.length === 0, "invalid_graph", "Plan final-validation checkpoint must be locally terminal");
-      const reducesToFinal: any = reverseReachableNodes(state, finalNode.id);
+      const reducesToFinal  = reverseReachableNodes(state, finalNode.id);
       for (const nodeId of reducesToFinal) {
-        const metadata: any = globalNodeMetadata.get(nodeId);
+        const metadata  = globalNodeMetadata.get(nodeId);
         if (!metadata || !participatesInPlanFinal(metadata.node, finalNode)) continue;
         for (const profile of binding.profiles) metadata.profiles.add(profile);
       }
     }
     requireCondition(
-      state.nodes.filter((node?: any) : any => node.status !== "skipped" && !parentIntegrationNodeIds.has(node.id))
-        .every((node?: any) : any => globalNodeMetadata.get(node.id).profiles.size > 0),
+      state.nodes.filter((node) => node.status !== "skipped" && !parentIntegrationNodeIds.has(node.id))
+        .every((node) => (globalNodeMetadata.get(node.id)?.profiles.size ?? 0) > 0),
       "invalid_graph",
       "local checkpoint does not reduce to a declared Plan final-validation checkpoint",
     );
   }
 
-  const rootPlans: any = dependencyMap.plans.filter((plan?: any) : any => plan.parent === null);
+  const rootPlans = currentDependencyMap.plans.filter((plan) => plan.parent === null);
   requireCondition(rootPlans.length === 1, "invalid_graph", "DependencyMap must contain exactly one root Plan");
 
   for (const [directory, state] of planStates) {
-    const mapPlan: any = mapByDirectory.get(directory);
-    const consumerIndex: any = manifestIndexByDirectory.get(directory);
-    const expectedChildren: any = dependencyMap.plans
-      .filter((candidate?: any) : any => candidate.parent === directory)
-      .map((candidate?: any) : any => candidate.directory)
+    const mapPlan  = mapByDirectory.get(directory);
+    const consumerIndex  = manifestIndexByDirectory.get(directory);
+    requireCondition(mapPlan && consumerIndex !== undefined, "invalid_graph", "Plan graph metadata is missing");
+    const expectedChildren  = currentDependencyMap.plans
+      .filter((candidate) => candidate.parent === directory)
+      .map((candidate) => candidate.directory)
       .sort();
-    const declaredChildren: any = [...mapPlan.children].sort();
+    const declaredChildren  = [...mapPlan.children].sort();
     requireCondition(
       JSON.stringify(expectedChildren) === JSON.stringify(declaredChildren),
       "invalid_graph",
@@ -558,10 +642,10 @@ export function evaluatePlanExecutionEligibility({
     );
 
     for (const receipt of mapPlan.prerequisite_receipts) {
-      const provider: any = mapByDirectory.get(receipt.plan);
+      const provider  = mapByDirectory.get(receipt.plan);
       requireCondition(provider, "unknown_reference", "unknown cross-Plan receipt provider reference");
       requireCondition(
-        manifestIndexByDirectory.get(receipt.plan) < consumerIndex,
+        (manifestIndexByDirectory.get(receipt.plan) ?? Number.MAX_SAFE_INTEGER) < consumerIndex,
         "invalid_graph",
         "cross-Plan receipt provider must precede its consumer in Manifest order",
       );
@@ -570,11 +654,11 @@ export function evaluatePlanExecutionEligibility({
         "invalid_graph",
         "ancestry dependency is incorrectly declared as a cross-Plan receipt",
       );
-      const receiptNode: any = planStates.get(receipt.plan).nodesById.get(receipt.node_id);
+      const receiptNode = planStates.get(receipt.plan)?.nodesById.get(receipt.node_id);
       requireCondition(receiptNode, "unknown_reference", "unknown cross-Plan receipt node reference");
-      const receiptProfiles: any = normalizePlanProfiles(receipt.profiles);
+      const receiptProfiles  = normalizePlanProfiles(receipt.profiles);
       if (receipt.kind === "final_validation") {
-        let providerBinding: any;
+        let providerBinding: FinalValidationBinding;
         try {
           providerBinding = finalValidationBinding(provider, receipt.node_id);
         } catch {
@@ -594,16 +678,16 @@ export function evaluatePlanExecutionEligibility({
         );
       }
       requireCondition(
-        profilesContain([...globalNodeMetadata.get(receipt.node_id).profiles], receiptProfiles),
+        profilesContain([...(globalNodeMetadata.get(receipt.node_id)?.profiles ?? [])], receiptProfiles),
         "invalid_graph",
         "cross-Plan receipt provider does not cover the declared profiles",
       );
-      const applicableRoots: any = state.implementationRoots.filter((implementationRoot?: any) : any =>
-        receiptProfiles.some((profile?: any) : any => globalNodeMetadata.get(implementationRoot.id).profiles.has(profile)));
+      const applicableRoots = state.implementationRoots.filter((implementationRoot) =>
+        receiptProfiles.some((profile) => globalNodeMetadata.get(implementationRoot.id)?.profiles.has(profile)));
       requireCondition(applicableRoots.length > 0, "invalid_graph", "cross-Plan receipt has no applicable consumer");
       for (const implementationRoot of applicableRoots) {
         requireCondition(
-          profilesContain([...globalNodeMetadata.get(implementationRoot.id).profiles], receiptProfiles),
+          profilesContain([...(globalNodeMetadata.get(implementationRoot.id)?.profiles ?? [])], receiptProfiles),
           "invalid_graph",
           "cross-Plan receipt spans multiple consumer final owners",
         );
@@ -620,16 +704,18 @@ export function evaluatePlanExecutionEligibility({
       continue;
     }
 
-    const parent: any = mapByDirectory.get(mapPlan.parent);
+    const parent  = mapByDirectory.get(mapPlan.parent);
     requireCondition(parent, "unknown_reference", "unknown parent Plan reference");
     requireCondition(directParent(directory) === mapPlan.parent, "invalid_graph", "Plan parent is not its direct directory ancestor");
     requireCondition(
-      manifestIndexByDirectory.get(mapPlan.parent) < consumerIndex,
+      (manifestIndexByDirectory.get(mapPlan.parent) ?? Number.MAX_SAFE_INTEGER) < consumerIndex,
       "invalid_graph",
       "parent Plan must precede its child in Manifest order",
     );
-    const parentState: any = planStates.get(mapPlan.parent);
-    const parentContract: any = parentState.nodesById.get(mapPlan.parent_contract_node_id);
+    const parentState = planStates.get(mapPlan.parent);
+    requireCondition(parentState, "unknown_reference", "unknown parent Plan state");
+    requireCondition(typeof mapPlan.parent_contract_node_id === "string", "unknown_reference", "unknown parent contract checkpoint reference");
+    const parentContract = parentState.nodesById.get(mapPlan.parent_contract_node_id);
     requireCondition(parentContract, "unknown_reference", "unknown parent contract checkpoint reference");
     requireCondition(
       parentContract.role === "implementation" || parentContract.role === "architecture_scaffold",
@@ -637,11 +723,13 @@ export function evaluatePlanExecutionEligibility({
       "parent contract checkpoint is not a non-final contract",
     );
     for (const binding of finalValidationBindings(mapPlan)) {
-      const integrationBinding: any = parentIntegrationBinding(mapPlan, binding.node_id);
-      const parentIntegration: any = parentState.nodesById.get(integrationBinding.parent_node_id);
-      const childFinalNode: any = state.nodesById.get(binding.node_id);
+      const integrationBinding  = parentIntegrationBinding(mapPlan, binding.node_id);
+      requireCondition(integrationBinding, "unknown_reference", "unknown parent integration binding");
+      const parentIntegration = parentState.nodesById.get(integrationBinding.parent_node_id);
+      const childFinalNode = state.nodesById.get(binding.node_id);
       requireCondition(parentIntegration, "unknown_reference", "unknown parent integration checkpoint reference");
-      const expectedIntegrationRole: any = childFinalNode.platform === "any" ? "implementation" : "evidence";
+      requireCondition(childFinalNode, "unknown_reference", "unknown child final checkpoint reference");
+      const expectedIntegrationRole  = childFinalNode.platform === "any" ? "implementation" : "evidence";
       requireCondition(
         parentIntegration.role === expectedIntegrationRole,
         "invalid_graph",
@@ -653,10 +741,10 @@ export function evaluatePlanExecutionEligibility({
         "parent integration checkpoint must remain owned by the child final platform",
       );
       for (const profile of binding.profiles) {
-        globalNodeMetadata.get(parentIntegration.id).profiles.add(profile);
+        globalNodeMetadata.get(parentIntegration.id)?.profiles.add(profile);
       }
       requireCondition(
-        profilesContain([...globalNodeMetadata.get(parentIntegration.id).profiles], binding.profiles),
+        profilesContain([...(globalNodeMetadata.get(parentIntegration.id)?.profiles ?? [])], binding.profiles),
         "invalid_graph",
         "parent integration checkpoint does not cover the child final profiles",
       );
@@ -665,8 +753,8 @@ export function evaluatePlanExecutionEligibility({
         "invalid_graph",
         "parent contract checkpoint does not precede its child integration checkpoint",
       );
-      const applicableRoots: any = state.implementationRoots.filter((implementationRoot?: any) : any =>
-        binding.profiles.some((profile?: any) : any => globalNodeMetadata.get(implementationRoot.id).profiles.has(profile)));
+      const applicableRoots = state.implementationRoots.filter((implementationRoot) =>
+        binding.profiles.some((profile) => globalNodeMetadata.get(implementationRoot.id)?.profiles.has(profile)));
       for (const implementationRoot of applicableRoots) {
         addEdge(parentContract.id, implementationRoot.id, "parent_contract");
       }
@@ -697,23 +785,25 @@ export function evaluatePlanExecutionEligibility({
       continue;
     }
     requireCondition(
-      [...incoming.get(nodeId)].every(
-        (dependencyId?: any) : any => globalNodeMetadata.get(dependencyId).node.status === "completed",
+      [...(incoming.get(nodeId) ?? [])].every(
+        (dependencyId) => globalNodeMetadata.get(dependencyId)?.node.status === "completed",
       ),
       "invalid_completed_dependency",
       "completed checkpoint has an incomplete incoming dependency",
     );
   }
 
-  const receiptValidatedFinals: any = new Set<any>();
-  const requireAcceptedFinalReceipt: any = (directory?: any, finalNodeId?: any) : any => {
-    const key: any = `${directory}\u0000${finalNodeId}`;
+  const receiptValidatedFinals = new Set<string>();
+  const requireAcceptedFinalReceipt = (directory: string, finalNodeId: string): void => {
+    const key  = `${directory}\u0000${finalNodeId}`;
     if (receiptValidatedFinals.has(key)) {
       return;
     }
-    const mapPlan: any = mapByDirectory.get(directory);
-    const finalBinding: any = finalValidationBinding(mapPlan, finalNodeId);
-    const finalNode: any = planStates.get(directory).nodesById.get(finalNodeId);
+    const mapPlan  = mapByDirectory.get(directory);
+    requireCondition(mapPlan, "unknown_reference", "unknown receipt Plan");
+    const finalBinding = finalValidationBinding(mapPlan, finalNodeId);
+    const finalNode = planStates.get(directory)?.nodesById.get(finalNodeId);
+    requireCondition(finalNode, "unknown_reference", "unknown receipt final node");
     requireCondition(
       finalNode.status === "completed",
       "invalid_final_receipt",
@@ -725,7 +815,8 @@ export function evaluatePlanExecutionEligibility({
 
   for (const [directory, mapPlan] of mapByDirectory) {
     for (const { binding, receipt } of acceptedFinalReceiptEntries(mapPlan)) {
-      const finalNode: any = planStates.get(directory).nodesById.get(binding.node_id);
+      const finalNode = planStates.get(directory)?.nodesById.get(binding.node_id);
+      requireCondition(finalNode, "unknown_reference", "accepted receipt final node is missing");
       requireCondition(
         finalNode.status === "completed" || receipt === undefined,
         "invalid_final_receipt",
@@ -734,15 +825,15 @@ export function evaluatePlanExecutionEligibility({
     }
   }
 
-  const eligible: any[] = [];
-  const deferred: any[] = [];
-  const deferredReasonCounts: Record<string, any> = {
+  const eligible: EligibleNodeProjection[] = [];
+  const deferred: PlanExecutionEvaluation["deferred"] = [];
+  const deferredReasonCounts: Record<string, number> = {
     repository_mismatch: 0,
     platform_mismatch: 0,
     incomplete_dependencies: 0,
     invalid_receipt: 0,
   };
-  let candidateCount: any = 0;
+  let candidateCount  = 0;
 
   for (const metadata of globalNodeMetadata.values()) {
     if (!ELIGIBLE_STATUSES.has(metadata.node.status)) {
@@ -752,28 +843,29 @@ export function evaluatePlanExecutionEligibility({
       continue;
     }
     candidateCount += 1;
-    const reasons: any[] = [];
+    const reasons: string[] = [];
     if (metadata.repositoryClass !== "core") {
       reasons.push("repository_mismatch");
     }
     if (metadata.node.platform !== "any" && metadata.node.platform !== normalizedHostPlatform) {
       reasons.push("platform_mismatch");
     }
-    const incompleteDependencyCount: any = [...incoming.get(metadata.node.id)].filter(
-      (dependencyId?: any) : any => globalNodeMetadata.get(dependencyId).node.status !== "completed",
+    const incompleteDependencyCount = [...(incoming.get(metadata.node.id) ?? [])].filter(
+      (dependencyId) => globalNodeMetadata.get(dependencyId)?.node.status !== "completed",
     ).length;
     if (incompleteDependencyCount > 0) {
       reasons.push("incomplete_dependencies");
     }
     if (requireAcceptedFinalReceipts && reasons.length === 0) {
       try {
-        for (const dependencyId of incoming.get(metadata.node.id)) {
-          const dependency: any = globalNodeMetadata.get(dependencyId);
+        for (const dependencyId of incoming.get(metadata.node.id) ?? []) {
+          const dependency  = globalNodeMetadata.get(dependencyId);
+          requireCondition(dependency, "unknown_reference", "execution dependency is missing");
           if (dependency.node.role === "final_validation") {
             requireAcceptedFinalReceipt(dependency.planDirectory, dependency.node.id);
           }
         }
-      } catch (error: any) {
+      } catch (error ) {
         if (!(error instanceof PlanExecutionPolicyError) || error.code !== "invalid_final_receipt") {
           throw error;
         }
@@ -781,7 +873,7 @@ export function evaluatePlanExecutionEligibility({
       }
     }
 
-    const projection: any = nodeProjection(metadata, incoming);
+    const projection  = nodeProjection(metadata, incoming);
     if (reasons.length === 0) {
       eligible.push(projection);
       continue;
@@ -809,17 +901,19 @@ export function evaluatePlanExecutionEligibility({
   };
 }
 
-export async function loadPlanExecutionInputs({ repoRoot = defaultRepoRoot, planRoot }: Record<string, any> = {}) : Promise<any> {
-  const resolvedRepoRoot: any = path.resolve(repoRoot);
-  const resolvedPlanRoot: any = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
-  const generationWorker: any = process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1";
-  const gitRepoRoot: any = generationWorker ? resolveGitRepoRoot(resolvedRepoRoot) : resolvedRepoRoot;
+export async function loadPlanExecutionInputs({ repoRoot = defaultRepoRoot, planRoot }: {
+  repoRoot?: string; planRoot?: string;
+} = {}): Promise<PlanExecutionInputs> {
+  const resolvedRepoRoot  = path.resolve(repoRoot);
+  const resolvedPlanRoot  = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
+  const generationWorker  = process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1";
+  const gitRepoRoot  = generationWorker ? resolveGitRepoRoot(resolvedRepoRoot) : resolvedRepoRoot;
   const [canonicalPlanRoot, packageText, gitStat] = await Promise.all([
     fs.realpath(resolvedPlanRoot),
     fs.readFile(path.join(resolvedRepoRoot, "package.json"), "utf8"),
     fs.stat(path.join(gitRepoRoot, ".git")),
   ]);
-  const gitTopLevelResult: any = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+  const gitTopLevelResult  = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     cwd: gitRepoRoot,
     encoding: "utf8",
     windowsHide: true,
@@ -833,42 +927,50 @@ export async function loadPlanExecutionInputs({ repoRoot = defaultRepoRoot, plan
     packageManifest: JSON.parse(packageText),
     gitMarkerPresent: generationWorker || gitStat.isDirectory() || gitStat.isFile(),
   });
-  const manifestPath: any = path.join(resolvedPlanRoot, "Manifest.json");
-  const dependencyMapPath: any = path.join(resolvedPlanRoot, "end-to-end-release", "DependencyMap.json");
+  const manifestPath  = path.join(resolvedPlanRoot, "Manifest.json");
+  const dependencyMapPath  = path.join(resolvedPlanRoot, "end-to-end-release", "DependencyMap.json");
   const [manifestText, dependencyMapText] = await Promise.all([
     fs.readFile(manifestPath, "utf8"),
     fs.readFile(dependencyMapPath, "utf8"),
   ]);
-  const manifest: any = JSON.parse(manifestText);
-  const dependencyMap: any = JSON.parse(dependencyMapText);
+  const manifest: unknown = JSON.parse(manifestText);
+  const dependencyMap = assertCurrentDependencyMapShape(JSON.parse(dependencyMapText));
   requireCondition(Array.isArray(manifest), "invalid_manifest", "Manifest must be an array");
 
-  const checkpoints: any = new Map<any, any>();
+  const checkpoints = new Map<string, CheckpointNode[]>();
   await Promise.all(
-    manifest.map(async (manifestPlan?: any) : Promise<any> => {
-      requireCondition(isRecord(manifestPlan), "invalid_manifest", "Manifest Plan entry is malformed");
-      const directory: any = requirePlanDirectory(manifestPlan.directory);
-      const expectedCheckpointPath: any = `${directory}/Checkpoints.json`;
+    manifest.map(async (manifestPlan: unknown) => {
+      requireCondition(isRecord(manifestPlan) && typeof manifestPlan.directory === "string" && typeof manifestPlan.checkpoints === "string", "invalid_manifest", "Manifest Plan entry is malformed");
+      const directory  = requirePlanDirectory(manifestPlan.directory);
+      const expectedCheckpointPath  = `${directory}/Checkpoints.json`;
       requireCondition(
         manifestPlan.checkpoints === expectedCheckpointPath,
         "invalid_manifest",
         "Manifest checkpoint path does not match its Plan directory",
       );
-      const checkpointPath: any = path.resolve(resolvedPlanRoot, expectedCheckpointPath);
+      const checkpointPath  = path.resolve(resolvedPlanRoot, expectedCheckpointPath);
       requireCondition(
         checkpointPath.startsWith(`${resolvedPlanRoot}${path.sep}`),
         "invalid_manifest",
         "Manifest checkpoint path escapes the plan root",
       );
-      checkpoints.set(directory, JSON.parse(await fs.readFile(checkpointPath, "utf8")));
+      const parsedCheckpoints: unknown = JSON.parse(await fs.readFile(checkpointPath, "utf8"));
+      requireCondition(Array.isArray(parsedCheckpoints) && parsedCheckpoints.every(isCheckpointNode), "invalid_checkpoints", "checkpoint collection is malformed");
+      checkpoints.set(directory, parsedCheckpoints);
     }),
   );
 
-  return { manifest, dependencyMap, checkpoints };
+  const typedManifest = manifest.map((entry) => {
+    requireCondition(isRecord(entry) && typeof entry.directory === "string" && typeof entry.checkpoints === "string", "invalid_manifest", "Manifest Plan entry is malformed");
+    return { ...entry, directory: entry.directory, checkpoints: entry.checkpoints };
+  });
+  return { manifest: typedManifest, dependencyMap, checkpoints };
 }
 
-export function assertRepositoryIdentity({ repoRoot, gitTopLevel, planRoot, packageManifest, gitMarkerPresent }: Record<string, any> = {}) : any {
-  const resolvedRepoRoot: any = path.resolve(repoRoot ?? "");
+export function assertRepositoryIdentity({ repoRoot, gitTopLevel, planRoot, packageManifest, gitMarkerPresent }: {
+  repoRoot?: string; gitTopLevel?: string; planRoot?: string; packageManifest?: unknown; gitMarkerPresent?: boolean;
+} = {}): void {
+  const resolvedRepoRoot  = path.resolve(repoRoot ?? "");
   requireCondition(
     gitMarkerPresent === true && path.resolve(gitTopLevel ?? "") === resolvedRepoRoot,
     "repository_identity_mismatch",
@@ -886,4 +988,4 @@ export function assertRepositoryIdentity({ repoRoot, gitTopLevel, planRoot, pack
   );
 }
 
-export const evaluatePlanExecutionAdmission: any = evaluatePlanExecutionEligibility;
+export const evaluatePlanExecutionAdmission  = evaluatePlanExecutionEligibility;

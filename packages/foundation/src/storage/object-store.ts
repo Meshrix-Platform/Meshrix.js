@@ -2,20 +2,70 @@ import { createHash, randomUUID } from "node:crypto";
 import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type Database from "better-sqlite3";
+import type { ReadStream } from "node:fs";
 import { resolveWithin } from "#meshrix/client-strings";
 import { openPrivateNoExecRegularFile } from "./storage-file-safety.ts";
 
-const FILE_COPY_BUFFER_BYTES: any = 64 * 1024;
-const OBJECT_READ_STREAM_BUFFER_BYTES: any = 64 * 1024;
-const PRIVATE_DIRECTORY_MODE: any = 0o700;
-const PRIVATE_FILE_MODE: any = 0o600;
-const WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES: any = new Set<any>(["EACCES", "EINVAL", "ENOTSUP", "EPERM"]);
+type UnknownRecord = Record<string, unknown>;
+type StorageObjectError = Error & { code: string };
 
-function nowIso() : any {
+export interface StoredObjectIntegrity {
+  byteSize: number;
+  sha256: string;
+}
+
+export interface StoredObjectRecord extends StoredObjectIntegrity {
+  objectId: string;
+  namespace: string;
+  fileName: string;
+  storageRelativePath: string;
+  mediaType: string;
+  metadata: UnknownRecord;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredObjectReadStream {
+  byteSize: number;
+  stream: ReadStream;
+}
+
+interface ObjectTarget {
+  safeNamespace: string;
+  safeName: string;
+  objectDirectory: string;
+  targetPath: string;
+}
+
+const FILE_COPY_BUFFER_BYTES = 64 * 1024;
+const OBJECT_READ_STREAM_BUFFER_BYTES = 64 * 1024;
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
+const WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES = new Set(["EACCES", "EINVAL", "ENOTSUP", "EPERM"]);
+
+function record(value: unknown): UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as UnknownRecord
+    : {};
+}
+
+function errorCode(error: unknown): string {
+  return String(record(error).code || "");
+}
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.codePointAt(0) || 0;
+    return code <= 31 || code === 127;
+  });
+}
+
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function normalizeNamespace(value: any = "default") : any {
+function normalizeNamespace(value: unknown = "default"): string {
   return String(value || "default")
     .trim()
     .replace(/[\\/]+/g, "_")
@@ -25,65 +75,73 @@ function normalizeNamespace(value: any = "default") : any {
     .slice(0, 96) || "default";
 }
 
-function safeFileName(value: any = "object.bin") : any {
-  const baseName: any = path.posix.basename(String(value || "object.bin").replace(/\\/g, "/"));
-  return baseName
-    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "_")
+function safeFileName(value: unknown = "object.bin"): string {
+  const baseName = path.posix.basename(String(value || "object.bin").replace(/\\/g, "/"));
+  const sanitized = [...baseName]
+    .map((character) => hasControlCharacter(character) || /[<>:"/\\|?*]/u.test(character) ? "_" : character)
+    .join("");
+  return sanitized
     .replace(/^\.+/, "")
     .trim()
     .slice(0, 180) || "object.bin";
 }
 
-function normalizeRelativePath(value: any = "") : any {
-  const normalized: any = String(value || "")
+function normalizeRelativePath(value: unknown = ""): string {
+  const normalized = String(value || "")
     .replace(/\\/g, "/")
     .replace(/^\/+/, "")
     .trim();
-  const segments: any = normalized.split("/");
-  if (!normalized || segments.some((segment?: any) : any => !segment || segment === "." || segment === "..")) {
+  const segments = normalized.split("/");
+  if (!normalized || segments.some((segment) => !segment || segment === "." || segment === "..")) {
     throw new Error(`Unsafe storage object relative path: ${value}`);
   }
   return normalized;
 }
 
-function pathWithinRoot(candidatePath?: any, rootPath?: any) : any {
-  const relative: any = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+function pathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
   return Boolean(relative && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function normalizeExpectedSha256(value: any = "") : any {
-  const normalized: any = String(value || "").trim().toLowerCase();
+function normalizeExpectedSha256(value: unknown = ""): string {
+  const normalized = String(value || "").trim().toLowerCase();
   if (normalized && !/^[a-f0-9]{64}$/u.test(normalized)) {
-    const error: Error & Record<string, any> = new Error("Expected storage object digest must be a SHA-256 hex value.");
+    const error = new Error("Expected storage object digest must be a SHA-256 hex value.") as StorageObjectError;
     error.code = "storage_object_expected_digest_invalid";
     throw error;
   }
   return normalized;
 }
 
-function normalizeExpectedByteSize(value?: any) : any {
+function normalizeExpectedByteSize(value?: unknown): number | null {
   if (value === undefined || value === null || value === "") {
     return null;
   }
-  const normalized: any = Number(value);
+  const normalized = Number(value);
   if (!Number.isSafeInteger(normalized) || normalized < 0) {
-    const error: Error & Record<string, any> = new Error("Expected storage object byte size must be a non-negative safe integer.");
+    const error = new Error("Expected storage object byte size must be a non-negative safe integer.") as StorageObjectError;
     error.code = "storage_object_expected_size_invalid";
     throw error;
   }
   return normalized;
 }
 
-function storageObjectTarget({ userDataPath, namespace, fileName, objectId, sha256 }: Record<string, any>) : any {
-  const safeNamespace: any = normalizeNamespace(namespace);
-  const safeName: any = safeFileName(fileName);
-  const objectIdentityHash: any = createHash("sha256")
+function storageObjectTarget({ userDataPath, namespace, fileName, objectId, sha256 }: {
+  userDataPath: string;
+  namespace: unknown;
+  fileName: unknown;
+  objectId: string;
+  sha256: string;
+}): ObjectTarget {
+  const safeNamespace = normalizeNamespace(namespace);
+  const safeName = safeFileName(fileName);
+  const objectIdentityHash = createHash("sha256")
     .update(String(objectId || ""), "utf8")
     .digest("hex")
     .slice(0, 32);
-  const objectDirectory: any = resolveWithin(userDataPath, "objects", safeNamespace, sha256.slice(0, 2));
-  const storageFileName: any = `${sha256.slice(0, 16)}__${objectIdentityHash}__${safeName}`;
-  const targetPath: any = resolveWithin(objectDirectory, storageFileName);
+  const objectDirectory = resolveWithin(userDataPath, "objects", safeNamespace, sha256.slice(0, 2));
+  const storageFileName = `${sha256.slice(0, 16)}__${objectIdentityHash}__${safeName}`;
+  const targetPath = resolveWithin(objectDirectory, storageFileName);
   return {
     safeNamespace,
     safeName,
@@ -92,13 +150,13 @@ function storageObjectTarget({ userDataPath, namespace, fileName, objectId, sha2
   };
 }
 
-function isUnsupportedDirectorySyncError(error?: any) : any {
-  return process.platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES.has(error?.code);
+function isUnsupportedDirectorySyncError(error: unknown): boolean {
+  return process.platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES.has(errorCode(error));
 }
 
-async function ensurePrivateObjectDirectory(directoryPath?: any) : Promise<any> {
+async function ensurePrivateObjectDirectory(directoryPath: string): Promise<void> {
   await fs.mkdir(directoryPath, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  const stat: any = await fs.lstat(directoryPath);
+  const stat = await fs.lstat(directoryPath);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw objectIntegrityError(
       "storage_object_directory_unsafe",
@@ -107,53 +165,53 @@ async function ensurePrivateObjectDirectory(directoryPath?: any) : Promise<any> 
   }
   try {
     await fs.chmod(directoryPath, PRIVATE_DIRECTORY_MODE);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySyncError(error)) throw error;
   }
 }
 
-async function hardenPrivateObjectFile(filePath?: any) : Promise<any> {
+async function hardenPrivateObjectFile(filePath: string): Promise<void> {
   try {
     await fs.chmod(filePath, PRIVATE_FILE_MODE);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySyncError(error)) throw error;
   }
 }
 
-async function syncDirectory(directoryPath?: any) : Promise<any> {
-  let handle: any = null;
+async function syncDirectory(directoryPath: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
     handle = await fs.open(directoryPath, "r");
     await handle.sync();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isUnsupportedDirectorySyncError(error)) throw error;
   } finally {
-    await handle?.close().catch(() : any => {});
+    await handle?.close().catch(() => {});
   }
 }
 
-function objectIntegrityError(code?: any, message?: any, cause?: any) : any {
-  const error: Error & Record<string, any> = new Error(message, cause ? { cause } : undefined);
+function objectIntegrityError(code: string, message: string, cause?: unknown): StorageObjectError {
+  const error = new Error(message, cause ? { cause } : undefined) as StorageObjectError;
   error.code = code;
   return error;
 }
 
-function objectFileSignature(stat?: any) : any {
+function objectFileSignature(stat: { dev: bigint | number; ino: bigint | number; size: bigint | number; mtimeNs: bigint; ctimeNs: bigint }): string {
   return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs]
-    .map((value?: any) : any => String(value))
+    .map((value) => String(value))
     .join(":");
 }
 
-async function inspectStoredObjectFile(filePath?: any) : Promise<any> {
-  const flags: any = fsNative.constants.O_RDONLY | (fsNative.constants.O_NOFOLLOW || 0);
-  let handle: any = null;
+async function inspectStoredObjectFile(filePath: string): Promise<StoredObjectIntegrity> {
+  const flags = fsNative.constants.O_RDONLY | (fsNative.constants.O_NOFOLLOW || 0);
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
     handle = await fs.open(filePath, flags);
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") {
       throw objectIntegrityError("storage_object_missing", "The stored object file is missing.", error);
     }
-    if (error?.code === "ELOOP") {
+    if (errorCode(error) === "ELOOP") {
       throw objectIntegrityError("storage_object_file_unsafe", "The stored object file is not a regular file.", error);
     }
     throw objectIntegrityError(
@@ -164,20 +222,20 @@ async function inspectStoredObjectFile(filePath?: any) : Promise<any> {
   }
 
   try {
-    const before: any = await handle.stat({ bigint: true });
+    const before = await handle.stat({ bigint: true });
     if (!before.isFile()) {
       throw objectIntegrityError("storage_object_file_unsafe", "The stored object file is not a regular file.");
     }
-    const digest: any = createHash("sha256");
-    const readBuffer: any = Buffer.allocUnsafe(FILE_COPY_BUFFER_BYTES);
-    let byteSize: any = 0;
+    const digest = createHash("sha256");
+    const readBuffer = Buffer.allocUnsafe(FILE_COPY_BUFFER_BYTES);
+    let byteSize = 0;
     while (true) {
       const { bytesRead } = await handle.read(readBuffer, 0, readBuffer.length, null);
       if (bytesRead === 0) break;
       digest.update(readBuffer.subarray(0, bytesRead));
       byteSize += bytesRead;
     }
-    const after: any = await handle.stat({ bigint: true });
+    const after = await handle.stat({ bigint: true });
     if (
       objectFileSignature(before) !== objectFileSignature(after) ||
       !Number.isSafeInteger(Number(after.size)) ||
@@ -193,7 +251,7 @@ async function inspectStoredObjectFile(filePath?: any) : Promise<any> {
       sha256: digest.digest("hex")
     };
   } finally {
-    await handle.close().catch(() : any => {});
+    await handle.close().catch(() => {});
   }
 }
 
@@ -203,10 +261,16 @@ async function commitTemporaryObject({
   objectDirectory,
   byteSize,
   sha256
-}: Record<string, any>) : Promise<any> {
+}: {
+  temporaryPath: string;
+  targetPath: string;
+  objectDirectory: string;
+  byteSize: number;
+  sha256: string;
+}): Promise<void> {
   await ensurePrivateObjectDirectory(objectDirectory);
   try {
-    const existing: any = await inspectStoredObjectFile(targetPath);
+    const existing = await inspectStoredObjectFile(targetPath);
     if (existing.byteSize !== byteSize || existing.sha256 !== sha256) {
       throw objectIntegrityError(
         "storage_object_integrity_mismatch",
@@ -216,8 +280,8 @@ async function commitTemporaryObject({
     await fs.rm(temporaryPath, { force: true });
     await syncDirectory(path.dirname(temporaryPath));
     return;
-  } catch (error: any) {
-    if (error?.code !== "storage_object_missing") throw error;
+  } catch (error: unknown) {
+    if (errorCode(error) !== "storage_object_missing") throw error;
   }
   await fs.rename(temporaryPath, targetPath);
   await hardenPrivateObjectFile(targetPath);
@@ -225,22 +289,23 @@ async function commitTemporaryObject({
   await syncDirectory(path.dirname(temporaryPath));
 }
 
-async function createPendingObjectFile({ userDataPath, objectId }: Record<string, any>) : Promise<any> {
-  const pendingDirectory: any = resolveWithin(userDataPath, "objects", ".pending");
+async function createPendingObjectFile({ userDataPath, objectId }: { userDataPath: string; objectId: string }): Promise<{ pendingDirectory: string; temporaryPath: string }> {
+  const pendingDirectory = resolveWithin(userDataPath, "objects", ".pending");
   await ensurePrivateObjectDirectory(pendingDirectory);
-  const temporaryPath: any = resolveWithin(
+  const temporaryPath = resolveWithin(
     pendingDirectory,
     `${safeFileName(objectId)}.${randomUUID()}.tmp`
   );
   return { pendingDirectory, temporaryPath };
 }
 
-export function getObjectRootPath(userDataPath?: any) : any {
+export function getObjectRootPath(userDataPath?: string): string {
+  if (!userDataPath) throw new TypeError("Storage userDataPath is required.");
   return path.join(userDataPath, "objects");
 }
 
-export function resolveStoredObjectPath(userDataPath?: any, storageRelativePath?: any) : any {
-  const resolvedPath: any = resolveWithin(userDataPath, normalizeRelativePath(storageRelativePath));
+export function resolveStoredObjectPath(userDataPath: string, storageRelativePath: unknown): string {
+  const resolvedPath = resolveWithin(userDataPath, normalizeRelativePath(storageRelativePath));
   if (!pathWithinRoot(resolvedPath, getObjectRootPath(userDataPath))) {
     throw new Error(`Unsafe storage object relative path: ${storageRelativePath}`);
   }
@@ -252,11 +317,16 @@ export async function verifyStoredObjectIntegrity({
   storageRelativePath,
   expectedSha256 = "",
   expectedByteSize = null
-}: Record<string, any> = {}) : Promise<any> {
-  const normalizedExpectedSha256: any = normalizeExpectedSha256(expectedSha256);
-  const normalizedExpectedByteSize: any = normalizeExpectedByteSize(expectedByteSize);
-  const resolvedPath: any = resolveStoredObjectPath(userDataPath, storageRelativePath);
-  const integrity: any = await inspectStoredObjectFile(resolvedPath);
+}: {
+  userDataPath: string;
+  storageRelativePath: unknown;
+  expectedSha256?: unknown;
+  expectedByteSize?: unknown;
+}): Promise<StoredObjectIntegrity> {
+  const normalizedExpectedSha256 = normalizeExpectedSha256(expectedSha256);
+  const normalizedExpectedByteSize = normalizeExpectedByteSize(expectedByteSize);
+  const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
+  const integrity = await inspectStoredObjectFile(resolvedPath);
   if (
     (normalizedExpectedSha256 && integrity.sha256 !== normalizedExpectedSha256) ||
     (normalizedExpectedByteSize !== null && integrity.byteSize !== normalizedExpectedByteSize)
@@ -277,10 +347,18 @@ export async function putStoredObject({
   mediaType = "application/octet-stream",
   metadata = {},
   objectId = randomUUID()
-}: Record<string, any> = {}) : Promise<any> {
-  const bytes: any = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || "");
-  const sha256: any = createHash("sha256").update(bytes).digest("hex");
-  const resolvedObjectId: any = String(objectId || randomUUID());
+}: {
+  userDataPath: string;
+  buffer?: string | Buffer | Uint8Array;
+  namespace?: unknown;
+  fileName?: unknown;
+  mediaType?: unknown;
+  metadata?: unknown;
+  objectId?: unknown;
+}): Promise<StoredObjectRecord> {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || "");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const resolvedObjectId = String(objectId || randomUUID());
   const {
     safeNamespace,
     safeName,
@@ -298,8 +376,8 @@ export async function putStoredObject({
     userDataPath,
     objectId: resolvedObjectId
   });
-  let targetHandle: any = null;
-  let committed: any = false;
+  let targetHandle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  let committed = false;
   try {
     targetHandle = await fs.open(temporaryPath, "wx", PRIVATE_FILE_MODE);
     await targetHandle.writeFile(bytes);
@@ -315,12 +393,12 @@ export async function putStoredObject({
     });
     committed = true;
   } finally {
-    await targetHandle?.close().catch(() : any => {});
-    if (!committed) await fs.rm(temporaryPath, { force: true }).catch(() : any => {});
+    await targetHandle?.close().catch(() => {});
+    if (!committed) await fs.rm(temporaryPath, { force: true }).catch(() => {});
   }
 
-  const storageRelativePath: any = path.relative(userDataPath, targetPath).split(path.sep).join("/");
-  const timestamp: any = nowIso();
+  const storageRelativePath = path.relative(userDataPath, targetPath).split(path.sep).join("/");
+  const timestamp = nowIso();
   return {
     objectId: resolvedObjectId,
     namespace: safeNamespace,
@@ -329,7 +407,7 @@ export async function putStoredObject({
     sha256,
     byteSize: bytes.length,
     mediaType: String(mediaType || "application/octet-stream"),
-    metadata: metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {},
+    metadata: record(metadata),
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -345,31 +423,41 @@ export async function putStoredObjectFromFile({
   objectId = randomUUID(),
   expectedSha256 = "",
   expectedByteSize = null
-}: Record<string, any> = {}) : Promise<any> {
-  const resolvedObjectId: any = String(objectId || randomUUID());
-  const normalizedExpectedSha256: any = normalizeExpectedSha256(expectedSha256);
-  const normalizedExpectedByteSize: any = normalizeExpectedByteSize(expectedByteSize);
+}: {
+  userDataPath: string;
+  sourcePath: string;
+  namespace?: unknown;
+  fileName?: unknown;
+  mediaType?: unknown;
+  metadata?: unknown;
+  objectId?: unknown;
+  expectedSha256?: unknown;
+  expectedByteSize?: unknown;
+}): Promise<StoredObjectRecord> {
+  const resolvedObjectId = String(objectId || randomUUID());
+  const normalizedExpectedSha256 = normalizeExpectedSha256(expectedSha256);
+  const normalizedExpectedByteSize = normalizeExpectedByteSize(expectedByteSize);
   const { temporaryPath } = await createPendingObjectFile({
     userDataPath,
     objectId: resolvedObjectId
   });
-  const sourceHandle: any = await fs.open(path.resolve(String(sourcePath || "")), "r");
-  let targetHandle: any = null;
-  let committed: any = false;
+  const sourceHandle = await fs.open(path.resolve(String(sourcePath || "")), "r");
+  let targetHandle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  let committed = false;
   try {
     targetHandle = await fs.open(temporaryPath, "wx", PRIVATE_FILE_MODE);
-    const digest: any = createHash("sha256");
-    const copyBuffer: any = Buffer.allocUnsafe(FILE_COPY_BUFFER_BYTES);
-    let byteSize: any = 0;
+    const digest = createHash("sha256");
+    const copyBuffer = Buffer.allocUnsafe(FILE_COPY_BUFFER_BYTES);
+    let byteSize = 0;
     while (true) {
       const { bytesRead } = await sourceHandle.read(copyBuffer, 0, copyBuffer.length, null);
       if (bytesRead === 0) break;
       digest.update(copyBuffer.subarray(0, bytesRead));
-      let written: any = 0;
+      let written = 0;
       while (written < bytesRead) {
-        const result: any = await targetHandle.write(copyBuffer, written, bytesRead - written, null);
+        const result = await targetHandle.write(copyBuffer, written, bytesRead - written, null);
         if (result.bytesWritten <= 0) {
-          const error: Error & Record<string, any> = new Error("Storage object copy made no forward progress.");
+          const error = new Error("Storage object copy made no forward progress.") as StorageObjectError;
           error.code = "storage_object_copy_stalled";
           throw error;
         }
@@ -377,14 +465,14 @@ export async function putStoredObjectFromFile({
       }
       byteSize += bytesRead;
     }
-    const sha256: any = digest.digest("hex");
+    const sha256 = digest.digest("hex");
     if (normalizedExpectedSha256 && sha256 !== normalizedExpectedSha256) {
-      const error: Error & Record<string, any> = new Error("Staged storage object digest changed before persistence.");
+      const error = new Error("Staged storage object digest changed before persistence.") as StorageObjectError;
       error.code = "storage_object_digest_mismatch";
       throw error;
     }
     if (normalizedExpectedByteSize !== null && byteSize !== normalizedExpectedByteSize) {
-      const error: Error & Record<string, any> = new Error("Staged storage object size changed before persistence.");
+      const error = new Error("Staged storage object size changed before persistence.") as StorageObjectError;
       error.code = "storage_object_size_mismatch";
       throw error;
     }
@@ -411,7 +499,7 @@ export async function putStoredObjectFromFile({
       sha256
     });
     committed = true;
-    const timestamp: any = nowIso();
+    const timestamp = nowIso();
     return {
       objectId: resolvedObjectId,
       namespace: safeNamespace,
@@ -420,24 +508,27 @@ export async function putStoredObjectFromFile({
       sha256,
       byteSize,
       mediaType: String(mediaType || "application/octet-stream"),
-      metadata: metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {},
+      metadata: record(metadata),
       createdAt: timestamp,
       updatedAt: timestamp
     };
   } finally {
-    await sourceHandle.close().catch(() : any => {});
-    await targetHandle?.close?.().catch(() : any => {});
+    await sourceHandle.close().catch(() => {});
+    await targetHandle?.close().catch(() => {});
     if (!committed) {
-      await fs.rm(temporaryPath, { force: true }).catch(() : any => {});
+      await fs.rm(temporaryPath, { force: true }).catch(() => {});
     }
   }
 }
 
-export function recordStoredObject(db?: any, object: Record<string, any> = {}) : any {
+export function recordStoredObject(
+  db: Database.Database | null | undefined,
+  object: Partial<StoredObjectRecord> = {}
+): Partial<StoredObjectRecord> | null {
   if (!db || !object?.objectId || !object?.storageRelativePath) {
     return null;
   }
-  const timestamp: any = object.updatedAt || object.createdAt || nowIso();
+  const timestamp = object.updatedAt || object.createdAt || nowIso();
   db.prepare(`
     INSERT INTO storage_objects (
       object_id, namespace, storage_rel_path, sha256, byte_size,
@@ -462,17 +553,15 @@ export function recordStoredObject(db?: any, object: Record<string, any> = {}) :
     object.createdAt || timestamp,
     timestamp
   );
-  const metadata: any = object.metadata && typeof object.metadata === "object"
-    ? object.metadata
-    : {};
-  const owner: Record<string, any> = {
+  const metadata = record(object.metadata);
+  const owner = {
     jobId: String(metadata.jobId || "").trim(),
     archiveBatchId: String(metadata.archiveBatchId || "").trim(),
     ownerSubjectId: String(metadata.ownerSubjectId || "").trim(),
     ownerUserId: String(metadata.ownerUserId || "").trim(),
     ownerUsername: String(metadata.ownerUsername || "").trim()
   };
-  if ((Object.values(owner) as any[]).some(Boolean)) {
+  if (Object.values(owner).some(Boolean)) {
     db.prepare(`
       INSERT INTO storage_object_owners (
         object_id, job_id, archive_batch_id, owner_subject_id,
@@ -499,8 +588,11 @@ export function recordStoredObject(db?: any, object: Record<string, any> = {}) :
   return object;
 }
 
-export async function readStoredObject({ userDataPath, storageRelativePath }: Record<string, any> = {}) : Promise<any> {
-  const resolvedPath: any = resolveStoredObjectPath(userDataPath, storageRelativePath);
+export async function readStoredObject({ userDataPath, storageRelativePath }: {
+  userDataPath: string;
+  storageRelativePath: unknown;
+}): Promise<Buffer> {
+  const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
   return fs.readFile(resolvedPath);
 }
 
@@ -508,13 +600,17 @@ export async function openStoredObjectReadStream({
   userDataPath,
   storageRelativePath,
   signal
-}: Record<string, any> = {}) : Promise<any> {
-  const resolvedPath: any = resolveStoredObjectPath(userDataPath, storageRelativePath);
-  const handle: any = await fs.open(resolvedPath, "r");
+}: {
+  userDataPath: string;
+  storageRelativePath: unknown;
+  signal?: AbortSignal;
+}): Promise<StoredObjectReadStream> {
+  const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
+  const handle = await fs.open(resolvedPath, "r");
   try {
-    const stat: any = await handle.stat();
+    const stat = await handle.stat();
     if (!stat.isFile()) {
-      const error: Error & Record<string, any> = new Error("Storage object is not a regular file.");
+      const error = new Error("Storage object is not a regular file.") as StorageObjectError;
       error.code = "storage_object_not_regular_file";
       throw error;
     }
@@ -526,23 +622,23 @@ export async function openStoredObjectReadStream({
         signal
       })
     };
-  } catch (error: any) {
-    await handle.close().catch(() : any => {});
+  } catch (error: unknown) {
+    await handle.close().catch(() => {});
     throw error;
   }
 }
 
-function privateObjectRelativePath(value?: any) : any {
-  const normalized: any = String(value || "").trim();
-  const segments: any = normalized.split("/");
+function privateObjectRelativePath(value: unknown): string {
+  const normalized = String(value || "").trim();
+  const segments = normalized.split("/");
   if (
     !normalized ||
     path.posix.isAbsolute(normalized) ||
     path.win32.isAbsolute(normalized) ||
     normalized.includes("\\") ||
-    /[\u0000-\u001f\u007f]/u.test(normalized) ||
+    hasControlCharacter(normalized) ||
     segments.some(
-      (segment?: any) : any => !segment || segment === "." || segment === ".."
+      (segment) => !segment || segment === "." || segment === ".."
     )
   ) {
     throw objectIntegrityError(
@@ -557,8 +653,12 @@ export async function openPrivateNoExecObjectReadStream({
   userDataPath,
   storageRelativePath,
   signal
-}: Record<string, any> = {}) : Promise<any> {
-  let resolvedPath: any;
+}: {
+  userDataPath: string;
+  storageRelativePath: unknown;
+  signal?: AbortSignal;
+}): Promise<StoredObjectReadStream> {
+  let resolvedPath: string;
   try {
     resolvedPath = resolveStoredObjectPath(
       userDataPath,
@@ -575,7 +675,7 @@ export async function openPrivateNoExecObjectReadStream({
     { errorPrefix: "upload_custody" }
   );
   try {
-    const byteSize: any = Number(stat.size);
+    const byteSize = Number(stat.size);
     if (!Number.isSafeInteger(byteSize) || byteSize < 0) {
       throw objectIntegrityError(
         "upload_custody_file_unsafe",
@@ -590,18 +690,24 @@ export async function openPrivateNoExecObjectReadStream({
         signal
       })
     };
-  } catch (error: any) {
-    await handle.close().catch(() : any => {});
+  } catch (error: unknown) {
+    await handle.close().catch(() => {});
     throw error;
   }
 }
 
-export async function statStoredObject({ userDataPath, storageRelativePath }: Record<string, any> = {}) : Promise<any> {
-  const resolvedPath: any = resolveStoredObjectPath(userDataPath, storageRelativePath);
+export async function statStoredObject({ userDataPath, storageRelativePath }: {
+  userDataPath: string;
+  storageRelativePath: unknown;
+}): Promise<Awaited<ReturnType<typeof fs.stat>>> {
+  const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
   return fs.stat(resolvedPath);
 }
 
-export async function removeStoredObject({ userDataPath, storageRelativePath }: Record<string, any> = {}) : Promise<any> {
-  const resolvedPath: any = resolveStoredObjectPath(userDataPath, storageRelativePath);
+export async function removeStoredObject({ userDataPath, storageRelativePath }: {
+  userDataPath: string;
+  storageRelativePath: unknown;
+}): Promise<void> {
+  const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
   await fs.rm(resolvedPath, { force: true });
 }

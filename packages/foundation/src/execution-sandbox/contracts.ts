@@ -1,13 +1,13 @@
 import crypto from "node:crypto";
 
-export const SANDBOX_REQUEST_SCHEMA: any = "v0.0.1:execution-sandbox:request-1";
-export const SANDBOX_CONFIGURED_WORKLOAD_REQUEST_SCHEMA: any =
+export const SANDBOX_REQUEST_SCHEMA = "v0.0.1:execution-sandbox:request-1";
+export const SANDBOX_CONFIGURED_WORKLOAD_REQUEST_SCHEMA =
   "v0.0.1:execution-sandbox:configured-workload-request-1";
-export const SANDBOX_RECEIPT_SCHEMA: any = "v0.0.1:execution-sandbox:receipt-1";
-export const SANDBOX_PROVIDER_CONFORMANCE_SCHEMA: any = "v0.0.1:execution-sandbox:provider-conformance-1";
-export const CONTROLLED_SANDBOX_FINAL_RECEIPT_ID: any = "31000000-0000-4000-8000-000000000047";
+export const SANDBOX_RECEIPT_SCHEMA = "v0.0.1:execution-sandbox:receipt-1";
+export const SANDBOX_PROVIDER_CONFORMANCE_SCHEMA = "v0.0.1:execution-sandbox:provider-conformance-1";
+export const CONTROLLED_SANDBOX_FINAL_RECEIPT_ID = "31000000-0000-4000-8000-000000000047";
 
-export const SANDBOX_DENIAL_REASONS: Readonly<Record<string, any>> = Object.freeze({
+export const SANDBOX_DENIAL_REASONS = Object.freeze({
   UNCONFIGURED: "sandbox_unconfigured",
   DISABLED: "sandbox_disabled",
   CONFIGURATION_INVALID: "sandbox_configuration_invalid",
@@ -32,7 +32,98 @@ export const SANDBOX_DENIAL_REASONS: Readonly<Record<string, any>> = Object.free
   RECEIPT_PERSISTENCE_FAILED: "sandbox_receipt_persistence_failed"
 });
 
-const REQUEST_FIELDS: any = new Set<any>([
+type UnknownRecord = Record<string, unknown>;
+type InvocationScalar = string | number | boolean;
+
+export interface SandboxPrincipal {
+  subjectRef: string;
+  tenantRef: string;
+  workspaceRef: string;
+  operationRef: string;
+}
+
+export interface SandboxArtifact {
+  digest: string;
+  runtimeKind: string;
+  entryPoint: string;
+}
+
+export interface SandboxInvocation {
+  args: readonly InvocationScalar[];
+  workingDirectory: string;
+}
+
+export interface SandboxInput {
+  handle: string;
+  digest: string;
+  readOnly: true;
+}
+
+export interface SandboxOutputs {
+  schema: string;
+  maxFiles: number;
+  maxBytes: number;
+  allowedTypes: readonly string[];
+}
+
+export interface SandboxCapabilities {
+  filesystem: readonly string[];
+  network: readonly string[];
+  tools: readonly string[];
+  secretRefs: readonly string[];
+  clock: boolean;
+  randomness: boolean;
+  subprocesses: number;
+}
+
+export interface SandboxGovernance {
+  grantRef: string;
+  approvalRef: string;
+  approvalBindingDigest: string;
+  approvalSourceDigest: string;
+  approvalRequestDigest: string;
+  approvalExpiresAt: string;
+  authorizationContextDigest: string;
+  riskDecisionRef: string;
+  policyRevision: string;
+  authorized: boolean;
+  current: boolean;
+  revoked: boolean;
+}
+
+export interface SandboxExecutionRequest {
+  schemaVersion: typeof SANDBOX_REQUEST_SCHEMA;
+  workloadKind: string;
+  principal: Readonly<SandboxPrincipal>;
+  artifact: Readonly<SandboxArtifact>;
+  invocation: Readonly<SandboxInvocation>;
+  inputs: readonly Readonly<SandboxInput>[];
+  outputs: Readonly<SandboxOutputs>;
+  capabilities: Readonly<SandboxCapabilities>;
+  resources: Readonly<Record<string, number>>;
+  governance: Readonly<SandboxGovernance>;
+  idempotencyKey: string;
+  deadlineAt: string;
+}
+
+export interface SandboxConfiguredWorkloadRequest extends Omit<SandboxExecutionRequest, "schemaVersion" | "artifact"> {
+  schemaVersion: typeof SANDBOX_CONFIGURED_WORKLOAD_REQUEST_SCHEMA;
+}
+
+export interface SandboxDenialReceipt {
+  schemaVersion: typeof SANDBOX_RECEIPT_SCHEMA;
+  runId: string;
+  requestDigest: string;
+  status: "denied";
+  reasonCode: string;
+  runtimeState: "not_started";
+  cleanupState: "not_required";
+  outputDisposition: "none";
+  createdAt: string;
+  finishedAt: string;
+}
+
+const REQUEST_FIELDS = new Set<string>([
   "schemaVersion",
   "workloadKind",
   "principal",
@@ -46,15 +137,15 @@ const REQUEST_FIELDS: any = new Set<any>([
   "idempotencyKey",
   "deadlineAt"
 ]);
-const CONFIGURED_WORKLOAD_REQUEST_FIELDS: any = new Set<any>(
-  [...REQUEST_FIELDS].filter((field?: any) : any => field !== "artifact")
+const CONFIGURED_WORKLOAD_REQUEST_FIELDS = new Set<string>(
+  [...REQUEST_FIELDS].filter((field) => field !== "artifact")
 );
-const PRINCIPAL_FIELDS: any = new Set<any>(["subjectRef", "tenantRef", "workspaceRef", "operationRef"]);
-const ARTIFACT_FIELDS: any = new Set<any>(["digest", "runtimeKind", "entryPoint"]);
-const INVOCATION_FIELDS: any = new Set<any>(["args", "workingDirectory"]);
-const INPUT_FIELDS: any = new Set<any>(["handle", "digest", "readOnly"]);
-const OUTPUT_FIELDS: any = new Set<any>(["schema", "maxFiles", "maxBytes", "allowedTypes"]);
-const CAPABILITY_FIELDS: any = new Set<any>([
+const PRINCIPAL_FIELDS = new Set<string>(["subjectRef", "tenantRef", "workspaceRef", "operationRef"]);
+const ARTIFACT_FIELDS = new Set<string>(["digest", "runtimeKind", "entryPoint"]);
+const INVOCATION_FIELDS = new Set<string>(["args", "workingDirectory"]);
+const INPUT_FIELDS = new Set<string>(["handle", "digest", "readOnly"]);
+const OUTPUT_FIELDS = new Set<string>(["schema", "maxFiles", "maxBytes", "allowedTypes"]);
+const CAPABILITY_FIELDS = new Set<string>([
   "filesystem",
   "network",
   "tools",
@@ -63,7 +154,7 @@ const CAPABILITY_FIELDS: any = new Set<any>([
   "randomness",
   "subprocesses"
 ]);
-const RESOURCE_FIELDS: any = new Set<any>([
+const RESOURCE_FIELDS = new Set<string>([
   "wallTimeMs",
   "cpuMillis",
   "memoryBytes",
@@ -77,7 +168,7 @@ const RESOURCE_FIELDS: any = new Set<any>([
   "networkBytes",
   "toolCalls"
 ]);
-const GOVERNANCE_FIELDS: any = new Set<any>([
+const GOVERNANCE_FIELDS = new Set<string>([
   "grantRef",
   "approvalRef",
   "approvalBindingDigest",
@@ -92,13 +183,13 @@ const GOVERNANCE_FIELDS: any = new Set<any>([
   "revoked"
 ]);
 
-function plainObject(value?: any) : any {
+function plainObject(value: unknown): value is UnknownRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function assertObject(value?: any, fields?: any, label?: any) : any {
+function assertObject(value: unknown, fields: ReadonlySet<string>, label: string): UnknownRecord {
   if (!plainObject(value)) throw new TypeError(`${label} must be an object.`);
   for (const field of Object.keys(value)) {
     if (!fields.has(field)) throw new TypeError(`${label} contains unsupported field ${field}.`);
@@ -106,56 +197,60 @@ function assertObject(value?: any, fields?: any, label?: any) : any {
   return value;
 }
 
-function requiredText(value?: any, label?: any, max: any = 512) : any {
-  const normalized: any = String(value || "").trim();
+function requiredText(value: unknown, label: string, max = 512): string {
+  const normalized = String(value || "").trim();
   if (!normalized || normalized.length > max || normalized.includes("\0")) {
     throw new TypeError(`${label} must be a bounded non-empty string.`);
   }
   return normalized;
 }
 
-function optionalText(value?: any, label?: any, max: any = 512) : any {
+function optionalText(value: unknown, label: string, max = 512): string {
   if (value === undefined || value === null || value === "") return "";
   return requiredText(value, label, max);
 }
 
-function sha256(value?: any, label?: any) : any {
-  const digest: any = requiredText(value, label, 128).toLowerCase();
+function sha256(value: unknown, label: string): string {
+  const digest = requiredText(value, label, 128).toLowerCase();
   if (!/^[a-f0-9]{64}$/u.test(digest)) throw new TypeError(`${label} must be a SHA-256 digest.`);
   return digest;
 }
 
-function relativeLogicalPath(value?: any, label?: any, { allowEmpty = false }: Record<string, any> = {}) : any {
-  const normalized: any = String(value || "").trim().replace(/\\/gu, "/");
+function relativeLogicalPath(value: unknown, label: string, { allowEmpty = false }: { allowEmpty?: boolean } = {}): string {
+  const normalized = String(value || "").trim().replace(/\\/gu, "/");
   if (allowEmpty && !normalized) return "";
   requiredText(normalized, label, 1024);
   if (
     normalized.startsWith("/") ||
     normalized.startsWith("~") ||
-    normalized.split("/").some((segment?: any) : any => segment === ".." || segment === ".")
+    normalized.split("/").some((segment) => segment === ".." || segment === ".")
   ) {
     throw new TypeError(`${label} must be a normalized sandbox-relative path.`);
   }
   return normalized;
 }
 
-function stringList(value?: any, label?: any, { maxItems = 64, maxLength = 512 }: Record<string, any> = {}) : any {
+function stringList(
+  value: unknown,
+  label: string,
+  { maxItems = 64, maxLength = 512 }: { maxItems?: number; maxLength?: number } = {}
+): readonly string[] {
   if (!Array.isArray(value) || value.length > maxItems) throw new TypeError(`${label} must be a bounded array.`);
-  const normalized: any = value.map((entry?: any, index?: any) : any => optionalText(entry, `${label}[${index}]`, maxLength));
-  if (normalized.some((entry?: any) : any => !entry) || new Set<any>(normalized).size !== normalized.length) {
+  const normalized = value.map((entry, index) => optionalText(entry, `${label}[${index}]`, maxLength));
+  if (normalized.some((entry) => !entry) || new Set(normalized).size !== normalized.length) {
     throw new TypeError(`${label} must contain unique non-empty strings.`);
   }
   return Object.freeze(normalized);
 }
 
-function positiveInteger(value?: any, label?: any) : any {
-  const number: any = Number(value);
+function positiveInteger(value: unknown, label: string): number {
+  const number = Number(value);
   if (!Number.isSafeInteger(number) || number <= 0) throw new TypeError(`${label} must be a positive integer.`);
   return number;
 }
 
-function normalizePrincipal(value?: any) : any {
-  const source: any = assertObject(value, PRINCIPAL_FIELDS, "principal");
+function normalizePrincipal(value: unknown): Readonly<SandboxPrincipal> {
+  const source = assertObject(value, PRINCIPAL_FIELDS, "principal");
   return Object.freeze({
     subjectRef: requiredText(source.subjectRef, "principal.subjectRef"),
     tenantRef: requiredText(source.tenantRef, "principal.tenantRef"),
@@ -164,8 +259,8 @@ function normalizePrincipal(value?: any) : any {
   });
 }
 
-function normalizeArtifact(value?: any) : any {
-  const source: any = assertObject(value, ARTIFACT_FIELDS, "artifact");
+function normalizeArtifact(value: unknown): Readonly<SandboxArtifact> {
+  const source = assertObject(value, ARTIFACT_FIELDS, "artifact");
   return Object.freeze({
     digest: sha256(source.digest, "artifact.digest"),
     runtimeKind: requiredText(source.runtimeKind, "artifact.runtimeKind", 128),
@@ -173,12 +268,12 @@ function normalizeArtifact(value?: any) : any {
   });
 }
 
-function normalizeInvocation(value?: any) : any {
-  const source: any = assertObject(value, INVOCATION_FIELDS, "invocation");
+function normalizeInvocation(value: unknown): Readonly<SandboxInvocation> {
+  const source = assertObject(value, INVOCATION_FIELDS, "invocation");
   if (!Array.isArray(source.args) || source.args.length > 128) {
     throw new TypeError("invocation.args must be a bounded array.");
   }
-  const args: any = source.args.map((entry?: any, index?: any) : any => {
+  const args = source.args.map((entry, index): InvocationScalar => {
     if (["string", "number", "boolean"].includes(typeof entry) && String(entry).length <= 4096) return entry;
     throw new TypeError(`invocation.args[${index}] must be a bounded scalar.`);
   });
@@ -191,14 +286,14 @@ function normalizeInvocation(value?: any) : any {
   });
 }
 
-function normalizeInputs(value?: any) : any {
+function normalizeInputs(value: unknown): readonly Readonly<SandboxInput>[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 32) {
     throw new TypeError("inputs must be a non-empty bounded array.");
   }
-  const handles: any = new Set<any>();
-  return Object.freeze(value.map((entry?: any, index?: any) : any => {
-    const source: any = assertObject(entry, INPUT_FIELDS, `inputs[${index}]`);
-    const handle: any = requiredText(source.handle, `inputs[${index}].handle`, 512);
+  const handles = new Set<string>();
+  return Object.freeze(value.map((entry, index) => {
+    const source = assertObject(entry, INPUT_FIELDS, `inputs[${index}]`);
+    const handle = requiredText(source.handle, `inputs[${index}].handle`, 512);
     if (handles.has(handle)) throw new TypeError("inputs handles must be unique.");
     handles.add(handle);
     if (source.readOnly !== true) throw new TypeError("Sandbox inputs must be explicitly read-only.");
@@ -210,8 +305,8 @@ function normalizeInputs(value?: any) : any {
   }));
 }
 
-function normalizeOutputs(value?: any) : any {
-  const source: any = assertObject(value, OUTPUT_FIELDS, "outputs");
+function normalizeOutputs(value: unknown): Readonly<SandboxOutputs> {
+  const source = assertObject(value, OUTPUT_FIELDS, "outputs");
   return Object.freeze({
     schema: requiredText(source.schema, "outputs.schema", 256),
     maxFiles: positiveInteger(source.maxFiles, "outputs.maxFiles"),
@@ -220,10 +315,10 @@ function normalizeOutputs(value?: any) : any {
   });
 }
 
-function normalizeCapabilities(value?: any) : any {
-  const source: any = assertObject(value, CAPABILITY_FIELDS, "capabilities");
-  const filesystem: any = stringList(source.filesystem || [], "capabilities.filesystem", { maxItems: 16, maxLength: 128 });
-  if (filesystem.some((item?: any) : any => !["input:read", "scratch:write", "output:write"].includes(item))) {
+function normalizeCapabilities(value: unknown): Readonly<SandboxCapabilities> {
+  const source = assertObject(value, CAPABILITY_FIELDS, "capabilities");
+  const filesystem = stringList(source.filesystem || [], "capabilities.filesystem", { maxItems: 16, maxLength: 128 });
+  if (filesystem.some((item) => !["input:read", "scratch:write", "output:write"].includes(item))) {
     throw new TypeError("capabilities.filesystem contains an unsupported capability.");
   }
   return Object.freeze({
@@ -239,15 +334,15 @@ function normalizeCapabilities(value?: any) : any {
   });
 }
 
-function normalizeResources(value?: any) : any {
-  const source: any = assertObject(value, RESOURCE_FIELDS, "resources");
-  const output: Record<string, any> = {};
+function normalizeResources(value: unknown): Readonly<Record<string, number>> {
+  const source = assertObject(value, RESOURCE_FIELDS, "resources");
+  const output: Record<string, number> = {};
   for (const field of RESOURCE_FIELDS) output[field] = positiveInteger(source[field], `resources.${field}`);
   return Object.freeze(output);
 }
 
-function normalizeGovernance(value?: any) : any {
-  const source: any = assertObject(value, GOVERNANCE_FIELDS, "governance");
+function normalizeGovernance(value: unknown): Readonly<SandboxGovernance> {
+  const source = assertObject(value, GOVERNANCE_FIELDS, "governance");
   return Object.freeze({
     grantRef: requiredText(source.grantRef, "governance.grantRef"),
     approvalRef: optionalText(source.approvalRef, "governance.approvalRef"),
@@ -272,21 +367,21 @@ function normalizeGovernance(value?: any) : any {
   });
 }
 
-function optionalTimestamp(value?: any, label?: any) : any {
+function optionalTimestamp(value: unknown, label: string): string {
   if (value === undefined || value === null || value === "") return "";
-  const normalized: any = requiredText(value, label, 64);
-  const parsed: any = Date.parse(normalized);
+  const normalized = requiredText(value, label, 64);
+  const parsed = Date.parse(normalized);
   if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be an ISO timestamp.`);
   return new Date(parsed).toISOString();
 }
 
-export function normalizeSandboxExecutionRequest(value?: any) : any {
-  const source: any = assertObject(value, REQUEST_FIELDS, "Sandbox execution request");
+export function normalizeSandboxExecutionRequest(value: unknown): Readonly<SandboxExecutionRequest> {
+  const source = assertObject(value, REQUEST_FIELDS, "Sandbox execution request");
   if (source.schemaVersion !== SANDBOX_REQUEST_SCHEMA) {
     throw new TypeError("Sandbox execution request schemaVersion is unsupported.");
   }
-  const deadlineAt: any = requiredText(source.deadlineAt, "deadlineAt", 64);
-  const deadlineTime: any = Date.parse(deadlineAt);
+  const deadlineAt = requiredText(source.deadlineAt, "deadlineAt", 64);
+  const deadlineTime = Date.parse(deadlineAt);
   if (!Number.isFinite(deadlineTime)) throw new TypeError("deadlineAt must be an ISO timestamp.");
   return Object.freeze({
     schemaVersion: SANDBOX_REQUEST_SCHEMA,
@@ -304,8 +399,8 @@ export function normalizeSandboxExecutionRequest(value?: any) : any {
   });
 }
 
-export function normalizeSandboxConfiguredWorkloadRequest(value?: any) : any {
-  const source: any = assertObject(
+export function normalizeSandboxConfiguredWorkloadRequest(value: unknown): Readonly<SandboxConfiguredWorkloadRequest> {
+  const source = assertObject(
     value,
     CONFIGURED_WORKLOAD_REQUEST_FIELDS,
     "Sandbox configured workload request"
@@ -313,8 +408,8 @@ export function normalizeSandboxConfiguredWorkloadRequest(value?: any) : any {
   if (source.schemaVersion !== SANDBOX_CONFIGURED_WORKLOAD_REQUEST_SCHEMA) {
     throw new TypeError("Sandbox configured workload request schemaVersion is unsupported.");
   }
-  const deadlineAt: any = requiredText(source.deadlineAt, "deadlineAt", 64);
-  const deadlineTime: any = Date.parse(deadlineAt);
+  const deadlineAt = requiredText(source.deadlineAt, "deadlineAt", 64);
+  const deadlineTime = Date.parse(deadlineAt);
   if (!Number.isFinite(deadlineTime)) throw new TypeError("deadlineAt must be an ISO timestamp.");
   return Object.freeze({
     schemaVersion: SANDBOX_CONFIGURED_WORKLOAD_REQUEST_SCHEMA,
@@ -331,8 +426,11 @@ export function normalizeSandboxConfiguredWorkloadRequest(value?: any) : any {
   });
 }
 
-export function bindSandboxConfiguredWorkloadRequest(value?: any, artifact?: any) : any {
-  const request: any = normalizeSandboxConfiguredWorkloadRequest(value);
+export function bindSandboxConfiguredWorkloadRequest(
+  value: unknown,
+  artifact: unknown
+): Readonly<SandboxExecutionRequest> {
+  const request = normalizeSandboxConfiguredWorkloadRequest(value);
   return normalizeSandboxExecutionRequest({
     ...request,
     schemaVersion: SANDBOX_REQUEST_SCHEMA,
@@ -340,36 +438,44 @@ export function bindSandboxConfiguredWorkloadRequest(value?: any, artifact?: any
   });
 }
 
-export function stableSandboxJson(value?: any) : any {
+export function stableSandboxJson(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (Array.isArray(value)) return `[${value.map(stableSandboxJson).join(",")}]`;
   if (typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key?: any) : any => `${JSON.stringify(key)}:${stableSandboxJson(value[key])}`).join(",")}}`;
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSandboxJson((value as UnknownRecord)[key])}`).join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value)!;
 }
 
-export function sandboxDigest(value?: any) : any {
+export function sandboxDigest(value: unknown): string {
   return crypto.createHash("sha256").update(stableSandboxJson(value)).digest("hex");
 }
 
-export function sandboxApprovalRequestDigest(value?: any) : any {
-  const request: any = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const governance: any = request.governance && typeof request.governance === "object" && !Array.isArray(request.governance)
+export function sandboxApprovalRequestDigest(value: unknown): string {
+  const request: UnknownRecord = plainObject(value) ? value : {};
+  const governance: UnknownRecord = plainObject(request.governance)
     ? request.governance
     : {};
   const { approvalRequestDigest: _approvalRequestDigest, ...approvalGovernance } = governance;
   return sandboxDigest({ ...request, governance: approvalGovernance });
 }
 
-export function controlledRef(value?: any, namespace: any = "ref") : any {
+export function controlledRef(value: unknown, namespace = "ref"): string {
   return `${namespace}:${sandboxDigest(String(value || "")).slice(0, 24)}`;
 }
 
-export function createSandboxDenialReceipt({ request = null, reasonCode, now = new Date() }: Record<string, any> = {}) : any {
-  const createdAt: any = now.toISOString();
-  const requestDigest: any = request ? sandboxDigest(request) : "";
-  const runId: any = requestDigest
+export function createSandboxDenialReceipt({
+  request = null,
+  reasonCode,
+  now = new Date()
+}: {
+  request?: unknown;
+  reasonCode?: unknown;
+  now?: Date;
+} = {}): Readonly<SandboxDenialReceipt> {
+  const createdAt = now.toISOString();
+  const requestDigest = request ? sandboxDigest(request) : "";
+  const runId = requestDigest
     ? `run:${requestDigest.slice(0, 24)}`
     : `denial:${sandboxDigest({ reasonCode, createdAt }).slice(0, 24)}`;
   return Object.freeze({

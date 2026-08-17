@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { ServerConfig } from "#meshrix/server-config";
 import {
@@ -15,6 +16,7 @@ import {
   sha256Text,
   storageError
 } from "./backup-contract.ts";
+import type { StorageArtifactClassifier } from "./backup-contract.ts";
 import {
   assertSnapshotSourceSetStable,
   captureRegularSourceSignatures,
@@ -40,23 +42,79 @@ import { acquireStorageMaintenanceLock } from "./storage-lifecycle-lock.ts";
 import { createStorageWorkTracker } from "./storage-maintenance-coordinator.ts";
 import { reconcileStorageRestoreTransactionsSync } from "./restore-transaction.ts";
 
-const MINIMUM_FREE_SPACE_RESERVE_BYTES: any = 64 * 1024 * 1024;
-const FREE_SPACE_RESERVE_PERCENT: any = 10;
-const MAX_PENDING_BACKUP_CLEANUP: any = 64;
+const MINIMUM_FREE_SPACE_RESERVE_BYTES = 64 * 1024 * 1024;
+const FREE_SPACE_RESERVE_PERCENT = 10;
+const MAX_PENDING_BACKUP_CLEANUP = 64;
 
-async function reconcilePendingBackups({ rootPath, tracker }: Record<string, any>) : Promise<any> {
-  const selectedBackupRoot: any = backupRoot(rootPath);
-  let entries: any[] = [];
+type WorkAmounts = { files?: number; bytes?: number; cleanupItems?: number };
+
+interface StorageWorkTracker {
+  assertActive(): void;
+  assertFits(amounts: WorkAmounts): void;
+  consume(amounts: WorkAmounts): void;
+}
+
+interface MaintenanceLock {
+  release(): Promise<void>;
+}
+
+interface SnapshotSource {
+  sourcePath: string;
+  relativePath: string;
+  category: string;
+}
+
+interface SnapshotIntegrity {
+  bytes: number;
+  sha256: string;
+  mtimeMs: number;
+  copyMethod: string;
+}
+
+interface SnapshotEntry extends SnapshotIntegrity {
+  relativePath: string;
+  category: string;
+}
+
+interface SnapshotCapacity {
+  sourceBytes: number;
+  requiredBytes: number;
+  availableBytes: number;
+  safetyReserveBytes: number;
+}
+
+export type StorageBackupManifest = Record<string, unknown> & {
+  protocolVersion: string;
+  backupId: string;
+  label: string;
+  createdAt: string;
+  files: SnapshotEntry[];
+};
+
+function errorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null || !("code" in error)) return "";
+  return String(error.code || "");
+}
+
+async function reconcilePendingBackups({
+  rootPath,
+  tracker
+}: {
+  rootPath: string;
+  tracker: StorageWorkTracker;
+}): Promise<number> {
+  const selectedBackupRoot = backupRoot(rootPath);
+  let entries: Dirent<string>[] = [];
   try {
     entries = await fs.readdir(selectedBackupRoot, { withFileTypes: true });
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return 0;
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") return 0;
     throw error;
   }
-  const pending: any = entries
-    .filter((entry?: any) : any => entry.name.startsWith(".backup_") && entry.name.endsWith(".pending"))
-    .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
-  const selected: any = pending.slice(0, MAX_PENDING_BACKUP_CLEANUP);
+  const pending = entries
+    .filter((entry) => entry.name.startsWith(".backup_") && entry.name.endsWith(".pending"))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const selected = pending.slice(0, MAX_PENDING_BACKUP_CLEANUP);
   for (const entry of selected) {
     tracker.consume({ cleanupItems: 1 });
     if (!entry.isDirectory() || entry.isSymbolicLink()) {
@@ -77,23 +135,23 @@ async function reconcilePendingBackups({ rootPath, tracker }: Record<string, any
   return selected.length;
 }
 
-async function estimateSnapshotBytes(sources?: any) : Promise<any> {
-  let bytes: any = 0;
+async function estimateSnapshotBytes(sources: readonly SnapshotSource[]): Promise<number> {
+  let bytes = 0;
   for (const source of sources) {
-    const stat: any = await fs.lstat(source.sourcePath);
+    const stat = await fs.lstat(source.sourcePath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw storageError("backup_file_type_invalid", "Backup sources must be regular files.");
     }
     bytes += Number(stat.size || 0);
     if (isSqliteDataFile(source.relativePath)) {
       try {
-        const wal: any = await fs.lstat(`${source.sourcePath}-wal`);
+        const wal = await fs.lstat(`${source.sourcePath}-wal`);
         if (!wal.isFile() || wal.isSymbolicLink()) {
           throw storageError("backup_file_type_invalid", "SQLite WAL sources must be regular files.");
         }
         bytes += Number(wal.size || 0);
-      } catch (error: any) {
-        if (error?.code !== "ENOENT") throw error;
+      } catch (error: unknown) {
+        if (errorCode(error) !== "ENOENT") throw error;
       }
     }
     if (!Number.isSafeInteger(bytes)) {
@@ -103,22 +161,30 @@ async function estimateSnapshotBytes(sources?: any) : Promise<any> {
   return bytes;
 }
 
-async function assertSnapshotCapacity({ rootPath, sourceBytes, tracker }: Record<string, any>) : Promise<any> {
-  const expectedWorkBytes: any = sourceBytes * 2;
+async function assertSnapshotCapacity({
+  rootPath,
+  sourceBytes,
+  tracker
+}: {
+  rootPath: string;
+  sourceBytes: number;
+  tracker: StorageWorkTracker;
+}): Promise<SnapshotCapacity> {
+  const expectedWorkBytes = sourceBytes * 2;
   if (!Number.isSafeInteger(expectedWorkBytes)) {
     throw storageError("storage_backup_capacity_invalid", "Backup work size exceeds safe capacity arithmetic.");
   }
   tracker.assertFits({ files: 0, bytes: expectedWorkBytes });
-  const stats: any = await fs.statfs(rootPath, { bigint: true });
-  const availableBigInt: any = stats.bavail * stats.bsize;
-  const availableBytes: any = availableBigInt > BigInt(Number.MAX_SAFE_INTEGER)
+  const stats = await fs.statfs(rootPath, { bigint: true });
+  const availableBigInt = stats.bavail * stats.bsize;
+  const availableBytes = availableBigInt > BigInt(Number.MAX_SAFE_INTEGER)
     ? Number.MAX_SAFE_INTEGER
     : Number(availableBigInt);
-  const safetyReserveBytes: any = Math.max(
+  const safetyReserveBytes = Math.max(
     MINIMUM_FREE_SPACE_RESERVE_BYTES,
     Math.ceil(sourceBytes * FREE_SPACE_RESERVE_PERCENT / 100)
   );
-  const requiredBytes: any = sourceBytes + safetyReserveBytes;
+  const requiredBytes = sourceBytes + safetyReserveBytes;
   if (!Number.isSafeInteger(requiredBytes) || availableBytes < requiredBytes) {
     throw storageError(
       "storage_backup_capacity_insufficient",
@@ -128,14 +194,15 @@ async function assertSnapshotCapacity({ rootPath, sourceBytes, tracker }: Record
   return { sourceBytes, requiredBytes, availableBytes, safetyReserveBytes };
 }
 
-async function latestBackupBaseline(rootPath?: any) : Promise<any> {
-  const listing: any = await listStorageBackups({ userDataPath: rootPath });
-  const latest: any = listing.backups[0];
-  if (!latest) return new Map<any, any>();
-  const manifest: any = await loadBackupManifest({ userDataPath: rootPath, backupId: latest.backupId });
-  return new Map<any, any>(manifest.files.map((entry?: any) : any => [
+async function latestBackupBaseline(rootPath: string): Promise<Map<string, string>> {
+  const listing = await listStorageBackups({ userDataPath: rootPath });
+  const latest = listing.backups[0];
+  const latestBackupId = typeof latest?.backupId === "string" ? latest.backupId : "";
+  if (!latestBackupId) return new Map();
+  const manifest = await loadBackupManifest({ userDataPath: rootPath, backupId: latestBackupId });
+  return new Map(manifest.files.map((entry) => [
     entry.relativePath,
-    path.join(backupFilesRoot(rootPath, latest.backupId), entry.relativePath)
+    path.join(backupFilesRoot(rootPath, latestBackupId), entry.relativePath)
   ]));
 }
 
@@ -147,39 +214,47 @@ export async function createStorageBackup({
   budget = {},
   retentionPolicy = null,
   executionContext = null
-}: Record<string, any> = {}) : Promise<any> {
-  const rootPath: any = path.resolve(userDataPath || ServerConfig.getDataDir());
-  const tracker: any = executionContext || createStorageWorkTracker({ signal, budget });
+}: {
+  userDataPath?: string;
+  label?: string;
+  artifactClassifiers?: unknown;
+  signal?: AbortSignal | null;
+  budget?: Record<string, unknown>;
+  retentionPolicy?: unknown;
+  executionContext?: StorageWorkTracker | null;
+} = {}): Promise<StorageBackupManifest & { retention?: unknown }> {
+  const rootPath = path.resolve(userDataPath || ServerConfig.getDataDir());
+  const tracker: StorageWorkTracker = executionContext || createStorageWorkTracker({ signal, budget });
   tracker.assertActive();
   await fs.mkdir(rootPath, { recursive: true, mode: 0o700 });
-  const maintenanceLock: any = await acquireStorageMaintenanceLock(rootPath);
-  const backupId: any = backupIdFor(label);
-  const finalBackupPath: any = backupPath(rootPath, backupId);
-  const stagingBackupPath: any = path.join(backupRoot(rootPath), `.${backupId}.pending`);
-  const stagingFilesRoot: any = path.join(stagingBackupPath, BACKUP_FILES_DIR);
+  const maintenanceLock: MaintenanceLock = await acquireStorageMaintenanceLock(rootPath);
+  const backupId = backupIdFor(label);
+  const finalBackupPath = backupPath(rootPath, backupId);
+  const stagingBackupPath = path.join(backupRoot(rootPath), `.${backupId}.pending`);
+  const stagingFilesRoot = path.join(stagingBackupPath, BACKUP_FILES_DIR);
   try {
     reconcileStorageRestoreTransactionsSync(rootPath);
-    const selectedBackupRoot: any = backupRoot(rootPath);
+    const selectedBackupRoot = backupRoot(rootPath);
     await ensurePrivateDirectory(selectedBackupRoot, selectedBackupRoot);
     await syncDirectory(rootPath);
     await reconcilePendingBackups({ rootPath, tracker });
-    const selectedArtifactClassifiers: any = normalizeArtifactClassifiers(artifactClassifiers);
-    const sources: any = await collectSnapshotSources(
+    const selectedArtifactClassifiers: StorageArtifactClassifier[] = normalizeArtifactClassifiers(artifactClassifiers);
+    const sources: SnapshotSource[] = await collectSnapshotSources(
       rootPath,
       rootPath,
       [],
       selectedArtifactClassifiers
     );
     tracker.assertFits({ files: sources.length });
-    const sourceBytes: any = await estimateSnapshotBytes(sources);
-    const capacity: any = await assertSnapshotCapacity({ rootPath, sourceBytes, tracker });
-    const baselineByPath: any = await latestBackupBaseline(rootPath);
+    const sourceBytes = await estimateSnapshotBytes(sources);
+    const capacity = await assertSnapshotCapacity({ rootPath, sourceBytes, tracker });
+    const baselineByPath = await latestBackupBaseline(rootPath);
     await ensurePrivateDirectory(selectedBackupRoot, stagingFilesRoot);
-    const regularSourceSignatures: any = await captureRegularSourceSignatures(sources);
-    const entries: any[] = [];
+    const regularSourceSignatures = await captureRegularSourceSignatures(sources);
+    const entries: SnapshotEntry[] = [];
     for (const source of sources) {
       tracker.consume({ files: 1 });
-      const sourceBoundaryReason: any = await pathBoundaryReason({
+      const sourceBoundaryReason: string = await pathBoundaryReason({
         rootPath,
         targetPath: source.sourcePath,
         allowMissingTarget: false
@@ -187,8 +262,8 @@ export async function createStorageBackup({
       if (sourceBoundaryReason) {
         throw storageError("backup_source_boundary_invalid", "A backup source file escaped the storage root.");
       }
-      const targetPath: any = path.join(stagingFilesRoot, source.relativePath);
-      const integrity: any = isSqliteDataFile(source.relativePath)
+      const targetPath = path.join(stagingFilesRoot, source.relativePath);
+      const integrity: SnapshotIntegrity = isSqliteDataFile(source.relativePath)
         ? await snapshotSqliteDatabase({
             sourcePath: source.sourcePath,
             targetPath,
@@ -215,8 +290,8 @@ export async function createStorageBackup({
       regularSourceSignatures,
       artifactClassifiers: selectedArtifactClassifiers
     });
-    const summary: any = summarizeEntries(entries);
-    const manifest: Record<string, any> = {
+    const summary = summarizeEntries(entries);
+    const manifest: StorageBackupManifest = {
       schemaVersion: "v0.0.1:schema:definition-1",
       protocolVersion: BACKUP_RESTORE_PROTOCOL_VERSION,
       backupId,
@@ -256,7 +331,7 @@ export async function createStorageBackup({
     await fs.rename(stagingBackupPath, finalBackupPath);
     await syncDirectory(backupRoot(rootPath));
     await rebuildStorageBackupCatalog({ userDataPath: rootPath });
-    const retention: any = retentionPolicy
+    const retention: unknown = retentionPolicy
       ? await applyStorageBackupRetention({
           userDataPath: rootPath,
           policy: retentionPolicy,
@@ -265,11 +340,11 @@ export async function createStorageBackup({
         })
       : null;
     return retention ? { ...manifest, retention } : manifest;
-  } catch (error: any) {
-    await fs.rm(stagingBackupPath, { recursive: true, force: true }).catch(() : any => {});
+  } catch (error: unknown) {
+    await fs.rm(stagingBackupPath, { recursive: true, force: true }).catch(() => {});
     if (isStorageError(error)) throw error;
     throw storageError("storage_backup_failed", "Storage backup could not be completed safely.", { cause: error });
   } finally {
-    await maintenanceLock.release().catch(() : any => {});
+    await maintenanceLock.release().catch(() => {});
   }
 }

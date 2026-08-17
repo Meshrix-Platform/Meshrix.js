@@ -2,6 +2,8 @@ import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import type Database from "better-sqlite3";
+import type { FileHandle } from "node:fs/promises";
 
 import { openSqliteDatabase } from "./sqlite-database.ts";
 import { ensurePrivateSqliteLocation } from "./private-sqlite.ts";
@@ -14,30 +16,111 @@ import {
   validateOpaqueServiceId
 } from "./storage-ports.ts";
 
-const DATABASE_SCHEMA_VERSION: any = 2;
-const REQUEST_RETENTION_MS: any = 7 * 24 * 60 * 60 * 1000;
-const INITIALIZATION_LOCK_STALE_MS: any = 60_000;
-export const SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS: any = 256;
-const RECEIPT_REF_PATTERN: any =
+type JsonRecord = Record<string, unknown>;
+type Metadata = Record<string, string>;
+type SqliteValue = string | number | Buffer | null;
+type SqliteRow = Record<string, SqliteValue>;
+type ServiceManifestKind = "published" | "candidate";
+
+export interface ManifestTransactionContext {
+  readonly budget: Readonly<ManifestResourceBudget>;
+  readonly signal?: AbortSignal;
+  readonly deadline: number;
+  check(): void;
+  touchFile(): void;
+  consumeRead(byteCount: number): void;
+  consumeWrite(byteCount: number): void;
+  inspectCleanupEntry(): void;
+}
+
+export interface ManifestPointer {
+  setRevision: number;
+  setDigest: string;
+}
+
+export interface ManifestSnapshotEntry {
+  serviceId: string;
+  serviceRevision: number;
+  manifestDigest: string;
+  manifestBytes: Buffer;
+}
+
+export interface ManifestSnapshotState {
+  pointer: Readonly<ManifestPointer>;
+  entries: readonly Readonly<ManifestSnapshotEntry>[];
+}
+
+export interface ManifestCommitOutcome extends ManifestPointer {
+  requestDigest: string;
+  serviceId: string;
+  manifestDigest: string;
+  expectedServiceRevision: number;
+  expectedSetRevision: number;
+  serviceRevision: number;
+  receiptRef: string;
+}
+
+export interface ManifestCommitResult {
+  outcome: Readonly<ManifestCommitOutcome>;
+  replayed: boolean;
+  changed: boolean;
+}
+
+export interface ManifestCommitInput {
+  serviceId: string;
+  expectedServiceRevision: number;
+  expectedSetRevision: number;
+  manifestBytes: Buffer;
+  manifestDigest: string;
+  requestDigest: string;
+}
+
+export interface ServiceManifestTransaction {
+  rootPath: string;
+  databasePath: string;
+  readSnapshot(kind: ServiceManifestKind, context: ManifestTransactionContext): Promise<ManifestSnapshotState>;
+  commitManifest(input: ManifestCommitInput, context: ManifestTransactionContext): Promise<ManifestCommitResult>;
+  acknowledgePublished(input: ManifestPointer, context: ManifestTransactionContext): Promise<Readonly<ManifestPointer>>;
+}
+
+interface ManifestResourceBudget {
+  maxManifestBytes: number;
+  maxManifestNodes: number;
+  maxReferenceCount: number;
+  maxServices: number;
+  maxRequestRecords: number;
+  maxRequestBytes: number;
+  maxReadBytes: number;
+  maxWriteBytes: number;
+  maxFiles: number;
+  maxCleanupEntries: number;
+  maxOperationMs: number;
+}
+
+const DATABASE_SCHEMA_VERSION = 2;
+const REQUEST_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const INITIALIZATION_LOCK_STALE_MS = 60_000;
+export const SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS = 256;
+const RECEIPT_REF_PATTERN =
   /^urn:meshrix:storage-manifest-receipt:[a-f0-9]{64}$/u;
-const EXPECTED_TABLES: readonly any[] = Object.freeze([
+const EXPECTED_TABLES: readonly string[] = Object.freeze([
   "manifest_authority_meta",
   "manifest_blobs",
   "manifest_services",
   "manifest_service_versions",
   "manifest_requests"
 ]);
-const EMPTY_SERVICES: readonly any[] = Object.freeze([]);
+const EMPTY_SERVICES: readonly JsonRecord[] = Object.freeze([]);
 
-export const SERVICE_MANIFEST_POINTER_SCHEMA_VERSION: any =
+export const SERVICE_MANIFEST_POINTER_SCHEMA_VERSION =
   "v0.0.1:storage:service-manifest-pointer-2";
-export const SERVICE_MANIFEST_GENERATION_SCHEMA_VERSION: any =
+export const SERVICE_MANIFEST_GENERATION_SCHEMA_VERSION =
   "v0.0.1:storage:service-manifest-generation-2";
-export const SERVICE_MANIFEST_JOURNAL_SCHEMA_VERSION: any =
+export const SERVICE_MANIFEST_JOURNAL_SCHEMA_VERSION =
   "v0.0.1:storage:service-manifest-sqlite-1";
 
-function combineSignals(signals?: any) : any {
-  const active: any = signals.filter(Boolean);
+function combineSignals(signals: readonly (AbortSignal | undefined)[]): AbortSignal | undefined {
+  const active = signals.filter((signal): signal is AbortSignal => Boolean(signal));
   if (active.length === 0) return undefined;
   if (active.length === 1) return active[0];
   return AbortSignal.any(active);
@@ -48,17 +131,22 @@ export function createManifestTransactionContext({
   signal,
   laneSignal,
   startedAt = Date.now()
-}: Record<string, any>) : any {
-  const combinedSignal: any = combineSignals([signal, laneSignal]);
-  const deadline: any = startedAt + budget.maxOperationMs;
-  let readBytes: any = 0;
-  let writeBytes: any = 0;
-  let files: any = 0;
-  let cleanupEntries: any = 0;
+}: {
+  budget: Readonly<ManifestResourceBudget>;
+  signal?: AbortSignal;
+  laneSignal?: AbortSignal | null;
+  startedAt?: number;
+}): ManifestTransactionContext {
+  const combinedSignal: AbortSignal | undefined = combineSignals([signal, laneSignal ?? undefined]);
+  const deadline = startedAt + budget.maxOperationMs;
+  let readBytes = 0;
+  let writeBytes = 0;
+  let files = 0;
+  let cleanupEntries = 0;
 
-  function check() : any {
+  function check(): void {
     if (combinedSignal?.aborted) {
-      const reason: any = combinedSignal.reason;
+      const reason: unknown = combinedSignal.reason;
       if (reason instanceof Error) throw reason;
       throw serviceManifestError(
         "storage_manifest_aborted",
@@ -73,7 +161,7 @@ export function createManifestTransactionContext({
     }
   }
 
-  function touchFile() : any {
+  function touchFile(): void {
     check();
     files += 1;
     if (files > budget.maxFiles) {
@@ -84,7 +172,7 @@ export function createManifestTransactionContext({
     }
   }
 
-  function consumeRead(byteCount?: any) : any {
+  function consumeRead(byteCount: number): void {
     check();
     readBytes += Number(byteCount);
     if (readBytes > budget.maxReadBytes) {
@@ -95,7 +183,7 @@ export function createManifestTransactionContext({
     }
   }
 
-  function consumeWrite(byteCount?: any) : any {
+  function consumeWrite(byteCount: number): void {
     check();
     writeBytes += Number(byteCount);
     if (writeBytes > budget.maxWriteBytes) {
@@ -106,7 +194,7 @@ export function createManifestTransactionContext({
     }
   }
 
-  function inspectCleanupEntry() : any {
+  function inspectCleanupEntry(): void {
     check();
     cleanupEntries += 1;
     if (cleanupEntries > budget.maxCleanupEntries) {
@@ -129,13 +217,13 @@ export function createManifestTransactionContext({
   });
 }
 
-export function serviceManifestSetDigest(services?: any) : any {
+export function serviceManifestSetDigest(services: readonly JsonRecord[] = EMPTY_SERVICES): string {
   return sha256ManifestBytes(
     Buffer.from(stableManifestJson(services), "utf8")
   );
 }
 
-const EMPTY_SET_DIGEST: any = serviceManifestSetDigest(EMPTY_SERVICES);
+const EMPTY_SET_DIGEST = serviceManifestSetDigest(EMPTY_SERVICES);
 
 function transitionSetDigest({
   previousSetDigest,
@@ -143,7 +231,13 @@ function transitionSetDigest({
   serviceId,
   serviceRevision,
   manifestDigest
-}: Record<string, any>) : any {
+}: {
+  previousSetDigest: string;
+  setRevision: number;
+  serviceId: string;
+  serviceRevision: number;
+  manifestDigest: string;
+}): string {
   return sha256ManifestBytes(Buffer.from(stableManifestJson({
     previousSetDigest,
     setRevision,
@@ -162,8 +256,8 @@ function requestOutcome({
   serviceRevision,
   setRevision,
   setDigest
-}: Record<string, any>) : any {
-  const receiptDigest: any = sha256ManifestBytes(
+}: Omit<ManifestCommitOutcome, "receiptRef">): ManifestCommitOutcome {
+  const receiptDigest = sha256ManifestBytes(
     Buffer.from(stableManifestJson({
       requestDigest,
       serviceId,
@@ -188,15 +282,74 @@ function requestOutcome({
   });
 }
 
-function metaRows(db?: any) : any {
-  return Object.fromEntries(
-    db.prepare("SELECT key,value FROM manifest_authority_meta").all()
-      .map((row?: any) : any => [String(row.key), String(row.value)])
-  );
+interface MetadataRow extends SqliteRow {
+  key: string;
+  value: string;
 }
 
-function numberMeta(meta?: any, key?: any) : any {
-  const value: any = Number(meta[key]);
+interface SchemaNameRow extends SqliteRow {
+  name: string;
+}
+
+interface ManifestBlobRow extends SqliteRow {
+  bytes: Buffer;
+  byte_size: number;
+}
+
+interface ManifestServiceRow extends SqliteRow {
+  service_revision: number;
+  manifest_digest: string;
+}
+
+interface ManifestVersionRow extends SqliteRow {
+  service_id: string;
+  valid_from_revision: number;
+  valid_to_revision: number;
+  service_revision: number;
+  manifest_digest: string;
+}
+
+interface ManifestSnapshotRow extends SqliteRow {
+  service_id: string;
+  service_revision: number;
+  manifest_digest: string;
+  bytes: Buffer;
+  byte_size: number;
+}
+
+interface ManifestRequestRow extends SqliteRow {
+  request_digest: string;
+  service_id: string;
+  manifest_digest: string;
+  expected_service_revision: number;
+  expected_set_revision: number;
+  service_revision: number;
+  set_revision: number;
+  set_digest: string;
+  receipt_ref: string;
+}
+
+interface ManifestRequestSequenceRow extends SqliteRow {
+  sequence: number;
+}
+
+function errorRecord(error: unknown): Record<string, unknown> {
+  return error && typeof error === "object" && !Array.isArray(error)
+    ? error as Record<string, unknown>
+    : {};
+}
+
+function errorCode(error: unknown): string {
+  return String(errorRecord(error).code || "");
+}
+
+function metaRows(db: Database.Database): Metadata {
+  const rows = db.prepare("SELECT key,value FROM manifest_authority_meta").all() as MetadataRow[];
+  return Object.fromEntries(rows.map((row): [string, string] => [row.key, row.value]));
+}
+
+function numberMeta(meta: Metadata, key: string): number {
+  const value = Number(meta[key]);
   if (!Number.isSafeInteger(value) || value < 0) {
     throw serviceManifestError(
       "storage_manifest_index_invalid",
@@ -206,10 +359,9 @@ function numberMeta(meta?: any, key?: any) : any {
   return value;
 }
 
-function verifySchema(db?: any) : any {
-  const expected: any = new Set<any>(EXPECTED_TABLES);
-  const existing: any = new Set<any>(
-    db.prepare(`
+function verifySchema(db: Database.Database): boolean {
+  const expected = new Set<string>(EXPECTED_TABLES);
+  const rows = db.prepare(`
       SELECT name FROM sqlite_master
       WHERE type='table'
         AND name IN (
@@ -219,13 +371,15 @@ function verifySchema(db?: any) : any {
           'manifest_service_versions',
           'manifest_requests'
         )
-    `).all().map((row?: any) : any => String(row.name))
+    `).all() as SchemaNameRow[];
+  const existing = new Set<string>(
+    rows.map((row): string => row.name)
   );
   if (
     existing.size !== 0 &&
     (
       existing.size !== expected.size ||
-      [...expected].some((name?: any) : any => !existing.has(name))
+      [...expected].some((name): boolean => !existing.has(name))
     )
   ) {
     throw serviceManifestError(
@@ -237,45 +391,47 @@ function verifySchema(db?: any) : any {
 }
 
 function createSchema(
-  db?: any,
-  { initialize = false }: Record<string, any> = {}
-) : any {
-  const initializing: any = verifySchema(db);
+  db: Database.Database,
+  { initialize = false }: { initialize?: boolean } = {}
+): void {
+  const initializing = verifySchema(db);
   if (!initializing) {
-    const expectedIndexes: any = new Set<any>([
+    const expectedIndexes = new Set<string>([
       "idx_manifest_versions_visibility",
       "idx_manifest_versions_digest",
       "idx_manifest_versions_retention",
       "idx_manifest_requests_created"
     ]);
-    const expectedTriggers: any = new Set<any>([
+    const expectedTriggers = new Set<string>([
       "manifest_services_insert",
       "manifest_services_delete",
       "manifest_requests_insert",
       "manifest_requests_delete"
     ]);
-    const indexes: any = new Set<any>(
-      db.prepare(`
+    const indexRows = db.prepare(`
         SELECT name FROM sqlite_master
         WHERE type='index' AND name LIKE 'idx_manifest_%'
-      `).all().map((row?: any) : any => String(row.name))
+      `).all() as SchemaNameRow[];
+    const indexes = new Set<string>(
+      indexRows.map((row): string => row.name)
     );
-    const triggers: any = new Set<any>(
-      db.prepare(`
+    const triggerRows = db.prepare(`
         SELECT name FROM sqlite_master
         WHERE type='trigger' AND name LIKE 'manifest_%'
-      `).all().map((row?: any) : any => String(row.name))
+      `).all() as SchemaNameRow[];
+    const triggers = new Set<string>(
+      triggerRows.map((row): string => row.name)
     );
     if (
-      [...expectedIndexes].some((name?: any) : any => !indexes.has(name)) ||
-      [...expectedTriggers].some((name?: any) : any => !triggers.has(name))
+      [...expectedIndexes].some((name): boolean => !indexes.has(name)) ||
+      [...expectedTriggers].some((name): boolean => !triggers.has(name))
     ) {
       throw serviceManifestError(
         "storage_manifest_index_incomplete",
         "Service manifest index schema is incomplete."
       );
     }
-    const meta: any = metaRows(db);
+    const meta = metaRows(db);
     for (const key of [
       "schema_version",
       "candidate_set_revision",
@@ -357,7 +513,7 @@ function createSchema(
     CREATE INDEX IF NOT EXISTS idx_manifest_requests_created
       ON manifest_requests(created_at_ms,sequence);
   `);
-  const initial: Record<string, any> = {
+  const initial: Record<string, string | number> = {
     schema_version: DATABASE_SCHEMA_VERSION,
     candidate_set_revision: 0,
     candidate_set_digest: EMPTY_SET_DIGEST,
@@ -367,11 +523,11 @@ function createSchema(
     request_count: 0,
     request_bytes: 0
   };
-  const insert: any = db.prepare(
+  const insert = db.prepare(
     "INSERT INTO manifest_authority_meta(key,value) VALUES(?,?)"
   );
-  db.transaction(() : any => {
-    for (const [key, value] of (Object.entries(initial) as [string, any][])) {
+  db.transaction((): void => {
+    for (const [key, value] of Object.entries(initial)) {
       insert.run(key, String(value));
     }
   })();
@@ -413,15 +569,18 @@ function createSchema(
   `);
 }
 
-function databasePathFor(rootPath?: any) : any {
+function databasePathFor(rootPath: string): string {
   return path.join(rootPath, "authority.sqlite");
 }
 
-function openAuthorityDatabase(rootPath?: any, { create = false }: Record<string, any> = {}) : any {
-  const databasePath: any = databasePathFor(rootPath);
-  let databaseExists: any = false;
+function openAuthorityDatabase(
+  rootPath: string,
+  { create = false }: { create?: boolean } = {}
+): Database.Database | null {
+  const databasePath = databasePathFor(rootPath);
+  let databaseExists = false;
   try {
-    const stat: any = fsSyncStat(databasePath);
+    const stat = fsSyncStat(databasePath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw serviceManifestError(
         "storage_manifest_file_unsafe",
@@ -429,29 +588,29 @@ function openAuthorityDatabase(rootPath?: any, { create = false }: Record<string
       );
     }
     databaseExists = true;
-  } catch (error: any) {
-    if (error?.code === "ENOENT" && !create) return null;
-    if (error?.code !== "ENOENT") throw error;
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT" && !create) return null;
+    if (errorCode(error) !== "ENOENT") throw error;
   }
   ensurePrivateSqliteLocation(databasePath);
-  const db: any = openSqliteDatabase(databasePath);
+  const db = openSqliteDatabase(databasePath);
   try {
     db.pragma("busy_timeout = 5000");
     if (!databaseExists) db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     createSchema(db, { initialize: create });
     return db;
-  } catch (error: any) {
+  } catch (error: unknown) {
     db.close();
     throw error;
   }
 }
 
-function assertSafeDirectoryAncestry(directoryPath?: any) : any {
-  let current: any = path.resolve(directoryPath);
+function assertSafeDirectoryAncestry(directoryPath: string): void {
+  let current = path.resolve(directoryPath);
   while (true) {
     try {
-      const stat: any = fsNative.lstatSync(current);
+      const stat = fsNative.lstatSync(current);
       if (!stat.isDirectory() || stat.isSymbolicLink()) {
         throw serviceManifestError(
           "storage_manifest_directory_unsafe",
@@ -459,44 +618,59 @@ function assertSafeDirectoryAncestry(directoryPath?: any) : any {
         );
       }
       return;
-    } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
+    } catch (error: unknown) {
+      if (errorCode(error) !== "ENOENT") throw error;
     }
-    const parent: any = path.dirname(current);
+    const parent = path.dirname(current);
     if (parent === current) break;
     current = parent;
   }
 }
 
-function fsSyncStat(filePath?: any) : any {
+function fsSyncStat(filePath: string): fsNative.Stats {
   // lstat is kept behind one small lazy boundary so reader-only access can
   // preserve an absent authority root without creating it.
   return fsNative.lstatSync(filePath);
 }
 
-function pointerFromMeta(meta?: any, kind?: any) : any {
-  const setRevision: any = numberMeta(meta, `${kind}_set_revision`);
-  const setDigest: any = String(meta[`${kind}_set_digest`] || "");
+function pointerFromMeta(meta: Metadata, kind: ServiceManifestKind): Readonly<ManifestPointer> {
+  const setRevision = numberMeta(meta, `${kind}_set_revision`);
+  const setDigest = String(meta[`${kind}_set_digest`] || "");
   validateManifestDigest(setDigest, `${kind} set digest`);
   return Object.freeze({ setRevision, setDigest });
 }
 
-function outcomeFromRow(row?: any) : any {
+function outcomeFromRow(row: ManifestRequestRow | undefined | null): Readonly<ManifestCommitOutcome> | null {
   if (!row) return null;
-  return Object.freeze({
-    requestDigest: String(row.request_digest),
-    serviceId: String(row.service_id),
-    manifestDigest: String(row.manifest_digest),
+  const outcome: ManifestCommitOutcome = {
+    requestDigest: row.request_digest,
+    serviceId: row.service_id,
+    manifestDigest: row.manifest_digest,
     expectedServiceRevision: Number(row.expected_service_revision),
     expectedSetRevision: Number(row.expected_set_revision),
     serviceRevision: Number(row.service_revision),
     setRevision: Number(row.set_revision),
-    setDigest: String(row.set_digest),
-    receiptRef: String(row.receipt_ref)
-  });
+    setDigest: row.set_digest,
+    receiptRef: row.receipt_ref
+  };
+  validateManifestDigest(outcome.requestDigest, "request digest");
+  validateOpaqueServiceId(outcome.serviceId);
+  validateManifestDigest(outcome.manifestDigest, "manifest digest");
+  validateManifestRevision(outcome.expectedServiceRevision, "expected service revision");
+  validateManifestRevision(outcome.expectedSetRevision, "expected set revision");
+  validateManifestRevision(outcome.serviceRevision, "service revision");
+  validateManifestRevision(outcome.setRevision, "set revision");
+  validateManifestDigest(outcome.setDigest, "set digest");
+  if (!RECEIPT_REF_PATTERN.test(outcome.receiptRef)) {
+    throw serviceManifestError(
+      "storage_manifest_receipt_invalid",
+      "Service manifest request receipt reference is invalid."
+    );
+  }
+  return Object.freeze(outcome);
 }
 
-function assertRequestMatches(outcome?: any, input?: any) : any {
+function assertRequestMatches(outcome: ManifestCommitOutcome, input: ManifestCommitInput): void {
   if (
     outcome.serviceId !== input.serviceId ||
     outcome.manifestDigest !== input.manifestDigest ||
@@ -510,25 +684,29 @@ function assertRequestMatches(outcome?: any, input?: any) : any {
   }
 }
 
-function setMeta(db?: any, key?: any, value?: any) : any {
+function setMeta(db: Database.Database, key: string, value: string | number): void {
   db.prepare(
     "UPDATE manifest_authority_meta SET value=? WHERE key=?"
   ).run(String(value), key);
 }
 
-function delay(milliseconds?: any) : any {
-  return new Promise((resolve?: any) : any => setTimeout(resolve, milliseconds));
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function withInitializationLock(rootPath?: any, context?: any, action?: any) : Promise<any> {
-  const lockPath: any = path.join(rootPath, ".authority-initialize.lock");
-  const token: any = `${process.pid}:${randomUUID()}`;
+async function withInitializationLock<T>(
+  rootPath: string,
+  context: ManifestTransactionContext,
+  action: () => Promise<T>
+): Promise<T> {
+  const lockPath = path.join(rootPath, ".authority-initialize.lock");
+  const token = `${process.pid}:${randomUUID()}`;
   await fs.mkdir(rootPath, { recursive: true, mode: 0o700 });
   await fs.chmod(rootPath, 0o700);
   while (true) {
     context.check();
     try {
-      const handle: any = await fs.open(lockPath, "wx", 0o600);
+      const handle: FileHandle = await fs.open(lockPath, "wx", 0o600);
       try {
         await handle.writeFile(token, "utf8");
         await handle.sync();
@@ -536,27 +714,27 @@ async function withInitializationLock(rootPath?: any, context?: any, action?: an
         await handle.close();
       }
       break;
-    } catch (error: any) {
-      if (error?.code !== "EEXIST") throw error;
-      const stat: any = await fs.stat(lockPath).catch(() : any => null);
+    } catch (error: unknown) {
+      if (errorCode(error) !== "EEXIST") throw error;
+      const stat = await fs.stat(lockPath).catch((): undefined => undefined);
       if (
         stat &&
         Date.now() - stat.mtimeMs > INITIALIZATION_LOCK_STALE_MS
       ) {
-        const owner: any = await fs.readFile(lockPath, "utf8").catch(() : any => "");
-        const ownerPid: any = Number(String(owner).split(":", 1)[0]);
-        let alive: any = Number.isSafeInteger(ownerPid) && ownerPid > 0;
+        const owner = await fs.readFile(lockPath, "utf8").catch((): string => "");
+        const ownerPid = Number(owner.split(":", 1)[0]);
+        let alive = Number.isSafeInteger(ownerPid) && ownerPid > 0;
         if (alive) {
           try {
             process.kill(ownerPid, 0);
-          } catch (ownerError: any) {
-            alive = ownerError?.code !== "ESRCH";
+          } catch (ownerError: unknown) {
+            alive = errorCode(ownerError) !== "ESRCH";
           }
         }
         if (!alive) {
-          const abandoned: any = `${lockPath}.abandoned-${randomUUID()}`;
-          await fs.rename(lockPath, abandoned).catch((renameError?: any) : any => {
-            if (renameError?.code !== "ENOENT") throw renameError;
+          const abandoned = `${lockPath}.abandoned-${randomUUID()}`;
+          await fs.rename(lockPath, abandoned).catch((renameError: unknown): void => {
+            if (errorCode(renameError) !== "ENOENT") throw renameError;
           });
           await fs.rm(abandoned, { force: true });
           continue;
@@ -565,25 +743,25 @@ async function withInitializationLock(rootPath?: any, context?: any, action?: an
       await delay(10);
     }
   }
-  const heartbeat: any = setInterval(() : any => {
-    void fs.readFile(lockPath, "utf8").then((owner?: any) : any => {
+  const heartbeat = setInterval((): void => {
+    void fs.readFile(lockPath, "utf8").then((owner: string): Promise<void> | void => {
       if (owner.trim() !== token) return;
       return fs.utimes(lockPath, new Date(), new Date());
-    }).catch(() : any => {});
+    }).catch((): void => {});
   }, 5_000);
   heartbeat.unref?.();
   try {
     return await action();
   } finally {
     clearInterval(heartbeat);
-    const owner: any = await fs.readFile(lockPath, "utf8").catch(() : any => "");
+    const owner = await fs.readFile(lockPath, "utf8").catch((): string => "");
     if (owner.trim() === token) {
       await fs.rm(lockPath, { force: true });
     }
   }
 }
 
-export function serviceManifestAuthorityRoot(storageRoot?: any) : any {
+export function serviceManifestAuthorityRoot(storageRoot: unknown): string {
   if (
     typeof storageRoot !== "string" ||
     !storageRoot.trim() ||
@@ -600,32 +778,39 @@ export function serviceManifestAuthorityRoot(storageRoot?: any) : any {
 export function createServiceManifestTransaction({
   storageRoot,
   now = Date.now
-}: Record<string, any>) : any {
-  const rootPath: any = serviceManifestAuthorityRoot(storageRoot);
-  const databasePath: any = databasePathFor(rootPath);
+}: {
+  storageRoot: string;
+  now?: () => number;
+}): Readonly<ServiceManifestTransaction> {
+  const rootPath = serviceManifestAuthorityRoot(storageRoot);
+  const databasePath = databasePathFor(rootPath);
 
-  async function ensureAuthority(context?: any) : Promise<any> {
+  async function ensureAuthority(context: ManifestTransactionContext): Promise<void> {
     context.check();
     assertSafeDirectoryAncestry(rootPath);
     try {
-      const existing: any = openAuthorityDatabase(rootPath, { create: false });
+      const existing = openAuthorityDatabase(rootPath, { create: false });
       if (existing) {
         existing.close();
         return;
       }
-    } catch (error: any) {
-      if (error?.code !== "storage_manifest_index_incomplete") throw error;
+    } catch (error: unknown) {
+      if (errorCode(error) !== "storage_manifest_index_incomplete") throw error;
     }
-    await withInitializationLock(rootPath, context, async () : Promise<any> => {
-      const db: any = openAuthorityDatabase(rootPath, { create: true });
+    await withInitializationLock(rootPath, context, async (): Promise<void> => {
+      const db = openAuthorityDatabase(rootPath, { create: true });
+      if (!db) throw new Error("Service manifest authority database could not be initialized.");
       db.close();
     });
   }
 
-  async function readSnapshot(kind?: any, context?: any) : Promise<any> {
+  async function readSnapshot(
+    kind: ServiceManifestKind,
+    context: ManifestTransactionContext
+  ): Promise<ManifestSnapshotState> {
     context.check();
     assertSafeDirectoryAncestry(rootPath);
-    let db: any = openAuthorityDatabase(rootPath, { create: false });
+    const db = openAuthorityDatabase(rootPath, { create: false });
     if (!db) {
       return Object.freeze({
         pointer: Object.freeze({
@@ -636,12 +821,12 @@ export function createServiceManifestTransaction({
       });
     }
     try {
-      const meta: any = metaRows(db);
-      const pointer: any = pointerFromMeta(meta, kind);
+      const meta = metaRows(db);
+      const pointer = pointerFromMeta(meta, kind);
       if (pointer.setRevision === 0) {
         return Object.freeze({ pointer, entries: Object.freeze([]) });
       }
-      const rows: any = db.prepare(`
+      const rows = db.prepare(`
         SELECT v.service_id,v.service_revision,v.manifest_digest,
                b.bytes,b.byte_size
         FROM manifest_service_versions AS v
@@ -649,15 +834,15 @@ export function createServiceManifestTransaction({
         WHERE v.valid_from_revision<=?
           AND (v.valid_to_revision=0 OR v.valid_to_revision>?)
         ORDER BY v.service_id ASC
-      `).all(pointer.setRevision, pointer.setRevision);
+      `).all(pointer.setRevision, pointer.setRevision) as ManifestSnapshotRow[];
       if (rows.length > context.budget.maxServices) {
         throw serviceManifestError(
           "storage_manifest_budget_exceeded",
           "Service manifest service count exceeds its resource budget."
         );
       }
-      const entries: any = rows.map((row?: any) : any => {
-        const bytes: any = Buffer.from(row.bytes);
+      const entries = rows.map((row): Readonly<ManifestSnapshotEntry> => {
+        const bytes = Buffer.from(row.bytes);
         context.consumeRead(bytes.length);
         if (
           bytes.length !== Number(row.byte_size) ||
@@ -669,9 +854,9 @@ export function createServiceManifestTransaction({
           );
         }
         return Object.freeze({
-          serviceId: String(row.service_id),
-          serviceRevision: Number(row.service_revision),
-          manifestDigest: String(row.manifest_digest),
+          serviceId: row.service_id,
+          serviceRevision: row.service_revision,
+          manifestDigest: row.manifest_digest,
           manifestBytes: bytes
         });
       });
@@ -691,21 +876,24 @@ export function createServiceManifestTransaction({
     manifestBytes,
     manifestDigest,
     requestDigest
-  }: Record<string, any>, context?: any) : Promise<any> {
+  }: ManifestCommitInput, context: ManifestTransactionContext): Promise<ManifestCommitResult> {
     await ensureAuthority(context);
-    const db: any = openAuthorityDatabase(rootPath, { create: false });
+    const db = openAuthorityDatabase(rootPath, { create: false });
+    if (!db) throw new Error("Service manifest authority database disappeared during commit.");
     try {
       try {
-        return db.transaction(() : any => {
+        return db.transaction((): ManifestCommitResult => {
           context.check();
-          const existingRequest: any = outcomeFromRow(db.prepare(`
+          const existingRequest = outcomeFromRow(db.prepare(`
           SELECT * FROM manifest_requests WHERE request_digest=?
-        `).get(requestDigest));
-        const input: Record<string, any> = {
+        `).get(requestDigest) as ManifestRequestRow | undefined);
+        const input: ManifestCommitInput = {
+          manifestBytes,
           serviceId,
           manifestDigest,
           expectedServiceRevision,
-          expectedSetRevision
+          expectedSetRevision,
+          requestDigest
         };
         if (existingRequest) {
           assertRequestMatches(existingRequest, input);
@@ -715,17 +903,15 @@ export function createServiceManifestTransaction({
             changed: false
           });
         }
-        const meta: any = metaRows(db);
-        const candidate: any = pointerFromMeta(meta, "candidate");
-        const published: any = pointerFromMeta(meta, "published");
-        const existingService: any = db.prepare(`
+        const meta = metaRows(db);
+        const candidate = pointerFromMeta(meta, "candidate");
+        const published = pointerFromMeta(meta, "published");
+        const existingService = db.prepare(`
           SELECT service_revision,manifest_digest
           FROM manifest_services
           WHERE service_id=?
-        `).get(serviceId);
-        const actualServiceRevision: any = Number(
-          existingService?.service_revision || 0
-        );
+        `).get(serviceId) as ManifestServiceRow | undefined;
+        const actualServiceRevision = existingService?.service_revision ?? 0;
         if (expectedServiceRevision !== actualServiceRevision) {
           throw serviceManifestError(
             "storage_manifest_service_revision_stale",
@@ -738,16 +924,16 @@ export function createServiceManifestTransaction({
             "Service manifest expected set revision is stale."
           );
         }
-        const unchanged: any =
-          String(existingService?.manifest_digest || "") === manifestDigest;
-        const serviceRevision: any = unchanged
+        const unchanged =
+          (existingService?.manifest_digest || "") === manifestDigest;
+        const serviceRevision = unchanged
           ? actualServiceRevision
           : actualServiceRevision + 1;
-        const setRevision: any = unchanged
+        const setRevision = unchanged
           ? candidate.setRevision
           : candidate.setRevision + 1;
         if (!existingService && !unchanged) {
-          const serviceCount: any = numberMeta(meta, "service_count");
+          const serviceCount = numberMeta(meta, "service_count");
           if (serviceCount + 1 > context.budget.maxServices) {
             throw serviceManifestError(
               "storage_manifest_budget_exceeded",
@@ -755,7 +941,7 @@ export function createServiceManifestTransaction({
             );
           }
         }
-        let setDigest: any = candidate.setDigest;
+        let setDigest = candidate.setDigest;
         if (!unchanged) {
           if (
             candidate.setRevision - published.setRevision >=
@@ -773,11 +959,11 @@ export function createServiceManifestTransaction({
             serviceRevision,
             manifestDigest
           });
-          const existingBlob: any = db.prepare(`
+          const existingBlob = db.prepare(`
             SELECT bytes,byte_size FROM manifest_blobs WHERE digest=?
-          `).get(manifestDigest);
+          `).get(manifestDigest) as ManifestBlobRow | undefined;
           if (existingBlob) {
-            const existingBytes: any = Buffer.from(existingBlob.bytes);
+            const existingBytes = Buffer.from(existingBlob.bytes);
             if (
               existingBytes.length !== Number(existingBlob.byte_size) ||
               !existingBytes.equals(manifestBytes)
@@ -818,7 +1004,7 @@ export function createServiceManifestTransaction({
           setMeta(db, "candidate_set_revision", setRevision);
           setMeta(db, "candidate_set_digest", setDigest);
         }
-        const outcome: any = requestOutcome({
+        const outcome = requestOutcome({
           requestDigest,
           serviceId,
           manifestDigest,
@@ -828,29 +1014,29 @@ export function createServiceManifestTransaction({
           setRevision,
           setDigest
         });
-        const recordBytes: any = Buffer.byteLength(stableManifestJson(outcome));
+        const recordBytes = Buffer.byteLength(stableManifestJson(outcome));
         if (recordBytes > context.budget.maxRequestBytes) {
           throw serviceManifestError(
             "storage_manifest_request_capacity_exceeded",
             "Service manifest request record exceeds its byte budget."
           );
         }
-        let removed: any = 0;
-        const cutoff: any = now() - REQUEST_RETENTION_MS;
+        let removed = 0;
+        const cutoff = now() - REQUEST_RETENTION_MS;
         while (removed < context.budget.maxCleanupEntries) {
-          const currentMeta: any = metaRows(db);
-          const overCapacity: any =
+          const currentMeta = metaRows(db);
+          const overCapacity =
             numberMeta(currentMeta, "request_count") + 1 >
               context.budget.maxRequestRecords ||
             numberMeta(currentMeta, "request_bytes") + recordBytes >
               context.budget.maxRequestBytes;
-          const oldest: any = db.prepare(`
+          const oldest = db.prepare(`
             SELECT sequence
             FROM manifest_requests
             WHERE ? OR created_at_ms<=?
             ORDER BY created_at_ms ASC,sequence ASC
             LIMIT 1
-          `).get(overCapacity ? 1 : 0, cutoff);
+          `).get(overCapacity ? 1 : 0, cutoff) as ManifestRequestSequenceRow | undefined;
           if (!oldest) break;
           context.inspectCleanupEntry();
           db.prepare(
@@ -858,7 +1044,7 @@ export function createServiceManifestTransaction({
           ).run(oldest.sequence);
           removed += 1;
         }
-        const capacity: any = metaRows(db);
+        const capacity = metaRows(db);
         if (
           numberMeta(capacity, "request_count") + 1 >
             context.budget.maxRequestRecords ||
@@ -897,9 +1083,9 @@ export function createServiceManifestTransaction({
             changed: !unchanged
           });
         }).immediate();
-      } catch (error: any) {
-        if (error?.code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
-          const candidate: any = pointerFromMeta(metaRows(db), "candidate");
+      } catch (error: unknown) {
+        if (errorCode(error) === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+          const candidate = pointerFromMeta(metaRows(db), "candidate");
           if (expectedSetRevision !== candidate.setRevision) {
             throw serviceManifestError(
               "storage_manifest_set_revision_stale",
@@ -914,14 +1100,18 @@ export function createServiceManifestTransaction({
     }
   }
 
-  async function acknowledgePublished({ setRevision, setDigest }: Record<string, any>, context?: any) : Promise<any> {
+  async function acknowledgePublished(
+    { setRevision, setDigest }: ManifestPointer,
+    context: ManifestTransactionContext
+  ): Promise<Readonly<ManifestPointer>> {
     await ensureAuthority(context);
-    const db: any = openAuthorityDatabase(rootPath, { create: false });
+    const db = openAuthorityDatabase(rootPath, { create: false });
+    if (!db) throw new Error("Service manifest authority database disappeared during acknowledgement.");
     try {
-      return db.transaction(() : any => {
+      return db.transaction((): Readonly<ManifestPointer> => {
         context.check();
-        const meta: any = metaRows(db);
-        const candidate: any = pointerFromMeta(meta, "candidate");
+        const meta = metaRows(db);
+        const candidate = pointerFromMeta(meta, "candidate");
         if (
           candidate.setRevision !== setRevision ||
           candidate.setDigest !== setDigest
@@ -933,24 +1123,24 @@ export function createServiceManifestTransaction({
         }
         setMeta(db, "published_set_revision", setRevision);
         setMeta(db, "published_set_digest", setDigest);
-        const obsolete: any = db.prepare(`
+        const obsolete = db.prepare(`
           SELECT service_id,valid_from_revision,manifest_digest
           FROM manifest_service_versions
           WHERE valid_to_revision<>0 AND valid_to_revision<=?
           ORDER BY valid_to_revision ASC,service_id ASC
           LIMIT ?
-        `).all(setRevision, context.budget.maxCleanupEntries);
+        `).all(setRevision, context.budget.maxCleanupEntries) as ManifestVersionRow[];
         for (const row of obsolete) {
           context.inspectCleanupEntry();
           db.prepare(`
             DELETE FROM manifest_service_versions
             WHERE service_id=? AND valid_from_revision=?
           `).run(row.service_id, row.valid_from_revision);
-          const retained: any = db.prepare(`
+          const retained = db.prepare(`
             SELECT 1 FROM manifest_service_versions
             WHERE manifest_digest=?
             LIMIT 1
-          `).get(row.manifest_digest);
+          `).get(row.manifest_digest) as SqliteRow | undefined;
           if (!retained) {
             db.prepare(
               "DELETE FROM manifest_blobs WHERE digest=?"

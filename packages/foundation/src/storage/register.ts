@@ -1,14 +1,49 @@
 // registerPlatformService is injected by the composition root (server-runtime).
 // Foundation must not import from server-runtime directly.
-export function registerStoragePlatformServices(registry?: any, {
+interface StorageCapability {
+  id: string;
+}
+
+interface StorageProviderRegistrationValue {
+  protocolVersion?: string;
+  listCapabilities?(): { capabilities: readonly StorageCapability[] };
+}
+
+interface StorageKernelRegistrationValue {
+  databasePath?: string;
+  objectRootPath?: string;
+}
+
+interface PlatformRegistry {
+  register(entry: PlatformServiceEntry): unknown;
+}
+
+interface PlatformServiceEntry {
+  id: string;
+  platform: "storage";
+  label: string;
+  kind: "provider" | "repository";
+  ownerFeatureId: "storage-core";
+  value: unknown;
+  metadata: Record<string, unknown>;
+}
+
+type RegisterPlatformService = (registry: PlatformRegistry | undefined, entry: PlatformServiceEntry) => unknown;
+
+export function registerStoragePlatformServices(registry?: PlatformRegistry, {
   storageProvider = null,
   storageKernel = null,
   userDataPath = "",
   registerPlatformService = null
-}: Record<string, any> = {}) : any {
-  const register: any = typeof registerPlatformService === "function"
+}: {
+  storageProvider?: StorageProviderRegistrationValue | null;
+  storageKernel?: StorageKernelRegistrationValue | null;
+  userDataPath?: string;
+  registerPlatformService?: RegisterPlatformService | null;
+} = {}): unknown[] {
+  const register: RegisterPlatformService = typeof registerPlatformService === "function"
     ? registerPlatformService
-    : (targetRegistry?: any, entry?: any) : any => {
+    : (targetRegistry, entry) => {
         if (!targetRegistry || typeof targetRegistry.register !== "function") {
           throw new Error("A PlatformRegistry instance is required.");
         }
@@ -25,7 +60,7 @@ export function registerStoragePlatformServices(registry?: any, {
       metadata: {
         protocolVersion: storageProvider?.protocolVersion || "",
         capabilityIds: storageProvider?.listCapabilities
-          ? storageProvider.listCapabilities().capabilities.map((capability?: any) : any => capability.id)
+          ? storageProvider.listCapabilities().capabilities.map((capability) => capability.id)
           : []
       }
     }),

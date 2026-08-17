@@ -15,34 +15,38 @@
  * stored in SQLite's built-in PRAGMA user_version so no extra bookkeeping
  * table is required.
  */
+import type Database from "better-sqlite3";
+
+export interface SqliteMigration {
+  version: number;
+  up(db: Database.Database): void;
+}
 
 /**
  * @param {import("better-sqlite3").Database} db
  * @param {Array<{ version: number; up: (db: import("better-sqlite3").Database) => void }>} migrations
  *   Must be sorted ascending by version, starting at version 1.
  */
-export function runMigrations(db?: any, migrations?: any) : any {
+export function runMigrations(db: Database.Database, migrations?: readonly SqliteMigration[]): void {
   if (!migrations || migrations.length === 0) {
     return;
   }
 
   // Read the current schema version (0 = fresh database).
-  const { user_version: currentVersion } = db.pragma("user_version", { simple: true })
-    ? { user_version: db.pragma("user_version", { simple: true }) }
-    : { user_version: 0 };
+  const currentVersion = Number(db.pragma("user_version", { simple: true })) || 0;
 
-  const pending: any = migrations
+  const pending = migrations
     .slice()
-    .sort((a?: any, b?: any) : any => a.version - b.version)
-    .filter((m?: any) : any => m.version > currentVersion);
+    .sort((a, b) => a.version - b.version)
+    .filter((migration) => migration.version > currentVersion);
 
   if (pending.length === 0) {
     return;
   }
 
-  const highestVersion: any = pending[pending.length - 1].version;
+  const highestVersion = pending[pending.length - 1].version;
 
-  db.transaction(() : any => {
+  db.transaction(() => {
     for (const migration of pending) {
       migration.up(db);
     }

@@ -8,44 +8,166 @@ import {
   validateManifestRevision,
   validateOpaqueServiceId
 } from "./storage-ports.ts";
+import type {
+  CanonicalManifestResult,
+  ManifestResourceBudget
+} from "./storage-ports.ts";
 import {
   createManifestTransactionContext,
   createServiceManifestTransaction
 } from "./service-manifest-transaction.ts";
 import { runStorageMaintenanceMutation } from "./storage-maintenance-coordinator.ts";
+import type { StorageWorkTracker } from "./storage-maintenance-coordinator.ts";
 
-const EMPTY_TRIE: Readonly<Record<string, any>> = Object.freeze({ value: null, children: new Map<any, any>() });
+type ManifestValue = Readonly<Record<string, unknown>>;
 
-function trieLookup(root?: any, key?: any) : any {
-  let node: any = root;
+interface ServiceRecord {
+  serviceId: string;
+  serviceRevision: number;
+  manifestDigest: string;
+  manifest: ManifestValue;
+}
+
+interface TrieNode {
+  value: Readonly<ServiceRecord> | null;
+  children: ReadonlyMap<string, Readonly<TrieNode>>;
+}
+
+interface ManifestPointer {
+  setRevision: number;
+  setDigest: string;
+}
+
+interface ManifestSnapshot {
+  readonly setRevision: number;
+  readonly setDigest: string;
+  readonly serviceCount: number;
+  getService(serviceId: unknown): Readonly<ServiceRecord> | null;
+  hasService(serviceId: unknown): boolean;
+  listServices(): readonly Readonly<ServiceRecord>[];
+}
+
+interface SnapshotEntry {
+  serviceId: string;
+  serviceRevision: number;
+  manifestDigest: string;
+  manifestBytes: Buffer;
+}
+
+interface SnapshotState {
+  pointer: Readonly<ManifestPointer>;
+  entries: readonly SnapshotEntry[];
+}
+
+interface ManifestTransactionContext {
+  budget: Readonly<ManifestResourceBudget>;
+  signal?: AbortSignal;
+  check(): void;
+}
+
+interface CommitOutcome extends ManifestPointer {
+  serviceRevision: number;
+  manifestDigest: string;
+  receiptRef: string;
+}
+
+interface CommitResult {
+  outcome: Readonly<CommitOutcome>;
+  replayed: boolean;
+  changed: boolean;
+}
+
+interface ServiceManifestTransaction {
+  rootPath: string;
+  readSnapshot(kind: "published" | "candidate", context: ManifestTransactionContext): Promise<SnapshotState>;
+  commitManifest(input: {
+    serviceId: string;
+    expectedServiceRevision: number;
+    expectedSetRevision: number;
+    manifestBytes: Buffer;
+    manifestDigest: string;
+    requestDigest: string;
+  }, context: ManifestTransactionContext): Promise<CommitResult>;
+  acknowledgePublished(input: ManifestPointer, context: ManifestTransactionContext): Promise<Readonly<ManifestPointer>>;
+}
+
+interface SnapshotCache {
+  identity: string;
+  pointer: Readonly<ManifestPointer>;
+  root: Readonly<TrieNode>;
+  snapshot: Readonly<ManifestSnapshot>;
+}
+
+export interface ServiceManifestStore {
+  writerPort: Readonly<{ commitManifestSet: CommitManifestSet }>;
+  readerPort: Readonly<{ getSnapshot: GetSnapshot }>;
+  commitManifestSet: CommitManifestSet;
+  getSnapshot: GetSnapshot;
+  getCandidateSnapshot: GetSnapshot;
+  acknowledgePublished: AcknowledgePublished;
+}
+
+interface SnapshotOptions {
+  signal?: AbortSignal;
+  budget?: unknown;
+}
+
+interface CommitManifestSetInput extends SnapshotOptions {
+  serviceId?: unknown;
+  expectedServiceRevision?: unknown;
+  expectedSetRevision?: unknown;
+  manifest?: unknown;
+  requestDigest?: unknown;
+}
+
+interface AcknowledgePublishedInput extends SnapshotOptions {
+  setRevision?: unknown;
+  setDigest?: unknown;
+}
+
+type PublicCommitOutcome = Readonly<CommitOutcome & { replayed: boolean }>;
+type GetSnapshot = (input?: SnapshotOptions) => Promise<Readonly<ManifestSnapshot>>;
+type CommitManifestSet = (input?: CommitManifestSetInput) => Promise<PublicCommitOutcome>;
+type AcknowledgePublished = (input?: AcknowledgePublishedInput) => Promise<Readonly<ManifestSnapshot> | Readonly<ManifestPointer>>;
+
+const EMPTY_TRIE: Readonly<TrieNode> = Object.freeze({ value: null, children: new Map() });
+
+function trieLookup(root: Readonly<TrieNode>, key: string): Readonly<ServiceRecord> | null {
+  let node: Readonly<TrieNode> = root;
   for (const character of key) {
-    node = node.children.get(character);
-    if (!node) return null;
+    const child = node.children.get(character);
+    if (!child) return null;
+    node = child;
   }
   return node.value;
 }
 
-function trieSet(node?: any, key?: any, index?: any, value?: any) : any {
-  const current: any = node || EMPTY_TRIE;
+function trieSet(
+  node: Readonly<TrieNode> | null,
+  key: string,
+  index: number,
+  value: Readonly<ServiceRecord>
+): Readonly<TrieNode> {
+  const current = node || EMPTY_TRIE;
   if (index === key.length) {
     return Object.freeze({ value, children: current.children });
   }
-  const character: any = key[index];
-  const child: any = trieSet(
-    current.children.get(character),
+  const character = key[index];
+  const child = trieSet(
+    current.children.get(character) || null,
     key,
     index + 1,
     value
   );
-  const children: any = new Map<any, any>(current.children);
+  const children = new Map(current.children);
   children.set(character, child);
   return Object.freeze({ value: current.value, children });
 }
 
-function collectTrieValues(node?: any, output?: any) : any {
+function collectTrieValues(node: Readonly<TrieNode>, output: ServiceRecord[]): void {
   if (node.value) output.push(node.value);
-  const children: any = [...node.children.entries()].sort(
-    ([left]: any[], [right]: any[]) : any => left.localeCompare(right)
+  const children = [...node.children.entries()].sort(
+    ([left], [right]) => left.localeCompare(right)
   );
   for (const [, child] of children) collectTrieValues(child, output);
 }
@@ -55,7 +177,7 @@ function freezeServiceRecord({
   serviceRevision,
   manifestDigest,
   manifest
-}: Record<string, any>) : any {
+}: ServiceRecord): Readonly<ServiceRecord> {
   return Object.freeze({
     serviceId,
     serviceRevision,
@@ -64,35 +186,33 @@ function freezeServiceRecord({
   });
 }
 
-function cacheIdentity(pointer?: any) : any {
+function cacheIdentity(pointer: ManifestPointer): string {
   return `${pointer.setRevision}:${pointer.setDigest}`;
 }
 
-function createSnapshot({ root, pointer }: Record<string, any>) : any {
-  const capturedRoot: any = root;
-  let listed: any = null;
+function createSnapshot({ root, pointer }: { root: Readonly<TrieNode>; pointer: Readonly<ManifestPointer> }): Readonly<ManifestSnapshot> {
+  const capturedRoot = root;
+  let listed: readonly Readonly<ServiceRecord>[] | null = null;
   return Object.freeze({
     setRevision: pointer.setRevision,
     setDigest: pointer.setDigest,
-    get serviceCount() : any {
+    get serviceCount(): number {
       if (!listed) {
-        const output: any[] = [];
+        const output: ServiceRecord[] = [];
         collectTrieValues(capturedRoot, output);
         listed = Object.freeze(output);
       }
       return listed.length;
     },
-    getService(serviceId?: any) : any {
-      validateOpaqueServiceId(serviceId);
-      return trieLookup(capturedRoot, serviceId);
+    getService(serviceId: unknown): Readonly<ServiceRecord> | null {
+      return trieLookup(capturedRoot, validateOpaqueServiceId(serviceId));
     },
-    hasService(serviceId?: any) : any {
-      validateOpaqueServiceId(serviceId);
-      return trieLookup(capturedRoot, serviceId) !== null;
+    hasService(serviceId: unknown): boolean {
+      return trieLookup(capturedRoot, validateOpaqueServiceId(serviceId)) !== null;
     },
-    listServices() : any {
+    listServices(): readonly Readonly<ServiceRecord>[] {
       if (!listed) {
-        const output: any[] = [];
+        const output: ServiceRecord[] = [];
         collectTrieValues(capturedRoot, output);
         listed = Object.freeze(output);
       }
@@ -101,7 +221,7 @@ function createSnapshot({ root, pointer }: Record<string, any>) : any {
   });
 }
 
-function publicOutcome(outcome?: any, replayed?: any) : any {
+function publicOutcome(outcome: Readonly<CommitOutcome>, replayed: boolean): PublicCommitOutcome {
   return Object.freeze({
     serviceRevision: outcome.serviceRevision,
     setRevision: outcome.setRevision,
@@ -112,7 +232,7 @@ function publicOutcome(outcome?: any, replayed?: any) : any {
   });
 }
 
-function assertSignal(signal?: any) : any {
+function assertSignal(signal: unknown): asserts signal is AbortSignal | undefined {
   if (signal !== undefined && !(signal instanceof AbortSignal)) {
     throw serviceManifestError(
       "storage_manifest_signal_invalid",
@@ -121,15 +241,32 @@ function assertSignal(signal?: any) : any {
   }
 }
 
-export function createServiceManifestStore({ storageRoot, now = Date.now }: Record<string, any>) : any {
-  const transaction: any = createServiceManifestTransaction({ storageRoot, now });
-  let candidateCache: any = null;
-  let publishedCache: any = null;
+export function createServiceManifestStore({
+  storageRoot,
+  now = Date.now
+}: {
+  storageRoot: string;
+  now?: () => number;
+}): Readonly<ServiceManifestStore> {
+  const transaction: ServiceManifestTransaction = createServiceManifestTransaction({ storageRoot, now });
+  let candidateCache: SnapshotCache | null = null;
+  let publishedCache: SnapshotCache | null = null;
 
-  async function runSerialized({ signal, budget, startedAt }: Record<string, any>, task?: any) : Promise<any> {
+  async function runSerialized<T>(
+    {
+      signal,
+      budget,
+      startedAt
+    }: {
+      signal?: AbortSignal;
+      budget: Readonly<ManifestResourceBudget>;
+      startedAt: number;
+    },
+    task: (context: ManifestTransactionContext) => T | Promise<T>
+  ): Promise<T> {
     assertSignal(signal);
     if (signal?.aborted) {
-      const context: any = createManifestTransactionContext({
+      const context: ManifestTransactionContext = createManifestTransactionContext({
         budget,
         signal,
         startedAt
@@ -138,8 +275,8 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
     }
     return runStorageMaintenanceMutation(
       transaction.rootPath,
-      async ({ signal: laneSignal }: Record<string, any>) : Promise<any> => {
-        const context: any = createManifestTransactionContext({
+      async ({ signal: laneSignal }: StorageWorkTracker): Promise<T> => {
+        const context: ManifestTransactionContext = createManifestTransactionContext({
           budget,
           signal,
           laneSignal,
@@ -161,20 +298,20 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
     );
   }
 
-  function hydrateSnapshot(state?: any, budget?: any) : any {
-    let root: any = EMPTY_TRIE;
+  function hydrateSnapshot(state: SnapshotState, budget: Readonly<ManifestResourceBudget>): Readonly<SnapshotCache> {
+    let root: Readonly<TrieNode> = EMPTY_TRIE;
     for (const entry of state.entries) {
-      let parsed: any;
+      let parsed: unknown;
       try {
         parsed = JSON.parse(entry.manifestBytes.toString("utf8"));
-      } catch (error: any) {
+      } catch (error: unknown) {
         throw serviceManifestError(
           "storage_manifest_content_invalid",
           "Service manifest indexed content is not valid JSON.",
           error
         );
       }
-      const canonical: any = canonicalizeTypedReferenceManifest(parsed, budget);
+      const canonical: Readonly<CanonicalManifestResult> = canonicalizeTypedReferenceManifest(parsed, budget);
       if (
         !canonical.canonicalBytes.equals(entry.manifestBytes) ||
         canonical.manifestDigest !== entry.manifestDigest
@@ -191,7 +328,7 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
         manifest: canonical.manifest
       }));
     }
-    const snapshot: any = createSnapshot({ root, pointer: state.pointer });
+    const snapshot = createSnapshot({ root, pointer: state.pointer });
     return Object.freeze({
       identity: cacheIdentity(state.pointer),
       pointer: state.pointer,
@@ -200,17 +337,21 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
     });
   }
 
-  async function loadSnapshot(kind?: any, context?: any, existingCache?: any) : Promise<any> {
-    const state: any = await transaction.readSnapshot(kind, context);
-    const identity: any = cacheIdentity(state.pointer);
+  async function loadSnapshot(
+    kind: "published" | "candidate",
+    context: ManifestTransactionContext,
+    existingCache: SnapshotCache | null
+  ): Promise<Readonly<SnapshotCache>> {
+    const state = await transaction.readSnapshot(kind, context);
+    const identity = cacheIdentity(state.pointer);
     if (existingCache?.identity === identity) return existingCache;
     return hydrateSnapshot(state, context.budget);
   }
 
-  async function getSnapshot({ signal, budget: budgetInput = {} }: Record<string, any> = {}) : Promise<any> {
-    const budget: any = normalizeManifestResourceBudget(budgetInput);
-    const startedAt: any = Date.now();
-    return runSerialized({ signal, budget, startedAt }, async (context?: any) : Promise<any> => {
+  async function getSnapshot({ signal, budget: budgetInput = {} }: SnapshotOptions = {}): Promise<Readonly<ManifestSnapshot>> {
+    const budget = normalizeManifestResourceBudget(budgetInput);
+    const startedAt = Date.now();
+    return runSerialized({ signal, budget, startedAt }, async (context) => {
       publishedCache = await loadSnapshot(
         "published",
         context,
@@ -223,10 +364,10 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
   async function getCandidateSnapshot({
     signal,
     budget: budgetInput = {}
-  }: Record<string, any> = {}) : Promise<any> {
-    const budget: any = normalizeManifestResourceBudget(budgetInput);
-    const startedAt: any = Date.now();
-    return runSerialized({ signal, budget, startedAt }, async (context?: any) : Promise<any> => {
+  }: SnapshotOptions = {}): Promise<Readonly<ManifestSnapshot>> {
+    const budget = normalizeManifestResourceBudget(budgetInput);
+    const startedAt = Date.now();
+    return runSerialized({ signal, budget, startedAt }, async (context) => {
       candidateCache = await loadSnapshot(
         "candidate",
         context,
@@ -244,41 +385,41 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
     requestDigest,
     signal,
     budget: budgetInput = {}
-  }: Record<string, any> = {}) : Promise<any> {
-    const budget: any = normalizeManifestResourceBudget(budgetInput);
-    const startedAt: any = Date.now();
+  }: CommitManifestSetInput = {}): Promise<PublicCommitOutcome> {
+    const budget = normalizeManifestResourceBudget(budgetInput);
+    const startedAt = Date.now();
     assertSignal(signal);
-    validateOpaqueServiceId(serviceId);
-    validateManifestRevision(
+    const selectedServiceId = validateOpaqueServiceId(serviceId);
+    const selectedServiceRevision = validateManifestRevision(
       expectedServiceRevision,
       "expected service revision"
     );
-    validateManifestRevision(expectedSetRevision, "expected set revision");
-    validateManifestDigest(requestDigest, "request digest");
-    const canonical: any = canonicalizeTypedReferenceManifest(manifest, budget);
+    const selectedSetRevision = validateManifestRevision(expectedSetRevision, "expected set revision");
+    const selectedRequestDigest = validateManifestDigest(requestDigest, "request digest");
+    const canonical = canonicalizeTypedReferenceManifest(manifest, budget);
 
-    return runSerialized({ signal, budget, startedAt }, async (context?: any) : Promise<any> => {
-      const previousCache: any =
-        candidateCache?.pointer.setRevision === expectedSetRevision
+    return runSerialized({ signal, budget, startedAt }, async (context) => {
+      const previousCache =
+        candidateCache?.pointer.setRevision === selectedSetRevision
           ? candidateCache
           : null;
-      const result: any = await transaction.commitManifest({
-        serviceId,
-        expectedServiceRevision,
-        expectedSetRevision,
+      const result = await transaction.commitManifest({
+        serviceId: selectedServiceId,
+        expectedServiceRevision: selectedServiceRevision,
+        expectedSetRevision: selectedSetRevision,
         manifestBytes: canonical.canonicalBytes,
         manifestDigest: canonical.manifestDigest,
-        requestDigest
+        requestDigest: selectedRequestDigest
       }, context);
       if (result.changed && previousCache) {
-        const record: any = freezeServiceRecord({
-          serviceId,
+        const record = freezeServiceRecord({
+          serviceId: selectedServiceId,
           serviceRevision: result.outcome.serviceRevision,
           manifestDigest: result.outcome.manifestDigest,
           manifest: canonical.manifest
         });
-        const root: any = trieSet(previousCache.root, serviceId, 0, record);
-        const pointer: Readonly<Record<string, any>> = Object.freeze({
+        const root = trieSet(previousCache.root, selectedServiceId, 0, record);
+        const pointer: Readonly<ManifestPointer> = Object.freeze({
           setRevision: result.outcome.setRevision,
           setDigest: result.outcome.setDigest
         });
@@ -300,15 +441,15 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
     setDigest,
     signal,
     budget: budgetInput = {}
-  }: Record<string, any> = {}) : Promise<any> {
-    const budget: any = normalizeManifestResourceBudget(budgetInput);
-    const startedAt: any = Date.now();
+  }: AcknowledgePublishedInput = {}): Promise<Readonly<ManifestSnapshot> | Readonly<ManifestPointer>> {
+    const budget = normalizeManifestResourceBudget(budgetInput);
+    const startedAt = Date.now();
     assertSignal(signal);
-    validateManifestRevision(setRevision, "set revision");
-    validateManifestDigest(setDigest, "set digest");
-    return runSerialized({ signal, budget, startedAt }, async (context?: any) : Promise<any> => {
-      const pointer: any = await transaction.acknowledgePublished(
-        { setRevision, setDigest },
+    const selectedSetRevision = validateManifestRevision(setRevision, "set revision");
+    const selectedSetDigest = validateManifestDigest(setDigest, "set digest");
+    return runSerialized({ signal, budget, startedAt }, async (context) => {
+      const pointer = await transaction.acknowledgePublished(
+        { setRevision: selectedSetRevision, setDigest: selectedSetDigest },
         context
       );
       if (candidateCache?.identity === cacheIdentity(pointer)) {
@@ -323,8 +464,8 @@ export function createServiceManifestStore({ storageRoot, now = Date.now }: Reco
     });
   }
 
-  const writerPort: any = createDurableManifestWriterPort(commitManifestSet);
-  const readerPort: any = createManifestSnapshotReaderPort(getSnapshot);
+  const writerPort = createDurableManifestWriterPort(commitManifestSet);
+  const readerPort = createManifestSnapshotReaderPort(getSnapshot);
   return Object.freeze({
     writerPort,
     readerPort,

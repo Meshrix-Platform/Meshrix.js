@@ -1,37 +1,44 @@
 import { normalizeManifestKey } from "./job-manager-validation.ts";
+import type { JobDocument } from "./contracts.ts";
 
-export function createActiveManifestIndex({ activeManifestJobs, jobs }: Record<string, any>) : any {
-  function rememberActiveManifestJob(job?: any) : any {
+export function createActiveManifestIndex({
+  activeManifestJobs,
+  jobs
+}: {
+  activeManifestJobs: Map<string, string>;
+  jobs: Map<string, JobDocument>;
+}) {
+  function rememberActiveManifestJob(job?: JobDocument | null) {
     if (!job || !["queued", "running"].includes(job.status)) {
       return;
     }
-    const manifestKey: any = normalizeManifestKey(job);
+    const manifestKey = normalizeManifestKey(job);
     if (!manifestKey) {
       return;
     }
-    const activeManifestKey: any = `${manifestKey}::${job.archiveBatchId || ""}`;
-    const existingJobId: any = activeManifestJobs.get(activeManifestKey);
-    const existingJob: any = existingJobId ? jobs.get(existingJobId) : null;
+    const activeManifestKey = `${manifestKey}::${job.archiveBatchId || ""}`;
+    const existingJobId = activeManifestJobs.get(activeManifestKey);
+    const existingJob = existingJobId ? jobs.get(existingJobId) : null;
     if (!existingJob || String(job.createdAt || "") < String(existingJob.createdAt || "")) {
       activeManifestJobs.set(activeManifestKey, job.id);
     }
   }
 
-  function forgetActiveManifestJob(job?: any) : any {
-    const manifestKey: any = normalizeManifestKey(job);
-    const activeManifestKey: any = `${manifestKey}::${job?.archiveBatchId || ""}`;
+  function forgetActiveManifestJob(job?: JobDocument | null) {
+    const manifestKey = normalizeManifestKey(job);
+    const activeManifestKey = `${manifestKey}::${job?.archiveBatchId || ""}`;
     if (manifestKey && activeManifestJobs.get(activeManifestKey) === job?.id) {
       activeManifestJobs.delete(activeManifestKey);
     }
   }
 
-  function getActiveManifestJob(manifestKey?: any, archiveBatchId: any = "") : any {
+  function getActiveManifestJob(manifestKey?: string, archiveBatchId = "") {
     if (!manifestKey) {
       return null;
     }
-    const activeManifestKey: any = `${manifestKey}::${archiveBatchId || ""}`;
-    const existingJobId: any = activeManifestJobs.get(activeManifestKey);
-    const existingJob: any = existingJobId ? jobs.get(existingJobId) : null;
+    const activeManifestKey = `${manifestKey}::${archiveBatchId || ""}`;
+    const existingJobId = activeManifestJobs.get(activeManifestKey);
+    const existingJob = existingJobId ? jobs.get(existingJobId) : null;
     if (!existingJob || !["queued", "running"].includes(existingJob.status)) {
       activeManifestJobs.delete(activeManifestKey);
       return null;

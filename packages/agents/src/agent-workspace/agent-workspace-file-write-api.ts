@@ -20,13 +20,68 @@ import {
   uniqueStrings
 } from "./agent-workspace-support.ts";
 
-export function createAgentWorkspaceFileWriteApi({
-  workspaceForStorage,
-  resolveWorkspacePath,
-  updateWorkspaceTimeStmt,
-  createArtifact,
-  fileStateApi
-}: Record<string, any> = {}) : any {
+type JsonRecord = Record<string, unknown>;
+interface Workspace extends JsonRecord { workspaceId: string; fsPath?: string }
+interface WorkspaceAccessSuccess { ok: true; workspace: Workspace }
+export interface WorkspaceAccessFailure extends JsonRecord { ok: false }
+type WorkspaceAccess = WorkspaceAccessSuccess | WorkspaceAccessFailure;
+interface ResolvedWorkspacePath { relativePath: string; absolutePath: string }
+interface Statement { run(...parameters: unknown[]): unknown }
+interface FileMutation { action: "put" | "delete"; key: string; valueRef?: string; metadata?: JsonRecord }
+interface FileStateApi {
+  decodeWorkspaceFileContent(input: JsonRecord): Buffer;
+  filePayloadMetadata(file: JsonRecord): JsonRecord;
+  archiveWorkspacePath(workspace: Workspace, relativePath: string, options?: JsonRecord): Promise<unknown>;
+  recordWorkspaceUploadIngest(input: JsonRecord): Promise<unknown>;
+  commitWorkspaceFileState(input: JsonRecord): Promise<unknown>;
+  recordWorkspaceFileCheckpoint(input: JsonRecord): Promise<unknown>;
+  captureWorkspaceFilePreimage(workspace: Workspace, paths: string[]): Promise<unknown>;
+}
+
+function provider<Provider extends (...args: never[]) => unknown>(value: unknown, name: string): Provider {
+  if (typeof value !== "function") throw new TypeError(`Agent workspace file-write dependency ${name} must be a function.`);
+  return value as Provider;
+}
+
+function statement(value: unknown): Statement {
+  const candidate = asObject(value);
+  if (typeof candidate.run !== "function") throw new TypeError("Agent workspace file-write dependency updateWorkspaceTimeStmt must be a statement.");
+  return candidate as unknown as Statement;
+}
+
+function fileState(value: unknown): FileStateApi {
+  const candidate = asObject(value);
+  const names: Array<keyof FileStateApi> = [
+    "decodeWorkspaceFileContent", "filePayloadMetadata", "archiveWorkspacePath", "recordWorkspaceUploadIngest",
+    "commitWorkspaceFileState", "recordWorkspaceFileCheckpoint", "captureWorkspaceFilePreimage"
+  ];
+  if (names.some((name) => typeof candidate[name] !== "function")) {
+    throw new TypeError("Agent workspace file-write dependency fileStateApi is incomplete.");
+  }
+  return candidate as unknown as FileStateApi;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "文件操作失败。");
+}
+
+function recordOrNull(value: unknown): JsonRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
+}
+
+function bufferEncoding(value: unknown): BufferEncoding {
+  const encoding = String(value || "utf8");
+  if (!Buffer.isEncoding(encoding)) throw new TypeError("不支持的文本编码。");
+  return encoding as BufferEncoding;
+}
+
+export function createAgentWorkspaceFileWriteApi(dependencies: unknown = {}) {
+  const source = asObject(dependencies);
+  const workspaceForStorageProvider = provider<(input: JsonRecord) => unknown>(source.workspaceForStorage, "workspaceForStorage");
+  const resolveWorkspacePathProvider = provider<(workspace: Workspace, relativePath: string) => unknown>(source.resolveWorkspacePath, "resolveWorkspacePath");
+  const updateWorkspaceTimeStmt = statement(source.updateWorkspaceTimeStmt);
+  const createArtifact = provider<(input: JsonRecord) => unknown>(source.createArtifact, "createArtifact");
+  const fileStateApi = fileState(source.fileStateApi);
   const {
     decodeWorkspaceFileContent,
     filePayloadMetadata,
@@ -37,14 +92,32 @@ export function createAgentWorkspaceFileWriteApi({
     captureWorkspaceFilePreimage
   } = fileStateApi;
 
-  function assertMovableWorkspaceDirectory(sourceAbsolutePath?: any, targetRelativePath?: any) : any {
-    const visit: any = (absoluteDir?: any, relativeDir?: any) : any => {
-      const entries: any = fs.readdirSync(absoluteDir, { withFileTypes: true })
-        .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+  function workspaceForStorage(input: JsonRecord): WorkspaceAccess {
+    const access = asObject(workspaceForStorageProvider(input));
+    if (access.ok !== true) return { ...access, ok: false };
+    const workspace = asObject(access.workspace);
+    if (typeof workspace.workspaceId !== "string" || !workspace.workspaceId) {
+      throw new TypeError("Workspace storage access did not return a valid workspace.");
+    }
+    return { ok: true, workspace: { ...workspace, workspaceId: workspace.workspaceId } };
+  }
+
+  function resolveWorkspacePath(workspace: Workspace, relativePath: string): ResolvedWorkspacePath {
+    const resolved = asObject(resolveWorkspacePathProvider(workspace, relativePath));
+    if (typeof resolved.relativePath !== "string" || typeof resolved.absolutePath !== "string") {
+      throw new TypeError("Workspace path provider returned an invalid path.");
+    }
+    return { relativePath: resolved.relativePath, absolutePath: resolved.absolutePath };
+  }
+
+  function assertMovableWorkspaceDirectory(sourceAbsolutePath: string, targetRelativePath: string): void {
+    const visit = (absoluteDir: string, relativeDir: string): void => {
+      const entries = fs.readdirSync(absoluteDir, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name));
       for (const entry of entries) {
-        const childAbsolutePath: any = path.join(absoluteDir, entry.name);
-        const childRelativePath: any = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-        const stat: any = fs.lstatSync(childAbsolutePath);
+        const childAbsolutePath = path.join(absoluteDir, entry.name);
+        const childRelativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+        const stat = fs.lstatSync(childAbsolutePath);
         if (stat.isSymbolicLink()) {
           throw new Error(`工作空间内存在不允许移动的符号链接：${childRelativePath}`);
         }
@@ -55,10 +128,10 @@ export function createAgentWorkspaceFileWriteApi({
         if (!stat.isFile()) {
           throw new Error(`工作空间内存在不允许移动的特殊文件：${childRelativePath}`);
         }
-        const finalRelativePath: any = targetRelativePath
+        const finalRelativePath = targetRelativePath
           ? `${targetRelativePath}/${childRelativePath}`
           : childRelativePath;
-        const content: any = fs.readFileSync(childAbsolutePath);
+        const content = fs.readFileSync(childAbsolutePath);
         assertWorkspaceFileContentPolicy({
           relativePath: finalRelativePath,
           contentBuffer: content,
@@ -69,34 +142,36 @@ export function createAgentWorkspaceFileWriteApi({
     visit(sourceAbsolutePath, "");
   }
 
-  async function uploadWorkspaceFile(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function uploadWorkspaceFile(value: unknown = {}) {
+    const input = asObject(value);
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    const fileName: any = String(input.fileName || input.filename || input.name || "").trim();
-    const explicitPath: any = String(input.path || input.relativePath || input.filePath || input.targetPath || "").trim();
+    const fileName = String(input.fileName || input.filename || input.name || "").trim();
+    const explicitPath = String(input.path || input.relativePath || input.filePath || input.targetPath || "").trim();
     if (!fileName && !explicitPath) {
       return { ok: false, status: 400, error: "fileName 不能为空。" };
     }
-    const resolvedName: any = explicitPath ? path.posix.basename(explicitPath) : fileName;
+    const resolvedName = explicitPath ? path.posix.basename(explicitPath) : fileName;
     if (resolvedName.startsWith(".")) {
       return { ok: false, status: 400, error: "不允许上传以 . 开头的文件。" };
     }
-    let contentBuffer: any;
+    let contentBuffer: Buffer;
     try {
       contentBuffer = decodeWorkspaceFileContent(input);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+      if (!Buffer.isBuffer(contentBuffer)) throw new TypeError("文件内容解码结果无效。");
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
-      const relativePath: any = explicitPath
+      const relativePath = explicitPath
         ? normalizeWorkspaceRelativePath(explicitPath, { allowEmpty: false })
         : joinWorkspaceRelativePath(input.folderPath || input.folder || input.directory || "files", fileName);
       resolved = resolveWorkspacePath(access.workspace, relativePath);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (fs.existsSync(resolved.absolutePath) && fs.lstatSync(resolved.absolutePath).isDirectory()) {
       return { ok: false, status: 409, error: "目标路径是文件夹，不能上传为文件。" };
@@ -106,14 +181,14 @@ export function createAgentWorkspaceFileWriteApi({
         relativePath: resolved.relativePath,
         contentBuffer
       });
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
-    const overwritten: any = fs.existsSync(resolved.absolutePath);
+    const overwritten = fs.existsSync(resolved.absolutePath);
     if (overwritten && input.overwrite === false) {
       return { ok: false, status: 409, error: "文件已存在。" };
     }
-    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+    const preimageSnapshot = await captureWorkspaceFilePreimage(
       access.workspace,
       [resolved.relativePath]
     );
@@ -121,11 +196,11 @@ export function createAgentWorkspaceFileWriteApi({
     fs.writeFileSync(resolved.absolutePath, contentBuffer);
     stripExecutableMode(resolved.absolutePath);
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const artifact: any = createArtifact({
+    const artifact = recordOrNull(asObject(createArtifact({
       workspaceId: access.workspace.workspaceId,
       level: String(input.level || "artifact"),
       title: fileName || path.posix.basename(resolved.relativePath),
-      content: contentBuffer.toString(String(input.encoding || "utf8")),
+      content: contentBuffer.toString(bufferEncoding(input.encoding || "utf8")),
       status: String(input.status || "draft"),
       createdBy: input.createdBy || input.actorUserId || input.agentId || "",
       artifactId: input.artifactId,
@@ -137,41 +212,42 @@ export function createAgentWorkspaceFileWriteApi({
         ...(asObject(input.coverageReport || input.coverage)),
         workspaceFilePath: resolved.relativePath
       }
-    }).artifact;
-    const file: any = fileMetadataFromStat({
+    })).artifact);
+    const file = fileMetadataFromStat({
       workspaceId: access.workspace.workspaceId,
       relativePath: resolved.relativePath,
       absolutePath: resolved.absolutePath,
       stat: fs.statSync(resolved.absolutePath),
       includeHash: true
     });
-    const ingestReceipt: any = await recordWorkspaceUploadIngest({
+    const ingestReceipt = recordOrNull(await recordWorkspaceUploadIngest({
       workspace: access.workspace,
       relativePath: resolved.relativePath,
       contentBuffer,
       operationId: input.operationId || "workspace.file.upload"
-    });
-    const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
+    }));
+    const archived = recordOrNull(await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "workspace.file.upload"
-    });
-    const uploadMutations: any[] = archived
+    }));
+    const archiveMetadata = asObject(archived?.metadata);
+    const uploadMutations: FileMutation[] = archived
       ? [{
           action: "put",
           key: resolved.relativePath,
-          valueRef: archived.rootCid,
+          valueRef: String(archived.rootCid || ""),
           metadata: {
-            ...filePayloadMetadata(file),
-            contentCid: archived?.metadata?.contentCid || ""
+            ...filePayloadMetadata(asObject(file)),
+            contentCid: String(archiveMetadata.contentCid || "")
           }
         }]
       : [];
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.upload",
       mutations: uploadMutations,
       contentRefs: [
-        ...(archived?.contentRefs || []),
-        ...(ingestReceipt?.contentRefs || [])
+        ...asArray(archived?.contentRefs),
+        ...asArray(ingestReceipt?.contentRefs)
       ],
       payload: {
         action: "file.upload",
@@ -187,7 +263,7 @@ export function createAgentWorkspaceFileWriteApi({
           : null
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.upload",
       stateCommit,
@@ -225,29 +301,31 @@ export function createAgentWorkspaceFileWriteApi({
     };
   }
 
-  async function writeWorkspaceFile(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function writeWorkspaceFile(value: unknown = {}) {
+    const input = asObject(value);
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    const explicitPath: any = String(input.path || input.relativePath || "").trim();
+    const explicitPath = String(input.path || input.relativePath || "").trim();
     if (!explicitPath) {
       return { ok: false, status: 400, error: "path 不能为空。" };
     }
     if (path.posix.basename(explicitPath).startsWith(".")) {
       return { ok: false, status: 400, error: "不允许操作以 . 开头的文件。" };
     }
-    let contentBuffer: any;
+    let contentBuffer: Buffer;
     try {
       contentBuffer = decodeWorkspaceFileContent(input);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+      if (!Buffer.isBuffer(contentBuffer)) throw new TypeError("文件内容解码结果无效。");
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
       resolved = resolveWorkspacePath(access.workspace, normalizeWorkspaceRelativePath(explicitPath, { allowEmpty: false }));
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (!fs.existsSync(resolved.absolutePath)) {
       return { ok: false, status: 404, error: "文件不存在。" };
@@ -260,38 +338,39 @@ export function createAgentWorkspaceFileWriteApi({
         relativePath: resolved.relativePath,
         contentBuffer
       });
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
-    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+    const preimageSnapshot = await captureWorkspaceFilePreimage(
       access.workspace,
       [resolved.relativePath]
     );
     fs.writeFileSync(resolved.absolutePath, contentBuffer);
     stripExecutableMode(resolved.absolutePath);
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const file: any = fileMetadataFromStat({
+    const file = fileMetadataFromStat({
       workspaceId: access.workspace.workspaceId,
       relativePath: resolved.relativePath,
       absolutePath: resolved.absolutePath,
       stat: fs.statSync(resolved.absolutePath),
       includeHash: true
     });
-    const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
+    const archived = recordOrNull(await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "workspace.file.write"
-    });
-    const writeMutations: any[] = archived
+    }));
+    const archiveMetadata = asObject(archived?.metadata);
+    const writeMutations: FileMutation[] = archived
       ? [{
           action: "put",
           key: resolved.relativePath,
-          valueRef: archived.rootCid,
+          valueRef: String(archived.rootCid || ""),
           metadata: {
-            ...filePayloadMetadata(file),
-            contentCid: archived?.metadata?.contentCid || ""
+            ...filePayloadMetadata(asObject(file)),
+            contentCid: String(archiveMetadata.contentCid || "")
           }
         }]
       : [];
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.write",
       mutations: writeMutations,
@@ -303,7 +382,7 @@ export function createAgentWorkspaceFileWriteApi({
         contentSha256: file.contentSha256 || ""
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.write",
       stateCommit,
@@ -323,23 +402,24 @@ export function createAgentWorkspaceFileWriteApi({
     };
   }
 
-  async function patchWorkspaceFile(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function patchWorkspaceFile(value: unknown = {}) {
+    const input = asObject(value);
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    const explicitPath: any = String(input.path || input.relativePath || input.filePath || input["file-path"] || "").trim();
+    const explicitPath = String(input.path || input.relativePath || input.filePath || input["file-path"] || "").trim();
     if (!explicitPath) {
       return { ok: false, status: 400, error: "path 不能为空。" };
     }
     if (path.posix.basename(explicitPath).startsWith(".")) {
       return { ok: false, status: 400, error: "不允许操作以 . 开头的文件。" };
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
       resolved = resolveWorkspacePath(access.workspace, normalizeWorkspaceRelativePath(explicitPath, { allowEmpty: false }));
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (!fs.existsSync(resolved.absolutePath)) {
       return { ok: false, status: 404, error: "文件不存在。" };
@@ -347,10 +427,15 @@ export function createAgentWorkspaceFileWriteApi({
     if (fs.lstatSync(resolved.absolutePath).isDirectory()) {
       return { ok: false, status: 400, error: "目标路径是文件夹，不能打补丁。" };
     }
-    const encoding: any = String(input.encoding || input.textEncoding || "utf8");
-    const beforeBuffer: any = fs.readFileSync(resolved.absolutePath);
-    const beforeSha256: any = sha256Buffer(beforeBuffer);
-    const expectedSha256: any = String(input.expectedSha256 || input.baseSha256 || "").trim();
+    let encoding: BufferEncoding;
+    try {
+      encoding = bufferEncoding(input.encoding || input.textEncoding || "utf8");
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
+    }
+    const beforeBuffer = fs.readFileSync(resolved.absolutePath);
+    const beforeSha256 = sha256Buffer(beforeBuffer);
+    const expectedSha256 = String(input.expectedSha256 || input.baseSha256 || "").trim();
     if (expectedSha256 && expectedSha256 !== beforeSha256) {
       return {
         ok: false,
@@ -360,9 +445,9 @@ export function createAgentWorkspaceFileWriteApi({
         currentSha256: beforeSha256
       };
     }
-    let nextText: any;
+    let nextText: string;
     try {
-      const beforeText: any = beforeBuffer.toString(encoding);
+      const beforeText = beforeBuffer.toString(encoding);
       if (Array.isArray(input.hunks) && input.hunks.length > 0) {
         nextText = applyReplacementHunks(beforeText, input.hunks);
       } else if (Object.hasOwn(input, "patch")) {
@@ -370,11 +455,11 @@ export function createAgentWorkspaceFileWriteApi({
       } else {
         return { ok: false, status: 400, error: "patch 或 hunks 至少提供一个。" };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { ok: false, status: 409, error: error instanceof Error ? error.message : "patch 应用失败。" };
     }
-    const nextBuffer: any = Buffer.from(nextText, encoding);
-    const afterSha256: any = sha256Buffer(nextBuffer);
+    const nextBuffer = Buffer.from(nextText, encoding);
+    const afterSha256 = sha256Buffer(nextBuffer);
     if (afterSha256 === beforeSha256) {
       return { ok: false, status: 409, error: "patch 未改变文件内容。", currentSha256: beforeSha256 };
     }
@@ -383,38 +468,39 @@ export function createAgentWorkspaceFileWriteApi({
         relativePath: resolved.relativePath,
         contentBuffer: nextBuffer
       });
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
-    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+    const preimageSnapshot = await captureWorkspaceFilePreimage(
       access.workspace,
       [resolved.relativePath]
     );
     fs.writeFileSync(resolved.absolutePath, nextBuffer);
     stripExecutableMode(resolved.absolutePath);
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const file: any = fileMetadataFromStat({
+    const file = fileMetadataFromStat({
       workspaceId: access.workspace.workspaceId,
       relativePath: resolved.relativePath,
       absolutePath: resolved.absolutePath,
       stat: fs.statSync(resolved.absolutePath),
       includeHash: true
     });
-    const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
+    const archived = recordOrNull(await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "workspace.file.patch"
-    });
-    const patchMutations: any[] = archived
+    }));
+    const archiveMetadata = asObject(archived?.metadata);
+    const patchMutations: FileMutation[] = archived
       ? [{
           action: "put",
           key: resolved.relativePath,
-          valueRef: archived.rootCid,
+          valueRef: String(archived.rootCid || ""),
           metadata: {
-            ...filePayloadMetadata(file),
-            contentCid: archived?.metadata?.contentCid || ""
+            ...filePayloadMetadata(asObject(file)),
+            contentCid: String(archiveMetadata.contentCid || "")
           }
         }]
       : [];
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.patch",
       mutations: patchMutations,
@@ -426,7 +512,7 @@ export function createAgentWorkspaceFileWriteApi({
         afterSha256
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.patch",
       stateCommit,
@@ -448,38 +534,39 @@ export function createAgentWorkspaceFileWriteApi({
     };
   }
 
-  async function deleteWorkspaceFile(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function deleteWorkspaceFile(value: unknown = {}) {
+    const input = asObject(value);
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    const explicitPath: any = String(input.path || input.relativePath || "").trim();
+    const explicitPath = String(input.path || input.relativePath || "").trim();
     if (!explicitPath) {
       return { ok: false, status: 400, error: "path 不能为空。" };
     }
     if (path.posix.basename(explicitPath).startsWith(".")) {
       return { ok: false, status: 400, error: "不允许操作以 . 开头的文件。" };
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
       resolved = resolveWorkspacePath(access.workspace, normalizeWorkspaceRelativePath(explicitPath, { allowEmpty: false }));
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (!fs.existsSync(resolved.absolutePath)) {
       return { ok: false, status: 404, error: "文件不存在。" };
     }
-    const stat: any = fs.lstatSync(resolved.absolutePath);
-    const deletedPaths: any[] = [];
+    const stat = fs.lstatSync(resolved.absolutePath);
+    const deletedPaths: string[] = [];
     if (stat.isDirectory()) {
-      const collect: any = (absoluteDir?: any, relativeDir?: any) : any => {
-        const entries: any = fs.readdirSync(absoluteDir, { withFileTypes: true })
-          .filter((entry?: any) : any => !entry.name.startsWith("."))
-          .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+      const collect = (absoluteDir: string, relativeDir: string): void => {
+        const entries = fs.readdirSync(absoluteDir, { withFileTypes: true })
+          .filter((entry) => !entry.name.startsWith("."))
+          .sort((left, right) => left.name.localeCompare(right.name));
         for (const entry of entries) {
-          const childRelativePath: any = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-          const childAbsolutePath: any = path.join(absoluteDir, entry.name);
-          const childStat: any = fs.lstatSync(childAbsolutePath);
+          const childRelativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+          const childAbsolutePath = path.join(absoluteDir, entry.name);
+          const childStat = fs.lstatSync(childAbsolutePath);
           if (childStat.isSymbolicLink()) {
             throw new Error(`不允许删除符号链接：${childRelativePath}`);
           }
@@ -493,16 +580,16 @@ export function createAgentWorkspaceFileWriteApi({
       };
       try {
         collect(resolved.absolutePath, resolved.relativePath);
-      } catch (error: any) {
-        return { ok: false, status: 400, error: error.message };
+      } catch (error: unknown) {
+        return { ok: false, status: 400, error: errorMessage(error) };
       }
     }
     deletedPaths.push(resolved.relativePath);
-    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+    const preimageSnapshot = await captureWorkspaceFilePreimage(
       access.workspace,
       deletedPaths
     );
-    const meta: any = fileMetadataFromStat({
+    const meta = fileMetadataFromStat({
       workspaceId: access.workspace.workspaceId,
       relativePath: resolved.relativePath,
       absolutePath: resolved.absolutePath,
@@ -518,11 +605,11 @@ export function createAgentWorkspaceFileWriteApi({
       fs.unlinkSync(resolved.absolutePath);
     }
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const deleteMutations: any[] = deletedPaths.map((relativePath?: any) : any => ({
+    const deleteMutations: FileMutation[] = deletedPaths.map((relativePath) => ({
       action: "delete",
       key: relativePath
     }));
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.file.delete",
       mutations: deleteMutations,
@@ -533,7 +620,7 @@ export function createAgentWorkspaceFileWriteApi({
         deletedPathCount: deletedPaths.length
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.file.delete",
       stateCommit,
@@ -553,13 +640,14 @@ export function createAgentWorkspaceFileWriteApi({
     };
   }
 
-  async function moveWorkspaceFile(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function moveWorkspaceFile(value: unknown = {}) {
+    const input = asObject(value);
+    const access = workspaceForStorage(input);
     if (!access.ok) {
       return access;
     }
-    const sourcePath: any = String(input.from || input.sourcePath || "").trim();
-    const targetPath: any = String(input.to || input.targetPath || input.path || "").trim();
+    const sourcePath = String(input.from || input.sourcePath || "").trim();
+    const targetPath = String(input.to || input.targetPath || input.path || "").trim();
     if (!sourcePath) {
       return { ok: false, status: 400, error: "sourcePath (from) 不能为空。" };
     }
@@ -569,17 +657,18 @@ export function createAgentWorkspaceFileWriteApi({
     if (path.posix.basename(sourcePath).startsWith(".") || path.posix.basename(targetPath).startsWith(".")) {
       return { ok: false, status: 400, error: "不允许操作以 . 开头的文件。" };
     }
-    let resolvedSource: any, resolvedTarget: any;
+    let resolvedSource: ResolvedWorkspacePath;
+    let resolvedTarget: ResolvedWorkspacePath;
     try {
       resolvedSource = resolveWorkspacePath(access.workspace, normalizeWorkspaceRelativePath(sourcePath, { allowEmpty: false }));
       resolvedTarget = resolveWorkspacePath(access.workspace, normalizeWorkspaceRelativePath(targetPath, { allowEmpty: false }));
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (!fs.existsSync(resolvedSource.absolutePath)) {
       return { ok: false, status: 404, error: "源文件不存在。" };
     }
-    let sourceStat: any;
+    let sourceStat: fs.Stats;
     try {
       sourceStat = fs.lstatSync(resolvedSource.absolutePath);
       if (sourceStat.isSymbolicLink() || (!sourceStat.isFile() && !sourceStat.isDirectory())) {
@@ -594,15 +683,15 @@ export function createAgentWorkspaceFileWriteApi({
       } else if (sourceStat.isDirectory()) {
         assertMovableWorkspaceDirectory(resolvedSource.absolutePath, resolvedTarget.relativePath);
       }
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (fs.existsSync(resolvedTarget.absolutePath)) {
       if (!input.overwrite) {
         return { ok: false, status: 409, error: "目标路径已存在。设置 overwrite: true 以覆盖。" };
       }
     }
-    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+    const preimageSnapshot = await captureWorkspaceFilePreimage(
       access.workspace,
       [
         resolvedSource.relativePath,
@@ -620,41 +709,44 @@ export function createAgentWorkspaceFileWriteApi({
       stripExecutableMode(resolvedTarget.absolutePath);
     }
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const newStat: any = fs.statSync(resolvedTarget.absolutePath);
-    const file: any = fileMetadataFromStat({
+    const newStat = fs.statSync(resolvedTarget.absolutePath);
+    const file = fileMetadataFromStat({
       workspaceId: access.workspace.workspaceId,
       relativePath: resolvedTarget.relativePath,
       absolutePath: resolvedTarget.absolutePath,
       stat: newStat,
       includeHash: newStat.isFile()
     });
-    const archived: any = await archiveWorkspacePath(access.workspace, resolvedTarget.relativePath, {
+    const archived = recordOrNull(await archiveWorkspacePath(access.workspace, resolvedTarget.relativePath, {
       operationId: input.operationId || "agent_workspaces.file.move"
-    });
-    const sourceSubtreePaths: any[] = [
+    }));
+    const preimage = asObject(preimageSnapshot);
+    const sourceSubtreePaths: string[] = [
       resolvedSource.relativePath,
-      ...asArray(preimageSnapshot?.files)
-        .map((entry?: any) : any => String(entry?.path || ""))
-        .filter((entryPath?: any) : any =>
+      ...asArray(preimage.files)
+        .map((entry) => String(asObject(entry).path || ""))
+        .filter((entryPath) =>
           entryPath.startsWith(`${resolvedSource.relativePath}/`)
         )
     ];
-    const targetMutations: any[] = sourceStat.isDirectory()
+    const archiveEntries = asArray(archived?.entries).map(asObject);
+    const archiveMetadata = asObject(archived?.metadata);
+    const targetMutations: FileMutation[] = sourceStat.isDirectory()
       ? [
           {
             action: "put",
             key: resolvedTarget.relativePath,
-            valueRef: archived?.rootCid || "",
-            metadata: { ...filePayloadMetadata(file), type: "directory" }
+            valueRef: String(archived?.rootCid || ""),
+            metadata: { ...filePayloadMetadata(asObject(file)), type: "directory" }
           },
-          ...asArray(archived?.entries).map((entry?: any) : any => ({
+          ...archiveEntries.map((entry): FileMutation => ({
             action: "put",
             key: String(entry.path || ""),
             valueRef: String(entry.cid || ""),
             metadata: {
               type: "file",
               sizeBytes: Number(entry.byteLength || 0),
-              contentSha256: normalizeSha256(entry.metadata?.contentSha256 || ""),
+              contentSha256: normalizeSha256(asObject(entry.metadata).contentSha256 || ""),
               contentCid: String(entry.cid || "")
             }
           }))
@@ -663,21 +755,21 @@ export function createAgentWorkspaceFileWriteApi({
         ? [{
             action: "put",
             key: resolvedTarget.relativePath,
-            valueRef: archived.rootCid,
+            valueRef: String(archived.rootCid || ""),
             metadata: {
-              ...filePayloadMetadata(file),
-              contentCid: archived?.metadata?.contentCid || ""
+              ...filePayloadMetadata(asObject(file)),
+              contentCid: String(archiveMetadata.contentCid || "")
             }
           }]
         : [];
-    const moveMutations: any[] = [
-      ...uniqueStrings(sourceSubtreePaths).map((entryPath?: any) : any => ({
+    const moveMutations: FileMutation[] = [
+      ...uniqueStrings(sourceSubtreePaths).map((entryPath): FileMutation => ({
         action: "delete",
         key: entryPath
       })),
       ...targetMutations
     ];
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.file.move",
       mutations: moveMutations,
@@ -689,7 +781,7 @@ export function createAgentWorkspaceFileWriteApi({
         overwrite: input.overwrite === true
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.file.move",
       stateCommit,

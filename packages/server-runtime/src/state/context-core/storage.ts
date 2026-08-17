@@ -1,85 +1,107 @@
 import fs from "node:fs/promises";
 import { atomicWriteJson } from "#meshrix/state-coordinator";
-import { appendBoundedJsonLine, readJsonlTail } from "#meshrix/foundation/storage/bounded-jsonl";
+import {
+  appendBoundedJsonLine,
+  readJsonlTail,
+} from "#meshrix/foundation/storage/bounded-jsonl";
+import type {
+  ContextProfile,
+  ContextStorage,
+  ContextStorageOptions,
+  RuntimeRecord,
+} from "./types.ts";
 
-const CONTEXT_RECORDS_MAX_BYTES: any = 16 * 1024 * 1024;
+const CONTEXT_RECORDS_MAX_BYTES = 16 * 1024 * 1024;
+
+function errorCode(error: unknown): string {
+  return error && typeof error === "object" && "code" in error
+    ? String(error.code || "")
+    : "";
+}
 
 export function createContextCoreStorage({
   profilesPath,
   buildRecordsPath,
   evaluationRunsPath,
   protocolVersion,
-  normalizeProfiles
-}: Record<string, any>) : any {
-  async function readProfiles() : Promise<any> {
+  normalizeProfiles,
+}: ContextStorageOptions): ContextStorage {
+  async function readProfiles(): Promise<ContextProfile[]> {
     try {
-      const parsed: any = JSON.parse(await fs.readFile(profilesPath, "utf8"));
-      if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.profiles)) {
+      const parsed: unknown = JSON.parse(
+        await fs.readFile(profilesPath, "utf8"),
+      );
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        !("profiles" in parsed) ||
+        !Array.isArray(parsed.profiles)
+      ) {
         throw new Error("context_profiles_file_invalid");
       }
       return normalizeProfiles(parsed.profiles);
-    } catch (error: any) {
-      if (error?.code === "ENOENT") return [];
+    } catch (error: unknown) {
+      if (errorCode(error) === "ENOENT") return [];
       throw error;
     }
   }
 
-  async function writeProfiles(profiles?: any) : Promise<any> {
-    const normalized: any = normalizeProfiles(profiles);
+  async function writeProfiles(profiles?: unknown): Promise<ContextProfile[]> {
+    const normalized = normalizeProfiles(profiles);
     await atomicWriteJson(profilesPath, {
       protocolVersion,
       updatedAt: new Date().toISOString(),
-      profiles: normalized
+      profiles: normalized,
     });
     return normalized;
   }
 
-  async function listProfiles() : Promise<any> {
-    const profiles: any = await readProfiles();
+  async function listProfiles() {
+    const profiles = await readProfiles();
     return {
       protocolVersion,
       profiles,
-      path: profilesPath
+      path: profilesPath,
     };
   }
 
-  async function saveProfiles(input: Record<string, any> = {}) : Promise<any> {
+  async function saveProfiles(input: RuntimeRecord = {}) {
     if (!Array.isArray(input.profiles)) {
       throw new Error("context_profiles_required");
     }
-    const profiles: any = await writeProfiles(input.profiles);
+    const profiles = await writeProfiles(input.profiles);
     return {
       protocolVersion,
       profiles,
-      path: profilesPath
+      path: profilesPath,
     };
   }
 
-  async function listBuildRecords(input: Record<string, any> = {}) : Promise<any> {
-    const records: any = await readJsonlTail(buildRecordsPath, {
-      limit: input.limit || 50,
+  async function listBuildRecords(input: RuntimeRecord = {}) {
+    const records = await readJsonlTail(buildRecordsPath, {
+      limit: Number(input.limit) || 50,
       maxScanBytes: CONTEXT_RECORDS_MAX_BYTES / 2,
-      reverse: true
+      reverse: true,
     });
     return {
       protocolVersion,
       path: buildRecordsPath,
-      records
+      records,
     };
   }
 
-  async function writeBuildRecord(record?: any) : Promise<any> {
+  async function writeBuildRecord<T>(record: T): Promise<T> {
     await appendBoundedJsonLine(buildRecordsPath, record, {
       maxBytes: CONTEXT_RECORDS_MAX_BYTES,
-      retainedBytes: CONTEXT_RECORDS_MAX_BYTES / 2
+      retainedBytes: CONTEXT_RECORDS_MAX_BYTES / 2,
     });
     return record;
   }
 
-  async function appendEvaluationRun(run?: any) : Promise<any> {
+  async function appendEvaluationRun<T>(run: T): Promise<T> {
     await appendBoundedJsonLine(evaluationRunsPath, run, {
       maxBytes: CONTEXT_RECORDS_MAX_BYTES,
-      retainedBytes: CONTEXT_RECORDS_MAX_BYTES / 2
+      retainedBytes: CONTEXT_RECORDS_MAX_BYTES / 2,
     });
     return run;
   }
@@ -91,6 +113,6 @@ export function createContextCoreStorage({
     saveProfiles,
     listBuildRecords,
     writeBuildRecord,
-    appendEvaluationRun
+    appendEvaluationRun,
   };
 }
