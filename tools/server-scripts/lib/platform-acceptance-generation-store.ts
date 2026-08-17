@@ -213,9 +213,32 @@ async function withPublicationLock(root?: any, action?: any) : Promise<any> {
   }
 }
 
-function workspaceCopyFilter(repoRoot?: any) : any {
+async function collectPlanEvidenceBuildPaths(repoRoot?: any) : Promise<any[]> {
+  const checkpointsPath: any = path.join(repoRoot, "docs/plans/end-to-end-release/Checkpoints.json");
+  try {
+    const checkpoints: any = JSON.parse(await fs.readFile(checkpointsPath, "utf8"));
+    const paths: any = new Set<any>();
+    for (const node of Array.isArray(checkpoints) ? checkpoints : []) {
+      for (const criterion of node?.acceptance_criteria ?? []) {
+        for (const ref of criterion?.evidence_refs ?? []) {
+          if (ref?.type === "file" && typeof ref?.path === "string" && ref.path.startsWith("build/")) {
+            paths.add(ref.path.split(path.sep).join("/"));
+          }
+        }
+      }
+    }
+    return [...paths];
+  } catch {
+    return [];
+  }
+}
+
+function workspaceCopyFilter(repoRoot?: any, planEvidenceBuildPaths: any[] = []) : any {
   const excludedTopLevel: any = new Set<any>([".git", "node_modules"]);
-  const allowedBuildPrefixes: any[] = ["build/plan-proof-ledger"];
+  const allowedBuildPrefixes: any[] = [
+    "build/plan-proof-ledger",
+    ...planEvidenceBuildPaths
+  ];
   return (sourcePath?: any) : any => {
     const relativePath: any = path.relative(repoRoot, sourcePath);
     if (!relativePath) return true;
@@ -225,7 +248,9 @@ function workspaceCopyFilter(repoRoot?: any) : any {
     if (firstSegment === "build") {
       if (normalized === "build") return true;
       return allowedBuildPrefixes.some((prefix?: any) : any =>
-        normalized === prefix || normalized.startsWith(`${prefix}/`));
+        normalized === prefix ||
+        normalized.startsWith(`${prefix}/`) ||
+        prefix.startsWith(`${normalized}/`));
     }
     return true;
   };
@@ -268,11 +293,12 @@ export async function createAcceptanceGenerationWorkspace(repoRoot?: any, { id }
   );
   const paths: any = generationPaths(repoRoot, selectedId, workspace, baseGenerationId);
   try {
+    const evidenceBuildPaths: any[] = await collectPlanEvidenceBuildPaths(repoRoot);
     await fs.cp(repoRoot, paths.workspace, {
       recursive: true,
       force: true,
       preserveTimestamps: true,
-      filter: workspaceCopyFilter(repoRoot)
+      filter: workspaceCopyFilter(repoRoot, evidenceBuildPaths)
     });
     const dependencyRoot: any = path.join(repoRoot, "node_modules");
     const stats: any = await fs.stat(dependencyRoot);

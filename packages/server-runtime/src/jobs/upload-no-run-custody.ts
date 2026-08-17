@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { Readable } from "node:stream";
+import type { Hash } from "node:crypto";
+import type { FileHandle } from "node:fs/promises";
+import type Database from "better-sqlite3";
 
 import {
   SANDBOX_CUSTODY_ENVELOPE_SCHEMA,
@@ -12,90 +16,159 @@ import {
   CHUNK_BYTES,
   CONTENT_ALGORITHM,
   chunkAad,
-  frameDigest,
   hashHex,
-  headerBinding,
   nonceFor,
   timingSafeDigest
 } from "../execution-sandbox/opaque-custody.ts";
+import type { StorageKernel } from "#meshrix/foundation/storage/storage-kernel";
+import type { StorageProvider } from "#meshrix/foundation/storage/storage-provider";
+import { errorProperty, isObjectRecord, type CodedError } from "./jobs/contracts.ts";
 
-const MAX_UPLOAD_CUSTODY_BYTES: any = 512 * 1024 * 1024;
-const MAX_UPLOAD_CUSTODY_ENVELOPE_BYTES: any =
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+interface CustodyOwnerInput { subjectId?: string; ownerSubjectId?: string; userId?: string; ownerUserId?: string; tenantId?: string; ownerTenantId?: string; tenant?: string }
+interface CustodyBeginInput { sessionId?: string; fileIndex?: number; expectedSha256?: string; expectedByteSize?: number; owner?: CustodyOwnerInput; idempotencyKey?: string; custodyRef?: string }
+interface CustodyRow {
+  custody_ref: string; owner_binding_digest: string; state: "sealed" | "staging"; pending_identity: string;
+  expected_byte_size: number; expected_content_digest: string; committed_plaintext_bytes: number;
+  committed_frame_count: number; committed_ciphertext_digest: string; sealed_envelope_digest: string;
+  envelope_id: string; sealed_object_id: string; resource_binding_digest: string;
+  idempotency_digest: string; prepared_plaintext_bytes: number | null;
+  prepared_frame_count: number | null; prepared_ciphertext_digest: string | null;
+  created_at: string; updated_at: string;
+  storage_rel_path?: string; envelope_byte_count?: number;
+}
+interface SealedCustodyObject extends CustodyRow { storage_rel_path: string; envelope_byte_count: number }
+interface SealedArtifactRow {
+  object_id: string; content_digest: string; envelope_digest: string;
+  plaintext_bytes: number; chunk_count: number; state: string;
+}
+interface WrappedKey { keyReference: string; [key: string]: JsonValue }
+interface EnvelopeRecord {
+  [key: string]: JsonValue | undefined;
+  type: string; schemaVersion?: string; algorithm?: string; envelopeId?: string;
+  noncePrefix?: string; wrappedKey?: JsonValue; headerDigest?: string;
+  index?: number; previousFrameDigest?: string; plaintextBytes?: number;
+  nonce?: string; ciphertext?: string; authTag?: string;
+}
+interface EnvelopeHeader extends EnvelopeRecord {
+  type: "header"; envelopeId: string; noncePrefix: string; mediaType: string;
+  wrappedKey: WrappedKey; headerDigest: string;
+}
+type RecoveredCustodyRow = CustodyRow & { header?: EnvelopeHeader };
+interface RecordCapture { handle: FileHandle; byteCount: number; maxBytes: number }
+interface KeyBroker { wrapKey(key: Buffer, envelopeId: string): Promise<WrappedKey>; unwrapKey(wrappedKey: WrappedKey, envelopeId: string): Promise<Buffer> }
+interface CustodyFaultInjector { afterChunkPrepared?(input: Record<string, unknown>): Promise<void> | void }
+interface CustodyAuthorization {
+  allowed?: boolean; revoked?: boolean; evidenceRef?: string; proofRef?: string;
+  currentPolicyRevision?: unknown; currentGrantRevision?: unknown; decisionRef?: unknown;
+}
+interface AuthorizationReceipt { policyRevision?: unknown; grantRevision?: unknown; decisionRef?: unknown }
+type GovernedExecutionReceipt = Parameters<typeof assertConsumedGovernedExecutionPermit>[0];
+interface CustodyIdentityInput { custodyRef?: string; owner?: CustodyOwnerInput }
+interface CustodyAppendInput extends CustodyIdentityInput { offset?: number; bytes?: Buffer | string; signal?: AbortSignal }
+interface CustodyReadInput extends CustodyIdentityInput {
+  contentDigest?: string; envelopeDigest?: string; byteCount?: number; resourceRef?: string;
+  authorizationReceipt?: AuthorizationReceipt; governedExecutionReceipt?: GovernedExecutionReceipt; maxBytes?: number; signal?: AbortSignal;
+}
+interface DecryptInput { encryptedStream: Readable; expectedEnvelopeId: string; expectedEnvelopeByteCount: number; expectedByteCount: number; expectedContentDigest: string; expectedEnvelopeDigest: string; maxBytes: number; signal?: AbortSignal }
+
+function isEnvelopeRecord(value: unknown): value is EnvelopeRecord {
+  return isObjectRecord(value) && typeof value.type === "string";
+}
+
+function isChunkRecord(record: EnvelopeRecord): record is EnvelopeRecord & { type: "chunk"; index: number; previousFrameDigest: string; plaintextBytes: number } {
+  return record.type === "chunk" && Number.isSafeInteger(record.plaintextBytes);
+}
+
+function envelopeRecordDigest(record: Record<string, JsonValue | undefined>): string {
+  return hashHex(Buffer.from(JSON.stringify(record), "utf8"));
+}
+
+function envelopeHeaderBinding(header: EnvelopeHeader) {
+  return {
+    type: "header", schemaVersion: header.schemaVersion, envelopeId: header.envelopeId,
+    algorithm: header.algorithm, mediaType: header.mediaType, noncePrefix: header.noncePrefix,
+    wrappedKey: header.wrappedKey
+  };
+}
+
+const MAX_UPLOAD_CUSTODY_BYTES = 512 * 1024 * 1024;
+const MAX_UPLOAD_CUSTODY_ENVELOPE_BYTES =
   MAX_UPLOAD_CUSTODY_BYTES * 2 + 1024 * 1024;
-const READ_AUDIENCE: any = "upload-custody-read";
-const ZERO_DIGEST: any = "0".repeat(64);
-const REQUEST_SCHEMA: any = "v0.0.1:upload:no-run-custody-request-1";
-const PRIVATE_DIRECTORY_MODE: any = 0o700;
-const PRIVATE_FILE_MODE: any = 0o600;
+const READ_AUDIENCE = "upload-custody-read";
+const ZERO_DIGEST = "0".repeat(64);
+const REQUEST_SCHEMA = "v0.0.1:upload:no-run-custody-request-1";
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
 
-function fail(code?: any, message?: any, details: any = null, cause: any = null) : any {
-  const error: Error & Record<string, any> = new Error(message, cause ? { cause } : undefined);
+function fail(code: string, message: string, details: Record<string, unknown> | null = null, cause: unknown = null) {
+  const error = new Error(message, cause ? { cause } : undefined) as CodedError;
   error.code = code;
   if (details && typeof details === "object") {
-    for (const [key, value] of (Object.entries(details) as [string, any][])) error[key] = value;
+    for (const [key, value] of Object.entries(details)) error[key] = value;
   }
   return error;
 }
 
-function canonicalJson(value?: any) : any {
+function canonicalJson(value: JsonValue): string {
   if (Array.isArray(value)) {
-    return `[${value.map((item?: any) : any => canonicalJson(item)).join(",")}]`;
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   }
   if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key?: any) : any => (
+    return `{${Object.keys(value).sort().map((key) => (
       `${JSON.stringify(key)}:${canonicalJson(value[key])}`
     )).join(",")}}`;
   }
   return JSON.stringify(value);
 }
 
-function boundedText(value?: any, label?: any, max: any = 512) : any {
-  const normalized: any = String(value || "").trim();
+function boundedText(value: unknown, label: string, max = 512) {
+  const normalized = String(value || "").trim();
   if (!normalized || normalized.length > max || normalized.includes("\0")) {
     throw new TypeError(`${label} must be a bounded non-empty string.`);
   }
   return normalized;
 }
 
-function normalizeDigest(value?: any, label?: any) : any {
-  const normalized: any = boundedText(value, label, 64).toLowerCase();
+function normalizeDigest(value: unknown, label: string) {
+  const normalized = boundedText(value, label, 64).toLowerCase();
   if (!/^[a-f0-9]{64}$/u.test(normalized)) {
     throw new TypeError(`${label} must be a SHA-256 digest.`);
   }
   return normalized;
 }
 
-function normalizeByteCount(value?: any, label?: any, maximum: any = MAX_UPLOAD_CUSTODY_BYTES) : any {
-  const normalized: any = Number(value);
+function normalizeByteCount(value: unknown, label: string, maximum = MAX_UPLOAD_CUSTODY_BYTES) {
+  const normalized = Number(value);
   if (!Number.isSafeInteger(normalized) || normalized < 0 || normalized > maximum) {
     throw new TypeError(`${label} must be a bounded non-negative safe integer.`);
   }
   return normalized;
 }
 
-function normalizeFileIndex(value?: any) : any {
-  const normalized: any = Number(value);
+function normalizeFileIndex(value: unknown) {
+  const normalized = Number(value);
   if (!Number.isSafeInteger(normalized) || normalized < 0 || normalized > 255) {
     throw new TypeError("fileIndex must be a bounded non-negative safe integer.");
   }
   return normalized;
 }
 
-function normalizeOwner(owner: Record<string, any> = {}) : any {
+function normalizeOwner(owner: CustodyOwnerInput = {}) {
   if (!owner || typeof owner !== "object" || Array.isArray(owner)) {
     throw new TypeError("Upload custody owner binding is required.");
   }
-  const subjectId: any = boundedText(
+  const subjectId = boundedText(
     owner.subjectId || owner.ownerSubjectId || owner.userId,
     "owner.subjectId",
     256
   );
-  const userId: any = boundedText(
+  const userId = boundedText(
     owner.userId || owner.ownerUserId || subjectId,
     "owner.userId",
     256
   );
-  const tenantId: any = boundedText(
+  const tenantId = boundedText(
     owner.tenantId || owner.ownerTenantId || owner.tenant,
     "owner.tenantId",
     256
@@ -103,28 +176,28 @@ function normalizeOwner(owner: Record<string, any> = {}) : any {
   return Object.freeze({ subjectId, tenantId, userId });
 }
 
-function ownerBindingDigest(owner?: any) : any {
+function ownerBindingDigest(owner?: CustodyOwnerInput) {
   return hashHex(Buffer.from(canonicalJson(normalizeOwner(owner)), "utf8"));
 }
 
-function resourceReference(sessionId?: any, fileIndex?: any) : any {
+function resourceReference(sessionId: string, fileIndex: number) {
   return `upload-resource:${sessionId}:${fileIndex}`;
 }
 
-function resourceBindingDigest(resourceRef?: any) : any {
+function resourceBindingDigest(resourceRef: string) {
   return hashHex(Buffer.from(boundedText(resourceRef, "resourceRef", 768), "utf8"));
 }
 
-function normalizeBeginInput(input: Record<string, any> = {}) : any {
-  const sessionId: any = boundedText(input.sessionId, "sessionId", 512);
-  const fileIndex: any = normalizeFileIndex(input.fileIndex);
-  const expectedContentDigest: any = normalizeDigest(input.expectedSha256, "expectedSha256");
-  const expectedByteSize: any = normalizeByteCount(input.expectedByteSize, "expectedByteSize");
-  const ownerDigest: any = ownerBindingDigest(input.owner);
-  const resourceRef: any = resourceReference(sessionId, fileIndex);
-  const resourceDigest: any = resourceBindingDigest(resourceRef);
-  const idempotencyKey: any = boundedText(input.idempotencyKey, "idempotencyKey", 512);
-  const idempotencyDigest: any = hashHex(Buffer.from(canonicalJson({
+function normalizeBeginInput(input: CustodyBeginInput = {}) {
+  const sessionId = boundedText(input.sessionId, "sessionId", 512);
+  const fileIndex = normalizeFileIndex(input.fileIndex);
+  const expectedContentDigest = normalizeDigest(input.expectedSha256, "expectedSha256");
+  const expectedByteSize = normalizeByteCount(input.expectedByteSize, "expectedByteSize");
+  const ownerDigest = ownerBindingDigest(input.owner);
+  const resourceRef = resourceReference(sessionId, fileIndex);
+  const resourceDigest = resourceBindingDigest(resourceRef);
+  const idempotencyKey = boundedText(input.idempotencyKey, "idempotencyKey", 512);
+  const idempotencyDigest = hashHex(Buffer.from(canonicalJson({
     schemaVersion: REQUEST_SCHEMA,
     sessionId,
     fileIndex,
@@ -134,7 +207,7 @@ function normalizeBeginInput(input: Record<string, any> = {}) : any {
     resourceBindingDigest: resourceDigest,
     idempotencyKey
   }), "utf8"));
-  const custodyRef: any = `custody:upload_${idempotencyDigest.slice(0, 48)}`;
+  const custodyRef = `custody:upload_${idempotencyDigest.slice(0, 48)}`;
   return Object.freeze({
     custodyRef,
     expectedByteSize,
@@ -148,7 +221,7 @@ function normalizeBeginInput(input: Record<string, any> = {}) : any {
   });
 }
 
-function validateHeader(header?: any, envelopeId: any = "") : any {
+function validateHeader(header: EnvelopeRecord | null, envelopeId = ""): EnvelopeHeader {
   if (
     !header ||
     header.type !== "header" ||
@@ -156,28 +229,28 @@ function validateHeader(header?: any, envelopeId: any = "") : any {
     header.algorithm !== CONTENT_ALGORITHM ||
     (envelopeId && header.envelopeId !== envelopeId) ||
     Buffer.from(String(header.noncePrefix || ""), "base64").length !== 8 ||
-    !header.wrappedKey ||
-    typeof header.wrappedKey !== "object"
+    !isObjectRecord(header.wrappedKey) ||
+    typeof header.wrappedKey.keyReference !== "string"
   ) {
     throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
   }
-  const expectedHeaderDigest: any = hashHex(
-    Buffer.from(JSON.stringify(headerBinding(header)), "utf8")
+  const expectedHeaderDigest = hashHex(
+    Buffer.from(JSON.stringify(envelopeHeaderBinding(header as EnvelopeHeader)), "utf8")
   );
   if (!timingSafeDigest(expectedHeaderDigest, header.headerDigest)) {
     throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
   }
-  return header;
+  return header as EnvelopeHeader;
 }
 
-function jsonLine(value?: any) : any {
+function jsonLine(value: JsonValue) {
   return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
 }
 
-async function writeAll(handle?: any, bytes?: any, position: any = null) : Promise<any> {
-  let written: any = 0;
+async function writeAll(handle: FileHandle, bytes: Buffer, position: number | null = null) {
+  let written = 0;
   while (written < bytes.length) {
-    const result: any = await handle.write(
+    const result = await handle.write(
       bytes,
       written,
       bytes.length - written,
@@ -190,46 +263,46 @@ async function writeAll(handle?: any, bytes?: any, position: any = null) : Promi
   }
 }
 
-async function syncDirectory(directoryPath?: any) : Promise<any> {
-  let handle: any = null;
+async function syncDirectory(directoryPath: string) {
+  let handle = null;
   try {
     handle = await fs.open(directoryPath, fsNative.constants.O_RDONLY);
     await handle.sync();
-  } catch (error: any) {
-    const unsupported: any =
+  } catch (error) {
+    const unsupported =
       process.platform === "win32" &&
-      ["EACCES", "EINVAL", "ENOTSUP", "EPERM"].includes(error?.code);
+      ["EACCES", "EINVAL", "ENOTSUP", "EPERM"].includes(String(errorProperty(error, "code")));
     if (!unsupported) throw error;
   } finally {
-    await handle?.close().catch(() : any => {});
+    await handle?.close().catch(() => {});
   }
 }
 
-async function ensurePrivateDirectory(directoryPath?: any) : Promise<any> {
+async function ensurePrivateDirectory(directoryPath: string) {
   await fs.mkdir(directoryPath, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  const stat: any = await fs.lstat(directoryPath);
+  const stat = await fs.lstat(directoryPath);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw fail("upload_custody_directory_unsafe", "Upload custody directory is unsafe.");
   }
   if (process.platform !== "win32") await fs.chmod(directoryPath, PRIVATE_DIRECTORY_MODE);
 }
 
-async function ensureCustodyRoots(rootPath?: any, pendingRoot?: any) : Promise<any> {
-  const custodyRoot: any = path.dirname(pendingRoot);
+async function ensureCustodyRoots(rootPath: string, pendingRoot: string) {
+  const custodyRoot = path.dirname(pendingRoot);
   await ensurePrivateDirectory(custodyRoot);
   await ensurePrivateDirectory(pendingRoot);
-  const relative: any = path.relative(rootPath, pendingRoot);
+  const relative = path.relative(rootPath, pendingRoot);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
     throw fail("upload_custody_directory_unsafe", "Upload custody directory is unsafe.");
   }
 }
 
-async function openPrivatePendingFile(filePath?: any, flags?: any) : Promise<any> {
-  const openFlags: any = flags | (fsNative.constants.O_NOFOLLOW || 0);
-  let handle: any = null;
+async function openPrivatePendingFile(filePath: string, flags: number) {
+  const openFlags = flags | (fsNative.constants.O_NOFOLLOW || 0);
+  let handle = null;
   try {
     handle = await fs.open(filePath, openFlags);
-    const stat: any = await handle.stat({ bigint: true });
+    const stat = await handle.stat({ bigint: true });
     if (!stat.isFile()) {
       throw fail("upload_custody_file_unsafe", "Upload custody file is unsafe.");
     }
@@ -240,21 +313,21 @@ async function openPrivatePendingFile(filePath?: any, flags?: any) : Promise<any
       throw fail("upload_custody_mode_unsafe", "Upload custody file mode is unsafe.");
     }
     return { handle, stat };
-  } catch (error: any) {
-    await handle?.close().catch(() : any => {});
-    if (String(error?.code || "").startsWith("upload_custody_")) throw error;
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    if (String(errorProperty(error, "code") || "").startsWith("upload_custody_")) throw error;
     throw fail("upload_custody_file_unsafe", "Upload custody file is unsafe.", null, error);
   }
 }
 
-async function *jsonRecords(stream?: any, rawHash: any = null, capture: any = null) : AsyncGenerator<any, any, any> {
-  let pending: any = Buffer.alloc(0);
-  let consumed: any = 0;
+async function *jsonRecords(stream: Readable, rawHash: Hash | null = null, capture: RecordCapture | null = null): AsyncGenerator<{ endOffset: number; record: EnvelopeRecord }, void, void> {
+  let pending = Buffer.alloc(0);
+  let consumed = 0;
   for await (const input of stream) {
-    const chunk: any = Buffer.isBuffer(input) ? input : Buffer.from(input);
+    const chunk = Buffer.isBuffer(input) ? input : Buffer.from(input);
     rawHash?.update(chunk);
     if (capture) {
-      const nextCapturedBytes: any = capture.byteCount + chunk.length;
+      const nextCapturedBytes = capture.byteCount + chunk.length;
       if (nextCapturedBytes > capture.maxBytes) {
         throw fail(
           "upload_custody_envelope_invalid",
@@ -266,24 +339,27 @@ async function *jsonRecords(stream?: any, rawHash: any = null, capture: any = nu
     }
     pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
     while (true) {
-      const newline: any = pending.indexOf(0x0a);
+      const newline = pending.indexOf(0x0a);
       if (newline < 0) break;
-      const raw: any = pending.subarray(0, newline);
+      const raw = pending.subarray(0, newline);
       pending = pending.subarray(newline + 1);
       consumed += newline + 1;
       if (raw.length === 0 || raw.length > 256 * 1024) {
         throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
       }
-      let record: any;
+      let record: unknown;
       try {
         record = JSON.parse(raw.toString("utf8"));
-      } catch (error: any) {
+      } catch (error) {
         throw fail(
           "upload_custody_envelope_invalid",
           "Upload custody envelope is invalid.",
           null,
           error
         );
+      }
+      if (!isEnvelopeRecord(record)) {
+        throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
       }
       yield { endOffset: consumed, record };
     }
@@ -293,8 +369,9 @@ async function *jsonRecords(stream?: any, rawHash: any = null, capture: any = nu
   }
 }
 
-function statusFromRow(row?: any, { replayed }: Record<string, any> = {}) : any {
-  const sealed: any = row.state === "sealed";
+function statusFromRow(row: CustodyRow | null, { replayed }: { replayed?: boolean } = {}) {
+  if (!row) throw fail("upload_custody_missing", "Upload custody object is unavailable.");
+  const sealed = row.state === "sealed";
   return Object.freeze({
     custodyRef: row.custody_ref,
     nextOffset: Number(row.committed_plaintext_bytes),
@@ -312,7 +389,7 @@ function statusFromRow(row?: any, { replayed }: Record<string, any> = {}) : any 
   });
 }
 
-function rowForCustody(db?: any, custodyRef?: any) : any {
+function rowForCustody(db: Database.Database, custodyRef: string): CustodyRow | null {
   return db.prepare(`
     SELECT custody_ref, idempotency_digest, expected_content_digest,
            expected_byte_size, owner_binding_digest, resource_binding_digest,
@@ -324,10 +401,10 @@ function rowForCustody(db?: any, custodyRef?: any) : any {
     FROM upload_no_run_custody_staging
     WHERE custody_ref = ?
     LIMIT 1
-  `).get(custodyRef) || null;
+  `).get(custodyRef) as CustodyRow | undefined || null;
 }
 
-function rowForResource(db?: any, resourceDigest?: any) : any {
+function rowForResource(db: Database.Database, resourceDigest: string): CustodyRow | null {
   return db.prepare(`
     SELECT custody_ref, idempotency_digest, expected_content_digest,
            expected_byte_size, owner_binding_digest, resource_binding_digest,
@@ -339,16 +416,16 @@ function rowForResource(db?: any, resourceDigest?: any) : any {
     FROM upload_no_run_custody_staging
     WHERE resource_binding_digest = ?
     LIMIT 1
-  `).get(resourceDigest) || null;
+  `).get(resourceDigest) as CustodyRow | undefined || null;
 }
 
-function assertOwner(row?: any, owner?: any) : any {
+function assertOwner(row: CustodyRow, owner?: CustodyOwnerInput) {
   if (row.owner_binding_digest !== ownerBindingDigest(owner)) {
     throw fail("upload_custody_owner_mismatch", "Upload custody object is unavailable.");
   }
 }
 
-function assertAbort(signal?: any) : any {
+function assertAbort(signal?: AbortSignal | null) {
   if (signal?.aborted) {
     throw fail("upload_custody_read_aborted", "Upload custody read was aborted.");
   }
@@ -361,8 +438,13 @@ export function createUploadNoRunCustody({
   keyBroker,
   reauthorizeCustodyRead,
   faultInjector = null
-}: Record<string, any> = {}) : any {
-  const rootPath: any = path.resolve(String(userDataPath || ""));
+}: {
+  userDataPath: string; storageKernel: StorageKernel; storageProvider: StorageProvider;
+  keyBroker: KeyBroker;
+  reauthorizeCustodyRead(input: Record<string, unknown>): Promise<CustodyAuthorization>;
+  faultInjector?: CustodyFaultInjector | null;
+}) {
+  const rootPath = path.resolve(String(userDataPath || ""));
   if (!String(userDataPath || "").trim()) {
     throw new TypeError("Upload no-run custody requires userDataPath.");
   }
@@ -381,23 +463,23 @@ export function createUploadNoRunCustody({
   if (typeof reauthorizeCustodyRead !== "function") {
     throw new TypeError("Upload no-run custody requires a final-boundary read authority.");
   }
-  const db: any = storageKernel.db;
-  const pendingRoot: any = path.join(rootPath, "upload-custody", "pending");
-  const authenticatedReplayRoot: any = path.join(
+  const db = storageKernel.db;
+  const pendingRoot = path.join(rootPath, "upload-custody", "pending");
+  const authenticatedReplayRoot = path.join(
     rootPath,
     "upload-custody",
     "authenticated-replays"
   );
-  const custodyMutations: any = new Map<any, any>();
+  const custodyMutations = new Map<string, Promise<void>>();
 
-  async function withCustodyMutation(custodyRef?: any, mutation?: any) : Promise<any> {
-    const previous: any = custodyMutations.get(custodyRef) || Promise.resolve();
-    let release: any;
-    const current: any = new Promise((resolve?: any) : any => {
+  async function withCustodyMutation<T>(custodyRef: string, mutation: () => Promise<T>): Promise<T> {
+    const previous = custodyMutations.get(custodyRef) || Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
       release = resolve;
     });
     custodyMutations.set(custodyRef, current);
-    await previous.catch(() : any => {});
+    await previous.catch(() => {});
     try {
       return await mutation();
     } finally {
@@ -408,8 +490,8 @@ export function createUploadNoRunCustody({
     }
   }
 
-  function pendingPath(rowOrIdentity?: any) : any {
-    const identity: any = typeof rowOrIdentity === "string"
+  function pendingPath(rowOrIdentity: CustodyRow | string) {
+    const identity = typeof rowOrIdentity === "string"
       ? rowOrIdentity
       : rowOrIdentity.pending_identity;
     if (!/^[a-f0-9]{64}$/u.test(String(identity || ""))) {
@@ -418,18 +500,18 @@ export function createUploadNoRunCustody({
     return path.join(pendingRoot, `${identity}.custody`);
   }
 
-  async function openAuthenticatedEnvelopeReplay() : Promise<any> {
+  async function openAuthenticatedEnvelopeReplay() {
     await ensureCustodyRoots(rootPath, pendingRoot);
     await ensurePrivateDirectory(authenticatedReplayRoot);
-    const relative: any = path.relative(rootPath, authenticatedReplayRoot);
+    const relative = path.relative(rootPath, authenticatedReplayRoot);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
       throw fail("upload_custody_directory_unsafe", "Upload custody directory is unsafe.");
     }
-    const replayPath: any = path.join(
+    const replayPath = path.join(
       authenticatedReplayRoot,
       `${crypto.randomUUID()}.encrypted-replay`
     );
-    let handle: any = null;
+    let handle = null;
     try {
       handle = await fs.open(
         replayPath,
@@ -439,7 +521,7 @@ export function createUploadNoRunCustody({
           (fsNative.constants.O_NOFOLLOW || 0),
         PRIVATE_FILE_MODE
       );
-      const stat: any = await handle.stat({ bigint: true });
+      const stat = await handle.stat({ bigint: true });
       if (!stat.isFile() || Number(stat.nlink) !== 1) {
         throw fail("upload_custody_file_unsafe", "Upload custody file is unsafe.");
       }
@@ -449,21 +531,21 @@ export function createUploadNoRunCustody({
       ) {
         throw fail("upload_custody_mode_unsafe", "Upload custody file mode is unsafe.");
       }
-      let linked: any = true;
+      let linked = true;
       try {
         await fs.unlink(replayPath);
         linked = false;
-      } catch (error: any) {
-        const ciphertextReplayMayRemainLinked: any =
+      } catch (error) {
+        const ciphertextReplayMayRemainLinked =
           process.platform === "win32" &&
-          ["EACCES", "EBUSY", "EPERM"].includes(error?.code);
+          ["EACCES", "EBUSY", "EPERM"].includes(String(errorProperty(error, "code")));
         if (!ciphertextReplayMayRemainLinked) throw error;
       }
       return { handle, linked, replayPath };
-    } catch (error: any) {
-      await handle?.close().catch(() : any => {});
-      await fs.rm(replayPath, { force: true }).catch(() : any => {});
-      if (String(error?.code || "").startsWith("upload_custody_")) throw error;
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      await fs.rm(replayPath, { force: true }).catch(() => {});
+      if (String(errorProperty(error, "code") || "").startsWith("upload_custody_")) throw error;
       throw fail(
         "upload_custody_replay_unavailable",
         "Upload custody authenticated replay is unavailable.",
@@ -473,7 +555,7 @@ export function createUploadNoRunCustody({
     }
   }
 
-  async function recoverStaging(row?: any) : Promise<any> {
+  async function recoverStaging(row: CustodyRow): Promise<RecoveredCustodyRow> {
     if (!row) throw fail("upload_custody_missing", "Upload custody object is unavailable.");
     if (row.state === "sealed") return row;
     await ensureCustodyRoots(rootPath, pendingRoot);
@@ -481,15 +563,15 @@ export function createUploadNoRunCustody({
       pendingPath(row),
       fsNative.constants.O_RDWR
     );
-    let header: any = null;
-    let committedEnd: any = 0;
-    let committedCount: any = 0;
-    let committedDigest: any = "";
+    let header: EnvelopeHeader | null = null;
+    let committedEnd = 0;
+    let committedCount = 0;
+    let committedDigest = "";
     try {
-      let pending: any = Buffer.alloc(0);
-      let readPosition: any = 0;
-      const readBuffer: any = Buffer.allocUnsafe(CHUNK_BYTES);
-      let complete: any = false;
+      let pending = Buffer.alloc(0);
+      let readPosition = 0;
+      const readBuffer = Buffer.allocUnsafe(CHUNK_BYTES);
+      let complete = false;
       while (!complete) {
         const { bytesRead } = await handle.read(
           readBuffer,
@@ -499,18 +581,18 @@ export function createUploadNoRunCustody({
         );
         if (bytesRead === 0) break;
         readPosition += bytesRead;
-        const chunk: any = readBuffer.subarray(0, bytesRead);
+        const chunk = readBuffer.subarray(0, bytesRead);
         pending = pending.length === 0 ? Buffer.from(chunk) : Buffer.concat([pending, chunk]);
         while (true) {
-          const newline: any = pending.indexOf(0x0a);
+          const newline = pending.indexOf(0x0a);
           if (newline < 0) break;
-          const raw: any = pending.subarray(0, newline);
+          const raw = pending.subarray(0, newline);
           pending = pending.subarray(newline + 1);
           committedEnd += newline + 1;
-          let record: any;
+          let record: unknown;
           try {
             record = JSON.parse(raw.toString("utf8"));
-          } catch (error: any) {
+          } catch (error) {
             throw fail(
               "upload_custody_state_corrupt",
               "Upload custody state is invalid.",
@@ -518,8 +600,12 @@ export function createUploadNoRunCustody({
               error
             );
           }
+          if (!isEnvelopeRecord(record)) {
+            throw fail("upload_custody_state_corrupt", "Upload custody state is invalid.");
+          }
+          const envelopeRecord = record;
           if (!header) {
-            header = validateHeader(record, row.envelope_id);
+            header = validateHeader(envelopeRecord, row.envelope_id);
             committedDigest = ZERO_DIGEST;
             if (Number(row.committed_frame_count) === 0) {
               complete = true;
@@ -528,16 +614,16 @@ export function createUploadNoRunCustody({
             continue;
           }
           if (
-            record?.type !== "chunk" ||
-            record.index !== committedCount ||
-            record.previousFrameDigest !== committedDigest ||
-            !Number.isSafeInteger(record.plaintextBytes) ||
-            record.plaintextBytes < 1 ||
-            record.plaintextBytes > CHUNK_BYTES
+            envelopeRecord.type !== "chunk" ||
+            envelopeRecord.index !== committedCount ||
+            envelopeRecord.previousFrameDigest !== committedDigest ||
+            !Number.isSafeInteger(envelopeRecord.plaintextBytes) ||
+            Number(envelopeRecord.plaintextBytes) < 1 ||
+            Number(envelopeRecord.plaintextBytes) > CHUNK_BYTES
           ) {
             throw fail("upload_custody_state_corrupt", "Upload custody state is invalid.");
           }
-          committedDigest = frameDigest(record);
+          committedDigest = envelopeRecordDigest(envelopeRecord);
           committedCount += 1;
           if (committedCount === Number(row.committed_frame_count)) {
             complete = true;
@@ -555,7 +641,7 @@ export function createUploadNoRunCustody({
       await handle.truncate(committedEnd);
       await handle.sync();
     } finally {
-      await handle.close().catch(() : any => {});
+      await handle.close().catch(() => {});
     }
     if (
       row.prepared_plaintext_bytes !== null ||
@@ -571,12 +657,16 @@ export function createUploadNoRunCustody({
         WHERE custody_ref = ? AND state = 'staging'
       `).run(new Date().toISOString(), row.custody_ref);
     }
-    return { ...rowForCustody(db, row.custody_ref), header };
+    const recovered = rowForCustody(db, row.custody_ref);
+    if (!recovered || recovered.state !== "staging" || !header) {
+      throw fail("upload_custody_state_corrupt", "Upload custody state is invalid.");
+    }
+    return { ...recovered, header };
   }
 
-  async function beginLocked(input: Record<string, any> = {}) : Promise<any> {
-    const normalized: any = normalizeBeginInput(input);
-    const current: any = rowForResource(db, normalized.resourceBindingDigest);
+  async function beginLocked(input: CustodyBeginInput = {}) {
+    const normalized = normalizeBeginInput(input);
+    const current = rowForResource(db, normalized.resourceBindingDigest);
     if (current) {
       if (
         current.custody_ref !== normalized.custodyRef ||
@@ -590,20 +680,20 @@ export function createUploadNoRunCustody({
           "Upload custody idempotency binding conflicts."
         );
       }
-      const recovered: any = await recoverStaging(current);
+      const recovered = await recoverStaging(current);
       return statusFromRow(recovered, { replayed: true });
     }
 
     await ensureCustodyRoots(rootPath, pendingRoot);
-    const envelopeId: any = `env_${crypto.randomUUID()}`;
-    const pendingIdentity: any = hashHex(
+    const envelopeId = `env_${crypto.randomUUID()}`;
+    const pendingIdentity = hashHex(
       Buffer.from(`upload-custody\0${normalized.custodyRef}`, "utf8")
     );
-    const dataKey: any = crypto.randomBytes(32);
-    let handle: any = null;
+    const dataKey = crypto.randomBytes(32);
+    let handle = null;
     try {
-      const wrappedKey: any = await keyBroker.wrapKey(dataKey, envelopeId);
-      const headerBase: Record<string, any> = {
+      const wrappedKey = await keyBroker.wrapKey(dataKey, envelopeId);
+      const headerBase = {
         type: "header",
         schemaVersion: SANDBOX_CUSTODY_ENVELOPE_SCHEMA,
         envelopeId,
@@ -612,7 +702,7 @@ export function createUploadNoRunCustody({
         noncePrefix: crypto.randomBytes(8).toString("base64"),
         wrappedKey
       };
-      const headerDigest: any = hashHex(
+      const headerDigest = hashHex(
         Buffer.from(JSON.stringify(headerBase), "utf8")
       );
       handle = await fs.open(
@@ -628,7 +718,7 @@ export function createUploadNoRunCustody({
       await handle.close();
       handle = null;
       await syncDirectory(pendingRoot);
-      const timestamp: any = new Date().toISOString();
+      const timestamp = new Date().toISOString();
       db.prepare(`
         INSERT INTO upload_no_run_custody_staging (
           custody_ref, idempotency_digest, expected_content_digest,
@@ -656,14 +746,14 @@ export function createUploadNoRunCustody({
       return statusFromRow(rowForCustody(db, normalized.custodyRef), {
         replayed: false
       });
-    } catch (error: any) {
-      await handle?.close().catch(() : any => {});
-      const raced: any = rowForResource(db, normalized.resourceBindingDigest);
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      const raced = rowForResource(db, normalized.resourceBindingDigest);
       if (raced && raced.idempotency_digest === normalized.idempotencyDigest) {
-        await fs.rm(pendingPath(pendingIdentity), { force: true }).catch(() : any => {});
+        await fs.rm(pendingPath(pendingIdentity), { force: true }).catch(() => {});
         return statusFromRow(await recoverStaging(raced), { replayed: true });
       }
-      await fs.rm(pendingPath(pendingIdentity), { force: true }).catch(() : any => {});
+      await fs.rm(pendingPath(pendingIdentity), { force: true }).catch(() => {});
       throw error;
     } finally {
       dataKey.fill(0);
@@ -676,20 +766,21 @@ export function createUploadNoRunCustody({
     offset,
     bytes,
     signal
-  }: Record<string, any> = {}) : Promise<any> {
+  }: CustodyAppendInput = {}) {
     if (signal?.aborted) {
       throw fail("upload_custody_append_aborted", "Upload custody append was aborted.");
     }
-    const normalizedRef: any = normalizeCustodyHandle(custodyRef);
-    let row: any = rowForCustody(db, normalizedRef);
+    const normalizedRef = normalizeCustodyHandle(custodyRef);
+    let row = rowForCustody(db, normalizedRef);
     if (!row) throw fail("upload_custody_missing", "Upload custody object is unavailable.");
     assertOwner(row, owner);
-    row = await recoverStaging(row);
-    if (row.state !== "staging") {
+    const recovered = await recoverStaging(row);
+    if (recovered.state !== "staging") {
       throw fail("upload_custody_already_sealed", "Upload custody object is already sealed.");
     }
-    const expectedOffset: any = Number(row.committed_plaintext_bytes);
-    const requestedOffset: any = Number(offset);
+    row = recovered;
+    const expectedOffset = Number(row.committed_plaintext_bytes);
+    const requestedOffset = Number(offset);
     if (!Number.isSafeInteger(requestedOffset) || requestedOffset !== expectedOffset) {
       throw fail(
         "upload_custody_offset_mismatch",
@@ -697,7 +788,7 @@ export function createUploadNoRunCustody({
         { expectedOffset }
       );
     }
-    const input: any = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || "");
+    const input = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || "");
     if (expectedOffset + input.length > Number(row.expected_byte_size)) {
       throw fail(
         "upload_custody_size_exceeded",
@@ -706,27 +797,30 @@ export function createUploadNoRunCustody({
     }
     if (input.length === 0) return statusFromRow(row);
 
-    const header: any = row.header || (await recoverStaging(row)).header;
-    const dataKey: any = await keyBroker.unwrapKey(header.wrappedKey, header.envelopeId);
+    const header = recovered.header;
+    if (!header) {
+      throw fail("upload_custody_state_corrupt", "Upload custody state is invalid.");
+    }
+    const dataKey = await keyBroker.unwrapKey(header.wrappedKey, header.envelopeId);
     const { handle } = await openPrivatePendingFile(
       pendingPath(row),
       fsNative.constants.O_RDWR
     );
-    let nextOffset: any = expectedOffset;
-    let frameCount: any = Number(row.committed_frame_count);
-    let previousFrameDigest: any = row.committed_ciphertext_digest;
-    let filePosition: any = Number((await handle.stat()).size);
+    let nextOffset = expectedOffset;
+    let frameCount = Number(row.committed_frame_count);
+    let previousFrameDigest = row.committed_ciphertext_digest;
+    let filePosition = Number((await handle.stat()).size);
     try {
-      for (let inputOffset: any = 0; inputOffset < input.length; inputOffset += CHUNK_BYTES) {
+      for (let inputOffset = 0; inputOffset < input.length; inputOffset += CHUNK_BYTES) {
         if (signal?.aborted) {
           throw fail("upload_custody_append_aborted", "Upload custody append was aborted.");
         }
-        const chunk: any = input.subarray(
+        const chunk = input.subarray(
           inputOffset,
           Math.min(input.length, inputOffset + CHUNK_BYTES)
         );
-        const nonce: any = nonceFor(header.noncePrefix, frameCount);
-        const cipher: any = crypto.createCipheriv(CONTENT_ALGORITHM, dataKey, nonce);
+        const nonce = nonceFor(header.noncePrefix, frameCount);
+        const cipher = crypto.createCipheriv(CONTENT_ALGORITHM, dataKey, nonce);
         cipher.setAAD(
           chunkAad(
             header.headerDigest,
@@ -735,8 +829,8 @@ export function createUploadNoRunCustody({
             previousFrameDigest
           )
         );
-        const ciphertext: any = Buffer.concat([cipher.update(chunk), cipher.final()]);
-        const frame: Record<string, any> = {
+        const ciphertext = Buffer.concat([cipher.update(chunk), cipher.final()]);
+        const frame = {
           type: "chunk",
           index: frameCount,
           plaintextBytes: chunk.length,
@@ -744,10 +838,10 @@ export function createUploadNoRunCustody({
           ciphertext: ciphertext.toString("base64"),
           tag: cipher.getAuthTag().toString("base64")
         };
-        const preparedCiphertextDigest: any = frameDigest(frame);
-        const preparedOffset: any = nextOffset + chunk.length;
-        const preparedFrameCount: any = frameCount + 1;
-        const prepare: any = db.prepare(`
+        const preparedCiphertextDigest = envelopeRecordDigest(frame);
+        const preparedOffset = nextOffset + chunk.length;
+        const preparedFrameCount = frameCount + 1;
+        const prepare = db.prepare(`
           UPDATE upload_no_run_custody_staging
           SET prepared_plaintext_bytes = ?,
               prepared_frame_count = ?,
@@ -777,7 +871,7 @@ export function createUploadNoRunCustody({
           );
         }
 
-        const encoded: any = jsonLine(frame);
+        const encoded = jsonLine(frame);
         await writeAll(handle, encoded, filePosition);
         await handle.sync();
         await faultInjector?.afterChunkPrepared?.({
@@ -787,7 +881,7 @@ export function createUploadNoRunCustody({
           preparedCiphertextDigest
         });
 
-        const commit: any = db.prepare(`
+        const commit = db.prepare(`
           UPDATE upload_no_run_custody_staging
           SET committed_plaintext_bytes = ?,
               committed_frame_count = ?,
@@ -827,27 +921,27 @@ export function createUploadNoRunCustody({
       }
     } finally {
       dataKey.fill(0);
-      await handle.close().catch(() : any => {});
+      await handle.close().catch(() => {});
     }
     row = rowForCustody(db, row.custody_ref);
     return statusFromRow(row);
   }
 
-  async function verifyCommittedPlaintext(row?: any) : Promise<any> {
+  async function verifyCommittedPlaintext(row: CustodyRow) {
     const { handle } = await openPrivatePendingFile(
       pendingPath(row),
       fsNative.constants.O_RDONLY
     );
-    const stream: any = handle.createReadStream({
+    const stream = handle.createReadStream({
       highWaterMark: CHUNK_BYTES,
       start: 0
     });
-    let header: any = null;
-    let dataKey: any = null;
-    let count: any = 0;
-    let byteCount: any = 0;
-    let previousFrameDigest: any = "";
-    const contentHash: any = crypto.createHash("sha256");
+    let header = null;
+    let dataKey = null;
+    let count = 0;
+    let byteCount = 0;
+    let previousFrameDigest = "";
+    const contentHash = crypto.createHash("sha256");
     try {
       for await (const { record } of jsonRecords(stream)) {
         if (!header) {
@@ -857,16 +951,18 @@ export function createUploadNoRunCustody({
           continue;
         }
         if (
-          record?.type !== "chunk" ||
+          !isChunkRecord(record) ||
           record.index !== count ||
           record.previousFrameDigest !== previousFrameDigest ||
-          !Number.isSafeInteger(record.plaintextBytes) ||
           record.plaintextBytes < 1 ||
           record.plaintextBytes > CHUNK_BYTES
         ) {
           throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
         }
-        const decipher: any = crypto.createDecipheriv(
+        if (!dataKey) {
+          throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
+        }
+        const decipher = crypto.createDecipheriv(
           CONTENT_ALGORITHM,
           dataKey,
           nonceFor(header.noncePrefix, count)
@@ -880,7 +976,7 @@ export function createUploadNoRunCustody({
           )
         );
         decipher.setAuthTag(Buffer.from(String(record.tag || ""), "base64"));
-        const plaintext: any = Buffer.concat([
+        const plaintext = Buffer.concat([
           decipher.update(Buffer.from(String(record.ciphertext || ""), "base64")),
           decipher.final()
         ]);
@@ -891,12 +987,13 @@ export function createUploadNoRunCustody({
         contentHash.update(plaintext);
         byteCount += plaintext.length;
         plaintext.fill(0);
-        previousFrameDigest = frameDigest(record);
+        previousFrameDigest = envelopeRecordDigest(record);
         count += 1;
       }
-      const contentDigest: any = contentHash.digest("hex");
+      const contentDigest = contentHash.digest("hex");
       if (
         !header ||
+        !dataKey ||
         count !== Number(row.committed_frame_count) ||
         byteCount !== Number(row.committed_plaintext_bytes) ||
         previousFrameDigest !== row.committed_ciphertext_digest
@@ -904,17 +1001,17 @@ export function createUploadNoRunCustody({
         throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
       }
       return { byteCount, contentDigest, dataKey, header };
-    } catch (error: any) {
+    } catch (error) {
       dataKey?.fill(0);
       throw error;
     } finally {
       stream.destroy();
-      await handle.close().catch(() : any => {});
+      await handle.close().catch(() => {});
     }
   }
 
-  async function sealLocked({ custodyRef, owner }: Record<string, any> = {}) : Promise<any> {    const normalizedRef: any = normalizeCustodyHandle(custodyRef);
-    let row: any = rowForCustody(db, normalizedRef);
+  async function sealLocked({ custodyRef, owner }: CustodyIdentityInput = {}) {    const normalizedRef = normalizeCustodyHandle(custodyRef);
+    let row = rowForCustody(db, normalizedRef);
     if (!row) throw fail("upload_custody_missing", "Upload custody object is unavailable.");
     assertOwner(row, owner);
     if (row.state === "sealed") return statusFromRow(row, { replayed: true });
@@ -925,7 +1022,7 @@ export function createUploadNoRunCustody({
         "Upload custody object has not received its declared byte size."
       );
     }
-    const verified: any = await verifyCommittedPlaintext(row);
+    const verified = await verifyCommittedPlaintext(row);
     try {
       if (!timingSafeDigest(verified.contentDigest, row.expected_content_digest)) {
         throw fail(
@@ -933,7 +1030,7 @@ export function createUploadNoRunCustody({
           "Upload custody content digest does not match its declaration."
         );
       }
-      const footerPayload: Record<string, any> = {
+      const footerPayload = {
         type: "footer",
         contentDigest: verified.contentDigest,
         byteCount: verified.byteCount,
@@ -943,7 +1040,7 @@ export function createUploadNoRunCustody({
           Buffer.from(verified.header.mediaType, "utf8")
         )
       };
-      const footerMac: any = crypto
+      const footerMac = crypto
         .createHmac("sha256", verified.dataKey)
         .update(JSON.stringify(footerPayload))
         .digest("hex");
@@ -952,14 +1049,14 @@ export function createUploadNoRunCustody({
         fsNative.constants.O_RDWR
       );
       try {
-        const position: any = Number((await handle.stat()).size);
+        const position = Number((await handle.stat()).size);
         await writeAll(handle, jsonLine({ ...footerPayload, footerMac }), position);
         await handle.sync();
       } finally {
-        await handle.close().catch(() : any => {});
+        await handle.close().catch(() => {});
       }
 
-      const objectId: any = row.custody_ref.slice("custody:".length);
+      const objectId = row.custody_ref.slice("custody:".length);
       const [stored] = await storageProvider.putObjectsFromFiles([{
         sourcePath: pendingPath(row),
         namespace: "execution-sandbox-custody",
@@ -970,15 +1067,15 @@ export function createUploadNoRunCustody({
           artifactKind: "upload-no-run-custody"
         }
       }]);
-      const timestamp: any = new Date().toISOString();
-      const commit: any = db.transaction(() : any => {
-        const existing: any = db.prepare(`
+      const timestamp = new Date().toISOString();
+      const commit = db.transaction(() => {
+        const existing = db.prepare(`
           SELECT custody_ref, object_id, content_digest, envelope_digest,
                  plaintext_bytes, chunk_count, state
           FROM opaque_custody_artifacts
           WHERE custody_ref = ?
           LIMIT 1
-        `).get(row.custody_ref);
+        `).get(row.custody_ref) as SealedArtifactRow | undefined;
         if (existing) {
           if (
             existing.object_id !== stored.objectId ||
@@ -1041,16 +1138,16 @@ export function createUploadNoRunCustody({
     }
   }
 
-  async function describeLocked({ custodyRef, owner }: Record<string, any> = {}) : Promise<any> {
-    const normalizedRef: any = normalizeCustodyHandle(custodyRef);
-    let row: any = rowForCustody(db, normalizedRef);
+  async function describeLocked({ custodyRef, owner }: CustodyIdentityInput = {}) {
+    const normalizedRef = normalizeCustodyHandle(custodyRef);
+    let row = rowForCustody(db, normalizedRef);
     if (!row) throw fail("upload_custody_missing", "Upload custody object is unavailable.");
     assertOwner(row, owner);
     row = await recoverStaging(row);
     return statusFromRow(row);
   }
 
-  function sealedObject(custodyRef?: any) : any {
+  function sealedObject(custodyRef: string): SealedCustodyObject | null {
     return db.prepare(`
       SELECT staging.custody_ref, staging.expected_content_digest,
              staging.expected_byte_size, staging.owner_binding_digest,
@@ -1067,7 +1164,7 @@ export function createUploadNoRunCustody({
         AND staging.state = 'sealed'
         AND custody.state = 'sealed'
       LIMIT 1
-    `).get(custodyRef) || null;
+    `).get(custodyRef) as SealedCustodyObject | undefined || null;
   }
 
   async function *decryptReadStream({
@@ -1079,8 +1176,8 @@ export function createUploadNoRunCustody({
     expectedEnvelopeDigest,
     maxBytes,
     signal
-  }: Record<string, any>) : AsyncGenerator<any, any, any> {
-    const envelopeByteCount: any = Number(expectedEnvelopeByteCount);
+  }: DecryptInput): AsyncGenerator<Buffer, void, void> {
+    const envelopeByteCount = Number(expectedEnvelopeByteCount);
     if (
       !Number.isSafeInteger(envelopeByteCount) ||
       envelopeByteCount < 1 ||
@@ -1091,19 +1188,19 @@ export function createUploadNoRunCustody({
         "Upload custody envelope authentication failed."
       );
     }
-    const rawHash: any = crypto.createHash("sha256");
-    const contentHash: any = crypto.createHash("sha256");
-    let header: any = null;
-    let footer: any = null;
-    let dataKey: any = null;
-    let frameCount: any = 0;
-    let byteCount: any = 0;
-    let previousFrameDigest: any = "";
-    let authenticatedReplay: any = null;
-    let replayStream: any = null;
+    const rawHash = crypto.createHash("sha256");
+    const contentHash = crypto.createHash("sha256");
+    let header = null;
+    let footer = null;
+    let dataKey = null;
+    let frameCount = 0;
+    let byteCount = 0;
+    let previousFrameDigest = "";
+    let authenticatedReplay = null;
+    let replayStream = null;
     try {
       authenticatedReplay = await openAuthenticatedEnvelopeReplay();
-      const capture: Record<string, any> = {
+      const capture = {
         byteCount: 0,
         handle: authenticatedReplay.handle,
         maxBytes: envelopeByteCount
@@ -1129,16 +1226,18 @@ export function createUploadNoRunCustody({
         }
         if (
           footer ||
-          record?.type !== "chunk" ||
+          !isChunkRecord(record) ||
           record.index !== frameCount ||
           record.previousFrameDigest !== previousFrameDigest ||
-          !Number.isSafeInteger(record.plaintextBytes) ||
           record.plaintextBytes < 1 ||
           record.plaintextBytes > CHUNK_BYTES
         ) {
           throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
         }
-        const decipher: any = crypto.createDecipheriv(
+        if (!dataKey) {
+          throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
+        }
+        const decipher = crypto.createDecipheriv(
           CONTENT_ALGORITHM,
           dataKey,
           nonceFor(header.noncePrefix, frameCount)
@@ -1152,7 +1251,7 @@ export function createUploadNoRunCustody({
           )
         );
         decipher.setAuthTag(Buffer.from(String(record.tag || ""), "base64"));
-        const plaintext: any = Buffer.concat([
+        const plaintext = Buffer.concat([
           decipher.update(Buffer.from(String(record.ciphertext || ""), "base64")),
           decipher.final()
         ]);
@@ -1160,7 +1259,7 @@ export function createUploadNoRunCustody({
           plaintext.fill(0);
           throw fail("upload_custody_envelope_invalid", "Upload custody envelope is invalid.");
         }
-        const nextByteCount: any = byteCount + plaintext.length;
+        const nextByteCount = byteCount + plaintext.length;
         if (nextByteCount > maxBytes || nextByteCount > expectedByteCount) {
           plaintext.fill(0);
           throw fail(
@@ -1174,14 +1273,14 @@ export function createUploadNoRunCustody({
           plaintext.fill(0);
         }
         byteCount = nextByteCount;
-        previousFrameDigest = frameDigest(record);
+        previousFrameDigest = envelopeRecordDigest(record);
         frameCount += 1;
       }
       if (!header || !footer || footer.chunkCount !== frameCount) {
         throw fail("upload_custody_envelope_invalid", "Upload custody envelope is incomplete.");
       }
       dataKey ||= await keyBroker.unwrapKey(header.wrappedKey, header.envelopeId);
-      const footerPayload: Record<string, any> = {
+      const footerPayload = {
         type: "footer",
         contentDigest: footer.contentDigest,
         byteCount: footer.byteCount,
@@ -1189,12 +1288,12 @@ export function createUploadNoRunCustody({
         finalFrameDigest: footer.finalFrameDigest,
         mediaTypeDigest: footer.mediaTypeDigest
       };
-      const expectedMac: any = crypto
+      const expectedMac = crypto
         .createHmac("sha256", dataKey)
         .update(JSON.stringify(footerPayload))
         .digest("hex");
-      const observedContentDigest: any = contentHash.digest("hex");
-      const observedEnvelopeDigest: any = rawHash.digest("hex");
+      const observedContentDigest = contentHash.digest("hex");
+      const observedEnvelopeDigest = rawHash.digest("hex");
       if (
         capture.byteCount !== envelopeByteCount ||
         header.envelopeId !== expectedEnvelopeId ||
@@ -1217,12 +1316,12 @@ export function createUploadNoRunCustody({
         highWaterMark: CHUNK_BYTES,
         start: 0
       });
-      let replayHeader: any = null;
-      let replayFooter: any = null;
-      let replayFrameCount: any = 0;
-      let replayByteCount: any = 0;
-      let replayPreviousFrameDigest: any = "";
-      const authenticatedFooterDigest: any = hashHex(
+      let replayHeader = null;
+      let replayFooter = null;
+      let replayFrameCount = 0;
+      let replayByteCount = 0;
+      let replayPreviousFrameDigest = "";
+      const authenticatedFooterDigest = hashHex(
         Buffer.from(JSON.stringify(footer), "utf8")
       );
       for await (const { record } of jsonRecords(replayStream)) {
@@ -1257,13 +1356,12 @@ export function createUploadNoRunCustody({
           replayFooter = record;
           continue;
         }
-        const observedFrameDigest: any = frameDigest(record);
+        const observedFrameDigest = envelopeRecordDigest(record);
         if (
           replayFooter ||
-          record?.type !== "chunk" ||
+          !isChunkRecord(record) ||
           record.index !== replayFrameCount ||
           record.previousFrameDigest !== replayPreviousFrameDigest ||
-          !Number.isSafeInteger(record.plaintextBytes) ||
           record.plaintextBytes < 1 ||
           record.plaintextBytes > CHUNK_BYTES
         ) {
@@ -1272,7 +1370,7 @@ export function createUploadNoRunCustody({
             "Upload custody envelope authentication failed."
           );
         }
-        const decipher: any = crypto.createDecipheriv(
+        const decipher = crypto.createDecipheriv(
           CONTENT_ALGORITHM,
           dataKey,
           nonceFor(replayHeader.noncePrefix, replayFrameCount)
@@ -1286,7 +1384,7 @@ export function createUploadNoRunCustody({
           )
         );
         decipher.setAuthTag(Buffer.from(String(record.tag || ""), "base64"));
-        const plaintext: any = Buffer.concat([
+        const plaintext = Buffer.concat([
           decipher.update(Buffer.from(String(record.ciphertext || ""), "base64")),
           decipher.final()
         ]);
@@ -1321,8 +1419,8 @@ export function createUploadNoRunCustody({
           "Upload custody envelope authentication failed."
         );
       }
-    } catch (error: any) {
-      if (error?.code) throw error;
+    } catch (error) {
+      if (errorProperty(error, "code")) throw error;
       throw fail(
         "upload_custody_envelope_authentication_failed",
         "Upload custody envelope authentication failed.",
@@ -1333,9 +1431,9 @@ export function createUploadNoRunCustody({
       dataKey?.fill(0);
       encryptedStream.destroy?.();
       replayStream?.destroy();
-      await authenticatedReplay?.handle.close().catch(() : any => {});
+      await authenticatedReplay?.handle.close().catch(() => {});
       if (authenticatedReplay?.linked) {
-        await fs.rm(authenticatedReplay.replayPath, { force: true }).catch(() : any => {});
+        await fs.rm(authenticatedReplay.replayPath, { force: true }).catch(() => {});
       }
     }
   }
@@ -1351,22 +1449,22 @@ export function createUploadNoRunCustody({
     governedExecutionReceipt,
     maxBytes,
     signal
-  }: Record<string, any> = {}) : Promise<any> {
+  }: CustodyReadInput = {}) {
     assertAbort(signal);
-    const normalizedRef: any = normalizeCustodyHandle(custodyRef);
-    const normalizedContentDigest: any = normalizeDigest(contentDigest, "contentDigest");
-    const normalizedEnvelopeDigest: any = normalizeDigest(envelopeDigest, "envelopeDigest");
-    const normalizedByteCount: any = normalizeByteCount(byteCount, "byteCount");
-    const normalizedMaxBytes: any = normalizeByteCount(maxBytes, "maxBytes");
+    const normalizedRef = normalizeCustodyHandle(custodyRef);
+    const normalizedContentDigest = normalizeDigest(contentDigest, "contentDigest");
+    const normalizedEnvelopeDigest = normalizeDigest(envelopeDigest, "envelopeDigest");
+    const normalizedByteCount = normalizeByteCount(byteCount, "byteCount");
+    const normalizedMaxBytes = normalizeByteCount(maxBytes, "maxBytes");
     if (normalizedMaxBytes < normalizedByteCount) {
       throw fail(
         "upload_custody_read_limit_exceeded",
         "Upload custody read exceeds its byte budget."
       );
     }
-    const object: any = sealedObject(normalizedRef);
-    const ownerDigest: any = ownerBindingDigest(owner);
-    const normalizedResourceRef: any = boundedText(resourceRef, "resourceRef", 768);
+    const object = sealedObject(normalizedRef);
+    const ownerDigest = ownerBindingDigest(owner);
+    const normalizedResourceRef = boundedText(resourceRef, "resourceRef", 768);
     if (
       !object ||
       object.expected_content_digest !== normalizedContentDigest ||
@@ -1378,19 +1476,19 @@ export function createUploadNoRunCustody({
       throw fail("upload_custody_read_denied", "Upload custody read is denied.");
     }
 
-    let evidenceRef: any = "";
+    let evidenceRef = "";
     if (governedExecutionReceipt) {
       try {
-        const receipt: any = assertConsumedGovernedExecutionPermit(
+        const receipt = assertConsumedGovernedExecutionPermit(
           governedExecutionReceipt,
           { audience: "upstream-structured-http-final-effect" }
         );
         evidenceRef = receipt.proofRef;
-      } catch (error: any) {
+      } catch (error) {
         throw fail("upload_custody_read_denied", "Upload custody read is denied.", null, error);
       }
     } else {
-      let authorization: any;
+      let authorization: CustodyAuthorization;
       try {
         authorization = await reauthorizeCustodyRead({
           authorizationReceipt,
@@ -1402,7 +1500,7 @@ export function createUploadNoRunCustody({
           ownerBindingDigest: ownerDigest,
           resourceRef: normalizedResourceRef
         });
-      } catch (error: any) {
+      } catch (error) {
         assertAbort(signal);
         throw fail("upload_custody_read_denied", "Upload custody read is denied.", null, error);
       }
@@ -1417,14 +1515,14 @@ export function createUploadNoRunCustody({
       ) {
         throw fail("upload_custody_read_denied", "Upload custody read is denied.");
       }
-      evidenceRef = authorization.evidenceRef;
+      evidenceRef = String(authorization.evidenceRef);
     }
 
-    const opened: any = await storageProvider.openPrivateNoExecObjectReadStream({
+    const opened = await storageProvider.openPrivateNoExecObjectReadStream({
       storageRelativePath: object.storage_rel_path,
       signal
     });
-    const stream: any = decryptReadStream({
+    const stream = decryptReadStream({
       encryptedStream: opened.stream,
       expectedEnvelopeId: object.envelope_id,
       expectedEnvelopeByteCount: Number(object.envelope_byte_count),
@@ -1447,27 +1545,27 @@ export function createUploadNoRunCustody({
     });
   }
 
-  function begin(input: Record<string, any> = {}) : any {
-    const custodyRef: any = normalizeBeginInput(input).custodyRef;
-    return withCustodyMutation(custodyRef, () : any => beginLocked(input));
+  function begin(input: CustodyBeginInput = {}) {
+    const custodyRef = normalizeBeginInput(input).custodyRef;
+    return withCustodyMutation(custodyRef, () => beginLocked(input));
   }
 
-  function append(input: Record<string, any> = {}) : any {
-    const custodyRef: any = normalizeCustodyHandle(input.custodyRef);
-    return withCustodyMutation(custodyRef, () : any => appendLocked(input));
+  function append(input: CustodyAppendInput = {}) {
+    const custodyRef = normalizeCustodyHandle(input.custodyRef);
+    return withCustodyMutation(custodyRef, () => appendLocked(input));
   }
 
-  function seal(input: Record<string, any> = {}) : any {
-    const custodyRef: any = normalizeCustodyHandle(input.custodyRef);
-    return withCustodyMutation(custodyRef, () : any => sealLocked(input));
+  function seal(input: CustodyIdentityInput = {}) {
+    const custodyRef = normalizeCustodyHandle(input.custodyRef);
+    return withCustodyMutation(custodyRef, () => sealLocked(input));
   }
 
-  function describe(input: Record<string, any> = {}) : any {
-    const custodyRef: any = normalizeCustodyHandle(input.custodyRef);
-    return withCustodyMutation(custodyRef, () : any => describeLocked(input));
+  function describe(input: CustodyIdentityInput = {}) {
+    const custodyRef = normalizeCustodyHandle(input.custodyRef);
+    return withCustodyMutation(custodyRef, () => describeLocked(input));
   }
 
-  const stagingPort: Readonly<Record<string, any>> = Object.freeze({ begin, append, seal });
-  const readPort: Readonly<Record<string, any>> = Object.freeze({ open });
+  const stagingPort = Object.freeze({ begin, append, seal });
+  const readPort = Object.freeze({ open });
   return Object.freeze({ stagingPort, readPort, describe });
 }

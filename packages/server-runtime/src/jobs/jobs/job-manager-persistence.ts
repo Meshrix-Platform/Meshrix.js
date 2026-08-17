@@ -8,37 +8,59 @@ import {
   getJobPayloadPath,
   getJobResultPath
 } from "./job-manager-validation.ts";
+import {
+  errorProperty,
+  isJobDocument,
+  isJobPayload,
+  isObjectRecord,
+  type CodedError,
+  type JobDocument,
+  type JobPayload,
+  type JobResult
+} from "./contracts.ts";
+import type { createJobProjectionStore } from "./job-projection-store.ts";
 
-function jobPersistenceError(code?: any, jobId?: any, message?: any, cause: any = null) : any {
-  const error: Error & Record<string, any> = new Error(message, cause ? { cause } : undefined);
+type ProjectionStore = ReturnType<typeof createJobProjectionStore>;
+
+interface TerminalEnvelope {
+  format: typeof JOB_TERMINAL_FORMAT;
+  schema: typeof JOB_TERMINAL_SCHEMA;
+  job: JobDocument;
+  result: JobResult;
+  artifactDigest: string;
+  artifactBytes: number;
+}
+
+function jobPersistenceError(code: string, jobId: unknown, message: string, cause: unknown = null) {
+  const error = new Error(message, cause ? { cause } : undefined) as CodedError;
   error.name = "JobPersistenceError";
   error.code = code;
   error.jobId = String(jobId || "");
   return error;
 }
 
-const JOB_TERMINAL_FORMAT: any = "meshrix.job-terminal";
-const JOB_TERMINAL_SCHEMA: any = "job-terminal-envelope";
-const MAX_JOB_METADATA_BYTES: any = 256 * 1024;
-const MAX_JOB_PAYLOAD_BYTES: any = 64 * 1024 * 1024;
-const MAX_JOB_RESULT_BYTES: any = 256 * 1024 * 1024;
-const FILE_TOO_LARGE: any = "job_persistence_file_too_large";
+const JOB_TERMINAL_FORMAT = "meshrix.job-terminal";
+const JOB_TERMINAL_SCHEMA = "job-terminal-envelope";
+const MAX_JOB_METADATA_BYTES = 256 * 1024;
+const MAX_JOB_PAYLOAD_BYTES = 64 * 1024 * 1024;
+const MAX_JOB_RESULT_BYTES = 256 * 1024 * 1024;
+const FILE_TOO_LARGE = "job_persistence_file_too_large";
 
-function digestText(value?: any) : any {
+function digestText(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
-async function readBoundedText(filePath?: any, maxBytes?: any) : Promise<any> {
-  const handle: any = await fs.open(filePath, "r");
+async function readBoundedText(filePath: string, maxBytes: number) {
+  const handle = await fs.open(filePath, "r");
   try {
-    const stat: any = await handle.stat();
+    const stat = await handle.stat();
     if (!stat.isFile() || stat.size > maxBytes) {
       throw Object.assign(new Error("Persisted job file exceeds its byte limit."), {
         code: FILE_TOO_LARGE
       });
     }
-    const content: any = Buffer.allocUnsafe(Number(stat.size));
-    let offset: any = 0;
+    const content = Buffer.allocUnsafe(Number(stat.size));
+    let offset = 0;
     while (offset < content.length) {
       const { bytesRead } = await handle.read(
         content,
@@ -49,7 +71,7 @@ async function readBoundedText(filePath?: any, maxBytes?: any) : Promise<any> {
       if (bytesRead === 0) break;
       offset += bytesRead;
     }
-    const extra: any = Buffer.allocUnsafe(1);
+    const extra = Buffer.allocUnsafe(1);
     const { bytesRead: extraBytes } = await handle.read(extra, 0, 1, offset);
     if (extraBytes > 0) {
       throw Object.assign(new Error("Persisted job file exceeds its byte limit."), {
@@ -63,20 +85,20 @@ async function readBoundedText(filePath?: any, maxBytes?: any) : Promise<any> {
 }
 
 async function readPersistedJobTerminal(
-  userDataPath?: any,
-  jobId?: any,
-  maxBytes: any = MAX_JOB_RESULT_BYTES
-) : Promise<any> {
-  let content: any;
+  userDataPath: string,
+  jobId: string,
+  maxBytes = MAX_JOB_RESULT_BYTES
+) {
+  let content: string;
   try {
     content = await readBoundedText(
       getJobResultPath(userDataPath, jobId),
       maxBytes
     );
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return null;
+  } catch (error) {
+    if (errorProperty(error, "code") === "ENOENT") return null;
     throw jobPersistenceError(
-      error?.code === FILE_TOO_LARGE
+      errorProperty(error, "code") === FILE_TOO_LARGE
         ? "job_persistence_terminal_too_large"
         : "job_persistence_terminal_unreadable",
       jobId,
@@ -84,10 +106,10 @@ async function readPersistedJobTerminal(
       error
     );
   }
-  let envelope: any;
+  let envelope: unknown;
   try {
     envelope = JSON.parse(content);
-  } catch (error: any) {
+  } catch (error) {
     throw jobPersistenceError(
       "job_persistence_terminal_invalid",
       jobId,
@@ -96,10 +118,10 @@ async function readPersistedJobTerminal(
     );
   }
   if (
-    !envelope || typeof envelope !== "object" || Array.isArray(envelope)
+    !isObjectRecord(envelope)
     || envelope.format !== JOB_TERMINAL_FORMAT
     || envelope.schema !== JOB_TERMINAL_SCHEMA
-    || !envelope.job || typeof envelope.job !== "object" || Array.isArray(envelope.job)
+    || !isJobDocument(envelope.job)
     || String(envelope.job.id || "") !== jobId
     || envelope.job.status !== "completed"
     || !Object.hasOwn(envelope, "result")
@@ -120,37 +142,37 @@ async function readPersistedJobTerminal(
       enumerable: false
     }
   });
-  return envelope;
+  return envelope as Record<string, unknown> & TerminalEnvelope;
 }
 
 export async function readPersistedJobMeta(
-  userDataPath?: any,
-  jobId?: any,
+  userDataPath: string,
+  jobId: string,
   {
     maxMetadataBytes = MAX_JOB_METADATA_BYTES,
     maxResultBytes = MAX_JOB_RESULT_BYTES
-  }: Record<string, any> = {}
-) : Promise<any> {
-  let content: any;
+  }: { maxMetadataBytes?: number; maxResultBytes?: number } = {}
+) {
+  let content: string;
   try {
     content = await readBoundedText(
       getJobMetaPath(userDataPath, jobId),
       maxMetadataBytes
     );
-  } catch (error: any) {
-    const terminal: any = await readPersistedJobTerminal(
+  } catch (error) {
+    const terminal = await readPersistedJobTerminal(
       userDataPath,
       jobId,
       maxResultBytes
     );
-    if (terminal && error?.code === "ENOENT") {
+    if (terminal && errorProperty(error, "code") === "ENOENT") {
       await persistJobMeta(userDataPath, terminal.job);
       return terminal.job;
     }
     throw jobPersistenceError(
-      error?.code === "ENOENT"
+      errorProperty(error, "code") === "ENOENT"
         ? "job_persistence_meta_missing"
-        : error?.code === FILE_TOO_LARGE
+        : errorProperty(error, "code") === FILE_TOO_LARGE
           ? "job_persistence_meta_too_large"
           : "job_persistence_meta_unreadable",
       jobId,
@@ -159,11 +181,11 @@ export async function readPersistedJobMeta(
     );
   }
 
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(content);
-  } catch (error: any) {
-    const terminal: any = await readPersistedJobTerminal(
+  } catch (error) {
+    const terminal = await readPersistedJobTerminal(
       userDataPath,
       jobId,
       maxResultBytes
@@ -180,8 +202,8 @@ export async function readPersistedJobMeta(
     );
   }
 
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    const terminal: any = await readPersistedJobTerminal(
+  if (!isJobDocument(parsed)) {
+    const terminal = await readPersistedJobTerminal(
       userDataPath,
       jobId,
       maxResultBytes
@@ -197,7 +219,7 @@ export async function readPersistedJobMeta(
     );
   }
   if (String(parsed.id || "") !== jobId) {
-    const terminal: any = await readPersistedJobTerminal(
+    const terminal = await readPersistedJobTerminal(
       userDataPath,
       jobId,
       maxResultBytes
@@ -215,15 +237,15 @@ export async function readPersistedJobMeta(
 
   if (parsed.status === "completed") {
     const [metaStat, terminalStat] = await Promise.all([
-      fs.stat(getJobMetaPath(userDataPath, jobId)).catch(() : any => null),
-      fs.stat(getJobResultPath(userDataPath, jobId)).catch(() : any => null)
+      fs.stat(getJobMetaPath(userDataPath, jobId)).catch(() => null),
+      fs.stat(getJobResultPath(userDataPath, jobId)).catch(() => null)
     ]);
     if (!terminalStat || (metaStat && metaStat.mtimeMs >= terminalStat.mtimeMs)) {
       return parsed;
     }
   }
 
-  const terminal: any = await readPersistedJobTerminal(
+  const terminal = await readPersistedJobTerminal(
     userDataPath,
     jobId,
     maxResultBytes
@@ -237,9 +259,9 @@ export async function readPersistedJobMeta(
   return parsed;
 }
 
-export async function persistJobMeta(userDataPath?: any, job?: any, projectionStore: any = null) : Promise<any> {
+export async function persistJobMeta(userDataPath: string, job: JobDocument, projectionStore: ProjectionStore | null = null) {
   projectionStore?.upsert(job);
-  const jobDirectory: any = getJobDirectory(userDataPath, job.id);
+  const jobDirectory = getJobDirectory(userDataPath, job.id);
   await fs.mkdir(jobDirectory, { recursive: true });
   await atomicWriteJsonThroughState(getJobMetaPath(userDataPath, job.id), job, {
     trailingNewline: false,
@@ -250,11 +272,11 @@ export async function persistJobMeta(userDataPath?: any, job?: any, projectionSt
 }
 
 export async function persistJobTerminal(
-  userDataPath?: any,
-  job?: any,
-  result?: any,
-  projectionStore: any = null
-) : Promise<any> {
+  userDataPath: string,
+  job: JobDocument,
+  result: JobResult,
+  projectionStore: ProjectionStore | null = null
+) {
   if (!job?.id || job.status !== "completed") {
     throw jobPersistenceError(
       "job_persistence_terminal_invalid",
@@ -262,16 +284,16 @@ export async function persistJobTerminal(
       "Only a completed job can commit a terminal result."
     );
   }
-  const jobDirectory: any = getJobDirectory(userDataPath, job.id);
+  const jobDirectory = getJobDirectory(userDataPath, job.id);
   await fs.mkdir(jobDirectory, { recursive: true });
-  const envelope: Record<string, any> = {
+  const envelope = {
     format: JOB_TERMINAL_FORMAT,
     schema: JOB_TERMINAL_SCHEMA,
     job,
     result
   };
-  const serialized: any = JSON.stringify(envelope, null, 2);
-  const artifact: any = projectionStore?.beginArtifact({
+  const serialized = JSON.stringify(envelope, null, 2);
+  const artifact = projectionStore?.beginArtifact({
     jobId: job.id,
     kind: "result",
     finalRef: `jobs/${job.id}/result.json`,
@@ -279,7 +301,7 @@ export async function persistJobTerminal(
     byteSize: Buffer.byteLength(serialized),
     job
   });
-  let artifactPublished: any = false;
+  let artifactPublished = false;
   try {
     await atomicWriteJsonThroughState(getJobResultPath(userDataPath, job.id), envelope, {
       trailingNewline: false,
@@ -287,22 +309,22 @@ export async function persistJobTerminal(
       kind: "jobs.terminal.write",
       metadata: { jobId: job.id }
     });
-    if (artifact) {
+    if (artifact && projectionStore) {
       projectionStore.publishArtifact(artifact.journalId);
       artifactPublished = true;
     }
     await persistJobMeta(userDataPath, job, projectionStore);
-    if (artifact) projectionStore.settleArtifact(artifact.journalId);
-  } catch (error: any) {
-    if (artifact && !artifactPublished) {
+    if (artifact && projectionStore) projectionStore.settleArtifact(artifact.journalId);
+  } catch (error) {
+    if (artifact && !artifactPublished && projectionStore) {
       projectionStore.abortArtifact(artifact.journalId);
     }
     throw error;
   }
 }
 
-export async function loadJobResult(userDataPath?: any, jobId?: any, projectionStore: any = null) : Promise<any> {
-  const terminal: any = await readPersistedJobTerminal(
+export async function loadJobResult(userDataPath: string, jobId: string, projectionStore: ProjectionStore | null = null) {
+  const terminal = await readPersistedJobTerminal(
     userDataPath,
     jobId,
     projectionStore?.policy?.maxResultBytes || MAX_JOB_RESULT_BYTES
@@ -314,7 +336,7 @@ export async function loadJobResult(userDataPath?: any, jobId?: any, projectionS
       "Persisted job terminal envelope is missing."
     );
   }
-  const projected: any = projectionStore?.get(jobId);
+  const projected = projectionStore?.get(jobId);
   if (projected && projected.status !== "completed") {
     throw jobPersistenceError(
       "job_persistence_terminal_state_mismatch",
@@ -322,7 +344,7 @@ export async function loadJobResult(userDataPath?: any, jobId?: any, projectionS
       "Persisted job terminal envelope does not match projection state."
     );
   }
-  const artifact: any = projectionStore?.getArtifactInfo(jobId);
+  const artifact = projectionStore?.getArtifactInfo(jobId);
   if (
     artifact?.resultDigest &&
     (
@@ -340,15 +362,15 @@ export async function loadJobResult(userDataPath?: any, jobId?: any, projectionS
 }
 
 export async function persistJobPayload(
-  userDataPath?: any,
-  jobId?: any,
-  payload?: any,
-  projectionStore: any = null
-) : Promise<any> {
-  const jobDirectory: any = getJobDirectory(userDataPath, jobId);
+  userDataPath: string,
+  jobId: string,
+  payload: JobPayload,
+  projectionStore: ProjectionStore | null = null
+) {
+  const jobDirectory = getJobDirectory(userDataPath, jobId);
   await fs.mkdir(jobDirectory, { recursive: true });
-  const serialized: any = JSON.stringify(payload, null, 2);
-  const artifact: any = projectionStore?.beginArtifact({
+  const serialized = JSON.stringify(payload, null, 2);
+  const artifact = projectionStore?.beginArtifact({
     jobId,
     kind: "payload",
     finalRef: `jobs/${jobId}/payload.json`,
@@ -362,25 +384,32 @@ export async function persistJobPayload(
       kind: "jobs.payload.write",
       metadata: { jobId }
     });
-    if (artifact) {
+    if (artifact && projectionStore) {
       projectionStore.publishArtifact(artifact.journalId);
       projectionStore.settleArtifact(artifact.journalId);
     }
-  } catch (error: any) {
-    if (artifact) projectionStore.abortArtifact(artifact.journalId);
+  } catch (error) {
+    if (artifact && projectionStore) projectionStore.abortArtifact(artifact.journalId);
     throw error;
   }
 }
 
-export async function loadJobPayload(userDataPath?: any, jobId?: any, projectionStore: any = null) : Promise<any> {
+export async function loadJobPayload(userDataPath: string, jobId: string, projectionStore: ProjectionStore | null = null): Promise<JobPayload | null> {
   try {
-    const raw: any = await readBoundedText(
+    const raw = await readBoundedText(
       getJobPayloadPath(userDataPath, jobId),
       projectionStore?.policy?.maxPayloadBytes || MAX_JOB_PAYLOAD_BYTES
     );
     try {
-      const payload: any = JSON.parse(raw);
-      const projected: any = projectionStore?.getArtifactInfo(jobId);
+      const payload: unknown = JSON.parse(raw);
+      if (!isJobPayload(payload)) {
+        throw jobPersistenceError(
+          "job_persistence_payload_invalid",
+          jobId,
+          "Persisted job payload must be an object."
+        );
+      }
+      const projected = projectionStore?.getArtifactInfo(jobId);
       if (
         projected &&
         projected.payloadDigest &&
@@ -396,8 +425,8 @@ export async function loadJobPayload(userDataPath?: any, jobId?: any, projection
         );
       }
       return payload;
-    } catch (error: any) {
-      if (error?.name === "JobPersistenceError") throw error;
+    } catch (error) {
+      if (errorProperty(error, "name") === "JobPersistenceError") throw error;
       throw jobPersistenceError(
         "job_persistence_payload_invalid",
         jobId,
@@ -405,13 +434,13 @@ export async function loadJobPayload(userDataPath?: any, jobId?: any, projection
         error
       );
     }
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error) {
+    if (errorProperty(error, "code") === "ENOENT") {
       return null;
     }
-    if (error?.name === "JobPersistenceError") throw error;
+    if (errorProperty(error, "name") === "JobPersistenceError") throw error;
     throw jobPersistenceError(
-      error?.code === FILE_TOO_LARGE
+      errorProperty(error, "code") === FILE_TOO_LARGE
         ? "job_persistence_payload_too_large"
         : "job_persistence_payload_unreadable",
       jobId,

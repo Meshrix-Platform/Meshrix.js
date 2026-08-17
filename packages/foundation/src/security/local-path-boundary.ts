@@ -8,7 +8,7 @@ interface ControlledRootsOptions { userDataPath?: string; extraRoots?: readonly 
 interface PathLabelOptions { label?: string; }
 interface ControlledPathOptions extends PathLabelOptions { userDataPath?: string; allowedRoots?: readonly string[]; }
 interface RootPair { rootPath: string; realPath: string; }
-interface ExistingPathResult { absolutePath: string; realPath: string; stat: Stats; allowedRoots: string[]; }
+export interface ExistingPathResult { absolutePath: string; realPath: string; stat: Stats; allowedRoots: string[]; }
 interface PathWithinRootOptions extends PathLabelOptions {
   allowMissing?: boolean;
   requireExisting?: boolean;

@@ -5,11 +5,73 @@ import {
   assertBoundUploadSessionStore
 } from "../state/upload-session-store.ts";
 import { resolveArchiveBatchIdentity } from "./archive-batch-id.ts";
+import { errorMessage, errorProperty, type CodedError, type JobPayload, type JobResult, type UploadConsumptionStorageProvider } from "./jobs/contracts.ts";
+
+type MetadataValue = null | boolean | number | string | MetadataValue[] | { [key: string]: MetadataValue };
+interface PipelinePayload extends JobPayload {
+  uploadSessionId?: string;
+  ownerRoleId?: string;
+  ownerTenantId?: string;
+  canonicalObjectSources?: unknown[];
+  inputText?: string;
+  settings?: Record<string, unknown>;
+  clientUid?: string;
+  clientId?: string;
+  sourceType?: string;
+  resourceType?: string;
+  providerId?: string;
+  externalId?: string;
+  syncBatchId?: string;
+  capturedAt?: string;
+}
+interface UploadSessionFile {
+  name?: string; originalFileName?: string; relativePath?: string;
+  archiveBatchId?: string; contentDigest: string; sha256?: string;
+  envelopeDigest: string; byteSize: number; custodyRef: string;
+  custodyState: string; mediaType?: string; providerId?: string;
+  externalId?: string; syncBatchId?: string; contentHash?: string;
+  capturedAt?: string; sourceMetadata?: MetadataValue;
+}
+interface UploadConsumptionReceipt {
+  receiptId: string; sessionId: string;
+  objects: Array<{ objectId: string; sha256: string; byteSize: number }>;
+}
+interface CanonicalObjectSource {
+  kind: "canonical-object";
+  objectRef: { objectId: string; storageRelativePath: string; sha256: string; byteSize: number };
+  originalFileName: string; mediaType: string; sourceMetadata: MetadataValue | Record<string, never>;
+}
+interface SourceDefaults {
+  generatedAt?: string; clientUid?: string; sourceType?: string; providerId?: string;
+  externalId?: string; syncBatchId?: string; capturedAt?: string;
+}
+interface PipelineSource {
+  id: string; name: string; path: string; kind: string;
+  text?: string; mediaType?: string; sourceCreatedAt?: string; sourceUpdatedAt?: string;
+  sourceCollectedAt?: string; providerId?: string; externalId?: string; syncBatchId?: string;
+  contentHash?: string; capturedAt?: string; sourceMetadata?: MetadataValue | Record<string, never>;
+  uploadConsumptionReceiptId?: string; receiptObjectIndex?: number; contentSha256?: string;
+  contentByteSize?: number; originalSha256?: string; originalByteSize?: number;
+  originalRelativePath?: string;
+  rawObject?: Record<string, unknown> & {
+    objectId?: string; clientUid?: string; sourceType?: string; providerId?: string;
+    externalId?: string; syncBatchId?: string; contentHash?: string; capturedAt?: string;
+    archiveFileName?: string; originalFileName?: string; originalRelativePath?: string;
+    storageRelativePath?: string; sha256?: string; byteSize?: number; sourceMetadata?: unknown;
+  };
+}
+interface PipelineContext {
+  userDataPath: string; payload: PipelinePayload; runtime: object;
+  reportProgress(message: Record<string, unknown>): void | Promise<void>;
+  signal: AbortSignal | null; jobId: string; archiveBatchId: string; generatedAt: string;
+  warnings: string[]; settings: unknown; uploadSessionFiles: UploadSessionFile[];
+  sources: PipelineSource[]; result: JobResult | null;
+}
 
 
-const DIRECT_TEXT_MAX_BYTES: any = 1024 * 1024;
-const CANONICAL_OBJECT_MAX_BYTES: any = 512 * 1024 * 1024;
-const CANONICAL_OBJECT_FIELDS: any = new Set<any>([
+const DIRECT_TEXT_MAX_BYTES = 1024 * 1024;
+const CANONICAL_OBJECT_MAX_BYTES = 512 * 1024 * 1024;
+const CANONICAL_OBJECT_FIELDS = new Set<string>([
   "mediaType",
   "originalFileName",
   "rawObjectByteSize",
@@ -18,9 +80,9 @@ const CANONICAL_OBJECT_FIELDS: any = new Set<any>([
   "sourceMetadata",
   "storageRelativePath"
 ]);
-const OPAQUE_OBJECT_ID_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
-const SHA256_PATTERN: any = /^[a-f0-9]{64}$/;
-const UPLOAD_CONSUMPTION_RECEIPT_ID_PATTERN: any =
+const OPAQUE_OBJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const UPLOAD_CONSUMPTION_RECEIPT_ID_PATTERN =
   /^upload_consumption_receipt_[a-f0-9]{32}$/u;
 const UPLOAD_SOURCE_METADATA_FORBIDDEN_KEYS: ReadonlySet<string> = new Set([
   "absolutepath",
@@ -42,9 +104,9 @@ const UPLOAD_SOURCE_METADATA_FORBIDDEN_KEYS: ReadonlySet<string> = new Set([
   "stream"
 ]);
 
-function firstText(...values: any[]) : any {
+function firstText(...values: unknown[]) {
   for (const value of values) {
-    const text: any = String(value || "").trim();
+    const text = String(value || "").trim();
     if (text) {
       return text;
     }
@@ -52,16 +114,16 @@ function firstText(...values: any[]) : any {
   return "";
 }
 
-function throwIfAborted(signal?: any) : any {
+function throwIfAborted(signal?: AbortSignal | null) {
   if (!signal?.aborted) return;
   if (signal.reason instanceof Error) throw signal.reason;
-  const error: Error & Record<string, any> = new Error("Job execution was cancelled.");
+  const error = new Error("Job execution was cancelled.") as CodedError;
   error.code = "job_execution_aborted";
   throw error;
 }
 
-function uploadSessionOwnerFromPayload(payload: Record<string, any> = {}) : any {
-  const subjectId: any = firstText(payload.ownerSubjectId, payload.ownerUserId, payload.ownerUsername);
+function uploadSessionOwnerFromPayload(payload: PipelinePayload = {}) {
+  const subjectId = firstText(payload.ownerSubjectId, payload.ownerUserId, payload.ownerUsername);
   return {
     subjectId,
     userId: firstText(payload.ownerUserId, subjectId),
@@ -71,30 +133,30 @@ function uploadSessionOwnerFromPayload(payload: Record<string, any> = {}) : any 
   };
 }
 
-function asArray(value?: any) : any {
+function asArray(value?: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function sourceText(value: Record<string, any> = {}) : any {
+function sourceText(value: { text?: string } = {}) {
   return typeof value.text === "string" ? value.text.trim() : "";
 }
 
-function canonicalObjectError(code: any = "canonical_reparse_object_ref_invalid") : any {
+function canonicalObjectError(code = "canonical_reparse_object_ref_invalid") {
   return Object.assign(new Error(code), {
     code,
     statusCode: 400
   });
 }
 
-function isPlainObject(value?: any) : any {
+function isPlainObject(value?: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function sanitizeUploadSourceMetadataValue(value?: any, depth: any = 0) : any {
+function sanitizeUploadSourceMetadataValue(value: unknown, depth = 0): MetadataValue {
   if (depth > 8) return null;
   if (value === null || typeof value === "boolean" || typeof value === "number") {
     return value;
@@ -103,34 +165,34 @@ function sanitizeUploadSourceMetadataValue(value?: any, depth: any = 0) : any {
     return Buffer.byteLength(value, "utf8") <= 4096 ? value : "";
   }
   if (Array.isArray(value)) {
-    return value.slice(0, 256).map((item?: any) : any =>
+    return value.slice(0, 256).map((item) =>
       sanitizeUploadSourceMetadataValue(item, depth + 1)
     );
   }
   if (!isPlainObject(value)) return null;
-  const sanitized: Record<string, any> = {};
-  for (const [key, item] of (Object.entries(value) as [string, any][])) {
+  const sanitized: { [key: string]: MetadataValue } = {};
+  for (const [key, item] of Object.entries(value)) {
     if (UPLOAD_SOURCE_METADATA_FORBIDDEN_KEYS.has(key.toLowerCase())) continue;
     sanitized[key] = sanitizeUploadSourceMetadataValue(item, depth + 1);
   }
   return sanitized;
 }
 
-function sanitizeUploadSourceMetadata(value?: any) : any {
+function sanitizeUploadSourceMetadata(value?: unknown) {
   if (!isPlainObject(value)) return {};
-  const sanitized: any = sanitizeUploadSourceMetadataValue(value);
-  const serialized: any = JSON.stringify(sanitized);
+  const sanitized = sanitizeUploadSourceMetadataValue(value);
+  const serialized = JSON.stringify(sanitized);
   return Buffer.byteLength(serialized, "utf8") <= 64 * 1024
     ? sanitized
     : {};
 }
 
-function normalizeStorageRelativePath(value?: any) : any {
+function normalizeStorageRelativePath(value?: unknown) {
   if (typeof value !== "string") {
     throw canonicalObjectError();
   }
-  const normalized: any = value.trim();
-  const segments: any = normalized.split("/");
+  const normalized = value.trim();
+  const segments = normalized.split("/");
   if (
     normalized.length === 0 ||
     Buffer.byteLength(normalized, "utf8") > 1024 ||
@@ -140,21 +202,21 @@ function normalizeStorageRelativePath(value?: any) : any {
     normalized.includes("\0") ||
     /^[A-Za-z]:/.test(normalized) ||
     /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(normalized) ||
-    segments.some((segment?: any) : any => segment.length === 0 || segment === "." || segment === "..")
+    segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
   ) {
     throw canonicalObjectError();
   }
   return normalized;
 }
 
-function normalizeCanonicalMetadata(value?: any) : any {
+function normalizeCanonicalMetadata(value?: unknown): MetadataValue | Record<string, never> {
   if (value === undefined) {
     return {};
   }
   if (!isPlainObject(value)) {
     throw canonicalObjectError();
   }
-  let serialized: any;
+  let serialized: string | undefined;
   try {
     serialized = JSON.stringify(value);
   } catch {
@@ -169,7 +231,7 @@ function normalizeCanonicalMetadata(value?: any) : any {
   return JSON.parse(serialized);
 }
 
-export function normalizeCanonicalObjectSource(input: Record<string, any> = {}) : any {
+export function normalizeCanonicalObjectSource(input: unknown = {}): CanonicalObjectSource {
   if (!isPlainObject(input)) {
     throw canonicalObjectError();
   }
@@ -179,26 +241,26 @@ export function normalizeCanonicalObjectSource(input: Record<string, any> = {}) 
     }
   }
 
-  const objectId: any =
+  const objectId =
     typeof input.rawObjectId === "string"
       ? input.rawObjectId.trim()
       : "";
-  const sha256: any =
+  const sha256 =
     typeof input.rawObjectSha256 === "string"
       ? input.rawObjectSha256.trim().toLowerCase()
       : "";
-  const byteSize: any = input.rawObjectByteSize;
+  const byteSize = input.rawObjectByteSize;
   if (
     !OPAQUE_OBJECT_ID_PATTERN.test(objectId) ||
     !SHA256_PATTERN.test(sha256) ||
     !Number.isSafeInteger(byteSize) ||
-    byteSize < 0 ||
-    byteSize > CANONICAL_OBJECT_MAX_BYTES
+    Number(byteSize) < 0 ||
+    Number(byteSize) > CANONICAL_OBJECT_MAX_BYTES
   ) {
     throw canonicalObjectError();
   }
 
-  const originalFileName: any =
+  const originalFileName =
     input.originalFileName === undefined
       ? objectId
       : String(input.originalFileName).trim();
@@ -207,11 +269,14 @@ export function normalizeCanonicalObjectSource(input: Record<string, any> = {}) 
     Buffer.byteLength(originalFileName, "utf8") > 255 ||
     originalFileName.includes("/") ||
     originalFileName.includes("\\") ||
-    /[\u0000-\u001f\u007f]/.test(originalFileName)
+    Array.from(originalFileName).some((character) => {
+      const codePoint = character.codePointAt(0) || 0;
+      return codePoint <= 31 || codePoint === 127;
+    })
   ) {
     throw canonicalObjectError();
   }
-  const mediaType: any =
+  const mediaType =
     input.mediaType === undefined
       ? "application/octet-stream"
       : String(input.mediaType).trim().toLowerCase();
@@ -231,7 +296,7 @@ export function normalizeCanonicalObjectSource(input: Record<string, any> = {}) 
         input.storageRelativePath
       ),
       sha256,
-      byteSize
+      byteSize: Number(byteSize)
     },
     originalFileName,
     mediaType,
@@ -239,8 +304,8 @@ export function normalizeCanonicalObjectSource(input: Record<string, any> = {}) 
   };
 }
 
-function serializeSourceFilesForClient(sources?: any) : any {
-  return sources.map((source?: any) : any => source.kind ===
+function serializeSourceFilesForClient(sources: PipelineSource[]) {
+  return sources.map((source) => source.kind ===
     "upload-consumption-receipt-object"
     ? {
         id: source.id,
@@ -298,8 +363,12 @@ function createInitialContext({
   jobId,
   archiveBatchId,
   generatedAt
-}: Record<string, any>) : any {
-  const executionRuntime: any =
+}: {
+  userDataPath: string; payload: PipelinePayload; runtime: Record<string, unknown>;
+  reportProgress(message: Record<string, unknown>): void | Promise<void>;
+  signal: AbortSignal | null; jobId: string; archiveBatchId: string; generatedAt: string;
+}): PipelineContext {
+  const executionRuntime =
     runtime && typeof runtime.createExecutionView === "function"
       ? runtime.createExecutionView()
       : runtime;
@@ -320,7 +389,7 @@ function createInitialContext({
   };
 }
 
-function sourceDefaults(payload: Record<string, any> = {}, generatedAt: any = "") : any {
+function sourceDefaults(payload: PipelinePayload = {}, generatedAt = ""): SourceDefaults {
   return {
     generatedAt,
     clientUid: firstText(
@@ -346,8 +415,8 @@ function sourceDefaults(payload: Record<string, any> = {}, generatedAt: any = ""
   };
 }
 
-function directTextSource(text?: any, defaults: Record<string, any> = {}) : any {
-  const generatedAt: any = defaults.generatedAt || new Date().toISOString();
+function directTextSource(text: string, defaults: SourceDefaults = {}): PipelineSource {
+  const generatedAt = defaults.generatedAt || new Date().toISOString();
   return {
     id: "inline-input",
     name: "inline-input.txt",
@@ -382,7 +451,7 @@ function directTextSource(text?: any, defaults: Record<string, any> = {}) : any 
   };
 }
 
-function canonicalObjectPipelineSource(source?: any, defaults: Record<string, any> = {}) : any {
+function canonicalObjectPipelineSource(source: CanonicalObjectSource, defaults: SourceDefaults = {}): PipelineSource {
   return {
     id: source.objectRef.objectId,
     name: source.originalFileName,
@@ -419,10 +488,10 @@ function canonicalObjectPipelineSource(source?: any, defaults: Record<string, an
   };
 }
 
-function persistedUploadSource(file: Record<string, any> = {}, receipt?: any, index: any = 0, defaults: Record<string, any> = {}) : any {
-  const logicalObject: any = receipt.objects[index];
-  const originalFileName: any = firstText(file.originalFileName, file.name, `upload-${index + 1}`);
-  const sourceMetadata: any = sanitizeUploadSourceMetadata(file.sourceMetadata);
+function persistedUploadSource(file: UploadSessionFile, receipt: UploadConsumptionReceipt, index = 0, defaults: SourceDefaults = {}): PipelineSource {
+  const logicalObject = receipt.objects[index];
+  const originalFileName = firstText(file.originalFileName, file.name, `upload-${index + 1}`);
+  const sourceMetadata = sanitizeUploadSourceMetadata(file.sourceMetadata);
   return {
     id: `${receipt.receiptId}:${index}`,
     name: firstText(file.name, originalFileName),
@@ -447,17 +516,23 @@ function persistedUploadSource(file: Record<string, any> = {}, receipt?: any, in
 }
 
 function validateUploadConsumptionReceipt(
-  receipt?: any,
-  payload?: any,
-  uploadSessionFiles: any[] = []
-) : any {
+  receipt: unknown,
+  payload: PipelinePayload,
+  uploadSessionFiles: UploadSessionFile[] = []
+) {
+  if (!isPlainObject(receipt)) {
+    throw adoptionError(
+      "upload_session_adoption_receipt_invalid",
+      "Upload session adoption returned an invalid durable receipt."
+    );
+  }
   if (
     !receipt ||
     !UPLOAD_CONSUMPTION_RECEIPT_ID_PATTERN.test(String(receipt.receiptId || "")) ||
     receipt.sessionId !== payload.uploadSessionId ||
     !Array.isArray(receipt.objects) ||
     receipt.objects.length !== uploadSessionFiles.length ||
-    receipt.objects.some((logicalObject?: any, index?: any) : any =>
+    receipt.objects.some((logicalObject: { objectId: string; sha256: string; byteSize: number }, index: number) =>
       Object.keys(logicalObject || {}).sort().join(",") !==
         "byteSize,objectId,sha256" ||
       !OPAQUE_OBJECT_ID_PATTERN.test(String(logicalObject?.objectId || "")) ||
@@ -472,29 +547,37 @@ function validateUploadConsumptionReceipt(
       "Upload session adoption returned an invalid durable receipt."
     );
   }
-  return receipt;
+  return {
+    receiptId: String(receipt.receiptId),
+    sessionId: String(receipt.sessionId),
+    objects: (receipt.objects as Array<Record<string, unknown>>).map((object) => ({
+      objectId: String(object.objectId),
+      sha256: String(object.sha256),
+      byteSize: Number(object.byteSize)
+    }))
+  };
 }
 
-function adoptionError(code?: any, message?: any, cause: any = null) : any {
-  const error: Error & Record<string, any> = new Error(
+function adoptionError(code: string, message: string, cause: unknown = null) {
+  const error = new Error(
     message,
     cause ? { cause } : undefined
-  );
+  ) as CodedError;
   error.code = code;
   return error;
 }
 
-function validateUploadAdoptionBinding(payload?: any, files?: any) : any {
-  const receipt: any = payload?.checkpointReceipt;
-  const expectedFiles: any = Array.isArray(receipt?.files)
+function validateUploadAdoptionBinding(payload: PipelinePayload, files: unknown): UploadSessionFile[] {
+  const receipt = payload?.checkpointReceipt;
+  const expectedFiles = Array.isArray(receipt?.files)
     ? receipt.files
     : [];
-  const owner: any = uploadSessionOwnerFromPayload(payload);
+  const owner = uploadSessionOwnerFromPayload(payload);
   if (
     !Array.isArray(files) ||
     files.length === 0 ||
     !Object.isFrozen(files) ||
-    files.some((file?: any) : any => !Object.isFrozen(file)) ||
+    files.some((file) => !Object.isFrozen(file)) ||
     !receipt ||
     expectedFiles.length !== files.length ||
     Number(receipt.fileCount) !== files.length ||
@@ -504,7 +587,7 @@ function validateUploadAdoptionBinding(payload?: any, files?: any) : any {
     firstText(receipt.ownerUsername) !== owner.username ||
     firstText(receipt.ownerRoleId) !== owner.roleId ||
     firstText(receipt.ownerTenantId) !== owner.tenantId ||
-    expectedFiles.some((expected?: any, index?: any) : any =>
+    expectedFiles.some((expected, index) =>
       firstText(files[index]?.archiveBatchId) !== firstText(receipt.archiveBatchId) ||
       firstText(expected?.name) !== firstText(files[index]?.name) ||
       firstText(expected?.relativePath) !== firstText(files[index]?.relativePath) ||
@@ -518,7 +601,7 @@ function validateUploadAdoptionBinding(payload?: any, files?: any) : any {
       "Upload session adoption does not match its checkpoint receipt."
     );
   }
-  if (files.some((file?: any) : any =>
+  if (files.some((file) =>
     file?.custodyState !== "sealed_no_run" ||
     !file?.custodyRef ||
     !SHA256_PATTERN.test(String(file?.contentDigest || "")) ||
@@ -535,18 +618,21 @@ function validateUploadAdoptionBinding(payload?: any, files?: any) : any {
 }
 
 async function resolveBoundUploadSessionFiles(
-  uploadSessionStore?: any,
-  payload?: any
-) : Promise<any> {
+  uploadSessionStore: { resolveUploadSessionFiles(sessionId: string, input: { owner: ReturnType<typeof uploadSessionOwnerFromPayload> }): Promise<unknown> },
+  payload: PipelinePayload
+) {
+  if (!payload.uploadSessionId) {
+    throw adoptionError("upload_session_not_found", "Upload session is unavailable.");
+  }
   try {
-    const files: any = await uploadSessionStore.resolveUploadSessionFiles(
+    const files = await uploadSessionStore.resolveUploadSessionFiles(
       payload.uploadSessionId,
       { owner: uploadSessionOwnerFromPayload(payload) }
     );
     return validateUploadAdoptionBinding(payload, files);
-  } catch (error: any) {
-    if (error?.code && error.code !== "upload_session_incomplete") throw error;
-    const message: any = String(error?.message || "");
+  } catch (error) {
+    if (errorProperty(error, "code") && errorProperty(error, "code") !== "upload_session_incomplete") throw error;
+    const message = errorMessage(error);
     if (message.includes("尚未完成")) {
       throw adoptionError(
         "upload_session_adoption_not_sealed",
@@ -566,10 +652,11 @@ async function persistUploadSessionSources({
   payload = {},
   uploadSessionFiles = [],
   storageProvider = null,
-  jobId = "",
-  archiveBatchId = "",
   generatedAt = ""
-}: Record<string, any> = {}) : Promise<any> {
+}: {
+  payload?: PipelinePayload; uploadSessionFiles?: UploadSessionFile[];
+  storageProvider?: UploadConsumptionStorageProvider | null; jobId?: string; archiveBatchId?: string; generatedAt?: string;
+} = {}) {
   if (!payload.uploadSessionId) {
     return {
       receipt: null,
@@ -581,15 +668,15 @@ async function persistUploadSessionSources({
     typeof storageProvider.commitUploadConsumptionReceipt !== "function" ||
     !Array.isArray(uploadSessionFiles)
   ) {
-    const error: Error & Record<string, any> = new Error("Upload session persistence requires the canonical storage provider.");
+    const error = new Error("Upload session persistence requires the canonical storage provider.") as CodedError;
     error.code = "upload_session_storage_provider_unavailable";
     throw error;
   }
-  const receipt: any = validateUploadConsumptionReceipt(
+  const receipt = validateUploadConsumptionReceipt(
     await storageProvider.commitUploadConsumptionReceipt({
       sessionId: payload.uploadSessionId,
       owner: uploadSessionOwnerFromPayload(payload),
-      custodyDescriptors: uploadSessionFiles.map((file?: any, index?: any) : any => ({
+      custodyDescriptors: uploadSessionFiles.map((file, index) => ({
         resourceRef: `upload-resource:${payload.uploadSessionId}:${index}`,
         custodyRef: file.custodyRef,
         custodyState: file.custodyState,
@@ -601,10 +688,10 @@ async function persistUploadSessionSources({
     payload,
     uploadSessionFiles
   );
-  const defaults: any = sourceDefaults(payload, generatedAt);
+  const defaults = sourceDefaults(payload, generatedAt);
   return {
     receipt,
-    sources: uploadSessionFiles.map((file?: any, index?: any) : any =>
+    sources: uploadSessionFiles.map((file, index) =>
       persistedUploadSource(file, receipt, index, defaults)
     )
   };
@@ -614,12 +701,12 @@ function collectIncomingSources({
   payload = {},
   persistedUploadSources = [],
   generatedAt = ""
-}: Record<string, any>) : any {
-  const defaults: any = sourceDefaults(payload, generatedAt);
-  const canonicalSources: any = asArray(payload.canonicalObjectSources)
-    .map((source?: any) : any => normalizeCanonicalObjectSource(source))
-    .map((source?: any) : any => canonicalObjectPipelineSource(source, defaults));
-  const inlineText: any =
+}: { payload?: PipelinePayload; persistedUploadSources?: PipelineSource[]; generatedAt?: string }) {
+  const defaults = sourceDefaults(payload, generatedAt);
+  const canonicalSources = asArray(payload.canonicalObjectSources)
+    .map((source) => normalizeCanonicalObjectSource(source))
+    .map((source) => canonicalObjectPipelineSource(source, defaults));
+  const inlineText =
     typeof payload.inputText === "string"
       ? payload.inputText
       : "";
@@ -627,26 +714,26 @@ function collectIncomingSources({
     inlineText &&
     Buffer.byteLength(inlineText, "utf8") > DIRECT_TEXT_MAX_BYTES
   ) {
-    const error: Error & Record<string, any> = new Error("job_create_direct_text_too_large");
+    const error = new Error("job_create_direct_text_too_large") as CodedError;
     error.code = "job_create_direct_text_too_large";
     throw error;
   }
-  const inputKindCount: any =
+  const inputKindCount =
     Number(Boolean(payload.uploadSessionId)) +
     Number(canonicalSources.length > 0) +
     Number(inlineText.trim().length > 0);
   if (inputKindCount > 1) {
-    const error: Error & Record<string, any> = new Error("job_pipeline_input_ambiguous");
+    const error = new Error("job_pipeline_input_ambiguous") as CodedError;
     error.code = "job_pipeline_input_ambiguous";
     throw error;
   }
-  const sources: any[] = [...persistedUploadSources, ...canonicalSources];
+  const sources = [...persistedUploadSources, ...canonicalSources];
   if (inlineText) {
     sources.unshift(directTextSource(inlineText, defaults));
   }
 
-  const warnings: any[] = [];
-  const storedWithoutTextCount: any = persistedUploadSources.filter((source?: any) : any => !sourceText(source)).length;
+  const warnings = [];
+  const storedWithoutTextCount = persistedUploadSources.filter((source) => !sourceText(source)).length;
   if (storedWithoutTextCount > 0) {
     warnings.push(
       `${storedWithoutTextCount} uploaded file(s) were adopted as sealed custody references without normalized text; upstream processing may submit normalized text separately.`
@@ -668,22 +755,32 @@ export function createJobPipeline({
   jobId,
   generatedAt,
   signal = null
-}: Record<string, any>) : any {
-  const boundUploadSessionStore: any = payload?.uploadSessionId
+}: {
+  userDataPath: string; payload: PipelinePayload; runtime: Record<string, unknown>;
+  storageProvider?: UploadConsumptionStorageProvider | null;
+  uploadSessionStore?: { resolveUploadSessionFiles(sessionId: string, input: { owner: ReturnType<typeof uploadSessionOwnerFromPayload> }): Promise<unknown> } | null;
+  reportProgress(message: Record<string, unknown>): void | Promise<void>;
+  jobId: string; generatedAt: string; signal?: AbortSignal | null;
+}) {
+  const boundUploadSessionStore: unknown = payload?.uploadSessionId
     ? assertBoundUploadSessionStore(uploadSessionStore, { userDataPath })
     : null;
+  const uploadResolver = boundUploadSessionStore &&
+    typeof (boundUploadSessionStore as { resolveUploadSessionFiles?: unknown }).resolveUploadSessionFiles === "function"
+      ? boundUploadSessionStore as { resolveUploadSessionFiles(sessionId: string, input: { owner: ReturnType<typeof uploadSessionOwnerFromPayload> }): Promise<unknown> }
+      : null;
   if (
     payload?.uploadSessionId &&
     (!storageProvider ||
       typeof storageProvider.commitUploadConsumptionReceipt !== "function")
   ) {
-    const error: Error & Record<string, any> = new Error(
+    const error = new Error(
       "Upload session persistence requires the canonical storage provider."
-    );
+    ) as CodedError;
     error.code = "upload_session_storage_provider_unavailable";
     throw error;
   }
-  const archiveBatchIdentity: any = resolveArchiveBatchIdentity({
+  const archiveBatchIdentity = resolveArchiveBatchIdentity({
     archiveBatchId:
       payload?.checkpointReceipt?.archiveBatchId ||
       payload?.archiveBatchId ||
@@ -704,10 +801,10 @@ export function createJobPipeline({
       "",
     inputDigest: payload?.checkpoint?.inputDigest || payload?.inputDigest || ""
   });
-  const archiveBatchId: any = archiveBatchIdentity.archiveBatchId || jobId;
+  const archiveBatchId = archiveBatchIdentity.archiveBatchId || jobId;
 
   return {
-    createContext() : any {
+    createContext() {
       return createInitialContext({
         userDataPath,
         payload,
@@ -719,16 +816,19 @@ export function createJobPipeline({
         generatedAt
       });
     },
-    async run(context?: any) : Promise<any> {
+    async run(context: PipelineContext) {
       throwIfAborted(context.signal);
       if (payload.uploadSessionId) {
+        if (!uploadResolver) {
+          throw adoptionError("upload_session_not_found", "Upload session is unavailable.");
+        }
         context.uploadSessionFiles = await resolveBoundUploadSessionFiles(
-          boundUploadSessionStore,
+          uploadResolver,
           payload
         );
       }
       throwIfAborted(context.signal);
-      const persistedUpload: any = await persistUploadSessionSources({
+      const persistedUpload = await persistUploadSessionSources({
         payload,
         uploadSessionFiles: context.uploadSessionFiles,
         storageProvider,
@@ -748,9 +848,9 @@ export function createJobPipeline({
         progressPercent: 26,
         stage: "接收上游文本"
       });
-      const persistedUploadSources: any = persistedUpload.sources;
+      const persistedUploadSources = persistedUpload.sources;
       throwIfAborted(context.signal);
-      const incoming: any = collectIncomingSources({
+      const incoming = collectIncomingSources({
         payload,
         persistedUploadSources,
         generatedAt
@@ -784,7 +884,7 @@ export function createJobPipeline({
         ...(payload.uploadSessionId
           ? {
               uploadConsumptionReceiptId:
-                persistedUpload.receipt.receiptId
+        persistedUpload.receipt?.receiptId || ""
             }
           : {}),
         warnings: context.warnings,

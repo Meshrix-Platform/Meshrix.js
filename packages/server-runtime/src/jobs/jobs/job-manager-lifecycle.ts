@@ -7,8 +7,36 @@ import {
 import { getJobDirectory, CLOSE_ABORT_MESSAGE, RECOVERY_STAGE_MESSAGE } from "./job-manager-validation.ts";
 import { runSplitJob } from "./job-runner.ts";
 import { deleteUploadSession } from "../../state/upload-session-store.ts";
+import type { createDurableWorkflowSubstrate } from "#meshrix/product-api";
+import type { ActiveJobController, JobDocument, JobPayload, JobResult, QueueEntry, UploadConsumptionStorageProvider } from "./contracts.ts";
+import type { createJobProjectionStore } from "./job-projection-store.ts";
 
-export function createStartQueuedJob(ctx?: any) : any {
+interface LifecycleQueueEntry extends QueueEntry {
+  signal?: AbortSignal;
+  leaseGuard?: (input: { reason: string }) => Promise<void>;
+  payload: JobPayload;
+}
+interface FinalizeInput { status: "completed" | "failed" | "cancelled"; stage: string; errorMessage?: string; result?: JobResult }
+interface LifecycleContext {
+  userDataPath: string; workerConcurrency: number; jobs: Map<string, JobDocument>;
+  checkpointJobs: Map<string, string>; jobProjectionStore: ReturnType<typeof createJobProjectionStore>;
+  activeControllers: Map<string, ActiveJobController>; durableWorkflows: ReturnType<typeof createDurableWorkflowSubstrate>;
+  logJob(level: string, event: string, details?: Record<string, unknown>): void; state: { closed: boolean };
+  updateJobCheckpointNode(job: JobDocument, node: Record<string, unknown>): Promise<unknown>;
+  finishJobCheckpoint(job: JobDocument, input: Record<string, unknown>): Promise<unknown>;
+  failJob(jobId: string, message: string, stage: string): Promise<unknown>; workflowIdForJob(job: JobDocument): string;
+  updateJob(jobId: string, patch: Partial<JobDocument>): Promise<JobDocument | null>;
+  commitJobTerminal(jobId: string, patch: Partial<JobDocument>, result: JobResult): Promise<unknown>;
+  commitTerminalThenScheduleUploadCleanup(input: Record<string, unknown>): Promise<unknown>;
+  forgetActiveManifestJob(job?: JobDocument | null): void; publishDeletedJobEvent(job: JobDocument): Promise<unknown>;
+  cloneJobForApi(job?: JobDocument | null): JobDocument | null; resolveCurrentRuntimeOptions(): Record<string, unknown>;
+  uploadSessionStore: {
+    resolveUploadSessionFiles(sessionId: string, input: { owner: Record<string, string> }): Promise<unknown>;
+  } | null;
+  storageProvider: UploadConsumptionStorageProvider | null;
+}
+
+export function createStartQueuedJob(ctx: LifecycleContext) {
   const {
     userDataPath,
     workerConcurrency: taskConcurrency,
@@ -34,8 +62,8 @@ export function createStartQueuedJob(ctx?: any) : any {
     storageProvider
   } = ctx;
 
-  async function startQueuedJob(nextEntry?: any) : Promise<any> {
-    const currentJob: any = jobs.get(nextEntry.jobId);
+  async function startQueuedJob(nextEntry: LifecycleQueueEntry) {
+    const currentJob = jobs.get(nextEntry.jobId);
     if (!currentJob || currentJob.status !== "queued") {
       logJob("warn", "jobs.task.start.skipped", {
         jobId: nextEntry?.jobId || "",
@@ -69,20 +97,20 @@ export function createStartQueuedJob(ctx?: any) : any {
         compensation: {
           action: "preserve_payload_and_requeue"
         }
-      }).catch((error?: any) : any => {
+      }).catch((error: unknown) => {
         logJob("warn", "jobs.workflow.activity_schedule.failed", {
           jobId: currentJob.id,
           error: summarizeError(error)
         });
       });
-      await durableWorkflows.startActivity(currentJob.workflowId || workflowIdForJob(currentJob), "job-execution").catch((error?: any) : any => {
+      await durableWorkflows.startActivity(currentJob.workflowId || workflowIdForJob(currentJob), "job-execution").catch((error: unknown) => {
         logJob("warn", "jobs.workflow.activity_start.failed", {
           jobId: currentJob.id,
           error: summarizeError(error)
         });
       });
-    } catch (error: any) {
-      const message: any =
+    } catch (error) {
+      const message =
         error instanceof Error ? error.message : "后台任务启动失败。";
       logJob("error", "jobs.task.start.failed", {
         jobId: currentJob.id,
@@ -106,57 +134,57 @@ export function createStartQueuedJob(ctx?: any) : any {
       return false;
     }
 
-    let settled: any = false;
-    let deleted: any = false;
-    let preservingForRecovery: any = false;
-    let preservedForRecovery: any = false;
-    let preserveForRecoveryPromise: any = null;
-    let finalizePromise: any = null;
-    let resolveQueueTask: any = null;
-    let queueTaskSettled: any = false;
-    const executionController: any = new AbortController();
-    let executionTask: any = null;
-    const backgroundTasks: any = new Set<any>();
-    const queueTaskPromise: any = new Promise((resolve?: any) : any => {
+    let settled = false;
+    let deleted = false;
+    let preservingForRecovery = false;
+    let preservedForRecovery = false;
+    let preserveForRecoveryPromise: Promise<void | null> | null = null;
+    let finalizePromise: Promise<void> | null = null;
+    let resolveQueueTask: ((value: boolean) => void) | null = null;
+    let queueTaskSettled = false;
+    const executionController = new AbortController();
+    let executionTask: Promise<boolean> | null = null;
+    const backgroundTasks = new Set<Promise<unknown>>();
+    const queueTaskPromise = new Promise<boolean>((resolve) => {
       resolveQueueTask = resolve;
     });
-    const completeQueueTask: any = (value?: any) : any => {
+    const completeQueueTask = (value: boolean) => {
       if (queueTaskSettled) {
         return;
       }
       queueTaskSettled = true;
       resolveQueueTask?.(value);
     };
-    const trackBackgroundTask: any = (label?: any, task?: any) : any => {
-      const tracked: any = Promise.resolve(task)
-        .catch((error?: any) : any => {
+    const trackBackgroundTask = (label: string, task: PromiseLike<unknown>) => {
+      const tracked = Promise.resolve(task)
+        .catch((error: unknown) => {
           logJob("warn", "jobs.task.background_task.failed", {
             jobId: currentJob.id,
             label,
             error: summarizeError(error)
           });
         })
-        .finally(() : any => {
+        .finally(() => {
           backgroundTasks.delete(tracked);
         });
       backgroundTasks.add(tracked);
       return tracked;
     };
-    const drainBackgroundTasks: any = async () : Promise<any> => {
+    const drainBackgroundTasks = async () => {
       while (backgroundTasks.size > 0) {
-        await Promise.allSettled([...backgroundTasks]);
+        await Promise.allSettled(backgroundTasks);
       }
     };
-    const finalizeJob: any = async ({
+    const finalizeJob = async ({
       status,
       stage,
       errorMessage,
       result
-    }: Record<string, any>) : Promise<any> => {
+    }: FinalizeInput) => {
       if (finalizePromise) {
         return finalizePromise;
       }
-      finalizePromise = (async () : Promise<any> => {
+      finalizePromise = (async () => {
       if (settled) {
         logJob("debug", "jobs.job.finalize.skipped", {
           jobId: currentJob.id,
@@ -169,8 +197,8 @@ export function createStartQueuedJob(ctx?: any) : any {
 
       settled = true;
 
-      const completed: any = status === "completed";
-      const cancelled: any = status === "cancelled";
+      const completed = status === "completed";
+      const cancelled = status === "cancelled";
       logJob(completed ? "info" : cancelled ? "warn" : "error", "jobs.job.finalize.started", {
         jobId: currentJob.id,
         status,
@@ -196,7 +224,7 @@ export function createStartQueuedJob(ctx?: any) : any {
         return;
       }
 
-      const finishedAt: any = new Date().toISOString();
+      const finishedAt = new Date().toISOString();
 
       await updateJobCheckpointNode(currentJob, {
         nodeId: "job-execution",
@@ -235,18 +263,18 @@ export function createStartQueuedJob(ctx?: any) : any {
                 warnings: result.warnings?.length || 0
               }
             : {}
-        }).catch(() : any => null);
+        }).catch(() => null);
         await durableWorkflows.completeWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), {
           status,
           jobId: currentJob.id
-        }).catch(() : any => null);
+        }).catch(() => null);
       } else {
-        const terminalMessage: any = errorMessage || stage || (cancelled ? "Job cancelled." : "Job failed.");
-        await durableWorkflows.failActivity(currentJob.workflowId || workflowIdForJob(currentJob), "job-execution", terminalMessage).catch(() : any => null);
-        await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), terminalMessage).catch(() : any => null);
+        const terminalMessage = errorMessage || stage || (cancelled ? "Job cancelled." : "Job failed.");
+        await durableWorkflows.failActivity(currentJob.workflowId || workflowIdForJob(currentJob), "job-execution", terminalMessage).catch(() => null);
+        await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), terminalMessage).catch(() => null);
       }
 
-      const terminalPatch: Record<string, any> = {
+      const terminalPatch = {
         status,
         stage,
         error: errorMessage,
@@ -264,7 +292,7 @@ export function createStartQueuedJob(ctx?: any) : any {
       };
       if (completed) {
         if (currentJob.uploadSessionId) {
-          const receiptId: any = String(
+          const receiptId = String(
             result?.uploadConsumptionReceiptId || ""
           ).trim();
           if (!receiptId) {
@@ -283,6 +311,9 @@ export function createStartQueuedJob(ctx?: any) : any {
             result
           });
         } else {
+          if (!result) {
+            throw new Error("Completed job result is unavailable.");
+          }
           await commitJobTerminal(currentJob.id, terminalPatch, result);
         }
         await removeImportCheckpoint({
@@ -311,7 +342,7 @@ export function createStartQueuedJob(ctx?: any) : any {
       })();
       return finalizePromise;
     };
-    const runFinalizeJob: any = (input?: any) : any => finalizeJob(input).catch((error?: any) : any => {
+    const runFinalizeJob = (input: FinalizeInput) => finalizeJob(input).catch((error: unknown) => {
         logJob("error", "jobs.job.finalize.failed", {
           jobId: currentJob.id,
           error: summarizeError(error)
@@ -320,14 +351,14 @@ export function createStartQueuedJob(ctx?: any) : any {
         completeQueueTask(false);
       });
 
-    const activeController: Record<string, any> = {
+    const activeController = {
       jobId: currentJob.id,
-      stop: async () : Promise<any> => {
+      stop: async () => {
         logJob("warn", "jobs.task.stop_requested", {
           jobId: currentJob.id
         });
         executionController.abort(new Error(CLOSE_ABORT_MESSAGE));
-        await executionTask?.catch(() : any => null);
+        await executionTask?.catch(() => null);
         await drainBackgroundTasks();
         await finalizeJob({
           status: "failed",
@@ -335,10 +366,10 @@ export function createStartQueuedJob(ctx?: any) : any {
           errorMessage: CLOSE_ABORT_MESSAGE
         });
       },
-      cancel: async () : Promise<any> => {
+      cancel: async () => {
         logJob("warn", "jobs.task.cancel_requested", { jobId: currentJob.id });
         executionController.abort(new Error("Job cancelled."));
-        await executionTask?.catch(() : any => null);
+        await executionTask?.catch(() => null);
         await drainBackgroundTasks();
         await finalizeJob({
           status: "cancelled",
@@ -347,26 +378,26 @@ export function createStartQueuedJob(ctx?: any) : any {
         });
         return cloneJobForApi(currentJob);
       },
-      fail: async ({ stage = "队列执行失败", errorMessage = "Queue execution failed." }: Record<string, any> = {}) : Promise<any> => {
+      fail: async ({ stage = "队列执行失败", errorMessage = "Queue execution failed." }: { stage?: string; errorMessage?: string } = {}) => {
         logJob("error", "jobs.task.queue_fail_requested", { jobId: currentJob.id, stage });
         executionController.abort(new Error(errorMessage));
-        await executionTask?.catch(() : any => null);
+        await executionTask?.catch(() => null);
         await drainBackgroundTasks();
         await finalizeJob({ status: "failed", stage, errorMessage });
         return cloneJobForApi(currentJob);
       },
-      delete: async () : Promise<any> => {
+      delete: async () => {
         logJob("warn", "jobs.task.delete_requested", {
           jobId: currentJob.id
         });
         deleted = true;
         settled = true;
         executionController.abort(new Error("Job deleted."));
-        await executionTask?.catch(() : any => null);
+        await executionTask?.catch(() => null);
         await drainBackgroundTasks();
 
         if (finalizePromise) {
-          await finalizePromise.catch(() : any => null);
+          await finalizePromise.catch(() => null);
         }
 
         activeControllers.delete(currentJob.id);
@@ -382,9 +413,9 @@ export function createStartQueuedJob(ctx?: any) : any {
           await deleteCheckpointTree({
             userDataPath,
             treeId: currentJob.checkpointTreeId
-          }).catch(() : any => null);
+          }).catch(() => null);
         }
-        await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), "Job deleted.").catch(() : any => null);
+        await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), "Job deleted.").catch(() => null);
         jobProjectionStore.delete(currentJob.id);
         await fs.rm(getJobDirectory(userDataPath, currentJob.id), {
           recursive: true,
@@ -399,26 +430,25 @@ export function createStartQueuedJob(ctx?: any) : any {
         });
         return cloneJobForApi(currentJob);
       },
-      preserveForRecovery: async () : Promise<any> => {
+      preserveForRecovery: async () => {
         if (preserveForRecoveryPromise) {
           return preserveForRecoveryPromise;
         }
         if (finalizePromise || settled || deleted) {
-          await finalizePromise?.catch(() : any => null);
+          await finalizePromise?.catch(() => null);
           await drainBackgroundTasks();
           return null;
         }
-        preserveForRecoveryPromise = (async () : Promise<any> => {
+        preserveForRecoveryPromise = (async () => {
           preservingForRecovery = true;
           try {
             logJob("info", "jobs.task.preserve_for_recovery.started", {
               jobId: currentJob.id
             });
             executionController.abort(new Error(RECOVERY_STAGE_MESSAGE));
-            await executionTask?.catch(() : any => null);
+            await executionTask?.catch(() => null);
             await drainBackgroundTasks();
             if (settled || deleted) {
-              await finalizePromise?.catch(() : any => null);
               return null;
             }
             await updateJobCheckpointNode(currentJob, {
@@ -451,16 +481,16 @@ export function createStartQueuedJob(ctx?: any) : any {
               jobId: currentJob.id,
               progressPercent: Number(currentJob.progressPercent || 0),
               stage: currentJob.stage || ""
-            }).catch(() : any => null);
+            }).catch(() => null);
             await durableWorkflows.recoverWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), {
               reason: "job_execution_preserved_for_recovery"
-            }).catch(() : any => null);
+            }).catch(() => null);
             activeControllers.delete(currentJob.id);
             completeQueueTask(false);
             logJob("info", "jobs.task.preserve_for_recovery.completed", {
               jobId: currentJob.id
             });
-          } catch (error: any) {
+          } catch (error) {
             preserveForRecoveryPromise = null;
             throw error;
           } finally {
@@ -472,7 +502,7 @@ export function createStartQueuedJob(ctx?: any) : any {
     };
     activeControllers.set(currentJob.id, activeController);
 
-    const preserveForLostLease: any = async (reason: any = "queue_lease_unavailable") : Promise<any> => {
+    const preserveForLostLease = async (reason = "queue_lease_unavailable") => {
       logJob("warn", "jobs.task.queue_lease_lost", {
         jobId: currentJob.id,
         reason
@@ -480,7 +510,7 @@ export function createStartQueuedJob(ctx?: any) : any {
       await activeController.preserveForRecovery();
       return false;
     };
-    const assertQueueLease: any = async (reason?: any) : Promise<any> => {
+    const assertQueueLease = async (reason = "") => {
       if (nextEntry.signal?.aborted) {
         throw new Error("Queue execution lease is unavailable.");
       }
@@ -491,7 +521,7 @@ export function createStartQueuedJob(ctx?: any) : any {
         throw new Error("Queue execution lease is unavailable.");
       }
     };
-    const runGuardedFinalizeJob: any = async (input?: any) : Promise<any> => {
+    const runGuardedFinalizeJob = async (input: FinalizeInput) => {
       try {
         await assertQueueLease("job_terminal_fence");
       } catch {
@@ -505,8 +535,8 @@ export function createStartQueuedJob(ctx?: any) : any {
       }
       return runFinalizeJob(input);
     };
-    const abortFromQueueLease: any = () : any => {
-      void preserveForLostLease().catch((error?: any) : any => {
+    const abortFromQueueLease = () => {
+      void preserveForLostLease().catch((error: unknown) => {
         logJob("error", "jobs.task.queue_lease_preserve.failed", {
           jobId: currentJob.id,
           error: summarizeError(error)
@@ -515,12 +545,12 @@ export function createStartQueuedJob(ctx?: any) : any {
       });
     };
     nextEntry.signal?.addEventListener?.("abort", abortFromQueueLease, { once: true });
-    void queueTaskPromise.finally(() : any => {
+    void queueTaskPromise.finally(() => {
       nextEntry.signal?.removeEventListener?.("abort", abortFromQueueLease);
     });
     if (nextEntry.signal?.aborted) abortFromQueueLease();
 
-    const preserveIfClosing: any = async () : Promise<any> => {
+    const preserveIfClosing = async () => {
       if (!state.closed && !preservedForRecovery) {
         return false;
       }
@@ -583,7 +613,7 @@ export function createStartQueuedJob(ctx?: any) : any {
     logJob("info", "jobs.task.started", {
       jobId: currentJob.id
     });
-    const reportProgress: any = (message: Record<string, any> = {}) : any => {
+    const reportProgress = (message: { progressPercent?: number; stage?: string } = {}) => {
       if (settled || deleted || preservingForRecovery || preservedForRecovery || executionController.signal.aborted) {
         logJob("debug", "jobs.task.progress.ignored", {
           jobId: currentJob.id,
@@ -627,18 +657,21 @@ export function createStartQueuedJob(ctx?: any) : any {
                 ? message.progressPercent
                 : currentJob.progressPercent,
             stage: message.stage || "处理中"
-          }).catch(() : any => null),
+          }).catch(() => null),
         ]));
     };
 
+    if (!storageProvider) {
+      throw new Error("Job storage provider is unavailable.");
+    }
     executionTask = runSplitJob(userDataPath, nextEntry.payload, {
       jobId: currentJob.id,
       runtimeOptions: resolveCurrentRuntimeOptions(),
-      uploadSessionStore,
+      uploadSessionStore: uploadSessionStore || undefined,
       storageProvider,
       signal: executionController.signal,
       onProgress: reportProgress
-    }).then(async (result?: any) : Promise<any> => {
+    }).then(async (result) => {
       if (executionController.signal.aborted || deleted || preservingForRecovery || preservedForRecovery) {
         return false;
       }
@@ -657,11 +690,11 @@ export function createStartQueuedJob(ctx?: any) : any {
         result
       });
       return true;
-    }).catch(async (error?: any) : Promise<any> => {
+    }).catch(async (error: unknown) => {
       if (executionController.signal.aborted || deleted || preservingForRecovery || preservedForRecovery || settled) {
         return false;
       }
-      const errorMessage: any = error instanceof Error ? error.message : "后台任务执行失败。";
+      const errorMessage = error instanceof Error ? error.message : "后台任务执行失败。";
       logJob("error", "jobs.task.failed", {
         jobId: currentJob.id,
         error: summarizeError(error)

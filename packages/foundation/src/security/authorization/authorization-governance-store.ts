@@ -36,7 +36,7 @@ type TagManagementStorePort = TagStoreProvider & {
 };
 type GovernanceStoreError = Error & { code?: string; diagnostic?: unknown };
 
-function requireTagManagementStore(provider?: TagManagementStorePort | null, userDataPath?: unknown): TagManagementStorePort {
+function requireTagManagementStore(provider?: TagManagementStorePort | null, userDataPath?: string): TagManagementStorePort {
   if (!provider || provider.isClosed?.()) {
     const error: GovernanceStoreError = new Error("Authorization governance requires an active Tag Store provider.");
     error.code = "AUTHORIZATION_TAG_STORE_REQUIRED";

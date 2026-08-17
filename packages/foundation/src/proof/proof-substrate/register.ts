@@ -1,122 +1,107 @@
-// registerPlatformService is injected by the composition root (server-runtime).
-// Foundation must not import from server-runtime directly.
-export function registerOperationProofSubstratePlatformServices(registry?: any, {
-  operationProofSubstrate = null,
-  registerPlatformService = null
-}: Record<string, any> = {}) : any {
-  const register: any = typeof registerPlatformService === "function"
-    ? registerPlatformService
-    : (targetRegistry?: any, entry?: any) : any => {
-        if (!targetRegistry || typeof targetRegistry.register !== "function") {
-          throw new Error("A PlatformRegistry instance is required.");
-        }
-        return targetRegistry.register(entry);
-      };
-  const capabilities: any = operationProofSubstrate?.listCapabilities
-    ? operationProofSubstrate.listCapabilities().capabilities
-    : [];
+import type { PactiumProofBundle, PactiumProofEnvelope, PactiumRecord } from "pactium";
+
+interface PlatformServiceEntry {
+  id: string;
+  platform: string;
+  label: string;
+  kind: string;
+  ownerFeatureId: string;
+  value: unknown;
+  metadata: PactiumRecord;
+}
+
+interface PlatformRegistry {
+  register(entry: PlatformServiceEntry): unknown;
+}
+
+interface OperationProofSubstrateFacade {
+  protocolVersion: string;
+  provider: string;
+  mode: string;
+  productionVerifiable: boolean;
+  listCapabilities(): { capabilities: Array<{ id: string }> };
+  beginLifecycle(input?: PactiumRecord): unknown;
+  finishLifecycle(input?: PactiumRecord): unknown;
+  denyLifecycle(input?: PactiumRecord): unknown;
+  recordReceipt(input?: PactiumRecord): unknown;
+  verifyReceipt(input?: PactiumRecord): unknown;
+  verifyEnvelope(envelope?: PactiumProofEnvelope, options?: PactiumRecord): unknown;
+  verifyBundle(bundle?: PactiumProofBundle, options?: PactiumRecord): unknown;
+  exportProofBundle(input?: PactiumRecord): unknown;
+  planRecovery(input?: PactiumRecord): unknown;
+  getWorkspaceProjection(workspaceId?: string): unknown;
+  proveWorkspaceMembership(input?: PactiumRecord): unknown;
+  recordAcceptanceEvidence(input?: PactiumRecord): unknown;
+}
+
+interface RegistrationOptions {
+  operationProofSubstrate?: OperationProofSubstrateFacade | null;
+  registerPlatformService?: ((registry: PlatformRegistry | undefined, entry: PlatformServiceEntry) => unknown) | null;
+}
+
+export function registerOperationProofSubstratePlatformServices(
+  registry?: PlatformRegistry,
+  {
+    operationProofSubstrate = null,
+    registerPlatformService = null
+  }: RegistrationOptions = {}
+): unknown[] {
+  const register = registerPlatformService ?? ((
+    targetRegistry: PlatformRegistry | undefined,
+    entry: PlatformServiceEntry
+  ): unknown => {
+    if (!targetRegistry) throw new Error("A PlatformRegistry instance is required.");
+    return targetRegistry.register(entry);
+  });
+  const capabilities = operationProofSubstrate?.listCapabilities().capabilities ?? [];
+  const metadata = (extra: PactiumRecord = {}): PactiumRecord => ({
+    protocolVersion: operationProofSubstrate?.protocolVersion || "",
+    provider: operationProofSubstrate?.provider || "",
+    mode: operationProofSubstrate?.mode || "",
+    ...extra
+  });
+  const entry = (
+    id: string,
+    label: string,
+    kind: string,
+    value: unknown,
+    entryMetadata: PactiumRecord = {}
+  ): PlatformServiceEntry => ({
+    id,
+    platform: "operation-proof-substrate",
+    label,
+    kind,
+    ownerFeatureId: "operation-proof-substrate",
+    value,
+    metadata: metadata(entryMetadata)
+  });
+
   return [
-    register(registry, {
-      id: "operation-proof-substrate.provider",
-      platform: "operation-proof-substrate",
-      label: "Operation Proof Substrate provider",
-      kind: "provider",
-      ownerFeatureId: "operation-proof-substrate",
-      value: operationProofSubstrate,
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        provider: operationProofSubstrate?.provider || "",
-        mode: operationProofSubstrate?.mode || "",
-        productionVerifiable: operationProofSubstrate?.productionVerifiable === true,
-        capabilityIds: capabilities.map((capability?: any) : any => capability.id)
-      }
-    }),
-    register(registry, {
-      id: "operation-proof-substrate.lifecycle",
-      platform: "operation-proof-substrate",
-      label: "Operation proof lifecycle",
-      kind: "proof-lifecycle",
-      ownerFeatureId: "operation-proof-substrate",
-      value: {
-        beginLifecycle: (input: Record<string, any> = {}) : any => operationProofSubstrate?.beginLifecycle(input),
-        finishLifecycle: (input: Record<string, any> = {}) : any => operationProofSubstrate?.finishLifecycle(input),
-        denyLifecycle: (input: Record<string, any> = {}) : any => operationProofSubstrate?.denyLifecycle(input),
-        recordReceipt: (input: Record<string, any> = {}) : any => operationProofSubstrate?.recordReceipt(input)
-      },
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        mode: operationProofSubstrate?.mode || ""
-      }
-    }),
-    register(registry, {
-      id: "operation-proof-substrate.verify",
-      platform: "operation-proof-substrate",
-      label: "Operation proof verification",
-      kind: "proof-verifier",
-      ownerFeatureId: "operation-proof-substrate",
-      value: {
-        verifyReceipt: (input: Record<string, any> = {}) : any => operationProofSubstrate?.verifyReceipt(input),
-        verifyEnvelope: (envelope?: any, options: Record<string, any> = {}) : any => operationProofSubstrate?.verifyEnvelope(envelope, options),
-        verifyBundle: (bundle?: any, options: Record<string, any> = {}) : any => operationProofSubstrate?.verifyBundle(bundle, options)
-      },
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        provider: operationProofSubstrate?.provider || ""
-      }
-    }),
-    register(registry, {
-      id: "operation-proof-substrate.export",
-      platform: "operation-proof-substrate",
-      label: "Proof Bundle Export",
-      kind: "proof-export",
-      ownerFeatureId: "operation-proof-substrate",
-      value: (input: Record<string, any> = {}) : any => operationProofSubstrate?.exportProofBundle(input),
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        provider: operationProofSubstrate?.provider || ""
-      }
-    }),
-    register(registry, {
-      id: "operation-proof-substrate.recover",
-      platform: "operation-proof-substrate",
-      label: "Operation proof recovery",
-      kind: "proof-recovery",
-      ownerFeatureId: "operation-proof-substrate",
-      value: (input: Record<string, any> = {}) : any => operationProofSubstrate?.planRecovery(input),
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        provider: operationProofSubstrate?.provider || ""
-      }
-    }),
-    register(registry, {
-      id: "operation-proof-substrate.project",
-      platform: "operation-proof-substrate",
-      label: "Workspace proof projection",
-      kind: "proof-projection",
-      ownerFeatureId: "operation-proof-substrate",
-      value: {
-        getWorkspaceProjection: (workspaceId: any = "default") : any => operationProofSubstrate?.getWorkspaceProjection(workspaceId),
-        proveWorkspaceMembership: (input: Record<string, any> = {}) : any => operationProofSubstrate?.proveWorkspaceMembership(input)
-      },
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        provider: operationProofSubstrate?.provider || ""
-      }
-    }),
-    register(registry, {
-      id: "operation-proof-substrate.acceptance-evidence",
-      platform: "operation-proof-substrate",
-      label: "Acceptance evidence ledger anchoring",
-      kind: "proof-acceptance-evidence",
-      ownerFeatureId: "operation-proof-substrate",
-      value: {
-        recordAcceptanceEvidence: (input: Record<string, any> = {}) : any => operationProofSubstrate?.recordAcceptanceEvidence(input)
-      },
-      metadata: {
-        protocolVersion: operationProofSubstrate?.protocolVersion || "",
-        provider: operationProofSubstrate?.provider || "",
-        digestOnly: true
-      }
-    })
+    register(registry, entry("operation-proof-substrate.provider", "Operation Proof Substrate provider", "provider", operationProofSubstrate, {
+      productionVerifiable: operationProofSubstrate?.productionVerifiable === true,
+      capabilityIds: capabilities.map(({ id }) => id)
+    })),
+    register(registry, entry("operation-proof-substrate.lifecycle", "Operation proof lifecycle", "proof-lifecycle", {
+      beginLifecycle: (input: PactiumRecord = {}) => operationProofSubstrate?.beginLifecycle(input),
+      finishLifecycle: (input: PactiumRecord = {}) => operationProofSubstrate?.finishLifecycle(input),
+      denyLifecycle: (input: PactiumRecord = {}) => operationProofSubstrate?.denyLifecycle(input),
+      recordReceipt: (input: PactiumRecord = {}) => operationProofSubstrate?.recordReceipt(input)
+    })),
+    register(registry, entry("operation-proof-substrate.verify", "Operation proof verification", "proof-verifier", {
+      verifyReceipt: (input: PactiumRecord = {}) => operationProofSubstrate?.verifyReceipt(input),
+      verifyEnvelope: (envelope?: PactiumProofEnvelope, options: PactiumRecord = {}) => operationProofSubstrate?.verifyEnvelope(envelope, options),
+      verifyBundle: (bundle?: PactiumProofBundle, options: PactiumRecord = {}) => operationProofSubstrate?.verifyBundle(bundle, options)
+    })),
+    register(registry, entry("operation-proof-substrate.export", "Proof Bundle Export", "proof-export",
+      (input: PactiumRecord = {}) => operationProofSubstrate?.exportProofBundle(input))),
+    register(registry, entry("operation-proof-substrate.recover", "Operation proof recovery", "proof-recovery",
+      (input: PactiumRecord = {}) => operationProofSubstrate?.planRecovery(input))),
+    register(registry, entry("operation-proof-substrate.project", "Workspace proof projection", "proof-projection", {
+      getWorkspaceProjection: (workspaceId = "default") => operationProofSubstrate?.getWorkspaceProjection(workspaceId),
+      proveWorkspaceMembership: (input: PactiumRecord = {}) => operationProofSubstrate?.proveWorkspaceMembership(input)
+    })),
+    register(registry, entry("operation-proof-substrate.acceptance-evidence", "Acceptance evidence ledger anchoring", "proof-acceptance-evidence", {
+      recordAcceptanceEvidence: (input: PactiumRecord = {}) => operationProofSubstrate?.recordAcceptanceEvidence(input)
+    }, { digestOnly: true }))
   ];
 }

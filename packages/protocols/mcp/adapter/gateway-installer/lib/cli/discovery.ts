@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
-import { MCP_PROTOCOL_VERSION } from "@meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
+import { MCP_PROTOCOL_VERSION } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,

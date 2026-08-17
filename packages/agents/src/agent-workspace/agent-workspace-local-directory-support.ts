@@ -13,67 +13,148 @@ import {
 } from "./agent-workspace-support.ts";
 import { readOrdinaryFileNoFollow } from "./agent-workspace-local-directory-safe-fs.ts";
 
+interface LocalDirectoryMount {
+  mountRef: string;
+  workspaceId: string;
+  sourcePath: string;
+  targetPath?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+interface ValidatedLocalDirectoryRoot {
+  absolutePath: string;
+  realPath: string;
+  stat: fs.Stats;
+  allowedRoots: string[];
+}
+
+interface LocalDirectoryMountConfig {
+  schemaVersion: string;
+  configPath: string;
+  mounts: LocalDirectoryMount[];
+}
+
+interface LocalDirectoryInput extends Record<string, unknown> {
+  mountRef?: unknown;
+  mountId?: unknown;
+  localDirMountRef?: unknown;
+  localDirectoryMountRef?: unknown;
+  sourcePath?: unknown;
+  localPath?: unknown;
+  dirPath?: unknown;
+}
+
+interface LocalDirectorySupportOptions {
+  userDataPath?: string;
+  localDirectoryMountConfigPath?: string;
+  createAccessReceipt?: (input: {
+    workspaceId: string;
+    operationId: string;
+    path: string;
+    action: string;
+  }) => Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeMount(value: unknown): LocalDirectoryMount | null {
+  if (!isRecord(value)) return null;
+  return {
+    mountRef: String(value.mountRef || ""),
+    workspaceId: String(value.workspaceId || ""),
+    sourcePath: String(value.sourcePath || ""),
+    targetPath: String(value.targetPath || ""),
+    status: String(value.status || "active"),
+    createdAt: String(value.createdAt || ""),
+    updatedAt: String(value.updatedAt || "")
+  };
+}
+
+function normalizeMounts(value: unknown): LocalDirectoryMount[] {
+  const values: unknown[] = asArray(value);
+  return values.map(normalizeMount).filter((mount): mount is LocalDirectoryMount => mount !== null);
+}
+
 export function createAgentWorkspaceLocalDirectorySupport({
   userDataPath,
   localDirectoryMountConfigPath,
   createAccessReceipt
-}: Record<string, any> = {}) : any {
-  function defaultLocalDirectoryMountConfig() : any {
+}: LocalDirectorySupportOptions = {}) {
+  if (!localDirectoryMountConfigPath) {
+    throw new TypeError("本机目录 mount 配置路径不可用。");
+  }
+  if (!createAccessReceipt) {
+    throw new TypeError("本机目录访问回执工厂不可用。");
+  }
+  const mountConfigPath = localDirectoryMountConfigPath;
+  const accessReceiptFactory = createAccessReceipt;
+
+  function defaultLocalDirectoryMountConfig(): LocalDirectoryMountConfig {
     return {
       schemaVersion: "v0.0.1:schema:definition-1",
-      configPath: localDirectoryMountConfigPath,
+      configPath: mountConfigPath,
       mounts: []
     };
   }
 
-  function readLocalDirectoryMountConfig() : any {
-    if (!fs.existsSync(localDirectoryMountConfigPath)) {
+  function readLocalDirectoryMountConfig(): LocalDirectoryMountConfig {
+    if (!fs.existsSync(mountConfigPath)) {
       return defaultLocalDirectoryMountConfig();
     }
     try {
-      const parsed: any = JSON.parse(fs.readFileSync(localDirectoryMountConfigPath, "utf8"));
+      const parsed: unknown = JSON.parse(fs.readFileSync(mountConfigPath, "utf8"));
+      const record = isRecord(parsed) ? parsed : {};
       return {
         schemaVersion: "v0.0.1:schema:definition-1",
-        configPath: localDirectoryMountConfigPath,
-        ...asObject(parsed),
-        mounts: asArray(parsed.mounts)
+        configPath: mountConfigPath,
+        ...asObject(record),
+        mounts: normalizeMounts(record.mounts)
       };
     } catch {
       return defaultLocalDirectoryMountConfig();
     }
   }
 
-  function writeLocalDirectoryMountConfig(config: Record<string, any> = {}) : any {
-    const next: Record<string, any> = {
+  function writeLocalDirectoryMountConfig(config: Partial<LocalDirectoryMountConfig> = {}): LocalDirectoryMountConfig {
+    const next: LocalDirectoryMountConfig = {
       schemaVersion: "v0.0.1:schema:definition-1",
-      configPath: localDirectoryMountConfigPath,
-      mounts: asArray(config.mounts)
+      configPath: mountConfigPath,
+      mounts: normalizeMounts(config.mounts)
     };
-    fs.mkdirSync(path.dirname(localDirectoryMountConfigPath), { recursive: true });
-    const tmpPath: any = `${localDirectoryMountConfigPath}.tmp`;
+    fs.mkdirSync(path.dirname(mountConfigPath), { recursive: true });
+    const tmpPath = `${mountConfigPath}.tmp`;
     fs.writeFileSync(tmpPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-    fs.renameSync(tmpPath, localDirectoryMountConfigPath);
+    fs.renameSync(tmpPath, mountConfigPath);
     return next;
   }
 
-  function validateLocalDirectoryRoot(sourcePath?: any) : any {
+  function validateLocalDirectoryRoot(sourcePath?: unknown): ValidatedLocalDirectoryRoot {
     if (!String(sourcePath || "").trim()) {
       throw new Error("sourcePath 不能为空。");
     }
     try {
-      return assertExistingLocalDirectoryWithinControlledRootsSync(sourcePath, {
+      const validated = assertExistingLocalDirectoryWithinControlledRootsSync(sourcePath, {
         userDataPath,
         label: "本机目录"
       });
-    } catch (error: any) {
-      if (error?.code === "ENOENT") {
+      return {
+        absolutePath: validated.absolutePath,
+        realPath: validated.realPath,
+        stat: validated.stat,
+        allowedRoots: [...validated.allowedRoots]
+      };
+    } catch (error: unknown) {
+      if (isRecord(error) && error.code === "ENOENT") {
         throw new Error("本机目录不存在。");
       }
       throw error;
     }
   }
 
-  function publicLocalDirectoryMount(mount: Record<string, any> = {}) : any {
+  function publicLocalDirectoryMount(mount: Partial<LocalDirectoryMount> = {}) {
     return {
       mountRef: String(mount.mountRef || ""),
       workspaceId: String(mount.workspaceId || ""),
@@ -90,8 +171,12 @@ export function createAgentWorkspaceLocalDirectorySupport({
     };
   }
 
-  function resolveLocalDirectorySource(input: Record<string, any> = {}, workspace?: any, { allowDirectSourcePath = false }: Record<string, any> = {}) : any {
-    const mountRef: any = String(
+  function resolveLocalDirectorySource(
+    input: LocalDirectoryInput = {},
+    workspace: { workspaceId?: unknown } = {},
+    { allowDirectSourcePath = false }: { allowDirectSourcePath?: boolean } = {}
+  ) {
+    const mountRef = String(
       input.mountRef ||
         input.mountId ||
         input.localDirMountRef ||
@@ -99,8 +184,8 @@ export function createAgentWorkspaceLocalDirectorySupport({
         ""
     ).trim();
     if (mountRef) {
-      const config: any = readLocalDirectoryMountConfig();
-      const mount: any = asArray(config.mounts).find((item?: any) : any =>
+      const config = readLocalDirectoryMountConfig();
+      const mount = config.mounts.find((item) =>
         String(item.mountRef || "") === mountRef &&
         String(item.workspaceId || "") === String(workspace.workspaceId || "")
       );
@@ -110,24 +195,24 @@ export function createAgentWorkspaceLocalDirectorySupport({
       if (String(mount.status || "active") !== "active") {
         throw new Error("本机目录 mount 未启用。");
       }
-      const root: any = validateLocalDirectoryRoot(mount.sourcePath);
+      const root = validateLocalDirectoryRoot(mount.sourcePath);
       return {
         sourcePath: root.realPath,
         mount
       };
     }
-    const sourcePath: any = String(input.sourcePath || input.localPath || input.dirPath || "").trim();
+    const sourcePath = String(input.sourcePath || input.localPath || input.dirPath || "").trim();
     if (!allowDirectSourcePath) {
       throw new Error("本机目录访问需要使用已登记的 mountRef。");
     }
-    const root: any = validateLocalDirectoryRoot(sourcePath);
+    const root = validateLocalDirectoryRoot(sourcePath);
     return {
       sourcePath: root.realPath,
       mount: null
     };
   }
 
-  function hasLocalDirectoryMountRef(input: Record<string, any> = {}) : any {
+  function hasLocalDirectoryMountRef(input: LocalDirectoryInput = {}): boolean {
     return Boolean(String(
       input.mountRef ||
         input.mountId ||
@@ -137,7 +222,7 @@ export function createAgentWorkspaceLocalDirectorySupport({
     ).trim());
   }
 
-  function localDirectoryInputPath(input: Record<string, any> = {}, options: Record<string, any> = {}) : any {
+  function localDirectoryInputPath(input: Record<string, unknown> = {}, options: { allowEmpty?: boolean } = {}): string {
     return normalizeWorkspaceRelativePath(
       input.path ||
         input.relativePath ||
@@ -151,14 +236,18 @@ export function createAgentWorkspaceLocalDirectorySupport({
     );
   }
 
-  function resolveLocalDirectoryMountPath(input: Record<string, any> = {}, workspace?: any, options: Record<string, any> = {}) : any {
-    const source: any = resolveLocalDirectorySource(input, workspace);
-    const relativePath: any = localDirectoryInputPath(input, { allowEmpty: options.allowEmpty === true });
-    const root: any = source.sourcePath;
-    const target: any = resolveVirtualPathWithinRoot(root, relativePath, {
+  function resolveLocalDirectoryMountPath(
+    input: LocalDirectoryInput = {},
+    workspace: { workspaceId?: unknown } = {},
+    options: { allowEmpty?: boolean; allowMissing?: boolean; requireExisting?: boolean; allowDirectory?: boolean; allowFile?: boolean } = {}
+  ) {
+    const source = resolveLocalDirectorySource(input, workspace);
+    const relativePath = localDirectoryInputPath(input, { allowEmpty: options.allowEmpty === true });
+    const root = source.sourcePath;
+    const target = resolveVirtualPathWithinRoot(root, relativePath, {
       label: "本机目录 mount 路径"
     }).absolutePath;
-    const bounded: any = assertPathWithinRootSync(root, target, {
+    const bounded = assertPathWithinRootSync(root, target, {
       label: "本机目录 mount 路径",
       allowMissing: options.allowMissing !== false,
       requireExisting: options.requireExisting === true,
@@ -185,9 +274,18 @@ export function createAgentWorkspaceLocalDirectorySupport({
     includeHash = false,
     rootPath = "",
     contentBuffer = null
-  }: Record<string, any>) : any {
-    const isFile: any = stat.isFile();
-    const metadata: Record<string, any> = {
+  }: {
+    workspaceId: string;
+    mount?: Partial<LocalDirectoryMount> | null;
+    relativePath: string;
+    absolutePath: string;
+    stat: fs.Stats;
+    includeHash?: boolean;
+    rootPath?: string;
+    contentBuffer?: Buffer | null;
+  }) {
+    const isFile = stat.isFile();
+    const metadata = {
       workspaceId,
       mountRef: String(mount?.mountRef || ""),
       relativePath,
@@ -199,7 +297,7 @@ export function createAgentWorkspaceLocalDirectorySupport({
       contentSha256: ""
     };
     if (includeHash && isFile) {
-      const content: any = Buffer.isBuffer(contentBuffer)
+      const content = Buffer.isBuffer(contentBuffer)
         ? contentBuffer
         : readOrdinaryFileNoFollow(rootPath, absolutePath).content;
       metadata.contentSha256 = sha256Buffer(content);
@@ -207,9 +305,15 @@ export function createAgentWorkspaceLocalDirectorySupport({
     return metadata;
   }
 
-  function localDirectoryAccessReceipt({ workspaceId = "", mountRef = "", operationId = "", path: receiptPath = "", action = "read" }: Record<string, any> = {}) : any {
+  function localDirectoryAccessReceipt({ workspaceId = "", mountRef = "", operationId = "", path: receiptPath = "", action = "read" }: {
+    workspaceId?: string;
+    mountRef?: string;
+    operationId?: string;
+    path?: string;
+    action?: string;
+  } = {}) {
     return {
-      ...createAccessReceipt({
+      ...accessReceiptFactory({
         workspaceId,
         operationId,
         path: receiptPath || "/",

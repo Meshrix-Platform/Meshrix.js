@@ -5,9 +5,39 @@ import {
   boundedInteger,
   fileMetadataFromStat,
   normalizeWorkspaceRelativePath,
-  nowIso,
-  sha256Buffer
+  nowIso
 } from "./agent-workspace-support.ts";
+
+type WorkspaceInput = Record<string, unknown>;
+interface Workspace { workspaceId: string }
+type WorkspaceAccess = { ok: true; workspace: Workspace } | ({ ok: false } & Record<string, unknown>);
+interface ResolvedWorkspacePath { absolutePath: string; relativePath: string }
+interface WorkspaceFileStateApi {
+  archiveWorkspacePath(workspace: Workspace, relativePath: string, options: { operationId: unknown }): Promise<null | { rootCid: string; metadata: unknown; contentRefs?: unknown[] }>;
+  workspaceDownloadCacheReceipt(workspace: Workspace, relativePath: string): Promise<unknown>;
+  workspaceListCacheReceipt(workspace: Workspace, relativePath: string): Promise<unknown>;
+  commitWorkspaceFileState(input: Record<string, unknown>): Promise<unknown>;
+  recordWorkspaceFileCheckpoint(input: Record<string, unknown>): Promise<unknown>;
+}
+interface FileReadApiOptions {
+  workspaceForStorage?: (input: WorkspaceInput) => WorkspaceAccess;
+  resolveWorkspacePath?: (workspace: Workspace, relativePath: unknown, options?: Record<string, boolean>) => ResolvedWorkspacePath;
+  createAccessReceipt?: (input: Record<string, unknown>) => unknown;
+  updateWorkspaceTimeStmt?: { run(updatedAt: string, workspaceId: string): unknown };
+  fileStateApi?: WorkspaceFileStateApi;
+  ensurePrivateWorkspaceDirectory?: (absolutePath: string) => void;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "Unknown error");
+}
+
+function errorStatus(error: unknown, fallback: number): number {
+  if (error && typeof error === "object" && "status" in error) {
+    return Number((error as { status?: unknown }).status || fallback);
+  }
+  return fallback;
+}
 
 export function createAgentWorkspaceFileReadApi({
   workspaceForStorage,
@@ -16,7 +46,14 @@ export function createAgentWorkspaceFileReadApi({
   updateWorkspaceTimeStmt,
   fileStateApi,
   ensurePrivateWorkspaceDirectory
-}: Record<string, any> = {}) : any {
+}: FileReadApiOptions = {}) {
+  if (!workspaceForStorage || !resolveWorkspacePath || !createAccessReceipt || !updateWorkspaceTimeStmt || !fileStateApi) {
+    throw new TypeError("Agent workspace file read dependencies are required.");
+  }
+  const accessWorkspace = workspaceForStorage;
+  const resolvePath = resolveWorkspacePath;
+  const accessReceiptFactory = createAccessReceipt;
+  const workspaceTimeStatement = updateWorkspaceTimeStmt;
   const {
     archiveWorkspacePath,
     workspaceDownloadCacheReceipt,
@@ -24,20 +61,20 @@ export function createAgentWorkspaceFileReadApi({
     commitWorkspaceFileState,
     recordWorkspaceFileCheckpoint
   } = fileStateApi;
-  async function createWorkspaceFolder(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function createWorkspaceFolder(input: WorkspaceInput = {}) {
+    const access = accessWorkspace(input);
     if (!access.ok) {
       return access;
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
-      const folderPath: any = normalizeWorkspaceRelativePath(
+      const folderPath = normalizeWorkspaceRelativePath(
         input.folderPath || input.folder || input.directory || input.path || input.relativePath || "",
         { allowEmpty: false }
       );
-      resolved = resolveWorkspacePath(access.workspace, folderPath);
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+      resolved = resolvePath(access.workspace, folderPath);
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (typeof ensurePrivateWorkspaceDirectory !== "function") {
       throw new TypeError(
@@ -46,18 +83,18 @@ export function createAgentWorkspaceFileReadApi({
     }
     try {
       ensurePrivateWorkspaceDirectory(resolved.absolutePath);
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         ok: false,
-        status: Number(error?.status || 409),
-        error: error?.message || "Workspace directory is unsafe."
+        status: errorStatus(error, 409),
+        error: errorMessage(error) || "Workspace directory is unsafe."
       };
     }
-    updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
-    const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
+    workspaceTimeStatement.run(nowIso(), access.workspace.workspaceId);
+    const archived = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "agent_workspaces.folder.create"
     });
-    const stateCommit: any = await commitWorkspaceFileState({
+    const stateCommit = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.folder.create",
       mutations: archived
@@ -74,7 +111,7 @@ export function createAgentWorkspaceFileReadApi({
         path: resolved.relativePath
       }
     });
-    const checkpoint: any = await recordWorkspaceFileCheckpoint({
+    const checkpoint = await recordWorkspaceFileCheckpoint({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.folder.create",
       stateCommit,
@@ -96,20 +133,20 @@ export function createAgentWorkspaceFileReadApi({
     };
   }
 
-  async function listWorkspaceFiles(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function listWorkspaceFiles(input: WorkspaceInput = {}) {
+    const access = accessWorkspace(input);
     if (!access.ok) {
       return access;
     }
-    let base: any;
+    let base: ResolvedWorkspacePath;
     try {
-      base = resolveWorkspacePath(
+      base = resolvePath(
         access.workspace,
         input.folderPath || input.folder || input.directory || input.path || input.relativePath || "",
         { allowEmpty: true }
       );
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (!fs.existsSync(base.absolutePath)) {
       return {
@@ -119,7 +156,7 @@ export function createAgentWorkspaceFileReadApi({
         basePath: base.relativePath,
         exists: false,
         cacheReceipt: await workspaceListCacheReceipt(access.workspace, base.relativePath),
-        accessReceipt: createAccessReceipt({
+        accessReceipt: accessReceiptFactory({
           workspaceId: access.workspace.workspaceId,
           operationId: input.operationId || "agent_workspaces.files.list",
           path: base.relativePath || "/",
@@ -129,26 +166,26 @@ export function createAgentWorkspaceFileReadApi({
         files: []
       };
     }
-    const includeDirectories: any = input.includeDirectories !== false;
-    const includeFiles: any = input.includeFiles !== false;
-    const includeHash: any = input.includeHash === true;
-    const recursive: any = input.recursive !== false;
-    const limit: any = boundedInteger(input.limit, 500, 1, 5000);
-    const files: any[] = [];
-    const visit: any = (absoluteDir?: any, relativeDir?: any) : any => {
+    const includeDirectories = input.includeDirectories !== false;
+    const includeFiles = input.includeFiles !== false;
+    const includeHash = input.includeHash === true;
+    const recursive = input.recursive !== false;
+    const limit = boundedInteger(input.limit, 500, 1, 5000);
+    const files: ReturnType<typeof fileMetadataFromStat>[] = [];
+    const visit = (absoluteDir: string, relativeDir: string): void => {
       if (files.length >= limit) {
         return;
       }
-      const entries: any = fs.readdirSync(absoluteDir, { withFileTypes: true })
-        .filter((entry?: any) : any => !entry.name.startsWith("."))
-        .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+      const entries = fs.readdirSync(absoluteDir, { withFileTypes: true })
+        .filter((entry) => !entry.name.startsWith("."))
+        .sort((left, right) => left.name.localeCompare(right.name));
       for (const entry of entries) {
         if (files.length >= limit) {
           return;
         }
-        const relativePath: any = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-        const absolutePath: any = path.join(absoluteDir, entry.name);
-        const stat: any = fs.lstatSync(absolutePath);
+        const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+        const absolutePath = path.join(absoluteDir, entry.name);
+        const stat = fs.lstatSync(absolutePath);
         if (stat.isSymbolicLink()) {
           throw new Error(`工作空间内存在不允许访问的符号链接：${relativePath}`);
         }
@@ -170,7 +207,7 @@ export function createAgentWorkspaceFileReadApi({
       }
     };
     try {
-      const baseStat: any = fs.lstatSync(base.absolutePath);
+      const baseStat = fs.lstatSync(base.absolutePath);
       if (baseStat.isSymbolicLink()) {
         return { ok: false, status: 400, error: "不允许访问符号链接。" };
       }
@@ -188,8 +225,8 @@ export function createAgentWorkspaceFileReadApi({
           includeHash
         }));
       }
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -198,32 +235,32 @@ export function createAgentWorkspaceFileReadApi({
       basePath: base.relativePath,
       exists: true,
       cacheReceipt: await workspaceListCacheReceipt(access.workspace, base.relativePath),
-      accessReceipt: createAccessReceipt({
+      accessReceipt: accessReceiptFactory({
         workspaceId: access.workspace.workspaceId,
         operationId: input.operationId || "agent_workspaces.files.list",
         path: base.relativePath || "/",
         action: "workspace.list"
       }),
-      paths: files.map((file?: any) : any => file.relativePath),
+      paths: files.map((file) => file.relativePath),
       files,
       count: files.length
     };
   }
 
-  async function workspaceFileMetadata(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function workspaceFileMetadata(input: WorkspaceInput = {}) {
+    const access = accessWorkspace(input);
     if (!access.ok) {
       return access;
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
-      resolved = resolveWorkspacePath(
+      resolved = resolvePath(
         access.workspace,
         input.path || input.relativePath || input.filePath || input.file || "",
         { allowEmpty: false }
       );
-    } catch (error: any) {
-      return { ok: false, status: 400, error: error.message };
+    } catch (error: unknown) {
+      return { ok: false, status: 400, error: errorMessage(error) };
     }
     if (!fs.existsSync(resolved.absolutePath)) {
       return {
@@ -254,30 +291,30 @@ export function createAgentWorkspaceFileReadApi({
     };
   }
 
-  async function downloadWorkspaceFile(input: Record<string, any> = {}) : Promise<any> {
-    const statResult: any = await workspaceFileMetadata(input);
+  async function downloadWorkspaceFile(input: WorkspaceInput = {}) {
+    const statResult = await workspaceFileMetadata(input);
     if (!statResult.ok || !statResult.exists) {
       return statResult.exists === false
         ? { ...statResult, ok: false, status: 404, error: "文件不存在。" }
         : statResult;
     }
-    if (statResult.file.type !== "file") {
+    if (!("type" in statResult.file) || statResult.file.type !== "file") {
       return { ok: false, status: 400, error: "目标路径不是文件。" };
     }
-    const access: any = workspaceForStorage(input);
+    const access = accessWorkspace(input);
     if (!access.ok) {
       return access;
     }
-    const resolved: any = resolveWorkspacePath(access.workspace, statResult.file.relativePath);
-    const content: any = fs.readFileSync(resolved.absolutePath);
-    const cacheReceipt: any = await workspaceDownloadCacheReceipt(access.workspace, statResult.file.relativePath);
+    const resolved = resolvePath(access.workspace, statResult.file.relativePath);
+    const content = fs.readFileSync(resolved.absolutePath);
+    const cacheReceipt = await workspaceDownloadCacheReceipt(access.workspace, statResult.file.relativePath);
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
       ok: true,
       workspaceId: access.workspace.workspaceId,
       file: statResult.file,
       cacheReceipt,
-      accessReceipt: createAccessReceipt({
+      accessReceipt: accessReceiptFactory({
         workspaceId: access.workspace.workspaceId,
         operationId: input.operationId || "workspace.file.read",
         path: statResult.file.relativePath,
@@ -285,28 +322,28 @@ export function createAgentWorkspaceFileReadApi({
       }),
       encoding: "base64",
       contentBase64: content.toString("base64"),
-      content: input.includeText === false ? undefined : content.toString(String(input.textEncoding || input.encoding || "utf8"))
+      content: input.includeText === false ? undefined : content.toString(String(input.textEncoding || input.encoding || "utf8") as BufferEncoding)
     };
   }
 
-  async function openWorkspaceFileReadStream(input: Record<string, any> = {}) : Promise<any> {
-    const access: any = workspaceForStorage(input);
+  async function openWorkspaceFileReadStream(input: WorkspaceInput = {}) {
+    const access = accessWorkspace(input);
     if (!access.ok) {
       return access;
     }
-    let resolved: any;
+    let resolved: ResolvedWorkspacePath;
     try {
-      resolved = resolveWorkspacePath(
+      resolved = resolvePath(
         access.workspace,
         input.path || input.relativePath || input.filePath || "",
         { allowEmpty: false, requireExisting: true, allowDirectory: false }
       );
-    } catch (error: any) {
-      return error?.code === "ENOENT"
+    } catch (error: unknown) {
+      return error && typeof error === "object" && "code" in error && error.code === "ENOENT"
         ? { ok: false, status: 404, error: "文件不存在。" }
-        : { ok: false, status: 400, error: error.message };
+        : { ok: false, status: 400, error: errorMessage(error) };
     }
-    const stat: any = fs.lstatSync(resolved.absolutePath);
+    const stat = fs.lstatSync(resolved.absolutePath);
     if (stat.isSymbolicLink() || !stat.isFile()) {
       return { ok: false, status: 400, error: "目标路径不是文件。" };
     }
@@ -317,13 +354,13 @@ export function createAgentWorkspaceFileReadApi({
       relativePath: resolved.relativePath,
       name: path.posix.basename(resolved.relativePath) || "artifact.bin",
       byteLength: Number(stat.size || 0),
-      accessReceipt: createAccessReceipt({
+      accessReceipt: accessReceiptFactory({
         workspaceId: access.workspace.workspaceId,
         operationId: input.operationId || "workspace.file.read",
         path: resolved.relativePath,
         action: "workspace.read"
       }),
-      open: ({ start, end }: Record<string, any> = {}) : any => fs.createReadStream(resolved.absolutePath, {
+      open: ({ start, end }: { start?: number; end?: number } = {}) => fs.createReadStream(resolved.absolutePath, {
         ...(Number.isSafeInteger(start) ? { start } : {}),
         ...(Number.isSafeInteger(end) ? { end } : {})
       })

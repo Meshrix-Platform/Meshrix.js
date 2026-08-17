@@ -10,23 +10,172 @@ import {
   redactEmbeddedPayloads,
   redactText
 } from "./validation.ts";
+import type { CompactionPolicy } from "./validation.ts";
 import { normalizeMessage, toolResultIds, toolUseIds } from "./graph.ts";
+import type { NormalizedMessage } from "./graph.ts";
 
-export function extractMatches(text?: any, regex?: any, limit: any = 20) : any {
-  return [...new Set<any>((String(text || "").match(regex) || []).map((item?: any) : any => item.trim()).filter(Boolean))].slice(0, limit);
+interface ScoredLine {
+  line: string;
+  index: number;
+  score: number;
 }
 
-export function selectImportantLines(text?: any, limit: any = 8) : any {
-  const lines: any = String(text || "")
+export interface StructuredFacts {
+  constraints: string[];
+  decisions: string[];
+  risks: string[];
+  todos: string[];
+  evidenceRefs: string[];
+  fileRefs: string[];
+  dates: string[];
+  amounts: string[];
+  gatewayRefs: string[];
+}
+
+export interface RequiredAnchor {
+  id: string;
+  text: string;
+}
+
+export interface QualityReport {
+  protocolVersion: string;
+  requiredAnchorCount: number;
+  retainedAnchorCount: number;
+  missingAnchorCount: number;
+  retentionRatio: number;
+  minimumRetentionRatio: number;
+  missingAnchors: RequiredAnchor[];
+  retainedAnchors: RequiredAnchor[];
+  secretLeakCount: number;
+  compressionSavingsRatio: number;
+  passed: boolean;
+}
+
+export interface DeterministicSummary {
+  summary: string;
+  structured: unknown;
+}
+
+export interface ModelSummary {
+  summary: string;
+  structured: Record<string, unknown>;
+}
+
+export interface ApiRoundGroup {
+  apiRoundId: string;
+  messages: NormalizedMessage[];
+  start: number;
+  end: number;
+  totalTokens: number;
+}
+
+export interface ApiRoundSelectionIndex {
+  groups: ApiRoundGroup[];
+  suffixTokens: number[];
+}
+
+export interface SelectedApiRoundSuffix {
+  startGroupIndex: number;
+  totalTokens: number;
+  messages: NormalizedMessage[];
+}
+
+export interface WorkbenchInputResult {
+  messages: NormalizedMessage[];
+  metadata: {
+    droppedGroupCount: number;
+    trimRatio: number;
+    inputTokens: number;
+  };
+}
+
+export interface ReinjectionItem {
+  key: string;
+  value: unknown;
+  tokens: number;
+  priority: number;
+}
+
+export interface ReinjectionDroppedItem {
+  key: string;
+  reason: string;
+  tokens: number;
+}
+
+export interface ReinjectionPayload {
+  items: ReinjectionItem[];
+  usedTokens: number;
+  dropped: ReinjectionDroppedItem[];
+  degraded: boolean;
+  budgetTokens: number;
+}
+
+export interface DehydratedAttachment {
+  type: string;
+  name: string;
+  ref: string;
+  checksum: string;
+  summary: string;
+  dehydrated: true;
+}
+
+export interface DehydratedContentBlock {
+  type: "dehydrated_payload";
+  originalType: string;
+  name: string;
+  ref: string;
+  checksum: string;
+  summary: string;
+  dehydrated: true;
+}
+
+export interface StrippedMessageResult {
+  message: NormalizedMessage;
+  strippedBlockCount: number;
+  dehydratedAttachmentCount: number;
+}
+
+export interface WorkbenchPreparation {
+  messages: NormalizedMessage[];
+  strippedBlockCount: number;
+  dehydratedAttachmentCount: number;
+  changedCount: number;
+  originalTokens: number;
+  preparedTokens: number;
+  savedTokens: number;
+}
+
+export interface SummarizedToolResult {
+  [key: string]: unknown;
+  content: string;
+  text: string;
+  dehydrated: true;
+  tokenEstimate: number;
+}
+
+export interface MicroCompactionResult {
+  messages: NormalizedMessage[];
+  changedCount: number;
+  dehydratedAttachments: DehydratedAttachment[];
+}
+
+export function extractMatches(text: unknown, regex: RegExp, limit = 20) : string[] {
+  return [...new Set<string>(
+    (String(text || "").match(regex) || []).map((item: string) : string => item.trim()).filter(Boolean)
+  )].slice(0, limit);
+}
+
+export function selectImportantLines(text?: unknown, limit = 8) : string[] {
+  const lines: string[] = String(text || "")
     .split(/\r?\n|(?<=[。！？.!?])\s+/u)
-    .map((line?: any) : any => normalizeText(line))
+    .map((line: string) : string => normalizeText(line))
     .filter(Boolean);
-  const heap: any[] = [];
+  const heap: ScoredLine[] = [];
   const boundedLimit: number = Math.max(0, Math.floor(Number(limit) || 0));
-  const betterThan: any = (left?: any, right?: any) : any =>
+  const betterThan = (left: ScoredLine, right: ScoredLine) : boolean =>
     left.score > right.score || (left.score === right.score && left.index < right.index);
-  const worseThan: any = (left?: any, right?: any) : any => betterThan(right, left);
-  const siftUp: any = (start?: any) : any => {
+  const worseThan = (left: ScoredLine, right: ScoredLine) : boolean => betterThan(right, left);
+  const siftUp = (start: number) : void => {
     let index: number = start;
     while (index > 0) {
       const parent: number = Math.floor((index - 1) / 2);
@@ -35,7 +184,7 @@ export function selectImportantLines(text?: any, limit: any = 8) : any {
       index = parent;
     }
   };
-  const siftDown: any = () : any => {
+  const siftDown = () : void => {
     let index: number = 0;
     while (true) {
       const left: number = index * 2 + 1;
@@ -49,7 +198,7 @@ export function selectImportantLines(text?: any, limit: any = 8) : any {
     }
   };
   for (const [index, line] of lines.entries()) {
-    const item: any = {
+    const item: ScoredLine = {
       line,
       index,
       score:
@@ -69,29 +218,29 @@ export function selectImportantLines(text?: any, limit: any = 8) : any {
     }
   }
   return heap
-    .sort((left?: any, right?: any) : any => left.index - right.index)
-    .map((item?: any) : any => item.line);
+    .sort((left: ScoredLine, right: ScoredLine) : number => left.index - right.index)
+    .map((item: ScoredLine) : string => item.line);
 }
 
-export function compactToBudget(text?: any, targetTokens?: any) : any {
-  const safeTarget: any = Math.max(0, Number(targetTokens || 0));
-  const source: any = redactText(String(text || "").trim());
+export function compactToBudget(text?: unknown, targetTokens?: unknown) : string {
+  const safeTarget: number = Math.max(0, Number(targetTokens || 0));
+  const source: string = redactText(String(text || "").trim());
   if (safeTarget === 0) {
     return "";
   }
   if (!source || estimateContextTokens(source) <= safeTarget) {
     return source;
   }
-  const lines: any = selectImportantLines(source, Math.max(6, Math.floor(safeTarget / 90)));
-  let output: any = lines.join("\n");
+  const lines: string[] = selectImportantLines(source, Math.max(6, Math.floor(safeTarget / 90)));
+  let output: string = lines.join("\n");
   while (estimateContextTokens(output) > safeTarget && output.length > 80) {
     output = output.slice(0, Math.floor(output.length * 0.85)).trim();
   }
   return output || source.slice(0, safeTarget * 4);
 }
 
-export function collectStructuredFacts(messages: any = [], runtimeState: Record<string, any> = {}) : any {
-  const joined: any = messages.map((message?: any) : any => `${message.role}: ${message.text}`).join("\n");
+export function collectStructuredFacts(messages: NormalizedMessage[] = [], runtimeState: Record<string, unknown> = {}) : StructuredFacts {
+  const joined: string = messages.map((message: NormalizedMessage) : string => `${message.role}: ${message.text}`).join("\n");
   return {
     constraints: extractMatches(
       joined,
@@ -129,30 +278,30 @@ export function collectStructuredFacts(messages: any = [], runtimeState: Record<
       runtimeState.gatewayReference,
       runtimeState.gatewayPolicyVersion,
       runtimeState.gatewaySourceId
-    ].map((item?: any) : any => String(item || "").trim()).filter(Boolean)
+    ].map((item?: unknown) : string => String(item || "").trim()).filter(Boolean)
   };
 }
 
-export function normalizeRequiredAnchors(input: Record<string, any> = {}, runtimeState: Record<string, any> = {}) : any {
-  const rawAnchors: any[] = [
+export function normalizeRequiredAnchors(input: Record<string, unknown> = {}, runtimeState: Record<string, unknown> = {}) : RequiredAnchor[] {
+  const rawAnchors: unknown[] = [
     ...asArray(input.requiredAnchors),
     ...asArray(input.requiredFacts),
     ...asArray(input.protectedAnchors),
-    ...asArray(input.compactionQuality?.requiredAnchors),
+    ...asArray(asObject(input.compactionQuality).requiredAnchors),
     ...asArray(runtimeState.requiredAnchors)
   ];
-  const seen: any = new Set<any>();
+  const seen: Set<string> = new Set<string>();
   return rawAnchors
-    .map((anchor?: any) : any => {
-      const source: any = typeof anchor === "string"
+    .map((anchor?: unknown) : RequiredAnchor | null => {
+      const source: Record<string, unknown> = typeof anchor === "string"
         ? { text: anchor }
         : asObject(anchor);
-      const text: any = normalizeText(source.text || source.value || source.anchor || source.id || "");
+      const text: string = normalizeText(source.text || source.value || source.anchor || source.id || "");
       if (!text) {
         return null;
       }
-      const id: any = normalizeText(source.id || source.key || text).slice(0, 120);
-      const key: any = `${id}\u001f${text}`.toLowerCase();
+      const id: string = normalizeText(source.id || source.key || text).slice(0, 120);
+      const key: string = `${id}\u001f${text}`.toLowerCase();
       if (seen.has(key)) {
         return null;
       }
@@ -162,19 +311,24 @@ export function normalizeRequiredAnchors(input: Record<string, any> = {}, runtim
         text: compactToBudget(text, 120)
       };
     })
-    .filter(Boolean)
+    .filter((anchor: RequiredAnchor | null) : anchor is RequiredAnchor => anchor !== null)
     .slice(0, 100);
 }
 
-export function retainedTextForQuality({ summary = "", messagesToKeep = [], reinjection = {} }: Record<string, any> = {}) : any {
+export function retainedTextForQuality({
+  summary = "",
+  messagesToKeep = [],
+  reinjection = {}
+}: { summary?: string; messagesToKeep?: unknown[]; reinjection?: Record<string, unknown> } = {}) : string {
   return [
     summary,
-    ...asArray(messagesToKeep).map((message?: any) : any =>
-      typeof message === "string" ? message : (message.text || message.content || JSON.stringify(message))
+    ...asArray(messagesToKeep).map((message?: unknown) : string =>
+      typeof message === "string" ? message : String(asObject(message).text || asObject(message).content || JSON.stringify(message))
     ),
-    ...asArray(reinjection.items).map((item?: any) : any =>
-      typeof item?.value === "string" ? item.value : JSON.stringify(item?.value ?? "")
-    )
+    ...asArray(reinjection.items).map((item?: unknown) : string => {
+      const source = asObject(item);
+      return typeof source.value === "string" ? source.value : JSON.stringify(source.value ?? "");
+    })
   ].join("\n");
 }
 
@@ -185,24 +339,31 @@ export function buildCompactionQualityReport({
   messagesToKeep = [],
   reinjection = {},
   tokenReport = null
-}: Record<string, any> = {}) : any {
-  const requiredAnchors: any = normalizeRequiredAnchors(input, runtimeState);
-  const retainedRawText: any = retainedTextForQuality({ summary, messagesToKeep, reinjection });
-  const retainedText: any = normalizeText(retainedRawText).toLowerCase();
-  const retained: any[] = [];
-  const missing: any[] = [];
+}: {
+  input?: Record<string, unknown>;
+  runtimeState?: Record<string, unknown>;
+  summary?: string;
+  messagesToKeep?: unknown[];
+  reinjection?: unknown;
+  tokenReport?: Record<string, unknown> | null;
+} = {}) : QualityReport {
+  const requiredAnchors: RequiredAnchor[] = normalizeRequiredAnchors(input, runtimeState);
+  const retainedRawText: string = retainedTextForQuality({ summary, messagesToKeep, reinjection: asObject(reinjection) });
+  const retainedText: string = normalizeText(retainedRawText).toLowerCase();
+  const retained: RequiredAnchor[] = [];
+  const missing: RequiredAnchor[] = [];
   for (const anchor of requiredAnchors) {
-    const matched: any = anchor.text && retainedText.includes(normalizeText(anchor.text).toLowerCase());
+    const matched: boolean = Boolean(anchor.text && retainedText.includes(normalizeText(anchor.text).toLowerCase()));
     (matched ? retained : missing).push(anchor);
   }
-  const secretMatches: any = findSensitiveCompactionLeaks(retainedRawText);
-  const minimumRetentionRatio: any = clampNumber(
-    input.compactionQuality?.minimumRetentionRatio,
+  const secretMatches: string[] = findSensitiveCompactionLeaks(retainedRawText);
+  const minimumRetentionRatio: number = clampNumber(
+    asObject(input.compactionQuality).minimumRetentionRatio,
     1,
     0,
     1
   );
-  const retentionRatio: any = requiredAnchors.length
+  const retentionRatio: number = requiredAnchors.length
     ? Number((retained.length / requiredAnchors.length).toFixed(6))
     : 1;
   return {
@@ -215,9 +376,17 @@ export function buildCompactionQualityReport({
     missingAnchors: missing.slice(0, 20),
     retainedAnchors: retained.slice(0, 20),
     secretLeakCount: secretMatches.length,
-    compressionSavingsRatio: Number(tokenReport?.savingsRatio || 0),
+    compressionSavingsRatio: Number(asObject(tokenReport).savingsRatio || 0),
     passed: retentionRatio >= minimumRetentionRatio && secretMatches.length === 0
   };
+}
+
+interface MessageSummaryNote {
+  id: string;
+  role: string;
+  apiRoundId: string;
+  toolIds: string[];
+  summary: string;
 }
 
 export function buildDeterministicSummary({
@@ -225,11 +394,16 @@ export function buildDeterministicSummary({
   runtimeState = {},
   targetTokens,
   compactedRange = {}
-}: Record<string, any>) : any {
-  const facts: any = collectStructuredFacts(messages, runtimeState);
-  const messageSummaries: any = messages.slice(-60).map((message?: any) : any => {
-    const lines: any = selectImportantLines(message.text, 4);
-    const toolIds: any[] = [...toolUseIds(message), ...toolResultIds(message)];
+}: {
+  messages?: NormalizedMessage[];
+  runtimeState?: Record<string, unknown>;
+  targetTokens?: unknown;
+  compactedRange?: Record<string, unknown>;
+}) : DeterministicSummary {
+  const facts: StructuredFacts = collectStructuredFacts(messages, runtimeState);
+  const messageSummaries: MessageSummaryNote[] = messages.slice(-60).map((message: NormalizedMessage) : MessageSummaryNote => {
+    const lines: string[] = selectImportantLines(message.text, 4);
+    const toolIds: string[] = [...toolUseIds(message), ...toolResultIds(message)];
     return {
       id: message.id,
       role: message.role,
@@ -237,8 +411,8 @@ export function buildDeterministicSummary({
       toolIds,
       summary: compactToBudget(lines.join("\n") || message.text, 180)
     };
-  }).filter((item?: any) : any => item.summary || item.toolIds.length);
-  const structured: Record<string, any> = {
+  }).filter((item: MessageSummaryNote) : boolean => Boolean(item.summary || item.toolIds.length > 0));
+  const structured: Record<string, unknown> = {
     kind: "context_compaction_summary",
     sourceRange: compactedRange,
     taskBrief: runtimeState.taskBrief || runtimeState.task || "",
@@ -246,7 +420,7 @@ export function buildDeterministicSummary({
     facts,
     messages: messageSummaries
   };
-  const summary: any = [
+  const summary: string = [
     "Context compaction summary. This is auxiliary memory, not canonical evidence.",
     `Source range: ${compactedRange.startMessageId || ""}..${compactedRange.endMessageId || ""}`,
     runtimeState.taskBrief ? `Current task: ${runtimeState.taskBrief}` : "",
@@ -258,7 +432,7 @@ export function buildDeterministicSummary({
     facts.fileRefs.length ? `File refs: ${facts.fileRefs.join(", ")}` : "",
     facts.gatewayRefs.length ? `Gateway refs: ${facts.gatewayRefs.join(", ")}` : "",
     "Message notes:",
-    ...messageSummaries.slice(-24).map((item?: any) : any => `- [${item.role} ${item.id}] ${item.summary}`)
+    ...messageSummaries.slice(-24).map((item: MessageSummaryNote) : string => `- [${item.role} ${item.id}] ${item.summary}`)
   ].filter(Boolean).join("\n");
   return {
     summary: compactToBudget(summary, targetTokens),
@@ -266,32 +440,34 @@ export function buildDeterministicSummary({
   };
 }
 
-export function parseModelSummary(value?: any) : any {
-  const text: any = String(value?.summary || value?.answer || value?.text || value || "").trim();
+export function parseModelSummary(value?: unknown) : ModelSummary {
+  const container: Record<string, unknown> = value && typeof value === "object" ? asObject(value) : {};
+  const text: string = String(container.summary || container.answer || container.text || value || "").trim();
   if (!text) {
     throw new Error("model_compaction_empty");
   }
-  const fenced: any = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const candidate: any = fenced || text.match(/\{[\s\S]*\}/)?.[0] || "";
+  const fenced: string | undefined = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const candidate: string = fenced || text.match(/\{[\s\S]*\}/)?.[0] || "";
   if (!candidate) {
     throw new Error("model_compaction_json_missing");
   }
-  const parsed: any = JSON.parse(candidate);
+  const parsed: unknown = JSON.parse(candidate);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("model_compaction_schema_invalid");
   }
-  if (typeof parsed.summary !== "string" || !parsed.summary.trim()) {
+  const parsedRecord: Record<string, unknown> = parsed as Record<string, unknown>;
+  if (typeof parsedRecord.summary !== "string" || !parsedRecord.summary.trim()) {
     throw new Error("model_compaction_summary_missing");
   }
   return {
-    summary: parsed.summary,
-    structured: parsed
+    summary: parsedRecord.summary,
+    structured: parsedRecord
   };
 }
 
-export function messagesByApiRound(messages: any = []) : any {
-  const groups: any[] = [];
-  let current: any = null;
+export function messagesByApiRound(messages: NormalizedMessage[] = []) : ApiRoundGroup[] {
+  const groups: ApiRoundGroup[] = [];
+  let current: ApiRoundGroup | null = null;
   for (const [messageIndex, message] of messages.entries()) {
     if (!current || current.apiRoundId !== message.apiRoundId) {
       current = {
@@ -310,17 +486,17 @@ export function messagesByApiRound(messages: any = []) : any {
   return groups;
 }
 
-export function createApiRoundSelectionIndex(messages: any = []) : any {
-  const groups: any[] = messagesByApiRound(messages);
-  const suffixTokens: number[] = new Array(groups.length + 1).fill(0);
+export function createApiRoundSelectionIndex(messages: NormalizedMessage[] = []) : ApiRoundSelectionIndex {
+  const groups: ApiRoundGroup[] = messagesByApiRound(messages);
+  const suffixTokens: number[] = Array.from({ length: groups.length + 1 }, () : number => 0);
   for (let index: number = groups.length - 1; index >= 0; index -= 1) {
     suffixTokens[index] = suffixTokens[index + 1] + Math.max(0, Number(groups[index].totalTokens) || 0);
   }
   return Object.freeze({ groups, suffixTokens });
 }
 
-function selectApiRoundSuffix(selectionIndex: any, maxInputTokens: any = 0, minimumGroupIndex: any = 0) : any {
-  const groups: any[] = selectionIndex.groups;
+function selectApiRoundSuffix(selectionIndex: ApiRoundSelectionIndex, maxInputTokens = 0, minimumGroupIndex = 0) : SelectedApiRoundSuffix {
+  const groups: ApiRoundGroup[] = selectionIndex.groups;
   const suffixTokens: number[] = selectionIndex.suffixTokens;
   let low: number = Math.max(0, Math.min(groups.length, Number(minimumGroupIndex) || 0));
   let high: number = groups.length;
@@ -332,40 +508,39 @@ function selectApiRoundSuffix(selectionIndex: any, maxInputTokens: any = 0, mini
   return {
     startGroupIndex: low,
     totalTokens: suffixTokens[low],
-    messages: low < groups.length ? groups.slice(low).flatMap((group?: any) : any => group.messages) : []
+    messages: low < groups.length ? groups.slice(low).flatMap((group: ApiRoundGroup) : NormalizedMessage[] => group.messages) : []
   };
 }
 
 export function modelInputForAttempt(
-  messages: any = [],
-  attempt: any = 0,
-  maxInputTokens: any = 0,
-  selectionIndex: any = null
-) : any {
+  messages: NormalizedMessage[] = [],
+  attempt = 0,
+  maxInputTokens = 0,
+  selectionIndex: ApiRoundSelectionIndex | null = null
+) : NormalizedMessage[] {
   if (!Number.isFinite(Number(maxInputTokens)) || Number(maxInputTokens) <= 0) {
     return [];
   }
-  const index: any = selectionIndex || createApiRoundSelectionIndex(messages);
-  const groups: any[] = index.groups;
+  const index: ApiRoundSelectionIndex = selectionIndex || createApiRoundSelectionIndex(messages);
+  const groups: ApiRoundGroup[] = index.groups;
   return selectApiRoundSuffix(index, maxInputTokens, Math.min(Math.max(0, Number(attempt) || 0), Math.max(0, groups.length - 1))).messages;
 }
 
 export function workbenchInputForAttempt(
-  messages: any = [],
-  attempt: any = 0,
-  maxInputTokens: any = 0,
-  trimRatio: any = 0,
-  selectionIndex: any = null
-) : any {
-  const index: any = selectionIndex || createApiRoundSelectionIndex(messages);
-  const groups: any[] = index.groups;
+  messages: NormalizedMessage[] = [],
+  attempt = 0,
+  maxInputTokens = 0,
+  trimRatio = 0,
+  selectionIndex: ApiRoundSelectionIndex | null = null
+) : WorkbenchInputResult {
+  const index: ApiRoundSelectionIndex = selectionIndex || createApiRoundSelectionIndex(messages);
+  const groups: ApiRoundGroup[] = index.groups;
   if (!Number.isFinite(Number(maxInputTokens)) || Number(maxInputTokens) <= 0) {
     return {
       messages: [],
       metadata: { droppedGroupCount: groups.length, trimRatio, inputTokens: 0 }
     };
   }
-  const originalGroupCount: any = groups.length;
   let minimumGroupIndex: number = 0;
   if (attempt > 0 && groups.length > 1) {
     minimumGroupIndex = Math.min(
@@ -373,8 +548,8 @@ export function workbenchInputForAttempt(
       Math.max(1, Math.ceil(groups.length * trimRatio * attempt))
     );
   }
-  const selectedSuffix: any = selectApiRoundSuffix(index, maxInputTokens, minimumGroupIndex);
-  const selected: any = selectedSuffix.messages;
+  const selectedSuffix: SelectedApiRoundSuffix = selectApiRoundSuffix(index, maxInputTokens, minimumGroupIndex);
+  const selected: NormalizedMessage[] = selectedSuffix.messages;
   return {
     messages: selected,
     metadata: {
@@ -385,8 +560,13 @@ export function workbenchInputForAttempt(
   };
 }
 
-export function buildModelPrompt({ messages, runtimeState, targetTokens, compactedRange }: Record<string, any>) : any {
-  const payload: any = messages.map((message?: any) : any => ({
+export function buildModelPrompt({ messages, runtimeState, targetTokens, compactedRange }: {
+  messages: NormalizedMessage[];
+  runtimeState: Record<string, unknown>;
+  targetTokens: number;
+  compactedRange: Record<string, unknown>;
+}) : string {
+  const payload: Record<string, unknown>[] = messages.map((message: NormalizedMessage) : Record<string, unknown> => ({
     id: message.id,
     role: message.role,
     apiRoundId: message.apiRoundId,
@@ -406,38 +586,47 @@ export function buildModelPrompt({ messages, runtimeState, targetTokens, compact
   ].filter(Boolean).join("\n");
 }
 
-export function buildReinjectionPayload({ input = {}, runtimeState = {}, policy }: Record<string, any>) : any {
-  const source: Record<string, any> = {
+interface ReinjectionCandidate {
+  key: string;
+  value: unknown;
+  priority: number;
+}
+
+export function buildReinjectionPayload({ input = {}, runtimeState = {}, policy }: {
+  input?: Record<string, unknown>;
+  runtimeState?: Record<string, unknown>;
+  policy: CompactionPolicy;
+}) : ReinjectionPayload {
+  const source: Record<string, unknown> = {
     ...asObject(input.runtimeState),
     ...runtimeState
   };
-  const candidates: any = [
-    ["taskBrief", source.taskBrief || input.taskBrief || input.task || input.query || "", 100],
-    ["activePlan", source.activePlan || input.activePlan || input.plan || "", 95],
-    ["activeSkill", source.activeSkill || input.activeSkill || "", 88],
-    ["activeToolUseIds", source.activeToolUseIds || input.activeToolUseIds || "", 84],
-    ["openToolCalls", source.openToolCalls || input.openToolCalls || "", 82],
-    ["enabledTools", source.enabledTools || input.enabledTools || input.tools || "", 80],
-    ["operationCatalog", source.operationCatalog || input.operationCatalog || "", 75],
-    ["currentFiles", source.currentFiles || input.currentFiles || "", 70],
-    ["fileAttachments", source.fileAttachments || input.fileAttachments || "", 68],
-    ["gatewayReference", source.gatewayReference || input.gatewayReference || "", 65],
-    ["mcpServers", source.mcpServers || input.mcpServers || "", 64],
-    ["deferredToolDeltas", source.deferredToolDeltas || input.deferredToolDeltas || "", 62],
-    ["maintenanceRun", source.maintenanceRun || input.maintenanceRun || "", 60],
-    ["recentError", source.recentError || input.recentError || "", 55],
-    ["worktreeState", source.worktreeState || input.worktreeState || "", 54],
-    ["userConstraints", source.userConstraints || input.userConstraints || "", 50]
+  const candidates: ReinjectionCandidate[] = [
+    { key: "taskBrief", value: redactCompactionValue(source.taskBrief || input.taskBrief || input.task || input.query || ""), priority: 100 },
+    { key: "activePlan", value: redactCompactionValue(source.activePlan || input.activePlan || input.plan || ""), priority: 95 },
+    { key: "activeSkill", value: redactCompactionValue(source.activeSkill || input.activeSkill || ""), priority: 88 },
+    { key: "activeToolUseIds", value: redactCompactionValue(source.activeToolUseIds || input.activeToolUseIds || ""), priority: 84 },
+    { key: "openToolCalls", value: redactCompactionValue(source.openToolCalls || input.openToolCalls || ""), priority: 82 },
+    { key: "enabledTools", value: redactCompactionValue(source.enabledTools || input.enabledTools || input.tools || ""), priority: 80 },
+    { key: "operationCatalog", value: redactCompactionValue(source.operationCatalog || input.operationCatalog || ""), priority: 75 },
+    { key: "currentFiles", value: redactCompactionValue(source.currentFiles || input.currentFiles || ""), priority: 70 },
+    { key: "fileAttachments", value: redactCompactionValue(source.fileAttachments || input.fileAttachments || ""), priority: 68 },
+    { key: "gatewayReference", value: redactCompactionValue(source.gatewayReference || input.gatewayReference || ""), priority: 65 },
+    { key: "mcpServers", value: redactCompactionValue(source.mcpServers || input.mcpServers || ""), priority: 64 },
+    { key: "deferredToolDeltas", value: redactCompactionValue(source.deferredToolDeltas || input.deferredToolDeltas || ""), priority: 62 },
+    { key: "maintenanceRun", value: redactCompactionValue(source.maintenanceRun || input.maintenanceRun || ""), priority: 60 },
+    { key: "recentError", value: redactCompactionValue(source.recentError || input.recentError || ""), priority: 55 },
+    { key: "worktreeState", value: redactCompactionValue(source.worktreeState || input.worktreeState || ""), priority: 54 },
+    { key: "userConstraints", value: redactCompactionValue(source.userConstraints || input.userConstraints || ""), priority: 50 }
   ]
-    .map(([key, value, priority]: any[]) : any => ({ key, value: redactCompactionValue(value), priority }))
-    .filter((item?: any) : any => item.value && estimateContextTokens(item.value) > 1);
+    .filter((item: ReinjectionCandidate) : boolean => Boolean(item.value && estimateContextTokens(item.value) > 1));
 
-  const selected: any[] = [];
-  const dropped: any[] = [];
-  let usedTokens: any = 0;
-  for (const item of candidates.sort((left?: any, right?: any) : any => right.priority - left.priority)) {
-    const tokens: any = estimateContextTokens(item.value);
-    if (usedTokens + tokens > policy.reinjectionBudgetTokens) {
+  const selected: ReinjectionItem[] = [];
+  const dropped: ReinjectionDroppedItem[] = [];
+  let usedTokens: number = 0;
+  for (const item of candidates.sort((left: ReinjectionCandidate, right: ReinjectionCandidate) : number => right.priority - left.priority)) {
+    const tokens: number = estimateContextTokens(item.value);
+    if (usedTokens + tokens > Number(policy.reinjectionBudgetTokens || 0)) {
       dropped.push({ key: item.key, reason: "reinjection_budget_exceeded", tokens });
       continue;
     }
@@ -449,100 +638,102 @@ export function buildReinjectionPayload({ input = {}, runtimeState = {}, policy 
     usedTokens,
     dropped,
     degraded: dropped.length > 0,
-    budgetTokens: policy.reinjectionBudgetTokens
+    budgetTokens: Number(policy.reinjectionBudgetTokens || 0)
   };
 }
 
-export function dehydrateAttachment(attachment: Record<string, any> = {}, policy?: any) : any {
-  const ref: any = attachment.ref || attachment.artifactRef || attachment.path || attachment.url || attachment.name || attachment.fileName || "";
-  const summary: any = compactToBudget(
+export function dehydrateAttachment(attachment: Record<string, unknown> = {}, policy: CompactionPolicy) : DehydratedAttachment {
+  const ref: unknown = attachment.ref || attachment.artifactRef || attachment.path || attachment.url || attachment.name || attachment.fileName || "";
+  const summary: string = compactToBudget(
     attachment.summary || attachment.text || attachment.description || JSON.stringify(attachment),
-    policy.maxAttachmentTokens
+    Number(policy.maxAttachmentTokens || 0)
   );
   return {
-    type: attachment.type || attachment.mediaType || "attachment",
-    name: attachment.name || attachment.fileName || "",
+    type: String(attachment.type || attachment.mediaType || "attachment"),
+    name: String(attachment.name || attachment.fileName || ""),
     ref: redactText(String(ref || "")),
-    checksum: attachment.checksum || attachment.sha256 || hashValue({ ref, summary }, 16),
+    checksum: String(attachment.checksum || attachment.sha256 || hashValue({ ref, summary }, 16)),
     summary,
     dehydrated: true
   };
 }
 
-export function isHeavyContentBlock(value: Record<string, any> = {}) : any {
-  const block: any = asObject(value);
-  const type: any = String(block.type || block.mediaType || block.kind || "").toLowerCase();
+export function isHeavyContentBlock(value: Record<string, unknown> = {}) : boolean {
+  const block: Record<string, unknown> = asObject(value);
+  const type: string = String(block.type || block.mediaType || block.kind || "").toLowerCase();
   return /image|document|attachment|binary|pdf|audio|video/.test(type) ||
     Boolean(block.data || block.dataBase64 || block.base64 || block.bytes || block.buffer);
 }
 
-export function dehydrateContentBlock(block: Record<string, any> = {}, policy?: any) : any {
-  const source: any = asObject(block);
-  const ref: any = source.ref || source.path || source.url || source.name || source.fileName || "";
-  const originalType: any = String(source.type || source.mediaType || source.kind || "attachment");
-  const summary: any = compactToBudget(
+export function dehydrateContentBlock(block: Record<string, unknown> = {}, policy: CompactionPolicy) : DehydratedContentBlock {
+  const source: Record<string, unknown> = asObject(block);
+  const ref: unknown = source.ref || source.path || source.url || source.name || source.fileName || "";
+  const originalType: string = String(source.type || source.mediaType || source.kind || "attachment");
+  const summary: string = compactToBudget(
     source.summary || source.text || source.description || source.title || JSON.stringify({
       type: originalType,
       name: source.name || source.fileName || "",
       ref
     }),
-    policy.maxAttachmentTokens
+    Number(policy.maxAttachmentTokens || 0)
   );
   return {
     type: "dehydrated_payload",
     originalType,
-    name: source.name || source.fileName || "",
+    name: String(source.name || source.fileName || ""),
     ref: redactText(String(ref || "")),
-    checksum: source.checksum || source.sha256 || hashValue({ originalType, ref, summary }, 16),
+    checksum: String(source.checksum || source.sha256 || hashValue({ originalType, ref, summary }, 16)),
     summary,
     dehydrated: true
   };
 }
 
-export function stripHeavyPayloadsFromMessage(message: Record<string, any> = {}, policy?: any) : any {
-  let strippedBlockCount: any = 0;
-  let dehydratedAttachmentCount: any = 0;
-  const next: Record<string, any> = {
+export function stripHeavyPayloadsFromMessage(message: Record<string, unknown> = {}, policy: CompactionPolicy) : StrippedMessageResult {
+  let strippedBlockCount: number = 0;
+  let dehydratedAttachmentCount: number = 0;
+  const next: Record<string, unknown> = {
     ...message,
     text: redactEmbeddedPayloads(message.text || "")
   };
 
   if (Array.isArray(message.content)) {
-    next.content = message.content.map((item?: any) : any => {
-      if (isHeavyContentBlock(item)) {
+    next.content = message.content.map((item?: unknown) : unknown => {
+      if (isHeavyContentBlock(asObject(item))) {
         strippedBlockCount += 1;
-        return dehydrateContentBlock(item, policy);
+        return dehydrateContentBlock(asObject(item), policy);
       }
       if (typeof item === "string") {
         return redactEmbeddedPayloads(item);
       }
-      if (item && typeof item === "object") {
+      const source = asObject(item);
+      if (Object.keys(source).length > 0) {
         return {
-          ...item,
-          text: item.text ? redactEmbeddedPayloads(item.text) : item.text,
-          content: typeof item.content === "string" ? redactEmbeddedPayloads(item.content) : item.content
+          ...source,
+          text: source.text ? redactEmbeddedPayloads(String(source.text)) : source.text,
+          content: typeof source.content === "string" ? redactEmbeddedPayloads(source.content) : source.content
         };
       }
       return item;
     });
   } else if (typeof message.content === "string") {
     next.content = redactEmbeddedPayloads(message.content);
-  } else if (isHeavyContentBlock(message.content)) {
+  } else if (isHeavyContentBlock(asObject(message.content))) {
     strippedBlockCount += 1;
-    next.content = dehydrateContentBlock(message.content, policy);
+    next.content = dehydrateContentBlock(asObject(message.content), policy);
   }
 
   if (Array.isArray(message.blocks)) {
-    next.blocks = message.blocks.map((block?: any) : any => {
-      if (isHeavyContentBlock(block)) {
+    next.blocks = message.blocks.map((block?: unknown) : unknown => {
+      if (isHeavyContentBlock(asObject(block))) {
         strippedBlockCount += 1;
-        return dehydrateContentBlock(block, policy);
+        return dehydrateContentBlock(asObject(block), policy);
       }
-      if (block && typeof block === "object") {
+      const source = asObject(block);
+      if (Object.keys(source).length > 0) {
         return {
-          ...block,
-          text: block.text ? redactEmbeddedPayloads(block.text) : block.text,
-          content: typeof block.content === "string" ? redactEmbeddedPayloads(block.content) : block.content
+          ...source,
+          text: source.text ? redactEmbeddedPayloads(String(source.text)) : source.text,
+          content: typeof source.content === "string" ? redactEmbeddedPayloads(source.content) : source.content
         };
       }
       return block;
@@ -550,40 +741,40 @@ export function stripHeavyPayloadsFromMessage(message: Record<string, any> = {},
   }
 
   if (Array.isArray(message.attachments)) {
-    next.attachments = message.attachments.map((attachment?: any) : any => {
-      if (isHeavyContentBlock(attachment) || estimateContextTokens(attachment) > policy.maxAttachmentTokens) {
+    next.attachments = message.attachments.map((attachment?: unknown) : unknown => {
+      if (isHeavyContentBlock(asObject(attachment)) || estimateContextTokens(attachment) > Number(policy.maxAttachmentTokens || 0)) {
         dehydratedAttachmentCount += 1;
-        return dehydrateAttachment(attachment, policy);
+        return dehydrateAttachment(asObject(attachment), policy);
       }
       return attachment;
     });
   }
 
-  const normalized: any = normalizeMessage(next, message.index || 0);
+  const normalized: NormalizedMessage = normalizeMessage(next, Number(message.index || 0));
   return {
     message: {
       ...normalized,
-      index: message.index,
-      apiRoundId: message.apiRoundId,
-      id: message.id
+      index: Number(message.index ?? normalized.index),
+      apiRoundId: String(message.apiRoundId ?? normalized.apiRoundId),
+      id: String(message.id ?? normalized.id)
     },
     strippedBlockCount,
     dehydratedAttachmentCount
   };
 }
 
-export function prepareWorkbenchMessages(messages: any = [], policy?: any) : any {
-  const prepared: any[] = [];
-  let strippedBlockCount: any = 0;
-  let dehydratedAttachmentCount: any = 0;
+export function prepareWorkbenchMessages(messages: NormalizedMessage[] = [], policy: CompactionPolicy) : WorkbenchPreparation {
+  const prepared: NormalizedMessage[] = [];
+  let strippedBlockCount: number = 0;
+  let dehydratedAttachmentCount: number = 0;
   for (const message of messages) {
-    const result: any = stripHeavyPayloadsFromMessage(message, policy);
+    const result: StrippedMessageResult = stripHeavyPayloadsFromMessage(message, policy);
     strippedBlockCount += result.strippedBlockCount;
     dehydratedAttachmentCount += result.dehydratedAttachmentCount;
     prepared.push(result.message);
   }
-  const originalTokens: any = messages.reduce((total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0), 0);
-  const preparedTokens: any = prepared.reduce((total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0), 0);
+  const originalTokens: number = messages.reduce((total: number, message: NormalizedMessage) : number => total + Math.max(1, Number(message.tokenEstimate) || 0), 0);
+  const preparedTokens: number = prepared.reduce((total: number, message: NormalizedMessage) : number => total + Math.max(1, Number(message.tokenEstimate) || 0), 0);
   return {
     messages: prepared,
     strippedBlockCount,
@@ -595,47 +786,52 @@ export function prepareWorkbenchMessages(messages: any = [], policy?: any) : any
   };
 }
 
-export function summarizeToolResult(message: Record<string, any> = {}, policy?: any) : any {
-  const text: any = message.text || "";
+export function summarizeToolResult(message: Record<string, unknown> = {}, policy: CompactionPolicy) : NormalizedMessage {
+  const text: string = compactToBudget(message.text || "", Number(policy.maxToolResultTokens || 0));
   return {
-    ...message,
-    content: `[tool_result dehydrated: ${compactToBudget(text, policy.maxToolResultTokens)}]`,
-    text: compactToBudget(text, policy.maxToolResultTokens),
-    dehydrated: true,
-    originalTokenEstimate: message.tokenEstimate,
-    tokenEstimate: Math.min(message.tokenEstimate, policy.maxToolResultTokens)
+    ...normalizeMessage({
+      ...message,
+      content: `[tool_result dehydrated: ${text}]`,
+      text,
+      dehydrated: true,
+      originalTokenEstimate: message.tokenEstimate
+    }, Number(message.index || 0)),
+    tokenEstimate: Math.min(Number(message.tokenEstimate), Number(policy.maxToolResultTokens || 0))
   };
 }
 
-export function microCompactMessages(messages: any = [], { policy, activeToolUseIds = [] }: Record<string, any> = {}) : any {
-  if (!policy.microCompaction) {
+export function microCompactMessages(
+  messages: NormalizedMessage[] = [],
+  { policy, activeToolUseIds = [] }: { policy?: CompactionPolicy; activeToolUseIds?: unknown[] } = {}
+) : MicroCompactionResult {
+  if (!policy?.microCompaction) {
     return {
       messages,
       changedCount: 0,
       dehydratedAttachments: []
     };
   }
-  const activeSet: any = new Set<any>(asArray(activeToolUseIds).map((item?: any) : any => String(item)));
-  const protectedStart: any = Math.max(0, messages.length - policy.recentMessageProtectionCount);
-  const dehydratedAttachments: any[] = [];
-  const compacted: any = messages.map((message?: any, index?: any) : any => {
-    let next: any = message;
-    const messageToolIds: any[] = [...toolUseIds(message), ...toolResultIds(message)];
-    const isProtected: any = index >= protectedStart ||
-      messageToolIds.some((id?: any) : any => activeSet.has(id)) ||
-      (/error|failed|failure|异常|失败/i.test(message.text) && index >= Math.max(0, messages.length - policy.recentMessageProtectionCount * 2));
+  const activeSet: Set<string> = new Set<string>(asArray(activeToolUseIds).map((item?: unknown) : string => String(item)));
+  const protectedStart: number = Math.max(0, messages.length - Number(policy.recentMessageProtectionCount || 0));
+  const dehydratedAttachments: DehydratedAttachment[] = [];
+  const compacted: NormalizedMessage[] = messages.map((message: NormalizedMessage, index: number) : NormalizedMessage => {
+    let next: NormalizedMessage = message;
+    const messageToolIds: string[] = [...toolUseIds(message), ...toolResultIds(message)];
+    const isProtected: boolean = index >= protectedStart ||
+      messageToolIds.some((id: string) : boolean => activeSet.has(id)) ||
+      (/error|failed|failure|异常|失败/i.test(message.text) && index >= Math.max(0, messages.length - Number(policy.recentMessageProtectionCount || 0) * 2));
 
-    if (!isProtected && (message.role === "tool" || message.type === "tool_result") && message.tokenEstimate > policy.maxToolResultTokens) {
+    if (!isProtected && (message.role === "tool" || message.type === "tool_result") && message.tokenEstimate > Number(policy.maxToolResultTokens || 0)) {
       next = summarizeToolResult(message, policy);
     }
 
     if (policy.allowAttachmentDehydration && asArray(next.attachments).length) {
-      const attachments: any = next.attachments.map((attachment?: any) : any => {
-        const tokens: any = estimateContextTokens(attachment);
-        if (tokens <= policy.maxAttachmentTokens) {
+      const attachments: unknown[] = asArray(next.attachments).map((attachment?: unknown) : unknown => {
+        const tokens: number = estimateContextTokens(attachment);
+        if (tokens <= Number(policy.maxAttachmentTokens || 0)) {
           return attachment;
         }
-        const dehydrated: any = dehydrateAttachment(attachment, policy);
+        const dehydrated: DehydratedAttachment = dehydrateAttachment(asObject(attachment), policy);
         dehydratedAttachments.push(dehydrated);
         return dehydrated;
       });
@@ -646,7 +842,7 @@ export function microCompactMessages(messages: any = [], { policy, activeToolUse
     }
     return next;
   });
-  const changedCount: any = compacted.filter((message?: any, index?: any) : any => message !== messages[index]).length;
+  const changedCount: number = compacted.filter((message: NormalizedMessage, index: number) : boolean => message !== messages[index]).length;
   return {
     messages: compacted,
     changedCount,

@@ -4,7 +4,30 @@ import path from "node:path";
 import { assertPathWithinRootSync } from "@meshrix/foundation/security/local-path-boundary";
 import { WORKSPACE_FILE_MAX_BYTES } from "./agent-workspace-core.ts";
 
-function boundedPath(root?: any, absolutePath?: any, options: Record<string, any> = {}) : any {
+interface LocalDirectoryFsError extends Error { code?: string; status?: number }
+interface BoundedPathOptions {
+  label?: string; allowMissing?: boolean; requireExisting?: boolean;
+  allowDirectory?: boolean; allowFile?: boolean; allowSpecial?: boolean;
+}
+interface ReadOrdinaryFileOptions { maximumBytes?: number; errorPrefix?: string }
+
+function errorCode(error: unknown): string {
+  return error !== null && typeof error === "object" && "code" in error ? String(error.code || "") : "";
+}
+
+function localDirectoryFsError(message: string, code: string, status?: number): LocalDirectoryFsError {
+  const error: LocalDirectoryFsError = new Error(message);
+  error.code = code;
+  if (status !== undefined) error.status = status;
+  return error;
+}
+
+function requiredStat(stat: fs.Stats | null): fs.Stats {
+  if (!stat) throw localDirectoryFsError("本机目录路径状态不可用。", "local_directory_path_state_unavailable", 409);
+  return stat;
+}
+
+function boundedPath(root: string, absolutePath: string, options: BoundedPathOptions = {}) {
   return assertPathWithinRootSync(root, absolutePath, {
     allowSpecial: false,
     ...options
@@ -12,44 +35,36 @@ function boundedPath(root?: any, absolutePath?: any, options: Record<string, any
 }
 
 export function readOrdinaryFileNoFollow(
-  root?: any,
-  absolutePath?: any,
-  { maximumBytes = WORKSPACE_FILE_MAX_BYTES, errorPrefix = "local_directory_file" }: Record<string, any> = {}
-) : any {
-  const bounded: any = boundedPath(root, absolutePath, {
+  root: string,
+  absolutePath: string,
+  { maximumBytes = WORKSPACE_FILE_MAX_BYTES, errorPrefix = "local_directory_file" }: ReadOrdinaryFileOptions = {}
+): { content: Buffer; stat: fs.Stats } {
+  const bounded = boundedPath(root, absolutePath, {
     label: "本机目录普通文件",
     allowMissing: false,
     requireExisting: true,
     allowDirectory: false,
     allowFile: true
   });
-  let descriptor: any;
+  let descriptor: number | undefined;
   try {
     descriptor = fs.openSync(bounded.absolutePath, fs.constants.O_RDONLY | Number(fs.constants.O_NOFOLLOW || 0));
-    const before: any = fs.fstatSync(descriptor);
+    const before = fs.fstatSync(descriptor);
     if (!before.isFile()) {
-      const error: Error & Record<string, any> = new Error("本机目录路径不是普通文件。");
-      error.code = `${errorPrefix}_not_file`;
-      throw error;
+      throw localDirectoryFsError("本机目录路径不是普通文件。", `${errorPrefix}_not_file`);
     }
     if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0 || before.size > maximumBytes) {
-      const error: Error & Record<string, any> = new Error("本机目录文件超过大小限制。");
-      error.code = `${errorPrefix}_limit`;
-      error.status = 413;
-      throw error;
+      throw localDirectoryFsError("本机目录文件超过大小限制。", `${errorPrefix}_limit`, 413);
     }
-    const content: any = fs.readFileSync(descriptor);
-    const after: any = fs.fstatSync(descriptor);
+    const content = fs.readFileSync(descriptor);
+    const after = fs.fstatSync(descriptor);
     if (
       before.dev !== after.dev ||
       before.ino !== after.ino ||
       before.size !== after.size ||
       before.mtimeMs !== after.mtimeMs
     ) {
-      const error: Error & Record<string, any> = new Error("本机目录文件在读取期间发生变化。");
-      error.code = `${errorPrefix}_changed`;
-      error.status = 409;
-      throw error;
+      throw localDirectoryFsError("本机目录文件在读取期间发生变化。", `${errorPrefix}_changed`, 409);
     }
     return { content, stat: after };
   } finally {
@@ -57,16 +72,16 @@ export function readOrdinaryFileNoFollow(
   }
 }
 
-export function ensureDirectorySafely(root?: any, absolutePath?: any, mode: any = 0o700) : any {
-  const resolvedRoot: any = path.resolve(root);
-  const resolvedTarget: any = path.resolve(absolutePath);
-  const relative: any = path.relative(resolvedRoot, resolvedTarget);
-  const segments: any = relative ? relative.split(path.sep).filter(Boolean) : [];
-  let current: any = resolvedRoot;
-  let targetCreated: any = false;
+export function ensureDirectorySafely(root: string, absolutePath: string, mode = 0o700) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedTarget = path.resolve(absolutePath);
+  const relative = path.relative(resolvedRoot, resolvedTarget);
+  const segments = relative ? relative.split(path.sep).filter(Boolean) : [];
+  let current = resolvedRoot;
+  let targetCreated = false;
   for (const [index, segment] of segments.entries()) {
     current = path.join(current, segment);
-    const before: any = boundedPath(resolvedRoot, current, {
+    const before = boundedPath(resolvedRoot, current, {
       label: "本机目录 mutation 目录",
       allowMissing: true,
       allowDirectory: true,
@@ -83,8 +98,8 @@ export function ensureDirectorySafely(root?: any, absolutePath?: any, mode: any 
       try {
         fs.mkdirSync(current, { recursive: false, mode: index === segments.length - 1 ? Number(mode) & 0o777 : 0o700 });
         if (index === segments.length - 1) targetCreated = true;
-      } catch (error: any) {
-        if (error?.code !== "EEXIST") throw error;
+      } catch (error: unknown) {
+        if (errorCode(error) !== "EEXIST") throw error;
       }
     }
     boundedPath(resolvedRoot, current, {
@@ -95,7 +110,7 @@ export function ensureDirectorySafely(root?: any, absolutePath?: any, mode: any 
       allowFile: false
     });
   }
-  const after: any = boundedPath(resolvedRoot, resolvedTarget, {
+  const after = boundedPath(resolvedRoot, resolvedTarget, {
     label: "本机目录 mutation 目录",
     allowMissing: false,
     requireExisting: true,
@@ -107,12 +122,12 @@ export function ensureDirectorySafely(root?: any, absolutePath?: any, mode: any 
 }
 
 export function writeFileAtomically(
-  root?: any,
-  absolutePath?: any,
-  content?: any,
-  mode: any = 0o600,
-  { preserveExecutable = false }: Record<string, any> = {}
-) : any {
+  root: string,
+  absolutePath: string,
+  content: string | NodeJS.ArrayBufferView,
+  mode = 0o600,
+  { preserveExecutable = false }: { preserveExecutable?: boolean } = {}
+): void {
   ensureDirectorySafely(root, path.dirname(absolutePath), 0o700);
   boundedPath(root, absolutePath, {
     label: "本机目录恢复文件",
@@ -120,8 +135,8 @@ export function writeFileAtomically(
     allowDirectory: false,
     allowFile: true
   });
-  const temporaryPath: any = path.join(path.dirname(absolutePath), `.meshrix-restore-${randomUUID()}.tmp`);
-  let descriptor: any;
+  const temporaryPath = path.join(path.dirname(absolutePath), `.meshrix-restore-${randomUUID()}.tmp`);
+  let descriptor: number | undefined;
   try {
     descriptor = fs.openSync(
       temporaryPath,
@@ -147,8 +162,8 @@ export function writeFileAtomically(
     });
     try {
       fs.renameSync(temporaryPath, absolutePath);
-    } catch (error: any) {
-      if (!["EEXIST", "EPERM"].includes(String(error?.code || "")) || !fs.existsSync(absolutePath)) throw error;
+    } catch (error: unknown) {
+      if (!["EEXIST", "EPERM"].includes(errorCode(error)) || !fs.existsSync(absolutePath)) throw error;
       removePathSafely(root, absolutePath, { recursive: true });
       fs.renameSync(temporaryPath, absolutePath);
     }
@@ -159,25 +174,26 @@ export function writeFileAtomically(
   }
 }
 
-export function removePathSafely(root?: any, absolutePath?: any, { recursive = false }: Record<string, any> = {}) : any {
-  const bounded: any = boundedPath(root, absolutePath, {
+export function removePathSafely(root: string, absolutePath: string, { recursive = false }: { recursive?: boolean } = {}): fs.Stats {
+  const bounded = boundedPath(root, absolutePath, {
     label: "本机目录 mutation 删除路径",
     allowMissing: false,
     requireExisting: true,
     allowDirectory: true,
     allowFile: true
   });
-  if (bounded.stat.isDirectory()) {
+  const stat = requiredStat(bounded.stat);
+  if (stat.isDirectory()) {
     if (recursive) fs.rmSync(bounded.absolutePath, { recursive: true, force: false });
     else fs.rmdirSync(bounded.absolutePath);
   } else {
     fs.unlinkSync(bounded.absolutePath);
   }
-  return bounded.stat;
+  return stat;
 }
 
-export function renamePathSafely(root?: any, sourcePath?: any, targetPath?: any) : any {
-  const source: any = boundedPath(root, sourcePath, {
+export function renamePathSafely(root: string, sourcePath: string, targetPath: string) {
+  const source = boundedPath(root, sourcePath, {
     label: "本机目录 mutation source",
     allowMissing: false,
     requireExisting: true,
@@ -185,17 +201,14 @@ export function renamePathSafely(root?: any, sourcePath?: any, targetPath?: any)
     allowFile: true
   });
   ensureDirectorySafely(root, path.dirname(targetPath), 0o700);
-  const target: any = boundedPath(root, targetPath, {
+  const target = boundedPath(root, targetPath, {
     label: "本机目录 mutation target",
     allowMissing: true,
     allowDirectory: true,
     allowFile: true
   });
   if (target.exists) {
-    const error: Error & Record<string, any> = new Error("本机目录 target 在 mutation 前发生变化。");
-    error.code = "local_directory_mutation_target_changed";
-    error.status = 409;
-    throw error;
+    throw localDirectoryFsError("本机目录 target 在 mutation 前发生变化。", "local_directory_mutation_target_changed", 409);
   }
   fs.renameSync(source.absolutePath, target.absolutePath);
   return boundedPath(root, target.absolutePath, {

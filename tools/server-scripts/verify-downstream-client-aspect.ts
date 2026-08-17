@@ -66,7 +66,7 @@ try {
   });
   assert.equal(route.ok, true);
   assert.equal(route.routeTarget, "mcp-server-side");
-  assert.equal(service.translateInboundRequest({ protocol: "unsupported" }).reasonCode, "downstream_protocol_not_supported");
+  assert.equal((service.translateInboundRequest({ protocol: "unsupported" }) as any).reasonCode, "downstream_protocol_not_supported");
 
   const missingService: any = createDownstreamClientAspectService({
     frameworks: [FIXTURE_FRAMEWORK],

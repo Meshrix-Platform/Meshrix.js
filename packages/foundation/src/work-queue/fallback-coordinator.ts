@@ -2,32 +2,55 @@ import { queueIdentityGenerator } from "./identity.ts";
 import { computeDeterministicRetryDelay, DEFAULT_QUEUE_POLICY } from "./policies.ts";
 import { systemQueueTimeSource } from "./time-source.ts";
 
-function toText(value?: any) : any {
+interface QueueRecord { [key: string]: unknown }
+interface WorkItem extends QueueRecord { workItemId?: string; queueDefinitionId?: string; attempt?: number; lease?: QueueLease }
+interface QueueLease extends QueueRecord { leaseId?: string }
+interface QueueStore {
+  retry(input: QueueRecord): Promise<unknown>;
+  complete(input: QueueRecord): Promise<unknown>;
+  cancelRunning(input: QueueRecord): Promise<unknown>;
+  fail?(input: QueueRecord): Promise<unknown>;
+  progress(input: QueueRecord): Promise<unknown>;
+  writeFallbackCoordinatorState?(input: QueueRecord): unknown;
+}
+interface QueueTimeSource { nowMs(): number }
+interface QueueIdentityGenerator { fallbackTaskId(): string }
+interface QueueLogger { error?(event: string, facts: object): void }
+interface FallbackRetryPolicy { maxAttempts: number; initialDelayMs: number; multiplier: number; maxDelayMs: number }
+interface FallbackPolicy extends QueueRecord { fallbackRetry: FallbackRetryPolicy; retryBackoff: QueueRecord }
+interface FallbackOutcome extends QueueRecord { action?: string; delayMs?: number; reason?: string; error?: unknown; extendMs?: number }
+type FallbackHandler = (input: { workItem: WorkItem; lease: QueueLease; error: unknown; reason: unknown; attempt: unknown }) => Promise<FallbackOutcome> | FallbackOutcome;
+interface FallbackInput extends QueueRecord {
+  workItem?: WorkItem; lease?: QueueLease; workItemId?: unknown; leaseId?: unknown; fallbackTaskId?: unknown;
+  maxAttempts?: unknown; error?: unknown; reason?: unknown; actor?: object; delayMs?: unknown; fallback?: FallbackHandler;
+}
+
+function toText(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function asObject(value: unknown, fallback: QueueRecord = {}): QueueRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : fallback;
 }
 
-function asInt(value?: any, fallback: any = 0) : any {
-  const parsed: any = Number(value);
+function asInt(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
-function summarizeError(error?: any) : any {
+function summarizeError(error?: unknown) {
   if (!error) {
     return {};
   }
   return {
-    name: error.name || "Error",
-    message: error.message || String(error),
-    code: error.code || "",
-    stack: typeof error.stack === "string" ? error.stack.split("\n").slice(0, 8).join("\n") : ""
+    name: error instanceof Error ? error.name : "Error",
+    message: error instanceof Error ? error.message : String(error),
+    code: typeof error === "object" && error !== null && "code" in error ? String(error.code ?? "") : "",
+    stack: error instanceof Error && typeof error.stack === "string" ? error.stack.split("\n").slice(0, 8).join("\n") : ""
   };
 }
 
-function mergePolicy(policy: Record<string, any> = {}) : any {
+function mergePolicy(policy: QueueRecord = {}): FallbackPolicy {
   return {
     ...DEFAULT_QUEUE_POLICY,
     ...asObject(policy),
@@ -38,8 +61,8 @@ function mergePolicy(policy: Record<string, any> = {}) : any {
   };
 }
 
-function sleep(ms?: any) : any {
-  return new Promise((resolve?: any) : any => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+function sleep(ms?: unknown): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
 export function createQueueFallbackCoordinator({
@@ -49,25 +72,29 @@ export function createQueueFallbackCoordinator({
   policy = DEFAULT_QUEUE_POLICY,
   fallback = null,
   logger = null
-}: Record<string, any> = {}) : any {
+}: {
+  store?: QueueStore; timeSource?: QueueTimeSource; identityGenerator?: QueueIdentityGenerator; policy?: QueueRecord;
+  fallback?: FallbackHandler | null; logger?: QueueLogger | null;
+} = {}) {
   if (!store || typeof store.retry !== "function") {
     throw new Error("Queue Fallback Coordinator requires a work queue store.");
   }
-  const resolvedPolicy: any = mergePolicy(policy);
-  const locks: any = new Set<any>();
+  const queueStore = store;
+  const resolvedPolicy = mergePolicy(policy);
+  const locks = new Set<string>();
 
-  function writeState(input: Record<string, any> = {}) : any {
-    if (typeof store.writeFallbackCoordinatorState !== "function") {
+  function writeState(input: QueueRecord = {}): unknown {
+    if (typeof queueStore.writeFallbackCoordinatorState !== "function") {
       return null;
     }
-    return store.writeFallbackCoordinatorState({
+    return queueStore.writeFallbackCoordinatorState({
       ...input,
       nowMs: input.nowMs ?? timeSource.nowMs()
     });
   }
 
-  function lock(workItemId?: any) : any {
-    const key: any = toText(workItemId);
+  function lock(workItemId?: unknown): () => boolean {
+    const key = toText(workItemId);
     if (!key) {
       throw new Error("Fallback workItemId is required.");
     }
@@ -75,11 +102,11 @@ export function createQueueFallbackCoordinator({
       throw new Error(`Fallback already in progress for work item ${key}.`);
     }
     locks.add(key);
-    return () : any => locks.delete(key);
+    return () => locks.delete(key);
   }
 
-  async function defaultFallbackAction(input: Record<string, any> = {}) : Promise<any> {
-    const delayMs: any = input.delayMs === undefined
+  async function defaultFallbackAction(input: FallbackInput = {}): Promise<unknown> {
+    const delayMs = input.delayMs === undefined
       ? computeDeterministicRetryDelay({
           queueDefinitionId: input.workItem?.queueDefinitionId,
           workItemId: input.workItemId,
@@ -87,7 +114,7 @@ export function createQueueFallbackCoordinator({
           ...resolvedPolicy.retryBackoff
         })
       : Math.max(0, asInt(input.delayMs, 0));
-    return store.retry({
+    return queueStore.retry({
       workItemId: input.workItemId,
       leaseId: input.leaseId,
       delayMs,
@@ -97,20 +124,20 @@ export function createQueueFallbackCoordinator({
     });
   }
 
-  async function executeFallbackAction(input: Record<string, any> = {}) : Promise<any> {
-    const fallbackHandler: any = input.fallback || fallback;
+  async function executeFallbackAction(input: FallbackInput = {}): Promise<unknown> {
+    const fallbackHandler = input.fallback || fallback;
     if (typeof fallbackHandler !== "function") {
       return defaultFallbackAction(input);
     }
-    const outcome: any = await fallbackHandler({
-      workItem: input.workItem,
-      lease: input.lease,
+    const outcome = await fallbackHandler({
+      workItem: input.workItem || {},
+      lease: input.lease || {},
       error: input.error,
       reason: input.reason,
       attempt: input.attempt
     });
     if (outcome?.action === "retry") {
-      return store.retry({
+      return queueStore.retry({
         workItemId: input.workItemId,
         leaseId: input.leaseId,
         delayMs: outcome?.delayMs ?? input.delayMs,
@@ -120,7 +147,7 @@ export function createQueueFallbackCoordinator({
       });
     }
     if (outcome?.action === "completed") {
-      return store.complete({
+      return queueStore.complete({
         workItemId: input.workItemId,
         leaseId: input.leaseId,
         actor: input.actor,
@@ -128,7 +155,7 @@ export function createQueueFallbackCoordinator({
       });
     }
     if (outcome?.action === "cancelled") {
-      return store.cancelRunning({
+      return queueStore.cancelRunning({
         workItemId: input.workItemId,
         leaseId: input.leaseId,
         actor: input.actor,
@@ -136,7 +163,8 @@ export function createQueueFallbackCoordinator({
       });
     }
     if (outcome?.action === "failed") {
-      return store.fail({
+      if (typeof queueStore.fail !== "function") throw new Error("Queue store fail operation is unavailable.");
+      return queueStore.fail({
         workItemId: input.workItemId,
         leaseId: input.leaseId,
         actor: input.actor,
@@ -145,7 +173,7 @@ export function createQueueFallbackCoordinator({
       });
     }
     if (outcome?.action === "progress") {
-      return store.progress({
+      return queueStore.progress({
         workItemId: input.workItemId,
         leaseId: input.leaseId,
         extendMs: outcome.extendMs,
@@ -156,15 +184,15 @@ export function createQueueFallbackCoordinator({
     throw new Error("Fallback outcome action must be one of: completed, retry, cancelled, failed, progress.");
   }
 
-  async function runFallback(input: Record<string, any> = {}) : Promise<any> {
-    const workItem: any = input.workItem || {};
-    const lease: any = input.lease || workItem.lease || {};
-    const workItemId: any = toText(input.workItemId || workItem.workItemId);
-    const leaseId: any = toText(input.leaseId || lease.leaseId);
-    const fallbackTaskId: any = toText(input.fallbackTaskId || identityGenerator.fallbackTaskId());
-    const unlock: any = lock(workItemId);
-    const maxAttempts: any = Math.max(1, asInt(input.maxAttempts, resolvedPolicy.fallbackRetry.maxAttempts));
-    let lastError: any = input.error || null;
+  async function runFallback(input: FallbackInput = {}) {
+    const workItem = input.workItem || {};
+    const lease = input.lease || workItem.lease || {};
+    const workItemId = toText(input.workItemId || workItem.workItemId);
+    const leaseId = toText(input.leaseId || lease.leaseId);
+    const fallbackTaskId = toText(input.fallbackTaskId || identityGenerator.fallbackTaskId());
+    const unlock = lock(workItemId);
+    const maxAttempts = Math.max(1, asInt(input.maxAttempts, resolvedPolicy.fallbackRetry.maxAttempts));
+    let lastError: unknown = input.error || null;
     try {
       writeState({
         fallbackTaskId,
@@ -180,9 +208,9 @@ export function createQueueFallbackCoordinator({
         }
       });
 
-      for (let attempt: any = 1; attempt <= maxAttempts; attempt += 1) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
-          const result: any = await executeFallbackAction({
+          const result = await executeFallbackAction({
             ...input,
             workItem,
             lease,
@@ -209,7 +237,7 @@ export function createQueueFallbackCoordinator({
             attempt,
             result
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           lastError = error;
           logger?.error?.("queue.fallback.attempt.failed", {
             fallbackTaskId,
@@ -240,8 +268,8 @@ export function createQueueFallbackCoordinator({
         }
       }
 
-      if (typeof store.fail === "function") {
-        const result: any = await store.fail({
+      if (typeof queueStore.fail === "function") {
+        const result = await queueStore.fail({
           workItemId,
           leaseId,
           fallbackTaskId,
@@ -264,9 +292,9 @@ export function createQueueFallbackCoordinator({
     }
   }
 
-  function startFallback(input: Record<string, any> = {}) : any {
-    const fallbackTaskId: any = toText(input.fallbackTaskId || identityGenerator.fallbackTaskId());
-    const promise: any = Promise.resolve().then(() : any => runFallback({
+  function startFallback(input: FallbackInput = {}) {
+    const fallbackTaskId = toText(input.fallbackTaskId || identityGenerator.fallbackTaskId());
+    const promise = Promise.resolve().then(() => runFallback({
       ...input,
       fallbackTaskId
     }));
@@ -279,7 +307,7 @@ export function createQueueFallbackCoordinator({
   return Object.freeze({
     runFallback,
     startFallback,
-    inFlightCount() : any {
+    inFlightCount(): number {
       return locks.size;
     }
   });

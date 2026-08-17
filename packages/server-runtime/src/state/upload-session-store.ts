@@ -49,12 +49,53 @@ import {
   resolveUploadSessionStatus,
   saveSessionMeta,
   validateRelativePath,
-  withSessionRoot
+  withSessionRoot,
+  type CustodyDescribe,
+  type TraceEmitter,
+  type UploadSessionMeta
 } from "./upload-session-support.ts";
+
+type UnknownRecord = Record<string, unknown>;
+interface UploadFileInput extends UnknownRecord {
+  relativePath?: unknown; name?: unknown; sha256?: unknown; byteSize?: unknown;
+  clientUid?: unknown; clientId?: unknown; sourceType?: unknown; resourceType?: unknown;
+  providerId?: unknown; externalId?: unknown; syncBatchId?: unknown; contentHash?: unknown;
+  capturedAt?: unknown; sourceMetadata?: unknown; mediaType?: unknown;
+}
+interface CustodyResult extends UnknownRecord {
+  custodyRef: string; state: string; nextOffset?: number; contentDigest: string; envelopeDigest: string;
+}
+interface CustodyPort {
+  begin(input: UnknownRecord): Promise<CustodyResult>;
+  append(input: UnknownRecord): Promise<CustodyResult>;
+  seal(input: UnknownRecord): Promise<CustodyResult>;
+}
+interface FaultInjector { afterCustodyAppendCommitted?(input: UnknownRecord): void | Promise<void> }
+interface SessionOptions extends UnknownRecord { owner?: unknown; custodyDescribe?: CustodyDescribe }
+interface CreateUploadSessionInput {
+  userDataPath: string; custodyPort: CustodyPort; custodyDescribe: CustodyDescribe;
+  checkpoint: UnknownRecord; manifest: UnknownRecord; files?: UploadFileInput[]; owner: unknown; trace?: TraceEmitter;
+}
+interface AppendUploadSessionInput {
+  userDataPath: string; custodyPort: CustodyPort; custodyDescribe: CustodyDescribe; sessionId: string;
+  fileIndex: unknown; offset: unknown; buffer: unknown; owner: unknown; faultInjector?: FaultInjector | null; trace?: TraceEmitter;
+}
+interface AppendLockedInput extends Omit<AppendUploadSessionInput, "fileIndex" | "owner" | "custodyPort"> {
+  safeFileIndex: number; buffer: Buffer; ownerSubject: ReturnType<typeof normalizeUploadSessionOwner>; custody: CustodyPort;
+}
+interface UploadSessionStore {
+  createOrResumeUploadSession(input?: Omit<CreateUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">): Promise<UnknownRecord>;
+  appendUploadSessionChunk(input?: Omit<AppendUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">): Promise<UnknownRecord>;
+  getUploadSession(sessionId: string, options?: SessionOptions): Promise<unknown>;
+  resolveUploadSessionFiles(sessionId: string, options?: SessionOptions): Promise<unknown>;
+  buildCheckpointReceiptFromUploadSession(sessionId: string, options?: SessionOptions): Promise<unknown>;
+  deleteUploadSession(sessionId: string): Promise<void>;
+}
+interface StoreOptions { userDataPath?: unknown; custodyPort?: unknown; custodyDescribe?: unknown; faultInjector?: FaultInjector | null }
 
 const uploadSessionStoreBindings: WeakMap<object, string> = new WeakMap();
 
-function uploadSessionStoreBindingError() : any {
+function uploadSessionStoreBindingError() {
   return Object.assign(
     new TypeError("A composition-bound upload session store is required."),
     { code: "upload_session_store_binding_invalid" }
@@ -62,37 +103,39 @@ function uploadSessionStoreBindingError() : any {
 }
 
 export function assertBoundUploadSessionStore(
-  store?: any,
-  { userDataPath }: Record<string, any> = {}
-) : any {
-  const expectedRoot: any = path.resolve(String(userDataPath || ""));
+  store: unknown,
+  { userDataPath }: { userDataPath?: unknown } = {}
+): UploadSessionStore {
+  const expectedRoot = path.resolve(String(userDataPath || ""));
   if (
     !store ||
     typeof store !== "object" ||
     uploadSessionStoreBindings.get(store) !== expectedRoot ||
+    !("resolveUploadSessionFiles" in store) ||
     typeof store.resolveUploadSessionFiles !== "function"
   ) {
     throw uploadSessionStoreBindingError();
   }
-  return store;
+  return store as UploadSessionStore;
 }
 
-function requireCustodyPort(custodyPort?: any) : any {
-  const required: any[] = ["begin", "append", "seal"];
-  if (required.some((name?: any) : any => typeof custodyPort?.[name] !== "function")) {
+function requireCustodyPort(custodyPort: unknown): CustodyPort {
+  const candidate = custodyPort as Partial<CustodyPort> | null;
+  const required: Array<keyof CustodyPort> = ["begin", "append", "seal"];
+  if (!candidate || required.some((name) => typeof candidate[name] !== "function")) {
     throw new TypeError("Upload session store requires a bound no-run custody staging port.");
   }
-  return custodyPort;
+  return candidate as CustodyPort;
 }
 
-function requireCustodyDescribe(custodyDescribe?: any) : any {
+function requireCustodyDescribe(custodyDescribe: unknown): CustodyDescribe {
   if (typeof custodyDescribe !== "function") {
     throw new TypeError("Upload session store requires a bound custody describe function.");
   }
-  return custodyDescribe;
+  return custodyDescribe as CustodyDescribe;
 }
 
-function freezeUploadDescriptorValue(value?: any) : any {
+function freezeUploadDescriptorValue(value: unknown): unknown {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
   }
@@ -102,23 +145,23 @@ function freezeUploadDescriptorValue(value?: any) : any {
   return Object.freeze(value);
 }
 
-function syncAdmissionStatus(userDataPath?: any, sessionId?: any, admission?: any, status?: any) : any {
+function syncAdmissionStatus(userDataPath: string, sessionId: string, admission: { status: string } | null, status: "complete" | "uploading") {
   if (admission?.status !== status) {
     updateUploadSessionAdmissionStatus(userDataPath, sessionId, status);
   }
 }
 
-function withUploadSessionMutation(sessionId?: any, mutation?: any) : any {
-  const queueKey: any = hashClientString(sessionId, "upload.session.mutation");
+function withUploadSessionMutation<Result>(sessionId: string, mutation: () => Result | Promise<Result>): Promise<Result> {
+  const queueKey = hashClientString(sessionId, "upload.session.mutation");
   return queueStateMutation(`upload-session:${queueKey}`, mutation);
 }
 
-function validateUploadSessionFiles(files?: any) : any {
-  const declaration: any = validateUploadSessionDeclaration(files);
+function validateUploadSessionFiles(files: UploadFileInput[]) {
+  const declaration = validateUploadSessionDeclaration(files);
   for (const [index, file] of files.entries()) {
     validateRelativePath(file.relativePath || file.name || `upload-${index + 1}`);
-    const digest: any = normalizeSha256(file.sha256, `files[${index}].sha256`);
-    const byteSize: any = normalizeByteSize(file.byteSize);
+    const digest = normalizeSha256(file.sha256, `files[${index}].sha256`);
+    const byteSize = normalizeByteSize(file.byteSize);
     if (byteSize === 0 && digest !== EMPTY_FILE_SHA256) {
       throw uploadAdmissionError("upload_sha256_zero_byte_mismatch", 400, `files[${index}].sha256 与零字节文件不匹配。`);
     }
@@ -126,12 +169,12 @@ function validateUploadSessionFiles(files?: any) : any {
   return declaration;
 }
 
-async function removeExpiredUploadSessionArtifacts(userDataPath?: any, sessionIds?: any) : Promise<any> {
+async function removeExpiredUploadSessionArtifacts(userDataPath: string, sessionIds: string[]): Promise<void> {
   for (const expiredSessionId of sessionIds) {
     await deleteCheckpointTree({
       userDataPath,
       treeId: buildCheckpointTreeId("upload-session", expiredSessionId)
-    }).catch(() : any => null);
+    }).catch(() => null);
     await fsp.rm(withSessionRoot(userDataPath, expiredSessionId), {
       recursive: true,
       force: true
@@ -149,10 +192,10 @@ export async function createOrResumeUploadSession({
   files = [],
   owner,
   trace
-}: Record<string, any>) : Promise<any> {
-  const custody: any = requireCustodyPort(custodyPort);
-  const describeCustody: any = requireCustodyDescribe(custodyDescribe);
-  const declaration: any = validateUploadSessionFiles(files);
+}: CreateUploadSessionInput) {
+  const custody = requireCustodyPort(custodyPort);
+  const describeCustody = requireCustodyDescribe(custodyDescribe);
+  const declaration = validateUploadSessionFiles(files);
   await emitTrace(trace, {
     functionName: "createOrResumeUploadSession",
     stage: "start",
@@ -162,7 +205,7 @@ export async function createOrResumeUploadSession({
     inputDigestPresent: Boolean(manifest?.inputDigest),
     fileCount: files.length
   });
-  const clientCheckpointId: any =
+  const clientCheckpointId =
     typeof checkpoint?.checkpointId === "string" ? checkpoint.checkpointId.trim() : "";
   if (!clientCheckpointId) {
     await emitTrace(trace, {
@@ -175,40 +218,40 @@ export async function createOrResumeUploadSession({
     throw uploadAdmissionError("upload_checkpoint_id_required", 400, "upload session 缺少 checkpointId。");
   }
 
-  const manifestDigest: any = normalizeSha256(manifest?.manifestDigest, "manifestDigest");
-  const inputDigest: any = normalizeOptionalSha256(manifest?.inputDigest, "inputDigest");
-  const ownerSubject: any = normalizeUploadSessionOwner(owner);
-  const ownerKey: any = uploadSessionOwnerKey(ownerSubject);
-  const checkpointId: any = serverToken(
+  const manifestDigest = normalizeSha256(manifest?.manifestDigest, "manifestDigest");
+  const inputDigest = normalizeOptionalSha256(manifest?.inputDigest, "inputDigest");
+  const ownerSubject = normalizeUploadSessionOwner(owner);
+  const ownerKey = uploadSessionOwnerKey(ownerSubject);
+  const checkpointId = serverToken(
     "checkpoint",
     clientCheckpointId,
     manifestDigest,
     inputDigest
   );
-  const archiveBatch: any = resolveArchiveBatchIdentity({
-    archiveBatchId: checkpoint?.archiveBatchId,
-    batchId: checkpoint?.batchId,
-    clientBatchId: checkpoint?.clientBatchId,
+  const archiveBatch = resolveArchiveBatchIdentity({
+    archiveBatchId: String(checkpoint.archiveBatchId || ""),
+    batchId: String(checkpoint.batchId || ""),
+    clientBatchId: String(checkpoint.clientBatchId || ""),
     checkpointId: clientCheckpointId,
     manifestDigest,
     inputDigest
   });
-  const sessionId: any = serverToken("upload_session", checkpointId, manifestDigest, inputDigest, ownerKey);
-  const clientUid: any = String(checkpoint?.clientUid || checkpoint?.clientId || manifest?.clientUid || manifest?.clientId || "").trim();
-  const sourceType: any = String(checkpoint?.sourceType || checkpoint?.resourceType || manifest?.sourceType || manifest?.resourceType || "upload").trim();
-  const providerId: any = String(checkpoint?.providerId || manifest?.providerId || "").trim();
-  const externalId: any = String(checkpoint?.externalId || manifest?.externalId || "").trim();
-  const syncBatchId: any = String(checkpoint?.syncBatchId || manifest?.syncBatchId || "").trim();
-  const contentHash: any = String(checkpoint?.contentHash || manifest?.contentHash || "").trim();
-  const capturedAt: any = String(checkpoint?.capturedAt || manifest?.capturedAt || "").trim();
-  const checkpointTreeId: any = buildCheckpointTreeId("upload-session", sessionId);
-  let existing: any = await loadSessionMeta(userDataPath, sessionId);
+  const sessionId = serverToken("upload_session", checkpointId, manifestDigest, inputDigest, ownerKey);
+  const clientUid = String(checkpoint?.clientUid || checkpoint?.clientId || manifest?.clientUid || manifest?.clientId || "").trim();
+  const sourceType = String(checkpoint?.sourceType || checkpoint?.resourceType || manifest?.sourceType || manifest?.resourceType || "upload").trim();
+  const providerId = String(checkpoint?.providerId || manifest?.providerId || "").trim();
+  const externalId = String(checkpoint?.externalId || manifest?.externalId || "").trim();
+  const syncBatchId = String(checkpoint?.syncBatchId || manifest?.syncBatchId || "").trim();
+  const contentHash = String(checkpoint?.contentHash || manifest?.contentHash || "").trim();
+  const capturedAt = String(checkpoint?.capturedAt || manifest?.capturedAt || "").trim();
+  const checkpointTreeId = buildCheckpointTreeId("upload-session", sessionId);
+  let existing = await loadSessionMeta(userDataPath, sessionId);
   if (existing) {
     existing = await reconcileSessionMeta(userDataPath, existing, {
       custodyDescribe: describeCustody
     });
   }
-  let admission: any = null;
+  let admission = null;
   if (existing) {
     admission = readUploadSessionAdmission(userDataPath, sessionId);
     if (!admission) {
@@ -221,7 +264,7 @@ export async function createOrResumeUploadSession({
     }
     syncAdmissionStatus(userDataPath, sessionId, admission, existing.status);
   } else {
-    const admissionNowMs: any = Date.now();
+    const admissionNowMs = Date.now();
     await removeExpiredUploadSessionArtifacts(
       userDataPath,
       listExpiredUploadSessionAdmissions(userDataPath, admissionNowMs)
@@ -277,7 +320,7 @@ export async function createOrResumeUploadSession({
     },
     resetOnInputHashChange: false
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       deleteUploadSessionAdmission(userDataPath, sessionId);
       throw error;
     }
@@ -295,7 +338,7 @@ export async function createOrResumeUploadSession({
   });
 
   if (existing) {
-    const existingOwnerAccess: any = uploadSessionOwnerAccess(existing, ownerSubject);
+    const existingOwnerAccess = uploadSessionOwnerAccess(existing, ownerSubject);
     if (!existingOwnerAccess.ok) {
       await emitTrace(trace, {
         functionName: "createOrResumeUploadSession",
@@ -323,7 +366,7 @@ export async function createOrResumeUploadSession({
       });
       throw uploadAdmissionError("upload_session_digest_conflict", 409, "同一 checkpoint 的上传会话摘要不一致，拒绝覆盖。");
     }
-    const existingArchiveBatchId: any = existing.archiveBatchId
+    const existingArchiveBatchId = existing.archiveBatchId
       ? resolveArchiveBatchIdentity({
           archiveBatchId: existing.archiveBatchId,
           checkpointId: existing.checkpointId,
@@ -352,7 +395,7 @@ export async function createOrResumeUploadSession({
       sessionId,
       checkpointId,
       status: existing.status,
-      files: (existing.files || []).map((file?: any) : any => ({
+      files: (existing.files || []).map((file) => ({
         index: file.index,
         byteSize: file.byteSize,
         receivedBytes: file.receivedBytes || 0,
@@ -368,28 +411,28 @@ export async function createOrResumeUploadSession({
       status: existing.status === "complete" ? "completed" : "running",
       totals: {
         fileCount: existing.files?.length || 0,
-        totalBytes: (existing.files || []).reduce((sum?: any, file?: any) : any => sum + Number(file.byteSize || 0), 0),
-        receivedBytes: (existing.files || []).reduce((sum?: any, file?: any) : any => sum + Number(file.receivedBytes || 0), 0),
-        completedFiles: (existing.files || []).filter((file?: any) : any => file.completedAt).length
+        totalBytes: (existing.files || []).reduce((sum, file) => sum + Number(file.byteSize || 0), 0),
+        receivedBytes: (existing.files || []).reduce((sum, file) => sum + Number(file.receivedBytes || 0), 0),
+        completedFiles: (existing.files || []).filter((file) => file.completedAt).length
       },
       cursor: {
         status: existing.status || "",
-        completedFiles: (existing.files || []).filter((file?: any) : any => file.completedAt).length
+        completedFiles: (existing.files || []).filter((file) => file.completedAt).length
       }
-    }).catch(() : any => null);
+    }).catch(() => null);
     if (existing.status === "complete") {
       await finishCheckpointTree({
         userDataPath,
         treeId: existing.checkpointTreeId || checkpointTreeId,
         status: "completed",
         message: "Upload session already complete."
-      }).catch(() : any => null);
+      }).catch(() => null);
     }
     return buildPublicSession(existing);
   }
 
-  const now: any = nowIso();
-  const meta: Record<string, any> = {
+  const now = nowIso();
+  const meta: UploadSessionMeta = {
     schemaVersion: SESSION_SCHEMA_VERSION,
     sessionId,
     checkpointId,
@@ -413,22 +456,22 @@ export async function createOrResumeUploadSession({
     status: files.length === 0 ? "complete" : "uploading",
     createdAt: now,
     updatedAt: now,
-    files: files.map((file?: any, index?: any) : any => {
-      const sourceRelativePath: any = validateRelativePath(
+    files: files.map((file, index) => {
+      const sourceRelativePath = validateRelativePath(
         file.relativePath || file.name || `upload-${index + 1}`
       );
-      const originalFileName: any = originalFileNameForUpload(file, index);
-      const sha256: any = normalizeSha256(file.sha256, `files[${index}].sha256`);
-      const byteSize: any = normalizeByteSize(file.byteSize);
+      const originalFileName = originalFileNameForUpload(file, index);
+      const sha256 = normalizeSha256(file.sha256, `files[${index}].sha256`);
+      const byteSize = normalizeByteSize(file.byteSize);
       if (byteSize === 0 && sha256 !== EMPTY_FILE_SHA256) {
         throw uploadAdmissionError("upload_sha256_zero_byte_mismatch", 400, `files[${index}].sha256 与零字节文件不匹配。`);
       }
-      const sourceRelativePathHash: any = hashClientString(sourceRelativePath, "upload.relative_path");
-      const sourceNameHash: any = hashClientString(
+      const sourceRelativePathHash = hashClientString(sourceRelativePath, "upload.relative_path");
+      const sourceNameHash = hashClientString(
         file.name || path.posix.basename(sourceRelativePath),
         "upload.name"
       );
-      const fileToken: any = serverToken(
+      const fileToken = serverToken(
         "upload_file",
         sessionId,
         index,
@@ -472,7 +515,7 @@ export async function createOrResumeUploadSession({
 
   try {
     for (const file of meta.files) {
-      const begun: any = await custody.begin({
+      const begun = await custody.begin({
         sessionId,
         fileIndex: file.index,
         expectedSha256: file.sha256,
@@ -484,7 +527,7 @@ export async function createOrResumeUploadSession({
       file.custodyState = begun.state;
       file.receivedBytes = Number(begun.nextOffset || 0);
       if (file.byteSize === 0) {
-        const sealed: any = await custody.seal({
+        const sealed = await custody.seal({
           custodyRef: file.custodyRef,
           owner: ownerSubject
         });
@@ -501,9 +544,9 @@ export async function createOrResumeUploadSession({
       custodyDescribe: describeCustody
     });
     syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
-  } catch (error: any) {
+  } catch (error: unknown) {
     deleteUploadSessionAdmission(userDataPath, sessionId);
-    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]).catch(() : any => null);
+    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]).catch(() => null);
     throw error;
   }
   await upsertCheckpointNode({
@@ -515,21 +558,21 @@ export async function createOrResumeUploadSession({
     status: files.length === 0 ? "skipped" : meta.status === "complete" ? "completed" : "running",
     totals: {
       fileCount: meta.files.length,
-      totalBytes: meta.files.reduce((sum?: any, file?: any) : any => sum + Number(file.byteSize || 0), 0),
+      totalBytes: meta.files.reduce((sum, file) => sum + Number(file.byteSize || 0), 0),
       receivedBytes: 0,
-      completedFiles: meta.files.filter((file?: any) : any => file.completedAt).length
+      completedFiles: meta.files.filter((file) => file.completedAt).length
     },
     cursor: {
       status: meta.status
     }
-  }).catch(() : any => null);
+  }).catch(() => null);
   if (meta.status === "complete") {
     await finishCheckpointTree({
       userDataPath,
       treeId: checkpointTreeId,
       status: "completed",
       message: "Upload session completed during initialization."
-    }).catch(() : any => null);
+    }).catch(() => null);
   }
   await emitTrace(trace, {
     functionName: "createOrResumeUploadSession",
@@ -539,7 +582,7 @@ export async function createOrResumeUploadSession({
     checkpointId,
     status: meta.status,
     fileCount: meta.files.length,
-    files: meta.files.map((file?: any) : any => ({
+    files: meta.files.map((file) => ({
       index: file.index,
       name: file.name,
       relativePath: file.relativePath,
@@ -554,17 +597,17 @@ export async function createOrResumeUploadSession({
 }
 
 async function getUploadSessionLocked(
-  userDataPath?: any,
-  sessionId?: any,
-  options?: any,
-  custodyDescribe?: any
-) : Promise<any> {
-  const owner: any = normalizeUploadSessionOwner(options.owner);
-  let meta: any;
+  userDataPath: string,
+  sessionId: string,
+  options: SessionOptions,
+  custodyDescribe: CustodyDescribe
+) {
+  const owner = normalizeUploadSessionOwner(options.owner);
+  let meta: UploadSessionMeta | null;
   try {
     meta = await loadSessionMeta(userDataPath, sessionId);
-  } catch (error: any) {
-    if (/token 格式无效/.test(String(error?.message || ""))) {
+  } catch (error: unknown) {
+    if (/token 格式无效/.test(error instanceof Error ? error.message : String(error))) {
       return null;
     }
     throw error;
@@ -579,7 +622,7 @@ async function getUploadSessionLocked(
     return null;
   }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
-  const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
+  const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
     await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
     return null;
@@ -588,9 +631,9 @@ async function getUploadSessionLocked(
   return buildPublicSession(meta);
 }
 
-export async function getUploadSession(userDataPath?: any, sessionId?: any, options: Record<string, any> = {}) : Promise<any> {
-  const custodyDescribe: any = requireCustodyDescribe(options.custodyDescribe);
-  return withUploadSessionMutation(sessionId, () : any =>
+export async function getUploadSession(userDataPath: string, sessionId: string, options: SessionOptions = {}) {
+  const custodyDescribe = requireCustodyDescribe(options.custodyDescribe);
+  return withUploadSessionMutation(sessionId, () =>
     getUploadSessionLocked(userDataPath, sessionId, options, custodyDescribe)
   );
 }
@@ -606,10 +649,10 @@ export async function appendUploadSessionChunk({
   owner,
   faultInjector = null,
   trace
-}: Record<string, any>) : Promise<any> {
-  const custody: any = requireCustodyPort(custodyPort);
-  const describeCustody: any = requireCustodyDescribe(custodyDescribe);
-  const safeFileIndex: any = normalizeFileIndex(fileIndex);
+}: AppendUploadSessionInput) {
+  const custody = requireCustodyPort(custodyPort);
+  const describeCustody = requireCustodyDescribe(custodyDescribe);
+  const safeFileIndex = normalizeFileIndex(fileIndex);
   if (!Buffer.isBuffer(buffer)) {
     throw uploadAdmissionError("upload_chunk_invalid", 400, "上传分块必须是二进制内容。");
   }
@@ -620,7 +663,7 @@ export async function appendUploadSessionChunk({
       session: null
     };
   }
-  const ownerSubject: any = normalizeUploadSessionOwner(owner);
+  const ownerSubject = normalizeUploadSessionOwner(owner);
   await emitTrace(trace, {
     functionName: "appendUploadSessionChunk",
     stage: "start",
@@ -631,7 +674,7 @@ export async function appendUploadSessionChunk({
     chunkBytes: buffer.length,
     ...uploadSessionOwnerTrace(ownerSubject)
   });
-  return withUploadSessionMutation(sessionId, () : any => appendUploadSessionChunkLocked({
+  return withUploadSessionMutation(sessionId, () => appendUploadSessionChunkLocked({
     userDataPath,
     sessionId,
     safeFileIndex,
@@ -656,12 +699,12 @@ async function appendUploadSessionChunkLocked({
   custodyDescribe,
   faultInjector,
   trace
-}: Record<string, any>) : Promise<any> {
-  let meta: any;
+}: AppendLockedInput) {
+  let meta: UploadSessionMeta | null;
   try {
     meta = await loadSessionMeta(userDataPath, sessionId);
-  } catch (error: any) {
-    if (/token 格式无效/.test(String(error?.message || ""))) {
+  } catch (error: unknown) {
+    if (/token 格式无效/.test(error instanceof Error ? error.message : String(error))) {
       await emitTrace(trace, {
         functionName: "appendUploadSessionChunk",
         stage: "session_token_invalid",
@@ -694,7 +737,7 @@ async function appendUploadSessionChunkLocked({
     };
   }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
-  const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
+  const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
     await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
     return {
@@ -704,7 +747,7 @@ async function appendUploadSessionChunkLocked({
     };
   }
   syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
-  const ownerAccess: any = uploadSessionOwnerAccess(meta, ownerSubject);
+  const ownerAccess = uploadSessionOwnerAccess(meta, ownerSubject);
   if (!ownerAccess.ok) {
     await emitTrace(trace, {
       functionName: "appendUploadSessionChunk",
@@ -722,7 +765,7 @@ async function appendUploadSessionChunkLocked({
     };
   }
 
-  const file: any = meta.files.find((item?: any) : any => item.index === safeFileIndex);
+  const file = meta.files.find((item) => item.index === safeFileIndex);
   if (!file) {
     await emitTrace(trace, {
       functionName: "appendUploadSessionChunk",
@@ -739,8 +782,8 @@ async function appendUploadSessionChunkLocked({
     };
   }
 
-  let appended: any;
-  const previousOffset: any = Number(file.receivedBytes || 0);
+  let appended: CustodyResult;
+  const previousOffset = Number(file.receivedBytes || 0);
   try {
     appended = await custody.append({
       custodyRef: file.custodyRef,
@@ -748,8 +791,8 @@ async function appendUploadSessionChunkLocked({
       offset: Number(offset),
       bytes: buffer
     });
-  } catch (error: any) {
-    if (error?.code === "upload_custody_offset_mismatch") {
+  } catch (error: unknown) {
+    if ((error !== null && typeof error === "object" ? (error as UnknownRecord).code : undefined) === "upload_custody_offset_mismatch") {
       meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
       meta.status = resolveUploadSessionStatus(meta);
       meta.updatedAt = nowIso();
@@ -758,12 +801,12 @@ async function appendUploadSessionChunkLocked({
         ok: false,
         code: "offset_mismatch",
         expectedOffset: Number(
-          meta.files.find((item?: any) : any => item.index === safeFileIndex)?.receivedBytes || 0
+          meta.files.find((item) => item.index === safeFileIndex)?.receivedBytes || 0
         ),
         session: buildPublicSession(meta)
       };
     }
-    if (error?.code === "upload_custody_size_exceeded") {
+    if ((error !== null && typeof error === "object" ? (error as UnknownRecord).code : undefined) === "upload_custody_size_exceeded") {
       return {
         ok: false,
         code: "chunk_too_large",
@@ -789,7 +832,7 @@ async function appendUploadSessionChunkLocked({
 
   if (Number(file.receivedBytes || 0) === Number(file.byteSize || 0)) {
     try {
-      const sealed: any = await custody.seal({
+      const sealed = await custody.seal({
         custodyRef: file.custodyRef,
         owner: ownerSubject
       });
@@ -798,8 +841,8 @@ async function appendUploadSessionChunkLocked({
       file.envelopeDigest = sealed.envelopeDigest;
       file.verifiedSha256 = sealed.contentDigest;
       file.completedAt = nowIso();
-    } catch (error: any) {
-      if (error?.code !== "upload_custody_content_digest_mismatch") throw error;
+    } catch (error: unknown) {
+      if ((error !== null && typeof error === "object" ? (error as UnknownRecord).code : undefined) !== "upload_custody_content_digest_mismatch") throw error;
       meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
       meta.status = resolveUploadSessionStatus(meta);
       meta.updatedAt = nowIso();
@@ -818,8 +861,8 @@ async function appendUploadSessionChunkLocked({
   meta.updatedAt = nowIso();
   await saveSessionMeta(userDataPath, meta);
   syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
-  const reconciled: any = meta;
-  const treeId: any = reconciled.checkpointTreeId || buildCheckpointTreeId("upload-session", reconciled.sessionId);
+  const reconciled = meta;
+  const treeId = reconciled.checkpointTreeId || buildCheckpointTreeId("upload-session", reconciled.sessionId);
   await upsertCheckpointNode({
     userDataPath,
     treeId,
@@ -829,9 +872,9 @@ async function appendUploadSessionChunkLocked({
     status: reconciled.status === "complete" ? "completed" : "running",
     totals: {
       fileCount: reconciled.files?.length || 0,
-      totalBytes: (reconciled.files || []).reduce((sum?: any, item?: any) : any => sum + Number(item.byteSize || 0), 0),
-      receivedBytes: (reconciled.files || []).reduce((sum?: any, item?: any) : any => sum + Number(item.receivedBytes || 0), 0),
-      completedFiles: (reconciled.files || []).filter((item?: any) : any => item.completedAt).length
+      totalBytes: (reconciled.files || []).reduce((sum, item) => sum + Number(item.byteSize || 0), 0),
+      receivedBytes: (reconciled.files || []).reduce((sum, item) => sum + Number(item.receivedBytes || 0), 0),
+      completedFiles: (reconciled.files || []).filter((item) => item.completedAt).length
     },
     cursor: {
       fileIndex: safeFileIndex,
@@ -840,7 +883,7 @@ async function appendUploadSessionChunkLocked({
       completed: Boolean(file.completedAt),
       status: reconciled.status
     }
-  }).catch(() : any => null);
+  }).catch(() => null);
   if (reconciled.status === "complete") {
     await finishCheckpointTree({
       userDataPath,
@@ -850,7 +893,7 @@ async function appendUploadSessionChunkLocked({
       metadata: {
         fileCount: reconciled.files?.length || 0
       }
-    }).catch(() : any => null);
+    }).catch(() => null);
   }
   await emitTrace(trace, {
     functionName: "appendUploadSessionChunk",
@@ -873,18 +916,18 @@ async function appendUploadSessionChunkLocked({
 }
 
 async function resolveUploadSessionFilesLocked(
-  userDataPath?: any,
-  sessionId?: any,
-  options?: any,
-  custodyDescribe?: any
-) : Promise<any> {
-  const owner: any = normalizeUploadSessionOwner(options.owner);
-  let meta: any = await loadSessionMeta(userDataPath, sessionId);
+  userDataPath: string,
+  sessionId: string,
+  options: SessionOptions,
+  custodyDescribe: CustodyDescribe
+) {
+  const owner = normalizeUploadSessionOwner(options.owner);
+  let meta = await loadSessionMeta(userDataPath, sessionId);
   if (!meta) {
     throw uploadAdmissionError("upload_session_not_found", 404, `上传会话不存在：${sessionId}`);
   }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
-  const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
+  const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
     await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
     throw uploadAdmissionError("upload_session_expired", 410, "上传会话已过期。");
@@ -896,7 +939,7 @@ async function resolveUploadSessionFilesLocked(
     throw uploadAdmissionError("upload_session_incomplete", 409, `上传会话尚未完成：${sessionId}`);
   }
 
-  return Object.freeze(meta.files.map((file?: any) : any => Object.freeze({
+  return Object.freeze(meta.files.map((file) => Object.freeze({
     name: file.name,
     relativePath: file.relativePath,
     sourceNameHash: file.sourceNameHash || "",
@@ -922,9 +965,9 @@ async function resolveUploadSessionFilesLocked(
   })));
 }
 
-export async function resolveUploadSessionFiles(userDataPath?: any, sessionId?: any, options: Record<string, any> = {}) : Promise<any> {
-  const custodyDescribe: any = requireCustodyDescribe(options.custodyDescribe);
-  return withUploadSessionMutation(sessionId, () : any =>
+export async function resolveUploadSessionFiles(userDataPath: string, sessionId: string, options: SessionOptions = {}) {
+  const custodyDescribe = requireCustodyDescribe(options.custodyDescribe);
+  return withUploadSessionMutation(sessionId, () =>
     resolveUploadSessionFilesLocked(
       userDataPath,
       sessionId,
@@ -935,18 +978,18 @@ export async function resolveUploadSessionFiles(userDataPath?: any, sessionId?: 
 }
 
 async function buildCheckpointReceiptFromUploadSessionLocked(
-  userDataPath?: any,
-  sessionId?: any,
-  options?: any,
-  custodyDescribe?: any
-) : Promise<any> {
-  const owner: any = normalizeUploadSessionOwner(options.owner);
-  let meta: any = await loadSessionMeta(userDataPath, sessionId);
+  userDataPath: string,
+  sessionId: string,
+  options: SessionOptions,
+  custodyDescribe: CustodyDescribe
+) {
+  const owner = normalizeUploadSessionOwner(options.owner);
+  let meta = await loadSessionMeta(userDataPath, sessionId);
   if (!meta) {
     throw uploadAdmissionError("upload_session_not_found", 404, `上传会话不存在：${sessionId}`);
   }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
-  const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
+  const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
     await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
     throw uploadAdmissionError("upload_session_expired", 410, "上传会话已过期。");
@@ -958,7 +1001,7 @@ async function buildCheckpointReceiptFromUploadSessionLocked(
     throw uploadAdmissionError("upload_session_incomplete", 409, `上传会话尚未完成：${sessionId}`);
   }
 
-  const archiveBatch: any = resolveArchiveBatchIdentity({
+  const archiveBatch = resolveArchiveBatchIdentity({
     archiveBatchId: meta.archiveBatchId,
     checkpointId: meta.checkpointId,
     manifestDigest: meta.manifestDigest,
@@ -982,7 +1025,7 @@ async function buildCheckpointReceiptFromUploadSessionLocked(
     verifiedAt: nowIso(),
     manifestSha256: meta.manifestDigest,
     fileCount: meta.files.length,
-    files: meta.files.map((file?: any) : any => ({
+    files: meta.files.map((file) => ({
       name: file.name,
       relativePath: file.relativePath,
       originalFileName: file.originalFileName || "",
@@ -1003,12 +1046,12 @@ async function buildCheckpointReceiptFromUploadSessionLocked(
 }
 
 export async function buildCheckpointReceiptFromUploadSession(
-  userDataPath?: any,
-  sessionId?: any,
-  options: Record<string, any> = {}
-) : Promise<any> {
-  const custodyDescribe: any = requireCustodyDescribe(options.custodyDescribe);
-  return withUploadSessionMutation(sessionId, () : any =>
+  userDataPath: string,
+  sessionId: string,
+  options: SessionOptions = {}
+) {
+  const custodyDescribe = requireCustodyDescribe(options.custodyDescribe);
+  return withUploadSessionMutation(sessionId, () =>
     buildCheckpointReceiptFromUploadSessionLocked(
       userDataPath,
       sessionId,
@@ -1018,7 +1061,7 @@ export async function buildCheckpointReceiptFromUploadSession(
   );
 }
 
-export async function deleteUploadSession(userDataPath?: any, sessionId?: any) : Promise<any> {
+export async function deleteUploadSession(userDataPath: string, sessionId: string): Promise<void> {
   if (!sessionId) {
     return;
   }
@@ -1028,7 +1071,7 @@ export async function deleteUploadSession(userDataPath?: any, sessionId?: any) :
   await deleteCheckpointTree({
     userDataPath,
     treeId: buildCheckpointTreeId("upload-session", sessionId)
-  }).catch(() : any => null);
+  }).catch(() => null);
   await fsp.rm(withSessionRoot(userDataPath, sessionId), {
     recursive: true,
     force: true
@@ -1040,50 +1083,59 @@ export function createUploadSessionStore({
   custodyPort,
   custodyDescribe,
   faultInjector = null
-}: Record<string, any> = {}) : any {
-  const root: any = String(userDataPath || "").trim();
+}: StoreOptions = {}): UploadSessionStore {
+  const root = String(userDataPath || "").trim();
   if (!root) {
     throw new TypeError("Upload session store requires userDataPath.");
   }
-  const custody: any = requireCustodyPort(custodyPort);
-  const describeCustody: any = requireCustodyDescribe(custodyDescribe);
-  const store: any = Object.freeze({
-    createOrResumeUploadSession(input: Record<string, any> = {}) : any {
+  const custody = requireCustodyPort(custodyPort);
+  const describeCustody = requireCustodyDescribe(custodyDescribe);
+  const store = Object.freeze({
+    createOrResumeUploadSession(input: Partial<Omit<CreateUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">> = {}) {
       return createOrResumeUploadSession({
-        ...input,
-        userDataPath: root,
-        custodyPort: custody,
-        custodyDescribe: describeCustody
-      });
-    },
-    appendUploadSessionChunk(input: Record<string, any> = {}) : any {
-      return appendUploadSessionChunk({
-        ...input,
         userDataPath: root,
         custodyPort: custody,
         custodyDescribe: describeCustody,
+        checkpoint: input.checkpoint || {},
+        manifest: input.manifest || {},
+        files: input.files || [],
+        owner: input.owner,
+        trace: input.trace
+      });
+    },
+    appendUploadSessionChunk(input: Partial<Omit<AppendUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">> = {}) {
+      return appendUploadSessionChunk({
+        userDataPath: root,
+        custodyPort: custody,
+        custodyDescribe: describeCustody,
+        sessionId: String(input.sessionId || ""),
+        fileIndex: input.fileIndex,
+        offset: input.offset,
+        buffer: input.buffer,
+        owner: input.owner,
+        trace: input.trace,
         faultInjector
       });
     },
-    getUploadSession(sessionId?: any, options: Record<string, any> = {}) : any {
+    getUploadSession(sessionId: string, options: SessionOptions = {}) {
       return getUploadSession(root, sessionId, {
         ...options,
         custodyDescribe: describeCustody
       });
     },
-    resolveUploadSessionFiles(sessionId?: any, options: Record<string, any> = {}) : any {
+    resolveUploadSessionFiles(sessionId: string, options: SessionOptions = {}) {
       return resolveUploadSessionFiles(root, sessionId, {
         ...options,
         custodyDescribe: describeCustody
       });
     },
-    buildCheckpointReceiptFromUploadSession(sessionId?: any, options: Record<string, any> = {}) : any {
+    buildCheckpointReceiptFromUploadSession(sessionId: string, options: SessionOptions = {}) {
       return buildCheckpointReceiptFromUploadSession(root, sessionId, {
         ...options,
         custodyDescribe: describeCustody
       });
     },
-    deleteUploadSession(sessionId?: any) : any {
+    deleteUploadSession(sessionId: string) {
       return deleteUploadSession(root, sessionId);
     }
   });

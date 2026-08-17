@@ -1,4 +1,12 @@
-export const STATE_MACHINE_GUARDS: Readonly<Record<string, any>> = Object.freeze({
+export interface StateMachineGuardDefinition {
+  guardId: string;
+  description: string;
+  riskLevel: "low" | "medium" | "high";
+  contextRequired: readonly string[];
+  runtimeMode?: "staticOnly" | "declaredOnly";
+}
+
+export const STATE_MACHINE_GUARDS: Readonly<Record<string, StateMachineGuardDefinition>> = Object.freeze({
   require_p0_passed_or_waived: {
     guardId: "require_p0_passed_or_waived",
     description:
@@ -119,31 +127,31 @@ export const STATE_MACHINE_GUARDS: Readonly<Record<string, any>> = Object.freeze
   }
 });
 
-export function guardExists(guardId?: any) : any {
-  return guardId in STATE_MACHINE_GUARDS;
+export function guardExists(guardId?: unknown): boolean {
+  return typeof guardId === "string" && guardId in STATE_MACHINE_GUARDS;
 }
 
-export function getGuard(guardId?: any) : any {
-  return STATE_MACHINE_GUARDS[guardId] || null;
+export function getGuard(guardId?: unknown): StateMachineGuardDefinition | null {
+  return typeof guardId === "string" ? STATE_MACHINE_GUARDS[guardId] || null : null;
 }
 
-export function listAllGuardIds() : any {
+export function listAllGuardIds(): string[] {
   return Object.keys(STATE_MACHINE_GUARDS);
 }
 
-export function isGuardRuntimeSafe(guardId?: any) : any {
-  const guard: any = STATE_MACHINE_GUARDS[guardId];
+export function isGuardRuntimeSafe(guardId?: unknown): boolean {
+  const guard = getGuard(guardId);
   if (!guard) return false;
   return guard.runtimeMode !== "staticOnly" && guard.runtimeMode !== "declaredOnly";
 }
 
-export function listAllRuntimeGuardIds() : any {
-  return (Object.entries(STATE_MACHINE_GUARDS) as [string, any][])
-    .filter(([, g]: any[]) : any => g.runtimeMode !== "staticOnly" && g.runtimeMode !== "declaredOnly")
-    .map(([id]: any[]) : any => id);
+export function listAllRuntimeGuardIds(): string[] {
+  return Object.entries(STATE_MACHINE_GUARDS)
+    .filter(([, guard]) => guard.runtimeMode !== "staticOnly" && guard.runtimeMode !== "declaredOnly")
+    .map(([id]) => id);
 }
 
-export function isStaticOnlyGuard(guardId?: any) : any {
-  const guard: any = STATE_MACHINE_GUARDS[guardId];
+export function isStaticOnlyGuard(guardId?: unknown): boolean {
+  const guard = getGuard(guardId);
   return guard?.runtimeMode === "staticOnly";
 }

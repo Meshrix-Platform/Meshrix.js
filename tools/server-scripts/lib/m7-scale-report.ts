@@ -8,21 +8,23 @@ import {
   M7_SCALE_PROFILE,
 } from "../../../packages/foundation/src/scale/m7-scale-discipline.ts";
 
-const defaultRepoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const defaultRepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+type ReportKind = keyof typeof M7_SCALE_DISCIPLINE.reports;
+type UnknownRecord = Record<string, unknown>;
 
-export function resolveRepoRoot(value: any = defaultRepoRoot) : any {
+export function resolveRepoRoot(value = defaultRepoRoot): string {
   return path.resolve(value);
 }
 
-export async function readJson(filePath?: any) : Promise<any> {
+export async function readJson(filePath: string): Promise<unknown> {
   return JSON.parse(await fs.readFile(filePath, "utf8"));
 }
 
-export async function writeReportAtomically(repoRoot?: any, relativePath?: any, report?: any) : Promise<any> {
-  const targetPath: any = path.join(repoRoot, relativePath);
-  const serialized: any = `${JSON.stringify(report, null, 2)}\n`;
+export async function writeReportAtomically(repoRoot: string, relativePath: string, report: unknown): Promise<string> {
+  const targetPath = path.join(repoRoot, relativePath);
+  const serialized = `${JSON.stringify(report, null, 2)}\n`;
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  const temporary: any = path.join(
+  const temporary = path.join(
     path.dirname(targetPath),
     `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.tmp`,
   );
@@ -37,8 +39,13 @@ export function createBlockedReport({
   reasonCode,
   message,
   finishedAt = new Date().toISOString(),
-}: Record<string, any>) : any {
-  const spec: any = M7_SCALE_DISCIPLINE.reports[kind];
+}: {
+  kind: ReportKind;
+  reasonCode: unknown;
+  message: unknown;
+  finishedAt?: string;
+}): UnknownRecord {
+  const spec = M7_SCALE_DISCIPLINE.reports[kind];
   return {
     schema_version: spec.schemaVersion,
     profile: M7_SCALE_PROFILE,
@@ -59,8 +66,12 @@ export function createAcceptedReport({
   kind,
   summary,
   finishedAt = new Date().toISOString(),
-}: Record<string, any>) : any {
-  const spec: any = M7_SCALE_DISCIPLINE.reports[kind];
+}: {
+  kind: ReportKind;
+  summary: UnknownRecord;
+  finishedAt?: string;
+}): UnknownRecord {
+  const spec = M7_SCALE_DISCIPLINE.reports[kind];
   return {
     schema_version: spec.schemaVersion,
     profile: M7_SCALE_PROFILE,

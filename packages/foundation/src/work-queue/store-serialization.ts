@@ -4,35 +4,69 @@ import { createHash } from "node:crypto";
 import { assertQueueDefinitionCanEnqueue, normalizeStructuredQueueScope } from "./definitions.ts";
 import { DEFAULT_QUEUE_POLICY } from "./policies.ts";
 
-export const WORK_QUEUE_MAX_CHECKPOINT_REF_BYTES: any = 2 * 1024;
-const CHECKPOINT_TOKEN: any = /^[A-Za-z0-9._:-]+$/u;
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+interface QueueBoundaryError extends Error { code?: string; limit?: number; reason?: string; }
+interface QueueTimeSource { nowMs(): number; }
+interface WorkItemBoundaryRow { [key: string]: unknown; queue_definition_id?: unknown; scope_key?: unknown; }
+interface WorkItemDatabaseRow extends WorkItemBoundaryRow {
+  work_item_id?: unknown; queue_definition_version?: unknown; scope_json?: unknown; dedupe_key?: unknown;
+  state?: unknown; owner_ref_json?: unknown; payload_ref_json?: unknown; payload_kind?: unknown;
+  priority?: unknown; priority_class?: unknown; tenant_id?: unknown; workspace_id?: unknown;
+  project_id?: unknown; available_at_ms?: unknown; expires_at_ms?: unknown; attempt?: unknown;
+  max_attempts?: unknown; lease_id?: unknown; lease_seq?: unknown; leased_by_worker_id?: unknown;
+  lease_expires_at_ms?: unknown; concurrency_key?: unknown; route_version?: unknown;
+  policy_version?: unknown; fallback_task_id?: unknown; checkpoint_seq?: unknown;
+  checkpoint_ref_json?: unknown; checkpoint_digest?: unknown; checkpoint_updated_at_ms?: unknown;
+  last_error_json?: unknown; created_at_ms?: unknown; updated_at_ms?: unknown; last_transition_seq?: unknown;
+}
+interface DedupeFingerprintInput {
+  queueDefinitionVersion?: unknown; payloadRef?: unknown; ownerRef?: unknown;
+  schedulingScope?: Record<string, unknown>;
+}
+interface JournalDatabaseRow { [key: string]: unknown; }
+export interface JournalTransition {
+  seq: number; journalEntryId: string; workItemId: string; queueDefinitionId: string;
+  queueDefinitionVersion: number; transition: string; fromState: string | null; toState: string;
+  leaseId: string; leaseSeq: number; operationId: string; actor: unknown; reason: string;
+  policyVersion: string; decision: unknown; createdAtMs: number; adoptedTimeMs: number;
+}
+interface CheckpointRef { kind: string; ref: string; revision: string; digest: string; }
+interface QueueInput {
+  [key: string]: unknown;
+  queueDefinition?: Record<string, unknown>; definition?: Record<string, unknown>;
+  scope?: Record<string, unknown>;
+}
 
-export function toText(value?: any) : any {
+export const WORK_QUEUE_MAX_CHECKPOINT_REF_BYTES = 2 * 1024;
+const CHECKPOINT_TOKEN = /^[A-Za-z0-9._:-]+$/u;
+
+export function toText(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-export function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+export function asObject(value?: unknown, fallback: Record<string, unknown> | null = {}): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : fallback;
 }
 
-export function asArray(value?: any, fallback: any = []) : any {
-  return Array.isArray(value) ? value : fallback;
+export function asArray<Value = unknown>(value?: unknown, fallback: Value[] = []): Value[] {
+  return Array.isArray(value) ? value as Value[] : fallback;
 }
 
-export function asInt(value?: any, fallback: any = 0) : any {
-  const parsed: any = Number(value);
+export function asInt(value?: unknown, fallback = 0): number {
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
 }
 
-export function asPositiveInt(value?: any, fallback: any = 1) : any {
+export function asPositiveInt(value?: unknown, fallback = 1): number {
   return Math.max(1, asInt(value, fallback));
 }
 
-export function jsonString(value?: any, fallback: any = null) : any {
+export function jsonString(value?: unknown, fallback: unknown = null): string | undefined {
   return JSON.stringify(value ?? fallback);
 }
 
-export function parseJson(value?: any, fallback?: any) : any {
+export function parseJson<Fallback>(value: unknown, fallback: Fallback): JsonValue | object | Fallback {
   if (value === null || value === undefined) {
     return fallback;
   }
@@ -40,7 +74,7 @@ export function parseJson(value?: any, fallback?: any) : any {
     return value;
   }
   try {
-    const parsed: any = JSON.parse(String(value || ""));
+    const parsed: JsonValue = JSON.parse(String(value || ""));
     return parsed === undefined || parsed === null ? fallback : parsed;
   } catch {
     return fallback;
@@ -48,20 +82,20 @@ export function parseJson(value?: any, fallback?: any) : any {
 }
 
 
-export function normalizeCheckpointRef(value?: any) : any {
-  const source: any = asObject(value, null);
+export function normalizeCheckpointRef(value?: unknown): { checkpointRef: CheckpointRef; serialized: string; checkpointDigest: string } {
+  const source = asObject(value, null);
   if (!source) {
-    const error: Error & Record<string, any> = new Error("Queue checkpointRef must be an object.");
+    const error: QueueBoundaryError = new Error("Queue checkpointRef must be an object.");
     error.code = "work_queue_checkpoint_invalid";
     throw error;
   }
-  const allowed: any = new Set<any>(["kind", "ref", "revision", "digest"]);
-  if (Object.keys(source).some((key?: any) : any => !allowed.has(key))) {
-    const error: Error & Record<string, any> = new Error("Queue checkpointRef contains unsupported fields.");
+  const allowed = new Set(["kind", "ref", "revision", "digest"]);
+  if (Object.keys(source).some((key) => !allowed.has(key))) {
+    const error: QueueBoundaryError = new Error("Queue checkpointRef contains unsupported fields.");
     error.code = "work_queue_checkpoint_invalid";
     throw error;
   }
-  const checkpointRef: Record<string, any> = {
+  const checkpointRef: CheckpointRef = {
     kind: toText(source.kind),
     ref: toText(source.ref),
     revision: toText(source.revision),
@@ -71,13 +105,13 @@ export function normalizeCheckpointRef(value?: any) : any {
       !CHECKPOINT_TOKEN.test(checkpointRef.kind) || !CHECKPOINT_TOKEN.test(checkpointRef.ref) ||
       (checkpointRef.revision && !CHECKPOINT_TOKEN.test(checkpointRef.revision)) ||
       (checkpointRef.digest && !/^sha256:[a-f0-9]{64}$/u.test(checkpointRef.digest))) {
-    const error: Error & Record<string, any> = new Error("Queue checkpointRef must contain bounded opaque identifiers.");
+    const error: QueueBoundaryError = new Error("Queue checkpointRef must contain bounded opaque identifiers.");
     error.code = "work_queue_checkpoint_invalid";
     throw error;
   }
-  const serialized: any = stableJson(checkpointRef);
+  const serialized = stableJson(checkpointRef);
   if (Buffer.byteLength(serialized, "utf8") > WORK_QUEUE_MAX_CHECKPOINT_REF_BYTES) {
-    const error: Error & Record<string, any> = new Error("Queue checkpointRef exceeds its byte budget.");
+    const error: QueueBoundaryError = new Error("Queue checkpointRef exceeds its byte budget.");
     error.code = "work_queue_checkpoint_capacity_exceeded";
     error.limit = WORK_QUEUE_MAX_CHECKPOINT_REF_BYTES;
     throw error;
@@ -89,7 +123,7 @@ export function normalizeCheckpointRef(value?: any) : any {
   };
 }
 
-export function queueDefinitionSnapshot(definition: Record<string, any> = {}) : any {
+export function queueDefinitionSnapshot(definition: Record<string, unknown> = {}) {
   return {
     queueDefinitionId: toText(definition.queueDefinitionId ?? definition.queue_definition_id),
     queueDefinitionVersion: asPositiveInt(
@@ -109,30 +143,30 @@ export function queueDefinitionSnapshot(definition: Record<string, any> = {}) : 
   };
 }
 
-export function queueDefinitionConflict(message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
+export function queueDefinitionConflict(message?: string): QueueBoundaryError {
+  const error: QueueBoundaryError = new Error(message);
   error.code = "work_queue_definition_conflict";
   return error;
 }
 
-export function normalizeScope(scope: Record<string, any> = {}) : any {
+export function normalizeScope(scope: Record<string, unknown> = {}) {
   return normalizeStructuredQueueScope(scope);
 }
 
-export function scopeKeyFromScope(scope: Record<string, any> = {}) : any {
+export function scopeKeyFromScope(scope: Record<string, unknown> = {}): string {
   return stableJson(normalizeScope(scope));
 }
 
-export function workItemMatchesBoundary(row?: any, input: Record<string, any> = {}) : any {
+export function workItemMatchesBoundary(row?: WorkItemBoundaryRow | null, input: QueueInput = {}): boolean {
   if (!row) return false;
-  const queueDefinitionId: any = toText(
+  const queueDefinitionId = toText(
     input.queueDefinitionId || input.queueDefinition?.queueDefinitionId
   );
   if (queueDefinitionId && toText(row.queue_definition_id) !== queueDefinitionId) {
     return false;
   }
-  const hasScope: any = Object.hasOwn(input, "scopeKey") || Object.hasOwn(input, "scope");
-  const scopeKey: any = Object.hasOwn(input, "scopeKey")
+  const hasScope = Object.hasOwn(input, "scopeKey") || Object.hasOwn(input, "scope");
+  const scopeKey = Object.hasOwn(input, "scopeKey")
     ? toText(input.scopeKey)
     : hasScope
       ? scopeKeyFromScope(input.scope)
@@ -140,28 +174,30 @@ export function workItemMatchesBoundary(row?: any, input: Record<string, any> = 
   return !hasScope || toText(row.scope_key) === scopeKey;
 }
 
-export function requireWorkItemBoundary(row?: any, input: Record<string, any> = {}) : any {
-  if (workItemMatchesBoundary(row, input)) return row;
-  const error: Error & Record<string, any> = new Error(`Work item not found: ${toText(input.workItemId)}`);
+export function requireWorkItemBoundary<Row extends WorkItemBoundaryRow>(row: Row | null | undefined, input: QueueInput = {}): Row {
+  if (row && workItemMatchesBoundary(row, input)) return row;
+  const error: QueueBoundaryError = new Error(`Work item not found: ${toText(input.workItemId)}`);
   error.code = "work_queue_item_not_found";
   throw error;
 }
 
-export function nowFrom(timeSource?: any, override?: any) : any {
+export function nowFrom(timeSource: QueueTimeSource, override?: unknown): number {
   return asInt(override, asInt(timeSource.nowMs(), Date.now()));
 }
 
-export function resolveWorkExpiryAtMs({ nowMs, availableAtMs, expiresAtMs, policy = {} }: Record<string, any> = {}) : any {
-  const expiryPolicy: any = asObject(policy.workExpiry, DEFAULT_QUEUE_POLICY.workExpiry);
-  const defaultLifetimeMs: any = Math.max(1, asInt(
+export function resolveWorkExpiryAtMs({ nowMs = 0, availableAtMs = 0, expiresAtMs, policy = {} }: {
+  nowMs?: number; availableAtMs?: number; expiresAtMs?: unknown; policy?: Record<string, unknown>;
+} = {}): number {
+  const expiryPolicy = asObject(policy.workExpiry, DEFAULT_QUEUE_POLICY.workExpiry) || {};
+  const defaultLifetimeMs = Math.max(1, asInt(
     expiryPolicy.defaultLifetimeMs,
     DEFAULT_QUEUE_POLICY.workExpiry.defaultLifetimeMs
   ));
-  const maxLifetimeMs: any = Math.max(defaultLifetimeMs, asInt(
+  const maxLifetimeMs = Math.max(defaultLifetimeMs, asInt(
     expiryPolicy.maxLifetimeMs,
     DEFAULT_QUEUE_POLICY.workExpiry.maxLifetimeMs
   ));
-  const requested: any = expiresAtMs === undefined || expiresAtMs === null
+  const requested = expiresAtMs === undefined || expiresAtMs === null
     ? nowMs + defaultLifetimeMs
     : Number(expiresAtMs);
   if (!Number.isSafeInteger(requested)) {
@@ -179,8 +215,8 @@ export function resolveWorkExpiryAtMs({ nowMs, availableAtMs, expiresAtMs, polic
   return requested;
 }
 
-export function getPolicy(inputPolicy: Record<string, any> = {}) : any {
-  const resolved: Record<string, any> = {
+export function getPolicy(inputPolicy: Record<string, unknown> = {}) {
+  const resolved = {
     ...DEFAULT_QUEUE_POLICY,
     ...asObject(inputPolicy),
     retryBackoff: {
@@ -216,7 +252,7 @@ export function getPolicy(inputPolicy: Record<string, any> = {}) : any {
       ...asObject(inputPolicy.fairness)
     }
   };
-  for (const [group, key] of [
+  const positiveIntegerFields = [
     ["capacity", "maxPayloadRefBytes"],
     ["capacity", "maxOutstanding"],
     ["capacity", "maxOutstandingPerTenant"],
@@ -236,10 +272,17 @@ export function getPolicy(inputPolicy: Record<string, any> = {}) : any {
     , ["fairness", "agingBatchSize"]
     , ["fairness", "minReservedLeasesPerPartition"]
     , ["fairness", "reservationScanLimit"]
-  ]) {
-    const value: any = Number(resolved[group][key]);
+  ] as const;
+  const policyGroups = {
+    capacity: resolved.capacity,
+    retention: resolved.retention,
+    fairness: resolved.fairness
+  };
+  for (const [group, key] of positiveIntegerFields) {
+    const policyGroup: Record<string, unknown> = policyGroups[group];
+    const value = Number(policyGroup[key]);
     if (!Number.isSafeInteger(value) || value < 1) {
-      const error: Error & Record<string, any> = new Error(`Queue policy ${group}.${key} must be a finite positive integer.`);
+      const error: QueueBoundaryError = new Error(`Queue policy ${group}.${key} must be a finite positive integer.`);
       error.code = "work_queue_policy_invalid";
       error.reason = `${group}.${key}`;
       throw error;
@@ -248,9 +291,11 @@ export function getPolicy(inputPolicy: Record<string, any> = {}) : any {
   return resolved;
 }
 
-export function resolveQueueDefinition(input: Record<string, any> = {}, { assertEnqueue = false, allowAllVersions = false }: Record<string, any> = {}) : any {
-  const definition: any = asObject(input.queueDefinition || input.definition, {});
-  const queueDefinitionId: any = toText(
+export function resolveQueueDefinition(input: QueueInput = {}, { assertEnqueue = false, allowAllVersions = false }: {
+  assertEnqueue?: boolean; allowAllVersions?: boolean;
+} = {}) {
+  const definition = asObject(input.queueDefinition || input.definition, {}) || {};
+  const queueDefinitionId = toText(
     input.queueDefinitionId ||
       definition.queueDefinitionId ||
       input.queueId ||
@@ -259,11 +304,11 @@ export function resolveQueueDefinition(input: Record<string, any> = {}, { assert
   if (!queueDefinitionId) {
     throw new Error("queueDefinitionId is required.");
   }
-  const rawVersion: any = input.queueDefinitionVersion ??
+  const rawVersion = input.queueDefinitionVersion ??
     input.version ??
     definition.queueDefinitionVersion ??
     definition.version;
-  const queueDefinitionVersion: any = rawVersion === undefined && allowAllVersions
+  const queueDefinitionVersion = rawVersion === undefined && allowAllVersions
     ? 0
     : asPositiveInt(rawVersion, 1);
   if (assertEnqueue && Object.keys(definition).length) {
@@ -276,50 +321,50 @@ export function resolveQueueDefinition(input: Record<string, any> = {}, { assert
   };
 }
 
-export function normalizePayloadRef(value?: any) : any {
-  const payloadRef: any = asObject(value, null);
+export function normalizePayloadRef(value?: unknown): Record<string, unknown> {
+  const payloadRef = asObject(value, null);
   if (!payloadRef || Object.keys(payloadRef).length === 0) {
     throw new Error("payloadRef is required and must be a structured reference.");
   }
   return payloadRef;
 }
 
-export function serializePayloadRef(value?: any) : any {
-  const ancestors: any = new Set<any>();
-  const visit: any = (candidate?: any, depth?: any) : any => {
+export function serializePayloadRef(value?: unknown): string {
+  const ancestors = new Set<object>();
+  const visit = (candidate: unknown, depth: number): JsonValue => {
     if (depth > 16) throw new TypeError("payloadRef exceeds the supported nesting depth.");
     if (candidate === null || typeof candidate === "string" || typeof candidate === "boolean") return candidate;
     if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
     if (typeof candidate !== "object") throw new TypeError("payloadRef contains a non-JSON value.");
     if (ancestors.has(candidate)) throw new TypeError("payloadRef contains a circular reference.");
-    const prototype: any = Object.getPrototypeOf(candidate);
+    const prototype: object | null = Object.getPrototypeOf(candidate);
     if (!Array.isArray(candidate) && prototype !== Object.prototype && prototype !== null) {
       throw new TypeError("payloadRef must contain only JSON objects and arrays.");
     }
     ancestors.add(candidate);
-    const normalized: any = Array.isArray(candidate)
-      ? candidate.map((item?: any) : any => visit(item, depth + 1))
-      : Object.fromEntries((Object.entries(candidate) as [string, any][]).map(([key, item]: any[]) : any => [key, visit(item, depth + 1)]));
+    const normalized: JsonValue = Array.isArray(candidate)
+      ? candidate.map((item) => visit(item, depth + 1))
+      : Object.fromEntries(Object.entries(candidate).map(([key, item]) => [key, visit(item, depth + 1)]));
     ancestors.delete(candidate);
     return normalized;
   };
   try {
     return JSON.stringify(visit(value, 0));
-  } catch (cause: any) {
-    const error: Error & Record<string, any> = new Error("payloadRef must be a bounded JSON-compatible structured reference.", { cause });
+  } catch (cause: unknown) {
+    const error: QueueBoundaryError = new Error("payloadRef must be a bounded JSON-compatible structured reference.", { cause });
     error.code = "work_queue_payload_ref_invalid";
     throw error;
   }
 }
 
-export function assertDedupeFingerprint(existingRow: any, {
+export function assertDedupeFingerprint(existingRow: WorkItemDatabaseRow, {
   queueDefinitionVersion,
   payloadRef,
   ownerRef,
   schedulingScope = {}
-}: Record<string, any>) : any {
-  const requestedSchedulingScope: any = normalizeScope(schedulingScope);
-  const existingFingerprint: any = stableJson({
+}: DedupeFingerprintInput): void {
+  const requestedSchedulingScope = normalizeScope(schedulingScope);
+  const existingFingerprint = stableJson({
     queueDefinitionVersion: Number(existingRow.queue_definition_version || 0),
     payloadRef: parseJson(existingRow.payload_ref_json, {}),
     ownerRef: parseJson(existingRow.owner_ref_json, {}),
@@ -329,7 +374,7 @@ export function assertDedupeFingerprint(existingRow: any, {
       projectId: existingRow.project_id || ""
     }
   });
-  const requestedFingerprint: any = stableJson({
+  const requestedFingerprint = stableJson({
     queueDefinitionVersion: Number(queueDefinitionVersion || 0),
     payloadRef,
     ownerRef,
@@ -340,21 +385,21 @@ export function assertDedupeFingerprint(existingRow: any, {
     }
   });
   if (existingFingerprint !== requestedFingerprint) {
-    const error: Error & Record<string, any> = new Error("The dedupe key is already bound to a different immutable work request.");
+    const error: QueueBoundaryError = new Error("The dedupe key is already bound to a different immutable work request.");
     error.code = "work_queue_dedupe_conflict";
     throw error;
   }
 }
 
-export function normalizeOwnerRef(value?: any) : any {
-  return asObject(value, {});
+export function normalizeOwnerRef(value?: unknown): Record<string, unknown> {
+  return asObject(value, {}) || {};
 }
 
-export function rowToWorkItem(row?: any) : any {
+export function rowToWorkItem(row?: WorkItemDatabaseRow | null) {
   if (!row) {
     return null;
   }
-  const leaseId: any = toText(row.lease_id);
+  const leaseId = toText(row.lease_id);
   return {
     workItemId: row.work_item_id,
     queueDefinitionId: row.queue_definition_id,
@@ -404,22 +449,22 @@ export function rowToWorkItem(row?: any) : any {
   };
 }
 
-export function journalRowToTransition(row?: any) : any {
+export function journalRowToTransition(row: JournalDatabaseRow): JournalTransition {
   return {
     seq: Number(row.seq || 0),
-    journalEntryId: row.journal_entry_id,
-    workItemId: row.work_item_id,
-    queueDefinitionId: row.queue_definition_id,
+    journalEntryId: toText(row.journal_entry_id),
+    workItemId: toText(row.work_item_id),
+    queueDefinitionId: toText(row.queue_definition_id),
     queueDefinitionVersion: Number(row.queue_definition_version || 0),
-    transition: row.transition,
-    fromState: row.from_state || null,
-    toState: row.to_state,
-    leaseId: row.lease_id || "",
+    transition: toText(row.transition),
+    fromState: row.from_state ? toText(row.from_state) : null,
+    toState: toText(row.to_state),
+    leaseId: toText(row.lease_id),
     leaseSeq: Number(row.lease_seq || 0),
-    operationId: row.operation_id || "",
+    operationId: toText(row.operation_id),
     actor: parseJson(row.actor_json, {}),
-    reason: row.reason || "",
-    policyVersion: row.policy_version || "",
+    reason: toText(row.reason),
+    policyVersion: toText(row.policy_version),
     decision: parseJson(row.decision_json, {}),
     createdAtMs: Number(row.created_at_ms || 0),
     adoptedTimeMs: Number(row.adopted_time_ms || 0)

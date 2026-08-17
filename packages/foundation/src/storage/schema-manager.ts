@@ -1,8 +1,9 @@
 import path from "node:path";
+import type Database from "better-sqlite3";
 
-export const STORAGE_SCHEMA_REVISION: any = 3;
+export const STORAGE_SCHEMA_REVISION = 3;
 
-const CORE_SCHEMA_COLUMNS: Readonly<Record<string, any>> = Object.freeze({
+const CORE_SCHEMA_COLUMNS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   storage_objects: Object.freeze([
     "object_id", "namespace", "storage_rel_path", "sha256", "byte_size",
     "media_type", "metadata_json", "created_at", "updated_at"
@@ -30,62 +31,88 @@ const CORE_SCHEMA_COLUMNS: Readonly<Record<string, any>> = Object.freeze({
   ])
 });
 
-const UPGRADEABLE_CORE_TABLES: any = new Set<any>([
+const UPGRADEABLE_CORE_TABLES = new Set<string>([
   "storage_upload_consumption_receipts",
   "upload_no_run_custody_staging"
 ]);
 
-function storageSchemaError(code?: any, message?: any, details: Record<string, any> = {}) : any {
-  const error: Error & Record<string, any> = new Error(message);
+export interface StorageSchemaCompatibility {
+  ready: boolean;
+  currentRevision: number;
+  targetRevision: number;
+  initializationRequired: boolean;
+  metadataUpgradeRequired: boolean;
+  schemaUpgradeRequired: boolean;
+  futureRevisionDetected: boolean;
+  missingCoreTableCount: number;
+  missingColumnCount: number;
+}
+
+export type StorageSchemaContributor =
+  | ((database: Database.Database) => void)
+  | { initialize(database: Database.Database): void };
+
+type StorageSchemaError = Error & {
+  code: string;
+  reasonCode: string;
+  details: StorageSchemaCompatibility;
+};
+
+function storageSchemaError(
+  code: string,
+  message: string,
+  details: StorageSchemaCompatibility
+): StorageSchemaError {
+  const error = new Error(message) as StorageSchemaError;
   error.code = code;
   error.reasonCode = code;
   error.details = details;
   return error;
 }
 
-function tableNames(db?: any) : any {
-  return new Set<any>(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()
-    .map((row?: any) : any => String(row.name || "")));
+function tableNames(db: Database.Database): Set<string> {
+  return new Set(db.prepare<[], { name: unknown }>("SELECT name FROM sqlite_master WHERE type = 'table'").all()
+    .map((row) => String(row.name || "")));
 }
 
-function tableColumns(db?: any, tableName?: any) : any {
-  return new Set<any>(db.prepare(`PRAGMA table_info(${tableName})`).all()
-    .map((row?: any) : any => String(row.name || "")));
+function tableColumns(db: Database.Database, tableName: string): Set<string> {
+  return new Set(db.prepare<[], { name: unknown }>(`PRAGMA table_info(${tableName})`).all()
+    .map((row) => String(row.name || "")));
 }
 
-function storedRevision(db?: any, tables?: any) : any {
+function storedRevision(db: Database.Database, tables: ReadonlySet<string>): number {
   if (!tables.has("storage_schema_meta")) return 0;
-  const value: any = db.prepare("SELECT value FROM storage_schema_meta WHERE key = 'schema_revision' LIMIT 1").get()?.value;
-  const revision: any = Number(value);
+  const value = db.prepare<[], { value: unknown }>("SELECT value FROM storage_schema_meta WHERE key = 'schema_revision' LIMIT 1").get()?.value;
+  const revision = Number(value);
   return Number.isSafeInteger(revision) && revision >= 0 ? revision : -1;
 }
 
-export function inspectStorageSchemaCompatibility(db?: any) : any {
+export function inspectStorageSchemaCompatibility(db: Database.Database): Readonly<StorageSchemaCompatibility> {
   if (!db || typeof db.prepare !== "function") {
     throw new TypeError("Storage schema compatibility inspection requires a database handle.");
   }
-  const tables: any = tableNames(db);
-  const presentCoreTables: any = Object.keys(CORE_SCHEMA_COLUMNS).filter((table?: any) : any => tables.has(table));
-  const missingCoreTables: any = Object.keys(CORE_SCHEMA_COLUMNS).filter((table?: any) : any => !tables.has(table));
-  const missingColumns: any = Object.fromEntries(presentCoreTables
-    .map((table?: any) : any => {
-      const columns: any = tableColumns(db, table);
-      return [table, CORE_SCHEMA_COLUMNS[table].filter((column?: any) : any => !columns.has(column))];
+  const tables = tableNames(db);
+  const presentCoreTables = Object.keys(CORE_SCHEMA_COLUMNS).filter((table) => tables.has(table));
+  const missingCoreTables = Object.keys(CORE_SCHEMA_COLUMNS).filter((table) => !tables.has(table));
+  const missingColumns: Record<string, string[]> = Object.fromEntries(presentCoreTables
+    .map((table): [string, string[]] => {
+      const columns = tableColumns(db, table);
+      return [table, CORE_SCHEMA_COLUMNS[table].filter((column) => !columns.has(column))];
     })
-    .filter(([, columns]: any[]) : any => columns.length > 0));
-  const currentRevision: any = storedRevision(db, tables);
-  const empty: any = presentCoreTables.length === 0;
-  const knownUpgradeRequired: any =
+    .filter(([, columns]) => columns.length > 0));
+  const currentRevision = storedRevision(db, tables);
+  const empty = presentCoreTables.length === 0;
+  const knownUpgradeRequired =
     missingCoreTables.length > 0 &&
-    missingCoreTables.every((table?: any) : any => UPGRADEABLE_CORE_TABLES.has(table)) &&
+    missingCoreTables.every((table) => UPGRADEABLE_CORE_TABLES.has(table)) &&
     Object.keys(missingColumns).length === 0;
-  const compatibleShape: any = empty ||
+  const compatibleShape = empty ||
     (
       missingCoreTables.length === 0 &&
       Object.keys(missingColumns).length === 0
     ) ||
     knownUpgradeRequired;
-  const revisionSupported: any = currentRevision >= 0 && currentRevision <= STORAGE_SCHEMA_REVISION;
+  const revisionSupported = currentRevision >= 0 && currentRevision <= STORAGE_SCHEMA_REVISION;
   return Object.freeze({
     ready: compatibleShape && revisionSupported,
     currentRevision,
@@ -100,12 +127,12 @@ export function inspectStorageSchemaCompatibility(db?: any) : any {
       ),
     futureRevisionDetected: currentRevision > STORAGE_SCHEMA_REVISION,
     missingCoreTableCount: empty ? 0 : missingCoreTables.length,
-    missingColumnCount: (Object.values(missingColumns) as any[]).reduce((count?: any, columns?: any) : any => count + columns.length, 0)
+    missingColumnCount: Object.values(missingColumns).reduce((count, columns) => count + columns.length, 0)
   });
 }
 
-export function assertStorageSchemaUpgradePreflight(db?: any) : any {
-  const result: any = inspectStorageSchemaCompatibility(db);
+export function assertStorageSchemaUpgradePreflight(db: Database.Database): Readonly<StorageSchemaCompatibility> {
+  const result = inspectStorageSchemaCompatibility(db);
   if (!result.ready) {
     throw storageSchemaError(
       result.futureRevisionDetected ? "storage_schema_future_revision" : "storage_schema_incompatible",
@@ -116,7 +143,7 @@ export function assertStorageSchemaUpgradePreflight(db?: any) : any {
   return result;
 }
 
-function applySchemaContributor(db?: any, contributor?: any) : any {
+function applySchemaContributor(db: Database.Database, contributor: StorageSchemaContributor): void {
   if (typeof contributor === "function") {
     contributor(db);
     return;
@@ -126,15 +153,21 @@ function applySchemaContributor(db?: any, contributor?: any) : any {
   }
 }
 
-export function getStorageDatabaseDirectory(userDataPath?: any) : any {
+export function getStorageDatabaseDirectory(userDataPath?: string): string {
+  if (!userDataPath) {
+    throw new TypeError("Storage userDataPath is required.");
+  }
   return path.join(userDataPath, "metadata");
 }
 
-export function getStorageDatabasePath(userDataPath?: any) : any {
+export function getStorageDatabasePath(userDataPath?: string): string {
   return path.join(getStorageDatabaseDirectory(userDataPath), "meshrix.sqlite");
 }
 
-export function initializeStorageSchema(db?: any, { schemaContributors = [] }: Record<string, any> = {}) : any {
+export function initializeStorageSchema(
+  db: Database.Database,
+  { schemaContributors = [] }: { schemaContributors?: readonly StorageSchemaContributor[] } = {}
+): void {
   if (!db || typeof db.exec !== "function") {
     throw new TypeError("Storage schema initialization requires a database handle.");
   }

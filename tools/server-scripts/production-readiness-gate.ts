@@ -24,7 +24,7 @@ export const PRODUCTION_READINESS_GATES: readonly any[] = Object.freeze([
     owner: "security-boundary",
     verifier: "tools/server-scripts/verify-security-local-stdio-lockdown.ts",
     command: process.execPath,
-    args: ["tools/server-scripts/verify-security-local-stdio-lockdown.ts"]
+    args: ["--conditions=source", "tools/server-scripts/verify-security-local-stdio-lockdown.ts"]
   },
   {
     id: "risk-control-model",
@@ -32,7 +32,7 @@ export const PRODUCTION_READINESS_GATES: readonly any[] = Object.freeze([
     owner: "security-boundary",
     verifier: "tools/server-scripts/verify-risk-control-model.ts",
     command: process.execPath,
-    args: ["tools/server-scripts/verify-risk-control-model.ts"]
+    args: ["--conditions=source", "tools/server-scripts/verify-risk-control-model.ts"]
   }
 
 ]);

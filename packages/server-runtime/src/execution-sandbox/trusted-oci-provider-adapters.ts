@@ -6,52 +6,77 @@ import path from "node:path";
 import { controlledRef, sandboxDigest } from "#meshrix/foundation/execution-sandbox/contracts";
 import { createOciSandboxBackend } from "./oci-backend.ts";
 
-const FIXED_CANDIDATES: Readonly<Record<string, any>> = Object.freeze({
+interface OciCandidate {
+  id: string;
+  providerClass: string;
+  engine: "podman" | "docker";
+  binary: string;
+  runtimeClass: string;
+  rootless: boolean;
+}
+interface OciBackend {
+  descriptor(): Promise<{ healthy?: boolean; enforcedRestrictions?: readonly string[]; [key: string]: unknown }>;
+}
+type BackendFactory = (input: { id: string; binary: string; engine: string; runtimeClass: string }) => OciBackend;
+type RootlessProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<boolean>;
+type IdentityProbe = (candidate: OciCandidate) => Promise<string>;
+interface AdapterOptions {
+  platform?: NodeJS.Platform;
+  conformanceReceipts?: Record<string, unknown>;
+  pathExists?: (candidatePath: string) => boolean;
+  rootlessProbe?: RootlessProbe;
+  executableIdentityProbe?: IdentityProbe;
+  backendFactory?: BackendFactory;
+}
+interface ExecutableOptions { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform }
+
+const FIXED_CANDIDATES: Readonly<Partial<Record<NodeJS.Platform, readonly OciCandidate[]>>> = Object.freeze({
   darwin: Object.freeze([
-    { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman", binary: "podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.docker", providerClass: "docker", engine: "docker", binary: "docker", runtimeClass: "runc", rootless: false }
+    { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman" as const, binary: "podman", runtimeClass: "crun", rootless: true },
+    { id: "oci.docker", providerClass: "docker", engine: "docker" as const, binary: "docker", runtimeClass: "runc", rootless: false }
   ]),
   linux: Object.freeze([
-    { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman", binary: "podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.podman", providerClass: "podman", engine: "podman", binary: "podman", runtimeClass: "crun", rootless: false },
-    { id: "oci.rootless-docker", providerClass: "rootless-docker", engine: "docker", binary: "docker", runtimeClass: "runc", rootless: true },
-    { id: "oci.docker", providerClass: "docker", engine: "docker", binary: "docker", runtimeClass: "runc", rootless: false }
+    { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman" as const, binary: "podman", runtimeClass: "crun", rootless: true },
+    { id: "oci.podman", providerClass: "podman", engine: "podman" as const, binary: "podman", runtimeClass: "crun", rootless: false },
+    { id: "oci.rootless-docker", providerClass: "rootless-docker", engine: "docker" as const, binary: "docker", runtimeClass: "runc", rootless: true },
+    { id: "oci.docker", providerClass: "docker", engine: "docker" as const, binary: "docker", runtimeClass: "runc", rootless: false }
   ])
 });
 
-function resolveExecutablePath(command?: any, {
+function resolveExecutablePath(command = "", {
   env = process.env,
   platform = process.platform
-}: Record<string, any> = {}) : any {
+}: ExecutableOptions = {}): string {
   if (!command) return "";
   if (path.isAbsolute(command)) return fs.existsSync(command) ? command : "";
-  const pathValue: any = env.PATH || env.Path || env.path || "";
-  const extensions: any = platform === "win32"
+  const pathValue = env.PATH || env.Path || env.path || "";
+  const extensions = platform === "win32"
     ? String(env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean)
     : [""];
   for (const directory of pathValue.split(path.delimiter).filter(Boolean)) {
     for (const extension of extensions) {
-      const candidatePath: any = path.join(directory, `${command}${extension}`);
+      const candidatePath = path.join(directory, `${command}${extension}`);
       if (fs.existsSync(candidatePath)) return candidatePath;
     }
   }
   return "";
 }
 
-function resolveCandidateBinary(candidate?: any, platform: any = process.platform) : any {
+function resolveCandidateBinary(candidate: OciCandidate, platform: NodeJS.Platform = process.platform): string {
   return resolveExecutablePath(candidate.binary, { platform });
 }
 
-function fixedRootlessProbe(candidate?: any, { timeoutMs = 2_000 }: Record<string, any> = {}) : any {
-  const args: any = candidate.engine === "podman"
+function fixedRootlessProbe(candidate: OciCandidate, { timeoutMs = 2_000 }: { timeoutMs?: number } = {}): Promise<boolean> {
+  const args = candidate.engine === "podman"
     ? ["info", "--format", "{{.Host.Security.Rootless}}"]
     : ["info", "--format", "{{json .SecurityOptions}}"];
-  return new Promise((resolve?: any) : any => {
-    let bytes: any = 0;
-    let output: any = "";
-    let settled: any = false;
-    let child: any;
-    const finish: any = (value?: any) : any => {
+  return new Promise<boolean>((resolve) => {
+    let bytes = 0;
+    let output = "";
+    let settled = false;
+    let child: ReturnType<typeof spawn>;
+    let timer: NodeJS.Timeout;
+    const finish = (value: boolean) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -67,12 +92,12 @@ function fixedRootlessProbe(candidate?: any, { timeoutMs = 2_000 }: Record<strin
       resolve(false);
       return;
     }
-    const timer: any = setTimeout(() : any => {
+    timer = setTimeout(() => {
       child.kill("SIGKILL");
       finish(false);
     }, timeoutMs);
     timer.unref?.();
-    child.stdout.on("data", (chunk?: any) : any => {
+    child.stdout?.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
       if (bytes > 4 * 1024) {
         child.kill("SIGKILL");
@@ -81,13 +106,13 @@ function fixedRootlessProbe(candidate?: any, { timeoutMs = 2_000 }: Record<strin
       }
       output += chunk.toString("utf8");
     });
-    child.once("error", () : any => finish(false));
-    child.once("close", (code?: any) : any => {
+    child.once("error", () => finish(false));
+    child.once("close", (code: number | null) => {
       if (code !== 0) {
         finish(false);
         return;
       }
-      const normalized: any = output.trim().toLowerCase();
+      const normalized = output.trim().toLowerCase();
       finish(candidate.engine === "podman"
         ? normalized === "true"
         : normalized.includes("rootless"));
@@ -95,11 +120,11 @@ function fixedRootlessProbe(candidate?: any, { timeoutMs = 2_000 }: Record<strin
   });
 }
 
-async function fixedExecutableIdentityProbe(candidate?: any) : Promise<any> {
-  const executablePath: any = resolveExecutablePath(candidate.binary);
+async function fixedExecutableIdentityProbe(candidate: OciCandidate): Promise<string> {
+  const executablePath = resolveExecutablePath(candidate.binary);
   if (!executablePath) throw new Error("OCI executable is unavailable");
-  const hash: any = crypto.createHash("sha256");
-  const stream: any = fs.createReadStream(executablePath);
+  const hash = crypto.createHash("sha256");
+  const stream = fs.createReadStream(executablePath);
   for await (const chunk of stream) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -107,15 +132,15 @@ async function fixedExecutableIdentityProbe(candidate?: any) : Promise<any> {
 export function createTrustedOciProviderAdapters({
   platform = process.platform,
   conformanceReceipts = {},
-  pathExists = (candidatePath?: any) : any => Boolean(resolveExecutablePath(candidatePath, { platform })),
+  pathExists = (candidatePath: string) => Boolean(resolveExecutablePath(candidatePath, { platform })),
   rootlessProbe = fixedRootlessProbe,
   executableIdentityProbe = fixedExecutableIdentityProbe,
   backendFactory = createOciSandboxBackend
-}: Record<string, any> = {}) : any {
-  const candidates: any = FIXED_CANDIDATES[platform] || [];
-  return Object.freeze(candidates.map((candidate?: any) : any => {
-    let backend: any = null;
-    const ensureBackend: any = () : any => {
+}: AdapterOptions = {}) {
+  const candidates = FIXED_CANDIDATES[platform] || [];
+  return Object.freeze(candidates.map((candidate) => {
+    let backend: OciBackend | null = null;
+    const ensureBackend = (): OciBackend => {
       backend ||= backendFactory({
         id: candidate.id,
         binary: resolveCandidateBinary(candidate, platform),
@@ -127,7 +152,7 @@ export function createTrustedOciProviderAdapters({
     return Object.freeze({
       id: candidate.id,
       providerClass: candidate.providerClass,
-      async probe() : Promise<any> {
+      async probe()  {
         if (!pathExists(candidate.binary)) {
           return Object.freeze({
             id: candidate.id,
@@ -137,7 +162,7 @@ export function createTrustedOciProviderAdapters({
             enforcedRestrictions: []
           });
         }
-        const actualRootless: any = await rootlessProbe(candidate);
+        const actualRootless = await rootlessProbe(candidate);
         if (actualRootless !== candidate.rootless) {
           return Object.freeze({
             id: candidate.id,
@@ -147,7 +172,7 @@ export function createTrustedOciProviderAdapters({
             enforcedRestrictions: []
           });
         }
-        let executableIdentityDigest: any;
+        let executableIdentityDigest;
         try {
           executableIdentityDigest = await executableIdentityProbe(candidate);
         } catch {
@@ -168,8 +193,8 @@ export function createTrustedOciProviderAdapters({
             enforcedRestrictions: []
           });
         }
-        const descriptor: any = await ensureBackend().descriptor();
-        const serviceIdentityRef: any = controlledRef(sandboxDigest({
+        const descriptor = await ensureBackend().descriptor();
+        const serviceIdentityRef = controlledRef(sandboxDigest({
           providerId: candidate.id,
           engine: candidate.engine,
           runtimeClass: candidate.runtimeClass,
@@ -185,7 +210,7 @@ export function createTrustedOciProviderAdapters({
           conformanceReceipt: conformanceReceipts[candidate.id] || null
         });
       },
-      async createBackend() : Promise<any> {
+      async createBackend()  {
         return ensureBackend();
       }
     });
@@ -194,43 +219,43 @@ export function createTrustedOciProviderAdapters({
 
 export async function createOciBackendConformanceTarget({
   platform = process.platform,
-  pathExists = (candidatePath?: any) : any => Boolean(resolveExecutablePath(candidatePath, { platform })),
+  pathExists = (candidatePath: string) => Boolean(resolveExecutablePath(candidatePath, { platform })),
   rootlessProbe = fixedRootlessProbe,
   executableIdentityProbe = fixedExecutableIdentityProbe,
   backendFactory = createOciSandboxBackend
-}: Record<string, any> = {}) : Promise<any> {
+}: Omit<AdapterOptions, "conformanceReceipts"> = {}) {
   for (const candidate of FIXED_CANDIDATES[platform] || []) {
     if (!pathExists(candidate.binary)) continue;
-    let actualRootless: any;
+    let actualRootless;
     try {
       actualRootless = await rootlessProbe(candidate);
     } catch {
       continue;
     }
     if (actualRootless !== candidate.rootless) continue;
-    let executableIdentityDigest: any;
+    let executableIdentityDigest;
     try {
       executableIdentityDigest = await executableIdentityProbe(candidate);
     } catch {
       continue;
     }
     if (!/^[a-f0-9]{64}$/u.test(String(executableIdentityDigest || ""))) continue;
-    const resolvedBinary: any = resolveCandidateBinary(candidate, platform);
+    const resolvedBinary = resolveCandidateBinary(candidate, platform);
     if (!resolvedBinary) continue;
-    const backend: any = backendFactory({
+    const backend = backendFactory({
       id: candidate.id,
       binary: resolvedBinary,
       engine: candidate.engine,
       runtimeClass: candidate.runtimeClass
     });
-    let descriptor: any;
+    let descriptor;
     try {
       descriptor = await backend.descriptor();
     } catch {
       continue;
     }
     if (descriptor?.healthy !== true) continue;
-    const serviceIdentityRef: any = controlledRef(sandboxDigest({
+    const serviceIdentityRef = controlledRef(sandboxDigest({
       providerId: candidate.id,
       engine: candidate.engine,
       runtimeClass: candidate.runtimeClass,
@@ -250,7 +275,7 @@ export async function createOciBackendConformanceTarget({
   return null;
 }
 
-export const TRUSTED_OCI_PROVIDER_CLASSES: readonly any[] = Object.freeze([
+export const TRUSTED_OCI_PROVIDER_CLASSES: readonly string[] = Object.freeze([
   "rootless-podman",
   "podman",
   "rootless-docker",

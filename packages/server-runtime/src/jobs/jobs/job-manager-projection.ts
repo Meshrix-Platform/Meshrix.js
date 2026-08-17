@@ -1,25 +1,29 @@
 import { unifiedRegistrationForTask } from "#meshrix/product-api";
 import { CHECKPOINT_FILE_SAMPLE_LIMIT } from "./job-manager-validation.ts";
+import type { CheckpointReceipt, JobDocument } from "./contracts.ts";
 
-export function cloneCheckpointReceipt(receipt?: any, { includeFiles = false }: Record<string, any> = {}) : any {
+export function cloneCheckpointReceipt(
+  receipt?: CheckpointReceipt | null,
+  { includeFiles = false }: { includeFiles?: boolean } = {}
+) {
   if (!receipt || typeof receipt !== "object") {
     return receipt || null;
   }
 
-  const files: any = Array.isArray(receipt.files) ? receipt.files : [];
-  const cloned: Record<string, any> = {
+  const files = Array.isArray(receipt.files) ? receipt.files : [];
+  const cloned = {
     ...receipt
   };
 
   if (includeFiles || files.length <= CHECKPOINT_FILE_SAMPLE_LIMIT) {
-    cloned.files = files.map((file?: any) : any => ({
+    cloned.files = files.map((file) => ({
       ...file
     }));
     return cloned;
   }
 
   delete cloned.files;
-  cloned.fileSamples = files.slice(0, CHECKPOINT_FILE_SAMPLE_LIMIT).map((file?: any) : any => ({
+  cloned.fileSamples = files.slice(0, CHECKPOINT_FILE_SAMPLE_LIMIT).map((file) => ({
     ...file
   }));
   cloned.filesTruncated = true;
@@ -28,12 +32,15 @@ export function cloneCheckpointReceipt(receipt?: any, { includeFiles = false }: 
   return cloned;
 }
 
-export function cloneJob(job?: any, { includeCheckpointFiles = false }: Record<string, any> = {}) : any {
+export function cloneJob(
+  job?: JobDocument | null,
+  { includeCheckpointFiles = false }: { includeCheckpointFiles?: boolean } = {}
+) {
   if (!job) {
     return null;
   }
 
-  const cloned: Record<string, any> = {
+  const cloned = {
     ...job,
     checkpointReceipt: cloneCheckpointReceipt(job.checkpointReceipt, {
       includeFiles: includeCheckpointFiles

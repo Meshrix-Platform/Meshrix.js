@@ -15,38 +15,164 @@ import {
   normalizeCanonicalValue,
   toCanonicalSafeValue
 } from "pactium";
+import type {
+  PactiumCanonicalValue,
+  PactiumRecord,
+  PactiumStoragePort
+} from "pactium";
 import { serverToken } from "#meshrix/client-strings";
 import { queueStateMutation } from "../../storage/state-coordinator.ts";
 import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
 } from "./pactium-runtime.ts";
+import type { MeshrixPactiumRuntime } from "./types.ts";
+import { isRecord, recordArray } from "./types.ts";
 
-export const MERKLE_STATE_SUBSTRATE_PROTOCOL: any = PACTIUM_PROTOCOL;
-export const MERKLE_STATE_SUBSTRATE_PROVIDER: any = "pactium.verifiable-state-substrate";
+interface CodedError extends Error { code: string; status?: number }
 
-const STATE_ROOT_SCOPE: any = "meshrix-state-root";
-const STATE_COMMIT_SCOPE: any = "meshrix-state-commit";
-const STATE_COMMIT_EVENT_INDEX_SCOPE: any =
-  "meshrix-state-commit-event-index";
-const STATE_MUTATION_IDEMPOTENCY_SCOPE: any =
-  "meshrix-state-mutation-idempotency";
-const EVENT_LOG_SCOPE: any = "meshrix-event-log";
+export interface IndexEntry extends PactiumRecord {
+  key: string;
+  valueRef: string;
+  valueHash: string;
+  metadata: PactiumCanonicalValue;
+}
 
-function substrateMutationError(code?: any, message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
+interface StateMutation extends PactiumRecord {
+  action?: string;
+  key?: string;
+  valueRef?: string;
+  cid?: string;
+  value?: unknown;
+  valueHash?: string;
+  metadata?: PactiumRecord;
+}
+
+interface ChunkRecord extends PactiumRecord {
+  relativePath?: string;
+  fileId?: string;
+  chunkIndex?: number;
+  chunkCid?: string;
+  cid?: string;
+  byteLength?: number;
+  mediaType?: string;
+  metadata?: PactiumRecord;
+  offset?: number;
+  chunkHash?: string;
+}
+
+interface StateSubstrateOptions {
+  userDataPath?: string;
+  dataDir?: string;
+  pactiumRuntime?: MeshrixPactiumRuntime | null;
+}
+
+export interface CasBlock extends PactiumRecord { cid: string }
+export interface CasWalkResult extends PactiumRecord { missing: string[]; blockCount: number }
+interface ContentAddressedStore extends PactiumRecord {
+  putBlock(value: unknown, options?: PactiumRecord): Promise<CasBlock>;
+  getBlock(cid: string): Promise<PactiumRecord | null>;
+  hasBlock(cid: string): Promise<boolean>;
+  walk(cid: string): Promise<CasWalkResult>;
+  listMissing(cid: string): Promise<string[]>;
+  verify(cid: string): Promise<PactiumRecord>;
+}
+
+export interface ProtocolEvent extends PactiumRecord {
+  eventHash: string;
+  eventId: string;
+  afterRoot?: string;
+  operationId?: string;
+}
+
+interface ProtocolEventLog extends PactiumRecord {
+  appendEvent(input: PactiumRecord): Promise<ProtocolEvent>;
+  listEvents(partitionId: string, options?: PactiumRecord): Promise<ProtocolEvent[]>;
+  getEvent(partitionId: string, offset: number): Promise<ProtocolEvent | null>;
+  verifyPartition(partitionId: string): Promise<PactiumRecord>;
+}
+
+export interface StateCommitRecord extends PactiumRecord {
+  commitId: string;
+  scope: string;
+  operationId: string;
+  beforeRoot: string;
+  afterRoot: string;
+  eventHash: string;
+  eventId: string;
+}
+
+interface StateMutationClaim extends PactiumRecord {
+  inputDigest: string;
+  commitId: string;
+  scope: string;
+  operationId: string;
+}
+
+function isStateCommitRecord(value: unknown): value is StateCommitRecord {
+  return isRecord(value) &&
+    typeof value.commitId === "string" &&
+    typeof value.scope === "string" &&
+    typeof value.operationId === "string" &&
+    typeof value.beforeRoot === "string" &&
+    typeof value.afterRoot === "string" &&
+    typeof value.eventHash === "string" &&
+    typeof value.eventId === "string";
+}
+
+function isStateMutationClaim(value: unknown): value is StateMutationClaim {
+  return isRecord(value) &&
+    typeof value.inputDigest === "string" &&
+    typeof value.commitId === "string" &&
+    typeof value.scope === "string" &&
+    typeof value.operationId === "string";
+}
+
+function bytesInput(value: unknown): string | Uint8Array {
+  if (typeof value === "string" || value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  throw new TypeError("Codec input must be a string, Uint8Array, or ArrayBuffer.");
+}
+
+function isContentAddressedStore(value: PactiumRecord): value is ContentAddressedStore {
+  return typeof value.putBlock === "function" &&
+    typeof value.getBlock === "function" &&
+    typeof value.hasBlock === "function" &&
+    typeof value.walk === "function" &&
+    typeof value.listMissing === "function" &&
+    typeof value.verify === "function";
+}
+
+function isProtocolEventLog(value: PactiumRecord): value is ProtocolEventLog {
+  return typeof value.appendEvent === "function" &&
+    typeof value.listEvents === "function" &&
+    typeof value.getEvent === "function" &&
+    typeof value.verifyPartition === "function";
+}
+
+export const MERKLE_STATE_SUBSTRATE_PROTOCOL = PACTIUM_PROTOCOL;
+export const MERKLE_STATE_SUBSTRATE_PROVIDER = "pactium.verifiable-state-substrate";
+
+const STATE_ROOT_SCOPE = "meshrix-state-root";
+const STATE_COMMIT_SCOPE = "meshrix-state-commit";
+const STATE_COMMIT_EVENT_INDEX_SCOPE = "meshrix-state-commit-event-index";
+const STATE_MUTATION_IDEMPOTENCY_SCOPE = "meshrix-state-mutation-idempotency";
+const EVENT_LOG_SCOPE = "meshrix-event-log";
+
+function substrateMutationError(code: string, message: string): CodedError {
+  const error = new Error(message) as CodedError;
   error.code = code;
   return error;
 }
 
-async function selectedStorageBackend(storage?: any) : Promise<any> {
+async function selectedStorageBackend(storage: PactiumStoragePort): Promise<string> {
   await storage.initialize?.();
   return text(storage.selectedStorageBackend || storage.storageBackend || "").toLowerCase();
 }
 
-async function assertTransactionalStorage(storage?: any, capability?: any) : Promise<any> {
+async function assertTransactionalStorage(storage: PactiumStoragePort, capability: string): Promise<void> {
   if (storage.inMemory) return;
-  const backend: any = await selectedStorageBackend(storage);
+  const backend = await selectedStorageBackend(storage);
   if (backend !== "sqlite") {
     throw substrateMutationError(
       "pactium_transactional_storage_required",
@@ -55,19 +181,19 @@ async function assertTransactionalStorage(storage?: any, capability?: any) : Pro
   }
 }
 
-async function withSerializedStorageMutation(storage?: any, name?: any, task?: any) : Promise<any> {
-  return queueStateMutation(`pactium-storage:${storage.dataDir}`, async () : Promise<any> => {
+async function withSerializedStorageMutation<Result>(storage: PactiumStoragePort, name: string, task: () => Promise<Result>): Promise<Result> {
+  return queueStateMutation(`pactium-storage:${storage.dataDir}`, async () => {
     if (storage.inMemory || typeof storage.withWriteLock !== "function") return task();
-    return storage.withWriteLock(async () : Promise<any> => {
+    return storage.withWriteLock(async () => {
       storage.clearCache?.();
       return task();
     }, { name, timeoutMs: 30_000 });
   });
 }
 
-async function withTransactionalCoreMutation(runtime?: any, capability?: any, task?: any) : Promise<any> {
+async function withTransactionalCoreMutation<Result>(runtime: MeshrixPactiumRuntime, capability: string, task: () => Promise<Result>): Promise<Result> {
   const { core, storage } = runtime;
-  return queueStateMutation(`pactium-storage:${runtime.dataDir}`, async () : Promise<any> => {
+  return queueStateMutation(`pactium-storage:${runtime.dataDir}`, async () => {
     await assertTransactionalStorage(storage, capability);
     if (typeof core.withMutationTransaction === "function") {
       return core.withMutationTransaction(task);
@@ -80,31 +206,31 @@ async function withTransactionalCoreMutation(runtime?: any, capability?: any, ta
   });
 }
 
-function nowIso() : any {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function asObject(value: unknown, fallback: PactiumRecord = {}): PactiumRecord {
+  return isRecord(value) ? value : fallback;
 }
 
-function asArray(value?: any) : any {
+function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function text(value?: any, fallback: any = "") : any {
-  const normalized: any = String(value ?? "").trim();
+function text(value: unknown, fallback = ""): string {
+  const normalized = String(value ?? "").trim();
   return normalized || fallback;
 }
 
-function normalizePathKey(value?: any) : any {
+function normalizePathKey(value: unknown): string {
   return text(value)
     .replace(/\\/gu, "/")
     .replace(/\/+/gu, "/")
     .replace(/^\/+|\/+$/gu, "");
 }
 
-function normalizeCanonical(value?: any) : any {
+function normalizeCanonical(value: unknown): PactiumCanonicalValue {
   return normalizeCanonicalValue(toCanonicalSafeValue(value, {
     maxDepth: 256,
     maxArrayItems: 100000,
@@ -114,20 +240,20 @@ function normalizeCanonical(value?: any) : any {
   }));
 }
 
-function hashValue(value?: any) : any {
+function hashValue(value: unknown): string {
   return protocolHash("meshrix.value", value);
 }
 
-function storageKey(kind?: any, value?: any) : any {
+function storageKey(kind: string, value: unknown): string {
   return protocolHashHex(`meshrix.${kind}`, text(value, "default"));
 }
 
-function stateIndexDomain(scope?: any) : any {
+function stateIndexDomain(scope: unknown): string {
   return `meshrix-state-${storageKey("state-scope", scope)}`;
 }
 
-function normalizeIndexEntry(entry: Record<string, any> = {}) : any {
-  const valueRef: any = text(entry.valueRef || entry.cid || entry.value || "");
+function normalizeIndexEntry(entry: PactiumRecord = {}): IndexEntry {
+  const valueRef = text(entry.valueRef || entry.cid || entry.value || "");
   return {
     key: normalizePathKey(entry.key || entry.path),
     valueRef,
@@ -136,47 +262,51 @@ function normalizeIndexEntry(entry: Record<string, any> = {}) : any {
   };
 }
 
-function sortEntries(entries?: any) : any {
-  return [...entries].sort((left?: any, right?: any) : any => left.key.localeCompare(right.key));
+function sortEntries<Entry extends { key: string }>(entries: readonly Entry[]): Entry[] {
+  return [...entries].sort((left, right) => left.key.localeCompare(right.key));
 }
 
-function proofExists(proof?: any) : any {
-  return proof?.proofType === PACTIUM_PROOF_TYPES.indexMembership;
+function proofExists(proof: unknown): boolean {
+  return isRecord(proof) && proof.proofType === PACTIUM_PROOF_TYPES.indexMembership;
 }
 
-function sortedChunkRecords(records?: any) : any {
-  return sortEntries(records.map((record?: any) : any => ({
+function sortedChunkRecords(records: readonly ChunkRecord[]): ChunkRecord[] {
+  return sortEntries(records.map((record) => ({
     ...record,
     key: `${normalizePathKey(record.relativePath || record.fileId)}#${String(Number(record.chunkIndex || 0)).padStart(12, "0")}`
-  }))).map(({ key: _key, ...record }: Record<string, any>) : any => record);
+  }))).map(({ key: _key, ...record }) => record);
 }
 
-export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", pactiumRuntime = null }: Record<string, any> = {}) : any {
-  const resolvedDataDir: any = resolveMeshrixPactiumDataDir(userDataPath || dataDir);
-  const ownsPactiumRuntime: any = !pactiumRuntime;
-  const runtime: any = normalizeMeshrixPactiumRuntime({
+export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", pactiumRuntime = null }: StateSubstrateOptions = {}) {
+  const resolvedDataDir = resolveMeshrixPactiumDataDir(userDataPath || dataDir);
+  const ownsPactiumRuntime = !pactiumRuntime;
+  const runtime = normalizeMeshrixPactiumRuntime({
     dataDir: resolvedDataDir,
     pactiumRuntime
   });
-  const core: any = runtime.core;
-  const storage: any = runtime.storage;
-  const indexEngine: any = runtime.indexEngine;
-  const pins: any = new Map<any, any>();
+  const core = runtime.core;
+  const storage = runtime.storage;
+  const indexEngine = runtime.indexEngine;
+  const pins = new Map<string, PactiumCanonicalValue>();
 
-  const contentAddressedStore: any = createContentAddressedStore({
+  const createdContentAddressedStore = createContentAddressedStore({
     storage,
     defaultKind: "meshrix.cas-block"
   });
+  if (!isContentAddressedStore(createdContentAddressedStore)) {
+    throw new Error("Pactium content-addressed store does not expose the required operations.");
+  }
+  const contentAddressedStore = createdContentAddressedStore;
 
-  const cas: Readonly<Record<string, any>> = Object.freeze({
+  const cas = Object.freeze({
     putBlock: contentAddressedStore.putBlock,
     getBlock: contentAddressedStore.getBlock,
     hasBlock: contentAddressedStore.hasBlock,
     walk: contentAddressedStore.walk,
     listMissing: contentAddressedStore.listMissing,
     verify: contentAddressedStore.verify,
-    async pin(rootCid?: any, policy: Record<string, any> = {}) : Promise<any> {
-      const normalizedPolicy: any = normalizeCanonical(asObject(policy));
+    async pin(rootCid: string, policy: PactiumRecord = {}) {
+      const normalizedPolicy = normalizeCanonical(asObject(policy));
       pins.set(rootCid, normalizedPolicy);
       await storage.putProtocolObject("meshrix-cas-pin", storageKey("cas-pin", rootCid), {
         rootCid,
@@ -185,7 +315,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       });
       return { rootCid, policy: normalizedPolicy, pinnedAt: nowIso() };
     },
-    async gc() : Promise<any> {
+    async gc() {
       return {
         collected: 0,
         retainedRoots: [...pins.keys()],
@@ -194,10 +324,10 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }
   });
 
-  const merkleDag: Readonly<Record<string, any>> = Object.freeze({
-    async buildManifest(type?: any, refs: any = [], metadata: Record<string, any> = {}) : Promise<any> {
-      const entries: any = sortEntries(asArray(refs)
-        .map((entry?: any) : any => ({
+  const merkleDag = Object.freeze({
+    async buildManifest(type: unknown, refs: unknown = [], metadata: PactiumRecord = {}) {
+      const entries = sortEntries(recordArray(refs)
+        .map((entry) => ({
           key: normalizePathKey(entry.key || entry.path || entry.relativePath),
           path: normalizePathKey(entry.path || entry.relativePath || entry.key),
           cid: text(entry.cid || entry.valueRef),
@@ -205,29 +335,29 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           byteLength: Number(entry.byteLength || 0),
           metadata: normalizeCanonical(asObject(entry.metadata))
         }))
-        .filter((entry?: any) : any => entry.key && entry.valueRef));
-      const manifest: Record<string, any> = {
+        .filter((entry) => entry.key && entry.valueRef));
+      const manifest: PactiumRecord = {
         protocol: PACTIUM_PROTOCOL,
         schema: PACTIUM_SCHEMA_VERSION,
         manifestType: "meshrix.merkle-dag.manifest",
         type: text(type, "manifest"),
         entries,
-        refs: entries.map((entry?: any) : any => entry.valueRef),
+        refs: entries.map((entry) => entry.valueRef),
         metadata: normalizeCanonical(asObject(metadata)),
         createdAt: nowIso()
       };
-      const block: any = await cas.putBlock(manifest, {
+      const block = await cas.putBlock(manifest, {
         refs: manifest.refs,
         kind: "meshrix.merkle-dag.manifest"
       });
       return {
         ...manifest,
-        rootCid: block.cid,
-        manifestCid: block.cid
+        rootCid: text(block.cid),
+        manifestCid: text(block.cid)
       };
     },
-    async verify(rootCid?: any) : Promise<any> {
-      const result: any = await cas.walk(rootCid);
+    async verify(rootCid: string) {
+      const result = await cas.walk(rootCid);
       return {
         ok: result.missing.length === 0,
         rootCid,
@@ -235,8 +365,8 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         missing: result.missing
       };
     },
-    async diff(_leftRootCid?: any, rightRootCid?: any) : Promise<any> {
-      const right: any = await cas.walk(rightRootCid);
+    async diff(_leftRootCid: string, rightRootCid: string) {
+      const right = await cas.walk(rightRootCid);
       return {
         missing: right.missing,
         rightBlockCount: right.blockCount
@@ -244,59 +374,59 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }
   });
 
-  const merkleIndex: Readonly<Record<string, any>> = Object.freeze({
-    async create(domain?: any, entries: any = []) : Promise<any> {
-      const index: any = await indexEngine.createIndex(
-        sortEntries(asArray(entries).map(normalizeIndexEntry).filter((entry?: any) : any => entry.key)),
+  const merkleIndex = Object.freeze({
+    async create(domain: unknown, entries: unknown = []) {
+      const index = await indexEngine.createIndex(
+        sortEntries(recordArray(entries).map(normalizeIndexEntry).filter((entry) => entry.key)),
         { domain: text(domain, "index") }
       );
       return {
-        indexRootCid: index.root,
-        root: index.root,
-        domain: index.domain,
-        count: index.count
+        indexRootCid: text(index.root),
+        root: text(index.root),
+        domain: text(index.domain),
+        count: Number(index.count || 0)
       };
     },
-    async put(indexRootCid?: any, key?: any, valueRef?: any, metadata: Record<string, any> = {}) : Promise<any> {
-      const normalizedKey: any = normalizePathKey(key);
-      const entry: any = normalizeIndexEntry({
+    async put(indexRootCid: string, key: unknown, valueRef: unknown, metadata: PactiumRecord = {}) {
+      const normalizedKey = normalizePathKey(key);
+      const entry = normalizeIndexEntry({
         key: normalizedKey,
         valueRef,
         valueHash: hashValue({ valueRef }),
         metadata
       });
-      const next: any = await indexEngine.put(indexRootCid, normalizedKey, entry, { domain: "meshrix-state" });
+      const next = await indexEngine.put(indexRootCid, normalizedKey, entry, { domain: "meshrix-state" });
       return {
-        indexRootCid: next.root,
-        root: next.root,
+        indexRootCid: text(next.root),
+        root: text(next.root),
         entry,
-        count: next.count
+        count: Number(next.count || 0)
       };
     },
-    async delete(indexRootCid?: any, key?: any) : Promise<any> {
-      const next: any = await indexEngine.delete(indexRootCid, normalizePathKey(key), { domain: "meshrix-state" });
+    async delete(indexRootCid: string, key: unknown) {
+      const next = await indexEngine.delete(indexRootCid, normalizePathKey(key), { domain: "meshrix-state" });
       return {
-        indexRootCid: next.root,
-        root: next.root,
-        count: next.count
+        indexRootCid: text(next.root),
+        root: text(next.root),
+        count: Number(next.count || 0)
       };
     },
-    get(indexRootCid?: any, key?: any) : any {
+    get(indexRootCid: string, key: unknown) {
       return indexEngine.get(indexRootCid, normalizePathKey(key));
     },
-    scan(indexRootCid?: any, { min = "", max = "\uffff", limit = 5000, after = "" }: Record<string, any> = {}) : any {
+    scan(indexRootCid: string, { min = "", max = "\uffff", limit = 5000, after = "" }: { min?: string; max?: string; limit?: number; after?: string } = {}) {
       return indexEngine.scan(indexRootCid, { min, max, limit, after });
     },
-    prefix(indexRootCid?: any, keyPrefix: any = "", options: Record<string, any> = {}) : any {
+    prefix(indexRootCid: string, keyPrefix = "", options: { min?: string; max?: string; limit?: number; after?: string } = {}) {
       return indexEngine.prefix(indexRootCid, normalizePathKey(keyPrefix), options);
     },
-    diff(leftRootCid?: any, rightRootCid?: any) : any {
+    diff(leftRootCid: string, rightRootCid: string) {
       return indexEngine.diff(leftRootCid, rightRootCid);
     },
-    async prove(indexRootCid?: any, key?: any) : Promise<any> {
-      const normalizedKey: any = normalizePathKey(key);
-      const proof: any = await indexEngine.prove(indexRootCid, normalizedKey);
-      const entry: any = proof.entry || null;
+    async prove(indexRootCid: string, key: unknown) {
+      const normalizedKey = normalizePathKey(key);
+      const proof = await indexEngine.prove(indexRootCid, normalizedKey);
+      const entry = isRecord(proof.entry) ? proof.entry : null;
       return {
         ...proof,
         exists: proofExists(proof),
@@ -310,16 +440,20 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
 
   // Caller-owned locking: compound state commits already hold the storage write
   // lock, so the Pactium helper must not take a nested lock on append.
-  const protocolEventLog: any = createAppendOnlyEventLog({
+  const createdProtocolEventLog = createAppendOnlyEventLog({
     storage,
     protocolObjectScope: EVENT_LOG_SCOPE,
     hashDomain: "meshrix.state-event",
-    createEventId: ({ partitionId, operationId }: Record<string, any> = {}) : any =>
+    createEventId: ({ partitionId, operationId }: PactiumRecord = {})  =>
       serverToken("state_event", partitionId, operationId || "", nowIso(), randomUUID()),
-    withWriteLock: (task?: any) : any => task()
+    withWriteLock: async (task) => task()
   });
+  if (!isProtocolEventLog(createdProtocolEventLog)) {
+    throw new Error("Pactium event log does not expose the required operations.");
+  }
+  const protocolEventLog = createdProtocolEventLog;
 
-  async function appendEventUnlocked(input: Record<string, any> = {}) : Promise<any> {
+  async function appendEventUnlocked(input: PactiumRecord = {}) {
     // Meshrix.js-normalize before Pactium so event payloads / eventHash match
     // commit records that already use normalizeCanonical(asObject(...)).
     return protocolEventLog.appendEvent({
@@ -328,13 +462,13 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     });
   }
 
-  const eventLog: Readonly<Record<string, any>> = Object.freeze({
-    appendEvent(input: Record<string, any> = {}) : any {
-      const partitionId: any = text(input.partitionId || input.scope, "default");
+  const eventLog = Object.freeze({
+    appendEvent(input: PactiumRecord = {})  {
+      const partitionId = text(input.partitionId || input.scope, "default");
       return withSerializedStorageMutation(
         storage,
         `meshrix-event-log-${storageKey("event-partition", partitionId)}`,
-        () : any => appendEventUnlocked(input)
+        ()  => appendEventUnlocked(input)
       );
     },
     listEvents: protocolEventLog.listEvents,
@@ -342,21 +476,22 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     verifyPartition: protocolEventLog.verifyPartition
   });
 
-  async function loadStateRoot(scope?: any) : Promise<any> {
+  async function loadStateRoot(scope: unknown): Promise<string> {
     if (!storage.inMemory) storage.clearCache?.();
     return text(await storage.getProtocolObject(STATE_ROOT_SCOPE, storageKey("state-root", scope), ""));
   }
 
-  async function saveStateRoot(scope?: any, root?: any) : Promise<any> {
+  async function saveStateRoot(scope: unknown, root: unknown): Promise<void> {
     await storage.putProtocolObject(STATE_ROOT_SCOPE, storageKey("state-root", scope), text(root));
   }
 
-  async function loadCommit(commitId?: any) : Promise<any> {
+  async function loadCommit(commitId: unknown): Promise<StateCommitRecord | null> {
     if (!storage.inMemory) storage.clearCache?.();
-    return storage.getProtocolObject(STATE_COMMIT_SCOPE, text(commitId), null);
+    const stored = await storage.getProtocolObject(STATE_COMMIT_SCOPE, text(commitId), null);
+    return isStateCommitRecord(stored) ? stored : null;
   }
 
-  async function saveCommit(commit?: any) : Promise<any> {
+  async function saveCommit(commit: StateCommitRecord): Promise<void> {
     await storage.putProtocolObject(STATE_COMMIT_SCOPE, commit.commitId, commit);
     await storage.putProtocolObject(
       STATE_COMMIT_EVENT_INDEX_SCOPE,
@@ -380,7 +515,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     scope,
     operationId,
     idempotencyKey
-  }: Record<string, any>) : any {
+  }: PactiumRecord)  {
     return storageKey("state-mutation-idempotency", canonicalJson({
       kind: text(kind),
       scope: text(scope, "default"),
@@ -389,7 +524,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }));
   }
 
-  function stateMutationInputDigest(kind?: any, input: Record<string, any> = {}) : any {
+  function stateMutationInputDigest(kind: "commit" | "restore", input: PactiumRecord = {}): string {
     return protocolHash(`meshrix.state-${kind}`, normalizeCanonical({
       scope: text(input.scope, "default"),
       operationId: text(input.operationId),
@@ -401,7 +536,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
             targetRoot: text(input.targetRoot || input.root),
             anchor: asObject(input.anchor),
             allowedOperationIds: asArray(input.allowedOperationIds)
-              .map(text)
+              .map((operationId) => text(operationId))
               .filter(Boolean),
             maxSuffixEvents: Number(input.maxSuffixEvents || 256)
           }
@@ -413,33 +548,40 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }));
   }
 
-  async function replayStateMutationIfPresent(kind?: any, input: Record<string, any> = {}) : Promise<any> {
-    const idempotencyKey: any = text(input.idempotencyKey);
+  async function replayStateMutationIfPresent(kind: "commit" | "restore", input: PactiumRecord = {}) {
+    const idempotencyKey = text(input.idempotencyKey);
     if (!idempotencyKey) return null;
-    const scope: any = text(input.scope, "default");
-    const operationId: any = text(input.operationId);
-    const claimKey: any = stateMutationIdempotencyKey({
+    const scope = text(input.scope, "default");
+    const operationId = text(input.operationId);
+    const claimKey = stateMutationIdempotencyKey({
       kind,
       scope,
       operationId,
       idempotencyKey
     });
-    const inputDigest: any = stateMutationInputDigest(kind, input);
-    const existing: any = await storage.getProtocolObject(
+    const inputDigest = stateMutationInputDigest(kind, input);
+    const storedClaim = await storage.getProtocolObject(
       STATE_MUTATION_IDEMPOTENCY_SCOPE,
       claimKey,
       null
     );
-    if (!existing) {
+    if (!storedClaim) {
       return { claimKey, inputDigest, replay: null };
     }
+    if (!isStateMutationClaim(storedClaim)) {
+      throw substrateMutationError(
+        "state_mutation_idempotency_incomplete",
+        "State mutation idempotency claim is incomplete."
+      );
+    }
+    const existing = storedClaim;
     if (text(existing.inputDigest) !== inputDigest) {
       throw substrateMutationError(
         "state_mutation_idempotency_conflict",
         "State mutation idempotency key was reused with different input."
       );
     }
-    const commit: any = await loadCommit(text(existing.commitId));
+    const commit = await loadCommit(text(existing.commitId));
     if (
       !commit ||
       commit.scope !== scope ||
@@ -461,7 +603,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     claimKey,
     inputDigest,
     commit
-  }: Record<string, any>) : Promise<any> {
+  }: { claimKey?: string; inputDigest?: string; commit: StateCommitRecord }): Promise<void> {
     if (!claimKey) return;
     await storage.putProtocolObject(
       STATE_MUTATION_IDEMPOTENCY_SCOPE,
@@ -475,20 +617,33 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     );
   }
 
-  async function verifyRestoreLineage({ scope, targetRoot, allowedOperationIds = [], anchor = null, maxSuffixEvents = 256 }: Record<string, any>) : Promise<any> {
-    const events: any = [...await eventLog.listEvents(scope, { limit: 10000 })].reverse();
-    const anchorOffset: any = Number(anchor?.offset);
-    const anchoredEvent: any = Number.isInteger(anchorOffset) ? events[anchorOffset] : null;
-    const anchorIndex: any = anchoredEvent?.eventHash === text(anchor?.eventHash) && anchoredEvent?.afterRoot === targetRoot
+  async function verifyRestoreLineage({
+    scope,
+    targetRoot,
+    allowedOperationIds = [],
+    anchor = null,
+    maxSuffixEvents = 256
+  }: {
+    scope: string;
+    targetRoot: string;
+    allowedOperationIds?: unknown;
+    anchor?: unknown;
+    maxSuffixEvents?: unknown;
+  }) {
+    const events = [...await eventLog.listEvents(scope, { limit: 10000 })].reverse();
+    const normalizedAnchor = asObject(anchor);
+    const anchorOffset = Number(normalizedAnchor.offset);
+    const anchoredEvent = Number.isInteger(anchorOffset) ? events[anchorOffset] : null;
+    const anchorIndex = anchoredEvent?.eventHash === text(normalizedAnchor.eventHash) && anchoredEvent?.afterRoot === targetRoot
       ? anchorOffset
       : -1;
-    const allowed: any = asArray(allowedOperationIds).map(text).filter(Boolean);
-    const suffix: any = events.slice(anchorIndex + 1);
-    const conflicting: any = suffix.find(
-      (event?: any) : any => !allowed.includes(text(event.operationId))
+    const allowed = asArray(allowedOperationIds).map((operationId) => text(operationId)).filter(Boolean);
+    const suffix = events.slice(anchorIndex + 1);
+    const conflicting = suffix.find(
+      (event) => !allowed.includes(text(event.operationId))
     );
     if (anchorIndex < 0 || allowed.length === 0 || suffix.length > Math.max(1, Number(maxSuffixEvents) || 256) || conflicting) {
-      const error: Error & Record<string, any> = new Error("State root restore lineage contains an unrelated mutation.");
+      const error = new Error("State root restore lineage contains an unrelated mutation.") as CodedError;
       error.code = "state_root_restore_lineage_conflict";
       error.status = 409;
       throw error;
@@ -496,44 +651,44 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     return { ok: true, eventCount: suffix.length };
   }
 
-  const stateCommit: Readonly<Record<string, any>> = Object.freeze({
-    async begin({ scope = "default" }: Record<string, any> = {}) : Promise<any> {
+  const stateCommit = Object.freeze({
+    async begin({ scope = "default" }: PactiumRecord = {}) {
       return {
         scope: text(scope, "default"),
         currentRoot: await loadStateRoot(scope)
       };
     },
-    async commit(input: Record<string, any> = {}) : Promise<any> {
-      return withTransactionalCoreMutation(runtime, "State commits", async () : Promise<any> => {
-      const scope: any = text(input.scope, "default");
-      const idempotency: any = await replayStateMutationIfPresent(
+    async commit(input: PactiumRecord = {}) {
+      return withTransactionalCoreMutation(runtime, "State commits", async () => {
+      const scope = text(input.scope, "default");
+      const idempotency = await replayStateMutationIfPresent(
         "commit",
         { ...input, scope }
       );
       if (idempotency?.replay) return idempotency.replay;
-      const beforeRoot: any = await loadStateRoot(scope);
+      const beforeRoot = await loadStateRoot(scope);
       if (Object.hasOwn(input, "expectedCurrentRoot") && text(input.expectedCurrentRoot) !== beforeRoot) {
-        const error: any = substrateMutationError(
+        const error = substrateMutationError(
           "state_root_commit_conflict",
           "State root changed before commit."
         );
         error.status = 409;
         throw error;
       }
-      let afterRoot: any = beforeRoot;
+      let afterRoot = beforeRoot;
       if (!afterRoot) {
-        afterRoot = (await indexEngine.createIndex([], { domain: stateIndexDomain(scope) })).root;
+        afterRoot = text((await indexEngine.createIndex([], { domain: stateIndexDomain(scope) })).root);
       }
-      const mutations: any = asArray(input.mutations);
+      const mutations: StateMutation[] = recordArray(input.mutations);
       for (const mutation of mutations) {
-        const action: any = text(mutation.action, "put");
+        const action = text(mutation.action, "put");
         if (action === "delete") {
           afterRoot = (await merkleIndex.delete(afterRoot, mutation.key)).indexRootCid;
         } else {
-          afterRoot = (await merkleIndex.put(afterRoot, mutation.key, mutation.valueRef || mutation.value, mutation.metadata || {})).indexRootCid;
+          afterRoot = (await merkleIndex.put(afterRoot, mutation.key, mutation.valueRef || mutation.value, asObject(mutation.metadata))).indexRootCid;
         }
       }
-      const envelope: any = await core.recordOperation({
+      const envelope = await core.recordOperation({
         operationId: input.operationId || "meshrix.state.commit",
         workspaceId: scope,
         idempotencyKey: text(input.idempotencyKey),
@@ -543,13 +698,13 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           beforeRoot,
           afterRoot
         },
-        stateMutations: mutations.map((mutation?: any) : any => ({
+        stateMutations: mutations.map((mutation) => ({
           action: text(mutation.action, "put"),
           key: normalizePathKey(mutation.key),
           valueRef: text(mutation.valueRef || mutation.value),
           valueHash: text(mutation.valueHash || hashValue(mutation.valueRef || mutation.value || "")),
           metadata: asObject(mutation.metadata)
-        })).filter((mutation?: any) : any => mutation.key)
+        })).filter((mutation) => mutation.key)
       });
       if (envelope?.replayed) {
         throw substrateMutationError(
@@ -558,7 +713,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         );
       }
       await saveStateRoot(scope, afterRoot);
-      const event: any = await appendEventUnlocked({
+      const event = await appendEventUnlocked({
         partitionId: scope,
         operationId: input.operationId || "meshrix.state.commit",
         beforeRoot,
@@ -566,8 +721,8 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         contentRefs: input.contentRefs || [],
         payload: input.payload || {}
       });
-      const commitId: any = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
-      const commit: Record<string, any> = {
+      const commitId = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
+      const commit: StateCommitRecord = {
         protocol: PACTIUM_PROTOCOL,
         schema: PACTIUM_SCHEMA_VERSION,
         commitId,
@@ -577,14 +732,14 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         afterRoot,
         eventHash: event.eventHash,
         eventId: event.eventId,
-        contentRefs: asArray(input.contentRefs).map(text).filter(Boolean),
+        contentRefs: asArray(input.contentRefs).map((contentRef) => text(contentRef)).filter(Boolean),
         mutations: normalizeCanonical(mutations),
         payload: normalizeCanonical(asObject(input.payload)),
         pactium: {
           envelopeId: envelope.envelopeId,
           outcomeId: envelope.factId,
-          ledgerEventId: envelope.factRef?.ledgerEventId || "",
-          ledgerIndex: envelope.factRef?.ledgerIndex ?? -1
+          ledgerEventId: text(envelope.factRef?.ledgerEventId),
+          ledgerIndex: Number(envelope.factRef?.ledgerIndex ?? -1)
         },
         createdAt: nowIso()
       };
@@ -597,33 +752,33 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       return commit;
       });
     },
-    async verifyRestoreLineage(input: Record<string, any> = {}) : Promise<any> {
-      const scope: any = text(input.scope, "default");
-      const targetRoot: any = text(input.targetRoot || input.root);
+    async verifyRestoreLineage(input: PactiumRecord = {}) {
+      const scope = text(input.scope, "default");
+      const targetRoot = text(input.targetRoot || input.root);
       return verifyRestoreLineage({ scope, targetRoot, allowedOperationIds: input.allowedOperationIds, anchor: input.anchor, maxSuffixEvents: input.maxSuffixEvents });
     },
-    async restoreRoot(input: Record<string, any> = {}) : Promise<any> {
-      return withTransactionalCoreMutation(runtime, "State root restores", async () : Promise<any> => {
-        const scope: any = text(input.scope, "default");
-        const idempotency: any = await replayStateMutationIfPresent(
+    async restoreRoot(input: PactiumRecord = {}) {
+      return withTransactionalCoreMutation(runtime, "State root restores", async () => {
+        const scope = text(input.scope, "default");
+        const idempotency = await replayStateMutationIfPresent(
           "restore",
           { ...input, scope }
         );
         if (idempotency?.replay) return idempotency.replay;
-        const targetRoot: any = text(input.targetRoot || input.root);
-        const beforeRoot: any = await loadStateRoot(scope);
+        const targetRoot = text(input.targetRoot || input.root);
+        const beforeRoot = await loadStateRoot(scope);
         if (!targetRoot) throw new Error("State root restore requires a target root.");
         if (
           Object.hasOwn(input, "expectedCurrentRoot") &&
           text(input.expectedCurrentRoot) !== beforeRoot
         ) {
-          const error: Error & Record<string, any> = new Error("State root changed before restore.");
+          const error = new Error("State root changed before restore.") as CodedError;
           error.code = "state_root_restore_conflict";
           throw error;
         }
         await verifyRestoreLineage({ scope, targetRoot, allowedOperationIds: input.allowedOperationIds, anchor: input.anchor, maxSuffixEvents: input.maxSuffixEvents });
-        const operationId: any = input.operationId || "meshrix.state.root.restore";
-        const envelope: any = await core.recordOperation({
+        const operationId = text(input.operationId, "meshrix.state.root.restore");
+        const envelope = await core.recordOperation({
           operationId,
           workspaceId: scope,
           idempotencyKey: text(input.idempotencyKey),
@@ -639,7 +794,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           );
         }
         await saveStateRoot(scope, targetRoot);
-        const event: any = await appendEventUnlocked({
+        const event = await appendEventUnlocked({
           partitionId: scope,
           operationId,
           beforeRoot,
@@ -647,8 +802,8 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           contentRefs: input.contentRefs || [],
           payload: { ...asObject(input.payload), restoredRoot: targetRoot }
         });
-        const commitId: any = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
-        const commit: Record<string, any> = {
+        const commitId = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
+        const commit: StateCommitRecord = {
           protocol: PACTIUM_PROTOCOL,
           schema: PACTIUM_SCHEMA_VERSION,
           commitId,
@@ -658,14 +813,14 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           afterRoot: targetRoot,
           eventHash: event.eventHash,
           eventId: event.eventId,
-          contentRefs: asArray(input.contentRefs).map(text).filter(Boolean),
+          contentRefs: asArray(input.contentRefs).map((contentRef) => text(contentRef)).filter(Boolean),
           mutations: [],
           payload: normalizeCanonical(asObject(input.payload)),
           pactium: {
             envelopeId: envelope.envelopeId,
             outcomeId: envelope.factId,
-            ledgerEventId: envelope.factRef?.ledgerEventId || "",
-            ledgerIndex: envelope.factRef?.ledgerIndex ?? -1
+            ledgerEventId: text(envelope.factRef?.ledgerEventId),
+            ledgerIndex: Number(envelope.factRef?.ledgerIndex ?? -1)
           },
           createdAt: nowIso()
         };
@@ -678,8 +833,8 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         return commit;
       });
     },
-    async verifyCommit(commitId?: any) : Promise<any> {
-      const commit: any = await loadCommit(text(commitId));
+    async verifyCommit(commitId: unknown) {
+      const commit = await loadCommit(text(commitId));
       if (!commit) {
         return {
           ok: false,
@@ -689,7 +844,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       }
       try {
         await indexEngine.readIndexRoot(commit.afterRoot);
-      } catch (error: any) {
+      } catch (error ) {
         return {
           ok: false,
           error: error instanceof Error ? error.message : "state_root_missing",
@@ -704,11 +859,11 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     async getCommitByEventHash({
       scope = "default",
       eventHash = ""
-    }: Record<string, any> = {}) : Promise<any> {
-      const normalizedScope: any = text(scope, "default");
-      const normalizedEventHash: any = text(eventHash);
+    }: PactiumRecord = {}) {
+      const normalizedScope = text(scope, "default");
+      const normalizedEventHash = text(eventHash);
       if (!normalizedEventHash) return null;
-      const indexed: any = await storage.getProtocolObject(
+      const indexed = await storage.getProtocolObject(
         STATE_COMMIT_EVENT_INDEX_SCOPE,
         storageKey(
           "state-commit-event",
@@ -720,13 +875,16 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         null
       );
       if (
-        !indexed ||
+        !isRecord(indexed) ||
+        typeof indexed.scope !== "string" ||
+        typeof indexed.eventHash !== "string" ||
+        typeof indexed.commitId !== "string" ||
         indexed.scope !== normalizedScope ||
         indexed.eventHash !== normalizedEventHash
       ) {
         return null;
       }
-      const commit: any = await loadCommit(text(indexed.commitId));
+      const commit = await loadCommit(text(indexed.commitId));
       if (
         !commit ||
         commit.scope !== normalizedScope ||
@@ -741,20 +899,20 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }
   });
 
-  const uploadManifest: Readonly<Record<string, any>> = Object.freeze({
-    async materialize(input: Record<string, any> = {}) : Promise<any> {
-      const records: any[] = sortedChunkRecords(asArray(input.records));
+  const uploadManifest = Object.freeze({
+    async materialize(input: PactiumRecord = {}) {
+      const records: ChunkRecord[] = sortedChunkRecords(recordArray(input.records));
       for (const record of records) {
-        const chunkCid: any = text(record.chunkCid || record.cid);
+        const chunkCid = text(record.chunkCid || record.cid);
         if (!chunkCid || !(await storage.hasBlock(chunkCid))) {
           throw new Error("chunkCid must reference an existing CAS block");
         }
       }
-      const manifest: any = await merkleDag.buildManifest(
+      const manifest = await merkleDag.buildManifest(
         "upload-manifest",
-        records.map((record?: any) : any => {
-          const relativePath: any = normalizePathKey(record.relativePath || record.fileId);
-          const suffix: any = String(Number(record.chunkIndex || 0)).padStart(12, "0");
+        records.map((record) => {
+          const relativePath = normalizePathKey(record.relativePath || record.fileId);
+          const suffix = String(Number(record.chunkIndex || 0)).padStart(12, "0");
           return {
             key: `${relativePath}#${suffix}`,
             path: `${relativePath}#${suffix}`,
@@ -775,7 +933,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         ...manifest,
         recordCount: records.length,
         nextOffset: records.reduce(
-          (maximum?: any, record?: any) : any => Math.max(
+          (maximum, record) => Math.max(
             maximum,
             Number(record.offset || 0) + Number(record.byteLength || 0)
           ),
@@ -797,13 +955,13 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       normalize: normalizeCanonical,
       stableJson: canonicalJson,
       hash: hashValue,
-      encode(value?: any, codec: any = "pactium-canonical") : any {
-        return codec === "raw" ? Buffer.from(value || "") : canonicalEncode(value);
+      encode(value: unknown, codec = "pactium-canonical") {
+        return codec === "raw" ? Buffer.from(bytesInput(value)) : canonicalEncode(value);
       },
-      decode(value?: any, codec: any = "pactium-canonical") : any {
-        return codec === "raw" ? Buffer.from(value) : canonicalDecode(value);
+      decode(value: unknown, codec = "pactium-canonical") {
+        return codec === "raw" ? Buffer.from(bytesInput(value)) : canonicalDecode(bytesInput(value));
       },
-      cid(value?: any) : any {
+      cid(value: unknown) {
         return cidForCanonical(value);
       }
     }),
@@ -813,12 +971,12 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     eventLog,
     stateCommit,
     uploadManifest,
-    close() : any {
+    close()  {
       return ownsPactiumRuntime
         ? (runtime.close?.() || Promise.resolve())
         : Promise.resolve();
     },
-    listCapabilities() : any {
+    listCapabilities()  {
       return {
         protocol: PACTIUM_PROTOCOL,
         provider: MERKLE_STATE_SUBSTRATE_PROVIDER,

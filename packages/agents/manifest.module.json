@@ -65,7 +65,7 @@
     {
       "feature": "workspace-contribution",
       "path": "src/workspace-contribution",
-      "fileCount": 8,
+      "fileCount": 9,
       "testSuites": [
         "runtime.operation-dispatch-lock"
       ]

@@ -1437,7 +1437,7 @@ async function spawnCrashChild(
       env: {
         LANG: "C"
       },
-      execArgv: ["--no-warnings"],
+      execArgv: ["--no-warnings", "--conditions=source"],
       serialization: "advanced",
       stdio: [
         "ignore",

@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { Dirent } from "node:fs";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "./sqlite-database.ts";
 import {
   getObjectRootPath,
@@ -8,11 +10,71 @@ import {
 } from "./object-store.ts";
 import { getStorageDatabasePath } from "./schema-manager.ts";
 
-const SAFE_PATH_SEGMENT_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
-const HASH_BUFFER_BYTES: any = 64 * 1024;
+type UnknownRecord = Record<string, unknown>;
+type IssueRecord = Record<string, unknown>;
+type IssueCollection = Record<string, IssueRecord[]>;
+type ObjectFileIssues = IssueCollection & { orphanObjectFiles: Array<IssueRecord & { path: string }> };
+export type StorageDoctorIssues = IssueCollection & { orphanObjectFiles: Array<IssueRecord & { path: string }> };
 
-export const CANONICAL_STORAGE_TABLES: readonly any[] = Object.freeze([
+interface StorageObjectRow extends UnknownRecord {
+  object_id: string;
+  storage_rel_path: string;
+  sha256: string;
+  byte_size: number;
+}
+
+interface StorageOwnerRow extends UnknownRecord {
+  object_id: string;
+  job_id: string;
+  archive_batch_id: string;
+}
+
+interface DeletionOperationRow extends UnknownRecord {
+  operation_id: string;
+  owner_id: string;
+  job_id: string;
+  status: string;
+  updated_at: string;
+}
+
+interface DatabaseSnapshot {
+  objects: StorageObjectRow[];
+  owners: StorageOwnerRow[];
+  deletionOperations: DeletionOperationRow[];
+  opaqueCustodyArtifacts: UnknownRecord[];
+  opaqueCustodyPromotions: UnknownRecord[];
+  counts: {
+    objectCount: number;
+    ownedObjectCount: number;
+    deletionOperationCount: number;
+    opaqueCustodyArtifactCount: number;
+    opaqueCustodyPromotionCount: number;
+  };
+}
+
+export interface StorageOpsPaths {
+  userDataPath: string;
+  databasePath: string;
+  jobsRootPath: string;
+  objectRootPath: string;
+}
+
+export interface StorageDoctorReport extends StorageOpsPaths {
+  databasePresent: boolean;
+  summary: DatabaseSnapshot["counts"] & {
+    objectFileCount: number;
+    objectBytes: number;
+    jobDirectoryCount: number;
+  };
+  issues: StorageDoctorIssues;
+  healthy: boolean;
+}
+
+const SAFE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+const HASH_BUFFER_BYTES = 64 * 1024;
+
+export const CANONICAL_STORAGE_TABLES: readonly string[] = Object.freeze([
   "storage_objects",
   "storage_object_owners",
   "storage_deletion_operations",
@@ -20,23 +82,33 @@ export const CANONICAL_STORAGE_TABLES: readonly any[] = Object.freeze([
   "opaque_custody_promotions"
 ]);
 
-export function getJobsRootPath(userDataPath?: any) : any {
+function record(value: unknown): UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as UnknownRecord
+    : {};
+}
+
+function errorCode(error: unknown): string {
+  return String(record(error).code || "");
+}
+
+export function getJobsRootPath(userDataPath: string): string {
   return path.join(userDataPath, "jobs");
 }
 
-export function safePathSegment(value?: any, label: any = "path segment") : any {
-  const text: any = String(value || "").trim();
-  if (!SAFE_PATH_SEGMENT_PATTERN.test(text) || text === "." || text === ".." || text.includes("/") || text.includes("\\") || text.includes("\0")) {
+export function safePathSegment(value: unknown, label = "path segment"): string {
+  const text = String(value || "").trim();
+  if (!SAFE_PATH_SEGMENT_PATTERN.test(text) || text === "." || text === ".." || text.includes("/") || text.includes("\\") || text.includes(String.fromCodePoint(0))) {
     throw new Error(`Invalid ${label}.`);
   }
   return text;
 }
 
-export function toPosixRelative(basePath?: any, targetPath?: any) : any {
+export function toPosixRelative(basePath: string, targetPath: string): string {
   return path.relative(basePath, targetPath).split(path.sep).join("/");
 }
 
-export async function pathExists(targetPath?: any) : Promise<any> {
+export async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
     return true;
@@ -45,7 +117,7 @@ export async function pathExists(targetPath?: any) : Promise<any> {
   }
 }
 
-export async function readJsonIfExists(filePath?: any) : Promise<any> {
+export async function readJsonIfExists(filePath: string): Promise<unknown> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
   } catch {
@@ -53,9 +125,9 @@ export async function readJsonIfExists(filePath?: any) : Promise<any> {
   }
 }
 
-export async function buildJobLocation(jobsRootPath?: any, jobId?: any) : Promise<any> {
-  const safeJobId: any = safePathSegment(jobId, "job id");
-  const jobDirectory: any = path.join(jobsRootPath, safeJobId);
+export async function buildJobLocation(jobsRootPath: string, jobId: unknown): Promise<UnknownRecord> {
+  const safeJobId = safePathSegment(jobId, "job id");
+  const jobDirectory = path.join(jobsRootPath, safeJobId);
   return {
     jobId: safeJobId,
     directoryPath: jobDirectory,
@@ -68,11 +140,11 @@ export async function buildJobLocation(jobsRootPath?: any, jobId?: any) : Promis
   };
 }
 
-export async function listFilesRecursively(rootPath?: any) : Promise<any> {
-  const output: any[] = [];
+export async function listFilesRecursively(rootPath: string): Promise<string[]> {
+  const output: string[] = [];
 
-  async function walk(currentPath?: any) : Promise<any> {
-    let entries: any[] = [];
+  async function walk(currentPath: string): Promise<void> {
+    let entries: Dirent<string>[] = [];
     try {
       entries = await fs.readdir(currentPath, { withFileTypes: true });
     } catch {
@@ -80,7 +152,7 @@ export async function listFilesRecursively(rootPath?: any) : Promise<any> {
     }
 
     for (const entry of entries) {
-      const absolutePath: any = path.join(currentPath, entry.name);
+      const absolutePath = path.join(currentPath, entry.name);
       if (entry.isDirectory()) {
         await walk(absolutePath);
         continue;
@@ -95,7 +167,7 @@ export async function listFilesRecursively(rootPath?: any) : Promise<any> {
   return output;
 }
 
-export function getOpsPaths(userDataPath?: any) : any {
+export function getOpsPaths(userDataPath: string): StorageOpsPaths {
   return {
     userDataPath,
     databasePath: getStorageDatabasePath(userDataPath),
@@ -104,20 +176,23 @@ export function getOpsPaths(userDataPath?: any) : any {
   };
 }
 
-export function createDatabaseHandle(databasePath?: any, { readonly = false }: Record<string, any> = {}) : any {
+export function createDatabaseHandle(
+  databasePath: string,
+  { readonly = false }: { readonly?: boolean } = {}
+): Database.Database {
   return openSqliteDatabase(databasePath, { fileMustExist: true, readonly });
 }
 
-export function listDatabaseTables(db?: any) : any {
-  return new Set<any>(db.prepare(`
+export function listDatabaseTables(db: Database.Database): Set<string> {
+  return new Set(db.prepare<[], { name: string }>(`
     SELECT name
     FROM sqlite_master
     WHERE type = 'table'
     ORDER BY name ASC
-  `).all().map((row?: any) : any => row.name));
+  `).all().map((row) => row.name));
 }
 
-function emptySnapshot() : any {
+function emptySnapshot(): DatabaseSnapshot {
   return {
     objects: [],
     owners: [],
@@ -134,15 +209,18 @@ function emptySnapshot() : any {
   };
 }
 
-export function loadDatabaseSnapshot(db?: any, tableNames: any = listDatabaseTables(db)) : any {
-  const snapshot: any = emptySnapshot();
+export function loadDatabaseSnapshot(
+  db: Database.Database,
+  tableNames: ReadonlySet<string> = listDatabaseTables(db)
+): DatabaseSnapshot {
+  const snapshot = emptySnapshot();
   if (tableNames.has("storage_objects")) {
     snapshot.objects = db.prepare(`
       SELECT object_id, namespace, storage_rel_path, sha256, byte_size,
              media_type, metadata_json, created_at, updated_at
       FROM storage_objects
       ORDER BY created_at ASC, object_id ASC
-    `).all();
+    `).all() as StorageObjectRow[];
   }
   if (tableNames.has("storage_object_owners")) {
     snapshot.owners = db.prepare(`
@@ -150,7 +228,7 @@ export function loadDatabaseSnapshot(db?: any, tableNames: any = listDatabaseTab
              owner_user_id, owner_username, created_at, updated_at
       FROM storage_object_owners
       ORDER BY created_at ASC, object_id ASC
-    `).all();
+    `).all() as StorageOwnerRow[];
   }
   if (tableNames.has("storage_deletion_operations")) {
     snapshot.deletionOperations = db.prepare(`
@@ -158,7 +236,7 @@ export function loadDatabaseSnapshot(db?: any, tableNames: any = listDatabaseTab
              error, created_at, updated_at
       FROM storage_deletion_operations
       ORDER BY updated_at ASC, operation_id ASC
-    `).all();
+    `).all() as DeletionOperationRow[];
   }
   if (tableNames.has("opaque_custody_artifacts")) {
     snapshot.opaqueCustodyArtifacts = db.prepare(`
@@ -167,7 +245,7 @@ export function loadDatabaseSnapshot(db?: any, tableNames: any = listDatabaseTab
              workspace_ref, state, created_at, updated_at
       FROM opaque_custody_artifacts
       ORDER BY created_at ASC, custody_ref ASC
-    `).all();
+    `).all() as UnknownRecord[];
   }
   if (tableNames.has("opaque_custody_promotions")) {
     snapshot.opaqueCustodyPromotions = db.prepare(`
@@ -175,7 +253,7 @@ export function loadDatabaseSnapshot(db?: any, tableNames: any = listDatabaseTab
              reason_code, created_at, updated_at
       FROM opaque_custody_promotions
       ORDER BY created_at ASC, promotion_id ASC
-    `).all();
+    `).all() as UnknownRecord[];
   }
   snapshot.counts = {
     objectCount: snapshot.objects.length,
@@ -187,15 +265,15 @@ export function loadDatabaseSnapshot(db?: any, tableNames: any = listDatabaseTab
   return snapshot;
 }
 
-function pathWithinRoot(candidatePath?: any, rootPath?: any) : any {
-  const relative: any = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+function pathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
   return relative === "" || Boolean(relative && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-async function hashFileSha256(filePath?: any) : Promise<any> {
-  const handle: any = await fs.open(filePath, "r");
-  const digest: any = createHash("sha256");
-  const buffer: any = Buffer.allocUnsafe(HASH_BUFFER_BYTES);
+async function hashFileSha256(filePath: string): Promise<string> {
+  const handle = await fs.open(filePath, "r");
+  const digest = createHash("sha256");
+  const buffer = Buffer.allocUnsafe(HASH_BUFFER_BYTES);
   try {
     while (true) {
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
@@ -208,8 +286,11 @@ async function hashFileSha256(filePath?: any) : Promise<any> {
   }
 }
 
-async function inspectJobArtifacts(jobsRootPath?: any, owners?: any) : Promise<any> {
-  const issues: Record<string, any> = {
+async function inspectJobArtifacts(
+  jobsRootPath: string,
+  owners: readonly StorageOwnerRow[]
+): Promise<{ issues: IssueCollection; jobDirectoryCount: number }> {
+  const issues: IssueCollection = {
     invalidJobDirectories: [],
     invalidOwnedJobIds: [],
     missingOwnedJobDirectories: [],
@@ -221,27 +302,27 @@ async function inspectJobArtifacts(jobsRootPath?: any, owners?: any) : Promise<a
     missingJobResult: [],
     malformedJobResult: []
   };
-  let directories: any[] = [];
+  let directories: Dirent<string>[] = [];
   try {
     directories = await fs.readdir(jobsRootPath, { withFileTypes: true });
   } catch {
     directories = [];
   }
 
-  const safeDirectories: any = new Map<any, any>();
+  const safeDirectories = new Map<string, string>();
   for (const directory of directories) {
     if (!directory.isDirectory()) continue;
     try {
-      const jobId: any = safePathSegment(directory.name, "job id");
+      const jobId = safePathSegment(directory.name, "job id");
       safeDirectories.set(jobId, path.join(jobsRootPath, jobId));
     } catch {
       issues.invalidJobDirectories.push({ directoryName: directory.name });
     }
   }
 
-  const ownedJobIds: any = new Set<any>();
+  const ownedJobIds = new Set<string>();
   for (const owner of owners) {
-    const candidate: any = String(owner.job_id || "").trim();
+    const candidate = String(owner.job_id || "").trim();
     if (!candidate) continue;
     try {
       ownedJobIds.add(safePathSegment(candidate, "job id"));
@@ -256,12 +337,12 @@ async function inspectJobArtifacts(jobsRootPath?: any, owners?: any) : Promise<a
   }
 
   for (const [jobId, directoryPath] of safeDirectories) {
-    const metaPath: any = path.join(directoryPath, "meta.json");
-    const payloadPath: any = path.join(directoryPath, "payload.json");
-    const resultPath: any = path.join(directoryPath, "result.json");
-    const metaExists: any = await pathExists(metaPath);
-    const payloadExists: any = await pathExists(payloadPath);
-    const resultExists: any = await pathExists(resultPath);
+    const metaPath = path.join(directoryPath, "meta.json");
+    const payloadPath = path.join(directoryPath, "payload.json");
+    const resultPath = path.join(directoryPath, "result.json");
+    const metaExists = await pathExists(metaPath);
+    const payloadExists = await pathExists(payloadPath);
+    const resultExists = await pathExists(resultPath);
     const [meta, payload, result] = await Promise.all([
       metaExists ? readJsonIfExists(metaPath) : null,
       payloadExists ? readJsonIfExists(payloadPath) : null,
@@ -272,15 +353,15 @@ async function inspectJobArtifacts(jobsRootPath?: any, owners?: any) : Promise<a
       issues.missingJobMeta.push({ jobId, path: metaPath });
     } else if (!meta) {
       issues.malformedJobMeta.push({ jobId, path: metaPath });
-    } else if (String(meta.id || "") !== jobId) {
-      issues.jobIdentityMismatches.push({ jobId, metadataJobId: String(meta.id || ""), path: metaPath });
+    } else if (String(record(meta).id || "") !== jobId) {
+      issues.jobIdentityMismatches.push({ jobId, metadataJobId: String(record(meta).id || ""), path: metaPath });
     }
     if (!payloadExists) {
       issues.missingJobPayload.push({ jobId, path: payloadPath });
     } else if (!payload) {
       issues.malformedJobPayload.push({ jobId, path: payloadPath });
     }
-    if (meta?.status === "completed" && !resultExists) {
+    if (record(meta).status === "completed" && !resultExists) {
       issues.missingJobResult.push({ jobId, path: resultPath });
     } else if (resultExists && !result) {
       issues.malformedJobResult.push({ jobId, path: resultPath });
@@ -293,8 +374,16 @@ async function inspectJobArtifacts(jobsRootPath?: any, owners?: any) : Promise<a
   };
 }
 
-async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Record<string, any>) : Promise<any> {
-  const issues: Record<string, any> = {
+async function inspectObjectFiles({
+  userDataPath,
+  objectRootPath,
+  objects
+}: {
+  userDataPath: string;
+  objectRootPath: string;
+  objects: readonly StorageObjectRow[];
+}): Promise<{ issues: ObjectFileIssues; objectFileCount: number; objectBytes: number }> {
+  const issues: ObjectFileIssues = {
     invalidObjectPaths: [],
     unsafeObjectFiles: [],
     missingObjectFiles: [],
@@ -304,13 +393,13 @@ async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Rec
     objectDigestMismatches: [],
     orphanObjectFiles: []
   };
-  const expectedRelativePaths: any = new Set<any>(
-    objects.map((row?: any) : any => String(row.storage_rel_path || "").trim()).filter(Boolean)
+  const expectedRelativePaths = new Set(
+    objects.map((row) => String(row.storage_rel_path || "").trim()).filter(Boolean)
   );
-  const realObjectRootPath: any = await fs.realpath(objectRootPath).catch(() : any => path.resolve(objectRootPath));
+  const realObjectRootPath = await fs.realpath(objectRootPath).catch(() => path.resolve(objectRootPath));
 
   for (const row of objects) {
-    let absolutePath: any;
+    let absolutePath: string;
     try {
       absolutePath = resolveStoredObjectPath(userDataPath, row.storage_rel_path);
       if (!pathWithinRoot(absolutePath, objectRootPath)) {
@@ -324,11 +413,11 @@ async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Rec
       continue;
     }
 
-    let fileStat: any;
+    let fileStat: Awaited<ReturnType<typeof fs.lstat>>;
     try {
       fileStat = await fs.lstat(absolutePath);
-    } catch (error: any) {
-      if (error?.code === "ENOENT") {
+    } catch (error: unknown) {
+      if (errorCode(error) === "ENOENT") {
         issues.missingObjectFiles.push({
           objectId: row.object_id,
           storageRelativePath: row.storage_rel_path,
@@ -343,7 +432,7 @@ async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Rec
       }
       continue;
     }
-    const realObjectPath: any = await fs.realpath(absolutePath).catch(() : any => "");
+    const realObjectPath = await fs.realpath(absolutePath).catch(() => "");
     if (!fileStat.isFile() || !realObjectPath || !pathWithinRoot(realObjectPath, realObjectRootPath)) {
       issues.unsafeObjectFiles.push({
         objectId: row.object_id,
@@ -361,7 +450,7 @@ async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Rec
       });
       continue;
     }
-    const expectedDigest: any = String(row.sha256 || "").trim().toLowerCase();
+    const expectedDigest = String(row.sha256 || "").trim().toLowerCase();
     if (!SHA256_PATTERN.test(expectedDigest)) {
       issues.invalidObjectDigests.push({
         objectId: row.object_id,
@@ -385,11 +474,11 @@ async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Rec
     }
   }
 
-  const objectFiles: any = await listFilesRecursively(objectRootPath);
-  let objectBytes: any = 0;
+  const objectFiles = await listFilesRecursively(objectRootPath);
+  let objectBytes = 0;
   for (const filePath of objectFiles) {
-    const relativePath: any = toPosixRelative(userDataPath, filePath);
-    const stat: any = await fs.lstat(filePath).catch(() : any => null);
+    const relativePath = toPosixRelative(userDataPath, filePath);
+    const stat = await fs.lstat(filePath).catch(() => null);
     objectBytes += stat?.size || 0;
     if (!expectedRelativePaths.has(relativePath)) {
       issues.orphanObjectFiles.push({
@@ -406,23 +495,29 @@ async function inspectObjectFiles({ userDataPath, objectRootPath, objects }: Rec
   };
 }
 
-function inspectOwnershipIntegrity({ objects, owners }: Record<string, any>) : any {
-  const objectIds: any = new Set<any>(objects.map((row?: any) : any => row.object_id));
+function inspectOwnershipIntegrity({
+  objects,
+  owners
+}: {
+  objects: readonly StorageObjectRow[];
+  owners: readonly StorageOwnerRow[];
+}): IssueCollection {
+  const objectIds = new Set(objects.map((row) => row.object_id));
   return {
     danglingObjectOwners: owners
-      .filter((owner?: any) : any => !objectIds.has(owner.object_id))
-      .map((owner?: any) : any => ({ objectId: owner.object_id, jobId: owner.job_id })),
+      .filter((owner) => !objectIds.has(owner.object_id))
+      .map((owner) => ({ objectId: owner.object_id, jobId: owner.job_id })),
     unscopedObjectOwners: owners
-      .filter((owner?: any) : any => !owner.job_id && !owner.archive_batch_id)
-      .map((owner?: any) : any => ({ objectId: owner.object_id }))
+      .filter((owner) => !owner.job_id && !owner.archive_batch_id)
+      .map((owner) => ({ objectId: owner.object_id }))
   };
 }
 
-function inspectDeletionOperations(deletionOperations?: any) : any {
-  const completedDeletionOperations: any[] = [];
-  const pendingDeletionOperations: any[] = [];
+function inspectDeletionOperations(deletionOperations: readonly DeletionOperationRow[]): IssueCollection {
+  const completedDeletionOperations: IssueRecord[] = [];
+  const pendingDeletionOperations: IssueRecord[] = [];
   for (const operation of deletionOperations) {
-    const entry: Record<string, any> = {
+    const entry: IssueRecord = {
       operationId: operation.operation_id,
       ownerId: operation.owner_id,
       jobId: operation.job_id,
@@ -438,18 +533,18 @@ function inspectDeletionOperations(deletionOperations?: any) : any {
   return { completedDeletionOperations, pendingDeletionOperations };
 }
 
-export function summarizeHealth(issues?: any) : any {
-  return (Object.values(issues) as any[]).every((entries?: any) : any => Array.isArray(entries) && entries.length === 0);
+export function summarizeHealth(issues: IssueCollection): boolean {
+  return Object.values(issues).every((entries) => Array.isArray(entries) && entries.length === 0);
 }
 
-export async function runStorageDoctor({ userDataPath }: Record<string, any>) : Promise<any> {
-  const paths: any = getOpsPaths(userDataPath);
-  const databasePresent: any = await pathExists(paths.databasePath);
-  let tableNames: any = new Set<any>();
-  let snapshot: any = emptySnapshot();
+export async function runStorageDoctor({ userDataPath }: { userDataPath: string }): Promise<StorageDoctorReport> {
+  const paths = getOpsPaths(userDataPath);
+  const databasePresent = await pathExists(paths.databasePath);
+  let tableNames = new Set<string>();
+  let snapshot = emptySnapshot();
 
   if (databasePresent) {
-    const db: any = createDatabaseHandle(paths.databasePath, { readonly: true });
+    const db = createDatabaseHandle(paths.databasePath, { readonly: true });
     try {
       tableNames = listDatabaseTables(db);
       snapshot = loadDatabaseSnapshot(db, tableNames);
@@ -458,17 +553,17 @@ export async function runStorageDoctor({ userDataPath }: Record<string, any>) : 
     }
   }
 
-  const jobInspection: any = await inspectJobArtifacts(paths.jobsRootPath, snapshot.owners);
-  const objectInspection: any = await inspectObjectFiles({
+  const jobInspection = await inspectJobArtifacts(paths.jobsRootPath, snapshot.owners);
+  const objectInspection = await inspectObjectFiles({
     userDataPath,
     objectRootPath: paths.objectRootPath,
     objects: snapshot.objects
   });
-  const issues: Record<string, any> = {
+  const issues: StorageDoctorIssues = {
     databaseMissing: databasePresent ? [] : [{ databasePath: paths.databasePath }],
     missingCanonicalTables: databasePresent
-      ? CANONICAL_STORAGE_TABLES.filter((tableName?: any) : any => !tableNames.has(tableName))
-          .map((tableName?: any) : any => ({ tableName }))
+      ? CANONICAL_STORAGE_TABLES.filter((tableName) => !tableNames.has(tableName))
+          .map((tableName) => ({ tableName }))
       : [],
     ...jobInspection.issues,
     ...objectInspection.issues,

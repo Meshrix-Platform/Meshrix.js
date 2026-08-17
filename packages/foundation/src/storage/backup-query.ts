@@ -1,12 +1,22 @@
 import path from "node:path";
 import { ServerConfig } from "#meshrix/server-config";
 import { readStorageBackupCatalog } from "./backup-catalog.ts";
+import type { StorageBackupCatalog, StorageBackupCatalogEntry } from "./backup-catalog.ts";
 import { BACKUP_RESTORE_PROTOCOL_VERSION } from "./backup-contract.ts";
 import { rebuildStorageBackupCatalog } from "./backup-manifest.ts";
 
-export async function listStorageBackups({ userDataPath }: Record<string, any> = {}) : Promise<any> {
-  const rootPath: any = path.resolve(userDataPath || ServerConfig.getDataDir());
-  let catalog: any = null;
+export interface StorageBackupList {
+  schemaVersion: "v0.0.1:schema:definition-1";
+  protocolVersion: string;
+  catalogRevision: string;
+  backups: readonly Readonly<StorageBackupCatalogEntry>[];
+}
+
+export async function listStorageBackups({
+  userDataPath
+}: { userDataPath?: string } = {}): Promise<StorageBackupList> {
+  const rootPath = path.resolve(userDataPath || ServerConfig.getDataDir());
+  let catalog: StorageBackupCatalog | null = null;
   try {
     catalog = await readStorageBackupCatalog({
       userDataPath: rootPath,
