@@ -447,20 +447,24 @@ export function createUpstreamGatewayRegistry({
         }
       };
     }
-    const entityRefs: any[] = Array.isArray(subject.entityRefs)
-      ? subject.entityRefs
-      : [
-          subject.subjectId ? { entityType: "subject", entityId: subject.subjectId } : null,
-          (subject.organizationNodeId || subject.organizationId)
-            ? { entityType: "organization", entityId: subject.organizationNodeId || subject.organizationId }
-            : null,
-          subject.teamId ? { entityType: "team", entityId: subject.teamId } : null,
-          subject.roleId ? { entityType: "role", entityId: subject.roleId } : null
-        ].filter(Boolean);
+    const configuredEntityRefs: any[] = asArray(
+      service.tagPolicy?.entityRefs || service.tagPolicy?.entities
+    );
+    const subjectEntityRefs: any[] = [
+      subject.subjectId ? { entityType: "subject", entityId: subject.subjectId } : null,
+      (subject.organizationNodeId || subject.organizationId)
+        ? { entityType: "organization", entityId: subject.organizationNodeId || subject.organizationId }
+        : null,
+      subject.teamId ? { entityType: "team", entityId: subject.teamId } : null,
+      subject.roleId ? { entityType: "role", entityId: subject.roleId } : null
+    ].filter(Boolean);
+    const entityRefs: any[] = configuredEntityRefs.length > 0
+      ? configuredEntityRefs
+      : subjectEntityRefs;
     const decision: any = evaluateUniversalTagPolicy({
       tagStore: resolvedTagStore,
       ...service.tagPolicy,
-      entityRefs: entityRefs.length > 0 ? entityRefs : service.tagPolicy?.entityRefs
+      entityRefs
     });
     return {
       allowed: decision.allowed === true,

@@ -149,8 +149,12 @@ export async function dispatchRpcOperation({
   }
   const liveOperationResolver: any = typeof resolveAuthorizationOperation === "function"
     ? resolveAuthorizationOperation
-    : routeIndex
-      ? ({ operationId }: Record<string, any>) : any => routeIndex.getOperationById(operationId) || null
+    : Array.isArray(operations)
+      ? ({ operationId }: Record<string, any>) : any => operations.find(
+          (candidate?: any) : any => candidate?.id === operationId
+        ) || null
+      : routeIndex
+        ? ({ operationId }: Record<string, any>) : any => routeIndex.getOperationById(operationId) || null
       : null;
 
   const params: any = payload.params && typeof payload.params === "object" ? payload.params : {};

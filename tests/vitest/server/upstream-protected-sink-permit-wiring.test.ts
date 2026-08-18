@@ -866,7 +866,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       expect(permits).toHaveLength(1);
       expect(permits[0]).toBeTruthy();
       expect(authorityFixture.credentialReads).toHaveBeenCalledTimes(1);
-      const authorizationDecisions: any =
+      const authorizationDecisions: any = await
         authorityFixture.consoleAuth.authorizationStore.listDecisions({
           limit: 10,
           operationId: "gateway.forward"
@@ -933,7 +933,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       expect(events).not.toContain("handler-entry");
       expect(permits).toHaveLength(0);
       expect(
-        authorityFixture.consoleAuth.authorizationStore.listDecisions({
+        await authorityFixture.consoleAuth.authorizationStore.listDecisions({
           limit: 10,
           operationId: "gateway.forward"
         })

@@ -30,7 +30,8 @@ function createMerkleState({ verifyRestoreLineage = null }: Record<string, any> 
         afterRoot: "after-root",
         contentRefs: [],
         indexRoots: {}
-      }))
+      })),
+      begin: vi.fn(async () : Promise<any> => ({ currentRoot: "after-root" }))
     };
   if (verifyRestoreLineage) {
     stateCommit.verifyRestoreLineage = verifyRestoreLineage;
@@ -63,7 +64,11 @@ function createMerkleState({ verifyRestoreLineage = null }: Record<string, any> 
       }))
     },
     merkleIndex: {
-      prefix: vi.fn(async () : Promise<any> => [])
+      prefix: vi.fn(async () : Promise<any> => []),
+      prove: vi.fn(async () : Promise<any> => ({ proofHash: "" }))
+    },
+    eventLog: {
+      listEvents: vi.fn(async () : Promise<any> => [])
     },
     stateCommit
   };

@@ -71,7 +71,7 @@ describe("security permissions provider behavior", () : any => {
     }));
   });
 
-  it("delegates all governance and authorization store operations when stores are available", () : any => {
+  it("delegates all governance and authorization store operations when stores are available", async () : Promise<any> => {
     const governanceStore: Record<string, any> = {
       getPolicyRevision: vi.fn(() : any => ({ revision: 3 })),
       listRoles: vi.fn(() : any => ["role-a"]),
@@ -168,7 +168,7 @@ describe("security permissions provider behavior", () : any => {
     })).toEqual(generatedPolicy);
     expect(provider.getWorkspaceAssetPolicy({ workspace: "workspace-b" })).toBeNull();
 
-    const permission: any = provider.checkWorkspaceAssetPermission({
+    const permission: any = await provider.checkWorkspaceAssetPermission({
       request: { headers: { "x-unit": "1" } },
       authSession: { user: { userId: "user-a" } },
       action: "download",
