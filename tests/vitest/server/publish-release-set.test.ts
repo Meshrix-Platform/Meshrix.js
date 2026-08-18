@@ -171,6 +171,7 @@ describe("npm release-set publication", () : any => {
         "plugins/agents/client-adapter-kit",
         "plugins/agents/codex",
         "plugins/agents/kimi",
+        "plugins/agents/meshrix-self-maintenance",
         "plugins/agents/openclaw",
         "plugins/agents/opencode",
         "plugins/agents/pi"

@@ -689,7 +689,7 @@ export function ensureSchema(db?: any) : any {
         `).get();
         if (cycle) throw new Error("operation_permission_delegated_parent_cycle");
         db.exec(`
-          CREATE INDEX idx_tool_grants_parent_type
+          CREATE INDEX IF NOT EXISTS idx_tool_grants_parent_type
             ON tool_grants(parent_grant_id, type, id);
         `);
       }

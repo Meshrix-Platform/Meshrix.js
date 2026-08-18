@@ -34,7 +34,6 @@ function fixture(overrides: Partial<Parameters<typeof createConsoleRuntimeLifecy
     liveDashboardAlerts: { value: [] },
     onBootstrapError: vi.fn(),
     refreshAuthState: vi.fn(async () : Promise<any> => authenticatedSnapshot()),
-    refreshContextCompiler: vi.fn(async () : Promise<any> => undefined),
     refreshMonitorAlerts: vi.fn(async () : Promise<any> => undefined),
     refreshState: vi.fn(async () : Promise<any> => undefined),
     startServerEventSubscription: vi.fn(),
@@ -104,7 +103,7 @@ describe("console runtime lifecycle", () : any => {
   it("reports bootstrap rejection and never starts the event subscription", async () : Promise<any> => {
     const failure: any = new Error("bootstrap failed");
     const { controller, options } = fixture({
-      refreshContextCompiler: vi.fn(async () : Promise<any> => {
+      refreshAuthState: vi.fn(async () : Promise<any> => {
         throw failure;
       }),
     });

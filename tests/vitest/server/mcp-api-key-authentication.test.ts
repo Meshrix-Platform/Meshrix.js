@@ -685,8 +685,10 @@ describe("Operation Permission device-state migration", () : any => {
       expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
         .get("mcp_authorization_requests")).toBeUndefined();
       db.exec(`
-        INSERT INTO tool_grants (id, label, type, created_at, updated_at)
-          VALUES ('grant-preserved', 'Preserved', 'delegated-mcp-child', 'synthetic', 'synthetic');
+        INSERT INTO tool_grants (id, label, type, parent_grant_id, metadata_json, created_at, updated_at)
+          VALUES ('grant-parent-preserved', 'Parent', 'machine', '', '{}', 'synthetic', 'synthetic');
+        INSERT INTO tool_grants (id, label, type, parent_grant_id, metadata_json, created_at, updated_at)
+          VALUES ('grant-preserved', 'Preserved', 'delegated-mcp-child', 'grant-parent-preserved', '{"delegatedMcp":{"sourceGrantId":"grant-parent-preserved"}}', 'synthetic', 'synthetic');
         INSERT INTO tool_grant_events (event_id, grant_id, event_type, created_at)
           VALUES ('grant-event-preserved', 'grant-preserved', 'created', 'synthetic');
         INSERT INTO tool_policy_decisions (decision_id, tool_id, effect, reason_code, created_at)
@@ -739,7 +741,7 @@ describe("Operation Permission device-state migration", () : any => {
 
       ensureSchema(db);
 
-      expect(db.pragma("user_version", { simple: true })).toBe(13);
+      expect(db.pragma("user_version", { simple: true })).toBe(14);
       expect(db.prepare("SELECT name FROM sqlite_master WHERE name LIKE '%mcp_authorization_requests%'").all())
         .toEqual([]);
       expect(snapshot()).toEqual(before);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createAuthorizationEngine } from "../../../packages/foundation/src/security/authorization/authorization-engine.ts";
 
-function evaluate(input: Record<string, any> = {}) : any {
+async function evaluate(input: Record<string, any> = {}) : Promise<any> {
   return createAuthorizationEngine().evaluate({
     enforceConfirmation: false,
     ...input
@@ -10,8 +10,8 @@ function evaluate(input: Record<string, any> = {}) : any {
 }
 
 describe("authorization resource context mapping", () : any => {
-  it("maps operation resourceContext fieldMap aliases into workspace ABAC decisions", () : any => {
-    const decision: any = evaluate({
+  it("maps operation resourceContext fieldMap aliases into workspace ABAC decisions", async () : Promise<any> => {
+    const decision: any = await evaluate({
       operation: {
         id: "sample_plugin.stats",
         requiredScopes: ["workspace:read"],
@@ -40,8 +40,8 @@ describe("authorization resource context mapping", () : any => {
     expect(decision.evaluatedLayers).toContain("abac_resource_policy");
   });
 
-  it("uses nested resource objects for service and secret binding ABAC decisions", () : any => {
-    const serviceDecision: any = evaluate({
+  it("uses nested resource objects for service and secret binding ABAC decisions", async () : Promise<any> => {
+    const serviceDecision: any = await evaluate({
       operation: {
         id: "gateway.forward",
         requiredScopes: ["gateway:write"],
@@ -67,7 +67,7 @@ describe("authorization resource context mapping", () : any => {
     expect(serviceDecision.reasonCode).toBe("service_not_allowed");
     expect(serviceDecision.resource.serviceId).toBe("private-mcp");
 
-    const secretDecision: any = evaluate({
+    const secretDecision: any = await evaluate({
       operation: {
         id: "gateway.forward",
         requiredScopes: ["gateway:write"],
@@ -94,8 +94,8 @@ describe("authorization resource context mapping", () : any => {
     expect(secretDecision.resource.secretBindingId).toBe("private-binding");
   });
 
-  it("denies grant management inputs that delegate outside the subject resource boundary", () : any => {
-    const decision: any = evaluate({
+  it("denies grant management inputs that delegate outside the subject resource boundary", async () : Promise<any> => {
+    const decision: any = await evaluate({
       operation: {
         id: "operation_permission.create_grant",
         requiredScopes: ["runtime:admin"],
@@ -137,8 +137,8 @@ describe("authorization resource context mapping", () : any => {
     expect(decision.resource.secretBindingIds).toEqual(["sec-b"]);
   });
 
-  it("denies grant metadata resource limits outside the subject boundary", () : any => {
-    const decision: any = evaluate({
+  it("denies grant metadata resource limits outside the subject boundary", async () : Promise<any> => {
+    const decision: any = await evaluate({
       operation: {
         id: "operation_permission.update_grant",
         requiredScopes: ["runtime:admin"],
@@ -175,7 +175,7 @@ describe("authorization resource context mapping", () : any => {
   it("denies grant metadata resource limits with the real registry mapping", async () : Promise<any> => {
     const { SERVER_API_OPERATIONS } = await import("../../../packages/contracts/src/operations/operation-registry.ts");
     const operation: any = SERVER_API_OPERATIONS.find((item?: any) : any => item.id === "operation_permission.create_grant");
-    const decision: any = evaluate({
+    const decision: any = await evaluate({
       operation,
       authSession: {
         user: {
@@ -197,8 +197,8 @@ describe("authorization resource context mapping", () : any => {
     expect(decision.reasonCode).toBe("workspace_not_allowed");
   });
 
-  it("denies gateway forwarding when credential or secret refs exceed the subject boundary", () : any => {
-    const decision: any = evaluate({
+  it("denies gateway forwarding when credential or secret refs exceed the subject boundary", async () : Promise<any> => {
+    const decision: any = await evaluate({
       operation: {
         id: "gateway.forward",
         requiredScopes: ["gateway:write"],
@@ -231,8 +231,8 @@ describe("authorization resource context mapping", () : any => {
     expect(decision.resource.secretBindingIds).toEqual(["sec-a", "sec-b"]);
   });
 
-  it("keeps legitimate mapped resource access allowed", () : any => {
-    const decision: any = evaluate({
+  it("keeps legitimate mapped resource access allowed", async () : Promise<any> => {
+    const decision: any = await evaluate({
       operation: {
         id: "external_services.get",
         requiredScopes: ["gateway:read"],

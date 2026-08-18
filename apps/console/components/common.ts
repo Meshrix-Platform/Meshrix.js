@@ -15,6 +15,7 @@ import FeatureToggle from "./FeatureToggle.vue";
 import HelpTooltip from "./HelpTooltip.vue";
 import HistorySessionPanel from "./HistorySessionPanel.vue";
 import JsonConfigFileEditor from "./JsonConfigFileEditor.vue";
+import MeshrixJsMark from "./MeshrixJsMark.vue";
 import MeshrixTabs from "./MeshrixTabs.vue";
 import MultiChoiceCardGroup from "./MultiChoiceCardGroup.vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
@@ -27,7 +28,7 @@ import StatusPill from "@meshrix/ui-console/status-pill";
 import UploadFileListCard from "./UploadFileListCard.vue";
 import WorkspaceFileTree from "./WorkspaceFileTree.vue";
 
-export { BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleSkeleton, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
+export { BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleSkeleton, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixJsMark, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
 
 export type CommonComponentRegistration = {
   name: string;
@@ -221,6 +222,14 @@ export const commonComponentRegistry: CommonComponentRegistration[] = [
     category: "result",
     description: "Element Plus 表格的标准封装，统一边框、斑马纹、尺寸和加载态。",
     usageRule: "页面需要数据表格时优先使用；不要在页面级直接散布 ElTable 配置。",
+  },
+  {
+    name: "MeshrixJsMark",
+    file: "apps/console/components/MeshrixJsMark.vue",
+    tier: "2",
+    category: "render",
+    description: "Meshrix.js 品牌标识的标准 SVG 渲染，统一主标样式与无障碍隐藏。",
+    usageRule: "需要展示 Meshrix.js 品牌标识（登录门、侧边导航品牌区等）时使用；不在功能页面手写品牌图片或内联 SVG。",
   },
   {
     name: "MeshrixTabs",

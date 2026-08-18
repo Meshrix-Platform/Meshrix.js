@@ -92,7 +92,7 @@ function createFixture(overrides: Record<string, any> = {}) : any {
     ),
     backgroundSupervisorLabel: computed(() : any => (backgroundProcessStatus.value?.supervisor.alive ? "正常" : "守护进程离线")),
     isBusy,
-    canAdminMaintenanceAgent: ref(false),
+    canAdminAuth: ref(false),
     activeMonitorAlerts,
     monitorAlertConfigText,
     monitorAlertSummary: computed(() : any => ({

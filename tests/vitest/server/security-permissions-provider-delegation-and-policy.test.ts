@@ -84,7 +84,7 @@ describe("security permissions provider defaults and fallback paths", () : any =
     expect(provider.listSessions()).toEqual([]);
     expect(provider.revokeSession("session-1")).toEqual({ ok: false });
     expect(provider.resolveSubject()).toBeNull();
-    expect(provider.evaluatePolicy()).toEqual({
+    await expect(provider.evaluatePolicy()).resolves.toEqual({
       effect: "deny",
       allowed: false,
       reasonCode: "authorization_engine_unavailable",
@@ -129,9 +129,9 @@ describe("security permissions provider defaults and fallback paths", () : any =
       workspaceId: "workspace-a",
       policyId: "missing"
     })).toBeNull();
-    expect(provider.checkWorkspaceAssetPermission({
+    await expect(provider.checkWorkspaceAssetPermission({
       request: { headers: {} }
-    })).toBeNull();
+    })).resolves.toBeNull();
 
     expect(() : any => provider.setOidcConfig({ issuer: "issuer" })).toThrow("Console OIDC provider is unavailable.");
     expect(() : any => provider.upsertGovernanceRole({ roleId: "role-a" })).toThrow("Authorization governance role store is unavailable.");
@@ -263,7 +263,7 @@ describe("security permissions provider construction and delegation", () : any =
     expect(explicitEngine.evaluate).not.toHaveBeenCalled();
 
     expect(provider.resolveSubject({ subjectId: "subject-1" })).toEqual({ subjectId: "explicit-subject" });
-    expect(provider.evaluatePolicy({ operation: { id: "policy-1" } })).toEqual({
+    await expect(provider.evaluatePolicy({ operation: { id: "policy-1" } })).resolves.toEqual({
       allowed: false,
       reasonCode: "explicit-engine"
     });
@@ -398,7 +398,7 @@ describe("security permissions provider authorization engine behavior", () : any
     }));
   });
 
-  it("checks workspace asset permissions through the engine", () : any => {
+  it("checks workspace asset permissions through the engine", async () : Promise<any> => {
     const decision: Record<string, any> = { allowed: true, reasonCode: "allowed" };
     const evaluate: any = vi.fn(() : any => decision);
     const provider: any = createSecurityPermissionsProvider({
@@ -411,7 +411,7 @@ describe("security permissions provider authorization engine behavior", () : any
       requestedEgress: "https://egress.example"
     };
 
-    expect(provider.checkWorkspaceAssetPermission(input)).toBe(decision);
+    await expect(provider.checkWorkspaceAssetPermission(input)).resolves.toBe(decision);
     expect(evaluate).toHaveBeenCalledWith({
       operation: {
         id: "workspace.asset.permission.check",

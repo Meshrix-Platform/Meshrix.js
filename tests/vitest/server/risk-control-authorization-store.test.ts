@@ -174,8 +174,8 @@ describe("authorization store behavior", () : any => {
         createdAt: "2026-06-01T00:00:00.000Z"
       };
 
-      const firstDecision: any = store.appendDecision(decisionPayload);
-      const secondDecision: any = store.appendDecision({
+      const firstDecision: any = await store.appendDecision(decisionPayload);
+      const secondDecision: any = await store.appendDecision({
         ...decisionPayload,
         decisionId: "decision-2",
         traceId: "trace-2",
@@ -195,10 +195,10 @@ describe("authorization store behavior", () : any => {
         createdAt: "2026-06-02T00:00:00.000Z"
       });
 
-      const allDecisions: any = store.listDecisions({ limit: "500" });
+      const allDecisions: any = await store.listDecisions({ limit: "500" });
       expect(allDecisions.map((entry?: any) : any => entry.decisionId)).toEqual([secondDecision.decisionId, firstDecision.decisionId]);
 
-      const firstListed: any = store.listDecisions({
+      const firstListed: any = await store.listDecisions({
         subjectId: "subject-1",
         traceId: "trace-1",
         tenantId: "tenant-a",
@@ -237,7 +237,7 @@ describe("authorization store behavior", () : any => {
       });
       expect(JSON.stringify(firstListed[0].decision.decision)).toContain("<redacted-depth>");
 
-      const deniedRequests: any = store.listDeniedRequests({
+      const deniedRequests: any = await store.listDeniedRequests({
         subjectId: "subject-1",
         tenantId: "tenant-a",
         workspaceId: "workspace-a",
@@ -257,7 +257,7 @@ describe("authorization store behavior", () : any => {
       });
       expect(JSON.stringify(deniedRequests[0].deniedRequest)).toContain("<redacted>");
 
-      const receipt: any = store.appendReceipt({
+      const receipt: any = await store.appendReceipt({
         decisionId: firstDecision.decisionId,
         subject: {
           userId: "subject-1"
@@ -271,7 +271,7 @@ describe("authorization store behavior", () : any => {
         createdAt: "2026-06-03T00:00:00.000Z"
       });
 
-      const loanRecord: any = store.appendLoanRecord({
+      const loanRecord: any = await store.appendLoanRecord({
         receiptId: receipt.receiptId,
         decisionId: firstDecision.decisionId,
         subject: {
@@ -286,7 +286,7 @@ describe("authorization store behavior", () : any => {
         createdAt: "2026-06-03T00:00:00.000Z"
       });
 
-      const receipts: any = store.listReceipts({ subjectId: "subject-1", limit: 0 });
+      const receipts: any = await store.listReceipts({ subjectId: "subject-1", limit: 0 });
       expect(receipts).toHaveLength(1);
       expect(receipts[0]).toMatchObject({
         receiptId: receipt.receiptId,
@@ -304,7 +304,7 @@ describe("authorization store behavior", () : any => {
         }
       });
 
-      const loanRecords: any = store.listLoanRecords({ subjectId: "subject-1", limit: 0 });
+      const loanRecords: any = await store.listLoanRecords({ subjectId: "subject-1", limit: 0 });
       expect(loanRecords).toHaveLength(1);
       expect(loanRecords[0]).toMatchObject({
         loanRecordId: loanRecord.loanRecordId,
@@ -323,30 +323,30 @@ describe("authorization store behavior", () : any => {
         }
       });
 
-      expect(() : any => store.appendDecision({
+      await expect(store.appendDecision({
         ...decisionPayload,
         decisionId: firstDecision.decisionId,
         effect: "allow",
         allowed: true
-      })).toThrow();
-      expect(() : any => store.appendReceipt({
+      })).rejects.toThrow();
+      await expect(store.appendReceipt({
         receiptId: receipt.receiptId,
         decisionId: secondDecision.decisionId
-      })).toThrow();
-      expect(() : any => store.appendLoanRecord({
+      })).rejects.toThrow();
+      await expect(store.appendLoanRecord({
         loanRecordId: loanRecord.loanRecordId,
         decisionId: secondDecision.decisionId
-      })).toThrow();
+      })).rejects.toThrow();
 
-      expect(store.listDecisions({ subjectId: "subject-1" })[0]).toMatchObject({
+      expect((await store.listDecisions({ subjectId: "subject-1" }))[0]).toMatchObject({
         decisionId: firstDecision.decisionId,
         effect: "deny"
       });
-      expect(store.listReceipts({ subjectId: "subject-1" })[0]).toMatchObject({
+      expect((await store.listReceipts({ subjectId: "subject-1" }))[0]).toMatchObject({
         receiptId: receipt.receiptId,
         decisionId: firstDecision.decisionId
       });
-      expect(store.listLoanRecords({ subjectId: "subject-1" })[0]).toMatchObject({
+      expect((await store.listLoanRecords({ subjectId: "subject-1" }))[0]).toMatchObject({
         loanRecordId: loanRecord.loanRecordId,
         decisionId: firstDecision.decisionId
       });
