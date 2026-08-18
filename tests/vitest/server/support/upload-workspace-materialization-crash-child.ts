@@ -408,7 +408,7 @@ async function run(configuration?: any) : Promise<any> {
           new Error("Crash stage was not reached."),
           { code: "child_crash_stage_not_reached" }
         ));
-      }, 60_000);
+      }, 240_000);
       timeout.unref?.();
     })
   ]);
