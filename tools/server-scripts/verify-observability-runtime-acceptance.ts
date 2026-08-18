@@ -383,6 +383,25 @@ try {
 }
 
 const revision: any = await computeVerifierSourceRevision(ROOT, SOURCE_FILES);
+let upstreamPublishingEvidence: Record<string, any> = {
+  status: "blocked",
+  reasonCode: "upstream_service_publishing_production_producer_missing",
+  acceptedAsProductionEvidence: false
+};
+try {
+  const upstreamReport: Record<string, any> = JSON.parse(
+    await fs.readFile(path.join(ROOT, "build/reports/upstream-service-publishing.json"), "utf8")
+  );
+  if (upstreamReport?.summary?.verificationPassed === true) {
+    upstreamPublishingEvidence = {
+      status: "ready",
+      reasonCode: "",
+      acceptedAsProductionEvidence: true
+    };
+  }
+} catch {
+  // Upstream publishing report is absent; the dependency stays blocked.
+}
 const reportInput: Record<string, any> = {
   schemaVersion: REPORT_SCHEMA_VERSION,
   verifier: VERIFIER,
@@ -390,11 +409,7 @@ const reportInput: Record<string, any> = {
   finishedAt: new Date().toISOString(),
   readyForReleaseReduction,
   dependencies: {
-    upstreamServicePublishingProductionEvidence: {
-      status: "blocked",
-      reasonCode: "upstream_service_publishing_production_producer_missing",
-      acceptedAsProductionEvidence: false
-    }
+    upstreamServicePublishingProductionEvidence: upstreamPublishingEvidence
   },
   checks,
   summary: {

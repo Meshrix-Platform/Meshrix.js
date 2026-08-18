@@ -6,7 +6,7 @@ export const UPSTREAM_MCP_GATEWAY_READINESS_SOURCE: any =
 
 export const UPSTREAM_MCP_GATEWAY_REQUIRED_TEST_NAMES: readonly any[] = Object.freeze([
   "load stdio MCP upstream service from the durable manifest snapshot",
-  "create local agent grant with upstream MCP visibility",
+  "create scoped API key with upstream MCP visibility",
   "downstream MCP tools/list exposes upstream MCP tool",
   "downstream MCP tools/call reaches upstream MCP tools/call",
   "failed upstream MCP tools/call opens service circuit",
