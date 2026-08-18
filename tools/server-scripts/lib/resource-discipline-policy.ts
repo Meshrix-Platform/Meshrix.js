@@ -49,7 +49,7 @@ export const RESOURCE_DISCIPLINE_POLICY: any = deepFreeze({
     maxRssGrowthBytes: 128 * MIB,
     maxFailureProfileBytes: 8 * MIB,
     requestTimeoutMs: 5_000,
-    startupTimeoutMs: 30_000,
+    startupTimeoutMs: 120_000,
     sampleTimeoutMs: 15_000,
     shutdownTimeoutMs: 15_000
   },

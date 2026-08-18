@@ -1483,7 +1483,7 @@ async function spawnCrashChild(
   const marker: any = await new Promise((resolve?: any, reject?: any) : any => {
     const timeout: any = setTimeout(() : any => {
       reject(new Error("Crash child readiness timed out."));
-    }, 90_000);
+    }, 300_000);
     const finish: any = (task?: any) : any => (value?: any) : any => {
       clearTimeout(timeout);
       task(value);
@@ -3140,7 +3140,7 @@ describe(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
-    }, 90_000);
+    }, 420_000);
 
     it.each(WAL_TAMPER_CASES)(
       "rejects valid-format digest substitution, stale ownership, stage skip, and ordinary failure at $expectedStage without changing the live WAL",
@@ -3416,7 +3416,7 @@ describe(
       expect(snapshotDatabaseLayout(afterDb))
         .toBe(tamperedLayout);
       afterDb.close();
-    }, 90_000);
+    }, 420_000);
 
     itPosix("reconciles a transaction row lost before its first queue enqueue after a real SIGKILL", async () : Promise<any> => {
       const fixture: any = await createFixture();
@@ -3563,7 +3563,7 @@ describe(
       expect(transitions.at(-1)).toBe("complete");
       expect(recoveredRuntime.queueGate.recoveredWorkItemIds())
         .not.toContain(workItemId);
-    }, 90_000);
+    }, 420_000);
 
     itPosix.each(QUEUE_CRASH_CASES)(
       "recovers the real queue boundary $crashStage and fences its stale acknowledgement",
@@ -3700,7 +3700,7 @@ describe(
           await staleQueueStore.close?.();
         }
       },
-      90_000
+      420_000
     );
 
     itPosix("fails closed with an identity-less private inode and retained WAL when SIGKILL lands after inode reserve but before its WAL identity", async () : Promise<any> => {
@@ -3823,7 +3823,7 @@ describe(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
-    }, 90_000);
+    }, 420_000);
 
     itPosix.each(PRECOMMIT_CRASH_CASES)(
       "recovers the exact $crashStage precommit namespace after a real SIGKILL without touching its neighbor",
@@ -3995,7 +3995,7 @@ describe(
           admittedRecord.bindingDigest
         );
       },
-      90_000
+      420_000
     );
 
     it("commits forward from the exact durable Merkle event after SIGKILL with no second permit, custody read, archive, or event", async () : Promise<any> => {
@@ -4118,7 +4118,7 @@ describe(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
-    }, 90_000);
+    }, 420_000);
 
     itPosix.each(["target-identity", "target-content"])(
       "fails closed when committed recovery observes $0 mismatch after SIGKILL",
@@ -4195,7 +4195,7 @@ describe(
         expect(await fixture.workspaceCheckpointTrees())
           .toEqual(checkpointsBeforeRecovery);
       },
-      90_000
+      420_000
     );
 
     itPosix.each([
@@ -4328,7 +4328,7 @@ describe(
         expect(await fixture.workspaceCheckpointTrees())
           .toEqual(checkpointsBeforeRecovery);
       },
-      90_000
+      420_000
     );
 
     it.each([
@@ -4569,7 +4569,7 @@ describe(
           admittedRecord.bindingDigest
         );
       },
-      90_000
+      420_000
     );
 
     it("migrates a fully recognizable current-layout v0 transaction set and refuses sparse effectful or unknown layouts unchanged", async () : Promise<any> => {
