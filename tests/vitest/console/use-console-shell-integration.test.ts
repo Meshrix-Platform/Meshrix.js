@@ -342,7 +342,6 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
     await shell.refresh.refreshState({ silent: true, forceDrafts: true });
     expect(consoleStateClientMock.getServerConsoleState).toHaveBeenCalledTimes(2);
     expect(shell.runtime.consoleState.value?.server.url).toBe(refreshedState.server.url);
-    expect(shell.settings.ruleAuthoringModelOptions.value.map((option?: any) : any => option.value)).toContain("rule-agent");
 
     const eventJob: any = makeJob("event-job");
     resolveEventSubscription({

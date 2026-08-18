@@ -15,15 +15,26 @@ async function mcpRequest(provider?: any, body?: any, headers: Record<string, an
     requestBody: Buffer.from(JSON.stringify(body)),
     method: "POST",
     url: new URL("http://127.0.0.1/mcp"),
-    toolSkillManagementProvider: provider
+    toolSkillManagementProvider: provider,
+    agentMcpGatewayPipeline: createFixturePipeline()
   });
   return { response, payload: responsePayload(response) };
+}
+
+function createFixturePipeline() : any {
+  return {
+    async execute({ executeOperation }: Record<string, any>) : Promise<any> {
+      const operationOutput: any = await executeOperation({ applicationOutput: null });
+      return { operationOutput, applicationOutput: null };
+    }
+  };
 }
 
 function provider(visibleTools: any = []) : any {
   return {
     authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "fixture", subject: {} } })),
     listVisibleTools: vi.fn(() : any => visibleTools),
+    resolveActiveTool: vi.fn(() : any => visibleTools[0] || null),
     visibleGrantSummary: vi.fn(() : any => ({ id: "fixture" })),
     executeTool: vi.fn()
   };
@@ -218,7 +229,8 @@ describe("enabled plugin MCP outlets", () : any => {
       id: "meshrix.sample.file.read",
       operationId: "sample_plugin.file.read",
       mcpOutlet: "meshrix.sample",
-      mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR
+      mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR,
+      trafficModel: "gateway_transit"
     };
     const runtime: any = provider([visibleTool]);
     runtime.authorizeMcpClientRequest.mockResolvedValue({
