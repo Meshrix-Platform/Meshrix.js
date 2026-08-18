@@ -1,6 +1,5 @@
 import path from "node:path";
 import crypto from "node:crypto";
-import type { AgentMemory } from "#meshrix/agents/agent-memory/index";
 import {
   CONTEXT_COMPACTION_PROTOCOL_VERSION,
   createContextCompactionRuntime,
@@ -56,6 +55,16 @@ interface ModelCompressorResponse extends RuntimeRecord {
 type ModelCompressor = (
   input: RuntimeRecord,
 ) => ModelCompressorResponse | Promise<ModelCompressorResponse>;
+
+interface AgentMemory {
+  protocolVersion: string;
+  rootPath: string;
+  sessionMemoryPath: string;
+  latestSessionMemory(query?: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+  appendSessionMemory(entry?: Record<string, unknown>): Promise<Record<string, unknown>>;
+  listSessionMemory(query?: Record<string, unknown>): Promise<Record<string, unknown>>;
+  clearSessionMemory(query?: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
 
 interface ContextRuntimeOptions {
   userDataPath: string;

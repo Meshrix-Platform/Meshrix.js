@@ -290,6 +290,7 @@ function createIsolatedChildEnvironment(overrides: Record<string, any> = {}) : a
 
 function createChildEnvironment(runRoot?: any, profilePath?: any) : any {
   return createIsolatedChildEnvironment({
+    NODE_OPTIONS: "--conditions=source",
     NO_COLOR: "1",
     MESHRIX_HTTP_RATE_LIMIT_IP_PER_MINUTE: "1000000",
     MESHRIX_HTTP_RATE_LIMIT_SUBJECT_PER_MINUTE: "1000000",
