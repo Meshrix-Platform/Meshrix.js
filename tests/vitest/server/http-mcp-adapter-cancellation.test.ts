@@ -60,7 +60,8 @@ function createFixtureProvider() : any {
     operationId: "fixture.wait",
     label: "Wait fixture",
     inputSchema: { type: "object" },
-    readOnly: false
+    readOnly: false,
+    trafficModel: "gateway_transit"
   };
   const provider: Record<string, any> = {
     authorizeMcpClientRequest: vi.fn(async ({ request }: Record<string, any>) : Promise<any> => {
@@ -83,6 +84,7 @@ function createFixtureProvider() : any {
       };
     }),
     listVisibleTools: vi.fn(() : any => [visibleTool]),
+    resolveActiveTool: vi.fn(() : any => visibleTool),
     resolveMcpWorkspaceInput: vi.fn(async ({ input }: Record<string, any>) : Promise<any> => ({ input })),
     publicMcpToolPayload: vi.fn(async ({ payload }: Record<string, any>) : Promise<any> => payload),
     executeTool: vi.fn(async ({ input, signal }: Record<string, any>) : Promise<any> => {
@@ -133,7 +135,8 @@ function startMcpRequest({
   client = "client-a",
   session = "session-a",
   proxySession = "",
-  signal = null
+  signal = null,
+  agentMcpGatewayPipeline = null
 }: Record<string, any>) : any {
   const response: any = createCapturedResponse();
   const requestBodyBuffer: any = Buffer.from(JSON.stringify(body), "utf8");
@@ -152,10 +155,20 @@ function startMcpRequest({
     method: "POST",
     url: new URL("http://127.0.0.1/mcp"),
     toolSkillManagementProvider: provider,
+    agentMcpGatewayPipeline: agentMcpGatewayPipeline || createFixturePipeline(),
     inFlightRequestRegistry: registry,
     signal
   });
   return { completion, response };
+}
+
+function createFixturePipeline() : any {
+  return {
+    async execute({ executeOperation }: Record<string, any>) : Promise<any> {
+      const operationOutput: any = await executeOperation({ applicationOutput: null });
+      return { operationOutput, applicationOutput: null };
+    }
+  };
 }
 
 async function sendMcpRequest(input?: any) : Promise<any> {
