@@ -17,10 +17,22 @@ import { errorProperty, type JobDocument, type JobPatch, type JobPayload, type J
 import type { createJobProjectionStore } from "./job-projection-store.ts";
 
 interface CleanupEntry { jobId: string; receiptId: string; sessionId: string; state?: string }
+interface DurableWorkflows {
+  protocolVersion: string;
+  startWorkflow(input?: Record<string, unknown>): Promise<unknown>;
+  getWorkflow(workflowIdValue?: unknown): Promise<unknown>;
+  listWorkflows(input?: Record<string, unknown>): Promise<unknown>;
+  scheduleActivity(workflowIdValue?: unknown, input?: Record<string, unknown>): Promise<unknown>;
+  heartbeatActivity(workflowIdValue?: unknown, activityId?: unknown, heartbeat?: Record<string, unknown>): Promise<unknown>;
+  completeActivity(workflowIdValue?: unknown, activityId?: unknown, output?: Record<string, unknown>): Promise<unknown>;
+  failActivity(workflowIdValue?: unknown, activityId?: unknown, error?: unknown): Promise<unknown>;
+  recoverWorkflow(workflowIdValue?: unknown, input?: Record<string, unknown>): Promise<unknown>;
+  failWorkflow(workflowIdValue?: unknown, error?: unknown): Promise<unknown>;
+}
 interface ArtifactContext {
   userDataPath: string;
   protocolEventBus: { publish(type: string, payload: object, metadata?: object): Promise<unknown> } | null;
-  durableWorkflows: Record<string, (...args: unknown[]) => Promise<unknown>>;
+  durableWorkflows: DurableWorkflows;
   logJob(level: string, event: string, details?: Record<string, unknown>): void;
   jobs: Map<string, JobDocument>;
   checkpointJobs: Map<string, string>;
@@ -34,7 +46,22 @@ function uploadCleanupError(code: string, message: string, statusCode = 500) {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
-export function createJobManagerArtifacts(ctx: ArtifactContext) {
+interface JobManagerArtifacts {
+  checkpointTreeIdForJob(job?: JobDocument | null): string;
+  workflowIdForJob(job?: JobDocument | null): string;
+  ensureJobCheckpointTree(job: JobDocument, payload?: JobPayload | null): Promise<unknown>;
+  updateJobCheckpointNode(job: JobDocument, node: Record<string, unknown>): Promise<unknown>;
+  finishJobCheckpoint(job: JobDocument, input?: Record<string, unknown>): Promise<unknown>;
+  publishJobEvent(job: JobDocument, type?: string): Promise<unknown>;
+  publishDeletedJobEvent(job: JobDocument): Promise<unknown>;
+  updateJob(jobId: string, patch: JobPatch): Promise<JobDocument | null>;
+  commitJobTerminal(jobId: string, patch: JobPatch, result: JobResult): Promise<unknown>;
+  commitTerminalThenScheduleUploadCleanup(input: Record<string, unknown>): Promise<unknown>;
+  replayUploadCleanupJournal(): Promise<unknown>;
+  failJob(jobId: string, errorMessage: string, stage: string): Promise<JobDocument | null>;
+}
+
+export function createJobManagerArtifacts(ctx: ArtifactContext): JobManagerArtifacts {
   const {
     userDataPath,
     protocolEventBus,

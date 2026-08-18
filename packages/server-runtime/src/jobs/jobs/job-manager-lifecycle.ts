@@ -655,7 +655,7 @@ export function createStartQueuedJob(ctx: LifecycleContext) {
             progressPercent:
               typeof message.progressPercent === "number"
                 ? message.progressPercent
-                : currentJob.progressPercent,
+                : (currentJob.progressPercent ?? 0),
             stage: message.stage || "处理中"
           }).catch(() => null),
         ]));
