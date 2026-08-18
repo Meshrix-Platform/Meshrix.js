@@ -842,10 +842,17 @@ async function main() : Promise<any> {
   });
   setTimeout(() : any => cancellationController.abort(), 20);
   await assert.rejects(cancellationRequest, (error?: any) : any => error?.name === "AbortError");
-  await new Promise((resolve?: any) : any => setTimeout(resolve, 150));
-  const cancellationAudit: any = await requestJson(`${server.url}/api/gateway/v1/audit`, { headers: ownerSession.read });
-  assert.ok(cancellationAudit.payload?.items?.some((item?: any) : any =>
-    item?.payload?.operationKey === "timeout" && item?.payload?.reasonCode === "upstream_forward_cancelled"));
+  let cancellationObserved: any = false;
+  for (let attempt: any = 0; attempt < 20; attempt += 1) {
+    const cancellationAudit: any = await requestJson(`${server.url}/api/gateway/v1/audit`, { headers: ownerSession.read });
+    if (cancellationAudit.payload?.items?.some((item?: any) : any =>
+      item?.payload?.operationKey === "timeout" && item?.payload?.reasonCode === "upstream_forward_cancelled")) {
+      cancellationObserved = true;
+      break;
+    }
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 50));
+  }
+  assert.ok(cancellationObserved, "upstream forward cancellation audit record was not observed");
   observe("forward.cancellation.observed", "cancelled", "replace", 2, 2);
   const trafficCatalog: any = await trafficPeer.pullCatalog();
   const trafficTool: any = trafficCatalog.tools.find((tool?: any) : any =>
