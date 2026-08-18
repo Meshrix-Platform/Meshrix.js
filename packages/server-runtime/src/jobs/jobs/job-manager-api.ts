@@ -18,12 +18,24 @@ import {
 import { errorProperty, type ActiveJobController, type CodedError, type JobAccess, type JobDocument, type JobPayload, type QueueEntry } from "./contracts.ts";
 import type { createJobProjectionStore } from "./job-projection-store.ts";
 
+interface DurableWorkflows {
+  protocolVersion: string;
+  startWorkflow(input?: Record<string, unknown>): Promise<unknown>;
+  getWorkflow(workflowIdValue?: unknown): Promise<unknown>;
+  listWorkflows(input?: Record<string, unknown>): Promise<unknown>;
+  scheduleActivity(workflowIdValue?: unknown, input?: Record<string, unknown>): Promise<unknown>;
+  heartbeatActivity(workflowIdValue?: unknown, activityId?: unknown, heartbeat?: Record<string, unknown>): Promise<unknown>;
+  completeActivity(workflowIdValue?: unknown, activityId?: unknown, output?: Record<string, unknown>): Promise<unknown>;
+  failActivity(workflowIdValue?: unknown, activityId?: unknown, error?: unknown): Promise<unknown>;
+  recoverWorkflow(workflowIdValue?: unknown, input?: Record<string, unknown>): Promise<unknown>;
+  failWorkflow(workflowIdValue?: unknown, error?: unknown): Promise<unknown>;
+}
 interface ApiContext {
   userDataPath: string; processingEnabled: boolean; workerConcurrency: number;
   jobs: Map<string, JobDocument>; checkpointJobs: Map<string, string>;
   jobProjectionStore: ReturnType<typeof createJobProjectionStore>;
   activeControllers: Map<string, ActiveJobController>;
-  durableWorkflows: Record<string, (...args: unknown[]) => Promise<unknown>>;
+  durableWorkflows: DurableWorkflows;
   logJob(level: string, event: string, details?: Record<string, unknown>): void;
   state: { closed: boolean }; ready: Promise<void>;
   refreshPersistedJobs(): Promise<void>; publishJobEvent(job: JobDocument, type?: string): Promise<unknown>;

@@ -611,7 +611,7 @@ async function runBrokerProbe(target?: any, root?: any, source?: any, {
     requiresApproval: false,
     receiptRequirement: CONTROLLED_SANDBOX_FINAL_RECEIPT_ID
   });
-  const resolver: Readonly<Record<string, any>> = Object.freeze({
+  const resolver = Object.freeze({
     async resolve() : Promise<any> {
       return Object.freeze({ descriptor: brokerDescriptor(target), backend: target.backend });
     },
@@ -626,7 +626,7 @@ async function runBrokerProbe(target?: any, root?: any, source?: any, {
       providerId: target.id,
       profileId: ADVERSARIAL_PROFILE,
       policyRevision: ADVERSARIAL_POLICY_REVISION,
-      allowedProviderClasses: Object.freeze([target.providerClass]),
+      allowedProviderClasses: [target.providerClass],
       receiptRequirement: CONTROLLED_SANDBOX_FINAL_RECEIPT_ID
     }),
     profiles: Object.freeze({ [ADVERSARIAL_PROFILE]: profile }),
@@ -895,7 +895,7 @@ export function createOciProviderConformanceReceipt({
 }
 
 async function receiptResolverState({ target, receipt, policyRevision, runtimeProfile, receiptRequirement, now }: Record<string, any>) : Promise<any> {
-  const adapter: Readonly<Record<string, any>> = Object.freeze({
+  const adapter = Object.freeze({
     id: target.id,
     providerClass: target.providerClass,
     async probe() : Promise<any> {
@@ -915,7 +915,7 @@ async function receiptResolverState({ target, receipt, policyRevision, runtimePr
       providerId: target.id,
       profileId: runtimeProfile,
       policyRevision,
-      allowedProviderClasses: Object.freeze([target.providerClass]),
+      allowedProviderClasses: [target.providerClass],
       receiptRequirement
     }),
     adapters: Object.freeze([adapter]),
@@ -976,7 +976,7 @@ export async function verifyOciReceiptLifecycle({
       providerId: target.id,
       profileId: runtimeProfile,
       policyRevision,
-      allowedProviderClasses: Object.freeze([target.providerClass]),
+      allowedProviderClasses: [target.providerClass],
       receiptRequirement
     }),
     adapters: Object.freeze([]),
