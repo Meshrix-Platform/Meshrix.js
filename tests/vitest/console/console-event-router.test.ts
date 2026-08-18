@@ -21,22 +21,16 @@ function event(topic: string, payload: unknown): ProtocolEvent {
 
 function fixture(currentState: ServerConsoleState | null = state()) : any {
   const applyConsoleState: any = vi.fn();
-  const applyMaintenanceConfig: any = vi.fn(() : any => true);
-  const refreshMaintenanceSilently: any = vi.fn();
   const removeJob: any = vi.fn(() : any => true);
   const upsertJob: any = vi.fn(() : any => true);
   return {
     applyConsoleState,
-    applyMaintenanceConfig,
     applyServerEvent: createConsoleEventRouter({
       applyConsoleState,
-      applyMaintenanceConfig,
       getConsoleState: () : any => currentState,
-      refreshMaintenanceSilently,
       removeJob,
       upsertJob,
     }),
-    refreshMaintenanceSilently,
     removeJob,
     upsertJob,
   };
@@ -67,12 +61,13 @@ describe("console event router", () : any => {
     }));
   });
 
-  it("routes maintenance configuration and run refresh independently", () : any => {
+  it("ignores retired maintenance events without side effects", () : any => {
     const target: any = fixture();
-    expect(target.applyServerEvent(event("maintenance.agent.config", { config: { enabled: true } }))).toBe(true);
-    expect(target.applyMaintenanceConfig).toHaveBeenCalledWith({ enabled: true });
-    expect(target.applyServerEvent(event("maintenance.agent.run.completed", { run: { id: "run-1" } }))).toBe(true);
-    expect(target.refreshMaintenanceSilently).toHaveBeenCalledOnce();
+    expect(target.applyServerEvent(event("maintenance.agent.config", { config: { enabled: true } }))).toBe(false);
+    expect(target.applyServerEvent(event("maintenance.agent.run.completed", { run: { id: "run-1" } }))).toBe(false);
+    expect(target.applyConsoleState).not.toHaveBeenCalled();
+    expect(target.upsertJob).not.toHaveBeenCalled();
+    expect(target.removeJob).not.toHaveBeenCalled();
   });
 
   it("ignores unknown topics without side effects", () : any => {
@@ -81,7 +76,5 @@ describe("console event router", () : any => {
     expect(target.applyConsoleState).not.toHaveBeenCalled();
     expect(target.upsertJob).not.toHaveBeenCalled();
     expect(target.removeJob).not.toHaveBeenCalled();
-    expect(target.applyMaintenanceConfig).not.toHaveBeenCalled();
-    expect(target.refreshMaintenanceSilently).not.toHaveBeenCalled();
   });
 });
