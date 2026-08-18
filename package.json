@@ -69,6 +69,10 @@
       "source": "./packages/contracts/src/plugins/plugin-package-state.ts",
       "default": "./packages/contracts/dist/plugins/plugin-package-state.js"
     },
+    "#meshrix/contracts/service-collaboration-contract": {
+      "source": "./packages/contracts/src/service-collaboration-contract.ts",
+      "default": "./packages/contracts/dist/service-collaboration-contract.js"
+    },
     "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection": {
       "source": "./packages/foundation/src/checkpoint/tree/checkpoint-tree-projection.ts",
       "default": "./packages/foundation/dist/checkpoint/tree/checkpoint-tree-projection.js"
@@ -192,6 +196,10 @@
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter": {
       "source": "./packages/protocols/mcp/adapter/http-mcp-adapter.ts",
       "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter.js"
+    },
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants": {
+      "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-constants.js"
     },
     "#meshrix/protocols/http/controllers/system-controller-foundation-handlers": {
       "source": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",

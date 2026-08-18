@@ -16,6 +16,7 @@
     "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
     "#meshrix/contracts/operations/static-semantic-family-catalog": "@meshrix/contracts/operations/static-semantic-family-catalog",
     "#meshrix/contracts/serialization/canonical-json": "@meshrix/contracts/serialization/canonical-json",
+    "#meshrix/contracts/service-collaboration-contract": "@meshrix/contracts/service-collaboration-contract",
     "#meshrix/foundation/environment-compatibility/index": "@meshrix/foundation/environment-compatibility/index",
     "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
     "#meshrix/http-response": "@meshrix/foundation/http/http-response",
@@ -23,6 +24,11 @@
       "types": "./dist/http/http-utils.d.ts",
       "source": "./http/http-utils.ts",
       "default": "./dist/http/http-utils.js"
+    },
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants": {
+      "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
+      "source": "./mcp/adapter/http-mcp-adapter-constants.ts",
+      "default": "./dist/mcp/adapter/http-mcp-adapter-constants.js"
     },
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"

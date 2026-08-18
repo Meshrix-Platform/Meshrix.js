@@ -13,6 +13,7 @@
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
     "@meshrix/protocols": "0.0.1",
+    "better-sqlite3": "^12.9.0",
     "pactium": "0.8.0"
   },
   "imports": {

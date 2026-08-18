@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-17",
+  "updatedAt": "2026-08-18",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -11503,7 +11503,193 @@
             ]
           }
         ]
-      }
+      },
+    {
+      "artifactId": "meshrix.maintenance-plugin.config-only-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.maintenance-plugin.config-only-report.",
+      "activeVersion": "v0.0.1:maintenance-plugin:config-only-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:maintenance-plugin:config-only-report-1",
+          "ref": "meshrix.maintenance-plugin.config-only-report@v0.0.1:maintenance-plugin:config-only-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-config-only-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-config-only-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-agent-self-maintenance-runtime.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.maintenance-plugin.one-way-meshrix-control-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.maintenance-plugin.one-way-meshrix-control-report.",
+      "activeVersion": "v0.0.1:maintenance-plugin:one-way-meshrix-control-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:maintenance-plugin:one-way-meshrix-control-report-1",
+          "ref": "meshrix.maintenance-plugin.one-way-meshrix-control-report@v0.0.1:maintenance-plugin:one-way-meshrix-control-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-one-way-meshrix-control-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-one-way-meshrix-control-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-agent-self-maintenance-runtime.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.maintenance-plugin.direct-model-gateway-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.maintenance-plugin.direct-model-gateway-report.",
+      "activeVersion": "v0.0.1:maintenance-plugin:direct-model-gateway-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:maintenance-plugin:direct-model-gateway-report-1",
+          "ref": "meshrix.maintenance-plugin.direct-model-gateway-report@v0.0.1:maintenance-plugin:direct-model-gateway-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-direct-model-gateway-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-direct-model-gateway-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-agent-self-maintenance-runtime.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.maintenance-plugin.backend-unreachable-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.maintenance-plugin.backend-unreachable-report.",
+      "activeVersion": "v0.0.1:maintenance-plugin:backend-unreachable-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:maintenance-plugin:backend-unreachable-report-1",
+          "ref": "meshrix.maintenance-plugin.backend-unreachable-report@v0.0.1:maintenance-plugin:backend-unreachable-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-backend-unreachable-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-maintenance-plugin-backend-unreachable-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-agent-self-maintenance-runtime.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.gateway-boundary-final.report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.gateway-boundary-final.report.",
+      "activeVersion": "v0.0.1:gateway-boundary-final:report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:gateway-boundary-final:report-1",
+          "ref": "meshrix.gateway-boundary-final.report@v0.0.1:gateway-boundary-final:report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-gateway-boundary-final-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-gateway-boundary-final-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/gateway-boundary-final.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.gateway-boundary-final.receipt",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.gateway-boundary-final.receipt.",
+      "activeVersion": "v0.0.1:gateway-boundary-final:receipt-1",
+      "versions": [
+        {
+          "version": "v0.0.1:gateway-boundary-final:receipt-1",
+          "ref": "meshrix.gateway-boundary-final.receipt@v0.0.1:gateway-boundary-final:receipt-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-gateway-boundary-final-receipt-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-gateway-boundary-final-receipt-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/gateway-boundary-final.ts"
+            }
+          ]
+        }
+      ]
+    }
   ],
   "compatibilityTable": [],
   "transitions": [],
