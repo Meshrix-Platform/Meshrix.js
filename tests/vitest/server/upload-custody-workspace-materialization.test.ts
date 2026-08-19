@@ -1680,7 +1680,8 @@ async function expectTerminatedQueueRecovery(runtime?: any, bindingDigest?: any)
     const retainedProgress: any = journal.slice(1).filter(
       (entry?: any) : any =>
         entry.transition === "progress" &&
-        entry.reason !== "lease_renewal"
+        entry.reason !== "lease_renewal" &&
+        entry.reason !== "materialization_lease_heartbeat"
     );
     expect(
       retainedProgress.length,
