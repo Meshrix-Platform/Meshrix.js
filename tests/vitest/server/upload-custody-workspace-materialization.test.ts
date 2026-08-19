@@ -1481,45 +1481,76 @@ async function spawnCrashChild(
   });
   let prematureExitHandler: any;
   const marker: any = await new Promise((resolve?: any, reject?: any) : any => {
-    const timeout: any = setTimeout(() : any => {
-      reject(new Error("Crash child readiness timed out."));
-    }, 300_000);
-    const finish: any = (task?: any) : any => (value?: any) : any => {
-      clearTimeout(timeout);
-      task(value);
+    // Readiness is a liveness window rather than one fixed wall-clock
+    // deadline: once its module graph has loaded, the child emits a
+    // heartbeat every second and each heartbeat re-arms the window, so a
+    // host-starved but progressing child is not false-failed. A full
+    // window of silence still means the child is wedged (or never reached
+    // its top level) and the case fails within one window.
+    let readinessTimer: any = null;
+    let onMessage: any = null;
+    const clearReadiness: any = () : any => {
+      if (readinessTimer) clearTimeout(readinessTimer);
+      readinessTimer = null;
     };
-    child.once("message", finish((value?: any) : any => {
-      if (value?.kind === "ready") resolve(value);
-      else {
-        const failureCode: any =
-          /^[a-z0-9][a-z0-9._:-]{0,79}$/u.test(
-            String(value?.code || "")
-          )
-            ? value.code
-            : "child_failure";
-        reject(Object.assign(
-          new Error(
-            `Crash child failed before readiness (${failureCode}).`
-          ),
-          { code: failureCode }
-        ));
+    const armReadiness: any = () : any => {
+      clearReadiness();
+      readinessTimer = setTimeout(() : any => {
+        if (onMessage) child.off("message", onMessage);
+        reject(new Error("Crash child readiness timed out."));
+      }, 300_000);
+    };
+    onMessage = (value?: any) : any => {
+      if (value?.kind === "heartbeat") {
+        armReadiness();
+        return;
       }
-    }));
-    prematureExitHandler = finish(async (code?: any, signal?: any) : Promise<any> => {
-      const [stdout, stderr] = await Promise.all([
-        fs.readFile(stdoutPath),
-        fs.readFile(stderrPath)
-      ]);
-      reject(new Error(
-        [
-          "Crash child exited before readiness",
-          `(code=${Number.isInteger(code) ? code : "none"},`,
-          `signal=${signal || "none"},`,
-          `stdoutBytes=${stdout.byteLength},`,
-          `stderrBytes=${stderr.byteLength}).`
-        ].join(" ")
+      clearReadiness();
+      child.off("message", onMessage);
+      if (value?.kind === "ready") {
+        resolve(value);
+        return;
+      }
+      const failureCode: any =
+        /^[a-z0-9][a-z0-9._:-]{0,79}$/u.test(
+          String(value?.code || "")
+        )
+          ? value.code
+          : "child_failure";
+      reject(Object.assign(
+        new Error(
+          `Crash child failed before readiness (${failureCode}).`
+        ),
+        { code: failureCode }
       ));
-    });
+    };
+    prematureExitHandler = (code?: any, signal?: any) : any => {
+      clearReadiness();
+      child.off("message", onMessage);
+      void (async () : Promise<any> => {
+        let stdout: any = Buffer.alloc(0);
+        let stderr: any = Buffer.alloc(0);
+        try {
+          [stdout, stderr] = await Promise.all([
+            fs.readFile(stdoutPath),
+            fs.readFile(stderrPath)
+          ]);
+        } catch (error) {
+          // Capture files are best-effort diagnostics for the failure.
+        }
+        reject(new Error(
+          [
+            "Crash child exited before readiness",
+            `(code=${Number.isInteger(code) ? code : "none"},`,
+            `signal=${signal || "none"},`,
+            `stdoutBytes=${stdout.byteLength},`,
+            `stderrBytes=${stderr.byteLength}).`
+          ].join(" ")
+        ));
+      })();
+    };
+    armReadiness();
+    child.on("message", onMessage);
     child.once("exit", prematureExitHandler);
     child.send({
       ...(admission ? { admission } : {}),
@@ -1677,11 +1708,20 @@ async function expectTerminatedQueueRecovery(runtime?: any, bindingDigest?: any)
           entry === "progress" || entry === "complete"
       )
     ).toBe(true);
+    // Lease-maintenance journal entries are not materialization progress:
+    // periodic worker renewals, engine lease heartbeats, and the terminal
+    // lease fence the worker records before applying the handler outcome.
+    // Under host load any of them can repeat, while genuine progress
+    // reasons must stay within the bounded-recovery invariant below.
+    const leaseMaintenanceReasons: any = new Set<any>([
+      "lease_renewal",
+      "materialization_lease_heartbeat",
+      "handler_terminal_fence"
+    ]);
     const retainedProgress: any = journal.slice(1).filter(
       (entry?: any) : any =>
         entry.transition === "progress" &&
-        entry.reason !== "lease_renewal" &&
-        entry.reason !== "materialization_lease_heartbeat"
+        !leaseMaintenanceReasons.has(entry.reason)
     );
     expect(
       retainedProgress.length,
