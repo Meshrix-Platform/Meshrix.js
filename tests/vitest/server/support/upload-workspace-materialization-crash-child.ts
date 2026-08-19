@@ -81,6 +81,16 @@ function emitMarker(marker?: any) : any {
   });
 }
 
+function emitHeartbeat() : any {
+  if (typeof process.send !== "function") return;
+  try {
+    process.send(Object.freeze({ kind: "heartbeat" }), () : any => {});
+  } catch (error) {
+    // Liveness signaling is best-effort; the parent bounds a dead channel
+    // through its silence window.
+  }
+}
+
 function validateConfiguration(value?: any) : any {
   const crashStage: any = String(value?.crashStage || "");
   const admissionCrash: any =
@@ -137,7 +147,9 @@ function validateConfiguration(value?: any) : any {
 }
 
 async function run(configuration?: any) : Promise<any> {
-  keepAlive = setInterval(() : any => {}, 1_000);
+  keepAlive = setInterval(() : any => {
+    if (!halted) emitHeartbeat();
+  }, 1_000);
   const counters: Record<string, any> = {
     queueClaims: 0,
     finalPermits: 0,
@@ -147,12 +159,53 @@ async function run(configuration?: any) : Promise<any> {
   };
   let halted: any = false;
   let signalStageReached: any;
-  const stageReached: any = new Promise((resolve?: any) : any => {
+  let rejectStageReached: any;
+  const stageReached: any = new Promise((resolve?: any, reject?: any) : any => {
     signalStageReached = resolve;
+    rejectStageReached = reject;
   });
+  // Prevent an unhandled rejection when run() fails before the stage race
+  // is awaited; the tail await still observes the rejection when reached.
+  stageReached.catch(() : any => {});
+  let stageWatchdog: any = null;
+  // The stage budget bounds silence between observable milestones rather
+  // than total wall-clock time: a host-starved child that keeps making
+  // progress is given the time it needs, while a wedged child still fails
+  // within one window.
+  const noteStageProgress: any = () : any => {
+    if (halted) return;
+    if (stageWatchdog) clearTimeout(stageWatchdog);
+    stageWatchdog = setTimeout(() : any => {
+      if (keepAlive) {
+        clearInterval(keepAlive);
+        keepAlive = null;
+      }
+      rejectStageReached(Object.assign(
+        new Error("Crash stage was not reached."),
+        { code: "child_crash_stage_not_reached" }
+      ));
+      // A milestone await that never resolves would keep the tail stage
+      // race from observing the rejection, so surface the failure to the
+      // parent directly as well; the duplicate marker is harmless because
+      // the parent settles its readiness wait exactly once.
+      void emitMarker({
+        kind: "failed",
+        stage: configuration.crashStage,
+        code: "child_crash_stage_not_reached"
+      }).finally(() : any => {
+        process.exitCode = 1;
+      });
+    }, 240_000);
+    stageWatchdog.unref?.();
+  };
   const halt: any = async (stage?: any) : Promise<any> => {
+    noteStageProgress();
     if (halted || configuration.crashStage !== stage) return;
     halted = true;
+    if (stageWatchdog) {
+      clearTimeout(stageWatchdog);
+      stageWatchdog = null;
+    }
     await emitMarker({
       kind: "ready",
       stage,
@@ -162,6 +215,7 @@ async function run(configuration?: any) : Promise<any> {
     signalStageReached();
     await new Promise(() : any => {});
   };
+  noteStageProgress();
 
   const operation: any = SERVER_API_OPERATIONS.find(
     (candidate?: any) : any => candidate.id === OPERATION_ID
@@ -188,6 +242,7 @@ async function run(configuration?: any) : Promise<any> {
     },
     userDataPath: configuration.root
   });
+  noteStageProgress();
   const {
     consoleAuth,
     dataStructureSubstrate,
@@ -237,6 +292,7 @@ async function run(configuration?: any) : Promise<any> {
       { code: "child_workspace_unavailable" }
     );
   }
+  noteStageProgress();
 
   const transactionStore: any =
     createUploadWorkspaceMaterializationTransactionStore({
@@ -348,6 +404,7 @@ async function run(configuration?: any) : Promise<any> {
       { code: "child_queue_unavailable" }
     );
   }
+  noteStageProgress();
   if (
     configuration.crashStage ===
       "after_transaction_created_before_enqueue"
@@ -400,18 +457,8 @@ async function run(configuration?: any) : Promise<any> {
   } else {
     await queueFacet.requestDispatch();
   }
-  await Promise.race([
-    stageReached,
-    new Promise((_?: any, reject?: any) : any => {
-      const timeout: any = setTimeout(() : any => {
-        reject(Object.assign(
-          new Error("Crash stage was not reached."),
-          { code: "child_crash_stage_not_reached" }
-        ));
-      }, 240_000);
-      timeout.unref?.();
-    })
-  ]);
+  noteStageProgress();
+  await stageReached;
   await new Promise(() : any => {});
 }
 
