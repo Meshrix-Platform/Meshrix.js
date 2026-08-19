@@ -491,6 +491,13 @@ export async function runReleaseCommandDag({
         const blocked: any = !passed && timedOut === false && metadata.blockedExitCodes.includes(code);
         const status: any = passed ? "passed" : blocked ? "blocked" : "failed";
         console.log(`[${logPrefix}] ${passed ? "OK" : blocked ? "BLOCKED" : "FAIL"} ${id} (${durationMs}ms${timedOut ? ", timed out" : ""})`);
+        const errorTail: any = passed ? "" : redactTail(`${processError?.message || ""}\n${stderr.text()}\n${stdout.text()}`);
+        if (!passed) {
+          const clipped: any = errorTail.trim().slice(-2_000);
+          if (clipped) {
+            console.log(`[${logPrefix}] ${status.toUpperCase()} ${id} detail=${clipped.replaceAll("\n", " | ")}`);
+          }
+        }
         resolve({
           ...metadata,
           status,
@@ -503,7 +510,7 @@ export async function runReleaseCommandDag({
           reasonChain: passed
             ? []
             : [timedOut ? "command-timeout" : blocked ? `command-blocked-exit:${code}` : `command-failed-exit:${code}`],
-          errorTail: passed ? "" : redactTail(`${processError?.message || ""}\n${stderr.text()}\n${stdout.text()}`)
+          errorTail
         });
       };
       const child: any = spawn(executable, args, {

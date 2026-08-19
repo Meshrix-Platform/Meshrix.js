@@ -149,15 +149,37 @@ function boundedProbeFailure(error?: any) : any {
   });
 }
 
+function ociEngineCommandEnv() : any {
+  const env: Record<string, any> = {};
+  for (const key of [
+    "PATH",
+    "Path",
+    "HOME",
+    "USERPROFILE",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "DOCKER_HOST",
+    "DOCKER_CONTEXT",
+    "DOCKER_CONFIG",
+    "XDG_RUNTIME_DIR"
+  ]) {
+    const value: any = process.env[key];
+    if (value) env[key] = value;
+  }
+  return env;
+}
+
 function runOciEngineCommand(binary?: any, args?: any, {
   timeoutMs = 30_000,
   allowFailure = false,
-  maxBuffer = 16 * 1024
+  maxBuffer = 1024 * 1024
 }: Record<string, any> = {}) : any {
   const result: any = spawnSync(binary, args, {
     encoding: "utf8",
     timeout: timeoutMs,
-    env: {},
+    killSignal: "SIGKILL",
+    env: ociEngineCommandEnv(),
     maxBuffer
   });
   if (!allowFailure && result.status !== 0) {

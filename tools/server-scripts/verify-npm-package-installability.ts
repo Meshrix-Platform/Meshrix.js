@@ -117,6 +117,26 @@ async function runStage(errorCode?: any, command?: any, args?: any, options: Rec
         throw new Error(`npm_package_install_enoent_${normalizedTarget || "unknown"}`);
       }
       const npmErrorCode = output.match(/npm (?:error|ERR!) code ([A-Z0-9_]+)/iu)?.[1];
+      if (npmErrorCode === "E404") {
+        const resource = output.match(/requested resource '([^']+)'/iu)?.[1]
+          || output.match(/GET https?:\/\/[^/\s]+\/([^\s?]+)/iu)?.[1]
+          || "";
+        let decoded = resource;
+        try {
+          decoded = decodeURIComponent(String(resource));
+        } catch {
+          decoded = String(resource);
+        }
+        const packageName = decoded
+          .replace(/\/-\/.*$/u, "")
+          .replace(/\/[0-9][^/]*$/u, "")
+          .replace(/^@/u, "")
+          .replace(/[^a-z0-9]+/giu, "_")
+          .replace(/^_+|_+$/gu, "")
+          .toLowerCase()
+          .slice(0, 80);
+        throw new Error(`npm_package_install_e404_${packageName || "unknown"}`);
+      }
       if (npmErrorCode) {
         const normalizedCode = npmErrorCode.toLowerCase().replace(/[^a-z0-9_]+/gu, "_");
         throw new Error(`npm_package_install_${normalizedCode}`);
@@ -432,7 +452,12 @@ try {
   const registryMirror: any = freshContainer === true
     ? await createLockBackedNpmRegistry({
         lockPath: "package-lock.json",
-        cacheRoot: "/opt/meshrix-npm-cache"
+        cacheRoot: "/opt/meshrix-npm-cache",
+        extraTarballs: packedArtifacts.map((artifact?: any, index?: any) : any => ({
+          name: String(artifact.name),
+          version: String(artifact.version),
+          tarballPath: tarballPaths[index]
+        }))
       })
     : null;
   const installRegistry: any = registryMirror?.registry || OFFICIAL_NPM_REGISTRY;

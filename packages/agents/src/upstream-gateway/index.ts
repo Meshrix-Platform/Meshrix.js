@@ -437,6 +437,21 @@ export function createUpstreamGatewayRegistry({
     };
   }
 
+  function uniqueEntityRefs(values: any = []) : any {
+    const seen: any = new Set<any>();
+    const output: any[] = [];
+    for (const entry of asArray(values)) {
+      const entityType: any = text(entry?.entityType || entry?.type);
+      const entityId: any = text(entry?.entityId || entry?.id);
+      if (!entityType || !entityId) continue;
+      const key: any = `${entityType}\0${entityId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push({ entityType, entityId });
+    }
+    return output;
+  }
+
   function evaluateServiceTagPolicy(service?: any, subject: Record<string, any> = {}) : any {
     if (!hasUniversalTagPolicyRules(service.tagPolicy || {})) {
       return {
@@ -450,17 +465,18 @@ export function createUpstreamGatewayRegistry({
     const configuredEntityRefs: any[] = asArray(
       service.tagPolicy?.entityRefs || service.tagPolicy?.entities
     );
+    const callerSubjectId: any = text(subject.subjectId || subject.workloadPrincipalId || subject.id);
     const subjectEntityRefs: any[] = [
-      subject.subjectId ? { entityType: "subject", entityId: subject.subjectId } : null,
+      callerSubjectId ? { entityType: "subject", entityId: callerSubjectId } : null,
       (subject.organizationNodeId || subject.organizationId)
         ? { entityType: "organization", entityId: subject.organizationNodeId || subject.organizationId }
         : null,
       subject.teamId ? { entityType: "team", entityId: subject.teamId } : null,
       subject.roleId ? { entityType: "role", entityId: subject.roleId } : null
     ].filter(Boolean);
-    const entityRefs: any[] = configuredEntityRefs.length > 0
-      ? configuredEntityRefs
-      : subjectEntityRefs;
+    // Discovery evaluates caller identity first. A publishing descriptor may also
+    // persist a default service entityRef; that must not replace caller audience.
+    const entityRefs: any[] = uniqueEntityRefs([...subjectEntityRefs, ...configuredEntityRefs]);
     const decision: any = evaluateUniversalTagPolicy({
       tagStore: resolvedTagStore,
       ...service.tagPolicy,
@@ -1847,13 +1863,26 @@ export function createUpstreamGatewayRegistry({
           }
         });
         if (options.signal?.aborted === true) {
+          const audit: any = appendAudit("upstream.forward.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            protocol: operation.protocol,
+            method: targetFacts.method,
+            target: summarizeUrl(targetFacts.targetUrl),
+            endpoint: traffic.endpoint,
+            circuit: traffic.circuit,
+            statusCode: 499,
+            reasonCode: "upstream_forward_cancelled"
+          });
+          persist();
           throw Object.assign(
             new Error("Upstream gateway request was cancelled."),
             {
               code: "upstream_forward_cancelled",
               reasonCode: "upstream_forward_cancelled",
               status: 499,
-              statusCode: 499
+              statusCode: 499,
+              audit
             }
           );
         }

@@ -243,6 +243,75 @@ describe("platform acceptance Plan receipt preflight", () : any => {
     });
   });
 
+  it("binds a completed GATE-FINAL receipt as the functional candidate", async () : Promise<any> => {
+    const loadCandidate: any = vi.fn(async () : Promise<any> => {
+      throw new Error("must not construct a new release-candidate identity");
+    });
+    const loadBinding: any = vi.fn(async () : Promise<any> => ({
+      finalNodeId: "release-final",
+      platform: "any",
+      profiles: ["enterprise-single-node"],
+      requirements: ["REQ-GATEWAY-SPLIT-FINAL"],
+      receiptDigest: "completed-receipt",
+      checkpointDigest: "completed-checkpoints",
+      candidateDigest: "a".repeat(64),
+      sourceRevision: "c5e40c5",
+      repositoryRevision: "b".repeat(40),
+      repositoryTreeDigest: "sha256:completed-tree",
+      proofProvider: "pactium.operation-proof-substrate",
+      proofVerified: true,
+      privacySafe: true,
+    }));
+    const map: any = {
+      schema_version: 3,
+      plans: [{
+        directory: "end-to-end-release",
+        parent: null,
+        parent_contract_node_id: null,
+        parent_integrations: [],
+        final_validations: [{ node_id: "release-final", profiles: ["enterprise-single-node"] }],
+        prerequisite_receipts: [],
+        children: [],
+        accepted_final_receipts: {
+          "release-final": { receipt_digest: "completed-receipt" },
+        },
+      }],
+    };
+
+    await expect(verifyPlatformAcceptancePlanReceipts({
+      repoRoot: "/synthetic-repo",
+      selectedProfile: "enterprise-single-node",
+      dependencyMap: map,
+      verifyPlan: async () : Promise<any> => ({ accepted: true }),
+      loadBinding,
+      loadCandidate,
+      loadCheckpoints: async () : Promise<any> => [
+        {
+          id: "release-final",
+          code: "GATE-FINAL",
+          role: "final_validation",
+          status: "completed",
+          platform: "any",
+          requirements: ["REQ-GATEWAY-SPLIT-FINAL"],
+          prerequisites: [],
+          acceptance_criteria: [{ checked: true, evidence_refs: [{ type: "command" }] }],
+        },
+      ],
+      verifyCheckpointEvidence: async () : Promise<any> => ({ evidenceCount: 1 }),
+    })).resolves.toMatchObject({
+      requiredReceiptCount: 0,
+      requiredCheckpointCount: 0,
+      candidateDigest: "a".repeat(64),
+      bindings: [expect.objectContaining({
+        finalNodeId: "release-final",
+        receiptDigest: "completed-receipt",
+        repositoryRevision: "b".repeat(40),
+      })],
+    });
+    expect(loadCandidate).not.toHaveBeenCalled();
+    expect(loadBinding).toHaveBeenCalledTimes(1);
+  });
+
   it("requires the exact Release Acceptance prerequisite final receipts", () : any => {
     expect(requiredPlatformAcceptancePlanReceipts(dependencyMap())).toEqual([
       { plan: "end-to-end-release/fixture-alpha", finalNodeId: "alpha-final", planProfile: "enterprise-single-node" },

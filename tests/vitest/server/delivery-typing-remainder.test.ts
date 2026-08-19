@@ -35,7 +35,6 @@ const TYPING_REMAINDER_PATHS: readonly string[] = Object.freeze([
   "packages/foundation/src/workflow/state-machine/verification",
   "packages/foundation/src/workflow/state-machine/work-queue",
   "packages/agents/src/agent-memory",
-  "packages/agents/src/agent-runtime-provider.ts",
   "packages/agents/src/agent-workspace",
   "packages/agents/src/core-change-set-authority.ts",
   "packages/agents/src/workspace-asset-registry",

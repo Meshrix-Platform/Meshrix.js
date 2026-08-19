@@ -65,7 +65,10 @@ export interface GatewayBoundaryFinalReceipt {
   readonly mandatoryStageOrders: number;
   readonly transitWorkspaceCalls: 0;
   readonly consoleDirectionSwitches: 4;
-  readonly pinnedDrain: Readonly<{ downstreamGeneration: 1; upstreamGeneration: 0 }>;
+  readonly pinnedDrain: Readonly<{
+    inFlight: Readonly<{ downstreamGeneration: 1; upstreamGeneration: 0 }>;
+    afterUpstreamSwitch: Readonly<{ downstreamGeneration: 1; upstreamGeneration: 1 }>;
+  }>;
   readonly hiddenFallbackCalls: 0;
   readonly modelGateway: Readonly<{
     disabledOperations: 0;
@@ -331,6 +334,10 @@ export async function runGatewayBoundaryFinalScenario(): Promise<GatewayBoundary
 
   const externalApplication = await executePipeline("workspace_application");
   const externalTransit = await executePipeline("gateway_transit");
+  assert.equal(externalApplication.downstreamPin.generation, 1);
+  assert.equal(externalApplication.upstreamPin.generation, 1);
+  assert.equal(externalTransit.downstreamPin.generation, 1);
+  assert.equal(externalTransit.upstreamPin.generation, 1);
   assert.equal(externalApplication.downstream.normalizedOutcomeRef, builtInApplication.downstream.normalizedOutcomeRef);
   assert.equal(externalApplication.upstream.normalizedOutcomeRef, builtInApplication.upstream.normalizedOutcomeRef);
   assert.equal(externalTransit.downstream.normalizedOutcomeRef, builtInTransit.downstream.normalizedOutcomeRef);
@@ -467,7 +474,10 @@ export async function runGatewayBoundaryFinalScenario(): Promise<GatewayBoundary
     mandatoryStageOrders,
     transitWorkspaceCalls: 0,
     consoleDirectionSwitches: 4,
-    pinnedDrain: Object.freeze({ downstreamGeneration: 1, upstreamGeneration: 0 }),
+    pinnedDrain: Object.freeze({
+      inFlight: Object.freeze({ downstreamGeneration: 1, upstreamGeneration: 0 }),
+      afterUpstreamSwitch: Object.freeze({ downstreamGeneration: 1, upstreamGeneration: 1 })
+    }),
     hiddenFallbackCalls: 0,
     modelGateway: Object.freeze({
       disabledOperations: 0,

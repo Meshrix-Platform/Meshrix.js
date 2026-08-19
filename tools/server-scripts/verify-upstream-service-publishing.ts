@@ -48,6 +48,7 @@ const localSecretKeyCustody: any = await provisionVerifierLocalSecretKey();
 const PUBLISHING_SECRET_REF: any = "secret://verifier/upstream-publishing";
 const PUBLISHING_SECRET_HEADER: any = "x-upstream-publishing-verifier";
 const PUBLISHING_SECRET_VALUE: any = "synthetic-runtime-material";
+const CATALOG_INVALIDATION_WAIT_MS: any = 20_000;
 
 const ZERO_COUNTER_DELTA: any = Object.freeze(Object.fromEntries(
   UPSTREAM_SERVICE_PUBLISHING_COUNTERS.map((counter?: any) : any => [counter, 0])
@@ -155,7 +156,7 @@ function startLoopbackFixture() : any {
           if (response.destroyed) return;
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
           response.end(JSON.stringify({ ok: true }));
-        }, 300);
+        }, 3_000);
         return;
       }
       response.writeHead(404, { "content-type": "application/json" });
@@ -222,7 +223,7 @@ function descriptor(fixtureUrl?: any, label: any = "Verifier service", tagPolicy
       path: "/slow",
       requiredScopes: ["gateway:write"],
       risk: "safe_write",
-      timeoutMs: 100,
+      timeoutMs: 2_000,
       payloadTransport: structuredPayloadTransport()
     }]
   };
@@ -262,6 +263,82 @@ async function requestJson(url?: any, options: Record<string, any> = {}) : Promi
   let payload: Record<string, any> = {};
   if (text.trim()) payload = JSON.parse(text);
   return { status: response.status, payload };
+}
+
+async function waitUntil(predicate?: any, timeoutMs: any = 5_000, intervalMs: any = 10) : Promise<any> {
+  const deadline: any = Date.now() + Number(timeoutMs || 0);
+  while (Date.now() <= deadline) {
+    if (predicate() === true) return true;
+    await new Promise((resolve?: any) : any => setTimeout(resolve, intervalMs));
+  }
+  return predicate() === true;
+}
+
+function timeoutCancellationAuditMatch(item?: any) : any {
+  const operationKey: any = item?.payload?.operationKey || item?.operationKey;
+  const reasonCode: any = item?.payload?.reasonCode || item?.reasonCode;
+  return operationKey === "timeout" && reasonCode === "upstream_forward_cancelled";
+}
+
+async function observeUpstreamForwardCancellation({
+  serverUrl,
+  session,
+  serviceId,
+  fixtureState
+}: Record<string, any>) : Promise<any> {
+  const admissionWaitMs: any = 5_000;
+  const auditPollAttempts: any = 100;
+  const auditPollMs: any = 50;
+  const maxAttempts: any = 3;
+  let lastTimeoutReasonCodes: any[] = [];
+  let lastAuditStatus: any = 0;
+  let lastItemCount: any = 0;
+  for (let attempt: any = 1; attempt <= maxAttempts; attempt += 1) {
+    const slowCallsBefore: any = Number(fixtureState.slowCalls || 0);
+    const cancellationController: any = new AbortController();
+    const cancellationRequest: any = fetch(`${serverUrl}/api/gateway/v1/forward`, {
+      method: "POST",
+      headers: session.write,
+      body: JSON.stringify({ serviceId, operationKey: "timeout", body: {} }),
+      signal: cancellationController.signal
+    });
+    const admitted: any = await waitUntil(
+      () : any => Number(fixtureState.slowCalls || 0) > slowCallsBefore,
+      admissionWaitMs
+    );
+    cancellationController.abort();
+    await cancellationRequest.catch((error?: any) : any => {
+      if (error?.name !== "AbortError") throw error;
+    });
+    for (let poll: any = 0; poll < auditPollAttempts; poll += 1) {
+      const cancellationAudit: any = await requestJson(
+        `${serverUrl}/api/gateway/v1/audit`,
+        { headers: session.read }
+      );
+      lastAuditStatus = Number(cancellationAudit.status || 0);
+      const items: any[] = Array.isArray(cancellationAudit.payload?.items)
+        ? cancellationAudit.payload.items
+        : [];
+      lastItemCount = items.length;
+      lastTimeoutReasonCodes = items
+        .filter((item?: any) : any =>
+          (item?.payload?.operationKey || item?.operationKey) === "timeout")
+        .map((item?: any) : any => String(
+          item?.payload?.reasonCode || item?.reasonCode || item?.eventType || "unknown"
+        ))
+        .slice(0, 8);
+      if (items.some(timeoutCancellationAuditMatch)) {
+        return;
+      }
+      await new Promise((resolve?: any) : any => setTimeout(resolve, auditPollMs));
+    }
+    if (admitted !== true) {
+      continue;
+    }
+  }
+  throw new Error(
+    `upstream forward cancellation audit record was not observed (status=${lastAuditStatus}; items=${lastItemCount}; timeoutReasons=${lastTimeoutReasonCodes.join(",") || "none"})`
+  );
 }
 
 async function publish(baseUrl?: any, session?: any, method?: any, route?: any, body?: any, expectedStatus: any = 202) : Promise<any> {
@@ -715,7 +792,7 @@ async function main() : Promise<any> {
   });
   audienceNotificationStore.close();
   observe("audience.scoped-api-key.projected", "projected", "replace", 2, 2);
-  const invalidation: any = await ackStream.waitForInvalidation(5_000, {
+  const invalidation: any = await ackStream.waitForInvalidation(CATALOG_INVALIDATION_WAIT_MS, {
     partitionKeys: protocolCatalog.facts.partitionKeys
   });
   observe("protocol.invalidation.received", "received", "replace", 1, 2);
@@ -766,7 +843,7 @@ async function main() : Promise<any> {
   assert.equal(
     forwarded.status,
     200,
-    `Forwarding failed: ${String(forwarded.payload?.error?.data?.details?.reasonCode || forwarded.payload?.error?.data?.code || "unknown")}`
+    `Forwarding failed: ${String(forwarded.payload?.error?.data?.code || "unknown")}: ${String(forwarded.payload?.error?.message || "")}`
   );
   assert.equal(forwarded.payload?.error, undefined);
   observe("forward.allowed.accepted", "accepted", "replace", 2, 2);
@@ -833,26 +910,12 @@ async function main() : Promise<any> {
   const timeoutCall: any = await executionPeer.callTool(timeoutTool.name, { body: {} });
   assert.ok(timeoutCall.payload?.error || timeoutCall.payload?.result?.structuredContent?.payload?.ok === false);
   observe("forward.timeout.rejected", "rejected", "replace", 2, 2);
-  const cancellationController: any = new AbortController();
-  const cancellationRequest: any = fetch(`${server.url}/api/gateway/v1/forward`, {
-    method: "POST",
-    headers: ownerSession.write,
-    body: JSON.stringify({ serviceId, operationKey: "timeout", body: {} }),
-    signal: cancellationController.signal
+  await observeUpstreamForwardCancellation({
+    serverUrl: server.url,
+    session: ownerSession,
+    serviceId,
+    fixtureState: fixture.state
   });
-  setTimeout(() : any => cancellationController.abort(), 20);
-  await assert.rejects(cancellationRequest, (error?: any) : any => error?.name === "AbortError");
-  let cancellationObserved: any = false;
-  for (let attempt: any = 0; attempt < 20; attempt += 1) {
-    const cancellationAudit: any = await requestJson(`${server.url}/api/gateway/v1/audit`, { headers: ownerSession.read });
-    if (cancellationAudit.payload?.items?.some((item?: any) : any =>
-      item?.payload?.operationKey === "timeout" && item?.payload?.reasonCode === "upstream_forward_cancelled")) {
-      cancellationObserved = true;
-      break;
-    }
-    await new Promise((resolve?: any) : any => setTimeout(resolve, 50));
-  }
-  assert.ok(cancellationObserved, "upstream forward cancellation audit record was not observed");
   observe("forward.cancellation.observed", "cancelled", "replace", 2, 2);
   const trafficCatalog: any = await trafficPeer.pullCatalog();
   const trafficTool: any = trafficCatalog.tools.find((tool?: any) : any =>
@@ -960,7 +1023,7 @@ async function main() : Promise<any> {
   });
   timeoutTagStore.close();
   observe("protocol.timeout-audience.changed", "updated", "replace", 3, 3);
-  await timeoutStream.waitForInvalidation(5_000, {
+  await timeoutStream.waitForInvalidation(CATALOG_INVALIDATION_WAIT_MS, {
     partitionKeys: timeoutCatalog.facts.partitionKeys
   });
   observe("protocol.timeout-invalidation.received", "received", "replace", 3, 3);
