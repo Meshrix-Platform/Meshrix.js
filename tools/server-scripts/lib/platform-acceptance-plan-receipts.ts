@@ -313,7 +313,7 @@ export async function verifyPlatformAcceptancePlanReceipts({
     selectedProfile,
     planProfile,
     candidateDigest,
-    requiredReceiptCount: requiredReceipts.length,
+    requiredReceiptCount: bindings.length,
     requiredCheckpointCount: checkpointBindings.length,
     bindings,
     checkpointBindings,

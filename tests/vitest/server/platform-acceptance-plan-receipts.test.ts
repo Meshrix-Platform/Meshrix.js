@@ -299,7 +299,7 @@ describe("platform acceptance Plan receipt preflight", () : any => {
       ],
       verifyCheckpointEvidence: async () : Promise<any> => ({ evidenceCount: 1 }),
     })).resolves.toMatchObject({
-      requiredReceiptCount: 0,
+      requiredReceiptCount: 1,
       requiredCheckpointCount: 0,
       candidateDigest: "a".repeat(64),
       bindings: [expect.objectContaining({
