@@ -98,7 +98,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
       "build/reports/opaque-sandbox-custody.json",
       "build/reports/execution-launcher-boundary.json"
     ],
-    resourceLocks: ["container-runtime"]
+    resourceLocks: ["container-runtime", "foundation-public-gate"]
   }),
   command("controlled-execution-convergence-final", "Controlled Execution Convergence final reduction", "platform-capability", npmRun("verify:controlled-execution-convergence"), "build/reports/controlled-execution-convergence-final.json", ["platform-capability", "execution-sandbox", "current-plan-checkpoint"], { dependsOn: ["controlled-execution-sandbox"] }),
   command("enterprise-governance-coverage", "Enterprise authorization governance coverage", "platform-capability", npmRun("verify:authorization-governance"), "build/reports/enterprise-governance-coverage.json", ["platform-capability", "authorization", "governance"]),

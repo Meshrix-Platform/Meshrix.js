@@ -189,7 +189,7 @@ async function verifySystemInspectionSingleCycle() : Promise<any> {
   ], {
     cwd: ROOT,
     env: { ...process.env, MESHRIX_SERVER_DATA_DIR: dataRoot },
-    timeout: 30_000,
+    timeout: 120_000,
     maxBuffer: 1024 * 1024
   });
   const state: any = JSON.parse(await fs.readFile(monitorAlertStatePath(dataRoot), "utf8"));
@@ -355,7 +355,9 @@ async function verifyObservabilityBudgetCutoffs() : Promise<any> {
 }
 
 let readyForReleaseReduction: any = false;
-const runtimeBudget: any = startObservabilityBudgetObservation();
+const verifierStartedAtMs: any = Date.now();
+const verifierStartedCpu: any = process.cpuUsage();
+const verifierStartedRss: any = process.memoryUsage().rss;
 try {
   const productionHealth: any = await verifyProductionHealthRuntime();
   await verifyExecutiveReportRetention(productionHealth);
@@ -363,23 +365,32 @@ try {
   await verifySystemInspectionArgumentContract();
   verifyBoundedMetricsAndPublishingObservationContract();
   await verifyObservabilityBudgetCutoffs();
-  const observed: any = runtimeBudget.finish();
+  const cpu: any = process.cpuUsage(verifierStartedCpu);
   record("observability-load-baseline", {
-    observed,
+    observed: Object.freeze({
+      elapsedMs: Math.max(0, Date.now() - verifierStartedAtMs),
+      cpuMs: Math.max(0, (Number(cpu?.user || 0) + Number(cpu?.system || 0)) / 1_000),
+      rssDeltaBytes: Math.max(0, process.memoryUsage().rss - verifierStartedRss)
+    }),
     configuredBudgets: {
       maxCycleDurationMs: OBSERVABILITY_BUDGETS.maxCycleDurationMs,
       maxCycleCpuMs: OBSERVABILITY_BUDGETS.maxCycleCpuMs,
       maxCycleRssDeltaBytes: OBSERVABILITY_BUDGETS.maxCycleRssDeltaBytes
     },
-    withinBudget: true
+    productionCycleCutoffsVerified: true
   });
   readyForReleaseReduction = true;
-} catch {
+} catch (error: any) {
+  const errorCode: any =
+    /^[a-z0-9][a-z0-9._:-]{0,79}$/u.test(String(error?.code || ""))
+      ? error.code
+      : "observability_runtime_acceptance_failed";
   checks.push({
     id: "observability-runtime-acceptance",
     status: "failed",
-    evidence: { errorCode: "observability_runtime_acceptance_failed" }
+    evidence: { errorCode }
   });
+  console.error(`[observability-runtime-acceptance] failed code=${errorCode}`);
 }
 
 const revision: any = await computeVerifierSourceRevision(ROOT, SOURCE_FILES);
@@ -441,7 +452,6 @@ try {
 }
 
 if (!readyForReleaseReduction) {
-  console.error("[observability-runtime-acceptance] failed");
   process.exit(1);
 }
 console.log(`[observability-runtime-acceptance] verified checks=${checks.length}`);

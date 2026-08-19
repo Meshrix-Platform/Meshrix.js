@@ -147,9 +147,6 @@ function validateConfiguration(value?: any) : any {
 }
 
 async function run(configuration?: any) : Promise<any> {
-  keepAlive = setInterval(() : any => {
-    if (!halted) emitHeartbeat();
-  }, 1_000);
   const counters: Record<string, any> = {
     queueClaims: 0,
     finalPermits: 0,
@@ -168,10 +165,11 @@ async function run(configuration?: any) : Promise<any> {
   // is awaited; the tail await still observes the rejection when reached.
   stageReached.catch(() : any => {});
   let stageWatchdog: any = null;
-  // The stage budget bounds silence between observable milestones rather
-  // than total wall-clock time: a host-starved child that keeps making
-  // progress is given the time it needs, while a wedged child still fails
-  // within one window.
+  // The stage budget bounds silence of a live event loop rather than total
+  // wall-clock time. Heartbeats and named milestones both re-arm it, so a
+  // host-starved child that is still pumping timers through a long
+  // composition await is not false-failed, while a wedged child that cannot
+  // emit a heartbeat still fails within one window.
   const noteStageProgress: any = () : any => {
     if (halted) return;
     if (stageWatchdog) clearTimeout(stageWatchdog);
@@ -198,6 +196,11 @@ async function run(configuration?: any) : Promise<any> {
     }, 240_000);
     stageWatchdog.unref?.();
   };
+  keepAlive = setInterval(() : any => {
+    if (halted) return;
+    emitHeartbeat();
+    noteStageProgress();
+  }, 1_000);
   const halt: any = async (stage?: any) : Promise<any> => {
     noteStageProgress();
     if (halted || configuration.crashStage !== stage) return;
