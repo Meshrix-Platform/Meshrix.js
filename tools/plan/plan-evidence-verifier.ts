@@ -93,12 +93,18 @@ async function verifyFileEvidence({ repoRoot, realRepoRoot, ref }: {
   );
 }
 
-export async function verifyPlanEvidenceCurrent({ repoRoot, finalNode }: {
+export async function verifyPlanEvidenceCurrent({ repoRoot, finalNode, disallowedFilePaths = [] }: {
   repoRoot?: string;
   finalNode?: unknown;
+  disallowedFilePaths?: readonly string[];
 } = {}) {
   requireCondition(typeof repoRoot === "string" && path.isAbsolute(repoRoot), "Plan evidence repository root is invalid");
   requireCondition(isJsonRecord(finalNode), "Plan final node is invalid");
+  const disallowed = new Set(
+    (Array.isArray(disallowedFilePaths) ? disallowedFilePaths : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
   const criteria = Array.isArray(finalNode.acceptance_criteria) ? finalNode.acceptance_criteria : [];
   const refs = criteria.flatMap((criterion) =>
     isJsonRecord(criterion) && Array.isArray(criterion.evidence_refs)
@@ -122,6 +128,10 @@ export async function verifyPlanEvidenceCurrent({ repoRoot, finalNode }: {
 
     if (candidate.type === "file") {
       requireCondition(typeof candidate.path === "string" && typeof candidate.sha256 === "string", "Plan file evidence reference is invalid");
+      requireCondition(
+        !disallowed.has(candidate.path),
+        "Plan file evidence is a functional-gate output",
+      );
       const ref: FileEvidenceRef = { type: "file", path: candidate.path, sha256: candidate.sha256, recorded_at: candidate.recorded_at };
       assertExactKeys(
         candidate,
