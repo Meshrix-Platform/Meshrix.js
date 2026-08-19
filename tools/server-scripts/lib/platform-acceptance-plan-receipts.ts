@@ -6,6 +6,7 @@ import { verifyPlanEvidenceCurrent } from "../../plan/plan-evidence-verifier.ts"
 import { verifyEndToEndReleasePlan } from "../../plan/verify-end-to-end-release-plan.ts";
 import { reportPayloadDigest } from "../../../packages/foundation/src/observability/sensitive-report-scan.ts";
 import { requirePlatformAcceptanceProfile } from "./platform-acceptance-contract.ts";
+import { ACCEPTANCE_REQUIRED_REPORTS } from "./platform-acceptance-command-catalog.ts";
 import {
   acceptedFinalReceipt,
   assertCurrentDependencyMapShape,
@@ -130,7 +131,11 @@ export async function verifyPlatformAcceptancePlanReceipts({
   loadBinding = loadCurrentPlanReceiptBinding,
   loadCandidate,
   loadCheckpoints,
-  verifyCheckpointEvidence = verifyPlanEvidenceCurrent,
+  verifyCheckpointEvidence = (input: Record<string, any> = {}) : Promise<any> =>
+    verifyPlanEvidenceCurrent({
+      ...input,
+      disallowedFilePaths: ACCEPTANCE_REQUIRED_REPORTS
+    }),
 }: Record<string, any> = {}) : Promise<any> {
   requireStructure(repoRoot, "plan-receipt-repo-root-missing");
   try {

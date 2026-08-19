@@ -136,6 +136,16 @@ describe("plan receipt report digests", () : any => {
     })).resolves.toEqual({ evidenceCount: 2, fileCount: 1, commandCount: 1 });
   });
 
+  it("rejects functional-gate owned reports as plan file evidence", async () : Promise<any> => {
+    const { repoRoot, reportDigest } = await createEvidenceRepository();
+
+    await expect(verifyPlanEvidenceCurrent({
+      repoRoot,
+      finalNode: evidenceNode(fileEvidence("reports/result.json", reportDigest)),
+      disallowedFilePaths: ["reports/result.json"],
+    })).rejects.toThrow("Plan file evidence is a functional-gate output");
+  });
+
   it("rejects tampered, missing, escaping, and symlink file evidence", async () : Promise<any> => {
     const { repoRoot, reportPath, reportDigest } = await createEvidenceRepository();
 
