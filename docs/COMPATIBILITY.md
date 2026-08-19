@@ -53,7 +53,7 @@ implementation, verification, release, and support result.
 | Downstream client protocol | Meshrix.js generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix.js release dependency. |
 | Client-specific adapters | Operator-supplied external client-adapter packages selected explicitly | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
 | Optional parsers, providers, datastores, and service adapters | Repository-local `services/` or `plugins/` implementation when present | Disabled or absent by default; each enabled path needs its own contract and evidence. |
-| Pactium | Exact dependency `pactium@0.7.0` and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities. Meshrix.js release and environment qualification remain remaining required work on their own receipts. |
+| Pactium | Exact file-vendored dependency `pactium@0.8.0` (`file:vendor/pactium-0.8.0.tgz`) and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities. Meshrix.js release and environment qualification remain remaining required work on their own receipts. |
 
 ## Pactium host-helper deprecation
 

@@ -421,10 +421,16 @@ async function preparePackagedDeploymentSource() : Promise<any> {
   assert.equal(checksumText, `${actualSha256}  ${result.artifact.name}\n`);
   run("tar", ["-xzf", archivePath, "-C", extractionDirectory]);
   deploymentRoot = path.join(extractionDirectory, result.artifact.rootName);
+  const vendoredEntries: any = await fs.readdir(path.join(deploymentRoot, "vendor"));
+  const authorizedVendoredTarball: any = vendoredEntries.find((entry?: any) : any =>
+    /^pactium-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.tgz$/u.test(String(entry || ""))
+  );
+  assert.ok(authorizedVendoredTarball, "source_package_authorized_vendored_tarball_missing");
   await Promise.all([
     fs.access(path.join(deploymentRoot, "Dockerfile")),
     fs.access(path.join(deploymentRoot, "docker-compose.yml")),
-    fs.access(path.join(deploymentRoot, "plugins"))
+    fs.access(path.join(deploymentRoot, "plugins")),
+    fs.access(path.join(deploymentRoot, "vendor", authorizedVendoredTarball))
   ]);
   return {
     artifactName: result.artifact.name,
@@ -432,6 +438,8 @@ async function preparePackagedDeploymentSource() : Promise<any> {
     sourceFileCount: result.source.copiedFileCount,
     checksumVerified: true,
     pluginSourceRootIncluded: result.source.pluginSourceRootIncluded,
+    vendoredSourceRootIncluded: result.source.vendoredSourceRootIncluded,
+    authorizedVendoredTarballIncluded: result.source.authorizedVendoredTarballIncluded,
     isolatedBuildContext: true
   };
 }
@@ -680,6 +688,7 @@ try {
     assert.match(dockerfile, new RegExp(String.raw`--cache=(?:\"|\")?${rootfsTarget}var/cache/meshrix/npm(?:\"|\")?`));
     assert.doesNotMatch(dockerfile, /COPY plugins \.\/plugins/);
     assert.doesNotMatch(dockerfile, /--from=build \/app\/plugins \.\/plugins/);
+    assert.match(dockerfile, /COPY vendor \.\/vendor/);
     assert.match(
       dockerfile,
       new RegExp(String.raw`cp -a (?:\"|\")?${rootfsTarget}var/cache/meshrix/npm/_cacache(?:\"|\")? (?:\"|\")?${rootfsTarget}opt/meshrix-npm-cache/_cacache(?:\"|\")?`)

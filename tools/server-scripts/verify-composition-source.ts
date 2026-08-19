@@ -8,6 +8,8 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  AUTHORIZED_VENDORED_PACKAGE_ROOT,
+  AUTHORIZED_VENDORED_TARBALL_PATTERN,
   INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS,
   ROOT_SOURCE_FILES,
   SOURCE_PACKAGE_ROOTS
@@ -116,6 +118,19 @@ if (manifest) {
   for (const root of SOURCE_PACKAGE_ROOTS) {
     if (!await exists(root)) {
       findings.push({ code: "source_root_missing", detail: root });
+    }
+  }
+  if (SOURCE_PACKAGE_ROOTS.includes(AUTHORIZED_VENDORED_PACKAGE_ROOT)) {
+    const vendorEntries: any[] = await fs.readdir(
+      path.join(sourceRoot, AUTHORIZED_VENDORED_PACKAGE_ROOT)
+    ).catch(() : any[] => []);
+    if (!vendorEntries.some((entry?: any) : any =>
+      AUTHORIZED_VENDORED_TARBALL_PATTERN.test(`${AUTHORIZED_VENDORED_PACKAGE_ROOT}/${entry}`)
+    )) {
+      findings.push({
+        code: "authorized_vendored_tarball_missing",
+        detail: AUTHORIZED_VENDORED_PACKAGE_ROOT
+      });
     }
   }
   for (const rootFile of ROOT_SOURCE_FILES.filter((file?: any) : any => manifest.rootFiles?.includes(file))) {

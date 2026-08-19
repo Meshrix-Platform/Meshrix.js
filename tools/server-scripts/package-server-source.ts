@@ -14,6 +14,8 @@ import {
 import { scanPublicArtifact } from "./lib/public-artifact-boundary.ts";
 import { resolveGitRepoRoot } from "./lib/source-tree-digest.ts";
 import {
+  AUTHORIZED_VENDORED_PACKAGE_ROOT,
+  AUTHORIZED_VENDORED_TARBALL_PATTERN,
   INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS,
   ROOT_SOURCE_FILES,
   SOURCE_PACKAGE_ROOTS
@@ -353,7 +355,11 @@ export async function applyFeatureSourcePlan(stagingPath?: any, packagingPlan: a
     featurePackagePlan: manifest.featurePackagePlan,
     copiedFileCount,
     totalBytes,
-    packageSha256: manifest.packageSha256
+    packageSha256: manifest.packageSha256,
+    copiedRoots,
+    authorizedVendoredTarballIncluded: manifestEntries.some((entry?: any) : any =>
+      AUTHORIZED_VENDORED_TARBALL_PATTERN.test(String(entry.path || ""))
+    )
   };
 }
 
@@ -515,7 +521,10 @@ export async function createServerSourcePackage({
         copiedFileCount: source.copiedFileCount,
         totalBytes: source.totalBytes,
         packageSha256: source.packageSha256,
-        pluginSourceRootIncluded: source.sourceRoots.includes("plugins")
+        pluginSourceRootIncluded: source.sourceRoots.includes("plugins"),
+        vendoredSourceRootIncluded: Array.isArray(source.copiedRoots)
+          && source.copiedRoots.includes(AUTHORIZED_VENDORED_PACKAGE_ROOT),
+        authorizedVendoredTarballIncluded: source.authorizedVendoredTarballIncluded === true
       },
       publicArtifactBoundary: {
         ok: true,

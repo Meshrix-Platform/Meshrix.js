@@ -328,9 +328,11 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "apps/**",
       "packages/**",
       "plugins/plugin.schema.json",
+      "vendor/**",
       "content/**",
       "tools/**",
       "tools/server-scripts/package-server-source.ts",
+      "tools/server-scripts/lib/source-package-contract.ts",
       "tools/server-scripts/lib/mcp-release-reproducible-archives.ts"
     ], outputs: ["build/packages/*.tar.gz", "build/packages/*.sha256"],
   },
@@ -405,7 +407,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
     inputs: [
       "package.json",
+      "vendor/**",
       "tools/server-scripts/package-server-source.ts",
+      "tools/server-scripts/lib/source-package-contract.ts",
       "tools/server-scripts/lib/mcp-release-reproducible-archives.ts",
       "tools/server-scripts/verify-composition-source.ts",
       "tools/server-scripts/verify-composition-source-package.ts"
