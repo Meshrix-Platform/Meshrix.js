@@ -721,6 +721,52 @@ describe("upstream gateway SSRF boundary", () : any => {
     });
   });
 
+  it("applies caller audience tags when the service descriptor also has a default service entityRef", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const serviceId: any = "audience-tagged";
+    const service: Record<string, any> = {
+      serviceId,
+      baseUrl: fixture.baseUrl,
+      tagPolicy: {
+        allowTags: ["audience:allow"],
+        requiredTags: ["audience:required"],
+        denyTags: ["audience:deny"]
+      },
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [
+        {
+          operationKey: "read",
+          method: "GET",
+          path: "/api/tagged",
+          risk: "read_only",
+          requiredScopes: ["gateway:read"]
+        }
+      ]
+    };
+    const allowedCaller: Record<string, any> = {
+      ...subject,
+      subjectId: "audience-allowed-principal"
+    };
+    const deniedCaller: Record<string, any> = {
+      ...subject,
+      subjectId: "audience-denied-principal"
+    };
+    const store: any = createStaticTagStore([
+      { entityType: "subject", entityId: allowedCaller.subjectId, tagId: "audience:allow" },
+      { entityType: "subject", entityId: allowedCaller.subjectId, tagId: "audience:required" },
+      { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:allow" },
+      { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:required" },
+      { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:deny" }
+    ]);
+    const { registry } = await createRegistryWithDataDir([service], { tagStore: store });
+    const allowed: any = await registry.forward({ serviceId, operationKey: "read" }, allowedCaller);
+    expect(allowed.ok).toBe(true);
+    expect(fixture.hits).toHaveLength(1);
+    await expect(registry.forward({ serviceId, operationKey: "read" }, deniedCaller))
+      .rejects.toMatchObject({ status: 403 });
+    expect(fixture.hits).toHaveLength(1);
+  });
+
   it("rejects scheme-relative, absolute, backslash, and direct host override inputs before fetch", async () : Promise<any> => {
     const fixture: any = await startFixtureServer();
     const registry: any = await createRegistry([

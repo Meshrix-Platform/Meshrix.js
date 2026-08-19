@@ -14,10 +14,13 @@ operations; Meshrix cannot call, observe, configure, schedule, cancel, start,
 stop, or restart it.
 Delivery-quality additions on that same Plan are reproducible
 acceptance-gate provenance, security-critical typing, and faster verification.
-They are not a new product direction. The thin substrate blocks GATE-CONTRACT;
-the remainder joins GATE-FINAL. The machine-readable local Plan in
-`docs/plans/` owns execution detail. GATE-FINAL remains the only current
-terminal candidate decision. Engineering is not complete.
+They are not a new product direction. The thin substrate blocked GATE-CONTRACT;
+the remainder joined GATE-FINAL. The machine-readable local Plan in
+`docs/plans/` owns execution detail. GATE-FINAL is the completed terminal
+candidate decision. Engineering for this candidate is complete pending a
+current GATE-FINAL receipt on the claimed repository tree. Native Linux,
+client, cloud, and recovery qualification remain FutureGoals after this
+candidate.
 
 ## Primary objectives
 
@@ -55,8 +58,8 @@ mandatory Gateway stages.
 
 ### Mandatory dual-Gateway pipeline, optional application stage, standalone Model Gateway, and local Agent self-maintenance
 
-The current embedded Agent Gateway, unconditional MCP Workspace resolution,
-and nested External Gateway ownership will be replaced once by seven separated
+The embedded Agent Gateway, unconditional MCP Workspace resolution,
+and nested External Gateway ownership are replaced by seven separated
 authorities:
 
 1. an immutable operation-descriptor classification with exactly
@@ -157,15 +160,15 @@ migrating retired data.
 | Core application state and effects | For `workspace_application`: one Change Set authority for Core-managed state and separate explicit Effect Commands for external side effects. Gateway transit neither reads nor writes these authorities. |
 | Workspace reference migration | Shared Workspace editing uses the optional application stage and removes per-file model loops and former online writers. Direct forwarding uses `gateway_transit`, not a synthetic Workspace; both use the same mandatory Gateway layers. |
 | Workspace application efficiency evidence | The exact named application profile either passes every reduction, privacy, safety, and recovery threshold or remains non-certifying with a finite reason. Direct transit has separate zero-Workspace evidence, while both modes have Gateway stage-order and production-control evidence. |
-| Thin delivery-quality substrate | Next executable work: provenance, security-critical typing, and faster verification. The thin substrate blocks GATE-CONTRACT. Engineering is not complete. |
-| Agent MCP and Gateway architecture contract | Freeze descriptor-owned `trafficModel` as an optional-middle-stage selector, immutable `DownstreamGatewayEnvelope`, `WorkspaceApplicationEnvelope`, and `UpstreamGatewayEnvelope`, the fixed stage order, production-control semantics, the standalone Service HTTP and JSON contract, Meshrix client and adapter ports, built-in and plugin channel interfaces in both directions for both traffic models, plugin-lifecycle-as-availability-only, explicit Console direction-and-target selection, the maintenance plugin's closed local configuration and outbound-client contracts, import directions, and mutually exclusive write sets before implementation branches open. |
-| Model Gateway Service | Build one independently startable Service with direct clients, its own models, providers, credentials, routing, persistence, request/token/concurrency/cost admission, pricing-revision-bound usage settlement, metadata-only accounting, health, restart recovery, and separate OCI artifact. It imports no Meshrix runtime and has no Agent/tool authority. |
-| External Gateway Runtime Plugin | Build `plugins/external-gateway` as a default-disabled native Runtime Plugin contributing optional downstream and upstream Caddy/Nginx/direct channels for both traffic models; prove it receives no Workspace or application-stage port, both channels preserve the immutable Gateway contracts and fixed stage order, and plugin lifecycle cannot select, redirect, authorize, reinterpret traffic, or skip a stage. |
+| Thin delivery-quality substrate | Completed before GATE-CONTRACT: provenance, security-critical typing, and faster verification. The thin substrate blocked GATE-CONTRACT. |
+| Agent MCP and Gateway architecture contract | Frozen descriptor-owned `trafficModel` as an optional-middle-stage selector, immutable `DownstreamGatewayEnvelope`, `WorkspaceApplicationEnvelope`, and `UpstreamGatewayEnvelope`, the fixed stage order, production-control semantics, the standalone Service HTTP and JSON contract, Meshrix client and adapter ports, built-in and plugin channel interfaces in both directions for both traffic models, plugin-lifecycle-as-availability-only, explicit Console direction-and-target selection, the maintenance plugin's closed local configuration and outbound-client contracts, import directions, and mutually exclusive write sets. |
+| Model Gateway Service | One independently startable Service with direct clients, its own models, providers, credentials, routing, persistence, request/token/concurrency/cost admission, pricing-revision-bound usage settlement, metadata-only accounting, health, restart recovery, and separate OCI artifact. It imports no Meshrix runtime and has no Agent/tool authority. |
+| External Gateway Runtime Plugin | `plugins/external-gateway` as a default-disabled native Runtime Plugin contributing optional downstream and upstream Caddy/Nginx/direct channels for both traffic models; it receives no Workspace or application-stage port, both channels preserve the immutable Gateway contracts and fixed stage order, and plugin lifecycle cannot select, redirect, authorize, reinterpret traffic, or skip a stage. |
 | Local Agent self-maintenance plugin | One separately started client-peer artifact controlled only by an atomically replaced local configuration file; direct Model Gateway client; ordinary governed Meshrix operation client; local bounded scheduler, queue, cancellation and recovery; no listener, Host port, runtime contribution, backend handle, Console, status, or lifecycle interface. |
 | Real parallel frontier | The standalone Model Gateway Service, Agent self-maintenance, and External Gateway Runtime Plugin compile and pass focused tests independently from frozen contracts without importing one another or editing shared composition authorities. |
-| Canonical cutover | One necessary join migrates every downstream operation descriptor to exactly one `trafficModel`; installs `AgentMcpGatewayPipeline`, mandatory downstream and upstream Gateway stages, retained optional Workspace application processing, direct Workspace-free middle-stage bypass, Core per-direction selection generations, `gatewayChannels` contribution plumbing, explicit Console switching, and the default-disabled stateless Model Gateway adapter; keeps maintenance outside Meshrix composition; removes unconditional Workspace resolution, every Gateway-bypassing path, and every retired Gateway/profile/Core-maintenance authority; completes confinement; and discards one residue audit. |
-| Delivery-quality remainder | Full `verify:acceptance` green with fresh Service-only, Meshrix-only, mandatory-dual-Gateway-stage-order, Workspace-application, Workspace-free-direct-transit, missing-classification denial, zero-cross-mode-effect, both-mode downstream/upstream load-admission-and-degradation, attached, detached, built-in/plugin semantic-equivalence, plugin-activation-no-switch, explicit Console-selection, direction-isolation, dual-generation-drain, no-implicit-fallback-or-stage-bypass, maintenance-config-only, one-way Meshrix control, direct Model Gateway, backend-unreachable, separate-identity, and independent-shutdown evidence; remaining any batches; and suite merge/cache/shard. |
-| Gateway and maintenance acceptance | Prove both application and direct-transit requests traverse downstream Gateway then upstream Gateway; efficient Workspace application behavior occurs only between them; direct transit with and without a forged Workspace identifier performs zero Workspace work; missing, conflicting, or caller-overridden classification reaches no stage; downstream and upstream built-in/plugin channels apply bounded load distribution, rate and concurrency admission, health and circuit handling, overload degradation, timeout, cancellation, streaming and backpressure to both modes; direct Service operation works without Meshrix or External Gateway; plugin activation changes no route; explicit Console downstream and upstream switches remain independent but affect both traffic models in their named direction; semantics and application-stage choice remain equal across paths; in-flight calls drain on both pinned generations; stable failure has no fallback to built-in, another channel, Workspace or application bypass; explicit switch-back to built-in works; maintenance operation uses its fixed configuration as the only control input; direct plugin-to-Service calls work while the Meshrix adapter is disabled; ordinary governed maintenance-plugin-to-Meshrix effects produce zero effect after refusal or revocation; backend control remains unreachable; independent shutdown, privacy, cancellation, recovery, and confinement hold. GATE-FINAL remains the only current terminal candidate decision. |
+| Canonical cutover | One necessary join migrated every downstream operation descriptor to exactly one `trafficModel`; installed `AgentMcpGatewayPipeline`, mandatory downstream and upstream Gateway stages, retained optional Workspace application processing, direct Workspace-free middle-stage bypass, Core per-direction selection generations, `gatewayChannels` contribution plumbing, explicit Console switching, and the default-disabled stateless Model Gateway adapter; kept maintenance outside Meshrix composition; removed unconditional Workspace resolution, every Gateway-bypassing path, and every retired Gateway/profile/Core-maintenance authority; completed confinement; and discarded one residue audit. |
+| Delivery-quality remainder | Remainder typing, acceptance-gate provenance, and suite merge/cache/shard joined GATE-FINAL. Project-level `npm run verify:acceptance` remains the Functional Release Gate when a functional-complete claim is required. |
+| Gateway and maintenance acceptance | GATE-FINAL completed the sequential dual-Gateway, detachment, and one-way maintenance boundary for this candidate. The oracle is an in-process fixture. A current receipt must bind the claimed repository tree. |
 | Remaining host qualification | Native-host, client, cloud, and recovery qualification remain FutureGoals after this candidate. Offline Linux VM delivery is required for EFF-10 and EFF-FINAL. Ubuntu is preferred; Debian is accepted. |
 
 Implemented capacity and concurrency changes are substrate for this Plan, not a
@@ -179,3 +182,8 @@ candidate.
 - Public-cloud and independent clean-host recovery qualification.
 - Multi-node availability, forwarding, federation, hosted operation, and
   concrete third-party provider support.
+- Public npm publication of the `0.0.1` release set (`meshrix.js`, the
+  `@meshrix/*` workspace packages, and `meshrix-mcp-connector`) on
+  `https://registry.npmjs.org/`. The installability gate is a lock-backed
+  offline simulation of packed tarballs and is not a substitute for that
+  publication.

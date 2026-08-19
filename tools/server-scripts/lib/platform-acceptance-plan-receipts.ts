@@ -152,20 +152,20 @@ export async function verifyPlatformAcceptancePlanReceipts({
   }
   const requiredReceipts: any = requiredPlatformAcceptancePlanReceipts(currentDependencyMap, planProfile);
   const bindings: any[] = [];
-  for (const required of requiredReceipts) {
+  async function bindCurrentFinalReceipt(planDirectory: any, finalNodeId: any): Promise<any> {
     let binding: any;
     try {
       binding = await loadBinding({
         repoRoot,
-        planDirectory: required.plan,
+        planDirectory,
         dependencyMap: currentDependencyMap,
-        finalNodeId: required.finalNodeId,
+        finalNodeId,
       });
     } catch {
       throw new PlatformAcceptancePlanReceiptError("required-plan-receipt-stale", "failed");
     }
     requireReady(
-      binding?.finalNodeId === required.finalNodeId && binding?.proofVerified === true,
+      binding?.finalNodeId === finalNodeId && binding?.proofVerified === true,
       "required-plan-receipt-unverified",
     );
     requireReady(
@@ -179,8 +179,8 @@ export async function verifyPlatformAcceptancePlanReceipts({
       "required-plan-receipt-candidate-missing",
     );
     requireReady(binding?.privacySafe === true, "required-plan-receipt-privacy-unsafe");
-    bindings.push(Object.freeze({
-      plan: required.plan,
+    return Object.freeze({
+      plan: planDirectory,
       finalNodeId: binding.finalNodeId,
       platform: binding.platform,
       profiles: Object.freeze([...binding.profiles]),
@@ -194,7 +194,73 @@ export async function verifyPlatformAcceptancePlanReceipts({
       proofProvider: binding.proofProvider,
       proofVerified: true,
       privacySafe: true,
-    }));
+    });
+  }
+  for (const required of requiredReceipts) {
+    bindings.push(await bindCurrentFinalReceipt(required.plan, required.finalNodeId));
+  }
+  const checkpointBindings: any[] = [];
+  let identityCandidate: any = null;
+  if (requiredReceipts.length === 0) {
+    const releasePlan: any = currentDependencyMap.plans.find((entry?: any) : any =>
+      entry.directory === RELEASE_ACCEPTANCE_PLAN);
+    const releaseFinal: any = finalValidationBinding(releasePlan, releasePlan.final_validations[0].node_id);
+    requireStructure(releaseFinal.profiles.includes(planProfile), "release-final-profile-mismatch");
+    const checkpointLoader: any = loadCheckpoints ?? (async () : Promise<any> => JSON.parse(await fs.readFile(
+      path.join(repoRoot, "docs/plans/end-to-end-release/Checkpoints.json"),
+      "utf8",
+    )));
+    const checkpoints: any = await checkpointLoader({ repoRoot });
+    requireStructure(Array.isArray(checkpoints), "release-checkpoints-invalid");
+    const finalNode: any = checkpoints.find((entry?: any) : any => entry.id === releaseFinal.node_id);
+    requireStructure(finalNode?.role === "final_validation", "release-final-node-missing");
+    if (finalNode.status === "completed") {
+      const completedBinding: any = await bindCurrentFinalReceipt(RELEASE_ACCEPTANCE_PLAN, finalNode.id);
+      try {
+        await verifyCheckpointEvidence({ repoRoot, finalNode });
+      } catch {
+        throw new PlatformAcceptancePlanReceiptError("release-prerequisite-evidence-stale", "failed");
+      }
+      bindings.push(completedBinding);
+    } else {
+      requireReady(finalNode.status === "pending", "release-final-not-pending");
+      identityCandidate = await (loadCandidate ?? (async () : Promise<any> => {
+        const { createReleaseCandidateIdentity } = await import("../verify-release-candidate-identity.ts");
+        return createReleaseCandidateIdentity({ repoRoot });
+      }))({ repoRoot });
+      const pendingCandidateDigest: any = identityCandidate?.candidate_digest;
+      requireReady(SHA256_PATTERN.test(String(pendingCandidateDigest || "")), "release-candidate-missing");
+      requireReady(/^[a-f0-9]{40}$/u.test(String(identityCandidate?.source_revision || "")), "release-candidate-source-missing");
+      const prerequisites: any[] = completedPrerequisiteFrontier(checkpoints, finalNode);
+      for (const node of prerequisites) {
+        requireReady(node.status === "completed", "release-prerequisite-incomplete");
+        if (node.candidate_digest !== undefined && node.candidate_digest !== null) {
+          requireReady(node.candidate_digest === pendingCandidateDigest, "release-prerequisite-candidate-mismatch");
+        }
+        if (node.commit?.delivered !== undefined && node.commit?.delivered !== null) {
+          requireReady(node.commit.delivered === identityCandidate.source_revision, "release-prerequisite-source-mismatch");
+        }
+        requireReady(
+          Array.isArray(node.acceptance_criteria) && node.acceptance_criteria.length > 0 &&
+            node.acceptance_criteria.every((criterion?: any) : any => criterion.checked === true),
+          "release-prerequisite-criteria-incomplete",
+        );
+        try {
+          await verifyCheckpointEvidence({ repoRoot, finalNode: node });
+        } catch {
+          throw new PlatformAcceptancePlanReceiptError("release-prerequisite-evidence-stale", "failed");
+        }
+        checkpointBindings.push(Object.freeze({
+          nodeId: node.id,
+          code: node.code,
+          candidateDigest: pendingCandidateDigest,
+          sourceRevision: identityCandidate.source_revision,
+          checkpointDigest: reportPayloadDigest(node),
+          privacySafe: true,
+        }));
+      }
+      checkpointBindings.sort((left?: any, right?: any) : any => left.code.localeCompare(right.code));
+    }
   }
   const candidateBinding: any = bindings[0];
   if (candidateBinding) {
@@ -216,8 +282,10 @@ export async function verifyPlatformAcceptancePlanReceipts({
   }
   let candidate: any = candidateBinding ? {
     candidate_digest: candidateBinding.candidateDigest,
-    source_revision: candidateBinding.sourceRevision,
-  } : null;
+    source_revision: /^[a-f0-9]{40}$/u.test(String(candidateBinding.repositoryRevision || ""))
+      ? candidateBinding.repositoryRevision
+      : candidateBinding.sourceRevision,
+  } : identityCandidate;
   if (!candidate) {
     const candidateLoader: any = loadCandidate ?? (async () : Promise<any> => {
       const { createReleaseCandidateIdentity } = await import("../verify-release-candidate-identity.ts");
@@ -228,52 +296,6 @@ export async function verifyPlatformAcceptancePlanReceipts({
   const candidateDigest: any = candidate?.candidate_digest;
   requireReady(SHA256_PATTERN.test(String(candidateDigest || "")), "release-candidate-missing");
   requireReady(/^[a-f0-9]{40}$/u.test(String(candidate?.source_revision || "")), "release-candidate-source-missing");
-
-  const checkpointBindings: any[] = [];
-  if (requiredReceipts.length === 0) {
-    const releasePlan: any = currentDependencyMap.plans.find((entry?: any) : any =>
-      entry.directory === RELEASE_ACCEPTANCE_PLAN);
-    const releaseFinal: any = finalValidationBinding(releasePlan, releasePlan.final_validations[0].node_id);
-    requireStructure(releaseFinal.profiles.includes(planProfile), "release-final-profile-mismatch");
-    const checkpointLoader: any = loadCheckpoints ?? (async () : Promise<any> => JSON.parse(await fs.readFile(
-      path.join(repoRoot, "docs/plans/end-to-end-release/Checkpoints.json"),
-      "utf8",
-    )));
-    const checkpoints: any = await checkpointLoader({ repoRoot });
-    requireStructure(Array.isArray(checkpoints), "release-checkpoints-invalid");
-    const finalNode: any = checkpoints.find((entry?: any) : any => entry.id === releaseFinal.node_id);
-    requireStructure(finalNode?.role === "final_validation", "release-final-node-missing");
-    requireReady(finalNode.status === "pending", "release-final-not-pending");
-    const prerequisites: any[] = completedPrerequisiteFrontier(checkpoints, finalNode);
-    for (const node of prerequisites) {
-      requireReady(node.status === "completed", "release-prerequisite-incomplete");
-      if (node.candidate_digest !== undefined && node.candidate_digest !== null) {
-        requireReady(node.candidate_digest === candidateDigest, "release-prerequisite-candidate-mismatch");
-      }
-      if (node.commit?.delivered !== undefined && node.commit?.delivered !== null) {
-        requireReady(node.commit.delivered === candidate.source_revision, "release-prerequisite-source-mismatch");
-      }
-      requireReady(
-        Array.isArray(node.acceptance_criteria) && node.acceptance_criteria.length > 0 &&
-          node.acceptance_criteria.every((criterion?: any) : any => criterion.checked === true),
-        "release-prerequisite-criteria-incomplete",
-      );
-      try {
-        await verifyCheckpointEvidence({ repoRoot, finalNode: node });
-      } catch {
-        throw new PlatformAcceptancePlanReceiptError("release-prerequisite-evidence-stale", "failed");
-      }
-      checkpointBindings.push(Object.freeze({
-        nodeId: node.id,
-        code: node.code,
-        candidateDigest,
-        sourceRevision: candidate.source_revision,
-        checkpointDigest: reportPayloadDigest(node),
-        privacySafe: true,
-      }));
-    }
-    checkpointBindings.sort((left?: any, right?: any) : any => left.code.localeCompare(right.code));
-  }
   bindings.sort((left?: any, right?: any) : any => left.plan.localeCompare(right.plan));
   try {
     await verifyPlan({ repoRoot, writeReport: false, requireCompletedReceipts: false });

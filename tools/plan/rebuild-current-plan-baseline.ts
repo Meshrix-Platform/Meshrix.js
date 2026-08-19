@@ -226,7 +226,6 @@ const TYPING_REMAINDER_OWNED_PATHS: readonly string[] = Object.freeze([
   "packages/foundation/src/workflow/state-machine/verification",
   "packages/foundation/src/workflow/state-machine/work-queue",
   "packages/agents/src/agent-memory",
-  "packages/agents/src/agent-runtime-provider.ts",
   "packages/agents/src/agent-workspace",
   "packages/agents/src/core-change-set-authority.ts",
   "packages/agents/src/workspace-asset-registry",
@@ -934,8 +933,20 @@ export function planNodes()  {
       acceptance: "One sequential scenario proves Service-only direct operation; mandatory downstream and upstream Gateway traversal for efficient Workspace application and Workspace-free direct transit; complete immutable classification and caller non-override; missing-classification denial before any stage; zero cross-mode calls and state effects; built-in and External Gateway production controls at both stages; plugin activation without route change; explicit Console downstream selection affecting both traffic models without changing their application-stage decision; explicit Console upstream selection affecting both traffic models without implicit downstream coupling; semantic equivalence; direction isolation; pinned dual-generation drain; selected-channel failure without fallback to built-in, another channel, Workspace, or application bypass; explicit Console switch-back; attached Model Gateway adapter operation; stable Service-unavailable behavior; complete detachment; maintenance-plugin configuration-only control; ordinary governed plugin-to-Meshrix effects; backend unreachability; and independent reverse shutdown. The current graphs keep optional Workspace application processing, direct transit, the shared dual-Gateway pipeline, Model Gateway Service, and External Gateway Runtime Plugin as distinct capabilities. Meshrix Core owns immutable application-stage classification; Meshrix Core and Console alone own per-direction Gateway selection; External Gateway has no Workspace, application-stage, semantic, selection, model, authorization, credential, settlement, or lifecycle authority. The Service is absent from Meshrix runtime-ui and offline bundles. The repository contains no unconditional MCP Workspace resolution, Gateway-bypassing Agent MCP path, unclassified downstream operation, old Agent Gateway, old nested External Gateway ownership, Core-owned maintenance implementation, compatibility path, or second model runtime.",
       prerequisites: [DELIVERY_ACCEPTANCE_REMAINDER_KEY, DELIVERY_TYPING_REMAINDER_KEY, DELIVERY_FEEDBACK_REMAINDER_KEY],
       target: "tools/server-scripts",
-      commands: ["node tools/server-scripts/verify-model-gateway-service.ts", "npm run server:verify:model-gateway-detachment", "node tools/server-scripts/verify-agent-self-maintenance-runtime.ts", "npm run server:verify:agent-self-maintenance-boundary", "npm run verify:security", "npm test", "npm run repo:local-info-hygiene"],
+      commands: [
+        "node tools/server-scripts/gateway-boundary-final.ts",
+        "npx vitest run tests/acceptance/gateway-boundary-contract.test.ts",
+        "node tools/server-scripts/verify-model-gateway-service.ts",
+        "npm run server:verify:model-gateway-detachment",
+        "node tools/server-scripts/verify-agent-self-maintenance-runtime.ts",
+        "npm run server:verify:agent-self-maintenance-boundary",
+        "npm run verify:security",
+        "npm test",
+        "npm run repo:local-info-hygiene",
+      ],
       paths: ["apps", "packages", "plugins", "services/model-gateway", "tools", "tests", "docs"],
+      ownedPaths: ["tools/server-scripts/gateway-boundary-final.ts"],
+      acceptancePaths: ["tests/acceptance/gateway-boundary-contract.test.ts"],
       decisions: {
         isolation: "one bounded scenario proves Service-only, Meshrix-only mandatory dual-Gateway operation for both application modes, production controls at both stages, plugin availability without route change, Console-selected per-direction switching for both modes, semantic equivalence, dual-generation drain, no implicit fallback or stage bypass, attached adapter operation, maintenance directionality, full detachment, and independent reverse shutdown before one repository regression",
       },
@@ -948,7 +959,7 @@ export function planMarkdown()  {
 
 ## Current Outcome
 
-The only current Meshrix.js plan is one enterprise single-node functional candidate that combines the completed Workspace-backed Agent MCP application-collaboration efficiency baseline with pending delivery-quality closures and one pending mandatory downstream-Gateway, optional-application, upstream-Gateway pipeline, independently deployable Model Gateway Service, default-disabled Meshrix adapter, one-way local Agent self-maintenance plugin, Console-controlled per-direction Gateway selection, and bidirectional External Gateway Runtime Plugin. Delivery-quality work adds provenance, security-critical typing, and faster verification on that same Plan; it is not a new product direction.
+The only current Meshrix.js plan is one enterprise single-node functional candidate that combines the completed Workspace-backed Agent MCP application-collaboration efficiency baseline with completed delivery-quality closures and the completed mandatory downstream-Gateway, optional-application, upstream-Gateway pipeline, independently deployable Model Gateway Service, default-disabled Meshrix adapter, one-way local Agent self-maintenance plugin, Console-controlled per-direction Gateway selection, and bidirectional External Gateway Runtime Plugin. Delivery-quality work added provenance, security-critical typing, and faster verification on that same Plan; it is not a new product direction. GATE-FINAL is the completed terminal candidate decision. A current plan receipt must bind to the claimed repository tree. Native-host, client, cloud, and recovery qualification remain remaining required work after this candidate.
 
 Implemented runtime capacity and concurrency improvements are substrate. They are not a separate current Plan. The current Plan measures their behavior only where the new interaction profile needs fresh evidence or an objectively failing final regression requires repair.
 
@@ -1104,7 +1115,7 @@ EFF-3, EFF-4, EFF-5, EFF-8, EFF-9, and EFF-10 retain their completed dependency 
 The consolidated Plan preserves the facts owned by existing capability plans and migrates only the authorities affected by this split at GATE-CANONICAL:
 
 - completed \`agent-gateway-model-routing\` evidence remains historical input, then its active authority, acceptance machine, and command are replaced by standalone Model Gateway Service evidence, a neutral Meshrix adapter acceptance boundary, and separate routing, admission, and usage-accounting evidence owned only by the Service;
-- completed Agent-to-Service efficiency evidence is retained only for the optional \`workspace_application\` stage that its Workspace workloads exercise; it creates no efficiency or state-model claim for \`gateway_transit\`, and pending Gateway work must prove that both modes still traverse both mandatory Gateway stages;
+- completed Agent-to-Service efficiency evidence is retained only for the optional \`workspace_application\` stage that its Workspace workloads exercise; it creates no efficiency or state-model claim for \`gateway_transit\`, and completed Gateway work proves that both modes still traverse both mandatory Gateway stages;
 - incomplete \`maintenance-agent-collaboration\` is replaced by the independently started \`plugins/agents/meshrix-self-maintenance\` client-peer artifact; its Console/MCP parity and internal Host-port requirements are removed and replaced by proof that one local configuration file is its only control input and no Meshrix surface can call, observe, schedule, cancel or configure it;
 - \`plugin-runtime-and-module-system\` rejects the client-peer maintenance artifact from runtime activation and retains process-isolated runtime-plugin confinement plus opaque-origin Console isolation for actual Meshrix Runtime Plugins;
 - \`operation-permission-authorization\` gains local pre-egress authorization without permit forwarding plus sink reauthorization after queueing, approval, retry, cancellation, and recovery;
@@ -1156,7 +1167,7 @@ export function capabilities()  {
       disclosure: "examined",
       touch: "in_scope",
       source_files: [`docs/plans/${ROOT}/Plan.md`],
-      description: "Retained completed baseline using shared-document interaction mechanics to reduce the optional Workspace-backed Agent MCP application-stage cost; pending Gateway work must place that stage between the mandatory downstream and upstream Gateway layers.",
+      description: "Retained completed baseline using shared-document interaction mechanics to reduce the optional Workspace-backed Agent MCP application-stage cost; completed Gateway work places that stage between the mandatory downstream and upstream Gateway layers.",
     },
     {
       key: "meshrix/functional-convergence/model-gateway",

@@ -13,7 +13,10 @@ describe("Gateway boundary contract acceptance", () => {
       mandatoryStageOrders: 8,
       transitWorkspaceCalls: 0,
       consoleDirectionSwitches: 4,
-      pinnedDrain: { downstreamGeneration: 1, upstreamGeneration: 0 },
+      pinnedDrain: {
+        inFlight: { downstreamGeneration: 1, upstreamGeneration: 0 },
+        afterUpstreamSwitch: { downstreamGeneration: 1, upstreamGeneration: 1 }
+      },
       hiddenFallbackCalls: 0,
       modelGateway: {
         disabledOperations: 0,

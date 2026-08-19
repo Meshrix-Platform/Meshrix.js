@@ -390,7 +390,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
     }
   });
 
-  it("names delivery-quality closures and the thin-substrate split in operator docs", async () : Promise<any> => {
+  it("names delivery-quality closures and the completed candidate in operator docs", async () : Promise<any> => {
     const [status, whatsNext] = await Promise.all([
       fs.readFile(path.join(REPO_ROOT, "docs/STATUS.md"), "utf8"),
       fs.readFile(path.join(REPO_ROOT, "docs/WHATS-NEXT.md"), "utf8"),
@@ -399,9 +399,10 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(document).toContain("provenance");
       expect(document).toContain("security-critical typing");
       expect(document).toContain("faster verification");
-      expect(document).toMatch(/thin substrate blocks GATE-CONTRACT/i);
-      expect(document).toMatch(/remainder joins GATE-FINAL/i);
-      expect(document).not.toMatch(/engineering (work )?is (already )?(complete|done)/iu);
+      expect(document).toMatch(/thin substrate blocked GATE-CONTRACT/i);
+      expect(document).toMatch(/remainder joined GATE-FINAL/i);
+      expect(document).toMatch(/engineering for this candidate is complete pending a\s+current GATE-FINAL receipt/i);
+      expect(document).toMatch(/FutureGoals/);
     }
   });
 
