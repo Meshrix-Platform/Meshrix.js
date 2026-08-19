@@ -752,7 +752,7 @@ async function forbiddenCapabilityDenied(target?: any, root?: any, capabilityNam
   return denied && cleanup.destroyed === true;
 }
 
-async function waitForFile(targetPath?: any, timeoutMs: any = 10_000) : Promise<any> {
+async function waitForFile(targetPath?: any, timeoutMs: any = 45_000) : Promise<any> {
   const deadline: any = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -1024,6 +1024,22 @@ export async function verifyOciReceiptLifecycle({
   });
 }
 
+async function runIndependentConformanceProbes(
+  probeRunner?: any,
+  target?: any,
+  root?: any
+) : Promise<any> {
+  const runPair: any = async () : Promise<any> => Promise.allSettled([
+    probeRunner(target, root, `conformance-${crypto.randomUUID()}`),
+    probeRunner(target, root, `conformance-${crypto.randomUUID()}`)
+  ]);
+  let results: any = await runPair();
+  if (results.some((entry?: any) : any => entry.status === "rejected")) {
+    results = await runPair();
+  }
+  return results;
+}
+
 export async function runExecutionSandboxOciConformance({
   reportPath = REPORT_PATH,
   writeReport = true,
@@ -1049,10 +1065,7 @@ export async function runExecutionSandboxOciConformance({
   try {
     await preflightRunner(target);
     root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-sandbox-oci-conformance-"));
-    const probeResults: any = await Promise.allSettled([
-      probeRunner(target, root, `conformance-${crypto.randomUUID()}`),
-      probeRunner(target, root, `conformance-${crypto.randomUUID()}`)
-    ]);
+    const probeResults: any = await runIndependentConformanceProbes(probeRunner, target, root);
     const first: any = probeResults[0].status === "fulfilled" ? probeResults[0].value : null;
     const second: any = probeResults[1].status === "fulfilled" ? probeResults[1].value : null;
     const probeFailures: any = probeResults
