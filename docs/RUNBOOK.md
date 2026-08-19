@@ -277,7 +277,10 @@ npm run release:package-server-source
 
 The command writes to `build/packages`. This is a source package: it excludes
 installed dependencies and container images, so a target host still needs
-network access while building the container image.
+network access while building the remaining npm artifacts. It includes the
+authorized vendored Pactium tarball under `vendor/` so `Dockerfile` `COPY vendor`
+and `npm ci` can resolve `file:vendor/pactium-*.tgz` without a public npmjs hit
+for that package.
 
 Set `MESHRIX_HOST_PORT` to change the loopback host port. The Compose contract uses
 that same value for bootstrap, advertised, and active service URLs while the
@@ -783,17 +786,11 @@ Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
 the remaining Real-Machine Verification Workflows and cannot block publication.
 
-Meshrix.js `0.0.1` has an exact registry dependency on `pactium@0.7.0`. Publish
-that Pactium version first and confirm registry visibility before creating the
-Meshrix.js tag:
-
-```bash
-npm view pactium@0.7.0 version --registry=https://registry.npmjs.org/
-```
-
-The Meshrix.js clean-install and container gates intentionally fail while that
-version is absent. This is a functional publication ordering requirement, not
-a client or environment support condition.
+Meshrix.js `0.0.1` consumes exact file-vendored `pactium@0.8.0` from
+`vendor/pactium-0.8.0.tgz`. The server source archive and container build copy
+that tarball; they must not require a live npmjs fetch for Pactium. Public
+publication of Meshrix.js `0.0.1` remains remaining required work and is a
+separate npm-channel decision.
 
 The workflow stages a multi-platform container and compares the intended OCI
 manifest digest with the GHCR version tag before and after creating that tag.

@@ -9,6 +9,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { scanPublicArtifact } from "./lib/public-artifact-boundary.ts";
+import {
+  AUTHORIZED_VENDORED_PACKAGE_ROOT,
+  AUTHORIZED_VENDORED_TARBALL_PATTERN
+} from "./lib/source-package-contract.ts";
 import { resolveServerSourcePackageIdentity } from "./package-server-source.ts";
 
 const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -376,6 +380,15 @@ try {
     Array.isArray(manifest?.copiedRoots) &&
     manifest.copiedRoots.includes("plugins") &&
     packageCliReport?.source?.pluginSourceRootIncluded === true;
+  const vendoredSourceRootReady: any =
+    Array.isArray(manifest?.copiedRoots) &&
+    manifest.copiedRoots.includes(AUTHORIZED_VENDORED_PACKAGE_ROOT) &&
+    Array.isArray(manifest?.files) &&
+    manifest.files.some((entry?: any) : any =>
+      AUTHORIZED_VENDORED_TARBALL_PATTERN.test(String(entry?.path || ""))
+    ) &&
+    packageCliReport?.source?.vendoredSourceRootIncluded === true &&
+    packageCliReport?.source?.authorizedVendoredTarballIncluded === true;
   const portableSourceTargetReady: any =
     manifest?.packagingPlan?.target === "portable-source" &&
     packageCliReport?.source?.target === "portable-source";
@@ -438,6 +451,7 @@ try {
         reproducibleArchiveReady &&
         forceOutputPreserved &&
         pluginSourceRootReady &&
+        vendoredSourceRootReady &&
         portableSourceTargetReady &&
         sourceReady &&
         packagedPluginRuntimeReady &&
@@ -454,6 +468,7 @@ try {
       reproducibleArchiveReady,
       forceOutputPreserved,
       pluginSourceRootReady,
+      vendoredSourceRootReady,
       portableSourceTargetReady,
       packagedPluginCount,
       sourceVerifierReady: sourceReady,

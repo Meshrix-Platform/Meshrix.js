@@ -1,6 +1,11 @@
+export const AUTHORIZED_VENDORED_PACKAGE_ROOT = "vendor";
+export const AUTHORIZED_VENDORED_TARBALL_PATTERN: RegExp =
+  /^vendor\/pactium-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.tgz$/u;
+
 export const SOURCE_PACKAGE_ROOTS: readonly string[] = Object.freeze([
   "packages",
   "plugins",
+  AUTHORIZED_VENDORED_PACKAGE_ROOT,
   "apps/server",
   "apps/console",
   "content",
