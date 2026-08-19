@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
+import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync: any = promisify(execFile);
+const VENDORED_FILE_SPEC: any = /^file:vendor\/([^/]+)-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.tgz$/u;
 
 function packageNameFromLockPath(packagePath?: any) : any {
   const marker: any = "node_modules/";
@@ -82,6 +88,64 @@ function parseRegistryPackageRequest(pathname?: any) : any {
   return { name: raw.slice(0, slash), version: raw.slice(slash + 1) };
 }
 
+function rewriteFileVendorSpecs(dependencies?: any) : any {
+  if (!dependencies || typeof dependencies !== "object") return false;
+  let changed: any = false;
+  for (const [name, spec] of Object.entries(dependencies)) {
+    const match: any = String(spec).match(VENDORED_FILE_SPEC);
+    if (!match) continue;
+    const unscoped: any = String(name).includes("/")
+      ? String(name).slice(String(name).lastIndexOf("/") + 1)
+      : String(name);
+    if (match[1] !== unscoped) continue;
+    dependencies[name] = match[2];
+    changed = true;
+  }
+  return changed;
+}
+
+export async function rewritePackedVendoredFileDependencies(tarballPath?: any) : Promise<any> {
+  const workRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-pack-rewrite-"));
+  try {
+    await execFileAsync("tar", ["-xzf", tarballPath, "-C", workRoot]);
+    const manifestPath: any = path.join(workRoot, "package", "package.json");
+    const manifest: any = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    const changed: any = ["dependencies", "optionalDependencies", "peerDependencies"]
+      .map((field?: any) : any => rewriteFileVendorSpecs(manifest[field]))
+      .some(Boolean);
+    if (!changed) return false;
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await execFileAsync("tar", ["-czf", tarballPath, "-C", workRoot, "package"]);
+    return true;
+  } finally {
+    await fs.rm(workRoot, { recursive: true, force: true });
+  }
+}
+
+function registerLockPackage(
+  packages?: any,
+  tarballs?: any,
+  name?: any,
+  version?: any,
+  meta?: any,
+  artifact?: any
+) : any {
+  tarballs.set(artifact.key, artifact);
+  const versions: any = packages.get(name) || new Map<any, any>();
+  const existing: any = versions.get(version);
+  const metadata: any = registryVersionMetadata(name, meta, artifact);
+  if (existing) {
+    assert.equal(
+      existing.dist.integrity,
+      metadata.dist.integrity,
+      "npm_package_lock_version_integrity_conflict"
+    );
+  } else {
+    versions.set(version, metadata);
+  }
+  packages.set(name, versions);
+}
+
 async function extraTarballMetadata(tarballPath?: any) : Promise<any> {
   const sha512: any = createHash("sha512");
   const sha1: any = createHash("sha1");
@@ -113,43 +177,52 @@ export async function createLockBackedNpmRegistry({
   const lock: any = JSON.parse(await fs.readFile(lockPath, "utf8"));
   const packages: any = new Map<any, any>();
   const tarballs: any = new Map<any, any>();
+  const lockFileDirectory: any = path.dirname(path.resolve(lockPath));
   for (const [packagePath, meta] of (Object.entries(lock.packages || {}) as [string, any][])) {
     const resolved: any = String(meta?.resolved || "");
     const integrity: any = String(meta?.integrity || "");
-    if (!resolved || !integrity || !/^https?:/u.test(resolved)) continue;
-    const resolvedUrl: any = new URL(resolved);
-    assert.equal(resolvedUrl.origin, "https://registry.npmjs.org", "npm_package_lock_registry_untrusted");
+    if (!resolved || !integrity) continue;
     const name: any = String(meta.name || packageNameFromLockPath(packagePath));
     const version: any = String(meta.version || "");
     assert.ok(name && version, "npm_package_lock_metadata_incomplete");
-    const cached: any = cacheArtifactPath(cacheRoot, integrity);
-    let verified: any;
-    try {
-      verified = await verifyCachedArtifact(cached.path, cached.expectedDigest);
-    } catch (error: any) {
-      if (meta.optional === true && error?.code === "ENOENT") continue;
-      throw error;
-    }
-    const artifact: Record<string, any> = {
-      key: cached.key,
-      path: cached.path,
-      size: verified.size,
-      sha1: verified.sha1
-    };
-    tarballs.set(artifact.key, artifact);
-    const versions: any = packages.get(name) || new Map<any, any>();
-    const existing: any = versions.get(version);
-    const metadata: any = registryVersionMetadata(name, meta, artifact);
-    if (existing) {
-      assert.equal(
-        existing.dist.integrity,
-        metadata.dist.integrity,
-        "npm_package_lock_version_integrity_conflict"
-      );
+    let artifact: Record<string, any>;
+    if (resolved.startsWith("file:")) {
+      const tarballPath: any = path.resolve(lockFileDirectory, resolved.slice("file:".length));
+      const cached: any = cacheArtifactPath(cacheRoot, integrity);
+      let verified: any;
+      try {
+        verified = await verifyCachedArtifact(tarballPath, cached.expectedDigest);
+      } catch (error: any) {
+        if (meta.optional === true && error?.code === "ENOENT") continue;
+        throw error;
+      }
+      artifact = {
+        key: cached.key,
+        path: tarballPath,
+        size: verified.size,
+        sha1: verified.sha1
+      };
+    } else if (/^https?:/u.test(resolved)) {
+      const resolvedUrl: any = new URL(resolved);
+      assert.equal(resolvedUrl.origin, "https://registry.npmjs.org", "npm_package_lock_registry_untrusted");
+      const cached: any = cacheArtifactPath(cacheRoot, integrity);
+      let verified: any;
+      try {
+        verified = await verifyCachedArtifact(cached.path, cached.expectedDigest);
+      } catch (error: any) {
+        if (meta.optional === true && error?.code === "ENOENT") continue;
+        throw error;
+      }
+      artifact = {
+        key: cached.key,
+        path: cached.path,
+        size: verified.size,
+        sha1: verified.sha1
+      };
     } else {
-      versions.set(version, metadata);
+      continue;
     }
-    packages.set(name, versions);
+    registerLockPackage(packages, tarballs, name, version, meta, artifact);
   }
   assert.ok(packages.size > 0 && tarballs.size > 0, "npm_package_lock_registry_empty");
   for (const extra of Array.isArray(extraTarballs) ? extraTarballs : []) {

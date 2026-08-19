@@ -70,6 +70,25 @@ async function waitFor(predicate, timeoutMs = 2_000) {
   throw new Error("test_wait_timeout");
 }
 
+async function removeTempDir(dirPath) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await fs.rm(dirPath, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100
+      });
+      return;
+    } catch (error) {
+      if (attempt === 7 || !["EBUSY", "EPERM", "ENOTEMPTY"].includes(error?.code)) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+}
+
 test("closed schema rejects missing, extra, and secret-bearing configuration", () => {
   assert.throws(() => assertLocalConfig({ ...config(), listener: 7228 }), /closed_schema/);
   const missing = config();
@@ -83,7 +102,7 @@ test("closed schema rejects missing, extra, and secret-bearing configuration", (
 
 test("missing configuration is inert and opens no outbound request", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   let calls = 0;
   const runtime = new SelfMaintenanceRuntime({ ...local, pollIntervalMs: 20, fetchImpl: async () => { calls += 1; return response({}); } });
   await runtime.start();
@@ -95,7 +114,7 @@ test("missing configuration is inert and opens no outbound request", async (t) =
 
 test("valid atomic revision calls Model Gateway directly before ordinary governed Meshrix execution", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   await replaceConfig(local.configPath, config());
   const requests = [];
   const runtime = new SelfMaintenanceRuntime({ ...local, pollIntervalMs: 20, fetchImpl: async (url, init) => {
@@ -126,7 +145,7 @@ test("valid atomic revision calls Model Gateway directly before ordinary governe
 
 test("forged or out-of-policy model proposal causes zero Meshrix effect call", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   await replaceConfig(local.configPath, config());
   const paths = [];
   const runtime = new SelfMaintenanceRuntime({ ...local, pollIntervalMs: 20, fetchImpl: async (url) => {
@@ -147,7 +166,7 @@ test("forged or out-of-policy model proposal causes zero Meshrix effect call", a
 
 test("in-place mutation fails closed for new admission", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   await replaceConfig(local.configPath, config());
   let calls = 0;
   const runtime = new SelfMaintenanceRuntime({ ...local, pollIntervalMs: 20, fetchImpl: async () => {
@@ -167,7 +186,7 @@ test("in-place mutation fails closed for new admission", async (t) => {
 
 test("a running old-revision run remains pinned and drains after replacement", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   await replaceConfig(local.configPath, config("rev-old"));
   let releaseModel;
   const modelResult = new Promise((resolve) => { releaseModel = resolve; });
@@ -193,7 +212,7 @@ test("a running old-revision run remains pinned and drains after replacement", a
 
 test("private journal is bounded metadata and omits credentials, prompts, inputs, and results", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   await replaceConfig(local.configPath, config());
   const runtime = new SelfMaintenanceRuntime({ ...local, pollIntervalMs: 20, fetchImpl: async (url) =>
     new URL(url).pathname === "/v1/chat/completions"
@@ -213,7 +232,7 @@ test("private journal is bounded metadata and omits credentials, prompts, inputs
 
 test("a removed schedule cancels queued work while the running revision drains", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   await replaceConfig(local.configPath, config("rev-old"));
   await fs.mkdir(local.storageRoot, { recursive: true, mode: 0o700 });
   const oldConfig = config("rev-old");
@@ -248,7 +267,7 @@ test("a removed schedule cancels queued work while the running revision drains",
 
 test("durable queued work recovers with its pinned policy and completes", async (t) => {
   const local = await fixture();
-  t.after(() => fs.rm(local.root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(local.root));
   const active = config("rev-recovery", { schedules: [{ id: "schedule-1", cron: "0 0 31 2 *" }] });
   await replaceConfig(local.configPath, active);
   await fs.mkdir(local.storageRoot, { recursive: true, mode: 0o700 });

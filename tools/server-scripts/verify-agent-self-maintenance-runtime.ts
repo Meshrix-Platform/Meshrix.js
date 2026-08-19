@@ -185,6 +185,26 @@ async function waitFor(predicate: () => Promise<boolean> | boolean, timeoutMs = 
   throw new Error("test_wait_timeout");
 }
 
+async function removeTempDir(dirPath: string): Promise<void> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await fs.rm(dirPath, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100
+      });
+      return;
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (attempt === 7 || !["EBUSY", "EPERM", "ENOTEMPTY"].includes(code || "")) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+}
+
 async function assertConfigOnlyScenario(): Promise<JsonRecord> {
   const local = await fixture();
   try {
@@ -212,7 +232,7 @@ async function assertConfigOnlyScenario(): Promise<JsonRecord> {
       outboundCallsWhileMissing: calls
     };
   } finally {
-    await fs.rm(local.root, { recursive: true, force: true });
+    await removeTempDir(local.root);
   }
 }
 
@@ -256,7 +276,7 @@ async function assertOneWayMeshrixControlScenario(): Promise<JsonRecord> {
       meshrixRuntimeImports: 0
     };
   } finally {
-    await fs.rm(local.root, { recursive: true, force: true });
+    await removeTempDir(local.root);
   }
 }
 
@@ -291,7 +311,7 @@ async function assertDirectModelGatewayScenario(): Promise<JsonRecord> {
       meshrixCallsAfterDenial: 0
     };
   } finally {
-    await fs.rm(local.root, { recursive: true, force: true });
+    await removeTempDir(local.root);
   }
 }
 
@@ -333,7 +353,7 @@ async function assertBackendUnreachableScenario(): Promise<JsonRecord> {
       cancellationOrRecovery: true
     };
   } finally {
-    await fs.rm(local.root, { recursive: true, force: true });
+    await removeTempDir(local.root);
   }
 }
 

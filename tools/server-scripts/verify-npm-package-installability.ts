@@ -8,7 +8,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
-import { createLockBackedNpmRegistry } from "./lib/lock-backed-npm-registry.ts";
+import {
+  createLockBackedNpmRegistry,
+  rewritePackedVendoredFileDependencies
+} from "./lib/lock-backed-npm-registry.ts";
 import { assertNoLeak } from "./lib/report-evidence-safety.ts";
 import { discoverReleaseSet } from "./publish-release-set.ts";
 
@@ -396,6 +399,9 @@ try {
     const filename: any = String(artifact.filename || "");
     assert.ok(filename && path.basename(filename) === filename, "npm_package_pack_filename_invalid");
     tarballPaths.push(path.join(packDirectory, filename));
+  }
+  for (const tarballPath of tarballPaths) {
+    await rewritePackedVendoredFileDependencies(tarballPath);
   }
   const rootArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === rootPackage.name);
   const connectorArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === "meshrix-mcp-connector");

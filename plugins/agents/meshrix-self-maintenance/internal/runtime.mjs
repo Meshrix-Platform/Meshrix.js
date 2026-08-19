@@ -22,6 +22,7 @@ export class SelfMaintenanceRuntime {
   #daily = new Map();
   #admittedIds = new Set();
   #started = false;
+  #inFlightTicks = new Set();
 
   constructor({
     configPath = DEFAULT_CONFIG_PATH,
@@ -45,15 +46,27 @@ export class SelfMaintenanceRuntime {
     this.#queue = (await this.#state.loadQueue()).filter((item) => item && ["queued", "running"].includes(item.state))
       .slice(0, MAX_QUEUE_ITEMS).map((item) => ({ ...item, state: "queued", recovered: true }));
     for (const item of this.#queue) this.#admittedIds.add(item.runId);
-    this.#timer = setInterval(() => void this.#tick(), this.#pollIntervalMs);
-    void this.#tick();
+    this.#timer = setInterval(() => void this.#runTick(), this.#pollIntervalMs);
+    void this.#runTick();
   }
 
   async close() {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
     this.#started = false;
+    await Promise.all([...this.#inFlightTicks]);
     while (this.#running) await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  async #runTick() {
+    if (!this.#started) return;
+    const task = this.#tick();
+    this.#inFlightTicks.add(task);
+    try {
+      await task;
+    } finally {
+      this.#inFlightTicks.delete(task);
+    }
   }
 
   async #tick() {
