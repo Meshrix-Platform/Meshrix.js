@@ -16,6 +16,7 @@ import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import { upstreamOperationCapabilityId } from "../../packages/agents/src/upstream-gateway/operation-capability.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
+import { runMcpGatewayLoadPhase } from "./lib/mcp-gateway-load-phase.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./lib/upstream-gateway-verifier-publication.ts";
 
@@ -55,13 +56,6 @@ let token: any = "";
 let fixtureHits: any = 0;
 let processIdentityKeyPair: any = null;
 let clientIdentityPackage: any = null;
-
-function percentile(values?: any, percentileValue?: any) : any {
-  if (values.length === 0) return 0;
-  const sorted: any = [...values].sort((left?: any, right?: any) : any => left - right);
-  const index: any = Math.min(sorted.length - 1, Math.floor((percentileValue / 100) * sorted.length));
-  return Number(sorted[index].toFixed(2));
-}
 
 function closeServer(target?: any) : any {
   return new Promise((resolve?: any) : any => {
@@ -270,60 +264,14 @@ function createSafetyMonitor() : any {
   };
 }
 
-async function runPhase(name?: any, makeBody?: any, safetyMonitor?: any, { durationMs: phaseDurationMs = options.durationMs }: Record<string, any> = {}) : Promise<any> {
-  const startedAt: any = performance.now();
-  const deadline: any = startedAt + phaseDurationMs;
-  const latencies: any[] = [];
-  const stats: Record<string, any> = {
+async function runPhase(name?: any, makeBody?: any, safetyMonitor?: any) : Promise<any> {
+  return runMcpGatewayLoadPhase({
     name,
-    issued: 0,
-    completed: 0,
-    ok: 0,
-    failed: 0,
-    firstErrorCode: "",
-    safetyStop: false,
-    safetyReason: ""
-  };
-
-  async function worker(workerId?: any) : Promise<any> {
-    while (stats.issued < options.requests && performance.now() < deadline) {
-      const safety: any = safetyMonitor.check();
-      if (safety.triggered) {
-        stats.safetyStop = true;
-        stats.safetyReason = safety.reason;
-        return;
-      }
-      const id: any = stats.issued + 1;
-      stats.issued += 1;
-      const before: any = performance.now();
-      try {
-        const response: any = await callMcp(makeBody(id, workerId));
-        const latency: any = performance.now() - before;
-        latencies.push(latency);
-        stats.completed += 1;
-        if (response.status === 200 && !response.payload?.error) {
-          stats.ok += 1;
-        } else {
-          stats.failed += 1;
-          stats.firstErrorCode ||= String(response.payload?.error?.data?.code || response.payload?.error?.code || response.status);
-        }
-      } catch (error: any) {
-        stats.completed += 1;
-        stats.failed += 1;
-        stats.firstErrorCode ||= error?.name || "request_failed";
-      }
-    }
-  }
-
-  await Promise.all(Array.from({ length: options.concurrency }, (_?: any, index?: any) : any => worker(index)));
-  const durationMs: any = Math.max(1, performance.now() - startedAt);
-  return {
-    ...stats,
-    durationMs: Number(durationMs.toFixed(2)),
-    requestsPerSecond: Number(((stats.completed * 1000) / durationMs).toFixed(2)),
-    p50Ms: percentile(latencies, 50),
-    p95Ms: percentile(latencies, 95)
-  };
+    requestTarget: options.requests,
+    concurrency: options.concurrency,
+    safetyCheck: () : Record<string, any> => safetyMonitor.check(),
+    invoke: (id?: any, workerId?: any) : Promise<any> => callMcp(makeBody(id, workerId))
+  });
 }
 
 function assertNoReportLeak(report?: any) : any {
@@ -396,8 +344,7 @@ try {
   const healthPhase: any = await runPhase(
     "downstream-mcp-system-health",
     (id?: any) : any => mcpRequest(id, "meshrix.discovery", "system.health", {}),
-    safetyMonitor,
-    { durationMs: Math.max(options.durationMs, 15_000) }
+    safetyMonitor
   );
   const gatewayPhase: any = await runPhase(
     "upstream-gateway-forward-through-mcp",
@@ -406,8 +353,7 @@ try {
       operationKey: "echo",
       query: { i: String(id) }
     }),
-    safetyMonitor,
-    { durationMs: Math.max(options.durationMs, options.requests * 500) }
+    safetyMonitor
   );
 
   const phases: any[] = [healthPhase, gatewayPhase];
