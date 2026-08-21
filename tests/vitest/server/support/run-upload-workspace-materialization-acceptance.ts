@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const vitestPath: any = fileURLToPath(new URL(
-  "../../../../node_modules/vitest/vitest.ts",
+  "../../../../node_modules/vitest/vitest.mjs",
   import.meta.url
 ));
 const testPath: any =
@@ -45,7 +45,7 @@ if (
   new Set<any>(runtimeNames).size !== EXPECTED_TEST_COUNT ||
   collected.some((entry?: any) : any =>
     path.resolve(String(entry?.file || "")) !== expectedTestPath ||
-    entry?.projectName !== "parallel" ||
+    entry?.projectName !== "serial" ||
     !String(entry?.name || "").startsWith(
       "opaque upload custody to governed workspace materialization > "
     )
