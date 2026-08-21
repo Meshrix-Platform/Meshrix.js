@@ -57,11 +57,11 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
-The [What's Next register](WHATS-NEXT.md) names the sole current functional
-candidate, including the efficiency and Gateway-boundary closures, without
-duplicating execution detail. It summarizes tracked facts without replacing
-the owning implementation, architecture decision, local execution plan,
-verifier, acceptance receipt, or release authority.
+The [What's Next register](WHATS-NEXT.md) owns the current production-use
+closure: fix concrete defects, pass functional acceptance once, deploy the
+accepted candidate, and iterate from real use. Historical plans, publication
+channels, compatibility matrices, and environment-qualification programs do
+not block this operational outcome.
 
 ## Project Documents
 
@@ -97,7 +97,7 @@ verifier, acceptance receipt, or release authority.
 | Repository-local plugin implementation contract | [protocols/PLUGIN-IMPLEMENTATION-CONTRACT.md](protocols/PLUGIN-IMPLEMENTATION-CONTRACT.md) |
 | Format conversion API | [protocols/convert-api.md](protocols/convert-api.md) |
 | Entity configuration | [ENTITY-CONFIG-LAYOUT.md](ENTITY-CONFIG-LAYOUT.md) |
-| Compatibility | [COMPATIBILITY.md](COMPATIBILITY.md) |
+| Compatibility reference (informational, not a deployment gate) | [COMPATIBILITY.md](COMPATIBILITY.md) |
 | Examples | [examples/README.md](examples/README.md) |
 | Implemented decisions | [adrs/README.md](adrs/README.md) |
 

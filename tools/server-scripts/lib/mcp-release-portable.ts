@@ -33,6 +33,15 @@ const MAX_NODE_METADATA_BYTES: any = 1024 * 1024;
 const MAX_NODE_RUNTIME_ARCHIVE_BYTES: any = 128 * 1024 * 1024;
 const PINNED_DOWNLOAD_TIMEOUT_MS: any = 300000;
 const PINNED_DOWNLOAD_RETRY_DELAYS_MS: readonly any[] = Object.freeze([250, 750]);
+const PINNED_DOWNLOAD_RETRY_HTTP_STATUSES: ReadonlySet<number> = new Set<any>([
+  408,
+  425,
+  429,
+  500,
+  502,
+  503,
+  504
+]);
 let nodeRuntimeLockPromise: any = null;
 const activePinnedDownloads: any = new Map<any, any>();
 
@@ -248,7 +257,11 @@ async function downloadPinnedFileOnce(contract?: any, fetchImpl?: any) : Promise
       signal: AbortSignal.timeout(PINNED_DOWNLOAD_TIMEOUT_MS)
     });
     if (response.status !== 200 || !response.body || response.redirected === true) {
-      throw new Error("node_runtime_pinned_download_failed");
+      const error: Error & Record<string, any> = new Error("node_runtime_pinned_download_failed");
+      if (PINNED_DOWNLOAD_RETRY_HTTP_STATUSES.has(response.status)) {
+        error.code = "NODE_RUNTIME_TRANSIENT_HTTP_STATUS";
+      }
+      throw error;
     }
     const contentLength: any = response.headers?.get?.("content-length");
     if (contentLength !== null && contentLength !== undefined) {
@@ -307,7 +320,8 @@ function isRetryablePinnedDownloadError(error?: any) : any {
     "EAI_AGAIN",
     "ETIMEDOUT",
     "UND_ERR_CONNECT_TIMEOUT",
-    "UND_ERR_SOCKET"
+    "UND_ERR_SOCKET",
+    "NODE_RUNTIME_TRANSIENT_HTTP_STATUS"
   ].includes(code)) {
     return true;
   }

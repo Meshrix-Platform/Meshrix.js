@@ -1,40 +1,37 @@
 # Meshrix.js Status
 
-Status assessed on 2026-08-20.
+Status assessed on 2026-08-21.
 
-This document owns current product status. It separates intent,
-implementation, verification, release, and support. Source, a Plan, a command,
-a prior report, or a changelog entry cannot satisfy a different dimension by
-itself.
+This document records whether the current product can be used. Product
+completion is decided by working runtime behavior, the functional acceptance
+gate, and a healthy deployed instance. Publication channels, compatibility
+matrices, and environment-qualification programs do not block deployment or
+ordinary use.
 
-## Product-wide status
+## Current product state
 
 | Dimension | Current status |
 | --- | --- |
-| **Intent** | The Functional Convergence Plan is closed. Its enterprise single-node candidate uses downstream MCP → downstream Gateway → optional application stage → upstream Gateway → upstream Service. Every downstream operation declares immutable `trafficModel: workspace_application | gateway_transit`; this field selects only whether the middle Workspace application stage runs and never bypasses either Gateway. The downstream and upstream Gateways each have one built-in channel and optional External Gateway choices, selected independently by explicit Console action. Both traffic models receive the selected Gateway's bounded load distribution, rate and concurrency admission, health and circuit handling, overload degradation, timeout, cancellation, streaming, and backpressure. External Gateway owns neither application-stage choice, Workspace, Meshrix semantics nor route selection. Plugin activation changes availability only. The candidate also includes one independently deployable Model Gateway HTTP Service, a default-disabled stateless Meshrix adapter, a one-way local Agent self-maintenance plugin, plugin confinement, provenance, security-critical typing, and faster verification. All 24 Plan nodes, including GATE-FINAL, are complete. Publication and environment qualification are tracked separately and do not reopen or gate this Plan. |
-| **Implementation** | Server, Console, Operation Permission, Workspace collaboration, storage, jobs, Plugin Host, the dual-Gateway Agent MCP pipeline, Meshrix downstream MCP and upstream-Service paths, the External Gateway Runtime Plugin, the standalone Model Gateway Service, the default-disabled Meshrix adapter, and the local Agent self-maintenance plugin exist. Old Agent Gateway and Core-owned Maintenance Agent roots are gone. All registered operations declare `trafficModel`. Downstream MCP fail-closes without `agentMcpGatewayPipeline` and without a descriptor traffic model. `resolveMcpWorkspaceInput` runs only inside the optional `workspace_application` stage. |
-| **Verification** | GATE-FINAL and its accepted Plan receipt complete the terminal candidate decision. The GATE-FINAL oracle is an in-process fixture pipeline with built-in and direct External channels; it is not live Caddy/Nginx or a separate OS identity. Project-level `npm run verify:acceptance` remains the independent Functional Release Gate when that claim is requested. Native-host, client, and cloud qualification are non-gating follow-up outside the closed Plan. |
-| **Release** | `0.0.1` remains the declared target. Meshrix `runtime-ui` retains one public origin and does not embed the Model Gateway Service or a second backend port. The Service requires its own independently built OCI artifact and evidence. Live `npm view` against `https://registry.npmjs.org/` on 2026-08-19 returned E404 for `meshrix.js@*`, `@meshrix/agents@*`, `@meshrix/foundation@*`, `@meshrix/contracts@*`, and `meshrix-mcp-connector@*`. That unpublished set is remaining npm-channel work outside the closed Plan. `npm-package-installability` is a packed-tarball plus lock-backed offline simulation and must not treat a public-registry hit as success. Tag, package set, OCI manifests, GitHub Release, and hosted deployment still require immutable same-candidate channel evidence for their own release claims; none is a Functional Convergence closure condition. Branch promotion is three-stage: `nightly` remains direct-write feedback, `stable` admits only the exact complete-gate candidate, and `release` admits only that candidate after the `ubuntu-24.04` external runtime-ui deployment verification; tag publication requires the tag commit to equal the release tip and the release deployment authority to exist for that exact commit. |
-| **Support** | Native-host, client, cloud, cross-host, and recovery qualification are independently tracked support work outside the closed Plan. They do not change its GATE-FINAL result. |
+| **Product direction** | The previous Functional Convergence work is complete. The only current objective is production use: close concrete defects, pass functional acceptance once, deploy the accepted Server + Web Console candidate, and iterate from real usage. |
+| **Implementation** | Server, Web Console, Operation Permission, Workspace collaboration, storage, jobs, Plugin Host, downstream and upstream Gateway stages, the standalone Model Gateway Service, the External Gateway Runtime Plugin, and the local Agent self-maintenance plugin are implemented. |
+| **Verification** | `npm test` is the core public regression. `npm run verify:acceptance` is the single product-level functional gate. Focused checks are used only to repair concrete failures before that final gate. |
+| **Operation** | A usable deployment is one running `runtime-ui` process with one public origin: Console at `<server-url>/`, API at `<server-url>/api/`, and health at `<server-url>/api/healthz`. The current closure is incomplete until that instance is running and a real authenticated operation succeeds. |
 
-## Current candidate
+## Production-use closure
 
-| Capability | Current fact | Non-gating follow-up outside the closed Plan |
-| --- | --- | --- |
-| Workspace application collaboration efficiency | Named warm-profile comparison exists beside Connector Working View, Core Change Set authority, explicit Effect Commands, Workspace reference migration, and one plan-final receipt. The optional `workspace_application` stage sits between the mandatory downstream and upstream Gateways. | Native-host, client, cloud, and recovery qualification remain FutureGoals |
-| Model Gateway Service | `services/model-gateway` is one independently startable Service with its own HTTP API, direct-client authentication, model/provider configuration, credentials, persistence, admission, pricing, usage, settlement and OCI artifact. A default-disabled stateless Meshrix adapter uses explicit `serviceRef`. | Service OCI publication and hosted operation remain after this candidate |
-| Agent MCP Gateway pipeline | Every downstream descriptor declares `workspace_application` or `gateway_transit`. Missing, conflicting or caller-overridden classification fails before any stage. Both modes traverse downstream Gateway → optional application → upstream Gateway. | None for this candidate |
-| Workspace-free direct transit | `gateway_transit` bypasses only Workspace resolution, Working View, Change Set, Resource projection, cache, materialization and checkpoint behavior while still traversing both selected Gateway channels | None for this candidate |
-| Gateway production controls | Bounded load distribution, rate and concurrency admission, health and circuit behavior, overload degradation, timeout, cancellation, streaming and backpressure apply to application and direct-transit traffic at both Gateway stages in the GATE-FINAL oracle | Live Caddy/Nginx and OS-identity evidence remain stronger than the in-process fixture |
-| External Gateway Runtime Plugin | `plugins/external-gateway` is a default-disabled native Runtime Plugin contributing downstream and upstream Caddy/Nginx/direct channels for both traffic models. Plugin lifecycle does not select, redirect, reinterpret, authorize, skip a stage, or mutate traffic semantics | Operator-provided Caddy/Nginx attachment remains an operator concern |
-| Local Agent self-maintenance plugin | `plugins/agents/meshrix-self-maintenance` is a separately started client-peer artifact. One atomically replaced local configuration file is its only behavior-control input. It calls Model Gateway directly and Meshrix only through existing ordinary governed operations | Separate OS-identity qualification remains FutureGoals |
-| Plugin and Console confinement | The maintenance client-peer artifact is rejected from Meshrix Runtime Plugin loading. Process isolation remains for actual Runtime Plugins, with opaque-origin iframe isolation | None for this candidate |
-| Runtime capacity and concurrency | The refactor implementation exists as current substrate | Fresh evidence only if an objectively failing final regression appears |
-| Enterprise single-node operations | Focused operations-closure oracle accepted one candidate across governed operation, administration, recovery, upgrade, rollback, and diagnostics | Environment qualification remains FutureGoals |
-| Cross-system offline delivery | Candidate-bound Linux amd64 and arm64 offline bundle imported, started, first-governed-called, stopped, and cleaned up on a Linux VM without network or rebuild | Native Linux and recovery-host qualification remain FutureGoals. Ubuntu preferred; Debian accepted |
-| Delivery quality | Within the closed Plan, provenance, security-critical typing, and faster verification formed the thin substrate. The thin substrate blocked GATE-CONTRACT. The remainder joined GATE-FINAL: typing, acceptance-gate, and suite merge/cache/shard work | None for this candidate |
-| Functional acceptance | GATE-FINAL and its Plan receipt are complete. Project-level `npm run verify:acceptance` remains the independent Functional Release Gate when a functional-complete claim is required. `controlled-execution-convergence-final` binds the exact clean release candidate and was not weakened. | Native-host, client, cloud, and npm-channel work remain separately tracked and do not gate or reopen the closed Plan. |
+The current work is complete only when all of the following are true:
 
-The current priority summary is [What's Next](WHATS-NEXT.md). Compatibility and
-support evidence rules are in [Compatibility](COMPATIBILITY.md). Execution
-state remains in ignored `docs/plans/` material.
+1. concrete failing tests or runtime defects are fixed at their owning source;
+2. the focused checks for those fixes pass;
+3. one clean candidate passes `npm run verify:acceptance`;
+4. that candidate is deployed to the existing Linux virtual machine;
+5. health, Console delivery, authentication, and one governed operation work
+   through the deployed public origin; and
+6. the service remains running for real use.
+
+Public package publication, broad operating-system qualification, client
+compatibility certification, cloud matrices, and future multi-node work are
+separate optional activities. They do not reopen or block this production-use
+closure.
+
+The current execution priority is [What's Next](WHATS-NEXT.md).

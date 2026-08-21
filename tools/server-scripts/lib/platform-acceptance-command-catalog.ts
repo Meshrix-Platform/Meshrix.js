@@ -36,6 +36,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("typecheck", "TypeScript project typecheck", "foundation", npmRun("typecheck"), "", ["types"]),
   command("console-build", "Console production build", "foundation", npmRun("build"), "", ["console", "build"]),
   command("foundation-tests", "Core public foundation gate", "foundation", npmTest(), "build/test-reports/latest.json", ["unit", "public-boundary", "secret-hygiene", "local-info", "registry", "root-hygiene"], {
+    exclusive: true,
     ownedReports: [
       "build/reports/local-info-hygiene.json",
       "build/reports/script-registry.json"

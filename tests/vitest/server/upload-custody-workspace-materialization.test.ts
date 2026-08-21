@@ -41,7 +41,7 @@ const MATERIALIZATION_PATH: any =
 const DEFAULT_LOGICAL_TARGET: any = "incoming/materialized-payload.bin";
 const MAX_PLAINTEXT_WINDOW: any = 64 * 1024;
 const RUNTIME_LEASE_MS: any = 5_000;
-const CRASH_LEASE_MS: any = 250;
+const CRASH_LEASE_MS: any = 1_000;
 const POSIX: any = process.platform !== "win32";
 const itPosix: any = POSIX ? it : it.skip;
 const PRECOMMIT_CRASH_CASES: readonly any[] = Object.freeze([
