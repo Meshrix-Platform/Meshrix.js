@@ -29,7 +29,8 @@ describe("priority-zero resource discipline", () : any => {
         profile: "quick",
         minimumProtocolEvents: 100_000,
         minimumJobRecords: 10_000,
-        maxSettledHeapGrowthBytes: 2 * 1024 * 1024
+        maxSettledHeapGrowthBytes: 2 * 1024 * 1024,
+        maxEventLoopDelayP99Ms: 1_500
       }
     });
     expect(Object.isFrozen(RESOURCE_DISCIPLINE_POLICY)).toBe(true);

@@ -350,6 +350,7 @@ function compactHighRiskResult(message?: any) : any {
       "peakRssGrowthBytes",
       "peakExternalGrowthBytes",
       "settledHeapGrowthBytes",
+      "eventLoopDelayP99Ms",
       "eventLoopDelayMaxMs"
     ]) {
       const value: any = Number(scenario[key]);
@@ -614,8 +615,8 @@ try {
     addMaximumViolation(
       violations,
       `${scenario.id}_event_loop_delay_exceeded`,
-      scenario.eventLoopDelayMaxMs,
-      highRiskPolicy.maxEventLoopDelayMs
+      scenario.eventLoopDelayP99Ms,
+      highRiskPolicy.maxEventLoopDelayP99Ms
     );
   }
 
