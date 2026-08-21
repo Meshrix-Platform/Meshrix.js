@@ -390,20 +390,17 @@ describe("enterprise single-node release Plan execution authority", () : any => 
     }
   });
 
-  it("names delivery-quality closures and the completed candidate in operator docs", async () : Promise<any> => {
+  it("names the production-use closure and its executable checks in operator docs", async () : Promise<any> => {
     const [status, whatsNext] = await Promise.all([
       fs.readFile(path.join(REPO_ROOT, "docs/STATUS.md"), "utf8"),
       fs.readFile(path.join(REPO_ROOT, "docs/WHATS-NEXT.md"), "utf8"),
     ]);
     for (const document of [status, whatsNext]) {
-      expect(document).toContain("provenance");
-      expect(document).toContain("security-critical typing");
-      expect(document).toContain("faster verification");
-      expect(document).toMatch(/thin substrate blocked GATE-CONTRACT/i);
-      expect(document).toMatch(/remainder joined GATE-FINAL/i);
-      expect(document).toMatch(/Functional\s+Convergence Plan is closed/i);
-      expect(document).toMatch(/non-gating/i);
-      expect(document).toMatch(/outside the closed Plan/i);
+      expect(document).toMatch(/production[- ]use/i);
+      expect(document).toContain("npm run verify:acceptance");
+      expect(document).toMatch(/authentication/i);
+      expect(document).toMatch(/governed operation/i);
+      expect(document).toMatch(/real use/i);
     }
   });
 

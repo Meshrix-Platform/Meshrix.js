@@ -59,6 +59,19 @@ import { createJobProjectionStore } from "../../../packages/server-runtime/src/j
 import { serverToken } from "#meshrix/product-api";
 import { createTestJobManager } from "./job-manager-test-harness.ts";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FIXTURE_DAY_START_MS = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+
+function retainedFixtureTimestamps(meta?: any) : any {
+  const current: Record<string, any> = { ...meta };
+  for (const key of ["createdAt", "updatedAt", "startedAt", "finishedAt"]) {
+    const parsed: any = Date.parse(String(current[key] || ""));
+    if (!Number.isFinite(parsed)) continue;
+    current[key] = new Date(FIXTURE_DAY_START_MS + ((parsed % DAY_MS) + DAY_MS) % DAY_MS).toISOString();
+  }
+  return current;
+}
+
 async function withTempUserData(callback?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-manager-final-extra-"));
   try {
@@ -90,7 +103,7 @@ async function waitForJobStatus(manager?: any, jobId?: any, status?: any, timeou
 
 async function seedPersistedJob(userDataPath?: any, jobId?: any, meta?: any, payload: any = null) : Promise<any> {
   const currentMeta: Record<string, any> = {
-    ...meta,
+    ...retainedFixtureTimestamps(meta),
     versionGroupId: meta.versionGroupId || serverToken(
       "parse_version_group",
       meta.checkpointId || meta.archiveBatchId || meta.id

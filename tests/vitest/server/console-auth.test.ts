@@ -22,7 +22,7 @@ async function withTempAuth(callback?: any) : Promise<any> {
   try {
     return await callback(auth, userDataPath);
   } finally {
-    auth.close();
+    await auth.close();
     tagManagementStore.close();
     await fs.rm(userDataPath, { recursive: true, force: true });
   }
@@ -108,14 +108,14 @@ describe("console auth boundary behavior", () : any => {
       auth = createConsoleAuth({ userDataPath, activeFeatureIds: ["sample-feature"], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
       expect(auth.roleList().find((role?: any) : any => role.roleId === "viewer")?.scopes)
         .toContain("sample_plugin:read");
-      auth.close();
+      await auth.close();
       auth = null;
 
       auth = createConsoleAuth({ userDataPath, activeFeatureIds: [], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
       expect(auth.roleList().flatMap((role?: any) : any => role.scopes || [])
         .some((scope?: any) : any => String(scope).startsWith("sample_plugin:"))).toBe(false);
     } finally {
-      auth?.close?.();
+      await auth?.close?.();
       tagManagementStore.close();
       await fs.rm(userDataPath, { recursive: true, force: true });
     }
@@ -132,7 +132,7 @@ describe("console auth boundary behavior", () : any => {
       expect(auth.roleList().flatMap((role?: any) : any => role.scopes || [])
         .some((scope?: any) : any => String(scope).startsWith("sample_plugin:"))).toBe(false);
     } finally {
-      auth.close();
+      await auth.close();
       tagManagementStore.close();
       await fs.rm(userDataPath, { recursive: true, force: true });
     }
@@ -406,6 +406,7 @@ describe("console auth boundary behavior", () : any => {
       }
       try {
         await auth.ensureInitialOwner();
+        await auth.authorizationStore.listDecisions({ limit: 1 });
         for (const directoryPath of [
           path.join(userDataPath, "auth"),
           path.join(userDataPath, "security", "authorization")
@@ -422,7 +423,7 @@ describe("console auth boundary behavior", () : any => {
           expect((await fs.stat(filePath)).mode & 0o777).toBe(0o600);
         }
       } finally {
-        auth?.close?.();
+        await auth?.close?.();
         tagManagementStore?.close?.();
         await fs.rm(userDataPath, { recursive: true, force: true });
       }
