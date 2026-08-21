@@ -31,7 +31,7 @@ import { ensureTagManagementSchema } from "./tag-management-schema.ts";
 
 export { TAG_MANAGEMENT_PROTOCOL_VERSION } from "./tag-management-codec.ts";
 
-const changeHandlersByRoot: Map<string, Set<ChangeHandler>> = new Map();
+const changeSubscriberLanesByRoot: Map<string, ChangeSubscriberLane> = new Map();
 
 export interface RoleRecord { roleId: string; label: string; description: string; system: boolean; enabled: boolean; scopes: string[]; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
 export interface TeamRecord { teamId: string; label: string; description: string; enabled: boolean; roleIds: string[]; departmentIds: string[]; memberUserIds: string[]; resourcePolicies: TagPolicy[]; createdAt: string; updatedAt: string; [key: string]: unknown }
@@ -52,7 +52,29 @@ export interface OrganizationGovernanceSnapshot extends OrganizationGovernanceDr
 interface OrganizationGovernanceErrorOptions { statusCode?: number; currentRevision?: number }
 interface OrganizationGovernanceError extends Error { code: string; statusCode: number; currentRevision?: number }
 interface GovernanceOwnershipRow { entityType: string; entityId: string }
-type ChangeHandler = (event: Readonly<{ eventType: string }>) => void;
+type ChangeHandler = (event: Readonly<{ eventType: string }>) => unknown | Promise<unknown>;
+export interface TagChangeDispatchReceipt {
+  sequence: number;
+  eventType: string;
+  handlerCount: number;
+  subscriberResults: readonly unknown[];
+}
+export interface TagChangeDrainReceipt {
+  throughSequence: number;
+  eventCount: number;
+  lastEvent: TagChangeDispatchReceipt | null;
+}
+interface ChangeSubscriberLane {
+  handlers: Set<ChangeHandler>;
+  tail: Promise<void>;
+  nextSequence: number;
+  pendingCount: number;
+  storeCount: number;
+}
+interface ChangeDrainAccumulator extends TagChangeDrainReceipt {
+  failure: unknown | null;
+  failureCount: number;
+}
 
 function record(value: unknown): JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
@@ -121,13 +143,96 @@ function organizationGovernanceDraft(value: unknown): OrganizationGovernanceDraf
   };
 }
 
-function sharedChangeHandlers(rootPath: string): Set<ChangeHandler> {
-  let handlers = changeHandlersByRoot.get(rootPath);
-  if (!handlers) {
-    handlers = new Set();
-    changeHandlersByRoot.set(rootPath, handlers);
+function sharedChangeSubscriberLane(rootPath: string): ChangeSubscriberLane {
+  let lane = changeSubscriberLanesByRoot.get(rootPath);
+  if (!lane) {
+    lane = {
+      handlers: new Set(),
+      tail: Promise.resolve(),
+      nextSequence: 0,
+      pendingCount: 0,
+      storeCount: 0
+    };
+    changeSubscriberLanesByRoot.set(rootPath, lane);
   }
-  return handlers;
+  lane.storeCount += 1;
+  return lane;
+}
+
+function cleanupChangeSubscriberLane(rootPath: string, lane: ChangeSubscriberLane): void {
+  if (lane.storeCount === 0 && lane.handlers.size === 0 && lane.pendingCount === 0 &&
+      changeSubscriberLanesByRoot.get(rootPath) === lane) {
+    changeSubscriberLanesByRoot.delete(rootPath);
+  }
+}
+
+function releaseChangeSubscriberLane(rootPath: string, lane: ChangeSubscriberLane): void {
+  lane.storeCount = Math.max(0, lane.storeCount - 1);
+  cleanupChangeSubscriberLane(rootPath, lane);
+}
+
+function subscriberDispatchFailure(sequence: number, eventType: string, failures: readonly unknown[]): Error {
+  const error = new Error(
+    `Tag change subscriber failed while processing ${eventType}.`
+  ) as Error & Record<string, unknown>;
+  error.name = "TagChangeSubscriberError";
+  error.code = "tag_change_subscriber_failed";
+  error.sequence = sequence;
+  error.eventType = eventType;
+  error.failureCount = failures.length;
+  error.cause = failures[0];
+  return error;
+}
+
+function enqueueChangeSubscribers(
+  rootPath: string,
+  lane: ChangeSubscriberLane,
+  eventType: string
+): Promise<TagChangeDispatchReceipt> {
+  const sequence = ++lane.nextSequence;
+  const handlers = [...lane.handlers];
+  const event = Object.freeze({ eventType });
+  lane.pendingCount += 1;
+  const completion = lane.tail.then(async () : Promise<TagChangeDispatchReceipt> => {
+    const results: unknown[] = [];
+    const failures: unknown[] = [];
+    for (const handler of handlers) {
+      try {
+        results.push(await handler(event));
+      } catch (error: unknown) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) throw subscriberDispatchFailure(sequence, eventType, failures);
+    return Object.freeze({
+      sequence,
+      eventType,
+      handlerCount: handlers.length,
+      subscriberResults: Object.freeze(results)
+    });
+  });
+  lane.tail = completion.then(() : void => {}, () : void => {});
+  completion.then(
+    () : void => {
+      lane.pendingCount = Math.max(0, lane.pendingCount - 1);
+      cleanupChangeSubscriberLane(rootPath, lane);
+    },
+    () : void => {
+      lane.pendingCount = Math.max(0, lane.pendingCount - 1);
+      cleanupChangeSubscriberLane(rootPath, lane);
+    }
+  );
+  return completion;
+}
+
+function emptyChangeDrainAccumulator(): ChangeDrainAccumulator {
+  return {
+    throughSequence: 0,
+    eventCount: 0,
+    lastEvent: null,
+    failure: null,
+    failureCount: 0
+  };
 }
 
 function roleTagId(roleId?: unknown): string {
@@ -290,9 +395,12 @@ function createTagManagementStoreFromDatabase({
   resolvedRoot
 }: DatabaseStoreOptions) {
   let closed = false;
-  const changeHandlers = sharedChangeHandlers(String(resolvedRoot));
-  const ownedChangeHandlers = new Set<ChangeHandler>();
   ensureTagManagementSchema(db);
+  const changeLaneRoot = String(resolvedRoot);
+  const changeLane = sharedChangeSubscriberLane(changeLaneRoot);
+  const changeHandlers = changeLane.handlers;
+  const ownedChangeHandlers = new Set<ChangeHandler>();
+  let ownedChangeWork: Promise<ChangeDrainAccumulator> = Promise.resolve(emptyChangeDrainAccumulator());
 
   const tagUpsert = db.prepare(`
     INSERT INTO tag_management_tags (
@@ -320,18 +428,48 @@ function createTagManagementStoreFromDatabase({
       updated_at = excluded.updated_at
   `);
 
+  function trackChangeSubscribers(eventType: string): void {
+    const completion = enqueueChangeSubscribers(changeLaneRoot, changeLane, eventType);
+    ownedChangeWork = ownedChangeWork.then(async (accumulator: ChangeDrainAccumulator) : Promise<ChangeDrainAccumulator> => {
+      try {
+        const receipt = await completion;
+        return {
+          ...accumulator,
+          throughSequence: receipt.sequence,
+          eventCount: accumulator.eventCount + 1,
+          lastEvent: receipt
+        };
+      } catch (failure: unknown) {
+        const sequence = Number((failure as Record<string, unknown>)?.sequence || 0);
+        return {
+          ...accumulator,
+          throughSequence: Math.max(accumulator.throughSequence, sequence),
+          eventCount: accumulator.eventCount + 1,
+          failure: accumulator.failure || failure,
+          failureCount: accumulator.failureCount + 1
+        };
+      }
+    });
+  }
+
+  async function drainChangeHandlers(): Promise<TagChangeDrainReceipt> {
+    const pending = ownedChangeWork;
+    ownedChangeWork = Promise.resolve(emptyChangeDrainAccumulator());
+    const accumulator = await pending;
+    if (accumulator.failure) throw accumulator.failure;
+    return Object.freeze({
+      throughSequence: accumulator.throughSequence,
+      eventCount: accumulator.eventCount,
+      lastEvent: accumulator.lastEvent
+    });
+  }
+
   function appendEvent(eventType: string, { tagId = "", entityType = "", entityId = "", payload = {} }: EventInput = {}): void {
     db.prepare(`
       INSERT INTO tag_management_events (event_id, tag_id, entity_type, entity_id, event_type, payload_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(randomId("tag_event"), tagId, entityType, entityId, eventType, stringifyJson(payload, {}), nowIso());
-    for (const handler of changeHandlers) {
-      try {
-        handler(Object.freeze({ eventType }));
-      } catch {
-        // The durable tag mutation remains authoritative; subscribers reconcile independently.
-      }
-    }
+    trackChangeSubscribers(eventType);
   }
 
   function getTag(tagId?: unknown): TagRecord | null {
@@ -1149,11 +1287,7 @@ function createTagManagementStoreFromDatabase({
       expectedRevision,
       nowIso()
     );
-    for (const handler of changeHandlers) {
-      try { handler(Object.freeze({ eventType: "organization-governance-published" })); } catch {
-        // Publication is already committed; subscribers reconcile independently.
-      }
-    }
+    trackChangeSubscribers("organization-governance-published");
     return snapshot;
   }
 
@@ -1168,7 +1302,7 @@ function createTagManagementStoreFromDatabase({
       if (closed) return;
       for (const handler of ownedChangeHandlers) changeHandlers.delete(handler);
       ownedChangeHandlers.clear();
-      if (changeHandlers.size === 0) changeHandlersByRoot.delete(String(resolvedRoot));
+      releaseChangeSubscriberLane(changeLaneRoot, changeLane);
       if (ownsDatabase && db.open !== false) db.close();
       closed = true;
     },
@@ -1180,6 +1314,7 @@ function createTagManagementStoreFromDatabase({
     getOrganizationGovernance,
     getAuthorizationTeam,
     getPolicyRevision,
+    drainChangeHandlers,
     registerChangeHandler(handler?: ChangeHandler): () => boolean | void {
       if (typeof handler !== "function") return (): void => {};
       changeHandlers.add(handler);

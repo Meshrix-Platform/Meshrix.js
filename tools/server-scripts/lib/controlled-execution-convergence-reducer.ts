@@ -1,7 +1,11 @@
-import { canonicalDigest, isPrivacySafeValue } from "../../plan/plan-final-receipt.ts";
+import {
+  containsSensitiveReportData,
+  reportPayloadDigest,
+} from "../../../packages/foundation/src/observability/sensitive-report-scan.ts";
+import { validateReleaseCandidateIdentity } from "../verify-release-candidate-identity.ts";
 
 export const CONTROLLED_EXECUTION_FINAL_SCHEMA: any =
-  "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-1";
+  "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-2";
 
 export const CONTROLLED_EXECUTION_LEAF_SPECS: readonly any[] = Object.freeze([
   Object.freeze({
@@ -42,39 +46,28 @@ function valueAt(value?: any, path?: any) : any {
   return path.reduce((current?: any, key?: any) : any => current?.[key], value);
 }
 
-function privacySafeTree(value?: any) : any {
-  if (Array.isArray(value)) return value.every(privacySafeTree);
-  if (value && typeof value === "object") return (Object.values(value) as any[]).every(privacySafeTree);
-  return isPrivacySafeValue(value);
-}
-
 export function reduceControlledExecutionConvergence({
   generatedAt,
-  plan,
   sourceContext,
-  planCheckpoint,
+  candidate,
   leafReports
 }: Record<string, any> = {}) : any {
+  let currentCandidate: any;
+  try {
+    currentCandidate = validateReleaseCandidateIdentity(candidate);
+  } catch {
+    throw new Error("Controlled execution release candidate is invalid");
+  }
   requireCondition(
-    plan?.directory === "end-to-end-release" &&
-      plan?.nodeId === planCheckpoint?.nodeId,
-    "Enterprise operations checkpoint is mismatched",
+    currentCandidate.source_revision === sourceContext?.sourceRevision,
+    "Controlled execution release candidate is not current",
   );
-  requireCondition(plan?.status === "completed", "Controlled execution operations node is not completed");
-  requireCondition(Array.isArray(plan.requirements) && plan.requirements.includes("REQ-BASELINE-CONSOLE-ADMINISTRATION"),
-    "Enterprise operations requirements are incomplete");
-  requireCondition(plan.criteriaChecked === true, "Controlled execution acceptance criteria are incomplete");
   requireCondition(
-    /^[a-f0-9]{64}$/u.test(String(planCheckpoint?.candidateDigest || "")) &&
-      planCheckpoint.candidateDigest === plan.candidateDigest &&
-      planCheckpoint.sourceRevision === plan.sourceRevision,
-    "Controlled execution Plan checkpoint is not current",
+    currentCandidate.supported_profiles.length === 1 &&
+      currentCandidate.supported_profiles[0] === "enterprise-single-node",
+    "Enterprise single-node release candidate profile is missing",
   );
-  requireCondition(planCheckpoint?.privacySafe === true, "Controlled execution Plan checkpoint is privacy-unsafe");
-  requireCondition(
-    Array.isArray(planCheckpoint?.profiles) && planCheckpoint.profiles.includes("enterprise-single-node"),
-    "Enterprise single-node checkpoint profile is missing",
-  );
+  requireCondition(!containsSensitiveReportData(currentCandidate), "Controlled execution release candidate is privacy-unsafe");
   const leafEvidence: any[] = [];
   for (const spec of CONTROLLED_EXECUTION_LEAF_SPECS) {
     const report: any = leafReports?.[spec.key];
@@ -87,11 +80,11 @@ export function reduceControlledExecutionConvergence({
     requireCondition(report.sourceContext?.sourceTreeDigest === sourceContext.sourceTreeDigest, `Controlled execution leaf source tree is stale: ${spec.path}`);
     requireCondition(report.sourceContext?.verifier === spec.verifier, `Controlled execution leaf source verifier is mismatched: ${spec.path}`);
     requireCondition(/^sha256:[a-f0-9]{64}$/u.test(String(report.sourceContext?.verifierDigest || "")), `Controlled execution leaf verifier digest is invalid: ${spec.path}`);
-    requireCondition(privacySafeTree(report), `Controlled execution leaf is privacy-unsafe: ${spec.path}`);
+    requireCondition(!containsSensitiveReportData(report), `Controlled execution leaf is privacy-unsafe: ${spec.path}`);
     leafEvidence.push(Object.freeze({
       key: spec.key,
       path: spec.path,
-      reportDigest: canonicalDigest(report),
+      reportDigest: reportPayloadDigest(report),
       verifierDigest: report.sourceContext.verifierDigest
     }));
   }
@@ -103,16 +96,22 @@ export function reduceControlledExecutionConvergence({
     verifier: "tools/server-scripts/verify-controlled-execution-convergence.ts",
     generatedAt: String(generatedAt || ""),
     sourceContext,
-    plan,
-    baselineCheckpoint: planCheckpoint,
+    candidate: Object.freeze({
+      schemaVersion: currentCandidate.schema_version,
+      candidateDigest: currentCandidate.candidate_digest,
+      sourceRevision: currentCandidate.source_revision,
+      repositoryTreeDigest: currentCandidate.repository_tree_digest,
+      reportInventoryDigest: currentCandidate.report_inventory_digest,
+      supportedProfiles: Object.freeze([...currentCandidate.supported_profiles]),
+    }),
     leafEvidence,
     summary: {
       controlledExecutionConvergenceReady: true,
-      baselineCheckpointProfileCount: planCheckpoint.profiles.length,
+      candidateProfileCount: currentCandidate.supported_profiles.length,
       leafReportCount: leafEvidence.length,
       reportLeakScan: true
     }
   };
-  requireCondition(privacySafeTree(report), "Controlled execution final report is privacy-unsafe");
+  requireCondition(!containsSensitiveReportData(report), "Controlled execution final report is privacy-unsafe");
   return Object.freeze(report);
 }

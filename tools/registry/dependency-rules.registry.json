@@ -1,6 +1,6 @@
 {
   "$schema": "./schema/dependency-rule.schema.json",
-  "version": "v0.1.0",
+  "version": "v0.2.0",
   "layers": [
     {
       "id": "contracts",
@@ -16,6 +16,27 @@
         "server-runtime",
         "ui-console",
         "apps",
+        "plugins",
+        "tools"
+      ]
+    },
+    {
+      "id": "model-gateway-contracts",
+      "name": "Model Gateway Service Contracts",
+      "directory": "services/model-gateway/contracts",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
         "plugins",
         "tools"
       ]
@@ -234,7 +255,8 @@
         "plugins",
         "plugin-console",
         "plugin-verifiers",
-        "plugin-tests"
+        "plugin-tests",
+        "model-gateway-contracts"
       ],
       "forbiddenDependsOn": []
     }

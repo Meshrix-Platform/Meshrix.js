@@ -22,6 +22,7 @@
       "plugins/agents/client-adapter-kit/package.json",
       "plugins/agents/codex/package.json",
       "plugins/agents/kimi/package.json",
+      "plugins/agents/meshrix-self-maintenance/package.json",
       "plugins/agents/openclaw/package.json",
       "plugins/agents/opencode/package.json",
       "plugins/agents/pi/package.json",
@@ -40,8 +41,19 @@
   "acceptance": {
     "profile": "enterprise-single-node",
     "commandId": "platform-acceptance",
-    "requiredClaim": "functional-complete",
-    "standardsRegistry": "tools/registry/release-acceptance-standards.registry.json"
+    "stableRequiredClaim": "functional-complete",
+    "releaseRequiredClaim": "release-deployment-verified",
+    "standardsRegistry": "tools/registry/release-acceptance-standards.registry.json",
+    "deployment": {
+      "claim": "release-deployment-verified",
+      "requiredForRelease": true,
+      "requiresClaim": "functional-complete",
+      "command": "npm run server:verify:release-deployment",
+      "controller": "tools/server-scripts/verify-release-deployment.ts",
+      "workflow": ".github/workflows/release-branch.yml",
+      "runner": "ubuntu-24.04",
+      "receipt": "build/reports/release-deployment.json"
+    }
   },
   "prepublication": {
     "requiredClaim": "upstream-publishing-prepublication-passed",

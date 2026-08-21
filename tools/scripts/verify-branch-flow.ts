@@ -64,10 +64,6 @@ function git(args?: any) : any {
   }).trim();
 }
 
-function parents(commit?: any) : any {
-  return git(["show", "-s", "--format=%P", commit]).split(/\s+/u).filter(Boolean);
-}
-
 function resolveBranch(branch?: any) : any {
   for (const ref of [`refs/remotes/origin/${branch}`, `refs/heads/${branch}`]) {
     try {
@@ -81,7 +77,9 @@ function resolveBranch(branch?: any) : any {
 
 function isAncestor(ancestor?: any, descendant?: any) : any {
   try {
-    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { stdio: "ignore" });
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      stdio: "ignore"
+    });
     return true;
   } catch {
     return false;
@@ -92,7 +90,6 @@ export function verifyProtectedPushTopology({
   branch,
   before,
   after,
-  commitParents = parents,
   branchTip = resolveBranch,
   ancestor = isAncestor
 }: Record<string, any> = {}) : any {
@@ -100,26 +97,17 @@ export function verifyProtectedPushTopology({
   if (!before || !after || before === ZERO_OID || after === ZERO_OID) {
     return { ok: false, code: "protected-branch-bootstrap-forbidden" };
   }
-  const afterParents: any = commitParents(after);
-  if (afterParents.length !== 2 || afterParents[0] !== before) {
-    return { ok: false, code: "protected-branch-not-single-merge" };
+  if (!ancestor(before, after)) {
+    return { ok: false, code: "protected-branch-not-fast-forward" };
   }
-  const mergedHead: any = afterParents[1];
   if (branch === "nightly") {
-    for (const protectedBranch of LONG_LIVED_BRANCHES) {
-      if (protectedBranch === branch) continue;
-      const tip: any = branchTip(protectedBranch);
-      if (tip && ancestor(mergedHead, tip)) {
-        return { ok: false, code: "nightly-source-protected" };
-      }
-    }
-    return { ok: true, code: "temporary-merge-advanced-nightly" };
+    return { ok: true, code: "direct-nightly-advance" };
   }
   const upstream: any = DIRECT_UPSTREAM[branch];
   const tip: any = branchTip(upstream);
   if (!tip) return { ok: false, code: "promotion-source-missing" };
-  return mergedHead === tip
-    ? { ok: true, code: `${upstream}-merge-advanced-${branch}` }
+  return after === tip
+    ? { ok: true, code: `${upstream}-fast-forward-advanced-${branch}` }
     : { ok: false, code: "promotion-source-tip-mismatch" };
 }
 
@@ -168,23 +156,33 @@ export function runSelfTest() : any {
     headRef: "agent/security-review",
     payload: crossRepository
   }).ok) throw new Error("policy fixture failed: cross-repository source");
-  const tips: Record<string, any> = { nightly: "nightly-tip", stable: "stable-tip", release: "release-tip" };
   const topologyCases: any[] = [
-    ["temporary merge", true, "nightly", ["old-nightly", "feature-tip"]],
-    ["nightly promotion", true, "stable", ["old-stable", "nightly-tip"]],
-    ["stable promotion", true, "release", ["old-release", "stable-tip"]],
-    ["direct commit", false, "nightly", ["old-nightly"]],
-    ["wrong stable source", false, "stable", ["old-stable", "feature-tip"]],
-    ["wrong release source", false, "release", ["old-release", "nightly-tip"]]
+    ["nightly direct commit", true, "nightly", "old-nightly", "nightly-tip", true,
+      { nightly: "nightly-tip", stable: "old-stable", release: "old-release" }],
+    ["nightly multi-commit advance", true, "nightly", "old-nightly", "nightly-tip", true,
+      { nightly: "nightly-tip", stable: "old-stable", release: "old-release" }],
+    ["stable exact upstream fast-forward", true, "stable", "old-stable", "nightly-tip", true,
+      { nightly: "nightly-tip", stable: "nightly-tip", release: "old-release" }],
+    ["release exact upstream fast-forward", true, "release", "old-release", "stable-tip", true,
+      { nightly: "nightly-tip", stable: "stable-tip", release: "stable-tip" }],
+    ["stable wrong source", false, "stable", "old-stable", "feature-tip", true,
+      { nightly: "nightly-tip", stable: "feature-tip", release: "old-release" }],
+    ["release wrong source", false, "release", "old-release", "nightly-tip", true,
+      { nightly: "nightly-tip", stable: "stable-tip", release: "nightly-tip" }],
+    ["nightly force update", false, "nightly", "old-nightly", "nightly-tip", false,
+      { nightly: "nightly-tip", stable: "old-stable", release: "old-release" }],
+    ["stable non-fast-forward", false, "stable", "old-stable", "nightly-tip", false,
+      { nightly: "nightly-tip", stable: "nightly-tip", release: "old-release" }],
+    ["release non-fast-forward", false, "release", "old-release", "stable-tip", false,
+      { nightly: "nightly-tip", stable: "stable-tip", release: "stable-tip" }]
   ];
-  for (const [label, expected, branch, commitParents] of topologyCases) {
+  for (const [label, expected, branch, before, after, isFastForward, branchTips] of topologyCases) {
     const result: any = verifyProtectedPushTopology({
       branch,
-      before: commitParents[0],
-      after: "after",
-      commitParents: () : any => commitParents,
-      branchTip: (name?: any) : any => tips[name] || "",
-      ancestor: (candidate?: any, tip?: any) : any => candidate === tip
+      before,
+      after,
+      branchTip: (name?: any) : any => branchTips[name] || "",
+      ancestor: () : any => isFastForward
     });
     if (result.ok !== expected) throw new Error(`topology fixture failed: ${label}`);
   }

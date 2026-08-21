@@ -103,13 +103,33 @@ export async function verifyReleaseDefinition({
   if (
     definition?.acceptance?.profile !== "enterprise-single-node" ||
     definition?.acceptance?.commandId !== "platform-acceptance" ||
-    definition?.acceptance?.requiredClaim !== "functional-complete" ||
+    definition?.acceptance?.stableRequiredClaim !== "functional-complete" ||
+    definition?.acceptance?.releaseRequiredClaim !== "release-deployment-verified" ||
     definition?.acceptance?.standardsRegistry !==
       "tools/registry/release-acceptance-standards.registry.json"
   ) {
     fail(
       "release_definition_acceptance_standard_invalid",
       "The release definition must bind enterprise-single-node to the canonical platform-acceptance functional-complete claim.",
+    );
+  }
+  if (
+    definition?.acceptance?.deployment?.claim !== "release-deployment-verified" ||
+    definition?.acceptance?.deployment?.requiredForRelease !== true ||
+    definition?.acceptance?.deployment?.requiresClaim !== "functional-complete" ||
+    definition?.acceptance?.deployment?.command !==
+      "npm run server:verify:release-deployment" ||
+    definition?.acceptance?.deployment?.controller !==
+      "tools/server-scripts/verify-release-deployment.ts" ||
+    definition?.acceptance?.deployment?.workflow !==
+      ".github/workflows/release-branch.yml" ||
+    definition?.acceptance?.deployment?.runner !== "ubuntu-24.04" ||
+    definition?.acceptance?.deployment?.receipt !==
+      "build/reports/release-deployment.json"
+  ) {
+    fail(
+      "release_definition_deployment_standard_invalid",
+      "The release definition must bind the mandatory external runtime-ui release-deployment claim.",
     );
   }
   if (
@@ -170,7 +190,9 @@ async function main() : Promise<any> {
       tag: definition.release.tag,
       channel: definition.release.channel,
       platformCount: definition.container.platforms.length,
-      prepublicationClaim: definition.prepublication.requiredClaim
+      prepublicationClaim: definition.prepublication.requiredClaim,
+      stableClaim: definition.acceptance.stableRequiredClaim,
+      releaseClaim: definition.acceptance.releaseRequiredClaim
     })}\n`);
   }
 }

@@ -81,9 +81,9 @@ jobs:
         run: npm run test:audit
 
   functional-completeness:
-    name: Functional completeness release gate
-    needs: [public-gate]
-    if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release') }}
+    name: Stable functional completeness release gate
+    needs: [public-gate, node-22-compatibility, npm-package-portability, supply-chain]
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 395
     permissions:
@@ -98,14 +98,42 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
+      - name: Materialize the immutable source-candidate authority
+        run: >-
+          node tools/server-scripts/verify-release-candidate-identity.ts
+          --output build/release/control/SOURCE_CANDIDATE.json
       - name: Produce enterprise single-node delivery receipt in Ubuntu
-        run: npm run verify:enterprise-single-node:ubuntu-container
+        run: >-
+          npm run verify:enterprise-single-node:ubuntu-container --
+          --source-candidate build/release/control/SOURCE_CANDIDATE.json
       - name: Functional-complete authority
         env:
           MESHRIX_RELEASE_PARALLELISM: "4"
         run: >-
           node tools/server-scripts/verify-platform-acceptance.ts
-          --profile enterprise-single-node
+          --profile "$(node tools/server-scripts/verify-release-definition.ts --field acceptance.profile)"
+      - name: Assemble the closed stable authority bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="build/release/control/stable-authority"
+          mkdir -p "$bundle"
+          cp build/release/control/SOURCE_CANDIDATE.json "$bundle/SOURCE_CANDIDATE.json"
+          cp build/reports/platform-acceptance.json "$bundle/platform-acceptance.json"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts create-stable-manifest \
+            --candidate "$bundle/SOURCE_CANDIDATE.json" \
+            --functional "$bundle/platform-acceptance.json" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$bundle/stable-authority-manifest.json"
+      - name: Export the stable candidate authority bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stable-authority-${{ github.sha }}
+          path: build/release/control/stable-authority/
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
 
   node-22-compatibility:
     name: Supported Node 22 compatibility

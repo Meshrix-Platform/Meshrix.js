@@ -1,14 +1,10 @@
 import {
-  MODEL_GATEWAY_ADAPTER_CONFIG_SCHEMA,
-  assertModelGatewayAdapterConfig,
-  assertModelGatewayCallRequest
-} from "@meshrix/contracts/model-gateway";
-
-import {
   MODEL_GATEWAY_MCP_TOOL_BINDINGS,
   MODEL_GATEWAY_OPERATION_DEFINITIONS
 } from "./src/operation-definitions.mjs";
 
+const MODEL_GATEWAY_ADAPTER_CONFIG_SCHEMA = "v0.0.1:model-gateway:adapter-config-1";
+const MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS = 120_000;
 const CONTRIBUTION_KINDS = Object.freeze([
   "operations",
   "routes",
@@ -26,6 +22,73 @@ function plainObject(value) {
 
 function onlyFields(value, fields) {
   return plainObject(value) && Object.keys(value).every((field) => fields.has(field));
+}
+
+function nonEmptyString(value, code) {
+  if (typeof value !== "string" || value.trim().length === 0) throw new TypeError(code);
+  return value.trim();
+}
+
+function assertModelGatewayAdapterConfig(value) {
+  if (!onlyFields(value, new Set(["schemaVersion", "enabled", "serviceRef", "timeoutMs"]))) {
+    throw new TypeError("model_gateway_adapter_config_closed_schema");
+  }
+  if (value.schemaVersion !== MODEL_GATEWAY_ADAPTER_CONFIG_SCHEMA) {
+    throw new TypeError("model_gateway_adapter_config_schema_version");
+  }
+  if (typeof value.enabled !== "boolean") {
+    throw new TypeError("model_gateway_adapter_config_enabled_invalid");
+  }
+  const serviceRef = value.serviceRef === null || value.serviceRef === undefined
+    ? null
+    : nonEmptyString(value.serviceRef, "model_gateway_adapter_config_service_ref_invalid");
+  if (value.enabled && serviceRef === null) {
+    throw new TypeError("model_gateway_adapter_config_service_ref_required");
+  }
+  if (!Number.isSafeInteger(value.timeoutMs) || value.timeoutMs <= 0 ||
+      value.timeoutMs > MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS) {
+    throw new TypeError("model_gateway_adapter_config_timeout_invalid");
+  }
+  return Object.freeze({
+    schemaVersion: MODEL_GATEWAY_ADAPTER_CONFIG_SCHEMA,
+    enabled: value.enabled,
+    serviceRef,
+    timeoutMs: value.timeoutMs
+  });
+}
+
+function assertModelGatewayCallRequest(value) {
+  if (!onlyFields(value, new Set([
+    "operationId",
+    "serviceRef",
+    "modelRef",
+    "providerRef",
+    "inputRefs",
+    "idempotencyKey",
+    "deadlineMs",
+    "stream"
+  ]))) throw new TypeError("model_gateway_call_closed_schema");
+  if (value.operationId !== "model_gateway.call") {
+    throw new TypeError("model_gateway_call_operation_id_invalid");
+  }
+  if (!Array.isArray(value.inputRefs) || value.inputRefs.length > 64) {
+    throw new TypeError("model_gateway_call_input_refs_invalid");
+  }
+  const inputRefs = value.inputRefs.map((entry) => nonEmptyString(entry, "model_gateway_call_input_ref_invalid"));
+  if (!Number.isSafeInteger(value.deadlineMs) || value.deadlineMs <= 0) {
+    throw new TypeError("model_gateway_call_deadline_invalid");
+  }
+  if (typeof value.stream !== "boolean") throw new TypeError("model_gateway_call_stream_invalid");
+  return Object.freeze({
+    operationId: "model_gateway.call",
+    serviceRef: nonEmptyString(value.serviceRef, "model_gateway_call_service_ref_required"),
+    modelRef: nonEmptyString(value.modelRef, "model_gateway_call_model_ref_required"),
+    providerRef: nonEmptyString(value.providerRef, "model_gateway_call_provider_ref_required"),
+    inputRefs: Object.freeze(inputRefs),
+    idempotencyKey: nonEmptyString(value.idempotencyKey, "model_gateway_call_idempotency_key_required"),
+    deadlineMs: value.deadlineMs,
+    stream: value.stream
+  });
 }
 
 function emptyContributions() {

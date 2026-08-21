@@ -19,7 +19,12 @@ import {
 
 const ID = /^[a-z][a-z0-9-]*$/u;
 const PROVIDER_ID = /^(?:service|coding|document|datastore|agent)-[a-z0-9][a-z0-9-]*$/u;
-const PRODUCT_IDS = new Set(["shared-space", "skill-hub"]);
+const PRODUCT_IDS = new Set([
+  "external-gateway",
+  "model-gateway",
+  "shared-space",
+  "skill-hub"
+]);
 
 function uniqueStrings(value, label) {
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string" || !entry.trim())) throw new Error(`${label} must be a string array`);

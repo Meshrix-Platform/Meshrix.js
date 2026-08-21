@@ -10,7 +10,7 @@ The contract verifier combines admission, lifecycle, opaque-custody,
 launcher-boundary, and trusted OCI simulation facts. Current functional
 convergence is accepted only when `controlled-execution-sandbox` owns all four
 leaf reports and the `controlled-execution-convergence-final` reducer accepts
-their matching source provenance plus the exact current Plan receipts. That
+their matching source provenance plus the exact canonical release candidate. That
 reducer emits only `controlledExecutionConvergenceReady`. External-provider
 environment qualification remains remaining required work on the named
 Real-Machine Verification Workflow.
@@ -249,7 +249,7 @@ prove the product path, including:
 Run `npm run verify:controlled-execution-sandbox` for the contract, lifecycle,
 custody, launcher-boundary, and trusted-backend leaf checks. Then run
 `npm run verify:controlled-execution-convergence` to reduce the exact current
-leaf and Plan-receipt set. These development-environment checks contribute to
+leaf-report set for one clean release candidate. These development-environment checks contribute to
 the Functional Release Gate. Environment qualification for each optional
 plugin or provider remains remaining required work; a passing Core report is
 not that receipt. Each remaining Real-Machine Verification Workflow validates

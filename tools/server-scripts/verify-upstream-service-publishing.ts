@@ -274,6 +274,46 @@ async function waitUntil(predicate?: any, timeoutMs: any = 5_000, intervalMs: an
   return predicate() === true;
 }
 
+async function drainAndCloseTagStore(store?: any) : Promise<any> {
+  try {
+    assert.equal(typeof store?.drainChangeHandlers, "function");
+    return await store.drainChangeHandlers();
+  } finally {
+    store?.close?.();
+  }
+}
+
+function audiencePublicationFactsFromDrain(receipt?: any) : any {
+  assert.ok(Number(receipt?.eventCount || 0) > 0);
+  const publication: any = (receipt?.lastEvent?.subscriberResults || []).find((result?: any) : any =>
+    result?.publicationFacts && typeof result.publicationFacts === "object"
+  );
+  assert.equal(publication?.emitted, true);
+  const facts: any = publication.publicationFacts;
+  assert.ok(Number.isSafeInteger(facts.sourceRevision));
+  assert.ok(String(facts.catalogRevision || "").trim());
+  assert.ok(Number.isSafeInteger(facts.audienceRevision));
+  assert.ok(Array.isArray(facts.affectedPartitions));
+  assert.ok(facts.affectedPartitions.length > 0);
+  return facts;
+}
+
+async function waitForExactAudienceInvalidation(stream?: any, catalog?: any, publicationFacts?: any) : Promise<any> {
+  const catalogPartitions: any = new Set<any>(catalog?.facts?.partitionKeys || []);
+  const expectedPartitions: any[] = publicationFacts.affectedPartitions
+    .filter((partitionKey?: any) : any => catalogPartitions.has(partitionKey))
+    .sort();
+  assert.ok(expectedPartitions.length > 0);
+  const invalidation: any = await stream.waitForInvalidation(CATALOG_INVALIDATION_WAIT_MS, {
+    partitionKeys: expectedPartitions
+  });
+  assert.equal(invalidation.params.change.sourceRevision, publicationFacts.sourceRevision);
+  assert.equal(invalidation.params.change.catalogRevision, publicationFacts.catalogRevision);
+  assert.equal(invalidation.params.change.audienceRevision, publicationFacts.audienceRevision);
+  assert.deepEqual(invalidation.params.change.affectedPartitions, expectedPartitions);
+  return invalidation;
+}
+
 function timeoutCancellationAuditMatch(item?: any) : any {
   const operationKey: any = item?.payload?.operationKey || item?.operationKey;
   const reasonCode: any = item?.payload?.reasonCode || item?.reasonCode;
@@ -708,7 +748,6 @@ async function main() : Promise<any> {
   const allowedCatalog: any = await allowedPeer.pullCatalog();
   const deniedCatalog: any = await deniedPeer.pullCatalog();
   const executionCatalog: any = await executionPeer.pullCatalog();
-  const protocolCatalog: any = await protocolPeer.pullCatalog();
   for (const catalog of [allowedCatalog, deniedCatalog, executionCatalog]) {
     assert.equal(catalog.facts.sourceRevision, createAuthority.sourceRevision);
     assert.equal(catalog.facts.catalogRevision, executionCatalog.facts.catalogRevision);
@@ -743,7 +782,10 @@ async function main() : Promise<any> {
       payload: { kind: "scoped-api-key" }
     });
   }
-  audienceTagStore.close();
+  const initialAudienceDrain: any = await drainAndCloseTagStore(audienceTagStore);
+  assert.ok(initialAudienceDrain.eventCount > 0);
+  const protocolCatalog: any = await protocolPeer.pullCatalog();
+  assert.ok(protocolCatalog.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId));
 
   const ackStream: any = await protocolPeer.openInvalidationStream();
   assert.equal(ackStream.ok, true);
@@ -790,11 +832,14 @@ async function main() : Promise<any> {
     entityId: protocolGrant.workloadPrincipalId,
     payload: { kind: "scoped-api-key" }
   });
-  audienceNotificationStore.close();
+  const audiencePublicationDrain: any = await drainAndCloseTagStore(audienceNotificationStore);
+  const audiencePublicationFacts: any = audiencePublicationFactsFromDrain(audiencePublicationDrain);
   observe("audience.scoped-api-key.projected", "projected", "replace", 2, 2);
-  const invalidation: any = await ackStream.waitForInvalidation(CATALOG_INVALIDATION_WAIT_MS, {
-    partitionKeys: protocolCatalog.facts.partitionKeys
-  });
+  const invalidation: any = await waitForExactAudienceInvalidation(
+    ackStream,
+    protocolCatalog,
+    audiencePublicationFacts
+  );
   observe("protocol.invalidation.received", "received", "replace", 1, 2);
   await assert.rejects(() : any => unaffectedStream.waitForInvalidation(300));
   observe("protocol.unaffected-stream.quiet", "preserved", "replace", 1, 2);
@@ -1021,11 +1066,10 @@ async function main() : Promise<any> {
     entityId: timeoutGrant.workloadPrincipalId,
     payload: { kind: "scoped-api-key" }
   });
-  timeoutTagStore.close();
+  const timeoutAudienceDrain: any = await drainAndCloseTagStore(timeoutTagStore);
+  const timeoutAudienceFacts: any = audiencePublicationFactsFromDrain(timeoutAudienceDrain);
   observe("protocol.timeout-audience.changed", "updated", "replace", 3, 3);
-  await timeoutStream.waitForInvalidation(CATALOG_INVALIDATION_WAIT_MS, {
-    partitionKeys: timeoutCatalog.facts.partitionKeys
-  });
+  await waitForExactAudienceInvalidation(timeoutStream, timeoutCatalog, timeoutAudienceFacts);
   observe("protocol.timeout-invalidation.received", "received", "replace", 3, 3);
   assert.equal(await Promise.race([
     timeoutStream.waitForClose(),

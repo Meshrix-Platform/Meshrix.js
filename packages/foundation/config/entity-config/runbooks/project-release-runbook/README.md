@@ -6,16 +6,21 @@ assets. It is not exposed to downstream agents (`allowDownstream: false`).
 
 ## Authority
 
-- `npm run verify:acceptance` is the mandatory Functional Release Gate and the
-  only project-level acceptance authority.
+- `npm run verify:acceptance` is the mandatory Functional Release Gate.
+- `npm run server:verify:release-deployment` is the mandatory Release
+  Deployment Verification for the exact stable candidate on `ubuntu-24.04`
+  with bounded external deterministic synthetic requests and no real model
+  dependency.
 - `npm run verify:real-machine -- ...` runs remaining candidate-bound
   Real-Machine Verification Workflows. A passing receipt is the named
   Environment Support Claim for that exact environment
   and cannot block or promote project acceptance.
-- `.github/workflows/release.yml` is the only release publication path.
+- `.github/workflows/release-branch.yml` promotes `release` only after the
+  stable complete gate and external runtime-ui deployment verification.
+- `.github/workflows/release.yml` is the only release publication path and
+  accepts a version tag only when the tag commit equals the `release` branch
+  tip and the release deployment authority exists for that exact commit.
 - `.github/RELEASE_TEMPLATE.md` is the canonical release-notes template.
-- The canonical publication branch is `release`. A version tag is accepted
-  only when its commit is verifiably contained in that branch.
 
 ## Candidate Preparation
 
@@ -51,17 +56,19 @@ qualification as remaining required work.
 ## Publication
 
 An authorized maintainer creates the semantic version tag only after the
-candidate commit is present on `release`. The tag workflow revalidates package
-versions and branch ancestry, runs all release gates, assembles portable MCP
-assets, emits and verifies the production SBOM, stages the multi-platform
-container, enforces immutable GHCR version-tag digests, signs the container and
-the outer checksum authority with Sigstore, renders the release-notes template,
-and creates the GitHub Release.
+candidate commit is the exact `release` branch tip with a completed release
+deployment authority. The tag workflow revalidates package versions, the
+release deployment authority, and the exact tag-to-release-tip equality, then
+assembles portable MCP assets, emits and verifies the production SBOM, stages
+the multi-platform container, enforces immutable GHCR version-tag digests,
+signs the container and the outer checksum authority with Sigstore, renders
+the release-notes template, and creates the GitHub Release.
 
 The workflow fails closed when the release already exists, the tag commit is
-not on `release`, any required gate fails, a GHCR version tag names a different
-manifest digest, release asset basenames collide, or checksum signing and
-verification do not complete.
+not exactly the `release` branch tip, any required gate or the release
+deployment authority is missing, a GHCR version tag names a different manifest
+digest, release asset basenames collide, or checksum signing and verification
+do not complete.
 
 ## Consumer Verification
 

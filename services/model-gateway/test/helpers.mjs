@@ -64,7 +64,7 @@ export async function startService(options = {}) {
   };
 }
 
-export async function provision(service) {
+export async function provision(service, { modelId = "model-1" } = {}) {
   const headers = {
     authorization: `Bearer ${service.clientSecret}`,
     "content-type": "application/json"
@@ -79,7 +79,7 @@ export async function provision(service) {
     headers,
     body: JSON.stringify({
       revisionRef: "price-1",
-      modelRef: "model-1",
+      modelRef: modelId,
       currency: "USD",
       ...DEFAULT_PRICES,
       immutable: true
@@ -89,7 +89,7 @@ export async function provision(service) {
     method: "POST",
     headers,
     body: JSON.stringify({
-      modelId: "model-1",
+      modelId,
       providerRef: "prov1",
       pricingRevisionRef: "price-1",
       enabled: true

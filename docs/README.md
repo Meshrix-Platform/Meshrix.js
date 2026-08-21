@@ -29,14 +29,15 @@ is not independent authority. A path that has not converged on this boundary
 fails the Functional Release Gate.
 
 The [Runbook release contract](RUNBOOK.md#release-definition-and-publication)
-separates the mandatory Functional Release Gate from remaining Real-Machine
-Verification Workflows and their Environment Support Claims. Functional
-acceptance is a prerequisite for every real-machine workflow. A real-machine
-receipt never blocks, promotes, or changes functional acceptance. Offline
-delivery and the current plan receipt may close on Linux inside a virtual
-machine; Ubuntu is preferred and Debian is accepted. Native Linux, Ubuntu, and
-Debian qualification remain remaining required work after the named
-Real-Machine Verification Workflow.
+separates the mandatory Functional Release Gate and mandatory Release
+Deployment Verification from remaining Real-Machine Verification Workflows and
+their Environment Support Claims. Functional acceptance is a prerequisite for
+the exact-candidate runtime-ui deployment on `ubuntu-24.04` and for every
+real-machine workflow. A real-machine receipt never blocks, promotes, or
+changes functional acceptance. Offline delivery and the current plan receipt
+may close on Linux inside a virtual machine; Ubuntu is preferred and Debian is
+accepted. Native Linux, Ubuntu, and Debian qualification remain remaining
+required work after the named Real-Machine Verification Workflow.
 
 Governance evidence and ordinary telemetry have different value. Protected
 access and side effects require the minimum bounded lifecycle proof. Routine

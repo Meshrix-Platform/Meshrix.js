@@ -4,6 +4,7 @@ import {
   CONTROLLED_EXECUTION_LEAF_SPECS,
   reduceControlledExecutionConvergence
 } from "../../../tools/server-scripts/lib/controlled-execution-convergence-reducer.ts";
+import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
 
 const revision: any = "a".repeat(40);
 const treeDigest: any = `sha256:${"b".repeat(64)}`;
@@ -18,14 +19,21 @@ function sourceContext(verifier: any = "tools/server-scripts/verify-controlled-e
   };
 }
 
-function checkpoint(nodeId: any = "fixture-operations") : any {
-  return {
-    nodeId,
-    candidateDigest: "d".repeat(64),
+function candidate() : any {
+  return buildReleaseCandidateIdentity({
     sourceRevision: revision,
-    privacySafe: true,
-    profiles: ["enterprise-single-node"],
-  };
+    repositoryTreeDigest: `sha256:${"e".repeat(64)}`,
+    releaseDefinitionSha256: `sha256:${"1".repeat(64)}`,
+    packageLockSha256: `sha256:${"2".repeat(64)}`,
+    releasePackages: [{
+      manifest_path: "package.json",
+      name: "meshrix",
+      version: "0.0.1",
+      manifest_sha256: "3".repeat(64)
+    }],
+    supportedProfiles: ["enterprise-single-node"],
+    reportInventoryDigest: `sha256:${"f".repeat(64)}`,
+  });
 }
 
 function leaf(spec?: any) : any {
@@ -49,26 +57,17 @@ function fixture() : any {
   return {
     generatedAt: "2026-01-01T00:00:00.000Z",
     sourceContext: sourceContext(),
-    plan: {
-      directory: "end-to-end-release",
-      nodeId: "fixture-operations",
-      status: "completed",
-      requirements: ["REQ-BASELINE-CONSOLE-ADMINISTRATION"],
-      criteriaChecked: true,
-      candidateDigest: "d".repeat(64),
-      sourceRevision: revision
-    },
-    planCheckpoint: checkpoint(),
+    candidate: candidate(),
     leafReports: Object.fromEntries(CONTROLLED_EXECUTION_LEAF_SPECS.map((spec?: any) : any => [spec.key, leaf(spec)]))
   };
 }
 
 describe("controlled execution convergence reducer", () : any => {
-  it("accepts only the exact current checkpoint and leaf evidence set", () : any => {
+  it("accepts only the exact current release candidate and leaf evidence set", () : any => {
     const report: any = reduceControlledExecutionConvergence(fixture());
     expect(report.summary).toEqual({
       controlledExecutionConvergenceReady: true,
-      baselineCheckpointProfileCount: 1,
+      candidateProfileCount: 1,
       leafReportCount: 4,
       reportLeakScan: true
     });
@@ -76,13 +75,14 @@ describe("controlled execution convergence reducer", () : any => {
 
   for (const [name, mutate, message] of [
     ["missing leaf", (input?: any) : any => { delete input.leafReports.custody; }, "leaf report is missing"],
-    ["pending plan", (input?: any) : any => { input.plan.status = "pending"; }, "operations node is not completed"],
     ["stale source", (input?: any) : any => { input.leafReports.launcher.sourceContext.sourceTreeDigest = `sha256:${"0".repeat(64)}`; }, "source tree is stale"],
     ["mismatched verifier", (input?: any) : any => { input.leafReports.sandbox.verifier = "unexpected"; }, "verifier is mismatched"],
     ["privacy unsafe", (input?: any) : any => {
       input.leafReports.custody.privatePath = ["", "Users", "example", "private"].join("/");
     }, "privacy-unsafe"],
-    ["candidate mismatch", (input?: any) : any => { input.planCheckpoint.candidateDigest = "0".repeat(64); }, "is not current"],
+    ["candidate mutation", (input?: any) : any => {
+      input.candidate = { ...input.candidate, source_revision: "0".repeat(40) };
+    }, "is invalid"],
     ["non-Linux provider", (input?: any) : any => { input.leafReports.oci.checks.linuxRuntime = false; }, "not verified on Linux"],
     ["incomplete cleanup", (input?: any) : any => { input.leafReports.oci.checks.independentInstancesDestroyed = false; }, "cleanup is incomplete"]
   ]) {

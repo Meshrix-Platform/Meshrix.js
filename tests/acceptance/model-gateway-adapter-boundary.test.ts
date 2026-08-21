@@ -5,6 +5,9 @@ import type { GatewayChannel, GatewayDirection } from "@meshrix/contracts/plugin
 import { createAgentMcpGatewayPipeline } from "../../packages/server-runtime/src/composition/agent-mcp-gateway-pipeline.ts";
 import { createGatewayChannelRouter } from "../../packages/server-runtime/src/composition/gateway-channel-router.ts";
 import { activatePlugin } from "../../plugins/model-gateway/runtime.mjs";
+import {
+  assertRuntimeDockerfileServiceIsolation
+} from "../../tools/server-scripts/verify-model-gateway-detachment.ts";
 
 const REFS = Object.freeze({
   operationId: "model_gateway.call",
@@ -47,6 +50,23 @@ function channel(direction: GatewayDirection, order: string[]): GatewayChannel {
       return Object.freeze({ status: "admitted", envelopeRef: direction });
     },
   });
+}
+
+function dockerfile({ build = "", runtime = "", final = "" }: Record<string, string> = {}): string {
+  return `
+FROM node:fixture AS build
+COPY services/model-gateway/contracts ./services/model-gateway/contracts
+${build}
+FROM node:fixture AS build-ui
+COPY ["services/model-gateway/contracts", "./services/model-gateway/contracts"]
+FROM build AS runtime
+COPY --from=build app/dist ./dist
+${runtime}
+FROM runtime AS runtime-ui
+COPY --from=build-ui app/build/dist ./build/dist
+FROM runtime AS final
+${final}
+`;
 }
 
 describe("Model Gateway adapter boundary", () => {
@@ -112,5 +132,39 @@ describe("Model Gateway adapter boundary", () => {
     expect(runtime.contributions.routes).toEqual({});
     expect(runtime.contributions.mcpTools).toEqual({});
     await runtime.close();
+  });
+
+  it("permits only the canonical service-owned contracts in both build stages", () => {
+    expect(() => assertRuntimeDockerfileServiceIsolation(dockerfile())).not.toThrow();
+  });
+
+  it.each([
+    "COPY services ./services",
+    "COPY services/model-gateway ./services/model-gateway",
+    "COPY services/model-gateway/src ./services/model-gateway/src",
+    "COPY services/model-gateway/test ./services/model-gateway/test",
+    "COPY services/model-gateway/package.json ./services/model-gateway/package.json",
+    "COPY . ."
+  ])("rejects non-contract build-context service input: %s", (copy) => {
+    expect(() => assertRuntimeDockerfileServiceIsolation(dockerfile({ build: copy })))
+      .toThrow(/must not copy service source/u);
+  });
+
+  it.each([
+    ["runtime", "COPY services/model-gateway/contracts ./services/model-gateway/contracts"],
+    ["runtime", "COPY --from=build /app/services/model-gateway/contracts ./contracts"],
+    ["final", "COPY services/model-gateway/contracts ./services/model-gateway/contracts"]
+  ])("rejects direct service input in the %s stage", (stage, copy) => {
+    expect(() => assertRuntimeDockerfileServiceIsolation(dockerfile({ [stage]: copy })))
+      .toThrow(new RegExp(`stage ${stage} must not copy service source`, "u"));
+  });
+
+  it("requires one canonical contracts copy in each build stage", () => {
+    const missingBuildUi = dockerfile().replace(
+      'COPY ["services/model-gateway/contracts", "./services/model-gateway/contracts"]',
+      ""
+    );
+    expect(() => assertRuntimeDockerfileServiceIsolation(missingBuildUi))
+      .toThrow(/must each copy exactly/u);
   });
 });

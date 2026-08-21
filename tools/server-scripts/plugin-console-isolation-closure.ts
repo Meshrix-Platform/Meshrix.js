@@ -46,7 +46,6 @@ const SOURCE_FILES: readonly any[] = Object.freeze([
   "apps/console/router/plugin-console-routes.ts",
   "packages/foundation/src/module-system/plugin-console-isolation.ts",
   "packages/foundation/src/module-system/plugin-runtime.ts",
-  "tests/acceptance/plugin-console-isolation.test.ts",
   ...FOCUSED_SUITES
 ]);
 

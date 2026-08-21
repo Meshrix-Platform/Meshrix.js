@@ -69,31 +69,84 @@
     {
       "id": "release-acceptance-standards",
       "factKey": "release.acceptance-standards",
-      "domain": "Mandatory functional-completeness release claim, optional real-machine verification claim, their one-way dependency, and the declared target set.",
+      "domain": "Mandatory functional-completeness and release-deployment claims, optional real-machine verification claim, their one-way dependencies, and the declared target set.",
       "authorityPath": "tools/registry/release-acceptance-standards.registry.json",
       "authorityRole": "release-acceptance-standards-authority",
       "projectionPaths": [
         "tools/registry/release-definition.registry.json",
         ".github/workflows/ci.yml",
         ".github/workflows/release.yml",
+        ".github/workflows/release-branch.yml",
         ".github/workflows/real-machine-validation.yml",
-        "docs/RUNBOOK.md",
-        "docs/plans/Manifest.json",
-        "docs/plans/end-to-end-release/DependencyMap.json"
+        "docs/RUNBOOK.md"
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-release-acceptance-standards.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-real-machine-validation.ts"
+        "tools/server-scripts/verify-real-machine-validation.ts",
+        "tools/server-scripts/verify-release-deployment.ts"
       ],
       "verification": [
         "npm run verify:acceptance:standards",
-        "npm run verify:better-plan",
         "npm run verify:acceptance:plan"
       ],
       "nonAuthorityBoundaries": [
-        "Workflow files, plans, reports, and documentation project the two standards but cannot redefine their dependency direction.",
+        "Workflow files, reports, and documentation project the three standards but cannot redefine their dependency direction.",
+        "Release-deployment verification consumes a functional-complete receipt for the exact candidate and cannot replace or revoke functional-complete.",
         "A real-machine receipt may establish only its candidate-and-environment support claim and cannot block or revoke functional-complete."
+      ]
+    },
+    {
+      "id": "release-deployment-verifier",
+      "factKey": "release.deployment-verification",
+      "domain": "Deterministic external runtime-ui deployment verification over the exact stable source candidate and functional receipt, bounded synthetic request scenarios, deployment cleanup, and the fixed-size privacy-safe deployment receipt.",
+      "authorityPath": "tools/server-scripts/verify-release-deployment.ts",
+      "authorityRole": "release-deployment-verifier",
+      "projectionPaths": [
+        "build/reports/release-deployment.json",
+        ".github/workflows/release-branch.yml",
+        ".github/workflows/release.yml"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-release-acceptance-standards.ts",
+        ".github/workflows/release-branch.yml",
+        ".github/workflows/release.yml",
+        "tools/server-scripts/verify-release-deployment.ts",
+        "tests/vitest/server/release-deployment-smoke.test.ts",
+        "tests/vitest/server/external-synthetic-requests.test.ts"
+      ],
+      "verification": [
+        "npm run server:verify:release-deployment",
+        "npm run verify:acceptance:standards"
+      ],
+      "nonAuthorityBoundaries": [
+        "The deployment receipt is a write-once projection of this verifier; workflows, reports, and documentation cannot recompute or relax its bounded scenarios.",
+        "Deployment evidence is capacity-uncertified by contract and cannot be reused as a runtime-capacity claim.",
+        "Receipts must contain only the fixed-size allowlisted aggregate fields and never embed runtime environment, machine identity, or personal data."
+      ]
+    },
+    {
+      "id": "release-branch-workflow",
+      "factKey": "release.branch-workflow",
+      "domain": "The release-branch workflow that resolves the successful stable complete-gate authority for the exact push commit and runs the external runtime-ui deployment verification before any release publication can consume that commit.",
+      "authorityPath": ".github/workflows/release-branch.yml",
+      "authorityRole": "release-branch-workflow-authority",
+      "projectionPaths": [
+        ".github/workflows/release.yml",
+        "docs/RUNBOOK.md"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-release-acceptance-standards.ts",
+        ".github/workflows/release.yml",
+        "tools/registry/release-authority-baseline.registry.json"
+      ],
+      "verification": [
+        "npm run verify:acceptance:standards",
+        "npm run verify:release-definition"
+      ],
+      "nonAuthorityBoundaries": [
+        "The release workflow projects the release-branch deployment authority and cannot redefine its runner, receipt, or scenario set.",
+        "Tag publication must consume the release authority produced for the exact release tip commit and cannot bypass deployment verification."
       ]
     },
     {
@@ -445,7 +498,7 @@
     {
       "id": "controlled-execution-convergence-reducer",
       "factKey": "controlled-execution.convergence-readiness",
-      "domain": "Current Controlled Execution Convergence readiness reduction over the exact candidate-bound enterprise-operations Plan checkpoint, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
+      "domain": "Current Controlled Execution Convergence readiness reduction over the exact canonical release candidate, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
       "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts",
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [

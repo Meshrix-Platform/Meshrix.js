@@ -24,17 +24,20 @@ import {
   PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH,
   PLATFORM_ACCEPTANCE_GENERATION_ROOT
 } from "./platform-acceptance-report-catalog.ts";
+import { validateReleaseCandidateIdentity } from "../verify-release-candidate-identity.ts";
 
-export const ACCEPTANCE_GENERATION_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-generation-1";
+export const ACCEPTANCE_GENERATION_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-generation-2";
 export const ACCEPTANCE_GENERATION_POINTER_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-generation-pointer-1";
 export const ACCEPTANCE_GENERATION_ROOT: any = PLATFORM_ACCEPTANCE_GENERATION_ROOT;
 export const ACCEPTANCE_GENERATION_POINTER: any = PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH;
+export const ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT: any = `${ACCEPTANCE_GENERATION_ROOT}/failures`;
 export const ACCEPTANCE_EXECUTION_LEASE_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-execution-lease-1";
 export const ACCEPTANCE_GENERATION_BUDGETS: Readonly<Record<string, any>> = Object.freeze({
   maxEntries: 256,
   maxEntryBytes: 32 * 1024 * 1024,
   maxGenerationBytes: 256 * 1024 * 1024,
   maxRetainedGenerations: 8,
+  maxRetainedFailures: 8,
   publicationLockTimeoutMs: 5_000,
   stalePublicationLockMs: 5 * 60 * 1000
 });
@@ -101,6 +104,20 @@ function generationPaths(repoRoot?: any, id: any = generationId(), workspace: an
     stagedGeneration: path.join(root, "staging", id),
     committedGeneration: path.join(root, "generations", id),
     pointer: path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER)
+  };
+}
+
+function failureDiagnosticPaths(repoRoot?: any, id?: any) : any {
+  const diagnosticId: any = String(id || "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(diagnosticId)) {
+    throw new Error("Acceptance failure diagnostic generation id is invalid");
+  }
+  const root: any = path.join(repoRoot, ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT);
+  return {
+    id: diagnosticId,
+    root,
+    staged: path.join(root, `.staging-${diagnosticId}`),
+    committed: path.join(root, diagnosticId)
   };
 }
 
@@ -213,45 +230,17 @@ async function withPublicationLock(root?: any, action?: any) : Promise<any> {
   }
 }
 
-async function collectPlanEvidenceBuildPaths(repoRoot?: any) : Promise<any[]> {
-  const checkpointsPath: any = path.join(repoRoot, "docs/plans/end-to-end-release/Checkpoints.json");
-  try {
-    const checkpoints: any = JSON.parse(await fs.readFile(checkpointsPath, "utf8"));
-    const paths: any = new Set<any>();
-    for (const node of Array.isArray(checkpoints) ? checkpoints : []) {
-      for (const criterion of node?.acceptance_criteria ?? []) {
-        for (const ref of criterion?.evidence_refs ?? []) {
-          if (ref?.type === "file" && typeof ref?.path === "string" && ref.path.startsWith("build/")) {
-            paths.add(ref.path.split(path.sep).join("/"));
-          }
-        }
-      }
-    }
-    return [...paths];
-  } catch {
-    return [];
-  }
-}
-
-function workspaceCopyFilter(repoRoot?: any, planEvidenceBuildPaths: any[] = []) : any {
-  const excludedTopLevel: any = new Set<any>([".git", "node_modules"]);
-  const allowedBuildPrefixes: any[] = [
-    "build/plan-proof-ledger",
-    ...planEvidenceBuildPaths
-  ];
+function workspaceCopyFilter(repoRoot?: any) : any {
+  const excludedTopLevel: any = new Set<any>([".git", "build", "node_modules"]);
+  const excludedProcessRoots: readonly any[] = Object.freeze(["docs/plans", "docs/reports"]);
   return (sourcePath?: any) : any => {
     const relativePath: any = path.relative(repoRoot, sourcePath);
     if (!relativePath) return true;
     const normalized: any = relativePath.split(path.sep).join("/");
     const [firstSegment] = relativePath.split(path.sep);
     if (excludedTopLevel.has(firstSegment)) return false;
-    if (firstSegment === "build") {
-      if (normalized === "build") return true;
-      return allowedBuildPrefixes.some((prefix?: any) : any =>
-        normalized === prefix ||
-        normalized.startsWith(`${prefix}/`) ||
-        prefix.startsWith(`${normalized}/`));
-    }
+    if (excludedProcessRoots.some((root?: any) : any =>
+      normalized === root || normalized.startsWith(`${root}/`))) return false;
     return true;
   };
 }
@@ -285,6 +274,30 @@ async function linkWorkspaceNodeModules(repoRoot?: any, workspace?: any) : Promi
   }));
 }
 
+async function resolveWorkspaceGitDirectory(repoRoot?: any) : Promise<any> {
+  const resolved: any = spawnSync("git", ["rev-parse", "--absolute-git-dir"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    windowsHide: true
+  });
+  const gitDirectory: any = String(resolved.stdout || "").trim();
+  if (
+    resolved.status !== 0 ||
+    !path.isAbsolute(gitDirectory) ||
+    /[\r\n]/u.test(gitDirectory)
+  ) {
+    throw new Error("Acceptance generation requires valid Git repository evidence");
+  }
+  const canonicalGitDirectory: any = await fs.realpath(gitDirectory).catch(() : any => "");
+  const stats: any = canonicalGitDirectory
+    ? await fs.stat(canonicalGitDirectory).catch(() : any => null)
+    : null;
+  if (!stats?.isDirectory()) {
+    throw new Error("Acceptance generation requires valid Git repository evidence");
+  }
+  return canonicalGitDirectory;
+}
+
 export async function createAcceptanceGenerationWorkspace(repoRoot?: any, { id }: Record<string, any> = {}) : Promise<any> {
   const selectedId: any = id || generationId();
   const workspace: any = await fs.mkdtemp(path.join(os.tmpdir(), `meshrix-acceptance-${selectedId}-`));
@@ -293,26 +306,22 @@ export async function createAcceptanceGenerationWorkspace(repoRoot?: any, { id }
   );
   const paths: any = generationPaths(repoRoot, selectedId, workspace, baseGenerationId);
   try {
-    const evidenceBuildPaths: any[] = await collectPlanEvidenceBuildPaths(repoRoot);
     await fs.cp(repoRoot, paths.workspace, {
       recursive: true,
       force: true,
       preserveTimestamps: true,
-      filter: workspaceCopyFilter(repoRoot, evidenceBuildPaths)
+      filter: workspaceCopyFilter(repoRoot)
     });
     const dependencyRoot: any = path.join(repoRoot, "node_modules");
     const stats: any = await fs.stat(dependencyRoot);
     if (!stats.isDirectory()) throw new Error("not a directory");
     await linkWorkspaceNodeModules(repoRoot, paths.workspace);
-    const gitDir: any = path.join(repoRoot, ".git");
-    const gitStats: any = await fs.stat(gitDir).catch(() : any => null);
-    if (gitStats?.isDirectory()) {
-      await fs.writeFile(
-        path.join(paths.workspace, ".git"),
-        `gitdir: ${gitDir}\n`,
-        { encoding: "utf8", mode: 0o644 }
-      );
-    }
+    const gitDirectory: any = await resolveWorkspaceGitDirectory(repoRoot);
+    await fs.writeFile(
+      path.join(paths.workspace, ".git"),
+      `gitdir: ${gitDirectory}\n`,
+      { encoding: "utf8", mode: 0o644 }
+    );
   } catch (error: any) {
     await fs.rm(paths.workspace, { recursive: true, force: true });
     if (error?.message === "not a directory" || error?.code === "ENOENT") {
@@ -406,7 +415,7 @@ async function validateOwnedReport(workspace?: any, inventoryEntry?: any) : Prom
   assertNoSensitiveReportLeak(raw, `acceptance generation report ${reportPath}`);
 }
 
-const SHA256_DIGEST: any = /^sha256:[a-f0-9]{64}$/u;
+const BARE_SHA256_DIGEST: any = /^[a-f0-9]{64}$/u;
 
 function sameValues(left?: any, right?: any) : any {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -416,21 +425,19 @@ function requireAggregate(condition?: any, code?: any) : any {
   if (!condition) throw new Error(`Acceptance generation aggregate contract is invalid: ${code}`);
 }
 
-function validateReceiptPreflight(preflight?: any, selectedProfile?: any) : any {
-  requireAggregate(preflight?.selectedProfile === selectedProfile, "receipt-profile-mismatch");
-  requireAggregate(SHA256_DIGEST.test(String(preflight?.planReceiptSetDigest || "")), "receipt-set-digest-invalid");
-  requireAggregate(Number.isInteger(preflight?.requiredReceiptCount) && preflight.requiredReceiptCount >= 0,
-    "receipt-count-invalid");
-  requireAggregate(/^[a-f0-9]{64}$/u.test(String(preflight?.candidateDigest || "")),
-    "candidate-digest-invalid");
-  requireAggregate(Array.isArray(preflight?.bindings) &&
-    preflight.bindings.length === preflight.requiredReceiptCount, "receipt-bindings-invalid");
-  requireAggregate(Number.isInteger(preflight?.requiredCheckpointCount) && preflight.requiredCheckpointCount >= 0,
-    "checkpoint-count-invalid");
-  requireAggregate(Array.isArray(preflight?.checkpointBindings) &&
-    preflight.checkpointBindings.length === preflight.requiredCheckpointCount &&
-    preflight.requiredReceiptCount + preflight.requiredCheckpointCount > 0,
-    "checkpoint-bindings-invalid");
+function validateCandidateIdentity(candidate?: any, selectedProfile?: any) : any {
+  let validated: any;
+  try {
+    validated = validateReleaseCandidateIdentity(candidate);
+  } catch {
+    requireAggregate(false, "candidate-identity-invalid");
+  }
+  requireAggregate(
+    validated.supported_profiles.length === 1 &&
+      validated.supported_profiles[0] === selectedProfile,
+    "candidate-profile-mismatch"
+  );
+  return validated;
 }
 
 function validateCommandAndRequirementEvidence(aggregateReport?: any) : any {
@@ -501,7 +508,7 @@ export async function validateAcceptedAggregateReport({
   repoRoot,
   verifyLedgerAnchor = verifyAggregateLedgerAnchor
 }: Record<string, any> = {}) : Promise<any> {
-  requireAggregate(aggregateReport?.schemaVersion === "v0.0.1:acceptance:platform-report-2", "schema");
+  requireAggregate(aggregateReport?.schemaVersion === "v0.0.1:acceptance:platform-report-3", "schema");
   requireAggregate(aggregateReport?.verifier === "tools/server-scripts/verify-platform-acceptance.ts", "verifier");
   const selectedProfile: any = requirePlatformAcceptanceProfile(aggregateReport?.selectedProfile);
   requireAggregate(aggregateReport.status === "accepted", "status");
@@ -532,12 +539,14 @@ export async function validateAcceptedAggregateReport({
   requireAggregate(sameValues(aggregateReport.releaseEvidenceInventory, releaseEvidenceInventory), "report-inventory");
   const inventoryDigest: any = reportPayloadDigest({ inventory: releaseEvidenceInventory });
   requireAggregate(aggregateReport.releaseEvidenceInventoryDigest === inventoryDigest, "report-inventory-digest");
-  validateReceiptPreflight(aggregateReport.planReceiptPreflight, selectedProfile);
-  validateReceiptPreflight(aggregateReport.finalPlanReceiptPreflight, selectedProfile);
+  const candidateIdentity: any = validateCandidateIdentity(aggregateReport.candidateIdentity, selectedProfile);
+  const finalCandidateIdentity: any = validateCandidateIdentity(aggregateReport.finalCandidateIdentity, selectedProfile);
   requireAggregate(
-    aggregateReport.planReceiptPreflight.planReceiptSetDigest ===
-      aggregateReport.finalPlanReceiptPreflight.planReceiptSetDigest,
-    "receipt-set-drift"
+    candidateIdentity.candidate_digest === finalCandidateIdentity.candidate_digest &&
+      aggregateReport.candidate_digest === candidateIdentity.candidate_digest &&
+      aggregateReport.sourceRevision === candidateIdentity.source_revision &&
+      aggregateReport.releaseEvidenceInventoryDigest === candidateIdentity.report_inventory_digest,
+    "candidate-identity-drift"
   );
   requireAggregate(aggregateReport.capabilityEvidenceExecution?.ready === true, "capability-evidence");
   requireAggregate(aggregateReport.requirementEvidence?.ready === true &&
@@ -582,13 +591,155 @@ export async function validateAcceptedAggregateReport({
     anchor?.verification?.ok === true && anchor?.reportDigestCount === requiredReports.length &&
     Array.isArray(anchor?.reportDigests) && anchor.reportDigests.length === requiredReports.length,
     "ledger-anchor-shape");
-  requireAggregate(anchor.evidenceContext?.selectedProfile === selectedProfile &&
+  requireAggregate(anchor.evidenceContext?.schemaVersion === "v0.0.1:meshrix:acceptance-evidence-anchor-context-2" &&
+    anchor.evidenceContext?.selectedProfile === selectedProfile &&
+    anchor.evidenceContext?.sourceRevision === candidateIdentity.source_revision &&
     anchor.evidenceContext?.ownedReportsInventoryDigest === inventoryDigest &&
-    anchor.evidenceContext?.planReceiptSetDigest === aggregateReport.planReceiptPreflight.planReceiptSetDigest &&
+    anchor.evidenceContext?.candidateDigest === candidateIdentity.candidate_digest &&
     anchor.evidenceContext?.privacySafe === true, "ledger-context");
   const verification: any = await verifyLedgerAnchor({ aggregateReport, repoRoot });
   requireAggregate(verification?.ok === true, "ledger-anchor-verification");
   return Object.freeze({ selectedProfile, inventoryDigest });
+}
+
+function validateFailedAggregateReport(aggregateReport?: any) : any {
+  requireAggregate(aggregateReport && typeof aggregateReport === "object" && !Array.isArray(aggregateReport),
+    "failure-object");
+  requireAggregate(aggregateReport.schemaVersion === "v0.0.1:acceptance:platform-report-3", "failure-schema");
+  requireAggregate(aggregateReport.verifier === "tools/server-scripts/verify-platform-acceptance.ts",
+    "failure-verifier");
+  requireAggregate(aggregateReport.acceptanceStandard === "functional-completeness" &&
+    aggregateReport.claim === "functional-complete", "failure-claim");
+  requireAggregate(aggregateReport.status === "failed", "failure-status");
+  requireAggregate(Number.isFinite(Date.parse(aggregateReport.generatedAt)), "failure-generated-at");
+  const selectedProfile: any = requirePlatformAcceptanceProfile(aggregateReport.selectedProfile);
+  requireAggregate(aggregateReport.stateMachine?.currentState === "failed" &&
+    aggregateReport.stateMachine?.event === "command_or_report_failed", "failure-terminal-state");
+  const { currentState: _currentState, event: _event, ...stateMachineContract } = aggregateReport.stateMachine;
+  requireAggregate(sameValues(stateMachineContract, PLATFORM_ACCEPTANCE_STATE_MACHINE),
+    "failure-state-machine-contract");
+  requireAggregate(aggregateReport.summary && typeof aggregateReport.summary === "object" &&
+    !Array.isArray(aggregateReport.summary) && aggregateReport.summary.releaseReady === false,
+    "failure-summary");
+
+  if (aggregateReport.candidateIdentity !== undefined) {
+    const candidateIdentity: any = validateCandidateIdentity(aggregateReport.candidateIdentity, selectedProfile);
+    requireAggregate(aggregateReport.candidate_digest === candidateIdentity.candidate_digest,
+      "failure-candidate-digest");
+    if (String(aggregateReport.sourceRevision || "")) {
+      requireAggregate(aggregateReport.sourceRevision === candidateIdentity.source_revision,
+        "failure-source-revision");
+    }
+    if (aggregateReport.finalCandidateIdentity !== null && aggregateReport.finalCandidateIdentity !== undefined) {
+      validateCandidateIdentity(
+        aggregateReport.finalCandidateIdentity,
+        selectedProfile
+      );
+    }
+  } else {
+    requireAggregate(aggregateReport.candidate_digest === undefined &&
+      aggregateReport.finalCandidateIdentity === undefined &&
+      !String(aggregateReport.sourceRevision || ""), "failure-orphan-candidate-binding");
+  }
+  return Object.freeze({ selectedProfile });
+}
+
+async function readFailedAggregateReport(workspace?: any, aggregateReportPath?: any) : Promise<any> {
+  const logicalPath: any = normalizedLogicalPath(aggregateReportPath);
+  let sourcePath: any;
+  try {
+    sourcePath = await assertPathHasNoSymlinkComponents(workspace, logicalPath, "file");
+  } catch (error: any) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  const stats: any = await fs.stat(sourcePath);
+  if (stats.size > ACCEPTANCE_GENERATION_BUDGETS.maxEntryBytes) {
+    throw new Error("Acceptance failure diagnostic aggregate exceeds its byte budget");
+  }
+  const raw: any = await fs.readFile(sourcePath, "utf8");
+  let aggregateReport: any;
+  try {
+    aggregateReport = JSON.parse(raw);
+  } catch {
+    throw new Error("Acceptance failure diagnostic aggregate JSON is invalid");
+  }
+  validateFailedAggregateReport(aggregateReport);
+  assertNoSensitiveReportLeak(raw, "acceptance failure diagnostic aggregate report");
+  return Object.freeze({ logicalPath, raw });
+}
+
+function validateWorkerFailureResult(workerResult?: any) : any {
+  const exitCode: any = Number(workerResult?.exitCode);
+  const signal: any = String(workerResult?.signal || "");
+  if (!Number.isInteger(exitCode) || exitCode === 0 || exitCode < 0 || exitCode > 255 ||
+      (signal && !/^SIG[A-Z0-9]+$/u.test(signal))) {
+    throw new Error("Acceptance failure diagnostic worker result is invalid");
+  }
+  return Object.freeze({ exitCode, signal });
+}
+
+function createWorkerExitReceipt(paths?: any, workerResult?: any) : any {
+  const { exitCode, signal } = workerResult;
+  const receipt: Record<string, any> = {
+    schemaVersion: ACCEPTANCE_GENERATION_SCHEMA,
+    diagnosticKind: "worker-exit",
+    generationId: String(paths.id),
+    status: "failed",
+    exitCode,
+    signal
+  };
+  assertNoSensitiveReportLeak(receipt, "acceptance failure diagnostic worker receipt");
+  return Object.freeze(receipt);
+}
+
+async function pruneFailureDiagnostics(failureRoot?: any) : Promise<any> {
+  const entries: any[] = await fs.readdir(failureRoot, { withFileTypes: true });
+  for (const staging of entries.filter((entry?: any) : any =>
+    entry.isDirectory() && !entry.isSymbolicLink() && entry.name.startsWith(".staging-"))) {
+    await fs.rm(path.join(failureRoot, staging.name), { recursive: true, force: true });
+  }
+  const retained: any[] = entries
+    .filter((entry?: any) : any => entry.isDirectory() && !entry.isSymbolicLink() &&
+      !entry.name.startsWith(".staging-"))
+    .map((entry?: any) : any => entry.name)
+    .sort()
+    .reverse();
+  for (const retired of retained.slice(ACCEPTANCE_GENERATION_BUDGETS.maxRetainedFailures)) {
+    await fs.rm(path.join(failureRoot, retired), { recursive: true, force: true });
+  }
+}
+
+export async function publishAcceptanceFailureDiagnostic({
+  repoRoot,
+  paths,
+  aggregateReportPath,
+  workerResult
+}: Record<string, any>) : Promise<any> {
+  const failurePaths: any = failureDiagnosticPaths(repoRoot, paths?.id);
+  const failureResult: any = validateWorkerFailureResult(workerResult);
+  const aggregate: any = await readFailedAggregateReport(paths?.workspace, aggregateReportPath);
+  const targetName: any = aggregate ? path.posix.basename(aggregate.logicalPath) : "worker-exit.json";
+  const payload: any = aggregate?.raw ?? `${JSON.stringify(createWorkerExitReceipt(paths, failureResult), null, 2)}\n`;
+
+  await fs.mkdir(failurePaths.root, { recursive: true, mode: 0o700 });
+  await fs.mkdir(failurePaths.staged, { recursive: false, mode: 0o700 });
+  try {
+    const targetPath: any = path.join(failurePaths.staged, targetName);
+    await writePrivateFileAtomic(targetPath, payload);
+    await syncPathIfSupported(failurePaths.staged);
+    await fs.rename(failurePaths.staged, failurePaths.committed);
+    await syncPathIfSupported(failurePaths.root);
+    await pruneFailureDiagnostics(failurePaths.root);
+    return Object.freeze({
+      generationId: failurePaths.id,
+      kind: aggregate ? "aggregate" : "worker-exit",
+      path: path.relative(repoRoot, path.join(failurePaths.committed, targetName)).split(path.sep).join("/")
+    });
+  } catch (error: any) {
+    await fs.rm(failurePaths.staged, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 async function pruneCommittedGenerations(paths?: any) : Promise<any> {
@@ -671,7 +822,7 @@ export async function publishAcceptanceGeneration({
       createdAt: new Date().toISOString(),
       aggregateReport: aggregateLogicalPath,
       selectedProfile: aggregateBinding.selectedProfile,
-      planReceiptSetDigest: aggregateReport.planReceiptPreflight.planReceiptSetDigest,
+      candidateDigest: aggregateReport.candidateIdentity.candidate_digest,
       ledgerEventId: aggregateReport.ledgerAnchor.ledgerEventId,
       releaseEvidenceInventory,
       releaseEvidenceInventoryDigest: reportPayloadDigest({ inventory: releaseEvidenceInventory }),
@@ -749,7 +900,7 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
   } catch {
     throw new Error("Acceptance generation manifest profile is invalid");
   }
-  if (!SHA256_DIGEST.test(String(manifest.planReceiptSetDigest || "")) ||
+  if (!BARE_SHA256_DIGEST.test(String(manifest.candidateDigest || "")) ||
       !String(manifest.ledgerEventId || "").trim()) {
     throw new Error("Acceptance generation manifest acceptance binding is invalid");
   }
@@ -825,7 +976,7 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
   assertNoSensitiveReportLeak(aggregateReport, "resolved acceptance generation aggregate report");
   if (
     aggregateBinding.selectedProfile !== manifest.selectedProfile ||
-    aggregateReport.planReceiptPreflight.planReceiptSetDigest !== manifest.planReceiptSetDigest ||
+    aggregateReport.candidateIdentity.candidate_digest !== manifest.candidateDigest ||
     aggregateReport.ledgerAnchor.ledgerEventId !== manifest.ledgerEventId
   ) {
     throw new Error("Acceptance generation manifest does not bind its aggregate report");

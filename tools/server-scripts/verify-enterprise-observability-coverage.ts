@@ -21,7 +21,6 @@ const OBSERVABILITY_SEMANTICS_REPORT: any = "build/reports/observability-semanti
 const VERIFIER: any = "tools/server-scripts/verify-enterprise-observability-coverage.ts";
 const COMMAND_ID: any = "enterprise-observability-coverage";
 const REPORT_SCHEMA_VERSION: any = "v0.0.1:observability:enterprise-coverage-report-1";
-const PLAN_FILE: any = "docs/plans/end-to-end-release/Plan.md";
 const REQUIREMENTS: readonly any[] = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES: readonly any[] = Object.freeze([
   "packages/capabilities/src/operation-permission-core/catalog.ts",
@@ -186,7 +185,7 @@ async function main() : Promise<any> {
     schemaVersion: REPORT_SCHEMA_VERSION,
     verifier: VERIFIER,
     provenance,
-    checkpointDigest: await computeVerifierSourceRevision(repoRoot, [PLAN_FILE]),
+    checkpointDigest: revision,
     requirements: REQUIREMENTS
   });
   assertNoSensitiveReportLeak(finalizedReport, "enterprise observability coverage report");

@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { repoRoot, readJson, sanitizeError } from "./lib/repository.mjs";
+import { assertMigratedExtensionClosure } from "./lib/migrated-extension-closure.mjs";
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -23,9 +24,7 @@ async function exists(relative) {
 
 async function main() {
   const registry = await readJson(path.join(repoRoot, "plugins", "registry", "plugins.json"));
-  const runtime = registry.plugins.filter((entry) => entry.runtime === true);
-  const adapters = registry.plugins.filter((entry) => entry.adapter === true);
-  if (registry.plugins.length !== 10 || runtime.length !== 3 || adapters.length !== 7) throw new Error("implemented catalog closure counts are invalid");
+  const counts = assertMigratedExtensionClosure(registry);
   const required = [
     "services/file-parser/format-convert/go.mod",
     "services/file-parser/format-convert/LICENSE",
@@ -54,7 +53,16 @@ async function main() {
   for (const file of ["services/file-parser/format-convert/go.mod", "services/file-parser/format-convert/LICENSE", "plugins/LICENSE-APACHE-2.0", "plugins/registry/plugins.json", "THIRD_PARTY_NOTICES.md"]) {
     if (![...packed].some((entry) => entry === file || entry.startsWith(`${file}/`))) throw new Error(`npm dry-run omitted ${file}`);
   }
-  process.stdout.write(`${JSON.stringify({ ok: true, serviceCount: 1, runtimePluginCount: runtime.length, adapterCount: adapters.length, nestedLicenses: true, npmPackClosure: true })}\n`);
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    serviceCount: 1,
+    runtimePluginCount: counts.runtimeCount,
+    adapterCount: counts.adapterCount,
+    migratedRuntimeCount: counts.migratedRuntimeCount,
+    migratedAdapterCount: counts.migratedAdapterCount,
+    nestedLicenses: true,
+    npmPackClosure: true
+  })}\n`);
 }
 
 main().catch((error) => {

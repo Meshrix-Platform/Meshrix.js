@@ -75,13 +75,14 @@
       {
         "id": "release-acceptance-standards-positive-path",
         "classification": "retained-positive-forwarding",
-        "description": "The acceptance-standards registry remains the sole authority for the mandatory functional-complete claim and the downstream optional real-machine claim.",
+        "description": "The acceptance-standards registry remains the sole authority for the mandatory functional-complete and release-deployment claims and the downstream optional real-machine claim.",
         "authorityPaths": [
           "tools/registry/release-acceptance-standards.registry.json",
           "tools/server-scripts/verify-release-acceptance-standards.ts"
         ],
         "assertions": [
-          "Functional completeness is the only mandatory project release gate.",
+          "Functional completeness is a mandatory project release gate.",
+          "Release-deployment verification is a mandatory project release gate consuming a functional-complete receipt for the exact candidate.",
           "Real-machine verification consumes a candidate-bound functional receipt.",
           "Real-machine results cannot block or revoke functional completeness."
         ]

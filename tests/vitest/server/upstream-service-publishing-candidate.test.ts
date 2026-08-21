@@ -35,7 +35,8 @@ function candidateFixture() : any {
     acceptance: {
       profile: "enterprise-single-node",
       commandId: "platform-acceptance",
-      requiredClaim: "functional-complete"
+      stableRequiredClaim: "functional-complete",
+      releaseRequiredClaim: "release-deployment-verified"
     }
   }, null, 2)}\n`;
   const releaseDefinitionSha256: any = sha256(releaseDefinitionText);

@@ -635,7 +635,7 @@ non-converged rather than compensating with additional logs.
 
 ## Release Definition and Publication
 
-Meshrix.js has two deliberately separate acceptance standards:
+Meshrix.js has three deliberately separate acceptance standards:
 
 1. The **Functional Release Gate** is the mandatory project release closure.
    It proves that the implementation and code organization are complete,
@@ -643,7 +643,13 @@ Meshrix.js has two deliberately separate acceptance standards:
    by every simulation, container, failure-injection, recovery, packaging, and
    protocol check that the development environment can execute. A missing,
    skipped, stale, or failing required functional check fails this gate.
-2. A **Real-Machine Verification Workflow** is remaining required work that
+2. **Release Deployment Verification** is the mandatory runtime-ui deployment
+   closure for the exact stable candidate. On a GitHub-hosted `ubuntu-24.04`
+   runner it deploys the runtime-ui surface and drives bounded external
+   deterministic synthetic requests with no real model dependency, then
+   verifies termination and cleanup of every deployment resource. Its
+   fixed-size privacy-safe receipt is the named **Release Deployment Claim**.
+3. A **Real-Machine Verification Workflow** is remaining required work that
    independently repeats the exact accepted candidate on one declared
    operating system, architecture, device, host, or network environment. Its
    successful receipt is the named **Environment Support Claim** for that
@@ -653,10 +659,15 @@ The dependency is one-way:
 
 ```text
 Functional Release Gate receipt
+  -> Release Deployment Verification receipt
+  -> Release Deployment Claim
+Functional Release Gate receipt
   -> Real-Machine Verification Workflow receipt
   -> Environment Support Claim
 ```
 
+A release-deployment workflow must refuse an unaccepted or mismatched
+candidate, and its absence or failure blocks tag publication for that commit.
 A real-machine workflow must refuse an unaccepted or mismatched candidate, but
 its absence, unavailability, failure, or expired receipt never changes the
 Functional Release Gate result and never blocks project publication. It only
@@ -668,7 +679,8 @@ result. Real-machine workflow results are `not_run`, `ineligible`, `passed`, or
 Avoid the ambiguous standalone terms `production-ready`, `final readiness`,
 and `platform acceptance`. State the exact remaining-work or completed evidence
 instead: `functional release accepted`, `real-machine verified on
-<environment>`, or `environment qualification remains remaining required work`.
+<environment>`, `release deployment verified on ubuntu-24.04`, or
+`environment qualification remains remaining required work`.
 
 `tools/registry/release-definition.registry.json` is the sole source for the
 product version, Git tag, release channel, package manifest set, container
@@ -774,14 +786,19 @@ projects failure messages, receipts, logs, or runtime values.
 
 `.github/workflows/release.yml` is the sole publication path. It runs only for
 semantic version tags, serializes all release runs globally, and fails unless
-the tagged commit is verifiably contained in the canonical `release` branch.
-The workflow runs the Functional Release Gate before any publication. Its
-protected `release-candidate` GitHub environment is the review boundary.
+the tagged commit equals the canonical `release` branch tip. The release
+branch is promoted only by `.github/workflows/release-branch.yml`, which
+resolves the successful stable complete-gate run for the exact push commit,
+downloads its stable authority bundle, runs the external runtime-ui deployment
+verification on `ubuntu-24.04`, and uploads the `release-authority` bundle for
+that commit. `release.yml` imports that authority and revalidates candidate
+identity, functional receipt, and deployment receipt before any publication.
+Its protected `release-candidate` GitHub environment is the review boundary.
 Before that authority, a read-only `upstream-service-publishing` job runs the
 self-contained Core verifier. It checks out no detachable service or plugin
-repository and performs no registry or release mutation. The Functional
-Release Gate depends on this job, so every later publication job inherits the
-Core prepublication prerequisite.
+repository and performs no registry or release mutation. Every later
+publication job inherits the Core prepublication and release deployment
+prerequisites.
 Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
 the remaining Real-Machine Verification Workflows and cannot block publication.
@@ -873,6 +890,27 @@ Inspect the sanitized functional DAG without executing it:
 ```bash
 npm run verify:acceptance:plan
 ```
+
+Run the mandatory Release Deployment Verification against an exact stable
+candidate and its functional receipt:
+
+```bash
+npm run server:verify:release-deployment -- \
+  --source-candidate build/release/control/SOURCE_CANDIDATE.json \
+  --functional-receipt build/reports/platform-acceptance.json \
+  --output build/reports/release-deployment.json \
+  --cleanup-state <private-cleanup-state>
+```
+
+The controller deploys the runtime-ui surface for the exact candidate, drives
+the bounded external deterministic synthetic request scenarios, verifies
+termination and cleanup, and writes one fixed-size privacy-safe deployment
+receipt with `capacityCertified: false`. Exit code `0` means the Release
+Deployment Claim is present; every non-zero exit means the claim is absent
+and tag publication for that commit is blocked. If the controller is
+interrupted, invoke the same exact-resource cleanup through
+`--cleanup-only --cleanup-state <private-cleanup-state>`; never substitute a
+broad container, volume, process, or directory cleanup.
 
 After the Functional Release Gate has accepted an immutable candidate, an
 operator may run any registered real-machine workflow:

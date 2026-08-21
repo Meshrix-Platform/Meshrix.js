@@ -6,6 +6,7 @@ export const SOURCE_PACKAGE_ROOTS: readonly string[] = Object.freeze([
   "packages",
   "plugins",
   AUTHORIZED_VENDORED_PACKAGE_ROOT,
+  "services/model-gateway/contracts",
   "apps/server",
   "apps/console",
   "content",

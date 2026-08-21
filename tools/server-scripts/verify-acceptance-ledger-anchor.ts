@@ -18,7 +18,7 @@ async function main() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-ledger-anchor-"));
   const reportPath: any = path.join(root, "sample-report.json");
   await fs.writeFile(reportPath, `${JSON.stringify({
-    schemaVersion: "v0.0.1:acceptance:platform-report-2",
+    schemaVersion: "v0.0.1:acceptance:platform-report-3",
     status: "accepted",
     summary: { releaseReady: true }
   }, null, 2)}\n`, "utf8");
@@ -38,7 +38,7 @@ async function main() : Promise<any> {
         selectedProfile: "core",
         commandDagDigest: digest("command-dag"),
         ownedReportsInventoryDigest: digest("owned-reports"),
-        planReceiptSetDigest: digest("plan-receipts"),
+        candidateDigest: digest("release-candidate").slice("sha256:".length),
         privacySafe: true
       }
     });

@@ -165,15 +165,15 @@ async function run(configuration?: any) : Promise<any> {
   // is awaited; the tail await still observes the rejection when reached.
   stageReached.catch(() : any => {});
   let stageWatchdog: any = null;
-  // The stage budget bounds silence of a live event loop rather than total
-  // wall-clock time. Heartbeats and named milestones both re-arm it, so a
-  // host-starved child that is still pumping timers through a long
-  // composition await is not false-failed, while a wedged child that cannot
-  // emit a heartbeat still fails within one window.
+  // The stage budget measures material progress toward the requested crash
+  // seam. Heartbeats prove only that the IPC channel and event loop are alive;
+  // they must not let a live but stalled child outlive this watchdog.
   const noteStageProgress: any = () : any => {
     if (halted) return;
     if (stageWatchdog) clearTimeout(stageWatchdog);
     stageWatchdog = setTimeout(() : any => {
+      halted = true;
+      stageWatchdog = null;
       if (keepAlive) {
         clearInterval(keepAlive);
         keepAlive = null;
@@ -199,7 +199,6 @@ async function run(configuration?: any) : Promise<any> {
   keepAlive = setInterval(() : any => {
     if (halted) return;
     emitHeartbeat();
-    noteStageProgress();
   }, 1_000);
   const halt: any = async (stage?: any) : Promise<any> => {
     noteStageProgress();

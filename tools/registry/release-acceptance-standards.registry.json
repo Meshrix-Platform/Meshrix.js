@@ -1,11 +1,10 @@
 {
   "$schema": "./schema/release-acceptance-standards.schema.json",
-  "version": "v0.0.1:registry:release-acceptance-standards-1",
+  "version": "v0.0.1:registry:release-acceptance-standards-2",
   "functionalCompleteness": {
     "claim": "functional-complete",
     "requiredForRelease": true,
     "command": "npm run verify:acceptance",
-    "plan": "end-to-end-release",
     "covers": [
       "source-organization",
       "static-contracts",
@@ -66,6 +65,22 @@
         "mode": "optional",
         "simulationCommand": "node tools/server-scripts/verify-storage-production-restore-drill.ts"
       }
+    ]
+  },
+  "releaseDeploymentVerification": {
+    "claim": "release-deployment-verified",
+    "requiredForRelease": true,
+    "requiresClaim": "functional-complete",
+    "command": "npm run server:verify:release-deployment",
+    "controller": "tools/server-scripts/verify-release-deployment.ts",
+    "workflow": ".github/workflows/release-branch.yml",
+    "runner": "ubuntu-24.04",
+    "receipt": "build/reports/release-deployment.json",
+    "scenarios": [
+      "success",
+      "concurrency",
+      "cancellation",
+      "provider-fault"
     ]
   }
 }

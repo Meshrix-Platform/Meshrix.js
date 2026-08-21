@@ -1,0 +1,138 @@
+# Public clean-rebuild workflow registration anchor.
+name: Release branch deployment
+
+env:
+  NODE_OPTIONS: --conditions=source
+
+on:
+  push:
+    branches: ["release"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-branch-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-deployment:
+    name: Runtime-ui external deployment smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Require release to equal the current stable tip
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/stable^{commit})"
+      - name: Independently materialize the checkout candidate
+        run: >-
+          node tools/server-scripts/verify-release-candidate-identity.ts
+          --output build/release/control/expected/SOURCE_CANDIDATE.json
+      - name: Resolve the successful stable complete-gate run for this commit
+        id: stable-run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs="$RUNNER_TEMP/stable-runs.json"
+          selected="$RUNNER_TEMP/stable-run.json"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?event=push&branch=stable&head_sha=${GITHUB_SHA}&per_page=100" \
+            --slurp | jq '{workflow_runs: [.[] | .workflow_runs[]]}' > "$runs"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts select-run \
+            --input "$runs" \
+            --workflow-path .github/workflows/ci.yml \
+            --branch stable \
+            --head-sha "$GITHUB_SHA" \
+            --output "$selected"
+          run_id="$(jq -r .runId "$selected")"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "selection=$selected" >> "$GITHUB_OUTPUT"
+      - name: Resolve exactly one stable authority artifact
+        id: stable-artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          inventory="$RUNNER_TEMP/stable-artifacts.json"
+          selected="$RUNNER_TEMP/stable-artifact.json"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.stable-run.outputs.run_id }}/artifacts?per_page=100" \
+            --slurp | jq '{artifacts: [.[] | .artifacts[]]}' > "$inventory"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts select-artifact \
+            --input "$inventory" \
+            --artifact-name "stable-authority-${GITHUB_SHA}" \
+            --output "$selected"
+          echo "artifact_id=$(jq -r .artifactId "$selected")" >> "$GITHUB_OUTPUT"
+      - name: Download the stable candidate authority bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/stable-authority.zip"
+          bundle="build/release/control/stable-authority"
+          mkdir -p "$bundle"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${{ steps.stable-artifact.outputs.artifact_id }}/zip" > "$archive"
+          unzip -q "$archive" -d "$bundle"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts verify-stable-bundle \
+            --bundle "$bundle" \
+            --expected-candidate build/release/control/expected/SOURCE_CANDIDATE.json \
+            --run "${{ steps.stable-run.outputs.selection }}"
+      - name: Verify the external runtime-ui deployment
+        run: >-
+          npm run server:verify:release-deployment --
+          --source-candidate build/release/control/stable-authority/SOURCE_CANDIDATE.json
+          --functional-receipt build/release/control/stable-authority/platform-acceptance.json
+          --output build/reports/release-deployment.json
+          --cleanup-state "$RUNNER_TEMP/release-deployment-cleanup.json"
+      - name: Remove exact run-scoped deployment resources
+        if: ${{ always() }}
+        run: >-
+          node tools/server-scripts/verify-release-deployment.ts
+          --cleanup-only
+          --cleanup-state "$RUNNER_TEMP/release-deployment-cleanup.json"
+      - name: Assemble the release authority bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          stable="build/release/control/stable-authority"
+          bundle="build/release/control/release-authority"
+          mkdir -p "$bundle"
+          cp "$stable/SOURCE_CANDIDATE.json" "$bundle/SOURCE_CANDIDATE.json"
+          cp "$stable/platform-acceptance.json" "$bundle/platform-acceptance.json"
+          cp "$stable/stable-authority-manifest.json" "$bundle/stable-authority-manifest.json"
+          cp build/reports/release-deployment.json "$bundle/release-deployment.json"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts create-release-manifest \
+            --bundle "$stable" \
+            --expected-candidate build/release/control/expected/SOURCE_CANDIDATE.json \
+            --stable-run "${{ steps.stable-run.outputs.selection }}" \
+            --deployment "$bundle/release-deployment.json" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$bundle/release-authority-manifest.json"
+      - name: Upload the release authority bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-authority-${{ github.sha }}
+          path: build/release/control/release-authority/
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true

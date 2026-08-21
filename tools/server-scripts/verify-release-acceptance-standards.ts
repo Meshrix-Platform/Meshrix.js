@@ -8,6 +8,7 @@ import { loadRegistry } from "../registry/index.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const EXPECTED_FUNCTIONAL_CLAIM: any = "functional-complete";
+const EXPECTED_RELEASE_DEPLOYMENT_CLAIM: any = "release-deployment-verified";
 const EXPECTED_REAL_MACHINE_CLAIM: any = "real-machine-verified";
 const EXPECTED_REAL_MACHINE_SCRIPT: any =
   "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-real-machine-validation.ts";
@@ -18,6 +19,15 @@ const EXPECTED_REAL_MACHINE_TARGETS: readonly any[] = Object.freeze([
   "native-windows-x64",
   "public-cloud-single-node",
   "clean-host-recovery",
+]);
+
+const EXPECTED_RELEASE_DEPLOYMENT_SCRIPT: any =
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-deployment.ts";
+const EXPECTED_RELEASE_DEPLOYMENT_SCENARIOS: readonly any[] = Object.freeze([
+  "success",
+  "concurrency",
+  "cancellation",
+  "provider-fault",
 ]);
 
 function fail(code?: any) : any {
@@ -42,16 +52,16 @@ function simulationCommandExists(command?: any, rootPackage?: any) : any {
 export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?: any) : any {
   const reasons: any[] = [];
   const functional: any = standards?.functionalCompleteness;
+  const deployment: any = standards?.releaseDeploymentVerification;
   const realMachine: any = standards?.realMachineVerification;
 
-  if (standards?.version !== "v0.0.1:registry:release-acceptance-standards-1") {
+  if (standards?.version !== "v0.0.1:registry:release-acceptance-standards-2") {
     reasons.push("release_acceptance_standards_version_invalid");
   }
   if (
     functional?.claim !== EXPECTED_FUNCTIONAL_CLAIM ||
     functional?.requiredForRelease !== true ||
-    functional?.command !== "npm run verify:acceptance" ||
-    functional?.plan !== "end-to-end-release"
+    functional?.command !== "npm run verify:acceptance"
   ) {
     reasons.push("functional_release_standard_invalid");
   }
@@ -61,6 +71,24 @@ export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?
     new Set<any>(functional.covers).size !== functional.covers.length
   ) {
     reasons.push("functional_release_coverage_invalid");
+  }
+  if (
+    deployment?.claim !== EXPECTED_RELEASE_DEPLOYMENT_CLAIM ||
+    deployment?.requiredForRelease !== true ||
+    deployment?.requiresClaim !== EXPECTED_FUNCTIONAL_CLAIM ||
+    deployment?.command !== "npm run server:verify:release-deployment" ||
+    deployment?.controller !== "tools/server-scripts/verify-release-deployment.ts" ||
+    deployment?.workflow !== ".github/workflows/release-branch.yml" ||
+    deployment?.runner !== "ubuntu-24.04" ||
+    deployment?.receipt !== "build/reports/release-deployment.json" ||
+    JSON.stringify(deployment?.scenarios || []) !==
+      JSON.stringify(EXPECTED_RELEASE_DEPLOYMENT_SCENARIOS)
+  ) {
+    reasons.push("release_deployment_release_standard_invalid");
+  }
+  if (rootPackage?.scripts?.["server:verify:release-deployment"] !==
+    EXPECTED_RELEASE_DEPLOYMENT_SCRIPT) {
+    reasons.push("release_deployment_command_missing_or_mismatched");
   }
   if (
     realMachine?.claim !== EXPECTED_REAL_MACHINE_CLAIM ||
@@ -96,6 +124,7 @@ export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?
   return {
     valid: reasons.length === 0,
     functionalClaim: String(functional?.claim || ""),
+    releaseDeploymentClaim: String(deployment?.claim || ""),
     realMachineClaim: String(realMachine?.claim || ""),
     targetCount: targets.length,
     reasons,
@@ -114,14 +143,52 @@ export async function verifyReleaseAcceptanceStandards({
   const result: any = validateReleaseAcceptanceStandards(registry, packageDefinition);
   if (!result.valid) fail(result.reasons[0]);
 
-  const [realMachineWorkflow, releaseWorkflow, ciWorkflow] = await Promise.all([
-    fs.readFile(path.join(rootDir, registry.realMachineVerification.workflow), "utf8")
-      .catch(() : any => fail("real_machine_workflow_missing")),
-    fs.readFile(path.join(rootDir, ".github/workflows/release.yml"), "utf8")
-      .catch(() : any => fail("release_workflow_missing")),
-    fs.readFile(path.join(rootDir, ".github/workflows/ci.yml"), "utf8")
-      .catch(() : any => fail("ci_workflow_missing")),
-  ]);
+  const [realMachineWorkflow, releaseWorkflow, ciWorkflow, releaseBranchWorkflow] =
+    await Promise.all([
+      fs.readFile(path.join(rootDir, registry.realMachineVerification.workflow), "utf8")
+        .catch(() : any => fail("real_machine_workflow_missing")),
+      fs.readFile(path.join(rootDir, ".github/workflows/release.yml"), "utf8")
+        .catch(() : any => fail("release_workflow_missing")),
+      fs.readFile(path.join(rootDir, ".github/workflows/ci.yml"), "utf8")
+        .catch(() : any => fail("ci_workflow_missing")),
+      fs.readFile(path.join(rootDir, ".github/workflows/release-branch.yml"), "utf8")
+        .catch(() : any => fail("release_branch_workflow_missing")),
+    ]);
+  const deploymentRequiredMarkers: any[] = [
+    "runs-on: ubuntu-24.04",
+    "npm run server:verify:release-deployment",
+    "SOURCE_CANDIDATE.json",
+    "platform-acceptance.json",
+    "release-deployment.json",
+    "release-authority-${{ github.sha }}",
+  ];
+  if (
+    deploymentRequiredMarkers.some((marker?: any) : any => !releaseBranchWorkflow.includes(marker)) ||
+    releaseBranchWorkflow.includes("verify-platform-acceptance.ts") ||
+    releaseBranchWorkflow.includes("functional-completeness")
+  ) {
+    fail("release_branch_workflow_contract_invalid");
+  }
+  if (
+    releaseWorkflow.includes("\n  functional-completeness:\n") ||
+    releaseWorkflow.includes("git merge-base --is-ancestor")
+  ) {
+    fail("release_workflow_functional_rerun_forbidden");
+  }
+  const stableGateStart: any = ciWorkflow.indexOf("\n  functional-completeness:\n");
+  const stableGateSection: any = stableGateStart < 0
+    ? ""
+    : ciWorkflow.slice(stableGateStart);
+  if (
+    stableGateSection === "" ||
+    !stableGateSection.includes("github.ref_name == 'stable'") ||
+    stableGateSection.includes("github.ref_name == 'release'") ||
+    !stableGateSection.includes("stable-authority-${{ github.sha }}")
+  ) {
+    fail("ci_workflow_stable_gate_contract_invalid");
+  }
+  await fs.access(path.join(rootDir, registry.releaseDeploymentVerification.controller))
+    .catch(() : any => fail("release_deployment_verifier_missing"));
   const realMachineRequiredMarkers: any[] = [
     "workflow_dispatch:",
     "source_revision:",
@@ -245,6 +312,7 @@ async function main() : Promise<any> {
   process.stdout.write(`${JSON.stringify({
     ok: true,
     functionalClaim: result.functionalClaim,
+    releaseDeploymentClaim: result.releaseDeploymentClaim,
     realMachineClaim: result.realMachineClaim,
     targetCount: result.targetCount,
   })}\n`);

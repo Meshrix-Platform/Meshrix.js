@@ -2,7 +2,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -81,6 +80,7 @@ import {
   clearAccidentalCoreWorktree,
   createAcceptanceGenerationWorkspace,
   publishAcceptanceGeneration,
+  publishAcceptanceFailureDiagnostic,
   removeAcceptanceGenerationWorkspace,
   runAcceptanceGenerationWorker,
   withAcceptanceExecutionLease
@@ -99,10 +99,7 @@ import {
   stampReleaseReportProvenance
 } from "./lib/release-report-provenance.ts";
 import { currentSourceTreeDigest } from "./lib/source-tree-digest.ts";
-import {
-  PlatformAcceptancePlanReceiptError,
-  verifyPlatformAcceptancePlanReceipts,
-} from "./lib/platform-acceptance-plan-receipts.ts";
+import { createReleaseCandidateIdentity } from "./verify-release-candidate-identity.ts";
 import {
   PLATFORM_ACCEPTANCE_REQUIREMENT_EVIDENCE,
   PLATFORM_ACCEPTANCE_REQUIREMENTS,
@@ -131,15 +128,9 @@ function sanitizeError(error?: any) : any {
   return sanitizeSensitiveError(error).replaceAll("[redacted-path]", "<local-path>");
 }
 
-async function acceptanceEvidenceContext({ childReportLeakScan, planReceiptPreflight, selectedProfile }: Record<string, any>) : Promise<any> {
-  const sourceRevision: any = spawnSync("git", ["rev-parse", "HEAD"], {
-    cwd: repoRoot,
-    env: process.env,
-    encoding: "utf8",
-    windowsHide: true
-  }).stdout?.trim() || "";
+async function acceptanceEvidenceContext({ childReportLeakScan, candidateIdentity, selectedProfile }: Record<string, any>) : Promise<any> {
   return Object.freeze({
-    sourceRevision,
+    sourceRevision: candidateIdentity.source_revision,
     sourceTreeDigest: currentSourceTreeDigest(repoRoot),
     selectedProfile,
     commandDagDigest: reportPayloadDigest({
@@ -152,7 +143,7 @@ async function acceptanceEvidenceContext({ childReportLeakScan, planReceiptPrefl
       }))
     }),
     ownedReportsInventoryDigest: RELEASE_EVIDENCE_INVENTORY_DIGEST,
-    planReceiptSetDigest: planReceiptPreflight.planReceiptSetDigest,
+    candidateDigest: candidateIdentity.candidate_digest,
     privacySafe: childReportLeakScan === true
   });
 }
@@ -230,7 +221,7 @@ export function createPlatformAcceptancePlan(
   if (schedule?.valid !== true) throw new Error("Platform acceptance command schedule is invalid.");
   selectedProfile = requirePlatformAcceptanceProfile(selectedProfile);
   return {
-    schemaVersion: "v0.0.1:acceptance:platform-report-2",
+    schemaVersion: "v0.0.1:acceptance:platform-report-3",
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
     status: "planned",
@@ -261,11 +252,10 @@ export function createPlatformAcceptancePlan(
     releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY,
     releaseEvidenceInventoryDigest: RELEASE_EVIDENCE_INVENTORY_DIGEST,
     requirementEvidence: PLATFORM_ACCEPTANCE_REQUIREMENT_EVIDENCE,
-    planReceiptPreflight: {
-      consumerPlan: "end-to-end-release",
-      planProfile: "enterprise-single-node",
-      requiredKind: "candidate-bound-final-prerequisites",
-      verifier: "tools/server-scripts/lib/platform-acceptance-plan-receipts.ts",
+    candidateIdentity: {
+      requiredProfile: selectedProfile,
+      requiredKind: "canonical-clean-source-candidate",
+      verifier: "tools/server-scripts/verify-release-candidate-identity.ts",
     },
     summary: {
       commandCount: PLATFORM_ACCEPTANCE_COMMANDS.length,
@@ -288,10 +278,10 @@ async function runAcceptanceWorker() : Promise<any> {
     return;
   }
 
-  const planReceiptPreflight: any = await verifyPlatformAcceptancePlanReceipts({
-    repoRoot,
-    selectedProfile
-  });
+  const candidateIdentity: any = await createReleaseCandidateIdentity({ repoRoot });
+  if (!candidateIdentity.supported_profiles.includes(selectedProfile)) {
+    throw new Error("release_candidate_profile_mismatch");
+  }
 
   const startedAt: any = new Date();
   const reportTreeBefore: any = await snapshotJsonReportFiles(repoRoot);
@@ -388,27 +378,18 @@ async function runAcceptanceWorker() : Promise<any> {
     reportEvidence,
     missingReports
   });
-  let finalPlanReceiptPreflight: any = null;
-  let planReceiptPreflightReady: any = true;
+  let finalCandidateIdentity: any = null;
+  let candidateIdentityReady: any = true;
   try {
-    finalPlanReceiptPreflight = await verifyPlatformAcceptancePlanReceipts({
-      repoRoot,
-      selectedProfile
-    });
-    if (finalPlanReceiptPreflight.planReceiptSetDigest !== planReceiptPreflight.planReceiptSetDigest) {
-      planReceiptPreflightReady = false;
-      missingEvidence.push("plan-receipt-set-drift");
+    finalCandidateIdentity = await createReleaseCandidateIdentity({ repoRoot });
+    if (finalCandidateIdentity.candidate_digest !== candidateIdentity.candidate_digest) {
+      candidateIdentityReady = false;
+      missingEvidence.push("release-candidate-identity-drift");
     }
   } catch (error: any) {
-    planReceiptPreflightReady = false;
-    const code: any = error instanceof PlatformAcceptancePlanReceiptError
-      ? error.code
-      : "plan-receipt-preflight-failed";
-    if (error instanceof PlatformAcceptancePlanReceiptError && error.classification === "failed") {
-      failedCommandIds.push("plan-receipt-preflight");
-    } else {
-      missingEvidence.push(code);
-    }
+    candidateIdentityReady = false;
+    failedCommandIds.push("release-candidate-identity");
+    missingEvidence.push(String(error?.code || "release-candidate-identity-failed"));
   }
   const skipLedgerAnchor: any = String(process.env.MESHRIX_ACCEPTANCE_SKIP_LEDGER_ANCHOR || "").trim() === "1";
   let ledgerAnchor: Record<string, any> = {
@@ -419,7 +400,7 @@ async function runAcceptanceWorker() : Promise<any> {
     error: skipLedgerAnchor ? "skipped:MESHRIX_ACCEPTANCE_SKIP_LEDGER_ANCHOR=1" : "",
     verification: null
   };
-  if (!skipLedgerAnchor && planReceiptPreflightReady) {
+  if (!skipLedgerAnchor && candidateIdentityReady) {
     const { createOperationProofSubstrate } = await import(
       "#meshrix/foundation/proof/proof-substrate/index"
     );
@@ -430,7 +411,7 @@ async function runAcceptanceWorker() : Promise<any> {
     try {
       const evidenceContext: any = await acceptanceEvidenceContext({
         childReportLeakScan,
-        planReceiptPreflight,
+        candidateIdentity,
         selectedProfile
       });
       const releaseId: any = String(
@@ -469,7 +450,7 @@ async function runAcceptanceWorker() : Promise<any> {
   } else if (skipLedgerAnchor) {
     missingEvidence.push("acceptance-ledger-anchor:explicitly-skipped");
   } else {
-    missingEvidence.push("acceptance-ledger-anchor:plan-receipt-preflight-not-ready");
+    missingEvidence.push("acceptance-ledger-anchor:release-candidate-identity-not-ready");
   }
 
   const requirementEvidence: any = reducePlatformAcceptanceRequirementEvidence({
@@ -478,8 +459,8 @@ async function runAcceptanceWorker() : Promise<any> {
     reportEvidence,
     aggregateFacts: {
       ledgerAnchorReady: Boolean(ledgerAnchor.ledgerEventId) && ledgerAnchor.verification?.ok === true,
-      receiptPreflightReady: planReceiptPreflightReady &&
-        finalPlanReceiptPreflight?.planReceiptSetDigest === planReceiptPreflight.planReceiptSetDigest,
+      candidateIdentityReady: candidateIdentityReady &&
+        finalCandidateIdentity?.candidate_digest === candidateIdentity.candidate_digest,
       commandDagReady: executedSchedule.valid === true && results.length === PLATFORM_ACCEPTANCE_COMMANDS.length,
       inventoryReady: RELEASE_EVIDENCE_INVENTORY.length === ACCEPTANCE_REQUIRED_REPORTS.length,
       privacyReady: childReportLeakScan === true
@@ -501,10 +482,10 @@ async function runAcceptanceWorker() : Promise<any> {
   const finalState: any = aggregateReadinessFinal.releaseReady === true ? "accepted" : "failed";
   const finishedAt: any = new Date();
   const report: Record<string, any> = {
-    schemaVersion: "v0.0.1:acceptance:platform-report-2",
+    schemaVersion: "v0.0.1:acceptance:platform-report-3",
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
-    candidate_digest: planReceiptPreflight.candidateDigest,
+    candidate_digest: candidateIdentity.candidate_digest,
     status: finalState,
     selectedProfile,
     sourceRevision: ledgerAnchor.evidenceContext?.sourceRevision || "",
@@ -550,8 +531,8 @@ async function runAcceptanceWorker() : Promise<any> {
     releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY,
     releaseEvidenceInventoryDigest: RELEASE_EVIDENCE_INVENTORY_DIGEST,
     requirementEvidence,
-    planReceiptPreflight,
-    finalPlanReceiptPreflight,
+    candidateIdentity,
+    finalCandidateIdentity,
     reportEvidence,
     capabilityEvidenceExecution,
     blockedCommandValidation: blockedResultValidation,
@@ -621,6 +602,13 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
       });
       if (result.exitCode !== 0) {
         process.exitCode = result.exitCode;
+        const diagnostic: any = await publishAcceptanceFailureDiagnostic({
+          repoRoot,
+          paths,
+          aggregateReportPath: REPORT_PATH,
+          workerResult: result
+        });
+        console.log(`[platform-acceptance] failureDiagnostic=${diagnostic.path}`);
         return;
       }
       await publishAcceptanceGeneration({
@@ -666,11 +654,9 @@ if (isDirectRun) {
       process.exit(1);
     }
     const now: any = new Date();
-    const safeFailure: any = error instanceof PlatformAcceptancePlanReceiptError
-      ? error.code
-      : sanitizeError(error);
+    const safeFailure: any = String(error?.code || sanitizeError(error));
     const report: Record<string, any> = {
-      schemaVersion: "v0.0.1:acceptance:platform-report-2",
+      schemaVersion: "v0.0.1:acceptance:platform-report-3",
       acceptanceStandard: "functional-completeness",
       claim: "functional-complete",
       status: "failed",

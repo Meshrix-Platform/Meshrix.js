@@ -1481,12 +1481,9 @@ async function spawnCrashChild(
   });
   let prematureExitHandler: any;
   const marker: any = await new Promise((resolve?: any, reject?: any) : any => {
-    // Readiness is a liveness window rather than one fixed wall-clock
-    // deadline: once its module graph has loaded, the child emits a
-    // heartbeat every second and each heartbeat re-arms the window, so a
-    // host-starved but progressing child is not false-failed. A full
-    // window of silence still means the child is wedged (or never reached
-    // its top level) and the case fails within one window.
+    // This timer owns IPC liveness only. Heartbeats re-arm it while the
+    // child's independent progress watchdog requires named materialization
+    // milestones and reports child_crash_stage_not_reached for a live stall.
     let readinessTimer: any = null;
     let onMessage: any = null;
     const clearReadiness: any = () : any => {

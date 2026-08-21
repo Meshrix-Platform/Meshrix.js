@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { MCP_CATALOG_DELIVERY_SCHEMA_VERSION } from "../../../packages/contracts/src/mcp-catalog-delivery.ts";
 import {
   MCP_SSE_CONNECTION_LIMITS,
   bindMcpSseConnectionPartitions,
@@ -107,13 +108,30 @@ describe("MCP catalog convergence partitions", () : any => {
     expect(delivery).toMatchObject({
       ok: true,
       sourceRevision: 3,
+      catalogRevision: "catalog-3",
       audienceRevision: 7,
       matchedConnectionCount: 1,
       deliveredConnectionCount: 1
     });
-    expect(affected.response.chunks.join("")).toContain("notifications/tools/list_changed");
-    expect(affected.response.chunks.join("")).toContain("\"audienceRevision\":7");
-    expect(affected.response.chunks.join("")).toContain("part-a");
+    const affectedPayloadText: any = affected.response.chunks.join("")
+      .split("\n")
+      .find((line?: any) : any => line.startsWith("data: "))
+      ?.slice("data: ".length);
+    const affectedPayload: any = JSON.parse(affectedPayloadText);
+    expect(affectedPayload).toEqual({
+      jsonrpc: "2.0",
+      method: "notifications/tools/list_changed",
+      params: {
+        change: {
+          schemaVersion: MCP_CATALOG_DELIVERY_SCHEMA_VERSION,
+          reasonCode: "upstream_audiences_published",
+          sourceRevision: 3,
+          catalogRevision: "catalog-3",
+          audienceRevision: 7,
+          affectedPartitions: ["part-a"]
+        }
+      }
+    });
     expect(affected.response.chunks.join("")).not.toMatch(/tools\"\s*:/);
     expect(other.response.chunks.join("")).toBe("");
   });

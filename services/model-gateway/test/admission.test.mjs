@@ -73,14 +73,15 @@ test("request rate limiting rejects a second call without egress", async (t) => 
 test("concurrent call bound rejects parallel admission without egress", async (t) => {
   const service = await startService({ bounds: { maxConcurrentCalls: 1 } });
   t.after(() => service.close());
-  await provision(service);
-  const held = openAiCall(service, CALL, { "x-hold": "1" });
+  const modelId = "fixture-openai-hold";
+  await provision(service, { modelId });
+  const held = openAiCall(service, { ...CALL, model: modelId });
   await new Promise((resolve) => setTimeout(resolve, 50));
-  const second = await openAiCall(service, CALL);
+  const second = await openAiCall(service, { ...CALL, model: modelId });
   assert.equal(second.status, 429);
   assert.equal((await second.json()).error.code, "rate_limited");
   assert.equal(service.fixture.openAiCalls(), 1, "the second call must not reach the provider");
-  service.fixture.release("model-1");
+  service.fixture.release(modelId);
   const first = await held;
   assert.equal(first.status, 200);
   assert.equal(service.fixture.openAiCalls(), 1, "the released call is the only provider request");

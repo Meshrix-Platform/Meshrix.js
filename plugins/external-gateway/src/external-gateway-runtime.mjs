@@ -1,23 +1,19 @@
-import {
-  AGENT_MCP_GATEWAY_ENVELOPE_SCHEMA_VERSION,
-  TRAFFIC_MODELS,
-  isGatewayStageResultStatus
-} from "@meshrix/contracts/agent-mcp-traffic";
-import {
-  GATEWAY_EXTERNAL_CONFIGURATION_AUTHORITY,
-  GATEWAY_EXTERNAL_IMPLICIT_FALLBACK,
-  GATEWAY_EXTERNAL_LIFECYCLE_AUTHORITY,
-  assertGatewayChannel,
-  assertGatewayExternalAttachment,
-  assertPluginGatewayChannelContribution
-} from "@meshrix/contracts/plugins/gateway-channel-contract";
-import {
-  PLUGIN_CONFINEMENT_FORBIDDEN_AUTHORITIES,
-  PLUGIN_CONFINEMENT_SCHEMA_VERSION,
-  assertPluginConfinement,
-  createPluginActivationResult
-} from "@meshrix/contracts/plugins/plugin-confinement-contract";
-
+const AGENT_MCP_GATEWAY_ENVELOPE_SCHEMA_VERSION = "v0.0.1:agent-mcp-traffic:gateway-envelope-1";
+const GATEWAY_CHANNELS_CONTRIBUTION_SCHEMA_VERSION = "v0.0.1:plugin:gateway-channels-1";
+const PLUGIN_CONFINEMENT_SCHEMA_VERSION = "v0.0.1:plugin:confinement-1";
+const TRAFFIC_MODELS = Object.freeze(["workspace_application", "gateway_transit"]);
+const PLUGIN_CONFINEMENT_FORBIDDEN_AUTHORITIES = Object.freeze([
+  "workspace",
+  "application_stage",
+  "semantics",
+  "identity",
+  "authorization",
+  "credential",
+  "policy",
+  "channel_selection",
+  "model_gateway_lifecycle",
+  "maintenance"
+]);
 const CONFIGURATION_FIELDS = new Set(["enabled", "downstream", "upstream"]);
 const CHANNEL_FIELDS = new Set([
   "adapter",
@@ -32,6 +28,30 @@ const CHANNEL_FIELDS = new Set([
 const DIRECTIONS = Object.freeze(["downstream", "upstream"]);
 const RESULT_STATUSES = new Set(["admitted", "degraded", "shed", "timeout", "cancelled", "failed"]);
 const RATE_WINDOW_MS = 1_000;
+
+function confinement(pluginId) {
+  return Object.freeze({
+    schemaVersion: PLUGIN_CONFINEMENT_SCHEMA_VERSION,
+    pluginId,
+    forbiddenAuthorities: PLUGIN_CONFINEMENT_FORBIDDEN_AUTHORITIES,
+    lifecycleAuthority: "availability_only"
+  });
+}
+
+function activationResult(availableChoices) {
+  return Object.freeze({
+    trafficChanged: false,
+    availableChoices: Object.freeze([...availableChoices])
+  });
+}
+
+function gatewayContribution(channels) {
+  return Object.freeze({
+    schemaVersion: GATEWAY_CHANNELS_CONTRIBUTION_SCHEMA_VERSION,
+    kind: "gatewayChannels",
+    channels: Object.freeze([...channels])
+  });
+}
 
 function plainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -118,7 +138,7 @@ function result(envelope, status, errorRef = null, normalizedOutcomeRef = null, 
 }
 
 function normalizeTransportResult(envelope, value) {
-  if (!plainObject(value) || !RESULT_STATUSES.has(value.status) || !isGatewayStageResultStatus(value.status)) {
+  if (!plainObject(value) || !RESULT_STATUSES.has(value.status)) {
     return result(envelope, "failed", "external_gateway_transport_result_invalid");
   }
   for (const field of ["normalizedOutcomeRef", "errorRef", "generationRef"]) {
@@ -193,13 +213,13 @@ function createChannel(direction, configuration, transport) {
     const now = Date.now();
     const endpointRef = selectEndpoint(now);
     if (!endpointRef) return result(job.envelope, "degraded", "external_gateway_circuit_open");
-    const attachment = assertGatewayExternalAttachment({
+    const attachment = Object.freeze({
       adapter: configuration.adapter,
       endpointRef,
       instanceOwnership: configuration.adapter === "direct" ? "operator_endpoint" : "operator_existing",
-      configurationAuthority: GATEWAY_EXTERNAL_CONFIGURATION_AUTHORITY,
-      lifecycleAuthority: GATEWAY_EXTERNAL_LIFECYCLE_AUTHORITY,
-      implicitFallback: GATEWAY_EXTERNAL_IMPLICIT_FALLBACK
+      configurationAuthority: "none",
+      lifecycleAuthority: "none",
+      implicitFallback: false
     });
     const controller = new AbortController();
     activeControllers.add(controller);
@@ -244,13 +264,13 @@ function createChannel(direction, configuration, transport) {
     });
   }
 
-  const channel = assertGatewayChannel({
+  const channel = Object.freeze({
     channelId: `external-gateway.${configuration.adapter}.${direction}`,
     direction,
     kind: "external",
     trafficModels: TRAFFIC_MODELS,
     externalAdapter: configuration.adapter,
-    capabilities: {
+    capabilities: Object.freeze({
       loadDistribution: "bounded",
       maxConcurrency: configuration.maxConcurrency,
       maxRatePerSecond: configuration.maxRatePerSecond,
@@ -261,7 +281,7 @@ function createChannel(direction, configuration, transport) {
       streaming: true,
       backpressure: true,
       degradation: "stable_transport"
-    },
+    }),
     accepts(input) {
       return frozenEnvelope(input, direction);
     },
@@ -350,19 +370,14 @@ function emptyContributions() {
 
 export function createExternalGatewayPluginRuntime({ pluginId, configuration = {}, transport } = {}) {
   const admission = validateExternalGatewayConfiguration(configuration);
-  const confinement = assertPluginConfinement({
-    schemaVersion: PLUGIN_CONFINEMENT_SCHEMA_VERSION,
-    pluginId: pluginId || "external-gateway",
-    forbiddenAuthorities: PLUGIN_CONFINEMENT_FORBIDDEN_AUTHORITIES,
-    lifecycleAuthority: "availability_only"
-  });
+  const pluginConfinement = confinement(pluginId || "external-gateway");
   if (!admission.enabled) {
     let closed = false;
     return Object.freeze({
       id: pluginId || "external-gateway",
       mounts: Object.freeze({}),
-      confinement,
-      activation: createPluginActivationResult([]),
+      confinement: pluginConfinement,
+      activation: activationResult([]),
       contributions: emptyContributions(),
       close() {
         const alreadyClosed = closed;
@@ -375,17 +390,13 @@ export function createExternalGatewayPluginRuntime({ pluginId, configuration = {
     throw new TypeError("External Gateway activation requires a gatewayTransport function.");
   }
   const runtimes = DIRECTIONS.map((direction) => createChannel(direction, admission[direction], transport));
-  const contribution = assertPluginGatewayChannelContribution({
-    schemaVersion: "v0.0.1:plugin:gateway-channels-1",
-    kind: "gatewayChannels",
-    channels: runtimes.map((runtime) => runtime.channel)
-  });
+  const contribution = gatewayContribution(runtimes.map((runtime) => runtime.channel));
   let closed = false;
   return Object.freeze({
     id: pluginId || "external-gateway",
     mounts: Object.freeze({}),
-    confinement,
-    activation: createPluginActivationResult(contribution.channels.map((channel) => channel.channelId)),
+    confinement: pluginConfinement,
+    activation: activationResult(contribution.channels.map((channel) => channel.channelId)),
     contributions: Object.freeze({ gatewayChannels: contribution }),
     snapshot: () => Object.freeze(runtimes.map((runtime) => runtime.snapshot())),
     close() {

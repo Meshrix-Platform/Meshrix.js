@@ -1210,9 +1210,11 @@ async function stageCap18Contract() : Promise<any> {
   if (!String(manifest.scripts?.["verify:runtime-capacity-convergence"] || "").includes("verify-runtime-capacity-convergence.ts")) {
     findings.push("package-script:runtime-capacity-convergence-missing");
   }
-  const canonicalPlan: any = await readTextIfExists("docs/plans/end-to-end-release/Plan.md");
-  for (const symbol of ["EFF-7", "capacityCertified", "owner_profile_not_authorized"]) {
-    if (!canonicalPlan.includes(symbol)) findings.push(`canonical-plan:${symbol}-missing`);
+  const profile: any = await readJsonIfExists("tools/registry/runtime-capacity-profile.registry.json");
+  if (profile?.authorized !== false) findings.push("capacity-profile:authorization-invalid");
+  if (profile?.capacityCertified !== false) findings.push("capacity-profile:certification-invalid");
+  if (profile?.nonCertificationReason !== "owner_profile_not_authorized") {
+    findings.push("capacity-profile:non-certification-reason-invalid");
   }
   assert.strictEqual(findings.length, 0, `CAP-18 contract findings: ${findings.join(", ")}`);
   return {
