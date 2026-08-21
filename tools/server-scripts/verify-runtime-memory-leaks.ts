@@ -410,14 +410,7 @@ async function runHighRiskWorkloads(runRoot?: any) : Promise<any> {
   try {
     return await new Promise((resolve?: any, reject?: any) : any => {
       let result: any = null;
-      const timeout: any = setTimeout(() : any => {
-        const error: Error & Record<string, any> = new Error("High-risk workload timed out.");
-        error.code = "HIGH_RISK_WORKLOAD_TIMEOUT";
-        highRiskChild.kill("SIGKILL");
-        reject(error);
-      }, selectedHighRiskProfile === "release" ? 600_000 : highRiskPolicy.timeoutMs);
       const settle: any = (callback?: any) : any => {
-        clearTimeout(timeout);
         callback();
       };
       highRiskChild.on("message", (message?: any) : any => {

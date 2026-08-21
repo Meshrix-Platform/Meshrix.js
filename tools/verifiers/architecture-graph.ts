@@ -276,7 +276,9 @@ async function resolveMappedTarget({ descriptor, target, capture, workspaces, se
 }
 
 async function resolvePackageImport(specifier?: any, fromFile?: any, workspaces?: any, seen: any = new Set<any>()) : Promise<any> {
-  if (BUILTINS.has(specifier)) return { builtin: true, external: true, reason: "", target: null };
+  if (specifier.startsWith("node:") || BUILTINS.has(specifier)) {
+    return { builtin: true, external: true, reason: "", target: null };
+  }
   const cycleKey: any = `${fromFile}\0${specifier}`;
   if (seen.has(cycleKey)) return { reason: "mapping_cycle", target: null };
   const nextSeen: any = new Set<any>(seen).add(cycleKey);
