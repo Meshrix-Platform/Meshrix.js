@@ -101,6 +101,7 @@ async function measureScenario(id?: any, operationCount?: any, run?: any) : Prom
       before.externalBytes
     ),
     settledHeapGrowthBytes: Math.max(0, settled.heapUsedBytes - before.heapUsedBytes),
+    eventLoopDelayP99Ms: Math.round(Number(histogram.percentile(99) || 0) / 1_000) / 1000,
     eventLoopDelayMaxMs: Math.round(Number(histogram.max || 0) / 1_000) / 1000,
     facts
   };

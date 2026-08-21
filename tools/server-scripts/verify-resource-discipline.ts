@@ -313,6 +313,7 @@ const requiredRuntimeContracts: any[] = [
       "runHighRiskWorkloads",
       "highRiskWorkloads",
       "minimumProtocolEvents",
+      "maxEventLoopDelayP99Ms",
       "toolCacheCleanupAttempted: false"
     ]
   },
@@ -330,6 +331,8 @@ const requiredRuntimeContracts: any[] = [
       "createStorageBackup",
       "1_000_000",
       "100_000",
+      "eventLoopDelayP99Ms",
+      "histogram.percentile(99)",
       "syntheticDataOnly: true"
     ]
   },

@@ -70,6 +70,6 @@ export const RESOURCE_DISCIPLINE_POLICY: any = deepFreeze({
     maxSettledHeapGrowthBytes: 2 * MIB,
     maxPeakRssGrowthBytes: 192 * MIB,
     maxPeakExternalGrowthBytes: 64 * MIB,
-    maxEventLoopDelayMs: 1_500
+    maxEventLoopDelayP99Ms: 1_500
   }
 });
