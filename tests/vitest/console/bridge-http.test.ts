@@ -179,7 +179,11 @@ describe("bridge-http downloadFile", () : any => {
       credentials: "same-origin",
       headers: { Accept: "*/*" },
     }));
-    expect(triggerBrowserDownloadMock).toHaveBeenCalledWith(expect.any(Blob), "report one_bad.csv");
+    expect(triggerBrowserDownloadMock).toHaveBeenCalledOnce();
+    const [downloadedBlob, downloadedFileName]: any[] = triggerBrowserDownloadMock.mock.calls[0];
+    expect(downloadedFileName).toBe("report one_bad.csv");
+    expect(downloadedBlob).toMatchObject({ size: 13, type: "text/csv" });
+    await expect(downloadedBlob.text()).resolves.toBe("id,name\n1,Ada");
   });
 
   it("allows explicit filenames and falls back to URL segments", async () : Promise<any> => {
