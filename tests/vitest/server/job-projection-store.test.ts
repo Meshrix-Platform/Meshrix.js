@@ -8,6 +8,9 @@ import { createJobProjectionStore } from "../../../packages/server-runtime/src/j
 import { reconcileJobProjectionArtifacts } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-recovery.ts";
 import { persistJobPayload } from "../../../packages/server-runtime/src/jobs/jobs/job-manager-persistence.ts";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FIXTURE_DAY_START_MS = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+
 async function withTempUserData(testCase?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(
     path.join(os.tmpdir(), "meshrix-job-projection-")
@@ -20,7 +23,7 @@ async function withTempUserData(testCase?: any) : Promise<any> {
 }
 
 function job(index?: any, overrides: Record<string, any> = {}) : any {
-  const createdAt: any = new Date(Date.UTC(2026, 6, 22, 0, 0, index)).toISOString();
+  const createdAt: any = new Date(FIXTURE_DAY_START_MS + Number(index || 0) * 1_000).toISOString();
   return {
     id: `job-${String(index).padStart(5, "0")}`,
     status: "completed",
