@@ -17,6 +17,21 @@ export interface TestShard {
   count: number;
 }
 
+export function profileInherits(
+  configs: Readonly<Record<string, { extends?: string | null }>>,
+  profile: string,
+  ancestor: string
+): boolean {
+  const visited = new Set<string>();
+  let current: string | null = profile;
+  while (current && !visited.has(current)) {
+    if (current === ancestor) return true;
+    visited.add(current);
+    current = configs[current]?.extends || null;
+  }
+  return false;
+}
+
 function isVitestEntry(entry: TestSuiteEntry): boolean {
   return entry.command === "npm"
     && entry.args[0] === "run"

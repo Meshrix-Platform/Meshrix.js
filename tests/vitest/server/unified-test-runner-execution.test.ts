@@ -3,12 +3,27 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  profileInherits,
   resolveExecutionTimeout,
   runSuiteProcess,
   timeoutMsForSuite
 } from "../../lib/unified-test-runner-execution.ts";
 
 describe("unified test runner execution budgets", () : any => {
+  it("reuses exact-command results only from the same or an inherited profile", () : any => {
+    const profiles: any = {
+      core: { extends: null },
+      audit: { extends: "core" },
+      release: { extends: "audit" },
+      cyclicA: { extends: "cyclicB" },
+      cyclicB: { extends: "cyclicA" }
+    };
+    expect(profileInherits(profiles, "core", "core")).toBe(true);
+    expect(profileInherits(profiles, "release", "core")).toBe(true);
+    expect(profileInherits(profiles, "core", "audit")).toBe(false);
+    expect(profileInherits(profiles, "cyclicA", "core")).toBe(false);
+  });
+
   it("resolves suite timeout classes and caps them to the remaining profile budget", () : any => {
     const suiteTimeoutMs: any = timeoutMsForSuite({ id: "fixture.fast", timeoutClass: "fast" });
     expect(resolveExecutionTimeout({ suiteTimeoutMs })).toEqual({

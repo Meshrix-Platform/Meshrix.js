@@ -11,6 +11,7 @@ import {
   applyVitestShard,
   mergeCompatibleSuiteProcesses,
   parseTestShard,
+  profileInherits,
   resolveExecutionTimeout,
   runSuiteProcess,
   timeoutMsForSuite
@@ -369,7 +370,10 @@ function passedResultCache(profile: string, sourceRevision: string | null): Map<
   if (!existsSync(reportPath)) return new Map();
   try {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    if (report.profile !== profile || report.sourceRevision !== sourceRevision) return new Map();
+    if (
+      !profileInherits(profileConfigs, profile, report.profile) ||
+      report.sourceRevision !== sourceRevision
+    ) return new Map();
     return new Map((Array.isArray(report.suites) ? report.suites : [])
       .filter((result: any) => result?.status === "passed" && typeof result.command === "string")
       .map((result: any) => [result.command, result]));
