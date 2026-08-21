@@ -75,7 +75,7 @@ async function mcpCapabilityOperations(catalog?: any) : Promise<any> {
     }
   }));
   const provider: Record<string, any> = {
-    async authorizeRequest() : Promise<any> {
+    async authorizeMcpClientRequest() : Promise<any> {
       return {
         ok: true,
         status: 200,
@@ -294,7 +294,7 @@ async function main() : Promise<any> {
     denyDecision: protocolConsistencyVerifierText.includes("\"deny\""),
     approvalRequiredDecision: protocolConsistencyVerifierText.includes("approval_required"),
     stalePolicyDecision: protocolConsistencyVerifierText.includes("hasStalePolicy"),
-    revokedGrantDecision: protocolConsistencyVerifierText.includes("revoked_grant"),
+    revokedCredentialDecision: protocolConsistencyVerifierText.includes("revoked_credential"),
     rateLimitDecision: protocolConsistencyVerifierText.includes("rate_limited"),
     unauthorizedDiscoveryHidden: protocolConsistencyVerifierText.includes("admin operation leaked") ||
       protocolConsistencyVerifierText.includes("config mutation operation leaked")
