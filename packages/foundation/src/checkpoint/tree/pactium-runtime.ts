@@ -42,6 +42,10 @@ export function resolveMeshrixPactiumDataDir(userDataPath = ""): string {
   return path.resolve(String(userDataPath || ServerConfig.getDataDir()));
 }
 
+export function assertMeshrixPactiumDataDir(userDataPath = ""): void {
+  assertCurrentDataDir({ dataDir: resolveMeshrixPactiumDataDir(userDataPath) });
+}
+
 export function createMeshrixPactiumRuntime({
   userDataPath = "",
   dataDir = "",

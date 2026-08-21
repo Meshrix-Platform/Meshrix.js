@@ -7,11 +7,6 @@ import path from "node:path";
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
-import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
-import {
-  createSignedMcpHeaders,
-  createVerifierMcpProcessIdentity
-} from "./mcp-process-identity-test-helper.ts";
 
 const REPORT_PATH: any = "build/reports/operation-permission-external-http-boundary.json";
 const AGENT_PROFILE_ID: any = "verify-http-boundary-agent";
@@ -19,7 +14,6 @@ const AGENT_PROFILE_ID: any = "verify-http-boundary-agent";
 const restoreCapabilityKernelEnv: any = useIsolatedCapabilityKernelForVerifier();
 const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-tool-http-boundary-"));
 const dynamicSecretNeedles: any = new Set<any>();
-const mcpIdentityByToken: any = new Map<any, any>();
 const report: Record<string, any> = {
   schemaVersion: "v0.0.1:operation-permission:external-http-boundary-report-1",
   verifier: "tools/server-scripts/verify-operation-permission-external-http-boundary.ts",
@@ -122,20 +116,24 @@ async function api(method?: any, route?: any, body: any = undefined) : Promise<a
 }
 
 async function grantToken() : Promise<any> {
-  const response: any = await issueVerifierMcpApiKey({
-    server,
-    access: {
-      targets: ["codex"],
+  const response: any = await fetchJson("/api/operation-permission/v1/grants", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-meshrix-safety-confirm": "true"
+    },
+    body: JSON.stringify({
       label: "external-http-boundary",
-      connectorVersion: "verify-operation-permission-external-http-boundary",
-      agentProfileId: AGENT_PROFILE_ID,
-      grantMode: "maintain",
-      toolsets: ["meshrix.gateway.read"]
-    }
+      type: "machine",
+      scopes: ["gateway:read"],
+      toolsets: ["meshrix.gateway.read"],
+      maxRisk: "read_only"
+    })
   });
-  assert.ok(response.apiKey);
-  dynamicSecretNeedles.add(response.apiKey);
-  return response.apiKey;
+  assert.equal(response.status, 201, responseFailureSummary(response));
+  assert.ok(response.payload.token);
+  dynamicSecretNeedles.add(response.payload.token);
+  return response.payload.token;
 }
 
 async function toolRequest(route?: any, token?: any, body?: any) : Promise<any> {
@@ -144,7 +142,7 @@ async function toolRequest(route?: any, token?: any, body?: any) : Promise<any> 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Meshrix.js-Api-Key": token,
+      Authorization: `Bearer ${token}`,
       "X-Meshrix.js-MCP-Target": "codex",
       "X-Meshrix.js-Agent-Profile-Id": AGENT_PROFILE_ID
     },
@@ -154,6 +152,19 @@ async function toolRequest(route?: any, token?: any, body?: any) : Promise<any> 
 
 function assertNoTrustedLocalGate(payload?: any, label?: any) : any {
   assert.equal(JSON.stringify(payload).includes("trusted_meshrix_client_required"), false, `${label} returned trusted local gate`);
+}
+
+function responseFailureSummary(response: Record<string, any> = {}) : any {
+  return JSON.stringify({
+    status: Number(response.status || 0),
+    errorCode: String(
+      response.payload?.error?.code ||
+      response.payload?.error?.reasonCode ||
+      response.payload?.reasonCode ||
+      response.payload?.code ||
+      ""
+    )
+  });
 }
 
 try {
@@ -177,7 +188,7 @@ try {
       toolId: "meshrix.gateway.metrics",
       input: {}
     });
-    assert.equal(response.status, 200, JSON.stringify(response.payload, null, 2));
+    assert.equal(response.status, 200, responseFailureSummary(response));
     assert.equal(response.payload.status, "ok");
     assertNoTrustedLocalGate(response.payload, "execute");
     return { status: response.status, toolId: response.payload.toolId, resultStatus: response.payload.status };
@@ -188,7 +199,7 @@ try {
       toolId: "meshrix.gateway.metrics",
       input: {}
     });
-    assert.equal(response.status, 200, JSON.stringify(response.payload, null, 2));
+    assert.equal(response.status, 200, responseFailureSummary(response));
     assertNoTrustedLocalGate(response.payload, "dry-run");
     return { status: response.status, dryRun: response.payload.dryRun === true || response.payload.status === "dry_run" };
   });
@@ -200,7 +211,7 @@ try {
         { toolId: "meshrix.gateway.externalServices.list", input: {} }
       ]
     });
-    assert.equal(response.status, 200, JSON.stringify(response.payload, null, 2));
+    assert.equal(response.status, 200, responseFailureSummary(response));
     assert.equal(Array.isArray(response.payload.results), true);
     assert.equal(response.payload.results.length, 2);
     assertNoTrustedLocalGate(response.payload, "batch");
