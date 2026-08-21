@@ -76,6 +76,9 @@ jobs:
         run: node tools/plan/rebuild-current-plan-baseline.ts
       - name: Core repository gate
         run: npm run verify
+      - name: Install Chromium for browser acceptance
+        if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release') }}
+        run: npx playwright install --with-deps chromium
       - name: Audit gate
         if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release') }}
         run: npm run test:audit
@@ -106,6 +109,8 @@ jobs:
         run: >-
           npm run verify:enterprise-single-node:ubuntu-container --
           --source-candidate build/release/control/SOURCE_CANDIDATE.json
+      - name: Install Chromium for browser acceptance
+        run: npx playwright install --with-deps chromium
       - name: Functional-complete authority
         env:
           MESHRIX_RELEASE_PARALLELISM: "4"
