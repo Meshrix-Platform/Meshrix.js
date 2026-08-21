@@ -63,6 +63,11 @@
       "source": "./src/checkpoint/tree/pactium-runtime.ts",
       "default": "./dist/checkpoint/tree/pactium-runtime.js"
     },
+    "./checkpoint/tree/weighted-cache-substrate": {
+      "types": "./dist/checkpoint/tree/weighted-cache-substrate.d.ts",
+      "source": "./src/checkpoint/tree/weighted-cache-substrate.ts",
+      "default": "./dist/checkpoint/tree/weighted-cache-substrate.js"
+    },
     "./concurrency/lock-manager": {
       "types": "./dist/concurrency/lock-manager.d.ts",
       "source": "./src/concurrency/lock-manager.ts",

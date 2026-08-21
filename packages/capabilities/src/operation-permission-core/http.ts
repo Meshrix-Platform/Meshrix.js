@@ -343,7 +343,7 @@ export function createOperationPermissionHttpRouter({
       const payload: any = parseJsonBody(requestBody);
       const calls: any = Array.isArray(payload.calls) ? payload.calls : [];
       const effectCalls: any = calls.filter((call?: any) : any =>
-        payload.dryRun !== true && call?.dryRun !== true
+        platform.registry.getTool(call?.toolId)?.readOnly !== true
       );
       if (effectCalls.length > 1) {
         return complete(409, {

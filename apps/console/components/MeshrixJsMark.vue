@@ -15,16 +15,16 @@
         width="240"
         height="270"
         maskUnits="userSpaceOnUse"
-        style="mask-type: luminance"
+        class="meshrix-js-mark__mask"
       >
-        <rect x="190" y="25" width="240" height="270" fill="#fff" />
-        <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="#000" />
+        <rect x="190" y="25" width="240" height="270" fill="var(--text-primary)" />
+        <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="var(--bg-inset)" />
       </mask>
     </defs>
 
-    <rect x="150" width="320" height="320" fill="#000" />
+    <rect x="150" width="320" height="320" fill="var(--bg-inset)" />
 
-    <g stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="var(--text-primary)" stroke-linecap="round" stroke-linejoin="round">
       <g mask="url(#meshrix-js-mark-outside-gateway)">
         <path
           d="M216.902 98.75 299.175 51.25M320.825 51.25 403.098 98.75M206.077 117.5V212.5M413.923 117.5V212.5M216.902 231.25 284.019 270M403.098 231.25 335.981 270"
@@ -44,3 +44,9 @@
     </g>
   </svg>
 </template>
+
+<style scoped>
+.meshrix-js-mark__mask {
+  mask-type: luminance;
+}
+</style>

@@ -173,7 +173,7 @@ async function main() : Promise<any> {
       authorizationEngine: createAuthorizationEngine()
     });
     store.restoreTag("governance:deny");
-    const providerDecision: any = provider.evaluatePolicy({
+    const providerDecision: any = await provider.evaluatePolicy({
       operation: { id: "console.release.readiness" },
       context: {
         tagPolicy: {

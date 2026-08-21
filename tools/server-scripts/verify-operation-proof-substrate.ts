@@ -27,7 +27,7 @@ const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.ur
 async function* walkFiles(directory?: any) : AsyncGenerator<any, any, any> {
   const entries: any = await fs.readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
-    if ([".git", "build", "node_modules", "tmp"].includes(entry.name)) {
+    if ([".git", "build", "dist", "node_modules", "tmp"].includes(entry.name)) {
       continue;
     }
     const filePath: any = path.join(directory, entry.name);
@@ -120,6 +120,7 @@ function operationForDispatcherVerification() : any {
       id: "verify.operation_proof_substrate.dispatch",
       feature: "verification",
       label: "Operation proof substrate dispatcher verification",
+      trafficModel: "workspace_application",
       target: { controller: "verify", method: "handle" },
       http: { method: "POST", path: "/api/verify/operation-proof-substrate" },
       rpc: { method: "verify.operation_proof_substrate.dispatch", body: "params" },
@@ -357,9 +358,13 @@ async function assertPactiumImportBoundary() : Promise<any> {
   const allowed: any = new Set<any>([
     "packages/foundation/src/checkpoint/tree/checkpoint-tree-projection.ts",
     "packages/foundation/src/checkpoint/tree/data-structure-substrate.ts",
+    "packages/foundation/src/checkpoint/tree/export-import.ts",
     "packages/foundation/src/checkpoint/tree/merkle-state-substrate.ts",
     "packages/foundation/src/checkpoint/tree/pactium-runtime.ts",
+    "packages/foundation/src/checkpoint/tree/types.ts",
+    "packages/foundation/src/checkpoint/tree/weighted-cache-substrate.ts",
     "packages/foundation/src/proof/proof-substrate/index.ts",
+    "packages/foundation/src/proof/proof-substrate/register.ts",
     "packages/foundation/src/proof/proof-substrate/transparency-ledger.ts"
   ]);
   const offenders: any[] = [];
@@ -455,7 +460,7 @@ async function assertPermissionAuditAnchoring() : Promise<any> {
       assert.ok(execution.ledgerEventId, "tool execution must store ledgerEventId");
       assert.ok(execution.inputHash, "tool execution must store redacted input hash");
 
-      const audit: any = store.getAudit("tool_exec_anchor_1");
+      const audit: any = await store.getAudit("tool_exec_anchor_1");
       assert.equal(audit.ledgerEventId, execution.ledgerEventId);
       assert.equal(audit.inputHash, execution.inputHash);
       assert.notEqual(JSON.stringify(audit.redactedInput || {}).includes("must-not-reach-ledger"), true);

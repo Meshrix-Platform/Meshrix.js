@@ -5,7 +5,7 @@ import {
   requiredCapabilitiesFor
 } from "./authorization-capabilities.ts";
 import crypto from "node:crypto";
-import { createWeightedLruCache } from "pactium";
+import { createWeightedLruCache } from "../../checkpoint/tree/weighted-cache-substrate.ts";
 import { firstString, nowIso, randomId, riskRank, stringSet, stringsFrom, uniqueStrings, effectDetails } from "./authorization-engine-common.ts";
 import { resolveResourceContext } from "./authorization-resource-context.ts";
 import {

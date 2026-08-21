@@ -10,8 +10,7 @@ import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/
 import { registerCorePlatformServices } from "#meshrix/server-runtime/composition/core-platform-register";
 import { createDataStructureSubstrate } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
 import { registerDataStructureSubstratePlatformServices } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate-register";
-import { assertCurrentDataDir } from "pactium";
-import { resolveMeshrixPactiumDataDir } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
+import { assertMeshrixPactiumDataDir } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
 import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
 import { registerOperationProofSubstratePlatformServices } from "#meshrix/foundation/proof/proof-substrate/register";
 import { CONSOLE_ROLES, createConsoleAuth } from "#meshrix/foundation/security/auth/console-auth";
@@ -295,7 +294,7 @@ export async function createServerCompositionRoot({
   const isAnyFeatureActive: any = (...featureIds: any[]) : any =>
     featureIds.some((featureId?: any) : any => isFeatureActive(featureId));
 
-  assertCurrentDataDir({ dataDir: resolveMeshrixPactiumDataDir(userDataPath) });
+  assertMeshrixPactiumDataDir(userDataPath);
   let runtime: any;
   try {
     runtime = await createServerRuntime({
