@@ -7,7 +7,7 @@ import { createQueueApplicationPort } from "../../../../packages/server-runtime/
 import { createUploadWorkspaceMaterializationTransactionStore } from "../../../../packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts";
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
-const LEASE_MS: any = 250;
+const LEASE_MS: any = 1_000;
 const ADMISSION_USERNAME: any = "materialization-crash-owner";
 const ADMISSION_PASSWORD: any =
   "Synthetic-Materialization-Crash-Owner-42!";

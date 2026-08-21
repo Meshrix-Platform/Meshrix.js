@@ -1049,7 +1049,7 @@ export const UNCLASSIFIED_ALLOWLIST: readonly any[] = Object.freeze([
   "vitest",                   // Vitest runner
   "vitest:coverage",          // Vitest with coverage
   "repo:branch-flow",         // Branch flow verification
-  "repo:git-publication",     // Git publication privacy policy fixtures
+  "repo:git-publication",     // Git publication privacy policy fixtures plus the complete index
   "server:prepare:npm-cache",  // Release packaging helper
   "test:audit",               // Audit test profile
   "test:smoke",               // Smoke test profile

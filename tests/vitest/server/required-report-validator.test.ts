@@ -751,7 +751,11 @@ describe("platform acceptance foundation ownership", () : any => {
 
     expect(commandIds).not.toContain("hygiene");
     expect(commandIds).not.toContain("script-registry");
-    expect(foundation).toMatchObject({ command: "npm", args: ["test"] });
+    expect(foundation).toMatchObject({
+      command: "npm",
+      args: ["test"],
+      exclusive: true
+    });
     expect(foundation.resourceLocks).toEqual(expect.arrayContaining([
       "report:build/test-reports/latest.json",
       "report:build/reports/local-info-hygiene.json",

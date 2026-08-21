@@ -116,8 +116,8 @@ try {
 
   const fixtureBytes: any = Buffer.from("bounded-pinned-download", "utf8");
   const fixtureSha256: any = createHash("sha256").update(fixtureBytes).digest("hex");
-  const responseFor: any = (body?: any, { redirected = false, contentLength = null }: Record<string, any> = {}) : any => ({
-    status: 200,
+  const responseFor: any = (body?: any, { redirected = false, contentLength = null, status = 200 }: Record<string, any> = {}) : any => ({
+    status,
     redirected,
     headers: new Headers(contentLength === null ? {} : { "content-length": String(contentLength) }),
     body: Readable.from([body])
@@ -163,8 +163,27 @@ try {
     }
   );
   assert.equal(transientRetryFetchCount, 2);
+
+  let transientHttpFetchCount: any = 0;
+  const transientHttpDestination: any = path.join(tempRoot, "transient-http-fixture");
+  await downloadPinnedFile(
+    "https://nodejs.org/dist/transient-http-fixture",
+    transientHttpDestination,
+    fixtureSha256,
+    fixtureBytes.length,
+    {
+      fetchImpl: async () : Promise<any> => {
+        transientHttpFetchCount += 1;
+        return transientHttpFetchCount === 1
+          ? responseFor(Buffer.alloc(0), { status: 503 })
+          : responseFor(fixtureBytes, { contentLength: fixtureBytes.length });
+      }
+    }
+  );
+  assert.equal(transientHttpFetchCount, 2);
   record("transient network failures retry within a bounded pinned download policy", "passed", {
     transientFailureRetried: true,
+    transientHttpStatusRetried: true,
     finalIntegrityVerified: true
   });
 
