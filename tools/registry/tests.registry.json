@@ -730,12 +730,75 @@
         "tests/vitest/server/plan-receipt-digest.test.ts",
         "tests/vitest/server/publish-release-set.test.ts",
         "tests/vitest/server/release-authority-baseline.test.ts",
+        "tests/vitest/server/release-acceptance-standards.test.ts",
+        "tests/vitest/server/release-candidate-identity.test.ts",
         "tests/vitest/server/release-command-dag-runner.test.ts",
         "tests/vitest/server/release-evidence-freshness.test.ts",
         "tests/vitest/server/real-machine-validation-workflow.test.ts",
         "tests/vitest/server/release-plan-execution-authority.test.ts",
         "tests/vitest/server/release-workflow-supply-chain.test.ts",
-        "tests/vitest/server/required-report-validator.test.ts"
+        "tests/vitest/server/required-report-validator.test.ts",
+        "tests/vitest/server/verify-failure-localization.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "release.branch-promotion-workflow",
+      "label": "Branch promotion workflow semantics: nightly direct feedback and exact-tip stable/release promotion",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/branch-promotion-workflow.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "release.external-synthetic-requests",
+      "label": "External deterministic synthetic request deployment scenarios",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/external-synthetic-requests.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "release.deployment-smoke",
+      "label": "Release deployment reducer, contract, and controller smoke suite",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/release-deployment-smoke.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",

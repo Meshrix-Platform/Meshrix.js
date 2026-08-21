@@ -16,7 +16,7 @@ describe("platform acceptance ledger anchoring", () : any => {
     selectedProfile: "enterprise-single-node",
     commandDagDigest: `sha256:${"b".repeat(64)}`,
     ownedReportsInventoryDigest: `sha256:${"c".repeat(64)}`,
-    planReceiptSetDigest: `sha256:${"d".repeat(64)}`,
+    candidateDigest: "d".repeat(64),
     privacySafe: true
   });
 
@@ -24,7 +24,7 @@ describe("platform acceptance ledger anchoring", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-anchor-"));
     const reportPath: any = path.join(root, "sample-report.json");
     await fs.writeFile(reportPath, `${JSON.stringify({
-      schemaVersion: "v0.0.1:acceptance:platform-report-2",
+      schemaVersion: "v0.0.1:acceptance:platform-report-3",
       status: "accepted",
       summary: { releaseReady: true }
     }, null, 2)}\n`, "utf8");

@@ -104,23 +104,23 @@ export async function anchorAcceptanceEvidence({
     .update(JSON.stringify(reportDigests))
     .digest("hex")}`;
   const context: Record<string, any> = {
-    schemaVersion: "v0.0.1:meshrix:acceptance-evidence-anchor-context-1",
+    schemaVersion: "v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
     sourceRevision: String(evidenceContext?.sourceRevision || "").trim(),
     sourceTreeDigest: String(evidenceContext?.sourceTreeDigest || "").trim(),
     selectedProfile: String(evidenceContext?.selectedProfile || "").trim(),
     commandDagDigest: String(evidenceContext?.commandDagDigest || "").trim(),
     ownedReportsInventoryDigest: String(evidenceContext?.ownedReportsInventoryDigest || "").trim(),
-    planReceiptSetDigest: String(evidenceContext?.planReceiptSetDigest || "").trim(),
+    candidateDigest: String(evidenceContext?.candidateDigest || "").trim(),
     evidenceSetDigest,
     privacySafe: evidenceContext?.privacySafe === true
   };
   const SHA256: any = /^sha256:[a-f0-9]{64}$/u;
-  if (!/^[a-f0-9]{40,64}$/u.test(context.sourceRevision) ||
+  if (!/^[a-f0-9]{40}$/u.test(context.sourceRevision) ||
       !context.selectedProfile || context.selectedProfile.length > 128 ||
       !SHA256.test(context.sourceTreeDigest) ||
       !SHA256.test(context.commandDagDigest) ||
       !SHA256.test(context.ownedReportsInventoryDigest) ||
-      !SHA256.test(context.planReceiptSetDigest) ||
+      !/^[a-f0-9]{64}$/u.test(context.candidateDigest) ||
       context.privacySafe !== true) {
     return {
       ledgerEventId: "",

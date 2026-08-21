@@ -345,7 +345,7 @@ export async function createServerConsoleOperationProviders({
           getTagRevision: () : any => Number(securityPermissions?.tagManagementStore?.getPolicyRevision?.()?.revision || 0) || 0,
           protocolEventBus,
           onAudiencePublished({ projection, previousProjection }: Record<string, any>) : any {
-            broadcastAudienceCatalogInvalidation({
+            return broadcastAudienceCatalogInvalidation({
               sourceRevision: projection.sourceRevision,
               catalogRevision: projection.catalogRevision || projection.catalogFingerprint,
               audienceRevision: projection.audienceRevision,
@@ -358,6 +358,31 @@ export async function createServerConsoleOperationProviders({
         });
         const refreshAudience: any = async (event: Record<string, any> = {}) : Promise<any> => {
           const result: any = await manifestSnapshotCommitter?.refreshAudienceProjection?.();
+          const currentFacts: any = manifestSnapshotCommitter?.getPublicationFacts?.() || null;
+          const affectedPartitions: readonly any[] = Object.freeze(
+            [...new Set<any>((Array.isArray(result?.affectedPartitions) ? result.affectedPartitions : [])
+              .map((value?: any) : any => String(value || "").trim())
+              .filter(Boolean))].sort()
+          );
+          const publicationFacts: Readonly<Record<string, any>> | null = currentFacts && result
+            ? Object.freeze({
+                sourceRevision: currentFacts.sourceRevision,
+                catalogRevision: currentFacts.catalogRevision,
+                audienceRevision: result.audienceRevision,
+                affectedPartitions
+              })
+            : null;
+          if (result?.emitted === true && (
+            !Number.isSafeInteger(publicationFacts?.sourceRevision) ||
+            !String(publicationFacts?.catalogRevision || "").trim() ||
+            !Number.isSafeInteger(publicationFacts?.audienceRevision)
+          )) {
+            const error: Error & Record<string, any> = new Error(
+              "Published upstream audience facts were incomplete."
+            );
+            error.code = "upstream_audience_publication_facts_invalid";
+            throw error;
+          }
           if ([
             "grant_token_rotated",
             "grant_revoked",
@@ -367,7 +392,10 @@ export async function createServerConsoleOperationProviders({
           ].includes(event?.reasonCode)) {
             disconnectMcpSseConnectionsByGrant(event.grantId);
           }
-          return result;
+          return Object.freeze({
+            ...(result || {}),
+            publicationFacts
+          });
         };
         const unregisterOperationPermissionChange: any = getOperationPermissionPlatform()?.registerChangeHandler?.(
           refreshAudience

@@ -401,8 +401,9 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(document).toContain("faster verification");
       expect(document).toMatch(/thin substrate blocked GATE-CONTRACT/i);
       expect(document).toMatch(/remainder joined GATE-FINAL/i);
-      expect(document).toMatch(/engineering for this candidate is complete pending a\s+current GATE-FINAL receipt/i);
-      expect(document).toMatch(/FutureGoals/);
+      expect(document).toMatch(/Functional\s+Convergence Plan is closed/i);
+      expect(document).toMatch(/non-gating/i);
+      expect(document).toMatch(/outside the closed Plan/i);
     }
   });
 
@@ -658,15 +659,23 @@ describe("enterprise single-node release Plan execution authority", () : any => 
   });
 
   it("makes CI and tag acceptance consume the Ubuntu closure without a direct Plan reset", async () : Promise<any> => {
-    for (const relativePath of [".github/workflows/ci.yml", ".github/workflows/release.yml"]) {
-      const workflow: any = await fs.readFile(path.join(REPO_ROOT, relativePath), "utf8");
-      const acceptance: any = workflowJob(workflow, "functional-completeness");
-      const closure: any = acceptance.indexOf("npm run verify:enterprise-single-node:ubuntu-container");
-      const consumer: any = acceptance.indexOf("verify-platform-acceptance.ts");
-      expect(closure, `${relativePath}: missing Ubuntu closure`).toBeGreaterThan(0);
-      expect(consumer, `${relativePath}: missing platform acceptance consumer`).toBeGreaterThan(closure);
-      expect(acceptance).not.toContain("rebuild-current-plan-baseline.ts");
-      expect(acceptance).not.toContain("--replace");
-    }
+    const ciWorkflow: any = await fs.readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+    const acceptance: any = workflowJob(ciWorkflow, "functional-completeness");
+    const closure: any = acceptance.indexOf("npm run verify:enterprise-single-node:ubuntu-container");
+    const consumer: any = acceptance.indexOf("verify-platform-acceptance.ts");
+    expect(closure, "ci.yml: missing Ubuntu closure").toBeGreaterThan(0);
+    expect(consumer, "ci.yml: missing platform acceptance consumer").toBeGreaterThan(closure);
+    expect(acceptance).not.toContain("rebuild-current-plan-baseline.ts");
+    expect(acceptance).not.toContain("--replace");
+
+    const releaseWorkflow: any = await fs.readFile(path.join(REPO_ROOT, ".github/workflows/release.yml"), "utf8");
+    expect(releaseWorkflow).not.toContain("\n  functional-completeness:\n");
+    expect(releaseWorkflow).not.toContain("npm run verify:enterprise-single-node:ubuntu-container");
+    const releaseBranchWorkflow: any = await fs.readFile(
+      path.join(REPO_ROOT, ".github/workflows/release-branch.yml"),
+      "utf8",
+    );
+    expect(releaseBranchWorkflow).toContain("npm run server:verify:release-deployment");
+    expect(releaseBranchWorkflow).not.toContain("rebuild-current-plan-baseline.ts");
   });
 });

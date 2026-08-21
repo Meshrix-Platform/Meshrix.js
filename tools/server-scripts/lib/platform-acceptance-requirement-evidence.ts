@@ -17,7 +17,7 @@ const mapping: Record<string, any> = {
   [rel(8)]: { commandIds: ["storage-restore"] },
   [rel(9)]: { commandIds: ["job-work-queue", "job-work-queue-ceiling-conformance", "work-queue-conformance", "work-queue-process-restart"] },
   [rel(10)]: { commandIds: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "observability-coverage"] },
-  [rel(11)]: { commandIds: ["better-plan", "foundation-tests"], aggregateFacts: ["receiptPreflightReady", "commandDagReady", "inventoryReady", "privacyReady"] },
+  [rel(11)]: { commandIds: ["foundation-tests"], aggregateFacts: ["candidateIdentityReady", "commandDagReady", "inventoryReady", "privacyReady"] },
   [rel(12)]: { commandIds: ["downstream-mcp-audit", "mcp-installer-convergence", "operation-permission-protocol-consistency"] },
   [rel(13)]: { commandIds: ["mcp-installer-convergence", "mcp-release-target-scope", "operation-permission-protocol-consistency"] },
   [rel(14)]: { commandIds: ["upstream-mcp-gateway", "upstream-gateway-e2e"] },
@@ -36,7 +36,7 @@ const mapping: Record<string, any> = {
   [rel(27)]: { commandIds: ["plugin-runtime", "npm-package-installability", "composition-source-package"] },
   [rel(28)]: { commandIds: ["model-gateway-service", "model-gateway-adapter", "gateway-boundary-final", "external-gateway-plugin", "surface-convergence"] },
   [rel(29)]: { commandIds: ["workspace-asset-management", "upload-workspace-materialization"] },
-  [rel(30)]: { commandIds: ["better-plan", "repo-organization", "documentation-convergence"] },
+  [rel(30)]: { commandIds: ["repo-organization", "documentation-convergence"] },
   ...Object.fromEntries(Array.from({ length: 13 }, (_?: any, index?: any) : any => [
     usp(index + 1),
     {
@@ -128,7 +128,7 @@ export function reducePlatformAcceptanceRequirementEvidence({
     });
   });
   return Object.freeze({
-    schemaVersion: "v0.0.1:meshrix:platform-acceptance-requirement-evidence-1",
+    schemaVersion: "v0.0.1:meshrix:platform-acceptance-requirement-evidence-2",
     sourceOfTruth: "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts",
     requirementCount: nodes.length,
     readyCount: nodes.filter((node?: any) : any => node.ready).length,

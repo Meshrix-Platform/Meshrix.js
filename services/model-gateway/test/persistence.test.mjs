@@ -71,11 +71,12 @@ test("idempotent replay after restart performs no second egress", async (t) => {
 test("provider failures settle the ledger as in_doubt with bounded attempts", async (t) => {
   const service = await startService({ maxAttempts: 3 });
   t.after(() => service.close());
-  await provision(service);
+  const modelId = "fixture-openai-fault";
+  await provision(service, { modelId });
   const response = await openAiCall(service, {
-    model: "model-1",
+    model: modelId,
     messages: [{ role: "user", content: "fail me" }]
-  }, { "x-fixture-fail": "1", "idempotency-key": "ik-fail-1" });
+  }, { "idempotency-key": "ik-fail-1" });
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error.code, "provider_unavailable");
   assert.equal(service.fixture.openAiCalls(), 3, "attempts are bounded by maxAttempts");
@@ -129,11 +130,12 @@ test("released ledger entries left by a crash become in_doubt on reopen", async 
 test("cancellation of a pending call leaves an in_doubt ledger without settlement", async (t) => {
   const service = await startService({ bounds: { maxConcurrentCalls: 2 } });
   t.after(() => service.close());
-  await provision(service);
+  const modelId = "fixture-openai-hold";
+  await provision(service, { modelId });
   const held = openAiCall(
     service,
-    { model: "model-1", messages: [{ role: "user", content: "hold for cancel" }] },
-    { "x-hold": "1", "idempotency-key": "ik-cancel-1" }
+    { model: modelId, messages: [{ role: "user", content: "hold for cancel" }] },
+    { "idempotency-key": "ik-cancel-1" }
   );
   await new Promise((resolve) => setTimeout(resolve, 50));
   const state = JSON.parse(await readFile(path.join(service.dataRoot, "state.json"), "utf8"));
@@ -147,6 +149,6 @@ test("cancellation of a pending call leaves an in_doubt ledger without settlemen
   assert.equal((await cancel.json()).state, "requested");
   const updated = JSON.parse(await readFile(path.join(service.dataRoot, "state.json"), "utf8"));
   assert.equal(updated.ledger[callId].state, "in_doubt");
-  service.fixture.release("model-1");
+  service.fixture.release(modelId);
   await held.catch(() => {});
 });

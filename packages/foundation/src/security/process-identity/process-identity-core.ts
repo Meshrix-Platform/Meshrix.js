@@ -722,7 +722,11 @@ export function operationRequiredCapabilities(operation: ProcessIdentityObject =
   return configured.length > 0 ? configured : [apiCapabilityId(text(operation.id))].filter(Boolean);
 }
 
-export function requestIsLoopback(request: { headers?: Record<string, unknown> } | null = null): boolean {
+export function requestIsLoopback(request: {
+  headers?: Record<string, unknown>;
+  socket?: { remoteAddress?: string };
+  connection?: { remoteAddress?: string };
+} | null = null): boolean {
   const normalizedHeaders: Record<string, string | string[] | undefined> = {};
   for (const [name, value] of Object.entries(request?.headers || {})) {
     if (typeof value === "string" || value === undefined) {
@@ -731,7 +735,11 @@ export function requestIsLoopback(request: { headers?: Record<string, unknown> }
       normalizedHeaders[name] = value;
     }
   }
-  const ip = clientIpFromRequest({ headers: normalizedHeaders }, { unknown: "" });
+  const ip = clientIpFromRequest({
+    headers: normalizedHeaders,
+    socket: request?.socket,
+    connection: request?.connection
+  }, { unknown: "" });
   if (!isLoopbackAddress(ip)) {
     return false;
   }

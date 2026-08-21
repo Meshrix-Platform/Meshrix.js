@@ -168,7 +168,7 @@ export async function validateFunctionalPlatformAcceptanceReport(
     throw workflowError("real_machine_functional_report_invalid");
   }
   requireCondition(
-    report?.schemaVersion === "v0.0.1:acceptance:platform-report-2" &&
+    report?.schemaVersion === "v0.0.1:acceptance:platform-report-3" &&
       report?.acceptanceStandard === "functional-completeness" &&
       report?.claim === "functional-complete" &&
       report?.status === "accepted" &&

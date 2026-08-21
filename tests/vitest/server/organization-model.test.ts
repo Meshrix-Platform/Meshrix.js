@@ -145,3 +145,89 @@ describe("organization governance canonical tag-store aggregate", () : any => {
     store.close();
   });
 });
+
+describe("tag change subscriber convergence", () : any => {
+  it("serializes shared-root subscribers and returns the final publication receipt", async () : Promise<any> => {
+    const root: any = await temporaryRoot();
+    const subscriberStore: any = createTagManagementStore({ rootPath: root });
+    const writerStore: any = createTagManagementStore({ rootPath: root });
+    let releaseFirst: () => void = () : void => {};
+    let reportFirstStarted: () => void = () : void => {};
+    const firstBlocked: any = new Promise<void>((resolve?: any) : any => { releaseFirst = resolve; });
+    const firstStarted: any = new Promise<void>((resolve?: any) : any => { reportFirstStarted = resolve; });
+    const order: string[] = [];
+    let invocation: any = 0;
+    subscriberStore.registerChangeHandler(async () : Promise<any> => {
+      invocation += 1;
+      const current: any = invocation;
+      order.push(`start:${current}`);
+      if (current === 1) {
+        reportFirstStarted();
+        await firstBlocked;
+      }
+      order.push(`finish:${current}`);
+      return Object.freeze({
+        audienceRevision: current,
+        affectedPartitions: Object.freeze([`partition-${current}`])
+      });
+    });
+    try {
+      writerStore.upsertTag({ tagId: "subscriber:first", kind: "custom", label: "First" });
+      writerStore.upsertTag({ tagId: "subscriber:second", kind: "custom", label: "Second" });
+      const drain: any = writerStore.drainChangeHandlers();
+      await firstStarted;
+      expect(order).toEqual(["start:1"]);
+      releaseFirst();
+      const receipt: any = await drain;
+      expect(order).toEqual(["start:1", "finish:1", "start:2", "finish:2"]);
+      expect(receipt).toMatchObject({ throughSequence: 2, eventCount: 2 });
+      expect(receipt.lastEvent).toMatchObject({
+        sequence: 2,
+        eventType: "create",
+        handlerCount: 1,
+        subscriberResults: [{ audienceRevision: 2, affectedPartitions: ["partition-2"] }]
+      });
+    } finally {
+      releaseFirst();
+      writerStore.close();
+      subscriberStore.close();
+    }
+  });
+
+  it("propagates subscriber failure after the durable mutation and keeps the lane usable", async () : Promise<any> => {
+    const root: any = await temporaryRoot();
+    const subscriberStore: any = createTagManagementStore({ rootPath: root });
+    const writerStore: any = createTagManagementStore({ rootPath: root });
+    const subscriberFailure: any = new Error("subscriber fixture failure");
+    const unregisterFailure: any = subscriberStore.registerChangeHandler(async () : Promise<any> => {
+      throw subscriberFailure;
+    });
+    try {
+      writerStore.upsertTag({ tagId: "subscriber:durable", kind: "custom", label: "Durable" });
+      await expect(writerStore.drainChangeHandlers()).rejects.toMatchObject({
+        name: "TagChangeSubscriberError",
+        code: "tag_change_subscriber_failed",
+        eventType: "create",
+        failureCount: 1,
+        cause: subscriberFailure
+      });
+      expect(writerStore.getTag("subscriber:durable")).toMatchObject({ label: "Durable" });
+
+      unregisterFailure();
+      subscriberStore.registerChangeHandler(async () : Promise<any> => ({
+        audienceRevision: 2,
+        affectedPartitions: ["partition-recovered"]
+      }));
+      writerStore.upsertTag({ tagId: "subscriber:recovered", kind: "custom", label: "Recovered" });
+      await expect(writerStore.drainChangeHandlers()).resolves.toMatchObject({
+        eventCount: 1,
+        lastEvent: {
+          subscriberResults: [{ audienceRevision: 2, affectedPartitions: ["partition-recovered"] }]
+        }
+      });
+    } finally {
+      writerStore.close();
+      subscriberStore.close();
+    }
+  });
+});

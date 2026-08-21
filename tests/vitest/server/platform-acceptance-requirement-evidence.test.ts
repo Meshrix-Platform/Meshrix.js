@@ -31,6 +31,8 @@ describe("platform acceptance requirement evidence", () : any => {
     expect(new Set<any>(PLATFORM_ACCEPTANCE_REQUIREMENTS).size).toBe(43);
     expect(PLATFORM_ACCEPTANCE_REQUIREMENTS[0]).toBe("REQ-REL-001");
     expect(PLATFORM_ACCEPTANCE_REQUIREMENTS.at(-1)).toBe("REQ-USP-013");
+    expect(PLATFORM_ACCEPTANCE_COMMANDS.map((command?: any) : any => command.id))
+      .not.toContain("better-plan");
     expect(validatePlatformAcceptanceRequirementEvidence({
       commands: PLATFORM_ACCEPTANCE_COMMANDS
     })).toMatchObject({ valid: true, requirementCount: 43, reasons: [] });
@@ -44,7 +46,7 @@ describe("platform acceptance requirement evidence", () : any => {
       reportEvidence,
       aggregateFacts: {
         ledgerAnchorReady: true,
-        receiptPreflightReady: true,
+        candidateIdentityReady: true,
         commandDagReady: true,
         inventoryReady: true,
         privacyReady: true
@@ -66,7 +68,7 @@ describe("platform acceptance requirement evidence", () : any => {
       reportEvidence,
       aggregateFacts: {
         ledgerAnchorReady: false,
-        receiptPreflightReady: true,
+        candidateIdentityReady: true,
         commandDagReady: true,
         inventoryReady: true,
         privacyReady: true

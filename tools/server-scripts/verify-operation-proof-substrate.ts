@@ -185,7 +185,7 @@ async function assertProviderContract() : Promise<any> {
     // Acceptance evidence anchoring
     const anchor: any = await proofSubstrate.recordAcceptanceEvidence({
       reportDigests: [
-        { path: "build/reports/example.json", schemaVersion: "v0.0.1:acceptance:platform-report-2", contentHash: "sha256:deadbeef" }
+        { path: "build/reports/example.json", schemaVersion: "v0.0.1:acceptance:platform-report-3", contentHash: "sha256:deadbeef" }
       ],
       releaseId: "verify-release",
       actor: { type: "system" }

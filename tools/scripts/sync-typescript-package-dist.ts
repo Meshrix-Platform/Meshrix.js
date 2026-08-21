@@ -37,6 +37,10 @@ const assetCopies: any = [
     "packages/foundation/dist/version-control/version-registry.schema.json",
   ],
   [
+    "services/model-gateway/contracts/provider-manifest-contract.mjs",
+    "dist/services/model-gateway/contracts/provider-manifest-contract.mjs",
+  ],
+  [
     "packages/foundation/src/workflow/state-machine/definitions",
     "packages/foundation/dist/workflow/state-machine/definitions",
   ],

@@ -31,6 +31,8 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Install dependencies
+        run: npm ci
       - name: Validate the canonical release definition
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -39,16 +41,14 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
-      - name: Verify tag commit belongs to the canonical release branch
+      - name: Require the tag commit to equal the canonical release tip
         shell: bash
         run: |
           set -euo pipefail
           git show-ref --verify --quiet refs/remotes/origin/release
           tag_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
           release_commit="$(git rev-parse "refs/remotes/origin/release^{commit}")"
-          git merge-base --is-ancestor "$tag_commit" "$release_commit"
-      - name: Install dependencies
-        run: npm ci
+          test "$tag_commit" = "$release_commit"
       - name: Core repository gate
         run: npm run verify
       - name: Audit profile
@@ -59,36 +59,6 @@ jobs:
         env:
           RELEASE_IMMUTABLE_ENABLED: ${{ vars.RELEASE_IMMUTABLE_ENABLED }}
         run: test "$RELEASE_IMMUTABLE_ENABLED" = "true"
-
-  freeze-source-candidate:
-    name: Freeze the release source candidate
-    needs: [verify]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.16.0"
-          cache: "npm"
-      - name: Materialize the immutable source-candidate authority
-        run: >-
-          node tools/server-scripts/verify-release-candidate-identity.ts
-          --output build/release/control/SOURCE_CANDIDATE.json
-      - name: Transfer the immutable source-candidate authority
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: release-source-candidate-${{ github.sha }}
-          path: build/release/control/SOURCE_CANDIDATE.json
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
-          overwrite: true
 
   upstream-service-publishing:
     name: Core upstream publishing prepublication
@@ -110,50 +80,105 @@ jobs:
       - name: Verify the self-contained Core upstream publishing boundary
         run: npm run verify:upstream-service-publishing
 
-  functional-completeness:
-    name: Functional completeness release gate
-    needs: [verify, upstream-service-publishing, freeze-source-candidate]
+  release-authority:
+    name: Import and revalidate the release deployment authority
+    needs: [verify, upstream-service-publishing]
     runs-on: ubuntu-24.04
-    timeout-minutes: 395
+    timeout-minutes: 20
+    environment: release-candidate
     permissions:
       contents: read
-    environment: release-candidate
+      actions: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24.16.0"
           cache: "npm"
-      - name: Download the immutable source-candidate authority
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: release-source-candidate-${{ github.sha }}
-          path: build/release/control
       - name: Install dependencies
         run: npm ci
-      - name: Produce enterprise single-node delivery receipt in Ubuntu
+      - name: Independently materialize the tag checkout candidate
         run: >-
-          npm run verify:enterprise-single-node:ubuntu-container --
-          --source-candidate build/release/control/SOURCE_CANDIDATE.json
-      - name: Functional-complete authority
+          node tools/server-scripts/verify-release-candidate-identity.ts
+          --output build/release/control/expected/SOURCE_CANDIDATE.json
+      - name: Resolve the successful release-branch deployment run for this commit
+        id: release-run
+        shell: bash
         env:
-          MESHRIX_RELEASE_PARALLELISM: "4"
-        run: >-
-          node tools/server-scripts/verify-platform-acceptance.ts
-          --profile "$(node tools/server-scripts/verify-release-definition.ts --field acceptance.profile)"
-      - name: Export the functional-complete receipt for optional environment verification
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs="$RUNNER_TEMP/release-runs.json"
+          selected="$RUNNER_TEMP/release-run.json"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?event=push&branch=release&head_sha=${GITHUB_SHA}&per_page=100" \
+            --slurp | jq '{workflow_runs: [.[] | .workflow_runs[]]}' > "$runs"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts select-run \
+            --input "$runs" \
+            --workflow-path .github/workflows/release-branch.yml \
+            --branch release \
+            --head-sha "$GITHUB_SHA" \
+            --output "$selected"
+          run_id="$(jq -r .runId "$selected")"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "selection=$selected" >> "$GITHUB_OUTPUT"
+      - name: Resolve exactly one release authority artifact
+        id: release-artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          inventory="$RUNNER_TEMP/release-artifacts.json"
+          selected="$RUNNER_TEMP/release-artifact.json"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.release-run.outputs.run_id }}/artifacts?per_page=100" \
+            --slurp | jq '{artifacts: [.[] | .artifacts[]]}' > "$inventory"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts select-artifact \
+            --input "$inventory" \
+            --artifact-name "release-authority-${GITHUB_SHA}" \
+            --output "$selected"
+          echo "artifact_id=$(jq -r .artifactId "$selected")" >> "$GITHUB_OUTPUT"
+      - name: Download the release authority bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/release-authority.zip"
+          bundle="build/release/control/release-authority"
+          mkdir -p "$bundle"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${{ steps.release-artifact.outputs.artifact_id }}/zip" > "$archive"
+          unzip -q "$archive" -d "$bundle"
+      - name: Revalidate the imported candidate and deployment authority
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          release_commit="$(git rev-parse "refs/remotes/origin/release^{commit}")"
+          test "$tag_commit" = "$release_commit"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts verify-release-bundle \
+            --bundle build/release/control/release-authority \
+            --expected-candidate build/release/control/expected/SOURCE_CANDIDATE.json \
+            --run "${{ steps.release-run.outputs.selection }}"
+      - name: Transfer the revalidated release authority bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: functional-platform-acceptance
-          path: build/reports/platform-acceptance.json
+          name: release-authority-${{ github.sha }}
+          path: build/release/control/release-authority/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
 
   assemble-release-assets:
     name: Assemble release assets without publication credentials
-    needs: [verify, functional-completeness]
+    needs: [verify, release-authority]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -286,7 +311,7 @@ jobs:
 
   npm-registry-preflight:
     name: Preflight the complete npm release set before remote container mutation
-    needs: [verify, functional-completeness]
+    needs: [verify, release-authority]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -319,11 +344,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-      - name: Download the immutable source-candidate authority
+      - name: Download the revalidated release authority bundle
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: release-source-candidate-${{ github.sha }}
-          path: build/release/control
+          name: release-authority-${{ github.sha }}
+          path: build/release/control/release-authority
       - name: Authenticate to the GitHub container registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -442,7 +467,7 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --source-ref "$GITHUB_REF" \
             --source-commit "$GITHUB_SHA" \
-            --source-candidate build/release/control/SOURCE_CANDIDATE.json \
+            --source-candidate build/release/control/release-authority/SOURCE_CANDIDATE.json \
             --workflow-ref "$GITHUB_WORKFLOW_REF" \
             --manifest-descriptor "$manifest_descriptor_file" \
             --manifest "$manifest_file" \
@@ -464,9 +489,8 @@ jobs:
 
   sign-finalize-release:
     name: Sign and finalize immutable release assets
-    # Preserve the verified input and OCI authority edges while joining functional authority.
-    # needs: [verify-release-inputs, build-release-image]
-    needs: [verify-release-inputs, build-release-image, functional-completeness]
+    # Preserve the verified input and OCI authority edges while joining release deployment authority.
+    needs: [verify-release-inputs, build-release-image, release-authority]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -484,16 +508,11 @@ jobs:
         with:
           name: unsigned-release-image-${{ github.sha }}
           path: build/release
-      - name: Download the immutable source-candidate authority
+      - name: Download the revalidated release authority bundle
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: release-source-candidate-${{ github.sha }}
-          path: build/release/control
-      - name: Download the functional-complete authority
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: functional-platform-acceptance
-          path: build/release/control
+          name: release-authority-${{ github.sha }}
+          path: build/release/control/release-authority
       - name: Authenticate to the GitHub container registry
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -508,8 +527,9 @@ jobs:
           EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/meshrix" \
           IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
           IMAGE_STATE="build/release/control/RELEASE_IMAGE_STATE.json" \
-          SOURCE_CANDIDATE="build/release/control/SOURCE_CANDIDATE.json" \
-          FUNCTIONAL_AUTHORITY="build/release/control/platform-acceptance.json" \
+          SOURCE_CANDIDATE="build/release/control/release-authority/SOURCE_CANDIDATE.json" \
+          FUNCTIONAL_AUTHORITY="build/release/control/release-authority/platform-acceptance.json" \
+          DEPLOYMENT_AUTHORITY="build/release/control/release-authority/release-deployment.json" \
           node --input-type=module <<'NODE'
           import crypto from "node:crypto";
           import fs from "node:fs";
@@ -523,6 +543,9 @@ jobs:
           const functionalAuthority = JSON.parse(
             fs.readFileSync(process.env.FUNCTIONAL_AUTHORITY, "utf8")
           );
+          const deploymentAuthority = JSON.parse(
+            fs.readFileSync(process.env.DEPLOYMENT_AUTHORITY, "utf8")
+          );
           const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
           if (
             authority.schemaVersion !== "v0.0.1:release:image-authority-2"
@@ -535,6 +558,17 @@ jobs:
             || functionalAuthority.sourceRevision !== sourceCandidate.source_revision
             || imageAuthority.candidateDigest !== sourceCandidate.candidate_digest
             || functionalAuthority.candidate_digest !== sourceCandidate.candidate_digest
+            || deploymentAuthority.status !== "accepted"
+            || deploymentAuthority.claim !== "release-deployment-verified"
+            || deploymentAuthority.sourceRevision !== sourceCandidate.source_revision
+            || deploymentAuthority.candidateDigest !== sourceCandidate.candidate_digest
+            || deploymentAuthority.functionalReceiptDigest !== sha256(
+              fs.readFileSync(process.env.FUNCTIONAL_AUTHORITY, "utf8")
+            )
+            || deploymentAuthority.runtimeUiTarget !== "runtime-ui"
+            || deploymentAuthority.runner !== "ubuntu-24.04"
+            || deploymentAuthority.cleanup !== true
+            || deploymentAuthority.capacityCertified !== false
             || authority.repository !== process.env.GITHUB_REPOSITORY
             || authority.sourceCommit !== process.env.GITHUB_SHA
             || authority.sourceRef !== process.env.GITHUB_REF
@@ -1188,7 +1222,7 @@ jobs:
 
   publish-npm-release-set:
     name: Publish or reverify the npm release set
-    needs: [functional-completeness, sign-finalize-release, prepare-release-draft, publish-container-version]
+    needs: [release-authority, sign-finalize-release, prepare-release-draft, publish-container-version]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

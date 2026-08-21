@@ -44,7 +44,6 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
       "foundation-public-gate"
     ]
   }),
-  command("better-plan", "Public source documentation boundary", "foundation", npmRun("verify:better-plan"), "build/reports/better-plan.json", ["documentation", "public-boundary", "release-state"], { dependsOn: ["foundation-tests"] }),
   command("composition-source-package", "Self-contained composition source package", "foundation", npmRun("verify:composition-source-package"), "build/reports/composition-source-package.json", ["source-package", "offline-release", "composition"]),
   command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { dependsOn: ["foundation-tests"], resourceLocks: ["container-runtime"], timeoutMs: NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS }),
   command("security-alert-lifecycle", "Security alert lifecycle", "foundation", npmRun("verify:security-alert-lifecycle"), "build/reports/security-alert-lifecycle.json", ["security-alerts", "redaction"]),
@@ -100,7 +99,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
     ],
     resourceLocks: ["container-runtime", "foundation-public-gate"]
   }),
-  command("controlled-execution-convergence-final", "Controlled Execution Convergence final reduction", "platform-capability", npmRun("verify:controlled-execution-convergence"), "build/reports/controlled-execution-convergence-final.json", ["platform-capability", "execution-sandbox", "current-plan-checkpoint"], { dependsOn: ["controlled-execution-sandbox"] }),
+  command("controlled-execution-convergence-final", "Controlled Execution Convergence final reduction", "platform-capability", npmRun("verify:controlled-execution-convergence"), "build/reports/controlled-execution-convergence-final.json", ["platform-capability", "execution-sandbox", "exact-release-candidate"], { dependsOn: ["controlled-execution-sandbox"] }),
   command("enterprise-governance-coverage", "Enterprise authorization governance coverage", "platform-capability", npmRun("verify:authorization-governance"), "build/reports/enterprise-governance-coverage.json", ["platform-capability", "authorization", "governance"]),
   command("operation-permission-protocol-consistency", "Operation Permission protocol consistency", "platform-capability", npmRun("verify:operation-permission-protocol-consistency"), "build/reports/operation-permission-protocol-consistency.json", ["platform-capability", "operation-permission"]),
   command("operation-permission-tag-governed-e2e", "Operation Permission tag-governed capability E2E", "platform-capability", npmRun("verify:operation-permission-tag-governed-e2e"), "build/reports/operation-permission-tag-governed-e2e.json", ["platform-capability", "operation-permission", "tag-policy"], { dependsOn: ["controlled-execution-convergence-final"], resourceLocks: ["container-runtime"] }),

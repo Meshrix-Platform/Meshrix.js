@@ -49,6 +49,7 @@ FROM deps AS build
 COPY apps/server ./apps/server
 COPY apps/console ./apps/console
 COPY packages ./packages
+COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
@@ -61,6 +62,7 @@ FROM deps AS build-ui
 COPY apps/server ./apps/server
 COPY apps/console ./apps/console
 COPY packages ./packages
+COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
 COPY docs ./docs

@@ -18,10 +18,9 @@
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
           "name": { "type": "string", "minLength": 1 },
-          "directory": { "type": "string", "pattern": "^(?:apps|packages|tools|plugins)(?:/(?:[a-z0-9._-]+|\\*{1,2}))*$" },
+          "directory": { "type": "string", "pattern": "^(?:apps|packages|services|tools|plugins)(?:/(?:[a-z0-9._-]+|\\*{1,2}))*$" },
           "allowedDependsOn": {
             "type": "array",
-            "minItems": 1,
             "uniqueItems": true,
             "items": { "type": "string", "minLength": 1 }
           },

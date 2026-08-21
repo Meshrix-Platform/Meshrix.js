@@ -182,6 +182,19 @@
       }
     },
     {
+      "id": "agent-self-maintenance",
+      "path": "plugins/agents/meshrix-self-maintenance",
+      "status": "experimental",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Independent local maintenance client controlled only by an atomically replaced configuration file.",
+      "runtime": false,
+      "adapter": false,
+      "release": false
+    },
+    {
       "id": "coding-github",
       "path": "plugins/coding/github",
       "status": "stable",
@@ -196,15 +209,15 @@
       "release": true
     },
     {
-      "id": "shared-space",
-      "path": "plugins/shared-space",
+      "id": "external-gateway",
+      "path": "plugins/external-gateway",
       "status": "stable",
       "version": "0.0.1",
       "group": "products",
       "types": [
         "runtime-plugin"
       ],
-      "summary": "Governed Shared Space snapshots, reversible mutations, and controlled sandbox execution contributions.",
+      "summary": "Optional downstream and upstream transport channels for operator-owned Caddy, Nginx, or explicit direct endpoints.",
       "runtime": true,
       "adapter": false,
       "release": true
@@ -219,6 +232,20 @@
         "runtime-plugin"
       ],
       "summary": "Default-disabled stateless adapter for an independently deployed Model Gateway Service.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
+      "id": "shared-space",
+      "path": "plugins/shared-space",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Governed Shared Space snapshots, reversible mutations, and controlled sandbox execution contributions.",
       "runtime": true,
       "adapter": false,
       "release": true

@@ -186,7 +186,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
       "tools/server-scripts/lib/platform-acceptance-contract.ts",
       "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
-      "tools/server-scripts/lib/platform-acceptance-plan-receipts.ts",
+      "tools/server-scripts/verify-release-candidate-identity.ts",
       "tools/server-scripts/lib/platform-acceptance-reducer.ts",
       "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts"
     ],
@@ -218,6 +218,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/schema/release-acceptance-standards.schema.json",
       "tools/server-scripts/verify-release-acceptance-standards.ts",
       ".github/workflows/release.yml",
+      ".github/workflows/release-branch.yml",
       ".github/workflows/real-machine-validation.yml"
     ], outputs: [],
   },
@@ -489,7 +490,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "audit", expectedDurationClass: "extended",
     inputs: [
       "package.json",
-      "docs/plans/end-to-end-release/Plan.md",
       "tools/registry/runtime-capacity-profile.registry.json",
       "tools/registry/runtime-capacity-workload-catalog.registry.json",
       "tools/registry/sqlite-owner-migration.registry.json",
@@ -627,7 +627,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:controlled-execution-convergence", command: "npm run verify:controlled-execution-convergence", category: "verifier", subsystem: "execution-sandbox",
     owner: "platform-security", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "security", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.ts", "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts", "tools/server-scripts/verify-release-candidate-identity.ts", "tools/plan/plan-evidence-verifier.ts", "docs/plans/end-to-end-release/Plan.md", "docs/plans/end-to-end-release/Checkpoints.json", "docs/plans/end-to-end-release/DependencyMap.json", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
+    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.ts", "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts", "tools/server-scripts/verify-release-candidate-identity.ts", "packages/foundation/src/observability/sensitive-report-scan.ts", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
   },
   "verify:security-alert-lifecycle": {
     scriptName: "verify:security-alert-lifecycle", command: "npm run verify:security-alert-lifecycle", category: "verifier", subsystem: "security",
@@ -836,6 +836,28 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
       "tools/server-scripts/verify-mcp-release-target-scope.ts"
     ], outputs: ["build/reports/script-registry.json"],
+  },
+  "server:verify:release-deployment": {
+    scriptName: "server:verify:release-deployment",
+    command: "npm run server:verify:release-deployment",
+    category: "verifier",
+    subsystem: "release-deployment",
+    owner: "platform",
+    tier: "release",
+    sideEffects: "docker",
+    requiresFreshContainer: true,
+    ciProfile: "release",
+    expectedDurationClass: "extended",
+    inputs: [
+      "package-lock.json",
+      "Dockerfile",
+      "services/model-gateway/test/fixture-provider.mjs",
+      "tools/server-scripts/lib/release-deployment/**",
+      "tools/server-scripts/reduce-release-deployment.ts",
+      "tools/server-scripts/release-deployment-driver.ts",
+      "tools/server-scripts/verify-release-deployment.ts"
+    ],
+    outputs: ["build/reports/release-deployment.json"],
   },
   "server:verify:state-machines": {
     scriptName: "server:verify:state-machines", command: "npm run server:verify:state-machines", category: "verifier", subsystem: "state-machine",

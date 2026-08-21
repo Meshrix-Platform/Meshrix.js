@@ -19,4 +19,11 @@ describe("server source package vendor root", () : void => {
     expect(VENDORED_TARBALL).toMatch(AUTHORIZED_VENDORED_TARBALL_PATTERN);
     await fs.access(path.join(REPO_ROOT, VENDORED_TARBALL));
   });
+
+  it("includes the service-owned Model Gateway contract needed by release tooling", async () : Promise<void> => {
+    const contractRoot: any = "services/model-gateway/contracts";
+    expect(SOURCE_PACKAGE_ROOTS).toContain(contractRoot);
+    await fs.access(path.join(REPO_ROOT, contractRoot, "provider-manifest-contract.mjs"));
+    await fs.access(path.join(REPO_ROOT, contractRoot, "provider-manifest-contract.d.mts"));
+  });
 });

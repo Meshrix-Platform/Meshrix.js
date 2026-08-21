@@ -17,16 +17,19 @@ function rootPackage() : any {
         "node tools/server-scripts/verify-mcp-release-portable-assembly.ts",
       "verify:real-machine":
         "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-real-machine-validation.ts",
+      "server:verify:release-deployment":
+        "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-deployment.ts",
     },
   };
 }
 
 describe("release acceptance standards", () : any => {
-  it("makes functional completeness mandatory and real-machine verification optional", () : any => {
+  it("makes functional completeness and release deployment mandatory and real-machine verification optional", () : any => {
     const result: any = validateReleaseAcceptanceStandards(standards, rootPackage());
     expect(result).toMatchObject({
       valid: true,
       functionalClaim: "functional-complete",
+      releaseDeploymentClaim: "release-deployment-verified",
       realMachineClaim: "real-machine-verified",
       targetCount: 6,
       reasons: [],

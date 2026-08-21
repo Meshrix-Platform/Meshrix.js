@@ -74,11 +74,11 @@ function jobTransitivelyNeeds(workflow?: any, jobId?: any, requiredJobId?: any, 
 }
 
 describe("release workflow supply-chain boundary", () : any => {
-  it("requires the self-contained Core upstream gate before functional acceptance and publication", () : any => {
+  it("requires the self-contained Core upstream gate before release deployment authority and publication", () : any => {
     const workflow: any = read(".github/workflows/release.yml");
     const upstreamJobId: any = "upstream-service-publishing";
     const upstream: any = jobSource(workflow, upstreamJobId);
-    const functional: any = jobSource(workflow, "functional-completeness");
+    const releaseAuthority: any = jobSource(workflow, "release-authority");
     const publicationJobs: any[] = [
       "build-release-image",
       "sign-finalize-release",
@@ -101,13 +101,14 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(upstream).not.toContain("packages: write");
     expect(upstream).not.toContain("id-token: write");
 
-    expect(directJobNeeds(workflow, "functional-completeness"))
-      .toContain(upstreamJobId);
-    expect(functional).toContain("name: Functional-complete authority");
-    expect(workflow.match(/name: Functional-complete authority/gu)).toHaveLength(1);
-    expect(upstream).not.toContain("Functional-complete authority");
-    expect(upstream).not.toContain("functional-complete");
+    expect(directJobNeeds(workflow, "release-authority"))
+      .toEqual(["verify", upstreamJobId]);
+    expect(releaseAuthority).toContain("name: Import and revalidate the release deployment authority");
     for (const jobId of publicationJobs) {
+      expect(
+        jobTransitivelyNeeds(workflow, jobId, "release-authority"),
+        `${jobId} must retain the release deployment authority prerequisite`
+      ).toBe(true);
       expect(
         jobTransitivelyNeeds(workflow, jobId, upstreamJobId),
         `${jobId} must retain the Core upstream publishing prerequisite`
@@ -115,47 +116,63 @@ describe("release workflow supply-chain boundary", () : any => {
     }
   });
 
-  it("freezes one source-candidate artifact and joins its functional and OCI authorities before signing", () : any => {
+  it("binds one stable authority bundle and joins functional, deployment, and OCI authorities before signing", () : any => {
     const workflow: any = read(".github/workflows/release.yml");
-    const freeze: any = jobSource(workflow, "freeze-source-candidate");
-    const functional: any = jobSource(workflow, "functional-completeness");
+    const branchWorkflow: any = read(".github/workflows/release-branch.yml");
+    const releaseAuthority: any = jobSource(workflow, "release-authority");
     const image: any = jobSource(workflow, "build-release-image");
     const sign: any = jobSource(workflow, "sign-finalize-release");
-    const candidateArtifact: any = "release-source-candidate-${{ github.sha }}";
 
-    expect(directJobNeeds(workflow, "freeze-source-candidate")).toContain("verify");
-    expect(freeze.match(/verify-release-candidate-identity\.ts/gu)).toHaveLength(1);
-    expect(freeze.match(/actions\/upload-artifact@/gu)).toHaveLength(1);
-    expect(freeze).toContain(`name: ${candidateArtifact}`);
-    expect(freeze).toContain("build/release/control/SOURCE_CANDIDATE.json");
+    expect(branchWorkflow).toContain("runs-on: ubuntu-24.04");
+    expect(branchWorkflow).toContain('branches: ["release"]');
+    expect(branchWorkflow).toContain("stable-authority-${GITHUB_SHA}");
+    expect(branchWorkflow).toContain("release-authority-${{ github.sha }}");
+    expect(branchWorkflow).toContain("npm run server:verify:release-deployment");
+    expect(branchWorkflow).toContain(
+      "--source-candidate build/release/control/stable-authority/SOURCE_CANDIDATE.json"
+    );
+    expect(branchWorkflow).toContain(
+      "--functional-receipt build/release/control/stable-authority/platform-acceptance.json"
+    );
+    expect(branchWorkflow).toContain("--output build/reports/release-deployment.json");
 
-    expect(directJobNeeds(workflow, "functional-completeness"))
-      .toContain("freeze-source-candidate");
-    expect(functional).toContain(`name: ${candidateArtifact}`);
-    expect(functional).toContain("build/release/control/SOURCE_CANDIDATE.json");
-    expect(functional).toContain("--source-candidate");
+    expect(directJobNeeds(workflow, "release-authority"))
+      .toEqual(["verify", "upstream-service-publishing"]);
+    expect(releaseAuthority).toContain("name: release-authority-${{ github.sha }}");
+    expect(releaseAuthority).toContain("resolve-branch-promotion-authority.ts verify-release-bundle");
+    expect(releaseAuthority).toContain("build/release/control/expected/SOURCE_CANDIDATE.json");
+    expect(releaseAuthority).toContain('artifact-name "release-authority-${GITHUB_SHA}"');
+    expect(releaseAuthority).toContain("select-artifact");
+    expect(releaseAuthority).toContain('test "$tag_commit" = "$release_commit"');
 
-    expect(jobTransitivelyNeeds(workflow, "build-release-image", "freeze-source-candidate"))
+    expect(jobTransitivelyNeeds(workflow, "build-release-image", "release-authority"))
       .toBe(true);
-    expect(image).toContain(`name: ${candidateArtifact}`);
-    expect(image).toContain("--source-candidate build/release/control/SOURCE_CANDIDATE.json");
+    expect(image).toContain("name: release-authority-${{ github.sha }}");
+    expect(image).toContain("release-authority/SOURCE_CANDIDATE.json");
 
-    expect(jobTransitivelyNeeds(workflow, "sign-finalize-release", "functional-completeness"))
+    expect(jobTransitivelyNeeds(workflow, "sign-finalize-release", "release-authority"))
       .toBe(true);
-    expect(sign).toContain(`name: ${candidateArtifact}`);
-    expect(sign).toContain("name: functional-platform-acceptance");
+    expect(sign).toContain("Download the revalidated release authority bundle");
+    expect(sign).toContain("release-authority-${{ github.sha }}");
+    expect(sign).toContain("release-authority/SOURCE_CANDIDATE.json");
+    expect(sign).toContain("release-authority/platform-acceptance.json");
+    expect(sign).toContain("release-authority/release-deployment.json");
     expect(sign).toContain(
       "imageAuthority.candidateDigest !== sourceCandidate.candidate_digest"
     );
     expect(sign).toContain(
       "functionalAuthority.candidate_digest !== sourceCandidate.candidate_digest"
     );
+    expect(sign).toContain("deploymentAuthority.functionalReceiptDigest");
+    expect(sign).toContain("deploymentAuthority.cleanup !== true");
+    expect(sign).toContain("deploymentAuthority.capacityCertified !== false");
     expect(sign.indexOf("imageAuthority.candidateDigest"))
       .toBeLessThan(sign.indexOf("cosign sign"));
   });
 
-  it("keeps functional completeness mandatory without native-host publication dependencies", () : any => {
+  it("keeps functional completeness and release deployment mandatory without native-host publication dependencies", () : any => {
     const workflow: any = read(".github/workflows/release.yml");
+    const ciWorkflow: any = read(".github/workflows/ci.yml");
     const orderedJobs: any[] = [
       "verify-release-inputs",
       "npm-registry-preflight",
@@ -170,31 +187,27 @@ describe("release workflow supply-chain boundary", () : any => {
     const verifyJob: any = workflow.indexOf("  verify:\n");
     const firstPublicationJob: any = workflow.indexOf("  verify-release-inputs:\n");
     const verification: any = jobSource(workflow, "verify");
-    const acceptanceJob: any = jobSource(workflow, "functional-completeness");
+    const releaseAuthority: any = jobSource(workflow, "release-authority");
     const assembly: any = jobSource(workflow, "assemble-release-assets");
     expect(workflow).toContain('tags: ["v*"]');
     expect(verification).toContain("npm run release:prepare -- --check --tag");
     expect(verification).toContain("npm run verify:release-definition -- --tag");
+    expect(verification).toContain('test "$tag_commit" = "$release_commit"');
+    expect(verification).not.toContain("git merge-base --is-ancestor");
     expect(workflow).not.toContain("workflow_dispatch:");
     expect(verifyJob).toBeGreaterThan(0);
     expect(firstPublicationJob).toBeGreaterThan(verifyJob);
     expect(verification).not.toContain("npm run verify:acceptance");
-    expect(acceptanceJob).toContain(
-      "needs: [verify, upstream-service-publishing, freeze-source-candidate]"
-    );
-    expect(acceptanceJob).toContain("name: Functional completeness release gate");
-    expect(acceptanceJob).toContain("name: Functional-complete authority");
-    expect(acceptanceJob).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
-    expect(acceptanceJob).toContain("verify-platform-acceptance.ts");
-    expect(acceptanceJob).toContain("--field acceptance.profile");
-    expect(acceptanceJob).toContain("environment: release-candidate");
-    expect(assembly).toContain("needs: [verify, functional-completeness]");
+    expect(workflow).not.toContain("\n  functional-completeness:\n");
+    expect(workflow).not.toContain("\n  freeze-source-candidate:\n");
+    expect(workflow).not.toContain("name: release-source-candidate-${{ github.sha }}");
+    expect(releaseAuthority).toContain("environment: release-candidate");
+    expect(assembly).toContain("needs: [verify, release-authority]");
     const orderedJobOffsets: any = orderedJobs.map((jobId?: any) : any => workflow.indexOf(`  ${jobId}:\n`));
     expect(orderedJobOffsets.every((offset?: any) : any => offset > 0)).toBe(true);
     expect(orderedJobOffsets).toEqual([...orderedJobOffsets].sort((a?: any, b?: any) : any => a - b));
     expect(workflow).toContain("group: release");
     expect(workflow).toContain("refs/remotes/origin/release");
-    expect(workflow).toContain("git merge-base --is-ancestor");
     expect(workflow).not.toContain("  npm-package-portability:\n");
     expect(workflow).not.toContain("--host-platform-probe");
     expect(workflow).not.toContain("continue-on-error: true");
@@ -204,16 +217,19 @@ describe("release workflow supply-chain boundary", () : any => {
       "needs: [verify, assemble-release-assets]"
     );
     const npmPreflight: any = jobSource(workflow, "npm-registry-preflight");
-    expect(npmPreflight).toContain("needs: [verify, functional-completeness]");
+    expect(npmPreflight).toContain("needs: [verify, release-authority]");
     expect(npmPreflight).toContain("run: npm run release:publish-npm -- --preflight");
     expect(jobSource(workflow, "build-release-image")).toContain(
       "needs: [verify-release-inputs, npm-registry-preflight]"
+    );
+    expect(jobSource(workflow, "sign-finalize-release")).toContain(
+      "needs: [verify-release-inputs, build-release-image, release-authority]"
     );
     expect(jobSource(workflow, "prepare-release-draft")).toContain("gh release create");
     expect(jobSource(workflow, "prepare-release-draft"))
       .toContain("--notes-file build/release/RELEASE_NOTES.md");
     expect(jobSource(workflow, "publish-npm-release-set")).toContain(
-      "needs: [functional-completeness, sign-finalize-release, prepare-release-draft, publish-container-version]"
+      "needs: [release-authority, sign-finalize-release, prepare-release-draft, publish-container-version]"
     );
     expect(jobSource(workflow, "publish-github-release")).toContain(
       "needs: [prepare-release-draft, publish-container-version, publish-npm-release-set]"
@@ -221,6 +237,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(jobTransitivelyNeeds(workflow, "publish-npm-release-set", "prepare-release-draft"))
       .toBe(true);
     expect(jobTransitivelyNeeds(workflow, "publish-npm-release-set", "publish-container-version"))
+      .toBe(true);
+    expect(jobTransitivelyNeeds(workflow, "publish-npm-release-set", "release-authority"))
       .toBe(true);
     expect(jobTransitivelyNeeds(workflow, "publish-npm-release-set", "npm-package-node22"))
       .toBe(false);
@@ -248,6 +266,15 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(() : any => normalizeMcpPortableTargets("unsupported-platform")).toThrow(
       "mcp_release_platform_not_supported"
     );
+
+    const stableGate: any = jobSource(ciWorkflow, "functional-completeness");
+    expect(stableGate).toContain("github.ref_name == 'stable'");
+    expect(stableGate).not.toContain("github.ref_name == 'release'");
+    expect(stableGate).toContain("name: Stable functional completeness release gate");
+    expect(stableGate).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
+    expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
+    expect(stableGate).toContain("build/release/control/SOURCE_CANDIDATE.json");
+    expect(stableGate).toContain("build/reports/platform-acceptance.json");
   });
 
   it("runs every optional real-machine target in an independent workflow", () : any => {
@@ -303,14 +330,15 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(ciWorkflow).not.toContain("windows-latest");
     expect(ciWorkflow).not.toContain("continue-on-error: true");
     expect(jobSource(ciWorkflow, "functional-completeness"))
-      .toContain("name: Functional completeness release gate");
+      .toContain("name: Stable functional completeness release gate");
     expect(ciWorkflow).not.toContain("\n  platform-acceptance:\n");
   });
 
   it("keeps native execution and external journeys out of the release definition", () : any => {
     const definition: any = JSON.parse(read("tools/registry/release-definition.registry.json"));
     expect(definition.acceptance).toMatchObject({
-      requiredClaim: "functional-complete",
+      stableRequiredClaim: "functional-complete",
+      releaseRequiredClaim: "release-deployment-verified",
       standardsRegistry: "tools/registry/release-acceptance-standards.registry.json",
     });
     expect(definition.github).not.toHaveProperty("imageVerification");
@@ -321,7 +349,7 @@ describe("release workflow supply-chain boundary", () : any => {
   it("enforces least privilege and repository-code boundaries across every publication job", () : any => {
     const workflow: any = read(".github/workflows/release.yml");
     const verification: any = jobSource(workflow, "verify");
-    const acceptance: any = jobSource(workflow, "functional-completeness");
+    const releaseAuthority: any = jobSource(workflow, "release-authority");
     const assembly: any = jobSource(workflow, "assemble-release-assets");
     const inputs: any = jobSource(workflow, "verify-release-inputs");
     const npmPreflight: any = jobSource(workflow, "npm-registry-preflight");
@@ -338,10 +366,10 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(verification).not.toContain("packages: write");
     expect(verification).not.toContain("id-token: write");
 
-    expect(acceptance).toContain("permissions:\n      contents: read");
-    expect(acceptance).not.toContain("contents: write");
-    expect(acceptance).not.toContain("packages: write");
-    expect(acceptance).not.toContain("id-token: write");
+    expect(releaseAuthority).toContain("permissions:\n      contents: read\n      actions: read");
+    expect(releaseAuthority).not.toContain("contents: write");
+    expect(releaseAuthority).not.toContain("packages: write");
+    expect(releaseAuthority).not.toContain("id-token: write");
 
     expect(assembly).toContain("permissions:\n      contents: read");
     expect(assembly).toContain("run: npm ci --ignore-scripts");
@@ -434,7 +462,7 @@ describe("release workflow supply-chain boundary", () : any => {
 
   it("pins every third-party action and emits container provenance plus an SBOM", () : any => {
     const workflow: any = read(".github/workflows/release.yml");
-    const sourceCandidateFreeze: any = jobSource(workflow, "freeze-source-candidate");
+    const releaseAuthority: any = jobSource(workflow, "release-authority");
     const uses: any = [...workflow.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)\s*(?:#.*)?$/gmu)]
       .map((match?: any) : any => match[1]);
     expect(uses.length).toBeGreaterThan(0);
@@ -443,7 +471,7 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(workflow).toContain('--platform "$platform_csv"');
     expect(workflow).toContain('--target "$image_target"');
     expect(jobSource(workflow, "sign-finalize-release"))
-      .toContain("needs: [verify-release-inputs, build-release-image]");
+      .toContain("needs: [verify-release-inputs, build-release-image, release-authority]");
     expect(workflow).toContain("--provenance=mode=max,version=v0.2");
     expect(workflow).toContain(
       "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"
@@ -473,8 +501,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(workflow).toContain("release_checksum_assets_missing");
     expect(workflow).toContain("generate-supply-chain-artifacts.ts --output build/release/supply-chain");
     expect(workflow).toContain("verify-supply-chain-artifacts.ts --input build/release/supply-chain");
-    expect(sourceCandidateFreeze).toContain("build/release/control/SOURCE_CANDIDATE.json");
-    expect(sourceCandidateFreeze).toContain("overwrite: true");
+    expect(releaseAuthority).toContain("resolve-branch-promotion-authority.ts verify-release-bundle");
+    expect(releaseAuthority).toContain("overwrite: true");
     expect(workflow.match(/overwrite: true/gu)).toHaveLength(5);
   });
 
@@ -627,12 +655,8 @@ describe("release workflow supply-chain boundary", () : any => {
       workflow.slice(publicGateStart, publicGateEnd).match(/timeout-minutes: (\d+)/u)?.[1]
     );
     const releaseVerify: any = jobSource(releaseWorkflow, "verify");
-    const releaseAcceptance: any = jobSource(releaseWorkflow, "functional-completeness");
     const assembly: any = jobSource(releaseWorkflow, "assemble-release-assets");
     const ciAcceptanceMinutes: any = Number(ciAcceptance.match(/timeout-minutes: (\d+)/u)?.[1]);
-    const releaseAcceptanceMinutes: any = Number(
-      releaseAcceptance.match(/timeout-minutes: (\d+)/u)?.[1]
-    );
     const declaredAcceptanceJobMinutes: any = PLATFORM_ACCEPTANCE_JOB_BUDGET_MS / 60000;
 
     expect([buildMinutes, runMinutes, acceptanceMinutes, canonicalJobMinutes])
@@ -654,10 +678,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(PLATFORM_ACCEPTANCE_JOB_BUDGET_MS).toBeGreaterThanOrEqual(
       PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE.timeoutMs + PLATFORM_ACCEPTANCE_JOB_OVERHEAD_MS
     );
-    expect([ciAcceptanceMinutes, releaseAcceptanceMinutes, declaredAcceptanceJobMinutes])
-      .toEqual([395, 395, 395]);
+    expect([ciAcceptanceMinutes, declaredAcceptanceJobMinutes]).toEqual([395, 395]);
     expect(ciAcceptance).toContain('MESHRIX_RELEASE_PARALLELISM: "4"');
-    expect(releaseAcceptance).toContain('MESHRIX_RELEASE_PARALLELISM: "4"');
     expect(assembly).toContain("timeout-minutes: 60");
   });
 

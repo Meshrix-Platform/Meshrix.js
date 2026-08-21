@@ -17,10 +17,10 @@ acceptance-gate provenance, security-critical typing, and faster verification.
 They are not a new product direction. The thin substrate blocked GATE-CONTRACT;
 the remainder joined GATE-FINAL. The machine-readable local Plan in
 `docs/plans/` owns execution detail. GATE-FINAL is the completed terminal
-candidate decision. Engineering for this candidate is complete pending a
-current GATE-FINAL receipt on the claimed repository tree. Native Linux,
-client, cloud, and recovery qualification remain FutureGoals after this
-candidate.
+candidate decision, its accepted receipt is recorded, and the Functional
+Convergence Plan is closed. Native Linux, client, cloud, recovery,
+publication, and hosted-operation work is tracked separately. It does not
+gate or reopen this Plan.
 
 ## Primary objectives
 
@@ -168,14 +168,17 @@ migrating retired data.
 | Real parallel frontier | The standalone Model Gateway Service, Agent self-maintenance, and External Gateway Runtime Plugin compile and pass focused tests independently from frozen contracts without importing one another or editing shared composition authorities. |
 | Canonical cutover | One necessary join migrated every downstream operation descriptor to exactly one `trafficModel`; installed `AgentMcpGatewayPipeline`, mandatory downstream and upstream Gateway stages, retained optional Workspace application processing, direct Workspace-free middle-stage bypass, Core per-direction selection generations, `gatewayChannels` contribution plumbing, explicit Console switching, and the default-disabled stateless Model Gateway adapter; kept maintenance outside Meshrix composition; removed unconditional Workspace resolution, every Gateway-bypassing path, and every retired Gateway/profile/Core-maintenance authority; completed confinement; and discarded one residue audit. |
 | Delivery-quality remainder | Remainder typing, acceptance-gate provenance, and suite merge/cache/shard joined GATE-FINAL. Project-level `npm run verify:acceptance` remains the Functional Release Gate when a functional-complete claim is required. |
-| Gateway and maintenance acceptance | GATE-FINAL completed the sequential dual-Gateway, detachment, and one-way maintenance boundary for this candidate. The oracle is an in-process fixture. A current receipt must bind the claimed repository tree. |
-| Remaining host qualification | Native-host, client, cloud, and recovery qualification remain FutureGoals after this candidate. Offline Linux VM delivery is required for EFF-10 and EFF-FINAL. Ubuntu is preferred; Debian is accepted. |
+| Gateway and maintenance acceptance | GATE-FINAL completed and recorded the accepted sequential dual-Gateway, detachment, and one-way maintenance candidate. The oracle is an in-process fixture. |
 
 Implemented capacity and concurrency changes are substrate for this Plan, not a
 separate current Plan. Historical Plans and receipts do not promote the current
 candidate.
 
-## Remaining host qualification after this candidate
+## Non-gating follow-up outside the closed Plan
+
+The items below may establish separate release, publication, operation, or
+environment-support claims. They are not Functional Convergence closure
+conditions and do not change the completed GATE-FINAL decision.
 
 - Native Linux host qualification for named amd64 and arm64 systems.
 - macOS, Windows, and other client-platform qualification.

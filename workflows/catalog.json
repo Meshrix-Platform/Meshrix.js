@@ -19,6 +19,11 @@
       "id": "meshrix-js.test",
       "command": "npm",
       "args": ["test"]
+    },
+    {
+      "id": "meshrix-js.verify-release-deployment",
+      "command": "npm",
+      "args": ["run", "server:verify:release-deployment"]
     }
   ]
 }

@@ -95,6 +95,8 @@ interface ProcessIdentityState extends ProcessIdentityObject {
 
 export interface ProcessIdentityRequest {
   headers?: Record<string, unknown>;
+  socket?: { remoteAddress?: string };
+  connection?: { remoteAddress?: string };
   __meshrixProcessIdentity?: unknown;
 }
 

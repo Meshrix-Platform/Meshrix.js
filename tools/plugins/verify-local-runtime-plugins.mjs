@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { repoRoot, readJson, sanitizeError } from "./lib/repository.mjs";
+import { assertMigratedExtensionClosure } from "./lib/migrated-extension-closure.mjs";
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -18,11 +19,9 @@ function run(command, args) {
 
 async function assertCanonicalContract() {
   const registry = await readJson(path.join(repoRoot, "plugins", "registry", "plugins.json"));
-  const runtime = registry.plugins.filter((entry) => entry.runtime === true);
-  const adapters = registry.plugins.filter((entry) => entry.adapter === true);
-  if (registry.plugins.length !== 10 || runtime.length !== 3 || adapters.length !== 7) throw new Error("implemented plugin catalog counts are not 3 runtime and 7 adapters");
+  const counts = assertMigratedExtensionClosure(registry);
   if (registry.plugins.find((entry) => entry.id === "coding-github")?.group !== "coding") throw new Error("coding-github must belong to coding");
-  return { runtimeCount: runtime.length, adapterCount: adapters.length };
+  return counts;
 }
 
 async function main() {

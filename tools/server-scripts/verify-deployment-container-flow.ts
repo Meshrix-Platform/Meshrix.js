@@ -689,6 +689,10 @@ try {
     assert.doesNotMatch(dockerfile, /COPY plugins \.\/plugins/);
     assert.doesNotMatch(dockerfile, /--from=build \/app\/plugins \.\/plugins/);
     assert.match(dockerfile, /COPY vendor \.\/vendor/);
+    assert.equal(
+      dockerfile.match(/COPY services\/model-gateway\/contracts \.\/services\/model-gateway\/contracts/gu)?.length,
+      2
+    );
     assert.match(
       dockerfile,
       new RegExp(String.raw`cp -a (?:\"|\")?${rootfsTarget}var/cache/meshrix/npm/_cacache(?:\"|\")? (?:\"|\")?${rootfsTarget}opt/meshrix-npm-cache/_cacache(?:\"|\")?`)

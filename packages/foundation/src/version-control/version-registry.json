@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-18",
+  "updatedAt": "2026-08-20",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -15,11 +15,11 @@
       "artifactId": "meshrix.acceptance-evidence-anchor-context",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.acceptance-evidence-anchor-context.",
-      "activeVersion": "v0.0.1:meshrix:acceptance-evidence-anchor-context-1",
+      "activeVersion": "v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:acceptance-evidence-anchor-context-1",
-          "ref": "meshrix.acceptance-evidence-anchor-context@v0.0.1:meshrix:acceptance-evidence-anchor-context-1",
+          "version": "v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
+          "ref": "meshrix.acceptance-evidence-anchor-context@v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -29,7 +29,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-acceptance-evidence-anchor-context-1-source",
+              "evidenceId": "v0-0-1-meshrix-acceptance-evidence-anchor-context-2-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-ledger-anchor.ts"
             }
@@ -72,11 +72,11 @@
       "artifactId": "meshrix.acceptance.platform-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.acceptance.platform-report.",
-      "activeVersion": "v0.0.1:acceptance:platform-report-2",
+      "activeVersion": "v0.0.1:acceptance:platform-report-3",
       "versions": [
         {
-          "version": "v0.0.1:acceptance:platform-report-2",
-          "ref": "meshrix.acceptance.platform-report@v0.0.1:acceptance:platform-report-2",
+          "version": "v0.0.1:acceptance:platform-report-3",
+          "ref": "meshrix.acceptance.platform-report@v0.0.1:acceptance:platform-report-3",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -86,7 +86,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-acceptance-platform-report-2-source-1",
+              "evidenceId": "v0-0-1-acceptance-platform-report-3-source-1",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-platform-acceptance.ts"
             }
@@ -1495,11 +1495,11 @@
       "artifactId": "meshrix.execution-sandbox.controlled-execution-convergence-final-report",
       "kind": "runtime_capability",
       "description": "Governed final reduction report for current Controlled Execution Convergence evidence.",
-      "activeVersion": "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-1",
+      "activeVersion": "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-2",
       "versions": [
         {
-          "version": "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-1",
-          "ref": "meshrix.execution-sandbox.controlled-execution-convergence-final-report@v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-1",
+          "version": "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-2",
+          "ref": "meshrix.execution-sandbox.controlled-execution-convergence-final-report@v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1509,7 +1509,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-execution-sandbox-controlled-execution-convergence-final-report-1-source",
+              "evidenceId": "v0-0-1-execution-sandbox-controlled-execution-convergence-final-report-2-source",
               "kind": "verifier",
               "uri": "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts"
             }
@@ -2875,6 +2875,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.meshrix.fixture-provider-manifest",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for meshrix.meshrix.fixture-provider-manifest.",
+      "activeVersion": "v0.0.1:meshrix:fixture-provider-manifest-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:fixture-provider-manifest-1",
+          "ref": "meshrix.meshrix.fixture-provider-manifest@v0.0.1:meshrix:fixture-provider-manifest-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-fixture-provider-manifest-1-source",
+              "kind": "other",
+              "uri": "services/model-gateway/contracts/provider-manifest-contract.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.meshrix.offline-transfer-inventory",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.meshrix.offline-transfer-inventory.",
@@ -3005,6 +3031,58 @@
       ]
     },
     {
+      "artifactId": "meshrix.meshrix.release-authority-manifest",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for meshrix.meshrix.release-authority-manifest.",
+      "activeVersion": "v0.0.1:meshrix:release-authority-manifest-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:release-authority-manifest-1",
+          "ref": "meshrix.meshrix.release-authority-manifest@v0.0.1:meshrix:release-authority-manifest-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-release-authority-manifest-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/release-deployment/contract.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.meshrix.release-deployment-receipt",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for meshrix.meshrix.release-deployment-receipt.",
+      "activeVersion": "v0.0.1:meshrix:release-deployment-receipt-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:release-deployment-receipt-1",
+          "ref": "meshrix.meshrix.release-deployment-receipt@v0.0.1:meshrix:release-deployment-receipt-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-release-deployment-receipt-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/release-deployment/contract.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.meshrix.release-source-candidate",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.meshrix.release-source-candidate.",
@@ -3025,6 +3103,32 @@
               "evidenceId": "v0-0-1-meshrix-release-source-candidate-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/verify-release-candidate-identity.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.meshrix.stable-authority-manifest",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for meshrix.meshrix.stable-authority-manifest.",
+      "activeVersion": "v0.0.1:meshrix:stable-authority-manifest-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:stable-authority-manifest-1",
+          "ref": "meshrix.meshrix.stable-authority-manifest@v0.0.1:meshrix:stable-authority-manifest-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-stable-authority-manifest-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/release-deployment/contract.ts"
             }
           ]
         }
@@ -3174,11 +3278,11 @@
       "artifactId": "meshrix.observability.runtime-acceptance-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.observability.runtime-acceptance-report.",
-      "activeVersion": "v0.0.1:observability:runtime-acceptance-report-1",
+      "activeVersion": "v0.0.1:observability:runtime-acceptance-report-2",
       "versions": [
         {
-          "version": "v0.0.1:observability:runtime-acceptance-report-1",
-          "ref": "meshrix.observability.runtime-acceptance-report@v0.0.1:observability:runtime-acceptance-report-1",
+          "version": "v0.0.1:observability:runtime-acceptance-report-2",
+          "ref": "meshrix.observability.runtime-acceptance-report@v0.0.1:observability:runtime-acceptance-report-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -3188,12 +3292,12 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-observability-runtime-acceptance-report-1-source-1",
+              "evidenceId": "v0-0-1-observability-runtime-acceptance-report-2-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-observability-runtime-acceptance-report-1-source-2",
+              "evidenceId": "v0-0-1-observability-runtime-acceptance-report-2-source-2",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-observability-runtime-acceptance.ts"
             }
@@ -3921,11 +4025,11 @@
       "artifactId": "meshrix.platform-acceptance-generation",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.platform-acceptance-generation.",
-      "activeVersion": "v0.0.1:meshrix:platform-acceptance-generation-1",
+      "activeVersion": "v0.0.1:meshrix:platform-acceptance-generation-2",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:platform-acceptance-generation-1",
-          "ref": "meshrix.platform-acceptance-generation@v0.0.1:meshrix:platform-acceptance-generation-1",
+          "version": "v0.0.1:meshrix:platform-acceptance-generation-2",
+          "ref": "meshrix.platform-acceptance-generation@v0.0.1:meshrix:platform-acceptance-generation-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -3935,7 +4039,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-generation-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-generation-2-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
             }
@@ -3970,40 +4074,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.platform-acceptance-plan-receipts",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.platform-acceptance-plan-receipts.",
-      "activeVersion": "v0.0.1:meshrix:platform-acceptance-plan-receipts-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:platform-acceptance-plan-receipts-1",
-          "ref": "meshrix.platform-acceptance-plan-receipts@v0.0.1:meshrix:platform-acceptance-plan-receipts-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-plan-receipts-1-source",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/platform-acceptance-plan-receipts.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.platform-acceptance-requirement-evidence",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.platform-acceptance-requirement-evidence.",
-      "activeVersion": "v0.0.1:meshrix:platform-acceptance-requirement-evidence-1",
+      "activeVersion": "v0.0.1:meshrix:platform-acceptance-requirement-evidence-2",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:platform-acceptance-requirement-evidence-1",
-          "ref": "meshrix.platform-acceptance-requirement-evidence@v0.0.1:meshrix:platform-acceptance-requirement-evidence-1",
+          "version": "v0.0.1:meshrix:platform-acceptance-requirement-evidence-2",
+          "ref": "meshrix.platform-acceptance-requirement-evidence@v0.0.1:meshrix:platform-acceptance-requirement-evidence-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -4013,7 +4091,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-requirement-evidence-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-requirement-evidence-2-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts"
             }
@@ -5499,11 +5577,11 @@
       "artifactId": "meshrix.registry.release-acceptance-standards",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.registry.release-acceptance-standards.",
-      "activeVersion": "v0.0.1:registry:release-acceptance-standards-1",
+      "activeVersion": "v0.0.1:registry:release-acceptance-standards-2",
       "versions": [
         {
-          "version": "v0.0.1:registry:release-acceptance-standards-1",
-          "ref": "meshrix.registry.release-acceptance-standards@v0.0.1:registry:release-acceptance-standards-1",
+          "version": "v0.0.1:registry:release-acceptance-standards-2",
+          "ref": "meshrix.registry.release-acceptance-standards@v0.0.1:registry:release-acceptance-standards-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -5513,7 +5591,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-registry-release-acceptance-standards-1-source",
+              "evidenceId": "v0-0-1-registry-release-acceptance-standards-2-source",
               "kind": "other",
               "uri": "tools/registry/release-acceptance-standards.registry.json"
             }

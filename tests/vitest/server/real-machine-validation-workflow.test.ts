@@ -23,7 +23,7 @@ async function fixture() : Promise<any> {
   const stateRoot: any = path.join(root, "state");
   const functionalReportPath: any = path.join(root, "functional.json");
   await fs.writeFile(functionalReportPath, `${JSON.stringify({
-    schemaVersion: "v0.0.1:acceptance:platform-report-2",
+    schemaVersion: "v0.0.1:acceptance:platform-report-3",
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
     status: "accepted",
