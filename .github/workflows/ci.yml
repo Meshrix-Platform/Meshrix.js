@@ -147,8 +147,6 @@ jobs:
             profile: audit-stable-runtime
           - stage: downstream
             profile: audit-stable-downstream
-          - stage: sandbox
-            profile: audit-stable-sandbox
           - stage: data
             profile: audit-stable-data
           - stage: services
@@ -178,6 +176,72 @@ jobs:
         with:
           name: stable-audit-stage-${{ matrix.stage }}-${{ github.sha }}
           path: build/test-reports/stable-audit-stages/${{ matrix.profile }}.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  audit-resource-checkpoint:
+    name: Audit checkpoint / resource
+    needs: [repository-checkpoint]
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Run isolated resource checkpoint
+        run: >-
+          npm run test:audit:stage --
+          --profile audit-stable-resource
+          --report build/test-reports/stable-audit-stages/audit-stable-resource.json
+      - name: Export the resource checkpoint report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stable-audit-stage-resource-${{ github.sha }}
+          path: build/test-reports/stable-audit-stages/audit-stable-resource.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  audit-sandbox-checkpoint:
+    name: Audit checkpoint / sandbox
+    needs: [repository-checkpoint]
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Run isolated controlled sandbox checkpoint
+        run: >-
+          npm run test:audit:stage --
+          --profile audit-stable-sandbox
+          --report build/test-reports/stable-audit-stages/audit-stable-sandbox.json
+      - name: Export the sandbox checkpoint report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stable-audit-stage-sandbox-${{ github.sha }}
+          path: build/test-reports/stable-audit-stages/audit-stable-sandbox.json
           if-no-files-found: error
           retention-days: 30
           overwrite: true
@@ -274,7 +338,7 @@ jobs:
 
   audit-reduction:
     name: Audit checkpoint reduction
-    needs: [audit-checkpoint, audit-console-evidence-checkpoint, audit-console-checkpoint]
+    needs: [audit-checkpoint, audit-resource-checkpoint, audit-sandbox-checkpoint, audit-console-evidence-checkpoint, audit-console-checkpoint]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

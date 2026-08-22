@@ -13,6 +13,7 @@ const REVISION: any = /^[a-f0-9]{40}$/u;
 
 export const STABLE_AUDIT_PROFILES: readonly string[] = Object.freeze([
   "audit-stable-repository",
+  "audit-stable-resource",
   "audit-stable-governance",
   "audit-stable-runtime",
   "audit-stable-downstream",

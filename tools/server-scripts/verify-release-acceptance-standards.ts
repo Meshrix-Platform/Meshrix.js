@@ -183,6 +183,8 @@ export async function verifyReleaseAcceptanceStandards({
     "\n  stable-candidate:\n",
     "\n  repository-checkpoint:\n",
     "\n  audit-checkpoint:\n",
+    "\n  audit-resource-checkpoint:\n",
+    "\n  audit-sandbox-checkpoint:\n",
     "\n  audit-console-evidence-checkpoint:\n",
     "\n  audit-console-checkpoint:\n",
     "\n  audit-reduction:\n",
