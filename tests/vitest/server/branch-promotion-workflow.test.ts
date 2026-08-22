@@ -126,6 +126,10 @@ describe("branch promotion workflow", () : any => {
       "probe:sandbox_runtime_failed:oci_create_failed:oci_option_unsupported",
       "suite:execution-sandbox.controlled-runtime",
     ]);
+    const automation: any = read("tools/server-scripts/promote-release-branches.ts");
+    expect(automation).toContain('["run", "rerun", String(selected.id), "--failed"]');
+    expect(automation).toContain("resuming-failed-jobs");
+    expect(automation).toContain("resumeRequestedAttempt");
   });
 
   it("admits stable and release only when the after commit is the exact upstream tip", () : any => {
@@ -269,10 +273,12 @@ describe("branch promotion workflow", () : any => {
     );
     expect(stableGate).toContain("github.ref_name == 'stable'");
     expect(stableGate).not.toContain("github.ref_name == 'release'");
-    expect(stableGate).toContain("needs: [public-gate, supply-chain]");
+    expect(stableGate).toContain(
+      "needs: [stable-candidate, repository-checkpoint, audit-reduction, enterprise-delivery, functional-acceptance, supply-chain]"
+    );
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
-    expect(stableGate).toContain("build/release/control/SOURCE_CANDIDATE.json");
-    expect(stableGate).toContain("build/reports/platform-acceptance.json");
+    expect(stableGate).toContain("name: stable-source-candidate-${{ github.sha }}");
+    expect(stableGate).toContain("name: stable-functional-acceptance-${{ github.sha }}");
     expect(stableGate).toContain("stable-authority-manifest.json");
     expect(stableGate).not.toContain("verify-release-deployment");
   });

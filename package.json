@@ -421,6 +421,8 @@
     "test": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile core-public",
     "test:security": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile security-public",
     "test:audit": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile audit-public --continue-on-failure --report build/test-reports/audit-public.json",
+    "test:audit:stage": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --continue-on-failure",
+    "test:audit:reduce": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/reduce-stable-audit-stages.ts",
     "test:smoke": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile smoke-public",
     "test:list": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --list",
     "verify": "npm run typecheck && npm run build && npm test && npm run vitest && npm run verify:local-services && npm run verify:local-runtime-plugins && npm run verify:local-client-adapters && npm run verify:local-extension-package-closure",

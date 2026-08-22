@@ -268,13 +268,15 @@ describe("release workflow supply-chain boundary", () : any => {
     );
 
     const stableGate: any = jobSource(ciWorkflow, "functional-completeness");
+    const functionalCheckpoint: any = jobSource(ciWorkflow, "functional-acceptance");
     expect(stableGate).toContain("github.ref_name == 'stable'");
     expect(stableGate).not.toContain("github.ref_name == 'release'");
     expect(stableGate).toContain("name: Stable functional completeness release gate");
-    expect(stableGate).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
+    expect(functionalCheckpoint).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
+    expect(functionalCheckpoint).toContain("verify-platform-acceptance.ts");
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
-    expect(stableGate).toContain("build/release/control/SOURCE_CANDIDATE.json");
-    expect(stableGate).toContain("build/reports/platform-acceptance.json");
+    expect(stableGate).toContain("name: stable-source-candidate-${{ github.sha }}");
+    expect(stableGate).toContain("name: stable-functional-acceptance-${{ github.sha }}");
   });
 
   it("runs every optional real-machine target in an independent workflow", () : any => {
@@ -609,16 +611,14 @@ describe("release workflow supply-chain boundary", () : any => {
     const acceptanceCatalog: any = read(
       "tools/server-scripts/lib/platform-acceptance-command-catalog.ts"
     );
-    const publicGateStart: any = workflow.indexOf("  public-gate:\n");
-    const publicGateEnd: any = workflow.indexOf("\n  functional-completeness:\n", publicGateStart);
-    const ciAcceptance: any = jobSource(workflow, "functional-completeness");
+    const enterpriseDelivery: any = jobSource(workflow, "enterprise-delivery");
+    const ciAcceptance: any = jobSource(workflow, "functional-acceptance");
     const portabilityStart: any = workflow.indexOf("  npm-package-portability:\n");
     const nextJob: any = workflow.indexOf("\n  supply-chain:\n", portabilityStart);
     expect(portabilityStart).toBeGreaterThan(0);
     expect(nextJob).toBeGreaterThan(portabilityStart);
-    expect(publicGateStart).toBeGreaterThan(0);
-    expect(publicGateEnd).toBeGreaterThan(publicGateStart);
-    expect(workflow.slice(publicGateStart, publicGateEnd)).toContain("timeout-minutes: 120");
+    expect(enterpriseDelivery).toContain("timeout-minutes: 120");
+    expect(enterpriseDelivery).toContain("verify:enterprise-single-node:ubuntu-container");
     const portability: any = workflow.slice(portabilityStart, nextJob);
     expect(portability).toContain("runs-on: ubuntu-latest");
     expect(portability).toContain("timeout-minutes: 60");
@@ -651,8 +651,8 @@ describe("release workflow supply-chain boundary", () : any => {
     const canonicalJobMinutes: any = Number(
       portability.match(/timeout-minutes: (\d+)/u)?.[1]
     );
-    const publicGateMinutes: any = Number(
-      workflow.slice(publicGateStart, publicGateEnd).match(/timeout-minutes: (\d+)/u)?.[1]
+    const enterpriseDeliveryMinutes: any = Number(
+      enterpriseDelivery.match(/timeout-minutes: (\d+)/u)?.[1]
     );
     const releaseVerify: any = jobSource(releaseWorkflow, "verify");
     const assembly: any = jobSource(releaseWorkflow, "assemble-release-assets");
@@ -663,7 +663,7 @@ describe("release workflow supply-chain boundary", () : any => {
       .toEqual([25, 20, 55, 60]);
     expect(acceptanceMinutes).toBeGreaterThan(buildMinutes + runMinutes);
     expect(canonicalJobMinutes).toBeGreaterThan(buildMinutes + runMinutes);
-    expect(publicGateMinutes).toBe(120);
+    expect(enterpriseDeliveryMinutes).toBe(120);
     expect(releaseVerify).toContain("timeout-minutes: 120");
     expect(releaseVerify).not.toContain("npm run verify:acceptance");
     expect(PLATFORM_ACCEPTANCE_PARALLELISM).toBe(4);

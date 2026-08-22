@@ -608,10 +608,10 @@ export function planNodes()  {
       role: "implementation",
       code: "DQ-PROVENANCE",
       title: "Publish acceptance-gate provenance substrate",
-      goal: "Make acceptance and public-gate reports reproducible before GATE-CONTRACT.",
+      goal: "Make acceptance and stable checkpoint reports reproducible before GATE-CONTRACT.",
       description: "Scope: Closure: capability - reproducible acceptance-gate provenance; publish one command and report registry, require schemaVersion, producer, commandId, timestamp, and payloadDigest on producers, fail closed on stale reports, and simulate a clean-checkout PR against an isolated output root without replacing an existing docs/plans workspace.",
       requirements: ["REQ-REL-BASELINE", "REQ-DELIVERY-PROVENANCE"],
-      acceptance: "One registry names acceptance and public-gate commands and reports; producers emit schemaVersion, producer, commandId, timestamp, and payloadDigest; stale reports fail closed; the simulator writes a fresh plan to an isolated output root and leaves any existing docs/plans workspace unreplaced.",
+      acceptance: "One registry names acceptance and stable checkpoint commands and reports; producers emit schemaVersion, producer, commandId, timestamp, and payloadDigest; stale reports fail closed; the simulator writes a fresh plan to an isolated output root and leaves any existing docs/plans workspace unreplaced.",
       prerequisites: [final],
       next: [gatewayContract],
       target: "tools/server-scripts",
@@ -674,11 +674,11 @@ export function planNodes()  {
       key: DELIVERY_FEEDBACK_KEY,
       role: "implementation",
       code: "DQ-FEEDBACK",
-      title: "Split PR verification from public-gate",
+      title: "Split PR verification from stable checkpoints",
       goal: "Give pull requests a faster distinct path with localized failures before GATE-CONTRACT.",
-      description: "Scope: Closure: capability - faster verification; run pull requests on a distinct path from public-gate, name assertion, file, and command on failures, keep public-gate on npm run verify, and leave suite merging, cache, sharding, and verify:acceptance out of this node.",
+      description: "Scope: Closure: capability - faster verification; run pull requests on a distinct path from the stable checkpoint DAG, name assertion, file, stage, and command on failures, keep checkpoints independently retryable, and reduce exact audit receipts before functional acceptance.",
       requirements: ["REQ-REL-BASELINE", "REQ-DELIVERY-FEEDBACK"],
-      acceptance: "Pull requests run a distinct path from public-gate; failures name assertion, file, and command; public-gate still runs npm run verify; suite merging, cache, sharding, and verify:acceptance stay out of this node.",
+      acceptance: "Pull requests run a distinct fast path; stable runs independently retryable repository and audit checkpoints; failures name assertion, file, stage, and command; exact non-overlapping audit receipts reduce before functional acceptance.",
       prerequisites: [final],
       next: [gatewayContract],
       target: ".github/workflows/ci.yml",
@@ -1093,7 +1093,7 @@ MCP \`2026-07-28\` stateless requests, Resources, \`ttlMs\`, \`cacheScope\`, \`s
 | **EFF-FINAL** | Consume the completed efficiency and delivery evidence as the retained baseline. |
 | **DQ-PROVENANCE** | Thin substrate: one command and report registry with unified provenance, stale-report invalidation, and clean-checkout PR simulation. |
 | **DQ-TYPING** | Thin substrate: oxlint no-explicit-any on new TypeScript plus the contracts and security-critical batch. |
-| **DQ-FEEDBACK** | Thin substrate: PR versus public-gate path split and failure localization to assertion, file, and command. |
+| **DQ-FEEDBACK** | Thin substrate: PR versus stable checkpoint path split, resumable stage receipts, and failure localization to assertion, file, stage, and command. |
 | **GATE-CONTRACT** | Freeze the standalone Service wire contract, descriptor-owned optional-application decision, mandatory DownstreamGatewayEnvelope and UpstreamGatewayEnvelope stages, WorkspaceApplicationEnvelope, production-control semantics, Console-only per-direction selection, local maintenance configuration-only control, and independent ownership. |
 | **GATE-MODEL** | Build the independently deployable Model Gateway HTTP Service, direct-client API, Service-owned authentication, persistence, provider adapters, admission, accounting, and separate OCI artifact. |
 | **GATE-MAINTENANCE** | Build the separately started local Agent self-maintenance plugin with direct Model Gateway use, ordinary governed Meshrix operations, and a local configuration file as its only control input. |

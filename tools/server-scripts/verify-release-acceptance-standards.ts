@@ -179,11 +179,28 @@ export async function verifyReleaseAcceptanceStandards({
   const stableGateSection: any = stableGateStart < 0
     ? ""
     : ciWorkflow.slice(stableGateStart);
+  const stableCheckpointMarkers: any[] = [
+    "\n  stable-candidate:\n",
+    "\n  repository-checkpoint:\n",
+    "\n  audit-checkpoint:\n",
+    "\n  audit-reduction:\n",
+    "\n  enterprise-delivery:\n",
+    "\n  functional-acceptance:\n",
+    "fail-fast: false",
+    "npm run test:audit:stage",
+    "npm run test:audit:reduce",
+    "stable-audit-${{ github.sha }}",
+  ];
   if (
+    stableCheckpointMarkers.some((marker?: any) : any => !ciWorkflow.includes(marker)) ||
     stableGateSection === "" ||
     !stableGateSection.includes("github.ref_name == 'stable'") ||
     stableGateSection.includes("github.ref_name == 'release'") ||
-    !stableGateSection.includes("stable-authority-${{ github.sha }}")
+    !stableGateSection.includes("stable-authority-${{ github.sha }}") ||
+    !stableGateSection.includes("repository-checkpoint") ||
+    !stableGateSection.includes("audit-reduction") ||
+    !stableGateSection.includes("enterprise-delivery") ||
+    !stableGateSection.includes("functional-acceptance")
   ) {
     fail("ci_workflow_stable_gate_contract_invalid");
   }

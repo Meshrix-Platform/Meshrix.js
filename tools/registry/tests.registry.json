@@ -124,6 +124,155 @@
       ],
       "timeoutMs": 5400000
     },
+    "audit-stable-repository": {
+      "description": "Stable audit checkpoint: repository and foundation contracts",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "extends": "core-public",
+      "suites": [],
+      "timeoutMs": 1800000
+    },
+    "audit-stable-governance": {
+      "description": "Stable audit checkpoint: governance and authorization",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "governance.tag-management",
+        "governance.operation-permission-tag-audit",
+        "governance.operation-permission-universal-tag-policy",
+        "governance.operation-permission-protocol-consistency",
+        "governance.operation-permission-tag-governed-e2e",
+        "governance.authorization-coverage",
+        "governance.enterprise-authorization-enforcement",
+        "governance.enterprise-audit-retention-redaction",
+        "observability.semantic-baseline",
+        "governance.enterprise-observability-coverage",
+        "approval-governance",
+        "architecture.facts",
+        "governance.organization-model",
+        "governance.agent-session"
+      ],
+      "timeoutMs": 2700000
+    },
+    "audit-stable-runtime": {
+      "description": "Stable audit checkpoint: runtime and workspace substrate",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "runtime.trace-context",
+        "runtime.unified-registration",
+        "runtime.operation-proof-substrate",
+        "foundation.merkle-state-substrate",
+        "runtime.recovery-export-privacy",
+        "workspace.proposal-protocol",
+        "downstream-client.aspect",
+        "security-alert.lifecycle"
+      ],
+      "timeoutMs": 1800000
+    },
+    "audit-stable-downstream": {
+      "description": "Stable audit checkpoint: downstream MCP boundaries",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "downstream-mcp.completeness-audit",
+        "downstream-mcp.external-http-boundary",
+        "downstream-mcp.installer-convergence",
+        "downstream-mcp.release-target-scope",
+        "downstream-mcp.release-portable-assembly",
+        "downstream-mcp.proxy-transport"
+      ],
+      "timeoutMs": 1800000
+    },
+    "audit-stable-sandbox": {
+      "description": "Stable audit checkpoint: controlled execution sandbox",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "execution-sandbox.controlled-runtime",
+        "execution-sandbox.convergence-final"
+      ],
+      "timeoutMs": 1800000
+    },
+    "audit-stable-data": {
+      "description": "Stable audit checkpoint: container, storage, and jobs",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "container.deployment-flow",
+        "storage.backup-restore",
+        "storage.production-restore-drill",
+        "jobs.work-queue",
+        "jobs.work-queue-capacity",
+        "jobs.work-queue-conformance",
+        "jobs.work-queue-process-restart",
+        "jobs.upload-workspace-materialization",
+        "jobs.upload-custody-workspace-materialization-acceptance"
+      ],
+      "timeoutMs": 2700000
+    },
+    "audit-stable-services": {
+      "description": "Stable audit checkpoint: product services and upstream gateway",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "agent-memory.runtime",
+        "workspace-asset-management.runtime",
+        "workspace-governance.runtime",
+        "communication-service.runtime",
+        "strategy-management.runtime",
+        "upstream-gateway.e2e",
+        "upstream-gateway.service-publishing",
+        "upstream-gateway.mcp-e2e",
+        "workspace.core-file-ops"
+      ],
+      "timeoutMs": 2700000
+    },
+    "audit-stable-console": {
+      "description": "Stable audit checkpoint: console, internal platform, and plugins",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "console.administration-coverage",
+        "console.admin-browser-visual",
+        "console.component-reuse",
+        "console.design-tokens",
+        "console.gateway-mcp-workflows",
+        "governance.production-health-console",
+        "internal-platform.documentation-convergence",
+        "internal-platform.surface-convergence",
+        "internal-platform.capability-audit",
+        "plugins.runtime",
+        "model-gateway.service",
+        "upstream-gateway.fixture-transit",
+        "downstream-mcp.agent-tool-loop"
+      ],
+      "timeoutMs": 2700000
+    },
     "smoke-public": {
       "description": "Smoke gate",
       "execution": {

@@ -93,9 +93,7 @@ jobs:
 
           jobs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
           for required_job in \
-            'Public platform gate' \
-            'Supported Node 22 compatibility' \
-            'Supply-chain evidence' \
+            'Pull request verification' \
             'Dependency review'; do
             conclusion=$(printf '%s' "$jobs" | jq -r \
               --arg name "$required_job" \
