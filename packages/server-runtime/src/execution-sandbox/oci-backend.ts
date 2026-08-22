@@ -6,7 +6,7 @@ import { SANDBOX_DENIAL_REASONS } from "#meshrix/foundation/execution-sandbox/co
 import type { SandboxExecutionRequest } from "#meshrix/foundation/execution-sandbox/contracts";
 
 interface DirectoryOwnership { uid: number; gid: number; label: string; writable: boolean }
-interface CommandOptions { signal?: AbortSignal | null; maxBytes?: number; allowFailure?: boolean; captureStdout?: boolean }
+interface CommandOptions { signal?: AbortSignal | null; maxBytes?: number; allowFailure?: boolean; captureStdout?: boolean; timeoutMs?: number }
 interface CommandResult { code: number; signal: string; bytes: number; stdout: string }
 type CommandRunner = (binary: string, args: string[], options?: CommandOptions) => Promise<CommandResult>;
 interface SandboxPolicy {
@@ -37,6 +37,7 @@ const ENFORCED_RESTRICTIONS: readonly string[] = Object.freeze([
   "cleanup",
   "cross-trust-domain"
 ]);
+const OCI_CONTROL_COMMAND_TIMEOUT_MS: any = 30_000;
 
 function requiredText(value: unknown, label: string): string {
   const normalized = String(value || "").trim();
@@ -107,13 +108,16 @@ function runCommand(binary: string, args: string[], {
   signal = null,
   maxBytes = 64 * 1024,
   allowFailure = false,
-  captureStdout = false
+  captureStdout = false,
+  timeoutMs = 0
 }: CommandOptions = {}): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve, reject) => {
     let settled = false;
+    let deadlineExceeded = false;
     let bytes = 0;
     let stdout = "";
     let stderr = "";
+    let deadline: NodeJS.Timeout | null = null;
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(binary, args, {
@@ -128,6 +132,7 @@ function runCommand(binary: string, args: string[], {
     const finish = (error: unknown, value?: CommandResult) => {
       if (settled) return;
       settled = true;
+      if (deadline) clearTimeout(deadline);
       signal?.removeEventListener?.("abort", abort);
       if (error) reject(error);
       else if (value) resolve(value);
@@ -137,6 +142,14 @@ function runCommand(binary: string, args: string[], {
       child.kill("SIGKILL");
     };
     signal?.addEventListener?.("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+    if (Number.isSafeInteger(timeoutMs) && timeoutMs > 0) {
+      deadline = setTimeout(() => {
+        deadlineExceeded = true;
+        child.kill("SIGKILL");
+      }, timeoutMs);
+      deadline.unref?.();
+    }
     const consume = (chunk: Buffer, capture = false) => {
       bytes += chunk.length;
       if (bytes > maxBytes) {
@@ -151,9 +164,26 @@ function runCommand(binary: string, args: string[], {
     });
     child.once("error", (error: Error) => finish(error));
     child.once("close", (code: number | null, childSignal: NodeJS.Signals | null) => {
+      const failureStage = ["create", "start", "inspect"].includes(String(args[0] || ""))
+        ? String(args[0])
+        : "command";
+      if (deadlineExceeded) {
+        finish(Object.assign(new Error(`OCI sandbox backend ${failureStage} exceeded its command deadline.`), {
+          code: SANDBOX_DENIAL_REASONS.TIMED_OUT,
+          failureStage: `oci_${failureStage}_failed`,
+          failureReason: "oci_command_deadline_exceeded"
+        }));
+        return;
+      }
       if (signal?.aborted) {
         finish(Object.assign(new Error("OCI sandbox execution was cancelled."), {
-          code: SANDBOX_DENIAL_REASONS.CANCELLED
+          code: signal.reason === SANDBOX_DENIAL_REASONS.TIMED_OUT
+            ? SANDBOX_DENIAL_REASONS.TIMED_OUT
+            : SANDBOX_DENIAL_REASONS.CANCELLED,
+          failureStage: `oci_${failureStage}_failed`,
+          failureReason: signal.reason === SANDBOX_DENIAL_REASONS.TIMED_OUT
+            ? "oci_command_deadline_exceeded"
+            : "oci_command_cancelled"
         }));
         return;
       }
@@ -165,9 +195,6 @@ function runCommand(binary: string, args: string[], {
         return;
       }
       if (code !== 0 && !allowFailure) {
-        const failureStage = ["create", "start", "inspect"].includes(String(args[0] || ""))
-          ? String(args[0])
-          : "command";
         finish(Object.assign(new Error(`OCI sandbox backend ${failureStage} failed.`), {
           code: SANDBOX_DENIAL_REASONS.RUNTIME_FAILED,
           failureStage: `oci_${failureStage}_failed`,
@@ -212,14 +239,30 @@ export function createOciSandboxBackend({
   if (typeof commandRunner !== "function") throw new TypeError("OCI sandbox command runner is required.");
   const containers = new Map<string, string>();
   const backendNonce = crypto.randomUUID();
+  let createQueue: Promise<void> = Promise.resolve();
   let enabled = healthy === true;
+
+  async function createContainer(args: string[], options: CommandOptions): Promise<CommandResult> {
+    const previous: any = createQueue;
+    let release: any = () : any => {};
+    createQueue = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await commandRunner(executable, args, options);
+    } finally {
+      release();
+    }
+  }
 
   async function descriptor()  {
     if (!enabled) {
       return Object.freeze({ id: backendId, healthy: false, enforcedRestrictions: ENFORCED_RESTRICTIONS });
     }
     try {
-      await commandRunner(executable, ["version", "--format", "{{json .}}"], { maxBytes: 16 * 1024 });
+      await commandRunner(executable, ["version", "--format", "{{json .}}"], {
+        maxBytes: 16 * 1024,
+        timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+      });
       return Object.freeze({
         id: backendId,
         kind: "hardened-oci",
@@ -326,10 +369,15 @@ export function createOciSandboxBackend({
       ...request.invocation.args.map(String)
     ];
     containers.set(runId, name);
-    await commandRunner(executable, args, { signal, maxBytes: 16 * 1024 });
+    await createContainer(args, {
+      signal,
+      maxBytes: 16 * 1024,
+      timeoutMs: request.resources.wallTimeMs
+    });
     const execution = await commandRunner(executable, ["start", "--attach", name], {
       signal,
-      maxBytes: boundedBufferLimit(request.resources.logBytes)
+      maxBytes: boundedBufferLimit(request.resources.logBytes),
+      timeoutMs: request.resources.wallTimeMs
     });
     const inspected = await commandRunner(executable, [
       "inspect",
@@ -339,7 +387,8 @@ export function createOciSandboxBackend({
     ], {
       signal,
       maxBytes: 128,
-      captureStdout: true
+      captureStdout: true,
+      timeoutMs: request.resources.wallTimeMs
     });
     const workloadExitCode = Number.parseInt(inspected.stdout.trim(), 10);
     if (!Number.isSafeInteger(workloadExitCode) || workloadExitCode !== 0) {
@@ -359,7 +408,11 @@ export function createOciSandboxBackend({
     if (!runId) return false;
     const name = containers.get(runId);
     if (!name) return false;
-    await commandRunner(executable, ["kill", name], { maxBytes: 16 * 1024, allowFailure: true });
+    await commandRunner(executable, ["kill", name], {
+      maxBytes: 16 * 1024,
+      allowFailure: true,
+      timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+    });
     return true;
   }
 
@@ -369,7 +422,8 @@ export function createOciSandboxBackend({
     if (!name) return Object.freeze({ destroyed: true });
     const result = await commandRunner(executable, ["rm", "--force", name], {
       maxBytes: 16 * 1024,
-      allowFailure: true
+      allowFailure: true,
+      timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
     });
     if (result.code === 0) containers.delete(runId);
     return Object.freeze({ destroyed: result.code === 0 });
@@ -380,7 +434,8 @@ export function createOciSandboxBackend({
     const results = await Promise.allSettled([...containers.entries()].map(async ([runId, name])  => {
       const result = await commandRunner(executable, ["rm", "--force", name], {
         maxBytes: 16 * 1024,
-        allowFailure: true
+        allowFailure: true,
+        timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
       });
       if (result.code === 0) containers.delete(runId);
       if (result.code !== 0) throw new Error("OCI sandbox container cleanup failed.");
