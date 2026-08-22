@@ -19,6 +19,7 @@ import { sha256 } from "../../../tools/server-scripts/lib/release-deployment/con
 import { runAuthorityCommand } from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
 import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
 import {
+  githubProcessEnvironment,
   promotionDecision,
   requiredWorkflowPaths,
   selectLatestWorkflowRun,
@@ -101,6 +102,10 @@ describe("branch promotion workflow", () : any => {
       { id: 12, path: ".github/workflows/ci.yml", event: "push", head_branch: "nightly", head_sha: candidate, run_attempt: 3 },
     ], { branch: "stable", candidate, workflowPath: ".github/workflows/ci.yml" });
     expect(run?.id).toBe(11);
+    expect(githubProcessEnvironment({ EXAMPLE: "retained" })).toEqual({
+      EXAMPLE: "retained",
+      GODEBUG: "http2client=0",
+    });
   });
 
   it("admits stable and release only when the after commit is the exact upstream tip", () : any => {
