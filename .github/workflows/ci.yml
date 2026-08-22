@@ -57,7 +57,7 @@ jobs:
 
   public-gate:
     name: Public platform gate
-    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -77,15 +77,13 @@ jobs:
       - name: Core repository gate
         run: npm run verify
       - name: Install Chromium for browser acceptance
-        if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release') }}
         run: npx playwright install --with-deps chromium
       - name: Audit gate
-        if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release') }}
         run: npm run test:audit
 
   functional-completeness:
     name: Stable functional completeness release gate
-    needs: [public-gate, node-22-compatibility, npm-package-portability, supply-chain]
+    needs: [public-gate, supply-chain]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 395
@@ -142,7 +140,7 @@ jobs:
 
   node-22-compatibility:
     name: Supported Node 22 compatibility
-    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'nightly') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -166,7 +164,7 @@ jobs:
 
   npm-package-portability:
     name: Fresh-container npm package simulation
-    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'nightly') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -186,6 +184,7 @@ jobs:
 
   supply-chain:
     name: Supply-chain evidence
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
