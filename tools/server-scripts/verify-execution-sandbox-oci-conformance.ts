@@ -216,11 +216,12 @@ export function ensureOciPinnedImage(binary?: any, image: any = PINNED_IMAGE) : 
 
 export async function waitForOciEngineReady(binary?: any, {
   timeoutMs = OCI_ENGINE_READY_TIMEOUT_MS,
-  intervalMs = OCI_ENGINE_READY_INTERVAL_MS
+  intervalMs = OCI_ENGINE_READY_INTERVAL_MS,
+  commandRunner = runOciEngineCommand
 }: Record<string, any> = {}) : Promise<any> {
   const started: any = Date.now();
   while (Date.now() - started <= timeoutMs) {
-    const result: any = runOciEngineCommand(binary, ["info", "--format", "{{json .ServerVersion}}"], {
+    const result: any = commandRunner(binary, ["info", "--format", "{{json .}}"], {
       allowFailure: true,
       timeoutMs: 8_000
     });
