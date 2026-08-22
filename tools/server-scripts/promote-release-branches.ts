@@ -8,6 +8,7 @@ const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.ur
 const REVISION: any = /^[a-f0-9]{40}$/u;
 const BRANCHES: readonly any[] = Object.freeze(["nightly", "stable", "release"]);
 const POLL_INTERVAL_MS: any = 10_000;
+const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   nightly: Object.freeze([".github/workflows/branch-flow.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
@@ -39,8 +40,32 @@ export function githubProcessEnvironment(environment: Record<string, any> = proc
   return { ...environment, GODEBUG: "http2client=0" };
 }
 
+export function isTransientGithubFailure(stderr?: any) : any {
+  return /(?:\bEOF\b|connection reset|connection refused|TLS handshake timeout|i\/o timeout|stream error|temporarily unavailable|HTTP 50[234])/iu
+    .test(String(stderr || ""));
+}
+
+function sleepSync(delayMs?: any) : any {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
+}
+
 function gh(args: any[] = [], code: any = "github_command_failed") : any {
-  return run("gh", args, code, githubProcessEnvironment());
+  let announcedRetry: any = false;
+  for (;;) {
+    const result: any = spawnSync("gh", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: githubProcessEnvironment(),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (!result.error && result.status === 0) return String(result.stdout || "").trim();
+    if (!isTransientGithubFailure(result.stderr)) throw failure(code);
+    if (!announcedRetry) {
+      console.log("[release-promotion] github transport retry");
+      announcedRetry = true;
+    }
+    sleepSync(GITHUB_RETRY_INTERVAL_MS);
+  }
 }
 
 function parseJson(value?: any, code: any = "github_response_invalid") : any {
@@ -98,10 +123,6 @@ export function selectLatestWorkflowRun(
       Number(right?.run_attempt || 0) - Number(left?.run_attempt || 0) ||
       Number(right?.id || 0) - Number(left?.id || 0)
     )[0] || null;
-}
-
-export function shouldRetryWorkflowPolling(error?: any) : any {
-  return error?.code === "workflow_runs_unavailable";
 }
 
 function shortRevision(revision?: any) : any {
@@ -249,22 +270,11 @@ function sleep(delayMs?: any) : any {
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
   for (;;) {
-    let selected: any = null;
-    try {
-      selected = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
-        branch,
-        candidate,
-        workflowPath,
-      });
-    } catch (error) {
-      if (!shouldRetryWorkflowPolling(error)) throw error;
-      if (lastState !== "api-retry") {
-        console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} api-retry`);
-        lastState = "api-retry";
-      }
-      await sleep(POLL_INTERVAL_MS);
-      continue;
-    }
+    const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
+      branch,
+      candidate,
+      workflowPath,
+    });
     const state: any = selected
       ? `${String(selected.status || "unknown")}:${String(selected.conclusion || "")}`
       : "awaiting-run";
