@@ -13,6 +13,7 @@ import {
   runExecutionSandboxOciConformance,
   runExecutionSandboxOciConformanceCli,
   runOciConformancePreflight,
+  waitForOciEngineReady,
   verifyOciReceiptLifecycle
 } from "../../../tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
 
@@ -306,6 +307,23 @@ describe("trusted sandbox provider receipt store", () : any => {
         throw error;
       }
     })).rejects.toMatchObject({ code: "execution_sandbox_oci_pinned_image_missing" });
+  });
+
+  it("uses engine-neutral info JSON when probing OCI readiness", async () : Promise<any> => {
+    const calls: any[] = [];
+    const result: any = await waitForOciEngineReady("/fixed/bin/podman", {
+      commandRunner: (binary?: any, args?: any, options?: any) : any => {
+        calls.push({ binary, args, options });
+        return { status: 0, stdout: '{"host":{}}' };
+      }
+    });
+
+    expect(result.ready).toBe(true);
+    expect(calls).toEqual([{
+      binary: "/fixed/bin/podman",
+      args: ["info", "--format", "{{json .}}"],
+      options: { allowFailure: true, timeoutMs: 8_000 }
+    }]);
   });
 
   it("accepts a fresh receipt and rejects stale, revoked, and removed-provider state", async () : Promise<any> => {
