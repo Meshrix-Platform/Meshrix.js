@@ -115,6 +115,12 @@ describe("pull-request verification feedback", () => {
     expect(gateSection).not.toContain("run: npm run verify");
     expect(gateSection).toContain("Repository checkpoint / ${{ matrix.stage }}");
     expect(gateSection).toContain("Audit checkpoint / ${{ matrix.stage }}");
+    expect(gateSection).toContain("Audit checkpoint / console");
+    expect(gateSection).toContain("needs: [repository-checkpoint, audit-checkpoint]");
+    expect(gateSection).toContain("stable-console-build-${{ github.sha }}");
+    expect(gateSection).toContain("stable-console-evidence-governance-${{ github.sha }}");
+    expect(gateSection).toContain("stable-console-evidence-services-${{ github.sha }}");
+    expect(gateSection).toContain("pattern: stable-console-evidence-*-${{ github.sha }}");
     expect(gateSection).toContain("npm run test:audit:stage");
     expect(gateSection).toContain("npm run test:audit:reduce");
     expect(gateSection).toContain("fail-fast: false");
