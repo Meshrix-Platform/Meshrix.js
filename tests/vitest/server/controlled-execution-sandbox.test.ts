@@ -1,9 +1,22 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { runControlledExecutionSandboxVerification } from "../../../tools/server-scripts/verify-controlled-execution-sandbox.ts";
 import { createReleaseEvidenceReadiness } from "../../../tools/server-scripts/lib/release-evidence-readiness.ts";
 
 describe("controlled execution sandbox", () : any => {
+  it("runs before the heavyweight deployment container in the audit profile", () : any => {
+    const root: any = path.resolve(import.meta.dirname, "../../..");
+    const registry: any = JSON.parse(fs.readFileSync(path.join(root, "tools/registry/tests.registry.json"), "utf8"));
+    const suites: any = registry.profiles["audit-public"].suites;
+    expect(suites.indexOf("execution-sandbox.controlled-runtime"))
+      .toBeLessThan(suites.indexOf("container.deployment-flow"));
+    expect(suites.indexOf("execution-sandbox.convergence-final"))
+      .toBeLessThan(suites.indexOf("container.deployment-flow"));
+  });
+
   it("fails closed across admission and lifecycle paths without claiming a production backend", async () : Promise<any> => {
     const report: any = await runControlledExecutionSandboxVerification({ writeReport: false });
 
@@ -30,6 +43,7 @@ describe("controlled execution sandbox", () : any => {
     });
     expect(report.blockers).toEqual(["production_backend_conformance_receipt_missing"]);
     expect(report.productionBackendFailedChecks).toEqual([]);
+    expect(report.productionBackendProbeFailures).toEqual([]);
     expect(report.opaqueCustodyReport.schemaVersion).toBe(
       "v0.0.1:execution-sandbox:opaque-custody-acceptance-report-1"
     );
