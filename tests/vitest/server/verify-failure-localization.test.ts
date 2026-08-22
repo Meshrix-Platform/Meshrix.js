@@ -88,17 +88,19 @@ describe("pull-request verification feedback", () => {
     }
   });
 
-  it("runs pull requests on a fast path and the complete gate once on stable", async () => {
+  it("runs pull requests on a fast path and stable through resumable checkpoints", async () => {
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const pullRequestJob = workflow.indexOf("  pull-request-verify:\n");
-    const publicGate = workflow.indexOf("  public-gate:\n");
-    const functionalCompleteness = workflow.indexOf("\n  functional-completeness:\n", publicGate);
+    const stableCandidate = workflow.indexOf("  stable-candidate:\n");
+    const functionalCompleteness = workflow.indexOf("\n  functional-completeness:\n", stableCandidate);
+    const stableEnd = workflow.indexOf("\n  node-22-compatibility:\n", functionalCompleteness);
     expect(pullRequestJob).toBeGreaterThan(0);
-    expect(publicGate).toBeGreaterThan(pullRequestJob);
-    expect(functionalCompleteness).toBeGreaterThan(publicGate);
+    expect(stableCandidate).toBeGreaterThan(pullRequestJob);
+    expect(functionalCompleteness).toBeGreaterThan(stableCandidate);
+    expect(stableEnd).toBeGreaterThan(functionalCompleteness);
 
-    const prSection = workflow.slice(pullRequestJob, publicGate);
+    const prSection = workflow.slice(pullRequestJob, stableCandidate);
     expect(prSection).toContain("if: ${{ github.event_name == 'pull_request' }}");
     expect(prSection).toContain('run_check "npm run typecheck"');
     expect(prSection).toContain('run_check "npm run vitest"');
@@ -108,12 +110,27 @@ describe("pull-request verification feedback", () => {
     expect(prSection).not.toContain("verify:acceptance");
     expect(prSection).not.toContain("--shard");
 
-    const gateSection = workflow.slice(publicGate, functionalCompleteness);
+    const gateSection = workflow.slice(stableCandidate, stableEnd);
     expect(gateSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
-    expect(gateSection).toContain("run: npm run verify");
-    expect(gateSection).toContain("run: npm run test:audit");
+    expect(gateSection).not.toContain("run: npm run verify");
+    expect(gateSection).toContain("Repository checkpoint / ${{ matrix.stage }}");
+    expect(gateSection).toContain("Audit checkpoint / ${{ matrix.stage }}");
+    expect(gateSection).toContain("npm run test:audit:stage");
+    expect(gateSection).toContain("npm run test:audit:reduce");
+    expect(gateSection).toContain("fail-fast: false");
     expect(gateSection).toContain("timeout-minutes: 120");
     expect(packageJson.scripts["test:audit"]).toContain("--continue-on-failure");
     expect(packageJson.scripts["test:audit"]).toContain("--report build/test-reports/audit-public.json");
+  });
+
+  it("lets Dependabot wait only for checks that actually execute on pull requests", async () => {
+    const workflow = await fs.readFile(
+      path.join(repoRoot, ".github/workflows/dependabot-security-automerge.yml"),
+      "utf8",
+    );
+    expect(workflow).toContain("'Pull request verification'");
+    expect(workflow).toContain("'Dependency review'");
+    expect(workflow).not.toContain("'Public platform gate'");
+    expect(workflow).not.toContain("'Supply-chain evidence'");
   });
 });

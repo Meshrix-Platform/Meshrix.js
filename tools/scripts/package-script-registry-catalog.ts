@@ -1065,5 +1065,7 @@ export const UNCLASSIFIED_ALLOWLIST: readonly any[] = Object.freeze([
   "repo:git-publication",     // Git publication privacy policy fixtures plus the complete index
   "server:prepare:npm-cache",  // Release packaging helper
   "test:audit",               // Audit test profile
+  "test:audit:stage",         // Stable audit checkpoint profile runner
+  "test:audit:reduce",        // Stable audit checkpoint reducer
   "test:smoke",               // Smoke test profile
 ]);

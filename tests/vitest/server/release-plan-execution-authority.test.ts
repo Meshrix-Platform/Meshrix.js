@@ -657,13 +657,17 @@ describe("enterprise single-node release Plan execution authority", () : any => 
 
   it("makes CI and tag acceptance consume the Ubuntu closure without a direct Plan reset", async () : Promise<any> => {
     const ciWorkflow: any = await fs.readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
-    const acceptance: any = workflowJob(ciWorkflow, "functional-completeness");
-    const closure: any = acceptance.indexOf("npm run verify:enterprise-single-node:ubuntu-container");
-    const consumer: any = acceptance.indexOf("verify-platform-acceptance.ts");
-    expect(closure, "ci.yml: missing Ubuntu closure").toBeGreaterThan(0);
-    expect(consumer, "ci.yml: missing platform acceptance consumer").toBeGreaterThan(closure);
+    const delivery: any = workflowJob(ciWorkflow, "enterprise-delivery");
+    const acceptance: any = workflowJob(ciWorkflow, "functional-acceptance");
+    const reduction: any = workflowJob(ciWorkflow, "functional-completeness");
+    expect(delivery).toContain("npm run verify:enterprise-single-node:ubuntu-container");
+    expect(acceptance).toContain("needs: [audit-reduction, enterprise-delivery, supply-chain]");
+    expect(acceptance).toContain("verify-platform-acceptance.ts");
+    expect(reduction).toContain("enterprise-delivery");
+    expect(reduction).toContain("functional-acceptance");
+    expect(delivery).not.toContain("rebuild-current-plan-baseline.ts");
     expect(acceptance).not.toContain("rebuild-current-plan-baseline.ts");
-    expect(acceptance).not.toContain("--replace");
+    expect(`${delivery}${acceptance}${reduction}`).not.toContain("--replace");
 
     const releaseWorkflow: any = await fs.readFile(path.join(REPO_ROOT, ".github/workflows/release.yml"), "utf8");
     expect(releaseWorkflow).not.toContain("\n  functional-completeness:\n");

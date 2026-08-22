@@ -289,6 +289,8 @@ function sleep(delayMs?: any) : any {
 
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
+  let resumedFailedJobs: any = false;
+  let resumeRequestedAttempt: any = 0;
   for (;;) {
     const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
       branch,
@@ -307,8 +309,21 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
       continue;
     }
     if (selected.conclusion === "success") return selected;
+    if (resumedFailedJobs && Number(selected.run_attempt || 0) <= resumeRequestedAttempt) {
+      await sleep(POLL_INTERVAL_MS);
+      continue;
+    }
     for (const failed of failedJobNames(repository, selected.id)) {
       console.error(`[release-promotion] failed job=${failed.job} steps=${failed.steps.join(",") || "none"} signals=${failed.signals.join(",") || "none"}`);
+    }
+    if (!resumedFailedJobs) {
+      gh(["run", "rerun", String(selected.id), "--failed"], "workflow_failed_jobs_resume_failed");
+      resumedFailedJobs = true;
+      resumeRequestedAttempt = Number(selected.run_attempt || 0);
+      lastState = "";
+      console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-failed-jobs`);
+      await sleep(POLL_INTERVAL_MS);
+      continue;
     }
     throw failure(`${branch}_${path.basename(workflowPath, ".yml")}_failed`);
   }
