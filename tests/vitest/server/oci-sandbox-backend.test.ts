@@ -4,7 +4,10 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createOciSandboxBackend } from "#meshrix/server-runtime/execution-sandbox/oci-backend";
+import {
+  classifyOciCommandFailure,
+  createOciSandboxBackend
+} from "#meshrix/server-runtime/execution-sandbox/oci-backend";
 
 const roots: any[] = [];
 
@@ -54,6 +57,17 @@ function context(paths?: any, runId: any = "opaque-run-reference") : any {
 }
 
 describe("OCI sandbox backend", () : any => {
+  it("reduces engine errors to fixed privacy-safe failure classes", () : any => {
+    expect(classifyOciCommandFailure("write failed: no space left on device"))
+      .toBe("oci_storage_exhausted");
+    expect(classifyOciCommandFailure("unknown flag: --example"))
+      .toBe("oci_option_unsupported");
+    expect(classifyOciCommandFailure("permission denied while creating container"))
+      .toBe("oci_permission_denied");
+    expect(classifyOciCommandFailure("private engine payload"))
+      .toBe("oci_command_rejected");
+  });
+
   it("constructs a non-pulling, privately namespaced, resource-bounded container", async () : Promise<any> => {
     const calls: any[] = [];
     const commandRunner: any = async (binary?: any, args?: any, options?: any) : Promise<any> => {

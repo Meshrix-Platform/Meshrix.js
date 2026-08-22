@@ -59,7 +59,7 @@ export function extractSafeFailureSignals(logText?: any) : any {
     const probeFailures: any = /\bproductionBackendProbeFailures=([a-z_:,]{1,4096})(?:\s|$)/u.exec(line)?.[1];
     if (probeFailures) {
       for (const probeFailure of probeFailures.split(",")) {
-        if (/^sandbox_[a-z_]+:oci_(?:create|start|inspect|command|workload)_failed$/u.test(probeFailure)) {
+        if (/^sandbox_[a-z_]+:oci_(?:create|start|inspect|command|workload)_failed:oci_[a-z_]+$/u.test(probeFailure)) {
           signals.add(`probe:${probeFailure}`);
         }
       }
