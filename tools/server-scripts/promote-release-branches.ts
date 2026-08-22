@@ -298,7 +298,7 @@ function sleep(delayMs?: any) : any {
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
   let resumedTestFailures: any = false;
-  let resumedRunnerAssignmentFailures: any = false;
+  let unstartedResumeCount: any = 0;
   let resumeRequestedAttempt: any = 0;
   for (;;) {
     const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
@@ -318,7 +318,7 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
       continue;
     }
     if (selected.conclusion === "success") return selected;
-    if ((resumedTestFailures || resumedRunnerAssignmentFailures) && Number(selected.run_attempt || 0) <= resumeRequestedAttempt) {
+    if (resumeRequestedAttempt > 0 && Number(selected.run_attempt || 0) <= resumeRequestedAttempt) {
       await sleep(POLL_INTERVAL_MS);
       continue;
     }
@@ -326,12 +326,12 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
     for (const failed of failedJobs) {
       console.error(`[release-promotion] failed job=${failed.job} steps=${failed.steps.join(",") || "none"} signals=${failed.signals.join(",") || "none"}`);
     }
-    if (jobsFailedBeforeRunnerAssignment(failedJobs) && !resumedRunnerAssignmentFailures) {
+    if (jobsFailedBeforeRunnerAssignment(failedJobs)) {
       gh(["run", "rerun", String(selected.id), "--failed"], "workflow_unstarted_jobs_resume_failed");
-      resumedRunnerAssignmentFailures = true;
+      unstartedResumeCount += 1;
       resumeRequestedAttempt = Number(selected.run_attempt || 0);
       lastState = "";
-      console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-unstarted-jobs`);
+      console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-unstarted-jobs count=${unstartedResumeCount}`);
       await sleep(POLL_INTERVAL_MS);
       continue;
     }
