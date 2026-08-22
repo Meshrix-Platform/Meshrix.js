@@ -63,6 +63,17 @@ function boundedOutputCollector() : any {
     clear() : any {
       chunks = [];
       bytes = 0;
+    },
+    failureReasonCode() : any {
+      const value: any = Buffer.concat(chunks).toString("utf8");
+      const explicit: any = /(?:Error:\s+|code:\s*['"])([a-z][a-z0-9_]{0,79})/u.exec(value)?.[1];
+      if (explicit) return explicit;
+      if (/ERR_MODULE_NOT_FOUND|Cannot find module/u.test(value)) return "HIGH_RISK_WORKLOAD_MODULE_NOT_FOUND";
+      if (/ERR_PACKAGE_PATH_NOT_EXPORTED/u.test(value)) return "HIGH_RISK_WORKLOAD_PACKAGE_PATH_NOT_EXPORTED";
+      if (/ERR_DLOPEN_FAILED|Module did not self-register/u.test(value)) return "HIGH_RISK_WORKLOAD_NATIVE_MODULE_LOAD_FAILED";
+      if (/heap out of memory|FATAL ERROR/iu.test(value)) return "HIGH_RISK_WORKLOAD_HEAP_EXHAUSTED";
+      if (/SyntaxError/u.test(value)) return "HIGH_RISK_WORKLOAD_SYNTAX_ERROR";
+      return "";
     }
   };
 }
@@ -394,6 +405,7 @@ async function runHighRiskWorkloads(runRoot?: any) : Promise<any> {
   const workloadRoot: any = path.join(runRoot, "high-risk-workloads");
   await fs.mkdir(workloadRoot, { recursive: true, mode: 0o700 });
   const environment: any = createIsolatedChildEnvironment({
+    NODE_OPTIONS: "--conditions=source",
     MESHRIX_RESOURCE_LOAD_PROFILE: selectedHighRiskProfile
   });
   const workloadOutput: any = boundedOutputCollector();
@@ -445,11 +457,11 @@ async function runHighRiskWorkloads(runRoot?: any) : Promise<any> {
         }
         const error: Error & Record<string, any> = new Error("High-risk workload process failed.");
         const safeSignal: any = String(signal || "").replace(/[^A-Z0-9]/gu, "");
-        error.code = safeSignal
+        error.code = workloadOutput.failureReasonCode() || (safeSignal
           ? `HIGH_RISK_WORKLOAD_SIGNAL_${safeSignal}`
           : Number.isSafeInteger(code)
             ? `HIGH_RISK_WORKLOAD_EXIT_${code}`
-            : "HIGH_RISK_WORKLOAD_EXITED";
+            : "HIGH_RISK_WORKLOAD_EXITED");
         settle(() : any => reject(error));
       });
     });
