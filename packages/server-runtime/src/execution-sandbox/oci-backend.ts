@@ -37,7 +37,7 @@ const ENFORCED_RESTRICTIONS: readonly string[] = Object.freeze([
   "cleanup",
   "cross-trust-domain"
 ]);
-const OCI_CONTROL_COMMAND_TIMEOUT_MS: any = 30_000;
+const OCI_CONTROL_COMMAND_TIMEOUT_MS = 30_000;
 
 function requiredText(value: unknown, label: string): string {
   const normalized = String(value || "").trim();
@@ -243,8 +243,8 @@ export function createOciSandboxBackend({
   let enabled = healthy === true;
 
   async function createContainer(args: string[], options: CommandOptions): Promise<CommandResult> {
-    const previous: any = createQueue;
-    let release: any = () : any => {};
+    const previous = createQueue;
+    let release: () => void = () => {};
     createQueue = new Promise<void>((resolve) => { release = resolve; });
     await previous;
     try {
