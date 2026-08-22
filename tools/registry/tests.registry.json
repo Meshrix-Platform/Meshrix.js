@@ -131,8 +131,35 @@
         "cachePassedResults": true,
         "shardEnvironment": "MESHRIX_TEST_SHARD"
       },
-      "extends": "core-public",
-      "suites": [],
+      "suites": [
+        "repo.public-boundary",
+        "security.secret-hygiene",
+        "repo.local-info-hygiene",
+        "registry.consistency",
+        "registry.version-naming",
+        "registry.version-governance",
+        "repo.root-hygiene",
+        "repo.script-registry",
+        "repo.organization",
+        "architecture.import-graph",
+        "architecture.protocol-boundary",
+        "foundation.checkpoint-tree",
+        "foundation.state-machine",
+        "release.acceptance-ledger-anchor",
+        "gateway.external"
+      ],
+      "timeoutMs": 1800000
+    },
+    "audit-stable-resource": {
+      "description": "Stable audit checkpoint: isolated resource discipline",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
+      "suites": [
+        "runtime.resource-discipline"
+      ],
       "timeoutMs": 1800000
     },
     "audit-stable-governance": {

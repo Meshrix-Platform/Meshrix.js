@@ -46,6 +46,12 @@ describe("stable audit checkpoint reducer", () => {
   it("partitions the exact audit closure without overlap", () => {
     const stages: any = validateStableAuditPartition(registry);
     const staged: any[] = STABLE_AUDIT_PROFILES.flatMap((profile) => stages[profile]);
+    expect(STABLE_AUDIT_PROFILES).toHaveLength(10);
+    expect(stages["audit-stable-resource"]).toEqual(["runtime.resource-discipline"]);
+    expect(stages["audit-stable-sandbox"]).toEqual([
+      "execution-sandbox.controlled-runtime",
+      "execution-sandbox.convergence-final",
+    ]);
     expect(new Set(staged).size).toBe(staged.length);
     expect(staged.sort()).toEqual(resolveProfileSuiteIds(registry, "audit-public").sort());
   });
