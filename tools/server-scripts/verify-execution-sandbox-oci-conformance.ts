@@ -1042,17 +1042,10 @@ async function runIndependentConformanceProbes(
   target?: any,
   root?: any
 ) : Promise<any> {
-  const settle: any = async () : Promise<any> => {
-    try {
-      return {
-        status: "fulfilled",
-        value: await probeRunner(target, root, `conformance-${crypto.randomUUID()}`)
-      };
-    } catch (reason) {
-      return { status: "rejected", reason };
-    }
-  };
-  return [await settle(), await settle()];
+  return Promise.allSettled([
+    probeRunner(target, root, `conformance-${crypto.randomUUID()}`),
+    probeRunner(target, root, `conformance-${crypto.randomUUID()}`)
+  ]);
 }
 
 export async function runExecutionSandboxOciConformance({

@@ -113,9 +113,13 @@ describe("OCI sandbox backend", () : any => {
     ]));
     expect(createArgs.filter((value?: any) : any => value.startsWith("type=bind,"))).toHaveLength(2);
     expect(createArgs.find((value?: any) : any => value.startsWith("/sandbox/scratch:"))).toContain(`uid=${process.getuid()},gid=${process.getgid()}`);
+    for (const call of calls.filter((entry?: any) : any => ["create", "start", "inspect"].includes(entry.args[0]))) {
+      expect(call.options.timeoutMs).toBe(10_000);
+    }
 
     await expect(backend.run(context(paths))).rejects.toMatchObject({ code: "sandbox_runtime_failed" });
     await expect(backend.cleanup({ runId: "opaque-run-reference" })).resolves.toEqual({ destroyed: true });
+    expect(calls.find((call?: any) : any => call.args[0] === "rm").options.timeoutMs).toBe(30_000);
   });
 
   it("passes an explicit runtime class for non-default podman profiles", async () : Promise<any> => {
@@ -135,6 +139,41 @@ describe("OCI sandbox backend", () : any => {
     await backend.run(context(paths));
     const createArgs: any = calls.find((args?: any) : any => args[0] === "create");
     expect(createArgs).toEqual(expect.arrayContaining(["--runtime", "crun"]));
+  });
+
+  it("serializes container creation while preserving concurrent executions", async () : Promise<any> => {
+    const firstPaths: any = await sandboxPaths();
+    const secondPaths: any = await sandboxPaths();
+    let activeCreates: any = 0;
+    let maximumActiveCreates: any = 0;
+    let createCount: any = 0;
+    const backend: any = createOciSandboxBackend({
+      id: "oci.test",
+      binary: "/fixed/bin/docker",
+      engine: "docker",
+      runtimeClass: "runc",
+      commandRunner: async (_binary?: any, args?: any) : Promise<any> => {
+        if (args[0] === "create") {
+          createCount += 1;
+          activeCreates += 1;
+          maximumActiveCreates = Math.max(maximumActiveCreates, activeCreates);
+          await new Promise((resolve?: any) : any => setTimeout(resolve, 5));
+          activeCreates -= 1;
+        }
+        if (args[0] === "inspect") return { code: 0, signal: "", bytes: 1, stdout: "0\n" };
+        return { code: 0, signal: "", bytes: 0, stdout: "" };
+      }
+    });
+
+    await Promise.all([
+      backend.run(context(firstPaths, "concurrent-one")),
+      backend.run(context(secondPaths, "concurrent-two"))
+    ]);
+
+    expect(createCount).toBe(2);
+    expect(maximumActiveCreates).toBe(1);
+    await backend.cleanup({ runId: "concurrent-one" });
+    await backend.cleanup({ runId: "concurrent-two" });
   });
 
   it("rejects a non-zero subprocess capability that the backend cannot count independently", async () : Promise<any> => {

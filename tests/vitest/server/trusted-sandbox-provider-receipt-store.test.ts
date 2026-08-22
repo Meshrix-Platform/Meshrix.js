@@ -297,7 +297,7 @@ describe("trusted sandbox provider receipt store", () : any => {
     expect(loadTrustedSandboxProviderReceipts({ userDataPath })).toEqual({});
   });
 
-  it("creates independent OCI probes sequentially without retrying the pair", async () : Promise<any> => {
+  it("runs exactly one concurrent pair of independent OCI probes without retrying it", async () : Promise<any> => {
     const target: Record<string, any> = {
       id: "provider-one",
       providerClass: "docker",
@@ -356,7 +356,7 @@ describe("trusted sandbox provider receipt store", () : any => {
 
     expect(report.productionBackendConformance).toBe(true);
     expect(sequence).toBe(2);
-    expect(maximumActive).toBe(1);
+    expect(maximumActive).toBe(2);
   });
 
   it("fails closed when the digest-pinned conformance image cannot be provisioned", async () : Promise<any> => {
