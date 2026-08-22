@@ -570,6 +570,9 @@ export async function runControlledExecutionSandboxVerification({
     const contractChecksPassed: any = (Object.values(checks) as any[]).every(Boolean);
     const productionBackendConformance: any = productionReport?.productionBackendConformance === true;
     const productionBackendFailedChecks: any = failedOciConformanceCheckIds(productionReport);
+    const productionBackendProbeFailures: any = Array.isArray(productionReport?.probeFailures)
+      ? productionReport.probeFailures
+      : [];
     const opaqueCustodyReady: any = custodyReport?.custodyAcceptanceReady === true;
     const sandboxAcceptanceReady: any = contractChecksPassed && productionBackendConformance && opaqueCustodyReady;
     const report: Record<string, any> = {
@@ -583,6 +586,7 @@ export async function runControlledExecutionSandboxVerification({
       sandboxAcceptanceReady,
       productionBackendConformance,
       productionBackendFailedChecks,
+      productionBackendProbeFailures,
       opaqueCustodyReady,
       summary: {
         contractChecksPassed,
@@ -627,6 +631,9 @@ if (invokedDirectly) {
     console.log(`[controlled-execution-sandbox] productionBackendConformance=${report.productionBackendConformance} sandboxAcceptanceReady=${report.sandboxAcceptanceReady}`);
     if (report.productionBackendFailedChecks.length > 0) {
       console.log(`[controlled-execution-sandbox] productionBackendFailedChecks=${report.productionBackendFailedChecks.join(",")}`);
+    }
+    if (report.productionBackendProbeFailures.length > 0) {
+      console.log(`[controlled-execution-sandbox] productionBackendProbeFailures=${report.productionBackendProbeFailures.map((failure?: any) : any => `${failure.code}:${failure.failureStage}`).join(",")}`);
     }
     if (!report.sandboxAcceptanceReady) process.exitCode = 1;
   }).catch((error?: any) : any => {
