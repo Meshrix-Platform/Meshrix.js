@@ -23,6 +23,7 @@ import {
   promotionDecision,
   requiredWorkflowPaths,
   selectLatestWorkflowRun,
+  shouldRetryWorkflowPolling,
 } from "../../../tools/server-scripts/promote-release-branches.ts";
 
 const ROOT: any = path.resolve(import.meta.dirname, "../../..");
@@ -106,6 +107,8 @@ describe("branch promotion workflow", () : any => {
       EXAMPLE: "retained",
       GODEBUG: "http2client=0",
     });
+    expect(shouldRetryWorkflowPolling({ code: "workflow_runs_unavailable" })).toBe(true);
+    expect(shouldRetryWorkflowPolling({ code: "workflow_jobs_unavailable" })).toBe(false);
   });
 
   it("admits stable and release only when the after commit is the exact upstream tip", () : any => {
