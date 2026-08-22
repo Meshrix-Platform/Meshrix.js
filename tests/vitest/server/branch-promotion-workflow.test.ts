@@ -18,6 +18,11 @@ import {
 import { sha256 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
 import { runAuthorityCommand } from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
 import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
+import {
+  promotionDecision,
+  requiredWorkflowPaths,
+  selectLatestWorkflowRun,
+} from "../../../tools/server-scripts/promote-release-branches.ts";
 
 const ROOT: any = path.resolve(import.meta.dirname, "../../..");
 
@@ -68,6 +73,34 @@ describe("branch promotion workflow", () : any => {
     expect(nonFastForward.ok).toBe(false);
     expect(nonFastForward.code).toBe("protected-branch-not-fast-forward");
 
+  });
+
+  it("automates exact-tip promotion and waits only for each branch authority", () : any => {
+    const candidate: any = "c".repeat(40);
+    const current: any = "a".repeat(40);
+    expect(promotionDecision({ current, candidate, ancestor: () : any => true }))
+      .toEqual({ action: "advance" });
+    expect(promotionDecision({ current: candidate, candidate, ancestor: () : any => false }))
+      .toEqual({ action: "already-current" });
+    expect(() : any => promotionDecision({ current, candidate, ancestor: () : any => false }))
+      .toThrow("promotion_not_fast_forward");
+
+    expect(requiredWorkflowPaths("nightly")).toEqual([".github/workflows/branch-flow.yml"]);
+    expect(requiredWorkflowPaths("stable")).toEqual([
+      ".github/workflows/branch-flow.yml",
+      ".github/workflows/ci.yml",
+    ]);
+    expect(requiredWorkflowPaths("release")).toEqual([
+      ".github/workflows/branch-flow.yml",
+      ".github/workflows/release-branch.yml",
+    ]);
+
+    const run: any = selectLatestWorkflowRun([
+      { id: 10, path: ".github/workflows/ci.yml", event: "push", head_branch: "stable", head_sha: candidate, run_attempt: 1 },
+      { id: 11, path: ".github/workflows/ci.yml", event: "push", head_branch: "stable", head_sha: candidate, run_attempt: 2 },
+      { id: 12, path: ".github/workflows/ci.yml", event: "push", head_branch: "nightly", head_sha: candidate, run_attempt: 3 },
+    ], { branch: "stable", candidate, workflowPath: ".github/workflows/ci.yml" });
+    expect(run?.id).toBe(11);
   });
 
   it("admits stable and release only when the after commit is the exact upstream tip", () : any => {
@@ -211,7 +244,7 @@ describe("branch promotion workflow", () : any => {
     );
     expect(stableGate).toContain("github.ref_name == 'stable'");
     expect(stableGate).not.toContain("github.ref_name == 'release'");
-    expect(stableGate).toContain("needs: [public-gate, node-22-compatibility, npm-package-portability, supply-chain]");
+    expect(stableGate).toContain("needs: [public-gate, supply-chain]");
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
     expect(stableGate).toContain("build/release/control/SOURCE_CANDIDATE.json");
     expect(stableGate).toContain("build/reports/platform-acceptance.json");

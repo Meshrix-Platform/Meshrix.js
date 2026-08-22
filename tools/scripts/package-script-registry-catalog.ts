@@ -317,6 +317,19 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/protocols/mcp/adapter/gateway-installer/package.json"
     ],
   },
+  "release:promote-branches": {
+    scriptName: "release:promote-branches", command: "npm run release:promote-branches", category: "version-control", subsystem: "release-promotion",
+    owner: "platform", tier: "release", sideEffects: "network",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: [
+      "package.json",
+      ".github/workflows/branch-flow.yml",
+      ".github/workflows/ci.yml",
+      ".github/workflows/release-branch.yml",
+      "tools/server-scripts/promote-release-branches.ts",
+      "tools/scripts/verify-git-publication.ts"
+    ], outputs: [],
+  },
   "release:package-server-source": {
     scriptName: "release:package-server-source", command: "npm run release:package-server-source", category: "packaging", subsystem: "server-source-package",
     owner: "platform", tier: "release", sideEffects: "build-output",

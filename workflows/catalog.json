@@ -2,7 +2,8 @@
   "schemaVersion": 1,
   "profiles": {
     "changed": ["meshrix-js.typecheck", "meshrix-js.test"],
-    "reassembly": ["meshrix-js.typecheck", "meshrix-js.build", "meshrix-js.test"]
+    "reassembly": ["meshrix-js.typecheck", "meshrix-js.build", "meshrix-js.test"],
+    "release-promotion": ["meshrix-js.promote-release-branches"]
   },
   "tasks": [
     {
@@ -24,6 +25,11 @@
       "id": "meshrix-js.verify-release-deployment",
       "command": "npm",
       "args": ["run", "server:verify:release-deployment"]
+    },
+    {
+      "id": "meshrix-js.promote-release-branches",
+      "command": "npm",
+      "args": ["run", "release:promote-branches"]
     }
   ]
 }

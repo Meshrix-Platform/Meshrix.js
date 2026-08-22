@@ -88,8 +88,9 @@ describe("pull-request verification feedback", () => {
     }
   });
 
-  it("runs pull requests on a distinct fast path while public-gate keeps npm run verify", async () => {
+  it("runs pull requests on a fast path and the complete gate once on stable", async () => {
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+    const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const pullRequestJob = workflow.indexOf("  pull-request-verify:\n");
     const publicGate = workflow.indexOf("  public-gate:\n");
     const functionalCompleteness = workflow.indexOf("\n  functional-completeness:\n", publicGate);
@@ -108,8 +109,11 @@ describe("pull-request verification feedback", () => {
     expect(prSection).not.toContain("--shard");
 
     const gateSection = workflow.slice(publicGate, functionalCompleteness);
-    expect(gateSection).toContain("if: ${{ github.event_name != 'pull_request'");
+    expect(gateSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
     expect(gateSection).toContain("run: npm run verify");
+    expect(gateSection).toContain("run: npm run test:audit");
     expect(gateSection).toContain("timeout-minutes: 120");
+    expect(packageJson.scripts["test:audit"]).toContain("--continue-on-failure");
+    expect(packageJson.scripts["test:audit"]).toContain("--report build/test-reports/audit-public.json");
   });
 });
