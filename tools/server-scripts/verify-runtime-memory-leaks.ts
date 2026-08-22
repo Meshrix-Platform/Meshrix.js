@@ -411,10 +411,26 @@ async function runHighRiskWorkloads(runRoot?: any) : Promise<any> {
   try {
     return await new Promise((resolve?: any, reject?: any) : any => {
       let result: any = null;
+      let settled: any = false;
       const settle: any = (callback?: any) : any => {
+        if (settled) return;
+        settled = true;
         callback();
       };
       highRiskChild.on("message", (message?: any) : any => {
+        if (
+          message?.kind === "meshrix.resource-discipline.high-risk-failure" &&
+          message.profile === selectedHighRiskProfile &&
+          message.syntheticDataOnly === true
+        ) {
+          const reasonCode: any = String(message.reasonCode || "");
+          const error: Error & Record<string, any> = new Error("High-risk workload reported a safe failure code.");
+          error.code = /^[a-z][a-z0-9_]{0,79}$/u.test(reasonCode)
+            ? reasonCode
+            : "HIGH_RISK_WORKLOAD_FAILURE_INVALID";
+          settle(() : any => reject(error));
+          return;
+        }
         try {
           result = compactHighRiskResult(message);
         } catch (error: any) {
@@ -428,7 +444,12 @@ async function runHighRiskWorkloads(runRoot?: any) : Promise<any> {
           return;
         }
         const error: Error & Record<string, any> = new Error("High-risk workload process failed.");
-        error.code = "HIGH_RISK_WORKLOAD_EXITED";
+        const safeSignal: any = String(signal || "").replace(/[^A-Z0-9]/gu, "");
+        error.code = safeSignal
+          ? `HIGH_RISK_WORKLOAD_SIGNAL_${safeSignal}`
+          : Number.isSafeInteger(code)
+            ? `HIGH_RISK_WORKLOAD_EXIT_${code}`
+            : "HIGH_RISK_WORKLOAD_EXITED";
         settle(() : any => reject(error));
       });
     });

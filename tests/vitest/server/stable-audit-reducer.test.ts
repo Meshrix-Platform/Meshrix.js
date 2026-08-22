@@ -50,6 +50,17 @@ describe("stable audit checkpoint reducer", () => {
     expect(staged.sort()).toEqual(resolveProfileSuiteIds(registry, "audit-public").sort());
   });
 
+  it("runs the Linux materialization acceptance without an unrelated heap cap", () => {
+    const suite: any = registry.suites.find((entry: any) =>
+      entry.id === "jobs.upload-custody-workspace-materialization-acceptance");
+    expect(suite).toMatchObject({
+      command: "node",
+      args: ["tests/vitest/server/support/run-upload-workspace-materialization-acceptance.ts"],
+    });
+    expect(JSON.stringify(suite)).not.toContain("max-old-space-size");
+    expect(JSON.stringify(suite)).not.toContain("max-semi-space-size");
+  });
+
   it("reduces one successful receipt per stage for one source revision", () => {
     const report: any = reduceStableAuditReports({
       registry,
