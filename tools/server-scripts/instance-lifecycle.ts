@@ -374,8 +374,9 @@ function resultPayload({
   alreadyStopped = false,
   restarted = false,
   probe,
+  stages,
 }: Record<string, any> = {}) : any {
-  return Object.freeze({
+  const payload: Record<string, any> = {
     ok: true,
     action,
     mode,
@@ -385,7 +386,9 @@ function resultPayload({
     url: `http://127.0.0.1:${INSTANCE_LIFECYCLE_PORT}`,
     healthz: Number(probe?.healthz || 0),
     console: Number(probe?.console || 0),
-  });
+  };
+  if (Array.isArray(stages)) payload.stages = Object.freeze([...stages]);
+  return Object.freeze(payload);
 }
 
 function inspectCurrentInstance() : any {
@@ -403,6 +406,19 @@ function inspectCurrentInstance() : any {
 async function startInstance(mode?: any, { force = false } = {}) : Promise<any> {
   const probe: any = await probeInstancePort(INSTANCE_LIFECYCLE_PORT);
   const snapshot: any = inspectCurrentInstance();
+  if (mode === "offline") {
+    const started: any = await runOfflineDeliveryLocalUp();
+    return resultPayload({
+      action: "start",
+      mode: "offline",
+      reused: force !== true && started.reused === true,
+      probe: {
+        healthz: started.healthz,
+        console: started.console,
+      },
+      stages: started.stages,
+    });
+  }
   if (force !== true && snapshot.current === mode && probe.healthOk === true) {
     return resultPayload({
       action: "start",
@@ -422,18 +438,6 @@ async function startInstance(mode?: any, { force = false } = {}) : Promise<any> 
       action: "start",
       mode,
       probe: ready,
-    });
-  }
-  if (mode === "offline") {
-    const started: any = await runOfflineDeliveryLocalUp();
-    return resultPayload({
-      action: "start",
-      mode: "offline",
-      reused: started.reused === true,
-      probe: {
-        healthz: started.healthz,
-        console: started.console,
-      },
     });
   }
   if (mode === "compose" || mode === "compose-ui") {
