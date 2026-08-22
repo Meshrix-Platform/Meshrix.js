@@ -1,0 +1,298 @@
+export const TRACKED_REGRESSION_REPORT_PATH = "docs/verification/regression.html";
+
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+function finiteNumber(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
+function safeStatus(value: unknown): string {
+  const status = String(value || "unknown");
+  return ["passed", "failed", "skipped", "dry-run"].includes(status) ? status : "unknown";
+}
+
+function boundedText(value: unknown, maxLength = 320): string {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function wallDurationMs(results: readonly Record<string, any>[]): number {
+  const starts = results.map((result) => Date.parse(String(result.startedAt || "")))
+    .filter(Number.isFinite);
+  const finishes = results.map((result) => Date.parse(String(result.finishedAt || "")))
+    .filter(Number.isFinite);
+  if (starts.length === 0 || finishes.length === 0) {
+    return results.reduce((sum, result) => sum + finiteNumber(result.durationMs), 0);
+  }
+  return Math.max(0, Math.max(...finishes) - Math.min(...starts));
+}
+
+export function createRegressionReportSnapshot(
+  reportValue: unknown,
+  { productVersion }: { productVersion: string }
+): Record<string, any> {
+  const report = asRecord(reportValue);
+  const results = (Array.isArray(report.suites) ? report.suites : []).map((value) => {
+    const result = asRecord(value);
+    return {
+      id: boundedText(result.id, 240),
+      label: boundedText(result.label || result.id, 240),
+      phaseId: boundedText(result.phaseId || "unassigned", 120),
+      laneId: boundedText(result.laneId || "unassigned", 120),
+      status: safeStatus(result.status),
+      durationMs: finiteNumber(result.durationMs),
+      command: boundedText(result.command, 500),
+      cached: result.cached === true,
+      timedOut: result.timedOut === true,
+      childSuiteCount: Array.isArray(result.childSuiteIds) ? result.childSuiteIds.length : 1
+    };
+  });
+  const resultByLane = new Map<string, Record<string, any>[]>();
+  for (const result of results) {
+    const key = `${result.phaseId}\0${result.laneId}`;
+    const laneResults = resultByLane.get(key) ?? [];
+    laneResults.push(result);
+    resultByLane.set(key, laneResults);
+  }
+  const executionPhases = Array.isArray(report.executionPhases) ? report.executionPhases : [];
+  const phases = executionPhases.map((phaseValue: unknown) => {
+    const phase = asRecord(phaseValue);
+    const phaseId = boundedText(phase.id, 120);
+    const lanes = (Array.isArray(phase.lanes) ? phase.lanes : []).map((laneValue: unknown) => {
+      const lane = asRecord(laneValue);
+      const laneId = boundedText(lane.id, 120);
+      const laneResults = resultByLane.get(`${phaseId}\0${laneId}`) ?? [];
+      return {
+        id: laneId,
+        label: boundedText(lane.label || lane.id, 160),
+        dependsOn: (Array.isArray(lane.dependsOn) ? lane.dependsOn : [])
+          .map((value: unknown) => boundedText(value, 120))
+          .filter(Boolean),
+        durationMs: wallDurationMs(laneResults),
+        passed: laneResults.filter((result) => result.status === "passed").length,
+        failed: laneResults.filter((result) => result.status === "failed").length,
+        skipped: laneResults.filter((result) => result.status === "skipped").length,
+        processCount: laneResults.length
+      };
+    });
+    const phaseResults = results.filter((result) => result.phaseId === phaseId);
+    return {
+      id: phaseId,
+      label: boundedText(phase.label || phase.id, 180),
+      durationMs: wallDurationMs(phaseResults),
+      passed: phaseResults.filter((result) => result.status === "passed").length,
+      failed: phaseResults.filter((result) => result.status === "failed").length,
+      skipped: phaseResults.filter((result) => result.status === "skipped").length,
+      lanes
+    };
+  });
+  const summary = asRecord(report.summary);
+  const revision = /^[a-f0-9]{40}$/u.test(String(report.sourceRevision || ""))
+    ? String(report.sourceRevision).slice(0, 12)
+    : "working-tree";
+  const durationMs = finiteNumber(report.durationMs);
+  const longestLane = phases.flatMap((phase: Record<string, any>) =>
+    phase.lanes.map((lane: Record<string, any>) => ({
+      phaseId: phase.id,
+      laneId: lane.id,
+      durationMs: lane.durationMs
+    }))
+  ).sort((left: Record<string, any>, right: Record<string, any>) => right.durationMs - left.durationMs)[0] ?? null;
+  const passed = finiteNumber(summary.passed);
+  const failed = finiteNumber(summary.failed);
+  const skipped = finiteNumber(summary.skipped);
+  const total = passed + failed + skipped + finiteNumber(summary.dryRun);
+  return {
+    schemaVersion: "meshrix.regression-report.snapshot.v1",
+    product: "Meshrix.js",
+    productVersion: boundedText(productVersion, 80),
+    profile: boundedText(report.profile, 120),
+    revision,
+    generatedAt: boundedText(report.finishedAt || report.startedAt, 80),
+    durationMs,
+    releaseReady: summary.releaseReady === true,
+    summary: {
+      total,
+      passed,
+      failed,
+      skipped,
+      timedOut: finiteNumber(summary.timedOut),
+      passRate: total > 0 ? Math.round((passed / total) * 10000) / 100 : 0
+    },
+    longestLane,
+    phases,
+    results
+  };
+}
+
+function serializedForHtml(value: unknown): string {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026");
+}
+
+export function shouldRefreshTrackedRegressionReport({
+  profile,
+  selectedByProfile
+}: {
+  profile: string;
+  selectedByProfile: boolean;
+}): boolean {
+  return selectedByProfile && profile === "core-public";
+}
+
+export function createRegressionHtmlReport(
+  report: unknown,
+  options: { productVersion: string }
+): string {
+  const snapshot = createRegressionReportSnapshot(report, options);
+  const data = serializedForHtml(snapshot);
+  const titleStatus = snapshot.releaseReady ? "Passed" : "Failed";
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Meshrix.js Regression — ${titleStatus}</title>
+  <style>
+    :root{--bg:#f5f4ef;--panel:#fffefa;--ink:#171914;--muted:#65695f;--line:#d8d8cf;--pass:#237451;--fail:#b83b31;--skip:#8b6a22;--accent:#315bdb;--shadow:0 10px 30px rgba(30,33,24,.07)}
+    @media(prefers-color-scheme:dark){:root{--bg:#151713;--panel:#1e211b;--ink:#f0f1ea;--muted:#a8ada0;--line:#393e34;--pass:#62c89a;--fail:#ff8177;--skip:#e4bd66;--accent:#89a5ff;--shadow:none}}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}main{width:min(1240px,calc(100% - 32px));margin:0 auto;padding:42px 0 64px}.eyebrow{margin:0 0 8px;color:var(--accent);font-weight:750;letter-spacing:.08em;text-transform:uppercase}.hero{display:flex;gap:24px;align-items:flex-end;justify-content:space-between;margin-bottom:26px}.hero h1{font-size:clamp(32px,6vw,66px);line-height:.98;letter-spacing:-.055em;margin:0;max-width:780px}.meta{color:var(--muted);text-align:right;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.metric,.panel,.phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}.metric{padding:17px}.metric .value{display:block;font-size:27px;font-weight:760;letter-spacing:-.04em}.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.07em}.status-pass{color:var(--pass)}.status-fail{color:var(--fail)}.status-skip{color:var(--skip)}.section-title{display:flex;align-items:end;justify-content:space-between;margin:34px 0 12px}.section-title h2{font-size:21px;margin:0}.section-title p{margin:0;color:var(--muted)}.phases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.phase{padding:18px;text-align:left;color:inherit;cursor:pointer}.phase:hover,.phase.active{border-color:var(--accent)}.phase-head{display:flex;justify-content:space-between;gap:16px}.phase h3{margin:0 0 3px;font-size:17px}.phase small{color:var(--muted)}.bar{height:7px;border-radius:999px;background:var(--line);overflow:hidden;margin:15px 0}.bar span{display:block;height:100%;background:var(--pass)}.lanes{display:flex;flex-wrap:wrap;gap:6px}.lane{border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted);font-size:12px}.panel{padding:16px}.filters{display:grid;grid-template-columns:1fr 180px auto;gap:10px;margin-bottom:14px}.filters input,.filters select,.filters button{border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);padding:10px 12px}.filters button{cursor:pointer}.filters button:hover{border-color:var(--accent)}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;min-width:860px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{position:sticky;top:0;background:var(--panel);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}tr:last-child td{border-bottom:0}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:700}.dot{width:6px;height:6px;border-radius:50%;background:currentColor}.process-id{font-weight:680}.process-label{display:block;color:var(--muted);font-size:12px;margin-top:2px}.command{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);max-width:430px;overflow-wrap:anywhere}.empty{padding:36px;text-align:center;color:var(--muted)}footer{margin-top:18px;color:var(--muted);font-size:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}.phases{grid-template-columns:1fr}.hero{align-items:flex-start;flex-direction:column}.meta{text-align:left}.filters{grid-template-columns:1fr 1fr}.filters button{grid-column:1/-1}}
+    @media(max-width:560px){main{width:min(100% - 20px,1240px);padding-top:24px}.grid{grid-template-columns:repeat(2,1fr)}.metric{padding:13px}.filters{grid-template-columns:1fr}.filters button{grid-column:auto}}
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <div><p class="eyebrow">Tracked regression snapshot</p><h1>Meshrix.js regression</h1></div>
+      <div class="meta" id="meta"></div>
+    </header>
+    <section class="grid" id="metrics" aria-label="Regression metrics"></section>
+    <div class="section-title"><h2>Execution phases</h2><p>Choose a phase to filter processes.</p></div>
+    <section class="phases" id="phases"></section>
+    <div class="section-title"><h2>Process results</h2><p id="result-count"></p></div>
+    <section class="panel">
+      <div class="filters">
+        <label><span class="sr-only">Search processes</span><input id="search" type="search" placeholder="Search suite, lane, or command"></label>
+        <label><span class="sr-only">Filter by status</span><select id="status"><option value="all">All statuses</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select></label>
+        <button id="reset" type="button">Reset filters</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Status</th><th>Process</th><th>Phase / lane</th><th>Duration</th><th>Command</th></tr></thead><tbody id="results"></tbody></table><div class="empty" id="empty" hidden>No matching processes.</div></div>
+    </section>
+    <footer>This tracked file contains bounded metrics only. Full machine-readable reports and raw execution output are not committed.</footer>
+  </main>
+  <script type="application/json" id="regression-data">${data}</script>
+  <script>
+    (() => {
+      const data = JSON.parse(document.getElementById('regression-data').textContent);
+      const state = { phase: 'all', status: 'all', search: '' };
+      const formatDuration = (value) => {
+        const ms = Number(value || 0);
+        if (ms < 1000) return Math.round(ms) + ' ms';
+        if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + ' s';
+        const minutes = Math.floor(ms / 60000);
+        return minutes + 'm ' + Math.round((ms % 60000) / 1000) + 's';
+      };
+      const statusClass = (status) => status === 'passed' ? 'status-pass' : status === 'failed' ? 'status-fail' : 'status-skip';
+      const element = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      };
+      const meta = document.getElementById('meta');
+      meta.append(element('div', '', 'Version ' + data.productVersion + ' · ' + data.profile));
+      meta.append(element('div', '', data.revision + ' · ' + new Date(data.generatedAt).toLocaleString()));
+      const metrics = [
+        ['Result', data.releaseReady ? 'Passed' : 'Failed', data.releaseReady ? 'status-pass' : 'status-fail'],
+        ['Pass rate', data.summary.passRate + '%', ''],
+        ['Passed', String(data.summary.passed), 'status-pass'],
+        ['Failed', String(data.summary.failed), data.summary.failed ? 'status-fail' : ''],
+        ['Total time', formatDuration(data.durationMs), ''],
+        ['Longest lane', data.longestLane ? formatDuration(data.longestLane.durationMs) : '—', '']
+      ];
+      for (const item of metrics) {
+        const card = element('article', 'metric');
+        card.append(element('span', 'label', item[0]));
+        card.append(element('span', 'value ' + item[2], item[1]));
+        document.getElementById('metrics').append(card);
+      }
+      const phaseRoot = document.getElementById('phases');
+      const setPhase = (phaseId) => { state.phase = phaseId; render(); };
+      for (const phase of data.phases) {
+        const card = element('button', 'phase');
+        card.type = 'button';
+        card.dataset.phase = phase.id;
+        const head = element('div', 'phase-head');
+        const title = element('div');
+        title.append(element('h3', '', phase.label));
+        title.append(element('small', '', phase.lanes.length + ' lanes · ' + formatDuration(phase.durationMs)));
+        head.append(title);
+        head.append(element('span', phase.failed ? 'status-fail' : 'status-pass', phase.failed ? phase.failed + ' failed' : phase.passed + ' passed'));
+        card.append(head);
+        const bar = element('div', 'bar');
+        const fill = element('span');
+        const phaseTotal = phase.passed + phase.failed + phase.skipped;
+        fill.style.width = (phaseTotal ? (phase.passed / phaseTotal) * 100 : 0) + '%';
+        bar.append(fill); card.append(bar);
+        const lanes = element('div', 'lanes');
+        for (const lane of phase.lanes) {
+          const dependency = lane.dependsOn.length ? ' · after ' + lane.dependsOn.join(', ') : '';
+          lanes.append(element('span', 'lane', lane.id + ' · ' + formatDuration(lane.durationMs) + dependency));
+        }
+        card.append(lanes);
+        card.addEventListener('click', () => setPhase(state.phase === phase.id ? 'all' : phase.id));
+        phaseRoot.append(card);
+      }
+      const resultRoot = document.getElementById('results');
+      const empty = document.getElementById('empty');
+      const render = () => {
+        for (const card of phaseRoot.querySelectorAll('.phase')) card.classList.toggle('active', state.phase === card.dataset.phase);
+        const query = state.search.toLowerCase();
+        const filtered = data.results.filter((result) => {
+          if (state.phase !== 'all' && result.phaseId !== state.phase) return false;
+          if (state.status !== 'all' && result.status !== state.status) return false;
+          return !query || [result.id, result.label, result.phaseId, result.laneId, result.command].join(' ').toLowerCase().includes(query);
+        });
+        resultRoot.replaceChildren();
+        for (const result of filtered) {
+          const row = document.createElement('tr');
+          const statusCell = document.createElement('td');
+          const pill = element('span', 'pill ' + statusClass(result.status));
+          pill.append(element('span', 'dot'));
+          pill.append(document.createTextNode(result.status));
+          statusCell.append(pill); row.append(statusCell);
+          const processCell = document.createElement('td');
+          processCell.append(element('span', 'process-id', result.id));
+          processCell.append(element('span', 'process-label', result.label));
+          row.append(processCell);
+          row.append(element('td', '', result.phaseId + ' / ' + result.laneId));
+          row.append(element('td', '', formatDuration(result.durationMs)));
+          row.append(element('td', 'command', result.command || '—'));
+          resultRoot.append(row);
+        }
+        empty.hidden = filtered.length !== 0;
+        document.getElementById('result-count').textContent = filtered.length + ' of ' + data.results.length + ' processes';
+      };
+      document.getElementById('search').addEventListener('input', (event) => { state.search = event.target.value.trim(); render(); });
+      document.getElementById('status').addEventListener('change', (event) => { state.status = event.target.value; render(); });
+      document.getElementById('reset').addEventListener('click', () => {
+        state.phase = 'all'; state.status = 'all'; state.search = '';
+        document.getElementById('search').value = '';
+        document.getElementById('status').value = 'all';
+        render();
+      });
+      render();
+    })();
+  </script>
+</body>
+</html>
+`;
+}

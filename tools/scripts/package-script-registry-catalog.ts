@@ -107,7 +107,28 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "deploy:native:orb", command: "npm run deploy:native:orb", category: "startup", subsystem: "server",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: ["tools/server-scripts/native-orb-deploy.ts"], outputs: [],
+    inputs: [
+      "tools/server-scripts/native-orb-deploy.ts",
+      "tools/server-scripts/README.md",
+      "tools/server-scripts/lib/native-orb-deployment/**"
+    ], outputs: [],
+  },
+  "start:optional": {
+    scriptName: "start:optional", command: "npm run start:optional", category: "network-service", subsystem: "extensions",
+    owner: "platform", tier: "external", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: [
+      "tools/optional-startup/**",
+      "tools/server-scripts/README.md",
+      "plugins/registry/plugins.json",
+      "plugins/agents/**",
+      "plugins/coding/github/**",
+      "plugins/external-gateway/**",
+      "plugins/model-gateway/**",
+      "plugins/shared-space/**",
+      "plugins/skill-hub/**",
+      "services/**"
+    ], outputs: [],
   },
   "pack:offline": {
     scriptName: "pack:offline", command: "npm run pack:offline", category: "packaging", subsystem: "server",
@@ -986,6 +1007,48 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "plugins/plugin.schema.json",
       "plugins/*/plugin.json"
     ], outputs: ["build/reports/plugin-bundle-protocol.json", "build/reports/plugin-runtime.json"],
+  },
+  "test:functional:frontend": {
+    scriptName: "test:functional:frontend", command: "npm run test:functional:frontend", category: "test", subsystem: "console",
+    owner: "frontend", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    inputs: ["apps/console/**", "packages/ui-console/**", "tests/vitest/console/**", "vitest.config.ts"], outputs: [],
+  },
+  "test:functional:backend:server": {
+    scriptName: "test:functional:backend:server", command: "npm run test:functional:backend:server", category: "test", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    inputs: ["tests/run-functional-backend-server.ts", "tests/vitest/server/**", "tests/server/**", "vitest.config.ts"], outputs: [],
+  },
+  "test:functional:backend:worker-thread": {
+    scriptName: "test:functional:backend:worker-thread", command: "npm run test:functional:backend:worker-thread", category: "test", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: ["tests/vitest/server/operation-audit-retention.test.ts", "vitest.config.ts"], outputs: [],
+  },
+  "test:functional:backend:unit": {
+    scriptName: "test:functional:backend:unit", command: "npm run test:functional:backend:unit", category: "test", subsystem: "foundation",
+    owner: "platform", tier: "unit", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: ["tests/unit/routing/**", "tests/unit/security/**", "tests/unit/serialization/**", "vitest.config.ts"], outputs: [],
+  },
+  "test:functional:backend:contract": {
+    scriptName: "test:functional:backend:contract", command: "npm run test:functional:backend:contract", category: "test", subsystem: "protocols",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: ["tests/contract/domains/**", "tests/contract/protocols/**", "vitest.config.ts"], outputs: [],
+  },
+  "test:interface": {
+    scriptName: "test:interface", command: "npm run test:interface", category: "test", subsystem: "protocols",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    inputs: ["apps/console/**", "apps/server/**", "packages/protocols/**", "tests/acceptance/**"], outputs: [],
+  },
+  "test:platform:runtime-plugins": {
+    scriptName: "test:platform:runtime-plugins", command: "npm run test:platform:runtime-plugins", category: "test", subsystem: "module-system",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    inputs: ["tools/plugins/**", "plugins/**", "services/**", "tests/plugins/**"], outputs: ["build/plugins/**"],
   },
   "verify:local-services": {
     scriptName: "verify:local-services", command: "npm run verify:local-services", category: "verifier", subsystem: "services",

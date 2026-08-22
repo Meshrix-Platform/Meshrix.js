@@ -98,7 +98,7 @@ CLAUDE.md
 # Local process documents. Public documentation remains under docs/README.md,
 # docs/RUNBOOK.md, docs/COMPATIBILITY.md, docs/ENTITY-CONFIG-LAYOUT.md,
 # docs/architecture/, docs/functionality/, docs/protocols/, docs/examples/,
-# and docs/adrs/.
+# docs/adrs/, and docs/verification/.
 /docs/plans/
 /docs/reports/
 

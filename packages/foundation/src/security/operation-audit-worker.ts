@@ -59,6 +59,7 @@ parentPort?.on("message", async (message: unknown): Promise<void> => {
   const request = record(message);
   const payload = record(request.payload);
   const reply: Record<string, unknown> = { id: request.id, ok: false };
+  const closeAfterReply = String(request.kind || "") === "close";
   try {
     const kind = String(request.kind || "");
     if (!COMMANDS.has(kind)) {
@@ -94,4 +95,5 @@ parentPort?.on("message", async (message: unknown): Promise<void> => {
     reply.error = errorRecord(error);
   }
   parentPort?.postMessage(reply);
+  if (reply.ok === true && closeAfterReply) parentPort?.close();
 });

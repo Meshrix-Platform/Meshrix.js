@@ -161,6 +161,7 @@ function errorProjection(error?: any) : any {
 
 async function handle(message?: any) : Promise<void> {
   const reply: Record<string, any> = { id: message?.id, ok: false };
+  const closeAfterReply: boolean = message?.kind === "close";
   try {
     const kind: string = String(message?.kind || "");
     const isApiKey: boolean = kind.startsWith("apiKey.");
@@ -204,6 +205,7 @@ async function handle(message?: any) : Promise<void> {
     reply.error = errorProjection(error);
   }
   parentPort?.postMessage(reply);
+  if (reply.ok && closeAfterReply) parentPort?.close();
 }
 
 let commandTail: Promise<any> = Promise.resolve();

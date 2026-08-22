@@ -17,6 +17,39 @@ export interface TestShard {
   count: number;
 }
 
+export interface TestExecutionLaneDefinition {
+  id: string;
+  label?: string;
+  suites: string[];
+  dependsOn?: string[];
+}
+
+export interface TestExecutionPhaseDefinition {
+  id: string;
+  label?: string;
+  lanes: TestExecutionLaneDefinition[];
+}
+
+export interface TestExecutionLane {
+  id: string;
+  label?: string;
+  entries: TestSuiteEntry[];
+  dependsOn?: string[];
+}
+
+export interface TestExecutionPhase {
+  id: string;
+  label?: string;
+  lanes: TestExecutionLane[];
+}
+
+export interface TestExecutionLaneResult<Result> {
+  id: string;
+  label?: string;
+  dependsOn?: string[];
+  results: Result[];
+}
+
 export function profileInherits(
   configs: Readonly<Record<string, { extends?: string | null }>>,
   profile: string,
@@ -94,6 +127,137 @@ export function applyVitestShard(entry: TestSuiteEntry, shard: TestShard | null)
     ...entry,
     args: [...entry.args, `--shard=${shard.index}/${shard.count}`]
   };
+}
+
+export function planTestExecutionPhases(
+  entries: readonly TestSuiteEntry[],
+  definitions: readonly TestExecutionPhaseDefinition[] | null | undefined,
+  {
+    mergeVitestProcesses = false,
+    shard = null
+  }: {
+    mergeVitestProcesses?: boolean;
+    shard?: TestShard | null;
+  } = {}
+): TestExecutionPhase[] {
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  if (entryById.size !== entries.length) {
+    throw new Error("Selected test suites must have unique IDs.");
+  }
+
+  const planLane = (lane: TestExecutionLane): TestExecutionLane => {
+    const plannedEntries = mergeVitestProcesses
+      ? mergeCompatibleSuiteProcesses(lane.entries)
+      : lane.entries.map((entry) => ({ ...entry, args: [...entry.args] }));
+    return {
+      ...lane,
+      entries: plannedEntries.map((entry) => applyVitestShard(entry, shard))
+    };
+  };
+
+  if (!definitions || definitions.length === 0) {
+    return [{
+      id: "default",
+      label: "Selected test suites",
+      lanes: [planLane({ id: "default", entries: [...entries] })]
+    }];
+  }
+
+  const phaseIds = new Set<string>();
+  const referencedSuiteIds = new Set<string>();
+  const phases: TestExecutionPhase[] = definitions.map((phase) => {
+    if (phaseIds.has(phase.id)) {
+      throw new Error(`Execution phase "${phase.id}" is declared more than once.`);
+    }
+    phaseIds.add(phase.id);
+    const laneIds = new Set<string>();
+    const lanes = phase.lanes.map((lane) => {
+      if (laneIds.has(lane.id)) {
+        throw new Error(`Execution lane "${phase.id}/${lane.id}" is declared more than once.`);
+      }
+      laneIds.add(lane.id);
+      const laneEntries = lane.suites.map((suiteId) => {
+        const entry = entryById.get(suiteId);
+        if (!entry) {
+          throw new Error(`Execution lane "${phase.id}/${lane.id}" references unselected suite "${suiteId}".`);
+        }
+        if (referencedSuiteIds.has(suiteId)) {
+          throw new Error(`Execution suite "${suiteId}" is declared more than once.`);
+        }
+        referencedSuiteIds.add(suiteId);
+        return entry;
+      });
+      return planLane({
+        id: lane.id,
+        label: lane.label,
+        dependsOn: [...(lane.dependsOn ?? [])],
+        entries: laneEntries
+      });
+    });
+    const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
+    for (const lane of lanes) {
+      for (const dependencyId of lane.dependsOn ?? []) {
+        if (!laneById.has(dependencyId)) {
+          throw new Error(`Execution lane "${phase.id}/${lane.id}" depends on unknown lane "${dependencyId}".`);
+        }
+        if (dependencyId === lane.id) {
+          throw new Error(`Execution lane "${phase.id}/${lane.id}" cannot depend on itself.`);
+        }
+      }
+    }
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const visit = (laneId: string): void => {
+      if (visited.has(laneId)) return;
+      if (visiting.has(laneId)) {
+        throw new Error(`Execution phase "${phase.id}" contains a lane dependency cycle at "${laneId}".`);
+      }
+      visiting.add(laneId);
+      for (const dependencyId of laneById.get(laneId)?.dependsOn ?? []) visit(dependencyId);
+      visiting.delete(laneId);
+      visited.add(laneId);
+    };
+    for (const lane of lanes) visit(lane.id);
+    return { id: phase.id, label: phase.label, lanes };
+  });
+
+  const unplannedSuiteIds = entries
+    .map((entry) => entry.id)
+    .filter((suiteId) => !referencedSuiteIds.has(suiteId));
+  if (unplannedSuiteIds.length > 0) {
+    throw new Error(`Execution phases omit selected suites: ${unplannedSuiteIds.join(", ")}.`);
+  }
+  return phases;
+}
+
+export async function runTestPhaseLanes<Result>(
+  phase: TestExecutionPhase,
+  executeEntry: (entry: TestSuiteEntry) => Promise<Result>
+): Promise<TestExecutionLaneResult<Result>[]> {
+  const laneById = new Map(phase.lanes.map((lane) => [lane.id, lane]));
+  const executions = new Map<string, Promise<TestExecutionLaneResult<Result>>>();
+  const executeLane = (lane: TestExecutionLane): Promise<TestExecutionLaneResult<Result>> => {
+    const existing = executions.get(lane.id);
+    if (existing) return existing;
+    const execution = Promise.resolve().then(async () => {
+      await Promise.all((lane.dependsOn ?? []).map((dependencyId) =>
+        executeLane(laneById.get(dependencyId)!)
+      ));
+      const results: Result[] = [];
+      for (const entry of lane.entries) {
+        results.push(await executeEntry(entry));
+      }
+      return {
+        id: lane.id,
+        label: lane.label,
+        dependsOn: lane.dependsOn,
+        results
+      };
+    });
+    executions.set(lane.id, execution);
+    return execution;
+  };
+  return Promise.all(phase.lanes.map(executeLane));
 }
 
 export const TEST_SUITE_TIMEOUT_MS: Readonly<Record<string, any>> = Object.freeze({

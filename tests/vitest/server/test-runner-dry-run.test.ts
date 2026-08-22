@@ -52,4 +52,31 @@ describe("unified test runner dry-run", () : any => {
     expect(fs.existsSync(explicitReport)).toBe(false);
     expect(reportDirectorySnapshot()).toEqual(before);
   });
+
+  it("prints the ordered regression phases and their parallel lanes", () : any => {
+    const before: any = reportDirectorySnapshot();
+    const result: any = spawnSync(process.execPath, [
+      "tests/run.ts",
+      "--profile",
+      "core-public",
+      "--dry-run"
+    ], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 4 * 1024 * 1024
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("phases=4 lanes=14");
+    const phaseOffsets = ["environment", "functional", "interface", "platform"]
+      .map((phase) => result.stdout.indexOf(`PHASE ${phase}:`));
+    expect(phaseOffsets.every((offset) => offset >= 0)).toBe(true);
+    expect(phaseOffsets).toEqual([...phaseOffsets].sort((left, right) => left - right));
+    expect(result.stdout).toContain(
+      "LANES frontend, backend-build, backend-server-shard-a, backend-server-shard-b, backend-worker-thread, backend-unit, backend-contract"
+    );
+    expect(result.stdout).toContain("LANES services, plugins, agent-adapters");
+    expect(result.stdout).toContain("Report: not written (dry-run)");
+    expect(reportDirectorySnapshot()).toEqual(before);
+  });
 });
