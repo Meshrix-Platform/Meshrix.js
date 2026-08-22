@@ -103,6 +103,12 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
     inputs: ["tools/server-scripts/instance-lifecycle.ts"], outputs: [],
   },
+  "deploy:native:orb": {
+    scriptName: "deploy:native:orb", command: "npm run deploy:native:orb", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "runtime-data",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/native-orb-deploy.ts"], outputs: [],
+  },
   "pack:offline": {
     scriptName: "pack:offline", command: "npm run pack:offline", category: "packaging", subsystem: "server",
     owner: "platform", tier: "release", sideEffects: "docker",

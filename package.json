@@ -415,6 +415,7 @@
     "start:offline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/instance-lifecycle.ts start offline",
     "stop:offline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/instance-lifecycle.ts stop offline",
     "restart:offline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/instance-lifecycle.ts restart offline",
+    "deploy:native:orb": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/native-orb-deploy.ts",
     "pack:offline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/offline-delivery-pack.ts",
     "build": "npm run build:node && npm run build:web",
     "typecheck": "npm run typecheck:node && npm run typecheck:test && npm run typecheck:web",
