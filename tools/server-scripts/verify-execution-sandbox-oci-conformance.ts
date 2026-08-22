@@ -149,11 +149,15 @@ export function failedOciConformanceCheckIds(report?: any) : any {
 function boundedProbeFailure(error?: any) : any {
   const code: any = String(error?.code || "");
   const failureStage: any = String(error?.failureStage || "");
+  const failureReason: any = String(error?.failureReason || "");
   return Object.freeze({
     code: /^(?:sandbox_[a-z_]+)$/u.test(code) ? code : "sandbox_runtime_failed",
     failureStage: /^(?:oci_(?:create|start|inspect|command|workload)_failed)$/u.test(failureStage)
       ? failureStage
-      : "sandbox_backend_failed"
+      : "sandbox_backend_failed",
+    failureReason: /^oci_[a-z_]+$/u.test(failureReason)
+      ? failureReason
+      : "oci_failure_unclassified"
   });
 }
 

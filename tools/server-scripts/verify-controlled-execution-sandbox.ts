@@ -633,7 +633,7 @@ if (invokedDirectly) {
       console.log(`[controlled-execution-sandbox] productionBackendFailedChecks=${report.productionBackendFailedChecks.join(",")}`);
     }
     if (report.productionBackendProbeFailures.length > 0) {
-      console.log(`[controlled-execution-sandbox] productionBackendProbeFailures=${report.productionBackendProbeFailures.map((failure?: any) : any => `${failure.code}:${failure.failureStage}`).join(",")}`);
+      console.log(`[controlled-execution-sandbox] productionBackendProbeFailures=${report.productionBackendProbeFailures.map((failure?: any) : any => `${failure.code}:${failure.failureStage}:${failure.failureReason}`).join(",")}`);
     }
     if (!report.sandboxAcceptanceReady) process.exitCode = 1;
   }).catch((error?: any) : any => {

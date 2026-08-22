@@ -68,6 +68,19 @@ function boundedBufferLimit(value: unknown, fallback = 64 * 1024): number {
   return Number.isSafeInteger(number) && number > 0 ? number : fallback;
 }
 
+export function classifyOciCommandFailure(stderr: unknown): string {
+  const message = String(stderr || "").toLowerCase();
+  if (/no space left on device|disk quota exceeded/u.test(message)) return "oci_storage_exhausted";
+  if (/no such image|unable to find image|image .* not found/u.test(message)) return "oci_image_unavailable";
+  if (/container name .* already in use|conflict.*container name/u.test(message)) return "oci_name_conflict";
+  if (/cannot connect to .*daemon|is the .* daemon running|connection refused/u.test(message)) return "oci_daemon_unavailable";
+  if (/unknown flag|invalid argument|not supported|unsupported/u.test(message)) return "oci_option_unsupported";
+  if (/invalid mount config|mount .* denied|bind source path does not exist/u.test(message)) return "oci_mount_rejected";
+  if (/minimum memory limit|invalid cpu|invalid pids|resource limit/u.test(message)) return "oci_resource_limit_rejected";
+  if (/permission denied|operation not permitted|access is denied/u.test(message)) return "oci_permission_denied";
+  return "oci_command_rejected";
+}
+
 function runtimeCreateArguments(engine: unknown, runtimeClass: unknown): string[] {
   const selectedEngine = requiredText(engine, "OCI sandbox backend engine");
   const selectedRuntimeClass = requiredText(runtimeClass, "OCI sandbox runtime class");
@@ -100,6 +113,7 @@ function runCommand(binary: string, args: string[], {
     let settled = false;
     let bytes = 0;
     let stdout = "";
+    let stderr = "";
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(binary, args, {
@@ -131,7 +145,10 @@ function runCommand(binary: string, args: string[], {
       if (capture && bytes <= maxBytes) stdout += chunk.toString("utf8");
     };
     child.stdout?.on("data", (chunk: Buffer) => consume(chunk, captureStdout));
-    child.stderr?.on("data", (chunk: Buffer) => consume(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => {
+      if (Buffer.byteLength(stderr, "utf8") < 4 * 1024) stderr += chunk.toString("utf8");
+      consume(chunk);
+    });
     child.once("error", (error: Error) => finish(error));
     child.once("close", (code: number | null, childSignal: NodeJS.Signals | null) => {
       if (signal?.aborted) {
@@ -154,6 +171,7 @@ function runCommand(binary: string, args: string[], {
         finish(Object.assign(new Error(`OCI sandbox backend ${failureStage} failed.`), {
           code: SANDBOX_DENIAL_REASONS.RUNTIME_FAILED,
           failureStage: `oci_${failureStage}_failed`,
+          failureReason: classifyOciCommandFailure(stderr),
           exitCode: code,
           signal: childSignal || ""
         }));
