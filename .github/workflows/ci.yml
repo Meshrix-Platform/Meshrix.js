@@ -37,7 +37,7 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      - name: Fast pull-request verification with localized failures
+      - name: Ordered regression verification with localized failures
         shell: bash
         run: |
           run_check() {
@@ -50,8 +50,7 @@ jobs:
               return 1
             fi
           }
-          run_check "npm run typecheck" /tmp/pr-typecheck.log npm run typecheck
-          run_check "npm run vitest" /tmp/pr-vitest.log npm run vitest
+          run_check "npm test" /tmp/pr-regression.log npm test
 
   stable-candidate:
     name: Stable candidate checkpoint
@@ -84,27 +83,9 @@ jobs:
           overwrite: true
 
   repository-checkpoint:
-    name: Repository checkpoint / ${{ matrix.stage }}
+    name: Ordered repository regression checkpoint
     needs: [stable-candidate]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - stage: typecheck
-            script: typecheck
-          - stage: build
-            script: build
-          - stage: unit-tests
-            script: vitest
-          - stage: local-services
-            script: verify:local-services
-          - stage: runtime-plugins
-            script: verify:local-runtime-plugins
-          - stage: client-adapters
-            script: verify:local-client-adapters
-          - stage: extension-closure
-            script: verify:local-extension-package-closure
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -119,10 +100,9 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      - name: Run repository checkpoint
-        run: npm run ${{ matrix.script }}
+      - name: Run the canonical four-stage regression
+        run: npm test
       - name: Export compiled console assets
-        if: ${{ matrix.stage == 'build' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stable-console-build-${{ github.sha }}

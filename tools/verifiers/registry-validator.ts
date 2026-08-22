@@ -283,8 +283,8 @@ function validateTestSuiteRegistry(data?: any) : any {
     }
 
     for (const artifact of artifacts) {
-      if (!artifact.startsWith('build/')) {
-        issues.push(`tests: suite "${suiteId}" artifact "${artifact}" must be under build/`);
+      if (!artifact.startsWith('build/') && !artifact.startsWith('dist/')) {
+        issues.push(`tests: suite "${suiteId}" artifact "${artifact}" must be under build/ or dist/`);
       }
       const owner: any = artifactOwners.get(artifact);
       if (owner) {

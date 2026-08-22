@@ -4,6 +4,18 @@ This file is the repository-wide instruction authority for development agents.
 It applies to every task and directory in this repository. A more specific
 child `AGENTS.md` may strengthen these rules but must not weaken them.
 
+## Deployment Script Boundary
+
+Before changing any deployment entry point, stage catalog, stage script,
+activation path, upgrade path, deployment verification controller, optional
+external startup entry point, or optional target script, read and follow
+`tools/server-scripts/README.md`.
+
+Deployment scripts must close only Meshrix.js Core platform capabilities.
+Optional plugins, independent services, external providers, Agent or client
+products, and optional integration scenarios must remain separately invoked
+and must not block, promote, or alter a Core deployment result.
+
 ## Discover All Failures Before Repair
 
 When a test profile, audit, acceptance workflow, release gate, or other bounded

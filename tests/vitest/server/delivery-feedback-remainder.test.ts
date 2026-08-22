@@ -52,12 +52,17 @@ describe("delivery feedback scale", () => {
     const publicProfiles = Object.entries(registry.profiles)
       .filter(([name]) => name.endsWith("-public"));
     expect(publicProfiles.length).toBeGreaterThan(0);
-    for (const [, profile] of publicProfiles as Array<[string, { execution?: unknown }]>) {
-      expect(profile.execution).toEqual({
+    for (const [name, profile] of publicProfiles as Array<[string, { execution?: Record<string, unknown> }]>) {
+      expect(profile.execution).toMatchObject({
         mergeVitestProcesses: true,
         cachePassedResults: true,
         shardEnvironment: "MESHRIX_TEST_SHARD"
       });
+      if (name === "core-public") {
+        expect(profile.execution?.phases).toHaveLength(4);
+      } else {
+        expect(profile.execution).not.toHaveProperty("phases");
+      }
     }
   });
 });
