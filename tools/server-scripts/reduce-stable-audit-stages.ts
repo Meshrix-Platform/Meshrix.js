@@ -19,6 +19,7 @@ export const STABLE_AUDIT_PROFILES: readonly string[] = Object.freeze([
   "audit-stable-sandbox",
   "audit-stable-data",
   "audit-stable-services",
+  "audit-stable-console-evidence",
   "audit-stable-console",
 ]);
 

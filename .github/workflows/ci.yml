@@ -181,30 +181,55 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           overwrite: true
-      - name: Export governance evidence for the console checkpoint
-        if: ${{ always() && matrix.stage == 'governance' }}
+
+  audit-console-evidence-checkpoint:
+    name: Audit checkpoint / console evidence
+    needs: [repository-checkpoint]
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Produce complete real gateway evidence and retain all failures
+        run: >-
+          npm run test:audit:stage --
+          --profile audit-stable-console-evidence
+          --report build/test-reports/stable-audit-stages/audit-stable-console-evidence.json
+      - name: Export the console evidence checkpoint report
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: stable-console-evidence-governance-${{ github.sha }}
-          path: |
-            build/reports/operation-permission-protocol-consistency.json
-            build/reports/operation-permission-tag-governed-e2e.json
+          name: stable-audit-stage-console-evidence-${{ github.sha }}
+          path: build/test-reports/stable-audit-stages/audit-stable-console-evidence.json
           if-no-files-found: error
           retention-days: 30
           overwrite: true
-      - name: Export gateway evidence for the console checkpoint
-        if: ${{ always() && matrix.stage == 'services' }}
+      - name: Export real gateway evidence for the console checkpoint
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: stable-console-evidence-services-${{ github.sha }}
-          path: build/reports/upstream-gateway-e2e.json
+          name: stable-console-evidence-${{ github.sha }}
+          path: |
+            build/reports/operation-permission-protocol-consistency.json
+            build/reports/operation-permission-tag-governed-e2e.json
+            build/reports/upstream-gateway-e2e.json
           if-no-files-found: error
           retention-days: 30
           overwrite: true
 
   audit-console-checkpoint:
     name: Audit checkpoint / console
-    needs: [repository-checkpoint, audit-checkpoint]
+    needs: [repository-checkpoint, audit-console-evidence-checkpoint]
     if: ${{ always() && github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -228,9 +253,8 @@ jobs:
       - name: Restore gateway workflow evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: stable-console-evidence-*-${{ github.sha }}
+          name: stable-console-evidence-${{ github.sha }}
           path: build/reports
-          merge-multiple: true
       - name: Install Chromium for browser checkpoint
         run: npx playwright install --with-deps chromium
       - name: Run complete console checkpoint and retain all failures
@@ -250,7 +274,7 @@ jobs:
 
   audit-reduction:
     name: Audit checkpoint reduction
-    needs: [audit-checkpoint, audit-console-checkpoint]
+    needs: [audit-checkpoint, audit-console-evidence-checkpoint, audit-console-checkpoint]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
