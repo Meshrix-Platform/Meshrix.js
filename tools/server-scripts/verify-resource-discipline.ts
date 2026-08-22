@@ -312,6 +312,8 @@ const requiredRuntimeContracts: any[] = [
       "captureProfile",
       "runHighRiskWorkloads",
       "highRiskWorkloads",
+      "failureReasonCode",
+      "NODE_OPTIONS: \"--conditions=source\"",
       "meshrix.resource-discipline.high-risk-failure",
       "HIGH_RISK_WORKLOAD_SIGNAL_",
       "minimumProtocolEvents",
