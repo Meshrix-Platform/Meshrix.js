@@ -183,6 +183,7 @@ export async function verifyReleaseAcceptanceStandards({
     "\n  stable-candidate:\n",
     "\n  repository-checkpoint:\n",
     "\n  audit-checkpoint:\n",
+    "\n  audit-console-evidence-checkpoint:\n",
     "\n  audit-console-checkpoint:\n",
     "\n  audit-reduction:\n",
     "\n  enterprise-delivery:\n",
@@ -192,8 +193,7 @@ export async function verifyReleaseAcceptanceStandards({
     "npm run test:audit:reduce",
     "stable-audit-${{ github.sha }}",
     "stable-console-build-${{ github.sha }}",
-    "stable-console-evidence-governance-${{ github.sha }}",
-    "stable-console-evidence-services-${{ github.sha }}",
+    "stable-console-evidence-${{ github.sha }}",
   ];
   if (
     stableCheckpointMarkers.some((marker?: any) : any => !ciWorkflow.includes(marker)) ||
