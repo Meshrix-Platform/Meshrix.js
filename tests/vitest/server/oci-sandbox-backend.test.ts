@@ -64,6 +64,22 @@ describe("OCI sandbox backend", () : any => {
       .toBe("oci_option_unsupported");
     expect(classifyOciCommandFailure("permission denied while creating container"))
       .toBe("oci_permission_denied");
+    expect(classifyOciCommandFailure("context deadline exceeded"))
+      .toBe("oci_daemon_request_expired");
+    expect(classifyOciCommandFailure("resource temporarily unavailable"))
+      .toBe("oci_runtime_busy");
+    expect(classifyOciCommandFailure("failed to create shim task: OCI runtime create failed"))
+      .toBe("oci_runtime_initialization_failed");
+    expect(classifyOciCommandFailure("failed to set up container networking"))
+      .toBe("oci_network_setup_failed");
+    expect(classifyOciCommandFailure("cgroup namespace rejected"))
+      .toBe("oci_cgroup_rejected");
+    expect(classifyOciCommandFailure("seccomp profile rejected"))
+      .toBe("oci_seccomp_rejected");
+    expect(classifyOciCommandFailure("invalid reference format"))
+      .toBe("oci_image_reference_invalid");
+    expect(classifyOciCommandFailure("Error response from daemon: rejected"))
+      .toBe("oci_daemon_rejected");
     expect(classifyOciCommandFailure("private engine payload"))
       .toBe("oci_command_rejected");
   });

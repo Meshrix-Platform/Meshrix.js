@@ -118,12 +118,12 @@ describe("branch promotion workflow", () : any => {
       "FAILED execution-sandbox.controlled-runtime (1200ms)",
       "FAILED noisy",
       "productionBackendFailedChecks=cpuLimitEnforced,pidLimitEnforced",
-      "productionBackendProbeFailures=sandbox_runtime_failed:oci_create_failed:oci_option_unsupported",
+      "productionBackendProbeFailures=sandbox_runtime_failed:oci_create_failed:oci_option_unsupported:125",
       "private payload must not pass through",
     ].join("\n"))).toEqual([
       "check:cpuLimitEnforced",
       "check:pidLimitEnforced",
-      "probe:sandbox_runtime_failed:oci_create_failed:oci_option_unsupported",
+      "probe:sandbox_runtime_failed:oci_create_failed:oci_option_unsupported:125",
       "suite:execution-sandbox.controlled-runtime",
     ]);
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");

@@ -150,6 +150,7 @@ function boundedProbeFailure(error?: any) : any {
   const code: any = String(error?.code || "");
   const failureStage: any = String(error?.failureStage || "");
   const failureReason: any = String(error?.failureReason || "");
+  const exitCode: any = Number(error?.exitCode);
   return Object.freeze({
     code: /^(?:sandbox_[a-z_]+)$/u.test(code) ? code : "sandbox_runtime_failed",
     failureStage: /^(?:oci_(?:create|start|inspect|command|workload)_failed)$/u.test(failureStage)
@@ -157,7 +158,10 @@ function boundedProbeFailure(error?: any) : any {
       : "sandbox_backend_failed",
     failureReason: /^oci_[a-z_]+$/u.test(failureReason)
       ? failureReason
-      : "oci_failure_unclassified"
+      : "oci_failure_unclassified",
+    exitCode: Number.isSafeInteger(exitCode) && exitCode >= 0 && exitCode <= 255
+      ? exitCode
+      : -1
   });
 }
 

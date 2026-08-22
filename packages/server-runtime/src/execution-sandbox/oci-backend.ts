@@ -72,13 +72,24 @@ function boundedBufferLimit(value: unknown, fallback = 64 * 1024): number {
 export function classifyOciCommandFailure(stderr: unknown): string {
   const message = String(stderr || "").toLowerCase();
   if (/no space left on device|disk quota exceeded/u.test(message)) return "oci_storage_exhausted";
+  if (/invalid reference format/u.test(message)) return "oci_image_reference_invalid";
   if (/no such image|unable to find image|image .* not found/u.test(message)) return "oci_image_unavailable";
   if (/container name .* already in use|conflict.*container name/u.test(message)) return "oci_name_conflict";
   if (/cannot connect to .*daemon|is the .* daemon running|connection refused/u.test(message)) return "oci_daemon_unavailable";
+  if (/context canceled|context deadline exceeded|request canceled|request cancelled/u.test(message)) return "oci_daemon_request_expired";
+  if (/resource temporarily unavailable|temporarily unavailable|try again/u.test(message)) return "oci_runtime_busy";
+  if (/failed to create task|failed to create shim|oci runtime create failed|runc create failed/u.test(message)) return "oci_runtime_initialization_failed";
+  if (/failed to set up container networking|network[^\n]{0,96}failed/u.test(message)) return "oci_network_setup_failed";
+  if (/cgroup|cgroupns/u.test(message)) return "oci_cgroup_rejected";
+  if (/seccomp/u.test(message)) return "oci_seccomp_rejected";
+  if (/ulimit/u.test(message)) return "oci_ulimit_rejected";
+  if (/tmpfs/u.test(message)) return "oci_tmpfs_rejected";
   if (/unknown flag|invalid argument|not supported|unsupported/u.test(message)) return "oci_option_unsupported";
   if (/invalid mount config|mount .* denied|bind source path does not exist/u.test(message)) return "oci_mount_rejected";
   if (/minimum memory limit|invalid cpu|invalid pids|resource limit/u.test(message)) return "oci_resource_limit_rejected";
   if (/permission denied|operation not permitted|access is denied/u.test(message)) return "oci_permission_denied";
+  if (/error response from daemon/u.test(message)) return "oci_daemon_rejected";
+  if (/failed to create|error creating|cannot create/u.test(message)) return "oci_create_rejected";
   return "oci_command_rejected";
 }
 
