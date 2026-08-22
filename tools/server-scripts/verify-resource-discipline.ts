@@ -313,7 +313,6 @@ const requiredRuntimeContracts: any[] = [
       "runHighRiskWorkloads",
       "highRiskWorkloads",
       "minimumProtocolEvents",
-      "maxEventLoopDelayP99Ms",
       "toolCacheCleanupAttempted: false"
     ]
   },

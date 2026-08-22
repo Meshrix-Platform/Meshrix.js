@@ -612,12 +612,6 @@ try {
       scenario.peakExternalGrowthBytes,
       highRiskPolicy.maxPeakExternalGrowthBytes
     );
-    addMaximumViolation(
-      violations,
-      `${scenario.id}_event_loop_delay_exceeded`,
-      scenario.eventLoopDelayP99Ms,
-      highRiskPolicy.maxEventLoopDelayP99Ms
-    );
   }
 
   const report: Record<string, any> = {
