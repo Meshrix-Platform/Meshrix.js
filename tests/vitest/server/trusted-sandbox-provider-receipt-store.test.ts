@@ -297,6 +297,68 @@ describe("trusted sandbox provider receipt store", () : any => {
     expect(loadTrustedSandboxProviderReceipts({ userDataPath })).toEqual({});
   });
 
+  it("creates independent OCI probes sequentially without retrying the pair", async () : Promise<any> => {
+    const target: Record<string, any> = {
+      id: "provider-one",
+      providerClass: "docker",
+      isolationClass: "hardened-oci",
+      serviceIdentityRef: "sandbox-provider-service:fixture",
+      executableIdentityDigest: "b".repeat(64),
+      binary: "/fixed/bin/docker",
+      backend: { close: async () : Promise<any> => {} }
+    };
+    let active: any = 0;
+    let maximumActive: any = 0;
+    let sequence: any = 0;
+    const successfulProbe: any = (probeSequence?: any) : any => ({
+      execution: { status: "succeeded" },
+      result: {
+        linuxRuntime: true,
+        nonRootIdentity: true,
+        immutableInputReadable: true,
+        immutableInputWriteDenied: true,
+        rootFilesystemWriteDenied: true,
+        capabilitiesDropped: true,
+        noNewPrivileges: true,
+        seccompFilterActive: true,
+        deviceNodesRestricted: true,
+        networkDenied: true,
+        sensitiveEnvironmentAbsent: true,
+        containerControlSocketAbsent: true,
+        isolationNamespaces: {
+          ipc: `ipc:${probeSequence}`,
+          mount: `mount:${probeSequence}`,
+          network: `network:${probeSequence}`,
+          pid: `pid:${probeSequence}`,
+          uts: `uts:${probeSequence}`
+        },
+        scratchQuotaBounded: true,
+        privateOutputOwned: true
+      },
+      cleanup: { destroyed: true }
+    });
+
+    const report: any = await runExecutionSandboxOciConformance({
+      writeReport: false,
+      targetFactory: async () : Promise<any> => target,
+      preflightRunner: noopPreflight,
+      probeRunner: async () : Promise<any> => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        const current: any = sequence += 1;
+        await new Promise((resolve?: any) : any => setTimeout(resolve, 5));
+        active -= 1;
+        return successfulProbe(current);
+      },
+      adversarialRunner: async () : Promise<any> => passingAdversarialChecks(),
+      receiptLifecycleVerifier: async () : Promise<any> => passingReceiptLifecycleChecks()
+    });
+
+    expect(report.productionBackendConformance).toBe(true);
+    expect(sequence).toBe(2);
+    expect(maximumActive).toBe(1);
+  });
+
   it("fails closed when the digest-pinned conformance image cannot be provisioned", async () : Promise<any> => {
     await expect(runOciConformancePreflight({
       binary: "/fixed/bin/docker",
