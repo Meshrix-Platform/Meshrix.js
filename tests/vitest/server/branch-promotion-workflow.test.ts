@@ -22,6 +22,7 @@ import {
   githubProcessEnvironment,
   isTransientGithubFailure,
   extractSafeFailureSignals,
+  jobsFailedBeforeRunnerAssignment,
   promotionDecision,
   requiredWorkflowPaths,
   selectLatestWorkflowRun,
@@ -114,6 +115,16 @@ describe("branch promotion workflow", () : any => {
     expect(isTransientGithubFailure("Get request: EOF")).toBe(true);
     expect(isTransientGithubFailure("HTTP 503 service unavailable")).toBe(true);
     expect(isTransientGithubFailure("HTTP 403 forbidden")).toBe(false);
+    expect(jobsFailedBeforeRunnerAssignment([
+      { runnerAssigned: false, steps: [] },
+      { runnerAssigned: false, steps: [] },
+    ])).toBe(true);
+    expect(jobsFailedBeforeRunnerAssignment([
+      { runnerAssigned: true, steps: [] },
+    ])).toBe(false);
+    expect(jobsFailedBeforeRunnerAssignment([
+      { runnerAssigned: false, steps: ["Install dependencies"] },
+    ])).toBe(false);
     expect(extractSafeFailureSignals([
       "FAILED execution-sandbox.controlled-runtime (1200ms)",
       "FAILED noisy",
@@ -129,6 +140,7 @@ describe("branch promotion workflow", () : any => {
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");
     expect(automation).toContain('["run", "rerun", String(selected.id), "--failed"]');
     expect(automation).toContain("resuming-failed-jobs");
+    expect(automation).toContain("resuming-unstarted-jobs");
     expect(automation).toContain("resumeRequestedAttempt");
   });
 

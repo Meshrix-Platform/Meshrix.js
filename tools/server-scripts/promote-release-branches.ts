@@ -271,6 +271,7 @@ function failedJobNames(repository?: any, runId?: any) : any {
           .filter((step?: any) : any => !["success", "skipped"].includes(String(step?.conclusion || "")))
           .map((step?: any) : any => String(step?.name || "unnamed-step"))
         : [],
+      runnerAssigned: String(job?.runner_name || "").trim() !== "",
       signals: (() : any => {
         try {
           return extractSafeFailureSignals(gh([
@@ -285,13 +286,19 @@ function failedJobNames(repository?: any, runId?: any) : any {
     }));
 }
 
+export function jobsFailedBeforeRunnerAssignment(jobs: any[] = []) : any {
+  return jobs.length > 0 && jobs.every((job?: any) : any =>
+    job?.runnerAssigned !== true && Array.isArray(job?.steps) && job.steps.length === 0);
+}
+
 function sleep(delayMs?: any) : any {
   return new Promise((resolve?: any) : any => setTimeout(resolve, delayMs));
 }
 
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
-  let resumedFailedJobs: any = false;
+  let resumedTestFailures: any = false;
+  let resumedRunnerAssignmentFailures: any = false;
   let resumeRequestedAttempt: any = 0;
   for (;;) {
     const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
@@ -311,16 +318,26 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
       continue;
     }
     if (selected.conclusion === "success") return selected;
-    if (resumedFailedJobs && Number(selected.run_attempt || 0) <= resumeRequestedAttempt) {
+    if ((resumedTestFailures || resumedRunnerAssignmentFailures) && Number(selected.run_attempt || 0) <= resumeRequestedAttempt) {
       await sleep(POLL_INTERVAL_MS);
       continue;
     }
-    for (const failed of failedJobNames(repository, selected.id)) {
+    const failedJobs: any = failedJobNames(repository, selected.id);
+    for (const failed of failedJobs) {
       console.error(`[release-promotion] failed job=${failed.job} steps=${failed.steps.join(",") || "none"} signals=${failed.signals.join(",") || "none"}`);
     }
-    if (!resumedFailedJobs) {
+    if (jobsFailedBeforeRunnerAssignment(failedJobs) && !resumedRunnerAssignmentFailures) {
+      gh(["run", "rerun", String(selected.id), "--failed"], "workflow_unstarted_jobs_resume_failed");
+      resumedRunnerAssignmentFailures = true;
+      resumeRequestedAttempt = Number(selected.run_attempt || 0);
+      lastState = "";
+      console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-unstarted-jobs`);
+      await sleep(POLL_INTERVAL_MS);
+      continue;
+    }
+    if (!resumedTestFailures) {
       gh(["run", "rerun", String(selected.id), "--failed"], "workflow_failed_jobs_resume_failed");
-      resumedFailedJobs = true;
+      resumedTestFailures = true;
       resumeRequestedAttempt = Number(selected.run_attempt || 0);
       lastState = "";
       console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-failed-jobs`);
