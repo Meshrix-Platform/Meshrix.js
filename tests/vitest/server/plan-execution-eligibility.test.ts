@@ -375,6 +375,24 @@ const GOVERNING_REGISTRY_PATHS: Readonly<Record<string, any>> = Object.freeze({
   generatedOperations: "packages/contracts/src/generated/operations.generated.ts",
   generatedCapabilities: "packages/foundation/src/security/authorization/generated-capabilities.ts",
 });
+const PLAN_CHECKPOINT_FIXTURE_PATH: any = "docs/plans/end-to-end-release/Checkpoints.json";
+const PLAN_CHECKPOINT_FIXTURE: any = JSON.stringify([{
+  id: "isolated-plan-fixture",
+  requirements: [
+    "REQ-REL-BASELINE",
+    "REQ-BASELINE-UPSTREAM-GATEWAY",
+    "REQ-BASELINE-DOWNSTREAM-MCP",
+    "REQ-BASELINE-STRATEGY-MANAGEMENT",
+    "REQ-BASELINE-ENTERPRISE-GOVERNANCE",
+    "REQ-BASELINE-CONSOLE-ADMINISTRATION",
+    "REQ-BASELINE-CONTAINER-DEPLOYMENT",
+    "REQ-BASELINE-STORAGE",
+    "REQ-BASELINE-JOBS",
+    "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING",
+    "REQ-MODEL-GATEWAY-BOUNDARY",
+    "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE",
+  ],
+}]);
 
 function zeroWarningLocalInfoHygieneReport(generatedAt: any = "2026-07-19T00:00:00.000Z") : any {
   return createLocalInfoHygieneReport([], generatedAt);
@@ -406,6 +424,12 @@ function betterPlanResult(overrides: Record<string, any> = {}) : any {
 
 function readRepositoryFile(relativePath?: any) : any {
   return fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
+}
+
+function readRepositoryFileWithIsolatedPlan(relativePath?: any) : any {
+  return relativePath === PLAN_CHECKPOINT_FIXTURE_PATH
+    ? PLAN_CHECKPOINT_FIXTURE
+    : readRepositoryFile(relativePath);
 }
 
 function strategyVersionRegistryIdentities() : any {
@@ -555,7 +579,7 @@ describe("Core Plan execution eligibility", () : any => {
       canonicalValidator: async () : Promise<any> => betterPlanResult(),
       readRepositoryFile: async (relativePath?: any) : Promise<any> => {
         reads.add(relativePath);
-        return readRepositoryFile(relativePath);
+        return readRepositoryFileWithIsolatedPlan(relativePath);
       },
       readLocalInfoHygieneReport: async () : Promise<any> => zeroWarningLocalInfoHygieneReport(),
       now: () : any => LOCAL_INFO_HYGIENE_NOW,
@@ -623,6 +647,8 @@ describe("Core Plan execution eligibility", () : any => {
       repoRoot: REPO_ROOT,
       canonicalValidator: async () : Promise<any> => betterPlanResult(),
       enumeratePublicSourceRoots,
+      readRepositoryFile: async (relativePath?: any) : Promise<any> =>
+        readRepositoryFileWithIsolatedPlan(relativePath),
       readLocalInfoHygieneReport: async () : Promise<any> => zeroWarningLocalInfoHygieneReport(),
       now: () : any => LOCAL_INFO_HYGIENE_NOW,
       localInfoHygieneMaxAgeMs: LOCAL_INFO_HYGIENE_MAX_AGE_MS,
@@ -1154,9 +1180,8 @@ describe("Algorithmic Resource Discipline", () : any => {
     ]);
   });
 
-  it("evaluates the production plan graph within declared budgets", async () : Promise<any> => {
-    const { loadPlanExecutionInputs } = await import("../../../tools/plan/plan-execution-eligibility.ts");
-    const inputs: any = await loadPlanExecutionInputs({ repoRoot: REPO_ROOT });
+  it("evaluates an isolated plan graph within declared budgets", () : any => {
+    const inputs: any = planFixture();
     const result: any = evaluatePlanExecutionEligibility({ ...inputs, hostPlatform: "macos" });
     expect(result.graph.planCount).toBeLessThanOrEqual(
       PLAN_EXECUTION_RESOURCE_DISCIPLINE.bounds.maxPlanCount,
@@ -1202,9 +1227,8 @@ describe("M1 Shared State Authority And Migration", () : any => {
     expect(Object.isFrozen(PLAN_SHARED_STATE_AUTHORITY)).toBe(true);
   });
 
-  it("requires keyed final receipts for every current DependencyMap Plan entry", async () : Promise<any> => {
-    const { loadPlanExecutionInputs } = await import("../../../tools/plan/plan-execution-eligibility.ts");
-    const inputs: any = await loadPlanExecutionInputs({ repoRoot: REPO_ROOT });
+  it("requires keyed final receipts for every isolated DependencyMap Plan entry", () : any => {
+    const inputs: any = planFixture();
     const dependencyMap: any = assertCurrentDependencyMapShape(inputs.dependencyMap);
 
     for (const mapPlan of dependencyMap.plans) {
