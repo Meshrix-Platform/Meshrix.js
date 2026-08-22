@@ -93,6 +93,9 @@ export function createSqliteExecutionLane({
     Object.entries(hostHandlers).filter((entry): entry is [string, HostHandler] => typeof entry[1] === "function")
   );
   const worker = new Worker(workerUrl, { workerData });
+  const workerExit: Promise<number> = new Promise((resolve): void => {
+    worker.once("exit", resolve);
+  });
   const pending = new Map<number, PendingEntry>();
   let sequence = 0;
   let pendingBytes = 0;
@@ -244,9 +247,19 @@ export function createSqliteExecutionLane({
 
   async function close(): Promise<void> {
     if (closed) return;
-    await execute("close", {}, { deadlineMs: defaultDeadlineMs }).catch(() => {});
-    closed = true;
-    await worker.terminate();
+    try {
+      await execute("close", {}, { deadlineMs: defaultDeadlineMs });
+      closed = true;
+      const exitCode: number = await workerExit;
+      if (exitCode !== 0) {
+        crashed = true;
+        throw closedError();
+      }
+    } catch (error: unknown) {
+      closed = true;
+      await worker.terminate();
+      throw error;
+    }
   }
 
   return Object.freeze({

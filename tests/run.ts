@@ -8,11 +8,16 @@ import { fileURLToPath } from "node:url";
 
 import { assertNoLeak } from "../tools/server-scripts/lib/report-evidence-safety.ts";
 import {
-  applyVitestShard,
-  mergeCompatibleSuiteProcesses,
+  createRegressionHtmlReport,
+  shouldRefreshTrackedRegressionReport,
+  TRACKED_REGRESSION_REPORT_PATH
+} from "./lib/regression-html-report.ts";
+import {
   parseTestShard,
+  planTestExecutionPhases,
   profileInherits,
   resolveExecutionTimeout,
+  runTestPhaseLanes,
   runSuiteProcess,
   timeoutMsForSuite
 } from "./lib/unified-test-runner-execution.ts";
@@ -83,6 +88,7 @@ function resolveProfiles(profiles?: any) : any {
       extends: def.extends || null,
       dynamic: def.dynamic || false,
       timeoutMs: def.timeoutMs,
+      trackedArtifacts: def.trackedArtifacts ? [...def.trackedArtifacts] : [],
       execution: def.execution || {},
     };
   }
@@ -394,9 +400,13 @@ function isPlatformCompatible(entry?: any) : any {
 }
 
 async function writeJsonAtomic(filePath?: any, data?: any) : Promise<any> {
+  await writeTextAtomic(filePath, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+async function writeTextAtomic(filePath: string, text: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const tmpPath: any = `${filePath}.${process.pid}.tmp`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  await fs.writeFile(tmpPath, text, "utf8");
   await fs.rename(tmpPath, filePath);
 }
 
@@ -415,17 +425,33 @@ async function main() : Promise<any> {
   }
 
   const selectedIds: any = resolveSuiteIds(options);
+  const productManifest: any = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  const productVersion: string = String(productManifest.version || "");
   const profileExecution: any = profileConfigs[options.profile]?.execution || {};
   const shardEnvironment: string = String(profileExecution.shardEnvironment || "").trim();
   const shard = parseTestShard(options.shard || (shardEnvironment ? process.env[shardEnvironment] : null));
   const selectedEntries: any[] = selectedIds.map((id: string) => suiteById.get(id));
-  const mergedEntries: any[] = profileExecution.mergeVitestProcesses === true
-    ? mergeCompatibleSuiteProcesses(selectedEntries)
-    : selectedEntries;
-  const executionEntries: any[] = mergedEntries.map((entry: any) => applyVitestShard(entry, shard));
+  const selectedByProfile: any = options.suites.length === 0 && options.tags.length === 0;
+  const refreshTrackedReport = shouldRefreshTrackedRegressionReport({
+    profile: options.profile,
+    selectedByProfile
+  });
+  const trackedArtifacts: string[] = profileConfigs[options.profile]?.trackedArtifacts || [];
+  if (refreshTrackedReport && !trackedArtifacts.includes(TRACKED_REGRESSION_REPORT_PATH)) {
+    throw new Error(
+      `Profile "${options.profile}" must declare ${TRACKED_REGRESSION_REPORT_PATH} as a tracked artifact.`
+    );
+  }
+  const phaseDefinitions: any = selectedByProfile ? profileExecution.phases : null;
+  const executionPhases: any[] = planTestExecutionPhases(selectedEntries, phaseDefinitions, {
+    mergeVitestProcesses: profileExecution.mergeVitestProcesses === true,
+    shard
+  });
+  const executionEntries: any[] = executionPhases.flatMap((phase: any) =>
+    phase.lanes.flatMap((lane: any) => lane.entries)
+  );
   const startedAt: any = new Date();
   const results: any[] = [];
-  const selectedByProfile: any = options.suites.length === 0 && options.tags.length === 0;
   const profileTimeoutMs: any = selectedByProfile
     ? profileConfigs[options.profile]?.timeoutMs
     : null;
@@ -437,8 +463,15 @@ async function main() : Promise<any> {
     : null;
   const sourceRevision = profileExecution.cachePassedResults === true ? cleanSourceRevision() : null;
   const resultCache = passedResultCache(options.profile, sourceRevision);
+  const executionLaneCount = executionPhases.reduce(
+    (count: number, phase: any) => count + phase.lanes.length,
+    0
+  );
 
-  console.log(`Meshrix.js test runner: profile=${options.profile} suites=${selectedIds.length} processes=${executionEntries.length}`);
+  console.log(
+    `Meshrix.js test runner: profile=${options.profile} suites=${selectedIds.length} `
+    + `phases=${executionPhases.length} lanes=${executionLaneCount} processes=${executionEntries.length}`
+  );
   console.log(`Report directory: ${displayReportPath(defaultReportDir)}`);
   printFeatureConsistencyGate();
 
@@ -446,7 +479,7 @@ async function main() : Promise<any> {
     throw new Error(`Profile "${options.profile}" selected zero suites.`);
   }
 
-  for (const entry of executionEntries) {
+  const executeEntry = async (entry: any): Promise<any> => {
     const compatible: any = isPlatformCompatible(entry);
     if (!compatible) {
       const status: any = options.strictPlatform ? "failed" : "skipped";
@@ -461,12 +494,8 @@ async function main() : Promise<any> {
         finishedAt: new Date().toISOString(),
         durationMs: 0
       };
-      results.push(result);
       console.log(`${status.toUpperCase()} ${entry.id} - ${result.reason}`);
-      if (status === "failed" && !options.continueOnFailure) {
-        break;
-      }
-      continue;
+      return result;
     }
 
     if (options.dryRun) {
@@ -480,9 +509,8 @@ async function main() : Promise<any> {
         finishedAt: new Date().toISOString(),
         durationMs: 0
       };
-      results.push(result);
       console.log(`DRY-RUN ${entry.id}: ${result.command}`);
-      continue;
+      return result;
     }
 
     console.log(`\nRUN ${entry.id}: ${entry.label || entry.id}`);
@@ -490,7 +518,7 @@ async function main() : Promise<any> {
     const cached = resultCache.get(commandLine(entry));
     if (cached) {
       const now = new Date().toISOString();
-      results.push({
+      const result: any = {
         ...cached,
         id: entry.id,
         label: entry.label || entry.id,
@@ -499,9 +527,9 @@ async function main() : Promise<any> {
         startedAt: now,
         finishedAt: now,
         durationMs: 0
-      });
+      };
       console.log(`PASSED ${entry.id} (cached)`);
-      continue;
+      return result;
     }
     const declaredSuiteTimeoutMs: any = timeoutMsForSuite(entry);
     const profileRemainingMs: any = profileDeadlineMs === null
@@ -509,7 +537,7 @@ async function main() : Promise<any> {
       : profileDeadlineMs - Date.now();
     if (profileRemainingMs !== null && profileRemainingMs <= 0) {
       const now: any = new Date();
-      results.push({
+      const result: any = {
         id: entry.id,
         label: entry.label || entry.id,
         command: commandLine(entry),
@@ -522,9 +550,9 @@ async function main() : Promise<any> {
         startedAt: now.toISOString(),
         finishedAt: now.toISOString(),
         durationMs: 0
-      });
+      };
       console.log(`FAILED ${entry.id} (profile timeout)`);
-      break;
+      return result;
     }
     const timeout: any = resolveExecutionTimeout({
       suiteTimeoutMs: declaredSuiteTimeoutMs,
@@ -539,12 +567,25 @@ async function main() : Promise<any> {
     result.declaredSuiteTimeoutMs = declaredSuiteTimeoutMs;
     result.childSuiteIds = entry.childSuiteIds;
     result.cached = false;
-    results.push(result);
     console.log(`${result.status.toUpperCase()} ${entry.id} (${result.durationMs}ms)`);
-    if (result.timedOut === true && result.timeoutScope === "profile") {
-      break;
-    }
-    if (result.status === "failed" && !options.continueOnFailure) {
+    return result;
+  };
+
+  for (const phase of executionPhases) {
+    console.log("");
+    console.log(`PHASE ${phase.id}: ${phase.label || phase.id}`);
+    console.log(`LANES ${phase.lanes.map((lane: any) => lane.id).join(", ")}`);
+    const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry);
+    const phaseResults: any[] = laneOutcomes.flatMap((lane: any) =>
+      lane.results.map((result: any) => ({
+        ...result,
+        phaseId: phase.id,
+        laneId: lane.id
+      }))
+    );
+    results.push(...phaseResults);
+    if (phaseResults.some((result: any) => result.status === "failed") && !options.continueOnFailure) {
+      console.log(`STOP after phase ${phase.id}: later phases were not started.`);
       break;
     }
   }
@@ -569,8 +610,23 @@ async function main() : Promise<any> {
     schemaVersion: "v0.0.1:schema:definition-1",
     verifier: "tests/run.ts",
     runner: "meshrix-unified-test-runner",
+    productVersion,
     profile: options.profile,
     selectedSuites: selectedIds,
+    executionPhases: executionPhases.map((phase: any) => ({
+      id: phase.id,
+      label: phase.label,
+      lanes: phase.lanes.map((lane: any) => ({
+        id: lane.id,
+        label: lane.label,
+        dependsOn: lane.dependsOn || [],
+        processes: lane.entries.map((entry: any) => ({
+          id: entry.id,
+          childSuiteIds: entry.childSuiteIds || [entry.id],
+          command: commandLine(entry)
+        }))
+      }))
+    })),
     executionProcesses: executionEntries.map((entry: any) => ({
       id: entry.id,
       childSuiteIds: entry.childSuiteIds || [entry.id],
@@ -587,6 +643,9 @@ async function main() : Promise<any> {
       shard,
       mergeVitestProcesses: profileExecution.mergeVitestProcesses === true,
       cachePassedResults: profileExecution.cachePassedResults === true,
+      phasedExecution: Array.isArray(phaseDefinitions),
+      phaseCount: executionPhases.length,
+      laneCount: executionLaneCount,
       profileTimeoutMs
     },
     environment: {
@@ -608,6 +667,13 @@ async function main() : Promise<any> {
     : path.join(defaultReportDir, `meshrix-test-report-${timestamp}.json`);
   await writeJsonAtomic(reportPath, report);
   await writeJsonAtomic(path.join(defaultReportDir, "latest.json"), report);
+
+  if (refreshTrackedReport) {
+    const htmlReport: string = createRegressionHtmlReport(report, { productVersion });
+    assertNoLeak(htmlReport, "tracked regression HTML report");
+    await writeTextAtomic(path.join(repoRoot, TRACKED_REGRESSION_REPORT_PATH), htmlReport);
+    console.log(`Interactive report: ${TRACKED_REGRESSION_REPORT_PATH}`);
+  }
 
   console.log(`Report: ${displayReportPath(reportPath)}`);
 

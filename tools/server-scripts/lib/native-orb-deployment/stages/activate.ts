@@ -1,0 +1,14 @@
+import { runOrb } from "../support.ts";
+
+export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> {
+  const { machine } = context.parsed;
+  runOrb({ machine, args: ["systemctl", "--user", "daemon-reload"] });
+  runOrb({ machine, args: ["systemctl", "--user", "enable", context.unit] });
+  runOrb({
+    machine,
+    args: ["systemctl", "--user", "restart", context.unit],
+    timeout: 120_000,
+    code: "native_orb_activation_failed",
+  });
+  return Object.freeze({ id: "activate", status: "completed" });
+}

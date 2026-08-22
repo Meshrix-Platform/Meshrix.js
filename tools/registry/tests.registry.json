@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "generatedAt": "2026-07-22",
   "profiles": {
-    "core-public": {
-      "description": "Core verifier gate",
+    "core-baseline": {
+      "description": "Shared repository and foundation baseline",
       "execution": {
         "mergeVitestProcesses": true,
         "cachePassedResults": true,
@@ -27,6 +27,115 @@
         "foundation.state-machine",
         "release.acceptance-ledger-anchor",
         "gateway.external"
+      ],
+      "timeoutMs": 1800000
+    },
+    "core-public": {
+      "description": "Core verifier gate",
+      "trackedArtifacts": ["docs/verification/regression.html"],
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD",
+        "phases": [
+          {
+            "id": "environment",
+            "label": "Base environment and repository integrity",
+            "lanes": [
+              {
+                "id": "preflight",
+                "suites": [
+                  "runtime.resource-discipline",
+                  "regression.environment",
+                  "repo.public-boundary",
+                  "security.secret-hygiene",
+                  "repo.local-info-hygiene",
+                  "registry.consistency",
+                  "registry.version-naming",
+                  "registry.version-governance",
+                  "repo.root-hygiene",
+                  "repo.script-registry",
+                  "repo.organization",
+                  "architecture.import-graph"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "functional",
+            "label": "Parallel frontend and backend functional verification",
+            "lanes": [
+              {
+                "id": "frontend",
+                "suites": ["regression.frontend-build", "regression.frontend-functional"]
+              },
+              {
+                "id": "backend-build",
+                "suites": ["regression.backend-build"]
+              },
+              {
+                "id": "backend-server-shard-a",
+                "dependsOn": ["backend-build"],
+                "suites": ["regression.backend-server-shard-a"]
+              },
+              {
+                "id": "backend-server-shard-b",
+                "dependsOn": ["backend-build"],
+                "suites": ["regression.backend-server-shard-b"]
+              },
+              {
+                "id": "backend-worker-thread",
+                "dependsOn": ["backend-server-shard-a", "backend-server-shard-b"],
+                "suites": ["regression.backend-worker-thread"]
+              },
+              {
+                "id": "backend-unit",
+                "dependsOn": ["backend-build"],
+                "suites": ["regression.backend-unit"]
+              },
+              {
+                "id": "backend-contract",
+                "dependsOn": ["backend-build"],
+                "suites": ["regression.backend-contract", "foundation.checkpoint-tree", "foundation.state-machine"]
+              }
+            ]
+          },
+          {
+            "id": "interface",
+            "label": "Frontend and backend interoperability contracts",
+            "lanes": [
+              { "id": "api-contract", "suites": ["regression.frontend-backend-interface", "architecture.protocol-boundary"] },
+              { "id": "gateway", "suites": ["gateway.external"] },
+              { "id": "evidence", "suites": ["release.acceptance-ledger-anchor"] }
+            ]
+          },
+          {
+            "id": "platform",
+            "label": "Parallel platform extension adaptation",
+            "lanes": [
+              { "id": "services", "suites": ["regression.platform-services"] },
+              { "id": "plugins", "suites": ["regression.platform-runtime-plugins"] },
+              { "id": "agent-adapters", "suites": ["regression.platform-client-adapters"] }
+            ]
+          }
+        ]
+      },
+      "extends": "core-baseline",
+      "suites": [
+        "runtime.resource-discipline",
+        "regression.environment",
+        "regression.frontend-build",
+        "regression.frontend-functional",
+        "regression.backend-build",
+        "regression.backend-server-shard-a",
+        "regression.backend-server-shard-b",
+        "regression.backend-worker-thread",
+        "regression.backend-unit",
+        "regression.backend-contract",
+        "regression.frontend-backend-interface",
+        "regression.platform-services",
+        "regression.platform-runtime-plugins",
+        "regression.platform-client-adapters"
       ],
       "timeoutMs": 1800000
     },
@@ -58,7 +167,7 @@
         "cachePassedResults": true,
         "shardEnvironment": "MESHRIX_TEST_SHARD"
       },
-      "extends": "core-public",
+      "extends": "core-baseline",
       "suites": [
         "governance.tag-management",
         "governance.operation-permission-tag-audit",
@@ -318,7 +427,7 @@
         "cachePassedResults": true,
         "shardEnvironment": "MESHRIX_TEST_SHARD"
       },
-      "extends": "core-public",
+      "extends": "core-baseline",
       "suites": [
         "smoke.start-server-defaults"
       ],
@@ -346,6 +455,201 @@
     }
   },
   "suites": [
+    {
+      "id": "regression.environment",
+      "label": "Node, test, and Web Console type environment",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": ["run", "typecheck"],
+      "sideEffects": "none",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "regression.frontend-build",
+      "label": "Web Console production build",
+      "owner": "console",
+      "package": "console",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "build:web"],
+      "sideEffects": "build-output",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": ["build/dist/index.html"]
+    },
+    {
+      "id": "regression.frontend-functional",
+      "label": "Web Console functional tests",
+      "owner": "console",
+      "package": "console",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:functional:frontend"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.backend-build",
+      "label": "Server production build",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "build:node"],
+      "sideEffects": "build-output",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": ["dist/apps/server/bin/meshrix.js"]
+    },
+    {
+      "id": "regression.backend-server-shard-a",
+      "label": "Server functional tests, bounded shard A",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:functional:backend:server", "--", "shard-a"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.backend-server-shard-b",
+      "label": "Server functional tests, bounded shard B",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:functional:backend:server", "--", "shard-b"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.backend-worker-thread",
+      "label": "Isolated backend worker-thread audit retention tests",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:functional:backend:worker-thread"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.backend-unit",
+      "label": "Backend routing, security, and serialization unit tests",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:functional:backend:unit"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.backend-contract",
+      "label": "Backend domain and protocol contract tests",
+      "owner": "platform",
+      "package": "contracts",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:functional:backend:contract"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.frontend-backend-interface",
+      "label": "Web Console to Server acceptance contracts",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:interface"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.platform-services",
+      "label": "Independent service adaptation",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "verify:local-services"],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "regression.platform-runtime-plugins",
+      "label": "Runtime plugin adaptation and package closure",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "test:platform:runtime-plugins"],
+      "sideEffects": "build-output",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": ["build/packages/packages.json"]
+    },
+    {
+      "id": "regression.platform-client-adapters",
+      "label": "Agent client adapter adaptation",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "verify:local-client-adapters"],
+      "sideEffects": "build-output",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": ["build/adapters/index.json"]
+    },
     {
       "id": "runtime.capacity-catalog-conformance",
       "label": "Runtime capacity workload catalog conformance suite",

@@ -59,6 +59,7 @@ const allowed = new Set<string>([
 parentPort?.on("message", async (message: unknown): Promise<void> => {
   const request = record(message);
   const reply: LaneReply = { id: request?.id, ok: false };
+  const closeAfterReply: boolean = request?.kind === "close";
   try {
     const kind = typeof request?.kind === "string" ? request.kind : "";
     const command = store[kind];
@@ -82,4 +83,5 @@ parentPort?.on("message", async (message: unknown): Promise<void> => {
     };
   }
   parentPort?.postMessage(reply);
+  if (reply.ok && closeAfterReply) parentPort?.close();
 });

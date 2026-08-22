@@ -22,13 +22,56 @@
           "timeoutMs": { "type": "integer", "minimum": 1000 },
           "coverage": { "type": "boolean" },
           "dynamic": { "type": "boolean" },
+          "trackedArtifacts": {
+            "description": "Exact bounded artifacts refreshed by a complete profile and committed with the accepted version.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
           "execution": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
               "mergeVitestProcesses": { "type": "boolean" },
               "cachePassedResults": { "type": "boolean" },
-              "shardEnvironment": { "type": "string", "minLength": 1 }
+              "shardEnvironment": { "type": "string", "minLength": 1 },
+              "phases": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "lanes"],
+                  "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "label": { "type": "string", "minLength": 1 },
+                    "lanes": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["id", "suites"],
+                        "properties": {
+                          "id": { "type": "string", "minLength": 1 },
+                          "label": { "type": "string", "minLength": 1 },
+                          "suites": {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": { "type": "string", "minLength": 1 }
+                          },
+                          "dependsOn": {
+                            "type": "array",
+                            "uniqueItems": true,
+                            "items": { "type": "string", "minLength": 1 }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }

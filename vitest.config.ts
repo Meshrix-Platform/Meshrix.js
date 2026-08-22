@@ -3,6 +3,11 @@ import path from "node:path";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vitest/config";
 
+import {
+  backendFunctionalExcludedTestPatterns,
+  isBackendFunctionalScope
+} from "./tests/lib/backend-functional-test-scope.ts";
+
 const webRoot = path.resolve(__dirname, "apps", "console");
 const serialTestPatterns = [
   "tests/vitest/server/job-manager*.test.ts",
@@ -30,6 +35,9 @@ const excludedTestPatterns = [
   "tests/contract/foundation/**",
   "tests/unit/foundation/**",
 ];
+const scopedExcludedTestPatterns = isBackendFunctionalScope()
+  ? backendFunctionalExcludedTestPatterns
+  : [];
 
 
 const WORKSPACE_PACKAGE_DIRS: [string, string][] = [
@@ -146,7 +154,12 @@ export default defineConfig({
         test: {
           name: "parallel",
           include: testFilePatterns,
-          exclude: [...excludedTestPatterns, ...serialTestPatterns, ...workerThreadTestPatterns],
+          exclude: [
+            ...excludedTestPatterns,
+            ...serialTestPatterns,
+            ...workerThreadTestPatterns,
+            ...scopedExcludedTestPatterns
+          ],
         },
       },
       {
@@ -154,7 +167,7 @@ export default defineConfig({
         test: {
           name: "serial",
           include: serialTestPatterns,
-          exclude: excludedTestPatterns,
+          exclude: [...excludedTestPatterns, ...scopedExcludedTestPatterns],
           fileParallelism: false,
         },
       },
@@ -163,7 +176,7 @@ export default defineConfig({
         test: {
           name: "worker-threads",
           include: workerThreadTestPatterns,
-          exclude: excludedTestPatterns,
+          exclude: [...excludedTestPatterns, ...scopedExcludedTestPatterns],
           pool: "threads",
           fileParallelism: false,
         },
