@@ -174,10 +174,8 @@
         "governance.operation-permission-tag-audit",
         "governance.operation-permission-universal-tag-policy",
         "governance.authorization-coverage",
-        "governance.enterprise-authorization-enforcement",
         "governance.enterprise-audit-retention-redaction",
         "observability.semantic-baseline",
-        "governance.enterprise-observability-coverage",
         "approval-governance",
         "architecture.facts",
         "governance.organization-model",
@@ -283,6 +281,8 @@
       "suites": [
         "governance.operation-permission-protocol-consistency",
         "governance.operation-permission-tag-governed-e2e",
+        "governance.enterprise-authorization-enforcement",
+        "governance.enterprise-observability-coverage",
         "upstream-gateway.e2e"
       ],
       "timeoutMs": 1800000
