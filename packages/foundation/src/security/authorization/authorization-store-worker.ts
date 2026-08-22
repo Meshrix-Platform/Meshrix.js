@@ -39,6 +39,7 @@ const store = createAuthorizationStoreWorkerOwner(workerData);
 
 parentPort?.on("message", async (message?: WorkerRequest): Promise<void> => {
   const reply: WorkerReply = { id: message?.id, ok: false };
+  const closeAfterReply: boolean = message?.kind === "close";
   try {
     if (!message) {
       throw Object.assign(new Error("Authorization SQLite command is missing."), { code: "sqlite_lane_command_rejected" });
@@ -81,4 +82,5 @@ parentPort?.on("message", async (message?: WorkerRequest): Promise<void> => {
     };
   }
   parentPort?.postMessage(reply);
+  if (reply.ok && closeAfterReply) parentPort?.close();
 });

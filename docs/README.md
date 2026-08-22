@@ -68,6 +68,7 @@ not block this operational outcome.
 | Topic | Document |
 | --- | --- |
 | Product definition | [../PRODUCT.md](../PRODUCT.md) |
+| Current interactive regression snapshot | [verification/regression.html](verification/regression.html) |
 | Domain language | [../CONTEXT.md](../CONTEXT.md) |
 | Current five-dimension status | [STATUS.md](STATUS.md) |
 | Contribution process | [../CONTRIBUTING.md](../CONTRIBUTING.md) |

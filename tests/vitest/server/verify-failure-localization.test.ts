@@ -88,7 +88,7 @@ describe("pull-request verification feedback", () => {
     }
   });
 
-  it("runs pull requests on a fast path and stable through resumable checkpoints", async () => {
+  it("runs pull requests and stable through the ordered regression and resumable audit checkpoints", async () => {
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const pullRequestJob = workflow.indexOf("  pull-request-verify:\n");
@@ -102,8 +102,7 @@ describe("pull-request verification feedback", () => {
 
     const prSection = workflow.slice(pullRequestJob, stableCandidate);
     expect(prSection).toContain("if: ${{ github.event_name == 'pull_request' }}");
-    expect(prSection).toContain('run_check "npm run typecheck"');
-    expect(prSection).toContain('run_check "npm run vitest"');
+    expect(prSection).toContain('run_check "npm test"');
     expect(prSection).toContain('--command "$command_label"');
     expect(prSection).toContain("localize-verify-failure.ts");
     expect(prSection).not.toContain("npm run verify");
@@ -113,7 +112,8 @@ describe("pull-request verification feedback", () => {
     const gateSection = workflow.slice(stableCandidate, stableEnd);
     expect(gateSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
     expect(gateSection).not.toContain("run: npm run verify");
-    expect(gateSection).toContain("Repository checkpoint / ${{ matrix.stage }}");
+    expect(gateSection).toContain("Ordered repository regression checkpoint");
+    expect(gateSection).toContain("Run the canonical four-stage regression");
     expect(gateSection).toContain("Audit checkpoint / ${{ matrix.stage }}");
     expect(gateSection).toContain("Audit checkpoint / resource");
     expect(gateSection).toContain("Audit checkpoint / sandbox");

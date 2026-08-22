@@ -511,6 +511,36 @@ npm test -- --suite domains.manifest
 npm test
 ```
 
+`npm test` is the only complete regression entry point. Its ordered plan is
+owned by `tools/registry/tests.registry.json` and executes four resumable,
+traceable phases:
+
+1. Check the base environment and repository integrity. Resource and memory
+   discipline runs first and remains isolated so concurrent work cannot distort
+   its measurements.
+2. Build and verify the Web Console and backend in parallel lanes. The backend
+   build is an explicit prerequisite for two bounded Server shards, the unit
+   suite, and the contract suite; those dependent lanes start together after
+   the build succeeds or fails, so the phase still discovers all functional
+   failures without one oversized Vitest process. The worker-thread audit test
+   is a separate lane that starts after both Server shards finish; this avoids
+   V8 worker teardown overlapping the fork pools while keeping the ordinary
+   frontend and backend suites parallel.
+3. Verify the frontend/backend acceptance interface and protocol contracts.
+4. Verify independent services, runtime plugins, and Agent client adapters in
+   parallel lanes. Each plugin lane keeps packaging steps sequential where they
+   share build output.
+
+Suites remain sequential inside one lane, lanes run concurrently inside one
+phase, and phases run in order. The report records every phase, lane, process,
+and result so a failed lane can be resumed with its owning narrow command.
+`npm run verify` delegates to this entry point and does not repeat the same
+builds or tests. A complete `core-public` run also refreshes the bounded,
+interactive snapshot at `docs/verification/regression.html`. Focused suites,
+explicit tags, alternate profiles, and dry runs never overwrite that snapshot.
+Commit the refreshed file with the accepted product version; Git history then
+retains prior snapshots while the current path always shows the latest metrics.
+
 For broader validation:
 
 ```bash
@@ -1270,5 +1300,6 @@ The current hardened OCI adapter accepts only the governed Node runtime profile.
 ## Evidence Handling
 
 - Reports use redacted evidence for secrets, grant tokens, local absolute paths, private runtime state, and raw prompts.
-- Keep generated reports under `build/`.
+- Keep complete machine-readable reports, raw output, and transient evidence under `build/`.
+- `docs/verification/regression.html` is the sole tracked projection: the full core regression generates it from bounded version, phase, lane, duration, and result metrics. Do not hand-edit it.
 - For an interrupted command, record the command, prerequisite, and follow-up verification path.
