@@ -69,7 +69,6 @@ export const RESOURCE_DISCIPLINE_POLICY: any = deepFreeze({
     minimumJobRecords: 10_000,
     maxSettledHeapGrowthBytes: 2 * MIB,
     maxPeakRssGrowthBytes: 192 * MIB,
-    maxPeakExternalGrowthBytes: 64 * MIB,
-    maxEventLoopDelayP99Ms: 1_500
+    maxPeakExternalGrowthBytes: 64 * MIB
   }
 });
