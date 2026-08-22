@@ -25,6 +25,7 @@ import {
   jobsFailedBeforeRunnerAssignment,
   promotionDecision,
   requiredWorkflowPaths,
+  runnerAssignmentRetryDelay,
   selectLatestWorkflowRun,
 } from "../../../tools/server-scripts/promote-release-branches.ts";
 
@@ -125,6 +126,13 @@ describe("branch promotion workflow", () : any => {
     expect(jobsFailedBeforeRunnerAssignment([
       { runnerAssigned: false, steps: ["Install dependencies"] },
     ])).toBe(false);
+    expect([1, 2, 3, 4, 8].map(runnerAssignmentRetryDelay)).toEqual([
+      30_000,
+      60_000,
+      120_000,
+      300_000,
+      300_000,
+    ]);
     expect(extractSafeFailureSignals([
       "FAILED execution-sandbox.controlled-runtime (1200ms)",
       "FAILED noisy",

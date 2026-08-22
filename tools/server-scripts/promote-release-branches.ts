@@ -291,6 +291,14 @@ export function jobsFailedBeforeRunnerAssignment(jobs: any[] = []) : any {
     job?.runnerAssigned !== true && Array.isArray(job?.steps) && job.steps.length === 0);
 }
 
+export function runnerAssignmentRetryDelay(resumeCount?: any) : any {
+  const count: any = Math.max(1, Number(resumeCount) || 1);
+  if (count === 1) return 30_000;
+  if (count === 2) return 60_000;
+  if (count === 3) return 120_000;
+  return 300_000;
+}
+
 function sleep(delayMs?: any) : any {
   return new Promise((resolve?: any) : any => setTimeout(resolve, delayMs));
 }
@@ -332,7 +340,7 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
       resumeRequestedAttempt = Number(selected.run_attempt || 0);
       lastState = "";
       console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-unstarted-jobs count=${unstartedResumeCount}`);
-      await sleep(POLL_INTERVAL_MS);
+      await sleep(runnerAssignmentRetryDelay(unstartedResumeCount));
       continue;
     }
     if (!resumedTestFailures) {
