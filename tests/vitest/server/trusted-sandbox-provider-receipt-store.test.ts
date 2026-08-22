@@ -9,6 +9,7 @@ import {
   writeTrustedSandboxProviderReceipts
 } from "../../../packages/server-runtime/src/execution-sandbox/trusted-provider-receipt-store.ts";
 import {
+  failedOciConformanceCheckIds,
   parseExecutionSandboxOciConformanceArguments,
   runExecutionSandboxOciConformance,
   runExecutionSandboxOciConformanceCli,
@@ -285,6 +286,7 @@ describe("trusted sandbox provider receipt store", () : any => {
 
     expect(report.productionBackendConformance).toBe(false);
     expect(report.summary.failedCheckCount).toBe(1);
+    expect(failedOciConformanceCheckIds(report)).toEqual(["subprocessZeroEnforced"]);
     expect(report.checks).toMatchObject({
       subprocessZeroEnforced: false,
       timeoutObserved: true,
