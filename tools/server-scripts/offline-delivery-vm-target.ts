@@ -103,10 +103,32 @@ function imagePlatform(image?: any) : any {
   return String(result.stdout || "").trim();
 }
 
-function firstExistingImage(candidates?: any, expectedPlatform?: any) : any {
+export function imageSourceRevision(image?: any) : any {
+  const result: any = runCommand({
+    executable: "docker",
+    args: [
+      "image",
+      "inspect",
+      "--format",
+      "{{index .Config.Labels \"org.opencontainers.image.revision\"}}",
+      image,
+    ],
+    allowFailure: true,
+    timeout: 15_000,
+  });
+  if (result.status !== 0) return "";
+  return String(result.stdout || "").trim();
+}
+
+function firstExistingImage(candidates?: any, expectedPlatform?: any, expectedRevision?: any) : any {
   for (const image of candidates) {
     if (typeof image !== "string" || image.trim() === "") continue;
     if (imagePlatform(image) !== expectedPlatform) continue;
+    if (
+      typeof expectedRevision === "string"
+      && expectedRevision !== ""
+      && imageSourceRevision(image) !== expectedRevision
+    ) continue;
     if (imageHasConsoleIndex({ image }) !== true) continue;
     return image;
   }
@@ -626,14 +648,21 @@ function buildRuntimeUiImage({
     allowFailure: true,
   });
   if (result.status !== 0) return "";
-  return firstExistingImage([tag], platform);
+  return firstExistingImage([tag], platform, sourceCommit);
 }
 
 function ensureAmd64Image({ repoRoot }: Record<string, any> = {}) : any {
+  const sourceRevision: any = String(runCommand({
+    executable: "git",
+    args: ["rev-parse", "HEAD"],
+    cwd: repoRoot,
+    timeout: 15_000,
+    allowFailure: true,
+  }).stdout || "").trim();
   const existing: any = firstExistingImage([
     process.env.MESHRIX_OFFLINE_LINUX_AMD64_IMAGE,
     ...DEFAULT_AMD64_IMAGES,
-  ], "linux/amd64");
+  ], "linux/amd64", sourceRevision);
   if (existing) return existing;
   return buildRuntimeUiImage({
     repoRoot,
@@ -643,10 +672,17 @@ function ensureAmd64Image({ repoRoot }: Record<string, any> = {}) : any {
 }
 
 function ensureArm64Image({ repoRoot }: Record<string, any> = {}) : any {
+  const sourceRevision: any = String(runCommand({
+    executable: "git",
+    args: ["rev-parse", "HEAD"],
+    cwd: repoRoot,
+    timeout: 15_000,
+    allowFailure: true,
+  }).stdout || "").trim();
   const existing: any = firstExistingImage([
     process.env.MESHRIX_OFFLINE_LINUX_ARM64_IMAGE,
     DEFAULT_ARM64_IMAGES[0],
-  ], "linux/arm64");
+  ], "linux/arm64", sourceRevision);
   if (existing) return existing;
   return buildRuntimeUiImage({
     repoRoot,
@@ -870,7 +906,7 @@ export async function waitForConsoleRoot(url?: any, timeoutMs?: any) : Promise<a
   return false;
 }
 
-async function runFirstGovernedCall() : Promise<any> {
+async function runFirstGovernedCall(hostPort = VM_HOST_PORT) : Promise<any> {
   const script: any = `
 try {
 const content = await (await import("node:fs/promises")).readFile("/app/data/auth/initial-credentials.txt", "utf8");
@@ -941,7 +977,7 @@ const issuedResponse = await fetch("http://127.0.0.1:7228/api/operation-permissi
       deniedTools: [],
       scopeIds,
       maximumRisk: "high",
-      audience: { serverAudience: "127.0.0.1:${VM_HOST_PORT}", targetIds: ["codex"], connectorPackageIds: [] },
+      audience: { serverAudience: "127.0.0.1:${hostPort}", targetIds: ["codex"], connectorPackageIds: [] },
       resources: {
         mode: "unrestricted", workspaceIds: [], dataClassifications: [], egressClasses: [],
         semanticFamilies: [], capabilityDomains: [], capabilityVerbs: [], resourceKinds: [],
@@ -979,8 +1015,8 @@ console.log(JSON.stringify({ ok: true, apiKey: issued.apiKey }));
       "Disconnected lifecycle step failed closed.",
     );
   }
-  const mcpUrl: any = `http://127.0.0.1:${VM_HOST_PORT}/mcp`;
-  const origin: any = `http://127.0.0.1:${VM_HOST_PORT}`;
+  const mcpUrl: any = `http://127.0.0.1:${hostPort}/mcp`;
+  const origin: any = `http://127.0.0.1:${hostPort}`;
   const commonMcpHeaders: any = {
     "Content-Type": "application/json",
     Origin: origin,
@@ -1172,7 +1208,7 @@ export function createLinuxVmLifecycleRunner({
       return { ok: true };
     }
     if (step.id === "first_governed_call") {
-      await runFirstGovernedCall();
+      await runFirstGovernedCall(hostPort);
       return { ok: true };
     }
     if (step.id === "stop") {

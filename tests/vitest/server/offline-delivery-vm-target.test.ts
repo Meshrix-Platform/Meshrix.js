@@ -48,6 +48,11 @@ describe("offline delivery runtime-ui packaging", () : any => {
 
   it("reuses a Console-serving Meshrix on the default port and fails closed on an unrelated occupant", async () : Promise<any> => {
     await expect(selectOfflineVmHostPort({
+      inspectContainer: () : any => ({
+        present: true,
+        project: "meshrix-offline-vm",
+        sourceRevision: "a".repeat(40),
+      }),
       probe: async (port?: any) : Promise<any> => (
         Number(port) === 7228
           ? { listening: true, healthOk: true, consoleOk: true }
@@ -55,11 +60,48 @@ describe("offline delivery runtime-ui packaging", () : any => {
       ),
     })).resolves.toMatchObject({ port: 7228, reuse: true });
     await expect(selectOfflineVmHostPort({
+      inspectContainer: () : any => ({
+        present: false,
+        project: "",
+        sourceRevision: "",
+      }),
       probe: async (port?: any) : Promise<any> => (
         Number(port) === 7228
           ? { listening: true, healthOk: true, consoleOk: false }
           : { listening: false, healthOk: false, consoleOk: false }
       ),
+    })).rejects.toMatchObject({ code: "offline_delivery_host_port_conflict" });
+  });
+
+  it("replaces a healthy offline instance only when its candidate is stale", async () : Promise<any> => {
+    const current: any = "a".repeat(40);
+    const selected: any = await selectOfflineVmHostPort({
+      expectedRevision: current,
+      inspectContainer: () : any => ({
+        present: true,
+        project: "meshrix-offline-vm",
+        sourceRevision: "b".repeat(40),
+      }),
+      probe: async (port?: any) : Promise<any> => (
+        Number(port) === 7228
+          ? { listening: true, healthOk: true, consoleOk: true }
+          : { listening: false, healthOk: false, consoleOk: false }
+      ),
+    });
+    expect(selected).toEqual({ port: 7228, reuse: false, replace: true });
+
+    await expect(selectOfflineVmHostPort({
+      expectedRevision: current,
+      inspectContainer: () : any => ({
+        present: true,
+        project: "different-stack",
+        sourceRevision: current,
+      }),
+      probe: async () : Promise<any> => ({
+        listening: true,
+        healthOk: true,
+        consoleOk: true,
+      }),
     })).rejects.toMatchObject({ code: "offline_delivery_host_port_conflict" });
   });
 });
