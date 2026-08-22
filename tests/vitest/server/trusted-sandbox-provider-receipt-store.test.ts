@@ -220,13 +220,32 @@ describe("trusted sandbox provider receipt store", () : any => {
       targetFactory: async () : Promise<any> => target,
       preflightRunner: noopPreflight,
       probeRunner: async () : Promise<any> => {
-        throw Object.assign(new Error("synthetic probe failure"), { code: "synthetic_probe_failure" });
+        throw Object.assign(new Error("synthetic probe failure"), {
+          code: "sandbox_runtime_failed",
+          failureStage: "oci_create_failed",
+          failureReason: "oci_runtime_busy",
+          exitCode: 125
+        });
       },
       adversarialRunner: async () : Promise<any> => passingAdversarialChecks(),
       receiptLifecycleVerifier: async () : Promise<any> => passingReceiptLifecycleChecks()
     });
     expect(report.productionBackendConformance).toBe(false);
     expect(report.checks.executionSucceeded).toBe(false);
+    expect(report.probeFailures).toEqual([
+      {
+        code: "sandbox_runtime_failed",
+        failureStage: "oci_create_failed",
+        failureReason: "oci_runtime_busy",
+        exitCode: 125
+      },
+      {
+        code: "sandbox_runtime_failed",
+        failureStage: "oci_create_failed",
+        failureReason: "oci_runtime_busy",
+        exitCode: 125
+      }
+    ]);
     expect(loadTrustedSandboxProviderReceipts({ userDataPath })).toEqual({});
   });
 
