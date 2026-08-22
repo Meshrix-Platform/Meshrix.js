@@ -20,10 +20,11 @@ function failure(code?: any) : any {
   });
 }
 
-function run(command?: any, args: any[] = [], code?: any) : any {
+function run(command?: any, args: any[] = [], code?: any, environment: any = process.env) : any {
   const result: any = spawnSync(command, args, {
     cwd: repoRoot,
     encoding: "utf8",
+    env: environment,
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (result.error || result.status !== 0) throw failure(code);
@@ -34,8 +35,12 @@ function git(args: any[] = [], code: any = "git_command_failed") : any {
   return run("git", args, code);
 }
 
+export function githubProcessEnvironment(environment: Record<string, any> = process.env) : any {
+  return { ...environment, GODEBUG: "http2client=0" };
+}
+
 function gh(args: any[] = [], code: any = "github_command_failed") : any {
-  return run("gh", args, code);
+  return run("gh", args, code, githubProcessEnvironment());
 }
 
 function parseJson(value?: any, code: any = "github_response_invalid") : any {
