@@ -199,12 +199,14 @@ describe("OCI sandbox backend", () : any => {
   it("retries one empty-output OCI CLI create rejection after deterministic cleanup", async () : Promise<any> => {
     const paths: any = await sandboxPaths();
     const calls: any[] = [];
+    const retryDelays: any[] = [];
     let createAttempts: any = 0;
     const backend: any = createOciSandboxBackend({
       id: "oci.test",
       binary: "/fixed/bin/docker",
       engine: "docker",
       runtimeClass: "runc",
+      retryDelay: async (milliseconds?: any) : Promise<any> => { retryDelays.push(milliseconds); },
       commandRunner: async (_binary?: any, args?: any, options?: any) : Promise<any> => {
         calls.push({ args, options });
         if (args[0] === "create" && createAttempts++ === 0) {
@@ -230,6 +232,7 @@ describe("OCI sandbox backend", () : any => {
     ]);
     expect(calls[1].args.slice(0, 2)).toEqual(["rm", "--force"]);
     expect(calls[1].options).toMatchObject({ allowFailure: true, timeoutMs: 30_000 });
+    expect(retryDelays).toEqual([3_000]);
   });
 
   it("does not retry explicit OCI argument or policy rejection classes", async () : Promise<any> => {

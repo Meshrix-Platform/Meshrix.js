@@ -9,6 +9,7 @@ interface DirectoryOwnership { uid: number; gid: number; label: string; writable
 interface CommandOptions { signal?: AbortSignal | null; maxBytes?: number; allowFailure?: boolean; captureStdout?: boolean; timeoutMs?: number }
 interface CommandResult { code: number; signal: string; bytes: number; stdout: string }
 type CommandRunner = (binary: string, args: string[], options?: CommandOptions) => Promise<CommandResult>;
+type RetryDelay = (milliseconds: number, signal?: AbortSignal | null) => Promise<void>;
 interface SandboxPolicy {
   capabilities: { network: readonly string[]; secretRefs: readonly string[]; tools: readonly string[]; subprocesses: number };
   workload: { command: readonly string[]; image: string };
@@ -23,7 +24,7 @@ interface BackendContext {
 }
 interface OciBackendOptions {
   id?: string; binary?: string; engine?: string; runtimeClass?: string; healthy?: boolean;
-  hostUid?: number; hostGid?: number; commandRunner?: CommandRunner;
+  hostUid?: number; hostGid?: number; commandRunner?: CommandRunner; retryDelay?: RetryDelay;
 }
 
 const ENFORCED_RESTRICTIONS: readonly string[] = Object.freeze([
@@ -38,6 +39,20 @@ const ENFORCED_RESTRICTIONS: readonly string[] = Object.freeze([
   "cross-trust-domain"
 ]);
 const OCI_CONTROL_COMMAND_TIMEOUT_MS = 30_000;
+const OCI_TRANSIENT_CREATE_RETRY_DELAY_MS = 3_000;
+
+function waitForRetryDelay(milliseconds: number, signal?: AbortSignal | null): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(settle, milliseconds);
+    function settle() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", settle);
+      resolve();
+    }
+    signal?.addEventListener("abort", settle, { once: true });
+  });
+}
 
 function requiredText(value: unknown, label: string): string {
   const normalized = String(value || "").trim();
@@ -238,7 +253,8 @@ export function createOciSandboxBackend({
   healthy = true,
   hostUid = process.getuid?.(),
   hostGid = process.getgid?.(),
-  commandRunner = runCommand
+  commandRunner = runCommand,
+  retryDelay = waitForRetryDelay
 }: OciBackendOptions = {}) {
   const backendId = requiredText(id, "OCI sandbox backend id");
   const executable = requiredText(binary, "OCI sandbox backend binary");
@@ -253,6 +269,7 @@ export function createOciSandboxBackend({
     throw new Error("OCI sandbox backend requires a non-root host process identity.");
   }
   if (typeof commandRunner !== "function") throw new TypeError("OCI sandbox command runner is required.");
+  if (typeof retryDelay !== "function") throw new TypeError("OCI sandbox retry delay is required.");
   const containers = new Map<string, string>();
   const backendNonce = crypto.randomUUID();
   let createQueue: Promise<void> = Promise.resolve();
@@ -279,6 +296,8 @@ export function createOciSandboxBackend({
           allowFailure: true,
           timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
         });
+        await retryDelay(OCI_TRANSIENT_CREATE_RETRY_DELAY_MS, options.signal);
+        if (options.signal?.aborted) throw error;
         return await commandRunner(executable, args, options);
       }
     } finally {
