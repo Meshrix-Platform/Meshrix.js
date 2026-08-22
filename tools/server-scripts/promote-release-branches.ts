@@ -10,7 +10,7 @@ const BRANCHES: readonly any[] = Object.freeze(["nightly", "stable", "release"])
 const POLL_INTERVAL_MS: any = 10_000;
 const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  nightly: Object.freeze([".github/workflows/branch-flow.yml"]),
+  nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
   release: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/release-branch.yml"]),
 });
@@ -45,6 +45,21 @@ export function isTransientGithubFailure(stderr?: any) : any {
     .test(String(stderr || ""));
 }
 
+export function extractSafeFailureSignals(logText?: any) : any {
+  const signals: any = new Set<any>();
+  for (const line of String(logText || "").split(/\r?\n/u)) {
+    const suite: any = /\bFAILED ([a-z0-9][a-z0-9._-]{0,127})(?:\s|$)/u.exec(line)?.[1];
+    if (suite) signals.add(`suite:${suite}`);
+    const checks: any = /\b(?:productionBackendFailedChecks|failedChecks)=([A-Za-z0-9,]{1,4096})(?:\s|$)/u.exec(line)?.[1];
+    if (checks) {
+      for (const check of checks.split(",")) {
+        if (/^[A-Za-z][A-Za-z0-9]{0,95}$/u.test(check)) signals.add(`check:${check}`);
+      }
+    }
+  }
+  return [...signals].sort();
+}
+
 function sleepSync(delayMs?: any) : any {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
 }
@@ -56,6 +71,7 @@ function gh(args: any[] = [], code: any = "github_command_failed") : any {
       cwd: repoRoot,
       encoding: "utf8",
       env: githubProcessEnvironment(),
+      maxBuffer: 16 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
     });
     if (!result.error && result.status === 0) return String(result.stdout || "").trim();
@@ -260,6 +276,17 @@ function failedJobNames(repository?: any, runId?: any) : any {
           .filter((step?: any) : any => !["success", "skipped"].includes(String(step?.conclusion || "")))
           .map((step?: any) : any => String(step?.name || "unnamed-step"))
         : [],
+      signals: (() : any => {
+        try {
+          return extractSafeFailureSignals(gh([
+            "run", "view", String(runId),
+            "--job", String(job?.id || ""),
+            "--log",
+          ], "workflow_job_log_unavailable"));
+        } catch {
+          return [];
+        }
+      })(),
     }));
 }
 
@@ -288,7 +315,7 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
     }
     if (selected.conclusion === "success") return selected;
     for (const failed of failedJobNames(repository, selected.id)) {
-      console.error(`[release-promotion] failed job=${failed.job} steps=${failed.steps.join(",") || "none"}`);
+      console.error(`[release-promotion] failed job=${failed.job} steps=${failed.steps.join(",") || "none"} signals=${failed.signals.join(",") || "none"}`);
     }
     throw failure(`${branch}_${path.basename(workflowPath, ".yml")}_failed`);
   }

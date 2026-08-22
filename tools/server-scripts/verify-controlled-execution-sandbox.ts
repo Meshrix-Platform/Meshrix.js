@@ -24,7 +24,10 @@ import {
   createSandboxProviderConformanceReceipt,
   createTrustedSandboxProviderResolver
 } from "@meshrix/server-runtime/execution-sandbox/trusted-provider-resolver";
-import { runExecutionSandboxOciConformance } from "./verify-execution-sandbox-oci-conformance.ts";
+import {
+  failedOciConformanceCheckIds,
+  runExecutionSandboxOciConformance
+} from "./verify-execution-sandbox-oci-conformance.ts";
 import { runOpaqueSandboxCustodyVerification } from "./verify-opaque-sandbox-custody.ts";
 import { runExecutionLauncherBoundary } from "../verifiers/execution-launcher-boundary.ts";
 import { createSourceEvidenceContext } from "./lib/source-tree-digest.ts";
@@ -566,6 +569,7 @@ export async function runControlledExecutionSandboxVerification({
       : null;
     const contractChecksPassed: any = (Object.values(checks) as any[]).every(Boolean);
     const productionBackendConformance: any = productionReport?.productionBackendConformance === true;
+    const productionBackendFailedChecks: any = failedOciConformanceCheckIds(productionReport);
     const opaqueCustodyReady: any = custodyReport?.custodyAcceptanceReady === true;
     const sandboxAcceptanceReady: any = contractChecksPassed && productionBackendConformance && opaqueCustodyReady;
     const report: Record<string, any> = {
@@ -578,6 +582,7 @@ export async function runControlledExecutionSandboxVerification({
       }),
       sandboxAcceptanceReady,
       productionBackendConformance,
+      productionBackendFailedChecks,
       opaqueCustodyReady,
       summary: {
         contractChecksPassed,
@@ -620,6 +625,9 @@ if (invokedDirectly) {
   runControlledExecutionSandboxVerification({ verifyProductionBackend: true }).then((report?: any) : any => {
     console.log(`[controlled-execution-sandbox] contractChecksPassed=${report.summary.contractChecksPassed}`);
     console.log(`[controlled-execution-sandbox] productionBackendConformance=${report.productionBackendConformance} sandboxAcceptanceReady=${report.sandboxAcceptanceReady}`);
+    if (report.productionBackendFailedChecks.length > 0) {
+      console.log(`[controlled-execution-sandbox] productionBackendFailedChecks=${report.productionBackendFailedChecks.join(",")}`);
+    }
     if (!report.sandboxAcceptanceReady) process.exitCode = 1;
   }).catch((error?: any) : any => {
     console.error(error?.stack || error?.message || String(error));

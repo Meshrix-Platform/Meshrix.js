@@ -1,0 +1,48 @@
+name: Nightly controlled sandbox
+
+env:
+  NODE_OPTIONS: --conditions=source
+
+on:
+  push:
+    branches: ["nightly"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-controlled-sandbox-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controlled-sandbox:
+    name: Controlled sandbox production backend
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify controlled sandbox production backend
+        run: npm run verify:controlled-execution-sandbox
+      - name: Preserve privacy-safe controlled sandbox reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: controlled-sandbox-${{ github.sha }}
+          path: |
+            build/reports/controlled-execution-sandbox.json
+            build/reports/execution-sandbox-oci-conformance.json
+            build/reports/opaque-sandbox-custody.json
+            build/reports/execution-launcher-boundary.json
+          if-no-files-found: warn
+          retention-days: 7
+          overwrite: true

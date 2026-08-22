@@ -138,6 +138,14 @@ function publicErrorCode(error?: any) : any {
   return /^[a-z][a-z0-9_]{0,95}$/u.test(code) ? code : "execution_sandbox_oci_failed";
 }
 
+export function failedOciConformanceCheckIds(report?: any) : any {
+  return Object.entries(report?.checks || {})
+    .filter(([, value]) : any => value !== true)
+    .map(([name]) : any => String(name))
+    .filter((name?: any) : any => /^[A-Za-z][A-Za-z0-9]{0,95}$/u.test(name))
+    .sort();
+}
+
 function boundedProbeFailure(error?: any) : any {
   const code: any = String(error?.code || "");
   const failureStage: any = String(error?.failureStage || "");
@@ -1190,6 +1198,7 @@ export async function runExecutionSandboxOciConformanceCli({
   if (!report.productionBackendConformance) {
     const error: Error & Record<string, any> = new Error("OCI provider conformance did not pass.");
     error.code = "execution_sandbox_oci_conformance_failed";
+    error.failedCheckIds = failedOciConformanceCheckIds(report);
     throw error;
   }
   return Object.freeze({
@@ -1211,6 +1220,9 @@ if (invokedDirectly) {
     console.log(`[execution-sandbox-oci-conformance] passed=true checks=${result.report.summary.checkCount} receipt=provisioned`);
   }).catch((error?: any) : any => {
     console.error(`[execution-sandbox-oci-conformance] failed code=${publicErrorCode(error)}`);
+    if (Array.isArray(error?.failedCheckIds) && error.failedCheckIds.length > 0) {
+      console.error(`[execution-sandbox-oci-conformance] failedChecks=${error.failedCheckIds.join(",")}`);
+    }
     process.exitCode = ["execution_sandbox_oci_target_missing", "execution_sandbox_oci_daemon_unavailable"].includes(error?.code) ? 2 : 1;
   });
 }

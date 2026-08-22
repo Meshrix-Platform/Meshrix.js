@@ -29,6 +29,7 @@ describe("controlled execution sandbox", () : any => {
       reportLeakScan: true
     });
     expect(report.blockers).toEqual(["production_backend_conformance_receipt_missing"]);
+    expect(report.productionBackendFailedChecks).toEqual([]);
     expect(report.opaqueCustodyReport.schemaVersion).toBe(
       "v0.0.1:execution-sandbox:opaque-custody-acceptance-report-1"
     );

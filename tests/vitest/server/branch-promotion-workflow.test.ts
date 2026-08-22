@@ -21,6 +21,7 @@ import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/ver
 import {
   githubProcessEnvironment,
   isTransientGithubFailure,
+  extractSafeFailureSignals,
   promotionDecision,
   requiredWorkflowPaths,
   selectLatestWorkflowRun,
@@ -87,7 +88,10 @@ describe("branch promotion workflow", () : any => {
     expect(() : any => promotionDecision({ current, candidate, ancestor: () : any => false }))
       .toThrow("promotion_not_fast_forward");
 
-    expect(requiredWorkflowPaths("nightly")).toEqual([".github/workflows/branch-flow.yml"]);
+    expect(requiredWorkflowPaths("nightly")).toEqual([
+      ".github/workflows/branch-flow.yml",
+      ".github/workflows/nightly-controlled-sandbox.yml",
+    ]);
     expect(requiredWorkflowPaths("stable")).toEqual([
       ".github/workflows/branch-flow.yml",
       ".github/workflows/ci.yml",
@@ -110,6 +114,15 @@ describe("branch promotion workflow", () : any => {
     expect(isTransientGithubFailure("Get request: EOF")).toBe(true);
     expect(isTransientGithubFailure("HTTP 503 service unavailable")).toBe(true);
     expect(isTransientGithubFailure("HTTP 403 forbidden")).toBe(false);
+    expect(extractSafeFailureSignals([
+      "FAILED execution-sandbox.controlled-runtime (1200ms)",
+      "productionBackendFailedChecks=cpuLimitEnforced,pidLimitEnforced",
+      "private payload must not pass through",
+    ].join("\n"))).toEqual([
+      "check:cpuLimitEnforced",
+      "check:pidLimitEnforced",
+      "suite:execution-sandbox.controlled-runtime",
+    ]);
   });
 
   it("admits stable and release only when the after commit is the exact upstream tip", () : any => {
