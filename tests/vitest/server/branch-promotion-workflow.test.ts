@@ -141,6 +141,8 @@ describe("branch promotion workflow", () : any => {
     expect(automation).toContain('["run", "rerun", String(selected.id), "--failed"]');
     expect(automation).toContain("resuming-failed-jobs");
     expect(automation).toContain("resuming-unstarted-jobs");
+    expect(automation).toContain("unstartedResumeCount += 1");
+    expect(automation).not.toContain("resumedRunnerAssignmentFailures");
     expect(automation).toContain("resumeRequestedAttempt");
   });
 
