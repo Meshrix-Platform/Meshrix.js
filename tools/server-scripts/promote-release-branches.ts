@@ -100,6 +100,10 @@ export function selectLatestWorkflowRun(
     )[0] || null;
 }
 
+export function shouldRetryWorkflowPolling(error?: any) : any {
+  return error?.code === "workflow_runs_unavailable";
+}
+
 function shortRevision(revision?: any) : any {
   return requireRevision(revision).slice(0, 12);
 }
@@ -205,6 +209,21 @@ function workflowRuns(repository?: any, branch?: any, candidate?: any) : any {
   return response.workflow_runs;
 }
 
+function verifyWorkflowAccess(repository?: any) : any {
+  const workflowFiles: any = new Set<any>(
+    BRANCHES.flatMap((branch?: any) : any => requiredWorkflowPaths(branch).map((workflowPath?: any) : any =>
+      path.basename(workflowPath)
+    )),
+  );
+  for (const workflowFile of workflowFiles) {
+    const response: any = parseJson(gh([
+      "api",
+      `repos/${repository}/actions/workflows/${workflowFile}`,
+    ], "workflow_access_unavailable"));
+    if (response?.state !== "active") throw failure("required_workflow_not_active");
+  }
+}
+
 function failedJobNames(repository?: any, runId?: any) : any {
   const response: any = parseJson(gh([
     "api",
@@ -230,11 +249,22 @@ function sleep(delayMs?: any) : any {
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
   for (;;) {
-    const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
-      branch,
-      candidate,
-      workflowPath,
-    });
+    let selected: any = null;
+    try {
+      selected = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
+        branch,
+        candidate,
+        workflowPath,
+      });
+    } catch (error) {
+      if (!shouldRetryWorkflowPolling(error)) throw error;
+      if (lastState !== "api-retry") {
+        console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} api-retry`);
+        lastState = "api-retry";
+      }
+      await sleep(POLL_INTERVAL_MS);
+      continue;
+    }
     const state: any = selected
       ? `${String(selected.status || "unknown")}:${String(selected.conclusion || "")}`
       : "awaiting-run";
@@ -293,6 +323,7 @@ export async function runBranchPromotion(argv: any[] = process.argv.slice(2)) : 
   const candidate: any = ensureLocalCandidate(options.candidate);
   const repository: any = repositoryName();
   refreshRemoteBranches();
+  verifyWorkflowAccess(repository);
   verifyPublicationCandidate();
   console.log(`[release-promotion] candidate ${shortRevision(candidate)}`);
 
