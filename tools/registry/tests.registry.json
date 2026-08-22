@@ -2184,10 +2184,8 @@
       "owner": "platform-security",
       "package": "server-runtime",
       "level": "security",
-      "command": "env",
+      "command": "node",
       "args": [
-        "NODE_OPTIONS=--max-old-space-size=512 --max-semi-space-size=4",
-        "node",
         "tests/vitest/server/support/run-upload-workspace-materialization-acceptance.ts"
       ],
       "sideEffects": "temp-files",

@@ -36,6 +36,13 @@ function fail(reasonCode?: any) : any {
   throw error;
 }
 
+function safeFailureCode(error?: any) : any {
+  const code: any = String(error?.code || "").trim();
+  return /^[a-z][a-z0-9_]{0,79}$/u.test(code)
+    ? code
+    : "high_risk_workload_failed";
+}
+
 function assert(condition?: any, reasonCode?: any) : any {
   if (!condition) fail(reasonCode);
 }
@@ -652,4 +659,19 @@ async function main() : Promise<any> {
   }
 }
 
-await main();
+try {
+  await main();
+} catch (error: any) {
+  const failure: Record<string, any> = {
+    kind: "meshrix.resource-discipline.high-risk-failure",
+    profile: releaseProfile ? "release" : "quick",
+    syntheticDataOnly: true,
+    reasonCode: safeFailureCode(error)
+  };
+  if (typeof process.send === "function") {
+    await new Promise((resolve?: any) : any => process.send?.(failure, () : any => resolve()));
+  } else {
+    process.stdout.write(`${JSON.stringify(failure)}\n`);
+  }
+  process.exitCode = 1;
+}

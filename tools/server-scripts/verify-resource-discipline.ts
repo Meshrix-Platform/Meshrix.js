@@ -312,6 +312,8 @@ const requiredRuntimeContracts: any[] = [
       "captureProfile",
       "runHighRiskWorkloads",
       "highRiskWorkloads",
+      "meshrix.resource-discipline.high-risk-failure",
+      "HIGH_RISK_WORKLOAD_SIGNAL_",
       "minimumProtocolEvents",
       "toolCacheCleanupAttempted: false"
     ]
@@ -332,6 +334,7 @@ const requiredRuntimeContracts: any[] = [
       "100_000",
       "eventLoopDelayP99Ms",
       "histogram.percentile(99)",
+      "meshrix.resource-discipline.high-risk-failure",
       "syntheticDataOnly: true"
     ]
   },

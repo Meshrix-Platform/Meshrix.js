@@ -80,6 +80,10 @@ describe("OCI sandbox backend", () : any => {
       .toBe("oci_image_reference_invalid");
     expect(classifyOciCommandFailure("Error response from daemon: rejected"))
       .toBe("oci_daemon_rejected");
+    expect(classifyOciCommandFailure("", "resource temporarily unavailable", 125))
+      .toBe("oci_runtime_busy");
+    expect(classifyOciCommandFailure("", "", 125))
+      .toBe("oci_cli_invocation_rejected");
     expect(classifyOciCommandFailure("private engine payload"))
       .toBe("oci_command_rejected");
   });
