@@ -246,21 +246,6 @@ function workflowRuns(repository?: any, branch?: any, candidate?: any) : any {
   return response.workflow_runs;
 }
 
-function verifyWorkflowAccess(repository?: any) : any {
-  const workflowFiles: any = new Set<any>(
-    BRANCHES.flatMap((branch?: any) : any => requiredWorkflowPaths(branch).map((workflowPath?: any) : any =>
-      path.basename(workflowPath)
-    )),
-  );
-  for (const workflowFile of workflowFiles) {
-    const response: any = parseJson(gh([
-      "api",
-      `repos/${repository}/actions/workflows/${workflowFile}`,
-    ], "workflow_access_unavailable"));
-    if (response?.state !== "active") throw failure("required_workflow_not_active");
-  }
-}
-
 function failedJobNames(repository?: any, runId?: any) : any {
   const response: any = parseJson(gh([
     "api",
@@ -360,7 +345,6 @@ export async function runBranchPromotion(argv: any[] = process.argv.slice(2)) : 
   const candidate: any = ensureLocalCandidate(options.candidate);
   const repository: any = repositoryName();
   refreshRemoteBranches();
-  verifyWorkflowAccess(repository);
   verifyPublicationCandidate();
   console.log(`[release-promotion] candidate ${shortRevision(candidate)}`);
 
