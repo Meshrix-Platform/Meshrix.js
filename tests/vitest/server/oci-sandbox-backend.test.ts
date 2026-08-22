@@ -196,6 +196,67 @@ describe("OCI sandbox backend", () : any => {
     await backend.cleanup({ runId: "concurrent-two" });
   });
 
+  it("retries one empty-output OCI CLI create rejection after deterministic cleanup", async () : Promise<any> => {
+    const paths: any = await sandboxPaths();
+    const calls: any[] = [];
+    let createAttempts: any = 0;
+    const backend: any = createOciSandboxBackend({
+      id: "oci.test",
+      binary: "/fixed/bin/docker",
+      engine: "docker",
+      runtimeClass: "runc",
+      commandRunner: async (_binary?: any, args?: any, options?: any) : Promise<any> => {
+        calls.push({ args, options });
+        if (args[0] === "create" && createAttempts++ === 0) {
+          throw Object.assign(new Error("synthetic empty-output rejection"), {
+            code: "sandbox_runtime_failed",
+            failureStage: "oci_create_failed",
+            failureReason: "oci_cli_invocation_rejected",
+            exitCode: 125
+          });
+        }
+        if (args[0] === "inspect") return { code: 0, signal: "", bytes: 1, stdout: "0\n" };
+        return { code: 0, signal: "", bytes: 0, stdout: "" };
+      }
+    });
+
+    await expect(backend.run(context(paths))).resolves.toMatchObject({ status: "succeeded" });
+    expect(calls.map((call?: any) : any => call.args[0])).toEqual([
+      "create",
+      "rm",
+      "create",
+      "start",
+      "inspect"
+    ]);
+    expect(calls[1].args.slice(0, 2)).toEqual(["rm", "--force"]);
+    expect(calls[1].options).toMatchObject({ allowFailure: true, timeoutMs: 30_000 });
+  });
+
+  it("does not retry explicit OCI argument or policy rejection classes", async () : Promise<any> => {
+    const paths: any = await sandboxPaths();
+    const calls: any[] = [];
+    const backend: any = createOciSandboxBackend({
+      id: "oci.test",
+      binary: "/fixed/bin/docker",
+      engine: "docker",
+      runtimeClass: "runc",
+      commandRunner: async (_binary?: any, args?: any) : Promise<any> => {
+        calls.push(args);
+        throw Object.assign(new Error("synthetic option rejection"), {
+          code: "sandbox_runtime_failed",
+          failureStage: "oci_create_failed",
+          failureReason: "oci_option_unsupported",
+          exitCode: 125
+        });
+      }
+    });
+
+    await expect(backend.run(context(paths))).rejects.toMatchObject({
+      failureReason: "oci_option_unsupported"
+    });
+    expect(calls.map((args?: any) : any => args[0])).toEqual(["create"]);
+  });
+
   it("rejects a non-zero subprocess capability that the backend cannot count independently", async () : Promise<any> => {
     const paths: any = await sandboxPaths();
     const calls: any[] = [];

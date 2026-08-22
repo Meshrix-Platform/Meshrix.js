@@ -258,13 +258,29 @@ export function createOciSandboxBackend({
   let createQueue: Promise<void> = Promise.resolve();
   let enabled = healthy === true;
 
-  async function createContainer(args: string[], options: CommandOptions): Promise<CommandResult> {
+  async function createContainer(args: string[], options: CommandOptions, name: string): Promise<CommandResult> {
     const previous = createQueue;
     let release: () => void = () => {};
     createQueue = new Promise<void>((resolve) => { release = resolve; });
     await previous;
     try {
-      return await commandRunner(executable, args, options);
+      try {
+        return await commandRunner(executable, args, options);
+      } catch (error) {
+        if (
+          options.signal?.aborted ||
+          (error as { failureStage?: unknown })?.failureStage !== "oci_create_failed" ||
+          (error as { failureReason?: unknown })?.failureReason !== "oci_cli_invocation_rejected"
+        ) {
+          throw error;
+        }
+        await commandRunner(executable, ["rm", "--force", name], {
+          maxBytes: 16 * 1024,
+          allowFailure: true,
+          timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+        });
+        return await commandRunner(executable, args, options);
+      }
     } finally {
       release();
     }
@@ -389,7 +405,7 @@ export function createOciSandboxBackend({
       signal,
       maxBytes: 16 * 1024,
       timeoutMs: request.resources.wallTimeMs
-    });
+    }, name);
     const execution = await commandRunner(executable, ["start", "--attach", name], {
       signal,
       maxBytes: boundedBufferLimit(request.resources.logBytes),
