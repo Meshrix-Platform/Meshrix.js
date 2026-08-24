@@ -264,7 +264,20 @@ export function createUpstreamConfigFileLoader({
           serviceId,
           descriptor: Object.freeze({ ...descriptor, references: Object.freeze([reference]) })
         };
-        await publishingApplication.execute(JSON.stringify(referenceCommand), maintainerSubject);
+        try {
+          await publishingApplication.execute(JSON.stringify(referenceCommand), maintainerSubject);
+        } catch (referenceError: any) {
+          // The service revision advanced between the main publish and this
+          // reference bind (for example a previous reload). Retry once with
+          // the current revision from the reader snapshot.
+          const current: any = await publishingApplication.get(serviceId, maintainerSubject);
+          const retryCommand: any = {
+            ...referenceCommand,
+            expectedServiceRevision: Number(current?.service?.serviceRevision || 0),
+            expectedSetRevision: Number(current?.setRevision || 0)
+          };
+          await publishingApplication.execute(JSON.stringify(retryCommand), maintainerSubject);
+        }
       }
     }
     return Object.freeze({ serviceId, serviceKey, status: "applied" });
