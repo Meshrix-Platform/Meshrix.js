@@ -168,38 +168,56 @@ export function createUpstreamConfigFileLoader({
     });
   }
 
+  async function findServiceIdByName(name: string): Promise<any> {
+    const listed: any = await publishingApplication.list(maintainerSubject);
+    const services: any[] = Array.isArray(listed?.services) ? listed.services : [];
+    for (const entry of services) {
+      const serviceId: any = String(entry?.serviceId || "");
+      if (!serviceId) continue;
+      let detail: any = null;
+      try {
+        detail = await publishingApplication.get(serviceId, maintainerSubject);
+      } catch {
+        continue;
+      }
+      if (String(detail?.service?.descriptor?.label || "") === name) {
+        return Object.freeze({
+          serviceId,
+          serviceRevision: Number(detail.service.serviceRevision || 0),
+          setRevision: Number(listed.setRevision || 0)
+        });
+      }
+    }
+    return null;
+  }
+
   async function applyService(service: any): Promise<any> {
     const serviceKey: any = serviceKeyFromName(service.name);
     const descriptor: any = descriptorFor(service);
-    // Create first; replace on conflict is handled by re-running with the
-    // current revision from the reader snapshot via the publish application.
-    const createCommand: any = {
-      schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
-      action: "create",
-      expectedServiceRevision: 0,
-      expectedSetRevision: 0,
-      idempotencyKey: `config-file-create:${serviceKey}`,
-      serviceKey,
-      descriptor
-    };
+    const existing: any = await findServiceIdByName(service.name);
     let outcome: any;
-    try {
-      outcome = await publishingApplication.execute(JSON.stringify(createCommand), maintainerSubject);
-    } catch (error: any) {
-      if (String(error?.code || "") === "upstream_publishing_service_key_invalid" ||
-          String(error?.code || "") === "upstream_publishing_idempotency_invalid") {
-        throw error;
-      }
-      // Assume the service already exists (idempotency replay or revision
-      // conflict): replace it. Reuse the create descriptor as the replace
-      // body and let the application resolve the current revision.
+    if (existing) {
       const replaceCommand: any = {
-        ...createCommand,
+        schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
         action: "replace",
+        expectedServiceRevision: existing.serviceRevision,
+        expectedSetRevision: existing.setRevision,
         idempotencyKey: `config-file-replace:${serviceKey}`,
-        serviceId: outcome?.serviceId || ""
+        serviceId: existing.serviceId,
+        descriptor
       };
       outcome = await publishingApplication.execute(JSON.stringify(replaceCommand), maintainerSubject);
+    } else {
+      const createCommand: any = {
+        schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
+        action: "create",
+        expectedServiceRevision: 0,
+        expectedSetRevision: Number((await publishingApplication.list(maintainerSubject))?.setRevision || 0),
+        idempotencyKey: `config-file-create:${serviceKey}`,
+        serviceKey,
+        descriptor
+      };
+      outcome = await publishingApplication.execute(JSON.stringify(createCommand), maintainerSubject);
     }
     const serviceId: any = String(outcome?.serviceId || "");
     if (!serviceId) throw new Error(`Upstream config service ${service.name} did not produce a service id.`);
