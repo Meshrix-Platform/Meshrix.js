@@ -16,4 +16,4 @@ planning, audit, and progress material remains in the ignored `docs/plans/` or
 
 ## Index
 
-No ADR currently meets the publication requirements.
+- [ADR-0001: Upstream services may declare optional custom fields](0001-upstream-service-custom-fields.md) — `Implemented`
