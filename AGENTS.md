@@ -14,6 +14,17 @@ and extend it the same way new custom-field needs appear. See
 for the decision, the bounded security exemption, and the required
 verification before claiming a new field is supported.
 
+## Standard MCP Clients Are First-Class
+
+Meshrix.js MCP ingress speaks the standard MCP protocol. Any conforming MCP
+client must be able to connect and use published tools without being listed
+in a hard-coded client catalog. Do not hard-code a downstream client list
+(agent product names, connector package ids) as a gate for MCP access; a
+client-declared optional identity header may be validated when present, but
+its absence must never block a standard client. Capability authorization
+(protocol, toolsets, scopes, risk, dynamic capabilities) is the gate, not
+which product the caller happens to be.
+
 ## Deployment Script Boundary
 
 Before changing any deployment entry point, stage catalog, stage script,

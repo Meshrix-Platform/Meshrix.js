@@ -237,9 +237,10 @@ function normalizePolicy(input: any, registry: any): any {
     },
     catalogFingerprint: text(input.catalogFingerprint, "policy.catalogFingerprint", 512)
   };
-  if (normalized.audience.targetIds.length === 0) {
-    fail("api_key_input_invalid", "API Key target audience cannot be empty.");
-  }
+  // Empty targetIds means the key is not restricted to a specific Meshrix
+  // MCP connector target; generic MCP clients (for example Command Code) do
+  // not send the x-meshrix.js-mcp-target header and must be usable with such
+  // a key. A non-empty list still restricts to those targets.
   const catalog: any = registry?.getCatalog?.() || null;
   if (catalog?.fingerprint && normalized.catalogFingerprint !== catalog.fingerprint) {
     fail("api_key_authority_unavailable", "Operation Permission catalog changed.", 503);
@@ -767,7 +768,8 @@ export function createApiKeyDistributionWorkerOwner({
       errorForInactive(record);
     }
     if (record.policy.audience.serverAudience !== String(input.serverAudience || "") ||
-        !record.policy.audience.targetIds.includes(String(input.targetId || "")) ||
+        ((record.policy.audience.targetIds || []).length > 0 &&
+          !record.policy.audience.targetIds.includes(String(input.targetId || ""))) ||
         (record.policy.audience.connectorPackageIds.length > 0 &&
           !record.policy.audience.connectorPackageIds.includes(String(input.connectorPackageId || "")))) {
       fail("api_key_policy_denied", "API Key audience is not allowed.", 403);
