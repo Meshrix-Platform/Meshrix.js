@@ -190,7 +190,42 @@ export function createToolSkillManagementProvider({
   async function authorizeMcpClientRequest(input: Record<string, any> = {}) : Promise<any> {
     const authorization: any = await authorizeRequest(input);
     if (!authorization?.ok) return authorization;
-    if (authorization.credentialKind === "scoped_api_key") return authorization;
+    if (authorization.credentialKind === "scoped_api_key") {
+      // The API Key authorization returned by the store is flat (policy,
+      // keyId, workloadPrincipalId, organizationNodeId, policyFingerprint).
+      // MCP consumers (listVisibleTools, listVisibleUpstreamMcpTools, and the
+      // evaluateToolAudience injection) expect apiKeyAuthorization and a
+      // restriction/subject projection, so attach them here.
+      const policy: any = authorization.policy || {};
+      const restriction: any = Object.freeze({
+        credentialKind: "scoped_api_key",
+        credentialId: String(authorization.keyId || ""),
+        policyFingerprint: String(authorization.policyFingerprint || ""),
+        toolsets: Object.freeze([...(policy.toolsetIds || [])]),
+        scopes: Object.freeze([...(policy.scopeIds || [])]),
+        capabilities: Object.freeze([...(policy.capabilityIds || [])]),
+        dynamicCapabilities: Object.freeze([...(policy.capabilityIds || [])]),
+        maxRisk: API_KEY_MAXIMUM_RISK_TO_GRANT_RISK[String(policy.maximumRisk || "")] || "read_only",
+        allowedServiceIds: Object.freeze([...(policy.serviceIds || [])]),
+        allowedSecretBindings: Object.freeze([...(policy.resources?.secretBindingIds || [])])
+      });
+      const subject: any = Object.freeze({
+        type: "scoped-api-key",
+        subjectId: String(authorization.workloadPrincipalId || ""),
+        organizationNodeId: String(authorization.organizationNodeId || ""),
+        scopes: restriction.scopes,
+        capabilities: restriction.capabilities,
+        maxRisk: restriction.maxRisk
+      });
+      return Object.freeze({
+        ...authorization,
+        ok: true,
+        handled: true,
+        apiKeyAuthorization: authorization,
+        restriction,
+        subject
+      });
+    }
     if (String(authorization.grant?.type || "") === "delegated-mcp-child") return authorization;
     return {
       handled: true,
@@ -494,6 +529,12 @@ const API_KEY_MAXIMUM_RISK_RANK: Readonly<Record<string, any>> = Object.freeze({
   low: 0,
   medium: 1,
   high: 2
+});
+
+const API_KEY_MAXIMUM_RISK_TO_GRANT_RISK: Readonly<Record<string, any>> = Object.freeze({
+  low: "read_only",
+  medium: "safe_write",
+  high: "repair_write"
 });
 
 function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
