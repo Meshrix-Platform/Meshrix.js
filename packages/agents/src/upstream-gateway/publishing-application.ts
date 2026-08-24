@@ -39,6 +39,7 @@ const MCP_DESCRIPTOR_FIELDS: any = new Set<any>([
   "url",
   "endpoint",
   "baseUrl",
+  "headers",
   "toolNamePrefix",
   "prefix",
   "protocolVersion",
@@ -351,7 +352,11 @@ function rejectExecutableContent(value?: any, path: any = "descriptor") : any {
   if (!value || typeof value !== "object") return;
   for (const [key, child] of (Object.entries(value) as [string, any][])) {
     rejectUnsafeUnicode(key);
-    if (EXECUTABLE_KEYS.has(key)) {
+    // MCP service headers are declarative request headers (for example
+    // x-valorius-project context), not executable configuration. They are
+    // still bounded: header names and values are plain strings, and the
+    // string scan above rejects injection syntax and control characters.
+    if (EXECUTABLE_KEYS.has(key) && !(path === "descriptor.mcp" && key === "headers")) {
       throw publishingError("upstream_publishing_executable_input", 400, `${path} contains unsupported executable field "${key}".`);
     }
     rejectExecutableContent(child, `${path}.${key}`);
