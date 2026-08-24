@@ -139,28 +139,51 @@ export function createUpstreamConfigFileLoader({
   async function storeCredential(service: any, serviceId: string): Promise<any> {
     if (!service.auth?.token || !localSecretKeyProvider) return null;
     const secretRef: any = `secret://meshrix/upstream-config/${service.name}`;
-    const { initializeLocalSecret } = await import("@meshrix/foundation/security/secrets/local-secret-store");
-    const result: any = await initializeLocalSecret({
-      dataDir: userDataPath,
-      keyProvider: localSecretKeyProvider,
-      target: Object.freeze({
-        provider: "meshrix",
-        family: "http-header",
-        authType: "header",
-        secretRef,
-        scope: Object.freeze({
-          serviceId,
-          scopes: Object.freeze(["gateway:read", "gateway:write"]),
-          allowedHosts: Object.freeze([new URL(service.url).hostname]),
-          allowedProtocols: Object.freeze([new URL(service.url).protocol.replace(/:$/, "")])
-        })
-      }),
-      payload: Object.freeze({ headers: Object.freeze({ authorization: service.auth.type === "bearer" ? `Bearer ${service.auth.token}` : service.auth.token }) })
-    });
+    const { initializeLocalSecret, resolveLocalSecretPayload } = await import("@meshrix/foundation/security/secrets/local-secret-store");
+    let revision: any = 1;
+    try {
+      const result: any = await initializeLocalSecret({
+        dataDir: userDataPath,
+        keyProvider: localSecretKeyProvider,
+        target: Object.freeze({
+          provider: "meshrix",
+          family: "http-header",
+          authType: "header",
+          secretRef,
+          scope: Object.freeze({
+            serviceId,
+            scopes: Object.freeze(["gateway:read", "gateway:write"]),
+            allowedHosts: Object.freeze([new URL(service.url).hostname]),
+            allowedProtocols: Object.freeze([new URL(service.url).protocol.replace(/:$/, "")])
+          })
+        }),
+        payload: Object.freeze({ headers: Object.freeze({ authorization: service.auth.type === "bearer" ? `Bearer ${service.auth.token}` : service.auth.token }) })
+      });
+      revision = Number(result.secret?.revision || 1);
+    } catch (error: any) {
+      if (String(error?.code || "") !== "local_secret_already_configured") throw error;
+      // Idempotent reload: the secret already exists; reuse its revision.
+      try {
+        const current: any = await resolveLocalSecretPayload({
+          dataDir: userDataPath,
+          secretRef,
+          keyProvider: localSecretKeyProvider,
+          expectedScope: Object.freeze({
+            serviceId,
+            requiredScopes: Object.freeze(["gateway:read", "gateway:write"]),
+            host: new URL(service.url).hostname,
+            protocol: new URL(service.url).protocol.replace(/:$/, "")
+          })
+        });
+        revision = Number(current?.revision || 1);
+      } catch {
+        revision = 1;
+      }
+    }
     return Object.freeze({
       type: "credential",
       reference: secretRef,
-      revision: Number(result.secret?.revision || 1),
+      revision,
       use: "request-auth",
       host: new URL(service.url).hostname,
       protocol: new URL(service.url).protocol.replace(/:$/, ""),
