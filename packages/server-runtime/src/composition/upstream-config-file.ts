@@ -192,7 +192,9 @@ export function createUpstreamConfigFileLoader({
       use: "request-auth",
       host: new URL(service.url).hostname,
       protocol: new URL(service.url).protocol.replace(/:$/, ""),
-      scopes: Object.freeze(["gateway:read", "gateway:write"])
+      // Empty scopes: the binding must not conflict with any operation's
+      // requiredScopes (a binding scope absent from the operation is denied).
+      scopes: Object.freeze([])
     });
   }
 
