@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 
 import { createJobsController } from "#meshrix/protocols/http/controllers/jobs-controller";
 import { createSystemController } from "#meshrix/protocols/http/controllers/system-controller";
-import { createFileLocalSecretKeyProvider } from "#meshrix/foundation/security/secrets/local-secret-key-provider";
+import { createFileLocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
 import { requirePlatformInterface } from "./platform-registry.ts";
 import { createBatchDeletionCoordinator } from "../jobs/batch-deletion-coordinator.ts";
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.ts";
