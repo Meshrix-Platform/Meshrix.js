@@ -134,13 +134,15 @@ export function createServerUpstreamGatewayRegistry({
   userDataPath,
   securityPermissions,
   artifactTransitPort = null,
-  tagStore = securityPermissions?.tagManagementStore || null
+  tagStore = securityPermissions?.tagManagementStore || null,
+  secretKeyProvider = null
 }: Record<string, any>) : any {
   return createUpstreamGatewayRegistry({
     userDataPath,
     securityPermissions,
     artifactTransitPort,
     tagStore,
+    secretKeyProvider,
     publishSkillHubUpdate(event?: any) : any {
       return broadcastConfiguredMcpNotification({
         jsonrpc: "2.0",
@@ -163,7 +165,8 @@ export async function createServerConsoleOperationProviders({
   uploadCustodyReadPort,
   operationAuditStore,
   getListenUrl = () : any => "",
-  getAgentWorkspace = () : any => null
+  getAgentWorkspace = () : any => null,
+  secretKeyProvider = null
 }: Record<string, any>) : Promise<any> {
   const contributionRegistries: any = new Map<any, any>();
   const ownedResources: any[] = [];
@@ -183,7 +186,8 @@ export async function createServerConsoleOperationProviders({
       userDataPath,
       securityPermissions,
       artifactTransitPort,
-      tagStore: securityPermissions?.tagManagementStore || null
+      tagStore: securityPermissions?.tagManagementStore || null,
+      secretKeyProvider
     });
     ownedResources.push(upstreamGatewayRegistry);
     let manifestSnapshotCommitter: any = null;
