@@ -167,7 +167,15 @@ export function mcpSubjectFromGrant(grant: any = null) : any {
 
 export function mcpAuthorizationId(authorization: any = null) : any {
   if (authorization?.credentialKind === "scoped_api_key") {
-    return String(authorization?.apiKeyAuthorization?.workloadPrincipalId || "");
+    // Prefer the flat workloadPrincipalId the API Key store returns directly;
+    // fall back to the nested apiKeyAuthorization projection for callers that
+    // wrap the authorization (authorizeMcpClientRequest). Relying only on the
+    // nested field made every API Key request share an empty scope key.
+    return String(
+      authorization?.workloadPrincipalId ||
+      authorization?.apiKeyAuthorization?.workloadPrincipalId ||
+      ""
+    );
   }
   return String(authorization?.grant?.id || "");
 }
