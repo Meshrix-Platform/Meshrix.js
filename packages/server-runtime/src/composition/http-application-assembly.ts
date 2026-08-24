@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import { createJobsController } from "#meshrix/protocols/http/controllers/jobs-controller";
 import { createSystemController } from "#meshrix/protocols/http/controllers/system-controller";
+import { createFileLocalSecretKeyProvider } from "#meshrix/foundation/security/secrets/local-secret-key-provider";
 import { requirePlatformInterface } from "./platform-registry.ts";
 import { createBatchDeletionCoordinator } from "../jobs/batch-deletion-coordinator.ts";
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.ts";
@@ -361,6 +362,9 @@ export async function createHttpApplicationAssembly({
     compositionRoot.operationProofSubstrate ||
     null;
   let agentWorkspaceRef: any = null;
+  const localSecretKeyProvider: any = createFileLocalSecretKeyProvider({
+    dataDir: userDataPath
+  });
   const consoleOperationProviders: any = await createServerConsoleOperationProviders({
     userDataPath,
     securityPermissions,
@@ -370,7 +374,8 @@ export async function createHttpApplicationAssembly({
     uploadCustodyReadPort: uploadNoRunCustody.readPort,
     operationAuditStore,
     getListenUrl: () : any => listenUrl,
-    getAgentWorkspace: () : any => agentWorkspaceRef
+    getAgentWorkspace: () : any => agentWorkspaceRef,
+    secretKeyProvider: localSecretKeyProvider
   });
   registerStartupCleanup({ close: () : any => consoleOperationProviders.close() });
   const settingsPort: Readonly<Record<string, any>> = Object.freeze({
