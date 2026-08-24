@@ -62,6 +62,20 @@ The canonical list is
 `tools/server-scripts/native-orb-deploy.ts`. Stage implementations live under
 `tools/server-scripts/lib/native-orb-deployment/stages/`.
 
+## Origin Selection
+
+The deployment entry point takes a `--origin` argument that is environment-
+specific. There is no universally correct origin; the value depends on the
+target machine, its network topology, and how the host reaches it. The
+operator or agent running the deployment must determine a reachable origin
+for the current environment and pass it explicitly.
+
+In particular, the `verify` stage probes the given origin and fails when it
+is not reachable from the host. A plausible-looking origin (for example a
+`.orb.local` name) may not be reachable unless the environment forwards the
+service port. Choose an origin that is known to answer on the service port,
+and confirm it before relying on deployment verification.
+
 ## Resume And Evidence
 
 Expensive stages must detect their own candidate-bound completed state and

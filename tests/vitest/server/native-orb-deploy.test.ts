@@ -18,10 +18,10 @@ describe("native OrbStack deployment", () : any => {
       "--machine",
       "meshrix-vm",
       "--origin",
-      "http://meshrix-vm.orb.local:7228",
+      "http://meshrix-vm.internal.example:7228",
     ])).toEqual({
       machine: "meshrix-vm",
-      publicOrigin: "http://meshrix-vm.orb.local:7228",
+      publicOrigin: "http://meshrix-vm.internal.example:7228",
     });
     expect(() : any => parseNativeOrbDeploymentArgs([]))
       .toThrow(/OrbStack machine/);
@@ -29,12 +29,12 @@ describe("native OrbStack deployment", () : any => {
       "--machine",
       "meshrix-vm",
       "--origin",
-      "http://meshrix-vm.orb.local:7229",
+      "http://meshrix-vm.internal.example:7229",
     ])).toThrow(/port 7228/);
   });
 
   it("rejects credentials, paths, and unknown arguments", () : any => {
-    const credentialOrigin: any = new URL("http://meshrix-vm.orb.local:7228");
+    const credentialOrigin: any = new URL("http://meshrix-vm.internal.example:7228");
     credentialOrigin.username = "owner";
     credentialOrigin.password = "secret";
     expect(() : any => parseNativeOrbDeploymentArgs([
@@ -47,13 +47,13 @@ describe("native OrbStack deployment", () : any => {
       "--machine",
       "meshrix-vm",
       "--origin",
-      "http://meshrix-vm.orb.local:7228/api",
+      "http://meshrix-vm.internal.example:7228/api",
     ])).toThrow(/without credentials/);
     expect(() : any => parseNativeOrbDeploymentArgs([
       "--machine",
       "meshrix-vm",
       "--origin",
-      "http://meshrix-vm.orb.local:7228",
+      "http://meshrix-vm.internal.example:7228",
       "--fallback",
     ])).toThrow(/--machine and --origin/);
   });
