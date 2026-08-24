@@ -191,16 +191,21 @@ export function createToolSkillManagementProvider({
     const authorization: any = await authorizeRequest(input);
     if (!authorization?.ok) return authorization;
     if (authorization.credentialKind === "scoped_api_key") {
-      // The API Key authorization returned by the store is flat (policy,
-      // keyId, workloadPrincipalId, organizationNodeId, policyFingerprint).
-      // MCP consumers (listVisibleTools, listVisibleUpstreamMcpTools, and the
-      // evaluateToolAudience injection) expect apiKeyAuthorization and a
-      // restriction/subject projection, so attach them here.
-      const policy: any = authorization.policy || {};
-      const restriction: any = Object.freeze({
+      // authorizeRequest already projects a complete restriction/subject from
+      // the API Key policy; reuse it when present. Otherwise the flat store
+      // fields are not preserved on this path, so read the policy from the
+      // nested apiKeyAuthorization projection.
+      const existing: any = authorization.restriction && typeof authorization.restriction === "object"
+        ? authorization.restriction
+        : null;
+      const flat: any = authorization.apiKeyAuthorization && typeof authorization.apiKeyAuthorization === "object"
+        ? authorization.apiKeyAuthorization
+        : authorization;
+      const policy: any = flat.policy || {};
+      const restriction: any = existing || Object.freeze({
         credentialKind: "scoped_api_key",
-        credentialId: String(authorization.keyId || ""),
-        policyFingerprint: String(authorization.policyFingerprint || ""),
+        credentialId: String(flat.keyId || ""),
+        policyFingerprint: String(flat.policyFingerprint || ""),
         toolsets: Object.freeze([...(policy.toolsetIds || [])]),
         scopes: Object.freeze([...(policy.scopeIds || [])]),
         capabilities: Object.freeze([...(policy.capabilityIds || [])]),
@@ -209,19 +214,21 @@ export function createToolSkillManagementProvider({
         allowedServiceIds: Object.freeze([...(policy.serviceIds || [])]),
         allowedSecretBindings: Object.freeze([...(policy.resources?.secretBindingIds || [])])
       });
-      const subject: any = Object.freeze({
-        type: "scoped-api-key",
-        subjectId: String(authorization.workloadPrincipalId || ""),
-        organizationNodeId: String(authorization.organizationNodeId || ""),
-        scopes: restriction.scopes,
-        capabilities: restriction.capabilities,
-        maxRisk: restriction.maxRisk
-      });
+      const subject: any = authorization.subject && typeof authorization.subject === "object"
+        ? authorization.subject
+        : Object.freeze({
+            type: "scoped-api-key",
+            subjectId: String(flat.workloadPrincipalId || ""),
+            organizationNodeId: String(flat.organizationNodeId || ""),
+            scopes: restriction.scopes,
+            capabilities: restriction.capabilities,
+            maxRisk: restriction.maxRisk
+          });
       return Object.freeze({
         ...authorization,
         ok: true,
         handled: true,
-        apiKeyAuthorization: authorization,
+        apiKeyAuthorization: flat,
         restriction,
         subject
       });
