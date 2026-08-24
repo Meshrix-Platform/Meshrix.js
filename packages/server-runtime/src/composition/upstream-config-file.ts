@@ -184,7 +184,7 @@ export function createUpstreamConfigFileLoader({
     };
     let outcome: any;
     try {
-      outcome = await publishingApplication.execute(createCommand, maintainerSubject);
+      outcome = await publishingApplication.execute(JSON.stringify(createCommand), maintainerSubject);
     } catch (error: any) {
       if (String(error?.code || "") === "upstream_publishing_service_key_invalid" ||
           String(error?.code || "") === "upstream_publishing_idempotency_invalid") {
@@ -199,7 +199,7 @@ export function createUpstreamConfigFileLoader({
         idempotencyKey: `config-file-replace:${serviceKey}`,
         serviceId: outcome?.serviceId || ""
       };
-      outcome = await publishingApplication.execute(replaceCommand, maintainerSubject);
+      outcome = await publishingApplication.execute(JSON.stringify(replaceCommand), maintainerSubject);
     }
     const serviceId: any = String(outcome?.serviceId || "");
     if (!serviceId) throw new Error(`Upstream config service ${service.name} did not produce a service id.`);
@@ -215,7 +215,7 @@ export function createUpstreamConfigFileLoader({
           serviceId,
           descriptor: Object.freeze({ ...descriptor, references: Object.freeze([reference]) })
         };
-        await publishingApplication.execute(referenceCommand, maintainerSubject);
+        await publishingApplication.execute(JSON.stringify(referenceCommand), maintainerSubject);
       }
     }
     return Object.freeze({ serviceId, serviceKey, status: "applied" });
