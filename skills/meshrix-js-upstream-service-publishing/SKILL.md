@@ -51,7 +51,48 @@ The Core terminal success is `server_published` after the gateway, Operation Per
 - Bind delivery cohorts to opaque server-side grant digests, negotiated protocol sessions, audience partitions, and revision chains; do not model or inspect a consumer cache.
 - Accept only exact acknowledgements for the pending revision and affected partition set. Disconnect on grant retirement, fence timed-out sessions, and reject same-session reconnect after a timeout until a fresh protocol session is established.
 
-## Publish to a running instance
+## Preferred flow: declarative configuration file
+
+Registering an upstream service should be a **declarative configuration file
+that the server hot-loads**, not a sequence of hand-built API calls. This is
+the standing target for upstream onboarding; the API steps below are the
+manual/advanced fallback.
+
+```jsonc
+{
+  "services": [
+    {
+      "name": "requirement-cognition",
+      "type": "mcp",                          // http | json-rpc | mcp
+      "url": "http://<host>:8871/mcp",        // remote MCP endpoint
+      "auth": { "type": "bearer", "token": "..." },   // upstream credential
+      "headers": { "x-valorius-project": "dev" }      // non-sensitive request context
+    }
+  ]
+}
+```
+
+The server reads the file and completes the internal steps itself: create or
+replace the service publication, store the credential as a typed secret,
+bind the credential reference, and make the MCP service immediately
+available. Internal identifiers (`capabilityId`, `secretBindingId`,
+`issuer-scopes`) are derived server-side and are **not** part of the file.
+
+Scope boundaries:
+
+- **Upstream service registration** (this skill): the configuration file
+  above. It does not involve API Keys, organization governance, or client
+  authorization.
+- **Downstream client access**: issuing API Keys and configuring clients is a
+  separate workflow owned by `$meshrix-js-api-key-issuance` and
+  `$meshrix-js-organization-governance`; never mix client authorization into
+  service registration.
+
+While the configuration-file entry point is being implemented, use the
+manual API flow below; it is the same publication contract, expressed step by
+step.
+
+## Publish to a running instance (manual API flow)
 
 ### Authenticate
 
