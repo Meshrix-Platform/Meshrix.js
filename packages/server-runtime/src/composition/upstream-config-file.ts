@@ -233,18 +233,19 @@ export function createUpstreamConfigFileLoader({
         action: "replace",
         expectedServiceRevision: existing.serviceRevision,
         expectedSetRevision: existing.setRevision,
-        idempotencyKey: `config-file-replace:${serviceKey}:${fingerprint}`,
+        idempotencyKey: `config-file-replace:${serviceKey}:${fingerprint}:${existing.serviceRevision}`,
         serviceId: existing.serviceId,
         descriptor
       };
       outcome = await publishingApplication.execute(JSON.stringify(replaceCommand), maintainerSubject);
     } else {
+      const currentSetRevision: any = Number((await publishingApplication.list(maintainerSubject))?.setRevision || 0);
       const createCommand: any = {
         schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
         action: "create",
         expectedServiceRevision: 0,
-        expectedSetRevision: Number((await publishingApplication.list(maintainerSubject))?.setRevision || 0),
-        idempotencyKey: `config-file-create:${serviceKey}:${fingerprint}`,
+        expectedSetRevision: currentSetRevision,
+        idempotencyKey: `config-file-create:${serviceKey}:${fingerprint}:${currentSetRevision}`,
         serviceKey,
         descriptor
       };
@@ -255,12 +256,13 @@ export function createUpstreamConfigFileLoader({
     if (service.auth?.token && localSecretKeyProvider) {
       const reference: any = await storeCredential(service, serviceId);
       if (reference) {
+        const referenceFingerprint: any = contentFingerprint(reference);
         const referenceCommand: any = {
           schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
           action: "replace",
           expectedServiceRevision: Number(outcome.serviceRevision || 0),
           expectedSetRevision: Number(outcome.setRevision || 0),
-          idempotencyKey: `config-file-reference:${serviceKey}:${contentFingerprint(reference)}`,
+          idempotencyKey: `config-file-reference:${serviceKey}:${referenceFingerprint}:${outcome.serviceRevision || 0}`,
           serviceId,
           descriptor: Object.freeze({ ...descriptor, references: Object.freeze([reference]) })
         };
@@ -271,10 +273,12 @@ export function createUpstreamConfigFileLoader({
           // reference bind (for example a previous reload). Retry once with
           // the current revision from the reader snapshot.
           const current: any = await publishingApplication.get(serviceId, maintainerSubject);
+          const currentRevision: any = Number(current?.service?.serviceRevision || 0);
           const retryCommand: any = {
             ...referenceCommand,
-            expectedServiceRevision: Number(current?.service?.serviceRevision || 0),
-            expectedSetRevision: Number(current?.setRevision || 0)
+            expectedServiceRevision: currentRevision,
+            expectedSetRevision: Number(current?.setRevision || 0),
+            idempotencyKey: `config-file-reference:${serviceKey}:${referenceFingerprint}:${currentRevision}`
           };
           await publishingApplication.execute(JSON.stringify(retryCommand), maintainerSubject);
         }
