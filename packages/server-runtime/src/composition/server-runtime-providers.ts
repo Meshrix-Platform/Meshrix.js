@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { createUpstreamConfigFileLoader } from "./upstream-config-file.ts";
 import {
   createUpstreamGatewayRegistry,
   createUpstreamManifestObserver,
@@ -277,6 +278,18 @@ export async function createServerConsoleOperationProviders({
         }
       }
     });
+    const upstreamConfigFileLoader: any = createUpstreamConfigFileLoader({
+      userDataPath,
+      publishingApplication: upstreamPublishingApplication,
+      localSecretKeyProvider: secretKeyProvider,
+      onError: (error?: any) : any => {
+        if (error) {
+          console.error(`[upstream-config] ${error?.message || error}`);
+        }
+      }
+    });
+    ownedResources.push(upstreamConfigFileLoader);
+    await upstreamConfigFileLoader.start();
     const workspaceAssetRegistry: any = createWorkspaceAssetRegistry({ userDataPath });
     ownedResources.push(workspaceAssetRegistry);
     const workspaceGovernanceRegistry: any = createWorkspaceGovernanceRegistry({ userDataPath });
