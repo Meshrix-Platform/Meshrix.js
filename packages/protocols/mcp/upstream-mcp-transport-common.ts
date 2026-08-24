@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 export const UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION: any = "v0.0.1:mcp:upstream-client-1";
 export const MCP_JSONRPC_VERSION: any = "2.0";
 export const MCP_DEFAULT_PROTOCOL_VERSION: any = "2025-06-18";
-export const MCP_SUPPORTED_PROTOCOL_VERSIONS: readonly any[] = Object.freeze([MCP_DEFAULT_PROTOCOL_VERSION]);
+export const MCP_SUPPORTED_PROTOCOL_VERSIONS: readonly any[] = Object.freeze([
+  "2025-03-26",
+  MCP_DEFAULT_PROTOCOL_VERSION
+]);
 export const DEFAULT_MCP_REQUEST_TIMEOUT_MS: any = 30_000;
 
 const ENV_REF_PATTERN: any = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$/;
@@ -119,7 +122,10 @@ export function requestedProtocolVersion(config: Record<string, any> = {}) : any
 
 export function assertNegotiatedProtocolVersion(result: Record<string, any> = {}, requested: any = MCP_DEFAULT_PROTOCOL_VERSION) : any {
   const negotiated: any = text(asObject(result).protocolVersion);
-  if (!MCP_SUPPORTED_PROTOCOL_VERSIONS.includes(negotiated) || negotiated !== requested) {
+  // MCP negotiation: the client proposes a version, the server selects the
+  // version it supports. Accept any server-selected version we support rather
+  // than requiring an exact echo of the request.
+  if (!MCP_SUPPORTED_PROTOCOL_VERSIONS.includes(negotiated)) {
     throw protocolError("Upstream MCP negotiated an unsupported protocol version.");
   }
   return negotiated;
