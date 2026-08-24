@@ -47,10 +47,10 @@ Identity and fact-source sections support the reference; they are not separate
 | Kimi Code / wire.jsonl | `meshrix-js-agent-target-kimi-code` |
 | Pi / pi-coding-agent | `meshrix-js-agent-target-pi` |
 | Antigravity / agy | `meshrix-js-agent-target-antigravity` |
-| WorkBuddy / WorkBuddy desktop | `meshrix-js-agent-target-workbuddy` |
-| CodeBuddy / workbuddy CLI (`codebuddy`) | `meshrix-js-agent-target-codebuddy` |
-| Trae Work / TraeWork desktop | `meshrix-js-agent-target-trae-work` |
-| Trae Agent / trae-cli | `meshrix-js-agent-target-trae-agent` |
+| WorkBuddy / WorkBuddy desktop | 无专用技能（未提供 `meshrix-js-agent-target-workbuddy`） |
+| CodeBuddy / workbuddy CLI (`codebuddy`) | 无专用技能（未提供 `meshrix-js-agent-target-codebuddy`） |
+| Trae Work / TraeWork desktop | 无专用技能（未提供 `meshrix-js-agent-target-trae-work`） |
+| Trae Agent / trae-cli | 无专用技能（未提供 `meshrix-js-agent-target-trae-agent`） |
 
 Aliases resolve through the agent index below.
 
@@ -160,10 +160,10 @@ Each `meshrix-js-agent-target-*` skill uses this layout so 适配项 stay compar
 | `kimi` | `meshrix-js-agent-target-kimi` | `moonshot` | yes (id `kimi`) |
 | `kimi-code` | `meshrix-js-agent-target-kimi-code` | `kimi_code`, `kimicode` | no |
 | `pi` | `meshrix-js-agent-target-pi` | `pi-agent`, `pi-coding-agent` | yes |
-| `workbuddy` | `meshrix-js-agent-target-workbuddy` | — | no |
-| `codebuddy` | `meshrix-js-agent-target-codebuddy` | `workbuddy-cli` | no |
-| `trae-work` | `meshrix-js-agent-target-trae-work` | — | no |
-| `trae-agent` | `meshrix-js-agent-target-trae-agent` | `trae-cli` | no |
+| `workbuddy` | 无专用技能 | — | no |
+| `codebuddy` | 无专用技能 | `workbuddy-cli` | no |
+| `trae-work` | 无专用技能 | — | no |
+| `trae-agent` | 无专用技能 | `trae-cli` | no |
 
 `kimi` is the desktop history / Meshrix.js MCP id surface. `kimi-code` is the CLI
 conversation ACP target. They are separate reference entries.

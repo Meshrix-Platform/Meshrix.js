@@ -145,10 +145,11 @@ separate pre-release visual journey exercises every detected supported local
 client as an operator compatibility matrix, but that evidence cannot promote,
 replace, or modify the Core result.
 
-Simulation is forbidden when any supported local client is detected. A
-protocol simulation fallback is allowed only after the complete seven-target
-scan records every client as `not_detected`; the fallback remains explicitly
-identified as protocol-path evidence rather than client compatibility.
+Simulation is forbidden when any supported protocol version has a real
+consumer. A protocol simulation fallback is allowed only after the complete
+protocol-version scan records every row as `not_detected`; the fallback
+remains explicitly identified as protocol-path evidence rather than consumer
+compatibility.
 
 ## Security contract
 
@@ -405,23 +406,25 @@ the PNG IHDR dimensions against those facts before accepting or embedding the
 image. Do not resize or upscale an earlier 1× capture to meet the 2× contract.
 
 Before it may be generated, run an isolated real external service, the Meshrix.js API and
-Web Console, and the operator-owned connector compatibility matrix. Seed the
-exact external adapter packages for OpenClaw, Codex, Claude Code, Antigravity,
-OpenCode, Pi, and Kimi CLI. Discover each target through its real local command,
-then issue an organization-scoped API Key through the rendered Console and use
-an isolated temporary configuration to install through token-env or token-stdin, request,
-uninstall, and clean up every detected target. Every detected target must pass;
-the report retains all seven rows and records missing commands as
+Web Console, and the operator-owned connector compatibility matrix organized by
+**MCP protocol version**, not by agent product. Resolve the supported protocol
+versions from the canonical protocol definition; each matrix row is one
+protocol version. For every supported version, use a real consumer that speaks
+that version as the verification sample: issue an organization-scoped API Key
+through the rendered Console, install through token-env or token-stdin in an
+isolated temporary configuration, request, uninstall, and clean up every
+detected consumer. Every detected consumer must pass; the report retains every
+protocol-version row and records a version with no real consumer as
 `not_detected`. Do not use simulation to replace, supplement, or rescue a real
-client when at least one target is detected.
+consumer when at least one version has one.
 
-Only when all seven rows are `not_detected`, run one isolated MCP protocol
+Only when every protocol-version row is `not_detected`, run one isolated MCP protocol
 simulator through the same upload, tools/list, two-operation, approval, audit,
 screenshot, and cleanup path. Record validation mode `simulated-fallback` and
 reason
-`no_supported_local_client_detected_after_complete_catalog_scan`. Display the
-simulator as `mcp-simulator`, never as one of the absent client products, and
-state that client compatibility remains remaining required work until a real client is qualified. Record the exact safe startup and connector configuration as
+`no_supported_local_client_detected_after_complete_protocol_scan`. Display the
+simulator as `mcp-simulator`, never as a specific product, and
+state that consumer compatibility remains remaining required work until a real consumer is qualified. Record the exact safe startup and connector configuration as
 selectable text. Capture Chromium screenshots from the running Web Console for
 the default Workbench, descriptor configuration, publication health, operation
 projection, API Key issuance and downstream configuration, Operation Permission approval, and the final downstream

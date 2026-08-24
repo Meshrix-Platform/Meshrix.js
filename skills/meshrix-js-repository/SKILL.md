@@ -74,24 +74,11 @@ Apply these rules to every task inside the Meshrix.js product repository.
 
 ## 本地服务启动与实例复用
 
-- 启动普通本地服务前，先解析有效的默认数据目录，并检查默认对外源 `<server-url>`。
-- 发布、离线和 `--with-ui` 实例只有一个对外源：控制台是 `<server-url>/`，API 是 `<server-url>/api/`。开发者手册见 `$meshrix-js-developer-handbook`，用户手册见 `$meshrix-js-user-handbook`。
-- 源码开发可以另起 Vite 控制台端口做热更新；那不是发布地址，也不给外部服务对接。
-- 默认数据目录已有 Meshrix.js 运行数据时，复用该目录；不要改用隔离目录或临时目录。
-- 已有属于同一本地实例且健康的服务时，直接复用；不要重复启动进程。服务已带控制台时不要再起一个控制台进程。
-- 数据目录存在但服务未运行时，只启动一个指向该目录的服务端；仅在服务不提供控制台的源码开发中再启动一个连接该服务端的控制台。
-- 默认端口被无关或无法确认的进程占用时，停止并报告冲突；不要静默改用其它端口或创建另一数据目录。
-- 只有用户明确要求，或仓库测试、验证器明确要求隔离并负责清理时，才使用隔离数据目录。
-- 认证和运维命令必须使用与运行中服务完全相同的数据目录；命令在其它目录成功不代表当前实例已更新。
+本地服务启动、实例复用、数据目录解析和对外源契约由 `$meshrix-js-instance-configuration` 与 `$meshrix-js-instance-usage` 承接。此处只保留仓库级约定：默认数据目录已有运行数据时复用该目录；默认端口被无关进程占用时停止并报告冲突，不要静默改用其它端口或另建数据目录；认证和运维命令必须使用与运行中服务完全相同的数据目录。
 
 ## 功能迁移自查与长期门禁
 
-- 只有迁移或重构任务需要在本轮修改中执行迁移自查；普通功能改动按当前功能契约和最小上下游验证执行。
-- 功能改动按“功能优化 -> 全面迁移到新功能 -> 旧兼容移除”的顺序收口；不要只新增新入口后继续把普通调用链接到旧实现。
-- 功能、模块、文档、ADR 和计划命名不使用版本号或 `v2`/`version` 这类边界词；命名必须描述功能本身或本次改造总结。
-- 迁移自查需覆盖入口、调用方、配置、注册表、文档、测试、fixtures 和生成物引用；发现旧路径仍被普通流程使用时，先完成迁移再把测试结果视为有效。
-- 一次性迁移检查只能作为本次迁移的临时脚本、临时 `rg` 扫描或临时审计记录；迁移完成后必须删除或退出长期命令链。
-- 长期门禁只验证当前 canonical 入口、模块名、目录、注册表、契约和层边界；不要长期检查旧模块名、旧路径、旧 redirect、旧 fallback 或旧兼容格式是否不存在。
+功能迁移自查、迁移完成收口和长期门禁由 `$meshrix-js-migration-completion` 承接。此处只保留仓库级约定：功能改动按“功能优化 -> 全面迁移到新功能 -> 旧兼容移除”的顺序收口，不要只新增新入口后继续把普通调用链接到旧实现；功能、模块、文档、ADR 和计划命名不使用版本号或 `v2`/`version` 这类边界词。
 
 ## 可提交功能门禁
 
@@ -118,7 +105,7 @@ Apply these rules to every task inside the Meshrix.js product repository.
 - 代码文件拆分遵循 `docs/architecture/ARCHITECTURE.md` 的 `Source File Organization`；行数不作为门禁或单独拆分理由。
 - 默认在当前 feature root 内完成最小规模的职责提取；只有形成独立所有权、公共契约、生命周期、构建配置或依赖边界时才新增 feature root 或 package。
 - 拆分必须降低耦合并保持依赖方向、状态所有权、公共 API、测试和性能边界；不得产生数字分片、阶段命名、透传碎片、循环依赖或旧兼容残留。
-- 当拆分、包提取、所有权移动或协议解耦需要重新贯通组合根、注册表、调用方和验收表面时，使用 `$meshrix-js-feature-reassembly`，不要在 Meshrix.js 仓库复制维护流程或辅助脚本。
+- 当拆分、包提取、所有权移动或协议解耦需要重新贯通组合根、注册表、调用方和验收表面时，使用 `$meshrix-js-architecture-reassembly`，不要在 Meshrix.js 仓库复制维护流程或辅助脚本。
 
 ## 智能体配置分层
 
@@ -144,8 +131,7 @@ a stronger replacement lands.
 
 ## Linux VM closure
 
-- A Linux operating system inside a virtual machine can close Meshrix.js offline delivery and the current plan receipt. Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when that Linux VM is reachable.
-- Native Linux, Ubuntu, Debian, and environment qualification remain remaining required work after the named Real-Machine Verification Workflow. Project-level functional acceptance remains `npm run verify:acceptance`.
+Linux VM 内闭环交付、环境资格和真机验证由 `$meshrix-js-real-machine-verification` 承接。项目级功能验收仍是 `npm run verify:acceptance`，由 `$meshrix-js-platform-acceptance-workflow` 承接。
 
 ## 验证范围
 

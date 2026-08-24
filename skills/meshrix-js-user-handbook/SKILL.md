@@ -28,54 +28,21 @@ or the public address contract. That work belongs to
 ## How the instance is addressed
 
 A published, offline, or `--with-ui` instance has **one public origin**
-`<server-url>`. The default listen port is `7228`.
+`<server-url>` (Console at `/`, Server API at `/api/`). The full address
+contract is owned by `$meshrix-js-release-artifact-contract`; instance
+addressing, connection, and operation details are owned by
+`$meshrix-js-instance-usage` and `$meshrix-js-instance-configuration`. This
+handbook only routes: browser and operator access, external-service
+publishing, and agent or client connection all start from
+`$meshrix-js-instance-usage`. Operator commands live in `docs/RUNBOOK.md`; do
+not copy command maps into this handbook.
 
-| Who | Where |
-| --- | --- |
-| Browser / operator Console | `<server-url>/` |
-| Server API, health, auth, Operation Permission | `<server-url>/api/` |
-| Agent, MCP connector, or other governed client | the same `<server-url>` |
+## Connect an external service or client
 
-There is no second public “backend port.” `/` is the Console. `/api` is the
-Server. Both are the same process. Source development may expose a Vite
-console port; do not point external systems or reverse proxies at that port.
-
-Operator commands live in `docs/RUNBOOK.md`. Do not copy command maps into
-this handbook.
-
-## Connect an external service
-
-Keep the external service on its own host, port, and credential custody.
-Publish it through the authenticated upstream path so Meshrix.js projects a
-governed catalog. Do not copy host credentials into the Meshrix.js container
-merely to make a command reachable, and do not ask Meshrix.js to open a
-second listen address for that service.
-
-Use `$meshrix-js-instance-usage` first, then
-`$meshrix-js-upstream-service-publishing` for the publishing transaction.
-
-## Connect an external agent or client
-
-Point the connector at `<server-url>`. Authenticate with a Console-issued
-scoped API Key through the signed connector. Client configuration stores
-connector metadata, not the key. Operation Permission grants are a separate
-transaction from connector installation.
-
-Use `$meshrix-js-instance-usage`, `$meshrix-js-downstream-mcp-client-access`,
-and the matching agent-target skill.
-
-## Operate the instance
-
-Reuse a healthy same-mode instance. Refuse an occupied default port or a
-foreign container on the server name. Stop does not wipe volumes. Restart the
-same mode only.
-
-Probe `<server-url>/api/healthz` for the Server and `<server-url>/` for the
-Console. An API-only source compose stack is not the published usage shape.
-
-Report only status, HTTP status classes, bounded reason codes, and
-`<server-url>`. Never print credentials, fingerprints, or private paths.
-
-Instance configuration and plugin repair belong to
-`$meshrix-js-instance-configuration`. Everyday use and external connection
-stay in this handbook and `$meshrix-js-instance-usage`.
+Connecting an external service into Meshrix.js, connecting an external agent
+or client, and operating a healthy instance are owned by
+`$meshrix-js-instance-usage`; instance configuration and plugin repair by
+`$meshrix-js-instance-configuration`. Publishing an external service uses
+`$meshrix-js-upstream-service-publishing`; installing downstream MCP access
+uses `$meshrix-js-downstream-mcp-client-access` and the matching agent-target
+skill. This handbook does not repeat those procedures.

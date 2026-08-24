@@ -40,9 +40,10 @@ governed catalog. Do not copy host credentials into the Meshrix.js container
 merely to make a command reachable, and do not publish a second Meshrix.js
 listen address for that service.
 
-Use `$meshrix-js-upstream-service-publishing` for the publishing transaction
-and `$meshrix-js-instance-configuration` plus its Agent connectivity reference for
-host stdio or `gh` bridges.
+Use `$meshrix-js-upstream-service-publishing` for the publishing transaction,
+including host stdio services; its contract is the single authority for every
+upstream service type. `$meshrix-js-instance-configuration` routes the request
+through its Agent connectivity reference.
 
 ## Connect an external agent or client to Meshrix.js
 

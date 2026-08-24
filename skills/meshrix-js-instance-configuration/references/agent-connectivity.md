@@ -14,22 +14,31 @@ publish only the governed stdio service through Meshrix.js. External agents
 and clients connect to `<server-url>`, not to a second backend port. See
 `$meshrix-js-instance-usage`.
 
-## Publish a host stdio service
+## Publish a service into Meshrix.js
 
-1. Confirm the exact executable, fixed arguments, working boundary, operation
-   catalog, and intended audience. Treat user input as data, never as command,
-   path, template, or environment syntax.
+Publishing any upstream service — HTTP, JSON-RPC, MCP, or a host stdio
+command — is owned by `$meshrix-js-upstream-service-publishing`. Read that
+skill and its `references/publishing-contract.md` before registering a service.
+Do not keep a second publishing procedure here; this file only routes the
+request.
+
+1. Confirm the exact service contract: protocol, base URL or executable,
+   operation catalog, authentication, and intended audience. Treat user input
+   as data, never as command, path, template, or environment syntax.
 2. Register the service through the authenticated upstream publication path.
    Keep publication, Operation Permission grants, and downstream connector
    installation as separate transactions.
-3. For a host `gh` bridge, let the host `gh` process keep its existing CLI
-   authentication. Never export its token, auth store, process environment, or
-   response payload into Meshrix.js configuration or the consumer container.
-4. Grant only the explicitly requested operations and audience. A prior broad
+3. Grant only the explicitly requested operations and audience. A prior broad
    authorization is not a default for a future deployment.
-5. Verify publication health, projected operations, protected invocation, and
+4. Verify publication health, projected operations, protected invocation, and
    final effect with bounded receipts. Do not expose command output as health
    evidence.
+
+Never copy a host credential into a container merely to make a host-owned
+command reachable. Keep the command and its credential custody on the host and
+publish only the governed service through Meshrix.js. External agents and
+clients connect to `<server-url>`, not to a second backend port. See
+`$meshrix-js-instance-usage`.
 
 ## Install downstream MCP access
 

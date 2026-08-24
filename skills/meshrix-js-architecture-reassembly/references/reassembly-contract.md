@@ -77,7 +77,7 @@ contract.
 
 ## 5. Read checker output
 
-`node skills/meshrix-js-feature-reassembly/scripts/reassembly-cli.mjs check`
+`node skills/meshrix-js-architecture-reassembly/scripts/reassembly-cli.mjs check`
 returns:
 
 - `ok: false` only when the diagnostic artifact cannot be safely interpreted,

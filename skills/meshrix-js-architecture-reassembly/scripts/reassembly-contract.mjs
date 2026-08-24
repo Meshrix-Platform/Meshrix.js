@@ -155,8 +155,8 @@ export async function planReassembly({ target = process.cwd(), changedFrom = "" 
     signals: Object.freeze(signals),
     framework: Object.freeze({
       mode: "heuristic",
-      skill: "meshrix-js-feature-reassembly",
-      contractTemplate: "skills/meshrix-js-feature-reassembly/assets/reassembly-contract.template.json",
+      skill: "meshrix-js-architecture-reassembly",
+      contractTemplate: "skills/meshrix-js-architecture-reassembly/assets/reassembly-contract.template.json",
       suggestedDepth,
       recommendedProfiles: Object.freeze(["changed"]),
       optionalProfiles: Object.freeze([
