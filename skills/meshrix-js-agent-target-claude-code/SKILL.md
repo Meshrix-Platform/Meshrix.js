@@ -73,7 +73,10 @@ project transcript tree; `.claude.json` is global client state.
 
 ## Session visibility in the interactive resume picker (observed)
 
-Claude Code 2.1.211 hides SDK-spawned sessions from the interactive
+Observed on Claude Code 2.1.211 (packaged binary) at the time this skill was
+last verified. Behavior may change in later versions; re-verify against the
+installed binary before relying on it. The observed behavior: Claude Code
+hides SDK-spawned sessions from the interactive
 `claude --resume` picker. Verified from the packaged binary:
 
 - SDK-launched processes (`--print --input-format stream-json`) record

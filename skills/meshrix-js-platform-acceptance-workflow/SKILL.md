@@ -1,9 +1,13 @@
 ---
 name: meshrix-js-platform-acceptance-workflow
-description: Run or inspect the canonical Meshrix.js functional-completeness release gate and its aggregate evidence report. Use for functional release acceptance, acceptance task changes, or aggregate development-environment evidence validation.
+description: Run or inspect the canonical Meshrix.js functional-completeness release gate and its aggregate evidence report. Use for functional release acceptance, acceptance task changes, or aggregate development-environment evidence validation. The optional real-machine verification workflow is owned by $meshrix-js-real-machine-verification.
 ---
 
 # Meshrix.js Platform Acceptance Workflow
+
+This skill owns the **functional-completeness release gate** for Meshrix.js
+and its aggregate evidence report. The optional real-machine verification
+workflow belongs to `$meshrix-js-real-machine-verification`.
 
 ## Protect functional-release authority
 
@@ -22,7 +26,8 @@ candidate-bound `functional-complete` receipt. It may issue an environment
 support claim for the tested candidate and target, but it must never revoke,
 block, or replace functional acceptance. Layer tests and claim-specific
 profiles supply scoped evidence; they do not independently establish another
-claim's readiness.
+claim's readiness. Use `$meshrix-js-real-machine-verification` for that
+workflow.
 
 Plan with `npm run verify:acceptance:plan`. Confirm that every selected task declares its dependencies, locks, timeout, side-effect class, and owner.
 
@@ -37,15 +42,14 @@ retention and crash boundaries; routine telemetry has zero unbounded
 per-request growth; and optional telemetry sheds safely under pressure. A child
 report may establish only its scoped evidence readiness.
 
-Plan-scoped offline delivery and the current plan receipt may close on a Linux
-operating system inside a virtual machine. Prefer Ubuntu; accept Debian. A
-macOS operator host is allowed when that Linux VM is reachable. This path is
-not `npm run verify:acceptance`. Native Linux, Ubuntu, Debian, and environment
-qualification remain remaining required work after the named Real-Machine
-Verification Workflow.
-
 ## Handle evidence
 
 Keep planning read-only. Write reducer-owned reports only during an explicit workflow run. Do not let plan mode overwrite acceptance evidence.
 
 Report the reducer status, task IDs, counts, and sanitized failure categories. Never infer a pass from truncated logs or manually assembled command lists.
+
+## Boundaries
+
+Do not run real-machine or environment qualification from this skill; those
+belong to `$meshrix-js-real-machine-verification`. The real-machine workflow
+never changes the functional acceptance result.

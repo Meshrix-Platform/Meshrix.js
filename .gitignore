@@ -91,6 +91,7 @@ test-results/
 CLAUDE.md
 .claude/
 .codex-research/
+.commandcode/
 .gemini/
 .impeccable/
 .github/skills/

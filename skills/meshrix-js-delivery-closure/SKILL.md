@@ -1,9 +1,15 @@
 ---
-name: meshrix-js-feature-reassembly
-description: Recover stalled Meshrix.js delivery and reconnect fragmented features, package or ownership moves, interface migrations, and weak frontend direction with a risk-proportionate heuristic workflow.
+name: meshrix-js-delivery-closure
+description: Recover stalled Meshrix.js delivery and close a feature with a risk-proportionate heuristic workflow — diagnose, select a proportional depth, shape the closure, protect functional truth, classify findings, and close without looping. Use when a delivery is stuck, ambiguous, or needs a closure decision. Architecture reassembly diagnostics are owned by $meshrix-js-architecture-reassembly; frontend visual direction by $meshrix-js-frontend-visual-direction.
 ---
 
-# Meshrix.js Feature Reassembly
+# Meshrix.js Delivery Closure
+
+This skill owns **delivery closure decisions** for Meshrix.js features: the
+risk-proportionate workflow that recovers stalled delivery and closes a
+feature. Architecture reassembly diagnostics belong to
+`$meshrix-js-architecture-reassembly`; frontend visual direction belongs to
+`$meshrix-js-frontend-visual-direction`.
 
 ## Keep judgment with the agent
 
@@ -75,36 +81,6 @@ the change is standard or deep, delivery has already cycled through rework, or a
 reviewer needs a shared decision frame. Use only the sections that reduce real
 uncertainty.
 
-## Reassemble architecture when needed
-
-Use the reassembly diagnostic for a source split, package or ownership move,
-protocol boundary, composition-root change, or capability whose consumers no
-longer agree with its authority. Do not require it for every feature or UI edit.
-
-1. Optionally run `node skills/meshrix-js-feature-reassembly/scripts/reassembly-cli.mjs plan .` to inventory
-   changed surfaces and receive a suggested depth. Add `--changed-from <ref>`
-   only when those committed changes belong to the same candidate.
-2. Read `references/reassembly-contract.md` when the inventory reveals material
-   boundary or migration risk.
-3. For a standard or deep closure, optionally copy
-   `assets/reassembly-contract.template.json` into ignored process storage. Fill only the
-   surfaces that sharpen a decision; missing or pending surfaces are prompts,
-   not execution blockers.
-4. Update the canonical contract and fact owner before projections when that
-   ordering reduces split authority. Bind once, migrate consumers, regenerate
-   derived facts, and remove superseded behavior when the selected work is a
-   completed migration.
-5. Optionally run `node skills/meshrix-js-feature-reassembly/scripts/reassembly-cli.mjs check
-   <contract-file> --target .`. Interpret `errors` as an unreadable or unsafe diagnostic
-   artifact and `advisories` as review prompts. The command never authorizes,
-   blocks, or completes a Better Plan lifecycle.
-
-The `reassembly` check is an optional deep diagnostic. It does not replace the
-repository-owned package scripts or acceptance reducer. See
-`references/examples.md` for proportional examples and use
-`$meshrix-js-migration-completion` when a selected closure actually replaces a source,
-route, schema, name, or owner.
-
 ## Protect functional truth
 
 For each material behavior, identify the real actor and goal, truthful
@@ -116,23 +92,6 @@ Do not silently weaken a user-visible outcome. Escalate a compromise when it
 changes scope, hides a reachable defect, retains an unintended compatibility
 path, or changes an irreversible promise. Otherwise choose the soundest local
 tradeoff and continue.
-
-## Converge frontend quality
-
-- Reuse an approved product system for ordinary UI work. Do not reopen visual
-  direction simply because a screen changed.
-- For a new visual language or a material workflow reset, choose representative
-  states such as the shell, primary task, and dense failure or operational view.
-- Produce alternatives only when visual uncertainty is material and the choice
-  is expensive to reverse. Two or three complete image-level directions are
-  usually enough; one strong direction is valid when the system or brief is
-  already clear.
-- Ask the user to choose when the direction changes brand or product intent.
-  Otherwise the agent may select a direction, record why, and implement it.
-- Freeze shared typography, density, grid, semantic colors, controls, motion,
-  responsiveness, and accessibility only to the degree needed for consistency.
-- Compare representative widths and states after implementation. Screenshots
-  and visual diffs prove appearance only, never backend execution or readiness.
 
 ## Close without looping
 
@@ -177,3 +136,11 @@ project is perfect.
 - Never repeatedly run broad regression while bounded implementation is still changing.
 - Never publish planning artifacts, raw evidence, runtime data, credentials, machine identity, personal data, or private paths.
 - Never declare readiness from stale, partial, skipped, fabricated, or cross-owner evidence.
+
+## Boundaries
+
+Use `$meshrix-js-architecture-reassembly` for source splits, package or
+ownership moves, protocol boundaries, and composition-root changes. Use
+`$meshrix-js-frontend-visual-direction` for new visual languages or material
+workflow resets. Use `$meshrix-js-migration-completion` when a selected closure
+actually replaces a source, route, schema, name, or owner.

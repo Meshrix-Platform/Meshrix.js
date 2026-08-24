@@ -24,39 +24,17 @@ product repository.
 Do not use this package to start a published instance, log into the Console,
 or bridge an external service. That work belongs to `$meshrix-js-user-handbook`.
 
-## Published artifact
+## Published artifact and public address contract
 
 The release definition is the sole source for version, tag, channel, package
-manifests, container target, and platforms. The schema locks
-`container.target` to `runtime-ui` and platforms to `linux/amd64` plus
-`linux/arm64`.
-
-The published image and offline bundle are one process that serves Server and
-Web Console. API-only `runtime` is a source-checkout verification image, not
-the published artifact. Source `docker-compose.yml` may default to that
-API-only image; it is not the release or offline artifact.
-
-## Public address contract
-
-A published, offline, or `--with-ui` artifact exposes **one public origin**.
-Do not package a second public backend port.
-
-| Surface | Address |
-| --- | --- |
-| Public origin | `<server-url>` |
-| Web Console | `<server-url>/` |
-| Server API | `<server-url>/api/` |
-| Health | `<server-url>/api/healthz` |
-| Downstream MCP and other governed clients | the same `<server-url>` |
-
-The default listen port is `7228`. Host publish, bootstrap, advertised, and
-active service URLs must name that same origin. Changing the host port changes
-`<server-url>`; it does not split console and API onto two public ports.
-
-Source development may start a separate Vite console for hot reload. That
-second port is a development aid only. It is not part of the published
-address contract and must not appear in release images, offline bundles, or
-user-handbook integration instructions.
+manifests, container target, and platforms. The published artifact shape and
+the one-public-origin address contract (console at `<server-url>/`, API at
+`<server-url>/api/`, default port `7228`) are owned by
+`$meshrix-js-release-artifact-contract`; read that skill for the exact
+contract. This handbook only routes: changing the published image target,
+platforms, or listen-address contract is a `release-artifact-contract` change;
+packing or verifying a `runtime-ui` release or offline bundle is a
+`$meshrix-js-release-engineering-workflow` change.
 
 ## Developer workflow
 
