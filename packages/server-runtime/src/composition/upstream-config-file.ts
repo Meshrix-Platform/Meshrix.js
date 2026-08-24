@@ -22,6 +22,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 const CONFIG_DIRECTORY = "upstream-config";
 const CONFIG_FILENAME = "services.json";
@@ -32,6 +33,10 @@ const SAFE_NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,63}(?:\/[A-Za-z][A-Za-z0-9_.-]{0,63
 
 function serviceKeyFromName(name: string): string {
   return String(name || "").trim();
+}
+
+function contentFingerprint(value: any): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
 }
 
 export function createUpstreamConfigFileLoader({
@@ -217,6 +222,7 @@ export function createUpstreamConfigFileLoader({
   async function applyService(service: any): Promise<any> {
     const serviceKey: any = serviceKeyFromName(service.name);
     const descriptor: any = descriptorFor(service);
+    const fingerprint: any = contentFingerprint(descriptor);
     const existing: any = await findServiceIdByName(service.name);
     let outcome: any;
     if (existing) {
@@ -225,7 +231,7 @@ export function createUpstreamConfigFileLoader({
         action: "replace",
         expectedServiceRevision: existing.serviceRevision,
         expectedSetRevision: existing.setRevision,
-        idempotencyKey: `config-file-replace:${serviceKey}`,
+        idempotencyKey: `config-file-replace:${serviceKey}:${fingerprint}`,
         serviceId: existing.serviceId,
         descriptor
       };
@@ -236,7 +242,7 @@ export function createUpstreamConfigFileLoader({
         action: "create",
         expectedServiceRevision: 0,
         expectedSetRevision: Number((await publishingApplication.list(maintainerSubject))?.setRevision || 0),
-        idempotencyKey: `config-file-create:${serviceKey}`,
+        idempotencyKey: `config-file-create:${serviceKey}:${fingerprint}`,
         serviceKey,
         descriptor
       };
@@ -252,7 +258,7 @@ export function createUpstreamConfigFileLoader({
           action: "replace",
           expectedServiceRevision: Number(outcome.serviceRevision || 0),
           expectedSetRevision: Number(outcome.setRevision || 0),
-          idempotencyKey: `config-file-reference:${serviceKey}`,
+          idempotencyKey: `config-file-reference:${serviceKey}:${contentFingerprint(reference)}`,
           serviceId,
           descriptor: Object.freeze({ ...descriptor, references: Object.freeze([reference]) })
         };
