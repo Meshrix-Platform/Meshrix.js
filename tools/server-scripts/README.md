@@ -98,6 +98,13 @@ resume without repeating valid transfer, dependency, or build work. A resumed
 run may execute cheap prerequisite inspection, but must not repeat the entire
 deployment merely to reach a later stage.
 
+Acceptance publishes one digest-bound `accepted-candidate.json` receipt with
+the functional claim, terminal status, release readiness, profile, source
+revision, and candidate digest. Bootstrap, deployment, branch promotion, and
+production closure consume only that receipt. Detailed acceptance reports and
+their diagnostic manifest remain acceptance-owned diagnostics; downstream
+workflows must not reread, recount, reorder, or revalidate them.
+
 Output is limited to the candidate identifier, bounded status, public
 `<server-url>` placeholder, health status classes, and the ordered stage result
 list. Deployment scripts must not emit credentials, private paths, machine

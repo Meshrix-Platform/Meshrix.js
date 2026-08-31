@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -27,7 +26,7 @@ import {
   publishAcceptanceGeneration,
   publishAcceptanceFailureDiagnostic,
   removeAcceptanceGenerationWorkspace,
-  resolveCurrentAcceptanceGeneration,
+  resolveCurrentAcceptedCandidate,
   withAcceptanceExecutionLease
 } from "../../../tools/server-scripts/lib/platform-acceptance-generation-store.ts";
 
@@ -244,9 +243,7 @@ function publishFixture(options?: any) : any {
 }
 
 function resolveFixture(repoRoot?: any) : any {
-  return resolveCurrentAcceptanceGeneration(repoRoot, {
-    verifyLedgerAnchor: async () : Promise<any> => ({ ok: true })
-  });
+  return resolveCurrentAcceptedCandidate(repoRoot);
 }
 
 afterEach(async () : Promise<any> => {
@@ -338,11 +335,18 @@ describe("platform acceptance generation store", () : any => {
       "build/reports/child.json",
       "build/reports/platform-acceptance.json"
     ]);
+    expect(publication.receipt).toMatchObject({
+      claim: "functional-complete",
+      status: "accepted",
+      releaseReady: true,
+      generationId: "accepted-generation",
+      selectedProfile: "enterprise-single-node"
+    });
     const current: any = await resolveFixture(repoRoot);
     expect(current.pointer.generationId).toBe("accepted-generation");
-    expect(current.manifest.generationId).toBe("accepted-generation");
-    expect(current.manifest.selectedProfile).toBe("enterprise-single-node");
-    expect(current.pointer.manifestSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(current.receipt.generationId).toBe("accepted-generation");
+    expect(current.receipt.selectedProfile).toBe("enterprise-single-node");
+    expect(current.pointer.receiptSha256).toMatch(/^[a-f0-9]{64}$/u);
     await expect(fs.readFile(path.join(repoRoot, "build", "reports", "child.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
 
@@ -351,8 +355,9 @@ describe("platform acceptance generation store", () : any => {
       "{\"tampered\":true}\n",
       "utf8"
     );
-    await expect(resolveFixture(repoRoot))
-      .rejects.toThrow("Acceptance generation entry digest mismatch");
+    await expect(resolveFixture(repoRoot)).resolves.toMatchObject({
+      receipt: { generationId: "accepted-generation", status: "accepted" }
+    });
   });
 
   it("preserves the previous generation when a replacement is incomplete or non-ready", async () : Promise<any> => {
@@ -635,7 +640,7 @@ describe("platform acceptance generation store", () : any => {
     await removeAcceptanceGenerationWorkspace(unverifiable);
   });
 
-  it("detects manifest mutation through the atomic pointer digest", async () : Promise<any> => {
+  it("detects accepted-candidate receipt mutation through the atomic pointer digest", async () : Promise<any> => {
     const repoRoot: any = await fixtureRoot();
     const paths: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "manifest-digest" });
     await writeWorkerEvidence(paths.workspace);
@@ -647,18 +652,18 @@ describe("platform acceptance generation store", () : any => {
       releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY
     });
     const current: any = await resolveFixture(repoRoot);
-    const manifestPath: any = path.join(current.generationRoot, "manifest.json");
-    const manifest: any = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-    manifest.selectedProfile = "any";
-    await fs.writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
+    const receiptPath: any = path.join(current.generationRoot, "accepted-candidate.json");
+    const receipt: any = JSON.parse(await fs.readFile(receiptPath, "utf8"));
+    receipt.selectedProfile = "any";
+    await fs.writeFile(receiptPath, `${JSON.stringify(receipt)}\n`, "utf8");
     await expect(resolveFixture(repoRoot))
-      .rejects.toThrow("manifest digest does not match its pointer");
+      .rejects.toThrow("receipt digest does not match its pointer");
     await removeAcceptanceGenerationWorkspace(paths);
   });
 
-  it("revalidates aggregate semantics even when an attacker rewrites every file digest", async () : Promise<any> => {
+  it("keeps diagnostic report mutations outside accepted-candidate authority", async () : Promise<any> => {
     const repoRoot: any = await fixtureRoot();
-    const paths: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "aggregate-revalidation" });
+    const paths: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "diagnostic-mutation" });
     await writeWorkerEvidence(paths.workspace);
     await publishFixture({
       repoRoot,
@@ -671,24 +676,20 @@ describe("platform acceptance generation store", () : any => {
     const aggregatePath: any = path.join(current.generationRoot, "build", "reports", "platform-acceptance.json");
     const aggregate: any = JSON.parse(await fs.readFile(aggregatePath, "utf8"));
     aggregate.summary.releaseReady = false;
-    const aggregateBytes: any = Buffer.from(`${JSON.stringify(aggregate)}\n`);
-    await fs.writeFile(aggregatePath, aggregateBytes);
+    await fs.writeFile(aggregatePath, `${JSON.stringify(aggregate)}\n`, "utf8");
 
     const manifestPath: any = path.join(current.generationRoot, "manifest.json");
     const manifest: any = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-    const entry: any = manifest.entries.find((candidate?: any) : any => candidate.path === "build/reports/platform-acceptance.json");
-    entry.sha256 = crypto.createHash("sha256").update(aggregateBytes).digest("hex");
-    entry.byteLength = aggregateBytes.byteLength;
-    const manifestBytes: any = Buffer.from(`${JSON.stringify(manifest)}\n`);
-    await fs.writeFile(manifestPath, manifestBytes);
+    manifest.selectedProfile = "diagnostic-only-mutation";
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
 
-    const pointerPath: any = path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER);
-    const pointer: any = JSON.parse(await fs.readFile(pointerPath, "utf8"));
-    pointer.manifestSha256 = crypto.createHash("sha256").update(manifestBytes).digest("hex");
-    await fs.writeFile(pointerPath, `${JSON.stringify(pointer)}\n`, "utf8");
-
-    await expect(resolveFixture(repoRoot))
-      .rejects.toThrow("aggregate contract is invalid: summary-readiness");
+    await expect(resolveFixture(repoRoot)).resolves.toMatchObject({
+      receipt: {
+        generationId: "diagnostic-mutation",
+        status: "accepted",
+        releaseReady: true
+      }
+    });
     await removeAcceptanceGenerationWorkspace(paths);
   });
 });

@@ -943,7 +943,10 @@ exit means `failed`.
 The acceptance orchestrator materializes the explicit Git commit in a detached
 private worktree. It never copies a dirty caller workspace, and a failed run
 retains one candidate-bound fixed-field failure envelope without moving the
-accepted-generation pointer.
+accepted-generation pointer. A successful run publishes one digest-bound
+accepted-candidate receipt. Detailed reports remain diagnostic evidence owned
+by acceptance; bootstrap, deployment, branch promotion, and production closure
+consume only the receipt and never revalidate the report inventory.
 
 For the first installation on a clean supported Ubuntu or Debian x64/arm64
 Orb target, create an owner-only (`0600`) non-symlink login input containing
@@ -958,7 +961,7 @@ npm run bootstrap:native:orb -- \
   --login-input <private-login-input>
 ```
 
-The bootstrap accepts only the current post-commit acceptance generation and
+The bootstrap accepts only the current post-commit accepted-candidate receipt and
 archives that Git object rather than the caller's dirty tree. It installs the
 candidate-locked authenticated Node runtime, Core with
 `runtime.enabledPlugins: []`, external data/config/secrets, the private owner,
