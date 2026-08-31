@@ -147,8 +147,9 @@ describe("branch promotion workflow", () : any => {
     ]);
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");
     expect(automation).not.toContain('["run", "rerun", String(selected.id), "--failed"]');
-    expect(automation).toContain("MAX_WORKFLOW_WAIT_MS");
-    expect(automation).toContain("MAX_GITHUB_ATTEMPTS");
+    expect(automation).not.toContain("MAX_WORKFLOW_WAIT_MS");
+    expect(automation).not.toContain("MAX_GITHUB_ATTEMPTS");
+    expect(automation).not.toContain("_wait_timeout");
     expect(automation).not.toContain("resumedRunnerAssignmentFailures");
     expect(automation).not.toContain("resumeRequestedAttempt");
   });
