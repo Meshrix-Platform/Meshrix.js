@@ -61,7 +61,9 @@ PLAN-005 and the [What's Next register](WHATS-NEXT.md) own the current
 production-use closure: fix concrete defects, pass functional acceptance once,
 deploy the accepted candidate, and iterate from real use. Its Better Plan v3
 semantic source is `plans/production-use-closure/Plan.json`; acceptance and
-publication evidence remain separate authorities. Historical planning,
+publication evidence remain separate authorities. Product regression,
+deployment verification, production closure, and publication never read or
+validate the local Plan workspace. Historical planning,
 publication channels, compatibility matrices, and environment-qualification
 programs do not block this operational outcome.
 

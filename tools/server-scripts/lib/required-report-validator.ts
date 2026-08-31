@@ -59,7 +59,6 @@ function defineSpec({
 
 const SPEC_LIST: any[] = [
   defineSpec({ path: "build/reports/approval-governance.json", schemaVersion: "v0.0.1:authorization:approval-governance-report-1", verifier: "tools/server-scripts/verify-approval-governance.ts", timestampField: "finishedAt" }),
-  defineSpec({ path: "build/reports/better-plan.json", schemaVersion: "v0.0.1:meshrix:current-plan-authority-report-1", verifier: "tools/server-scripts/verify-better-plan.ts", readyFields: ["accepted"] }),
   defineSpec({ path: "build/reports/capability-acceptance-machines.json", schemaVersion: "v0.0.1:acceptance:capability-machines-report-7", verifier: "tools/server-scripts/verify-capability-acceptance-machines.ts", readyFields: ["readyForReleaseReduction", "summary.readyForReleaseReduction"], reducer: REQUIRED_REPORT_REDUCERS.CAPABILITY_ACCEPTANCE }),
   defineSpec({ path: "build/reports/composition-source-package.json", schemaVersion: "v0.0.1:release:composition-source-package-report-1", verifier: "tools/server-scripts/verify-composition-source-package.ts", readyFields: ["summary.compositionSourcePackageAcceptanceReady"] }),
   defineSpec({ path: "build/reports/console-admin-browser-visual.json", schemaVersion: "v0.0.1:console:admin-browser-visual-report-2", verifier: "tools/server-scripts/verify-console-admin-browser-visual.ts" }),

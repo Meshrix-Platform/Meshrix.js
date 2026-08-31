@@ -597,9 +597,11 @@ An absent, malformed, or mismatched workspace requires Plan repair. These
 commands do not run functional acceptance, deploy a candidate, advance a
 branch, publish an artifact, or mutate checkpoints; only canonical Better Plan
 lifecycle commands may change execution state. Product acceptance, Linux
-deployment evidence, and branch advancement remain candidate evidence owned by
-their separate workflows. The Plan workspace remains a local process document
-and is excluded from public release artifacts.
+deployment evidence, production-closure verification, and branch advancement
+remain candidate evidence owned by their separate workflows. Those product
+workflows never read or validate `docs/plans`; Plan validity cannot block or
+promote a product candidate. The Plan workspace remains a local process
+document and is excluded from public release artifacts.
 
 The reassembly profile covers the Core typecheck and build, public regression
 gate, capability surface convergence, and acceptance contract.

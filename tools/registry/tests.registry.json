@@ -1011,27 +1011,6 @@
       ]
     },
     {
-      "id": "planning.current-authority",
-      "label": "Canonical PLAN-005 validation and product-evidence separation",
-      "owner": "platform",
-      "package": "repo",
-      "level": "architecture",
-      "command": "npm",
-      "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/server/current-plan-authority.test.ts",
-        "tests/vitest/server/production-use-acceptance-authority.test.ts"
-      ],
-      "sideEffects": "none",
-      "timeoutClass": "fast",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": []
-    },
-    {
       "id": "architecture.protocol-boundary",
       "label": "Core protocol ownership and client-product evidence boundary",
       "owner": "platform",

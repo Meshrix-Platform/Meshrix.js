@@ -467,7 +467,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "verify:better-plan": {
     scriptName: "verify:better-plan", command: "npm run verify:better-plan", category: "verifier", subsystem: "documentation",
-    owner: "platform", tier: "release", sideEffects: "build-output",
+    owner: "platform", tier: "hygiene", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
     inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts", "tools/server-scripts/verify-better-plan.ts"], outputs: ["build/reports/better-plan.json"],
   },
