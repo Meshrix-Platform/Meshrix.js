@@ -6,7 +6,6 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   const { machine } = context.parsed;
   const translatedArchive: any = orbText(machine, ["readlink", "-f", context.archive.archivePath], {
     translatePaths: true,
-    timeout: 15_000,
   });
   const releaseDirectory: any = path.posix.join(context.releaseParent, context.sourceRevision);
   const markerPath: any = path.posix.join(releaseDirectory, ".meshrix-source-revision");
@@ -18,7 +17,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     markerPath,
     context.sourceRevision,
     releaseDirectory,
-  ], { allowFailure: true, timeout: 15_000 }) === "ready";
+  ], { allowFailure: true }) === "ready";
   assertInactiveReleaseMutation({
     activeWorkingDirectory: context.currentWorkingDirectory,
     releaseDirectory,
@@ -28,19 +27,16 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     runOrb({
       machine,
       args: ["rm", "-rf", releaseDirectory],
-      timeout: 60_000,
       code: "native_orb_release_prepare_failed",
     });
     runOrb({
       machine,
       args: ["install", "-d", "-m", "0700", releaseDirectory],
-      timeout: 30_000,
       code: "native_orb_release_prepare_failed",
     });
     runOrb({
       machine,
       args: ["tar", "-xf", translatedArchive, "-C", releaseDirectory],
-      timeout: 120_000,
       code: "native_orb_transfer_failed",
     });
     writeRemoteFile(machine, markerPath, `${context.sourceRevision}\n`);

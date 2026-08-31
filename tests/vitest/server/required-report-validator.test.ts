@@ -754,9 +754,9 @@ describe("platform acceptance foundation ownership", () : any => {
     expect(foundation).toMatchObject({
       command: "npm",
       args: ["test"],
-      exclusive: true,
-      timeoutMs: 35 * 60 * 1000
+      exclusive: true
     });
+    expect(foundation).not.toHaveProperty("timeoutMs");
     expect(foundation.resourceLocks).toEqual(expect.arrayContaining([
       "report:build/test-reports/latest.json",
       "report:build/reports/local-info-hygiene.json",
@@ -771,10 +771,9 @@ describe("platform acceptance foundation ownership", () : any => {
     expect(plan.status).toBe("planned");
     expect(plan.summary.reportLeakScan).toBe(true);
     expect(serialized).not.toContain("hostParallelism");
-    expect(plan.declaredWorstCaseEstimate).toMatchObject({ maxParallel: 4 });
-    expect(plan.declaredJobBudgetMs).toBeGreaterThan(
-      plan.declaredWorstCaseEstimate.timeoutMs
-    );
+    expect(plan).not.toHaveProperty("declaredWorstCaseEstimate");
+    expect(plan).not.toHaveProperty("declaredJobBudgetMs");
+    expect(plan.commands.every((command?: any) : any => !Object.hasOwn(command, "timeoutMs"))).toBe(true);
   });
 
   it("gates portable MCP assembly on pinned Node runtime supply-chain evidence", () : any => {

@@ -35,7 +35,6 @@ const REGISTRY_SIGNATURE_KEY_PATTERN: any = /^SHA256:[A-Za-z0-9+/]+={0,2}$/u;
 const BASE64_PATTERN: any = /^[A-Za-z0-9+/]+={0,2}$/u;
 const BUILD_METADATA_PATTERN: any = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
 const SLSA_PROVENANCE_PREDICATE: any = "https://slsa.dev/provenance/v1";
-const COMMAND_TIMEOUT_MS: any = 10 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_BYTES: any = 16 * 1024 * 1024;
 
 export class ReleaseSetPublicationError extends Error {
@@ -427,7 +426,6 @@ export function createNpmRunner({ environment = process.env }: Record<string, an
           encoding: "utf8",
           env: environment,
           maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
-          timeout: COMMAND_TIMEOUT_MS,
           windowsHide: true
         }
       );

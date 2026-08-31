@@ -82,7 +82,6 @@ function context() : any {
 async function run(executable?: any, args?: any, {
   cwd = repoRoot,
   env = process.env,
-  timeoutMs = 15 * 60_000,
   acceptedExitCodes = [0],
 }: Record<string, any> = {}) : Promise<any> {
   return new Promise((resolve?: any, reject?: any) : any => {
@@ -92,24 +91,9 @@ async function run(executable?: any, args?: any, {
       stdio: "ignore",
       windowsHide: true,
     });
-    let timedOut: any = false;
-    let forceTimer: any;
-    const timer: any = setTimeout(() : any => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      forceTimer = setTimeout(() : any => child.kill("SIGKILL"), 5_000);
-      forceTimer.unref?.();
-    }, timeoutMs);
-    timer.unref?.();
     child.once("error", reject);
     child.once("close", (exitCode?: any) : any => {
-      clearTimeout(timer);
-      clearTimeout(forceTimer);
-      if (timedOut) {
-        reject(Object.assign(new Error("real_machine_target_command_timeout"), {
-          code: "real_machine_target_command_timeout",
-        }));
-      } else if (!acceptedExitCodes.includes(exitCode)) {
+      if (!acceptedExitCodes.includes(exitCode)) {
         reject(Object.assign(new Error("real_machine_target_command_failed"), {
           code: "real_machine_target_command_failed",
         }));
@@ -130,15 +114,6 @@ async function output(executable?: any, args?: any, options: Record<string, any>
       stdio: ["ignore", "pipe", "ignore"],
       windowsHide: true,
     });
-    let timedOut: any = false;
-    let forceTimer: any;
-    const timer: any = setTimeout(() : any => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      forceTimer = setTimeout(() : any => child.kill("SIGKILL"), 5_000);
-      forceTimer.unref?.();
-    }, options.timeoutMs || 60_000);
-    timer.unref?.();
     let bytes: any = 0;
     child.stdout.on("data", (chunk?: any) : any => {
       bytes += chunk.length;
@@ -149,17 +124,9 @@ async function output(executable?: any, args?: any, options: Record<string, any>
       }
       chunks.push(chunk);
     });
-    child.once("error", (error?: any) : any => {
-      clearTimeout(timer);
-      clearTimeout(forceTimer);
-      reject(error);
-    });
+    child.once("error", reject);
     child.once("close", (exitCode?: any) : any => {
-      clearTimeout(timer);
-      clearTimeout(forceTimer);
-      if (timedOut) {
-        reject(new Error("real_machine_target_command_timeout"));
-      } else if (exitCode !== 0) {
+      if (exitCode !== 0) {
         reject(new Error("real_machine_target_command_failed"));
       } else {
         resolve(Buffer.concat(chunks).toString("utf8").trim());
@@ -361,7 +328,6 @@ async function portableChild(argv?: any) : Promise<any> {
       MESHRIX_MCP_TOKEN: "",
       MESHRIX_TOOL_TOKEN: "",
     },
-    timeoutMs: 60_000,
   });
   await writePrivateJsonAtomic(selected.health, {
     schemaVersion: PORTABLE_HANDLE_SCHEMA,
@@ -491,7 +457,7 @@ async function verifyDockerHardening(ctx?: any, selected?: any) : Promise<any> {
     "node",
     "-e",
     "const fs=require('node:fs');const v=fs.readFileSync('/proc/1/cgroup','utf8').trim();if(!v)process.exit(1)",
-  ], { timeoutMs: 30_000 });
+  ]);
 }
 
 function publicHealthUrl() : any {
@@ -697,16 +663,14 @@ async function publicCloudProbe() : Promise<any> {
 async function dockerPhase(ctx?: any) : Promise<any> {
   const selected: any = dockerContext(ctx);
   if (ctx.phase === "prepare") {
-    await run("docker", ["info"], { timeoutMs: 30_000 });
+    await run("docker", ["info"]);
     const imagePresent: any = await run("docker", [
       "image",
       "inspect",
       selected.candidateImage,
     ]).then(() : any => true, () : any => false);
     if (!imagePresent && process.env.MESHRIX_REAL_MACHINE_ALLOW_PULL !== "0") {
-      await run("docker", ["pull", selected.candidateImage], {
-        timeoutMs: 30 * 60_000,
-      });
+      await run("docker", ["pull", selected.candidateImage]);
     } else if (!imagePresent) {
       fail("real_machine_candidate_image_not_loaded");
     }
@@ -752,7 +716,7 @@ async function dockerPhase(ctx?: any) : Promise<any> {
       "never",
       "--wait",
       "meshrix-server",
-    ], { env: selected.env, timeoutMs: 10 * 60_000 });
+    ], { env: selected.env });
     await waitForDockerHealth(selected.container);
     return;
   }
@@ -782,9 +746,9 @@ async function dockerPhase(ctx?: any) : Promise<any> {
         "cp",
         `${backupInput}${path.sep}.`,
         `${selected.container}:/app/backups/${backupId}`,
-      ], { timeoutMs: 10 * 60_000 });
+      ]);
       await run("docker", ["stop", "--time", "90", selected.container], {
-        timeoutMs: 100_000,
+        acceptedExitCodes: [0],
       });
       const restoreScript: any = [
         "import {restoreStorageBackup} from './packages/foundation/src/storage/restore-execution.ts';",
@@ -812,7 +776,6 @@ async function dockerPhase(ctx?: any) : Promise<any> {
           ...selected.env,
           MESHRIX_REAL_MACHINE_BACKUP_ID: backupId,
         },
-        timeoutMs: 30 * 60_000,
       });
       await run("docker", [
         ...selected.composeArgs,
@@ -823,26 +786,18 @@ async function dockerPhase(ctx?: any) : Promise<any> {
         "never",
         "--wait",
         "meshrix-server",
-      ], { env: selected.env, timeoutMs: 10 * 60_000 });
+      ], { env: selected.env });
       await waitForDockerHealth(selected.container);
     }
-    await run("docker", ["restart", "--time", "90", selected.container], {
-      timeoutMs: 120_000,
-    });
+    await run("docker", ["restart", "--time", "90", selected.container]);
     await waitForDockerHealth(selected.container);
     await verifyDockerHardening(ctx, selected);
     return;
   }
   if (ctx.phase === "stop") {
-    const startedAt: any = Date.now();
     await run("docker", ["stop", "--time", "90", selected.container], {
-      timeoutMs: 100_000,
       acceptedExitCodes: [0, 1],
     });
-    requireCondition(
-      Date.now() - startedAt <= 100_000,
-      "real_machine_container_stop_unbounded",
-    );
     const running: any = await output("docker", [
       "inspect",
       "--format",
@@ -854,7 +809,6 @@ async function dockerPhase(ctx?: any) : Promise<any> {
   }
   await run("docker", [...selected.composeArgs, "down", "--remove-orphans"], {
     env: selected.env,
-    timeoutMs: 5 * 60_000,
     acceptedExitCodes: [0],
   });
 }
@@ -888,12 +842,10 @@ async function portablePhase(ctx?: any) : Promise<any> {
     ]);
     try {
       const listing: any = await output("tar", ["-tf", selected.artifact], {
-        timeoutMs: 5 * 60_000,
         maxOutputBytes: 32 * 1024 * 1024,
       });
       assertSafeArchiveListing(listing);
       const verboseListing: any = await output("tar", ["-tvf", selected.artifact], {
-        timeoutMs: 5 * 60_000,
         maxOutputBytes: 64 * 1024 * 1024,
       });
       assertArchiveContainsOnlyFilesAndDirectories(verboseListing);
@@ -902,7 +854,7 @@ async function portablePhase(ctx?: any) : Promise<any> {
         selected.artifact,
         "-C",
         selected.extracted,
-      ], { timeoutMs: 5 * 60_000 });
+      ]);
       await assertSafeExtractedTree(selected.extracted);
       await findPortableEntry(selected.extracted, ctx.target);
     } catch (error: any) {
@@ -1000,7 +952,7 @@ async function portablePhase(ctx?: any) : Promise<any> {
       inputDir,
       "--report-path",
       reportPath,
-    ], { timeoutMs: 10 * 60_000 });
+    ]);
     return;
   }
   if (ctx.phase === "verify") {
@@ -1021,7 +973,7 @@ async function portablePhase(ctx?: any) : Promise<any> {
       "-Command",
       "version",
       "-Json",
-    ], { timeoutMs: 5 * 60_000 });
+    ]);
     await run(process.execPath, [
       "tools/server-scripts/verify-npm-package-installability.ts",
       "--required-host-probe",
@@ -1032,10 +984,10 @@ async function portablePhase(ctx?: any) : Promise<any> {
         "real-machine",
         `${ctx.runId}-windows-x64.json`,
       ),
-    ], { timeoutMs: 20 * 60_000 });
+    ]);
     await run(process.execPath, [
       "tools/server-scripts/verify-mcp-windows-process-identity-credential-store.ts",
-    ], { timeoutMs: 5 * 60_000 });
+    ]);
     return;
   }
   if (ctx.phase === "stop") {

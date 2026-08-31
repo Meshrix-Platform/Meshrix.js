@@ -14,7 +14,7 @@ describe("platform acceptance ledger anchoring", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-anchor-"));
     const reportPath = path.join(root, "sample-report.json");
     await fs.writeFile(reportPath, `${JSON.stringify({
-      schemaVersion: "v0.0.1:acceptance:platform-report-3",
+      schemaVersion: "v0.0.1:acceptance:platform-report-4",
       status: "accepted",
     })}\n`, "utf8");
     const proofSubstrate: any = createOperationProofSubstrate({ dataDir: path.join(root, "proof") });

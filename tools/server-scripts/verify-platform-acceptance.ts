@@ -9,7 +9,7 @@ import {
   PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST
 } from "./lib/platform-acceptance-report-catalog.ts";
 import {
-  PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS,
+  PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
   PLATFORM_ACCEPTANCE_STATE_MACHINE,
   commandExecutable,
   commandLine,
@@ -18,9 +18,8 @@ import {
   requirePlatformAcceptanceProfile
 } from "./lib/platform-acceptance-contract.ts";
 export {
-  PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS,
-  PLATFORM_ACCEPTANCE_JOB_OVERHEAD_MS,
   PLATFORM_ACCEPTANCE_PARALLELISM,
+  PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
   PLATFORM_ACCEPTANCE_STATE_MACHINE
 } from "./lib/platform-acceptance-contract.ts";
 import {
@@ -28,17 +27,13 @@ import {
   PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
   PRIVATE_DEPLOYMENT_REQUIRED_REPORTS,
   PLATFORM_ACCEPTANCE_COMMANDS,
-  PLATFORM_ACCEPTANCE_JOB_BUDGET_MS,
-  PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE,
   REQUIRED_REPORT_SPEC_COVERAGE
 } from "./lib/platform-acceptance-command-catalog.ts";
 export {
   ACCEPTANCE_REQUIRED_REPORTS,
   PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
   PRIVATE_DEPLOYMENT_REQUIRED_REPORTS,
-  PLATFORM_ACCEPTANCE_COMMANDS,
-  PLATFORM_ACCEPTANCE_JOB_BUDGET_MS,
-  PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE
+  PLATFORM_ACCEPTANCE_COMMANDS
 } from "./lib/platform-acceptance-command-catalog.ts";
 import {
   acceptanceCriteria,
@@ -140,8 +135,7 @@ async function acceptanceEvidenceContext({ childReportLeakScan, candidateIdentit
         id: command.id,
         dependsOn: command.dependsOn,
         ownedReports: command.ownedReports,
-        resourceLocks: command.resourceLocks,
-        timeoutMs: command.timeoutMs
+        resourceLocks: command.resourceLocks
       }))
     }),
     ownedReportsInventoryDigest: RELEASE_EVIDENCE_INVENTORY_DIGEST,
@@ -223,7 +217,7 @@ export function createPlatformAcceptancePlan(
   if (schedule?.valid !== true) throw new Error("Platform acceptance command schedule is invalid.");
   selectedProfile = requirePlatformAcceptanceProfile(selectedProfile);
   return {
-    schemaVersion: "v0.0.1:acceptance:platform-report-3",
+    schemaVersion: PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
     status: "planned",
@@ -236,8 +230,6 @@ export function createPlatformAcceptancePlan(
       event: "build_plan"
     },
     commandSchedule: schedule,
-    declaredWorstCaseEstimate: PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE,
-    declaredJobBudgetMs: PLATFORM_ACCEPTANCE_JOB_BUDGET_MS,
     commands: PLATFORM_ACCEPTANCE_COMMANDS.map((item?: any) : any => ({
       id: item.id,
       label: item.label,
@@ -294,7 +286,6 @@ async function runAcceptanceWorker() : Promise<any> {
   };
   const { results, schedule: executedSchedule } = await runReleaseCommandDag({
     commands: PLATFORM_ACCEPTANCE_COMMANDS,
-    defaultTimeoutMs: PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS,
     env: commandEnv,
     logPrefix: "platform-acceptance",
     maxParallel: normalizedParallelism(commandEnv),
@@ -484,7 +475,7 @@ async function runAcceptanceWorker() : Promise<any> {
   const finalState: any = aggregateReadinessFinal.releaseReady === true ? "accepted" : "failed";
   const finishedAt: any = new Date();
   const report: Record<string, any> = {
-    schemaVersion: "v0.0.1:acceptance:platform-report-3",
+    schemaVersion: PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
     candidate_digest: candidateIdentity.candidate_digest,
@@ -519,7 +510,6 @@ async function runAcceptanceWorker() : Promise<any> {
       acceptanceLayer: PLATFORM_ACCEPTANCE_COMMANDS.find((item?: any) : any => item.id === result.id)?.acceptanceLayer || "",
       status: result.status,
       exitCode: result.exitCode,
-      timedOut: result.timedOut === true,
       durationMs: result.durationMs,
       report: result.report || "",
       dependsOn: result.dependsOn || [],
@@ -658,7 +648,7 @@ if (isDirectRun) {
     const now: any = new Date();
     const safeFailure: any = String(error?.code || sanitizeError(error));
     const report: Record<string, any> = {
-      schemaVersion: "v0.0.1:acceptance:platform-report-3",
+      schemaVersion: PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
       acceptanceStandard: "functional-completeness",
       claim: "functional-complete",
       status: "failed",

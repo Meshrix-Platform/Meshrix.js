@@ -1,5 +1,5 @@
-export const PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS: any = 12 * 60 * 1000;
 export const PLATFORM_ACCEPTANCE_PARALLELISM: any = 4;
+export const PLATFORM_ACCEPTANCE_REPORT_SCHEMA: any = "v0.0.1:acceptance:platform-report-4";
 export const PLATFORM_ACCEPTANCE_PROFILES: Readonly<Record<string, any>> = Object.freeze({
   "enterprise-single-node": Object.freeze({ id: "enterprise-single-node" }),
 });
@@ -12,20 +12,6 @@ export function requirePlatformAcceptanceProfile(value?: any) : any {
   }
   return selectedProfile;
 }
-export const PLATFORM_ACCEPTANCE_JOB_OVERHEAD_MS: any = 15 * 60 * 1000;
-export const PLATFORM_ACCEPTANCE_MINIMUM_JOB_BUDGET_MS: any = 395 * 60 * 1000;
-const PLATFORM_ACCEPTANCE_JOB_BUDGET_QUANTUM_MS: any = 5 * 60 * 1000;
-
-export function platformAcceptanceJobBudget(worstCaseTimeoutMs?: any) : any {
-  return Math.max(
-    PLATFORM_ACCEPTANCE_MINIMUM_JOB_BUDGET_MS,
-    Math.ceil(
-      (worstCaseTimeoutMs + PLATFORM_ACCEPTANCE_JOB_OVERHEAD_MS) /
-        PLATFORM_ACCEPTANCE_JOB_BUDGET_QUANTUM_MS
-    ) * PLATFORM_ACCEPTANCE_JOB_BUDGET_QUANTUM_MS
-  );
-}
-
 export const PLATFORM_ACCEPTANCE_STATE_MACHINE: Readonly<Record<string, any>> = Object.freeze({
   schemaVersion: "v0.0.1:state-machine:platform-acceptance-1",
   id: "meshrix-js-platform-acceptance",
@@ -134,7 +120,6 @@ export function acceptanceCommand(id?: any, label?: any, layer?: any, commandSpe
     ].filter(Boolean)),
     ownedReports: Object.freeze(ownedReports),
     blockedExitCodes: Object.freeze(options.blockedExitCodes || []),
-    exclusive: options.exclusive === true,
-    timeoutMs: options.timeoutMs
+    exclusive: options.exclusive === true
   });
 }

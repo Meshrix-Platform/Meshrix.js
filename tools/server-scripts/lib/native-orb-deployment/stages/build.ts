@@ -13,7 +13,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     buildMarker,
     context.toolchainState,
     context.releaseDirectory,
-  ], { allowFailure: true, timeout: 15_000 }) === "ready";
+  ], { allowFailure: true }) === "ready";
   assertInactiveReleaseMutation({
     activeWorkingDirectory: context.currentWorkingDirectory,
     releaseDirectory: context.releaseDirectory,
@@ -32,7 +32,6 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
         context.serviceNode,
         context.serviceNpmCli,
       ],
-      timeout: 1_200_000,
       code: "native_orb_build_failed",
     });
     writeRemoteFile(machine, buildMarker, `${context.toolchainState}\n`);

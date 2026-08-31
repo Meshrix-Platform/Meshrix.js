@@ -72,23 +72,23 @@
       "artifactId": "meshrix.acceptance.platform-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.acceptance.platform-report.",
-      "activeVersion": "v0.0.1:acceptance:platform-report-3",
+      "activeVersion": "v0.0.1:acceptance:platform-report-4",
       "versions": [
         {
-          "version": "v0.0.1:acceptance:platform-report-3",
-          "ref": "meshrix.acceptance.platform-report@v0.0.1:acceptance:platform-report-3",
+          "version": "v0.0.1:acceptance:platform-report-4",
+          "ref": "meshrix.acceptance.platform-report@v0.0.1:acceptance:platform-report-4",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Current time-unbounded platform acceptance report."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-acceptance-platform-report-3-source-1",
+              "evidenceId": "v0-0-1-acceptance-platform-report-4-source-1",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-platform-acceptance.ts"
+              "uri": "tools/server-scripts/lib/platform-acceptance-contract.ts"
             }
           ]
         }
@@ -2961,21 +2961,21 @@
       "artifactId": "meshrix.meshrix.real-machine-validation-phase-receipt",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.meshrix.real-machine-validation-phase-receipt.",
-      "activeVersion": "v0.0.1:meshrix:real-machine-validation-phase-receipt-1",
+      "activeVersion": "v0.0.1:meshrix:real-machine-validation-phase-receipt-2",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:real-machine-validation-phase-receipt-1",
-          "ref": "meshrix.meshrix.real-machine-validation-phase-receipt@v0.0.1:meshrix:real-machine-validation-phase-receipt-1",
+          "version": "v0.0.1:meshrix:real-machine-validation-phase-receipt-2",
+          "ref": "meshrix.meshrix.real-machine-validation-phase-receipt@v0.0.1:meshrix:real-machine-validation-phase-receipt-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Current time-unbounded real-machine phase receipt."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-real-machine-validation-phase-receipt-1-source",
+              "evidenceId": "v0-0-1-meshrix-real-machine-validation-phase-receipt-2-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/real-machine-validation-workflow.ts"
             }

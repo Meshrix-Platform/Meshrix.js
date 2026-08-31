@@ -278,73 +278,9 @@ export function defaultReleaseCommandParallelism(env: any = process.env) : any {
   );
 }
 
-function releaseCommandTimeoutMs(command?: any, defaultTimeoutMs?: any, env: any = process.env) : any {
-  return Math.max(
-    1,
-    Number(command.timeoutMs || env.MESHRIX_RELEASE_COMMAND_TIMEOUT_MS || defaultTimeoutMs) ||
-      Number(defaultTimeoutMs || 1)
-  );
-}
-
-export function estimateReleaseCommandWorstCaseMs(commands: any = [], options: Record<string, any> = {}) : any {
-  const schedule: any = createReleaseCommandSchedule(commands);
-  if (!schedule.valid) {
-    throw new Error("Cannot estimate an invalid release command DAG.");
-  }
-  const env: any = options.env || {};
-  const maxParallel: any = normalizedPositiveInteger(
-    options.maxParallel,
-    defaultReleaseCommandParallelism(env)
-  );
-  const idOrder: any = new Map<any, any>(commands.map((command?: any, index?: any) : any => [commandId(command), index]));
-  const pending: any = new Map<any, any>(commands.map((command?: any) : any => [commandId(command), command]));
-  const running: any = new Map<any, any>();
-  const completed: any = new Set<any>();
-  const heldLocks: any = new Set<any>();
-  let elapsedMs: any = 0;
-
-  while (completed.size < commands.length) {
-    const startable: any = selectReleaseCommandBatch({
-      completedCommandIds: [...completed],
-      heldLocks: [...heldLocks],
-      maxParallel,
-      pendingCommands: [...pending.values()],
-      runningCount: running.size
-    });
-    for (const command of startable) {
-      const id: any = commandId(command);
-      pending.delete(id);
-      const locks: any = releaseCommandLocks(command);
-      for (const lock of locks) heldLocks.add(lock);
-      running.set(id, {
-        finishesAtMs: elapsedMs + releaseCommandTimeoutMs(command, options.defaultTimeoutMs, env),
-        locks
-      });
-    }
-    if (running.size === 0) {
-      throw new Error("Cannot estimate a release command DAG that makes no progress.");
-    }
-    const [finishedId, finished] = [...running.entries()].sort((left?: any, right?: any) : any =>
-      left[1].finishesAtMs - right[1].finishesAtMs ||
-      (idOrder.get(left[0]) || 0) - (idOrder.get(right[0]) || 0)
-    )[0];
-    elapsedMs = finished.finishesAtMs;
-    running.delete(finishedId);
-    for (const lock of finished.locks) heldLocks.delete(lock);
-    completed.add(finishedId);
-  }
-
-  return Object.freeze({
-    commandCount: commands.length,
-    maxParallel,
-    timeoutMs: elapsedMs
-  });
-}
-
 export async function runReleaseCommandDag({
   beforeStart = async () : Promise<any> => {},
   commands = [],
-  defaultTimeoutMs,
   env = process.env,
   logPrefix = "release-dag",
   maxBufferBytes = DEFAULT_MAX_BUFFER_BYTES,
@@ -423,8 +359,6 @@ export async function runReleaseCommandDag({
       status: blocked ? "blocked" : "skipped",
       exitCode: blocked ? 2 : 1,
       signal: "",
-      timedOut: false,
-      timeoutMs: 0,
       durationMs: 0,
       startedAt: "",
       finishedAt: new Date().toISOString(),
@@ -446,7 +380,6 @@ export async function runReleaseCommandDag({
     const id: any = commandId(command);
     const startedAt: any = new Date();
     const startedMs: any = Date.now();
-    const timeoutMs: any = releaseCommandTimeoutMs(command, defaultTimeoutMs, env);
     const metadata: Record<string, any> = {
       id,
       label: command.label,
@@ -472,8 +405,6 @@ export async function runReleaseCommandDag({
         status: "failed",
         exitCode: 1,
         signal: "",
-        timedOut: false,
-        timeoutMs,
         durationMs: Date.now() - startedMs,
         finishedAt: new Date().toISOString(),
         errorTail: redactTail(error?.message || error),
@@ -492,39 +423,17 @@ export async function runReleaseCommandDag({
       const stdout: any = new CappedTextBuffer(maxBufferBytes);
       const stderr: any = new CappedTextBuffer(maxBufferBytes);
       let processError: any = null;
-      let timedOut: any = false;
-      let killTimer: any = null;
       let settled: any = false;
-      const useProcessGroup: any = process.platform !== "win32";
-      const terminate: any = (signal?: any) : any => {
-        try {
-          if (useProcessGroup && child.pid) {
-            process.kill(-child.pid, signal);
-          } else {
-            child.kill(signal);
-          }
-        } catch {
-          try {
-            child.kill(signal);
-          } catch {
-            // The process may already be gone.
-          }
-        }
-      };
       const finish: any = ({ code = 1, signal = "" }: Record<string, any> = {}) : any => {
         if (settled) {
           return;
         }
         settled = true;
-        clearTimeout(timer);
-        if (killTimer) {
-          clearTimeout(killTimer);
-        }
         const durationMs: any = Date.now() - startedMs;
-        const passed: any = code === 0 && timedOut === false;
-        const blocked: any = !passed && timedOut === false && metadata.blockedExitCodes.includes(code);
+        const passed: any = code === 0;
+        const blocked: any = !passed && metadata.blockedExitCodes.includes(code);
         const status: any = passed ? "passed" : blocked ? "blocked" : "failed";
-        console.log(`[${logPrefix}] ${passed ? "OK" : blocked ? "BLOCKED" : "FAIL"} ${id} (${durationMs}ms${timedOut ? ", timed out" : ""})`);
+        console.log(`[${logPrefix}] ${passed ? "OK" : blocked ? "BLOCKED" : "FAIL"} ${id} (${durationMs}ms)`);
         const errorTail: any = passed ? "" : redactTail(`${processError?.message || ""}\n${stderr.text()}\n${stdout.text()}`);
         if (!passed) {
           const clipped: any = errorTail.trim().slice(-2_000);
@@ -535,15 +444,13 @@ export async function runReleaseCommandDag({
         resolve({
           ...metadata,
           status,
-          exitCode: timedOut ? 124 : code,
+          exitCode: code,
           signal: signal || "",
-          timedOut,
-          timeoutMs,
           durationMs,
           finishedAt: new Date().toISOString(),
           reasonChain: passed
             ? []
-            : [timedOut ? "command-timeout" : blocked ? `command-blocked-exit:${code}` : `command-failed-exit:${code}`],
+            : [blocked ? `command-blocked-exit:${code}` : `command-failed-exit:${code}`],
           errorTail
         });
       };
@@ -551,18 +458,8 @@ export async function runReleaseCommandDag({
         cwd: repoRoot,
         env,
         stdio: ["ignore", "pipe", "pipe"],
-        detached: useProcessGroup,
         windowsHide: true
       });
-      const timer: any = setTimeout(() : any => {
-        timedOut = true;
-        terminate("SIGTERM");
-        killTimer = setTimeout(() : any => {
-          terminate("SIGKILL");
-          child.stdout?.destroy();
-          child.stderr?.destroy();
-        }, 5000);
-      }, timeoutMs);
       child.stdout?.on("data", (chunk?: any) : any => {
         stdout.append(chunk);
       });

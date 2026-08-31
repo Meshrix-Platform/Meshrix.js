@@ -9,10 +9,10 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
     await new Promise((resolve?: any) : any => setTimeout(resolve, 1000));
   }
   const machine: any = context.parsed.machine;
-  const serviceActive: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-active", "meshrix-js.service"], { allowFailure: true, timeout: 15_000 }) === "active";
-  const serviceEnabled: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-enabled", "meshrix-js.service"], { allowFailure: true, timeout: 15_000 }) === "enabled";
-  const activeDirectory: any = bootstrapOrbText(machine, ["systemctl", "--user", "show", "meshrix-js.service", "-p", "WorkingDirectory", "--value"], { allowFailure: true, timeout: 15_000 });
-  const activeRevision: any = bootstrapOrbText(machine, ["cat", context.layout.sourceMarkerPath], { allowFailure: true, timeout: 15_000 });
+  const serviceActive: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-active", "meshrix-js.service"], { allowFailure: true }) === "active";
+  const serviceEnabled: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-enabled", "meshrix-js.service"], { allowFailure: true }) === "enabled";
+  const activeDirectory: any = bootstrapOrbText(machine, ["systemctl", "--user", "show", "meshrix-js.service", "-p", "WorkingDirectory", "--value"], { allowFailure: true });
+  const activeRevision: any = bootstrapOrbText(machine, ["cat", context.layout.sourceMarkerPath], { allowFailure: true });
   const candidateActive: any = activeDirectory === context.layout.currentDirectory && activeRevision === context.sourceRevision;
   if (!probe || probe.health !== "healthy" || probe.console !== "available" || probe.authentication !== "authenticated" ||
       probe.governedRead !== "authorized" || !serviceActive || !serviceEnabled || !candidateActive) {

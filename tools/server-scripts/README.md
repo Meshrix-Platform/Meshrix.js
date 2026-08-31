@@ -105,6 +105,12 @@ production closure consume only that receipt. Detailed acceptance reports and
 their diagnostic manifest remain acceptance-owned diagnostics; downstream
 workflows must not reread, recount, reorder, or revalidate them.
 
+Release, acceptance, bootstrap, deployment, and real-machine phase commands
+run until they exit or the operator cancels the owning process. They must not
+infer failure from elapsed wall-clock time. Protocol request deadlines and
+bounded readiness probes remain local to the network or service interaction
+they protect and are not release-command verdicts.
+
 Output is limited to the candidate identifier, bounded status, public
 `<server-url>` placeholder, health status classes, and the ordered stage result
 list. Deployment scripts must not emit credentials, private paths, machine

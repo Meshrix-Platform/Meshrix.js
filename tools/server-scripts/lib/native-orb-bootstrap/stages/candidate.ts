@@ -38,7 +38,6 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
       machine: context.parsed.machine,
       args: ["sh", "-lc", "test -f \"$1\" && test ! -L \"$1\" && test \"$(stat -c %a \"$1\")\" = 600 && test \"$(sha256sum \"$1\" | cut -d ' ' -f 1)\" = \"$2\"", "meshrix-bootstrap-unit-resume", layout.unitPath, unitDigest],
       allowFailure: true,
-      timeout: 15_000,
     }).status === 0;
     if (!exactUnit) {
       failNativeOrbBootstrap("native_orb_bootstrap_service_exists", "Existing Meshrix service unit is foreign or mismatched.");

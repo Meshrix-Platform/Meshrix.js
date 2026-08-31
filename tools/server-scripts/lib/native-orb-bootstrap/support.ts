@@ -57,7 +57,6 @@ export function createPrivateBootstrapStagingDirectory(
   const parent: any = path.posix.dirname(target);
   const prefix: any = `${path.posix.basename(target)}.${marker}.staging.`;
   const staging: any = bootstrapOrbText(machine, ["mktemp", "-d", path.posix.join(parent, `${prefix}XXXXXX`)], {
-    timeout: 15_000,
     code: "native_orb_bootstrap_staging_failed",
   });
   const suffix: any = path.posix.basename(staging).slice(prefix.length);
@@ -69,7 +68,6 @@ export function createPrivateBootstrapStagingDirectory(
     machine,
     args: ["sh", "-lc", "test -d \"$1\" && test ! -L \"$1\" && test \"$(stat -c %a \"$1\")\" = 700", "meshrix-bootstrap-staging", staging],
     allowFailure: true,
-    timeout: 15_000,
   }).status === 0;
   if (!safe) failNativeOrbBootstrap("native_orb_bootstrap_staging_invalid", "Bootstrap staging directory is unsafe.");
   return staging;
@@ -77,7 +75,7 @@ export function createPrivateBootstrapStagingDirectory(
 
 export function gitObjectText(repoRoot?: unknown, revision?: unknown, relativePath?: unknown) : string {
   const result: any = spawnSync("git", ["show", `${revision}:${relativePath}`], {
-    cwd: String(repoRoot), encoding: "utf8", timeout: 15_000, maxBuffer: 1024 * 1024,
+    cwd: String(repoRoot), encoding: "utf8", maxBuffer: 1024 * 1024,
   });
   if (result.status !== 0) failNativeOrbBootstrap("native_orb_bootstrap_candidate_object_invalid", "Candidate metadata is unavailable.");
   return String(result.stdout || "");
@@ -220,17 +218,15 @@ export async function probeBootstrapOrigin(publicOrigin?: unknown, credentialByt
 export async function cleanupFailedBootstrapActivation(context?: any) : Promise<void> {
   if (!context?.bootstrapOwnedUnit || !context?.layout?.unitPath) return;
   const machine: any = context.parsed.machine;
-  runOrb({ machine, args: ["systemctl", "--user", "stop", "meshrix-js.service"], allowFailure: true, timeout: 30_000 });
-  runOrb({ machine, args: ["systemctl", "--user", "disable", "meshrix-js.service"], allowFailure: true, timeout: 30_000 });
-  runOrb({ machine, args: ["rm", "-f", context.layout.unitPath], timeout: 30_000 });
-  runOrb({ machine, args: ["systemctl", "--user", "daemon-reload"], timeout: 30_000, code: "native_orb_bootstrap_cleanup_in_doubt" });
+  runOrb({ machine, args: ["systemctl", "--user", "stop", "meshrix-js.service"], allowFailure: true });
+  runOrb({ machine, args: ["systemctl", "--user", "disable", "meshrix-js.service"], allowFailure: true });
+  runOrb({ machine, args: ["rm", "-f", context.layout.unitPath] });
+  runOrb({ machine, args: ["systemctl", "--user", "daemon-reload"], code: "native_orb_bootstrap_cleanup_in_doubt" });
   const activeState: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-active", "meshrix-js.service"], {
     allowFailure: true,
-    timeout: 15_000,
   });
   const enabledState: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-enabled", "meshrix-js.service"], {
     allowFailure: true,
-    timeout: 15_000,
   });
   assertBootstrapCleanupState({ activeState, enabledState });
 }

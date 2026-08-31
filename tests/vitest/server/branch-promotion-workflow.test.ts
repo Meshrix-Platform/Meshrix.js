@@ -398,7 +398,7 @@ describe("branch promotion workflow", () : any => {
       });
       const candidateText: any = `${JSON.stringify(candidate, null, 2)}\n`;
       const functional: any = {
-        schemaVersion: "v0.0.1:acceptance:platform-report-3",
+        schemaVersion: "v0.0.1:acceptance:platform-report-4",
         acceptanceStandard: "functional-completeness",
         claim: "functional-complete",
         candidate_digest: candidate.candidate_digest,

@@ -11,7 +11,6 @@ const execFileAsync: any = promisify(execFile);
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const MAX_COMMAND_BUFFER: any = 16 * 1024 * 1024;
 const MAX_EXTRACTED_ENTRY_BYTES: any = 192 * 1024 * 1024;
-const ARCHIVE_COMMAND_TIMEOUT_MS: any = 120_000;
 
 export async function sha256(filePath?: any) : Promise<any> {
   const hash: any = createHash("sha256");
@@ -51,7 +50,6 @@ export async function runArchiveCommand(command?: any, args?: any, options: Reco
   return execFileAsync(command, args, {
     cwd: options.cwd || repoRoot,
     encoding: Object.hasOwn(options, "encoding") ? options.encoding : "utf8",
-    timeout: options.timeout || 120_000,
     maxBuffer: options.maxBuffer || MAX_COMMAND_BUFFER,
     env: options.env || process.env,
     windowsHide: true
@@ -70,10 +68,6 @@ export async function hashCommand(command?: any, args?: any) : Promise<any> {
     let streamedBytes: any = 0;
     let failure: any = null;
     let settled: any = false;
-    const timeout: any = setTimeout(() : any => {
-      failure ||= new Error("mcp_release_archive_read_timeout");
-      child.kill("SIGKILL");
-    }, ARCHIVE_COMMAND_TIMEOUT_MS);
     child.stdout.on("data", (chunk?: any) : any => {
       streamedBytes += chunk.length;
       if (streamedBytes > MAX_EXTRACTED_ENTRY_BYTES) {
@@ -92,7 +86,6 @@ export async function hashCommand(command?: any, args?: any) : Promise<any> {
     child.once("close", (code?: any, signal?: any) : any => {
       if (settled) return;
       settled = true;
-      clearTimeout(timeout);
       if (failure) {
         reject(failure);
         return;

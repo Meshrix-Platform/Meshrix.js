@@ -20,7 +20,6 @@ export function runOrb({
   machine,
   args = [],
   translatePaths = false,
-  timeout = 60_000,
   allowFailure = false,
   input,
   code = "native_orb_command_failed",
@@ -30,7 +29,6 @@ export function runOrb({
   orbArgs.push(...args.map(String));
   const result: any = spawnSync("orb", orbArgs, {
     encoding: "utf8",
-    timeout,
     maxBuffer: 32 * 1024 * 1024,
     input,
     stdio: ["pipe", "pipe", "pipe"],
@@ -49,7 +47,6 @@ export function gitHead(repoRoot?: any) : any {
   const result: any = spawnSync("git", ["rev-parse", "HEAD"], {
     cwd: repoRoot,
     encoding: "utf8",
-    timeout: 15_000,
   });
   const revision: any = String(result.stdout || "").trim();
   if (result.status !== 0 || !REVISION_PATTERN.test(revision)) {
@@ -135,7 +132,6 @@ export function candidateArchive(repoRoot?: any, sourceRevision?: any, {
   ], {
     cwd: repoRoot,
     encoding: "utf8",
-    timeout: 120_000,
   });
   if (result.status !== 0) {
     fs.rmSync(temporary, { force: true });
@@ -180,7 +176,6 @@ export function writeRemoteFile(machine?: any, filePath?: any, contents?: any) :
       encoded,
       filePath,
     ],
-    timeout: 30_000,
     code: "native_orb_service_write_failed",
   });
 }
@@ -301,24 +296,22 @@ export async function rollbackNativeOrbActivation(context?: any) : Promise<any> 
       context.backupPath,
       context.previousDropInPresent ? "yes" : "no",
     ],
-    timeout: 30_000,
     code: "native_orb_rollback_failed",
   });
   runOrb({ machine, args: ["systemctl", "--user", "daemon-reload"], code: "native_orb_rollback_failed" });
   runOrb({
     machine,
     args: ["systemctl", "--user", "restart", context.unit],
-    timeout: 120_000,
     code: "native_orb_rollback_failed",
   });
   assertRollbackServiceRestored({
     activeWorkingDirectory: orbText(machine, [
       "systemctl", "--user", "show", context.unit, "-p", "WorkingDirectory", "--value",
-    ], { timeout: 15_000, code: "native_orb_rollback_failed" }),
+    ], { code: "native_orb_rollback_failed" }),
     expectedWorkingDirectory: context.currentWorkingDirectory,
     serviceState: orbText(machine, [
       "systemctl", "--user", "is-active", context.unit,
-    ], { allowFailure: true, timeout: 15_000 }),
+    ], { allowFailure: true }),
   });
   context.activationStarted = false;
 }

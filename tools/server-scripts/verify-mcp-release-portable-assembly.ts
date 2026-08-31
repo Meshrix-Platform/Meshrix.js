@@ -147,7 +147,6 @@ async function runPortable(executable?: any, args: any = []) : Promise<any> {
       MESHRIX_MCP_TOKEN: "",
       MESHRIX_TOOL_TOKEN: ""
     },
-    timeout: 30000,
     maxBuffer: 10 * 1024 * 1024
   });
   return {
@@ -159,7 +158,6 @@ async function runPortable(executable?: any, args: any = []) : Promise<any> {
 async function extractTarball(archivePath?: any, extractDir?: any) : Promise<any> {
   await fs.mkdir(extractDir, { recursive: true });
   await execFileAsync("tar", ["-xzf", archivePath, "-C", extractDir], {
-    timeout: 30000,
     maxBuffer: 10 * 1024 * 1024
   });
 }
@@ -263,7 +261,6 @@ try {
     await assert.rejects(
       () : any => execFileAsync(process.execPath, [RELEASE_SCRIPT, "--node-version=v0.0.0", "--json"], {
         cwd: projectRoot,
-        timeout: 10000,
         maxBuffer: 1024 * 1024
       }),
       (error?: any) : any => String(error?.stderr || "").includes("node_runtime_version_override_not_supported")

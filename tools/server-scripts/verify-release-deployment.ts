@@ -28,7 +28,6 @@ const DRIVER_SCRIPT = "tools/server-scripts/release-deployment-driver.ts";
 const REDUCER_SCRIPT = "tools/server-scripts/reduce-release-deployment.ts";
 const CLEANUP_STATE_SCHEMA = "meshrix.release-deployment.cleanup/1";
 const READINESS_BUDGET_MS = 120_000;
-const CLEANUP_BUDGET_MS = 60_000;
 const MAX_CHILD_OUTPUT_BYTES = 64 * 1024;
 const MAX_CONTROL_RESPONSE_BYTES = 256 * 1024;
 const MAX_AUTHORITY_INPUT_BYTES = 4 * 1024 * 1024;
@@ -64,7 +63,7 @@ function boundedAppend(previous: string, chunk: Buffer): string {
 function spawnBounded(
   executable: string,
   args: string[],
-  { stdin = "", allowFailure = false, timeoutMs = 0, captureStdout = false }: Record<string, any> = {},
+  { stdin = "", allowFailure = false, captureStdout = false }: Record<string, any> = {},
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
@@ -74,12 +73,10 @@ function spawnBounded(
       windowsHide: true,
     });
     let stdout = "";
-    let timer: NodeJS.Timeout | null = null;
     let settled = false;
     const rejectOnce = (error: any): void => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
       reject(error);
     };
     const terminateAndReject = (error: any): void => {
@@ -90,7 +87,6 @@ function spawnBounded(
     const resolveOnce = (value: any): void => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
       resolve(value);
     };
     child.once("error", terminateAndReject);
@@ -118,9 +114,6 @@ function spawnBounded(
       }
       stdinStream.on("error", terminateAndReject);
       stdinStream.end(stdin);
-    }
-    if (timeoutMs > 0) {
-      timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
     }
     child.once("close", (code, signal) => {
       if (!allowFailure && code !== 0) {
@@ -200,9 +193,8 @@ function validateCleanupState(value: any): any {
   return value;
 }
 
-async function waitForProcessExit(pid: number, cleanupDeadline: number): Promise<void> {
-  const gracefulDeadline = Math.min(cleanupDeadline, Date.now() + 5_000);
-  while (Date.now() < gracefulDeadline) {
+async function waitForProcessExit(pid: number): Promise<void> {
+  while (true) {
     try {
       process.kill(pid, 0);
     } catch {
@@ -210,16 +202,14 @@ async function waitForProcessExit(pid: number, cleanupDeadline: number): Promise
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  try { process.kill(pid, "SIGKILL"); } catch { /* Already gone. */ }
 }
 
-async function stopExactFixtureWithin(state: any, cleanupDeadline: number): Promise<void> {
+async function stopExactFixture(state: any): Promise<void> {
   const pid = state.fixturePid;
   if (!pid) return;
   const processProbe = await spawnBounded("ps", ["-ww", "-p", String(pid), "-o", "args="], {
     allowFailure: true,
     captureStdout: true,
-    timeoutMs: remainingBudget(cleanupDeadline, "release_deployment_cleanup_budget_exceeded"),
   });
   if (processProbe.code !== 0) return;
   const manifestPath = path.join(state.tempRoot, "fixture-manifest.json");
@@ -234,13 +224,12 @@ async function stopExactFixtureWithin(state: any, cleanupDeadline: number): Prom
     }
   }
   try { process.kill(pid, "SIGTERM"); } catch { return; }
-  await waitForProcessExit(pid, cleanupDeadline);
+  await waitForProcessExit(pid);
 }
 
-async function dockerRemoveExact(state: any, strict: boolean, cleanupDeadline: number): Promise<void> {
+async function dockerRemoveExact(state: any, strict: boolean): Promise<void> {
   const run = async (args: string[], allowFailure = false): Promise<any> => spawnBounded("docker", args, {
     allowFailure,
-    timeoutMs: remainingBudget(cleanupDeadline, "release_deployment_cleanup_budget_exceeded"),
   });
   const ready = await run(["info"], !strict);
   if (ready.code !== 0) {
@@ -268,9 +257,8 @@ export async function cleanupReleaseDeployment(
   if (!text) return;
   let state: any;
   try { state = validateCleanupState(JSON.parse(text)); } catch (error) { throw error; }
-  const cleanupDeadline = Date.now() + CLEANUP_BUDGET_MS;
-  await stopExactFixtureWithin(state, cleanupDeadline);
-  await dockerRemoveExact(state, strict, cleanupDeadline);
+  await stopExactFixture(state);
+  await dockerRemoveExact(state, strict);
   if (removePrivate) {
     await fs.rm(state.tempRoot, { recursive: true, force: true });
     await fs.rm(cleanupStatePath, { force: true });
@@ -405,10 +393,6 @@ async function configureRuntime(
     "set-password", "--username", "owner", "--generate-password",
   ], {
     captureStdout: true,
-    timeoutMs: remainingBudget(
-      readinessDeadline,
-      "release_deployment_readiness_budget_exceeded",
-    ),
   });
   let ownerPassword = /new password:\s*(\S+)/u.exec(rotated.stdout)?.[1] || "";
   if (!ownerPassword) fail("release_deployment_bootstrap_failed");
@@ -645,11 +629,10 @@ export async function verifyDeployment({
     if (driver.code !== 0) fail("release_deployment_driver_failed");
     control = { credential: "", openAiTool: "", anthropicTool: "" };
 
-    const cleanupDeadline = Date.now() + CLEANUP_BUDGET_MS;
-    await stopExactFixtureWithin(state, cleanupDeadline);
+    await stopExactFixture(state);
     state.fixturePid = 0;
     await writeJsonAtomic(cleanupStatePath, state);
-    await dockerRemoveExact(state, true, cleanupDeadline);
+    await dockerRemoveExact(state, true);
 
     const reducer = await spawnBounded(process.execPath, [
       REDUCER_SCRIPT,

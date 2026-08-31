@@ -1,7 +1,7 @@
 {
-  "prepare": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "prepare", "native-macos-arm64"], "timeoutMs": 300000 },
-  "start": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "start", "native-macos-arm64"], "timeoutMs": 300000 },
-  "verify": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "verify", "native-macos-arm64"], "timeoutMs": 1200000 },
-  "stop": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "stop", "native-macos-arm64"], "timeoutMs": 300000 },
-  "cleanup": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "cleanup", "native-macos-arm64"], "timeoutMs": 300000 }
+  "prepare": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "prepare", "native-macos-arm64"] },
+  "start": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "start", "native-macos-arm64"] },
+  "verify": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "verify", "native-macos-arm64"] },
+  "stop": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "stop", "native-macos-arm64"] },
+  "cleanup": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "cleanup", "native-macos-arm64"] }
 }

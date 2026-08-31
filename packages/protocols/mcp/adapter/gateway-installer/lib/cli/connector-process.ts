@@ -5,7 +5,6 @@ import path from "node:path";
 
 import {
   BOOTSTRAP_INSTALL_SCRIPT,
-  INSTALL_COMMAND_TIMEOUT_MS,
   PACKAGE_MANAGER_DISCOVERY_ENV
 } from "./constants.ts";
 
@@ -88,10 +87,7 @@ export async function run(command?: any, args: any = [], options: Record<string,
 }
 
 export async function runInstallCommand(command?: any, args: any = [], options: Record<string, any> = {}) : Promise<any> {
-  return run(command, args, {
-    ...options,
-    timeoutMs: options.timeoutMs || INSTALL_COMMAND_TIMEOUT_MS
-  });
+  return run(command, args, options);
 }
 
 export async function runWithInput(command?: any, args: any = [], input: any = "", options: Record<string, any> = {}) : Promise<any> {

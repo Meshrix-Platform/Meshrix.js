@@ -8,7 +8,6 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   runOrb({
     machine,
     args: ["systemctl", "--user", "restart", context.unit],
-    timeout: 120_000,
     code: "native_orb_activation_failed",
   });
   return Object.freeze({ id: "activate", status: "completed" });

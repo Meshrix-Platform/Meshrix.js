@@ -122,7 +122,6 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
     acceptanceLayer: command.acceptanceLayer,
     status: "passed",
     exitCode: 0,
-    timedOut: false,
     durationMs: 1,
     report: command.report,
     dependsOn: command.dependsOn,
@@ -147,7 +146,7 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
   await fs.writeFile(
     path.join(workspace, "build", "reports", "platform-acceptance.json"),
     `${JSON.stringify({
-      schemaVersion: "v0.0.1:acceptance:platform-report-3",
+      schemaVersion: "v0.0.1:acceptance:platform-report-4",
       acceptanceStandard: "functional-completeness",
       claim: "functional-complete",
       verifier: "tools/server-scripts/verify-platform-acceptance.ts",

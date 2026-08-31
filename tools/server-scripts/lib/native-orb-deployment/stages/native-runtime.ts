@@ -14,7 +14,6 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
       context.serviceNode,
     ],
     allowFailure: true,
-    timeout: 15_000,
   }).status === 0;
   if (!nativeRuntimeReady) {
     failNativeOrbDeployment("native_orb_native_runtime_incompatible", "Native dependencies do not match the service Node.js runtime.");

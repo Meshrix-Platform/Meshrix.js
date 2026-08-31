@@ -21,7 +21,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     "sh",
     "-lc",
     ". /etc/os-release; printf %s \"$ID\"",
-  ], { timeout: 15_000 });
+  ], {});
   if (!["ubuntu", "debian"].includes(distribution)) {
     failNativeOrbDeployment("native_orb_distribution_unsupported", "Target VM must use Ubuntu or Debian.");
   }
@@ -29,19 +29,19 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     "sh",
     "-lc",
     "systemctl --user list-unit-files --type=service --no-legend | awk 'tolower($1) ~ /meshrix/ {print $1; exit}'",
-  ], { timeout: 15_000 });
+  ], {});
   if (!UNIT_PATTERN.test(unit)) {
     failNativeOrbDeployment("native_orb_service_missing", "Existing native Meshrix.js service is unavailable.");
   }
   assertExistingServiceActive(orbText(machine, [
     "systemctl", "--user", "is-active", unit,
-  ], { allowFailure: true, timeout: 15_000 }));
+  ], { allowFailure: true }));
   const currentWorkingDirectory: any = orbText(machine, [
     "systemctl", "--user", "show", unit, "-p", "WorkingDirectory", "--value",
-  ], { timeout: 15_000 });
+  ], {});
   const fragmentPath: any = orbText(machine, [
     "systemctl", "--user", "show", unit, "-p", "FragmentPath", "--value",
-  ], { timeout: 15_000 });
+  ], {});
   const originalWorkingDirectory: any = orbText(machine, [
     "sh",
     "-lc",
@@ -51,10 +51,10 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     ].join("; "),
     "meshrix-original-working-directory",
     fragmentPath,
-  ], { timeout: 15_000 });
+  ], {});
   const currentExecStart: any = orbText(machine, [
     "systemctl", "--user", "show", unit, "-p", "ExecStart", "--value",
-  ], { timeout: 15_000 });
+  ], {});
   const serviceNode: any = resolveServiceNodeExecutable(currentExecStart);
   const serviceNodeDirectory: any = path.posix.dirname(serviceNode);
   const serviceNpmCli: any = orbText(machine, [
@@ -69,7 +69,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     ].join("\n"),
     "meshrix-service-npm",
     serviceNode,
-  ], { timeout: 15_000, code: "native_orb_node_unavailable" });
+  ], { code: "native_orb_node_unavailable" });
   const nodeReady: any = runOrb({
     machine,
     args: [
@@ -78,19 +78,17 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
       "const [major,minor]=process.versions.node.split('.').map(Number);process.exit((major===22&&minor>=18)||(major===24&&minor>=3)||major>24?0:1)",
     ],
     allowFailure: true,
-    timeout: 15_000,
   }).status === 0;
   const npmReady: any = runOrb({
     machine,
     args: [serviceNode, serviceNpmCli, "--version"],
     allowFailure: true,
-    timeout: 15_000,
   }).status === 0;
   const runtimeId: any = orbText(machine, [
     serviceNode,
     "-p",
     "process.versions.node+':'+process.versions.modules",
-  ], { timeout: 15_000, code: "native_orb_node_unavailable" });
+  ], { code: "native_orb_node_unavailable" });
   if (!nodeReady || !npmReady || !RUNTIME_ID_PATTERN.test(runtimeId)) {
     failNativeOrbDeployment("native_orb_node_unavailable", "The service Node.js toolchain is unavailable or unsupported.");
   }
@@ -98,7 +96,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   const releaseParent: any = path.posix.join(path.posix.dirname(originalWorkingDirectory), "releases");
   const dropInDirectory: any = orbText(machine, [
     "sh", "-lc", "printf %s \"$HOME/.config/systemd/user/$1.d\"", "meshrix-drop-in", unit,
-  ], { timeout: 15_000 });
+  ], {});
   if (
     !originalWorkingDirectory
     || originalWorkingDirectory === "/"
@@ -123,7 +121,6 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
       path.posix.join(originalWorkingDirectory, "package.json"),
     ],
     allowFailure: true,
-    timeout: 15_000,
   }).status === 0;
   if (!existingProgramValid) {
     failNativeOrbDeployment("native_orb_previous_program_unverified", "Previous program directory is not a verified Meshrix.js source tree.");

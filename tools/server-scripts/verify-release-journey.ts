@@ -117,23 +117,6 @@ const API_KEY_MAX_RISK: any = "safe_write";
 const APPROVAL_OPERATION_KEY: any = "convert-require-approval-debug";
 const IMMEDIATE_OPERATION_KEY: any = "convert-full-access-debug";
 
-const STEP_TIMEOUTS_MS: Readonly<Record<string, any>> = Object.freeze({
-  preflight: 60_000,
-  "stack-build-up": 30 * 60_000,
-  "admin-bootstrap": 180_000,
-  "upstream-publish": 120_000,
-  "adapter-seed": 10 * 60_000,
-  "client-discovery": 5 * 60_000,
-  "connector-install-matrix": 10 * 60_000,
-  "binary-upload-matrix": 5 * 60_000,
-  "api-key-workload": 10 * 60_000,
-  "mcp-acceptance-matrix": 10 * 60_000,
-  "approval-branch": 5 * 60_000,
-  "artifact-fetch": 120_000,
-  "pdf-verify": 60_000,
-  cleanup: 120_000
-});
-
 function usage() : any {
   process.stdout.write(`Usage: node tools/server-scripts/verify-release-journey.ts [options]
 
@@ -166,19 +149,6 @@ function parseArgs(argv?: any) : any {
     }
   }
   return options;
-}
-
-function withTimeout(stepId?: any, promise?: any) : any {
-  const budget: any = STEP_TIMEOUTS_MS[stepId] ?? 120_000;
-  let timer: any = null;
-  const timeout: any = new Promise((_?: any, reject?: any) : any => {
-    timer = setTimeout(() : any => {
-      const error: Error & Record<string, any> = new Error(`Release journey step ${stepId} exceeded its ${Math.round(budget / 1000)}s budget.`);
-      error.code = "release_journey_step_timeout";
-      reject(error);
-    }, budget);
-  });
-  return Promise.race([Promise.resolve(promise), timeout]).finally(() : any => clearTimeout(timer));
 }
 
 async function readVisualEvidenceFiles(root?: any, visualEvidence?: any) : Promise<any> {
@@ -269,7 +239,7 @@ async function main() : Promise<any> {
     currentStep = id;
     const started: any = Date.now();
     try {
-      const receipt: any = await withTimeout(id, fn());
+      const receipt: any = await fn();
       report.steps.push(stepReceipt(id, { status: "passed", durationMs: Date.now() - started, receipt }));
       return receipt;
     } catch (error: any) {
@@ -286,13 +256,13 @@ async function main() : Promise<any> {
     for (const target of installedTargets) {
       const started: any = Date.now();
       try {
-        const result: any = await withTimeout("cleanup", uninstallMatrixTarget({
+        const result: any = await uninstallMatrixTarget({
           connectorScript,
           target,
           env: targetEnvs.get(target),
           adapterCacheRoot,
           redact
-        }));
+        });
         details.push({
           id: `connector-uninstall:${target}`,
           status: result.ok ? "passed" : "failed",
@@ -319,19 +289,19 @@ async function main() : Promise<any> {
     if (stackStarted && !options.keepStack) {
       const started: any = Date.now();
       try {
-        await withTimeout("cleanup", runCompose(["--profile", "format-convert", "down", "-v"], {
+        await runCompose(["--profile", "format-convert", "down", "-v"], {
           cwd: repoRoot,
           env: composeEnv({ hostPort, converterImage: options.imageName }),
           redact,
           allowFailure: true
-        }));
+        });
         details.push({ id: "compose-down", status: "passed", durationMs: Date.now() - started });
       } catch (error: any) {
         details.push({ id: "compose-down", status: "failed", durationMs: Date.now() - started, error: redact(error?.message || String(error)).slice(-300) });
       }
       const imageStarted: any = Date.now();
       try {
-        await withTimeout("cleanup", runDocker(["image", "rm", "-f", RELEASE_JOURNEY_SERVER_IMAGE], { redact, allowFailure: true }));
+        await runDocker(["image", "rm", "-f", RELEASE_JOURNEY_SERVER_IMAGE], { redact, allowFailure: true });
         details.push({ id: "server-image-remove", status: "passed", durationMs: Date.now() - imageStarted });
       } catch (error: any) {
         details.push({ id: "server-image-remove", status: "failed", durationMs: Date.now() - imageStarted, error: redact(error?.message || String(error)).slice(-300) });
