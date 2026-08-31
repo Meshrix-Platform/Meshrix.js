@@ -155,7 +155,7 @@ describe("branch promotion workflow", () : any => {
 
   it("requires canonical accepted-generation resolution before promotion", () : any => {
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");
-    expect(automation).toContain("resolveCurrentAcceptanceGeneration");
+    expect(automation).toContain("resolveCurrentAcceptedCandidate");
     expect(automation).toContain("await ensureLocalCandidate(options.candidate)");
     expect(automation).not.toContain("pointer.generation");
   });

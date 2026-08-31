@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { resolveCurrentAcceptanceGeneration } from "../../platform-acceptance-generation-store.ts";
+import { resolveCurrentAcceptedCandidate } from "../../platform-acceptance-generation-store.ts";
 import { candidateArchive, runOrb } from "../../native-orb-deployment/support.ts";
 import { failNativeOrbBootstrap } from "../contract.ts";
 import {
@@ -13,8 +13,8 @@ import {
 
 export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
   const sourceRevision: any = context.parsed.sourceRevision;
-  const accepted: any = await resolveCurrentAcceptanceGeneration(context.repoRoot);
-  if (accepted.manifest.sourceRevision !== sourceRevision) {
+  const accepted: any = await resolveCurrentAcceptedCandidate(context.repoRoot);
+  if (accepted.receipt.sourceRevision !== sourceRevision) {
     failNativeOrbBootstrap("native_orb_bootstrap_candidate_not_accepted", "Bootstrap candidate is not the current accepted commit.");
   }
   let runtimeLock: any;
@@ -48,7 +48,7 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
   const archive: any = candidateArchive(context.repoRoot, sourceRevision);
   Object.assign(context, {
     sourceRevision,
-    candidateDigest: accepted.manifest.candidateDigest,
+    candidateDigest: accepted.receipt.candidateDigest,
     runtimeLock,
     packageManifest,
     archive,

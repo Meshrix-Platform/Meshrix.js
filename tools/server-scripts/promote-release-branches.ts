@@ -6,7 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { resolveCurrentAcceptanceGeneration } from "./lib/platform-acceptance-generation-store.ts";
+import { resolveCurrentAcceptedCandidate } from "./lib/platform-acceptance-generation-store.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REVISION: any = /^[a-f0-9]{40}$/u;
@@ -191,12 +191,12 @@ async function ensureLocalCandidate(requestedCandidate?: any) : Promise<any> {
   git(["cat-file", "-e", `${candidate}^{commit}`], "candidate_revision_unavailable");
   let accepted: any;
   try {
-    accepted = await resolveCurrentAcceptanceGeneration(repoRoot);
+    accepted = await resolveCurrentAcceptedCandidate(repoRoot);
   } catch {
     throw failure("accepted_candidate_evidence_unavailable");
   }
-  if (accepted?.manifest?.sourceRevision !== candidate ||
-      !/^[a-f0-9]{64}$/u.test(String(accepted?.manifest?.candidateDigest || ""))) {
+  if (accepted?.receipt?.sourceRevision !== candidate ||
+      !/^[a-f0-9]{64}$/u.test(String(accepted?.receipt?.candidateDigest || ""))) {
     throw failure("accepted_candidate_mismatch");
   }
   return candidate;

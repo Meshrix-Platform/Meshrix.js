@@ -27,7 +27,8 @@ import {
 import { validateReleaseCandidateIdentity } from "../verify-release-candidate-identity.ts";
 
 export const ACCEPTANCE_GENERATION_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-generation-2";
-export const ACCEPTANCE_GENERATION_POINTER_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-generation-pointer-1";
+export const ACCEPTED_CANDIDATE_RECEIPT_SCHEMA: any = "v0.0.1:meshrix:accepted-candidate-receipt-1";
+export const ACCEPTANCE_GENERATION_POINTER_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-generation-pointer-2";
 export const ACCEPTANCE_GENERATION_ROOT: any = PLATFORM_ACCEPTANCE_GENERATION_ROOT;
 export const ACCEPTANCE_GENERATION_POINTER: any = PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH;
 export const ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT: any = `${ACCEPTANCE_GENERATION_ROOT}/failures`;
@@ -857,7 +858,21 @@ export async function publishAcceptanceGeneration({
       path.join(paths.stagedGeneration, "manifest.json"),
       `${JSON.stringify(manifest, null, 2)}\n`
     );
-    const manifestDigest: any = await sha256File(path.join(paths.stagedGeneration, "manifest.json"));
+    const receipt: Record<string, any> = {
+      schemaVersion: ACCEPTED_CANDIDATE_RECEIPT_SCHEMA,
+      claim: "functional-complete",
+      status: "accepted",
+      releaseReady: true,
+      generationId: paths.id,
+      selectedProfile: aggregateBinding.selectedProfile,
+      sourceRevision: aggregateReport.sourceRevision,
+      candidateDigest: aggregateReport.candidateIdentity.candidate_digest
+    };
+    await writePrivateFileAtomic(
+      path.join(paths.stagedGeneration, "accepted-candidate.json"),
+      `${JSON.stringify(receipt, null, 2)}\n`
+    );
+    const receiptDigest: any = await sha256File(path.join(paths.stagedGeneration, "accepted-candidate.json"));
     await syncPathIfSupported(paths.stagedGeneration);
     await fs.rename(paths.stagedGeneration, paths.committedGeneration);
     committed = true;
@@ -867,8 +882,8 @@ export async function publishAcceptanceGeneration({
       schemaVersion: ACCEPTANCE_GENERATION_POINTER_SCHEMA,
       generationId: paths.id,
       generation: path.relative(repoRoot, paths.committedGeneration).split(path.sep).join("/"),
-      manifest: "manifest.json",
-      manifestSha256: manifestDigest.sha256
+      receipt: "accepted-candidate.json",
+      receiptSha256: receiptDigest.sha256
     };
     await withPublicationLock(paths.root, async () : Promise<any> => {
       const currentId: any = await currentGenerationId(paths.pointer);
@@ -880,7 +895,7 @@ export async function publishAcceptanceGeneration({
       published = true;
       await pruneCommittedGenerations(paths);
     });
-    return { manifest, pointer };
+    return { manifest, pointer, receipt };
   } catch (error: any) {
     await fs.rm(paths.stagedGeneration, { recursive: true, force: true });
     if (committed && !published) {
@@ -890,9 +905,7 @@ export async function publishAcceptanceGeneration({
   }
 }
 
-export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
-  verifyLedgerAnchor = verifyAggregateLedgerAnchor
-}: Record<string, any> = {}) : Promise<any> {
+export async function resolveCurrentAcceptedCandidate(repoRoot?: any) : Promise<any> {
   const pointerPath: any = path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER);
   await assertPathHasNoSymlinkComponents(repoRoot, ACCEPTANCE_GENERATION_POINTER, "file");
   const pointer: any = JSON.parse(await fs.readFile(pointerPath, "utf8"));
@@ -901,114 +914,38 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
   }
   const generation: any = normalizedLogicalPath(pointer.generation);
   const requiredPrefix: any = `${ACCEPTANCE_GENERATION_ROOT}/generations/`;
-  if (!generation.startsWith(requiredPrefix) || pointer.manifest !== "manifest.json") {
+  if (!generation.startsWith(requiredPrefix) || pointer.receipt !== "accepted-candidate.json") {
     throw new Error("Acceptance generation pointer target is invalid");
   }
   const generationRoot: any = path.join(repoRoot, ...generation.split("/"));
   await assertPathHasNoSymlinkComponents(repoRoot, generation, "directory");
-  const manifestPath: any = path.join(generationRoot, normalizedLogicalPath(pointer.manifest));
-  await assertPathHasNoSymlinkComponents(generationRoot, pointer.manifest, "file");
-  const manifestDigest: any = await sha256File(manifestPath);
-  if (!/^[a-f0-9]{64}$/u.test(String(pointer.manifestSha256 || "")) ||
-      manifestDigest.sha256 !== pointer.manifestSha256) {
-    throw new Error("Acceptance generation manifest digest does not match its pointer");
+  const receiptPath: any = path.join(generationRoot, normalizedLogicalPath(pointer.receipt));
+  await assertPathHasNoSymlinkComponents(generationRoot, pointer.receipt, "file");
+  const receiptDigest: any = await sha256File(receiptPath);
+  if (!BARE_SHA256_DIGEST.test(String(pointer.receiptSha256 || "")) ||
+      receiptDigest.sha256 !== pointer.receiptSha256) {
+    throw new Error("Accepted candidate receipt digest does not match its pointer");
   }
-  const manifest: any = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-  if (manifest?.schemaVersion !== ACCEPTANCE_GENERATION_SCHEMA || manifest.generationId !== pointer.generationId) {
-    throw new Error("Acceptance generation manifest does not match its pointer");
-  }
-  if (!Array.isArray(manifest.entries) || manifest.entries.length === 0) {
-    throw new Error("Acceptance generation manifest has no entries");
+  const receipt: any = JSON.parse(await fs.readFile(receiptPath, "utf8"));
+  if (
+    receipt?.schemaVersion !== ACCEPTED_CANDIDATE_RECEIPT_SCHEMA ||
+    receipt?.claim !== "functional-complete" ||
+    receipt?.status !== "accepted" ||
+    receipt?.releaseReady !== true ||
+    receipt?.generationId !== pointer.generationId
+  ) {
+    throw new Error("Accepted candidate receipt is invalid");
   }
   try {
-    requirePlatformAcceptanceProfile(manifest.selectedProfile);
+    requirePlatformAcceptanceProfile(receipt.selectedProfile);
   } catch {
-    throw new Error("Acceptance generation manifest profile is invalid");
+    throw new Error("Accepted candidate receipt profile is invalid");
   }
-  if (!/^[a-f0-9]{40}$/u.test(String(manifest.sourceRevision || "")) ||
-      !BARE_SHA256_DIGEST.test(String(manifest.candidateDigest || "")) ||
-      !String(manifest.ledgerEventId || "").trim()) {
-    throw new Error("Acceptance generation manifest acceptance binding is invalid");
+  if (!/^[a-f0-9]{40}$/u.test(String(receipt.sourceRevision || "")) ||
+      !BARE_SHA256_DIGEST.test(String(receipt.candidateDigest || ""))) {
+    throw new Error("Accepted candidate receipt binding is invalid");
   }
-  if (
-    !Array.isArray(manifest.releaseEvidenceInventory) ||
-    manifest.releaseEvidenceInventory.length === 0 ||
-    manifest.releaseEvidenceInventoryDigest !== reportPayloadDigest({
-      inventory: manifest.releaseEvidenceInventory
-    })
-  ) {
-    throw new Error("Acceptance generation release evidence inventory is invalid");
-  }
-  for (const inventoryEntry of manifest.releaseEvidenceInventory) {
-    for (const field of [
-      "reportPath",
-      "ownerCommandId",
-      "producer",
-      "reportSchemaVersion",
-      "timestampField",
-      "reducer",
-      "provenanceSchemaVersion"
-    ]) {
-      if (!String(inventoryEntry?.[field] || "").trim()) {
-        throw new Error(`Acceptance generation inventory field is missing: ${field}`);
-      }
-    }
-    if (
-      inventoryEntry.reportLeakScanField !== null &&
-      !String(inventoryEntry.reportLeakScanField || "").trim()
-    ) {
-      throw new Error("Acceptance generation inventory leak-scan field is invalid");
-    }
-  }
-  const manifestEntryPaths: any = manifest.entries.map((entry?: any) : any => normalizedLogicalPath(entry?.path)).sort();
-  const inventoryEntryPaths: any = [
-    ...manifest.releaseEvidenceInventory.map((entry?: any) : any => normalizedLogicalPath(entry?.reportPath)),
-    normalizedLogicalPath(manifest.aggregateReport)
-  ].sort();
-  if (
-    new Set<any>(manifestEntryPaths).size !== manifestEntryPaths.length ||
-    JSON.stringify(manifestEntryPaths) !== JSON.stringify(inventoryEntryPaths)
-  ) {
-    throw new Error("Acceptance generation entries do not match its release evidence inventory");
-  }
-  for (const entry of manifest.entries) {
-    const logicalPath: any = normalizedLogicalPath(entry?.path);
-    await assertPathHasNoSymlinkComponents(generationRoot, logicalPath, "file");
-    const reportPath: any = path.join(generationRoot, ...logicalPath.split("/"));
-    const stats: any = await fs.lstat(reportPath);
-    if (!stats.isFile() || stats.isSymbolicLink()) {
-      throw new Error(`Acceptance generation entry is not a regular file: ${logicalPath}`);
-    }
-    const digest: any = await sha256File(reportPath);
-    if (digest.sha256 !== entry.sha256 || digest.byteLength !== entry.byteLength) {
-      throw new Error(`Acceptance generation entry digest mismatch: ${logicalPath}`);
-    }
-  }
-  for (const inventoryEntry of manifest.releaseEvidenceInventory) {
-    await validateOwnedReport(generationRoot, inventoryEntry);
-  }
-  const aggregateLogicalPath: any = normalizedLogicalPath(manifest.aggregateReport);
-  const aggregateReport: any = JSON.parse(await fs.readFile(
-    path.join(generationRoot, ...aggregateLogicalPath.split("/")),
-    "utf8"
-  ));
-  const aggregateBinding: any = await validateAcceptedAggregateReport({
-    aggregateReport,
-    releaseEvidenceInventory: manifest.releaseEvidenceInventory,
-    requiredReports: manifest.releaseEvidenceInventory.map((entry?: any) : any => entry.reportPath),
-    repoRoot,
-    verifyLedgerAnchor
-  });
-  assertNoSensitiveReportLeak(aggregateReport, "resolved acceptance generation aggregate report");
-  if (
-    aggregateBinding.selectedProfile !== manifest.selectedProfile ||
-    aggregateReport.sourceRevision !== manifest.sourceRevision ||
-    aggregateReport.candidateIdentity.candidate_digest !== manifest.candidateDigest ||
-    aggregateReport.ledgerAnchor.ledgerEventId !== manifest.ledgerEventId
-  ) {
-    throw new Error("Acceptance generation manifest does not bind its aggregate report");
-  }
-  return { pointer, manifest, generationRoot };
+  return { pointer, receipt, generationRoot };
 }
 
 export async function removeAcceptanceGenerationWorkspace(paths?: any, { repoRoot = "" }: Record<string, any> = {}) : Promise<any> {

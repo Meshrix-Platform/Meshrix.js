@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/private-file-atomic.ts";
-import { resolveCurrentAcceptanceGeneration } from "./lib/platform-acceptance-generation-store.ts";
+import { resolveCurrentAcceptedCandidate } from "./lib/platform-acceptance-generation-store.ts";
 import { assertNoSensitiveReportLeak } from "./lib/sensitive-report-scan.ts";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -20,9 +20,9 @@ async function json(relativePath: string): Promise<any | null> {
 
 async function acceptedCandidate(): Promise<{ sourceRevision: string; candidateDigest: string } | null> {
   try {
-    const accepted = await resolveCurrentAcceptanceGeneration(repoRoot);
-    const sourceRevision = String(accepted.manifest.sourceRevision || "");
-    const candidateDigest = String(accepted.manifest.candidateDigest || "");
+    const accepted = await resolveCurrentAcceptedCandidate(repoRoot);
+    const sourceRevision = String(accepted.receipt.sourceRevision || "");
+    const candidateDigest = String(accepted.receipt.candidateDigest || "");
     if (!/^[a-f0-9]{40}$/u.test(sourceRevision) || !/^[a-f0-9]{64}$/u.test(candidateDigest)) return null;
     return { sourceRevision, candidateDigest };
   } catch {
