@@ -343,7 +343,6 @@ try {
         targets: ["opencode"],
         label: "verify-upstream-mcp-agent-grant",
         connectorVersion: "verify-upstream-mcp",
-        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         dynamicCapabilities: ["records.search", "records.get"].map((upstreamToolName?: any) : any =>
           compileUpstreamOperationCapability({ serviceId: SERVICE_ID, serviceProtocol: "mcp" }, {
             operationKey: "tools/call",
@@ -352,7 +351,11 @@ try {
             risk: "read_only"
           }, { upstreamToolName }).capabilityId
         ),
-        allowedServiceIds: [SERVICE_ID]
+        allowedTools: [`upstream.${SERVICE_ID.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)}.tools-call`],
+        toolsets: ["meshrix.gateway.read"],
+        scopeIds: ["gateway:read"],
+        allowedServiceIds: [SERVICE_ID],
+        resources: { mode: "unrestricted" }
       }
     });
     assert.ok(issuedApiKey.apiKey);

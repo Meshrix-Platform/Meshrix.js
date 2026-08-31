@@ -1,6 +1,7 @@
 import {
   nowIso,
   refreshMetrics,
+  requiredWorkspaceBinding,
   shallowObject,
   text,
   WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
@@ -143,7 +144,7 @@ export function buildContributionStatsDashboard({
   items = [],
   auditEvents = [],
   protocolVersion = WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
-  workspaceId = "default",
+  workspaceId = "",
   contributionType = "",
   assetRecordProjector,
 }: ContributionDashboardOptions = {}): ContributionDashboard {
@@ -198,7 +199,7 @@ export function buildContributionStatsDashboard({
     return row;
   };
   const workspaceRowFor = (workspaceKey: unknown): WorkspaceRow => {
-    const id = text(workspaceKey || "default") || "default";
+    const id = requiredWorkspaceBinding(workspaceKey);
     let row = workspaceMap.get(id);
     if (!row) {
       row = {
@@ -249,32 +250,20 @@ export function buildContributionStatsDashboard({
       row.rankScore += metricValue(contribution, "rankScore");
     }
     for (const event of contribution.usageEvents) {
-      workspaceRowFor(
-        event.workspaceId || contribution.workspaceId,
-      ).usageCount += 1;
+      workspaceRowFor(event.workspaceId).usageCount += 1;
       addCount(actionBreakdown, event.action || "asset.used");
     }
     for (const receipt of contribution.executionReceipts)
       if (receipt.status === "succeeded")
-        workspaceRowFor(
-          receipt.workspaceId || contribution.workspaceId,
-        ).successfulUseCount += 1;
+        workspaceRowFor(receipt.workspaceId).successfulUseCount += 1;
     for (const event of contribution.downloadEvents)
-      workspaceRowFor(
-        event.workspaceId || contribution.workspaceId,
-      ).downloadCount += 1;
+      workspaceRowFor(event.workspaceId).downloadCount += 1;
     for (const event of contribution.adoptions)
-      workspaceRowFor(
-        event.targetWorkspaceId || contribution.workspaceId,
-      ).adoptionCount += 1;
+      workspaceRowFor(event.targetWorkspaceId).adoptionCount += 1;
     for (const event of contribution.permissionRequests)
-      workspaceRowFor(
-        event.targetWorkspaceId || contribution.workspaceId,
-      ).permissionRequestCount += 1;
+      workspaceRowFor(event.targetWorkspaceId).permissionRequestCount += 1;
     for (const event of contribution.grants)
-      workspaceRowFor(
-        event.targetWorkspaceId || contribution.workspaceId,
-      ).permissionGrantCount += 1;
+      workspaceRowFor(event.targetWorkspaceId).permissionGrantCount += 1;
   }
   for (const event of relevantAuditEvents)
     addCount(eventBreakdownMap, event.eventType || "unknown");

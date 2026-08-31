@@ -46,7 +46,6 @@ describe("optional external startup", () : any => {
       "service:file-parser-format-convert",
       "service:model-gateway",
       "service:skill-hub",
-      "plugin:coding-github",
       "plugin:external-gateway",
       "plugin:model-gateway",
       "plugin:shared-space",
@@ -60,13 +59,13 @@ describe("optional external startup", () : any => {
       "adapter:pi",
       "agent:self-maintenance",
     ]);
-    expect(new Set(ids).size).toBe(16);
-    expect(new Set(OPTIONAL_STARTUP_TARGETS.map((entry?: any) : any => entry.script)).size).toBe(16);
+    expect(new Set(ids).size).toBe(15);
+    expect(new Set(OPTIONAL_STARTUP_TARGETS.map((entry?: any) : any => entry.script)).size).toBe(15);
     expect(OPTIONAL_STARTUP_TARGETS.every((entry?: any) : any => (
       entry.script.startsWith("./targets/") && entry.script.endsWith(".ts")
     ))).toBe(true);
     const loaded: any[] = await Promise.all(OPTIONAL_STARTUP_TARGETS.map(loadOptionalStartupTargetScript));
-    expect(loaded).toHaveLength(16);
+    expect(loaded).toHaveLength(15);
     const pluginRegistry: any = JSON.parse(await fs.readFile(
       path.join(repoRoot, "plugins/registry/plugins.json"),
       "utf8",

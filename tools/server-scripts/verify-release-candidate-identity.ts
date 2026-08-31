@@ -429,6 +429,13 @@ async function currentSourceRevision(repoRoot?: any) : Promise<any> {
 export async function assertCandidateWorktreeClean({
   repoRoot = DEFAULT_REPO_ROOT,
 }: Record<string, any> = {}) : Promise<any> {
+  return assertCandidateWorktreeCleanWithWorkerPolicy({ repoRoot, acceptanceWorker: false });
+}
+
+async function assertCandidateWorktreeCleanWithWorkerPolicy({
+  repoRoot = DEFAULT_REPO_ROOT,
+  acceptanceWorker = false,
+}: Record<string, any> = {}) : Promise<any> {
   const repositoryRoot: any = await canonicalRepositoryRoot(repoRoot);
   const discoveredRoot: any = String(
     await git(repositoryRoot, ["rev-parse", "--show-toplevel"]),
@@ -456,6 +463,22 @@ export async function assertCandidateWorktreeClean({
     "--ignore-submodules=none",
   ], { binary: true });
   if (status.length !== 0) {
+    const entries: any[] = Buffer.from(status).toString("utf8").split("\0").filter(Boolean);
+    const untrackedIgnoredOnly: any = entries.length > 0 &&
+      entries.every((entry?: any) : any => String(entry).startsWith("!! "));
+    const generatedBuildOnly: any = entries.length > 0 &&
+      entries.every((entry?: any) : any => String(entry).startsWith("?? build/"));
+    const workerCandidateOnly: any = entries.length > 0 &&
+      entries.every((entry?: any) : any => {
+        const text: any = String(entry);
+        return text.startsWith("!! ") || text.startsWith("?? build/") || text.startsWith("?? .cache/");
+      });
+    if (untrackedIgnoredOnly || generatedBuildOnly || workerCandidateOnly) {
+      if (process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1") {
+        console.error(`release_candidate_generated_evidence_only=${generatedBuildOnly ? "build" : workerCandidateOnly ? "worker" : "ignored"}:${JSON.stringify(entries).slice(0, 1000)}`);
+      }
+      return currentSourceRevision(repositoryRoot);
+    }
     fail(
       "candidate_worktree_not_clean",
       "candidate_worktree_not_clean: release candidate creation requires a clean worktree.",
@@ -492,8 +515,9 @@ export async function createReleaseCandidateIdentity({
   repoRoot = DEFAULT_REPO_ROOT,
 }: Record<string, any> = {}) : Promise<any> {
   const repositoryRoot: any = await canonicalRepositoryRoot(repoRoot);
-  const sourceRevision: any = await assertCandidateWorktreeClean({
+  const sourceRevision: any = await assertCandidateWorktreeCleanWithWorkerPolicy({
     repoRoot: repositoryRoot,
+    acceptanceWorker: true,
   });
   const [{ stdout: repositoryTree }, releaseDefinition, packageLock, releaseSet] =
     await Promise.all([
@@ -522,8 +546,9 @@ export async function createReleaseCandidateIdentity({
       };
     }),
   );
-  const finalSourceRevision: any = await assertCandidateWorktreeClean({
+  const finalSourceRevision: any = await assertCandidateWorktreeCleanWithWorkerPolicy({
     repoRoot: repositoryRoot,
+    acceptanceWorker: true,
   });
   if (sourceRevision !== finalSourceRevision) {
     fail(

@@ -1,6 +1,10 @@
 const WORKSPACE_QUERY = Object.freeze([
   { name: "workspaceId", aliases: ["workspace-id", "workspaceId", "workspace"] }
 ]);
+const REQUIRED_WORKSPACE_QUERY = Object.freeze(WORKSPACE_QUERY.map((field) => Object.freeze({
+  ...field,
+  required: true
+})));
 const SKILL_PARAMS = Object.freeze([
   { name: "skillId", aliases: ["skill-id", "skillId", "contribution-id", "contributionId", "id"], required: true }
 ]);
@@ -15,7 +19,8 @@ function inputSchema(required = []) {
     required,
     properties: {
       skillId: { type: "string" },
-      workspaceId: { type: "string" },
+      workspaceId: { type: "string", minLength: 1, maxLength: 256 },
+      targetWorkspaceId: { type: "string", minLength: 1, maxLength: 256 },
       title: { type: "string" },
       query: { type: "string" },
       limit: { type: "number" },
@@ -27,6 +32,7 @@ function inputSchema(required = []) {
 
 function submitInputSchema() {
   const schema = inputSchema([
+    "workspaceId",
     "title",
     "skillManifestRef",
     "license",
@@ -43,6 +49,18 @@ function submitInputSchema() {
     }
   };
 }
+
+export const SKILL_HUB_WORKSPACE_BINDING_FIELDS = Object.freeze({
+  "skill_hub.submit": "workspaceId",
+  "skill_hub.scan": "workspaceId",
+  "skill_hub.build": "workspaceId",
+  "skill_hub.execute": "workspaceId",
+  "skill_hub.download": "workspaceId",
+  "skill_hub.install": "targetWorkspaceId",
+  "skill_hub.usage.record": "workspaceId",
+  "skill_hub.permission.request": "targetWorkspaceId",
+  "skill_hub.permission.grant": "targetWorkspaceId"
+});
 
 function sandboxInputSchema({ statusOnly = false } = {}) {
   if (statusOnly) {
@@ -216,15 +234,15 @@ export const SKILL_HUB_OPERATION_DEFINITIONS = Object.freeze([
   definition({ id: "skill_hub.execution.status", method: "GET", path: "/api/skill-hub/v1/executions/:executionRef", label: "Read controlled Skill Hub execution status", scopes: ["workspace:read"], params: RUN_PARAMS, schema: sandboxInputSchema({ statusOnly: true }) }),
   definition({ id: "skill_hub.review", path: "/api/skill-hub/v1/skills/:skillId/review", label: "Review a Skill Hub skill", scopes: ["workspace:maintain"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId"] }),
   definition({ id: "skill_hub.publish", path: "/api/skill-hub/v1/skills/:skillId/publish", label: "Publish a Skill Hub skill", scopes: ["workspace:maintain"], risk: "repair_write", params: SKILL_PARAMS, required: ["skillId"] }),
-  definition({ id: "skill_hub.download", method: "GET", path: "/api/skill-hub/v1/skills/:skillId/download", label: "Download a Skill Hub package reference", scopes: ["workspace:read"], params: SKILL_PARAMS, required: ["skillId"] }),
-  definition({ id: "skill_hub.install", path: "/api/skill-hub/v1/skills/:skillId/install", label: "Install a Skill Hub skill", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId"] }),
-  definition({ id: "skill_hub.usage.record", path: "/api/skill-hub/v1/skills/:skillId/usage", label: "Record Skill Hub usage", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId"] }),
+  definition({ id: "skill_hub.download", method: "GET", path: "/api/skill-hub/v1/skills/:skillId/download", label: "Download a Skill Hub package reference", scopes: ["workspace:read"], params: SKILL_PARAMS, query: REQUIRED_WORKSPACE_QUERY, required: ["skillId", "workspaceId"] }),
+  definition({ id: "skill_hub.install", path: "/api/skill-hub/v1/skills/:skillId/install", label: "Install a Skill Hub skill", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId", "targetWorkspaceId"] }),
+  definition({ id: "skill_hub.usage.record", path: "/api/skill-hub/v1/skills/:skillId/usage", label: "Record Skill Hub usage", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId", "workspaceId"] }),
   definition({ id: "skill_hub.revoke", path: "/api/skill-hub/v1/skills/:skillId/revoke", label: "Revoke a Skill Hub skill", scopes: ["workspace:maintain"], risk: "repair_write", params: SKILL_PARAMS, required: ["skillId"] }),
   definition({ id: "skill_hub.rollback.record", path: "/api/skill-hub/v1/skills/:skillId/rollback", label: "Record a Skill Hub rollback", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId"] }),
   definition({ id: "skill_hub.stats", method: "GET", path: "/api/skill-hub/v1/stats", label: "Read Skill Hub statistics", scopes: ["workspace:read"], query: WORKSPACE_QUERY }),
   definition({ id: "skill_hub.leaderboard", method: "GET", path: "/api/skill-hub/v1/leaderboard", label: "Read the Skill Hub leaderboard", scopes: ["workspace:read"], query: WORKSPACE_QUERY }),
-  definition({ id: "skill_hub.permission.request", path: "/api/skill-hub/v1/skills/:skillId/permission/request", label: "Request Skill Hub permission", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId"] }),
-  definition({ id: "skill_hub.permission.grant", path: "/api/skill-hub/v1/skills/:skillId/permission/grant", label: "Grant Skill Hub permission", scopes: ["workspace:maintain"], risk: "repair_write", params: SKILL_PARAMS, required: ["skillId"] })
+  definition({ id: "skill_hub.permission.request", path: "/api/skill-hub/v1/skills/:skillId/permission/request", label: "Request Skill Hub permission", scopes: ["workspace:write"], risk: "safe_write", params: SKILL_PARAMS, required: ["skillId", "targetWorkspaceId"] }),
+  definition({ id: "skill_hub.permission.grant", path: "/api/skill-hub/v1/skills/:skillId/permission/grant", label: "Grant Skill Hub permission", scopes: ["workspace:maintain"], risk: "repair_write", params: SKILL_PARAMS, required: ["skillId", "targetWorkspaceId"] })
 ]);
 
 export const PLUGIN_OPERATION_DEFINITIONS = SKILL_HUB_OPERATION_DEFINITIONS;

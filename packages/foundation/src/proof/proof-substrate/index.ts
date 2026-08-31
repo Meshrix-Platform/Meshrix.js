@@ -1598,13 +1598,6 @@ interface AcceptanceEvidenceInput {
   actor?: ProofRecord;
 }
 
-interface PlanReceiptEvidenceInput {
-  plan?: string;
-  receiptDigest?: string;
-  context?: ProofRecord;
-  actor?: ProofRecord;
-}
-
 export function createOperationProofSubstrate({
   userDataPath = "",
   dataDir = "",
@@ -1958,40 +1951,6 @@ export function createOperationProofSubstrate({
           contentHash: String(digest.contentHash || "")
         })).sort((left, right) => left.path.localeCompare(right.path)),
         evidenceContext: cleanValue(asObject(evidenceContext))
-      });
-      const entry = await recordReceipt({
-        profile: "receipt",
-        operationId,
-        workspaceId,
-        idempotencyKey: operationId,
-        subject: cleanRecord(actor),
-        status: "succeeded",
-        commitment
-      });
-      return {
-        ledgerEventId: text(entry?.ledgerEventId),
-        envelopeId: text(entry?.pactium?.receiptEnvelopeId),
-        factId: text(entry?.pactium?.receiptId),
-        workspaceId,
-        recordedAt: text(entry?.createdAt),
-        resultDigest: text(entry?.resultDigest)
-      };
-    },
-    async recordPlanReceiptEvidence({
-      plan = "", receiptDigest = "", context = {}, actor = { type: "system" }
-    }: PlanReceiptEvidenceInput = {}) {
-      const normalizedPlan = text(plan);
-      const normalizedDigest = text(receiptDigest);
-      if (!normalizedPlan || !/^([a-f0-9]{64})$/u.test(normalizedDigest)) {
-        throw new Error("plan and sha256 receiptDigest are required for Plan receipt anchoring");
-      }
-      const workspaceId = `plan-receipt:${normalizedPlan}`;
-      const operationId = `plan.receipt.anchor.${normalizedDigest}`;
-      const commitment = cleanValue({
-        kind: "plan-final-receipt",
-        plan: normalizedPlan,
-        receiptDigest: normalizedDigest,
-        context: cleanValue(asObject(context))
       });
       const entry = await recordReceipt({
         profile: "receipt",

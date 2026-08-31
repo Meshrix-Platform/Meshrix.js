@@ -18,7 +18,13 @@ import {
   workspaceAssetPolicyDecision
 } from "./workspace-asset-governance.ts";
 import { contributionRegistryFor, workspaceAssetRegistryFor } from "./registry-services.ts";
-import { objectOrNull, workspaceAccessOptions, workspaceIdFrom } from "./shared.ts";
+import {
+  objectOrNull,
+  requiredWorkspaceIdFrom,
+  workspaceAccessOptions,
+  workspaceBindingFailureResult,
+  workspaceIdFrom
+} from "./shared.ts";
 import { executeAgentWorkspaceFileOperation } from "./agent-workspace-files-executor.ts";
 import { executeWorkspaceContributionOperation } from "./workspace-contribution-executor.ts";
 import { executeWorkspaceGovernanceOperation } from "./runtime-admin-executors.ts";
@@ -133,6 +139,13 @@ export async function executeWorkspaceAssetOperation({ operationId, input = {}, 
   const id: any = String(operationId || "");
   if (!id.startsWith("workspace.asset.") || id === "workspace.asset.policy.set" || id === "workspace.asset.permission.check") {
     return null;
+  }
+  if (isManagedWorkspaceAssetWriteOperation(id)) {
+    try {
+      requiredWorkspaceIdFrom(input);
+    } catch {
+      return workspaceBindingFailureResult(id);
+    }
   }
 
   const target: any = normalizeWorkspaceAssetTarget(input, id);

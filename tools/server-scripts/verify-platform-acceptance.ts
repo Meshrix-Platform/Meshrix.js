@@ -77,7 +77,6 @@ import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/pr
 import { reportPayloadDigest } from "../../packages/foundation/src/observability/sensitive-report-scan.ts";
 import {
   ACCEPTANCE_GENERATION_POINTER,
-  clearAccidentalCoreWorktree,
   createAcceptanceGenerationWorkspace,
   publishAcceptanceGeneration,
   publishAcceptanceFailureDiagnostic,
@@ -107,6 +106,9 @@ import {
 } from "./lib/platform-acceptance-requirement-evidence.ts";
 
 const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const authorityRoot: any = process.env.MESHRIX_ACCEPTANCE_AUTHORITY_ROOT
+  ? path.resolve(process.env.MESHRIX_ACCEPTANCE_AUTHORITY_ROOT)
+  : repoRoot;
 const REPORT_PATH: any = PLATFORM_ACCEPTANCE_REPORT_PATH;
 const RELEASE_EVIDENCE_INVENTORY: any = createReleaseEvidenceInventory({
   commands: PLATFORM_ACCEPTANCE_COMMANDS,
@@ -588,11 +590,12 @@ async function runAcceptanceWorker() : Promise<any> {
 }
 
 async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
-  return withAcceptanceExecutionLease(repoRoot, async () : Promise<any> => {
-    const paths: any = await createAcceptanceGenerationWorkspace(repoRoot);
+  return withAcceptanceExecutionLease(authorityRoot, async () : Promise<any> => {
+    const paths: any = await createAcceptanceGenerationWorkspace(repoRoot, { authorityRoot });
     try {
       const result: any = await runAcceptanceGenerationWorker({
         repoRoot,
+        proofLedgerRoot: authorityRoot,
         workspace: paths.workspace,
         args: [
           "tools/server-scripts/verify-platform-acceptance.ts",
@@ -603,7 +606,7 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
       if (result.exitCode !== 0) {
         process.exitCode = result.exitCode;
         const diagnostic: any = await publishAcceptanceFailureDiagnostic({
-          repoRoot,
+          repoRoot: authorityRoot,
           paths,
           aggregateReportPath: REPORT_PATH,
           workerResult: result
@@ -612,7 +615,7 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
         return;
       }
       await publishAcceptanceGeneration({
-        repoRoot,
+        repoRoot: authorityRoot,
         paths,
         requiredReports: ACCEPTANCE_REQUIRED_REPORTS,
         aggregateReportPath: REPORT_PATH,
@@ -622,7 +625,6 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
         `[platform-acceptance] generation=${paths.id} published=${ACCEPTANCE_GENERATION_POINTER}`
       );
     } finally {
-      await clearAccidentalCoreWorktree(repoRoot, paths.workspace);
       await removeAcceptanceGenerationWorkspace(paths, { repoRoot });
     }
   });

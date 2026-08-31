@@ -16,11 +16,24 @@ function sanitizeError(error?: any) : any {
     : `PLUGIN_PACKAGE_ACTIVATION_FAILED: ${message}`;
 }
 
+function assertContributionTransaction(transaction?: any) : any {
+  if (
+    !transaction ||
+    typeof transaction !== "object" ||
+    typeof transaction.prepare !== "function" ||
+    typeof transaction.commit !== "function" ||
+    typeof transaction.rollback !== "function" ||
+    typeof transaction.finalize !== "function"
+  ) {
+    throw new Error("PLUGIN_PACKAGE_TRANSACTION_INVALID: activation requires one complete contribution transaction");
+  }
+  return transaction;
+}
+
 export function createPluginPackageLifecycle({
   custody,
   acquisitionPort = createPluginPackageAcquisitionPort(),
   contributionTransactionFactory = null,
-  trustedPublicKeyIds = null,
   coreContractDigest = null,
   now = () : any => new Date().toISOString()
 }: Record<string, any> = {}) : any {
@@ -150,11 +163,10 @@ export function createPluginPackageLifecycle({
             throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: no acquired package digest");
           }
           const bytes: any = await custody.getArchive(record.packageDigest);
-          const verified: any = validatePluginPackageArchive({
+          const verified: any = await validatePluginPackageArchive({
             bytes,
             expectedPluginId: expectedPluginId || pluginId,
             coreContractDigest,
-            trustedPublicKeyIds,
             sourceKind: "bytes",
             now
           });
@@ -205,7 +217,7 @@ export function createPluginPackageLifecycle({
       });
     },
 
-    async activate({ pluginId, activationIdempotencyKey, commitContribution = null }: Record<string, any> = {}) : Promise<any> {
+    async activate({ pluginId, activationIdempotencyKey }: Record<string, any> = {}) : Promise<any> {
       return withFence(pluginId, async () : Promise<any> => {
         const record: any = getRecord(pluginId);
         if (
@@ -223,39 +235,53 @@ export function createPluginPackageLifecycle({
           }
           record.activationIdempotencyKey = activationIdempotencyKey || randomUUID();
           const verified: any = await custody.getVerified(record.packageDigest);
-          if (typeof contributionTransactionFactory === "function") {
-            transaction = await contributionTransactionFactory({
-              pluginId,
-              verifiedPackage: verified,
-              generation: record.generation,
-              configuration: record.stagedConfiguration || {}
-            });
-            await transaction.prepare();
+          if (typeof contributionTransactionFactory !== "function") {
+            throw new Error("PLUGIN_PACKAGE_TRANSACTION_REQUIRED: activation requires a contribution transaction");
           }
-          if (typeof commitContribution === "function") {
-            await commitContribution({
-              pluginId,
-              verifiedPackage: verified,
-              generation: record.generation,
-              configuration: record.stagedConfiguration || {}
-            });
-          }
-          if (transaction) await transaction.commit();
+          transaction = assertContributionTransaction(await contributionTransactionFactory({
+            pluginId,
+            verifiedPackage: verified,
+            generation: record.generation,
+            packageDigest: record.packageDigest,
+            configuration: record.stagedConfiguration || {}
+          }));
+          await transaction.prepare();
+          await transaction.commit();
           await custody.setActiveGeneration(pluginId, {
             generation: record.generation,
             packageDigest: record.packageDigest,
             state: "active"
           });
           transition(record, "active", "activate");
+          await transaction.finalize();
           return receipt(record);
         } catch (error: any) {
+          let rollbackFailed: any = false;
           if (transaction) {
-            try { await transaction.rollback(); } catch { /* bounded */ }
+            try {
+              await transaction.rollback();
+            } catch {
+              rollbackFailed = true;
+            }
+          }
+          if (record.generation && record.packageDigest) {
+            try {
+              await custody.setActiveGeneration(pluginId, {
+                generation: record.generation,
+                packageDigest: record.packageDigest,
+                state: "staged"
+              });
+            } catch {
+              rollbackFailed = true;
+            }
           }
           if (record.state !== "failed") {
             try { transition(record, "failed", "activate-failed"); } catch { record.state = "failed"; }
           }
-          return receipt(record, sanitizeError(error).split(":")[0]);
+          return receipt(
+            record,
+            rollbackFailed ? "PLUGIN_PACKAGE_ROLLBACK_FAILED" : sanitizeError(error).split(":")[0]
+          );
         }
       });
     },

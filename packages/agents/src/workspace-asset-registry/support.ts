@@ -90,6 +90,27 @@ export function normalizeWorkspaceId(input: UnknownRecord = {}): string {
   return text(input.workspaceId || input.workspaceRef || input.workspace || "default");
 }
 
+export function explicitWorkspaceId(input: UnknownRecord = {}): string {
+  if (!input || typeof input !== "object" || Array.isArray(input) || typeof input.workspaceId !== "string") {
+    return "";
+  }
+  const workspaceId = input.workspaceId.trim();
+  if (!workspaceId || workspaceId.length > 256 || /[\u0000-\u001f\u007f]/u.test(workspaceId)) {
+    return "";
+  }
+  return workspaceId;
+}
+
+export function requiredWorkspaceId(input: UnknownRecord = {}): string {
+  const workspaceId = explicitWorkspaceId(input);
+  if (!workspaceId) {
+    throw Object.assign(new TypeError("workspaceId must be a non-empty string."), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  return workspaceId;
+}
+
 export function normalizeAssetKind(value: unknown = ""): string {
   const normalized = text(value || "file");
   if (normalized === "code" || normalized === "code_change" || normalized === "codeChange") return "codeChange";
@@ -407,7 +428,7 @@ export function normalizedFileItems(payload: UnknownRecord = {}): NormalizedFile
   return items
     .filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item) && (item as UnknownRecord).isDirectory !== true && (item as UnknownRecord).type !== "directory")
     .map((item) => ({
-      workspaceId: normalizeWorkspaceId(item),
+      workspaceId: explicitWorkspaceId(item),
       path: firstString(item.path, item.relativePath, item.filePath),
       contentHash: firstString(item.contentSha256, item.sha256, item.contentHash),
       byteSize: Number(item.sizeBytes ?? item.byteSize ?? item.size ?? 0) || 0,

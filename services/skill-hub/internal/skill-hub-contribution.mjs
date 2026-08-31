@@ -9,6 +9,7 @@ import {
   text,
   WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION
 } from "./skill-hub-contracts.mjs";
+import { requiredWorkspaceId } from "./operation-helpers.mjs";
 
 export const SKILL_HUB_CONTRIBUTION_TYPE = "skill";
 export const SKILL_HUB_ASSET_BUCKET = "skills";
@@ -132,7 +133,7 @@ function emptySkillHubMetrics() {
 
 export function normalizeSkillHubContribution(input = {}, defaults = {}) {
   const contributionType = assertSkillContributionType(input.contributionType);
-  const workspaceId = text(input.workspaceId || defaults.workspaceId || "default");
+  const workspaceId = requiredWorkspaceId(input.workspaceId, "workspaceId");
   const payloadRefs = asArray(input.payloadRefs).map(text).filter(Boolean);
   const requestedActions = asArray(input.requestedActions || input.actions || ["discover", "read"])
     .map(text)

@@ -23,7 +23,7 @@ const MUTATING_OPERATIONS = new Set([
 
 export function isSkillHubMutation(operationId, input = {}) {
   const normalized = String(operationId || "");
-  const phase = String(input?.__meshrix?.phase || "execute");
+  const phase = String(input?.meshrixContext?.phase || "execute");
   if (["skill_hub.scan", "skill_hub.build", "skill_hub.execute"].includes(normalized)) return phase === "commit";
   if (normalized === "skill_hub.permission.grant" && phase === "prepare") return false;
   return MUTATING_OPERATIONS.has(normalized);

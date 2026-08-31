@@ -436,10 +436,7 @@ export function createSystemControllerFoundationHandlers({
       const payload: any = protocolPayload(requestBody);
       await sendConsoleDomainOperation({
         operationId: operation?.id || "workspace.file.upload",
-        input: {
-          ...payload,
-          workspaceId: workspaceIdFrom(payload)
-        },
+        input: payload,
         response,
         context: { agentWorkspace, authSession },
         errorMessage: "上传 workspace 文件失败。"
@@ -475,10 +472,7 @@ export function createSystemControllerFoundationHandlers({
       const payload: any = protocolPayload(requestBody);
       await sendConsoleDomainOperation({
         operationId: operation?.id || "workspace.file.write",
-        input: {
-          ...payload,
-          workspaceId: workspaceIdFrom(payload)
-        },
+        input: payload,
         response,
         context: { agentWorkspace, authSession },
         errorMessage: "写入 workspace 文件失败。"
@@ -488,10 +482,7 @@ export function createSystemControllerFoundationHandlers({
       const payload: any = protocolPayload(requestBody);
       await sendConsoleDomainOperation({
         operationId: operation?.id || "workspace.file.patch",
-        input: {
-          ...payload,
-          workspaceId: workspaceIdFrom(payload)
-        },
+        input: payload,
         response,
         context: { agentWorkspace, authSession },
         errorMessage: "补丁更新 workspace 文件失败。"

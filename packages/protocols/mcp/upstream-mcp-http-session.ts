@@ -172,11 +172,15 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
   const normalized: any = normalizeTransportConfig(config);
   const url: any = text(normalized.url || normalized.endpoint || normalized.baseUrl);
   if (!url) throw new Error("Upstream MCP http transport requires url.");
-  const fetchImpl: any = options.fetchImpl || globalThis.fetch;
-  if (typeof fetchImpl !== "function") throw new Error("Upstream MCP http transport requires fetch.");
-  const fetchTransport: any = typeof options.fetchTransport === "function"
-    ? options.fetchTransport
-    : async (targetUrl?: any, init?: any) : Promise<any> => ({ response: await fetchImpl(targetUrl, init) });
+  const fetchTransport: any = options.fetchTransport;
+  if (typeof fetchTransport !== "function") {
+    const error: Error & Record<string, any> = new Error(
+      "Upstream MCP http transport requires the gateway-managed egress transport."
+    );
+    error.code = "UPSTREAM_MCP_MANAGED_EGRESS_REQUIRED";
+    error.status = 500;
+    throw error;
+  }
   const customHeaders: any = normalizedHeaders(normalized.headers, options.env || process.env);
   let nextId: any = 1;
   let sessionId: any = "";

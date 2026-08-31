@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -151,6 +154,29 @@ describe("release command DAG runner", () : any => {
     });
   });
 
+  it("joins the owned descendant process tree before completing a timeout", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-tree-"));
+    const pidPath: any = path.join(root, "descendant.pid");
+    try {
+      const source: any = [
+        "const {spawn}=require('node:child_process');",
+        "const fs=require('node:fs');",
+        "const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});",
+        `fs.writeFileSync(${JSON.stringify(pidPath)},String(child.pid));`,
+        "setInterval(()=>{},1000);"
+      ].join("");
+      const result: any = await run([
+        fixtureCommand("timeout-tree", source, { timeoutMs: 500 })
+      ]);
+      expect(result.results[0]).toMatchObject({ status: "failed", timedOut: true });
+      const pid: any = Number(await fs.readFile(pidPath, "utf8"));
+      expect(Number.isInteger(pid)).toBe(true);
+      expect(() : any => process.kill(pid, 0)).toThrow();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("caps captured output by bytes without repeatedly copying the full stream", async () : Promise<any> => {
     const result: any = await run([
       fixtureCommand("noisy", "process.stdout.write('x'.repeat(10000)); process.exit(9)")
@@ -177,7 +203,7 @@ describe("release command DAG runner", () : any => {
     })).toEqual({
       commandCount: 4,
       maxParallel: 2,
-      timeoutMs: 4_000
+      timeoutMs: 5_000
     });
 
     const starts: any[] = [];
@@ -186,7 +212,7 @@ describe("release command DAG runner", () : any => {
       maxParallel: 2
     });
     expect(result.results.every(({ status }: Record<string, any>) : any => status === "passed")).toBe(true);
-    expect(starts).toEqual(["first", "second", "third", "exclusive"]);
+    expect(starts).toEqual(["first", "second", "exclusive", "third"]);
   });
 
   it("reports exact pending dependencies, needed locks, held locks, and owners", () : any => {

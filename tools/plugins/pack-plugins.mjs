@@ -56,7 +56,7 @@ async function packagePlugin(built, coreContractDigest) {
     { path: PLUGIN_BUNDLE_MANIFEST_FILENAME, content: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8") },
     ...[...payload].sort(([left], [right]) => left.localeCompare(right)).map(([filePath, content]) => ({ path: filePath, content }))
   ]);
-  const verified = admitPluginPackageArchive({ bytes: archive, expectedPluginId: built.id });
+  const verified = await admitPluginPackageArchive({ bytes: archive, expectedPluginId: built.id });
   const fileName = `meshrix-plugin-${built.id}-${built.manifest.version}.tar.gz`;
   await fs.writeFile(path.join(packagesRoot, fileName), archive, { mode: 0o600 });
   return Object.freeze({

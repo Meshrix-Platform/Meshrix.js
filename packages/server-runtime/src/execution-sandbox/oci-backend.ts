@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import { SANDBOX_DENIAL_REASONS } from "#meshrix/foundation/execution-sandbox/contracts";
 import type { SandboxExecutionRequest } from "#meshrix/foundation/execution-sandbox/contracts";
@@ -37,6 +38,19 @@ const ENFORCED_RESTRICTIONS: readonly string[] = Object.freeze([
   "output",
   "cleanup",
   "cross-trust-domain"
+]);
+const GOVERNED_NODE_RUNTIME_READ_PATHS: readonly string[] = Object.freeze([
+  "/sandbox/input",
+  "/sandbox/output",
+  "/sandbox/scratch",
+  "/dev",
+  "/proc/mounts",
+  "/proc/self/limits",
+  "/proc/self/ns",
+  "/proc/self/status",
+  "/sys/fs/cgroup/cpu.max",
+  "/sys/fs/cgroup/memory.max",
+  "/sys/fs/cgroup/pids.max"
 ]);
 const OCI_CONTROL_COMMAND_TIMEOUT_MS = 30_000;
 const OCI_TRANSIENT_CREATE_RETRY_DELAY_MS = 3_000;
@@ -86,6 +100,9 @@ function boundedBufferLimit(value: unknown, fallback = 64 * 1024): number {
 
 export function classifyOciCommandFailure(stderr: unknown, stdout: unknown = "", exitCode: unknown = null): string {
   const message = `${String(stderr || "")}\n${String(stdout || "")}`.toLowerCase();
+  if (/err_access_denied|access to this api has been restricted|use --allow-fs-(?:read|write)/u.test(message)) {
+    return "oci_node_permission_denied";
+  }
   if (/no space left on device|disk quota exceeded/u.test(message)) return "oci_storage_exhausted";
   if (/invalid reference format/u.test(message)) return "oci_image_reference_invalid";
   if (/no such image|unable to find image|image .* not found/u.test(message)) return "oci_image_unavailable";
@@ -112,10 +129,39 @@ export function classifyOciCommandFailure(stderr: unknown, stdout: unknown = "",
 function runtimeCreateArguments(engine: unknown, runtimeClass: unknown): string[] {
   const selectedEngine = requiredText(engine, "OCI sandbox backend engine");
   const selectedRuntimeClass = requiredText(runtimeClass, "OCI sandbox runtime class");
+  if (selectedEngine === "podman") {
+    if (selectedRuntimeClass !== "crun") {
+      throw new Error("The Podman sandbox backend requires the verified crun runtime.");
+    }
+    return [];
+  }
   if (selectedEngine === "docker" && selectedRuntimeClass === "runc") {
     return [];
   }
   return ["--runtime", selectedRuntimeClass];
+}
+
+function scratchTmpfsArgument(
+  engine: string,
+  resources: SandboxExecutionRequest["resources"],
+  runtimeUid: number,
+  runtimeGid: number
+): string {
+  const options = [
+    "rw",
+    "noexec",
+    "nosuid",
+    "nodev",
+    `size=${resources.diskBytes}`,
+    "mode=0700"
+  ];
+  if (engine === "podman") {
+    options.push("U");
+  } else {
+    options.splice(5, 0, `nr_inodes=${resources.inodes}`);
+    options.push(`uid=${runtimeUid}`, `gid=${runtimeGid}`);
+  }
+  return `/sandbox/scratch:${options.join(",")}`;
 }
 
 async function assertOwnedDirectory(directoryPath: string, { uid, gid, label, writable }: DirectoryOwnership): Promise<void> {
@@ -371,6 +417,22 @@ export function createOciSandboxBackend({
     const name = identity.name;
     const image = immutableImage(policy.workload.image);
     const cpus = Math.max(0.01, Math.min(64, request.resources.cpuMillis / request.resources.wallTimeMs));
+    const workingDirectory = String(request.invocation.workingDirectory || "").replaceAll("\\", "/");
+    const entryPoint = String(request.artifact.entryPoint || "").replaceAll("\\", "/");
+    const normalizedWorkingDirectory = path.posix.normalize(workingDirectory);
+    const normalizedEntrypoint = path.posix.normalize(entryPoint);
+    const resolvedEntrypoint = path.posix.resolve("/sandbox", normalizedWorkingDirectory, normalizedEntrypoint);
+    if (
+      !workingDirectory || !entryPoint ||
+      workingDirectory !== normalizedWorkingDirectory || entryPoint !== normalizedEntrypoint ||
+      path.posix.isAbsolute(workingDirectory) || path.posix.isAbsolute(entryPoint) ||
+      (normalizedWorkingDirectory !== "input" && !normalizedWorkingDirectory.startsWith("input/")) ||
+      !resolvedEntrypoint.startsWith("/sandbox/input/")
+    ) {
+      throw Object.assign(new Error("OCI sandbox Node paths must remain inside the fixed input root."), {
+        code: SANDBOX_DENIAL_REASONS.POLICY_UNSUPPORTED
+      });
+    }
     await assertOwnedDirectory(paths.inputRoot, {
       uid: runtimeUid,
       gid: runtimeGid,
@@ -406,17 +468,17 @@ export function createOciSandboxBackend({
       "--ulimit", `nofile=${request.resources.fileDescriptors}:${request.resources.fileDescriptors}`,
       "--mount", `type=bind,src=${paths.inputRoot},dst=/sandbox/input,readonly`,
       "--mount", `type=bind,src=${paths.outputRoot},dst=/sandbox/output`,
-      "--tmpfs", `/sandbox/scratch:rw,noexec,nosuid,nodev,size=${request.resources.diskBytes},nr_inodes=${request.resources.inodes},mode=0700,uid=${runtimeUid},gid=${runtimeGid}`,
-      "--workdir", `/sandbox/${request.invocation.workingDirectory}`,
+      "--tmpfs", scratchTmpfsArgument(selectedEngine, request.resources, runtimeUid, runtimeGid),
+      "--workdir", `/sandbox/${normalizedWorkingDirectory}`,
       "--user", `${runtimeUid}:${runtimeGid}`,
       image,
       "node",
       "--permission",
-      "--allow-fs-read=*",
+      ...GOVERNED_NODE_RUNTIME_READ_PATHS.map((allowedPath) => `--allow-fs-read=${allowedPath}`),
       "--allow-fs-write=/sandbox/output",
       "--allow-fs-write=/sandbox/scratch",
       ...nodeRuntimeArguments,
-      request.artifact.entryPoint,
+      normalizedEntrypoint,
       ...request.invocation.args.map(String)
     ];
     containers.set(runId, name);

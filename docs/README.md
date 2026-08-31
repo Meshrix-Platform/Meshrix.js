@@ -57,11 +57,13 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
-The [What's Next register](WHATS-NEXT.md) owns the current production-use
-closure: fix concrete defects, pass functional acceptance once, deploy the
-accepted candidate, and iterate from real use. Historical plans, publication
-channels, compatibility matrices, and environment-qualification programs do
-not block this operational outcome.
+PLAN-005 and the [What's Next register](WHATS-NEXT.md) own the current
+production-use closure: fix concrete defects, pass functional acceptance once,
+deploy the accepted candidate, and iterate from real use. Its Better Plan v3
+semantic source is `plans/production-use-closure/Plan.json`; acceptance and
+publication evidence remain separate authorities. Historical planning,
+publication channels, compatibility matrices, and environment-qualification
+programs do not block this operational outcome.
 
 ## Project Documents
 

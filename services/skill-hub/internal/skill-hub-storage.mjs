@@ -3,6 +3,7 @@ import {
   PRIVATE_DIRECTORY_MODE,
   PRIVATE_FILE_MODE
 } from "./skill-hub-contracts.mjs";
+import { requiredWorkspaceId } from "./operation-helpers.mjs";
 
 export const SKILL_HUB_STORAGE_ROOT_DIR = "SkillHub";
 export const SKILL_HUB_SKILL_STORAGE_DIR = path.posix.join(SKILL_HUB_STORAGE_ROOT_DIR, "skills");
@@ -23,7 +24,7 @@ export function skillHubAssetRelativePath({ workspaceId, contributionId, relatio
       SKILL_HUB_SKILL_STORAGE_DIR,
       skillId,
       "adoptions",
-      safePathSegment(workspaceId || "default"),
+      safePathSegment(requiredWorkspaceId(workspaceId, "targetWorkspaceId")),
       "asset.json"
     );
   }

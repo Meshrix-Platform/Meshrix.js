@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { orbText, runOrb, writeRemoteFile } from "../support.ts";
+import { assertInactiveReleaseMutation, orbText, runOrb, writeRemoteFile } from "../support.ts";
 
 export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> {
   const { machine } = context.parsed;
@@ -8,7 +8,8 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     translatePaths: true,
     timeout: 15_000,
   });
-  const markerPath: any = path.posix.join(context.originalWorkingDirectory, ".meshrix-source-revision");
+  const releaseDirectory: any = path.posix.join(context.releaseParent, context.sourceRevision);
+  const markerPath: any = path.posix.join(releaseDirectory, ".meshrix-source-revision");
   const sourceReady: any = orbText(machine, [
     "sh",
     "-lc",
@@ -16,34 +17,34 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     "meshrix-release-check",
     markerPath,
     context.sourceRevision,
-    context.originalWorkingDirectory,
+    releaseDirectory,
   ], { allowFailure: true, timeout: 15_000 }) === "ready";
+  assertInactiveReleaseMutation({
+    activeWorkingDirectory: context.currentWorkingDirectory,
+    releaseDirectory,
+    ready: sourceReady,
+  });
   if (!sourceReady) {
     runOrb({
       machine,
-      args: ["systemctl", "--user", "stop", context.unit],
-      timeout: 120_000,
-      code: "native_orb_previous_service_stop_failed",
-    });
-    runOrb({
-      machine,
-      args: ["rm", "-rf", context.originalWorkingDirectory, context.releaseParent],
+      args: ["rm", "-rf", releaseDirectory],
       timeout: 60_000,
       code: "native_orb_release_prepare_failed",
     });
     runOrb({
       machine,
-      args: ["install", "-d", "-m", "0700", context.originalWorkingDirectory],
+      args: ["install", "-d", "-m", "0700", releaseDirectory],
       timeout: 30_000,
       code: "native_orb_release_prepare_failed",
     });
     runOrb({
       machine,
-      args: ["tar", "-xf", translatedArchive, "-C", context.originalWorkingDirectory],
+      args: ["tar", "-xf", translatedArchive, "-C", releaseDirectory],
       timeout: 120_000,
       code: "native_orb_transfer_failed",
     });
     writeRemoteFile(machine, markerPath, `${context.sourceRevision}\n`);
   }
+  context.releaseDirectory = releaseDirectory;
   return Object.freeze({ id: "transfer", status: sourceReady ? "resumed" : "completed" });
 }

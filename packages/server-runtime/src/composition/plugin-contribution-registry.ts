@@ -7,6 +7,10 @@ import {
   pluginManifestArtifactIdentity,
   readPluginArtifactFile
 } from "#meshrix/foundation/module-system/plugin-registry";
+import {
+  PLUGIN_CONSOLE_ISOLATION_BRIDGE_VERSION,
+  PLUGIN_CONSOLE_ISOLATION_MOUNT_EXPORT
+} from "#meshrix/foundation/module-system/plugin-console-isolation";
 import { validateExecutableStateMachineDefinition } from "#meshrix/foundation/workflow/state-machine/engine/state-machine-core";
 import { registerPlatformService } from "./platform-registry.ts";
 import { PLUGIN_HOST_PORT_CONTRACT } from "./plugin-artifact-core-contract.ts";
@@ -477,7 +481,13 @@ function normalizeGatewayChannels({ contributions, manifests, loadedPlugins }: R
   return output;
 }
 
-function normalizeConsoleEntries({ contributions, manifests, artifactIdentityResolver }: Record<string, any>) : any {
+function normalizeConsoleEntries({
+  contributions,
+  manifests,
+  artifactIdentityResolver,
+  operationRecords,
+  mcpTools
+}: Record<string, any>) : any {
   const manifestsById: any = manifestIndex(manifests);
   const output: any = new Map<any, any>();
   for (const record of contributionEntries(contributions, "consoleEntries")) {
@@ -486,16 +496,31 @@ function normalizeConsoleEntries({ contributions, manifests, artifactIdentityRes
       implementation,
       new Set<any>([
         "featureId", "viewKey", "routePath", "slotId", "componentId", "label", "requiredScopes",
-        "assetPath", "assetExport"
+        "assetPath", "toolIds"
       ]),
       `Plugin console entry ${record.id}`
     );
     const manifest: any = manifestsById.get(record.pluginId);
     const assetPath: any = String(implementation.assetPath || "").trim();
-    const assetExport: any = String(implementation.assetExport || "").trim();
     const artifactIdentity: any = artifactIdentityResolver(manifest);
-    const assetPathToken: any = Buffer.from(assetPath, "utf8").toString("base64url");
     const entryToken: any = Buffer.from(record.id, "utf8").toString("base64url");
+    const toolIds: any = Object.freeze(stringList(
+      implementation.toolIds,
+      `Plugin console entry ${record.id} toolIds`
+    ));
+    const operationIdsByToolId: Record<string, any> = {};
+    for (const toolId of toolIds) {
+      const operation: any = operationRecords.get(toolId) || null;
+      const mcpTool: any = mcpTools.get(toolId) || null;
+      const owner: any = operation?.pluginId || mcpTool?.pluginId || "";
+      const operationId: any = operation?.id || mcpTool?.operationId || "";
+      if (!operationId || owner !== record.pluginId || (operation && mcpTool && mcpTool.operationId !== operation.id)) {
+        throw new Error(`Plugin console entry ${record.id} tool ${toolId} is not owned by its plugin.`);
+      }
+      operationIdsByToolId[toolId] = operationId;
+    }
+    const sandboxUrl: any = `/api/plugins/v1/console-sandboxes/${record.pluginId}/${artifactIdentity.generation}/${artifactIdentity.artifactDigest.slice(7)}/${entryToken}.html`;
+    const invokeUrl: any = `/api/plugins/v1/console-bridges/${record.pluginId}/${artifactIdentity.generation}/${artifactIdentity.artifactDigest.slice(7)}/${entryToken}/invoke`;
     const normalized: Record<string, any> = {
       id: record.id,
       pluginId: record.pluginId,
@@ -506,9 +531,13 @@ function normalizeConsoleEntries({ contributions, manifests, artifactIdentityRes
       componentId: String(implementation.componentId || "").trim(),
       label: String(implementation.label || record.id).trim(),
       requiredScopes: Object.freeze(stringList(implementation.requiredScopes, `Plugin console entry ${record.id} requiredScopes`)),
+      toolIds,
+      operationIdsByToolId: Object.freeze(operationIdsByToolId),
       assetPath,
-      assetExport,
-      assetUrl: `/api/plugins/v1/console-assets/${record.pluginId}/${artifactIdentity.generation}/${artifactIdentity.artifactDigest.slice(7)}/${entryToken}/${assetPathToken}.ts`,
+      mountExport: PLUGIN_CONSOLE_ISOLATION_MOUNT_EXPORT,
+      sandboxUrl,
+      invokeUrl,
+      bridgeVersion: PLUGIN_CONSOLE_ISOLATION_BRIDGE_VERSION,
       artifactDigest: artifactIdentity.artifactDigest,
       artifactGeneration: artifactIdentity.generation
     };
@@ -532,7 +561,6 @@ function normalizeConsoleEntries({ contributions, manifests, artifactIdentityRes
       !/^console\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.mjs$/u.test(normalized.assetPath) ||
       normalized.assetPath.includes("..") || normalized.assetPath.includes("\\") ||
       normalized.assetPath.split("/").some((part?: any) : any => !part) ||
-      !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(normalized.assetExport) ||
       artifactIdentity.pluginId !== record.pluginId ||
       !Number.isSafeInteger(artifactIdentity.generation) || artifactIdentity.generation < 1 ||
       !/^sha256:[a-f0-9]{64}$/u.test(artifactIdentity.artifactDigest)
@@ -555,10 +583,11 @@ function publicConsoleEntry(entry?: any) : any {
     componentId: entry.componentId,
     label: entry.label,
     requiredScopes: entry.requiredScopes,
-    assetUrl: entry.assetUrl,
-    assetExport: entry.assetExport,
+    sandboxUrl: entry.sandboxUrl,
+    bridgeVersion: entry.bridgeVersion,
     artifactDigest: entry.artifactDigest,
-    artifactGeneration: entry.artifactGeneration
+    artifactGeneration: entry.artifactGeneration,
+    toolIds: entry.toolIds
   });
 }
 
@@ -696,23 +725,28 @@ export function createPluginContributionRegistry({
   const consoleEntries: any = normalizeConsoleEntries({
     contributions: admittedContributions,
     manifests,
-    artifactIdentityResolver
+    artifactIdentityResolver,
+    operationRecords,
+    mcpTools
   });
   const stateMachines: any = normalizeStateMachines({ contributions: admittedContributions, manifests });
   const verifierHooks: any = normalizeVerifierHooks({ contributions: admittedContributions, manifests });
   const activePluginIds: any = new Set<any>(loadedPlugins.map((plugin?: any) : any => plugin.id));
   const manifestsById: any = manifestIndex(manifests);
-  const consoleAssetsByUrl: any = new Map<any, any>();
-  function refreshConsoleAssetIndex() : any {
-    consoleAssetsByUrl.clear();
+  const consoleSandboxesByUrl: any = new Map<any, any>();
+  const consoleBridgesByUrl: any = new Map<any, any>();
+  function refreshConsoleSandboxIndex() : any {
+    consoleSandboxesByUrl.clear();
+    consoleBridgesByUrl.clear();
     for (const entry of consoleEntries.values()) {
-      if (consoleAssetsByUrl.has(entry.assetUrl)) {
-        throw new Error(`Plugin console asset URL is ambiguous: ${entry.assetUrl}.`);
+      if (consoleSandboxesByUrl.has(entry.sandboxUrl) || consoleBridgesByUrl.has(entry.invokeUrl)) {
+        throw new Error(`Plugin console sandbox URL is ambiguous: ${entry.sandboxUrl}.`);
       }
-      consoleAssetsByUrl.set(entry.assetUrl, entry);
+      consoleSandboxesByUrl.set(entry.sandboxUrl, entry);
+      consoleBridgesByUrl.set(entry.invokeUrl, entry);
     }
   }
-  refreshConsoleAssetIndex();
+  refreshConsoleSandboxIndex();
   const registeredStateMachineServiceIds: any = new Map<any, any>();
 
   function preparePluginContributionReplacement(pluginId?: any, contributions?: any) : any {
@@ -731,7 +765,9 @@ export function createPluginContributionRegistry({
     const nextConsoleEntries: any = normalizeConsoleEntries({
       contributions: admitted,
       manifests,
-      artifactIdentityResolver
+      artifactIdentityResolver,
+      operationRecords: nextOperations,
+      mcpTools: nextMcpTools
     });
     const nextStateMachines: any = normalizeStateMachines({ contributions: admitted, manifests });
     const nextVerifierHooks: any = normalizeVerifierHooks({ contributions: admitted, manifests });
@@ -765,7 +801,7 @@ export function createPluginContributionRegistry({
         mcpToolByOperation.set(tool.operationId, tool);
       }
       invalidateActiveOperationsSnapshot();
-      refreshConsoleAssetIndex();
+      refreshConsoleSandboxIndex();
     };
     return Object.freeze({
       commit() : any {
@@ -790,7 +826,7 @@ export function createPluginContributionRegistry({
         if (record.pluginId === id) records.delete(key);
       }
     }
-    refreshConsoleAssetIndex();
+    refreshConsoleSandboxIndex();
     invalidateActiveOperationsSnapshot();
     return Object.freeze({ ok: true, changed: true, pluginId: id });
   }
@@ -810,7 +846,7 @@ export function createPluginContributionRegistry({
         if (!committed) return;
         if (wasActive) activePluginIds.add(id);
         for (const [records, entries] of snapshots) for (const [key, record] of entries) records.set(key, record);
-        refreshConsoleAssetIndex();
+        refreshConsoleSandboxIndex();
         invalidateActiveOperationsSnapshot();
         committed = false;
       }
@@ -830,18 +866,26 @@ export function createPluginContributionRegistry({
     return record;
   }
 
-  function getConsoleAssetEntry(assetUrl?: any) : any {
-    const entry: any = consoleAssetsByUrl.get(String(assetUrl || "")) || null;
+  function getConsoleSandboxEntry(sandboxUrl?: any) : any {
+    const entry: any = consoleSandboxesByUrl.get(String(sandboxUrl || "")) || null;
     return entry ? publicConsoleEntry(entry) : null;
   }
 
-  async function readConsoleAsset(assetUrl?: any) : Promise<any> {
-    const entry: any = consoleAssetsByUrl.get(String(assetUrl || ""));
+  async function readConsoleSandbox(sandboxUrl?: any) : Promise<any> {
+    const entry: any = consoleSandboxesByUrl.get(String(sandboxUrl || ""));
     if (!entry || !activePluginIds.has(entry.pluginId)) return null;
     const manifest: any = manifestsById.get(entry.pluginId);
     if (!manifest) return null;
     const bytes: any = await artifactFileReader(manifest, entry.assetPath);
     return Object.freeze({ entry: publicConsoleEntry(entry), bytes: Buffer.from(bytes) });
+  }
+
+  function resolveConsoleBridgeInvocation(invokeUrl?: any, toolId?: any) : any {
+    const entry: any = consoleBridgesByUrl.get(String(invokeUrl || "")) || null;
+    const id: any = String(toolId || "").trim();
+    const operationId: any = entry?.operationIdsByToolId?.[id] || "";
+    if (!entry || !activePluginIds.has(entry.pluginId) || !operationId) return null;
+    return Object.freeze({ entry: publicConsoleEntry(entry), operationId, toolId: id });
   }
 
   return Object.freeze({
@@ -861,8 +905,9 @@ export function createPluginContributionRegistry({
     preparePluginContributionReplacement,
     currentActiveOperations,
     requireOperation,
-    getConsoleAssetEntry,
-    readConsoleAsset,
+    getConsoleSandboxEntry,
+    readConsoleSandbox,
+    resolveConsoleBridgeInvocation,
     publicRuntime() : any {
       return Object.freeze({
         enabledPlugins: Object.freeze(loadedPlugins.filter((plugin?: any) : any => activePluginIds.has(plugin.id)).map(publicPluginSummary)),

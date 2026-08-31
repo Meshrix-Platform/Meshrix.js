@@ -343,14 +343,6 @@ export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
       defaultEnabled: false
     },
     {
-      featureId: "coding-github",
-      pluginId: "coding-github",
-      label: "GitHub connector operations and Codespace provider",
-      group: "connectors",
-      dependsOn: ["operation-permission-core", "security-permissions", "upstream-gateway"],
-      defaultEnabled: false
-    },
-    {
       featureId: "strategy-management",
       label: "Workflow and agent invocation strategy management",
       group: "capabilities",

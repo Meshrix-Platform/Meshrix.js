@@ -9,8 +9,8 @@ default-disabled `skill-hub` adapter plugin.
 The service does not import Meshrix runtime code. The adapter obtains a
 digest-bound package from the service only for an authorized scan, build, or
 execute operation, submits it to Meshrix controlled execution, and commits the
-terminal receipt back to this service. The service never reports a sandbox
-operation as successful without that receipt.
+closed terminal outcome back to this service. The service never reports a
+sandbox operation as successful without that outcome.
 
 ## API
 
@@ -35,6 +35,20 @@ service with `SKILL_HUB_AUTH_TOKEN` (32–512 bytes), store the same value in th
 Meshrix secret store, and add the resulting `secretRef` to the operator-owned
 service publication. The portable example intentionally contains neither the
 token nor a deployment-specific secret reference.
+
+Meshrix injects the versioned `meshrixContext` adapter field after plugin
+validation. It contains stable service-scoped opaque subject and tenant
+references plus, for commit phases only, a minimal sandbox or permission-grant
+outcome. The service rejects missing, malformed, or phase-inconsistent
+context. Raw identities, authorization booleans, policy
+records, and Host receipts remain inside Meshrix.
+
+The service independently revalidates workspace bindings before package
+custody, registry mutation, adoption materialization, usage recording, or
+permission processing. Submission, sandbox, download, and usage operations
+require `workspaceId`; adoption and permission operations require
+`targetWorkspaceId`. Global catalog reads may omit a workspace filter and do
+not fabricate a `default` workspace in their response.
 
 Meshrix Core owns this credentialed event connection. The Skill Hub plugin
 receives only its opaque `serviceRef`; it never receives the service URL or

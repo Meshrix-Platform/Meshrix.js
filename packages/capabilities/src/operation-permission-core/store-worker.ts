@@ -1,6 +1,10 @@
 import { parentPort, workerData } from "node:worker_threads";
 import crypto from "node:crypto";
 import { createApiKeyVerifierKeyProvider } from "@meshrix/foundation/security/authorization/api-key-verifier-key-provider";
+import {
+  normalizeRegisteredToolCapabilities,
+  toolExecuteCapabilityId
+} from "@meshrix/foundation/security/authorization/authorization-engine";
 import { createOperationPermissionWorkerOwner } from "./store-worker-owner.ts";
 import { createApiKeyDistributionWorkerOwner } from "./api-key-distribution-worker-owner.ts";
 import {
@@ -53,10 +57,14 @@ function registryProxy() : any {
       ].filter((id?: any) : any => toolsetsById.has(id)));
       const allow: any = new Set<any>(uniqueStrings(input.toolAllow || []));
       const deny: any = new Set<any>(uniqueStrings(input.toolDeny || []));
+      const capabilityCandidates: any = normalizeRegisteredToolCapabilities(input.capabilities || input.capabilityIds || []);
       const tools: any[] = (catalog.tools || []).filter((tool?: any) : any =>
         !deny.has(tool.id) &&
         (allow.size === 0 || allow.has(tool.id)) &&
-        (tool.toolsets || []).some((toolset?: any) : any => selected.has(toolset))
+        (
+          (tool.toolsets || []).some((toolset?: any) : any => selected.has(toolset)) ||
+          capabilityCandidates.includes(toolExecuteCapabilityId(tool.id))
+        )
       );
       return {
         toolsets: [...selected],

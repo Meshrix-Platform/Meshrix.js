@@ -217,7 +217,8 @@ function apiKeyOperationForTool(tool: any = null): any {
     toolsetIds: tool?.toolsets || [],
     scopeIds: tool?.requiredScopes || [],
     risk: tool?.risk || "",
-    resourceContext: tool?.resourceContext || {}
+    resourceContext: tool?.resourceContext || {},
+    requiredCapabilities: dynamicCapability ? [] : undefined
   };
 }
 

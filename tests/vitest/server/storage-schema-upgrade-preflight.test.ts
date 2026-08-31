@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +12,20 @@ import {
 } from "../../../packages/foundation/src/storage/schema-manager.ts";
 
 describe("storage schema upgrade preflight", () : any => {
+  it("opens the primary metadata database with durable WAL commits", () : any => {
+    const directory: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-storage-durability-"));
+    const db: any = new Database(path.join(directory, "meshrix.sqlite"));
+    try {
+      initializeStorageSchema(db);
+
+      expect(db.pragma("journal_mode", { simple: true })).toBe("wal");
+      expect(db.pragma("synchronous", { simple: true })).toBe(2);
+    } finally {
+      db.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("initializes and records the current schema revision", () : any => {
     const db: any = new Database(":memory:");
     try {

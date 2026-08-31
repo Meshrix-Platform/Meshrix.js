@@ -169,7 +169,7 @@ export async function createServerConsoleOperationProviders({
   getAgentWorkspace = () : any => null,
   secretKeyProvider = null
 }: Record<string, any>) : Promise<any> {
-  const contributionRegistries: any = new Map<any, any>();
+  let contributionRegistry: any = null;
   const ownedResources: any[] = [];
   try {
     if (typeof uploadSessionStore?.resolveUploadSessionFiles !== "function") {
@@ -310,25 +310,16 @@ export async function createServerConsoleOperationProviders({
     let closePromise: any = null;
 
     return Object.freeze({
-      getContributionRegistry(input: Record<string, any> = {}, context: Record<string, any> = {}) : any {
-        const workspaceId: any = String(
-          input.registryWorkspaceId ||
-          input.contributionRegistryWorkspaceId ||
-          context.contributionRegistryWorkspaceId ||
-          input.workspaceId ||
-          "default"
-        ).trim();
-        if (!contributionRegistries.has(workspaceId)) {
-          const contributionRegistry: any = createContributionRegistry({
-            workspaceId,
+      getContributionRegistry() : any {
+        if (!contributionRegistry) {
+          contributionRegistry = createContributionRegistry({
             userDataPath,
             excludedContributionTypes: ["skill"],
             lifecycleDefinition: CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION
           });
-          contributionRegistries.set(workspaceId, contributionRegistry);
           ownedResources.push(contributionRegistry);
         }
-        return contributionRegistries.get(workspaceId);
+        return contributionRegistry;
       },
       upstreamGatewayRegistry,
       artifactTransitPort,
@@ -448,7 +439,7 @@ export async function createServerConsoleOperationProviders({
       close() : any {
         if (closePromise) return closePromise;
         closePromise = (async () : Promise<any> => {
-          contributionRegistries.clear();
+          contributionRegistry = null;
           const failures: any = await closeOwnedResourcesInReverse(ownedResources);
           if (failures.length > 0) {
             throw new Error("Console operation providers did not shut down cleanly.");
@@ -461,7 +452,7 @@ export async function createServerConsoleOperationProviders({
       }
     });
   } catch (error: any) {
-    contributionRegistries.clear();
+    contributionRegistry = null;
     await closeOwnedResourcesInReverse(ownedResources);
     throw error;
   }

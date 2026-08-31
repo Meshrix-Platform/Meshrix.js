@@ -25,10 +25,7 @@ import { createOperationPermissionPlatform } from "../../packages/capabilities/s
 import { SERVER_API_OPERATIONS } from "../../packages/contracts/src/operations/operation-registry.ts";
 import { resolveLocalSecretPayload } from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
 import { createOperationProofSubstrate } from "../../packages/foundation/src/proof/proof-substrate/index.ts";
-import {
-  closeDefaultUpstreamMcpSessions,
-  listUpstreamMcpTools
-} from "../../packages/protocols/mcp/upstream-mcp-client.ts";
+import { createUpstreamMcpSessionManager } from "../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
 import {
@@ -69,6 +66,7 @@ import { createVerifierOperationDispatcher } from "./lib/verifier-operation-disp
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const fixtureCliPath: any = path.join(repoRoot, UPSTREAM_FIXTURE_CLI_PATH);
 const reportPath: any = path.join(repoRoot, UPSTREAM_FIXTURE_TRANSIT_REPORT_PATH);
+const verifierMcpSessions: any = createUpstreamMcpSessionManager();
 const verifierStartedAt: any = new Date().toISOString();
 
 const REST_SECRET_REF: any = "secret://verify/upstream-fixture/rest-token";
@@ -467,7 +465,7 @@ try {
     return { rest, mcp };
   });
 
-  const directTools: any = await runPhase("fixture-mcp-direct-tools-list", () : any => listUpstreamMcpTools({
+  const directTools: any = await runPhase("fixture-mcp-direct-tools-list", () : any => verifierMcpSessions.listTools({
     ...mcpStdioConfig,
     env: { [UPSTREAM_FIXTURE_TOKEN_ENV]: mcpToken }
   }));
@@ -665,10 +663,12 @@ try {
     dynamicCapabilities: [...grantBindings.dynamicCapabilities],
     allowedServiceIds: [...grantBindings.allowedServiceIds],
     allowedSecretBindings: [...grantBindings.allowedSecretBindings],
+    allowedEgress: ["mcp", "POST"],
+    allowedCapabilityDomains: ["upstream-gateway"],
+    allowedCapabilityVerbs: ["tools/call"],
+    allowedResourceKinds: ["upstream-service-operation"],
     metadata: {
       agentId: "fixture-downstream-agent",
-      profileId: "meshrix.mcp.opencode",
-      mcpTarget: "opencode",
       maxRisk: "safe_write"
     }
   }));
@@ -819,7 +819,7 @@ try {
   operationPermissionPlatform?.close?.();
   await operationProofSubstrate?.close?.();
   await registry?.close?.().catch(() : any => undefined);
-  await closeDefaultUpstreamMcpSessions().catch(() : any => undefined);
+  await verifierMcpSessions.close().catch(() : any => undefined);
   await verifierDispatcher.close();
   await stopFixtureChild();
   if (userDataPath) {

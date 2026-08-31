@@ -1,8 +1,5 @@
 export const PLUGIN_CONSOLE_BRIDGE_VERSION: any = "v0.0.1:plugin:console-bridge-1";
 export const PLUGIN_CONSOLE_IFRAME_SANDBOX: any = "allow-scripts";
-export const PLUGIN_CONSOLE_MOUNT_EXPORT: any = "mountPluginConsole";
-export const PLUGIN_CONSOLE_SANDBOX_URL: any = "srcdoc:opaque";
-export const PLUGIN_CONSOLE_MAX_ASSET_BYTES: any = 4 * 1024 * 1024;
 export const PLUGIN_CONSOLE_MAX_REQUEST_BYTES: any = 1 * 1024 * 1024;
 export const PLUGIN_CONSOLE_MAX_RESPONSE_BYTES: any = 8 * 1024 * 1024;
 export const PLUGIN_CONSOLE_MAX_CONCURRENT_CALLS: any = 4;
@@ -11,33 +8,27 @@ export const PLUGIN_CONSOLE_CALL_TIMEOUT_MS: any = 30_000;
 const DIGEST_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
 const TOOL_ID_PATTERN: any = /^[a-z][a-zA-Z0-9._-]*$/u;
 const INVOKE_ID_PATTERN: any = /^[A-Za-z0-9._-]{1,128}$/u;
-const MOUNT_EXPORT_PATTERN: any = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
+let pluginConsoleCsrfToken: any = "";
+let pluginConsoleCsrfPromise: Promise<void> | null = null;
 
 export type PluginConsoleIsolationEntry = {
+  id: string;
   pluginId: string;
-  featureId?: string;
-  viewKey?: string;
-  componentId: string;
-  assetUrl?: string;
-  assetExport?: string;
-  sandboxUrl?: string;
-  bridgeVersion?: string;
-  artifactDigest: string;
-  artifactGeneration: number;
-  toolIds?: readonly string[];
-  requiredScopes?: readonly string[];
-};
-
-export type PluginConsoleIsolationSurface = {
-  pluginId: string;
+  featureId: string;
+  viewKey: string;
+  routePath?: string;
+  slotId?: string;
   componentId: string;
   sandboxUrl: string;
   bridgeVersion: string;
   artifactDigest: string;
   artifactGeneration: number;
   toolIds: readonly string[];
-  assetFetchUrl: string;
-  mountExport: string;
+  requiredScopes: readonly string[];
+};
+
+export type PluginConsoleIsolationSurface = PluginConsoleIsolationEntry & {
+  invokeUrl: string;
   sandbox: string;
 };
 
@@ -52,19 +43,18 @@ export type PluginConsoleRevalidation =
   | { ok: false; reason: string };
 
 export type PluginConsoleIsolationHost = {
-  loadAsset?: (url: string, options?: { signal?: AbortSignal }) => Promise<string>;
   invokeTool?: (request: {
     toolId: string;
     payload: unknown;
     signal: AbortSignal;
     entry: PluginConsoleIsolationSurface;
+    context: PluginConsoleHostContext;
   }) => Promise<unknown>;
   revalidate?: () => PluginConsoleRevalidation;
   readHostContext?: () => PluginConsoleHostContext;
 };
 
 function uniqueToolIds(value?: any) : any {
-  if (value === undefined || value === null) return Object.freeze([]);
   if (!Array.isArray(value)) return null;
   const output: any[] = [];
   const seen: any = new Set<any>();
@@ -77,55 +67,59 @@ function uniqueToolIds(value?: any) : any {
   return Object.freeze(output);
 }
 
-export function pluginConsoleAssetFetchUrl(entry: PluginConsoleIsolationEntry) : any {
-  const digest: any = String(entry.artifactDigest || "").replace(/^sha256:/u, "");
-  const prefix: any = `/api/plugins/v1/console-assets/${entry.pluginId}/${entry.artifactGeneration}/${digest}/`;
-  const assetUrl: any = String(entry.assetUrl || "");
-  if (
-    !DIGEST_PATTERN.test(String(entry.artifactDigest || "")) ||
-    !Number.isSafeInteger(entry.artifactGeneration) ||
-    entry.artifactGeneration < 1 ||
-    !assetUrl.startsWith(prefix) ||
-    !assetUrl.endsWith(".ts") ||
-    /[?#]/u.test(assetUrl) ||
-    assetUrl.split("/").includes("..")
-  ) {
-    return "";
-  }
-  return assetUrl;
+function pluginConsoleInvokeUrl(sandboxUrl?: any) : any {
+  const value: any = String(sandboxUrl || "");
+  if (!value.endsWith(".html")) return "";
+  return value
+    .replace("/api/plugins/v1/console-sandboxes/", "/api/plugins/v1/console-bridges/")
+    .replace(/\.html$/u, "/invoke");
 }
 
 export function admitPluginConsoleIsolationEntry(
   entry: PluginConsoleIsolationEntry,
 ): PluginConsoleIsolationSurface | undefined {
-  const pluginId: any = String(entry?.pluginId || "");
-  const prefix: any = `${pluginId}/`;
-  if (!pluginId || !String(entry.componentId || "").startsWith(prefix)) return undefined;
-  const componentName: any = String(entry.componentId).slice(prefix.length);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(componentName)) return undefined;
-  const mountExport: any = String(entry.assetExport || PLUGIN_CONSOLE_MOUNT_EXPORT);
-  if (!MOUNT_EXPORT_PATTERN.test(mountExport) || mountExport !== PLUGIN_CONSOLE_MOUNT_EXPORT) {
+  if (!entry || typeof entry !== "object" || Object.hasOwn(entry, "assetUrl") || Object.hasOwn(entry, "assetExport")) {
     return undefined;
   }
-  const assetFetchUrl: any = pluginConsoleAssetFetchUrl(entry);
-  if (!assetFetchUrl) return undefined;
-  if (entry.bridgeVersion && entry.bridgeVersion !== PLUGIN_CONSOLE_BRIDGE_VERSION) return undefined;
-  const sandboxUrl: any = String(entry.sandboxUrl || PLUGIN_CONSOLE_SANDBOX_URL);
-  if (sandboxUrl !== PLUGIN_CONSOLE_SANDBOX_URL && sandboxUrl !== "about:srcdoc") return undefined;
+  const id: any = String(entry.id || "");
+  const pluginId: any = String(entry.pluginId || "");
+  const prefix: any = `${pluginId}/`;
+  if (!/^[a-z][a-z0-9-]*$/u.test(pluginId) || !/^[a-z][a-zA-Z0-9._-]*$/u.test(id)) return undefined;
+  if (!String(entry.componentId || "").startsWith(prefix)) return undefined;
+  const componentName: any = String(entry.componentId).slice(prefix.length);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(componentName)) return undefined;
+  const digest: any = String(entry.artifactDigest || "");
+  if (!DIGEST_PATTERN.test(digest) || !Number.isSafeInteger(entry.artifactGeneration) || entry.artifactGeneration < 1) {
+    return undefined;
+  }
+  if (entry.bridgeVersion !== PLUGIN_CONSOLE_BRIDGE_VERSION) return undefined;
+  const sandboxUrl: any = String(entry.sandboxUrl || "");
+  const sandboxPrefix: any = `/api/plugins/v1/console-sandboxes/${pluginId}/${entry.artifactGeneration}/${digest.slice(7)}/`;
+  if (
+    !sandboxUrl.startsWith(sandboxPrefix) ||
+    !/[A-Za-z0-9_-]+\.html$/u.test(sandboxUrl) ||
+    /[?#]/u.test(sandboxUrl) ||
+    sandboxUrl.split("/").includes("..")
+  ) {
+    return undefined;
+  }
+  const invokeUrl: any = pluginConsoleInvokeUrl(sandboxUrl);
+  if (!invokeUrl.startsWith(`/api/plugins/v1/console-bridges/${pluginId}/`)) return undefined;
   const toolIds: any = uniqueToolIds(entry.toolIds);
-  if (!toolIds) return undefined;
-  return {
+  if (!toolIds || !Array.isArray(entry.requiredScopes)) return undefined;
+  return Object.freeze({
+    ...entry,
+    id,
     pluginId,
     componentId: String(entry.componentId),
-    sandboxUrl: PLUGIN_CONSOLE_SANDBOX_URL,
+    sandboxUrl,
     bridgeVersion: PLUGIN_CONSOLE_BRIDGE_VERSION,
-    artifactDigest: String(entry.artifactDigest),
-    artifactGeneration: entry.artifactGeneration,
+    artifactDigest: digest,
     toolIds,
-    assetFetchUrl,
-    mountExport,
+    requiredScopes: Object.freeze([...entry.requiredScopes]),
+    invokeUrl,
     sandbox: PLUGIN_CONSOLE_IFRAME_SANDBOX,
-  };
+  });
 }
 
 export function utf8JsonByteLength(value?: any) : any {
@@ -138,84 +132,10 @@ export function utf8JsonByteLength(value?: any) : any {
   }
 }
 
-export function createPluginConsoleSandboxDocument({
-  source,
-  mountExport = PLUGIN_CONSOLE_MOUNT_EXPORT,
-  componentId,
-  bridgeVersion = PLUGIN_CONSOLE_BRIDGE_VERSION,
-}: Record<string, any> = {}) : any {
-  if (typeof source !== "string" || !source || new TextEncoder().encode(source).length > PLUGIN_CONSOLE_MAX_ASSET_BYTES) {
-    throw new Error("Verified plugin console module export is unavailable.");
-  }
-  if (!MOUNT_EXPORT_PATTERN.test(String(mountExport || "")) || String(mountExport) !== PLUGIN_CONSOLE_MOUNT_EXPORT) {
-    throw new Error("Verified plugin console module export is unavailable.");
-  }
-  const encodedSource: any = JSON.stringify(source).replace(/</gu, "\\u003c");
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none';">
-</head>
-<body>
-<div id="meshrix-plugin-console-root"></div>
-<script>
-(async function () {
-  const source = ${encodedSource};
-  const mountExport = ${JSON.stringify(PLUGIN_CONSOLE_MOUNT_EXPORT)};
-  const componentId = ${JSON.stringify(String(componentId || ""))};
-  const expectedBridge = ${JSON.stringify(String(bridgeVersion || PLUGIN_CONSOLE_BRIDGE_VERSION))};
-  const root = document.getElementById("meshrix-plugin-console-root");
-  let port = null;
-  window.addEventListener("message", async function (event) {
-    if (port || !event.ports || event.ports.length !== 1) return;
-    const init = event.data;
-    port = event.ports[0];
-    port.start();
-    if (!init || init.type !== "meshrix.plugin-console.init" || init.bridgeVersion !== expectedBridge) {
-      try { port.close(); } catch (error) {}
-      root.textContent = "Plugin console view could not be loaded.";
-      return;
-    }
-    try {
-      const blob = new Blob([source], { type: "text/javascript" });
-      const url = URL.createObjectURL(blob);
-      const module = await import(url);
-      URL.revokeObjectURL(url);
-      const mount = module[mountExport];
-      if (typeof mount !== "function") throw new Error("missing mount");
-      await mount({
-        element: root,
-        componentId: componentId,
-        context: init.context,
-        invokeTool: function (toolId, payload) {
-          return new Promise(function (resolve, reject) {
-            const id = "c" + Math.random().toString(36).slice(2);
-            const onMessage = function (message) {
-              const data = message.data;
-              if (!data || data.id !== id) return;
-              port.removeEventListener("message", onMessage);
-              if (data.type === "meshrix.plugin-console.result" && data.ok === true) resolve(data.result);
-              else reject(new Error((data && data.error && data.error.code) || "plugin_console_tool_denied"));
-            };
-            port.addEventListener("message", onMessage);
-            port.postMessage({ type: "meshrix.plugin-console.invoke", id: id, toolId: toolId, payload: payload });
-          });
-        }
-      });
-    } catch (error) {
-      root.textContent = "Plugin console view could not be loaded.";
-      try { port.postMessage({ type: "meshrix.plugin-console.failed" }); } catch (postError) {}
-    }
-  }, { once: true });
-  window.parent.postMessage({
-    type: "meshrix.plugin-console.guest-ready",
-    bridgeVersion: expectedBridge
-  }, "*");
-})();
-</script>
-</body>
-</html>`;
+function normalizedRoutePath() : any {
+  const hash: any = String(globalThis.location?.hash || "").replace(/^#/u, "");
+  const path: any = hash || String(globalThis.location?.pathname || "/");
+  return path.split(/[?#]/u)[0] || "/";
 }
 
 export function readPluginConsoleHostContext(entry: PluginConsoleIsolationSurface) : PluginConsoleHostContext {
@@ -223,34 +143,65 @@ export function readPluginConsoleHostContext(entry: PluginConsoleIsolationSurfac
   const colorScheme: any = String(
     html?.dataset?.appearanceColorScheme || html?.style?.colorScheme || "light"
   );
-  const locale: any = String(html?.lang || "zh-CN");
-  const hash: any = String(globalThis.location?.hash || "").replace(/^#/u, "");
-  return {
-    locale,
-    theme: { colorScheme: colorScheme === "dark" ? "dark" : "light" },
-    route: {
-      path: hash || String(globalThis.location?.pathname || "/"),
-      viewKey: String(entry.componentId || ""),
-    },
-  };
+  return Object.freeze({
+    locale: String(html?.lang || "zh-CN"),
+    theme: Object.freeze({ colorScheme: colorScheme === "dark" ? "dark" : "light" }),
+    route: Object.freeze({
+      path: normalizedRoutePath(),
+      viewKey: String(entry.viewKey || ""),
+    }),
+  });
 }
 
-export async function loadPluginConsoleAssetBytes(
-  url?: any,
-  { signal, maxBytes = PLUGIN_CONSOLE_MAX_ASSET_BYTES }: Record<string, any> = {},
-) : Promise<any> {
-  const response: any = await fetch(String(url || ""), {
-    method: "GET",
+export async function invokePluginConsoleTool({
+  toolId,
+  payload,
+  signal,
+  entry,
+  context,
+}: Record<string, any> = {}) : Promise<any> {
+  if (!pluginConsoleCsrfToken) {
+    if (!pluginConsoleCsrfPromise) {
+      pluginConsoleCsrfPromise = fetch("/api/auth/session", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      }).then(async (response?: any) : Promise<any> => {
+        if (!response.ok) throw new Error("plugin_console_session_unavailable");
+        const session: any = await response.json();
+        pluginConsoleCsrfToken = String(session?.csrfToken || session?.session?.csrfToken || "");
+        if (!pluginConsoleCsrfToken) throw new Error("plugin_console_session_unavailable");
+      }).finally(() : any => {
+        pluginConsoleCsrfPromise = null;
+      });
+    }
+    await pluginConsoleCsrfPromise;
+  }
+  const response: any = await fetch(entry.invokeUrl, {
+    method: "POST",
     credentials: "same-origin",
     signal,
-    headers: { Accept: "text/javascript" },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Meshrix-CSRF": pluginConsoleCsrfToken,
+    },
+    body: JSON.stringify({
+    bridgeVersion: entry.bridgeVersion,
+    pluginId: entry.pluginId,
+    componentId: entry.componentId,
+    artifactDigest: entry.artifactDigest,
+    artifactGeneration: entry.artifactGeneration,
+    route: context.route,
+    toolId,
+    payload: payload === undefined ? null : payload,
+    }),
   });
-  if (!response?.ok) throw new Error("Verified plugin console module export is unavailable.");
-  const bytes: any = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength <= 0 || bytes.byteLength > maxBytes) {
-    throw new Error("Verified plugin console module export is unavailable.");
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  if (!response.ok) throw new Error("plugin_console_tool_denied");
+  const result: any = await response.json();
+  const refreshedToken: any = String(result?.csrfToken || result?.session?.csrfToken || "");
+  if (refreshedToken) pluginConsoleCsrfToken = refreshedToken;
+  return result;
 }
 
 export function connectPluginConsoleHostBridge({
@@ -258,11 +209,10 @@ export function connectPluginConsoleHostBridge({
   port,
   entry,
   context,
-  invokeTool,
+  invokeTool = invokePluginConsoleTool,
   revalidate,
 }: Record<string, any> = {}) : any {
   let hostPort: any = port;
-  let channel: any = null;
   let revoked: any = false;
   let inFlight: any = 0;
   const timers: any = new Set<any>();
@@ -293,7 +243,7 @@ export function connectPluginConsoleHostBridge({
   }
 
   if (!hostPort) {
-    channel = new MessageChannel();
+    const channel: any = new MessageChannel();
     hostPort = channel.port1;
     const target: any = iframe?.contentWindow;
     if (!target || typeof target.postMessage !== "function") {
@@ -314,17 +264,13 @@ export function connectPluginConsoleHostBridge({
       revoke("plugin_console_failed");
       return;
     }
-    if (data.type !== "meshrix.plugin-console.invoke") return;
+    if (data.type !== "meshrix.plugin-console.invoke" || revoked) return;
     const id: any = String(data.id || "");
     const toolId: any = String(data.toolId || "");
     if (!INVOKE_ID_PATTERN.test(id)) return;
-    function reply(payload?: any) : any {
+    function reply(payloadValue?: any) : any {
       if (revoked) return;
-      try { hostPort.postMessage({ id, ...payload }); } catch {}
-    }
-    if (revoked) {
-      reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_bridge_revoked" } });
-      return;
+      try { hostPort.postMessage({ id, ...payloadValue }); } catch {}
     }
     const status: any = typeof revalidate === "function" ? revalidate() : { ok: true };
     if (!status || status.ok !== true) {
@@ -359,18 +305,19 @@ export function connectPluginConsoleHostBridge({
         payload: data.payload,
         signal: controller.signal,
         entry,
+        context,
       });
       if (utf8JsonByteLength(result) > PLUGIN_CONSOLE_MAX_RESPONSE_BYTES) {
         reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_payload_too_large" } });
         return;
       }
       reply({ type: "meshrix.plugin-console.result", ok: true, result });
-    } catch (error: any) {
-      const code: any = String(error?.code || error?.name || "plugin_console_tool_denied");
+    } catch {
+      const timedOut: any = controller.signal.aborted && controller.signal.reason === "plugin_console_timeout";
       reply({
         type: "meshrix.plugin-console.result",
         ok: false,
-        error: { code: code === "AbortError" ? "plugin_console_timeout" : "plugin_console_tool_denied" },
+        error: { code: timedOut ? "plugin_console_timeout" : "plugin_console_tool_denied" },
       });
     } finally {
       clearTimeout(timer);
@@ -387,7 +334,7 @@ export function connectPluginConsoleHostBridge({
   });
 }
 
-export function createOpaquePluginConsoleIframe() : any {
+export function createOpaquePluginConsoleIframe(entry: PluginConsoleIsolationSurface) : any {
   const iframe: any = globalThis.document.createElement("iframe");
   iframe.setAttribute("sandbox", PLUGIN_CONSOLE_IFRAME_SANDBOX);
   iframe.setAttribute("referrerpolicy", "no-referrer");
@@ -395,6 +342,7 @@ export function createOpaquePluginConsoleIframe() : any {
   iframe.setAttribute("title", "Plugin console");
   iframe.setAttribute("data-testid", "plugin-console-isolation-frame");
   iframe.style.cssText = "border:0;width:100%;height:100%;min-height:24rem;background:transparent;flex:1;";
+  iframe.src = entry.sandboxUrl;
   return iframe;
 }
 
@@ -403,19 +351,20 @@ export async function mountPluginConsoleIsolation(
   entry: PluginConsoleIsolationSurface,
   host: PluginConsoleIsolationHost = {},
 ) : Promise<any> {
-  const controller: any = new AbortController();
-  const source: any = await (host.loadAsset || loadPluginConsoleAssetBytes)(entry.assetFetchUrl, {
-    signal: controller.signal,
-  });
-  const iframe: any = createOpaquePluginConsoleIframe();
-  const srcdoc: any = createPluginConsoleSandboxDocument({
-    source,
-    mountExport: entry.mountExport,
-    componentId: entry.componentId,
-    bridgeVersion: entry.bridgeVersion,
-  });
+  const iframe: any = createOpaquePluginConsoleIframe(entry);
   let bridge: any = null;
   let connected: any = false;
+  const readContext: any = host.readHostContext || (() : any => readPluginConsoleHostContext(entry));
+  const initialContext: any = readContext();
+  function revalidate() : PluginConsoleRevalidation {
+    const custom: any = host.revalidate?.();
+    if (custom && custom.ok !== true) return custom;
+    const current: any = readContext();
+    if (entry.routePath && current.route.path !== entry.routePath) {
+      return { ok: false, reason: "plugin_console_route_changed" };
+    }
+    return { ok: true };
+  }
   function connect() : any {
     if (connected || !iframe.contentWindow) return;
     connected = true;
@@ -423,9 +372,9 @@ export async function mountPluginConsoleIsolation(
     bridge = connectPluginConsoleHostBridge({
       iframe,
       entry,
-      context: (host.readHostContext || (() : any => readPluginConsoleHostContext(entry)))(),
+      context: initialContext,
       invokeTool: host.invokeTool,
-      revalidate: host.revalidate,
+      revalidate,
     });
   }
   function onGuestReady(event?: any) : any {
@@ -436,9 +385,7 @@ export async function mountPluginConsoleIsolation(
   }
   window.addEventListener("message", onGuestReady);
   hostElement.replaceChildren(iframe);
-  iframe.srcdoc = srcdoc;
   return () : any => {
-    controller.abort("plugin_console_unmounted");
     window.removeEventListener("message", onGuestReady);
     bridge?.revoke("plugin_console_unmounted");
     bridge = null;

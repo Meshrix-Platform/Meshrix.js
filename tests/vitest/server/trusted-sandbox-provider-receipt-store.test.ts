@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   loadTrustedSandboxProviderReceipts,
@@ -247,6 +247,76 @@ describe("trusted sandbox provider receipt store", () : any => {
       }
     ]);
     expect(loadTrustedSandboxProviderReceipts({ userDataPath })).toEqual({});
+  });
+
+  it("does not hide a preferred Podman conformance failure behind Docker", async () : Promise<any> => {
+    const targets: Record<string, any>[] = ["provider-one", "provider-two"].map((id?: any) : any => ({
+      id,
+      providerClass: id === "provider-one" ? "rootless-podman" : "docker",
+      isolationClass: "hardened-oci",
+      serviceIdentityRef: `sandbox-provider-service:${id}`,
+      executableIdentityDigest: "b".repeat(64),
+      binary: `/fixed/bin/${id}`,
+      backend: { close: vi.fn(async () : Promise<any> => {}) }
+    }));
+    let sequence: any = 0;
+    const successfulProbe: any = () : any => ({
+      execution: { status: "succeeded" },
+      result: {
+        linuxRuntime: true,
+        nonRootIdentity: true,
+        immutableInputReadable: true,
+        immutableInputWriteDenied: true,
+        rootFilesystemWriteDenied: true,
+        capabilitiesDropped: true,
+        noNewPrivileges: true,
+        seccompFilterActive: true,
+        deviceNodesRestricted: true,
+        networkDenied: true,
+        sensitiveEnvironmentAbsent: true,
+        containerControlSocketAbsent: true,
+        isolationNamespaces: {
+          ipc: `ipc:${sequence}`,
+          mount: `mount:${sequence}`,
+          network: `network:${sequence}`,
+          pid: `pid:${sequence}`,
+          uts: `uts:${sequence}`
+        },
+        scratchQuotaBounded: true,
+        privateOutputOwned: true
+      },
+      cleanup: { destroyed: true }
+    });
+
+    const report: any = await runExecutionSandboxOciConformance({
+      writeReport: false,
+      targetFactory: async () : Promise<any> => targets[0],
+      preflightRunner: noopPreflight,
+      probeRunner: async (target?: any) : Promise<any> => {
+        if (target.id === "provider-one") {
+          throw Object.assign(new Error("synthetic unsupported provider"), {
+            code: "sandbox_runtime_failed",
+            failureStage: "oci_create_failed",
+            failureReason: "oci_option_unsupported",
+            exitCode: 125
+          });
+        }
+        sequence += 1;
+        return successfulProbe();
+      },
+      adversarialRunner: async () : Promise<any> => passingAdversarialChecks(),
+      receiptLifecycleVerifier: async () : Promise<any> => passingReceiptLifecycleChecks()
+    });
+
+    expect(report.productionBackendConformance).toBe(false);
+    expect(report.conformanceReceipt).toMatchObject({
+      providerId: "provider-one",
+      providerClass: "rootless-podman",
+      status: "failed"
+    });
+    expect(sequence).toBe(0);
+    expect(targets[0].backend.close).toHaveBeenCalledOnce();
+    expect(targets[1].backend.close).not.toHaveBeenCalled();
   });
 
   it("makes every adversarial and receipt-lifecycle result part of production conformance", async () : Promise<any> => {

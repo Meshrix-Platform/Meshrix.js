@@ -1,5 +1,6 @@
 import {
   PLUGIN_MCP_TOOL_BINDINGS,
+  SKILL_HUB_WORKSPACE_BINDING_FIELDS,
   SKILL_HUB_OPERATION_DEFINITIONS,
   skillHubRouteId
 } from "./src/operation-definitions.mjs";
@@ -64,6 +65,17 @@ function currentCall(call = {}) {
     call?.governance?.current === true && call?.governance?.revoked !== true;
 }
 
+function bindExplicitWorkspace(operationId, input) {
+  const field = SKILL_HUB_WORKSPACE_BINDING_FIELDS[operationId];
+  if (!field) return { ok: true, input };
+  if (!plainObject(input) || typeof input[field] !== "string") return { ok: false };
+  const workspaceId = input[field].trim();
+  if (!workspaceId || workspaceId.length > 256 || /[\u0000-\u001f\u007f]/u.test(workspaceId)) {
+    return { ok: false };
+  }
+  return { ok: true, input: Object.freeze({ ...input, [field]: workspaceId }) };
+}
+
 export async function activatePlugin({ manifest, context = {} } = {}) {
   if (manifest?.id !== "skill-hub") throw new TypeError("Skill Hub requires the skill-hub manifest.");
   const admission = validateSkillHubConfiguration(context.configuration || {});
@@ -88,14 +100,17 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
 
   async function executeOperation({ operation, input = {}, call = {}, signal = null, host = {} }) {
     if (!currentCall(call)) return failure("skill_hub_operation_denied", 403);
+    const workspaceBinding = bindExplicitWorkspace(operation.id, input);
+    if (!workspaceBinding.ok) return failure("skill_hub_workspace_binding_invalid", 400);
+    const requestInput = workspaceBinding.input;
     if (SANDBOX_OPERATIONS.has(operation.id)) {
-      return executeRemoteSandboxOperation({ operation, input, call, signal, host, remote });
+      return executeRemoteSandboxOperation({ operation, input: requestInput, call, signal, host, remote });
     }
     if (SANDBOX_STATUS_OPERATIONS.has(operation.id)) {
-      return sandboxStatusOperation({ operation, input, host });
+      return sandboxStatusOperation({ operation, input: requestInput, host });
     }
     if (operation.id === "skill_hub.permission.grant") {
-      const prepared = await remote.request({ operation, input, call, signal, host, phase: "prepare" });
+      const prepared = await remote.request({ operation, input: requestInput, call, signal, host, phase: "prepare" });
       if (prepared.statusCode >= 400) return prepared;
       const loanRecord = prepared.body?.loanRecord;
       if (!loanRecord || typeof host.operationPermissionGrant?.recordPluginGrant !== "function") {
@@ -117,7 +132,7 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
       }
       return remote.request({
         operation,
-        input,
+        input: requestInput,
         call,
         signal,
         host,
@@ -125,7 +140,7 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
         operationPermissionReceipt: receipt
       });
     }
-    return remote.request({ operation, input, call, signal, host });
+    return remote.request({ operation, input: requestInput, call, signal, host });
   }
 
   const operations = {};
@@ -171,7 +186,11 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
           routePath: "/admin/skill-hub",
           componentId: "skill-hub/SkillHubView",
           assetPath: "console/index.mjs",
-          assetExport: "mountPluginConsole",
+          toolIds: Object.freeze([
+            "skill_hub.list",
+            "skill_hub.stats",
+            "skill_hub.leaderboard"
+          ]),
           requiredScopes: Object.freeze(["console:read"])
         })
       }),

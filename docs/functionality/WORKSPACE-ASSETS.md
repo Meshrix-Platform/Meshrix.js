@@ -22,6 +22,46 @@ Core workspace assets cover uploaded files, generated artifacts, checkpoints, se
 - Fail closed when a workspace share has no applicable configured governance policy.
 - Compensate a persisted grant if the ACL mutation fails and bind policy evaluation to the authenticated subject rather than caller-supplied identity fields.
 
+## Workspace Binding
+
+Every operation that writes workspace files, unified asset state, asset policy,
+proof state, registry records, or backfill results requires an explicit
+non-empty `workspaceId`. Write paths do not infer that binding from
+`workspace`, `workspaceRef`, or a `default` workspace. The protocol boundary
+rejects an invalid binding before execution; the managed-write boundary repeats
+the check before proof creation or a downstream effect; the owning registry or
+policy provider validates it again before persistence. Read-only catalog
+queries may omit a workspace filter.
+
+Core workspace contribution submission, scanning, preview, review, publication,
+rejection, change requests, revocation, permission changes, and adoption are all
+managed workspace writes. Each requires the source `workspaceId`. Adoption and
+permission request or grant also require an explicit `targetWorkspaceId`; they
+never infer the target from the source contribution. Both bindings are checked
+before proof creation and again by the contribution registry or asset
+materializer before durable state changes. Unfiltered contribution catalog,
+statistics, report, leaderboard, and materialized-asset reads remain available.
+
+Workspace governance policy updates and evaluations require an explicit source
+`workspaceId`. Creating a share Grant additionally requires an explicit
+`targetWorkspaceId`; it never treats the source workspace as its own sharing
+target. The protocol executor rejects invalid bindings before it reaches the
+governance provider, and the registry validates them again before policy,
+audit, Grant, revocation, or incomplete-unshare state is persisted. The global
+governance overview remains available without a workspace filter, and absent
+organization or project configuration remains empty rather than being
+fabricated.
+
+## Durability Boundary
+
+Core object bytes are synchronized before publication, and the primary asset
+metadata database uses SQLite WAL with `synchronous=FULL`. A successful metadata
+transaction is therefore not acknowledged until SQLite has synchronized the WAL
+commit record. This favors confirmed-write durability over peak mutation
+throughput and prevents a power interruption from silently rolling back an
+already acknowledged object registration. Auxiliary databases own their own
+durability policy and are not implicitly covered by this storage authority.
+
 ## Execution Boundary
 
 Workspace filesystem governance covers path containment, mutation preview, checkpoint, compensation, and rollback. It is distinct from process, network, credential, resource, and tenant execution isolation and cannot satisfy an execution-sandbox admission decision.

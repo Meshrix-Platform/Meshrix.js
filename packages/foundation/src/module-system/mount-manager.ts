@@ -93,6 +93,13 @@ export function normalizeRuntimeOptions(runtimeOptions: Record<string, any> = {}
     if (!configuration || typeof configuration !== "object" || Array.isArray(configuration)) {
       throw new TypeError(`Plugin configuration ${pluginId} must be an object.`);
     }
+    for (const duplicateAuthorityField of ["hostCapabilities", "artifactSigningPurposes"]) {
+      if (Object.hasOwn(configuration, duplicateAuthorityField)) {
+        throw new Error(
+          `Plugin configuration ${pluginId} cannot declare ${duplicateAuthorityField}; signed manifest deployment owns startup authority.`
+        );
+      }
+    }
     normalizedPluginConfigurations[pluginId] = immutableConfigurationSnapshot(configuration);
   }
 
@@ -365,12 +372,12 @@ export async function createMountManager({
         if (artifactAuthority?.id !== "PluginArtifactAuthority" || typeof artifactAuthority.forPlugin !== "function") {
           throw new Error(`Plugin ${manifest.id} canonical artifact authority is unavailable.`);
         }
-        const configuredPurposes: any = Array.isArray(normalizedRuntimeOptions.pluginConfigurations[manifest.id]?.artifactSigningPurposes)
-          ? normalizedRuntimeOptions.pluginConfigurations[manifest.id].artifactSigningPurposes
-          : [];
-        const grantedPurposes: any = manifest.artifactSigningPurposes.filter((purpose?: any) : any => configuredPurposes.includes(purpose));
-        const artifactSigner: any = typeof pluginHostPorts.artifactSignerForPlugin === "function" && grantedPurposes.length > 0
-          ? await pluginHostPorts.artifactSignerForPlugin({ pluginId: manifest.id, allowedPurposes: grantedPurposes })
+        const declaredSigningPurposes: any = manifest.artifactSigningPurposes;
+        if (declaredSigningPurposes.length > 0 && typeof pluginHostPorts.artifactSignerForPlugin !== "function") {
+          throw new Error(`Plugin ${manifest.id} artifact signer authority is unavailable.`);
+        }
+        const artifactSigner: any = declaredSigningPurposes.length > 0
+          ? await pluginHostPorts.artifactSignerForPlugin({ pluginId: manifest.id, allowedPurposes: declaredSigningPurposes })
           : null;
         if (artifactSigner && artifactSigner.id !== "ArtifactSignerPort") {
           throw new Error(`Plugin ${manifest.id} artifact signer is invalid.`);

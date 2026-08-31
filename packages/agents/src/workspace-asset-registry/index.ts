@@ -12,6 +12,7 @@ import {
   dbPathFor,
   displayNameFrom,
   ensureSchema,
+  explicitWorkspaceId,
   firstString,
   hydrateAsset,
   hydrateLink,
@@ -28,6 +29,7 @@ import {
   projectionRefFrom,
   receiptItemsFrom,
   receiptRefFrom,
+  requiredWorkspaceId,
   revisionRefFrom,
   workspaceAssetCanonicalJson,
   stringifyJson,
@@ -200,7 +202,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath }: { db: Databa
     LIMIT @limit
   `);
   const mutationTx = db.transaction((input: UnknownRecord = {}): UnknownRecord => {
-    const workspaceId = normalizeWorkspaceId(input);
+    const workspaceId = requiredWorkspaceId(input);
     const assetKind = normalizeAssetKind(input.assetKind || input.kind);
     const canonicalState = normalizeCanonicalState(input.canonicalState || input.state);
     const dataClass = text(input.dataClass || asObject(input.policy).dataClass || "internal") || "internal";
@@ -414,7 +416,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath }: { db: Databa
   async function backfill(input: BackfillInput = {}): Promise<UnknownRecord> {
     const agentWorkspace = input.agentWorkspace;
     const contributionRegistry = input.contributionRegistry;
-    const workspaceIdFilter = text(input.workspaceId || "");
+    const workspaceIdFilter = requiredWorkspaceId(input);
     const limit = Math.max(1, Math.min(Number(input.limit || 500), 5000));
     const timestamp = nowIso();
     const accessibleWorkspaceIds = new Set<string>();
@@ -514,7 +516,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath }: { db: Databa
       const contributions = asArray(await maybeCall<unknown>(() => contributionRegistry.listContributions(), []))
         .filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item))
         .filter((item) => {
-          const contributionWorkspaceId = normalizeWorkspaceId(item);
+          const contributionWorkspaceId = explicitWorkspaceId(item);
           if (!contributionWorkspaceId) {
             return false;
           }
@@ -528,7 +530,7 @@ function createWorkspaceAssetRegistryFromDatabase({ db, filePath }: { db: Databa
         const contributionId = firstString(contribution.contributionId, contribution.id, contribution.assetId);
         if (!contributionId) continue;
         recordAssetMutation({
-          workspaceId: normalizeWorkspaceId(contribution),
+          workspaceId: requiredWorkspaceId(contribution),
           assetKind: "workspaceContribution",
           canonicalState: contribution.status === "published" || contribution.status === "adopted" ? "canonical" : "pending",
           dataClass: firstString(contribution.dataClass, "internal"),

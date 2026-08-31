@@ -73,7 +73,8 @@ describe("tracked interactive regression report", () => {
 
   it("refreshes only for the complete core profile", () => {
     expect(TRACKED_REGRESSION_REPORT_PATH).toBe("docs/verification/regression.html");
-    expect(shouldRefreshTrackedRegressionReport({ profile: "core-public", selectedByProfile: true })).toBe(true);
+    expect(shouldRefreshTrackedRegressionReport({ profile: "core-public", selectedByProfile: true, acceptanceWorker: false })).toBe(true);
+    expect(shouldRefreshTrackedRegressionReport({ profile: "core-public", selectedByProfile: true, acceptanceWorker: true })).toBe(false);
     expect(shouldRefreshTrackedRegressionReport({ profile: "core-public", selectedByProfile: false })).toBe(false);
     expect(shouldRefreshTrackedRegressionReport({ profile: "audit-public", selectedByProfile: true })).toBe(false);
   });

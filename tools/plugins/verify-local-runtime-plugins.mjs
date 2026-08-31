@@ -20,7 +20,6 @@ function run(command, args) {
 async function assertCanonicalContract() {
   const registry = await readJson(path.join(repoRoot, "plugins", "registry", "plugins.json"));
   const counts = assertMigratedExtensionClosure(registry);
-  if (registry.plugins.find((entry) => entry.id === "coding-github")?.group !== "coding") throw new Error("coding-github must belong to coding");
   return counts;
 }
 
@@ -31,7 +30,7 @@ async function main() {
   await run(process.execPath, ["tools/plugins/build-plugins.mjs"]);
   await run(process.execPath, ["tools/plugins/pack-plugins.mjs"]);
   await run(process.execPath, ["tools/plugins/smoke-test-packages.mjs"]);
-  await run(process.execPath, ["--test", "tests/plugins/shared-space.test.mjs", "tests/plugins/skill-hub.test.mjs", "tests/plugins/coding-github.test.mjs"]);
+  await run(process.execPath, ["--test", "tests/plugins/shared-space.test.mjs", "tests/plugins/skill-hub.test.mjs"]);
   process.stdout.write(`${JSON.stringify({ ok: true, ...counts, bundleSchema: "meshrix.plugin-bundle.manifest.v1", entrypointExtension: ".mjs" })}\n`);
 }
 

@@ -259,4 +259,77 @@ describe("Outbound egress policy", () : any => {
       targetUrl: "https://redirect.example.test/next"
     });
   });
+
+  it("manually revalidates every redirect hop and strips cross-origin authority", async () : Promise<any> => {
+    const calls: any[] = [];
+    const lookup: any = vi.fn(async () : Promise<any> => [{ address: [8, 8, 8, 8].join("."), family: 4 }]);
+    const fetchImpl: any = vi.fn(async (url?: any, init?: any) : Promise<any> => {
+      calls.push({ url, init });
+      if (calls.length === 1) {
+        return new Response(null, { status: 302, headers: { location: "https://second.example.test/final" } });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const result: any = await fetchWithPinnedDns({
+      url: "https://first.example.test/start",
+      lookup,
+      fetchImpl,
+      maxRedirects: 5,
+      init: {
+        method: "POST",
+        headers: { authorization: "Bearer synthetic", "content-type": "application/json" },
+        body: "{}"
+      }
+    });
+    try {
+      expect(await result.response.json()).toEqual({ ok: true });
+      expect(calls).toHaveLength(2);
+      expect(calls[0].init.redirect).toBe("manual");
+      expect(calls[1].init).toMatchObject({ method: "GET", redirect: "manual" });
+      expect(calls[1].init.headers.authorization).toBeUndefined();
+      expect(calls[1].init.body).toBeUndefined();
+      expect(lookup).toHaveBeenCalledTimes(2);
+    } finally {
+      await result.close();
+    }
+  });
+
+  it("returns a redirect response without a second hop when redirects are disabled", async () : Promise<any> => {
+    const fetchImpl: any = vi.fn(async () : Promise<any> => new Response(null, {
+      status: 302,
+      headers: { location: "https://second.example.test/final" }
+    }));
+    const lookup: any = vi.fn(async () : Promise<any> => [{ address: [8, 8, 8, 8].join("."), family: 4 }]);
+    const result: any = await fetchWithPinnedDns({
+      url: "https://first.example.test/start",
+      fetchImpl,
+      lookup,
+      maxRedirects: 0
+    });
+    try {
+      expect(result.response.status).toBe(302);
+    } finally {
+      await result.close();
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies a redirect to restricted DNS before issuing the next request", async () : Promise<any> => {
+    const fetchImpl: any = vi.fn(async () : Promise<any> => new Response(null, {
+      status: 307,
+      headers: { location: "https://private.example.test/next" }
+    }));
+    const lookup: any = vi.fn(async (host?: any) : Promise<any> => [{
+      address: host === "private.example.test" ? "10.0.0.4" : [8, 8, 8, 8].join("."),
+      family: 4
+    }]);
+    await expect(fetchWithPinnedDns({
+      url: "https://public.example.test/start",
+      fetchImpl,
+      maxRedirects: 5,
+      lookup
+    })).rejects.toMatchObject({ code: "outbound_egress_denied" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledTimes(2);
+  });
 });

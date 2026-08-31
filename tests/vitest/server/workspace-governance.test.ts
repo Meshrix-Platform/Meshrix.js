@@ -7,6 +7,8 @@ import {
   normalizeWorkspaceGovernancePolicy,
   WORKSPACE_GOVERNANCE_PROTOCOL_VERSION
 } from "../../../packages/agents/src/workspace-governance/index.ts";
+import { PLATFORM_CONSOLE_OPERATION_DEFINITIONS } from "../../../packages/contracts/src/operations/platform-console-operation-definitions.ts";
+import { executeWorkspaceGovernanceOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/runtime-admin-executors.ts";
 
 async function withRegistry(testCase?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-governance-extra-"));
@@ -39,8 +41,8 @@ function canonicalApproval(overrides: Record<string, any> = {}) : any {
   };
 }
 
-describe("workspace governance normalization and defaults", () : any => {
-  it("normalizes missing and invalid inputs to stable defaults", () : any => {
+describe("workspace governance normalization and binding", () : any => {
+  it("normalizes an explicitly bound policy without inventing configuration", () : any => {
     const normalized: any = normalizeWorkspaceGovernancePolicy({
       workspaceId: "  ws-1  ",
       organizationId: " org-1 ",
@@ -72,7 +74,7 @@ describe("workspace governance normalization and defaults", () : any => {
       protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
       workspaceId: "ws-1",
       organizationId: "org-1",
-      projectId: "default-project",
+      projectId: "",
       dataClass: "internal",
       copyPolicy: "sameProject",
       ownerSubjectIds: ["owner-a"],
@@ -97,15 +99,20 @@ describe("workspace governance normalization and defaults", () : any => {
       }
     });
 
-    const defaults: any = normalizeWorkspaceGovernancePolicy();
-    expect(defaults).toMatchObject({
-      workspaceId: "default",
-      organizationId: "default-org",
-      projectId: "default-project",
-      dataClass: "internal",
-      copyPolicy: "sameProject",
-      allowedActions: ["discover", "read", "cite", "copyToContext"]
-    });
+  });
+
+  it("rejects missing, aliased, non-string, and malformed workspace bindings", () : any => {
+    for (const input of [
+      {},
+      { workspace: "workspace-alpha" },
+      { workspaceId: 42 },
+      { workspaceId: "   " },
+      { workspaceId: "workspace-\u0000alpha" }
+    ]) {
+      expect(() : any => normalizeWorkspaceGovernancePolicy(input)).toThrow(
+        expect.objectContaining({ code: "workspace_binding_invalid" })
+      );
+    }
   });
 });
 
@@ -113,7 +120,6 @@ describe("workspace governance registry CRUD and persistence", () : any => {
   it("creates policies, records audit events, and reloads persisted state", async () : Promise<any> => {
     await withRegistry(async ({ registry, userDataPath }: Record<string, any>) : Promise<any> => {
       const created: any = await registry.upsertPolicy({
-        policy: {
           workspaceId: "workspace-alpha",
           organizationId: "org-alpha",
           projectId: "project-alpha",
@@ -132,7 +138,6 @@ describe("workspace governance registry CRUD and persistence", () : any => {
           legalHold: {
             enabled: false
           }
-        }
       });
 
       expect(created.protocolVersion).toBe(WORKSPACE_GOVERNANCE_PROTOCOL_VERSION);
@@ -180,7 +185,6 @@ describe("workspace governance permission checks", () : any => {
   it("allows and denies actions based on subject scope, clearance, approval, and legal hold", async () : Promise<any> => {
     await withRegistry(async ({ registry }: Record<string, any>) : Promise<any> => {
       await registry.upsertPolicy({
-        policy: {
           workspaceId: "workspace-alpha",
           organizationId: "org-alpha",
           projectId: "project-alpha",
@@ -200,7 +204,6 @@ describe("workspace governance permission checks", () : any => {
           legalHold: {
             enabled: true
           }
-        }
       });
 
       const allowed: any = await registry.evaluate({
@@ -300,7 +303,6 @@ describe("workspace governance share grants", () : any => {
   it("creates grants only when policy allows them and keeps denied requests ephemeral", async () : Promise<any> => {
     await withRegistry(async ({ registry, userDataPath }: Record<string, any>) : Promise<any> => {
       await registry.upsertPolicy({
-        policy: {
           workspaceId: "workspace-alpha",
           organizationId: "org-alpha",
           projectId: "project-alpha",
@@ -312,7 +314,6 @@ describe("workspace governance share grants", () : any => {
           copyPolicy: "withApproval",
           exportAllowed: false,
           checkoutAllowed: false
-        }
       });
 
       const denied: any = await registry.createShareGrant({
@@ -462,29 +463,53 @@ describe("workspace governance share grants", () : any => {
 });
 
 describe("workspace governance invalid input boundaries", () : any => {
-  it("handles missing workspace identifiers and empty registry state predictably", async () : Promise<any> => {
+  it("rejects missing source and target bindings without persisting audit state", async () : Promise<any> => {
     await withRegistry(async ({ registry }: Record<string, any>) : Promise<any> => {
-      const fallbackEvaluation: any = await registry.evaluate({
+      await expect(registry.evaluate({
         action: "read",
         subject: {
           subjectId: "subject-a",
-          organizationId: "default-org",
+          organizationId: "org-alpha",
           clearance: "internal"
         }
-      });
-      expect(fallbackEvaluation.workspaceId).toBe("default");
-      expect(fallbackEvaluation.allowed).toBe(false);
-      expect(fallbackEvaluation.reasons).toContain("subject_not_allowed");
+      })).rejects.toMatchObject({ code: "workspace_binding_invalid" });
 
-      const defaultGrant: any = await registry.createShareGrant({
+      await expect(registry.createShareGrant({
+        targetWorkspaceId: "workspace-beta",
         subject: {
           subjectId: "subject-a",
-          organizationId: "default-org",
+          organizationId: "org-alpha",
           clearance: "internal"
         }
+      })).rejects.toMatchObject({ code: "workspace_binding_invalid" });
+
+      await expect(registry.createShareGrant({
+        workspaceId: "workspace-alpha",
+        subject: {
+          subjectId: "subject-a",
+          organizationId: "org-alpha",
+          clearance: "internal"
+        }
+      })).rejects.toMatchObject({ code: "workspace_binding_invalid" });
+
+      await expect(registry.upsertPolicy({
+        policy: { workspaceId: "workspace-alpha" }
+      })).rejects.toMatchObject({ code: "workspace_binding_invalid" });
+
+      await expect(registry.recordIncompleteUnshare({
+        workspaceId: "workspace-alpha",
+        targetWorkspaceId: 42,
+        idempotencyKey: "unshare-alpha"
+      })).rejects.toMatchObject({ code: "workspace_binding_invalid" });
+
+      const missingRevocation: any = await registry.revokeShareGrants({
+        shareGrantId: "missing-grant"
       });
-      expect(defaultGrant.granted).toBe(false);
-      expect(defaultGrant.evaluation.workspaceId).toBe("default");
+      expect(missingRevocation).toMatchObject({
+        revoked: false,
+        revokedCount: 0,
+        audit: null
+      });
 
       const described: any = await registry.describe();
       expect(described).toMatchObject({
@@ -492,11 +517,66 @@ describe("workspace governance invalid input boundaries", () : any => {
         policies: [],
         shareGrants: []
       });
-      expect(described.auditEvents).toHaveLength(1);
-      expect(described.auditEvents[0]).toMatchObject({
-        eventType: "workspace_governance.evaluated",
-        workspaceId: "default"
-      });
+      expect(described.auditEvents).toEqual([]);
     });
+  });
+});
+
+describe("workspace governance protocol binding boundaries", () : any => {
+  it("declares source and target bindings in the public operation contracts", () : any => {
+    const operations: Map<string, any> = new Map(
+      PLATFORM_CONSOLE_OPERATION_DEFINITIONS.map((operation?: any) : any => [operation.id, operation])
+    );
+    expect(operations.get("workspace_governance.policy.set")?.inputSchema?.required).toEqual(["workspaceId"]);
+    expect(operations.get("workspace_governance.evaluate")?.inputSchema?.required).toEqual(["workspaceId"]);
+    expect(operations.get("workspace_governance.share_grant")?.inputSchema?.required).toEqual([
+      "workspaceId",
+      "targetWorkspaceId"
+    ]);
+  });
+
+  it("rejects invalid bindings before a governance provider method can run", async () : Promise<any> => {
+    const calls: string[] = [];
+    const context: Record<string, any> = {
+      workspaceGovernanceRegistry: {
+        describe: async () : Promise<any> => {
+          calls.push("describe");
+          return { policies: [] };
+        },
+        upsertPolicy: async () : Promise<any> => {
+          calls.push("upsertPolicy");
+          return {};
+        },
+        evaluate: async () : Promise<any> => {
+          calls.push("evaluate");
+          return {};
+        },
+        createShareGrant: async () : Promise<any> => {
+          calls.push("createShareGrant");
+          return {};
+        }
+      }
+    };
+    const cases: any[] = [
+      ["workspace_governance.policy.set", { workspace: "workspace-alpha" }],
+      ["workspace_governance.evaluate", { workspaceId: "   " }],
+      ["workspace_governance.share_grant", { workspaceId: "workspace-alpha" }]
+    ];
+    for (const [operationId, input] of cases) {
+      const response: any = await executeWorkspaceGovernanceOperation({ operationId, input, context });
+      expect(response).toMatchObject({
+        status: 400,
+        payload: { error: { code: "workspace_binding_invalid" } }
+      });
+    }
+    expect(calls).toEqual([]);
+
+    const overview: any = await executeWorkspaceGovernanceOperation({
+      operationId: "workspace_governance.describe",
+      input: {},
+      context
+    });
+    expect(overview.status).toBe(200);
+    expect(calls).toEqual(["describe"]);
   });
 });

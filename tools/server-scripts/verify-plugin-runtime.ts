@@ -641,6 +641,28 @@ async function main() : Promise<any> {
       }),
       contributionRuntimeSource("contributor")
     );
+    await writePlugin(
+      fixtureRoot,
+      manifest("isolated", {
+        runtime: { module: "./runtime.mjs" },
+        mounts: { isolated: { id: "isolated.mount", kind: "diagnostic" } }
+      }),
+      `
+export async function activatePlugin({ manifest }) {
+  return {
+    id: manifest.id,
+    mounts: {
+      isolated: {
+        id: "isolated.mount",
+        kind: "diagnostic",
+        processId() { return process.pid; }
+      }
+    },
+    close() {}
+  };
+}
+`
+    );
 
     await check("disabled-plugin-is-never-imported", async () : Promise<any> => {
       const manager: any = await fixtureManager(fixtureRoot, path.join(tempRoot, "disabled-state"));
@@ -674,6 +696,22 @@ async function main() : Promise<any> {
       const closing: any = (await readFixtureEvents(fixtureEventPath)).filter((entry?: any) : any => entry.includes("close"));
       if (closing.join(",") !== "demo:close,demo:registered-close,dependency:close,dependency:registered-close") {
         throw new Error("Plugin resources did not close in reverse dependency order.");
+      }
+    });
+
+    await check("production-plugin-code-runs-outside-the-server-process", async () : Promise<any> => {
+      const manager: any = await fixtureManager(
+        fixtureRoot,
+        path.join(tempRoot, "isolated-state"),
+        ["isolated"]
+      );
+      try {
+        const pluginProcessId: any = await manager.createExecutionView().mounts.isolated?.processId?.();
+        if (!Number.isSafeInteger(pluginProcessId) || pluginProcessId === process.pid) {
+          throw new Error("Production plugin code executed in the server process.");
+        }
+      } finally {
+        await manager.close();
       }
     });
 

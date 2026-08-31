@@ -103,13 +103,19 @@ function createFixtureFetch({
 describe("github release plugin package acquisition", () : any => {
   it("requires explicit repository/release/asset and keeps absent credential absent", () : any => {
     assert.throws(() : any => createGitHubReleasePluginPackageSource({}), /repository/);
-    const source: any = createGitHubReleasePluginPackageSource({
+    assert.throws(() : any => createGitHubReleasePluginPackageSource({
       repository: "acme/plugins",
       release: "v1.0.0",
       asset: "sample-plugin.tar.gz"
+    }), /expectedDigest/);
+    const source: any = createGitHubReleasePluginPackageSource({
+      repository: "acme/plugins",
+      release: "v1.0.0",
+      asset: "sample-plugin.tar.gz",
+      expectedDigest: "dummy"
     });
     assert.equal(source.credentialRef, null);
-    assert.equal(source.expectedDigest, null);
+    assert.equal(source.expectedDigest, "dummy");
   });
 
   it("acquires public and credential-reference assets through the shared port", async () : Promise<any> => {
@@ -166,7 +172,8 @@ describe("github release plugin package acquisition", () : any => {
     const source: any = createGitHubReleasePluginPackageSource({
       repository: "acme/plugins",
       release: "v1.0.0",
-      asset: "sample-plugin.tar.gz"
+      asset: "sample-plugin.tar.gz",
+      expectedDigest: sha256(assetBytes)
     });
     const a: any = await github.acquire(source);
     assert.equal(a.byteLength, assetBytes.length, JSON.stringify(calls));
@@ -185,7 +192,8 @@ describe("github release plugin package acquisition", () : any => {
       () : any => missing.acquire({
         repository: "acme/plugins",
         release: "v1.0.0",
-        asset: "sample-plugin.tar.gz"
+        asset: "sample-plugin.tar.gz",
+        expectedDigest: sha256(assetBytes)
       }),
       /release or asset is missing/
     );
@@ -198,7 +206,8 @@ describe("github release plugin package acquisition", () : any => {
       () : any => oversize.acquire({
         repository: "acme/plugins",
         release: "v1.0.0",
-        asset: "sample-plugin.tar.gz"
+        asset: "sample-plugin.tar.gz",
+        expectedDigest: sha256(assetBytes)
       }),
       /byte budget/
     );
@@ -212,7 +221,8 @@ describe("github release plugin package acquisition", () : any => {
       () : any => cancelled.acquire({
         repository: "acme/plugins",
         release: "v1.0.0",
-        asset: "sample-plugin.tar.gz"
+        asset: "sample-plugin.tar.gz",
+        expectedDigest: sha256(assetBytes)
       }, {}, controller.signal),
       /cancelled/
     );
@@ -225,7 +235,8 @@ describe("github release plugin package acquisition", () : any => {
       }).acquire({
         repository: "acme/plugins",
         release: "v1.0.0",
-        asset: "sample-plugin.tar.gz"
+        asset: "sample-plugin.tar.gz",
+        expectedDigest: sha256(assetBytes)
       });
       assert.fail("expected rejection");
     } catch (error: any) {

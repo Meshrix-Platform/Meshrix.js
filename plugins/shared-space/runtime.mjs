@@ -64,7 +64,8 @@ function authorizedSession(call = {}) {
   const auth = call.auth || {};
   const governance = call.governance || {};
   const workspaceAuthority = call.workspaceAuthority || {};
-  if (auth.authenticated !== true && governance.authorized !== true) return null;
+  if (auth.authenticated !== true || governance.authorized !== true ||
+      governance.current !== true || governance.revoked === true) return null;
   return Object.freeze({
     tenantRef: String(auth.tenantRef || "").trim(),
     user: Object.freeze({
@@ -149,11 +150,22 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
         async execute({ operation = definition, input = {}, call = {}, host = {} } = {}) {
           try {
             const operationId = operation.id || definition.id;
+            const authSession = authorizedSession(call);
+            if (!authSession) {
+              return Object.freeze({
+                statusCode: 403,
+                headers: Object.freeze({ "content-type": "application/json" }),
+                body: Object.freeze({
+                  ok: false,
+                  error: Object.freeze({ code: "shared_space_operation_denied" })
+                })
+              });
+            }
             const operationResult = await executeSharedSpaceOperation({
               operationId,
               input,
               context: Object.freeze({
-                authSession: authorizedSession(call),
+                authSession,
                 approvalRecord: call.approval || null,
                 agentWorkspace: host.agentWorkspace || null,
                 sandboxExecution: host.sandboxExecution || null,
@@ -206,7 +218,11 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
             slotId: "workspace.local-directory",
             componentId: "shared-space/WorkspaceLocalDirectoryPanel",
             assetPath: "console/index.mjs",
-            assetExport: "mountPluginConsole",
+            toolIds: Object.freeze([
+              "sharedspace.localDir.list",
+              "sharedspace.localDir.connect",
+              "sharedspace.sync.apply"
+            ]),
             requiredScopes: Object.freeze(["workspace:read"])
           })
         }),

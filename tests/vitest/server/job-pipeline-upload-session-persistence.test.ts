@@ -262,13 +262,55 @@ describe("job pipeline upload-session persistence", () : any => {
     expect(guardedStorageProvider.openObjectReadStream).not.toHaveBeenCalled();
   });
 
+  it("denies raw-object access when the internal identity is absent", async () : Promise<any> => {
+    const { userDataPath, storageProvider } = await createHarness();
+    const stored: any = await storageProvider.putObject({
+      objectId: "missing-identity-raw-object",
+      namespace: "tests",
+      fileName: "protected.bin",
+      buffer: Buffer.from("protected canonical bytes"),
+      metadata: {
+        ownerSubjectId: OWNER.subjectId,
+        ownerUserId: OWNER.userId
+      }
+    });
+    const guardedStorageProvider: Record<string, any> = {
+      ...storageProvider,
+      openObjectReadStream: vi.fn((input?: any) : any => storageProvider.openObjectReadStream(input))
+    };
+    const artifactHandlers: any = createJobArtifactHandlers({
+      userDataPath,
+      jobWorkflow: { getJob: vi.fn(async () : Promise<any> => null) },
+      storageObjectProvider: guardedStorageProvider,
+      loadNormalizedDocumentStoreRuntime: vi.fn(),
+      getDiscoveryState: vi.fn(() : any => ({})),
+      proxyApiRequest: vi.fn()
+    });
+    const response: any = createBufferedResponse();
+
+    await artifactHandlers.handleGetRawObject({
+      objectId: stored.objectId,
+      response,
+      authSession: null
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: "原始邮件不存在或不可访问。"
+    });
+    expect(guardedStorageProvider.openObjectReadStream).not.toHaveBeenCalled();
+  });
+
   it("bounds concurrent raw-object streams and releases capacity after cancellation", async () : Promise<any> => {
     const storedObject: Record<string, any> = {
       objectId: "bounded-raw-object",
       storageRelativePath: "objects/tests/bounded.bin",
       byteSize: 1,
       mediaType: "application/octet-stream",
-      metadata: {}
+      metadata: {
+        ownerSubjectId: OWNER.subjectId,
+        ownerUserId: OWNER.userId
+      }
     };
     const openObjectReadStream: any = vi.fn(async () : Promise<any> => ({
       byteSize: 1,
@@ -294,7 +336,7 @@ describe("job pipeline upload-session persistence", () : any => {
         promise: artifactHandlers.handleGetRawObject({
           objectId: storedObject.objectId,
           response: createBufferedResponse(),
-          authSession: null,
+          authSession: { user: OWNER },
           signal: abortController.signal
         })
       };
@@ -307,7 +349,7 @@ describe("job pipeline upload-session persistence", () : any => {
     await artifactHandlers.handleGetRawObject({
       objectId: storedObject.objectId,
       response: rejectedResponse,
-      authSession: null
+      authSession: { user: OWNER }
     });
 
     expect(rejectedResponse.statusCode).toBe(503);
@@ -326,7 +368,7 @@ describe("job pipeline upload-session persistence", () : any => {
     const resumedDownload: any = artifactHandlers.handleGetRawObject({
       objectId: storedObject.objectId,
       response: createBufferedResponse(),
-      authSession: null,
+      authSession: { user: OWNER },
       signal: resumedAbortController.signal
     });
     await vi.waitFor(() : any => {

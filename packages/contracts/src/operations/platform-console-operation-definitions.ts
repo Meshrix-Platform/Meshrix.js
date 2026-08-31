@@ -2,6 +2,7 @@ import {
   STATIC_SEMANTIC_FAMILY_COUNT,
   resolveAcpPromptRisk
 } from "./operation-registry-governed-definitions.ts";
+import { workspaceBindingSchema } from "./protocol-operation-builders.ts";
 
 export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
 {
@@ -220,6 +221,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["workspace-governance", "policy", "set"], usage: "workspace-governance policy set --body policy.json" },
       requiredScopes: ["workspace:maintain"],
       aspects: ["workspace-governance", "organization-policy"],
+      inputSchema: workspaceBindingSchema(),
       safety: { risk: "repair_write", requiresConfirmation: true, approvalScope: "workspace:maintain" }
     },
 {
@@ -232,6 +234,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["workspace-governance", "evaluate"], usage: "workspace-governance evaluate --body request.json" },
       requiredScopes: ["console:read"],
       readOnly: false,
+      inputSchema: workspaceBindingSchema(),
       safety: { risk: "safe_write" },
       aspects: ["workspace-governance", "organization-policy"]
     },
@@ -245,6 +248,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["workspace-governance", "share-grant"], usage: "workspace-governance share-grant --body grant.json" },
       requiredScopes: ["runtime:admin"],
       aspects: ["workspace-governance", "organization-policy"],
+      inputSchema: workspaceBindingSchema({ target: true }),
       safety: { risk: "safe_write", requiresConfirmation: true, approvalScope: "runtime:admin" }
     },
 {

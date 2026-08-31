@@ -9,12 +9,12 @@ import { fileURLToPath } from "node:url";
 import {
   PLUGIN_CONSOLE_BRIDGE_VERSION,
   PLUGIN_CONSOLE_IFRAME_SANDBOX,
-  PLUGIN_CONSOLE_MOUNT_EXPORT,
-  PLUGIN_CONSOLE_SANDBOX_URL,
   admitPluginConsoleIsolationEntry,
-  connectPluginConsoleHostBridge,
-  createPluginConsoleSandboxDocument
+  connectPluginConsoleHostBridge
 } from "../../apps/console/plugin-console-isolation.ts";
+import {
+  createPluginConsoleSandboxDocument
+} from "../../packages/server-runtime/src/composition/plugin-console-sandbox-document.ts";
 import {
   PLUGIN_CONSOLE_ISOLATION_BRIDGE_VERSION,
   registerPluginConsoleIsolationVerification
@@ -36,6 +36,8 @@ export const PLUGIN_CONSOLE_ISOLATION_REPORT_SCHEMA_VERSION: any =
 const VITEST_RUNNER: any = "./node_modules/vitest/vitest.mjs";
 const FOCUSED_SUITES: readonly any[] = Object.freeze([
   "tests/vitest/console/plugin-console-isolation.test.ts",
+  "tests/vitest/server/http-server-plugin-console-sandbox.test.ts",
+  "tests/vitest/server/plugin-contribution-registry.test.ts",
   "tests/vitest/server/plugin-console-isolation.test.ts",
   "tests/vitest/server/plugin-console-routes.test.ts",
   "tests/vitest/server/plugin-runtime.test.ts"
@@ -44,8 +46,11 @@ const SOURCE_FILES: readonly any[] = Object.freeze([
   PLUGIN_CONSOLE_ISOLATION_VERIFIER,
   "apps/console/plugin-console-isolation.ts",
   "apps/console/router/plugin-console-routes.ts",
+  "apps/server/runtime/http-server-plugin-console-sandbox.ts",
   "packages/foundation/src/module-system/plugin-console-isolation.ts",
   "packages/foundation/src/module-system/plugin-runtime.ts",
+  "packages/server-runtime/src/composition/plugin-console-sandbox-document.ts",
+  "packages/server-runtime/src/composition/plugin-contribution-registry.ts",
   ...FOCUSED_SUITES
 ]);
 
@@ -62,6 +67,9 @@ async function assertCurrentLoaderContract(repoRoot?: any) : Promise<any> {
   assert.equal(routes.includes("importPluginConsoleModule"), false);
   assert.equal(routes.includes("moduleImporter"), false);
   assert.equal(isolation.includes("MessageChannel"), true);
+  assert.equal(isolation.includes("loadAsset"), false);
+  assert.equal(isolation.includes("iframe.src = entry.sandboxUrl"), true);
+  assert.equal(isolation.includes("iframe.srcdoc"), false);
   assert.equal(isolation.includes('PLUGIN_CONSOLE_IFRAME_SANDBOX: any = "allow-scripts"'), true);
   assert.equal(isolation.includes("allow-same-origin"), false);
   assert.equal(runtime.includes("registerPluginConsoleIsolationVerification"), true);
@@ -110,13 +118,6 @@ function runFocusedSuites(repoRoot?: any) : any {
   };
 }
 
-function escapeHtmlAttribute(value?: any) : any {
-  return String(value || "")
-    .replace(/&/gu, "&amp;")
-    .replace(/"/gu, "&quot;")
-    .replace(/</gu, "&lt;");
-}
-
 function createEscapeProbeDocument() : any {
   return `<!DOCTYPE html>
 <html>
@@ -138,8 +139,15 @@ function createEscapeProbeDocument() : any {
     origin: String((self.location && self.location.origin) || ""),
     parentSecret: null,
     cookie: cookie,
+    storageState: "pending",
     fetchState: "pending"
   };
+  try {
+    localStorage.setItem("meshrix-plugin-probe", "1");
+    probe.storageState = "allowed";
+  } catch (error) {
+    probe.storageState = "blocked";
+  }
   try {
     probe.parentSecret = window.parent && window.parent.__MESHRIX_CONSOLE_PRIVILEGED__;
   } catch (error) {
@@ -209,7 +217,7 @@ window.addEventListener("message", (event) => {
   sandbox="${PLUGIN_CONSOLE_IFRAME_SANDBOX}"
   data-testid="plugin-console-isolation-frame"
   referrerpolicy="no-referrer"
-  srcdoc="${escapeHtmlAttribute(srcdoc)}"
+  src="/plugin-sandbox"
 ></iframe>
 </body>
 </html>`;
@@ -218,6 +226,15 @@ window.addEventListener("message", (event) => {
     if (request.url === "/privileged-state") {
       response.writeHead(200, { "content-type": "text/plain" });
       response.end("console-privileged-token");
+      return;
+    }
+    if (request.url === "/plugin-sandbox") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; frame-ancestors 'self'",
+        "x-frame-options": "SAMEORIGIN"
+      });
+      response.end(srcdoc);
       return;
     }
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -232,7 +249,7 @@ window.addEventListener("message", (event) => {
     const page: any = await browser.newPage();
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await page.locator("[data-testid='plugin-console-isolation-frame']").waitFor({ state: "attached", timeout: 10_000 });
-    const frame: any = page.frames().find((candidate?: any) : any => String(candidate.url() || "").includes("srcdoc"))
+    const frame: any = page.frames().find((candidate?: any) : any => String(candidate.url() || "").includes("/plugin-sandbox"))
       || page.frames().find((candidate?: any) : any => candidate !== page.mainFrame());
     if (!frame) {
       throw new Error("opaque iframe frame was not created");
@@ -277,7 +294,7 @@ window.addEventListener("message", (event) => {
         };
       }
     });
-    const opaqueOrigin: any = probe.origin === "null" || probe.origin === "";
+    const opaqueOrigin: any = probe.storageState === "blocked";
     const hostStateReadableFromGuest: any =
       probe.parentSecret === "console-privileged-token";
     const parentCanReadIframe: any = parentRead.hasContentDocument === true || parentRead.childProbe !== null;
@@ -326,8 +343,8 @@ function isolationAcceptanceEntry(patch: Record<string, any> = {}) : any {
     featureId: "sample-feature",
     viewKey: "sampleView",
     componentId: "sample-plugin/AdminView",
-    assetUrl: `/api/plugins/v1/console-assets/sample-plugin/1/${"a".repeat(64)}/entry/asset.ts`,
-    assetExport: PLUGIN_CONSOLE_MOUNT_EXPORT,
+    sandboxUrl: `/api/plugins/v1/console-sandboxes/sample-plugin/1/${"a".repeat(64)}/YWRtaW4uc2FtcGxlLXBsdWdpbg.html`,
+    bridgeVersion: PLUGIN_CONSOLE_BRIDGE_VERSION,
     artifactDigest: `sha256:${"a".repeat(64)}`,
     artifactGeneration: 1,
     requiredScopes: ["console:read"],
@@ -340,17 +357,18 @@ export async function assertPluginConsoleIsolationAcceptance() : Promise<any> {
   assert.equal(PLUGIN_CONSOLE_BRIDGE_VERSION, PLUGIN_CONSOLE_ISOLATION_BRIDGE_VERSION);
   assert.equal(PLUGIN_CONSOLE_IFRAME_SANDBOX, "allow-scripts");
   const surface: any = admitPluginConsoleIsolationEntry(isolationAcceptanceEntry());
-  assert.equal(surface.sandboxUrl, PLUGIN_CONSOLE_SANDBOX_URL);
+  assert.match(surface.sandboxUrl, /^\/api\/plugins\/v1\/console-sandboxes\//u);
+  assert.match(surface.invokeUrl, /^\/api\/plugins\/v1\/console-bridges\//u);
   assert.equal(surface.sandbox, PLUGIN_CONSOLE_IFRAME_SANDBOX);
-  assert.equal(surface.mountExport, PLUGIN_CONSOLE_MOUNT_EXPORT);
 
-  const html: any = createPluginConsoleSandboxDocument({
+  const document: any = createPluginConsoleSandboxDocument({
     source: "export function mountPluginConsole() {}",
-    componentId: surface.componentId
+    componentId: surface.componentId,
+    nonce: "YWJjZGVmZ2hpamtsbW5vcA=="
   });
-  assert.match(html, /connect-src 'none'/u);
-  assert.doesNotMatch(html, /@vite-ignore/u);
-  assert.doesNotMatch(html, /\/api\/plugins\/v1\/console-assets\//u);
+  assert.match(document.csp, /connect-src 'none'/u);
+  assert.doesNotMatch(document.html, /@vite-ignore/u);
+  assert.doesNotMatch(document.html, /\/api\/plugins\/v1\/console-assets\//u);
 
   registerPluginConsoleIsolationVerification({
     pluginId: "sample-plugin",

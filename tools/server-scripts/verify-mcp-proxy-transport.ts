@@ -18,6 +18,7 @@ import { installerProcessEnv } from "./lib/mcp-neutral-peer-identity-support.ts"
 import { assertExpectedOutlets, outletNames } from "./lib/mcp-neutral-peer-protocol-support.ts";
 import { createMcpProxyStdioClient } from "./lib/mcp-proxy-stdio-client.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
+import { runCompleteTargetDiagnostics } from "./lib/complete-target-diagnostics.ts";
 import {
   MCP_PROXY_TRANSPORT_REPORT_PATH,
   MCP_PROXY_TRANSPORT_SCHEMA_VERSION,
@@ -222,6 +223,8 @@ async function writeReport() : Promise<any> {
   report.summary = {
     targetCount: report.targets.length,
     requiredTargets: [...MCP_SUPPORTED_TARGETS],
+    executedTargets: report.targets.map((row?: any) : any => row.target),
+    unexecutedCount: Math.max(0, MCP_SUPPORTED_TARGETS.length - report.targets.length),
     verifiedTargets: report.targets.filter((row?: any) : any => row.status === "verified").map((row?: any) : any => row.target),
     failedCount,
     reportLeakScan: true
@@ -252,14 +255,17 @@ try {
   await installAuthenticatedFetch(server);
 
   console.log("=== MCP Proxy Transport: real meshrix-mcp proxy stdio verifier ===");
-  for (const target of MCP_SUPPORTED_TARGETS) {
-    process.stdout.write(`  ${target} proxy stdio initialize/list/call ... `);
-    try {
+  const diagnostics: any = await runCompleteTargetDiagnostics({
+    targets: MCP_SUPPORTED_TARGETS,
+    runTarget: async (target?: any) : Promise<any> => {
+      process.stdout.write(`  ${target} proxy stdio initialize/list/call ... `);
       const evidence: any = await verifyTargetProxyTransport(target);
-      report.targets.push(evidence);
       console.log("ok");
-    } catch (error: any) {
-      report.targets.push({
+      return evidence;
+    },
+    failureOutcome: async (target?: any, error?: any) : Promise<any> => {
+      console.log("FAIL");
+      return {
         target,
         status: "failed",
         proxyTransport: "stdio-jsonl",
@@ -270,10 +276,12 @@ try {
         toolsListed: false,
         healthCallOk: false,
         failure: failureEvidence(error)
-      });
-      console.log("FAIL");
-      throw error;
+      };
     }
+  });
+  report.targets.push(...diagnostics.outcomes);
+  if (diagnostics.failures.length > 0) {
+    exitCode = 1;
   }
 } catch (error: any) {
   console.error(`FAIL: ${redactText(error?.message || String(error))}`);

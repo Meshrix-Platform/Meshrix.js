@@ -26,6 +26,7 @@ const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url))
 
 const IGNORED_DIRECTORIES: any = new Set<any>([
   ".cache",
+  ".commandcode",
   ".git",
   ".dart_tool",
   ".gradle",

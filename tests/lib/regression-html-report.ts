@@ -138,13 +138,16 @@ function serializedForHtml(value: unknown): string {
 
 export function shouldRefreshTrackedRegressionReport({
   profile,
-  selectedByProfile
+  selectedByProfile,
+  acceptanceWorker = process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1"
 }: {
   profile: string;
   selectedByProfile: boolean;
+  acceptanceWorker?: boolean;
 }): boolean {
-  return selectedByProfile && profile === "core-public";
+  return acceptanceWorker === false && profile === "core-public" && selectedByProfile;
 }
+
 
 export function createRegressionHtmlReport(
   report: unknown,

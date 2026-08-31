@@ -164,6 +164,21 @@ export function createDownstreamAgentToolLoopReadiness(report: Record<string, an
   if (summary.selfContained !== true) {
     reasons.push("downstream-agent-tool-loop-not-self-contained");
   }
+  const unexecutedTargetCount: any = DOWNSTREAM_AGENT_CLIENT_TARGETS.filter(
+    (target?: any) : any => !targetRuns.some((run?: any) : any => String(asRecord(run).target || "") === target)
+  ).length;
+  const notPassedTargetCount: any = targetRuns.filter((run?: any) : any =>
+    String(asRecord(run).status || "") !== "passed").length;
+  if (summary.unexecutedCount !== undefined && Number(summary.unexecutedCount || 0) !== unexecutedTargetCount) {
+    reasons.push(`downstream-agent-tool-loop-unexecuted-count:${Number(summary.unexecutedCount || 0)}`);
+  }
+  if (summary.failedCount !== undefined && Number(summary.failedCount || 0) !== notPassedTargetCount) {
+    reasons.push(`downstream-agent-tool-loop-failed-count:${Number(summary.failedCount || 0)}`);
+  }
+  if (targetRuns.length !== DOWNSTREAM_AGENT_CLIENT_TARGETS.length ||
+    new Set(targetRuns.map((run?: any) : any => String(asRecord(run).target || ""))).size !== DOWNSTREAM_AGENT_CLIENT_TARGETS.length) {
+    reasons.push("downstream-agent-tool-loop-target-cardinality-invalid");
+  }
   if (Object.keys(failure).length > 0) {
     reasons.push("downstream-agent-tool-loop-runtime-failure");
   }

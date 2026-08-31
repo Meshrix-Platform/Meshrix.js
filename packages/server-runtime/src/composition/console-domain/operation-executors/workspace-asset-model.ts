@@ -181,7 +181,9 @@ export function isManagedWorkspaceAssetWriteOperation(operationId: any = "") : a
     id === "workspace.contribution.submit" ||
     id === "workspace.contribution.permission.request" ||
     id === "workspace.contribution.permission.grant" ||
+    id === "workspace.contribution.scan" ||
     id === "workspace.contribution.review" ||
+    id === "workspace.contribution.preview" ||
     id === "workspace.contribution.publish" ||
     id === "workspace.contribution.adopt" ||
     id === "workspace.contribution.reject" ||
@@ -216,8 +218,9 @@ export function workspaceAssetCanonicalStateForOperation(operationId: any = "", 
   const state: any = String(downstream.canonicalState || downstream.state || downstream.status || "").trim();
   if (["canonical", "pending", "review", "projected", "source", "archived"].includes(state)) return state;
   if (id === "workspace.contribution.submit") return "pending";
-  if (id === "workspace.contribution.review" || id === "workspace.contribution.request_changes" || id === "workspace.contribution.reject") return "review";
+  if (id === "workspace.contribution.scan" || id === "workspace.contribution.preview" || id === "workspace.contribution.review" || id === "workspace.contribution.request_changes" || id === "workspace.contribution.reject") return "review";
   if (id === "workspace.contribution.publish" || id === "workspace.contribution.adopt") return "canonical";
+  if (id === "workspace.contribution.revoke") return "archived";
   if (semantic === "export") return "projected";
   if (target.kind === "localDirectory" || semantic === "sync.apply") return "projected";
   return "canonical";
@@ -264,6 +267,8 @@ export function workspaceAssetTargetRef(input: Record<string, any> = {}, target:
     path: target.path || input.path || input.filePath || input["file-path"] || input.targetPath || "",
     filePath: input.filePath || input["file-path"] || "",
     targetPath: input.targetPath || input["target-path"] || "",
+    sourceWorkspaceId: input.workspaceId || "",
+    targetWorkspaceId: target.targetWorkspaceId || input.targetWorkspaceId || "",
     contributionId: input.contributionId || input["contribution-id"] || target.contributionId || "",
     codeChangeId: input.codeChangeId || input.changeId || target.codeChangeId || "",
     provider: target.provider || input.provider || "",

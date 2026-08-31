@@ -114,10 +114,10 @@
       "source": "./mcp/adapter/gateway-installer/mcp-identity.ts",
       "default": "./dist/mcp/adapter/gateway-installer/mcp-identity.js"
     },
-    "./mcp/upstream-mcp-client": {
-      "types": "./dist/mcp/upstream-mcp-client.d.ts",
-      "source": "./mcp/upstream-mcp-client.ts",
-      "default": "./dist/mcp/upstream-mcp-client.js"
+    "./mcp/upstream-mcp-gateway-transport": {
+      "types": "./dist/mcp/upstream-mcp-gateway-transport.d.ts",
+      "source": "./mcp/upstream-mcp-gateway-transport.ts",
+      "default": "./dist/mcp/upstream-mcp-gateway-transport.js"
     },
     "./pubsub/event-bus": {
       "types": "./dist/pubsub/event-bus.d.ts",

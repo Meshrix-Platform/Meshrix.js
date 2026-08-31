@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 
+const HOST_CONTEXT_SCHEMA = "v0.0.1:skill-hub:host-context-1";
+const HOST_OWNED_INPUT_FIELDS = new Set(["actor", "actor-id", "actorId", "tenantRef"]);
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -32,6 +35,39 @@ function applicationResponse(response) {
   });
 }
 
+function sha256Ref(namespace, value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) throw new TypeError(`Skill Hub ${namespace} is required.`);
+  return `sha256:${crypto.createHash("sha256").update(`${namespace}\0${normalized}`).digest("hex")}`;
+}
+
+function sandboxOutcome(receipt) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+    throw new TypeError("Skill Hub sandbox outcome is required.");
+  }
+  return Object.freeze({
+    runRef: sha256Ref("sandbox-run", receipt.runId),
+    workloadKind: String(receipt.workloadKind || "").trim(),
+    status: String(receipt.status || "").trim(),
+    artifactDigest: String(receipt.artifactDigest || "").trim(),
+    inputDigests: Object.freeze((Array.isArray(receipt.inputDigests) ? receipt.inputDigests : []).map(String)),
+    policyDigest: String(receipt.policyDigest || "").trim(),
+    cleanupState: String(receipt.cleanupState || "").trim(),
+    outputDisposition: String(receipt.outputDisposition || "").trim(),
+    reasonCode: String(receipt.reasonCode || "").trim(),
+    failureStage: String(receipt.failureStage || "").trim(),
+    createdAt: String(receipt.createdAt || "").trim()
+  });
+}
+
+function permissionGrantOutcome(receipt) {
+  if (receipt?.ok !== true) throw new TypeError("Skill Hub permission grant outcome is required.");
+  return Object.freeze({
+    recorded: true,
+    receiptRef: sha256Ref("operation-permission-grant", receipt.receiptId)
+  });
+}
+
 export function createSkillHubExternalServiceClient({ serviceRef, timeoutMs }) {
   let accepting = true;
   const active = new Set();
@@ -39,7 +75,6 @@ export function createSkillHubExternalServiceClient({ serviceRef, timeoutMs }) {
   async function request({
     operation,
     input = {},
-    call = {},
     signal = null,
     host = {},
     phase = "execute",
@@ -49,22 +84,22 @@ export function createSkillHubExternalServiceClient({ serviceRef, timeoutMs }) {
     if (!accepting || typeof host.externalService?.request !== "function") {
       return responseFailure("skill_hub_external_service_unavailable", 503);
     }
-    const metadata = Object.freeze({
-      actorId: String(call.auth?.subjectRef || "anonymous"),
-      actorKind: String(call.auth?.actorType || "plugin-operation"),
-      tenantRef: String(call.auth?.tenantRef || input.workspaceId || input.workspace || "default"),
-      authorized: call.governance?.authorized === true,
-      current: call.governance?.current === true,
+    const businessInput = Object.fromEntries(Object.entries(input).filter(([field]) =>
+      field !== "meshrixContext" && !field.startsWith("__") && !HOST_OWNED_INPUT_FIELDS.has(field)
+    ));
+    const meshrixContext = Object.freeze({
+      schemaVersion: HOST_CONTEXT_SCHEMA,
       phase,
-      ...(receipt ? { receipt } : {}),
-      ...(operationPermissionReceipt ? { operationPermissionReceipt } : {})
+      ...(receipt ? { sandboxOutcome: sandboxOutcome(receipt) } : {}),
+      ...(operationPermissionReceipt
+        ? { permissionGrantOutcome: permissionGrantOutcome(operationPermissionReceipt) }
+        : {})
     });
-    const requestInput = Object.freeze({ ...input, __meshrix: metadata });
+    const requestInput = Object.freeze({ ...businessInput, meshrixContext });
     const idempotencyKey = `skill-hub:${crypto.createHash("sha256").update(canonicalJson({
       operationId: operation.id,
       phase,
-      actorId: metadata.actorId,
-      input
+      input: requestInput
     })).digest("hex")}`;
     const task = (async () => {
       try {

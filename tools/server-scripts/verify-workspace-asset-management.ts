@@ -12,6 +12,7 @@ import {
 import { createWorkspaceAssetRegistry } from "../../packages/agents/src/workspace-asset-registry/index.ts";
 import { createWorkspaceGovernanceRegistry } from "../../packages/agents/src/workspace-governance/index.ts";
 import { executeConsoleDomainOperation } from "../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
+import { buildWorkspaceAssetRegistryInput } from "../../packages/server-runtime/src/composition/console-domain/operation-executors/workspace-asset-governance.ts";
 
 const b64: any = (value?: any) : any => Buffer.from(value).toString("base64");
 
@@ -60,7 +61,12 @@ const operationProviders: Readonly<Record<string, any>> = Object.freeze({
   workspaceAssetRegistry: createWorkspaceAssetRegistry({ userDataPath }),
   workspaceGovernanceRegistry: createWorkspaceGovernanceRegistry({ userDataPath }),
   getContributionRegistry(input: Record<string, any> = {}, context: Record<string, any> = {}) : any {
-    const workspaceId: any = String(input.workspaceId || context.workspaceId || "default").trim() || "default";
+    const workspaceId: any = String(input.workspaceId || context.workspaceId || "").trim();
+    if (!workspaceId) {
+      throw Object.assign(new TypeError("workspaceId must be explicit in the workspace asset verifier."), {
+        code: "workspace_binding_invalid"
+      });
+    }
     if (!contributionRegistries.has(workspaceId)) {
       contributionRegistries.set(workspaceId, createContributionRegistry({
         workspaceId,
@@ -113,7 +119,7 @@ try {
   await test("asset registry records asset, revision, projection, receipt, and lineage", async () : Promise<any> => {
     const registry: any = createWorkspaceAssetRegistry({ userDataPath });
     const recorded: any = registry.recordAssetMutation({
-      workspaceId: "ws-registry",
+      workspaceId: "  ws-registry  ",
       assetKind: "file",
       canonicalState: "canonical",
       displayName: "files/report.md",
@@ -132,10 +138,222 @@ try {
     assert.equal(recorded.receiptRefs.length, 1);
     const asset: any = registry.getAsset({ assetRef: recorded.assetRef });
     assert.equal(asset.assetRef, recorded.assetRef);
+    assert.equal(asset.workspaceId, "ws-registry");
     assert.equal(asset.revisions.length, 1);
     assert.equal(asset.projections.length, 1);
     assert.equal(asset.receipts.length, 1);
     assert.equal(asset.lineageLinks.length, 1);
+  });
+
+  await test("adoption registry projection belongs to the explicit target workspace", async () : Promise<any> => {
+    const projection: any = buildWorkspaceAssetRegistryInput({
+      operationId: "workspace.contribution.adopt",
+      downstreamOperationId: "workspace.contribution.adopt",
+      input: {
+        workspaceId: "source-workspace",
+        targetWorkspaceId: "target-workspace",
+        contributionId: "target-bound-contribution"
+      },
+      target: { kind: "workspaceContribution" },
+      downstream: {
+        contribution: {
+          contributionId: "target-bound-contribution",
+          workspaceId: "source-workspace"
+        }
+      }
+    });
+    assert.equal(projection.workspaceId, "target-workspace");
+    assert.equal(projection.targetRef.sourceWorkspaceId, "source-workspace");
+    assert.equal(projection.targetRef.targetWorkspaceId, "target-workspace");
+  });
+
+  await test("workspace-bound writes reject implicit attribution before proof, downstream, provider, or registry state", async () : Promise<any> => {
+    let proofStarts: any = 0;
+    let downstreamWrites: any = 0;
+    let policyWrites: any = 0;
+    let contributionProviderReads: any = 0;
+    const context: any = {
+      operationProofSubstrate: {
+        async beginLifecycle() : Promise<any> {
+          proofStarts += 1;
+          throw new Error("must not start");
+        }
+      },
+      workspaceAssetRegistry: operationProviders.workspaceAssetRegistry,
+      workspaceGovernanceRegistry: operationProviders.workspaceGovernanceRegistry,
+      agentWorkspace: {
+        uploadWorkspaceFile() : any {
+          downstreamWrites += 1;
+          return { ok: true };
+        }
+      },
+      securityPermissions: {
+        setWorkspaceAssetPolicy() : any {
+          policyWrites += 1;
+          return {};
+        }
+      },
+      getContributionRegistry() : any {
+        contributionProviderReads += 1;
+        throw new Error("contribution provider must not be reached");
+      },
+      authSession: authSession(allScopes),
+      userDataPath
+    };
+    const missingWorkspaceOperations: any[] = [
+      ["workspace.file.upload", { path: "files/missing.txt", content: "x" }],
+      ["workspace.asset.submit", { target: { kind: "workspaceFolder", path: "files/missing.txt" } }],
+      ["workspace.asset.backfill", { limit: 100 }],
+      ["workspace.asset.policy.set", { accessMode: "restricted" }],
+      ["workspace.contribution.submit", { title: "missing workspace" }],
+      ["workspace.contribution.permission.request", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.permission.grant", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.scan", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.review", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.preview", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.publish", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.adopt", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.reject", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.request_changes", { contributionId: "missing-workspace" }],
+      ["workspace.contribution.revoke", { contributionId: "missing-workspace" }]
+    ];
+    for (const [operationId, input] of missingWorkspaceOperations) {
+      const response: any = await executeConsoleDomainOperation({ operationId, input, context });
+      assert.equal(response.status, 400, `${operationId} must reject an implicit workspace`);
+      assert.equal(response.payload.error.code, "workspace_binding_invalid");
+    }
+    for (const input of [
+      { workspaceId: "", path: "files/missing.txt", content: "x" },
+      { workspaceId: 42, path: "files/missing.txt", content: "x" },
+      { workspace: "legacy-workspace", path: "files/missing.txt", content: "x" }
+    ]) {
+      const response: any = await executeConsoleDomainOperation({
+        operationId: "workspace.file.upload",
+        input,
+        context
+      });
+      assert.equal(response.status, 400);
+      assert.equal(response.payload.error.code, "workspace_binding_invalid");
+    }
+    assert.equal(proofStarts, 0);
+    assert.equal(downstreamWrites, 0);
+    assert.equal(policyWrites, 0);
+    assert.equal(contributionProviderReads, 0);
+
+    const registry: any = createWorkspaceAssetRegistry({ userDataPath });
+    for (const input of [{}, { workspace: "legacy-workspace" }, { workspaceId: "" }, { workspaceId: 42 }]) {
+      assert.throws(
+        () : any => registry.recordAssetMutation(input),
+        (error: any) : any => error?.code === "workspace_binding_invalid"
+      );
+    }
+    assert.equal(registry.listAssets({ workspaceId: "default" }).count, 0);
+
+    const globalRead: any = await executeConsoleDomainOperation({
+      operationId: "workspace.asset.list",
+      input: {},
+      context
+    });
+    assert.equal(globalRead.status, 200);
+  });
+
+  await test("cross-workspace contribution writes reject an implicit target before proof or provider access", async () : Promise<any> => {
+    let proofStarts: any = 0;
+    let contributionProviderReads: any = 0;
+    const context: any = {
+      operationProofSubstrate: {
+        async beginLifecycle() : Promise<any> {
+          proofStarts += 1;
+          throw new Error("proof must not start");
+        }
+      },
+      workspaceAssetRegistry: operationProviders.workspaceAssetRegistry,
+      workspaceGovernanceRegistry: operationProviders.workspaceGovernanceRegistry,
+      getContributionRegistry() : any {
+        contributionProviderReads += 1;
+        throw new Error("contribution provider must not be reached");
+      },
+      authSession: authSession(allScopes),
+      userDataPath
+    };
+    for (const operationId of [
+      "workspace.contribution.permission.request",
+      "workspace.contribution.permission.grant",
+      "workspace.contribution.adopt"
+    ]) {
+      const response: any = await executeConsoleDomainOperation({
+        operationId,
+        input: { workspaceId: "source-workspace", contributionId: "missing-target" },
+        context
+      });
+      assert.equal(response.status, 400, `${operationId} must reject an implicit target workspace`);
+      assert.equal(response.payload.error.code, "workspace_binding_invalid");
+      assert.match(response.payload.error.message, /targetWorkspaceId/u);
+    }
+    assert.equal(proofStarts, 0);
+    assert.equal(contributionProviderReads, 0);
+  });
+
+  await test("contribution scan and preview execute through managed workspace proof and registry projection", async () : Promise<any> => {
+    const workspaceId: any = "contribution-managed-workspace";
+    const context: any = {
+      ...operationProviders,
+      authSession: authSession(allScopes),
+      userDataPath
+    };
+    const submittedForScan: any = await executeConsoleDomainOperation({
+      operationId: "workspace.contribution.submit",
+      input: {
+        workspaceId,
+        contributionId: "managed-scan-contribution",
+        title: "Managed scan contribution"
+      },
+      context
+    });
+    assert.equal(submittedForScan.status, 201, JSON.stringify(submittedForScan.payload, null, 2));
+    const packageChecksum: any = submittedForScan.payload.contribution.packageChecksum;
+    const scanned: any = await executeConsoleDomainOperation({
+      operationId: "workspace.contribution.scan",
+      input: {
+        workspaceId,
+        contributionId: "managed-scan-contribution",
+        scanReceipt: {
+          runId: "managed-scan-run",
+          workloadKind: "contribution_scan",
+          status: "succeeded",
+          cleanupStatus: "destroyed",
+          workloadArtifactDigest: "a".repeat(64),
+          inputDigest: packageChecksum,
+          packageDigest: packageChecksum
+        }
+      },
+      context
+    });
+    assert.equal(scanned.status, 200, JSON.stringify(scanned.payload, null, 2));
+    assert.equal(scanned.payload.contribution.status, "scanned");
+    assert.ok(scanned.payload.workspaceAsset?.ledgerEventId);
+
+    const submittedForPreview: any = await executeConsoleDomainOperation({
+      operationId: "workspace.contribution.submit",
+      input: {
+        workspaceId,
+        contributionId: "managed-preview-contribution",
+        title: "Managed preview contribution"
+      },
+      context
+    });
+    assert.equal(submittedForPreview.status, 201, JSON.stringify(submittedForPreview.payload, null, 2));
+    const previewed: any = await executeConsoleDomainOperation({
+      operationId: "workspace.contribution.preview",
+      input: {
+        workspaceId,
+        contributionId: "managed-preview-contribution"
+      },
+      context
+    });
+    assert.equal(previewed.status, 200, JSON.stringify(previewed.payload, null, 2));
+    assert.equal(previewed.payload.contribution.status, "preview");
+    assert.ok(previewed.payload.workspaceAsset?.ledgerEventId);
   });
 
   await test("direct workspace file upload appends workspaceAsset and writes proof/registry state", async () : Promise<any> => {

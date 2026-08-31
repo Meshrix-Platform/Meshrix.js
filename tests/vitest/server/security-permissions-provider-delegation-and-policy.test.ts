@@ -431,12 +431,17 @@ describe("security permissions provider authorization engine behavior", () : any
 });
 
 describe("security permissions provider workspace asset policies", () : any => {
-  it("normalizes policy identifiers and falls back from blank ids", () : any => {
+  it("requires an explicit workspace binding and normalizes policy identifiers", () : any => {
     vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-1111-2222-3333-444444444444");
 
     const provider: any = createSecurityPermissionsProvider();
+    expect(() : any => provider.setWorkspaceAssetPolicy({
+      workspace: "legacy-workspace",
+      "policy-id": "policy-a",
+      accessMode: "read"
+    })).toThrow(expect.objectContaining({ code: "workspace_binding_invalid" }));
     const explicit: any = provider.setWorkspaceAssetPolicy({
-      workspace: "  workspace-a  ",
+      workspaceId: "  workspace-a  ",
       "policy-id": "  policy-a  ",
       accessMode: "read"
     });

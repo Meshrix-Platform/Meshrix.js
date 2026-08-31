@@ -48,7 +48,8 @@ export async function dispatchRegisteredHttpOperation({
   concurrencyScope = "default",
   signal = null,
   logger = getRuntimeLogger(),
-  routeIndex = null
+  routeIndex = null,
+  invokeOperation = invokeRegisteredOperation
 }: Record<string, any>) : Promise<any> {
   const match: any = findHttpOperation({
     operations,
@@ -87,7 +88,8 @@ export async function dispatchRegisteredHttpOperation({
     lockManager,
     concurrencyScope,
     signal,
-    logger
+    logger,
+    invokeOperation
   });
   return true;
 }

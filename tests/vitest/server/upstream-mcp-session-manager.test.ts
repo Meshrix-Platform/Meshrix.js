@@ -2,7 +2,7 @@ import http from "node:http";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-client.ts";
+import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 
 const managers: any = new Set<any>();
 const servers: any = new Set<any>();
@@ -25,6 +25,15 @@ function listenLoopback(server?: any) : any {
 
 function delay(ms?: any) : any {
   return new Promise((resolve?: any) : any => setTimeout(resolve, ms));
+}
+
+function createLoopbackHttpManager(options: Record<string, any> = {}) : any {
+  return createUpstreamMcpSessionManager({
+    ...options,
+    fetchTransport: async (url?: any, init?: any) : Promise<any> => ({
+      response: await fetch(url, init)
+    })
+  });
 }
 
 function stdioFixtureScript() : any {
@@ -326,6 +335,21 @@ afterEach(async () : Promise<any> => {
 });
 
 describe("upstream MCP managed sessions", () : any => {
+  it("fails closed when HTTP forwarding has no gateway-managed egress transport", async () : Promise<any> => {
+    const manager: any = createUpstreamMcpSessionManager();
+    managers.add(manager);
+
+    await expect(manager.listTools({
+      transport: "streamable-http",
+      url: "http://169.254.169.254/latest/meta-data",
+      sessionKey: "missing-managed-egress",
+      sessionScope: "missing-managed-egress"
+    })).rejects.toMatchObject({
+      code: "UPSTREAM_MCP_MANAGED_EGRESS_REQUIRED",
+      status: 500
+    });
+  });
+
   it("keeps stdio state, routes concurrent ids, and isolates cancellation", async () : Promise<any> => {
     const manager: any = createUpstreamMcpSessionManager({
       maxSessions: 2,
@@ -525,7 +549,7 @@ describe("upstream MCP managed sessions", () : any => {
 
   it("evicts at capacity and reaps idle HTTP sessions", async () : Promise<any> => {
     const fixture: any = await createHttpFixture();
-    const manager: any = createUpstreamMcpSessionManager({ maxSessions: 1, idleTtlMs: 30 });
+    const manager: any = createLoopbackHttpManager({ maxSessions: 1, idleTtlMs: 30 });
     managers.add(manager);
     const base: Record<string, any> = { transport: "streamable-http", url: fixture.url, timeoutMs: 1000 };
     await Promise.all([
@@ -543,7 +567,7 @@ describe("upstream MCP managed sessions", () : any => {
 
   it("bounds HTTP notification callbacks and fails a flooding upstream session closed", async () : Promise<any> => {
     const fixture: any = await createHttpFixture();
-    const manager: any = createUpstreamMcpSessionManager({ idleTtlMs: 5000 });
+    const manager: any = createLoopbackHttpManager({ idleTtlMs: 5000 });
     managers.add(manager);
     const config: Record<string, any> = {
       transport: "streamable-http",
@@ -568,7 +592,7 @@ describe("upstream MCP managed sessions", () : any => {
 
   it("retires sessions at their maximum lifetime", async () : Promise<any> => {
     const fixture: any = await createHttpFixture();
-    const manager: any = createUpstreamMcpSessionManager({
+    const manager: any = createLoopbackHttpManager({
       maxSessions: 1,
       idleTtlMs: 5000,
       maxLifetimeMs: 30
@@ -589,7 +613,7 @@ describe("upstream MCP managed sessions", () : any => {
 
   it("deletes issued HTTP sessions when initialization cannot complete", async () : Promise<any> => {
     const rejectedNotification: any = await createHttpFixture({ rejectInitialized: true });
-    const firstManager: any = createUpstreamMcpSessionManager();
+    const firstManager: any = createLoopbackHttpManager();
     managers.add(firstManager);
     await expect(firstManager.listTools({
       transport: "streamable-http",
@@ -600,7 +624,7 @@ describe("upstream MCP managed sessions", () : any => {
     expect(rejectedNotification.evidence.deletions).toEqual(["session-1"]);
 
     const unsupported: any = await createHttpFixture({ negotiatedProtocolVersion: "2024-11-05" });
-    const secondManager: any = createUpstreamMcpSessionManager();
+    const secondManager: any = createLoopbackHttpManager();
     managers.add(secondManager);
     await expect(secondManager.listTools({
       transport: "streamable-http",
@@ -613,7 +637,7 @@ describe("upstream MCP managed sessions", () : any => {
 
   it("retries once when an issued HTTP session disappears during initialization", async () : Promise<any> => {
     const fixture: any = await createHttpFixture({ missingInitializedOnce: true });
-    const manager: any = createUpstreamMcpSessionManager({ maxSessions: 1 });
+    const manager: any = createLoopbackHttpManager({ maxSessions: 1 });
     managers.add(manager);
     const listed: any = await manager.listTools({
       transport: "streamable-http",
@@ -632,7 +656,7 @@ describe("upstream MCP managed sessions", () : any => {
     const envName: any = "MCP_SESSION_HEADER_FIXTURE";
     const previous: any = process.env[envName];
     process.env[envName] = "ambient-placeholder";
-    const manager: any = createUpstreamMcpSessionManager({
+    const manager: any = createLoopbackHttpManager({
       env: { [envName]: "injected-placeholder" }
     });
     managers.add(manager);

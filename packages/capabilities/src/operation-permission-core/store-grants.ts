@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import {
   apiCapabilityId,
   evaluateAuthorizationPolicy,
+  normalizeKernelCapabilities,
   toolExecuteCapabilityId
 } from "@meshrix/foundation/security/authorization/authorization-engine";
 import {
@@ -316,7 +317,10 @@ export function createGrantStoreMethods(ctx?: any) : any {
       stringifyJson(grant.rateLimit),
       stringifyJson(grant.allowedOrigins),
       stringifyJson(grant.allowedCidrs),
-      stringifyJson(sanitizeGrantMetadata(grant.metadata)),
+      stringifyJson({
+        ...sanitizeGrantMetadata(grant.metadata),
+        kernelCapabilities: normalizeKernelCapabilities(grant.capabilities)
+      }),
       grant.reason,
       grant.tokenHash,
       grant.tokenPrefix,
@@ -994,8 +998,15 @@ export function createGrantStoreMethods(ctx?: any) : any {
     requiredScopes = [],
     tool = null,
     context = {},
-    recordUse = true
+    recordUse = true,
+    verifiedCapabilities = []
   }: Record<string, any>) : any {
+    const authorizationGrant: any = (value?: any) : any => ({
+      ...toPublicGrant(value),
+      capabilities: normalizeKernelCapabilities(
+        verifiedCapabilities.length > 0 ? verifiedCapabilities : value?.capabilities
+      )
+    });
     const integrityDenial: any = policyIntegrityDenial(grant);
     if (integrityDenial) return integrityDenial;
     const resolvedSourceIp: any = sourceIp || sourceIpFromRequest(request);
@@ -1018,7 +1029,7 @@ export function createGrantStoreMethods(ctx?: any) : any {
     const policyInput: Record<string, any> = {
       operation,
       tool,
-      grant: toPublicGrant(grant),
+      grant: authorizationGrant(grant),
       request,
       context: {
         ...context,
@@ -1055,7 +1066,12 @@ export function createGrantStoreMethods(ctx?: any) : any {
     if (parentGrant) {
       const parentAuthorizationDecision: any = evaluateAuthorizationPolicy({
         ...policyInput,
-        grant: toPublicGrant(parentGrant),
+        grant: {
+          ...authorizationGrant(parentGrant),
+          capabilities: normalizeKernelCapabilities(
+            verifiedCapabilities.length > 0 ? verifiedCapabilities : parentGrant.capabilities
+          )
+        },
         context: {
           ...policyInput.context,
           grantRateLimited: false
@@ -1092,7 +1108,7 @@ export function createGrantStoreMethods(ctx?: any) : any {
       }
       return {
         ok: true,
-        grant: toPublicGrant(grant),
+        grant: authorizationGrant(grant),
         sourceIp: resolvedSourceIp,
         authorizationDecision
       };
@@ -1133,7 +1149,7 @@ export function createGrantStoreMethods(ctx?: any) : any {
     const updated: any = getGrant(grant.id);
     return {
       ok: true,
-      grant: toPublicGrant(updated),
+      grant: authorizationGrant(updated),
       sourceIp: resolvedSourceIp
     };
   }
@@ -1181,6 +1197,24 @@ export function createGrantStoreMethods(ctx?: any) : any {
         grant: toPublicGrant(grant),
         authorizationDecision: credentialDecision
       };
+    }
+    if (parentGrant) {
+      const parentCapabilities: any = new Set<any>(normalizeKernelCapabilities(parentGrant.capabilities));
+      const parentAllowsRequiredCapability: any = parentCapabilities.has(requiredCapability) ||
+        parentCapabilities.has("cap:*") ||
+        (requiredCapability.startsWith("cap:tool:") && parentCapabilities.has("cap:tool:*"));
+      if (!parentAllowsRequiredCapability) {
+        return {
+          ok: false,
+          status: 403,
+          error: "Delegated MCP parent grant is missing the required capability.",
+          reasonCode: "delegated_parent_missing_capabilities",
+          missingCapabilities: [requiredCapability],
+          missingScopes: [],
+          grant: toPublicGrant(grant),
+          authorizationDecision: { ok: false, reasonCode: "missing_capabilities" }
+        };
+      }
     }
     if (typeof resolvedCapabilityBindingGuard?.verifyCapabilityKeyBinding === "function") {
       const boundContext: any = bindingContextFromGrant(grant);
@@ -1284,7 +1318,8 @@ export function createGrantStoreMethods(ctx?: any) : any {
       requiredScopes,
       tool,
       context,
-      recordUse
+      recordUse,
+      verifiedCapabilities: [requiredCapability]
     });
   }
 

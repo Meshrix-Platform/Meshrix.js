@@ -194,8 +194,24 @@ export function mcpSubjectFromAuthorization(authorization: any = null) : any {
     label: String(apiKeyAuthorization.workloadPrincipalId || ""),
     tenantId: "local",
     organizationNodeId: String(apiKeyAuthorization.organizationNodeId || ""),
-    scopes: normalizeGrantValues(policy.scopeIds || [], 512),
-    toolsets: normalizeGrantValues(policy.toolsetIds || [], 256)
+        scopes: normalizeGrantValues(policy.scopeIds || [], 512),
+    toolsets: normalizeGrantValues(policy.toolsetIds || [], 256),
+    allowedOrigins: normalizeGrantValues(policy.resources?.allowedOrigins || [], 512),
+    allowedCidrs: normalizeGrantValues(policy.resources?.allowedCidrs || [], 256)
+,
+    capabilities: normalizeGrantValues(policy.capabilityIds || [], 512),
+    dynamicCapabilities: normalizeGrantValues(policy.capabilityIds || [], 512),
+    maxRisk: String(policy.maximumRisk || ""),
+    allowedWorkspaceIds: normalizeGrantValues(policy.resources?.workspaceIds || [], 512),
+    allowedDataClasses: normalizeGrantValues(policy.resources?.dataClassifications || [], 256),
+    allowedEgress: normalizeGrantValues(policy.resources?.egressClasses || [], 256),
+    allowedStaticSemanticFamilies: normalizeGrantValues(policy.resources?.semanticFamilies || [], 256),
+    allowedCapabilityDomains: normalizeGrantValues(policy.resources?.capabilityDomains || [], 256),
+    allowedCapabilityVerbs: normalizeGrantValues(policy.resources?.capabilityVerbs || [], 256),
+    allowedResourceKinds: normalizeGrantValues(policy.resources?.resourceKinds || [], 256),
+    allowedEffectKinds: normalizeGrantValues(policy.resources?.effectKinds || [], 256),
+    allowedServiceIds: normalizeGrantValues(policy.serviceIds || [], 512),
+    allowedSecretBindings: normalizeGrantValues(policy.resources?.secretBindingIds || [], 512)
   };
 }
 
@@ -236,7 +252,19 @@ export function mcpAuthSessionFromAuthorization(authorization: any = null) : any
       organizationNodeId: subject.organizationNodeId,
       scopes: subject.scopes,
       toolsets: subject.toolsets,
-      allowedWorkspaceIds: normalizeGrantValues(policy.resources?.workspaceIds || [], 512)
+      capabilities: subject.capabilities,
+      dynamicCapabilities: subject.dynamicCapabilities,
+      maxRisk: subject.maxRisk,
+      allowedWorkspaceIds: subject.allowedWorkspaceIds,
+      allowedDataClasses: subject.allowedDataClasses,
+      allowedEgress: subject.allowedEgress,
+      allowedStaticSemanticFamilies: subject.allowedStaticSemanticFamilies,
+      allowedCapabilityDomains: subject.allowedCapabilityDomains,
+      allowedCapabilityVerbs: subject.allowedCapabilityVerbs,
+      allowedResourceKinds: subject.allowedResourceKinds,
+      allowedEffectKinds: subject.allowedEffectKinds,
+      allowedServiceIds: subject.allowedServiceIds,
+      allowedSecretBindings: subject.allowedSecretBindings
     }
   };
 }

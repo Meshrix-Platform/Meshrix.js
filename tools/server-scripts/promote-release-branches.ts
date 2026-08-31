@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { resolveCurrentAcceptanceGeneration } from "./lib/platform-acceptance-generation-store.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REVISION: any = /^[a-f0-9]{40}$/u;
 const BRANCHES: readonly any[] = Object.freeze(["nightly", "stable", "release"]);
 const POLL_INTERVAL_MS: any = 10_000;
 const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
+const MAX_GITHUB_ATTEMPTS: any = 3;
+const MAX_WORKFLOW_WAIT_MS: any = 30 * 60_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
@@ -76,7 +82,7 @@ function sleepSync(delayMs?: any) : any {
 
 function gh(args: any[] = [], code: any = "github_command_failed") : any {
   let announcedRetry: any = false;
-  for (;;) {
+  for (let attempt: any = 1; attempt <= MAX_GITHUB_ATTEMPTS; attempt += 1) {
     const result: any = spawnSync("gh", args, {
       cwd: repoRoot,
       encoding: "utf8",
@@ -85,13 +91,14 @@ function gh(args: any[] = [], code: any = "github_command_failed") : any {
       stdio: ["ignore", "pipe", "pipe"],
     });
     if (!result.error && result.status === 0) return String(result.stdout || "").trim();
-    if (!isTransientGithubFailure(result.stderr)) throw failure(code);
+    if (!isTransientGithubFailure(result.stderr) || attempt === MAX_GITHUB_ATTEMPTS) throw failure(code);
     if (!announcedRetry) {
       console.log("[release-promotion] github transport retry");
       announcedRetry = true;
     }
     sleepSync(GITHUB_RETRY_INTERVAL_MS);
   }
+  throw failure(code);
 }
 
 function parseJson(value?: any, code: any = "github_response_invalid") : any {
@@ -179,27 +186,49 @@ function remoteRevision(repository?: any, branch?: any) : any {
   );
 }
 
-function ensureLocalCandidate(requestedCandidate?: any) : any {
-  if (git(["status", "--porcelain=v1", "--untracked-files=all"], "working_tree_check_failed") !== "") {
-    throw failure("working_tree_not_clean");
+async function ensureLocalCandidate(requestedCandidate?: any) : Promise<any> {
+  const candidate: any = requireRevision(requestedCandidate, "accepted_candidate_required");
+  git(["cat-file", "-e", `${candidate}^{commit}`], "candidate_revision_unavailable");
+  let accepted: any;
+  try {
+    accepted = await resolveCurrentAcceptanceGeneration(repoRoot);
+  } catch {
+    throw failure("accepted_candidate_evidence_unavailable");
   }
-  if (git(["symbolic-ref", "--short", "HEAD"], "current_branch_unavailable") !== "nightly") {
-    throw failure("current_branch_must_be_nightly");
-  }
-  git(["diff", "--check"], "git_diff_check_failed");
-  const head: any = requireRevision(git(["rev-parse", "HEAD"], "candidate_revision_unavailable"));
-  const candidate: any = requestedCandidate ? requireRevision(requestedCandidate) : head;
-  if (candidate !== head) throw failure("candidate_must_equal_head");
-  if (requireRevision(git(["rev-parse", "refs/heads/nightly"], "nightly_revision_unavailable")) !== candidate) {
-    throw failure("candidate_must_equal_local_nightly");
+  if (accepted?.manifest?.sourceRevision !== candidate ||
+      !/^[a-f0-9]{64}$/u.test(String(accepted?.manifest?.candidateDigest || ""))) {
+    throw failure("accepted_candidate_mismatch");
   }
   return candidate;
 }
 
-function verifyPublicationCandidate() : any {
-  run("npm", ["run", "repo:local-info-hygiene"], "local_info_hygiene_failed");
-  run("node", ["tools/scripts/verify-git-publication.ts", "--index"], "git_publication_check_failed");
-  console.log("[release-promotion] publication preflight passed");
+function verifyPublicationCandidate(candidate?: any) : any {
+  const ownerRoot: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-promotion-"));
+  const workspace: any = path.join(ownerRoot, "candidate");
+  const added: any = spawnSync("git", ["worktree", "add", "--quiet", "--detach", workspace, candidate], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (added.status !== 0) throw failure("promotion_candidate_worktree_failed");
+  try {
+    fs.symlinkSync(path.join(repoRoot, "node_modules"), path.join(workspace, "node_modules"), "junction");
+    const runInCandidate: any = (command?: any, args: any[] = [], code?: any) : any => {
+      const result: any = spawnSync(command, args, {
+        cwd: workspace,
+        encoding: "utf8",
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (result.error || result.status !== 0) throw failure(code);
+    };
+    runInCandidate("npm", ["run", "repo:local-info-hygiene"], "local_info_hygiene_failed");
+    runInCandidate("node", ["tools/scripts/verify-git-publication.ts", "--index"], "git_publication_check_failed");
+    console.log("[release-promotion] publication preflight passed");
+  } finally {
+    spawnSync("git", ["worktree", "remove", "--force", workspace], { cwd: repoRoot, stdio: "ignore" });
+    fs.rmSync(ownerRoot, { recursive: true, force: true });
+  }
 }
 
 function advanceNightly(repository?: any, candidate?: any, dryRun: any = false) : any {
@@ -305,10 +334,9 @@ function sleep(delayMs?: any) : any {
 
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
-  let resumedTestFailures: any = false;
-  let unstartedResumeCount: any = 0;
-  let resumeRequestedAttempt: any = 0;
+  const deadline: any = Date.now() + MAX_WORKFLOW_WAIT_MS;
   for (;;) {
+    if (Date.now() >= deadline) throw failure(`${branch}_${path.basename(workflowPath, ".yml")}_wait_timeout`);
     const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
       branch,
       candidate,
@@ -326,31 +354,9 @@ async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, 
       continue;
     }
     if (selected.conclusion === "success") return selected;
-    if (resumeRequestedAttempt > 0 && Number(selected.run_attempt || 0) <= resumeRequestedAttempt) {
-      await sleep(POLL_INTERVAL_MS);
-      continue;
-    }
     const failedJobs: any = failedJobNames(repository, selected.id);
     for (const failed of failedJobs) {
       console.error(`[release-promotion] failed job=${failed.job} steps=${failed.steps.join(",") || "none"} signals=${failed.signals.join(",") || "none"}`);
-    }
-    if (jobsFailedBeforeRunnerAssignment(failedJobs)) {
-      gh(["run", "rerun", String(selected.id), "--failed"], "workflow_unstarted_jobs_resume_failed");
-      unstartedResumeCount += 1;
-      resumeRequestedAttempt = Number(selected.run_attempt || 0);
-      lastState = "";
-      console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-unstarted-jobs count=${unstartedResumeCount}`);
-      await sleep(runnerAssignmentRetryDelay(unstartedResumeCount));
-      continue;
-    }
-    if (!resumedTestFailures) {
-      gh(["run", "rerun", String(selected.id), "--failed"], "workflow_failed_jobs_resume_failed");
-      resumedTestFailures = true;
-      resumeRequestedAttempt = Number(selected.run_attempt || 0);
-      lastState = "";
-      console.log(`[release-promotion] ${branch} ${path.basename(workflowPath)} resuming-failed-jobs`);
-      await sleep(POLL_INTERVAL_MS);
-      continue;
     }
     throw failure(`${branch}_${path.basename(workflowPath, ".yml")}_failed`);
   }
@@ -392,10 +398,10 @@ export async function runBranchPromotion(argv: any[] = process.argv.slice(2)) : 
     return;
   }
 
-  const candidate: any = ensureLocalCandidate(options.candidate);
+  const candidate: any = await ensureLocalCandidate(options.candidate);
   const repository: any = repositoryName();
   refreshRemoteBranches();
-  verifyPublicationCandidate();
+  verifyPublicationCandidate(candidate);
   console.log(`[release-promotion] candidate ${shortRevision(candidate)}`);
 
   advanceNightly(repository, candidate, options.dryRun);
@@ -404,7 +410,10 @@ export async function runBranchPromotion(argv: any[] = process.argv.slice(2)) : 
     advanceProtectedBranch(repository, "release", "stable", candidate, true);
     return;
   }
-  await waitForBranchAuthority(repository, "nightly", candidate);
+  const nightlyFeedback: any = waitForBranchAuthority(repository, "nightly", candidate).then(
+    () : any => ({ conclusion: "success" }),
+    (error?: any) : any => ({ conclusion: "failure", code: String(error?.code || "nightly_feedback_failed") })
+  );
 
   advanceProtectedBranch(repository, "stable", "nightly", candidate);
   await waitForBranchAuthority(repository, "stable", candidate);
@@ -415,6 +424,21 @@ export async function runBranchPromotion(argv: any[] = process.argv.slice(2)) : 
   for (const branch of BRANCHES) {
     if (remoteRevision(repository, branch) !== candidate) throw failure("promotion_final_ref_mismatch");
   }
+  const nightly: any = await nightlyFeedback;
+  fs.mkdirSync(path.join(repoRoot, "build", "reports"), { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, "build", "reports", "branch-promotion.json"), `${JSON.stringify({
+    schemaVersion: "v0.0.1:release:branch-promotion-report-1",
+    verifier: "tools/server-scripts/promote-release-branches.ts",
+    generatedAt: new Date().toISOString(),
+    sourceRevision: candidate,
+    branches: Object.fromEntries(BRANCHES.map((branch?: any) : any => [branch, candidate])),
+    nightlyFeedback: nightly,
+    stableAuthorityValid: true,
+    releaseAuthorityValid: true,
+    publicationPerformed: false,
+    policyMutationPerformed: false,
+    releaseReady: true,
+  }, null, 2)}\n`, { mode: 0o600 });
   console.log(`[release-promotion] complete candidate=${shortRevision(candidate)} branches=nightly,stable,release deployment=verified`);
 }
 

@@ -146,12 +146,18 @@ describe("branch promotion workflow", () : any => {
       "suite:execution-sandbox.controlled-runtime",
     ]);
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");
-    expect(automation).toContain('["run", "rerun", String(selected.id), "--failed"]');
-    expect(automation).toContain("resuming-failed-jobs");
-    expect(automation).toContain("resuming-unstarted-jobs");
-    expect(automation).toContain("unstartedResumeCount += 1");
+    expect(automation).not.toContain('["run", "rerun", String(selected.id), "--failed"]');
+    expect(automation).toContain("MAX_WORKFLOW_WAIT_MS");
+    expect(automation).toContain("MAX_GITHUB_ATTEMPTS");
     expect(automation).not.toContain("resumedRunnerAssignmentFailures");
-    expect(automation).toContain("resumeRequestedAttempt");
+    expect(automation).not.toContain("resumeRequestedAttempt");
+  });
+
+  it("requires canonical accepted-generation resolution before promotion", () : any => {
+    const automation: any = read("tools/server-scripts/promote-release-branches.ts");
+    expect(automation).toContain("resolveCurrentAcceptanceGeneration");
+    expect(automation).toContain("await ensureLocalCandidate(options.candidate)");
+    expect(automation).not.toContain("pointer.generation");
   });
 
   it("admits stable and release only when the after commit is the exact upstream tip", () : any => {

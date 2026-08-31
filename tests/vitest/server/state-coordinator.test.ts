@@ -583,6 +583,28 @@ describe("state coordinator behavior", () : any => {
     })).rejects.toMatchObject({ code: "BOUNDED_JSONL_RECORD_TOO_LARGE" });
   });
 
+  it("heals a torn JSONL tail on read instead of failing", async (): Promise<any> => {
+    const root: any = await tempDir("meshrix-bounded-jsonl-torn-");
+    const eventPath: any = path.join(root, "events", "torn.jsonl");
+
+    const complete = `${JSON.stringify({ sequence: 1 })}\n${JSON.stringify({ sequence: 2 })}\n`;
+    // Simulate a crash mid-append: a partial record without its newline.
+    await fs.mkdir(path.dirname(eventPath), { recursive: true });
+    await fs.writeFile(eventPath, `${complete}${JSON.stringify({ sequence: 3 }).slice(0, 8)}`, "utf8");
+
+    const records: any = await readJsonlTail(eventPath, { limit: 10 });
+    expect(records).toEqual([{ sequence: 1 }, { sequence: 2 }]);
+
+    // The torn tail is physically truncated so later reads and appends see a
+    // newline-terminated file.
+    expect(await fs.readFile(eventPath, "utf8")).toBe(complete);
+
+    // The healed file accepts further appends normally.
+    await appendBoundedJsonLine(eventPath, { sequence: 3 });
+    const afterAppend: any = await readJsonlTail(eventPath, { limit: 10 });
+    expect(afterAppend.map((record?: any): any => record.sequence)).toEqual([1, 2, 3]);
+  });
+
   it("can ignore atomic writes when the target directory is concurrently removed", async () : Promise<any> => {
     const root: any = await tempDir("meshrix-state-coordinator-missing-parent-");
     const parentDirectory: any = path.join(root, "jobs", "job-1");

@@ -154,7 +154,7 @@ describe("security permissions provider behavior", () : any => {
     });
 
     const generatedPolicy: any = provider.setWorkspaceAssetPolicy({
-      workspace: " workspace-b ",
+      workspaceId: " workspace-b ",
       accessMode: "write"
     });
     expect(generatedPolicy).toMatchObject({

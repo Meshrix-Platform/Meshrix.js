@@ -263,6 +263,36 @@ export function workspaceIdFrom(input: Record<string, any> = {}, fallback: any =
   return String(input.workspaceId || input.workspace || fallback || "default").trim() || "default";
 }
 
+export function requiredWorkspaceBindingFrom(input: Record<string, any> = {}, field = "workspaceId") : any {
+  if (!input || typeof input !== "object" || Array.isArray(input) || typeof input[field] !== "string") {
+    throw Object.assign(new TypeError(`${field} must be a non-empty string.`), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  const workspaceId: any = input[field].trim();
+  if (!workspaceId || workspaceId.length > 256 || /[\u0000-\u001f\u007f]/u.test(workspaceId)) {
+    throw Object.assign(new TypeError(`${field} must be a non-empty string.`), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  return workspaceId;
+}
+
+export function requiredWorkspaceIdFrom(input: Record<string, any> = {}) : any {
+  return requiredWorkspaceBindingFrom(input, "workspaceId");
+}
+
+export function workspaceBindingFailureResult(operationId: any = "", field = "workspaceId") : any {
+  return result(400, {
+    ok: false,
+    operationId: String(operationId || ""),
+    error: {
+      code: "workspace_binding_invalid",
+      message: `${field} must be a non-empty string.`
+    }
+  });
+}
+
 export function arrayOfStrings(value?: any) : any {
   return Array.isArray(value)
     ? value.map((item?: any) : any => String(item || "").trim()).filter(Boolean)

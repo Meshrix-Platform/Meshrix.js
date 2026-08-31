@@ -12,6 +12,7 @@ import { openSqliteDatabase } from "./sqlite-database.ts";
 import {
   EXCLUDED_TOP_LEVEL_DIRS,
   isSecretCustodyPath,
+  isUnpublishedObjectStagingPath,
   classifyFile,
   isSqliteDataFile,
   isSqliteSidecar,
@@ -601,7 +602,11 @@ export async function collectSnapshotSources(
     const absolutePath = path.join(currentPath, dirent.name);
     const relativePath = path.relative(rootPath, absolutePath).replace(/\\/g, "/");
     const topLevel = relativePath.split("/")[0];
-    if (EXCLUDED_TOP_LEVEL_DIRS.has(topLevel) || isSecretCustodyPath(relativePath)) continue;
+    if (
+      EXCLUDED_TOP_LEVEL_DIRS.has(topLevel) ||
+      isUnpublishedObjectStagingPath(relativePath) ||
+      isSecretCustodyPath(relativePath)
+    ) continue;
     if (dirent.isSymbolicLink() || (!dirent.isDirectory() && !dirent.isFile())) {
       throw storageError(
         "storage_artifact_type_unsupported",

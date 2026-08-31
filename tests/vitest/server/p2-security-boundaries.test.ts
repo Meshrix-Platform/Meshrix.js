@@ -58,7 +58,9 @@ describe("P2 security boundaries", () : any => {
     });
 
     expect(result.allowed).toBe(false);
-    expect(result.decision.reasonCode).toBe("missing_scopes");
+    // Default-deny: a capability-less system actor is denied by the capability
+    // gate first; the scope gate is also violated but reported after it.
+    expect(["missing_capabilities", "missing_scopes"]).toContain(result.decision.reasonCode);
     expect(auditStore.recordDecision).toHaveBeenCalledOnce();
   });
 

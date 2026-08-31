@@ -7,10 +7,12 @@ import {
   parseBooleanFlag,
   protocolPayload,
   publishProtocolEvent,
+  requiredWorkspaceBindingFrom,
   requireRuntimeMethod,
   requireStrategyManagementProvider,
   result,
-  workspaceAccessOptions
+  workspaceAccessOptions,
+  workspaceBindingFailureResult
 } from "./shared.ts";
 import { createPathBrowserRoots, resolvePathBrowserVirtualValue } from "./path-browser.ts";
 import { applyWorkspaceRuntimeContext } from "./workspace-runtime-helpers.ts";
@@ -567,13 +569,31 @@ export async function executeWorkspaceGovernanceOperation({ operationId, input, 
   if (!String(operationId || "").startsWith("workspace_governance.")) {
     return null;
   }
+  const requiresWorkspaceId: any = [
+    "workspace_governance.policy.set",
+    "workspace_governance.evaluate",
+    "workspace_governance.share_grant"
+  ].includes(operationId);
+  if (requiresWorkspaceId) {
+    try {
+      requiredWorkspaceBindingFrom(input);
+      if (operationId === "workspace_governance.share_grant") {
+        requiredWorkspaceBindingFrom(input, "targetWorkspaceId");
+      }
+    } catch (error: any) {
+      const field: any = String(error?.message || "").startsWith("targetWorkspaceId")
+        ? "targetWorkspaceId"
+        : "workspaceId";
+      return workspaceBindingFailureResult(operationId, field);
+    }
+  }
   const governance: any = workspaceGovernanceRegistryFor(context);
   if (operationId === "workspace_governance.describe") {
     return result(200, await governance.describe());
   }
   if (operationId === "workspace_governance.policy.set") {
     try {
-      return result(200, await governance.upsertPolicy(input.policy || input));
+      return result(200, await governance.upsertPolicy(input));
     } catch (error: any) {
       return result(400, errorPayload(error, "Workspace governance policy update failed."));
     }

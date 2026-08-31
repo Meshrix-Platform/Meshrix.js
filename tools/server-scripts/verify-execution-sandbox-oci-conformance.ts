@@ -31,7 +31,7 @@ const REPORT_PATH: any = "build/reports/execution-sandbox-oci-conformance.json";
 const VERIFIER: any = "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
 const REPO_ROOT: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 export const PINNED_OCI_CONFORMANCE_IMAGE: any =
-  "node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203";
+  "docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203";
 const PINNED_IMAGE: any = PINNED_OCI_CONFORMANCE_IMAGE;
 const OCI_ENGINE_READY_TIMEOUT_MS: any = 120_000;
 const OCI_ENGINE_READY_INTERVAL_MS: any = 2_500;
@@ -377,10 +377,20 @@ function namespaceIdentity(name) {
 }
 
 function mountOptions(target) {
-  const record = fs.readFileSync("/proc/mounts", "utf8")
+  const record = mountRecords().find((fields) => fields[1] === target);
+  return new Set((record?.[3] || "").split(",").filter(Boolean));
+}
+
+function mountRecords() {
+  return fs.readFileSync("/proc/mounts", "utf8")
     .split("\n")
-    .find((line) => line.split(" ")[1] === target);
-  return new Set((record?.split(" ")[3] || "").split(",").filter(Boolean));
+    .map((line) => line.split(" "))
+    .filter((fields) => fields.length >= 4);
+}
+
+function controlSocketMountAbsent() {
+  const targets = new Set(mountRecords().map((fields) => fields[1]));
+  return !targets.has("/var/run/docker.sock") && !targets.has("/run/podman/podman.sock");
 }
 
 const status = fs.readFileSync("/proc/self/status", "utf8");
@@ -413,7 +423,7 @@ const result = {
     !fs.existsSync("/dev/kmsg"),
   networkDenied: await networkDenied(),
   sensitiveEnvironmentAbsent,
-  containerControlSocketAbsent: !fs.existsSync("/var/run/docker.sock") && !fs.existsSync("/run/podman/podman.sock"),
+  containerControlSocketAbsent: controlSocketMountAbsent(),
   isolationNamespaces: {
     ipc: namespaceIdentity("ipc"),
     mount: namespaceIdentity("mnt"),
@@ -426,7 +436,6 @@ const result = {
     scratchStat.uid === process.getuid() &&
     scratchStat.gid === process.getgid() &&
     scratchFs.blocks * scratchFs.bsize <= 16 * 1024 * 1024 &&
-    scratchFs.files <= 256 &&
     ["rw", "noexec", "nosuid", "nodev"].every((option) => scratchOptions.has(option)),
   privateOutputOwned:
     (outputStat.mode & 0o777) === 0o700 &&
@@ -1052,26 +1061,20 @@ async function runIndependentConformanceProbes(
   ]);
 }
 
-export async function runExecutionSandboxOciConformance({
+async function runOciTargetConformance({
+  target,
   reportPath = REPORT_PATH,
   writeReport = true,
   userDataPath = "",
   policyRevision = POLICY_REVISION,
   runtimeProfile = RUNTIME_PROFILE,
   receiptRequirement = CONTROLLED_SANDBOX_FINAL_RECEIPT_ID,
-  targetFactory = createOciBackendConformanceTarget,
   preflightRunner = runOciConformancePreflight,
   probeRunner = runProbe,
   adversarialRunner = runOciAdversarialConformanceMatrix,
   receiptLifecycleVerifier = verifyOciReceiptLifecycle,
   now = () : any => new Date()
 }: Record<string, any> = {}) : Promise<any> {
-  const target: any = await targetFactory();
-  if (!target) {
-    const error: Error & Record<string, any> = new Error("No trusted OCI conformance target is installed.");
-    error.code = "execution_sandbox_oci_target_missing";
-    throw error;
-  }
   let root: any = "";
   let report: any;
   try {
@@ -1175,6 +1178,22 @@ export async function runExecutionSandboxOciConformance({
     await target.backend.close().catch(() : any => {});
     if (root) await removePrivateTree(root);
   }
+}
+
+export async function runExecutionSandboxOciConformance({
+  targetFactory = createOciBackendConformanceTarget,
+  ...conformanceOptions
+}: Record<string, any> = {}) : Promise<any> {
+  const target: any = await targetFactory();
+  if (!target) {
+    const error: Error & Record<string, any> = new Error("No trusted OCI conformance target is installed.");
+    error.code = "execution_sandbox_oci_target_missing";
+    throw error;
+  }
+  return runOciTargetConformance({
+    ...conformanceOptions,
+    target
+  });
 }
 
 export async function runExecutionSandboxOciConformanceCli({

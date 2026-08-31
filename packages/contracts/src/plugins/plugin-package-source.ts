@@ -26,9 +26,11 @@ export function createGitHubReleasePluginPackageSource({
     credentialRef: credentialRef === null || credentialRef === undefined || credentialRef === ""
       ? null
       : requireNonEmptyString(credentialRef, "credentialRef"),
-    expectedDigest: expectedDigest === null || expectedDigest === undefined
-      ? null
-      : requireNonEmptyString(expectedDigest, "expectedDigest")
+    // Remote plugin packages are admitted only against an operator-fixed
+    // digest. A release source without an expected digest is refused — a
+    // network-acquired package must never become installable code without a
+    // content binding.
+    expectedDigest: requireNonEmptyString(expectedDigest, "expectedDigest")
   });
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthorizationEngine, evaluateAuthorizationPolicy } from "../../../packages/foundation/src/security/authorization/authorization-engine.ts";
+import { createPolicyEnforcementPoint } from "../../../packages/foundation/src/security/authorization/pdp/policy-enforcement-point.ts";
 
 function baseGrant() : any {
   return {
@@ -68,6 +69,67 @@ describe("runtime refactor authorization compiler", () : any => {
     expect(engine.getRefactorInstrumentation()).toMatchObject({
       compiledSnapshotCount: 2,
       cacheHits: 1
+    });
+  });
+
+  it("applies same-revision authorization changes on the next request", async () : Promise<any> => {
+    const originEngine: any = createAuthorizationEngine();
+    const originGrant: any = {
+      ...baseGrant(),
+      allowedOrigins: ["https://app.example.com"]
+    };
+    const originInput: any = {
+      grant: originGrant,
+      tool: baseTool(),
+      subject: baseSubject(),
+      operation: { id: "kernel.workspace.read" },
+      request: { headers: { origin: "https://app.example.com" } }
+    };
+
+    expect(await originEngine.evaluate(originInput)).toMatchObject({ allowed: true });
+    originGrant.allowedOrigins = ["https://admin.example.com"];
+    expect(await originEngine.evaluate(originInput)).toMatchObject({
+      allowed: false,
+      reasonCode: "origin_not_allowed"
+    });
+    expect(originEngine.getRefactorInstrumentation()).toMatchObject({
+      compiledSnapshotCount: 2,
+      cacheHits: 0
+    });
+
+    const capabilityEngine: any = createAuthorizationEngine();
+    const enforcementPoint: any = createPolicyEnforcementPoint({ authorizationEngine: capabilityEngine });
+    const capabilitySubject: any = {
+      ...baseSubject(),
+      type: "user",
+      capabilities: ["cap:api:workspace.file.list"]
+    };
+    const protectedHandler: any = vi.fn();
+    const responseJson: any = vi.fn();
+    const response: any = { status: vi.fn(() => ({ json: responseJson })) };
+    const request: any = {
+      routeConfig: {
+        operation: {
+          id: "kernel.workspace.read",
+          requiredScopes: ["meshrix:workspace:read"],
+          requiredCapabilities: ["cap:api:workspace.file.list"]
+        }
+      },
+      authorizationSubject: capabilitySubject
+    };
+
+    await enforcementPoint.httpMiddleware(request, response, protectedHandler);
+    expect(protectedHandler).toHaveBeenCalledOnce();
+    capabilitySubject.capabilities = [];
+    await enforcementPoint.httpMiddleware(request, response, protectedHandler);
+    expect(protectedHandler).toHaveBeenCalledOnce();
+    expect(response.status).toHaveBeenCalledWith(403);
+    expect(responseJson).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.objectContaining({ code: "missing_capabilities" })
+    }));
+    expect(capabilityEngine.getRefactorInstrumentation()).toMatchObject({
+      compiledSnapshotCount: 2,
+      cacheHits: 0
     });
   });
 

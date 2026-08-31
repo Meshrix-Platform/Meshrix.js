@@ -6,7 +6,6 @@
   "runtime": {
     "deploymentProfileId": "build-week-demo",
     "enabledPlugins": [
-      "coding-github",
       "shared-space",
       "skill-hub"
     ],
@@ -26,31 +25,11 @@
           "controlledSandbox": true,
           "operationPermission": true
         }
-      },
-      "coding-github": {
-        "enabled": true,
-        "modules": {
-          "rest": true,
-          "mcp": true,
-          "codespaces": true,
-          "skillInstaller": true
-        },
-        "services": {
-          "rest": {
-            "serviceRef": "demo-github-rest-binding",
-            "timeoutMs": 30000
-          },
-          "mcp": {
-            "serviceRef": "demo-github-mcp-binding",
-            "timeoutMs": 60000
-          }
-        }
       }
     }
   },
   "operatorNotes": [
     "Repository verification and this profile are separate from a tagged production release.",
-    "coding-github serviceRef values are logical names. Operators must publish matching upstream services and grants in Core before live GitHub access works.",
     "Do not place credentials, tokens, endpoints, or local paths in this profile."
   ]
 }

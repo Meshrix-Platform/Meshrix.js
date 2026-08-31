@@ -10,7 +10,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
       "export PATH=\"$1:$PATH\"; cd \"$2\" && exec \"$3\" -e 'const D=require(\"better-sqlite3\");const db=new D(\":memory:\");db.close()'",
       "meshrix-native-runtime",
       context.serviceNodeDirectory,
-      context.originalWorkingDirectory,
+      context.releaseDirectory,
       context.serviceNode,
     ],
     allowFailure: true,

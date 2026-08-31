@@ -787,7 +787,7 @@ describe("platform acceptance foundation ownership", () : any => {
     expect(portableAssembly.dependsOn).toContain("node-runtime-supply-chain");
     expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/node-runtime-supply-chain.json");
     expect(requiredReportSpec("build/reports/node-runtime-supply-chain.json")).toMatchObject({
-      schemaVersion: "v1:node-runtime-supply-chain-report",
+      schemaVersion: "v0.0.1:mcp:node-runtime-supply-chain-report-2",
       verifier: "tools/server-scripts/verify-node-runtime-supply-chain.ts"
     });
   });

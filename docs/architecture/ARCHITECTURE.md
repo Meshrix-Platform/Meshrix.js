@@ -163,12 +163,6 @@ Agent Workspace (canonical identity: workspaceId)
 │   ├── checkpoint trees and restore previews
 │   └── compensation and rollback receipts
 └── Optional plugin relationships [not embedded workspace fields]
-    ├── Codespace provider (product surface: Code Space)
-    │   [runtime capability; no first-class project binding]
-    │   ├── provider manifest and repository reference
-    │   ├── repository status, tree, file, and diff reads
-    │   ├── prepared and uploaded changes
-    │   └── review comment, request-changes, approval, and status sync
     ├── Shared Space [workspace-bound Core sidecar]
     │   ├── workspace-bound mountRef
     │   ├── controlled external-directory reads and mutations
@@ -186,23 +180,21 @@ Agent Workspace (canonical identity: workspaceId)
 | Concern | Owner | Architectural rule |
 | --- | --- | --- |
 | Workspace identity, hierarchy, configuration, sessions, managed files, assets, and recovery evidence | Core | These remain available with an empty plugin selection and use `workspaceId` as the protocol boundary. Empty storage remains empty until an authorized create operation. |
-| Code-host and provider-specific coding operations | Codespace provider plugin | Core does not encode GitHub, another code host, repository credentials, review APIs, or provider-specific mutation behavior. |
 | Existing external local directories | Shared Space plugin | The external directory remains externally owned. Core exposes only a controlled, workspace-bound Host capability; public projections never contain the real source path. |
 | Skill contribution, review, publication, adoption, and permission-aware use | Independent Skill Hub service | Meshrix reaches the service through a governed adapter and operator-published HTTP binding. A project adopts published skills by reference. |
 | Authorization, approval, audit, execution admission, and proof | Core | Plugin selection, project attachment, skill adoption, or directory connection never bypasses Core policy or enables execution by itself. |
 
-Core-managed project files are not a Code Space. They provide bounded storage, asset custody, checkpoints, and recovery inside the project boundary. The current GitHub Codespace provider adds governed remote-repository operations. Creating, starting, stopping, or persisting a GitHub Codespaces cloud instance remains remaining required work if that surface is admitted as a product capability. A Shared Space connects an existing external directory. These three content surfaces have different owners and identifiers and must not be collapsed into a single path abstraction.
+Core-managed project files provide bounded storage, asset custody, checkpoints, and recovery inside the project boundary. A Shared Space connects an existing external directory. These content surfaces have different owners and identifiers and must not be collapsed into a single path abstraction.
 
 ### Capability relationship and reference model
 
 Plugin relationships are not copied ownership trees, and they do not all have the same persistence model:
 
-- The current Codespace provider operation surface accepts plugin-owned provider identity, provider-owned repository coordinates, and revision references at operation time. Provider credentials remain behind the external-service Host boundary. Core does not currently persist a workspace-to-repository or workspace-to-Codespace binding.
 - A Shared Space is identified by `mountRef` plus a normalized relative path. Its Core-owned sidecar is bound to `workspaceId`, while the source directory remains outside Core ownership. Connecting it does not submit an asset, copy its files, or publish its path.
 - A Core project asset is identified by `assetRef`; revisions, projections, receipts, and lineage are separate evidence records. Materialized bytes remain in Core-managed custody or an explicitly governed target.
 - A Skill Hub item is identified by its contribution identity. The independently deployed service owns the registry, source workspace, target-workspace adoption, asset reference, and permission evidence. Meshrix stores no second registry. The current `install` operation means adoption of a published revision; it does not unpack the skill package into the project directory.
 
-Project sharing grants another project governed access to the source project boundary. It does not reveal a Shared Space source path, copy a Code Space repository, duplicate a Skill Hub registry, or implicitly grant plugin operations. Each referenced capability rechecks its own scopes, project authority, lifecycle state, and current Host admission.
+Project sharing grants another project governed access to the source project boundary. It does not reveal a Shared Space source path, duplicate a Skill Hub registry, or implicitly grant plugin operations. Each referenced capability rechecks its own scopes, project authority, lifecycle state, and current Host admission.
 
 ### Dependency direction
 
@@ -222,9 +214,9 @@ registered operation + Core authorization
           minimum-authority Host port
 ```
 
-Core publishes contracts and narrow Host capabilities. Plugins depend on those contracts. Core does not import Codespace provider, Shared Space, or Skill Hub implementations, and a project record does not discover a plugin artifact or activate a plugin. Plugin installation, runtime selection, lifecycle activation, any workspace-bound relation explicitly defined by a capability, and operation authorization remain distinct admissions. Agent or request `pluginList` selection is a runtime tool choice, not project ownership.
+Core publishes contracts and narrow Host capabilities. Plugins depend on those contracts. Core does not import Shared Space or Skill Hub implementations, and a project record does not discover a plugin artifact or activate a plugin. Plugin installation, runtime selection, lifecycle activation, any workspace-bound relation explicitly defined by a capability, and operation authorization remain distinct admissions. Agent or request `pluginList` selection is a runtime tool choice, not project ownership.
 
-All three plugin product lines are absent from the ordinary runtime path unless their verified artifacts are installed, explicitly selected, lifecycle-active, and authorized for the requested operation. The ownership tree is a capability topology; it does not imply automatic enablement, common persistence, or a shared parent-child lifecycle.
+Both plugin product lines are absent from the ordinary runtime path unless their verified artifacts are installed, explicitly selected, lifecycle-active, and authorized for the requested operation. The ownership tree is a capability topology; it does not imply automatic enablement, common persistence, or a shared parent-child lifecycle.
 
 ### Current implementation status
 
@@ -233,7 +225,6 @@ All three plugin product lines are absent from the ordinary runtime path unless 
 | Core workspace identity, hierarchy, Profile references, sharing, sessions, managed files, assets, checkpoints, audit, and rollback | Implemented as Core workspace capabilities. Platform startup never invents a workspace; creation requires the registered authorized operation. The console currently exposes only part of the complete operation surface. |
 | Shared Space project integration | Implemented by plugin `shared-space` and feature `local-sharedspace` as the optional `workspace.local-directory` console slot and workspace-bound operations when the verified plugin is selected and active. |
 | Skill Hub project relation | Implemented by the independent `services/skill-hub` HTTP service and the stateless `skill-hub` adapter. The service is the sole owner of contributions, adoption, package custody, permissions, and evidence; Meshrix retains authorization and controlled-execution authority. |
-| Codespace provider capability | Implemented by provider plugins such as `coding/github`. Provider operations exist, but Core does not yet store a first-class repository or Codespace attachment on the project record. |
 | Unified project capability assembly UI | Not yet implemented. Current plugin consoles and workspace slots remain separate surfaces. Documentation must not describe them as one completed project-detail workflow. |
 
 The detailed Core asset custody, filesystem, checkpoint, and Host-capability rules are defined in [Workspace Assets](../functionality/WORKSPACE-ASSETS.md). Plugin artifact selection and activation remain governed by the runtime rules in [Server Runtime](../functionality/SERVER-RUNTIME.md).
@@ -244,7 +235,7 @@ The Execution Sandbox is a Core platform boundary, not a plugin implementation d
 
 Every runtime path that interprets, loads, or launches code influenced by an agent, user, skill, package, or plugin request must enter through the same narrow core port. Skill publication, adoption, plugin enablement, an Operation Permission grant, or one approval never enables execution by itself. A backend failure or an unenforceable restriction fails closed without falling back to a shell or unrestricted local process.
 
-The runtime implements the closed Core port, default-deny policy compiler, bounded broker, trusted-provider resolver, narrow plugin Host port, opaque input custody, quarantined output validation, and a governed OCI Node profile. Provider observation does not become user configuration. Admission requires explicit configuration and a current operator-provisioned conformance receipt; missing, stale, revoked, or unenforceable facts deny without a host-process fallback. Each consuming plugin must produce its own integration receipt. Storage-only custody, file-safety checks, and privileged in-process plugin loading are current provenance facts. Process-isolated plugin confinement remains remaining GATE work and is the isolation evidence. The detailed contract, lifecycle, and verification boundary are defined in [EXECUTION-SANDBOX.md](EXECUTION-SANDBOX.md).
+The runtime implements the closed Core port, default-deny policy compiler, bounded broker, trusted-provider resolver, narrow plugin Host port, opaque input custody, quarantined output validation, and a governed OCI Node profile. Provider observation does not become user configuration. Admission requires explicit configuration and a current operator-provisioned conformance receipt; missing, stale, revoked, or unenforceable facts deny without a host-process fallback. Each consuming plugin must produce its own integration receipt. Storage-only custody and file-safety checks remain current provenance facts. Production plugin entrypoints run in Host-created per-plugin child processes with structured Host-port RPC and no in-process fallback; this is a fault and module-state boundary for trusted deployment code, separate from the adversarial execution-sandbox boundary. The detailed contract, lifecycle, and verification boundary are defined in [EXECUTION-SANDBOX.md](EXECUTION-SANDBOX.md).
 
 ## Upstream Service Publishing Boundary
 

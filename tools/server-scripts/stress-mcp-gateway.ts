@@ -212,7 +212,9 @@ async function createVerifierApiKey() : Promise<any> {
       label: "stress-mcp-gateway",
       connectorVersion: "stress-mcp-gateway",
       toolsets: ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.storage.read"],
-      maxRisk: "safe_write",
+      maxRisk: "high",
+      scopeIds: ["gateway:read", "gateway:write", "gateway:maintain"],
+      resources: { mode: "unrestricted" },
       maxUses: 4_096,
       requestsPerWindow: 4_096,
       dynamicCapabilities: [upstreamOperationCapabilityId(

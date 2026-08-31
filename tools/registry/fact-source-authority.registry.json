@@ -51,7 +51,6 @@
         ".github/workflows/release.yml"
       ],
       "consumerPaths": [
-        "tools/plan/plan-final-receipt.ts",
         "tools/server-scripts/lib/release-image-evidence.ts",
         "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",

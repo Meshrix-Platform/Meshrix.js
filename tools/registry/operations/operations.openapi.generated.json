@@ -1706,7 +1706,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "path": {
                     "type": "string"
@@ -1841,7 +1843,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "path": {
                     "type": "string"
@@ -1901,7 +1905,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "path": {
                     "type": "string"
@@ -1948,16 +1954,23 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId"
+                ],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": []
+                }
               }
             }
           }
@@ -2069,8 +2082,18 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
-                "required": []
+                "required": [],
+                "properties": {
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "timeRange": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                }
               }
             }
           }
@@ -2131,7 +2154,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "targetWorkspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2141,11 +2169,18 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "targetWorkspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2181,7 +2216,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "targetWorkspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2191,11 +2231,18 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "targetWorkspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2231,7 +2278,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2241,11 +2292,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2281,7 +2334,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2291,11 +2348,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2331,7 +2390,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2341,11 +2404,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2381,7 +2446,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2391,11 +2460,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2431,7 +2502,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "targetWorkspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2441,11 +2517,18 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "targetWorkspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2481,7 +2564,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2491,11 +2578,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2531,7 +2620,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2541,11 +2634,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2581,7 +2676,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "contributionId"
+                ],
                 "properties": {
                   "contributionId": {
                     "type": "string"
@@ -2591,11 +2690,13 @@
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": [
-                  "contributionId"
-                ]
+                }
               }
             }
           }
@@ -2763,16 +2864,23 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId"
+                ],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                },
-                "required": []
+                }
               }
             }
           }
@@ -2858,7 +2966,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3042,7 +3152,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3176,7 +3288,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3304,7 +3418,9 @@
                 ],
                 "properties": {
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3441,7 +3557,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3575,7 +3693,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3709,7 +3829,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3843,7 +3965,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -3977,7 +4101,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -4111,7 +4237,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -4245,7 +4373,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -4373,7 +4503,9 @@
                 ],
                 "properties": {
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -4504,7 +4636,9 @@
                 ],
                 "properties": {
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -4641,7 +4775,9 @@
                     "type": "boolean"
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "semantic": {
                     "type": "string"
@@ -6830,14 +6966,21 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [],
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId"
+                ],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
                 }
               }
@@ -6875,14 +7018,21 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [],
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId"
+                ],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
                 }
               }
@@ -6920,14 +7070,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [],
+                "additionalProperties": true,
+                "required": [
+                  "workspaceId",
+                  "targetWorkspaceId"
+                ],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "targetWorkspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
                 }
               }

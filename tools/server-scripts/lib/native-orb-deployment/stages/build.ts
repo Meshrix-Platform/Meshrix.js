@@ -1,10 +1,10 @@
 import path from "node:path";
 
-import { orbText, runOrb, writeRemoteFile } from "../support.ts";
+import { assertInactiveReleaseMutation, orbText, runOrb, writeRemoteFile } from "../support.ts";
 
 export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> {
   const { machine } = context.parsed;
-  const buildMarker: any = path.posix.join(context.originalWorkingDirectory, ".meshrix-build-ready");
+  const buildMarker: any = path.posix.join(context.releaseDirectory, ".meshrix-build-ready");
   const buildReady: any = context.dependenciesReady && orbText(machine, [
     "sh",
     "-lc",
@@ -12,8 +12,13 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     "meshrix-build-check",
     buildMarker,
     context.toolchainState,
-    context.originalWorkingDirectory,
+    context.releaseDirectory,
   ], { allowFailure: true, timeout: 15_000 }) === "ready";
+  assertInactiveReleaseMutation({
+    activeWorkingDirectory: context.currentWorkingDirectory,
+    releaseDirectory: context.releaseDirectory,
+    ready: buildReady,
+  });
   if (!buildReady) {
     runOrb({
       machine,
@@ -23,7 +28,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
         "export PATH=\"$1:$PATH\"; cd \"$2\" && exec \"$3\" \"$4\" run build",
         "meshrix-build",
         context.serviceNodeDirectory,
-        context.originalWorkingDirectory,
+        context.releaseDirectory,
         context.serviceNode,
         context.serviceNpmCli,
       ],

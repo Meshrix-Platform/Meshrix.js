@@ -4,6 +4,7 @@ import {
   atomicWriteFile,
   queueStateMutation,
   stateFileKey,
+  truncateTornJsonLineTail,
   waitForStateIdle
 } from "./state-coordinator.ts";
 
@@ -70,7 +71,20 @@ async function readRecentCompleteLines(filePath: string, maxScanBytes: number): 
       const firstLineBreak = content.indexOf("\n");
       content = firstLineBreak >= 0 ? content.slice(firstLineBreak + 1) : "";
     }
-    return content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    // A crash mid-append can leave a torn final line without its newline
+    // terminator. When the read reaches the real end of file and the last
+    // byte is not a newline, heal the tail the same way the append path does
+    // so subsequent reads (and repairs) see only complete records.
+    let healed = false;
+    if (start + offset === stat.size && offset > 0 && !content.endsWith("\n")) {
+      await queueStateMutation(stateFileKey(filePath), async (): Promise<void> => {
+        await truncateTornJsonLineTail(filePath);
+      });
+      healed = true;
+    }
+    const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    // The final line was torn; it has just been truncated away on disk.
+    return healed ? lines.slice(0, -1) : lines;
   } catch (error: unknown) {
     if (errorCode(error) === "ENOENT") return [];
     throw error;

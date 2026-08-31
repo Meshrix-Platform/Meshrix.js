@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-client.ts";
+import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 import { createUpstreamMcpStdioLauncher } from "../../../packages/protocols/mcp/upstream-mcp-stdio-launcher.ts";
 
 describe("upstream MCP stdio launcher boundary", () : any => {

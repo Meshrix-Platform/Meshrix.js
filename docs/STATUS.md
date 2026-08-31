@@ -1,6 +1,7 @@
 # Meshrix.js Status
 
-Status assessed on 2026-08-21.
+Status is determined from the current candidate-bound evidence, not from a
+calendar snapshot or an older planning receipt.
 
 This document records whether the current product can be used. Product
 completion is decided by working runtime behavior, the functional acceptance
@@ -12,8 +13,8 @@ ordinary use.
 
 | Dimension | Current status |
 | --- | --- |
-| **Product direction** | The previous Functional Convergence work is complete. The only current objective is production use: close concrete defects, pass functional acceptance once, deploy the accepted Server + Web Console candidate, and iterate from real usage. |
-| **Implementation** | Server, Web Console, Operation Permission, Workspace collaboration, storage, jobs, Plugin Host, downstream and upstream Gateway stages, the standalone Model Gateway Service, the External Gateway Runtime Plugin, and the local Agent self-maintenance plugin are implemented. |
+| **Product direction** | PLAN-005 is the current 0.0.1 Core production-use closure. Older convergence and release plans are historical provenance rather than parallel execution authority. |
+| **Implementation** | Core includes the Server, Web Console, security, storage, jobs, governed operation dispatch, plugin contract, and standard MCP ingress. Optional plugins, independent services, external providers, model services, Agent products, and named-client scenarios retain separate opt-in lifecycles. |
 | **Verification** | `npm test` is the core public regression. `npm run verify:acceptance` is the single product-level functional gate. Focused checks are used only to repair concrete failures before that final gate. |
 | **Operation** | A usable deployment is one running `runtime-ui` process with one public origin: Console at `<server-url>/`, API at `<server-url>/api/`, and health at `<server-url>/api/healthz`. The current closure is incomplete until that instance is running and a real authenticated operation succeeds. |
 
@@ -33,5 +34,11 @@ Public package publication, broad operating-system qualification, client
 compatibility certification, cloud matrices, and future multi-node work are
 separate optional activities. They do not reopen or block this production-use
 closure.
+
+Nightly, stable, and release branch equality is candidate promotion evidence;
+it is not a tag, package publication, image publication, GitHub Release, or
+public release asset. A completion claim is valid only when the accepted
+generation, existing-target Linux production-use receipt, and branch authority
+receipt all bind the same immutable commit and candidate digest.
 
 The current execution priority is [What's Next](WHATS-NEXT.md).

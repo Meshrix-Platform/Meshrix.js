@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, it } from "vitest";
 
 import {
@@ -84,7 +85,7 @@ function buildBundle({
 }
 
 describe("plugin package protocol", () : any => {
-  it("rejects closed-manifest mutations and hostile archives", () : any => {
+  it("rejects closed-manifest mutations and hostile archives", async () : Promise<any> => {
     assert.throws(
       () : any => normalizePluginBundleManifest({ schemaVersion: "nope" }),
       /PLUGIN_PACKAGE_FORMAT_REJECTED/
@@ -102,18 +103,32 @@ describe("plugin package protocol", () : any => {
       /pluginId/
     );
 
+    // No package-manifest signature verification exists; an ed25519 trust
+    // claim must be rejected as unsupported instead of admitted unverified.
+    assert.throws(
+      () : any => normalizePluginBundleManifest({
+        schemaVersion: PLUGIN_BUNDLE_MANIFEST_SCHEMA,
+        pluginId: "sample-plugin",
+        version: "1",
+        entrypoint: "runtime.mjs",
+        files: [{ path: "runtime.mjs", sha256: "sha256:" + "a".repeat(64), size: 1 }],
+        payloadDigest: "sha256:" + "b".repeat(64),
+        trust: { algorithm: "ed25519", publicKeyId: "ed25519:any", signature: "AAAA" }
+      }),
+      /PLUGIN_PACKAGE_TRUST_REJECTED/
+    );
+
     const good: any = buildBundle();
-    const verified: any = validatePluginPackageArchive({
+    const verified: any = await validatePluginPackageArchive({
       bytes: good.archive,
-      expectedPluginId: "sample-plugin",
-      trustedPublicKeyIds: null
+      expectedPluginId: "sample-plugin"
     });
     assert.equal(verified.pluginId, "sample-plugin");
     assert.equal(verified.packageDigest, sha256Digest(good.archive));
     assert.equal(verified.manifest.payloadDigest, good.manifest.payloadDigest);
     assert.equal(
       verified.manifest.payloadDigest,
-      computePluginPackagePayloadDigest(extractPluginPackageTarGz(good.archive))
+      computePluginPackagePayloadDigest(await extractPluginPackageTarGz(good.archive))
     );
 
     assert.throws(
@@ -124,7 +139,7 @@ describe("plugin package protocol", () : any => {
       }),
       /PLUGIN_PACKAGE_FORMAT_REJECTED/
     );
-    assert.throws(
+    await assert.rejects(
       () : any => validatePluginPackageArchive({
         bytes: createPluginPackageTarGz([
           { path: "runtime.mjs", content: Buffer.from("export default 1\n") }
@@ -132,7 +147,7 @@ describe("plugin package protocol", () : any => {
       }),
       /manifest file is missing/
     );
-    assert.throws(
+    await assert.rejects(
       () : any => validatePluginPackageArchive({
         bytes: buildBundle({
           mutateManifest: (manifest?: any) : any => ({
@@ -162,9 +177,10 @@ describe("plugin package protocol", () : any => {
             pluginId,
             generation,
             packageDigest,
-            prepareSnapshot: async () : Promise<any> => Object.freeze({ operations: {}, routes: {} }),
-            publishSnapshot: async () : Promise<any> => undefined,
-            discardSnapshot: async () : Promise<any> => undefined
+            prepareContribution: async () : Promise<any> => Object.freeze({
+              commit: async () : Promise<any> => undefined,
+              rollback: async () : Promise<any> => undefined
+            })
           })
       });
 
@@ -203,11 +219,52 @@ describe("plugin package protocol", () : any => {
     }
   });
 
+  it("rejects hostile archives during bounded incremental admission", async () : Promise<any> => {
+    const expanded: any = createPluginPackageTarGz([{ path: "payload.bin", content: Buffer.alloc(8 * 1024, 1) }]);
+    await assert.rejects(
+      () : any => extractPluginPackageTarGz(expanded, { maxBytes: 1024, maxExpansionRatio: 64 }),
+      /expansion byte budget/
+    );
+    await assert.rejects(
+      () : any => extractPluginPackageTarGz(expanded.subarray(0, expanded.length - 4), { maxExpansionRatio: 1024 }),
+      /gzip-compressed tar|truncated/
+    );
+    const duplicate: any = createPluginPackageTarGz([
+      { path: "same.txt", content: "first" },
+      { path: "same.txt", content: "second" }
+    ]);
+    await assert.rejects(() : any => extractPluginPackageTarGz(duplicate), /duplicate archive entry/);
+    const tooMany: any = createPluginPackageTarGz([
+      { path: "first.txt", content: "first" },
+      { path: "second.txt", content: "second" }
+    ]);
+    await assert.rejects(() : any => extractPluginPackageTarGz(tooMany, { maxEntries: 1 }), /entry count exceeded/);
+
+    const invalidTypeTar: any = gunzipSync(createPluginPackageTarGz([{ path: "entry.txt", content: "value" }]));
+    invalidTypeTar[156] = "2".charCodeAt(0);
+    invalidTypeTar.fill(32, 148, 156);
+    let sum: any = 0;
+    for (const byte of invalidTypeTar.subarray(0, 512)) sum += byte;
+    invalidTypeTar.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148, 8, "ascii");
+    await assert.rejects(
+      () : any => extractPluginPackageTarGz(gzipSync(invalidTypeTar)),
+      /entry type is not a regular file/
+    );
+
+    const controller: any = new AbortController();
+    controller.abort();
+    await assert.rejects(
+      () : any => extractPluginPackageTarGz(tooMany, { signal: controller.signal }),
+      /admission cancelled/
+    );
+  });
+
   it("discards contribution generation on activation failure", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
     try {
       const bundle: any = buildBundle();
       let discarded: any = false;
+      const visibleContributions: any = new Set<any>();
       const lifecycle: any = createPluginPackageLifecycle({
         custody: createPluginPackageCustody({ rootDir: path.join(root, "custody") }),
         contributionTransactionFactory: async ({ pluginId, generation, packageDigest }: Record<string, any>) : Promise<any> =>
@@ -215,13 +272,16 @@ describe("plugin package protocol", () : any => {
             pluginId,
             generation,
             packageDigest,
-            prepareSnapshot: async () : Promise<any> => Object.freeze({ ok: true }),
-            publishSnapshot: async () : Promise<any> => {
-              throw new Error("publish boom");
-            },
-            discardSnapshot: async () : Promise<any> => {
-              discarded = true;
-            }
+            prepareContribution: async () : Promise<any> => Object.freeze({
+              commit: async () : Promise<any> => {
+                visibleContributions.add("sample-plugin.run");
+                throw new Error("publish boom");
+              },
+              rollback: async () : Promise<any> => {
+                visibleContributions.clear();
+                discarded = true;
+              }
+            })
           })
       });
       await lifecycle.acquire({
@@ -234,7 +294,127 @@ describe("plugin package protocol", () : any => {
       const failed: any = await lifecycle.activate({ pluginId: "sample-plugin" });
       assert.equal(failed.state, "failed");
       assert.equal(discarded, true);
+      assert.equal(visibleContributions.size, 0);
       assert.match(failed.reasonCode || "", /^PLUGIN_PACKAGE_/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("requires a contribution transaction before activation", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
+    try {
+      const bundle: any = buildBundle();
+      const custody: any = createPluginPackageCustody({ rootDir: path.join(root, "custody") });
+      const lifecycle: any = createPluginPackageLifecycle({ custody });
+      await lifecycle.acquire({
+        pluginId: "sample-plugin",
+        source: createBytesPluginPackageSource({ bytes: bundle.archive })
+      });
+      await lifecycle.verify({ pluginId: "sample-plugin" });
+      await lifecycle.stage({ pluginId: "sample-plugin", configuration: {} });
+
+      const failed: any = await lifecycle.activate({ pluginId: "sample-plugin" });
+
+      assert.equal(failed.state, "failed");
+      assert.equal(failed.reasonCode, "PLUGIN_PACKAGE_TRANSACTION_REQUIRED");
+      assert.equal(lifecycle.getHealth("sample-plugin").ready, false);
+      assert.equal((await custody.getActiveGeneration("sample-plugin")).state, "staged");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rolls back published contributions when durable activation fails", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
+    try {
+      const bundle: any = buildBundle();
+      const durableCustody: any = createPluginPackageCustody({ rootDir: path.join(root, "custody") });
+      let rejectActiveGeneration: any = true;
+      const custody: any = Object.freeze({
+        ...durableCustody,
+        async setActiveGeneration(pluginId?: any, generation?: any) : Promise<any> {
+          if (generation?.state === "active" && rejectActiveGeneration) {
+            rejectActiveGeneration = false;
+            throw new Error("forced active generation failure");
+          }
+          return durableCustody.setActiveGeneration(pluginId, generation);
+        }
+      });
+      const visibleContributions: any = new Set<any>();
+      const lifecycle: any = createPluginPackageLifecycle({
+        custody,
+        contributionTransactionFactory: async ({ pluginId, generation, packageDigest }: Record<string, any>) : Promise<any> =>
+          beginPluginContributionTransaction({
+            pluginId,
+            generation,
+            packageDigest,
+            prepareContribution: async () : Promise<any> => Object.freeze({
+              commit: async () : Promise<any> => {
+                visibleContributions.add("sample-plugin.run");
+              },
+              rollback: async () : Promise<any> => {
+                visibleContributions.clear();
+              }
+            })
+          })
+      });
+      await lifecycle.acquire({
+        pluginId: "sample-plugin",
+        source: createBytesPluginPackageSource({ bytes: bundle.archive })
+      });
+      await lifecycle.verify({ pluginId: "sample-plugin" });
+      await lifecycle.stage({ pluginId: "sample-plugin", configuration: {} });
+
+      const failed: any = await lifecycle.activate({ pluginId: "sample-plugin" });
+
+      assert.equal(failed.state, "failed");
+      assert.equal(failed.reasonCode, "PLUGIN_PACKAGE_ACTIVATION_FAILED");
+      assert.equal(visibleContributions.size, 0);
+      assert.equal(lifecycle.getHealth("sample-plugin").ready, false);
+      assert.equal((await durableCustody.getActiveGeneration("sample-plugin")).state, "staged");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reports rollback failure instead of swallowing it", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
+    try {
+      const bundle: any = buildBundle();
+      const visibleContributions: any = new Set<any>();
+      const lifecycle: any = createPluginPackageLifecycle({
+        custody: createPluginPackageCustody({ rootDir: path.join(root, "custody") }),
+        contributionTransactionFactory: async ({ pluginId, generation, packageDigest }: Record<string, any>) : Promise<any> =>
+          beginPluginContributionTransaction({
+            pluginId,
+            generation,
+            packageDigest,
+            prepareContribution: async () : Promise<any> => Object.freeze({
+              commit: async () : Promise<any> => {
+                visibleContributions.add("sample-plugin.run");
+                throw new Error("publish boom");
+              },
+              rollback: async () : Promise<any> => {
+                visibleContributions.clear();
+                throw new Error("cleanup evidence unavailable");
+              }
+            })
+          })
+      });
+      await lifecycle.acquire({
+        pluginId: "sample-plugin",
+        source: createBytesPluginPackageSource({ bytes: bundle.archive })
+      });
+      await lifecycle.verify({ pluginId: "sample-plugin" });
+      await lifecycle.stage({ pluginId: "sample-plugin", configuration: {} });
+
+      const failed: any = await lifecycle.activate({ pluginId: "sample-plugin" });
+
+      assert.equal(failed.state, "failed");
+      assert.equal(failed.reasonCode, "PLUGIN_PACKAGE_ROLLBACK_FAILED");
+      assert.equal(visibleContributions.size, 0);
+      assert.equal(lifecycle.getHealth("sample-plugin").ready, false);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

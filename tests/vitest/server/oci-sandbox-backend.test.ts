@@ -58,6 +58,8 @@ function context(paths?: any, runId: any = "opaque-run-reference") : any {
 
 describe("OCI sandbox backend", () : any => {
   it("reduces engine errors to fixed privacy-safe failure classes", () : any => {
+    expect(classifyOciCommandFailure("Error [ERR_ACCESS_DENIED]: Access to this API has been restricted. Use --allow-fs-read to manage permissions."))
+      .toBe("oci_node_permission_denied");
     expect(classifyOciCommandFailure("write failed: no space left on device"))
       .toBe("oci_storage_exhausted");
     expect(classifyOciCommandFailure("unknown flag: --example"))
@@ -127,12 +129,28 @@ describe("OCI sandbox backend", () : any => {
       .toMatch(/^meshrix\.sandbox\.run-digest=[a-f0-9]{64}$/u);
     expect(createArgs).toEqual(expect.arrayContaining([
       "--permission",
-      "--allow-fs-read=*",
+      "--allow-fs-read=/sandbox/input",
+      "--allow-fs-read=/sandbox/output",
+      "--allow-fs-read=/sandbox/scratch",
+      "--allow-fs-read=/dev",
+      "--allow-fs-read=/proc/mounts",
+      "--allow-fs-read=/proc/self/limits",
+      "--allow-fs-read=/proc/self/ns",
+      "--allow-fs-read=/proc/self/status",
+      "--allow-fs-read=/sys/fs/cgroup/cpu.max",
+      "--allow-fs-read=/sys/fs/cgroup/memory.max",
+      "--allow-fs-read=/sys/fs/cgroup/pids.max",
       "--allow-fs-write=/sandbox/output",
       "--allow-fs-write=/sandbox/scratch"
     ]));
+    expect(createArgs.filter((value?: any) : any => value.startsWith("--allow-fs-read="))).toHaveLength(11);
     expect(createArgs.filter((value?: any) : any => value.startsWith("type=bind,"))).toHaveLength(2);
-    expect(createArgs.find((value?: any) : any => value.startsWith("/sandbox/scratch:"))).toContain(`uid=${process.getuid()},gid=${process.getgid()}`);
+    expect(createArgs).not.toContain("--allow-fs-read=*");
+    expect(createArgs).not.toContain("--allow-fs-read=/proc");
+    expect(createArgs).not.toContain("--allow-fs-read=/sys");
+    const dockerScratch: any = createArgs.find((value?: any) : any => value.startsWith("/sandbox/scratch:"));
+    expect(dockerScratch).toContain("nr_inodes=256");
+    expect(dockerScratch).toContain(`uid=${process.getuid()},gid=${process.getgid()}`);
     for (const call of calls.filter((entry?: any) : any => ["create", "start", "inspect"].includes(entry.args[0]))) {
       expect(call.options.timeoutMs).toBe(10_000);
     }
@@ -142,7 +160,33 @@ describe("OCI sandbox backend", () : any => {
     expect(calls.find((call?: any) : any => call.args[0] === "rm").options.timeoutMs).toBe(30_000);
   });
 
-  it("passes an explicit runtime class for non-default podman profiles", async () : Promise<any> => {
+  it.each([
+    ["traversing workdir", { workingDirectory: "input/../host", entryPoint: "probe.ts" }],
+    ["absolute workdir", { workingDirectory: "/input/0", entryPoint: "probe.ts" }],
+    ["sibling workdir", { workingDirectory: "output", entryPoint: "probe.ts" }],
+    ["traversing entrypoint", { workingDirectory: "input/0", entryPoint: "../../host.ts" }],
+    ["absolute entrypoint", { workingDirectory: "input/0", entryPoint: "/host.ts" }]
+  ])("rejects %s before container creation", async (_label?: any, invalid?: any) : Promise<any> => {
+    const calls: any[] = [];
+    const backend: any = createOciSandboxBackend({
+      id: "oci.test",
+      binary: "/fixed/bin/docker",
+      engine: "docker",
+      runtimeClass: "runc",
+      commandRunner: async (_binary?: any, args?: any) : Promise<any> => {
+        calls.push(args);
+        return { code: 0, signal: "", bytes: 0, stdout: "" };
+      }
+    });
+    const paths: any = await sandboxPaths();
+    const runContext: any = context(paths, `invalid-${String(_label).replaceAll(" ", "-")}`);
+    runContext.request.invocation.workingDirectory = invalid.workingDirectory;
+    runContext.request.artifact.entryPoint = invalid.entryPoint;
+    await expect(backend.run(runContext)).rejects.toMatchObject({ code: "sandbox_policy_unsupported" });
+    expect(calls).toEqual([]);
+  });
+
+  it("uses the separately verified Podman runtime without an unsupported CLI override", async () : Promise<any> => {
     const calls: any[] = [];
     const backend: any = createOciSandboxBackend({
       id: "oci.test",
@@ -158,7 +202,31 @@ describe("OCI sandbox backend", () : any => {
     const paths: any = await sandboxPaths();
     await backend.run(context(paths));
     const createArgs: any = calls.find((args?: any) : any => args[0] === "create");
-    expect(createArgs).toEqual(expect.arrayContaining(["--runtime", "crun"]));
+    expect(createArgs).not.toContain("--runtime");
+    const podmanScratch: any = createArgs.find((value?: any) : any => value.startsWith("/sandbox/scratch:"));
+    expect(podmanScratch).toContain("size=16777216");
+    expect(podmanScratch).toContain("mode=0700");
+    expect(podmanScratch).toContain(",U");
+    expect(podmanScratch).not.toContain("nr_inodes=");
+    expect(podmanScratch).not.toContain("uid=");
+    expect(podmanScratch).not.toContain("gid=");
+  });
+
+  it("rejects an unverified Podman runtime before container creation", async () : Promise<any> => {
+    const calls: any[] = [];
+    const backend: any = createOciSandboxBackend({
+      id: "oci.test",
+      binary: "/fixed/bin/podman",
+      engine: "podman",
+      runtimeClass: "runc",
+      commandRunner: async (_binary?: any, args?: any) : Promise<any> => {
+        calls.push(args);
+        return { code: 0, signal: "", bytes: 0, stdout: "" };
+      }
+    });
+    const paths: any = await sandboxPaths();
+    await expect(backend.run(context(paths))).rejects.toThrow("verified crun runtime");
+    expect(calls).toEqual([]);
   });
 
   it("serializes container creation while preserving concurrent executions", async () : Promise<any> => {

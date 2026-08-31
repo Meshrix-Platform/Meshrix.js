@@ -5,6 +5,7 @@ import {
   WORKSPACE_ID_QUERY,
   protocolOperation,
   schema,
+  workspaceBindingSchema,
   workspaceAssetOperation
 } from "./protocol-operation-builders.ts";
 
@@ -53,7 +54,8 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.proposal.create",
@@ -100,7 +102,15 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: {
+      type: "object",
+      required: ["workspaceId"],
+      additionalProperties: true,
+      properties: {
+        workspaceId: { type: "string", minLength: 1, maxLength: 256 }
+      }
+    }
   }),
 protocolOperation({
     id: "workspace.asset.permission.check",

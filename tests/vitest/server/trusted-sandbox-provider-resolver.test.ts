@@ -11,7 +11,10 @@ import {
   createTrustedSandboxProviderResolver,
   REQUIRED_SANDBOX_PROVIDER_RESTRICTIONS
 } from "../../../packages/server-runtime/src/execution-sandbox/trusted-provider-resolver.ts";
-import { createTrustedOciProviderAdapters } from "../../../packages/server-runtime/src/execution-sandbox/trusted-oci-provider-adapters.ts";
+import {
+  createOciBackendConformanceTarget,
+  createTrustedOciProviderAdapters
+} from "../../../packages/server-runtime/src/execution-sandbox/trusted-oci-provider-adapters.ts";
 import { createOciProviderConformanceReceipt } from "../../../tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
 
 const POLICY_REVISION: any = "policy-revision-current";
@@ -304,6 +307,7 @@ describe("trusted sandbox provider resolver", () : any => {
       conformanceReceipts: { "oci.docker": receipt },
       pathExists: (candidatePath?: any) : any => candidatePath === "docker",
       rootlessProbe: async () : Promise<any> => false,
+      runtimeClassProbe: async () : Promise<any> => "runc",
       executableIdentityProbe: async () : Promise<any> => executableIdentityDigest,
       backendFactory: vi.fn(() : any => backend)
     });
@@ -338,6 +342,7 @@ describe("trusted sandbox provider resolver", () : any => {
       platform: "linux",
       pathExists: (candidatePath?: any) : any => candidatePath === "podman",
       rootlessProbe: async () : Promise<any> => true,
+      runtimeClassProbe: async () : Promise<any> => "crun",
       executableIdentityProbe: async () : Promise<any> => EXECUTABLE_IDENTITY_DIGEST,
       backendFactory: () : any => backend
     });
@@ -346,5 +351,47 @@ describe("trusted sandbox provider resolver", () : any => {
 
     expect((await rootless.probe()).healthy).toBe(true);
     expect((await rootful.probe()).healthy).toBe(false);
+  });
+
+  it("rejects a conformance target whose observed OCI runtime class differs", async () : Promise<any> => {
+    const backendFactory: any = vi.fn(() : any => ({
+      async descriptor() : Promise<any> {
+        return { healthy: true, production: true, enforcedRestrictions: [] };
+      }
+    }));
+    const target: any = await createOciBackendConformanceTarget({
+      platform: "darwin",
+      pathExists: (candidatePath?: any) : any => candidatePath === "podman",
+      rootlessProbe: async () : Promise<any> => true,
+      runtimeClassProbe: async () : Promise<any> => "runc",
+      executableIdentityProbe: async () : Promise<any> => EXECUTABLE_IDENTITY_DIGEST,
+      backendFactory
+    });
+
+    expect(target).toBeNull();
+    expect(backendFactory).not.toHaveBeenCalled();
+  });
+
+  it("constructs the preferred Podman conformance target without Docker", async () : Promise<any> => {
+    const backend: any = {
+      async descriptor() : Promise<any> {
+        return { healthy: true, production: true, enforcedRestrictions: [] };
+      }
+    };
+    const target: any = await createOciBackendConformanceTarget({
+      platform: "darwin",
+      pathExists: (candidatePath?: any) : any => candidatePath === "podman",
+      rootlessProbe: async () : Promise<any> => true,
+      runtimeClassProbe: async () : Promise<any> => "crun",
+      executableIdentityProbe: async () : Promise<any> => EXECUTABLE_IDENTITY_DIGEST,
+      backendFactory: () : any => backend
+    });
+
+    expect(target).toMatchObject({
+      id: "oci.rootless-podman",
+      providerClass: "rootless-podman",
+      engine: "podman",
+      backend
+    });
   });
 });

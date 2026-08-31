@@ -48,6 +48,14 @@ interface StateMutation extends PactiumRecord {
   metadata?: PactiumRecord;
 }
 
+export interface NormalizedStateMutation extends PactiumRecord {
+  action: "put" | "delete";
+  key: string;
+  valueRef: string;
+  valueHash: string;
+  metadata: PactiumRecord & PactiumCanonicalValue;
+}
+
 interface ChunkRecord extends PactiumRecord {
   relativePath?: string;
   fileId?: string;
@@ -81,8 +89,24 @@ interface ContentAddressedStore extends PactiumRecord {
 export interface ProtocolEvent extends PactiumRecord {
   eventHash: string;
   eventId: string;
+  partitionId: string;
+  offset: number;
+  beforeRoot: string;
   afterRoot?: string;
   operationId?: string;
+  contentRefs: string[];
+  payload: PactiumRecord;
+  prevEventHash: string;
+}
+
+export interface StateCommitPactiumEvidence extends PactiumRecord {
+  envelopeId: string;
+  intentId: string;
+  outcomeId: string;
+  ledgerEventId: string;
+  ledgerIndex: number;
+  verifierManifestId: string;
+  verifierManifestHash: string;
 }
 
 interface ProtocolEventLog extends PactiumRecord {
@@ -93,6 +117,7 @@ interface ProtocolEventLog extends PactiumRecord {
 }
 
 export interface StateCommitRecord extends PactiumRecord {
+  commitKind: "mutation" | "restore";
   commitId: string;
   scope: string;
   operationId: string;
@@ -100,6 +125,11 @@ export interface StateCommitRecord extends PactiumRecord {
   afterRoot: string;
   eventHash: string;
   eventId: string;
+  eventOffset: number;
+  contentRefs: string[];
+  mutations: NormalizedStateMutation[];
+  payload: PactiumRecord;
+  pactium: StateCommitPactiumEvidence;
 }
 
 interface StateMutationClaim extends PactiumRecord {
@@ -110,14 +140,30 @@ interface StateMutationClaim extends PactiumRecord {
 }
 
 function isStateCommitRecord(value: unknown): value is StateCommitRecord {
+  const pactium = isRecord(value) && isRecord(value.pactium) ? value.pactium : null;
   return isRecord(value) &&
+    (value.commitKind === "mutation" || value.commitKind === "restore") &&
     typeof value.commitId === "string" &&
     typeof value.scope === "string" &&
     typeof value.operationId === "string" &&
     typeof value.beforeRoot === "string" &&
     typeof value.afterRoot === "string" &&
     typeof value.eventHash === "string" &&
-    typeof value.eventId === "string";
+    typeof value.eventId === "string" &&
+    Number.isSafeInteger(value.eventOffset) &&
+    Number(value.eventOffset) >= 0 &&
+    Array.isArray(value.contentRefs) &&
+    Array.isArray(value.mutations) &&
+    isRecord(value.payload) &&
+    Boolean(pactium) &&
+    typeof pactium?.envelopeId === "string" &&
+    typeof pactium.intentId === "string" &&
+    typeof pactium.outcomeId === "string" &&
+    typeof pactium.ledgerEventId === "string" &&
+    Number.isSafeInteger(pactium.ledgerIndex) &&
+    Number(pactium.ledgerIndex) >= 0 &&
+    typeof pactium.verifierManifestId === "string" &&
+    typeof pactium.verifierManifestHash === "string";
 }
 
 function isStateMutationClaim(value: unknown): value is StateMutationClaim {
@@ -158,6 +204,8 @@ const STATE_COMMIT_SCOPE = "meshrix-state-commit";
 const STATE_COMMIT_EVENT_INDEX_SCOPE = "meshrix-state-commit-event-index";
 const STATE_MUTATION_IDEMPOTENCY_SCOPE = "meshrix-state-mutation-idempotency";
 const EVENT_LOG_SCOPE = "meshrix-event-log";
+const STATE_EVENT_HASH_DOMAIN = "meshrix.state-event";
+const EMPTY_STATE_VALUE_REF = "meshrix:value-ref:none";
 
 function substrateMutationError(code: string, message: string): CodedError {
   const error = new Error(message) as CodedError;
@@ -260,6 +308,83 @@ function normalizeIndexEntry(entry: PactiumRecord = {}): IndexEntry {
     valueHash: text(entry.valueHash || (valueRef ? hashValue({ valueRef }) : "")),
     metadata: normalizeCanonical(asObject(entry.metadata))
   };
+}
+
+function normalizeStateMutations(value: unknown): NormalizedStateMutation[] {
+  if (value !== undefined && !Array.isArray(value)) {
+    throw substrateMutationError(
+      "state_mutations_invalid",
+      "State mutations must be an array."
+    );
+  }
+  const latestByKey = new Map<string, NormalizedStateMutation>();
+  for (const candidate of asArray(value)) {
+    if (!isRecord(candidate)) {
+      throw substrateMutationError(
+        "state_mutation_invalid",
+        "Each state mutation must be an object."
+      );
+    }
+    const mutation = candidate as StateMutation;
+    const action = text(mutation.action, "put");
+    if (action !== "put" && action !== "delete") {
+      throw substrateMutationError(
+        "state_mutation_action_invalid",
+        "State mutation action must be put or delete."
+      );
+    }
+    const key = normalizePathKey(mutation.key);
+    if (!key) {
+      throw substrateMutationError(
+        "state_mutation_key_required",
+        "State mutation key is required."
+      );
+    }
+    const metadata = normalizeCanonical(asObject(mutation.metadata)) as PactiumRecord & PactiumCanonicalValue;
+    if (action === "delete") {
+      latestByKey.set(key, { action, key, valueRef: "", valueHash: "", metadata });
+      continue;
+    }
+    const suppliedValue = Object.hasOwn(mutation, "valueRef")
+      ? mutation.valueRef
+      : Object.hasOwn(mutation, "cid")
+        ? mutation.cid
+        : mutation.value;
+    if (typeof suppliedValue !== "string") {
+      throw substrateMutationError(
+        "state_mutation_value_ref_required",
+        "Put state mutations require a string valueRef."
+      );
+    }
+    const valueRef = suppliedValue.trim() || EMPTY_STATE_VALUE_REF;
+    const valueHash = hashValue({ valueRef });
+    if (text(mutation.valueHash) && text(mutation.valueHash) !== valueHash) {
+      throw substrateMutationError(
+        "state_mutation_value_hash_mismatch",
+        "State mutation valueHash does not match valueRef."
+      );
+    }
+    latestByKey.set(key, { action, key, valueRef, valueHash, metadata });
+  }
+  return sortEntries([...latestByKey.values()]);
+}
+
+function pactiumStateMutations(mutations: readonly NormalizedStateMutation[]): NormalizedStateMutation[] {
+  return mutations.map((mutation) => ({ ...mutation }));
+}
+
+function normalizeContentRefs(value: unknown): string[] {
+  if (value !== undefined && !Array.isArray(value)) {
+    throw substrateMutationError(
+      "state_content_refs_invalid",
+      "State commit contentRefs must be an array."
+    );
+  }
+  return asArray(value).map((contentRef) => text(contentRef)).filter(Boolean);
+}
+
+function canonicalEquals(left: unknown, right: unknown): boolean {
+  return canonicalJson(normalizeCanonical(left)) === canonicalJson(normalizeCanonical(right));
 }
 
 function sortEntries<Entry extends { key: string }>(entries: readonly Entry[]): Entry[] {
@@ -443,7 +568,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
   const createdProtocolEventLog = createAppendOnlyEventLog({
     storage,
     protocolObjectScope: EVENT_LOG_SCOPE,
-    hashDomain: "meshrix.state-event",
+    hashDomain: STATE_EVENT_HASH_DOMAIN,
     createEventId: ({ partitionId, operationId }: PactiumRecord = {})  =>
       serverToken("state_event", partitionId, operationId || "", nowIso(), randomUUID()),
     withWriteLock: async (task) => task()
@@ -485,9 +610,13 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     await storage.putProtocolObject(STATE_ROOT_SCOPE, storageKey("state-root", scope), text(root));
   }
 
-  async function loadCommit(commitId: unknown): Promise<StateCommitRecord | null> {
+  async function loadStoredCommit(commitId: unknown): Promise<unknown> {
     if (!storage.inMemory) storage.clearCache?.();
-    const stored = await storage.getProtocolObject(STATE_COMMIT_SCOPE, text(commitId), null);
+    return storage.getProtocolObject(STATE_COMMIT_SCOPE, text(commitId), null);
+  }
+
+  async function loadCommit(commitId: unknown): Promise<StateCommitRecord | null> {
+    const stored = await loadStoredCommit(commitId);
     return isStateCommitRecord(stored) ? stored : null;
   }
 
@@ -538,7 +667,8 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
             allowedOperationIds: asArray(input.allowedOperationIds)
               .map((operationId) => text(operationId))
               .filter(Boolean),
-            maxSuffixEvents: Number(input.maxSuffixEvents || 256)
+            maxSuffixEvents: Number(input.maxSuffixEvents || 256),
+            contentRefs: asArray(input.contentRefs)
           }
         : {
             mutations: asArray(input.mutations),
@@ -651,6 +781,295 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     return { ok: true, eventCount: suffix.length };
   }
 
+  async function pactiumEvidenceForEnvelope(
+    envelopeValue: unknown,
+    { operationId, scope }: { operationId: string; scope: string }
+  ): Promise<StateCommitPactiumEvidence> {
+    const envelope = asObject(envelopeValue);
+    const factRef = asObject(envelope.factRef);
+    const verifierManifest = asObject(asObject(envelope.ledgerHead).verifierManifest);
+    const ledgerIndex = Number(factRef.ledgerIndex ?? -1);
+    if (
+      envelope.envelopeKind !== "operation-outcome" ||
+      envelope.factType !== "operation.outcome" ||
+      !text(envelope.envelopeId) ||
+      !text(envelope.factId) ||
+      !text(factRef.ledgerEventId) ||
+      !text(verifierManifest.manifestId) ||
+      !text(verifierManifest.manifestHash) ||
+      !Number.isSafeInteger(ledgerIndex) ||
+      ledgerIndex < 0
+    ) {
+      throw substrateMutationError(
+        "state_commit_pactium_evidence_invalid",
+        "Pactium did not return complete state commit evidence."
+      );
+    }
+    const ledgerLeaf = await core.readLedgerLeaf(ledgerIndex);
+    const fact = isRecord(ledgerLeaf?.fact) ? ledgerLeaf.fact : null;
+    if (
+      !fact ||
+      ledgerLeaf?.eventId !== factRef.ledgerEventId ||
+      fact.factType !== "operation.outcome" ||
+      fact.intentId !== envelope.factId ||
+      fact.operationId !== operationId ||
+      fact.workspaceId !== scope ||
+      !text(fact.outcomeId)
+    ) {
+      throw substrateMutationError(
+        "state_commit_pactium_evidence_invalid",
+        "Pactium state commit evidence does not bind to the recorded operation."
+      );
+    }
+    return {
+      envelopeId: text(envelope.envelopeId),
+      intentId: text(fact.intentId),
+      outcomeId: text(fact.outcomeId),
+      ledgerEventId: text(factRef.ledgerEventId),
+      ledgerIndex,
+      verifierManifestId: text(verifierManifest.manifestId),
+      verifierManifestHash: text(verifierManifest.manifestHash)
+    };
+  }
+
+  async function readStateEntries(root: string): Promise<IndexEntry[]> {
+    if (!root) return [];
+    const snapshot = await indexEngine.readSnapshot(root);
+    return sortEntries(recordArray(snapshot.entries)
+      .map(normalizeIndexEntry)
+      .filter((entry) => entry.key));
+  }
+
+  function replayStateEntries(
+    entries: readonly IndexEntry[],
+    mutations: readonly NormalizedStateMutation[]
+  ): IndexEntry[] {
+    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+    for (const mutation of mutations) {
+      if (mutation.action === "delete") {
+        byKey.delete(mutation.key);
+      } else {
+        byKey.set(mutation.key, {
+          key: mutation.key,
+          valueRef: mutation.valueRef,
+          valueHash: mutation.valueHash,
+          metadata: mutation.metadata
+        });
+      }
+    }
+    return sortEntries([...byKey.values()]);
+  }
+
+  async function readPactiumProofMaterial(envelope: PactiumRecord): Promise<PactiumRecord> {
+    for (const reference of recordArray(envelope.proofRefs)) {
+      const cid = text(reference.cid);
+      if (!cid) continue;
+      const block = await core.resolveBlock(cid);
+      if (!block?.bytes) continue;
+      const decoded = canonicalDecode(bytesInput(block.bytes));
+      if (isRecord(decoded) && decoded.materialType === "pactium.proof-material") {
+        return decoded;
+      }
+    }
+    throw substrateMutationError(
+      "state_commit_pactium_proof_missing",
+      "Pactium state commit proof material is missing."
+    );
+  }
+
+  async function verifyCommitEvent(commit: StateCommitRecord): Promise<void> {
+    const event = await eventLog.getEvent(commit.scope, commit.eventOffset);
+    if (!event) {
+      throw substrateMutationError(
+        "state_commit_event_missing",
+        "State commit event is missing."
+      );
+    }
+    const expectedPayload = commit.commitKind === "restore"
+      ? { ...commit.payload, restoredRoot: commit.afterRoot }
+      : commit.payload;
+    const expectedHash = protocolHash(STATE_EVENT_HASH_DOMAIN, {
+      ...event,
+      eventHash: undefined
+    });
+    if (
+      event.protocol !== PACTIUM_PROTOCOL ||
+      event.schema !== PACTIUM_SCHEMA_VERSION ||
+      event.partitionId !== commit.scope ||
+      event.offset !== commit.eventOffset ||
+      event.eventId !== commit.eventId ||
+      event.eventHash !== commit.eventHash ||
+      event.eventHash !== expectedHash ||
+      event.operationId !== commit.operationId ||
+      event.beforeRoot !== commit.beforeRoot ||
+      event.afterRoot !== commit.afterRoot ||
+      !canonicalEquals(event.contentRefs, commit.contentRefs) ||
+      !canonicalEquals(event.payload, expectedPayload)
+    ) {
+      throw substrateMutationError(
+        "state_commit_event_mismatch",
+        "State commit event does not match the commit record."
+      );
+    }
+    const partition = await eventLog.verifyPartition(commit.scope);
+    if (partition.ok !== true) {
+      throw substrateMutationError(
+        "state_commit_event_chain_invalid",
+        "State commit event partition hash chain is invalid."
+      );
+    }
+  }
+
+  async function verifyCommitPactiumEvidence(commit: StateCommitRecord): Promise<void> {
+    let bundle: Awaited<ReturnType<typeof core.exportProofBundle>>;
+    try {
+      bundle = await core.exportProofBundle(commit.pactium.envelopeId);
+    } catch {
+      throw substrateMutationError(
+        "state_commit_pactium_envelope_missing",
+        "State commit Pactium envelope is missing."
+      );
+    }
+    const envelope = asObject(bundle.envelope);
+    const factRef = asObject(envelope.factRef);
+    if (
+      envelope.envelopeId !== commit.pactium.envelopeId ||
+      envelope.envelopeKind !== "operation-outcome" ||
+      envelope.factType !== "operation.outcome" ||
+      envelope.factId !== commit.pactium.intentId ||
+      factRef.ledgerEventId !== commit.pactium.ledgerEventId ||
+      Number(factRef.ledgerIndex ?? -1) !== commit.pactium.ledgerIndex
+    ) {
+      throw substrateMutationError(
+        "state_commit_pactium_locator_mismatch",
+        "State commit Pactium envelope locator does not match."
+      );
+    }
+    const proofMaterial = await readPactiumProofMaterial(envelope);
+    const ledgerProof = asObject(proofMaterial.ledger);
+    const trustedManifest = asObject(asObject(ledgerProof.head).verifierManifest);
+    if (
+      trustedManifest.manifestId !== commit.pactium.verifierManifestId ||
+      trustedManifest.manifestHash !== commit.pactium.verifierManifestHash
+    ) {
+      throw substrateMutationError(
+        "state_commit_pactium_trust_mismatch",
+        "State commit Pactium verifier manifest does not match."
+      );
+    }
+    const verification = await core.verifyEnvelope(bundle.envelope, {
+      trustedManifest,
+      requireFullStateMutationProofs: true
+    });
+    if (verification.ok !== true) {
+      throw substrateMutationError(
+        "state_commit_pactium_proof_invalid",
+        "State commit Pactium proof did not verify."
+      );
+    }
+    const ledgerLeaf = await core.readLedgerLeaf(commit.pactium.ledgerIndex);
+    const fact = isRecord(ledgerLeaf?.fact) ? ledgerLeaf.fact : null;
+    if (
+      !fact ||
+      ledgerLeaf?.index !== commit.pactium.ledgerIndex ||
+      ledgerLeaf.eventId !== commit.pactium.ledgerEventId ||
+      ledgerLeaf.factCid !== factRef.factCid ||
+      ledgerLeaf.factHash !== factRef.factHash ||
+      fact.factType !== "operation.outcome" ||
+      fact.intentId !== commit.pactium.intentId ||
+      fact.outcomeId !== commit.pactium.outcomeId ||
+      fact.operationId !== commit.operationId ||
+      fact.workspaceId !== commit.scope ||
+      fact.status !== "succeeded" ||
+      fact.resultHash !== protocolHash("operation.outcome", {
+        beforeRoot: commit.beforeRoot,
+        afterRoot: commit.afterRoot
+      })
+    ) {
+      throw substrateMutationError(
+        "state_commit_pactium_ledger_mismatch",
+        "State commit Pactium ledger outcome does not match."
+      );
+    }
+    const proofs = asObject(proofMaterial.proofs);
+    const proofCommit = asObject(proofs.stateCommit);
+    const proofProfile = asObject(proofCommit.proofProfile);
+    const expectedMutations = pactiumStateMutations(commit.mutations);
+    if (
+      proofCommit.factType !== "state.commit" ||
+      proofCommit.outcomeId !== commit.pactium.outcomeId ||
+      proofCommit.intentId !== commit.pactium.intentId ||
+      proofCommit.workspaceId !== commit.scope ||
+      Number(proofCommit.mutationCount ?? -1) !== expectedMutations.length ||
+      !canonicalEquals(proofCommit.mutations, expectedMutations) ||
+      !canonicalEquals(proofCommit.mutationKeys, expectedMutations.map(({ key }) => key)) ||
+      !canonicalEquals(proofCommit.mutationActions, expectedMutations.map(({ action }) => action)) ||
+      proofCommit.mutationProofMode !== "full" ||
+      proofCommit.proofCompleteness !== "full" ||
+      proofProfile.mode !== "full" ||
+      proofProfile.completeness !== "full" ||
+      Number(proofProfile.totalUniqueKeyCount ?? -1) !== expectedMutations.length ||
+      Number(proofProfile.provedKeyCount ?? -1) !== expectedMutations.length
+    ) {
+      throw substrateMutationError(
+        "state_commit_pactium_state_mismatch",
+        "State commit Pactium state mutation proof does not match."
+      );
+    }
+  }
+
+  async function verifyStateCommitRecord(commit: StateCommitRecord): Promise<void> {
+    if (
+      commit.protocol !== PACTIUM_PROTOCOL ||
+      commit.schema !== PACTIUM_SCHEMA_VERSION ||
+      !text(commit.commitId) ||
+      !text(commit.scope) ||
+      !text(commit.operationId) ||
+      !text(commit.afterRoot) ||
+      !text(commit.eventHash) ||
+      !text(commit.eventId)
+    ) {
+      throw substrateMutationError(
+        "state_commit_record_invalid",
+        "State commit record is invalid."
+      );
+    }
+    const normalizedContentRefs = normalizeContentRefs(commit.contentRefs);
+    const normalizedMutations = normalizeStateMutations(commit.mutations);
+    if (
+      !canonicalEquals(commit.contentRefs, normalizedContentRefs) ||
+      !canonicalEquals(commit.mutations, normalizedMutations) ||
+      (commit.commitKind === "restore" && normalizedMutations.length !== 0)
+    ) {
+      throw substrateMutationError(
+        "state_commit_record_noncanonical",
+        "State commit record is not canonical."
+      );
+    }
+    let beforeEntries: IndexEntry[];
+    let afterEntries: IndexEntry[];
+    try {
+      beforeEntries = await readStateEntries(commit.beforeRoot);
+      afterEntries = await readStateEntries(commit.afterRoot);
+    } catch {
+      throw substrateMutationError(
+        "state_commit_root_invalid",
+        "State commit references an invalid Merkle root."
+      );
+    }
+    if (
+      commit.commitKind === "mutation" &&
+      !canonicalEquals(replayStateEntries(beforeEntries, normalizedMutations), afterEntries)
+    ) {
+      throw substrateMutationError(
+        "state_commit_replay_mismatch",
+        "State commit mutations do not reproduce the after root."
+      );
+    }
+    await verifyCommitEvent(commit);
+    await verifyCommitPactiumEvidence(commit);
+  }
+
   const stateCommit = Object.freeze({
     async begin({ scope = "default" }: PactiumRecord = {}) {
       return {
@@ -660,96 +1079,88 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     },
     async commit(input: PactiumRecord = {}) {
       return withTransactionalCoreMutation(runtime, "State commits", async () => {
-      const scope = text(input.scope, "default");
-      const idempotency = await replayStateMutationIfPresent(
-        "commit",
-        { ...input, scope }
-      );
-      if (idempotency?.replay) return idempotency.replay;
-      const beforeRoot = await loadStateRoot(scope);
-      if (Object.hasOwn(input, "expectedCurrentRoot") && text(input.expectedCurrentRoot) !== beforeRoot) {
-        const error = substrateMutationError(
-          "state_root_commit_conflict",
-          "State root changed before commit."
+        const scope = text(input.scope, "default");
+        const operationId = text(input.operationId, "meshrix.state.commit");
+        const mutations = normalizeStateMutations(input.mutations);
+        const contentRefs = normalizeContentRefs(input.contentRefs);
+        const payload = normalizeCanonical(asObject(input.payload)) as PactiumRecord;
+        const idempotency = await replayStateMutationIfPresent(
+          "commit",
+          { ...input, scope, operationId, mutations, contentRefs, payload }
         );
-        error.status = 409;
-        throw error;
-      }
-      let afterRoot = beforeRoot;
-      if (!afterRoot) {
-        afterRoot = text((await indexEngine.createIndex([], { domain: stateIndexDomain(scope) })).root);
-      }
-      const mutations: StateMutation[] = recordArray(input.mutations);
-      for (const mutation of mutations) {
-        const action = text(mutation.action, "put");
-        if (action === "delete") {
-          afterRoot = (await merkleIndex.delete(afterRoot, mutation.key)).indexRootCid;
-        } else {
-          afterRoot = (await merkleIndex.put(afterRoot, mutation.key, mutation.valueRef || mutation.value, asObject(mutation.metadata))).indexRootCid;
+        if (idempotency?.replay) return idempotency.replay;
+        const beforeRoot = await loadStateRoot(scope);
+        if (Object.hasOwn(input, "expectedCurrentRoot") && text(input.expectedCurrentRoot) !== beforeRoot) {
+          const error = substrateMutationError(
+            "state_root_commit_conflict",
+            "State root changed before commit."
+          );
+          error.status = 409;
+          throw error;
         }
-      }
-      const envelope = await core.recordOperation({
-        operationId: input.operationId || "meshrix.state.commit",
-        workspaceId: scope,
-        idempotencyKey: text(input.idempotencyKey),
-        returnIntentReplay: true,
-        input: asObject(input.payload),
-        result: {
+        let afterRoot = beforeRoot;
+        if (!afterRoot) {
+          afterRoot = text((await indexEngine.createIndex([], { domain: stateIndexDomain(scope) })).root);
+        }
+        for (const mutation of mutations) {
+          if (mutation.action === "delete") {
+            afterRoot = (await merkleIndex.delete(afterRoot, mutation.key)).indexRootCid;
+          } else {
+            afterRoot = (await merkleIndex.put(afterRoot, mutation.key, mutation.valueRef, mutation.metadata)).indexRootCid;
+          }
+        }
+        const envelope = await core.recordOperation({
+          operationId,
+          workspaceId: scope,
+          idempotencyKey: text(input.idempotencyKey),
+          returnIntentReplay: true,
+          input: payload,
+          result: { beforeRoot, afterRoot },
+          stateMutations: pactiumStateMutations(mutations),
+          proofOptions: { stateMutationProofMode: "full" }
+        });
+        if (envelope?.replayed) {
+          throw substrateMutationError(
+            "state_mutation_idempotency_incomplete",
+            "State evidence replay exists without a matching state mutation claim."
+          );
+        }
+        const pactium = await pactiumEvidenceForEnvelope(envelope, { operationId, scope });
+        await saveStateRoot(scope, afterRoot);
+        const event = await appendEventUnlocked({
+          partitionId: scope,
+          operationId,
           beforeRoot,
-          afterRoot
-        },
-        stateMutations: mutations.map((mutation) => ({
-          action: text(mutation.action, "put"),
-          key: normalizePathKey(mutation.key),
-          valueRef: text(mutation.valueRef || mutation.value),
-          valueHash: text(mutation.valueHash || hashValue(mutation.valueRef || mutation.value || "")),
-          metadata: asObject(mutation.metadata)
-        })).filter((mutation) => mutation.key)
-      });
-      if (envelope?.replayed) {
-        throw substrateMutationError(
-          "state_mutation_idempotency_incomplete",
-          "State evidence replay exists without a matching state mutation claim."
-        );
-      }
-      await saveStateRoot(scope, afterRoot);
-      const event = await appendEventUnlocked({
-        partitionId: scope,
-        operationId: input.operationId || "meshrix.state.commit",
-        beforeRoot,
-        afterRoot,
-        contentRefs: input.contentRefs || [],
-        payload: input.payload || {}
-      });
-      const commitId = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
-      const commit: StateCommitRecord = {
-        protocol: PACTIUM_PROTOCOL,
-        schema: PACTIUM_SCHEMA_VERSION,
-        commitId,
-        scope,
-        operationId: text(input.operationId),
-        beforeRoot,
-        afterRoot,
-        eventHash: event.eventHash,
-        eventId: event.eventId,
-        contentRefs: asArray(input.contentRefs).map((contentRef) => text(contentRef)).filter(Boolean),
-        mutations: normalizeCanonical(mutations),
-        payload: normalizeCanonical(asObject(input.payload)),
-        pactium: {
-          envelopeId: envelope.envelopeId,
-          outcomeId: envelope.factId,
-          ledgerEventId: text(envelope.factRef?.ledgerEventId),
-          ledgerIndex: Number(envelope.factRef?.ledgerIndex ?? -1)
-        },
-        createdAt: nowIso()
-      };
-      await saveCommit(commit);
-      await saveStateMutationClaim({
-        claimKey: idempotency?.claimKey,
-        inputDigest: idempotency?.inputDigest,
-        commit
-      });
-      return commit;
+          afterRoot,
+          contentRefs,
+          payload
+        });
+        const commitId = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
+        const commit: StateCommitRecord = {
+          protocol: PACTIUM_PROTOCOL,
+          schema: PACTIUM_SCHEMA_VERSION,
+          commitKind: "mutation",
+          commitId,
+          scope,
+          operationId,
+          beforeRoot,
+          afterRoot,
+          eventHash: event.eventHash,
+          eventId: event.eventId,
+          eventOffset: Number(event.offset),
+          contentRefs,
+          mutations,
+          payload,
+          pactium,
+          createdAt: nowIso()
+        };
+        await saveCommit(commit);
+        await saveStateMutationClaim({
+          claimKey: idempotency?.claimKey,
+          inputDigest: idempotency?.inputDigest,
+          commit
+        });
+        return commit;
       });
     },
     async verifyRestoreLineage(input: PactiumRecord = {}) {
@@ -760,9 +1171,12 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     async restoreRoot(input: PactiumRecord = {}) {
       return withTransactionalCoreMutation(runtime, "State root restores", async () => {
         const scope = text(input.scope, "default");
+        const operationId = text(input.operationId, "meshrix.state.root.restore");
+        const contentRefs = normalizeContentRefs(input.contentRefs);
+        const payload = normalizeCanonical(asObject(input.payload)) as PactiumRecord;
         const idempotency = await replayStateMutationIfPresent(
           "restore",
-          { ...input, scope }
+          { ...input, scope, operationId, contentRefs, payload }
         );
         if (idempotency?.replay) return idempotency.replay;
         const targetRoot = text(input.targetRoot || input.root);
@@ -777,15 +1191,23 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           throw error;
         }
         await verifyRestoreLineage({ scope, targetRoot, allowedOperationIds: input.allowedOperationIds, anchor: input.anchor, maxSuffixEvents: input.maxSuffixEvents });
-        const operationId = text(input.operationId, "meshrix.state.root.restore");
+        try {
+          await indexEngine.readIndexRoot(targetRoot);
+        } catch {
+          throw substrateMutationError(
+            "state_root_restore_target_invalid",
+            "State root restore target is not a readable Merkle root."
+          );
+        }
         const envelope = await core.recordOperation({
           operationId,
           workspaceId: scope,
           idempotencyKey: text(input.idempotencyKey),
           returnIntentReplay: true,
-          input: asObject(input.payload),
+          input: payload,
           result: { beforeRoot, afterRoot: targetRoot },
-          stateMutations: []
+          stateMutations: [],
+          proofOptions: { stateMutationProofMode: "full" }
         });
         if (envelope?.replayed) {
           throw substrateMutationError(
@@ -793,19 +1215,21 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
             "State evidence replay exists without a matching state mutation claim."
           );
         }
+        const pactium = await pactiumEvidenceForEnvelope(envelope, { operationId, scope });
         await saveStateRoot(scope, targetRoot);
         const event = await appendEventUnlocked({
           partitionId: scope,
           operationId,
           beforeRoot,
           afterRoot: targetRoot,
-          contentRefs: input.contentRefs || [],
-          payload: { ...asObject(input.payload), restoredRoot: targetRoot }
+          contentRefs,
+          payload: { ...payload, restoredRoot: targetRoot }
         });
         const commitId = serverToken("state_commit", scope, event.eventHash, nowIso(), randomUUID());
         const commit: StateCommitRecord = {
           protocol: PACTIUM_PROTOCOL,
           schema: PACTIUM_SCHEMA_VERSION,
+          commitKind: "restore",
           commitId,
           scope,
           operationId: text(operationId),
@@ -813,15 +1237,11 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           afterRoot: targetRoot,
           eventHash: event.eventHash,
           eventId: event.eventId,
-          contentRefs: asArray(input.contentRefs).map((contentRef) => text(contentRef)).filter(Boolean),
+          eventOffset: Number(event.offset),
+          contentRefs,
           mutations: [],
-          payload: normalizeCanonical(asObject(input.payload)),
-          pactium: {
-            envelopeId: envelope.envelopeId,
-            outcomeId: envelope.factId,
-            ledgerEventId: text(envelope.factRef?.ledgerEventId),
-            ledgerIndex: Number(envelope.factRef?.ledgerIndex ?? -1)
-          },
+          payload,
+          pactium,
           createdAt: nowIso()
         };
         await saveCommit(commit);
@@ -834,20 +1254,31 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       });
     },
     async verifyCommit(commitId: unknown) {
-      const commit = await loadCommit(text(commitId));
-      if (!commit) {
+      const normalizedCommitId = text(commitId);
+      const stored = await loadStoredCommit(normalizedCommitId);
+      if (stored === null || stored === undefined) {
         return {
           ok: false,
           error: "commit_missing",
-          commitId: text(commitId)
+          commitId: normalizedCommitId
         };
       }
-      try {
-        await indexEngine.readIndexRoot(commit.afterRoot);
-      } catch (error ) {
+      if (!isStateCommitRecord(stored)) {
         return {
           ok: false,
-          error: error instanceof Error ? error.message : "state_root_missing",
+          error: "commit_malformed",
+          commitId: normalizedCommitId
+        };
+      }
+      const commit = stored;
+      try {
+        await verifyStateCommitRecord(commit);
+      } catch (error) {
+        return {
+          ok: false,
+          error: isRecord(error) && typeof error.code === "string"
+            ? error.code
+            : "state_commit_verification_failed",
           commit
         };
       }

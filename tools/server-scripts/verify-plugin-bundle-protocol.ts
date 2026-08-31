@@ -70,7 +70,7 @@ function buildFixtureArchive() : any {
 async function main() : Promise<any> {
   const checks: any[] = [];
   const archive: any = buildFixtureArchive();
-  const verified: any = validatePluginPackageArchive({
+  const verified: any = await validatePluginPackageArchive({
     bytes: archive,
     expectedPluginId: "fixture-plugin"
   });
@@ -80,6 +80,7 @@ async function main() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-bundle-verify-"));
   try {
     let discarded: any = false;
+    const activeContributions: any = new Set<any>();
     const lifecycle: any = createPluginPackageLifecycle({
       custody: createPluginPackageCustody({ rootDir: path.join(root, "custody") }),
       contributionTransactionFactory: async ({ pluginId, generation, packageDigest }: Record<string, any>) : Promise<any> =>
@@ -87,11 +88,15 @@ async function main() : Promise<any> {
           pluginId,
           generation,
           packageDigest,
-          prepareSnapshot: async () : Promise<any> => Object.freeze({ operations: {} }),
-          publishSnapshot: async () : Promise<any> => undefined,
-          discardSnapshot: async () : Promise<any> => {
-            discarded = true;
-          }
+          prepareContribution: async () : Promise<any> => Object.freeze({
+            commit: async () : Promise<any> => {
+              activeContributions.add("fixture-plugin.run");
+            },
+            rollback: async () : Promise<any> => {
+              activeContributions.delete("fixture-plugin.run");
+              discarded = true;
+            }
+          })
         })
     });
     await lifecycle.acquire({
@@ -108,6 +113,7 @@ async function main() : Promise<any> {
     });
     assert.equal(active.state, "active");
     assert.equal(discarded, false);
+    assert.deepEqual([...activeContributions], ["fixture-plugin.run"]);
     checks.push("lifecycle-activate");
 
     const failing: any = createPluginPackageLifecycle({
@@ -117,13 +123,16 @@ async function main() : Promise<any> {
           pluginId,
           generation,
           packageDigest,
-          prepareSnapshot: async () : Promise<any> => Object.freeze({ operations: {} }),
-          publishSnapshot: async () : Promise<any> => {
-            throw new Error("forced publication failure");
-          },
-          discardSnapshot: async () : Promise<any> => {
-            discarded = true;
-          }
+          prepareContribution: async () : Promise<any> => Object.freeze({
+            commit: async () : Promise<any> => {
+              activeContributions.add("failed-plugin.run");
+              throw new Error("forced publication failure");
+            },
+            rollback: async () : Promise<any> => {
+              activeContributions.delete("failed-plugin.run");
+              discarded = true;
+            }
+          })
         })
     });
     await failing.acquire({
@@ -135,7 +144,22 @@ async function main() : Promise<any> {
     const failed: any = await failing.activate({ pluginId: "fixture-plugin" });
     assert.equal(failed.state, "failed");
     assert.equal(discarded, true);
+    assert.equal(activeContributions.has("failed-plugin.run"), false);
     checks.push("atomic-rollback");
+
+    const transactionRequired: any = createPluginPackageLifecycle({
+      custody: createPluginPackageCustody({ rootDir: path.join(root, "custody-transaction-required") })
+    });
+    await transactionRequired.acquire({
+      pluginId: "fixture-plugin",
+      source: createBytesPluginPackageSource({ bytes: archive })
+    });
+    await transactionRequired.verify({ pluginId: "fixture-plugin" });
+    await transactionRequired.stage({ pluginId: "fixture-plugin", configuration: {} });
+    const missingTransaction: any = await transactionRequired.activate({ pluginId: "fixture-plugin" });
+    assert.equal(missingTransaction.state, "failed");
+    assert.equal(missingTransaction.reasonCode, "PLUGIN_PACKAGE_TRANSACTION_REQUIRED");
+    checks.push("transaction-required");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

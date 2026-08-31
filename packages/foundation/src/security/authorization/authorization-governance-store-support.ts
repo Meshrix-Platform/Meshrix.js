@@ -334,6 +334,10 @@ export function inferScopeAction(operationId: unknown = "", action: unknown = ""
 export function inferGovernanceRequest({ operation = {}, tool = null, input = {}, context = {}, subject = {}, grant = null }: GovernanceRequestInput = {}) {
   const inputResource = objectOrNull(input.resource) || {};
   const contextResource = objectOrNull(context.resource) || {};
+  const operationResource = objectOrNull(operation?.resource) || {};
+  const operationResourceContext = objectOrNull(operation?.resourceContext) || {};
+  const toolResource = objectOrNull(tool?.resource) || {};
+  const toolResourceContext = objectOrNull(tool?.resourceContext) || {};
   const operationId = String(operation.id || tool?.operationId || input.operationId || "").trim();
   const rawAction = firstString(input.requestedAction, context.requestedAction, input.action, operationId);
   const action = rawAction || operationId || "read";
@@ -343,7 +347,15 @@ export function inferGovernanceRequest({ operation = {}, tool = null, input = {}
     inputResource.resourceType,
     inputResource.type,
     context.resourceType,
-    contextResource.resourceType
+    contextResource.resourceType,
+    // Declarative resource metadata falls back so an input that omits the
+    // resource type cannot detach a governed operation from its governance.
+    operationResourceContext.resourceType,
+    operationResource.resourceType,
+    operationResource.type,
+    toolResourceContext.resourceType,
+    toolResource.resourceType,
+    toolResource.type
   );
   const resourceId = firstString(
     input.resourceId,

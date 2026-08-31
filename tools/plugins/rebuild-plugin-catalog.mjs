@@ -15,7 +15,6 @@ import {
 } from "./lib/repository.mjs";
 
 function groupFor(relativePath, manifest) {
-  if (manifest.id === "coding-github" || relativePath === "coding/github/plugin.json") return "coding";
   if (manifest.group) return String(manifest.group);
   const parts = relativePath.split("/");
   return parts.length === 2 ? "products" : parts[1] || "products";
@@ -70,7 +69,6 @@ function registryFor(plugins) {
     groups: [
       { id: "products", path: "plugins", description: "Detachable Meshrix product plugins." },
       { id: "services", path: "plugins/services", description: "External service wrappers and provider integrations." },
-      { id: "coding", path: "plugins/coding", description: "Code hosting, repository, review, CI, and skill-source providers." },
       { id: "documents", path: "plugins/documents", description: "Document and OCR processing plugins." },
       { id: "datastores", path: "plugins/datastores", description: "Datastore and backend mounts." },
       { id: "agents", path: "plugins/agents", description: "Peer adapter plugins." }

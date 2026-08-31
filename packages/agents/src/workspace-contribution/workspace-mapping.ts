@@ -7,6 +7,7 @@ import {
   normalizeContributionType,
   nowIso,
   publicAssetRecord,
+  requiredWorkspaceBinding,
   stableId,
   stableJson,
   text,
@@ -88,6 +89,7 @@ export function workspaceAssetRelativePath({
   relation?: string;
   assetBucketResolver?: AssetBucketResolver;
 } = {}): string {
+  const boundWorkspaceId = requiredWorkspaceBinding(workspaceId);
   const bucket = String(assetBucketResolver(contributionType) || "").trim();
   if (!bucket) {
     throw new Error(
@@ -97,7 +99,7 @@ export function workspaceAssetRelativePath({
   return path.join(
     "workspace-contribution",
     "workspaces",
-    safePathSegment(workspaceId || "default"),
+    safePathSegment(boundWorkspaceId),
     bucket,
     safePathSegment(`${relation}-${contributionId || randomUUID()}`),
     "asset.json",
@@ -106,13 +108,14 @@ export function workspaceAssetRelativePath({
 
 export function ensureWorkspaceAssetBuckets(
   userDataPath = "",
-  workspaceId = "default",
+  workspaceId: unknown = "",
   assetBuckets: readonly string[] = FIXED_WORKSPACE_ASSET_BUCKETS,
 ): string[] {
+  const boundWorkspaceId = requiredWorkspaceBinding(workspaceId);
   if (!userDataPath) {
     return [];
   }
-  const safeWorkspaceId = safePathSegment(workspaceId);
+  const safeWorkspaceId = safePathSegment(boundWorkspaceId);
   const root = path.join(
     dataRoot(userDataPath),
     "workspace-contribution",
@@ -138,7 +141,7 @@ export function materializeWorkspaceAsset(
     persistenceEnabled = false,
     userDataPath = "",
     lifecycleState = contribution.status || "submitted",
-    targetWorkspaceId = contribution.workspaceId,
+    targetWorkspaceId,
     relation = "canonical",
     actorId = "",
     reason = "",
@@ -147,6 +150,14 @@ export function materializeWorkspaceAsset(
     assetRecordProjector = publicAssetRecord,
   }: MaterializeWorkspaceAssetOptions = {},
 ): AssetRecord {
+  const boundSourceWorkspaceId = requiredWorkspaceBinding(
+    contribution.workspaceId,
+    "sourceWorkspaceId",
+  );
+  const boundTargetWorkspaceId = requiredWorkspaceBinding(
+    targetWorkspaceId,
+    "targetWorkspaceId",
+  );
   const bucket = String(
     assetBucketResolver(contribution.contributionType) || "",
   ).trim();
@@ -157,11 +168,11 @@ export function materializeWorkspaceAsset(
   }
   const workspaceAssetPaths = ensureWorkspaceAssetBuckets(
     userDataPath,
-    targetWorkspaceId,
+    boundTargetWorkspaceId,
     assetBuckets,
   );
   const assetPath = workspaceAssetRelativePath({
-    workspaceId: targetWorkspaceId,
+    workspaceId: boundTargetWorkspaceId,
     contributionType: contribution.contributionType,
     contributionId: contribution.contributionId,
     relation,
@@ -173,8 +184,8 @@ export function materializeWorkspaceAsset(
     protocolVersion: WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
     assetKind: "workspace_contribution_asset",
     contributionId: contribution.contributionId,
-    workspaceId: targetWorkspaceId,
-    sourceWorkspaceId: contribution.workspaceId,
+    workspaceId: boundTargetWorkspaceId,
+    sourceWorkspaceId: boundSourceWorkspaceId,
     contributionType: contribution.contributionType,
     bucket,
     relation,
@@ -206,12 +217,12 @@ export function materializeWorkspaceAsset(
   const record = assetRecordProjector({
     assetId: stableId("workspace_asset", {
       contributionId: contribution.contributionId,
-      workspaceId: targetWorkspaceId,
+      workspaceId: boundTargetWorkspaceId,
       relation,
     }),
     contributionId: contribution.contributionId,
-    workspaceId: targetWorkspaceId,
-    sourceWorkspaceId: contribution.workspaceId,
+    workspaceId: boundTargetWorkspaceId,
+    sourceWorkspaceId: boundSourceWorkspaceId,
     contributionType: contribution.contributionType,
     bucket,
     relation,
