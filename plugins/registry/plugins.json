@@ -20,11 +20,6 @@
       "description": "External service wrappers and provider integrations."
     },
     {
-      "id": "coding",
-      "path": "plugins/coding",
-      "description": "Code hosting, repository, review, CI, and skill-source providers."
-    },
-    {
       "id": "documents",
       "path": "plugins/documents",
       "description": "Document and OCR processing plugins."
@@ -193,20 +188,6 @@
       "runtime": false,
       "adapter": false,
       "release": false
-    },
-    {
-      "id": "coding-github",
-      "path": "plugins/coding/github",
-      "status": "stable",
-      "version": "0.0.1",
-      "group": "coding",
-      "types": [
-        "runtime-plugin"
-      ],
-      "summary": "Governed GitHub REST, MCP, Codespace provider, and GitHub-hosted skill installer contributions.",
-      "runtime": true,
-      "adapter": false,
-      "release": true
     },
     {
       "id": "external-gateway",

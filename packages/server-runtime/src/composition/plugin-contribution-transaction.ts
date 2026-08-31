@@ -1,14 +1,13 @@
 /**
- * Publishes or discards one immutable contribution generation.
- * Does not interpret plugin payloads; callers supply a prepared snapshot.
+ * Coordinates one reversible contribution publication until its lifecycle
+ * generation is durably active. The prepared participant owns the atomic
+ * registry swap and restoration of its preceding generation.
  */
 export function beginPluginContributionTransaction({
   pluginId,
   generation,
   packageDigest,
-  prepareSnapshot,
-  publishSnapshot,
-  discardSnapshot = null
+  prepareContribution
 }: Record<string, any> = {}) : any {
   if (typeof pluginId !== "string" || !pluginId.trim()) {
     throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution transaction requires pluginId");
@@ -16,12 +15,24 @@ export function beginPluginContributionTransaction({
   if (typeof generation !== "string" || !generation.trim()) {
     throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution transaction requires generation");
   }
-  if (typeof prepareSnapshot !== "function" || typeof publishSnapshot !== "function") {
-    throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution transaction hooks are required");
+  if (typeof prepareContribution !== "function") {
+    throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution transaction preparer is required");
   }
 
   let phase: any = "open";
-  let snapshot: any = null;
+  let participant: any = null;
+
+  function assertParticipant(value?: any) : any {
+    if (
+      !value ||
+      typeof value !== "object" ||
+      typeof value.commit !== "function" ||
+      typeof value.rollback !== "function"
+    ) {
+      throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution transaction participant is invalid");
+    }
+    return value;
+  }
 
   return Object.freeze({
     id: "PluginContributionTransaction",
@@ -33,41 +44,59 @@ export function beginPluginContributionTransaction({
       if (phase !== "open") {
         throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution transaction already prepared");
       }
-      snapshot = await prepareSnapshot({ pluginId, generation, packageDigest });
-      if (snapshot === null || snapshot === undefined) {
-        throw new Error("PLUGIN_PACKAGE_STAGING_FAILED: contribution snapshot is required");
-      }
-      // Freeze plain objects when possible; callers may pass already-frozen values.
-      if (snapshot && typeof snapshot === "object" && !Object.isFrozen(snapshot)) {
-        snapshot = Object.freeze(snapshot);
+      phase = "preparing";
+      try {
+        participant = assertParticipant(await prepareContribution({ pluginId, generation, packageDigest }));
+      } catch (error: any) {
+        phase = "prepare-failed";
+        throw error;
       }
       phase = "prepared";
-      return snapshot;
+      return Object.freeze({ pluginId, generation, packageDigest, status: "prepared" });
     },
 
     async commit() : Promise<any> {
       if (phase !== "prepared") {
         throw new Error("PLUGIN_PACKAGE_ACTIVATION_FAILED: contribution transaction is not prepared");
       }
-      await publishSnapshot({ pluginId, generation, packageDigest, snapshot });
-      phase = "committed";
-      return Object.freeze({ pluginId, generation, packageDigest, status: "committed" });
+      phase = "committing";
+      try {
+        await participant.commit();
+      } catch (error: any) {
+        phase = "commit-failed";
+        throw error;
+      }
+      phase = "published";
+      return Object.freeze({ pluginId, generation, packageDigest, status: "published" });
     },
 
     async rollback() : Promise<any> {
-      if (phase === "committed" || phase === "discarded") {
-        throw new Error("PLUGIN_PACKAGE_ROLLBACK_FAILED: contribution transaction is terminal");
+      if (phase === "prepare-failed") {
+        phase = "rolled-back";
+        return Object.freeze({ pluginId, generation, packageDigest, status: "rolled-back" });
       }
-      if (typeof discardSnapshot === "function") {
-        await discardSnapshot({ pluginId, generation, packageDigest, snapshot });
+      if (!["prepared", "commit-failed", "published"].includes(phase)) {
+        throw new Error("PLUGIN_PACKAGE_ROLLBACK_FAILED: contribution transaction cannot roll back from its current phase");
       }
-      snapshot = null;
-      phase = "discarded";
-      return Object.freeze({ pluginId, generation, packageDigest, status: "discarded" });
+      phase = "rolling-back";
+      try {
+        await participant.rollback();
+      } catch (error: any) {
+        phase = "rollback-failed";
+        throw new Error("PLUGIN_PACKAGE_ROLLBACK_FAILED: contribution transaction rollback failed", { cause: error });
+      }
+      participant = null;
+      phase = "rolled-back";
+      return Object.freeze({ pluginId, generation, packageDigest, status: "rolled-back" });
     },
 
-    async discard() : Promise<any> {
-      return this.rollback();
+    async finalize() : Promise<any> {
+      if (phase !== "published") {
+        throw new Error("PLUGIN_PACKAGE_ACTIVATION_FAILED: contribution transaction is not published");
+      }
+      participant = null;
+      phase = "finalized";
+      return Object.freeze({ pluginId, generation, packageDigest, status: "finalized" });
     }
   });
 }

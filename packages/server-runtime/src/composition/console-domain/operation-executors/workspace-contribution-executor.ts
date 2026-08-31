@@ -6,9 +6,11 @@ import {
   errorPayload,
   objectOrNull,
   protocolPayload,
+  requiredWorkspaceBindingFrom,
+  requiredWorkspaceIdFrom,
   result,
   subjectFromAuthSession,
-  workspaceIdFrom
+  workspaceBindingFailureResult
 } from "./shared.ts";
 import { contributionRegistryFor } from "./registry-services.ts";
 import {
@@ -18,8 +20,14 @@ import {
 } from "./workspace-asset-model.ts";
 import { runManagedWorkspaceAssetWrite } from "./workspace-asset-governance.ts";
 
+const TARGET_WORKSPACE_REQUIRED_OPERATIONS: ReadonlySet<string> = new Set([
+  "workspace.contribution.permission.request",
+  "workspace.contribution.permission.grant",
+  "workspace.contribution.adopt"
+]);
+
 export function filterContributionsForWorkspace(items: any = [], input: Record<string, any> = {}) : any {
-  const workspaceId: any = String(input.workspaceId || input.workspace || "").trim();
+  const workspaceId: any = typeof input.workspaceId === "string" ? input.workspaceId.trim() : "";
   if (!workspaceId || !items.some((item?: any) : any => Object.hasOwn(item, "workspaceId"))) {
     return items;
   }
@@ -29,6 +37,25 @@ export function filterContributionsForWorkspace(items: any = [], input: Record<s
 export async function executeWorkspaceContributionOperation({ operationId, input, context }: Record<string, any>) : Promise<any> {
   if (!String(operationId || "").startsWith("workspace.contribution.")) {
     return null;
+  }
+  if (isManagedWorkspaceAssetWriteOperation(operationId)) {
+    try {
+      requiredWorkspaceIdFrom(input);
+      if (TARGET_WORKSPACE_REQUIRED_OPERATIONS.has(operationId)) {
+        requiredWorkspaceBindingFrom(input, "targetWorkspaceId");
+      }
+    } catch (error: any) {
+      const field: any = String(error?.message || "").startsWith("targetWorkspaceId")
+        ? "targetWorkspaceId"
+        : "workspaceId";
+      return workspaceBindingFailureResult(operationId, field);
+    }
+  } else if (Object.hasOwn(input, "workspaceId")) {
+    try {
+      requiredWorkspaceIdFrom(input);
+    } catch {
+      return workspaceBindingFailureResult(operationId);
+    }
   }
   if (isManagedWorkspaceAssetWriteOperation(operationId) && context.workspaceAssetManagedWriteActive !== true) {
     const target: any = normalizeWorkspaceAssetTarget(input, operationId);
@@ -68,25 +95,25 @@ export async function executeWorkspaceContributionOperation({ operationId, input
     if (operationId === "workspace.contribution.submit") {
       const resultPayload: any = registry.submitContribution({
         ...input,
-        workspaceId: workspaceIdFrom(input),
+        workspaceId: requiredWorkspaceIdFrom(input),
         contributorId,
         contributorKind
       });
       return result(201, protocolPayload(resultPayload));
     }
     if (operationId === "workspace.contribution.list") {
-      const items: any = filterContributionsForWorkspace(registry.listContributions(), input);
+      const items: any = filterContributionsForWorkspace(registry.listContributions(input), input);
       return result(200, protocolPayload({ items, count: items.length }));
     }
     if (operationId === "workspace.contribution.assets.list") {
       return result(200, protocolPayload(registry.listWorkspaceAssets(input)));
     }
     if (operationId === "workspace.contribution.leaderboard") {
-      const items: any = filterContributionsForWorkspace(registry.getLeaderboard(), input);
+      const items: any = filterContributionsForWorkspace(registry.getLeaderboard(input), input);
       return result(200, protocolPayload({ items, count: items.length }));
     }
     if (operationId === "workspace.contribution.stats") {
-      return result(200, protocolPayload(registry.getStats()));
+      return result(200, protocolPayload(registry.getStats(input)));
     }
     if (operationId === "workspace.contribution.report") {
       return result(200, protocolPayload(registry.getContributionReport(input)));

@@ -53,7 +53,7 @@ export function rowToGrant(row?: any) : any {
     toolAllow: storedPolicy.toolAllow.value,
     toolDeny: storedPolicy.toolDeny.value,
     scopes: storedPolicy.scopes.value,
-    capabilities: normalizeKernelCapabilities(metadata.capabilities, metadata.capabilityIds),
+    capabilities: normalizeKernelCapabilities(metadata.kernelCapabilities, metadata.capabilities, metadata.capabilityIds),
     dynamicCapabilities: normalizeDynamicUpstreamCapabilities(metadata.dynamicCapabilities),
     expiresAt: row.expires_at,
     maxUses: row.max_uses,

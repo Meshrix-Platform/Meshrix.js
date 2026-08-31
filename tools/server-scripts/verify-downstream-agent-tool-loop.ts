@@ -45,6 +45,7 @@ import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key
 import { installerProcessEnv } from "./lib/mcp-neutral-peer-identity-support.ts";
 import { createMcpProxyStdioClient } from "./lib/mcp-proxy-stdio-client.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
+import { runCompleteTargetDiagnostics } from "./lib/complete-target-diagnostics.ts";
 import {
   WINDOWS_LOCAL_PATH_PATTERN,
   redactReportText
@@ -660,16 +661,41 @@ async function main() : Promise<any> {
     notes: "Scripted target-specific client profiles drive the published meshrix-mcp proxy CLI over newline-delimited stdio JSON-RPC for every declared MCP client target, through the downstream MCP gateway to the deterministic upstream fixture MCP service."
   };
 
-  const proxyClientTargets: any[] = [];
-  for (const target of DOWNSTREAM_AGENT_CLIENT_TARGETS) {
-    proxyClientTargets.push(await runProxyClientTarget({ target, scenario }));
-  }
+  const diagnostics: any = await runCompleteTargetDiagnostics({
+    targets: DOWNSTREAM_AGENT_CLIENT_TARGETS,
+    runTarget: async (target?: any) : Promise<any> => runProxyClientTarget({ target, scenario }),
+    failureOutcome: async (target?: any, error?: any) : Promise<any> => ({
+      target,
+      status: "failed",
+      realProxyTransport: false,
+      initialized: false,
+      initializedNotificationSent: false,
+      unexpectedNotificationResponses: -1,
+      completedTurnIds: [],
+      failedTurnCount: 1,
+      readOnlyToolVisible: false,
+      identityToolVisible: false,
+      destructiveToolHidden: false,
+      readOnlyCallOk: false,
+      identityCallOk: false,
+      deniedDestructiveRejected: false,
+      proxyExitOk: false,
+      failure: failureEvidence(error, "target")
+    })
+  });
+  const proxyClientTargets: any[] = diagnostics.outcomes;
   const cancellationPropagation: any = proxyClientTargets.find(
     (item?: any) : any => item.target === DOWNSTREAM_AGENT_CANCELLATION_TARGET
   )?.cancellationPropagation || {};
 
   const readiness: any = await writeReport({
     ...baseReport,
+    summary: {
+      ...baseReport.summary,
+      executedTargets: diagnostics.executedTargets,
+      failedCount: diagnostics.failures.length,
+      unexecutedCount: diagnostics.unexecutedTargets.length
+    },
     evidence: {
       scenario: {
         source: scenario.source,
@@ -689,7 +715,7 @@ async function main() : Promise<any> {
     }
   });
   console.log(`[downstream-agent-tool-loop] ${readiness.liveStatus}`);
-  process.exitCode = readiness.releaseReady ? 0 : 1;
+  process.exitCode = diagnostics.failures.length === 0 && readiness.releaseReady ? 0 : 1;
 }
 
 try {
@@ -706,7 +732,15 @@ try {
       fixtureCli: UPSTREAM_FIXTURE_CLI_PATH
     },
     failure: failureEvidence(error, "downstream-agent-tool-loop"),
-    evidence: null
+    evidence: {
+      scenario: {},
+      secretStoreCredentialBinding: {},
+      cancellationPropagation: {},
+      proxyClientTargets: DOWNSTREAM_AGENT_CLIENT_TARGETS.map((target?: any) : any => ({
+        target,
+        status: "unexecuted"
+      }))
+    }
   };
   try {
     const readiness: any = await writeReport(report);

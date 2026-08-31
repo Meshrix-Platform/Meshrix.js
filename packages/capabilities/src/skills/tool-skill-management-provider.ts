@@ -397,7 +397,11 @@ export function createToolSkillManagementProvider({
             toolsets: contextualCapability.toolsets,
             risk: contextualCapability.risk,
             resourceContext: contextualCapability.resourceContext,
-            dynamicCapability: contextualCapability
+            dynamicCapability: contextualCapability,
+            _meta: {
+              ...(tool._meta || {}),
+              upstreamMcp: true
+            }
           }
         : tool;
       const audienceDecision: any = evaluateToolAudience?.({

@@ -209,6 +209,30 @@ describe("server runtime provider construction unwind", () : any => {
     expect(upstream.close).toHaveBeenCalledOnce();
   });
 
+  it("shares one global contribution catalog without a fabricated workspace scope", async () : Promise<any> => {
+    const closeOrder: any[] = [];
+    const contributionRegistry: any = closeable("contribution-registry", closeOrder);
+    factories.createContributionRegistry.mockReturnValue(contributionRegistry);
+    const providers: any = await createServerConsoleOperationProviders({
+      userDataPath: "<user-data>",
+      securityPermissions: {},
+      operationProofSubstrate: {},
+      storageProvider,
+      uploadSessionStore,
+      uploadCustodyReadPort
+    });
+
+    const first: any = providers.getContributionRegistry({ workspaceId: "workspace-a" });
+    const second: any = providers.getContributionRegistry({ workspaceId: "workspace-b" });
+
+    expect(first).toBe(contributionRegistry);
+    expect(second).toBe(contributionRegistry);
+    expect(factories.createContributionRegistry).toHaveBeenCalledOnce();
+    expect(factories.createContributionRegistry.mock.calls[0][0]).not.toHaveProperty("workspaceId");
+    await providers.close();
+    expect(contributionRegistry.close).toHaveBeenCalledOnce();
+  });
+
   it("retries one transient published-manifest bootstrap rejection", async () : Promise<any> => {
     const observer: Record<string, any> = {
       start: vi.fn(async () : Promise<any> => ({ outcome: "rejected", setRevision: -1 })),

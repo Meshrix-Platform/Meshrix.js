@@ -33,17 +33,16 @@ export function computePluginPackagePayloadDigest(files?: any) : any {
   return `sha256:${hash.digest("hex")}`;
 }
 
-export function admitPluginPackageArchive({
+export async function admitPluginPackageArchive({
   bytes,
   expectedPluginId = null,
   coreContractDigest = null,
-  trustedPublicKeyIds = null,
   sourceKind = "bytes",
   now = () : any => new Date().toISOString()
-}: Record<string, any> = {}) : any {
+}: Record<string, any> = {}) : Promise<any> {
   try {
     const archiveDigest: any = sha256Digest(bytes);
-    const files: any = extractPluginPackageTarGz(bytes);
+    const files: any = await extractPluginPackageTarGz(bytes);
     if (!files.has(PLUGIN_BUNDLE_MANIFEST_FILENAME)) {
       throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: bundle manifest file is missing");
     }
@@ -63,19 +62,6 @@ export function admitPluginPackageArchive({
       manifest.coreCompatibility.contractDigest !== coreContractDigest
     ) {
       throw new Error("PLUGIN_PACKAGE_COMPAT_REJECTED: core contract digest mismatch");
-    }
-    if (Array.isArray(trustedPublicKeyIds)) {
-      if (trustedPublicKeyIds.length === 0) {
-        throw new Error("PLUGIN_PACKAGE_TRUST_REJECTED: trust set is empty");
-      }
-      if (manifest.trust.algorithm === "ed25519") {
-        if (!manifest.trust.publicKeyId || !trustedPublicKeyIds.includes(manifest.trust.publicKeyId)) {
-          throw new Error("PLUGIN_PACKAGE_TRUST_REJECTED: public key is not trusted");
-        }
-        if (!manifest.trust.signature) {
-          throw new Error("PLUGIN_PACKAGE_TRUST_REJECTED: signature is required");
-        }
-      }
     }
     const payloadFileCount: any = [...files.keys()].filter((name?: any) : any => name !== PLUGIN_BUNDLE_MANIFEST_FILENAME).length;
     if (payloadFileCount !== manifest.files.length) {
@@ -122,6 +108,6 @@ export function admitPluginPackageArchive({
   }
 }
 
-export function validatePluginPackageArchive(options: Record<string, any> = {}) : any {
-  return admitPluginPackageArchive(options).verifiedPackage;
+export async function validatePluginPackageArchive(options: Record<string, any> = {}) : Promise<any> {
+  return (await admitPluginPackageArchive(options)).verifiedPackage;
 }

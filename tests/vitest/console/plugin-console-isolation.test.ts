@@ -6,10 +6,8 @@ import {
   PLUGIN_CONSOLE_BRIDGE_VERSION,
   PLUGIN_CONSOLE_IFRAME_SANDBOX,
   PLUGIN_CONSOLE_MAX_CONCURRENT_CALLS,
-  PLUGIN_CONSOLE_SANDBOX_URL,
   admitPluginConsoleIsolationEntry,
   connectPluginConsoleHostBridge,
-  createPluginConsoleSandboxDocument,
 } from "../../../apps/console/plugin-console-isolation.ts";
 import { resolvePluginConsoleComponent } from "../../../apps/console/router/plugin-console-routes.ts";
 
@@ -29,8 +27,8 @@ function entry(patch: Record<string, any> = {}) : any {
     viewKey: "sampleView",
     routePath: "/admin/sample-plugin",
     componentId: "sample-plugin/AdminView",
-    assetUrl: `/api/plugins/v1/console-assets/sample-plugin/1/${"a".repeat(64)}/entry/asset.ts`,
-    assetExport: "mountPluginConsole",
+    sandboxUrl: `/api/plugins/v1/console-sandboxes/sample-plugin/1/${"a".repeat(64)}/YWRtaW4uc2FtcGxlLXBsdWdpbg.html`,
+    bridgeVersion: PLUGIN_CONSOLE_BRIDGE_VERSION,
     artifactDigest,
     artifactGeneration: 1,
     requiredScopes: ["console:read"],
@@ -40,39 +38,25 @@ function entry(patch: Record<string, any> = {}) : any {
 }
 
 describe("plugin console isolation", () : any => {
-  it("admits only the opaque isolation contract", () : any => {
+  it("admits only the sandboxUrl-only opaque isolation contract", () : any => {
     const surface: any = admitPluginConsoleIsolationEntry(entry());
     expect(surface).toMatchObject({
-      sandboxUrl: PLUGIN_CONSOLE_SANDBOX_URL,
+      sandboxUrl: expect.stringContaining("/api/plugins/v1/console-sandboxes/"),
+      invokeUrl: expect.stringContaining("/api/plugins/v1/console-bridges/"),
       bridgeVersion: PLUGIN_CONSOLE_BRIDGE_VERSION,
       sandbox: PLUGIN_CONSOLE_IFRAME_SANDBOX,
-      mountExport: "mountPluginConsole",
       toolIds: ["sample-plugin.inspect"],
     });
-    expect(surface.assetFetchUrl).toContain("/api/plugins/v1/console-assets/");
-    expect(admitPluginConsoleIsolationEntry(entry({ assetExport: "mountOther" }))).toBeUndefined();
-    expect(admitPluginConsoleIsolationEntry(entry({ sandboxUrl: surface.assetFetchUrl }))).toBeUndefined();
+    expect(surface).not.toHaveProperty("assetUrl");
+    expect(surface).not.toHaveProperty("assetExport");
+    expect(admitPluginConsoleIsolationEntry(entry({ assetUrl: "/legacy.ts" }))).toBeUndefined();
+    expect(admitPluginConsoleIsolationEntry(entry({ assetExport: "mountPluginConsole" }))).toBeUndefined();
+    expect(admitPluginConsoleIsolationEntry(entry({ sandboxUrl: "/api/plugins/v1/console-assets/legacy.ts" }))).toBeUndefined();
+    expect(admitPluginConsoleIsolationEntry(entry({ bridgeVersion: "legacy.same-origin" }))).toBeUndefined();
   });
 
-  it("embeds plugin source in an opaque srcdoc and never imports a Console URL", () : any => {
-    const source: any = "export function mountPluginConsole({ element }) { element.textContent = 'ok'; }";
-    const documentHtml: any = createPluginConsoleSandboxDocument({
-      source,
-      componentId: "sample-plugin/AdminView",
-    });
-    expect(documentHtml).toContain("connect-src 'none'");
-    expect(documentHtml).toContain("meshrix.plugin-console.init");
-    expect(documentHtml).toContain("createObjectURL");
-    expect(documentHtml).not.toContain("/api/plugins/v1/console-assets/");
-    expect(documentHtml).not.toContain("@vite-ignore");
-    expect(documentHtml).not.toMatch(/import\(\s*assetUrl/u);
-  });
-
-  it("mounts an allow-scripts iframe without same-origin privileges", async () : Promise<any> => {
-    const loadAsset: any = vi.fn(async () : Promise<any> => (
-      "export function mountPluginConsole({ element }) { element.textContent = 'plugin'; }"
-    ));
-    const loader: any = resolvePluginConsoleComponent(entry(), { loadAsset });
+  it("mounts a server sandbox document in an allow-scripts iframe without same-origin privileges", async () : Promise<any> => {
+    const loader: any = resolvePluginConsoleComponent(entry());
     const component: any = await loader();
     const wrapper: any = mount(component, { attachTo: document.body });
     mounted.push(wrapper);
@@ -81,9 +65,8 @@ describe("plugin console isolation", () : any => {
     expect(iframe.attributes("sandbox")).toBe(PLUGIN_CONSOLE_IFRAME_SANDBOX);
     expect(iframe.attributes("sandbox")).not.toContain("allow-same-origin");
     expect(iframe.attributes("referrerpolicy")).toBe("no-referrer");
-    expect(String(iframe.element.srcdoc || "")).toContain("connect-src 'none'");
-    expect(loadAsset).toHaveBeenCalledTimes(1);
-    expect(loadAsset.mock.calls[0][0]).toContain("/api/plugins/v1/console-assets/sample-plugin/");
+    expect(iframe.attributes("src")).toContain("/api/plugins/v1/console-sandboxes/sample-plugin/");
+    expect(iframe.element.srcdoc).toBe("");
   });
 
   it("bounds and revokes the MessageChannel bridge", async () : Promise<any> => {

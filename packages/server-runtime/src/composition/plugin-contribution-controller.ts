@@ -43,6 +43,33 @@ const EXTERNAL_SERVICE_REFERENCE_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,1
 const EXTERNAL_SERVICE_MAX_REQUEST_BYTES: any = 2 * 1024 * 1024;
 const EXTERNAL_SERVICE_MAX_RESPONSE_BYTES: any = 8 * 1024 * 1024;
 const UNSAFE_JSON_KEYS: any = new Set<any>(["__proto__", "prototype", "constructor"]);
+const SKILL_HUB_HOST_CONTEXT_SCHEMA: any = "v0.0.1:skill-hub:host-context-1";
+const SKILL_HUB_HOST_CONTEXT_FIELDS: any = new Set<any>([
+  "schemaVersion",
+  "phase",
+  "sandboxOutcome",
+  "permissionGrantOutcome"
+]);
+const SKILL_HUB_SANDBOX_OUTCOME_FIELDS: any = new Set<any>([
+  "runRef",
+  "workloadKind",
+  "status",
+  "artifactDigest",
+  "inputDigests",
+  "policyDigest",
+  "cleanupState",
+  "outputDisposition",
+  "reasonCode",
+  "failureStage",
+  "createdAt"
+]);
+const SKILL_HUB_PERMISSION_OUTCOME_FIELDS: any = new Set<any>(["recorded", "receiptRef"]);
+const SKILL_HUB_HOST_OWNED_INPUT_FIELDS: any = new Set<any>(["actor", "actor-id", "actorId", "tenantRef"]);
+const SKILL_HUB_SANDBOX_OPERATIONS: any = new Set<any>([
+  "skill_hub.scan",
+  "skill_hub.build",
+  "skill_hub.execute"
+]);
 
 function pluginPermissionGrantError(code?: any) : any {
   return Object.assign(new Error("Plugin permission grant evidence was denied."), { code });
@@ -223,6 +250,129 @@ function externalServiceRateLimit(value?: any) : any {
   return Object.freeze(output);
 }
 
+function skillHubContextError(code: any = "plugin_external_service_skill_hub_context_invalid") : any {
+  throw pluginExternalServiceError(code, 400);
+}
+
+function skillHubContextObject(value?: any, fields?: any) : any {
+  if (!isPlainObject(value) || Object.keys(value).some((field?: any) : any => !fields.has(field))) {
+    return skillHubContextError();
+  }
+  return value;
+}
+
+function skillHubContextText(value?: any, maximum: any = 256, required: any = true) : any {
+  const normalized: any = String(value || "").trim();
+  if ((required && !normalized) || normalized.length > maximum || /[\u0000-\u001f\u007f]/u.test(normalized)) {
+    return skillHubContextError();
+  }
+  return normalized;
+}
+
+function skillHubContextDigest(value?: any, prefixed: any = false, optional: any = false) : any {
+  const normalized: any = String(value || "").trim();
+  if (optional && !normalized) return "";
+  const pattern: any = prefixed ? /^sha256:[a-f0-9]{64}$/u : /^[a-f0-9]{64}$/u;
+  if (!pattern.test(normalized)) return skillHubContextError();
+  return normalized;
+}
+
+function skillHubSandboxOutcome(value?: any) : any {
+  const source: any = skillHubContextObject(value, SKILL_HUB_SANDBOX_OUTCOME_FIELDS);
+  if (!Array.isArray(source.inputDigests) || source.inputDigests.length !== 1) return skillHubContextError();
+  const createdAt: any = skillHubContextText(source.createdAt, 64);
+  if (!Number.isFinite(Date.parse(createdAt))) return skillHubContextError();
+  return Object.freeze({
+    runRef: skillHubContextDigest(source.runRef, true),
+    workloadKind: skillHubContextText(source.workloadKind, 64),
+    status: skillHubContextText(source.status, 64),
+    artifactDigest: skillHubContextDigest(source.artifactDigest, false, true),
+    inputDigests: Object.freeze(source.inputDigests.map((entry?: any) : any => skillHubContextDigest(entry))),
+    policyDigest: skillHubContextDigest(source.policyDigest),
+    cleanupState: skillHubContextText(source.cleanupState, 64, false),
+    outputDisposition: skillHubContextText(source.outputDisposition, 64, false),
+    reasonCode: skillHubContextText(source.reasonCode, 128, false),
+    failureStage: skillHubContextText(source.failureStage, 128, false),
+    createdAt: new Date(Date.parse(createdAt)).toISOString()
+  });
+}
+
+function skillHubPermissionOutcome(value?: any) : any {
+  const source: any = skillHubContextObject(value, SKILL_HUB_PERMISSION_OUTCOME_FIELDS);
+  if (source.recorded !== true) return skillHubContextError();
+  return Object.freeze({ recorded: true, receiptRef: skillHubContextDigest(source.receiptRef, true) });
+}
+
+function skillHubPairwisePrincipalRef(kind?: any, serviceRef?: any, value?: any, tenantIdentity: any = "") : any {
+  const normalized: any = skillHubContextText(value, 256);
+  const tenantScope: any = skillHubContextText(tenantIdentity, 256, false);
+  const digest: any = createHash("sha256").update(canonicalPluginRequest({
+    schemaVersion: "v0.0.1:skill-hub:pairwise-principal-1",
+    pluginId: "skill-hub",
+    serviceRef,
+    kind,
+    value: normalized,
+    ...(tenantScope ? { tenantScope } : {})
+  })).digest("hex");
+  return `skill_hub_${kind}_${digest}`;
+}
+
+function bindSkillHubExternalServiceRequest({ requestInput, record, serviceRef, user, idempotencyKey }: Record<string, any>) : any {
+  if (record.pluginId !== "skill-hub") return Object.freeze({ requestInput, idempotencyKey });
+  const context: any = skillHubContextObject(requestInput.meshrixContext, SKILL_HUB_HOST_CONTEXT_FIELDS);
+  if (context.schemaVersion !== SKILL_HUB_HOST_CONTEXT_SCHEMA) return skillHubContextError();
+  const phase: any = skillHubContextText(context.phase, 16);
+  if (!["execute", "prepare", "commit"].includes(phase)) return skillHubContextError();
+  const sandboxOperation: any = SKILL_HUB_SANDBOX_OPERATIONS.has(record.id);
+  const permissionOperation: any = record.id === "skill_hub.permission.grant";
+  const sandboxOutcome: any = context.sandboxOutcome === undefined ? null : skillHubSandboxOutcome(context.sandboxOutcome);
+  const permissionOutcome: any = context.permissionGrantOutcome === undefined
+    ? null
+    : skillHubPermissionOutcome(context.permissionGrantOutcome);
+  const prepareInvalid: any = phase === "prepare" && (
+    !sandboxOperation && !permissionOperation || Boolean(sandboxOutcome) || Boolean(permissionOutcome)
+  );
+  const commitInvalid: any = phase === "commit" && (
+    !sandboxOperation && !permissionOperation ||
+    sandboxOperation !== Boolean(sandboxOutcome) ||
+    permissionOperation !== Boolean(permissionOutcome)
+  );
+  const executeInvalid: any = phase === "execute" && (
+    sandboxOperation || permissionOperation || Boolean(sandboxOutcome) || Boolean(permissionOutcome)
+  );
+  if (prepareInvalid || commitInvalid || executeInvalid) {
+    return skillHubContextError();
+  }
+  const subjectIdentity: any = String(user.subjectId || user.userId || "").trim();
+  if (!subjectIdentity) return skillHubContextError("plugin_external_service_skill_hub_subject_required");
+  const tenantIdentity: any = String(user.tenantId || user.organizationNodeId || "local").trim() || "local";
+  const principal: any = Object.freeze({
+    subjectRef: skillHubPairwisePrincipalRef("subject", serviceRef, subjectIdentity, tenantIdentity),
+    tenantRef: skillHubPairwisePrincipalRef("tenant", serviceRef, tenantIdentity)
+  });
+  const meshrixContext: any = Object.freeze({
+    schemaVersion: SKILL_HUB_HOST_CONTEXT_SCHEMA,
+    phase,
+    principal,
+    ...(sandboxOutcome ? { sandboxOutcome } : {}),
+    ...(permissionOutcome ? { permissionGrantOutcome: permissionOutcome } : {})
+  });
+  const businessInput: any = Object.freeze(Object.fromEntries(
+    Object.entries(requestInput).filter(([field]: any[]) : any =>
+      field !== "meshrixContext" && !field.startsWith("__") && !SKILL_HUB_HOST_OWNED_INPUT_FIELDS.has(field)
+    )
+  ));
+  const boundInput: any = Object.freeze({ ...businessInput, meshrixContext });
+  const boundIdempotencyKey: any = `skill-hub:${createHash("sha256").update(canonicalPluginRequest({
+    schemaVersion: "v0.0.1:skill-hub:idempotency-binding-1",
+    serviceRef,
+    operationRef: record.id,
+    subjectRef: principal.subjectRef,
+    idempotencyKey: skillHubContextText(idempotencyKey, 256)
+  })).digest("hex")}`;
+  return Object.freeze({ requestInput: boundInput, idempotencyKey: boundIdempotencyKey });
+}
+
 function externalServiceRequestFacade(source?: any, record?: any, call?: any) : any {
   return Object.freeze({
     async request(input: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
@@ -244,11 +394,8 @@ function externalServiceRequestFacade(source?: any, record?: any, call?: any) : 
       if (!EXTERNAL_SERVICE_REFERENCE_PATTERN.test(serviceRef) || operationRef !== record.id) {
         throw pluginExternalServiceError("plugin_external_service_binding_denied", 403);
       }
-      const requestInput: any = externalServiceJson(input.input ?? {}, "Plugin external service input");
-      if (Buffer.byteLength(canonicalPluginRequest(requestInput), "utf8") > EXTERNAL_SERVICE_MAX_REQUEST_BYTES) {
-        throw pluginExternalServiceError("plugin_external_service_input_too_large", 413);
-      }
-      const idempotencyKey: any = String(input.idempotencyKey || "").trim();
+      let requestInput: any = externalServiceJson(input.input ?? {}, "Plugin external service input");
+      let idempotencyKey: any = String(input.idempotencyKey || "").trim();
       if (idempotencyKey.length > 256 || /[\u0000-\u001f\u007f]/u.test(idempotencyKey)) {
         throw pluginExternalServiceError("plugin_external_service_idempotency_invalid", 400);
       }
@@ -265,6 +412,18 @@ function externalServiceRequestFacade(source?: any, record?: any, call?: any) : 
         call.request?.__meshrixOperationRuntimeAuthorization ||
         {};
       const grant: any = runtimeAuthorization.grant || {};
+      const skillHubBinding: any = bindSkillHubExternalServiceRequest({
+        requestInput,
+        record,
+        serviceRef,
+        user,
+        idempotencyKey
+      });
+      requestInput = skillHubBinding.requestInput;
+      idempotencyKey = skillHubBinding.idempotencyKey;
+      if (Buffer.byteLength(canonicalPluginRequest(requestInput), "utf8") > EXTERNAL_SERVICE_MAX_REQUEST_BYTES) {
+        throw pluginExternalServiceError("plugin_external_service_input_too_large", 413);
+      }
       let response: any;
       try {
         response = await source.requestPluginExternalService({

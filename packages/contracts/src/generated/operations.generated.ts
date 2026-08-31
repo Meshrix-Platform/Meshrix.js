@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:11d6948c5385773e
+ * Hash: sha256:e0cae77bcf6d1a88
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:11d6948c5385773e";
+export const GENERATED_OPERATIONS_HASH = "sha256:e0cae77bcf6d1a88";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -5541,7 +5541,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "path": {
           "type": "string"
@@ -6322,7 +6324,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "path": {
           "type": "string"
@@ -6479,7 +6483,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "path": {
           "type": "string"
@@ -6623,16 +6629,23 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId"
+      ],
       "properties": {
         "confirm": {
           "type": "boolean"
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": []
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -6667,14 +6680,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "submit",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "submit",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -7235,8 +7256,18 @@ export const SERVER_API_OPERATIONS: any = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
-      "required": []
+      "required": [],
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "timeRange": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
     },
     "safety": {
       "risk": "read_only",
@@ -7271,14 +7302,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "report",
       "effectKind": "read",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "report",
       "effectKind": "read",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "receipt",
@@ -7531,7 +7570,12 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "targetWorkspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -7541,11 +7585,18 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetWorkspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -7580,14 +7631,24 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "request",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "request",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -7680,7 +7741,12 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "targetWorkspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -7690,11 +7756,18 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetWorkspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -7729,14 +7802,24 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "grant",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "grant",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -7828,7 +7911,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -7838,11 +7925,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -7877,14 +7966,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "scan",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "scan",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -7976,7 +8073,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -7986,11 +8087,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -8025,14 +8128,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "review",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "review",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -8124,7 +8235,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -8134,11 +8249,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -8173,14 +8290,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "preview",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "preview",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -8272,7 +8397,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -8282,11 +8411,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -8321,14 +8452,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "publish",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "publish",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -8420,7 +8559,12 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "targetWorkspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -8430,11 +8574,18 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetWorkspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -8469,14 +8620,24 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "adopt",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "adopt",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -8568,7 +8729,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -8578,11 +8743,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -8617,14 +8784,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "reject",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "reject",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -8716,7 +8891,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -8726,11 +8905,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "safe_write",
@@ -8765,14 +8946,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "request-changes",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "request-changes",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -8864,7 +9053,11 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "contributionId"
+      ],
       "properties": {
         "contributionId": {
           "type": "string"
@@ -8874,11 +9067,13 @@ export const SERVER_API_OPERATIONS: any = [
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": [
-        "contributionId"
-      ]
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -8913,14 +9108,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "contribution",
       "capabilityVerb": "revoke",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "contribution",
       "capabilityVerb": "revoke",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -9330,16 +9533,23 @@ export const SERVER_API_OPERATIONS: any = [
     ],
     "inputSchema": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "required": [
+        "workspaceId"
+      ],
       "properties": {
         "confirm": {
           "type": "boolean"
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         }
-      },
-      "required": []
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -9374,14 +9584,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "workspace",
       "capabilityVerb": "set",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "workspace",
       "capabilityVerb": "set",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -9605,7 +9823,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -10421,7 +10641,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -10655,7 +10877,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -10884,7 +11108,9 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "properties": {
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -11122,7 +11348,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -11356,7 +11584,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -11590,7 +11820,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -11825,7 +12057,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -12060,7 +12294,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -12295,7 +12531,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -12529,7 +12767,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -12757,7 +12997,9 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "properties": {
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -12989,7 +13231,9 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "properties": {
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -13226,7 +13470,9 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "boolean"
         },
         "workspaceId": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "semantic": {
           "type": "string"
@@ -20922,6 +21168,26 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "workspaceId"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -20944,14 +21210,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "workspace",
       "capabilityVerb": "set",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "workspace",
       "capabilityVerb": "set",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -20965,19 +21239,6 @@ export const SERVER_API_OPERATIONS: any = [
       "key": "workspace_governance.policy.set",
       "maxParallel": 1,
       "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
     },
     "audit": {
       "enabled": true,
@@ -21041,6 +21302,26 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "workspaceId"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -21071,14 +21352,22 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "workspace",
       "capabilityVerb": "evaluate",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "workspace",
       "capabilityVerb": "evaluate",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -21092,19 +21381,6 @@ export const SERVER_API_OPERATIONS: any = [
       "key": "workspace_governance.evaluate",
       "maxParallel": 1,
       "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
     },
     "audit": {
       "enabled": true,
@@ -21176,6 +21452,32 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "workspaceId",
+        "targetWorkspaceId"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "targetWorkspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -21198,14 +21500,24 @@ export const SERVER_API_OPERATIONS: any = [
       "resourceKind": "workspace",
       "capabilityVerb": "share-grant",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "workspace",
       "capabilityVerb": "share-grant",
       "effectKind": "safe-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -21219,19 +21531,6 @@ export const SERVER_API_OPERATIONS: any = [
       "key": "workspace_governance.share_grant",
       "maxParallel": 1,
       "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
     },
     "audit": {
       "enabled": true,

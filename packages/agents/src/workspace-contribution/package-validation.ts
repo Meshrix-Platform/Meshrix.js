@@ -35,6 +35,47 @@ export function asArray(value?: unknown): unknown[] {
 export function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
+export function requiredWorkspaceBinding(
+  value?: unknown,
+  field = "workspaceId",
+): string {
+  if (typeof value !== "string") {
+    const error: CodedError = new TypeError(
+      `${field} must be a non-empty string.`,
+    );
+    error.code = "workspace_binding_invalid";
+    throw error;
+  }
+  const normalized = value.trim();
+  if (
+    !normalized ||
+    normalized.length > 256 ||
+    /[\u0000-\u001f\u007f]/u.test(normalized)
+  ) {
+    const error: CodedError = new TypeError(
+      `${field} must be a non-empty string.`,
+    );
+    error.code = "workspace_binding_invalid";
+    throw error;
+  }
+  return normalized;
+}
+export function assertWorkspaceBinding(
+  expectedWorkspaceId: unknown,
+  actualWorkspaceId: unknown,
+  field = "workspaceId",
+): string {
+  const expected = requiredWorkspaceBinding(expectedWorkspaceId, field);
+  const actual = requiredWorkspaceBinding(actualWorkspaceId, field);
+  if (actual !== expected) {
+    const error: CodedError = new Error(
+      `${field} must match the contribution workspace.`,
+    );
+    error.code = "workspace_binding_invalid";
+    throw error;
+  }
+  return actual;
+}
 export function shallowObject(value?: unknown): JsonObject {
   return asJsonObject(value);
 }
@@ -83,8 +124,11 @@ export function publicAssetRecord(value: JsonObject = {}): AssetRecord {
   return {
     assetId: text(value.assetId),
     contributionId: text(value.contributionId),
-    workspaceId: text(value.workspaceId),
-    sourceWorkspaceId: text(value.sourceWorkspaceId),
+    workspaceId: requiredWorkspaceBinding(value.workspaceId),
+    sourceWorkspaceId: requiredWorkspaceBinding(
+      value.sourceWorkspaceId,
+      "sourceWorkspaceId",
+    ),
     contributionType: normalizeContributionType(value.contributionType),
     bucket: text(value.bucket),
     relation: text(value.relation || "canonical"),
@@ -103,9 +147,7 @@ export function normalizeContribution(
 ): Contribution {
   const input = shallowObject(rawInput);
   const defaults = shallowObject(rawDefaults);
-  const workspaceId = text(
-    input.workspaceId || defaults.workspaceId || "default",
-  );
+  const workspaceId = requiredWorkspaceBinding(input.workspaceId);
   const payloadRefs = stringList(input.payloadRefs);
   const requestedActions = stringList(
     input.requestedActions || input.actions || ["discover", "read"],
@@ -157,7 +199,7 @@ export function normalizeContribution(
         "agent",
     ),
     sourceWorkspaceIds: stringList(input.sourceWorkspaceIds || workspaceId),
-    targetWorkspaceIds: stringList(input.targetWorkspaceIds || workspaceId),
+    targetWorkspaceIds: stringList(input.targetWorkspaceIds),
     contributionType,
     title: text(input.title || `${contributionType} contribution`),
     payloadRefs,
@@ -291,13 +333,49 @@ export function refreshMetrics(
     assetRecordProjector = publicAssetRecord,
   }: { assetRecordProjector?: AssetRecordProjector } = {},
 ): Contribution {
-  contribution.grants = eventList(contribution.grants);
-  contribution.permissionRequests = eventList(contribution.permissionRequests);
-  contribution.downloadEvents = eventList(contribution.downloadEvents);
-  contribution.usageEvents = eventList(contribution.usageEvents);
-  contribution.executionReceipts = receiptList(contribution.executionReceipts);
+  contribution.workspaceId = requiredWorkspaceBinding(contribution.workspaceId);
+  contribution.grants = eventList(contribution.grants).map((event) => ({
+    ...event,
+    targetWorkspaceId: requiredWorkspaceBinding(
+      event.targetWorkspaceId,
+      "targetWorkspaceId",
+    ),
+  }));
+  contribution.permissionRequests = eventList(
+    contribution.permissionRequests,
+  ).map((event) => ({
+    ...event,
+    targetWorkspaceId: requiredWorkspaceBinding(
+      event.targetWorkspaceId,
+      "targetWorkspaceId",
+    ),
+  }));
+  contribution.downloadEvents = eventList(contribution.downloadEvents).map(
+    (event) => ({
+      ...event,
+      workspaceId: requiredWorkspaceBinding(event.workspaceId),
+    }),
+  );
+  contribution.usageEvents = eventList(contribution.usageEvents).map(
+    (event) => ({
+      ...event,
+      workspaceId: requiredWorkspaceBinding(event.workspaceId),
+    }),
+  );
+  contribution.executionReceipts = receiptList(
+    contribution.executionReceipts,
+  ).map((receipt) => ({
+    ...receipt,
+    workspaceId: requiredWorkspaceBinding(receipt.workspaceId),
+  }));
   contribution.reviews = eventList(contribution.reviews);
-  contribution.adoptions = eventList(contribution.adoptions);
+  contribution.adoptions = eventList(contribution.adoptions).map((event) => ({
+    ...event,
+    targetWorkspaceId: requiredWorkspaceBinding(
+      event.targetWorkspaceId,
+      "targetWorkspaceId",
+    ),
+  }));
   contribution.assetRecords = asArray(contribution.assetRecords).map((item) =>
     assetRecordProjector(shallowObject(item)),
   );

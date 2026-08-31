@@ -4,6 +4,7 @@ import {
   hasCapability,
   requiredCapabilitiesFor
 } from "./authorization-capabilities.ts";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import { createWeightedLruCache } from "../../checkpoint/tree/weighted-cache-substrate.ts";
 import { firstString, nowIso, randomId, riskRank, stringSet, stringsFrom, uniqueStrings, effectDetails } from "./authorization-engine-common.ts";
@@ -168,6 +169,7 @@ function compiledFactsStructuralWeight(value: unknown): number {
 const COMPILED_FACT_REVISION_KEYS: readonly string[] = Object.freeze([
   "revision",
   "version",
+  "policyFingerprint",
   "generation",
   "sourceRevision",
   "catalogRevision",
@@ -192,7 +194,19 @@ function firstFactField(fact: Record<string, unknown>, keys: readonly string[]):
   return "";
 }
 
-function exactFactDescriptor(label: string, fact: unknown = null): readonly string[] | null {
+function compiledFactContent(label: string, record: Record<string, unknown>): Record<string, unknown> {
+  if (label !== "policy") {
+    return record;
+  }
+  const {
+    expiresAt: _expiresAt,
+    useCount: _useCount,
+    ...compiledContent
+  } = record;
+  return compiledContent;
+}
+
+function exactFactDescriptor(label: string, fact: unknown = null): readonly unknown[] | null {
   if (fact === null || fact === undefined) {
     return Object.freeze([label, "none", "none"]);
   }
@@ -203,12 +217,12 @@ function exactFactDescriptor(label: string, fact: unknown = null): readonly stri
   const identity: string = firstFactField(record, COMPILED_FACT_IDENTITY_KEYS);
   const revision: string = firstFactField(record, COMPILED_FACT_REVISION_KEYS);
   return identity && revision
-    ? Object.freeze([label, identity, revision])
+    ? Object.freeze([label, identity, revision, compiledFactContent(label, record)])
     : null;
 }
 
 function exactCompiledFactKey(input: AuthorizationEvaluationInput = {}): string | null {
-  const descriptors: Array<readonly string[] | null> = [
+  const descriptors: Array<readonly unknown[] | null> = [
     exactFactDescriptor("policy", input.grant || input.restriction || null),
     exactFactDescriptor("profile", input.profile || null),
     exactFactDescriptor("subject", input.subject || null),
@@ -219,10 +233,17 @@ function exactCompiledFactKey(input: AuthorizationEvaluationInput = {}): string 
   if (descriptors.some((descriptor) => descriptor === null)) {
     return null;
   }
-  return crypto
-    .createHash("sha256")
-    .update(JSON.stringify(descriptors))
-    .digest("hex");
+  try {
+    return crypto
+      .createHash("sha256")
+      .update(canonicalJson([
+        ...descriptors,
+        ["grant-required", input.grantRequired === true]
+      ]))
+      .digest("hex");
+  } catch {
+    return null;
+  }
 }
 
 function revisionOf(fact: unknown = null): string {
@@ -373,7 +394,7 @@ function compileAuthorizationFacts(input: AuthorizationEvaluationInput = {}): Co
       subject: input.subject || null,
       actor: input.actor || null,
       authSession: input.authSession || null,
-      grant
+      grant: policy
     });
   const tool = input.tool || null;
   const profile = input.profile || null;
@@ -464,13 +485,32 @@ export function evaluateAuthorizationPolicy({
   compiledFacts = null
 }: AuthorizationEvaluationInput = {}) {
   const authorizationPolicy = grant || restriction;
-  const resolvedSubject = compiledFacts?.subject || resolveAuthorizationSubject({ subject, actor, authSession, grant });
+  const resolvedSubject = compiledFacts?.subject || resolveAuthorizationSubject({ subject, actor, authSession, grant: grant || restriction });
   const resourceContext = resolveResourceContext({ operation, tool, input, context });
   const requiredScopes = requiredScopesFor(operation, tool);
-  const requiredCapabilities = requiredCapabilitiesFor(operation, tool);
+  // Context-carried capability requirements (for example console route guards)
+  // are honored in addition to operation/tool declarations; the engine never
+  // silently drops them.
+  const requiredCapabilities = uniqueStrings([
+    ...requiredCapabilitiesFor(operation, tool),
+    ...stringsFrom(context?.requiredCapabilities)
+  ]);
   const scopeSet = compiledFacts?.scopeSet || stringSet(resolvedSubject.scopes);
   const missingScopes = requiredScopes.filter((scope) => !scopeSet.has(scope));
-  const capabilityMode = requiredCapabilities.length > 0 && (resolvedSubject.capabilities || []).length > 0;
+  // Capability requirements apply whenever any are declared and the subject is
+  // not a console session. Console users authenticate through the console
+  // authority and are governed by declared scopes; every other subject
+  // (anonymous, tool-grant, system, process identity) is denied missing
+  // capabilities rather than silently skipping the gate (default-deny).
+  // The dispatcher only requests authorization re-evaluation with
+  // skipAuthorization for behalf of the platform's own internal dispatch
+  // wrapper operations (never reachable from the HTTP request surface); those
+  // paths are already subject to process-identity verification, so capability
+  // requirements are not re-applied there.
+  const consoleSessionSubject = String(resolvedSubject.type || "") === "console-user";
+  const capabilityMode = requiredCapabilities.length > 0 &&
+    !consoleSessionSubject &&
+    context?.skipAuthorization !== true;
   const subjectCapabilitiesForDecision = compiledFacts
     ? compiledFacts.effectiveCapabilities
     : effectiveSubjectCapabilities(resolvedSubject);
@@ -479,7 +519,9 @@ export function evaluateAuthorizationPolicy({
         ? !hasCompiledCapability(compiledFacts.capabilitySet, capability)
         : !hasCapability(subjectCapabilitiesForDecision, capability))
     : [];
-  const effectiveMissingScopes = capabilityMode ? [] : missingScopes;
+  // Scope requirements are enforced independently of capability mode; a
+  // subject holding every capability must still satisfy declared scopes.
+  const effectiveMissingScopes = missingScopes;
   const missingToolsets = compiledFacts ? compiledFacts.missingToolsets : toolsetMisses(authorizationPolicy, tool);
   const risk = operationRisk(operation, tool);
   const policyAllowedOrigins = authorizationPolicy?.allowedOrigins || [];
@@ -818,7 +860,7 @@ export function createAuthorizationEngine({
       subject: input.subject || null,
       actor: input.actor || null,
       authSession: input.authSession || null,
-      grant
+      grant: grant || input.restriction || null
     });
     const candidateKey: string | null = exactCompiledFactKey(input);
     let cached = null;

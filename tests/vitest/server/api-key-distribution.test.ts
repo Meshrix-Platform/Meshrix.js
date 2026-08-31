@@ -146,6 +146,69 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
 }
 
 describe("scoped API Key distribution", () : any => {
+  it("preserves explicitly selected upstream tool capabilities beside the gateway operation capability", async () : Promise<any> => {
+    const gatewayCapabilityId: any = "cap:upstream:opaque-service:tools-call";
+    const selectedToolCapabilityId: any = `${gatewayCapabilityId}-records-list`;
+    const current: any = harness({
+      tools: [{
+        id: "upstream.opaque-service.tools-call",
+        toolsets: ["meshrix.gateway.read"],
+        requiredScopes: ["gateway:read"],
+        risk: "read_only",
+        dynamicCapability: {
+          capabilityId: gatewayCapabilityId,
+          serviceId: "opaque-service",
+          risk: "read_only",
+          requiredScopes: ["gateway:read"],
+          toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+          credentialBindingIds: [],
+          resourceContext: {
+            serviceId: "opaque-service",
+            requestedEgress: "mcp",
+            capabilityDomain: "upstream-gateway",
+            capabilityVerb: "tools/call",
+            resourceKind: "upstream-service-operation"
+          }
+        }
+      }],
+      toolsets: [{ id: "meshrix.gateway.read", requiredScopes: ["gateway:read"] }],
+      scopes: [{ id: "gateway:read" }]
+    });
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Upstream MCP tool worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          serviceIds: ["opaque-service"],
+          capabilityIds: [selectedToolCapabilityId],
+          toolsetIds: ["meshrix.gateway.read"],
+          allowedTools: ["upstream.opaque-service.tools-call"],
+          deniedTools: [],
+          scopeIds: ["gateway:read"],
+          maximumRisk: "low",
+          resources: {
+            ...policy().resources,
+            mode: "restricted",
+            workspaceIds: [],
+            egressClasses: ["mcp"],
+            capabilityDomains: ["upstream-gateway"],
+            capabilityVerbs: ["tools/call"],
+            resourceKinds: ["upstream-service-operation"]
+          }
+        })
+      });
+
+      expect(created.record.policy.capabilityIds).toEqual([
+        gatewayCapabilityId,
+        selectedToolCapabilityId
+      ]);
+    } finally {
+      await current.close();
+    }
+  });
+
   it("revalidates dynamic MCP effects by exact capability while accepting their non-catalog toolset identity", async () : Promise<any> => {
     const current: any = harness({
       toolsets: [{ id: "meshrix.gateway.read" }],

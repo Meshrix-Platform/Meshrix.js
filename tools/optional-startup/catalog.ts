@@ -4,7 +4,6 @@ export const OPTIONAL_STARTUP_TARGETS: readonly any[] = Object.freeze([
   target("service:file-parser-format-convert", "service", "./targets/service-file-parser-format-convert.ts"),
   target("service:model-gateway", "service", "./targets/service-model-gateway.ts"),
   target("service:skill-hub", "service", "./targets/service-skill-hub.ts"),
-  target("plugin:coding-github", "plugin", "./targets/plugin-coding-github.ts"),
   target("plugin:external-gateway", "plugin", "./targets/plugin-external-gateway.ts"),
   target("plugin:model-gateway", "plugin", "./targets/plugin-model-gateway.ts"),
   target("plugin:shared-space", "plugin", "./targets/plugin-shared-space.ts"),

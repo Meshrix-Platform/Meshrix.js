@@ -23,8 +23,21 @@ export function hasLocalDirectoryMountInput(input = {}) {
   ).trim());
 }
 
-export function workspaceIdFrom(input = {}, fallback = "") {
-  return String(input.workspaceId || input.workspace || fallback || "default").trim() || "default";
+export function workspaceIdFrom(input = {}) {
+  if (typeof input.workspaceId !== "string") {
+    throw Object.assign(new TypeError("workspaceId must be a non-empty string."), {
+      code: "shared_space_invalid_workspace",
+      status: 400
+    });
+  }
+  const workspaceId = input.workspaceId.trim();
+  if (!workspaceId) {
+    throw Object.assign(new TypeError("workspaceId must be a non-empty string."), {
+      code: "shared_space_invalid_workspace",
+      status: 400
+    });
+  }
+  return workspaceId;
 }
 
 export function workspaceAccessOptions(authSession = null) {

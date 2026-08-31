@@ -599,7 +599,8 @@ describe("operation-permission runtime (behavior)", () : any => {
         toolsetIds: dynamicCapability.toolsets,
         scopeIds: dynamicCapability.requiredScopes,
         risk: "read_only",
-        resourceContext: dynamicCapability.resourceContext
+        resourceContext: dynamicCapability.resourceContext,
+        requiredCapabilities: []
       }
     }));
     expect(fixture.store.appendExecution).toHaveBeenCalledWith(expect.objectContaining({

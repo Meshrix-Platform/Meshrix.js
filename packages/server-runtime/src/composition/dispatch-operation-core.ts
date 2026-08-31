@@ -210,7 +210,8 @@ export async function dispatchOperation({
   logger = getRuntimeLogger(),
   authSession: providedAuthSession = null,
   actor: providedActor = null,
-  skipAuthorization = false
+  skipAuthorization = false,
+  invokeOperation = invokeRegisteredOperation
 }: Record<string, any> = {}) : Promise<any> {
   if (!operation) {
     throw new Error("dispatchOperation requires an operation.");
@@ -1314,7 +1315,7 @@ export async function dispatchOperation({
 	              maxParallel: operation.concurrency?.maxParallel || 1
 	            }
 	          });
-	          return invokeRegisteredOperation({
+	          return invokeOperation({
 	            operation,
 	            controllers,
             request,

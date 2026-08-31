@@ -6,7 +6,7 @@ const writeOperation: Readonly<Record<string, any>> = Object.freeze({
   id: "workspace.create",
   risk: "safe_write",
   requiredScopes: ["workspace:write"],
-  requiredCapabilities: ["cap:api:workspace.create"]
+  requiredCapabilities: ["cap:api:workspace.file.list"]
 });
 
 describe("Authorization engine", () : any => {
@@ -16,7 +16,7 @@ describe("Authorization engine", () : any => {
       subject: {
         type: "user",
         subjectId: "user-1",
-        capabilities: ["cap:api:workspace.create"],
+        capabilities: ["cap:api:workspace.file.list"],
         scopes: ["workspace:write"],
         maxRisk: "safe_write"
       }
@@ -83,5 +83,77 @@ describe("Authorization engine", () : any => {
     expect(decision.allowed).toBe(false);
     expect(decision.effect).toBe("require_approval");
     expect(decision.reasonCode).toBe("approval_receipt_required");
+  });
+
+  it("denies a subject with no capabilities when the operation requires them (default deny)", () : any => {
+    const decision: any = evaluateAuthorizationPolicy({
+      operation: writeOperation,
+      subject: {
+        type: "user",
+        subjectId: "user-3",
+        scopes: ["workspace:write"],
+        maxRisk: "safe_write"
+      }
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.reasonCode).toBe("missing_capabilities");
+    expect(decision.missingCapabilities).toEqual(["cap:api:workspace.file.list"]);
+  });
+
+  it("denies a subject missing required scopes even when the capability is present", () : any => {
+    const decision: any = evaluateAuthorizationPolicy({
+      operation: writeOperation,
+      subject: {
+        type: "user",
+        subjectId: "user-4",
+        capabilities: ["cap:api:workspace.file.list"],
+        scopes: ["workspace:read"],
+        maxRisk: "safe_write"
+      }
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.reasonCode).toBe("missing_scopes");
+    expect(decision.missingScopes).toEqual(["workspace:write"]);
+  });
+
+  it("honors context-carried requiredCapabilities from route guards", () : any => {
+    const decision: any = evaluateAuthorizationPolicy({
+      operation: {
+        id: "console.route_guard",
+        requiredScopes: [],
+        readOnly: true
+      },
+      subject: {
+        type: "user",
+        subjectId: "user-5",
+        capabilities: ["cap:api:workspace.file.list"],
+        scopes: [],
+        maxRisk: "safe_write"
+      },
+      context: { requiredCapabilities: ["cap:api:workspace.file.list"] }
+    });
+
+    expect(decision.allowed).toBe(true);
+
+    const denied: any = evaluateAuthorizationPolicy({
+      operation: {
+        id: "console.route_guard",
+        requiredScopes: [],
+        readOnly: true
+      },
+      subject: {
+        type: "user",
+        subjectId: "user-6",
+        capabilities: [],
+        scopes: [],
+        maxRisk: "safe_write"
+      },
+      context: { requiredCapabilities: ["cap:api:workspace.file.list"] }
+    });
+
+    expect(denied.allowed).toBe(false);
+    expect(denied.reasonCode).toBe("missing_capabilities");
   });
 });

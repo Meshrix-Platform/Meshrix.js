@@ -36,6 +36,10 @@ describe("current source tree digest", () : any => {
   });
 
   it("uses verified package provenance when the deployed source has no Git metadata", async () : Promise<any> => {
+    const savedWorker: any = process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER;
+    const savedAcceptanceRoot: any = process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT;
+    delete process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER;
+    delete process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT;
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-packaged-source-digest-"));
     try {
       const content: any = Buffer.from("packaged source\n", "utf8");
@@ -66,6 +70,10 @@ describe("current source tree digest", () : any => {
       await fs.writeFile(path.join(root, entry.path), "tampered\n");
       expect(() : any => currentSourceTreeDigest(root)).toThrow("does not match its provenance");
     } finally {
+      if (savedWorker === undefined) delete process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER;
+      else process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER = savedWorker;
+      if (savedAcceptanceRoot === undefined) delete process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT;
+      else process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT = savedAcceptanceRoot;
       await fs.rm(root, { recursive: true, force: true });
     }
   });

@@ -59,7 +59,7 @@ function defineSpec({
 
 const SPEC_LIST: any[] = [
   defineSpec({ path: "build/reports/approval-governance.json", schemaVersion: "v0.0.1:authorization:approval-governance-report-1", verifier: "tools/server-scripts/verify-approval-governance.ts", timestampField: "finishedAt" }),
-  defineSpec({ path: "build/reports/better-plan.json", schemaVersion: "v0.0.1:release:public-source-boundary-verifier-1", verifier: "tools/server-scripts/verify-better-plan.ts" }),
+  defineSpec({ path: "build/reports/better-plan.json", schemaVersion: "v0.0.1:meshrix:current-plan-authority-report-1", verifier: "tools/server-scripts/verify-better-plan.ts", readyFields: ["accepted"] }),
   defineSpec({ path: "build/reports/capability-acceptance-machines.json", schemaVersion: "v0.0.1:acceptance:capability-machines-report-7", verifier: "tools/server-scripts/verify-capability-acceptance-machines.ts", readyFields: ["readyForReleaseReduction", "summary.readyForReleaseReduction"], reducer: REQUIRED_REPORT_REDUCERS.CAPABILITY_ACCEPTANCE }),
   defineSpec({ path: "build/reports/composition-source-package.json", schemaVersion: "v0.0.1:release:composition-source-package-report-1", verifier: "tools/server-scripts/verify-composition-source-package.ts", readyFields: ["summary.compositionSourcePackageAcceptanceReady"] }),
   defineSpec({ path: "build/reports/console-admin-browser-visual.json", schemaVersion: "v0.0.1:console:admin-browser-visual-report-2", verifier: "tools/server-scripts/verify-console-admin-browser-visual.ts" }),
@@ -88,7 +88,7 @@ const SPEC_LIST: any[] = [
   defineSpec({ path: "build/reports/maintenance-plugin-backend-unreachable.json", schemaVersion: "v0.0.1:maintenance-plugin:backend-unreachable-report-1", verifier: "tools/server-scripts/verify-agent-self-maintenance-runtime.ts" }),
   defineSpec({ path: "build/reports/mcp-installer-convergence.json", schemaVersion: "v0.0.1:mcp:installer-convergence-report-1", verifier: "tools/server-scripts/verify-mcp-installer-convergence.ts", timestampField: "finishedAt" }),
   defineSpec({ path: "build/reports/mcp-gateway-load.json", schemaVersion: "v0.0.1:mcp:gateway-load-report-1", verifier: "tools/server-scripts/stress-mcp-gateway.ts" }),
-  defineSpec({ path: "build/reports/node-runtime-supply-chain.json", schemaVersion: "v1:node-runtime-supply-chain-report", verifier: "tools/server-scripts/verify-node-runtime-supply-chain.ts" }),
+  defineSpec({ path: "build/reports/node-runtime-supply-chain.json", schemaVersion: "v0.0.1:mcp:node-runtime-supply-chain-report-2", verifier: "tools/server-scripts/verify-node-runtime-supply-chain.ts" }),
   defineSpec({ path: "build/reports/npm-package-installability.json", schemaVersion: "v0.0.1:release:npm-package-installability-report-1", verifier: "tools/server-scripts/verify-npm-package-installability.ts", timestampField: "finishedAt", reducer: REQUIRED_REPORT_REDUCERS.NPM_PACKAGE_INSTALLABILITY }),
   defineSpec({ path: "build/reports/mcp-proxy-transport.json", schemaVersion: "v0.0.1:mcp:proxy-transport-report-1", verifier: "tools/server-scripts/verify-mcp-proxy-transport.ts", timestampField: "finishedAt", reducer: REQUIRED_REPORT_REDUCERS.MCP_PROXY_TRANSPORT }),
   defineSpec({ path: "build/reports/mcp-release-portable-assembly.json", schemaVersion: "v0.0.1:mcp:release-portable-assembly-report-1", verifier: "tools/server-scripts/verify-mcp-release-portable-assembly.ts", timestampField: "finishedAt" }),

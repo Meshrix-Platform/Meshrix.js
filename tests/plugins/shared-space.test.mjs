@@ -44,15 +44,27 @@ function memoryPluginData() {
   });
 }
 
-function authorizedCall(approval = null) {
+function authorizedCall(approval = null, authorization = {}) {
+  const {
+    authenticated = true,
+    authorized = true,
+    current = true,
+    revoked = false,
+    includeCurrent = true
+  } = authorization;
   return Object.freeze({
     auth: Object.freeze({
-      authenticated: true,
+      authenticated,
       subjectRef: "subject-1",
       tenantRef: "tenant-1",
       scopes: Object.freeze(["workspace:read", "workspace:maintain", "storage:read", "storage:write"])
     }),
-    governance: Object.freeze({ authorized: true, scopes: Object.freeze(["workspace:read"]) }),
+    governance: Object.freeze({
+      authorized,
+      ...(includeCurrent ? { current } : {}),
+      revoked,
+      scopes: Object.freeze(["workspace:read"])
+    }),
     workspaceAuthority: Object.freeze({ authorized: true, workspaceRef: "workspace-1" }),
     ...(approval ? { approval } : {})
   });
@@ -344,9 +356,9 @@ test("Shared Space activates the complete operation, route, MCP, console, state-
     runtime.contributions.consoleEntries["workspaces.local-directory"].assetPath,
     "console/index.mjs"
   );
-  assert.equal(
-    runtime.contributions.consoleEntries["workspaces.local-directory"].assetExport,
-    "mountPluginConsole"
+  assert.deepEqual(
+    runtime.contributions.consoleEntries["workspaces.local-directory"].toolIds,
+    ["sharedspace.localDir.list", "sharedspace.localDir.connect", "sharedspace.sync.apply"]
   );
   assert.deepEqual(
     runtime.contributions.operations["sharedspace.sandbox.input.seal"].requiredHostPorts,
@@ -393,6 +405,90 @@ test("Shared Space connects and synchronizes a local directory only through the 
   assert.equal(synced.statusCode, 200);
   assert.equal(synced.body.syncReceipt.syncReceiptId, "sync-1");
   assert.equal(fixture.calls.sync.length, 1);
+  await runtime.close();
+});
+
+test("Shared Space requires authenticated current governance before any Host side effect", async () => {
+  const runtime = await activate();
+  const fixture = createHostFixture();
+  const operation = runtime.contributions.operations["sharedspace.localDir.connect"];
+  const input = Object.freeze({
+    workspaceId: "workspace-1",
+    mountSelectionRef: "selection-1"
+  });
+  const deniedAuthorizations = [
+    { authenticated: false },
+    { authorized: false },
+    { current: false },
+    { includeCurrent: false },
+    { revoked: true }
+  ];
+
+  for (const authorization of deniedAuthorizations) {
+    const denied = await operation.execute({
+      operation: operation.definition,
+      input,
+      call: authorizedCall(null, authorization),
+      host: { agentWorkspace: fixture.agentWorkspace }
+    });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(denied.body.error.code, "shared_space_operation_denied");
+  }
+  assert.equal(fixture.calls.connect.length, 0);
+  await runtime.close();
+});
+
+test("Shared Space requires an explicit workspace and protects Host-owned request fields", async () => {
+  const runtime = await activate();
+  const fixture = createHostFixture();
+  const host = {
+    agentWorkspace: fixture.agentWorkspace,
+    sandboxExecution: fixture.sandboxExecution,
+    opaqueArtifactCustody: Object.freeze({})
+  };
+  for (const operationId of Object.keys(runtime.contributions.operations)) {
+    const denied = await invoke(runtime, operationId, {}, host);
+    assert.equal(denied.statusCode, 400);
+    assert.equal(denied.body.error.code, "shared_space_invalid_workspace");
+  }
+  const invalidInputs = [
+    { workspaceId: "" },
+    { workspaceId: "   " },
+    { workspaceId: 1 },
+    { workspace: "workspace-1" },
+    null,
+    []
+  ];
+
+  for (const input of invalidInputs) {
+    const denied = await invoke(runtime, "sharedspace.localDir.connect", input, host);
+    assert.equal(denied.statusCode, 400);
+    assert.ok([
+      "shared_space_invalid_request",
+      "shared_space_invalid_workspace"
+    ].includes(denied.body.error.code));
+  }
+  assert.equal(fixture.calls.connect.length, 0);
+
+  const connected = await invoke(runtime, "sharedspace.localDir.connect", {
+    workspaceId: "  workspace-1  ",
+    mountSelectionRef: "selection-1",
+    operationId: "forged-operation",
+    createdBy: "forged-actor",
+    actorUserId: "forged-actor",
+    allowedWorkspaceIds: ["forged-workspace"],
+    canAccessAll: true,
+    sharingMode: "admin"
+  }, host);
+  assert.equal(connected.statusCode, 201);
+  assert.equal(fixture.calls.connect.length, 1);
+  assert.equal(fixture.calls.connect[0].workspaceId, "workspace-1");
+  assert.equal(fixture.calls.connect[0].operationId, "sharedspace.localDir.connect");
+  assert.equal(fixture.calls.connect[0].createdBy, "subject-1");
+  assert.equal(fixture.calls.connect[0].actorUserId, "subject-1");
+  assert.deepEqual(fixture.calls.connect[0].allowedWorkspaceIds, ["workspace-1"]);
+  assert.equal(fixture.calls.connect[0].canAccessAll, false);
+  assert.equal(fixture.calls.connect[0].sharingMode, "owner-bound");
   await runtime.close();
 });
 

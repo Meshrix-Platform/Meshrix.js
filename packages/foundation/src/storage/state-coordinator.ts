@@ -1014,7 +1014,36 @@ export async function readJsonFile(filePath: string, fallback: unknown = undefin
   }
 }
 
-async function truncateTornJsonLineTail(handle: FileHandle): Promise<void> {
+export async function truncateTornJsonLineTail(filePath: string): Promise<void> {
+  const parentDirectory = path.dirname(filePath);
+  await ensurePrivateStateDirectory(parentDirectory);
+  let handle: FileHandle | null = null;
+  try {
+    const existing = await fs.lstat(filePath);
+    if (!existing.isFile() || existing.isSymbolicLink()) {
+      throw stateMutationError("STATE_JSONL_PATH_INVALID", "JSONL state must be a regular file.");
+    }
+  } catch (error: unknown) {
+    const code = error && typeof error === "object" ? String((error as { code?: unknown }).code || "") : "";
+    if (code === "ENOENT") return;
+    throw error;
+  }
+  const flags = fsNative.constants.O_RDWR |
+    (fsNative.constants.O_NOFOLLOW || 0);
+  try {
+    handle = await fs.open(filePath, flags, PRIVATE_FILE_MODE);
+    const stat = await handle.stat();
+    if (!stat.isFile()) {
+      throw stateMutationError("STATE_JSONL_PATH_INVALID", "JSONL state must be a regular file.");
+    }
+    await truncateTornTailFromHandle(handle);
+    await syncStateDirectory(parentDirectory);
+  } finally {
+    await handle?.close().catch((): void => {});
+  }
+}
+
+async function truncateTornTailFromHandle(handle: FileHandle): Promise<void> {
   const stat = await handle.stat();
   if (!stat.isFile()) {
     throw stateMutationError("STATE_JSONL_PATH_INVALID", "JSONL state must be a regular file.");
@@ -1069,7 +1098,7 @@ export async function appendJsonLine(filePath: string, value: unknown): Promise<
     } catch (error: unknown) {
       if (!isUnsupportedDirectorySync(error)) throw error;
     }
-    await truncateTornJsonLineTail(handle);
+    await truncateTornTailFromHandle(handle);
     await handle.writeFile(`${JSON.stringify(value)}\n`, "utf8");
     await handle.sync();
     await handle.close();

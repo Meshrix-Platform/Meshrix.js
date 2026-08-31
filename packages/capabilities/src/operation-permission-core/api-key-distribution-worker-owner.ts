@@ -7,6 +7,7 @@ import {
   organizationLineage,
   organizationLineageDigest
 } from "@meshrix/foundation/security/authorization/api-key-issuer-authority";
+import { toolExecuteCapabilityId } from "@meshrix/foundation/security/authorization/authorization-engine";
 
 export const API_KEY_CREDENTIAL_VERSION = "mxak1";
 export const API_KEY_CREDENTIAL_PATTERN = /^mxak1\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/u;
@@ -257,6 +258,104 @@ function normalizePolicy(input: any, registry: any): any {
         fail("api_key_input_invalid", "API Key policy references an unknown catalog item.");
       }
     }
+    const selectedTools: any[] = (catalog.tools || []).filter((tool?: any) : any =>
+      normalized.allowedTools.includes(String(tool?.id || ""))
+    );
+    const dynamicTools: any[] = selectedTools.filter((tool?: any) : any =>
+      tool?.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
+    );
+    if (dynamicTools.length > 0) {
+      const requestedDynamicCapabilities: any[] = [...normalized.capabilityIds];
+      if (requestedDynamicCapabilities.length === 0 && dynamicTools.length !== selectedTools.length) {
+        fail("api_key_input_invalid", "Dynamic upstream and ordinary tools must be issued in separate API Key policies.");
+      }
+      const derived: any = (field?: any) : any => [...new Set<any>(dynamicTools
+        .flatMap((tool?: any) : any => {
+          const capability: any = tool.dynamicCapability || {};
+          const resource: any = capability.resourceContext || tool.resourceContext || {};
+          return typeof field === "function" ? field(tool, capability, resource) : [];
+        })
+        .map((value?: any) : any => String(value || "").trim())
+        .filter(Boolean))].sort();
+      const catalogToolsets: any = new Set<any>((catalog.toolsets || []).map((item?: any) : any => item.id));
+      const requestedToolsets: any[] = [...normalized.toolsetIds];
+      const derivedServiceIds: any[] = derived((_tool?: any, capability?: any) : any => [capability.serviceId]);
+      normalized.serviceIds = [...new Set<any>([
+        ...normalized.serviceIds,
+        ...derivedServiceIds
+      ])].sort();
+      const selectedServicePrefixes: any[] = normalized.serviceIds.map((serviceId?: any) : any =>
+        `cap:upstream:${String(serviceId).replace(/[^A-Za-z0-9_-]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 80) || "service"}:`
+      );
+      const explicitlyBoundCapabilities: any[] = requestedDynamicCapabilities.filter((capabilityId?: any) : any =>
+        selectedServicePrefixes.some((prefix?: any) : any => capabilityId.startsWith(prefix))
+      );
+      normalized.capabilityIds = [...new Set<any>([
+        ...explicitlyBoundCapabilities,
+        ...derived((_tool?: any, capability?: any) : any => [capability.capabilityId]),
+        ...selectedTools
+          .filter((tool?: any) : any => !tool?.dynamicCapability)
+          .map((tool?: any) : any => toolExecuteCapabilityId(tool.id))
+      ])].sort();
+      normalized.toolsetIds = [...new Set<any>([
+        ...derived((tool?: any, capability?: any) : any => [
+        ...(tool.toolsets || []),
+        ...(capability.toolsets || [])
+        ]).filter((toolsetId?: any) : any => catalogToolsets.has(toolsetId)),
+        ...requestedToolsets
+      ])].sort();
+      const selectedToolsetScopes: any[] = (catalog.toolsets || [])
+        .filter((toolset?: any) : any => normalized.toolsetIds.includes(toolset.id))
+        .flatMap((toolset?: any) : any => toolset.requiredScopes || toolset.scopes || []);
+      normalized.scopeIds = [...new Set<any>([
+        ...normalized.scopeIds,
+        ...derived((tool?: any, capability?: any) : any => [
+        ...(tool.requiredScopes || []),
+        ...(capability.requiredScopes || [])
+        ]),
+        ...selectedToolsetScopes
+      ])].sort();
+      normalized.resources.egressClasses = [...new Set<any>([
+        ...normalized.resources.egressClasses,
+        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [
+          resource.requestedEgress,
+          ...(resource.requestedEgresses || [])
+        ])
+      ])].sort();
+      normalized.resources.secretBindingIds = [...new Set<any>([
+        ...normalized.resources.secretBindingIds,
+        ...derived((_tool?: any, capability?: any, resource?: any) : any => [
+          ...(capability.credentialBindingIds || []),
+          resource.secretBindingId,
+          ...(resource.secretBindingIds || [])
+        ])
+      ])].sort();
+      normalized.resources.capabilityDomains = [...new Set<any>([
+        ...normalized.resources.capabilityDomains,
+        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [resource.capabilityDomain])
+      ])].sort();
+      normalized.resources.capabilityVerbs = [...new Set<any>([
+        ...normalized.resources.capabilityVerbs,
+        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [resource.capabilityVerb])
+      ])].sort();
+      normalized.resources.resourceKinds = [...new Set<any>([
+        ...normalized.resources.resourceKinds,
+        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [resource.resourceKind])
+      ])].sort();
+      normalized.resources.mode = normalized.resources.mode === "unrestricted"
+        ? "unrestricted"
+        : "restricted";
+      const riskRank: any = { read_only: 0, low: 0, safe_write: 1, repair_write: 2, destructive: 2 };
+      const maximumRank: any = Math.max(...dynamicTools.map((tool?: any) : any =>
+        riskRank[String(tool.dynamicCapability?.risk || tool.risk || "read_only")] ?? 2
+      ));
+      normalized.maximumRisk = ["low", "medium", "high"][maximumRank] || "high";
+    } else if (selectedTools.length > 0) {
+      normalized.capabilityIds = [...new Set<any>([
+        ...normalized.capabilityIds,
+        ...selectedTools.map((tool?: any) : any => toolExecuteCapabilityId(tool.id))
+      ])].sort();
+    }
   }
   return deepFreeze(JSON.parse(canonicalJson(normalized)));
 }
@@ -323,6 +422,8 @@ export function apiKeyAuthorizationEvaluationInput(authorization: any): any {
     credentialKind: "scoped_api_key",
     credentialId: String(authorization.keyId),
     policyFingerprint: String(authorization.policyFingerprint),
+    id: String(authorization.keyId),
+    revision: `${String(authorization.keyId)}:${String(authorization.policyFingerprint)}`,
     resourceMode: resources.mode,
     toolsets: policy.toolsetIds || [],
     toolAllow: policy.allowedTools || [],
@@ -378,7 +479,13 @@ function requireAllowedOperation(policy: any, operation: any): void {
   if (!dynamicCapability && toolId && policy.deniedTools.includes(toolId)) {
     fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
   }
-  if (dynamicCapability && (!capabilityId || !serviceId || !policy.capabilityIds.includes(capabilityId))) {
+  const expandedCapabilityIds: any[] = [...new Set<any>([
+    ...(policy.capabilityIds || []),
+    ...(policy.capabilityIds || [])
+      .filter((value?: any) : any => String(value || "").startsWith("cap:upstream:") && String(value || "").includes(":tools-call-"))
+      .map((value?: any) : any => `${String(value).slice(0, String(value).indexOf(":tools-call-"))}:tools-call`)
+  ])];
+  if (dynamicCapability && (!capabilityId || !serviceId || !expandedCapabilityIds.includes(capabilityId))) {
     fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
   }
   if (serviceId && policy.serviceIds.length > 0 && !policy.serviceIds.includes(serviceId)) {
@@ -387,7 +494,7 @@ function requireAllowedOperation(policy: any, operation: any): void {
   const dimensions: any[] = [
     ...(!dynamicCapability ? [[toolId, policy.allowedTools]] : []),
     [serviceId, policy.serviceIds],
-    [capabilityId, policy.capabilityIds]
+    [capabilityId, expandedCapabilityIds]
   ];
   const suppliedToolsets: any[] = Array.isArray(operation?.toolsetIds) ? operation.toolsetIds : [];
   const suppliedScopes: any[] = Array.isArray(operation?.scopeIds) ? operation.scopeIds : [];
@@ -767,11 +874,11 @@ export function createApiKeyDistributionWorkerOwner({
       }
       errorForInactive(record);
     }
-    if (record.policy.audience.serverAudience !== String(input.serverAudience || "") ||
-        ((record.policy.audience.targetIds || []).length > 0 &&
-          !record.policy.audience.targetIds.includes(String(input.targetId || ""))) ||
-        (record.policy.audience.connectorPackageIds.length > 0 &&
-          !record.policy.audience.connectorPackageIds.includes(String(input.connectorPackageId || "")))) {
+  const targetIds: any[] = Array.isArray(record.policy.audience.targetIds) ? record.policy.audience.targetIds : [];
+  if (record.policy.audience.serverAudience !== String(input.serverAudience || "") ||
+      (targetIds.length > 0 && !targetIds.includes(String(input.targetId || ""))) ||
+      (record.policy.audience.connectorPackageIds.length > 0 &&
+        !record.policy.audience.connectorPackageIds.includes(String(input.connectorPackageId || "")))) {
       fail("api_key_policy_denied", "API Key audience is not allowed.", 403);
     }
     const { nodesById } = currentNodes();

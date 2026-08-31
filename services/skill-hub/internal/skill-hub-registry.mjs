@@ -10,6 +10,7 @@ import {
   text,
   WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION
 } from "./skill-hub-contracts.mjs";
+import { requiredWorkspaceId } from "./operation-helpers.mjs";
 
 const EVENT_BY_STATE = Object.freeze({
   preview: "contribution.preview",
@@ -43,7 +44,7 @@ function topRows(rows, key, limit) {
     .slice(0, limit);
 }
 
-export function buildSkillHubStatsDashboard({ items = [], auditEvents = [], workspaceId = "default", assetRecordProjector } = {}) {
+export function buildSkillHubStatsDashboard({ items = [], auditEvents = [], workspaceId = "", assetRecordProjector } = {}) {
   const contributions = asArray(items).map((item) => refreshSkillHubMetrics(item, { assetRecordProjector }));
   const contributorMap = new Map();
   const workspaceMap = new Map();
@@ -232,7 +233,7 @@ export function createSkillHubContributionRegistry({
 
   function currentGrantFor(contribution, { actorId, workspaceId: targetWorkspaceId, action = "use" } = {}) {
     const normalizedActorId = text(actorId);
-    const normalizedWorkspaceId = text(targetWorkspaceId || contribution.workspaceId);
+    const normalizedWorkspaceId = requiredWorkspaceId(targetWorkspaceId, "workspaceId");
     const normalizedAction = text(action || "use");
     const now = Date.now();
     return contribution.grants.find((grant) =>
@@ -287,7 +288,7 @@ export function createSkillHubContributionRegistry({
     publishContribution: (id, input = {}) => transition(id, "published", { ...input, lifecycleEvent: "contribution.publish" }),
     adoptContribution(id, input = {}) {
       const contribution = get(id);
-      const targetWorkspaceId = text(input.targetWorkspaceId || input.workspaceId || contribution.workspaceId);
+      const targetWorkspaceId = requiredWorkspaceId(input.targetWorkspaceId, "targetWorkspaceId");
       const adoption = { adoptionId: stableId("contribution_adoption", { id, targetWorkspaceId, nonce: randomUUID() }),
         contributionId: id, sourceWorkspaceId: contribution.workspaceId, targetWorkspaceId,
         adopterId: text(input.adopterId || input.actorId), status: "adopted", createdAt: nowIso() };
@@ -306,8 +307,9 @@ export function createSkillHubContributionRegistry({
     },
     requestPermission(id, input = {}) {
       const contribution = get(id);
+      const targetWorkspaceId = requiredWorkspaceId(input.targetWorkspaceId, "targetWorkspaceId");
       const permissionRequest = { permissionRequestId: stableId("contribution_permission_request", { id, ...input }),
-        contributionId: id, requesterId: text(input.requesterId), targetWorkspaceId: text(input.targetWorkspaceId || input.workspaceId || contribution.workspaceId),
+        contributionId: id, requesterId: text(input.requesterId), targetWorkspaceId,
         actions: asArray(input.actions || ["read"]).map(text).filter(Boolean), purpose: text(input.purpose), status: "requested", createdAt: nowIso() };
       const evidence = audit("contribution.permission.requested", permissionRequest);
       contribution.permissionRequests.push(permissionRequest); contribution.auditIds.push(evidence.auditId); persist();
@@ -316,7 +318,7 @@ export function createSkillHubContributionRegistry({
     async grantPermission(id, input = {}) {
       const contribution = get(id);
       if (contribution.status === "revoked") throw Object.assign(new Error("Revoked contributions cannot receive grants."), { code: "contribution_grant_revoked" });
-      const targetWorkspaceId = text(input.targetWorkspaceId || input.workspaceId || contribution.workspaceId);
+      const targetWorkspaceId = requiredWorkspaceId(input.targetWorkspaceId, "targetWorkspaceId");
       const actions = [...new Set(asArray(input.actions || contribution.requestedActions).map(text).filter(Boolean))].sort();
       const permissionRequest = [...contribution.permissionRequests].reverse().find((request) =>
         request.status === "requested" && request.targetWorkspaceId === targetWorkspaceId &&
@@ -353,8 +355,9 @@ export function createSkillHubContributionRegistry({
     },
     recordDownload(id, input = {}) {
       const contribution = get(id);
+      const workspaceId = requiredWorkspaceId(input.workspaceId, "workspaceId");
       const downloadEvent = { downloadEventId: stableId("contribution_download", { id, ...input, nonce: randomUUID() }), contributionId: id,
-        actorId: text(input.actorId), workspaceId: text(input.workspaceId || contribution.workspaceId), createdAt: nowIso() };
+        actorId: text(input.actorId), workspaceId, createdAt: nowIso() };
       const evidence = audit("contribution.downloaded", downloadEvent); contribution.downloadEvents.push(downloadEvent); persist();
       refreshSkillHubMetrics(contribution, { assetRecordProjector });
       return { downloadEvent: clone(downloadEvent), metrics: clone(contribution.metrics), audit: evidence };
@@ -365,7 +368,7 @@ export function createSkillHubContributionRegistry({
         throw Object.assign(new Error("Contribution use requires a published revision."), { code: "contribution_use_not_published" });
       }
       const actorId = text(input.actorId);
-      const workspaceId = text(input.workspaceId || contribution.workspaceId);
+      const workspaceId = requiredWorkspaceId(input.workspaceId, "workspaceId");
       const action = text(input.action || "skill.used");
       const requiredAction = action === "skill.used" || action.endsWith(".use") ? "use" : action;
       const currentGrant = currentGrantFor(contribution, { actorId, workspaceId, action: requiredAction });
@@ -382,7 +385,7 @@ export function createSkillHubContributionRegistry({
         status: text(receipt.status), workloadArtifactDigest: text(receipt.workloadArtifactDigest), inputDigest: text(receipt.inputDigest),
         packageDigest: text(receipt.packageDigest), policyDigest: text(receipt.policyDigest), cleanupStatus: text(receipt.cleanupStatus),
         outputDisposition: text(receipt.outputDisposition), reasonCode: text(receipt.reasonCode), failureStage: text(receipt.failureStage),
-        workspaceId: text(receipt.workspaceId || contribution.workspaceId), createdAt: text(receipt.createdAt || nowIso()) };
+        workspaceId: requiredWorkspaceId(receipt.workspaceId, "workspaceId"), createdAt: text(receipt.createdAt || nowIso()) };
       if (!normalized.runId || !normalized.workloadKind || !normalized.status || !normalized.inputDigest ||
           normalized.packageDigest !== contribution.packageChecksum || (normalized.status === "succeeded" &&
           (!normalized.workloadArtifactDigest || normalized.cleanupStatus !== "destroyed" || normalized.outputDisposition !== "committed"))) {

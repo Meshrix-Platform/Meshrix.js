@@ -6,7 +6,6 @@ import {
   setTraceContextOnRequest
 } from "#meshrix/foundation/observability/trace-context";
 import { handleMeshrixMcpHttpRequest } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
-import { inputFromRequest } from "#meshrix/server-runtime/composition/dispatch-operation";
 import {
   createRequestBodyAdmissionController,
   readRequestBody,
@@ -23,7 +22,7 @@ import {
   isUpstreamPayloadTransitRoute
 } from "#meshrix/protocols/http/controllers/upstream-payload-transit-controller";
 import { handleStaticFallback } from "./http-server-static-handlers.ts";
-import { handlePluginConsoleAssetRequest } from "./http-server-plugin-console-assets.ts";
+import { handlePluginConsoleRequest } from "./http-server-plugin-console-sandbox.ts";
 import {
   applySecurityHeaders,
   metricTransportForRoute,
@@ -63,50 +62,6 @@ function classifiedRequestFailureReason(error?: any) : string {
       ? "storage_error"
       : "runtime_error";
   return `${origin}_${kind}`;
-}
-
-export async function authorizeProxyRegisteredApiRequest({
-  securityPermissions,
-  request,
-  operation,
-  method,
-  url,
-  requestBody = Buffer.alloc(0),
-  pathParams = {}
-}: Record<string, any> = {}) : Promise<any> {
-  const input: any = inputFromRequest({
-    operation,
-    requestBody,
-    url,
-    params: pathParams,
-    applyHttpQuery: true
-  });
-  if (operation?.public === true) {
-    return { ok: true, input, authorization: { ok: true } };
-  }
-  if (!securityPermissions || typeof securityPermissions.authorizeOperation !== "function") {
-    return {
-      ok: false,
-      input,
-      authorization: {
-        ok: false,
-        status: 503,
-        error: "操作授权器未注册。"
-      }
-    };
-  }
-  const authorization: any = await securityPermissions.authorizeOperation({
-    request,
-    operation,
-    method,
-    url,
-    input
-  });
-  return {
-    ok: authorization?.ok === true,
-    input,
-    authorization
-  };
 }
 
 function requestBodyLimitForRoute(method?: any, pathname?: any) : any {
@@ -249,6 +204,8 @@ export function createHttpServerRequestHandler({
   loginRateLimiter,
   operationAuditStore,
   operationConcurrencyScope,
+  operationLockManager,
+  operationProofSubstrate,
   pluginContributions,
   proxyApiRequest,
   rateLimits,
@@ -605,13 +562,24 @@ export function createHttpServerRequestHandler({
             return;
           }
 
-          if (await handlePluginConsoleAssetRequest({
+          if (await handlePluginConsoleRequest({
             request,
             response,
+            requestBody,
             method,
             url,
             consoleAuth,
-            pluginContributions
+            pluginContributions,
+            requestOperations,
+            controllers,
+            authorizeOperation: (input?: any) : any => securityPermissions.authorizeOperation(input),
+            verifyProcessIdentity: (input?: any) : any => securityPermissions.verifyProcessIdentity(input),
+            operationAuditStore,
+            operationProofSubstrate,
+            lockManager: operationLockManager,
+            concurrencyScope: operationConcurrencyScope,
+            signal: requestAbortController.signal,
+            logger: runtimeLogger
           })) {
             return;
           }
@@ -660,39 +628,28 @@ export function createHttpServerRequestHandler({
             operations: requestOperations
           });
           if (proxyDecision) {
-            const proxyOperation: any = proxyDecision.operation;
-            const proxyAuthorization: any = await authorizeProxyRegisteredApiRequest({
-              securityPermissions,
-              request,
-              operation: proxyOperation,
+            await registeredCoreProvider.dispatchRegisteredHttpOperation({
+              operations: requestOperations,
+              controllers,
               method,
               url,
-              requestBody,
-              pathParams: proxyDecision.pathParams || {}
-            });
-            if (!proxyAuthorization.ok) {
-              const authorization: any = proxyAuthorization.authorization || {};
-              runtimeLogger.warn("http.proxy.denied", {
-                traceId: traceContext.traceId,
-                requestId,
-                operationId: proxyOperation.id,
-                method,
-                route: url.pathname,
-                status: authorization.status || 403
-              });
-              sendJson(response, authorization.status || 403, {
-                error: authorization.error || "权限不足。",
-                bootstrap: authorization.bootstrap,
-                traceId: traceContext.traceId
-              });
-              return;
-            }
-            await proxyApiRequest({
               request,
               response,
               requestBody,
-              targetBaseUrl: proxyDecision.targetBaseUrl,
-              logger: runtimeLogger
+              authorizeOperation: (input?: any) : any => securityPermissions.authorizeOperation(input),
+              verifyProcessIdentity: (input?: any) : any => securityPermissions.verifyProcessIdentity(input),
+              operationAuditStore,
+              concurrencyScope: operationConcurrencyScope,
+              signal: requestAbortController.signal,
+              logger: runtimeLogger,
+              invokeOperation: async (invocation?: any) : Promise<any> => proxyApiRequest({
+                request: invocation.request,
+                response: invocation.response,
+                requestBody: invocation.requestBody,
+                targetBaseUrl: proxyDecision.targetBaseUrl,
+                signal: invocation.signal,
+                logger: runtimeLogger
+              })
             });
             return;
           }

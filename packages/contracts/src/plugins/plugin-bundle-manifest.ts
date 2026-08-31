@@ -148,17 +148,13 @@ export function normalizePluginBundleManifest(input?: unknown) {
       throw new Error("PLUGIN_PACKAGE_TRUST_REJECTED: trust evidence is required");
     }
     const algorithm = requireString(input.trust.algorithm, "trust.algorithm");
-    if (algorithm !== "ed25519" && algorithm !== "configured-digest") {
+    // Package manifests admit only the configured-digest trust model. No
+    // cryptographic package-manifest signature verification exists, so an
+    // ed25519 claim would be a misleading no-op and is rejected outright.
+    if (algorithm !== "configured-digest") {
       throw new Error("PLUGIN_PACKAGE_TRUST_REJECTED: unsupported trust algorithm");
     }
-    const out: Record<string, unknown> = { algorithm };
-    if (input.trust.publicKeyId !== undefined) {
-      out.publicKeyId = requireString(input.trust.publicKeyId, "trust.publicKeyId");
-    }
-    if (input.trust.signature !== undefined) {
-      out.signature = requireString(input.trust.signature, "trust.signature");
-    }
-    return Object.freeze(out);
+    return Object.freeze({ algorithm });
   })();
 
   return Object.freeze({

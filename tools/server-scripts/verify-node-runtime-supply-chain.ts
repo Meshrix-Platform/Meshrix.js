@@ -7,17 +7,19 @@ import path from "node:path";
 import { Readable } from "node:stream";
 
 import { assertNoLeak } from "./lib/report-evidence-safety.ts";
+import { classifyNodeRuntimeFailure, NODE_RUNTIME_DIAGNOSTIC_PHASES } from "./lib/node-runtime-diagnostics.ts";
 
 const REPORT_PATH: any = "build/reports/node-runtime-supply-chain.json";
 const tempRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-node-runtime-supply-chain-"));
 process.env.MESHRIX_MCP_NODE_RUNTIME_CACHE_DIR = path.join(tempRoot, "cache");
 
 const report: Record<string, any> = {
-  schemaVersion: "v1:node-runtime-supply-chain-report",
+  schemaVersion: "v0.0.1:mcp:node-runtime-supply-chain-report-2",
   verifier: "tools/server-scripts/verify-node-runtime-supply-chain.ts",
   generatedAt: new Date().toISOString(),
   startedAt: new Date().toISOString(),
   tests: [],
+  diagnosticPhases: NODE_RUNTIME_DIAGNOSTIC_PHASES,
   summary: {}
 };
 
@@ -224,10 +226,9 @@ try {
     reportLeakScan: true
   };
 } catch (error: any) {
+  const diagnostic: any = classifyNodeRuntimeFailure(error);
   record("node runtime supply-chain verifier", "failed", {
-    errorCode: /^node_runtime_[a-z0-9_]+$/u.test(String(error?.message || ""))
-      ? String(error.message)
-      : "node_runtime_supply_chain_verification_failed"
+    ...diagnostic
   });
   report.summary = {
     testCount: report.tests.length,
@@ -239,6 +240,14 @@ try {
 } finally {
   report.finishedAt = new Date().toISOString();
   try {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  } catch (error: any) {
+    record("node runtime supply-chain cleanup", "failed", classifyNodeRuntimeFailure(error, "cleanup"));
+    report.summary.failedCount = Number(report.summary.failedCount || 0) + 1;
+    report.summary.releaseReady = false;
+    process.exitCode = 1;
+  }
+  try {
     report.summary.reportLeakScan = false;
     assertNoLeak(report, "node runtime supply-chain report");
     report.summary.reportLeakScan = true;
@@ -246,7 +255,9 @@ try {
     const serialized: any = JSON.stringify(report, null, 2);
     await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
     await fs.writeFile(REPORT_PATH, `${serialized}\n`, "utf8");
-  } finally {
-    await fs.rm(tempRoot, { recursive: true, force: true });
+  } catch (error: any) {
+    const diagnostic: any = classifyNodeRuntimeFailure(error, "report-finalization");
+    process.stderr.write(`${JSON.stringify({ ok: false, ...diagnostic })}\n`);
+    process.exitCode = 1;
   }
 }

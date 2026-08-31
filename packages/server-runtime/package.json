@@ -52,6 +52,7 @@
     "#meshrix/foundation/module-system/mount-manager": "@meshrix/foundation/module-system/mount-manager",
     "#meshrix/foundation/module-system/plugin-artifact-authority": "@meshrix/foundation/module-system/plugin-artifact-authority",
     "#meshrix/foundation/module-system/plugin-artifact-trust": "@meshrix/foundation/module-system/plugin-artifact-trust",
+    "#meshrix/foundation/module-system/plugin-console-isolation": "@meshrix/foundation/module-system/plugin-console-isolation",
     "#meshrix/foundation/module-system/plugin-package-artifact-installer": "@meshrix/foundation/module-system/plugin-package-artifact-installer",
     "#meshrix/foundation/module-system/plugin-registry": "@meshrix/foundation/module-system/plugin-registry",
     "#meshrix/foundation/module-system/register": "@meshrix/foundation/module-system/register",
@@ -195,6 +196,11 @@
       "types": "./dist/composition/dispatch-operation.d.ts",
       "source": "./src/composition/dispatch-operation.ts",
       "default": "./dist/composition/dispatch-operation.js"
+    },
+    "./composition/plugin-console-sandbox-document": {
+      "types": "./dist/composition/plugin-console-sandbox-document.d.ts",
+      "source": "./src/composition/plugin-console-sandbox-document.ts",
+      "default": "./dist/composition/plugin-console-sandbox-document.js"
     },
     "./composition/dispatch-operation-risk-control": {
       "types": "./dist/composition/dispatch-operation-risk-control.d.ts",

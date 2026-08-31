@@ -13,6 +13,20 @@ export function schema(required: any = [], properties: Record<string, any> = {})
   };
 }
 
+export function workspaceBindingSchema({ target = false }: Record<string, any> = {}) : any {
+  return {
+    type: "object",
+    required: target ? ["workspaceId", "targetWorkspaceId"] : ["workspaceId"],
+    additionalProperties: true,
+    properties: {
+      workspaceId: { type: "string", minLength: 1, maxLength: 256 },
+      ...(target
+        ? { targetWorkspaceId: { type: "string", minLength: 1, maxLength: 256 } }
+        : {})
+    }
+  };
+}
+
 export function protocolOperation({
   id,
   feature,
@@ -129,7 +143,7 @@ export const ASSET_CONTENT_SCHEMA: Record<string, any> = {
 };
 
 export const ASSET_OPERATION_SCHEMA: any = schema(["workspaceId"], {
-  workspaceId: { type: "string" },
+  workspaceId: { type: "string", minLength: 1, maxLength: 256 },
   semantic: { type: "string" },
   submitKind: { type: "string" },
   assetRef: { type: "string" },

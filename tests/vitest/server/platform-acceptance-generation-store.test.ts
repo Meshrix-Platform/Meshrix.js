@@ -20,9 +20,9 @@ import {
 
 import {
   ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT,
+  ACCEPTANCE_FAILURE_ENVELOPE_SCHEMA,
   ACCEPTANCE_GENERATION_BUDGETS,
   ACCEPTANCE_GENERATION_POINTER,
-  ACCEPTANCE_GENERATION_SCHEMA,
   createAcceptanceGenerationWorkspace,
   publishAcceptanceGeneration,
   publishAcceptanceFailureDiagnostic,
@@ -42,20 +42,22 @@ const RELEASE_EVIDENCE_INVENTORY: readonly any[] = Object.freeze([Object.freeze(
   reducer: "tools/reduce-child.ts#createReadiness",
   provenanceSchemaVersion: "v0.0.1:meshrix:release-evidence-report-provenance-1"
 })]);
-const CANDIDATE_IDENTITY: any = buildReleaseCandidateIdentity({
-  sourceRevision: "a".repeat(40),
-  repositoryTreeDigest: `sha256:${"1".repeat(64)}`,
-  releaseDefinitionSha256: `sha256:${"2".repeat(64)}`,
-  packageLockSha256: `sha256:${"3".repeat(64)}`,
-  releasePackages: [{
-    manifest_path: "package.json",
-    name: "meshrix",
-    version: "0.0.1",
-    manifest_sha256: "4".repeat(64)
-  }],
-  supportedProfiles: ["enterprise-single-node"],
-  reportInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY })
-});
+function candidateIdentity(workspace?: any) : any {
+  return buildReleaseCandidateIdentity({
+    sourceRevision: String(git(workspace, ["rev-parse", "HEAD"])).trim(),
+    repositoryTreeDigest: `sha256:${"1".repeat(64)}`,
+    releaseDefinitionSha256: `sha256:${"2".repeat(64)}`,
+    packageLockSha256: `sha256:${"3".repeat(64)}`,
+    releasePackages: [{
+      manifest_path: "package.json",
+      name: "meshrix",
+      version: "0.0.1",
+      manifest_sha256: "4".repeat(64)
+    }],
+    supportedProfiles: ["enterprise-single-node"],
+    reportInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY })
+  });
+}
 
 async function fixtureRoot() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-generation-"));
@@ -93,6 +95,7 @@ function git(repoRoot?: any, args: any[] = [], { binary = false }: Record<string
 }
 
 async function writeWorkerEvidence(workspace?: any, { includeChild = true, accepted = true }: Record<string, any> = {}) : Promise<any> {
+  const identity: any = candidateIdentity(workspace);
   await fs.mkdir(path.join(workspace, "build", "reports"), { recursive: true });
   if (includeChild) {
     const child: Record<string, any> = {
@@ -150,7 +153,7 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
       claim: "functional-complete",
       verifier: "tools/server-scripts/verify-platform-acceptance.ts",
       selectedProfile: "enterprise-single-node",
-      sourceRevision: CANDIDATE_IDENTITY.source_revision,
+      sourceRevision: identity.source_revision,
       generatedAt: "2026-01-01T00:00:00.000Z",
       status: accepted ? "accepted" : "failed",
       stateMachine: {
@@ -168,9 +171,9 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
       requiredReports: ["build/reports/child.json"],
       releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY,
       releaseEvidenceInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
-      candidate_digest: CANDIDATE_IDENTITY.candidate_digest,
-      candidateIdentity: CANDIDATE_IDENTITY,
-      finalCandidateIdentity: CANDIDATE_IDENTITY,
+      candidate_digest: identity.candidate_digest,
+      candidateIdentity: identity,
+      finalCandidateIdentity: identity,
       reportEvidence: {
         "build/reports/child.json": {
           releaseReady: true,
@@ -201,10 +204,10 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
         }],
         evidenceContext: {
           schemaVersion: "v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
-          sourceRevision: CANDIDATE_IDENTITY.source_revision,
+          sourceRevision: identity.source_revision,
           selectedProfile: "enterprise-single-node",
           ownedReportsInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
-          candidateDigest: CANDIDATE_IDENTITY.candidate_digest,
+          candidateDigest: identity.candidate_digest,
           privacySafe: true
         },
         error: "",
@@ -438,8 +441,8 @@ describe("platform acceptance generation store", () : any => {
 
     expect(diagnostic).toEqual({
       generationId: "retained-failure",
-      kind: "aggregate",
-      path: `${ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT}/retained-failure/platform-acceptance.json`
+      kind: "failure-envelope",
+      path: `${ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT}/retained-failure/failure.json`
     });
     await expect(fs.access(failedWorkspace)).rejects.toMatchObject({ code: "ENOENT" });
     const retained: any = JSON.parse(await fs.readFile(path.join(repoRoot, diagnostic.path), "utf8"));
@@ -494,7 +497,7 @@ describe("platform acceptance generation store", () : any => {
           aggregateReportPath: "build/reports/platform-acceptance.json",
           workerResult: { exitCode: 17, signal: "SIGTERM" }
         });
-        expect(diagnostic.kind).toBe("worker-exit");
+        expect(diagnostic.kind).toBe("failure-envelope");
       } finally {
         await removeAcceptanceGenerationWorkspace(failed, { repoRoot });
       }
@@ -507,24 +510,34 @@ describe("platform acceptance generation store", () : any => {
       .sort();
     expect(retainedIds).toEqual(ids.slice(-ACCEPTANCE_GENERATION_BUDGETS.maxRetainedFailures));
 
-    const receiptPath: any = path.join(failureRoot, ids.at(-1), "worker-exit.json");
+    const receiptPath: any = path.join(failureRoot, ids.at(-1), "failure.json");
     const receiptText: any = await fs.readFile(receiptPath, "utf8");
     const receipt: any = JSON.parse(receiptText);
     expect(Object.keys(receipt).sort()).toEqual([
-      "diagnosticKind",
+      "aggregatePresent",
+      "candidateDigest",
+      "errorCode",
       "exitCode",
       "generationId",
+      "phase",
       "schemaVersion",
+      "selectedProfile",
       "signal",
+      "sourceRevision",
       "status"
     ]);
     expect(receipt).toEqual({
-      schemaVersion: ACCEPTANCE_GENERATION_SCHEMA,
-      diagnosticKind: "worker-exit",
+      schemaVersion: ACCEPTANCE_FAILURE_ENVELOPE_SCHEMA,
       generationId: ids.at(-1),
       status: "failed",
+      sourceRevision: String(git(repoRoot, ["rev-parse", "HEAD"])).trim(),
+      candidateDigest: "",
+      selectedProfile: "",
+      phase: "worker",
+      errorCode: "acceptance_worker_signalled",
       exitCode: 17,
-      signal: "SIGTERM"
+      signal: "SIGTERM",
+      aggregatePresent: false
     });
     expect(Buffer.byteLength(receiptText, "utf8")).toBeLessThan(512);
   });

@@ -15,10 +15,6 @@ import {
   verifierMcpRequestHeaders
 } from "./verifier-mcp-api-key.ts";
 
-// This is a protocol negotiation value accepted by the server grant endpoint.
-// The verifier remains a neutral wire peer and imports no client implementation.
-const PEER_TARGET: any = "codex";
-
 function parseSsePayload(block?: any) : any {
   const data: any = String(block || "").split(/\r?\n/u)
     .filter((line?: any) : any => line.startsWith("data:"))
@@ -45,7 +41,7 @@ export async function issueNeutralMcpProtocolGrant({
   requestsPerWindow = 4_096
 }: Record<string, any> = {}) : Promise<any> {
   const normalizedPeerId: any = String(peerId || "primary").replace(/[^a-z0-9-]+/giu, "-").slice(0, 48);
-  const target: any = PEER_TARGET;
+  const target: any = "";
   const identityByToken: any = new Map<any, any>();
   const verifierAccess: any = createVerifierApiKeyAccess({
     target,
@@ -55,7 +51,7 @@ export async function issueNeutralMcpProtocolGrant({
     server,
     consoleAuth: approvalAuth,
     access: {
-      targets: [target],
+      targets: [],
       connectorVersion: "protocol-peer",
       grantMode: "maintain",
       maxRisk,

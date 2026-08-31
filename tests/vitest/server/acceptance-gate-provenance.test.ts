@@ -25,7 +25,6 @@ import {
   createReportFreshnessEvidence
 } from "../../../tools/server-scripts/lib/release-evidence-freshness.ts";
 import { requiredReportSpec } from "../../../tools/server-scripts/lib/required-report-validator.ts";
-import { simulateCleanCheckoutPr } from "../../../tools/server-scripts/simulate-clean-checkout-pr.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -153,28 +152,4 @@ describe("acceptance gate provenance substrate", () => {
     expect(drift.currentRunOrphans).toEqual(["build/reports/stale.json"]);
   });
 
-  it("writes a fresh plan to an isolated output root without replacing docs/plans", async () => {
-    const outputRoot = path.join(repoRoot, "build", "clean-checkout-pr-simulation", "acceptance-test");
-    const result = await simulateCleanCheckoutPr({ repoRoot, outputRoot });
-    expect(result.ok).toBe(true);
-    expect(result.docsPlansUnchanged).toBe(true);
-    expect(result.plansRoot).toBe(path.join(repoRoot, "docs", "plans"));
-    expect(result.nodes).toBeGreaterThan(0);
-    for (const relativePath of [
-      "Manifest.json",
-      "Capabilities.json",
-      "FutureGoals.md",
-      "end-to-end-release/Plan.md",
-      "end-to-end-release/Checkpoints.json",
-      "end-to-end-release/DependencyMap.json"
-    ]) {
-      const content = await fs.readFile(path.join(outputRoot, relativePath), "utf8");
-      expect(content.trim().length).toBeGreaterThan(0);
-    }
-    const checkpoints = JSON.parse(
-      await fs.readFile(path.join(outputRoot, "end-to-end-release", "Checkpoints.json"), "utf8")
-    );
-    expect(Array.isArray(checkpoints)).toBe(true);
-    expect(checkpoints.some((node) => node.code === "DQ-PROVENANCE")).toBe(true);
-  });
 });

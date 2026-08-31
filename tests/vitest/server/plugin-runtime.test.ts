@@ -13,7 +13,10 @@ import {
   validatePluginDeployment
 } from "../../../packages/foundation/src/module-system/plugin-registry.ts";
 import { activatePluginDeployment } from "../../../packages/foundation/src/module-system/plugin-runtime.ts";
-import { createMountManager } from "../../../packages/foundation/src/module-system/mount-manager.ts";
+import {
+  createMountManager,
+  normalizeRuntimeOptions
+} from "../../../packages/foundation/src/module-system/mount-manager.ts";
 import { createPluginLifecycleStatePort } from "../../../packages/foundation/src/module-system/plugin-lifecycle-state-port.ts";
 import {
   finalizePluginRuntimeReport,
@@ -507,7 +510,7 @@ export async function activatePlugin({ manifest, onClose }) {
     ]);
   });
 
-  it("injects Host capabilities only when both the signed manifest and real user configuration grant them", async () : Promise<any> => {
+  it("treats verified deployment as startup authorization for manifest-declared Host capabilities", async () : Promise<any> => {
     const root: any = await tempRoot();
     const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
@@ -520,13 +523,14 @@ export async function activatePlugin({ manifest, context }) {
     controlledExecutionHost: context.controlledExecutionHost?.id || "",
     protectedRecoveryPort: context.protectedRecoveryPort?.id || "",
     downstreamClientAspectHost: context.downstreamClientAspectHost?.id || "",
-    outboundEgressHost: context.outboundEgressHost?.id || ""
+    outboundEgressHost: context.outboundEgressHost?.id || "",
+    configuration: context.configuration
   });
   return { id: manifest.id, mounts: {}, close() {} };
 }`;
     const claims: any[] = ["owner-process-identity", "controlled-execution", "protected-recovery", "downstream-client-aspect", "outbound-egress-policy"];
-    await writePlugin(root, manifest("granted", { runtime: { module: "./runtime.mjs" }, hostCapabilities: claims }), source);
-    await writePlugin(root, manifest("unconfigured", { runtime: { module: "./runtime.mjs" }, hostCapabilities: claims }), source);
+    await writePlugin(root, manifest("declared", { runtime: { module: "./runtime.mjs" }, hostCapabilities: claims }), source);
+    await writePlugin(root, manifest("declared-with-host-policy", { runtime: { module: "./runtime.mjs" }, hostCapabilities: claims }), source);
     await writePlugin(root, manifest("unclaimed", { runtime: { module: "./runtime.mjs" } }), source);
     const fixture: any = await stagePluginArtifactFixture({ sourcePluginRoot: path.join(root, "plugins") });
     artifactFixtures.push(fixture);
@@ -535,12 +539,18 @@ export async function activatePlugin({ manifest, context }) {
     await fs.mkdir(path.join(root, "data"));
     const runtime: any = await activatePluginDeployment({
       artifactAuthority: fixture.authority,
-      deployment: registry.resolveDeployment({ enabledPluginIds: ["granted", "unconfigured", "unclaimed"] }),
+      deployment: registry.resolveDeployment({ enabledPluginIds: ["declared", "declared-with-host-policy", "unclaimed"] }),
       createContext: async (record?: any) : Promise<any> => ({
         lifecycleStatePort: await createPluginLifecycleStatePort({
           userDataPath: path.join(root, "data"), pluginId: record.id
         }),
-        configuration: record.id === "unconfigured" ? {} : { hostCapabilities: claims },
+        configuration: record.id === "declared-with-host-policy"
+          ? {
+              hostCapabilityConfiguration: { "controlled-execution": { targets: [] } },
+              consoleRoleScopeGrants: { demo: ["runtime:admin"] },
+              ordinarySetting: "visible"
+            }
+          : {},
         pluginOwnerProcessIdentityAuthority: authority("PluginOwnerProcessIdentityAuthority", "OwnerProcessIdentityHostPort"),
         pluginControlledExecutionAuthority: authority("PluginControlledExecutionAuthority", "ControlledExecutionHostPort"),
         pluginProtectedRecoveryAuthority: authority("PluginProtectedRecoveryAuthority", "ProtectedRecoveryPort"),
@@ -550,17 +560,57 @@ export async function activatePlugin({ manifest, context }) {
     });
     expect(globalThis[eventKey]).toEqual([
       {
-        id: "granted",
+        id: "declared",
         ownerProcessIdentityHost: "OwnerProcessIdentityHostPort",
         controlledExecutionHost: "ControlledExecutionHostPort",
         protectedRecoveryPort: "ProtectedRecoveryPort",
         downstreamClientAspectHost: "DownstreamClientAspectHostPort",
-        outboundEgressHost: "OutboundEgressHostPort"
+        outboundEgressHost: "OutboundEgressHostPort",
+        configuration: {}
       },
-      { id: "unclaimed", ownerProcessIdentityHost: "", controlledExecutionHost: "", protectedRecoveryPort: "", downstreamClientAspectHost: "", outboundEgressHost: "" },
-      { id: "unconfigured", ownerProcessIdentityHost: "", controlledExecutionHost: "", protectedRecoveryPort: "", downstreamClientAspectHost: "", outboundEgressHost: "" }
+      {
+        id: "declared-with-host-policy",
+        ownerProcessIdentityHost: "OwnerProcessIdentityHostPort",
+        controlledExecutionHost: "ControlledExecutionHostPort",
+        protectedRecoveryPort: "ProtectedRecoveryPort",
+        downstreamClientAspectHost: "DownstreamClientAspectHostPort",
+        outboundEgressHost: "OutboundEgressHostPort",
+        configuration: { ordinarySetting: "visible" }
+      },
+      { id: "unclaimed", ownerProcessIdentityHost: "", controlledExecutionHost: "", protectedRecoveryPort: "", downstreamClientAspectHost: "", outboundEgressHost: "", configuration: {} }
     ]);
     await runtime.close();
+  });
+
+  it("rejects duplicate startup authority allow-lists in per-plugin configuration", () : any => {
+    expect(() : any => normalizeRuntimeOptions({
+      pluginConfigurations: { demo: { hostCapabilities: [] } }
+    })).toThrow("signed manifest deployment owns startup authority");
+    expect(() : any => normalizeRuntimeOptions({
+      pluginConfigurations: { demo: { artifactSigningPurposes: [] } }
+    })).toThrow("signed manifest deployment owns startup authority");
+  });
+
+  it("fails activation when a declared Host capability has no server implementation", async () : Promise<any> => {
+    const root: any = await tempRoot();
+    await writePlugin(root, manifest("missing-host", {
+      runtime: { module: "./runtime.mjs" },
+      hostCapabilities: ["protected-recovery"]
+    }), `
+export async function activatePlugin({ manifest }) {
+  return { id: manifest.id, mounts: {}, close() {} };
+}`);
+    const fixture: any = await stagePluginArtifactFixture({ sourcePluginRoot: path.join(root, "plugins") });
+    artifactFixtures.push(fixture);
+    const registry: any = await loadPluginRegistry({ artifactAuthority: fixture.authority });
+    await expect(activatePluginDeployment({
+      artifactAuthority: fixture.authority,
+      deployment: registry.resolveDeployment({ enabledPluginIds: ["missing-host"] }),
+      createContext: async () : Promise<any> => ({})
+    })).rejects.toMatchObject({
+      code: "PLUGIN_RUNTIME_ACTIVATION_FAILED",
+      pluginId: "missing-host"
+    });
   });
 
   it("registers an exact executable contribution set for every manifest claim", async () : Promise<any> => {

@@ -15,15 +15,13 @@ export type PluginConsoleEntry = {
   routePath?: string;
   slotId?: string;
   componentId: string;
-  assetUrl: string;
-  assetExport: string;
-  sandboxUrl?: string;
-  bridgeVersion?: string;
+  sandboxUrl: string;
+  bridgeVersion: string;
   artifactDigest: string;
   artifactGeneration: number;
   label?: string;
   requiredScopes: readonly string[];
-  toolIds?: readonly string[];
+  toolIds: readonly string[];
 };
 
 export type RoutedPluginConsoleEntry = PluginConsoleEntry & { routePath: string };

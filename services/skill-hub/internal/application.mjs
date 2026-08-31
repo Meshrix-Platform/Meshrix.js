@@ -13,6 +13,7 @@ import {
   errorPayload,
   objectOrNull,
   protocolPayload,
+  requiredWorkspaceId,
   result,
   workspaceIdFrom
 } from "./operation-helpers.mjs";
@@ -29,6 +30,41 @@ import {
 
 const MAX_PACKAGE_BYTES = 1024 * 1024;
 const SANDBOX_OPERATIONS = new Set(["skill_hub.scan", "skill_hub.build", "skill_hub.execute"]);
+const GLOBAL_REGISTRY_PARTITION = "default";
+const WORKSPACE_BINDING_FIELDS = Object.freeze({
+  "skill_hub.submit": "workspaceId",
+  "skill_hub.scan": "workspaceId",
+  "skill_hub.build": "workspaceId",
+  "skill_hub.execute": "workspaceId",
+  "skill_hub.download": "workspaceId",
+  "skill_hub.install": "targetWorkspaceId",
+  "skill_hub.usage.record": "workspaceId",
+  "skill_hub.permission.request": "targetWorkspaceId",
+  "skill_hub.permission.grant": "targetWorkspaceId"
+});
+const HOST_CONTEXT_SCHEMA = "v0.0.1:skill-hub:host-context-1";
+const HOST_CONTEXT_FIELDS = new Set([
+  "schemaVersion",
+  "phase",
+  "principal",
+  "sandboxOutcome",
+  "permissionGrantOutcome"
+]);
+const PRINCIPAL_FIELDS = new Set(["subjectRef", "tenantRef"]);
+const SANDBOX_OUTCOME_FIELDS = new Set([
+  "runRef",
+  "workloadKind",
+  "status",
+  "artifactDigest",
+  "inputDigests",
+  "policyDigest",
+  "cleanupState",
+  "outputDisposition",
+  "reasonCode",
+  "failureStage",
+  "createdAt"
+]);
+const PERMISSION_OUTCOME_FIELDS = new Set(["recorded", "receiptRef"]);
 
 function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -52,6 +88,114 @@ function stableId(prefix, value) {
   return `${prefix}-${crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 32)}`;
 }
 
+function hostContextError() {
+  return Object.assign(new Error("Skill Hub Host context is invalid."), {
+    code: "skill_hub_host_context_invalid"
+  });
+}
+
+function closedObject(value, fields) {
+  if (!plainObject(value) || Object.keys(value).some((field) => !fields.has(field))) throw hostContextError();
+  return value;
+}
+
+function contextText(value, maximum = 256) {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.length > maximum || /[\u0000-\u001f\u007f]/u.test(normalized)) {
+    throw hostContextError();
+  }
+  return normalized;
+}
+
+function optionalContextText(value, maximum = 256) {
+  const normalized = String(value || "").trim();
+  if (normalized.length > maximum || /[\u0000-\u001f\u007f]/u.test(normalized)) throw hostContextError();
+  return normalized;
+}
+
+function digest(value, { prefixed = false, optional = false } = {}) {
+  const normalized = String(value || "").trim();
+  if (optional && !normalized) return "";
+  const pattern = prefixed ? /^sha256:[a-f0-9]{64}$/u : /^[a-f0-9]{64}$/u;
+  if (!pattern.test(normalized)) throw hostContextError();
+  return normalized;
+}
+
+function parseHostContext(operationId, value) {
+  const source = closedObject(value, HOST_CONTEXT_FIELDS);
+  if (source.schemaVersion !== HOST_CONTEXT_SCHEMA) throw hostContextError();
+  const phase = contextText(source.phase, 16);
+  if (!["execute", "prepare", "commit"].includes(phase)) throw hostContextError();
+  const principal = closedObject(source.principal, PRINCIPAL_FIELDS);
+  const subjectRef = contextText(principal.subjectRef);
+  const tenantRef = contextText(principal.tenantRef);
+  if (!/^skill_hub_subject_[a-f0-9]{64}$/u.test(subjectRef) ||
+      !/^skill_hub_tenant_[a-f0-9]{64}$/u.test(tenantRef)) {
+    throw hostContextError();
+  }
+
+  let sandboxOutcome = null;
+  if (source.sandboxOutcome !== undefined) {
+    const outcome = closedObject(source.sandboxOutcome, SANDBOX_OUTCOME_FIELDS);
+    if (!Array.isArray(outcome.inputDigests) || outcome.inputDigests.length !== 1) throw hostContextError();
+    const createdAt = contextText(outcome.createdAt, 64);
+    if (!Number.isFinite(Date.parse(createdAt))) throw hostContextError();
+    sandboxOutcome = Object.freeze({
+      runId: digest(outcome.runRef, { prefixed: true }),
+      workloadKind: contextText(outcome.workloadKind, 64),
+      status: contextText(outcome.status, 64),
+      artifactDigest: digest(outcome.artifactDigest, { optional: true }),
+      inputDigests: Object.freeze(outcome.inputDigests.map((entry) => digest(entry))),
+      policyDigest: digest(outcome.policyDigest),
+      cleanupState: optionalContextText(outcome.cleanupState, 64),
+      outputDisposition: optionalContextText(outcome.outputDisposition, 64),
+      reasonCode: optionalContextText(outcome.reasonCode, 128),
+      failureStage: optionalContextText(outcome.failureStage, 128),
+      createdAt: new Date(Date.parse(createdAt)).toISOString()
+    });
+  }
+
+  let permissionGrantOutcome = null;
+  if (source.permissionGrantOutcome !== undefined) {
+    const outcome = closedObject(source.permissionGrantOutcome, PERMISSION_OUTCOME_FIELDS);
+    if (outcome.recorded !== true) throw hostContextError();
+    permissionGrantOutcome = Object.freeze({
+      ok: true,
+      receiptId: digest(outcome.receiptRef, { prefixed: true })
+    });
+  }
+
+  const sandboxOperation = SANDBOX_OPERATIONS.has(operationId);
+  const permissionOperation = operationId === "skill_hub.permission.grant";
+  const prepareInvalid = phase === "prepare" && (
+    !sandboxOperation && !permissionOperation || Boolean(sandboxOutcome) || Boolean(permissionGrantOutcome)
+  );
+  const commitInvalid = phase === "commit" && (
+    !sandboxOperation && !permissionOperation ||
+    sandboxOperation !== Boolean(sandboxOutcome) ||
+    permissionOperation !== Boolean(permissionGrantOutcome)
+  );
+  const executeInvalid = phase === "execute" && (
+    sandboxOperation || permissionOperation || Boolean(sandboxOutcome) || Boolean(permissionGrantOutcome)
+  );
+  if (prepareInvalid || commitInvalid || executeInvalid) {
+    throw hostContextError();
+  }
+
+  return Object.freeze({
+    phase,
+    principal: Object.freeze({ subjectRef, tenantRef }),
+    sandboxOutcome,
+    permissionGrantOutcome
+  });
+}
+
+function bindExplicitWorkspace(operationId, input) {
+  const field = WORKSPACE_BINDING_FIELDS[operationId];
+  if (!field) return input;
+  return { ...input, [field]: requiredWorkspaceId(input[field], field) };
+}
+
 export async function createSkillHubApplication({ serviceData }) {
   if (!serviceData) throw new TypeError("Skill Hub application requires service data.");
   await serviceData.initialize();
@@ -64,9 +208,10 @@ export async function createSkillHubApplication({ serviceData }) {
   let closed = false;
 
   function registryDescriptor(input = {}) {
-    const workspaceId = workspaceIdFrom({
-      workspaceId: input.registryWorkspaceId || input.contributionRegistryWorkspaceId
-    }, "default");
+    const requestedPartition = String(
+      input.registryWorkspaceId || input.contributionRegistryWorkspaceId || ""
+    ).trim();
+    const workspaceId = requestedPartition || GLOBAL_REGISTRY_PARTITION;
     const registryId = crypto.createHash("sha256").update(workspaceId).digest("hex");
     return Object.freeze({
       workspaceId,
@@ -148,22 +293,21 @@ export async function createSkillHubApplication({ serviceData }) {
   });
   const sandboxOperations = createSkillHubSandboxOperations({ contributionRegistryFor, workspaceIdFrom });
 
-  function callContext(input, metadata) {
-    const actorId = String(metadata.actorId || "anonymous").trim() || "anonymous";
-    const tenantRef = String(metadata.tenantRef || input.workspaceId || input.workspace || "default").trim() || "default";
+  function callContext(input, hostContext) {
+    const { subjectRef, tenantRef } = hostContext.principal;
     return {
       serviceData: serviceData,
       transport: "http-service",
       subject: {
-        type: String(metadata.actorKind || "meshrix-adapter"),
-        subjectId: actorId,
+        type: "meshrix-service-principal",
+        subjectId: subjectRef,
         scopes: []
       },
       governance: {
-        authorized: metadata.authorized === true,
-        current: metadata.current === true
+        authorized: true,
+        current: true
       },
-      principal: { subjectRef: actorId, tenantRef },
+      principal: { subjectRef, tenantRef },
       contributionRegistryWorkspaceId: String(input.contributionRegistryWorkspaceId || input.registryWorkspaceId || ""),
       skillId: String(input.skillId || ""),
       contributionId: String(input.contributionId || "")
@@ -209,7 +353,7 @@ export async function createSkillHubApplication({ serviceData }) {
         code: "contribution_permission_not_published"
       });
     }
-    const targetWorkspaceId = String(input.targetWorkspaceId || input.workspaceId || contribution.workspaceId);
+    const targetWorkspaceId = requiredWorkspaceId(input.targetWorkspaceId, "targetWorkspaceId");
     const actions = [...new Set((Array.isArray(input.actions) ? input.actions : contribution.requestedActions).map(String))].sort();
     const request = [...contribution.permissionRequests].reverse().find((item) =>
       item.status === "requested" && item.targetWorkspaceId === targetWorkspaceId &&
@@ -238,13 +382,22 @@ export async function createSkillHubApplication({ serviceData }) {
   async function invoke(operationId, rawInput = {}) {
     if (closed) return { statusCode: 503, body: errorPayload({ code: "skill_hub_service_closed" }) };
     if (!plainObject(rawInput)) return { statusCode: 400, body: errorPayload({ code: "skill_hub_request_invalid" }) };
-    const input = { ...rawInput };
-    const metadata = plainObject(input.__meshrix) ? input.__meshrix : {};
-    const phase = String(metadata.phase || "execute");
-    const remoteReceipt = plainObject(metadata.receipt) ? metadata.receipt : null;
-    const hostReceipt = plainObject(metadata.operationPermissionReceipt) ? metadata.operationPermissionReceipt : null;
-    delete input.__meshrix;
-    const context = callContext(input, metadata);
+    const receivedInput = { ...rawInput };
+    let hostContext;
+    try {
+      hostContext = parseHostContext(operationId, receivedInput.meshrixContext);
+    } catch (error) {
+      return { statusCode: 400, body: errorPayload(error) };
+    }
+    delete receivedInput.meshrixContext;
+    let input;
+    try {
+      input = bindExplicitWorkspace(operationId, receivedInput);
+    } catch (error) {
+      return { statusCode: 400, body: errorPayload(error) };
+    }
+    const { phase, sandboxOutcome: remoteReceipt, permissionGrantOutcome: hostReceipt } = hostContext;
+    const context = callContext(input, hostContext);
     const descriptor = registryDescriptor(input);
 
     return mutationQueue.run(descriptor.queueKey, async () => {

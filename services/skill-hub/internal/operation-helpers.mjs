@@ -25,7 +25,8 @@ export function objectOrNull(value) {
 }
 
 function claimsLocked(context = {}, subject = {}) {
-  return context.transport === "mcp" || subject.type === "tool-grant";
+  return context.transport === "mcp" || context.transport === "http-service" ||
+    subject.type === "tool-grant" || subject.type === "meshrix-service-principal";
 }
 
 function firstInputString(input = {}, keys = []) {
@@ -46,6 +47,21 @@ export function callerKindClaim(context = {}, input = {}, subject = {}) {
   return String(input.contributorKind || input["contributor-kind"] || subject.type || "agent").trim() || "agent";
 }
 
-export function workspaceIdFrom(input = {}, fallback = "") {
-  return String(input.workspaceId || input.workspace || fallback || "default").trim() || "default";
+export function requiredWorkspaceId(value, field = "workspaceId") {
+  if (typeof value !== "string") {
+    throw Object.assign(new TypeError(`${field} must be a non-empty string.`), {
+      code: "skill_hub_workspace_binding_invalid"
+    });
+  }
+  const workspaceId = value.trim();
+  if (!workspaceId || workspaceId.length > 256 || /[\u0000-\u001f\u007f]/u.test(workspaceId)) {
+    throw Object.assign(new TypeError(`${field} must be a non-empty string.`), {
+      code: "skill_hub_workspace_binding_invalid"
+    });
+  }
+  return workspaceId;
+}
+
+export function workspaceIdFrom(input = {}) {
+  return requiredWorkspaceId(input.workspaceId, "workspaceId");
 }

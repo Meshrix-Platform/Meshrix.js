@@ -1,5 +1,4 @@
 export const MIGRATED_RUNTIME_PLUGIN_IDS = Object.freeze([
-  "coding-github",
   "shared-space",
   "skill-hub"
 ]);

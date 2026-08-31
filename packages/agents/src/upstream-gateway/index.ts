@@ -9,7 +9,7 @@ import {
 } from "@meshrix/foundation/security/final-protected-sink-permit";
 import { createSecurityAlertStore } from "@meshrix/foundation/security/security-alerts";
 import { fetchWithPinnedDns, requestWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
-import { createUpstreamMcpSessionManager } from "@meshrix/protocols/mcp/upstream-mcp-client";
+import { createUpstreamMcpSessionManager } from "@meshrix/protocols/mcp/upstream-mcp-gateway-transport";
 import {
   UPSTREAM_GATEWAY_PROTOCOL_VERSION,
   asArray,
@@ -226,7 +226,8 @@ export function createUpstreamGatewayRegistry({
       url,
       label,
       policies: upstreamEgressPolicies(service),
-      init
+      init,
+      maxRedirects: 0
     });
   }
 

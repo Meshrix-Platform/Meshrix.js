@@ -228,15 +228,19 @@ artifacts.
 
 Raw downloads, job deletion, and batch deletion resolve the same object and
 ownership records. A raw download completes the current owner and job access
-decision before opening the object file, then pipes a bounded file stream to
-the response with dispatch cancellation propagated to the stream. One server
-instance admits at most 32 concurrent raw-object streams and rejects excess
-downloads before opening another file. It does not materialize the complete
-object as an HTTP-controller buffer. Deletion writes its recovery journal
-before removing metadata or object files. Storage doctor, locate, and reconcile
-read only the canonical object, ownership, and deletion-journal tables,
-including on a fresh database; interrupted deletion resumes from that journal
-instead of leaving an untracked object.
+decision before opening the object file. A missing internal authenticated
+subject denies job status, results, normalized artifacts, and raw-object access;
+process co-location or an omitted controller argument does not create local
+access authority. Console sessions and scoped API Keys continue through the
+same owner, workspace, job, and administrator checks. An allowed download pipes
+a bounded file stream to the response with dispatch cancellation propagated to
+the stream. One server instance admits at most 32 concurrent raw-object streams
+and rejects excess downloads before opening another file. It does not
+materialize the complete object as an HTTP-controller buffer. Deletion writes
+its recovery journal before removing metadata or object files. Storage doctor,
+locate, and reconcile read only the canonical object, ownership, and
+deletion-journal tables, including on a fresh database; interrupted deletion
+resumes from that journal instead of leaving an untracked object.
 
 Job and batch deletion enter through the job workflow provider. The provider
 cancels the deterministic durable work item first. When execution belongs to an

@@ -467,7 +467,9 @@ try {
     type: "machine",
     scopes: ["gateway:write"],
     toolsets: ["meshrix.gateway.write"],
-    maxRisk: "repair_write"
+    capabilities: ["cap:tool:meshrix.gateway.forward:execute"],
+    maxRisk: "repair_write",
+    allowedServiceIds: ["strategy-verifier-service"]
   });
   const governedFollowUp: any = await operationPermissionPlatform.runtime.executeTool({
     toolId: "meshrix.gateway.forward",

@@ -330,7 +330,22 @@ function defaultSummary() {
 }
 
 function workspaceAssetPolicyKey(workspaceId?: unknown, policyId?: unknown): string {
-  return `${String(workspaceId || "default").trim() || "default"}:${String(policyId || "").trim()}`;
+  return `${String(workspaceId || "").trim()}:${String(policyId || "").trim()}`;
+}
+
+function requiredWorkspaceAssetWorkspaceId(input: ProviderRecord = {}): string {
+  if (!input || typeof input !== "object" || Array.isArray(input) || typeof input.workspaceId !== "string") {
+    throw Object.assign(new TypeError("workspaceId must be a non-empty string."), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  const workspaceId = input.workspaceId.trim();
+  if (!workspaceId || workspaceId.length > 256 || /[\u0000-\u001f\u007f]/u.test(workspaceId)) {
+    throw Object.assign(new TypeError("workspaceId must be a non-empty string."), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  return workspaceId;
 }
 
 function defaultGovernancePolicyRevision() {
@@ -1060,7 +1075,7 @@ export function createSecurityPermissionsProvider({
       return resolvedAuthorizationStore.appendDecision(decision);
     },
     setWorkspaceAssetPolicy(input: ProviderRecord = {}) {
-      const workspaceId = String(input.workspaceId || input.workspace || "default").trim() || "default";
+      const workspaceId = requiredWorkspaceAssetWorkspaceId(input);
       const policyId = String(input.policyId || input["policy-id"] || "").trim() || `workspace_asset_policy_${crypto.randomUUID()}`;
       const policy: ProviderRecord = {
         ...input,
@@ -1072,9 +1087,9 @@ export function createSecurityPermissionsProvider({
       return policy;
     },
     getWorkspaceAssetPolicy(input: ProviderRecord = {}) {
-      const workspaceId = String(input.workspaceId || input.workspace || "default").trim() || "default";
+      const workspaceId = String(input.workspaceId || input.workspace || "").trim();
       const policyId = String(input.policyId || input["policy-id"] || input.id || "").trim();
-      if (!policyId) {
+      if (!workspaceId || !policyId) {
         return null;
       }
       return workspaceAssetPolicies.get(workspaceAssetPolicyKey(workspaceId, policyId)) || null;

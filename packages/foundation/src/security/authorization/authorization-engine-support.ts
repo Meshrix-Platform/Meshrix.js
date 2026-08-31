@@ -241,6 +241,10 @@ export function abacDenyDetails({
   };
   const countOf = (value?: readonly unknown[] | ReadonlySet<unknown>) =>
     Array.isArray(value) ? value.length : (value as ReadonlySet<unknown> | undefined)?.size ?? 0;
+  const requestedValue = (value: unknown, list: unknown): boolean =>
+    firstString(value) !== "" || countOf(list as readonly unknown[] | ReadonlySet<unknown> | undefined) > 0;
+  const emptyBoundaryDenied = (allowed: readonly unknown[] | ReadonlySet<unknown>, value: unknown, list: unknown): boolean =>
+    countOf(allowed) === 0 && requestedValue(value, list) && !subjectHasResourceBoundaryBypass(subject);
   const tenantPolicy = policyString("tenantId", subject.tenantId, grant?.tenantId, grant?.metadata?.tenantId, profile?.tenantId);
   if (
     resource.tenantId &&
@@ -258,6 +262,9 @@ export function abacDenyDetails({
     grant?.metadata?.allowedWorkspaceIds,
     profile?.allowedWorkspaceIds
   );
+  if (emptyBoundaryDenied(allowedWorkspaceIds, resource.workspaceId, resource.workspaceIds)) {
+    return effectDetails("deny", "workspace_boundary_missing", "Subject has no workspace boundary for this resource.");
+  }
   if (deniedOutsideAllowed([resource.workspaceId, resource.workspaceIds], allowedWorkspaceIds)) {
     return effectDetails("deny", "workspace_not_allowed", "Requested workspace is outside the allowed workspace set.");
   }
@@ -349,6 +356,9 @@ export function abacDenyDetails({
     grant?.metadata?.allowedDataClasses,
     profile?.allowedDataClasses
   );
+  if (emptyBoundaryDenied(allowedDataClasses, resource.dataClass, resource.dataClasses)) {
+    return effectDetails("deny", "data_class_boundary_missing", "Subject has no data class boundary for this resource.");
+  }
   if (deniedOutsideAllowed([resource.dataClass], allowedDataClasses)) {
     return effectDetails("deny", "data_class_not_allowed", "Requested data class is outside the allowed data classes.");
   }
@@ -364,20 +374,44 @@ export function abacDenyDetails({
     grant?.metadata?.allowedEgress,
     profile?.allowedEgress
   );
+  if (emptyBoundaryDenied(allowedEgress, resource.requestedEgress, resource.requestedEgresses)) {
+    return effectDetails("deny", "egress_boundary_missing", "Subject has no egress boundary for this resource.");
+  }
   if (deniedOutsideAllowed([resource.requestedEgress, resource.requestedEgresses], allowedEgress)) {
     return effectDetails("deny", "egress_not_allowed", "Requested egress is outside the allowed egress set.");
   }
 
+  // Real authorization boundaries: a requested service or secret binding
+  // outside an empty allowlist is denied, mirroring account/endpoint/mailbox.
   const semanticChecks: ReadonlyArray<readonly [string, string, string, string, string]> = [
-    ["staticSemanticFamilyId", "staticSemanticFamilyIds", "allowedStaticSemanticFamilies", "static_semantic_family_not_allowed", "Requested static semantic family is outside the allowed set."],
-    ["capabilityDomain", "capabilityDomains", "allowedCapabilityDomains", "capability_domain_not_allowed", "Requested capability domain is outside the allowed set."],
-    ["capabilityVerb", "capabilityVerbs", "allowedCapabilityVerbs", "capability_verb_not_allowed", "Requested capability verb is outside the allowed set."],
-    ["resourceKind", "resourceKinds", "allowedResourceKinds", "resource_kind_not_allowed", "Requested resource kind is outside the allowed set."],
-    ["effectKind", "effectKinds", "allowedEffectKinds", "effect_kind_not_allowed", "Requested effect kind is outside the allowed set."],
     ["serviceId", "serviceIds", "allowedServiceIds", "service_not_allowed", "Requested external service is outside the allowed service set."],
     ["secretBindingId", "secretBindingIds", "allowedSecretBindings", "secret_binding_not_allowed", "Requested secret binding is outside the allowed secret binding set."]
   ];
   for (const [resourceKey, resourceListKey, allowedKey, reasonCode, reason] of semanticChecks) {
+    const allowed = allowedValues(allowedKey, subject[allowedKey], grant?.[allowedKey], grant?.metadata?.[allowedKey], profile?.[allowedKey]);
+    if (emptyBoundaryDenied(allowed, resource[resourceKey], resource[resourceListKey])) {
+      return effectDetails(
+        "deny",
+        String(reasonCode).replace("_not_allowed", "_boundary_missing"),
+        `Subject has no ${String(allowedKey).replace(/^allowed/, "").toLowerCase()} boundary for this resource.`
+      );
+    }
+    if (deniedOutsideAllowed([resource[resourceKey], resource[resourceListKey]], allowed)) {
+      return effectDetails("deny", reasonCode, reason);
+    }
+  }
+  // Descriptive semantic dimensions (resourceKind, capability domain/verb,
+  // semantic family, effect kind) describe the operation; they are enforced
+  // only when an allowlist is actually configured — an empty list is not a
+  // boundary for these dimensions.
+  const descriptiveChecks: ReadonlyArray<readonly [string, string, string, string, string]> = [
+    ["staticSemanticFamilyId", "staticSemanticFamilyIds", "allowedStaticSemanticFamilies", "static_semantic_family_not_allowed", "Requested static semantic family is outside the allowed set."],
+    ["capabilityDomain", "capabilityDomains", "allowedCapabilityDomains", "capability_domain_not_allowed", "Requested capability domain is outside the allowed set."],
+    ["capabilityVerb", "capabilityVerbs", "allowedCapabilityVerbs", "capability_verb_not_allowed", "Requested capability verb is outside the allowed set."],
+    ["resourceKind", "resourceKinds", "allowedResourceKinds", "resource_kind_not_allowed", "Requested resource kind is outside the allowed set."],
+    ["effectKind", "effectKinds", "allowedEffectKinds", "effect_kind_not_allowed", "Requested effect kind is outside the allowed set."]
+  ];
+  for (const [resourceKey, resourceListKey, allowedKey, reasonCode, reason] of descriptiveChecks) {
     const allowed = allowedValues(allowedKey, subject[allowedKey], grant?.[allowedKey], grant?.metadata?.[allowedKey], profile?.[allowedKey]);
     if (deniedOutsideAllowed([resource[resourceKey], resource[resourceListKey]], allowed)) {
       return effectDetails("deny", reasonCode, reason);

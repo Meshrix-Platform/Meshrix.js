@@ -162,6 +162,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
           { operationKey: "echo" }
         )],
         allowedServiceIds: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId],
+        scopeIds: ["gateway:read", "gateway:write", "gateway:maintain"],
         toolsets: requestedToolsets,
         label: verifierAccess.label,
         ...input
@@ -392,9 +393,13 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
   }
 
   async function refreshCapabilities() : Promise<any> {
-    const payload: any = await callMcp("meshrix.capabilities.list", {}, 10);
-    assertMcpOk(payload, "capabilities");
+    const payload: any = await callMcp("meshrix.capabilities.list", {}, 10, [200, 400, 401, 403]);
     const capabilities: any = mcpPayload(payload);
+    if (payload?.error || !capabilities.operations) {
+      throw Object.assign(new Error(`MCP capability discovery failed: ${JSON.stringify(safeEvidence(payload?.error || payload || {}))}`), {
+        code: "mcp_capability_discovery_failed"
+      });
+    }
     operationOutletByName = new Map<any, any>((capabilities.operations || []).map((operation?: any) : any => [
       String(operation.name || ""),
       String(operation?._meta?.mcpOutlet || "meshrix.discovery")

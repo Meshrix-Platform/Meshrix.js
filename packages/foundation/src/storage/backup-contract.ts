@@ -14,6 +14,7 @@ export const BACKUP_MANIFEST_FILE = "backup-manifest.json";
 export const RESTORE_REPORT_DIR = "restore-reports";
 export const RESTORE_STAGING_DIR = "tmp";
 export const EXCLUDED_TOP_LEVEL_DIRS = new Set<string>([BACKUP_ROOT_DIR, "locks", "logs", RESTORE_STAGING_DIR]);
+export const UNPUBLISHED_OBJECT_STAGING_ROOT = "objects/.pending";
 export const SECRET_CUSTODY_EXCLUDED_ROOTS: readonly string[] = Object.freeze([
   "secrets",
   "security/execution-sandbox-custody"
@@ -77,6 +78,7 @@ export function safeRelativePath(relativePath: unknown = ""): string {
     segments.includes("..") ||
     segments.includes("") ||
     EXCLUDED_TOP_LEVEL_DIRS.has(segments[0]) ||
+    isUnpublishedObjectStagingPath(value) ||
     isSecretCustodyPath(value)
   ) {
     throw storageError("backup_path_invalid", "Backup contains an unsafe relative path.");
@@ -84,10 +86,22 @@ export function safeRelativePath(relativePath: unknown = ""): string {
   return value;
 }
 
+export function isUnpublishedObjectStagingPath(relativePath: unknown = ""): boolean {
+  const value = path.posix.normalize(
+    String(relativePath || "").replace(/\\/gu, "/")
+  ).replace(/^\.?\//u, "");
+  return value === UNPUBLISHED_OBJECT_STAGING_ROOT ||
+    value.startsWith(`${UNPUBLISHED_OBJECT_STAGING_ROOT}/`);
+}
+
 export function isSecretCustodyPath(relativePath: unknown = ""): boolean {
   const value = String(relativePath || "").replace(/\\/gu, "/").replace(/^\.?\//u, "");
   return SECRET_CUSTODY_EXCLUDED_ROOTS.some((root) => value === root || value.startsWith(`${root}/`)) ||
-    /^security\/[^/]+\/[^/]+\.sealing-key$/u.test(value);
+    // Any sealing key under security/ at any depth: sealing keys are
+    // operator-custody secrets and must never enter a backup snapshot.
+    // This covers both flat layouts (security/<module>/<alias>.sealing-key)
+    // and nested runtime-state layouts (security/<namespace>/<alias>/state.sealing-key).
+    /^security\/(?:[^/]+\/)*[^/]+\.sealing-key$/u.test(value);
 }
 
 export function backupRoot(userDataPath = ""): string {

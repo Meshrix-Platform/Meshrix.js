@@ -474,11 +474,8 @@ export async function activatePluginDeployment({
         });
       }
       delete pluginContext.pluginInvocationAuthorizationAuthority;
-      const configuredHostCapabilities: any = new Set<any>(Array.isArray(context.configuration?.hostCapabilities)
-        ? context.configuration.hostCapabilities.map((entry?: any) : any => String(entry || "").trim())
-        : []);
-      const hostCapabilityGranted: any = (id?: any) : any => manifest.hostCapabilities.includes(id) && configuredHostCapabilities.has(id);
-      if (context.pluginOwnerProcessIdentityAuthority !== undefined && hostCapabilityGranted("owner-process-identity")) {
+      const hostCapabilityDeclared: any = (id?: any) : any => manifest.hostCapabilities.includes(id);
+      if (hostCapabilityDeclared("owner-process-identity")) {
         if (context.pluginOwnerProcessIdentityAuthority?.id !== "PluginOwnerProcessIdentityAuthority" ||
             typeof context.pluginOwnerProcessIdentityAuthority.forOwner !== "function" || !artifactSnapshot) {
           throw new Error(`Plugin ${manifest.id} owner process identity authority is unavailable.`);
@@ -496,7 +493,7 @@ export async function activatePluginDeployment({
         delete pluginContext.pluginOwnerProcessIdentityAuthority;
       }
       delete pluginContext.pluginOwnerProcessIdentityAuthority;
-      if (context.pluginControlledExecutionAuthority !== undefined && hostCapabilityGranted("controlled-execution")) {
+      if (hostCapabilityDeclared("controlled-execution")) {
         if (context.pluginControlledExecutionAuthority?.id !== "PluginControlledExecutionAuthority" ||
             typeof context.pluginControlledExecutionAuthority.forOwner !== "function" || !artifactSnapshot) {
           throw new Error(`Plugin ${manifest.id} controlled execution authority is unavailable.`);
@@ -515,7 +512,7 @@ export async function activatePluginDeployment({
         delete pluginContext.pluginControlledExecutionAuthority;
       }
       delete pluginContext.pluginControlledExecutionAuthority;
-      if (context.pluginProtectedRecoveryAuthority !== undefined && hostCapabilityGranted("protected-recovery")) {
+      if (hostCapabilityDeclared("protected-recovery")) {
         if (context.pluginProtectedRecoveryAuthority?.id !== "PluginProtectedRecoveryAuthority" ||
             typeof context.pluginProtectedRecoveryAuthority.forOwner !== "function" || !artifactSnapshot) {
           throw new Error(`Plugin ${manifest.id} protected recovery authority is unavailable.`);
@@ -532,7 +529,7 @@ export async function activatePluginDeployment({
         });
       }
       delete pluginContext.pluginProtectedRecoveryAuthority;
-      if (context.pluginDownstreamClientAspectAuthority !== undefined && hostCapabilityGranted("downstream-client-aspect")) {
+      if (hostCapabilityDeclared("downstream-client-aspect")) {
         if (context.pluginDownstreamClientAspectAuthority?.id !== "PluginDownstreamClientAspectAuthority" ||
             typeof context.pluginDownstreamClientAspectAuthority.forOwner !== "function" || !artifactSnapshot) {
           throw new Error(`Plugin ${manifest.id} downstream client aspect authority is unavailable.`);
@@ -550,7 +547,7 @@ export async function activatePluginDeployment({
         });
       }
       delete pluginContext.pluginDownstreamClientAspectAuthority;
-      if (context.pluginOutboundEgressAuthority !== undefined && hostCapabilityGranted("outbound-egress-policy")) {
+      if (hostCapabilityDeclared("outbound-egress-policy")) {
         if (context.pluginOutboundEgressAuthority?.id !== "PluginOutboundEgressAuthority" ||
             typeof context.pluginOutboundEgressAuthority.forOwner !== "function" || !artifactSnapshot) {
           throw new Error(`Plugin ${manifest.id} outbound egress authority is unavailable.`);
@@ -567,8 +564,14 @@ export async function activatePluginDeployment({
         });
       }
       delete pluginContext.pluginOutboundEgressAuthority;
-      if (pluginContext.configuration && Object.hasOwn(pluginContext.configuration, "hostCapabilities")) {
-        const { hostCapabilities: _hostCapabilities, ...pluginConfiguration } = pluginContext.configuration;
+      if (pluginContext.configuration) {
+        const {
+          artifactSigningPurposes: _artifactSigningPurposes,
+          consoleRoleScopeGrants: _consoleRoleScopeGrants,
+          hostCapabilities: _hostCapabilities,
+          hostCapabilityConfiguration: _hostCapabilityConfiguration,
+          ...pluginConfiguration
+        } = pluginContext.configuration;
         pluginContext.configuration = Object.freeze(pluginConfiguration);
       }
       const exposedContext: any = Object.freeze(pluginContext);

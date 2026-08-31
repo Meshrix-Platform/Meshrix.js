@@ -104,6 +104,21 @@ function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
+function requiredWorkspaceBinding(value: unknown, field = "workspaceId"): string {
+  if (typeof value !== "string") {
+    throw Object.assign(new TypeError(`${field} must be a non-empty string.`), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 256 || /[\u0000-\u001f\u007f]/u.test(normalized)) {
+    throw Object.assign(new TypeError(`${field} must be a non-empty string.`), {
+      code: "workspace_binding_invalid"
+    });
+  }
+  return normalized;
+}
+
 function uniqueStrings(value: unknown = []): string[] {
   return [...new Set(asArray(value).map(text).filter(Boolean))];
 }
@@ -172,14 +187,14 @@ function normalizeLegalHold(value: unknown = {}): WorkspacePolicy["legalHold"] {
 export function normalizeWorkspaceGovernancePolicy(input: UnknownRecord = {}): WorkspacePolicy {
   const source = asObject(input);
   const sharePolicy = asObject(source.sharePolicy);
-  const workspaceId = text(source.workspaceId || "default");
+  const workspaceId = requiredWorkspaceBinding(source.workspaceId);
   const copyPolicy = text(source.copyPolicy || sharePolicy.copyPolicy || "sameProject");
   const normalized: WorkspacePolicy = {
     schemaVersion: "v0.0.1:schema:definition-1",
     protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
     workspaceId,
-    organizationId: text(source.organizationId || source.orgId || "default-org"),
-    projectId: text(source.projectId || "default-project"),
+    organizationId: text(source.organizationId || source.orgId || ""),
+    projectId: text(source.projectId || ""),
     departmentId: text(source.departmentId || ""),
     dataClass: normalizeDataClass(source.dataClass),
     sensitivity: text(source.sensitivity || ""),
@@ -393,10 +408,11 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
   }
 
   function audit(registry: GovernanceRegistry, eventType: string, payload: UnknownRecord = {}): UnknownRecord {
+    const workspaceId = requiredWorkspaceBinding(payload.workspaceId);
     const event: UnknownRecord = {
       auditId: stableId("workspace_governance_audit", { eventType, payload, nonce: crypto.randomUUID() }),
       eventType,
-      workspaceId: text(payload.workspaceId || ""),
+      workspaceId,
       payload,
       createdAt: nowIso()
     };
@@ -410,8 +426,8 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       return publicRegistry(await readRegistry());
     },
     async upsertPolicy(input: UnknownRecord = {}): Promise<UnknownRecord> {
+      const policy = normalizeWorkspaceGovernancePolicy(input);
       const registry = await readRegistry();
-      const policy = normalizeWorkspaceGovernancePolicy(asObject(input.policy, input));
       registry.policies[policy.workspaceId] = {
         ...registry.policies[policy.workspaceId],
         ...policy,
@@ -431,9 +447,14 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       };
     },
     async evaluate(input: UnknownRecord = {}): Promise<GovernanceEvaluation> {
+      const workspaceId = requiredWorkspaceBinding(input.workspaceId);
       const registry = await readRegistry();
-      const workspaceId = text(input.workspaceId || asObject(input.policy).workspaceId || "default");
       const policy = registry.policies[workspaceId] || normalizeWorkspaceGovernancePolicy({ workspaceId });
+      if (requiredWorkspaceBinding(policy.workspaceId) !== workspaceId) {
+        throw Object.assign(new Error("Workspace governance policy binding conflicts with persisted state."), {
+          code: "workspace_binding_invalid"
+        });
+      }
       const evaluation = evaluatePolicy(policy, input);
       audit(registry, "workspace_governance.evaluated", {
         workspaceId,
@@ -446,11 +467,19 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       return evaluation;
     },
     async createShareGrant(input: UnknownRecord = {}, trusted: UnknownRecord = {}): Promise<UnknownRecord> {
+      const workspaceId = requiredWorkspaceBinding(input.workspaceId);
+      const targetWorkspaceId = requiredWorkspaceBinding(input.targetWorkspaceId, "targetWorkspaceId");
       const registry = await readRegistry();
-      const workspaceId = text(input.workspaceId || "");
       const policy = registry.policies[workspaceId] || normalizeWorkspaceGovernancePolicy({ workspaceId });
+      if (requiredWorkspaceBinding(policy.workspaceId) !== workspaceId) {
+        throw Object.assign(new Error("Workspace governance policy binding conflicts with persisted state."), {
+          code: "workspace_binding_invalid"
+        });
+      }
       const evaluation = evaluatePolicy(policy, {
         ...input,
+        workspaceId,
+        targetWorkspaceId,
         action: input.action || "share"
       }, trusted);
       if (!evaluation.allowed) {
@@ -463,7 +492,7 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       const shareGrantId = stableId("workspace_share_grant", {
           workspaceId,
           granteeId: input.granteeId,
-          targetWorkspaceId: input.targetWorkspaceId,
+          targetWorkspaceId,
           actions: input.actions
         });
       const grant: UnknownRecord = {
@@ -472,7 +501,7 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
         organizationId: policy.organizationId,
         projectId: policy.projectId,
         granteeId: text(input.granteeId || evaluation.subject.subjectId),
-        targetWorkspaceId: text(input.targetWorkspaceId || workspaceId),
+        targetWorkspaceId,
         actions: uniqueStrings(input.actions || [evaluation.action]),
         dataClass: policy.dataClass,
         retention: policy.retention,
@@ -492,33 +521,59 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       };
     },
     async revokeShareGrants(input: UnknownRecord = {}): Promise<UnknownRecord> {
-      const registry = await readRegistry();
       const shareGrantId = text(input.shareGrantId || input.grantId || "");
-      const workspaceId = text(input.workspaceId || "");
-      const targetWorkspaceId = text(input.targetWorkspaceId || "");
+      const workspaceId = Object.hasOwn(input, "workspaceId")
+        ? requiredWorkspaceBinding(input.workspaceId)
+        : "";
+      const targetWorkspaceId = Object.hasOwn(input, "targetWorkspaceId")
+        ? requiredWorkspaceBinding(input.targetWorkspaceId, "targetWorkspaceId")
+        : "";
       const granteeId = text(input.granteeId || "");
       if (!shareGrantId && (!workspaceId || !targetWorkspaceId)) {
         throw new Error("Share grant revocation requires shareGrantId or workspaceId and targetWorkspaceId.");
       }
+      const registry = await readRegistry();
       const matches = Object.values(registry.shareGrants).filter((grant) => {
         if (shareGrantId) return grant.shareGrantId === shareGrantId;
         return grant.workspaceId === workspaceId &&
           grant.targetWorkspaceId === targetWorkspaceId &&
           (!granteeId || grant.granteeId === granteeId);
       });
-      for (const grant of matches) delete registry.shareGrants[text(grant.shareGrantId)];
+      if (shareGrantId && matches.length === 0) {
+        return {
+          protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
+          revoked: false,
+          revokedCount: 0,
+          audit: null
+        };
+      }
+      const validatedMatches = matches.map((grant) => {
+        const storedWorkspaceId = requiredWorkspaceBinding(grant.workspaceId);
+        const storedTargetWorkspaceId = requiredWorkspaceBinding(grant.targetWorkspaceId, "targetWorkspaceId");
+        const storedShareGrantId = requiredWorkspaceBinding(grant.shareGrantId, "shareGrantId");
+        if (
+          (workspaceId && workspaceId !== storedWorkspaceId) ||
+          (targetWorkspaceId && targetWorkspaceId !== storedTargetWorkspaceId)
+        ) {
+          throw Object.assign(new Error("Share grant revocation binding conflicts with persisted state."), {
+            code: "workspace_binding_invalid"
+          });
+        }
+        return { grant, storedWorkspaceId, storedTargetWorkspaceId, storedShareGrantId };
+      });
+      for (const match of validatedMatches) delete registry.shareGrants[match.storedShareGrantId];
       const event = audit(registry, "workspace_governance.share_revoked", {
-        workspaceId: workspaceId || matches[0]?.workspaceId || "",
-        targetWorkspaceId: targetWorkspaceId || matches[0]?.targetWorkspaceId || "",
+        workspaceId: workspaceId || validatedMatches[0]?.storedWorkspaceId,
+        targetWorkspaceId: targetWorkspaceId || validatedMatches[0]?.storedTargetWorkspaceId,
         actorId: text(input.actorId || ""),
         reason: text(input.reason || ""),
-        revokedCount: matches.length
+        revokedCount: validatedMatches.length
       });
       await writeRegistry(registry);
       return {
         protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
-        revoked: matches.length > 0,
-        revokedCount: matches.length,
+        revoked: validatedMatches.length > 0,
+        revokedCount: validatedMatches.length,
         audit: event
       };
     },
@@ -530,14 +585,14 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       return registry.incompleteUnshares[recordId] || null;
     },
     async recordIncompleteUnshare(input: UnknownRecord = {}): Promise<UnknownRecord> {
-      const registry = await readRegistry();
-      const workspaceId = text(input.workspaceId || "");
-      const targetWorkspaceId = text(input.targetWorkspaceId || "");
+      const workspaceId = requiredWorkspaceBinding(input.workspaceId);
+      const targetWorkspaceId = requiredWorkspaceBinding(input.targetWorkspaceId, "targetWorkspaceId");
       const granteeId = text(input.granteeId || targetWorkspaceId);
       const idempotencyKey = text(input.idempotencyKey || "");
-      if (!workspaceId || !targetWorkspaceId || !idempotencyKey) {
+      if (!idempotencyKey) {
         throw new Error("Incomplete unshare requires workspace, target, and idempotencyKey.");
       }
+      const registry = await readRegistry();
       const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
       const existing = registry.incompleteUnshares[recordId];
       if (existing && (
@@ -587,6 +642,8 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
       const record = registry.incompleteUnshares[recordId];
       if (!record) throw new Error("Incomplete unshare intent is missing.");
+      const workspaceId = requiredWorkspaceBinding(record.workspaceId);
+      const targetWorkspaceId = requiredWorkspaceBinding(record.targetWorkspaceId, "targetWorkspaceId");
       const transitions: Record<string, string> = {
         intent_persisted: "acl_removal_in_progress",
         acl_removal_in_progress: "acl_removed_grant_pending"
@@ -601,8 +658,8 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       registry.incompleteUnshares[recordId] = updated;
       const event = audit(registry, "workspace_governance.unshare_stage_advanced", {
         recordId,
-        workspaceId: updated.workspaceId,
-        targetWorkspaceId: updated.targetWorkspaceId,
+        workspaceId,
+        targetWorkspaceId,
         stage
       });
       await writeRegistry(registry);
@@ -615,20 +672,23 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userD
       const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
       const record = registry.incompleteUnshares[recordId];
       if (!record) return { protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION, completed: false, recordId };
+      const workspaceId = requiredWorkspaceBinding(record.workspaceId);
+      const targetWorkspaceId = requiredWorkspaceBinding(record.targetWorkspaceId, "targetWorkspaceId");
       if (record.stage !== "acl_removed_grant_pending") {
         throw new Error("Incomplete unshare ACL removal is not complete.");
       }
       const matches = Object.values(registry.shareGrants).filter((grant) =>
-        grant.workspaceId === record.workspaceId &&
-        grant.targetWorkspaceId === record.targetWorkspaceId &&
+        grant.workspaceId === workspaceId &&
+        grant.targetWorkspaceId === targetWorkspaceId &&
         (!record.granteeId || grant.granteeId === record.granteeId)
       );
-      for (const grant of matches) delete registry.shareGrants[text(grant.shareGrantId)];
+      const shareGrantIds = matches.map((grant) => requiredWorkspaceBinding(grant.shareGrantId, "shareGrantId"));
+      for (const shareGrantId of shareGrantIds) delete registry.shareGrants[shareGrantId];
       delete registry.incompleteUnshares[recordId];
       const event = audit(registry, "workspace_governance.unshare_reconciled", {
         recordId,
-        workspaceId: record.workspaceId,
-        targetWorkspaceId: record.targetWorkspaceId,
+        workspaceId,
+        targetWorkspaceId,
         revokedCount: matches.length
       });
       await writeRegistry(registry);

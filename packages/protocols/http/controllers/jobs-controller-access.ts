@@ -117,7 +117,7 @@ export function canAccessJob(job: any = null, authSession: any = null) : any {
   }
   const subject: any = authSubjectFromSession(authSession);
   if (!subject.present) {
-    return true;
+    return false;
   }
   if (canAccessAllJobs(subject)) {
     return true;
@@ -191,7 +191,7 @@ function rawObjectJobId(rawObjectEntry: Record<string, any> = {}) : any {
 export async function canAccessRawObjectEntry(rawObjectEntry: Record<string, any> = {}, authSession: any = null, jobWorkflow: any = null) : Promise<any> {
   const subject: any = authSubjectFromSession(authSession);
   if (!subject.present) {
-    return true;
+    return false;
   }
   if (canAccessAllJobs(subject)) {
     return true;

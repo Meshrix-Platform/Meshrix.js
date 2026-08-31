@@ -14,6 +14,7 @@
         "runtime.resource-discipline",
         "repo.public-boundary",
         "security.secret-hygiene",
+        "security.local-path-boundary",
         "repo.local-info-hygiene",
         "registry.consistency",
         "registry.version-naming",
@@ -49,6 +50,7 @@
                   "regression.environment",
                   "repo.public-boundary",
                   "security.secret-hygiene",
+                  "security.local-path-boundary",
                   "repo.local-info-hygiene",
                   "registry.consistency",
                   "registry.version-naming",
@@ -243,6 +245,7 @@
       "suites": [
         "repo.public-boundary",
         "security.secret-hygiene",
+        "security.local-path-boundary",
         "repo.local-info-hygiene",
         "registry.consistency",
         "registry.version-naming",
@@ -806,6 +809,24 @@
       "artifacts": []
     },
     {
+      "id": "security.local-path-boundary",
+      "label": "Repository-local path containment boundary",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "--conditions=source",
+        "tests/security/local-path-boundary.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
       "id": "repo.local-info-hygiene",
       "owner": "platform",
       "package": "repo",
@@ -990,8 +1011,8 @@
       ]
     },
     {
-      "id": "planning.execution-admission",
-      "label": "Fail-closed repository, host-platform, and Plan dependency execution admission",
+      "id": "planning.current-authority",
+      "label": "Canonical PLAN-005 validation and product-evidence separation",
       "owner": "platform",
       "package": "repo",
       "level": "architecture",
@@ -1000,7 +1021,8 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/plan-execution-eligibility.test.ts"
+        "tests/vitest/server/current-plan-authority.test.ts",
+        "tests/vitest/server/production-use-acceptance-authority.test.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -1218,7 +1240,6 @@
         "tests/vitest/server/operation-proof-evidence-policy.test.ts",
         "tests/vitest/server/platform-acceptance-ledger-anchor.test.ts",
         "tests/vitest/server/platform-acceptance-generation-store.test.ts",
-        "tests/vitest/server/plan-receipt-digest.test.ts",
         "tests/vitest/server/publish-release-set.test.ts",
         "tests/vitest/server/release-authority-baseline.test.ts",
         "tests/vitest/server/release-acceptance-standards.test.ts",
@@ -1226,7 +1247,6 @@
         "tests/vitest/server/release-command-dag-runner.test.ts",
         "tests/vitest/server/release-evidence-freshness.test.ts",
         "tests/vitest/server/real-machine-validation-workflow.test.ts",
-        "tests/vitest/server/release-plan-execution-authority.test.ts",
         "tests/vitest/server/release-workflow-supply-chain.test.ts",
         "tests/vitest/server/required-report-validator.test.ts",
         "tests/vitest/server/verify-failure-localization.test.ts"

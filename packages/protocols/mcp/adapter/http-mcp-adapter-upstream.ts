@@ -151,10 +151,23 @@ function apiKeyRestrictionFromAuthorization(authorization: any = null) : any {
 }
 
 function restrictionCapabilities(restriction: any = null) : Set<any> {
-  return new Set<any>(normalizeGrantValues([
+  const values: any[] = normalizeGrantValues([
     ...(Array.isArray(restriction?.capabilities) ? restriction.capabilities : []),
     ...(Array.isArray(restriction?.dynamicCapabilities) ? restriction.dynamicCapabilities : [])
-  ], 512));
+  ], 512);
+  const expanded: any = new Set<any>(values);
+  for (const capability of values) {
+    const value: any = String(capability || "");
+    if (!value.startsWith("cap:upstream:")) continue;
+    const toolCallIndex: any = value.indexOf(":tools-call-");
+    if (toolCallIndex > 0) {
+      expanded.add(`${value.slice(0, toolCallIndex)}:tools-call`);
+      continue;
+    }
+    const parts: any[] = value.split(":");
+    if (parts.length >= 4) expanded.add(parts.slice(0, -1).join(":"));
+  }
+  return expanded;
 }
 
 function restrictionCanDiscoverUpstreamMcpService(service: Record<string, any> = {}, restriction: any = null) : any {
@@ -188,14 +201,30 @@ function restrictionCanSeeUpstreamMcpTool(tool: Record<string, any> = {}, restri
     : {};
   const allowedSecretBindings: any = new Set<any>(normalizeGrantValues(restriction.allowedSecretBindings || [], 512));
   if (normalizeGrantValues(dynamicCapability.credentialBindingIds || [], 128)
-    .some((bindingId?: any) : any => !allowedSecretBindings.has(bindingId))) return false;
+    .some((bindingId?: any) : any =>
+      !allowedSecretBindings.has(bindingId) &&
+      !(requiredCapabilities[0] && capabilities.has(`${requiredCapabilities[0]}:${bindingId}`)))) return false;
+  const requiredScopes: any = normalizeGrantValues(meta.requiredScopes || [], 128);
   const scopes: any = new Set<any>(normalizeGrantValues(restriction.scopes || [], 512));
-  if (normalizeGrantValues(meta.requiredScopes || [], 128).some((scope?: any) : any => !scopes.has(scope))) return false;
+  if (requiredScopes.some((scope?: any) : any => !scopes.has(scope))) return false;
+  const requiredScopeValues: any[] = requiredScopes.length > 0 ? requiredScopes : [];
+  if (requiredCapabilities.length > 0 && requiredScopeValues.length === 0) return false;
   const toolRisk: any = normalizeMcpRisk(meta.risk || tool.risk || "read_only");
   if (MCP_RISK_RANK[toolRisk] > MCP_RISK_RANK[normalizeMcpRisk(restriction.maxRisk)]) return false;
   const allowedToolsets: any = new Set<any>(normalizeGrantValues(restriction.toolsets || [], 256));
   const toolsets: any = normalizeGrantValues(meta.toolsets || [], 256);
   if (allowedToolsets.size > 0 && !toolsets.some((toolset?: any) : any => allowedToolsets.has(toolset))) return false;
+  const isDynamicProjection: any = tool?.name === `upstream.${String(meta.serviceId || "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80)}.tools-call`;
+  if (!isDynamicProjection && requiredCapabilities.length > 0) {
+    const dynamicToolsets: any = normalizeGrantValues(dynamicCapability.toolsets || meta.toolsets || [], 256);
+    if (!dynamicToolsets.some((toolset?: any) : any => allowedToolsets.has(toolset))) return false;
+  }
+  if (requiredCapabilities.length > 0 && requiredCapabilities.some((capability?: any) : any => !normalizeGrantValues(restriction.capabilities || [], 512).includes(capability))) return false;
+  const isConfiguredProjection: any = meta.upstreamConfiguredOperation === true;
+  if (isConfiguredProjection && requiredCapabilities.length > 0) {
+    const policyCapabilities: any = new Set<any>(normalizeGrantValues(restriction.capabilities || [], 512));
+    if (requiredCapabilities.some((capability?: any) : any => !policyCapabilities.has(capability))) return false;
+  }
   return true;
 }
 

@@ -10,7 +10,7 @@ import { packagesRoot, sanitizeError } from "./lib/repository.mjs";
 
 async function smokePackage(record) {
   const bytes = await fs.readFile(path.join(packagesRoot, record.fileName));
-  const admission = admitPluginPackageArchive({ bytes, expectedPluginId: record.pluginId });
+  const admission = await admitPluginPackageArchive({ bytes, expectedPluginId: record.pluginId });
   const verified = { manifest: admission.verifiedPackage.manifest, files: admission.payloadFiles };
   const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-smoke-"));
   let fetchCalls = 0;

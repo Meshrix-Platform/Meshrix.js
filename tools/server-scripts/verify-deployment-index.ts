@@ -75,15 +75,15 @@ assert.equal(index.sourcePackages?.mainService?.requiresNetworkForContainerBuild
 assert.deepEqual(index.sourcePackages?.mainService?.dockerTargets, ["runtime", "runtime-ui"]);
 assert.equal(
   packageJson.scripts?.["release:package-server-source"],
-  "node tools/server-scripts/package-server-source.ts"
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/package-server-source.ts"
 );
 assert.equal(
   packageJson.scripts?.["server:deployment-index"],
-  "node tools/server-scripts/deployment-index.ts"
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/deployment-index.ts"
 );
 assert.equal(
   packageJson.scripts?.["verify:enterprise-single-node-offline-bundle"],
-  "node tools/server-scripts/enterprise-single-node-offline-bundle.ts"
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/enterprise-single-node-offline-bundle.ts"
 );
 const offlineBundle: any = index.offlineBundles?.enterpriseSingleNode;
 assert.ok(offlineBundle, "enterpriseSingleNode offline bundle contract must exist");
@@ -169,7 +169,7 @@ assert.match(dockerfile, /mkdir -p data backups \.\.\/codex-home/u);
 const baseImage: any = String(index.dockerPresets?.baseImages?.mainService || "");
 assert.match(
   baseImage,
-  /^node:24\.\d+\.\d+-bookworm-slim@sha256:[a-f0-9]{64}$/u,
+  /^docker\.io\/library\/node:24\.\d+\.\d+-bookworm-slim@sha256:[a-f0-9]{64}$/u,
   "deployment base image must pin both the Node patch version and OCI index digest"
 );
 assert.equal(

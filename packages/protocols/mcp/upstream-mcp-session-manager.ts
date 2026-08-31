@@ -74,7 +74,6 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     : options.stdioLauncher;
   const transportOptions: Record<string, any> = {
     stdioLauncher,
-    fetchImpl: options.fetchImpl,
     fetchTransport: options.fetchTransport,
     env: options.env
   };

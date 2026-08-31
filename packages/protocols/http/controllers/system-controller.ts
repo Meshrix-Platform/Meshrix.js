@@ -3,6 +3,7 @@ import {
   contentDispositionHeader,
   sendJson
 } from "#meshrix/http-utils";
+import { logRuntimeEvent } from "#meshrix/runtime-logger";
 import { createSystemControllerSettingsHandlers } from "./system-controller-settings-handlers.ts";
 import { createSystemControllerAppearancePresetHandlers } from "./system-controller-appearance-preset-handlers.ts";
 import { createSystemControllerAuthHandlers } from "./system-controller-auth-handlers.ts";
@@ -291,11 +292,19 @@ export function createSystemController({
       const declaredStatus: any = Number(error?.statusCode || error?.status || 0);
       const status: any = Number.isInteger(declaredStatus) && declaredStatus >= 400 && declaredStatus <= 599
         ? declaredStatus
-        : 400;
+        : 500;
+      if (status >= 500) {
+        // Preserve the unexpected error for server-side diagnosis only; the
+        // client receives the generic caller-provided message.
+        logRuntimeEvent("error", "console_domain_operation_failed", {
+          operationId,
+          errorMessage: error instanceof Error ? error.message : String(error || "")
+        });
+      }
       sendJson(response, status, {
         ok: false,
         operationId,
-        error: error instanceof Error ? error.message : errorMessage,
+        error: errorMessage,
         ...(typeof error?.code === "string" && error.code ? { code: error.code } : {})
       });
     }

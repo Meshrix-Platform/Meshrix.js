@@ -296,15 +296,13 @@ export type FeatureRuntimeSummary = {
       routePath?: string;
       slotId?: string;
       componentId: string;
-      assetUrl: string;
-      assetExport: string;
-      sandboxUrl?: string;
-      bridgeVersion?: string;
+      sandboxUrl: string;
+      bridgeVersion: string;
       artifactDigest: string;
       artifactGeneration: number;
       label?: string;
       requiredScopes: string[];
-      toolIds?: string[];
+      toolIds: string[];
     }>;
   };
 };

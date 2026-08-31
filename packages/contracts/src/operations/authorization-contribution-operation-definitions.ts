@@ -5,6 +5,7 @@ import {
   WORKSPACE_ID_QUERY,
   protocolOperation,
   schema,
+  workspaceBindingSchema,
   workspaceAssetOperation
 } from "./protocol-operation-builders.ts";
 
@@ -521,7 +522,7 @@ protocolOperation({
     scopes: ["storage:write"],
     risk: "safe_write",
     inputSchema: schema(["workspaceId"], {
-      workspaceId: { type: "string" },
+      workspaceId: { type: "string", minLength: 1, maxLength: 256 },
       path: { type: "string" },
       content: { type: "string" },
       contentBase64: { type: "string" }
@@ -566,7 +567,7 @@ protocolOperation({
     scopes: ["storage:write"],
     risk: "safe_write",
     inputSchema: schema(["workspaceId", "path"], {
-      workspaceId: { type: "string" },
+      workspaceId: { type: "string", minLength: 1, maxLength: 256 },
       path: { type: "string" },
       content: { type: "string" },
       contentBase64: { type: "string" }
@@ -581,7 +582,7 @@ protocolOperation({
     scopes: ["storage:write"],
     risk: "safe_write",
     inputSchema: schema(["workspaceId", "path"], {
-      workspaceId: { type: "string" },
+      workspaceId: { type: "string", minLength: 1, maxLength: 256 },
       path: { type: "string" },
       patch: { type: "string" },
       hunks: { type: "array" }
@@ -594,7 +595,8 @@ protocolOperation({
     targetMethod: "handleWorkspaceContributionSubmit",
     path: "/api/workspace/contributions/submit",
     scopes: ["workspace:write"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.contribution.list",
@@ -632,7 +634,11 @@ protocolOperation({
     label: "生成 workspace 贡献报告",
     targetMethod: "handleWorkspaceContributionReport",
     path: "/api/workspace/contributions/report",
-    scopes: ["workspace:read"]
+    scopes: ["workspace:read"],
+    inputSchema: schema([], {
+      workspaceId: { type: "string", minLength: 1, maxLength: 256 },
+      timeRange: { type: "string", maxLength: 128 }
+    })
   }),
 protocolOperation({
     id: "workspace.contribution.assets.list",
@@ -652,7 +658,8 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/permission/request",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:write"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema({ target: true })
   }),
 protocolOperation({
     id: "workspace.contribution.permission.grant",
@@ -664,7 +671,8 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: workspaceBindingSchema({ target: true })
   }),
 protocolOperation({
     id: "workspace.contribution.scan",
@@ -674,7 +682,8 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/scan",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:maintain"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.contribution.review",
@@ -684,7 +693,8 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/review",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:maintain"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.contribution.preview",
@@ -694,7 +704,8 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/preview",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:maintain"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.contribution.publish",
@@ -706,7 +717,8 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.contribution.adopt",
@@ -716,7 +728,8 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/adopt",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:write"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema({ target: true })
   }),
 protocolOperation({
     id: "workspace.contribution.reject",
@@ -726,7 +739,8 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/reject",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:maintain"],
-    risk: "repair_write"
+    risk: "repair_write",
+    inputSchema: workspaceBindingSchema()
   }),
 protocolOperation({
     id: "workspace.contribution.request_changes",
@@ -736,6 +750,7 @@ protocolOperation({
     path: "/api/workspace/contributions/:contributionId/request-changes",
     params: [{ name: "contributionId", aliases: ["contribution-id", "id"], required: true }],
     scopes: ["workspace:maintain"],
-    risk: "safe_write"
+    risk: "safe_write",
+    inputSchema: workspaceBindingSchema()
   })
 ]);

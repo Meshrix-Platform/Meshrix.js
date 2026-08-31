@@ -31,6 +31,12 @@ export function createMcpProxyTransportReadiness(report: Record<string, any> = {
   if (Number(summary.failedCount || 0) !== 0) {
     reasons.push(`mcp-proxy-transport-failed-count:${Number(summary.failedCount || 0)}`);
   }
+  if (Number(summary.unexecutedCount ?? MCP_SUPPORTED_TARGETS.length) !== 0) {
+    reasons.push(`mcp-proxy-transport-unexecuted-count:${Number(summary.unexecutedCount ?? MCP_SUPPORTED_TARGETS.length)}`);
+  }
+  if (targets.length !== MCP_SUPPORTED_TARGETS.length || byTarget.size !== MCP_SUPPORTED_TARGETS.length) {
+    reasons.push("mcp-proxy-transport-target-cardinality-invalid");
+  }
   for (const target of MCP_SUPPORTED_TARGETS) {
     const row: any = byTarget.get(target);
     if (!row) {

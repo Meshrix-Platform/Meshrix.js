@@ -327,7 +327,10 @@ export function createGitHubReleasePluginPackageAcquisition({
     const downloadUrl: any = String(asset.url || assetUrl).trim();
     const bytes: any = await downloadAsset(downloadUrl, authorization, { ...policy, signal }, signal);
     const archiveDigest: any = digest(bytes);
-    if (source.expectedDigest && source.expectedDigest !== archiveDigest) {
+    // Remote packages must be verified against the operator-fixed digest. The
+    // source contract requires expectedDigest; this second check is a hard
+    // guard so a missing digest can never accept unverified bytes.
+    if (source.expectedDigest !== archiveDigest) {
       throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: acquired digest mismatch");
     }
     return Object.freeze({

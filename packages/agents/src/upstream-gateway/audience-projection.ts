@@ -88,12 +88,15 @@ function grantToolsetSet(grant: Record<string, any> = {}) : any {
 
 function grantCapabilitySet(grant: Record<string, any> = {}) : any {
   const metadata: any = plainObject(grant.metadata);
-  return new Set<any>(uniqueStrings([
+  const values: any[] = uniqueStrings([
+    ...(Array.isArray(grant.capabilities) ? grant.capabilities : []),
     ...(Array.isArray(grant.dynamicCapabilities) ? grant.dynamicCapabilities : []),
     ...(Array.isArray(grant.upstreamCapabilities) ? grant.upstreamCapabilities : []),
+    ...(Array.isArray(metadata.capabilities) ? metadata.capabilities : []),
     ...(Array.isArray(metadata.dynamicCapabilities) ? metadata.dynamicCapabilities : []),
     ...(Array.isArray(metadata.upstreamCapabilities) ? metadata.upstreamCapabilities : [])
-  ]));
+  ]);
+  return new Set<any>(values);
 }
 
 function grantAllowedServiceIds(grant: Record<string, any> = {}) : any {
@@ -179,7 +182,16 @@ export function evaluateAudienceDecision({
   const capability: any = plainObject(operation._meta?.dynamicCapability || operation.dynamicCapability);
   const capabilityId: any = text(capability.capabilityId || operation._meta?.capabilityId);
   const capabilities: any = grantCapabilitySet(authorizationPolicy);
-  if (capabilityId && (capabilities.size === 0 || !capabilities.has(capabilityId))) {
+  const isDiscoveredMcpTool: any = operation._meta?.upstreamMcp === true;
+  if (capabilityId && isDiscoveredMcpTool && capabilities.size === 0) {
+    return Object.freeze({
+      allowed: false,
+      reasonCode: "audience_capability_missing",
+      purpose: mode,
+      visibleMetadata: false
+    });
+  }
+  if (capabilityId && isDiscoveredMcpTool && !capabilities.has(capabilityId)) {
     return Object.freeze({
       allowed: false,
       reasonCode: "audience_capability_missing",

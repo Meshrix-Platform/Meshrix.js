@@ -39,7 +39,9 @@ export async function runProjectedToolWorkflows({
   await destructiveTest("upstream operations stay hidden and uncallable without an exact dynamic capability", async () : Promise<any> => {
     const token: any = await createGrant("verify-upstream-operation-tool-denied", ["meshrix.gateway.read", "meshrix.gateway.write"], {
       dynamicCapabilities: [],
-      allowedServiceIds: [serviceId]
+      allowedServiceIds: [],
+      allowedSecretBindings: [],
+      resources: { mode: "unrestricted" }
     });
     const directToolName: any = `upstream.${serviceId}.echo`;
     const beforeFixtureHits: any = fixtureState.echoCount;

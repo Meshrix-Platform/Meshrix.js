@@ -90,6 +90,44 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
     }
   });
 
+  it("publishes allowed MCP context headers without treating them as executable input", async () : Promise<any> => {
+    const fixture: any = await startFixture();
+    const { server, session } = await startProductionServer();
+    const collection: any = `${server.url}/api/gateway/v1/services`;
+    const command: any = {
+      schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
+      action: "create",
+      expectedServiceRevision: 0,
+      expectedSetRevision: 0,
+      idempotencyKey: "fixture-positive-mcp-context-header",
+      serviceKey: "fixture-context-service",
+      descriptor: {
+        serviceProtocol: "mcp",
+        label: "Fixture context service",
+        allowLocalNetwork: true,
+        mcp: {
+          transport: "http",
+          url: `${fixture.url}/mcp`,
+          headers: { "x-fixture-context": "alpha" }
+        }
+      }
+    };
+    const created: any = await fetch(collection, {
+      method: "POST",
+      headers: session.write,
+      body: JSON.stringify(command)
+    });
+    expect(created.status).toBe(202);
+    const payload: any = await created.json();
+    const detail: any = await fetch(`${collection}/${encodeURIComponent(payload.serviceId)}`, {
+      headers: session.read
+    });
+    expect(detail.status).toBe(200);
+    expect((await detail.json()).service.descriptor.mcp.headers).toEqual({
+      "x-fixture-context": "alpha"
+    });
+  });
+
   it("rejects the bounded corpus through REST and JSON-RPC with zero publication or network side effects", async () : Promise<any> => {
     const fixture: any = await startFixture();
     const { server, session } = await startProductionServer();

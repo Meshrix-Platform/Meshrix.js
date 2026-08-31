@@ -188,6 +188,11 @@
       "source": "./src/module-system/plugin-package-validator.ts",
       "default": "./dist/module-system/plugin-package-validator.js"
     },
+    "./module-system/plugin-console-isolation": {
+      "types": "./dist/module-system/plugin-console-isolation.d.ts",
+      "source": "./src/module-system/plugin-console-isolation.ts",
+      "default": "./dist/module-system/plugin-console-isolation.js"
+    },
     "./module-system/plugin-registry": {
       "types": "./dist/module-system/plugin-registry.d.ts",
       "source": "./src/module-system/plugin-registry.ts",

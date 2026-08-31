@@ -57,7 +57,14 @@ const contract = {
   },
   authorizationContract: {
     boundary: "Operation Permission v1",
-    serviceBindingRequired: true
+    serviceBindingRequired: true,
+    hostContext: {
+      field: "meshrixContext",
+      schemaVersion: "v0.0.1:skill-hub:host-context-1",
+      principal: "stable-service-scoped-opaque",
+      authorityEvidence: "host-retained",
+      outcomes: ["sandbox-terminal", "operation-permission-recorded"]
+    }
   },
   tools,
   healthCheck: { type: "http", method: "GET", path: "/readyz" },

@@ -77,7 +77,6 @@ export const TYPING_SUBSTRATE_OWNED_PATHS: readonly string[] = Object.freeze([
 
 export const NEW_TYPESCRIPT_SCOPE: readonly string[] = Object.freeze([
   "tools/server-scripts/verify-no-explicit-any.ts",
-  "tools/server-scripts/simulate-clean-checkout-pr.ts",
   "tools/server-scripts/localize-verify-failure.ts",
   "tests/vitest/server/acceptance-gate-provenance.test.ts",
   "tests/vitest/server/verify-failure-localization.test.ts",

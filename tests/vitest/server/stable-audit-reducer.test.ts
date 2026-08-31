@@ -78,7 +78,7 @@ describe("stable audit checkpoint reducer", () => {
       failed: 0,
       releaseReady: true,
       completedStageCount: STABLE_AUDIT_PROFILES.length,
-      selectedSuiteCount: 77,
+      selectedSuiteCount: 78,
     });
   });
 

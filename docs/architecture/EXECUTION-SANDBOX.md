@@ -29,7 +29,7 @@ Every governed executable workload must enter through the execution-sandbox port
 
 Developer test commands and release tooling that are not reachable from a product runtime operation are outside this product boundary. They must not be exposed indirectly as runtime tools.
 
-Selected plugin modules remain privileged, reviewed deployment code loaded in the server process. The execution sandbox isolates workloads requested by those modules. Process-isolated plugin confinement remains remaining GATE work so a hostile `activatePlugin` implementation cannot penetrate Core. Until that confinement lands, an untrusted plugin implementation must not be loaded by the privileged in-process plugin runtime.
+Selected plugin modules remain reviewed, trusted deployment code, but production loads each entrypoint in a Host-created per-plugin child process rather than importing it into the server process. That process boundary contains runtime faults and module state; it does not turn an unreviewed plugin into an adversarially sandboxed workload. The execution sandbox separately isolates agent-controlled or otherwise untrusted workloads requested by those modules. Untrusted plugin implementations are not admitted as server plugins.
 
 ## Architectural Invariants
 
@@ -178,7 +178,7 @@ The core contract supports replaceable backend classes and one deterministic res
 - a hardened OCI backend for the explicitly governed Node runtime profile, with other language runtimes requiring their own conforming adapter and receipt;
 - a microVM backend for hostile native workloads and stronger tenant isolation.
 
-Discovery evaluates only core-trusted adapters and fixed installation or service locations. It does not accept caller-controlled executable paths, sockets, endpoints, probe commands, images, or provider identifiers. The stable preference is Podman, Docker, then explicitly registered container or virtual-machine providers; rootless operation is preferred within each provider class. A candidate is selectable only when its health and current conformance receipt prove that it can enforce the complete effective policy. A higher-ranked non-conforming candidate is skipped rather than weakening a restriction.
+Discovery evaluates only core-trusted adapters and fixed installation or service locations. It does not accept caller-controlled executable paths, sockets, endpoints, probe commands, images, or provider identifiers. Podman with `crun` is the canonical open-source OCI engine and the stable first choice; Docker is optional compatibility and is never an installation, operation, verification, or release prerequisite. Rootless operation is preferred within each provider class. A candidate is selectable only when its health and current conformance receipt prove that it can enforce the complete effective policy. The provisioning verifier tests the highest-ranked installed target and reports its failure directly instead of falling through to a lower-ranked engine; runtime selection never weakens a restriction.
 
 The resolver caches only bounded redacted capability facts and invalidates selection when provider identity, service identity, health, policy revision, or conformance receipt changes. The public projection exposes only `sandboxAvailable`; it is true only for the ready state. An administrative projection may expose a redacted state, provider class, isolation class, enforceable capabilities, policy revision, and receipt reference, but never host paths, sockets, addresses, raw probe output, or machine identity.
 

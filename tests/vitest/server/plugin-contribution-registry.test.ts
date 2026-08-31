@@ -166,7 +166,7 @@ function enabledContributions(operationPatch: Record<string, any> = {}) : any {
         routePath: "/admin/demo",
         componentId: "demo/DemoView",
         assetPath: "console/index.mjs",
-        assetExport: "mountPluginConsole",
+        toolIds: ["demo.run"],
         requiredScopes: ["demo:run"]
       })
     },
@@ -217,23 +217,30 @@ describe("plugin contribution registry", () : any => {
 
     expect(entry).toMatchObject({
       pluginId: "demo",
-      assetExport: "mountPluginConsole",
+      bridgeVersion: "v0.0.1:plugin:console-bridge-1",
+      toolIds: ["demo.run"],
       artifactDigest: TEST_ARTIFACT_IDENTITY.artifactDigest,
       artifactGeneration: TEST_ARTIFACT_IDENTITY.generation
     });
-    expect(entry.assetUrl).toMatch(/^\/api\/plugins\/v1\/console-assets\/demo\/1\/[a-f0-9]{64}\//u);
+    expect(entry.sandboxUrl).toMatch(/^\/api\/plugins\/v1\/console-sandboxes\/demo\/1\/[a-f0-9]{64}\//u);
     expect(entry).not.toHaveProperty("assetPath");
-    expect(registry.getConsoleAssetEntry(entry.assetUrl)).toEqual(entry);
+    expect(entry).not.toHaveProperty("assetUrl");
+    expect(entry).not.toHaveProperty("assetExport");
+    expect(registry.getConsoleSandboxEntry(entry.sandboxUrl)).toEqual(entry);
 
-    const asset: any = await registry.readConsoleAsset(entry.assetUrl);
+    const asset: any = await registry.readConsoleSandbox(entry.sandboxUrl);
     expect(asset.entry).toEqual(entry);
     expect(asset.bytes.toString("utf8")).toContain("console/index.mjs");
     expect(artifactFileReader).toHaveBeenCalledWith(expect.objectContaining({ id: "demo" }), "console/index.mjs");
-    expect(await registry.readConsoleAsset(`${entry.assetUrl}.unknown`)).toBeNull();
+    expect(registry.resolveConsoleBridgeInvocation(
+      entry.sandboxUrl.replace("/console-sandboxes/", "/console-bridges/").replace(/\.html$/u, "/invoke"),
+      "demo.run"
+    )).toMatchObject({ operationId: "demo.run", toolId: "demo.run" });
+    expect(await registry.readConsoleSandbox(`${entry.sandboxUrl}.unknown`)).toBeNull();
 
     registry.deactivatePlugin("demo");
-    expect(registry.getConsoleAssetEntry(entry.assetUrl)).toBeNull();
-    expect(await registry.readConsoleAsset(entry.assetUrl)).toBeNull();
+    expect(registry.getConsoleSandboxEntry(entry.sandboxUrl)).toBeNull();
+    expect(await registry.readConsoleSandbox(entry.sandboxUrl)).toBeNull();
   });
 
   it("rejects unsafe or incomplete console artifact declarations", () : any => {
@@ -241,8 +248,7 @@ describe("plugin contribution registry", () : any => {
       { assetPath: "../runtime.mjs" },
       { assetPath: "runtime.mjs" },
       { assetPath: "console\\index.mjs" },
-      { assetPath: "console//index.mjs" },
-      { assetExport: "default export" }
+      { assetPath: "console//index.mjs" }
     ]) {
       const contributions: any = enabledContributions();
       const original: any = contributions.consoleEntries["admin.demo"];
@@ -252,6 +258,18 @@ describe("plugin contribution registry", () : any => {
       });
       expect(() : any => createRegistry(contributions)).toThrow(/console entry .* is invalid/u);
     }
+    const foreignTool: any = enabledContributions();
+    foreignTool.consoleEntries["admin.demo"] = record("demo", "consoleEntries", "admin.demo", {
+      ...foreignTool.consoleEntries["admin.demo"].implementation,
+      toolIds: ["foreign.run"]
+    });
+    expect(() : any => createRegistry(foreignTool)).toThrow(/tool foreign\.run is not owned/u);
+    const legacy: any = enabledContributions();
+    legacy.consoleEntries["admin.demo"] = record("demo", "consoleEntries", "admin.demo", {
+      ...legacy.consoleEntries["admin.demo"].implementation,
+      assetExport: "mountPluginConsole"
+    });
+    expect(() : any => createRegistry(legacy)).toThrow(/unsupported field assetExport/u);
   });
 
   it("admits each plugin contribution once into an immutable snapshot", () : any => {
@@ -810,6 +828,100 @@ describe("plugin contribution registry", () : any => {
     });
     expect(JSON.stringify(parseCapturedResult({ operation, captured: response })))
       .not.toContain("private-upstream-audit-record");
+  });
+
+  it("binds stable pairwise principals and opaque idempotency to Skill Hub service requests", async () : Promise<any> => {
+    const forwarded: any[] = [];
+    const requestPluginExternalService: any = vi.fn(async (request: any) : Promise<any> => {
+      forwarded.push(structuredClone(request));
+      return { ok: true, status: 200, data: { accepted: true } };
+    });
+    const operation: any = definition("skill_hub.list");
+    const record: any = Object.freeze({
+      pluginId: "skill-hub",
+      kind: "operations",
+      id: operation.id,
+      implementation: Object.freeze({
+        requiredHostPorts: Object.freeze(["externalService"]),
+        async execute({ host, input, signal }: Record<string, any>) : Promise<any> {
+          return host.externalService.request({
+            serviceRef: "svc_skill_hub",
+            operationRef: operation.id,
+            input: {
+              query: "stable",
+              actorId: "plugin-forged-subject",
+              meshrixContext: {
+                schemaVersion: "v0.0.1:skill-hub:host-context-1",
+                phase: "execute",
+                ...(input.spoof === true ? { principal: { subjectRef: "raw-subject" } } : {})
+              }
+            },
+            idempotencyKey: "skill-hub:plugin-request",
+            timeoutMs: 500
+          }, { signal });
+        }
+      })
+    });
+    const registry: any = {
+      operations: new Map([[operation.id, record]]),
+      requireOperation(id: any) { return id === operation.id ? record : null; }
+    };
+    const controller: any = createPluginContributionController({
+      registry,
+      hostPorts: { externalService: { requestPluginExternalService } }
+    });
+    const authorizedCall = (subjectId: string, input: any = {}) : Promise<any> => controller.executePluginOperation({
+      operation,
+      input,
+      request: {
+        __meshrixToolRuntimeAuthorization: {
+          ok: true,
+          grant: {
+            id: "grant-fixture",
+            scopes: ["demo:run"],
+            capabilities: ["cap:external:skill-hub"],
+            metadata: { policyRevision: "policy-fixture" }
+          },
+          policy: { decisionId: "decision-fixture" }
+        }
+      },
+      authSession: {
+        user: {
+          userId: subjectId,
+          tenantId: "tenant-fixture",
+          scopes: ["gateway:read"]
+        }
+      },
+      response: createCapturedResponse()
+    });
+
+    await authorizedCall("subject-fixture");
+    await authorizedCall("subject-fixture");
+    await authorizedCall("subject-other");
+    await expect(authorizedCall("subject-fixture", { spoof: true })).rejects.toMatchObject({
+      code: "plugin_external_service_skill_hub_context_invalid"
+    });
+
+    expect(forwarded).toHaveLength(3);
+    const first: any = forwarded[0];
+    expect(first.input.meshrixContext).toMatchObject({
+      schemaVersion: "v0.0.1:skill-hub:host-context-1",
+      phase: "execute",
+      principal: {
+        subjectRef: expect.stringMatching(/^skill_hub_subject_[a-f0-9]{64}$/u),
+        tenantRef: expect.stringMatching(/^skill_hub_tenant_[a-f0-9]{64}$/u)
+      }
+    });
+    expect(first.idempotencyKey).toMatch(/^skill-hub:[a-f0-9]{64}$/u);
+    expect(forwarded[1].input.meshrixContext.principal).toEqual(first.input.meshrixContext.principal);
+    expect(forwarded[1].idempotencyKey).toEqual(first.idempotencyKey);
+    expect(forwarded[2].input.meshrixContext.principal.subjectRef)
+      .not.toEqual(first.input.meshrixContext.principal.subjectRef);
+    expect(forwarded[2].idempotencyKey).not.toEqual(first.idempotencyKey);
+    expect(JSON.stringify(forwarded)).not.toContain("subject-fixture");
+    expect(JSON.stringify(forwarded)).not.toContain("tenant-fixture");
+    expect(JSON.stringify(forwarded)).not.toContain("grant-fixture");
+    expect(JSON.stringify(forwarded)).not.toContain("plugin-forged-subject");
   });
 
   it("seals declared base64 before plugin execution and preserves HTTP/MCP parity", async () : Promise<any> => {

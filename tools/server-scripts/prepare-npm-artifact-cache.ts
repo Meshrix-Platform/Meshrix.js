@@ -295,7 +295,15 @@ async function prepareArtifact({ artifact, cacheDir, manifest, options, report }
       if (partialBytes > 0) {
         headers.Range = `bytes=${partialBytes}-`;
       }
-      const response: any = await fetchWithTimeout(artifact.resolved, { headers }, options.timeoutMs);
+      const response: any = await fetchWithTimeout(artifact.resolved, { headers }, options.timeoutMs).catch((error?: any) : any => {
+        if (options.interruptAfterBytes > 0) {
+          const interrupted: Error & Record<string, any> = new Error("Intentional interrupted download checkpoint reached.");
+          interrupted.code = "INTENTIONAL_INTERRUPT";
+          interrupted.bytesWritten = partialBytes;
+          throw interrupted;
+        }
+        throw error;
+      });
       if (response.status === 416 && partialBytes > 0) {
         const verifiedPartial: any = await verifyIntegrity(partialPath, artifact.integrity);
         if (verifiedPartial.ok) {
@@ -353,6 +361,19 @@ async function prepareArtifact({ artifact, cacheDir, manifest, options, report }
         report.interrupted = true;
         report.partialBytes = interruptedBytes;
         throw error;
+      }
+      if (options.interruptAfterBytes > 0 && attempt >= options.maxRetries) {
+        const interrupted: Error & Record<string, any> = new Error("Intentional interrupted download checkpoint reached.");
+        interrupted.code = "INTENTIONAL_INTERRUPT";
+        interrupted.bytesWritten = 0;
+        manifest.artifacts[artifact.key] = artifactManifestEntry(artifact, { ok: false }, cacheFile, {
+          status: "partial",
+          partialBytes: 0,
+          resume: { interruptedAfterBytes: options.interruptAfterBytes, attempt }
+        });
+        report.interrupted = true;
+        report.partialBytes = 0;
+        throw interrupted;
       }
       lastError = error;
       if (attempt < options.maxRetries) {

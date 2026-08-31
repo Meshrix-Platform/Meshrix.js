@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PACTIUM_PROTOCOL } from "pactium";
+import { PACTIUM_PROTOCOL, protocolHash } from "pactium";
 import { describe, expect, it } from "vitest";
 import {
   createPactiumStateSubstrate,
@@ -307,6 +307,140 @@ describe("merkle state substrate", () : any => {
       await expect(baseRuntime.core.doctor()).resolves.toMatchObject({ ledgerSize: 0 });
     } finally {
       await baseRuntime.close();
+      await fs.rm(userDataPath, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects weak or tampered state commit records, event chains, and Pactium bindings", async () : Promise<any> => {
+    const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-integrity-"));
+    const runtime: any = createMeshrixPactiumRuntime({ userDataPath, storageBackend: "sqlite" });
+    const substrate: any = createPactiumStateSubstrate({ userDataPath, pactiumRuntime: runtime });
+    const scope: any = "workspace/integrity";
+    async function store(scopeName: string, key: string, value: unknown) : Promise<any> {
+      await runtime.core.withMutationTransaction(() : any =>
+        runtime.storage.putProtocolObject(scopeName, key, value));
+      runtime.storage.clearCache?.();
+    }
+    try {
+      const commit: any = await substrate.stateCommit.commit({
+        scope,
+        operationId: "workspace.integrity.first",
+        mutations: [
+          { action: "put", key: "docs/a.txt", valueRef: "ref:a" },
+          { action: "put", key: "docs/empty", valueRef: "", metadata: { type: "directory" } },
+        ],
+      });
+      await substrate.stateCommit.commit({
+        scope,
+        operationId: "workspace.integrity.second",
+        mutations: [{ action: "put", key: "docs/b.txt", valueRef: "ref:b" }],
+      });
+      expect(commit).toMatchObject({
+        commitKind: "mutation",
+        eventOffset: 0,
+        mutations: expect.arrayContaining([
+          expect.objectContaining({
+            key: "docs/empty",
+            valueRef: "meshrix:value-ref:none",
+          }),
+        ]),
+        pactium: {
+          envelopeId: expect.stringMatching(/^proof_envelope_/u),
+          intentId: expect.stringMatching(/^operation_intent_/u),
+          outcomeId: expect.stringMatching(/^operation_outcome_/u),
+          ledgerEventId: expect.stringMatching(/^ledger_event_/u),
+          ledgerIndex: expect.any(Number),
+        },
+      });
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({ ok: true });
+
+      const weakRecord: any = structuredClone(commit);
+      delete weakRecord.commitKind;
+      await store("meshrix-state-commit", commit.commitId, weakRecord);
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({
+        ok: false,
+        error: "commit_malformed",
+      });
+
+      const replayTampered: any = structuredClone(commit);
+      replayTampered.mutations[0] = {
+        ...replayTampered.mutations[0],
+        valueRef: "ref:tampered",
+        valueHash: protocolHash("meshrix.value", { valueRef: "ref:tampered" }),
+      };
+      await store("meshrix-state-commit", commit.commitId, replayTampered);
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({
+        ok: false,
+        error: "state_commit_replay_mismatch",
+      });
+
+      const proofTampered: any = structuredClone(commit);
+      proofTampered.mutations.push({
+        action: "delete",
+        key: "docs/missing.txt",
+        valueRef: "",
+        valueHash: "",
+        metadata: {},
+      });
+      proofTampered.mutations.sort((left: any, right: any) : any => left.key.localeCompare(right.key));
+      await store("meshrix-state-commit", commit.commitId, proofTampered);
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({
+        ok: false,
+        error: "state_commit_pactium_state_mismatch",
+      });
+
+      await store("meshrix-state-commit", commit.commitId, {
+        ...commit,
+        eventHash: protocolHash("meshrix.state-event", { tampered: true }),
+      });
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({
+        ok: false,
+        error: "state_commit_event_mismatch",
+      });
+
+      await store("meshrix-state-commit", commit.commitId, {
+        ...commit,
+        pactium: { ...commit.pactium, outcomeId: "operation_outcome_tampered" },
+      });
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({
+        ok: false,
+        error: "state_commit_pactium_ledger_mismatch",
+      });
+
+      await store("meshrix-state-commit", commit.commitId, commit);
+      const segmentKey: any = `event-log-segment:${scope}:0`;
+      const originalSegment: any = await runtime.storage.getProtocolObject(
+        "meshrix-event-log",
+        segmentKey,
+        [],
+      );
+      const brokenSegment: any = structuredClone(originalSegment);
+      brokenSegment[1].prevEventHash = protocolHash("meshrix.state-event", { broken: true });
+      brokenSegment[1].eventHash = protocolHash("meshrix.state-event", {
+        ...brokenSegment[1],
+        eventHash: undefined,
+      });
+      await store("meshrix-event-log", segmentKey, brokenSegment);
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({
+        ok: false,
+        error: "state_commit_event_chain_invalid",
+      });
+
+      await store("meshrix-event-log", segmentKey, originalSegment);
+      await expect(substrate.stateCommit.verifyCommit(commit.commitId)).resolves.toMatchObject({ ok: true });
+
+      const restored: any = await substrate.stateCommit.restoreRoot({
+        scope,
+        operationId: "workspace.integrity.restore",
+        targetRoot: commit.afterRoot,
+        anchor: { offset: commit.eventOffset, eventHash: commit.eventHash },
+        allowedOperationIds: ["workspace.integrity.second"],
+        payload: { actor: "integrity-test" },
+      });
+      expect(restored).toMatchObject({ commitKind: "restore", mutations: [] });
+      await expect(substrate.stateCommit.verifyCommit(restored.commitId)).resolves.toMatchObject({ ok: true });
+    } finally {
+      await runtime.close();
       await fs.rm(userDataPath, { recursive: true, force: true });
     }
   });

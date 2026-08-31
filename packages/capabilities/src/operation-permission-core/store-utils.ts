@@ -315,11 +315,13 @@ export function sanitizeGrantMetadata(metadata: Record<string, any> = {}) : any 
   const {
     capabilities,
     capabilityIds,
+    kernelCapabilities,
     permissions,
     ...safeMetadata
   } = source;
   void capabilities;
   void capabilityIds;
+  void kernelCapabilities;
   void permissions;
   return safeMetadata;
 }

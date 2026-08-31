@@ -1,10 +1,10 @@
 import path from "node:path";
 
-import { orbText, runOrb, writeRemoteFile } from "../support.ts";
+import { assertInactiveReleaseMutation, orbText, runOrb, writeRemoteFile } from "../support.ts";
 
 export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> {
   const { machine } = context.parsed;
-  const dependencyMarker: any = path.posix.join(context.originalWorkingDirectory, ".meshrix-dependencies-ready");
+  const dependencyMarker: any = path.posix.join(context.releaseDirectory, ".meshrix-dependencies-ready");
   const toolchainState: any = `${context.sourceRevision}:${context.runtimeId}`;
   const dependenciesReady: any = orbText(machine, [
     "sh",
@@ -13,8 +13,13 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
     "meshrix-dependencies-check",
     dependencyMarker,
     toolchainState,
-    context.originalWorkingDirectory,
+    context.releaseDirectory,
   ], { allowFailure: true, timeout: 15_000 }) === "ready";
+  assertInactiveReleaseMutation({
+    activeWorkingDirectory: context.currentWorkingDirectory,
+    releaseDirectory: context.releaseDirectory,
+    ready: dependenciesReady,
+  });
   if (!dependenciesReady) {
     runOrb({
       machine,
@@ -24,7 +29,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
         "export PATH=\"$1:$PATH\"; cd \"$2\" && exec \"$3\" \"$4\" ci --no-audit --no-fund",
         "meshrix-dependencies",
         context.serviceNodeDirectory,
-        context.originalWorkingDirectory,
+        context.releaseDirectory,
         context.serviceNode,
         context.serviceNpmCli,
       ],

@@ -72,6 +72,7 @@ export function createToolPolicyEngine({
           request,
           context: {
             ...context,
+            requiredCapabilities: context.requiredCapabilities || [],
             toolExpected: true
           },
           dryRun,

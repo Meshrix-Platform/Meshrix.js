@@ -109,6 +109,14 @@ An MCP stdio upstream process receives only the portable execution baseline need
 
 Each upstream gateway registry owns one bounded MCP session manager. The manager reuses an initialized session by service, transport configuration identity, and credential-reference revision without placing credential values in the pool key. Initialization is single-flight. Per-session and manager-wide concurrency limits reject excess work, idle and maximum-lifetime limits reclaim sessions, and a service configuration or credential revision change retires the prior generation without allowing a stale generation to reclaim that service scope. Registry shutdown closes all owned sessions.
 
+This session manager is a server-side gateway transport, not a Meshrix MCP
+client product or an unmanaged connection API. Streamable HTTP sessions require
+the gateway to inject its managed egress transport; there is no native `fetch`
+fallback. Therefore upstream MCP forwarding uses the same DNS pinning,
+restricted-address denial, redirect handling, and administrator-controlled
+local-network policy as the rest of the gateway, and a construction path that
+omits that transport fails closed before opening a connection.
+
 The stdio transport keeps one initialized child process for concurrent requests and routes replies by JSON-RPC id. The Streamable HTTP transport performs the MCP initialize/initialized lifecycle, sends the negotiated `MCP-Protocol-Version` and any issued `MCP-Session-Id` on subsequent requests, parses SSE incrementally so notifications may precede the matching result, rebuilds once after a session `404`, and uses `DELETE` for best-effort logical session shutdown. Its notification callbacks use one bounded sequential queue per session (`64` messages and `1 MiB`); overflow makes the upstream session fatal instead of creating unbounded callback work. Descriptor or credential headers cannot replace the required JSON `Content-Type`, JSON/SSE `Accept`, session, or protocol headers. The implemented negotiated protocol revision is `2025-06-18`; an upstream that selects a different revision is rejected.
 
 The downstream `/mcp` SSE stream requires a valid MCP grant. It admits at most

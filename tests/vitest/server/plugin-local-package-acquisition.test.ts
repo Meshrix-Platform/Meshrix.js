@@ -78,7 +78,8 @@ describe("local plugin package acquisition", () : any => {
       const online: any = await github.acquire({
         repository: "acme/plugins",
         release: "v1.0.0",
-        asset: "sample-plugin.tar.gz"
+        asset: "sample-plugin.tar.gz",
+        expectedDigest: acquired.archiveDigest
       });
       assert.equal(online.archiveDigest, acquired.archiveDigest);
     } finally {

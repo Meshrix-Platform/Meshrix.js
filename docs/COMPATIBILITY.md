@@ -39,7 +39,7 @@ usage. Only a concrete defect in an actively used path enters current work.
 | Node.js runtime | Version range declared by `package.json` | Implemented target; operating-system qualification remains remaining required work on the named host workflow. |
 | Local source startup | Repository npm scripts and local server entry point | Development path; release and production qualification remain remaining required work. |
 | Server and Web Console container | Linux amd64 and arm64 OCI artifacts on a Linux VM | Assembly and functional-verification target; Ubuntu preferred, Debian accepted; native Linux or distribution qualification remains remaining required work until its exact workflow passes. |
-| Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Implemented through an opaque `srcdoc` iframe without `allow-same-origin`, with a bounded and revocable Host bridge. |
+| Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Implemented through an authenticated Host-served sandbox document in an iframe without `allow-same-origin`, with a bounded and revocable Host bridge. |
 | npm release set | Manifests named by the release definition | Publication target; package publication remains remaining required work for the immutable accepted candidate. |
 | MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact still requires its own publication and environment receipt. |
 | Storage | Self-contained local storage by default; optional integrations only when explicitly configured | Local implementation target; each optional datastore remains remaining qualification work. |
@@ -52,7 +52,7 @@ usage. Only a concrete defect in an actively used path enters current work.
 | Surface | Owner and boundary | Current status |
 | --- | --- | --- |
 | HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocols | Meshrix.js protocol and technical documents | Implemented scope is defined only by the owning documents and schemas. |
-| Plugin browser code | Opaque-origin iframe with a bounded Host bridge | Implemented. Verified plugin source is fetched by the Host and executed only inside the opaque iframe; the iframe receives no same-origin privilege or direct network access. |
+| Plugin browser code | Opaque-origin iframe with a bounded Host bridge | Implemented. The server embeds verified plugin source in a nonce-bound sandbox document; the parent Console receives only `sandboxUrl` and the iframe receives no same-origin privilege or direct network access. |
 | Upstream service publishing | Meshrix.js server gateway and Operation Permission | Server-side functional target; compatible external-service adoption is independently owned. |
 | Downstream client protocol | Meshrix.js generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix.js release dependency. |
 | Client-specific adapters | Operator-supplied external client-adapter packages selected explicitly | Meshrix.js validates the package contract and never discovers implementations from another source repository. |

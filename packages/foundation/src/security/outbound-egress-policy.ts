@@ -97,12 +97,14 @@ export interface FetchWithPinnedDnsOptions extends OutboundEgressOptions {
   init?: Parameters<FetchImplementation>[1];
   lookup?: DnsLookup;
   fetchImpl?: FetchImplementation;
+  maxRedirects?: number;
 }
 
 export interface RequestWithPinnedDnsOptions extends OutboundEgressOptions {
   init?: Parameters<RequestImplementation>[1] & { maxRedirections?: number };
   lookup?: DnsLookup;
   requestImpl?: RequestImplementation;
+  maxRedirects?: number;
 }
 
 export interface PinnedFetchResult {
@@ -120,6 +122,9 @@ export interface PinnedRequestResult {
   pinnedDns: PinnedDnsAddress | null;
   close: () => Promise<void>;
 }
+
+type PinnedTransportResult = PinnedFetchResult | PinnedRequestResult;
+type RedirectRequestInit = Record<string, unknown>;
 
 export interface OutboundRedirectOptions {
   sourceUrl?: string;
@@ -296,8 +301,9 @@ export function evaluateOutboundEgressUrl({ url = "", policyPreset = "", policie
   };
 }
 
-function egressDenied(decision: OutboundEgressDecision): Error {
-  return Object.assign(new Error(`Outbound egress denied for ${decision.label}: ${decision.reason}.`), { code: "outbound_egress_denied", decision });
+function egressDenied(decision: OutboundEgressDecision | OutboundRedirectDecision): Error {
+  const label = "label" in decision ? decision.label : "redirect.location";
+  return Object.assign(new Error(`Outbound egress denied for ${label}: ${decision.reason}.`), { code: "outbound_egress_denied", decision });
 }
 
 export function assertOutboundEgressAllowed(options: OutboundEgressOptions = {}): OutboundEgressDecision {
@@ -399,7 +405,7 @@ function globalRequestInit(init: Parameters<FetchImplementation>[1]): globalThis
   return init as globalThis.RequestInit | undefined;
 }
 
-export async function fetchWithPinnedDns({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, fetchImpl }: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
+async function fetchPinnedDnsHop({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, fetchImpl }: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
   const decision = await assertOutboundRuntimeEgressAllowed({ url, label, policyPreset, policies, lookup });
   const pinned = createPinnedDnsDispatcher(decision);
   try {
@@ -412,7 +418,7 @@ export async function fetchWithPinnedDns({ url = "", label = "outbound.url", pol
   }
 }
 
-export async function requestWithPinnedDns({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, requestImpl = undiciRequest }: RequestWithPinnedDnsOptions = {}): Promise<PinnedRequestResult> {
+async function requestPinnedDnsHop({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, requestImpl = undiciRequest }: RequestWithPinnedDnsOptions = {}): Promise<PinnedRequestResult> {
   const decision = await assertOutboundRuntimeEgressAllowed({ url, label, policyPreset, policies, lookup });
   const pinned = createPinnedDnsDispatcher(decision);
   try {
@@ -423,6 +429,118 @@ export async function requestWithPinnedDns({ url = "", label = "outbound.url", p
     await pinned.close();
     throwWithDecision(error, decision);
   }
+}
+
+function responseHeader(response: FetchResponse | RequestResponse, name: string): string {
+  const headers = (response as FetchResponse | RequestResponse).headers as unknown as {
+    get?: (headerName: string) => string | null;
+  } & Record<string, unknown>;
+  if (typeof headers?.get === "function") return String(headers.get(name) || "");
+  const value = headers?.[name] ?? headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+async function closeRedirectResponse(result: PinnedTransportResult, { keepResponse = false }: Record<string, unknown> = {}): Promise<void> {
+  try {
+    if (keepResponse !== true) {
+      const body = result.response.body as unknown as {
+        cancel?: () => Promise<void>;
+        dump?: () => Promise<void>;
+        destroy?: () => void;
+      } | null | undefined;
+      if (typeof body?.cancel === "function") await body.cancel();
+      else if (typeof body?.dump === "function") await body.dump();
+      else body?.destroy?.();
+    }
+  } finally {
+    if (keepResponse !== true) await result.close();
+  }
+}
+
+function redirectInit(init: RedirectRequestInit, sourceUrl: string, targetUrl: string, status: number, fetchMode: boolean): RedirectRequestInit {
+  const sourceMethod = String(init?.method || "GET").toUpperCase();
+  const switchToGet = status === 303 || ((status === 301 || status === 302) && sourceMethod === "POST");
+  const method = switchToGet ? "GET" : sourceMethod;
+  const headers = new Headers(init?.headers as HeadersInit | undefined);
+  if (new URL(sourceUrl).origin !== new URL(targetUrl).origin) {
+    for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name);
+  }
+  if (switchToGet) {
+    for (const name of ["content-length", "content-type", "transfer-encoding"]) headers.delete(name);
+  }
+  return {
+    ...init,
+    method,
+    headers: Object.fromEntries(headers.entries()),
+    ...(switchToGet ? { body: undefined } : {}),
+    ...(fetchMode ? { redirect: "manual" } : { maxRedirections: 0 })
+  };
+}
+
+function redirectLimit(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 10) {
+    throw new Error("outbound_redirect_limit_invalid");
+  }
+  return parsed;
+}
+
+export async function fetchWithPinnedDns(options: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
+  const maximum = redirectLimit(options.maxRedirects);
+  let currentUrl = String(options.url || "");
+  let currentInit: RedirectRequestInit = { ...(options.init || {}), redirect: "manual" } as RedirectRequestInit;
+  const visited = new Set<string>();
+  for (let hop = 0; hop <= maximum; hop += 1) {
+    if (visited.has(currentUrl)) throw new Error("outbound_redirect_loop_detected");
+    visited.add(currentUrl);
+    const result = await fetchPinnedDnsHop({ ...options, url: currentUrl, init: currentInit });
+    const status = Number(result.response?.status || 0);
+    if (!redirectStatus(status)) return result;
+    const decision = evaluateOutboundRedirectLocation({
+      sourceUrl: currentUrl,
+      status,
+      location: responseHeader(result.response, "location"),
+      policyPreset: options.policyPreset,
+      policies: options.policies,
+      label: `${options.label || "outbound.url"}.redirect`
+    });
+    await closeRedirectResponse(result, { keepResponse: maximum === 0 });
+    if (maximum === 0) return result;
+    if (!decision.ok || !decision.targetUrl) throw egressDenied(decision);
+    if (hop === maximum) throw new Error("outbound_redirect_limit_exceeded");
+    currentInit = redirectInit(currentInit, currentUrl, decision.targetUrl, status, true);
+    currentUrl = decision.targetUrl;
+  }
+  throw new Error("outbound_redirect_limit_exceeded");
+}
+
+export async function requestWithPinnedDns(options: RequestWithPinnedDnsOptions = {}): Promise<PinnedRequestResult> {
+  const maximum = redirectLimit(options.maxRedirects);
+  let currentUrl = String(options.url || "");
+  let currentInit: RedirectRequestInit = { ...(options.init || {}), maxRedirections: 0 } as RedirectRequestInit;
+  const visited = new Set<string>();
+  for (let hop = 0; hop <= maximum; hop += 1) {
+    if (visited.has(currentUrl)) throw new Error("outbound_redirect_loop_detected");
+    visited.add(currentUrl);
+    const result = await requestPinnedDnsHop({ ...options, url: currentUrl, init: currentInit });
+    const status = Number(result.response?.statusCode || 0);
+    if (!redirectStatus(status)) return result;
+    const decision = evaluateOutboundRedirectLocation({
+      sourceUrl: currentUrl,
+      status,
+      location: responseHeader(result.response, "location"),
+      policyPreset: options.policyPreset,
+      policies: options.policies,
+      label: `${options.label || "outbound.url"}.redirect`
+    });
+    await closeRedirectResponse(result, { keepResponse: maximum === 0 });
+    if (maximum === 0) return result;
+    if (!decision.ok || !decision.targetUrl) throw egressDenied(decision);
+    if (hop === maximum) throw new Error("outbound_redirect_limit_exceeded");
+    currentInit = redirectInit(currentInit, currentUrl, decision.targetUrl, status, false);
+    currentUrl = decision.targetUrl;
+  }
+  throw new Error("outbound_redirect_limit_exceeded");
 }
 
 function redirectStatus(value: unknown): boolean {

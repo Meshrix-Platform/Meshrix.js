@@ -1,7 +1,13 @@
 
 import { AUTHORIZATION_PROTOCOL_VERSION } from "@meshrix/foundation/security/authorization/authorization-engine";
 import { SECURITY_PERMISSIONS_PROTOCOL_VERSION } from "@meshrix/foundation/security/security-permissions-provider";
-import { protocolPayload, result, workspaceIdFrom } from "./shared.ts";
+import {
+  protocolPayload,
+  requiredWorkspaceIdFrom,
+  result,
+  workspaceBindingFailureResult,
+  workspaceIdFrom
+} from "./shared.ts";
 import { publishAuthorizationGovernanceUpdate } from "./authorization-governance-update.ts";
 
 export async function executeAuthorizationFacadeOperation({ operationId, input = {}, context }: Record<string, any>) : Promise<any> {
@@ -490,12 +496,18 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
   }
 
   if (id === "workspace.asset.policy.set") {
+    let workspaceId: any = "";
+    try {
+      workspaceId = requiredWorkspaceIdFrom(input);
+    } catch {
+      return workspaceBindingFailureResult(id);
+    }
     if (!securityPermissions || typeof securityPermissions.setWorkspaceAssetPolicy !== "function") {
       return result(503, { error: "工作空间资产策略 provider 不可用。" });
     }
     const policy: any = securityPermissions.setWorkspaceAssetPolicy({
       ...input,
-      workspaceId: workspaceIdFrom(input)
+      workspaceId
     });
     return result(200, protocolPayload({ policy }));
   }

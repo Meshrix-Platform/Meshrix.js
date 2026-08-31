@@ -91,8 +91,7 @@ export async function installPluginPackageArchive({
   artifactAuthority,
   lifecycleStatePort,
   stagingRoot,
-  coreContractDigest,
-  trustedPublicKeyIds = null
+  coreContractDigest
 }: Record<string, any> = {}) : Promise<any> {
   let materializedRoot: any = "";
   try {
@@ -107,11 +106,10 @@ export async function installPluginPackageArchive({
     if (typeof stagingRoot !== "string" || !stagingRoot.trim()) {
       throw new TypeError("Plugin package installation requires an explicit private staging root.");
     }
-    const admission: any = admitPluginPackageArchive({
+    const admission: any = await admitPluginPackageArchive({
       bytes,
       expectedPluginId: pluginId,
       coreContractDigest: expectedCoreContractDigest,
-      trustedPublicKeyIds,
       sourceKind: "bytes"
     });
     const { verifiedPackage, payloadFiles: files } = admission;

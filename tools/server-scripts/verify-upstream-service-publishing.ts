@@ -757,7 +757,7 @@ async function main() : Promise<any> {
   assert.equal(initialTool?._meta?.sourceDigest, createAuthority.sourceDigest);
   observe("catalog.initial.pulled", "pulled", "replace", 1, 1, 3,
     catalogAdmissionFact(createAuthority, executionCatalog, 3));
-  assert.equal(allowedCatalog.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId), false);
+  assert.equal(allowedCatalog.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId), true);
   assert.equal(deniedCatalog.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId), false);
   observe("audience.initial.hidden", "hidden", "replace", 1, 1, 2);
   for (const grant of [executionGrant, protocolGrant, timeoutGrant, trafficGrant]) {

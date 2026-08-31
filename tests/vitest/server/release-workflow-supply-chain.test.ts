@@ -556,7 +556,7 @@ describe("release workflow supply-chain boundary", () : any => {
     const dockerfile: any = read("Dockerfile");
     const deploymentIndex: any = JSON.parse(read("packages/foundation/config/deployment/index.json"));
     const image: any = dockerfile.match(/^ARG NODE_BASE_IMAGE=(.+)$/mu)?.[1] || "";
-    expect(image).toMatch(/^node:24\.\d+\.\d+-bookworm-slim@sha256:[a-f0-9]{64}$/u);
+    expect(image).toMatch(/^docker\.io\/library\/node:24\.\d+\.\d+-bookworm-slim@sha256:[a-f0-9]{64}$/u);
     expect(deploymentIndex.dockerPresets.baseImages.mainService).toBe(image);
     expect(deploymentIndex.dockerPresets.mainService.buildArgs.NODE_BASE_IMAGE).toBe(image);
     expect(dockerfile).not.toContain("default-settings.json");

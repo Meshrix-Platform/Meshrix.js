@@ -137,8 +137,12 @@ test("cancellation of a pending call leaves an in_doubt ledger without settlemen
     { model: modelId, messages: [{ role: "user", content: "hold for cancel" }] },
     { "idempotency-key": "ik-cancel-1" }
   );
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  const state = JSON.parse(await readFile(path.join(service.dataRoot, "state.json"), "utf8"));
+  let state;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    state = JSON.parse(await readFile(path.join(service.dataRoot, "state.json"), "utf8"));
+    if (Object.values(state.ledger).some((entry) => entry.idempotencyKey === "ik-cancel-1")) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
   const callId = Object.keys(state.ledger).find((id) => state.ledger[id].idempotencyKey === "ik-cancel-1");
   assert.ok(callId, "the held call must have a ledger entry");
   const cancel = await fetch(`${service.baseUrl}/v1/model-gateway/calls/${callId}/cancel`, {

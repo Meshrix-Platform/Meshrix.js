@@ -19,12 +19,14 @@ interface OciBackend {
 }
 type BackendFactory = (input: { id: string; binary: string; engine: string; runtimeClass: string }) => OciBackend;
 type RootlessProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<boolean>;
+type RuntimeClassProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<string>;
 type IdentityProbe = (candidate: OciCandidate) => Promise<string>;
 interface AdapterOptions {
   platform?: NodeJS.Platform;
   conformanceReceipts?: Record<string, unknown>;
   pathExists?: (candidatePath: string) => boolean;
   rootlessProbe?: RootlessProbe;
+  runtimeClassProbe?: RuntimeClassProbe;
   executableIdentityProbe?: IdentityProbe;
   backendFactory?: BackendFactory;
 }
@@ -66,17 +68,18 @@ function resolveCandidateBinary(candidate: OciCandidate, platform: NodeJS.Platfo
   return resolveExecutablePath(candidate.binary, { platform });
 }
 
-function fixedRootlessProbe(candidate: OciCandidate, { timeoutMs = 2_000 }: { timeoutMs?: number } = {}): Promise<boolean> {
-  const args = candidate.engine === "podman"
-    ? ["info", "--format", "{{.Host.Security.Rootless}}"]
-    : ["info", "--format", "{{json .SecurityOptions}}"];
-  return new Promise<boolean>((resolve) => {
+function fixedInfoProbe(
+  candidate: OciCandidate,
+  args: string[],
+  { timeoutMs = 2_000 }: { timeoutMs?: number } = {}
+): Promise<string> {
+  return new Promise<string>((resolve) => {
     let bytes = 0;
     let output = "";
     let settled = false;
     let child: ReturnType<typeof spawn>;
     let timer: NodeJS.Timeout;
-    const finish = (value: boolean) => {
+    const finish = (value: string) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -89,35 +92,56 @@ function fixedRootlessProbe(candidate: OciCandidate, { timeoutMs = 2_000 }: { ti
         windowsHide: true
       });
     } catch {
-      resolve(false);
+      resolve("");
       return;
     }
     timer = setTimeout(() => {
       child.kill("SIGKILL");
-      finish(false);
+      finish("");
     }, timeoutMs);
     timer.unref?.();
     child.stdout?.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
       if (bytes > 4 * 1024) {
         child.kill("SIGKILL");
-        finish(false);
+        finish("");
         return;
       }
       output += chunk.toString("utf8");
     });
-    child.once("error", () => finish(false));
+    child.once("error", () => finish(""));
     child.once("close", (code: number | null) => {
       if (code !== 0) {
-        finish(false);
+        finish("");
         return;
       }
-      const normalized = output.trim().toLowerCase();
-      finish(candidate.engine === "podman"
-        ? normalized === "true"
-        : normalized.includes("rootless"));
+      finish(output.trim());
     });
   });
+}
+
+async function fixedRootlessProbe(
+  candidate: OciCandidate,
+  options: { timeoutMs?: number } = {}
+): Promise<boolean> {
+  const args = candidate.engine === "podman"
+    ? ["info", "--format", "{{.Host.Security.Rootless}}"]
+    : ["info", "--format", "{{json .SecurityOptions}}"];
+  const normalized = (await fixedInfoProbe(candidate, args, options)).toLowerCase();
+  return candidate.engine === "podman"
+    ? normalized === "true"
+    : normalized.includes("rootless");
+}
+
+async function fixedRuntimeClassProbe(
+  candidate: OciCandidate,
+  options: { timeoutMs?: number } = {}
+): Promise<string> {
+  const args = candidate.engine === "podman"
+    ? ["info", "--format", "{{.Host.OCIRuntime.Name}}"]
+    : ["info", "--format", "{{.DefaultRuntime}}"];
+  const normalized = (await fixedInfoProbe(candidate, args, options)).toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/u.test(normalized) ? normalized : "";
 }
 
 async function fixedExecutableIdentityProbe(candidate: OciCandidate): Promise<string> {
@@ -134,6 +158,7 @@ export function createTrustedOciProviderAdapters({
   conformanceReceipts = {},
   pathExists = (candidatePath: string) => Boolean(resolveExecutablePath(candidatePath, { platform })),
   rootlessProbe = fixedRootlessProbe,
+  runtimeClassProbe = fixedRuntimeClassProbe,
   executableIdentityProbe = fixedExecutableIdentityProbe,
   backendFactory = createOciSandboxBackend
 }: AdapterOptions = {}) {
@@ -164,6 +189,21 @@ export function createTrustedOciProviderAdapters({
         }
         const actualRootless = await rootlessProbe(candidate);
         if (actualRootless !== candidate.rootless) {
+          return Object.freeze({
+            id: candidate.id,
+            providerClass: candidate.providerClass,
+            healthy: false,
+            production: true,
+            enforcedRestrictions: []
+          });
+        }
+        let actualRuntimeClass;
+        try {
+          actualRuntimeClass = await runtimeClassProbe(candidate);
+        } catch {
+          actualRuntimeClass = "";
+        }
+        if (actualRuntimeClass !== candidate.runtimeClass) {
           return Object.freeze({
             id: candidate.id,
             providerClass: candidate.providerClass,
@@ -221,6 +261,7 @@ export async function createOciBackendConformanceTarget({
   platform = process.platform,
   pathExists = (candidatePath: string) => Boolean(resolveExecutablePath(candidatePath, { platform })),
   rootlessProbe = fixedRootlessProbe,
+  runtimeClassProbe = fixedRuntimeClassProbe,
   executableIdentityProbe = fixedExecutableIdentityProbe,
   backendFactory = createOciSandboxBackend
 }: Omit<AdapterOptions, "conformanceReceipts"> = {}) {
@@ -233,6 +274,13 @@ export async function createOciBackendConformanceTarget({
       continue;
     }
     if (actualRootless !== candidate.rootless) continue;
+    let actualRuntimeClass;
+    try {
+      actualRuntimeClass = await runtimeClassProbe(candidate);
+    } catch {
+      continue;
+    }
+    if (actualRuntimeClass !== candidate.runtimeClass) continue;
     let executableIdentityDigest;
     try {
       executableIdentityDigest = await executableIdentityProbe(candidate);

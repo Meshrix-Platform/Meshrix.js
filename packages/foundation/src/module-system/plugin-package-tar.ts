@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { Readable, Writable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { createGunzip, gzipSync } from "node:zlib";
 
 const BLOCK: any = 512;
 const MAX_ENTRIES: any = 256;
@@ -72,11 +74,12 @@ function readOctal(buffer?: any, offset?: any, length?: any) : any {
   return Number.parseInt(text, 8);
 }
 
-export function extractPluginPackageTarGz(archiveBytes?: any, {
+export async function extractPluginPackageTarGz(archiveBytes?: any, {
   maxBytes = MAX_BYTES,
   maxEntries = MAX_ENTRIES,
-  maxExpansionRatio = MAX_EXPANSION_RATIO
-}: Record<string, any> = {}) : any {
+  maxExpansionRatio = MAX_EXPANSION_RATIO,
+  signal = null
+}: Record<string, any> = {}) : Promise<any> {
   if (!Buffer.isBuffer(archiveBytes) && !(archiveBytes instanceof Uint8Array)) {
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive bytes are required");
   }
@@ -84,56 +87,123 @@ export function extractPluginPackageTarGz(archiveBytes?: any, {
   if (compressed.length === 0 || compressed.length > maxBytes) {
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive size is outside budget");
   }
-  let tar: any;
-  try {
-    tar = gunzipSync(compressed);
-  } catch {
-    throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive is not a gzip-compressed tar");
-  }
-  if (tar.length > maxBytes * maxExpansionRatio) {
-    throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive expansion ratio exceeded");
-  }
   const files: any = new Map<any, any>();
-  let offset: any = 0;
-  while (offset + BLOCK <= tar.length) {
-    const header: any = tar.subarray(offset, offset + BLOCK);
-    offset += BLOCK;
-    if (header.every((byte?: any) : any => byte === 0)) break;
-    const name: any = header.subarray(0, 100).toString("utf8").replace(/\0/gu, "").trim();
-    const size: any = readOctal(header, 124, 12);
-    const typeFlag: any = String.fromCharCode(header[156] || 48);
-    const magic: any = header.subarray(257, 262).toString("ascii");
-    if (magic !== "ustar") {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: unsupported tar format");
+  let state: "header" | "body" | "padding" | "end" = "header";
+  let pending: any = Buffer.alloc(0);
+  let currentName: any = "";
+  let currentSize: any = 0;
+  let currentRead: any = 0;
+  let currentChunks: any[] = [];
+  let paddingRemaining: any = 0;
+  let endBlocks: any = 0;
+  let expandedBytes: any = 0;
+  let retainedBytes: any = 0;
+
+  const fail: any = (message?: any) : never => {
+    throw new Error(`PLUGIN_PACKAGE_FORMAT_REJECTED: ${message}`);
+  };
+  const finishMember: any = () : any => {
+    const content: any = Buffer.concat(currentChunks, currentSize);
+    files.set(currentName, content);
+    retainedBytes += content.length;
+    if (retainedBytes > maxBytes) fail("archive exceeds byte budget");
+    currentName = "";
+    currentSize = 0;
+    currentRead = 0;
+    currentChunks = [];
+  };
+  const consume: any = (input?: any) : any => {
+    let chunk: any = Buffer.from(input);
+    expandedBytes += chunk.length;
+    if (expandedBytes > maxBytes) fail("archive expansion byte budget exceeded");
+    if (expandedBytes > compressed.length * maxExpansionRatio) fail("archive expansion ratio exceeded");
+    while (chunk.length > 0) {
+      if (state === "body") {
+        const take: any = Math.min(currentSize - currentRead, chunk.length);
+        if (take > 0) currentChunks.push(Buffer.from(chunk.subarray(0, take)));
+        currentRead += take;
+        chunk = chunk.subarray(take);
+        if (currentRead === currentSize) {
+          finishMember();
+          state = paddingRemaining > 0 ? "padding" : "header";
+        }
+        continue;
+      }
+      if (state === "padding") {
+        const take: any = Math.min(paddingRemaining, chunk.length);
+        paddingRemaining -= take;
+        chunk = chunk.subarray(take);
+        if (paddingRemaining === 0) state = "header";
+        continue;
+      }
+      const needed: any = BLOCK - pending.length;
+      const take: any = Math.min(needed, chunk.length);
+      pending = pending.length === 0
+        ? Buffer.from(chunk.subarray(0, take))
+        : Buffer.concat([pending, chunk.subarray(0, take)], pending.length + take);
+      chunk = chunk.subarray(take);
+      if (pending.length < BLOCK) continue;
+      const header: any = pending;
+      pending = Buffer.alloc(0);
+      const zeroBlock: any = header.every((byte?: any) : any => byte === 0);
+      if (state === "end") {
+        if (!zeroBlock) fail("archive has data after end markers");
+        endBlocks += 1;
+        continue;
+      }
+      if (zeroBlock) {
+        state = "end";
+        endBlocks = 1;
+        continue;
+      }
+      const name: any = header.subarray(0, 100).toString("utf8").replace(/\0/gu, "").trim();
+      const size: any = readOctal(header, 124, 12);
+      const typeFlag: any = String.fromCharCode(header[156] || 48);
+      const magic: any = header.subarray(257, 262).toString("ascii");
+      if (magic !== "ustar") fail("unsupported tar format");
+      if (checksum(header) !== readOctal(header, 148, 8)) fail("tar checksum mismatch");
+      if (!name || name.includes("..") || name.startsWith("/") || name.includes("\\")) {
+        fail("archive path escapes bundle root");
+      }
+      if (name.split("/").filter(Boolean).length > MAX_PATH_DEPTH) fail("archive path depth exceeded");
+      if (typeFlag !== "0" && typeFlag !== "\0") fail("archive entry type is not a regular file");
+      if (!Number.isSafeInteger(size) || size < 0 || size > maxBytes) fail("archive entry size is invalid");
+      if (files.has(name)) fail("duplicate archive entry");
+      if (files.size + 1 > maxEntries) fail("archive entry count exceeded");
+      currentName = name;
+      currentSize = size;
+      currentRead = 0;
+      currentChunks = [];
+      paddingRemaining = (BLOCK - (size % BLOCK)) % BLOCK;
+      if (size === 0) {
+        finishMember();
+        state = paddingRemaining > 0 ? "padding" : "header";
+      } else {
+        state = "body";
+      }
     }
-    const expected: any = checksum(header);
-    const actual: any = readOctal(header, 148, 8);
-    if (expected !== actual) {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: tar checksum mismatch");
+  };
+
+  if (signal?.aborted) fail("archive admission cancelled");
+  const sink: any = new Writable({
+    write(chunk?: any, _encoding?: any, callback?: any) {
+      try {
+        if (signal?.aborted) fail("archive admission cancelled");
+        consume(chunk);
+        callback();
+      } catch (error: any) {
+        callback(error);
+      }
     }
-    if (!name || name.includes("..") || name.startsWith("/") || name.includes("\\")) {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive path escapes bundle root");
-    }
-    if (name.split("/").filter(Boolean).length > MAX_PATH_DEPTH) {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive path depth exceeded");
-    }
-    if (typeFlag !== "0" && typeFlag !== "\0") {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive entry type is not a regular file");
-    }
-    if (size < 0 || offset + size > tar.length) {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive entry size is invalid");
-    }
-    const content: any = Buffer.from(tar.subarray(offset, offset + size));
-    offset += size;
-    offset += (BLOCK - (size % BLOCK)) % BLOCK;
-    if (files.has(name)) {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: duplicate archive entry");
-    }
-    files.set(name, content);
-    if (files.size > maxEntries) {
-      throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive entry count exceeded");
-    }
+  });
+  try {
+    await pipeline(Readable.from([compressed]), createGunzip(), sink, signal ? { signal } : {});
+  } catch (error: any) {
+    if (String(error?.message || "").startsWith("PLUGIN_PACKAGE_FORMAT_REJECTED:")) throw error;
+    if (signal?.aborted || error?.name === "AbortError") fail("archive admission cancelled");
+    fail("archive is not a gzip-compressed tar");
   }
+  if ((state as string) !== "end" || endBlocks < 2 || pending.length !== 0) fail("archive is truncated");
   if (files.size === 0) {
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: archive contains no files");
   }

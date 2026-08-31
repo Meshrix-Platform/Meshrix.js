@@ -456,7 +456,10 @@ describe("console domain auth and authorization facade coverage", () : any => {
     })).resolves.toMatchObject({ status: 200, payload: { items: [{ requestId: "denied-1" }], count: 1 } });
 
     await expect(runOperation("workspace.asset.policy.set", { context: {} }))
-      .resolves.toMatchObject({ status: 503 });
+      .resolves.toMatchObject({
+        status: 400,
+        payload: { error: { code: "workspace_binding_invalid" } }
+      });
     await expect(runOperation("workspace.asset.policy.set", {
       input: { workspaceId: "workspace-1", mode: "restricted" },
       context

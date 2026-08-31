@@ -7,6 +7,8 @@ import {
   nowIso,
   publicAssetRecord,
   refreshMetrics,
+  assertWorkspaceBinding,
+  requiredWorkspaceBinding,
   shallowObject,
   stableId,
   text,
@@ -88,7 +90,7 @@ function normalizePersistedState(value: unknown) {
     .map((event) => ({
       auditId: text(event.auditId),
       eventType: text(event.eventType),
-      workspaceId: text(event.workspaceId),
+      workspaceId: requiredWorkspaceBinding(event.workspaceId),
       payload: shallowObject(event.payload),
       createdAt: text(event.createdAt),
     }));
@@ -152,7 +154,7 @@ function assertTransition(
 }
 
 export function createContributionRegistry({
-  workspaceId = "default",
+  workspaceId,
   userDataPath = "",
   registryRelativePath = REGISTRY_FILE,
   initialPersistedState = undefined,
@@ -176,6 +178,9 @@ export function createContributionRegistry({
       "Contribution registry requires an explicit lifecycle definition.",
     );
   }
+  const registryWorkspaceId = workspaceId === undefined
+    ? ""
+    : requiredWorkspaceBinding(workspaceId);
   const contributionTransitionMatrix = new Map<string, LifecycleMatrixEntry>(
     lifecycleDefinition.totalMatrix.map((entry) => [
       `${entry.from}::${entry.event}`,
@@ -273,8 +278,9 @@ export function createContributionRegistry({
     return materialize(contribution, {
       ...input,
       lifecycleState: text(input.lifecycleState || contribution.status),
-      targetWorkspaceId: text(
-        input.targetWorkspaceId || contribution.workspaceId,
+      targetWorkspaceId: requiredWorkspaceBinding(
+        input.targetWorkspaceId,
+        "targetWorkspaceId",
       ),
       relation: text(input.relation || "canonical"),
       actorId: text(input.actorId),
@@ -296,7 +302,7 @@ export function createContributionRegistry({
     const audit: AuditEvent = {
       auditId: stableId("audit", { eventType, payload, nonce: randomUUID() }),
       eventType: text(eventType),
-      workspaceId: text(payload.workspaceId || workspaceId),
+      workspaceId: requiredWorkspaceBinding(payload.workspaceId),
       payload,
       createdAt: nowIso(),
     };
@@ -309,7 +315,52 @@ export function createContributionRegistry({
     if (!contribution) {
       throw new Error(`Contribution not found: ${contributionId}`);
     }
+    if (
+      registryWorkspaceId &&
+      contribution.workspaceId !== registryWorkspaceId
+    ) {
+      const error: CodedError = new Error(
+        "Contribution does not belong to the registry workspace.",
+      );
+      error.code = "workspace_binding_invalid";
+      throw error;
+    }
     return contribution;
+  }
+
+  function assertSourceWorkspace(
+    contribution: Contribution,
+    input: RegistryInput = {},
+  ): string {
+    const boundWorkspaceId = assertWorkspaceBinding(
+      contribution.workspaceId,
+      input.workspaceId,
+    );
+    if (registryWorkspaceId) {
+      assertWorkspaceBinding(registryWorkspaceId, boundWorkspaceId);
+    }
+    return boundWorkspaceId;
+  }
+
+  function requiredTargetWorkspace(input: RegistryInput = {}): string {
+    return requiredWorkspaceBinding(
+      input.targetWorkspaceId,
+      "targetWorkspaceId",
+    );
+  }
+
+  function workspaceScope(input: RegistryInput = {}): string {
+    if (input.workspaceId !== undefined) {
+      return requiredWorkspaceBinding(input.workspaceId);
+    }
+    return registryWorkspaceId;
+  }
+
+  function scopedContributions(input: RegistryInput = {}): Contribution[] {
+    const scope = workspaceScope(input);
+    return [...contributions.values()].filter(
+      (contribution) => !scope || contribution.workspaceId === scope,
+    );
   }
 
   function transition(
@@ -318,6 +369,7 @@ export function createContributionRegistry({
     input: RegistryInput = {},
   ) {
     const contribution = getContribution(contributionId);
+    assertSourceWorkspace(contribution, input);
     const eventId = text(
       input.lifecycleEvent ||
         input.eventId ||
@@ -374,7 +426,13 @@ export function createContributionRegistry({
   return {
     protocolVersion: WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
     submitContribution(input: RegistryInput = {}) {
-      const contribution = contributionNormalizer(input, { workspaceId });
+      const contribution = contributionNormalizer(input, {});
+      const boundWorkspaceId = requiredWorkspaceBinding(
+        contribution.workspaceId,
+      );
+      if (registryWorkspaceId) {
+        assertWorkspaceBinding(registryWorkspaceId, boundWorkspaceId);
+      }
       if (excludedContributionTypeSet.has(contribution.contributionType)) {
         const error: CodedError = new Error(
           "Contribution type is not supported by this registry.",
@@ -406,6 +464,7 @@ export function createContributionRegistry({
     },
     scanContribution(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      assertSourceWorkspace(contribution, input);
       const scanReceipt = shallowObject(input.scanReceipt);
       if (
         !text(scanReceipt.runId) ||
@@ -448,6 +507,7 @@ export function createContributionRegistry({
     },
     reviewContribution(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      assertSourceWorkspace(contribution, input);
       if (contribution.status !== "scanned") {
         const error: CodedError = new Error(
           "Contribution review requires a completed scan receipt.",
@@ -515,11 +575,8 @@ export function createContributionRegistry({
     },
     adoptContribution(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
-      const targetWorkspaceId = text(
-        input.targetWorkspaceId ||
-          input.workspaceId ||
-          contribution.workspaceId,
-      );
+      assertSourceWorkspace(contribution, input);
+      const targetWorkspaceId = requiredTargetWorkspace(input);
       const adoption: ContributionEvent = {
         adoptionId: stableId("contribution_adoption", {
           contributionId,
@@ -606,6 +663,8 @@ export function createContributionRegistry({
     },
     requestPermission(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      assertSourceWorkspace(contribution, input);
+      const targetWorkspaceId = requiredTargetWorkspace(input);
       const permissionRequest: ContributionEvent = {
         permissionRequestId: stableId("contribution_permission_request", {
           contributionId,
@@ -615,9 +674,7 @@ export function createContributionRegistry({
         }),
         contributionId,
         requesterId: text(input.requesterId || ""),
-        targetWorkspaceId: text(
-          input.targetWorkspaceId || contribution.workspaceId,
-        ),
+        targetWorkspaceId,
         actions: asArray(input.actions || ["read"])
           .map(text)
           .filter(Boolean),
@@ -640,6 +697,8 @@ export function createContributionRegistry({
     },
     grantPermission(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      assertSourceWorkspace(contribution, input);
+      const targetWorkspaceId = requiredTargetWorkspace(input);
       const grant: ContributionEvent = {
         contributionGrantId: stableId("contribution_grant", {
           contributionId,
@@ -649,9 +708,7 @@ export function createContributionRegistry({
         }),
         contributionId,
         granteeId: text(input.granteeId || ""),
-        targetWorkspaceId: text(
-          input.targetWorkspaceId || contribution.workspaceId,
-        ),
+        targetWorkspaceId,
         actions: asArray(input.actions || contribution.requestedActions)
           .map(text)
           .filter(Boolean),
@@ -691,6 +748,7 @@ export function createContributionRegistry({
     },
     recordDownload(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      const eventWorkspaceId = requiredWorkspaceBinding(input.workspaceId);
       const event: ContributionEvent = {
         downloadEventId: stableId("contribution_download", {
           contributionId,
@@ -700,7 +758,7 @@ export function createContributionRegistry({
         }),
         contributionId,
         actorId: text(input.actorId || ""),
-        workspaceId: text(input.workspaceId || contribution.workspaceId),
+        workspaceId: eventWorkspaceId,
         createdAt: nowIso(),
       };
       const audit = appendAudit("contribution.downloaded", event);
@@ -721,6 +779,7 @@ export function createContributionRegistry({
     },
     recordUsage(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      const eventWorkspaceId = requiredWorkspaceBinding(input.workspaceId);
       const event: ContributionEvent = {
         usageEventId: stableId("contribution_usage", {
           contributionId,
@@ -731,7 +790,7 @@ export function createContributionRegistry({
         }),
         contributionId,
         actorId: text(input.actorId || ""),
-        workspaceId: text(input.workspaceId || contribution.workspaceId),
+        workspaceId: eventWorkspaceId,
         action: text(input.action || "asset.used"),
         createdAt: nowIso(),
       };
@@ -753,7 +812,11 @@ export function createContributionRegistry({
     },
     recordExecutionReceipt(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      const sourceWorkspaceId = assertSourceWorkspace(contribution, input);
       const receipt = shallowObject(input.receipt || input);
+      if (receipt.workspaceId !== undefined) {
+        assertWorkspaceBinding(sourceWorkspaceId, receipt.workspaceId);
+      }
       const normalized: ExecutionReceipt = {
         receiptId: text(receipt.receiptId),
         runId: text(receipt.runId),
@@ -767,7 +830,7 @@ export function createContributionRegistry({
         outputDisposition: text(receipt.outputDisposition || "quarantined"),
         reasonCode: text(receipt.reasonCode),
         failureStage: text(receipt.failureStage),
-        workspaceId: text(receipt.workspaceId || contribution.workspaceId),
+        workspaceId: sourceWorkspaceId,
         createdAt: text(receipt.createdAt || nowIso()),
       };
       if (
@@ -836,6 +899,7 @@ export function createContributionRegistry({
     },
     recordRollback(contributionId = "", input: RegistryInput = {}) {
       const contribution = getContribution(contributionId);
+      assertSourceWorkspace(contribution, input);
       contribution.metrics.rollbackCount += 1;
       const audit = appendAudit("contribution.rollback.recorded", {
         workspaceId: contribution.workspaceId,
@@ -858,13 +922,13 @@ export function createContributionRegistry({
     getContribution(contributionId = "") {
       return clone(getContribution(contributionId));
     },
-    listContributions() {
-      return [...contributions.values()].map((contribution) =>
+    listContributions(input: RegistryInput = {}) {
+      return scopedContributions(input).map((contribution) =>
         clone(refreshContribution(contribution)),
       );
     },
-    getLeaderboard() {
-      return [...contributions.values()]
+    getLeaderboard(input: RegistryInput = {}) {
+      return scopedContributions(input)
         .map((contribution) => clone(refreshContribution(contribution)))
         .sort(
           (left, right) =>
@@ -886,29 +950,31 @@ export function createContributionRegistry({
           acceptedCount: contribution.metrics.acceptedCount,
         }));
     },
-    getStats() {
-      const items = [...contributions.values()].map((contribution) =>
+    getStats(input: RegistryInput = {}) {
+      const scope = workspaceScope(input);
+      const items = scopedContributions(input).map((contribution) =>
         refreshContribution(contribution),
       );
       return buildContributionStatsDashboard({
         items,
         auditEvents,
         protocolVersion: WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
-        workspaceId,
+        workspaceId: scope,
         contributionType: "",
         assetRecordProjector,
       });
     },
     getContributionReport(input: RegistryInput = {}) {
-      const stats = this.getStats();
-      const leaderboard = this.getLeaderboard();
+      const scope = workspaceScope(input);
+      const stats = this.getStats(input);
+      const leaderboard = this.getLeaderboard(input);
       return {
         protocolVersion: WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
         reportId: stableId("asset_contribution_report", {
-          workspaceId,
+          workspaceId: scope,
           timeRange: input.timeRange || "all",
         }),
-        workspaceId,
+        workspaceId: scope,
         timeRange: input.timeRange || "all",
         acceptedCount: stats.acceptedCount,
         usageCount: stats.usageCount,
@@ -928,15 +994,15 @@ export function createContributionRegistry({
         riskBreakdown: {},
         maintenanceBreakdown: {},
         topReusableAssets: leaderboard.slice(0, 10),
-        underMaintainedAssets: this.listContributions().filter(
+        underMaintainedAssets: this.listContributions(input).filter(
           (item) => Number(item.metrics.maintenanceFreshness || 0) < 0.5,
         ),
-        highDemandRestrictedAssets: this.listContributions().filter(
+        highDemandRestrictedAssets: this.listContributions(input).filter(
           (item) =>
             item.requestedVisibility === "restricted" &&
             item.metrics.permissionRequestCount > 0,
         ),
-        rollbackHotspots: this.listContributions().filter(
+        rollbackHotspots: this.listContributions(input).filter(
           (item) => item.metrics.rollbackCount > 0,
         ),
         assetContributionScore:
@@ -951,9 +1017,9 @@ export function createContributionRegistry({
       return clone(auditEvents);
     },
     listWorkspaceAssets(input: RegistryInput = {}) {
-      const targetWorkspaceId = text(
-        input.workspaceId || input.targetWorkspaceId || workspaceId,
-      );
+      const targetWorkspaceId = input.targetWorkspaceId !== undefined
+        ? requiredWorkspaceBinding(input.targetWorkspaceId, "targetWorkspaceId")
+        : workspaceScope(input);
       const items = [...contributions.values()]
         .flatMap((contribution) => contribution.assetRecords)
         .map(assetRecordProjector)

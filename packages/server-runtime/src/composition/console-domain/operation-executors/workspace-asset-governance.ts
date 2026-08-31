@@ -3,8 +3,11 @@ import {
   actorFrom,
   arrayOfStrings,
   objectOrNull,
+  requiredWorkspaceBindingFrom,
+  requiredWorkspaceIdFrom,
   result,
   subjectFromAuthSession,
+  workspaceBindingFailureResult,
   workspaceIdFrom
 } from "./shared.ts";
 import {
@@ -134,6 +137,9 @@ export function workspaceAssetFailureResult({ operationId, input = {}, target = 
 export function buildWorkspaceAssetRegistryInput({ operationId, input = {}, target = {}, semantic = "", downstreamOperationId = "", downstream = {}, ledgerEntry = null, governance = null, routeDecision = {} }: Record<string, any> = {}) : any {
   const assetKind: any = workspaceAssetKindForOperation(downstreamOperationId || operationId, input, target);
   const canonicalState: any = workspaceAssetCanonicalStateForOperation(downstreamOperationId || operationId, semantic, target, downstream);
+  const registryWorkspaceId: any = downstreamOperationId === "workspace.contribution.adopt"
+    ? requiredWorkspaceBindingFrom(input, "targetWorkspaceId")
+    : requiredWorkspaceIdFrom(input);
   const targetRef: any = workspaceAssetTargetRef(input, target);
   const contribution: any = objectOrNull(downstream.contribution) || {};
   const codeChange: any = objectOrNull(downstream.codeChange) || objectOrNull(downstream.change) || {};
@@ -151,7 +157,7 @@ export function buildWorkspaceAssetRegistryInput({ operationId, input = {}, targ
     targetRef.path = file.path || file.relativePath;
   }
   return {
-    workspaceId: workspaceIdFrom(input),
+    workspaceId: registryWorkspaceId,
     assetKind,
     canonicalState,
     dataClass: input.policy?.dataClass || input.dataClass || (assetKind === "codeChange" ? "codeChange" : "internal"),
@@ -236,6 +242,11 @@ export async function recordWorkspaceAssetFromDownstream({ operationId, input = 
 }
 
 export async function runManagedWorkspaceAssetWrite({ operationId, input = {}, context = {}, target = {}, semantic = "", downstreamOperationId = "", routeMode = "executed", run }: Record<string, any> = {}) : Promise<any> {
+  try {
+    requiredWorkspaceIdFrom(input);
+  } catch {
+    return workspaceBindingFailureResult(operationId);
+  }
   let proofContext: any = null;
   try {
     proofContext = await startWorkspaceAssetProof({

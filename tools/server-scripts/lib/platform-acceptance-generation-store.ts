@@ -32,6 +32,7 @@ export const ACCEPTANCE_GENERATION_ROOT: any = PLATFORM_ACCEPTANCE_GENERATION_RO
 export const ACCEPTANCE_GENERATION_POINTER: any = PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH;
 export const ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT: any = `${ACCEPTANCE_GENERATION_ROOT}/failures`;
 export const ACCEPTANCE_EXECUTION_LEASE_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-execution-lease-1";
+export const ACCEPTANCE_FAILURE_ENVELOPE_SCHEMA: any = "v0.0.1:meshrix:platform-acceptance-failure-envelope-1";
 export const ACCEPTANCE_GENERATION_BUDGETS: Readonly<Record<string, any>> = Object.freeze({
   maxEntries: 256,
   maxEntryBytes: 32 * 1024 * 1024,
@@ -230,21 +231,6 @@ async function withPublicationLock(root?: any, action?: any) : Promise<any> {
   }
 }
 
-function workspaceCopyFilter(repoRoot?: any) : any {
-  const excludedTopLevel: any = new Set<any>([".git", "build", "node_modules"]);
-  const excludedProcessRoots: readonly any[] = Object.freeze(["docs/plans", "docs/reports"]);
-  return (sourcePath?: any) : any => {
-    const relativePath: any = path.relative(repoRoot, sourcePath);
-    if (!relativePath) return true;
-    const normalized: any = relativePath.split(path.sep).join("/");
-    const [firstSegment] = relativePath.split(path.sep);
-    if (excludedTopLevel.has(firstSegment)) return false;
-    if (excludedProcessRoots.some((root?: any) : any =>
-      normalized === root || normalized.startsWith(`${root}/`))) return false;
-    return true;
-  };
-}
-
 const WORKSPACE_PACKAGE_SCOPE: any = "@meshrix";
 
 async function linkWorkspaceNodeModules(repoRoot?: any, workspace?: any) : Promise<any> {
@@ -274,56 +260,62 @@ async function linkWorkspaceNodeModules(repoRoot?: any, workspace?: any) : Promi
   }));
 }
 
-async function resolveWorkspaceGitDirectory(repoRoot?: any) : Promise<any> {
-  const resolved: any = spawnSync("git", ["rev-parse", "--absolute-git-dir"], {
+function resolveCandidateCommit(repoRoot?: any, candidate: any = "HEAD") : any {
+  const requested: any = String(candidate || "HEAD").trim();
+  if (requested !== "HEAD" && !/^[a-f0-9]{40}$/u.test(requested)) {
+    throw new Error("Acceptance generation requires an explicit full candidate commit");
+  }
+  const resolved: any = spawnSync("git", ["rev-parse", "--verify", `${requested}^{commit}`], {
     cwd: repoRoot,
     encoding: "utf8",
     windowsHide: true
   });
-  const gitDirectory: any = String(resolved.stdout || "").trim();
-  if (
-    resolved.status !== 0 ||
-    !path.isAbsolute(gitDirectory) ||
-    /[\r\n]/u.test(gitDirectory)
-  ) {
-    throw new Error("Acceptance generation requires valid Git repository evidence");
+  const sourceRevision: any = String(resolved.stdout || "").trim();
+  if (resolved.status !== 0 || !/^[a-f0-9]{40}$/u.test(sourceRevision)) {
+    throw new Error("Acceptance generation candidate commit is unavailable");
   }
-  const canonicalGitDirectory: any = await fs.realpath(gitDirectory).catch(() : any => "");
-  const stats: any = canonicalGitDirectory
-    ? await fs.stat(canonicalGitDirectory).catch(() : any => null)
-    : null;
-  if (!stats?.isDirectory()) {
-    throw new Error("Acceptance generation requires valid Git repository evidence");
-  }
-  return canonicalGitDirectory;
+  return sourceRevision;
 }
 
-export async function createAcceptanceGenerationWorkspace(repoRoot?: any, { id }: Record<string, any> = {}) : Promise<any> {
+export async function createAcceptanceGenerationWorkspace(repoRoot?: any, {
+  authorityRoot = repoRoot,
+  id,
+  sourceRevision = "HEAD"
+}: Record<string, any> = {}) : Promise<any> {
   const selectedId: any = id || generationId();
-  const workspace: any = await fs.mkdtemp(path.join(os.tmpdir(), `meshrix-acceptance-${selectedId}-`));
+  const candidateCommit: any = resolveCandidateCommit(repoRoot, sourceRevision);
+  const workspaceRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), `meshrix-acceptance-${selectedId}-`));
+  const workspace: any = path.join(workspaceRoot, "candidate");
   const baseGenerationId: any = await currentGenerationId(
-    path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER)
+    path.join(authorityRoot, ACCEPTANCE_GENERATION_POINTER)
   );
-  const paths: any = generationPaths(repoRoot, selectedId, workspace, baseGenerationId);
+  const paths: any = {
+    ...generationPaths(authorityRoot, selectedId, workspace, baseGenerationId),
+    authorityRoot,
+    repoRoot,
+    sourceRevision: candidateCommit,
+    workspaceRoot
+  };
   try {
-    await fs.cp(repoRoot, paths.workspace, {
-      recursive: true,
-      force: true,
-      preserveTimestamps: true,
-      filter: workspaceCopyFilter(repoRoot)
+    const added: any = spawnSync("git", [
+      "worktree", "add", "--quiet", "--detach", paths.workspace, candidateCommit
+    ], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      windowsHide: true
     });
+    if (added.status !== 0) throw new Error("Acceptance generation candidate worktree creation failed");
     const dependencyRoot: any = path.join(repoRoot, "node_modules");
     const stats: any = await fs.stat(dependencyRoot);
     if (!stats.isDirectory()) throw new Error("not a directory");
     await linkWorkspaceNodeModules(repoRoot, paths.workspace);
-    const gitDirectory: any = await resolveWorkspaceGitDirectory(repoRoot);
-    await fs.writeFile(
-      path.join(paths.workspace, ".git"),
-      `gitdir: ${gitDirectory}\n`,
-      { encoding: "utf8", mode: 0o644 }
-    );
   } catch (error: any) {
-    await fs.rm(paths.workspace, { recursive: true, force: true });
+    spawnSync("git", ["worktree", "remove", "--force", paths.workspace], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      windowsHide: true
+    });
+    await fs.rm(paths.workspaceRoot, { recursive: true, force: true });
     if (error?.message === "not a directory" || error?.code === "ENOENT") {
       throw new Error("Acceptance generation requires the repository dependency runtime");
     }
@@ -338,25 +330,33 @@ export async function runAcceptanceGenerationWorker({
   executable = process.execPath,
   args = ["tools/server-scripts/verify-platform-acceptance.ts"],
   env = process.env,
+  proofLedgerRoot = repoRoot,
   stdio = "inherit"
 }: Record<string, any>) : Promise<any> {
-  return new Promise((resolve?: any, reject?: any) : any => {
+  return new Promise((resolve?: any) : any => {
     const child: any = spawn(executable, args, {
       cwd: workspace,
       env: {
         ...env,
         MESHRIX_ACCEPTANCE_REPOSITORY_ROOT: repoRoot,
-        MESHRIX_ACCEPTANCE_PROOF_LEDGER_DIR: path.join(repoRoot, "build", "acceptance-proof-ledger"),
+        MESHRIX_ACCEPTANCE_PROOF_LEDGER_DIR: path.join(proofLedgerRoot, "build", "acceptance-proof-ledger"),
         MESHRIX_ACCEPTANCE_GENERATION_WORKER: "1"
       },
       stdio,
       windowsHide: true
     });
-    child.once("error", reject);
+    let settled: any = false;
+    const finish: any = (result?: any) : any => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    child.once("error", () : any => finish({ exitCode: 1, signal: "", errorCode: "acceptance_worker_spawn_failed" }));
     child.once("exit", (code?: any, signal?: any) : any => {
-      resolve({
+      finish({
         exitCode: Number.isInteger(code) ? code : 1,
-        signal: signal || ""
+        signal: signal || "",
+        errorCode: signal ? "acceptance_worker_signalled" : "acceptance_worker_failed"
       });
     });
   });
@@ -666,7 +666,7 @@ async function readFailedAggregateReport(workspace?: any, aggregateReportPath?: 
   }
   validateFailedAggregateReport(aggregateReport);
   assertNoSensitiveReportLeak(raw, "acceptance failure diagnostic aggregate report");
-  return Object.freeze({ logicalPath, raw });
+  return Object.freeze({ logicalPath, raw, aggregateReport });
 }
 
 function validateWorkerFailureResult(workerResult?: any) : any {
@@ -676,18 +676,35 @@ function validateWorkerFailureResult(workerResult?: any) : any {
       (signal && !/^SIG[A-Z0-9]+$/u.test(signal))) {
     throw new Error("Acceptance failure diagnostic worker result is invalid");
   }
-  return Object.freeze({ exitCode, signal });
+  const errorCode: any = String(workerResult?.errorCode || "").trim();
+  if (errorCode && !/^[a-z][a-z0-9_]{0,63}$/u.test(errorCode)) {
+    throw new Error("Acceptance failure diagnostic worker error code is invalid");
+  }
+  return Object.freeze({ exitCode, signal, errorCode });
 }
 
-function createWorkerExitReceipt(paths?: any, workerResult?: any) : any {
-  const { exitCode, signal } = workerResult;
+function createFailureEnvelope(paths?: any, workerResult?: any, aggregate?: any) : any {
+  const { exitCode, signal, errorCode } = workerResult;
+  const candidateIdentity: any = aggregate?.candidateIdentity && typeof aggregate.candidateIdentity === "object"
+    ? aggregate.candidateIdentity
+    : null;
+  const sourceRevision: any = String(candidateIdentity?.source_revision || paths?.sourceRevision || "");
+  const candidateDigest: any = String(candidateIdentity?.candidate_digest || aggregate?.candidate_digest || "");
+  if (!/^[a-f0-9]{40}$/u.test(sourceRevision) || (candidateDigest && !BARE_SHA256_DIGEST.test(candidateDigest))) {
+    throw new Error("Acceptance failure diagnostic candidate binding is invalid");
+  }
   const receipt: Record<string, any> = {
-    schemaVersion: ACCEPTANCE_GENERATION_SCHEMA,
-    diagnosticKind: "worker-exit",
+    schemaVersion: ACCEPTANCE_FAILURE_ENVELOPE_SCHEMA,
     generationId: String(paths.id),
     status: "failed",
+    sourceRevision,
+    candidateDigest,
+    selectedProfile: String(aggregate?.selectedProfile || ""),
+    phase: aggregate ? "aggregate" : "worker",
+    errorCode: errorCode || (aggregate ? "acceptance_aggregate_failed" : signal ? "acceptance_worker_signalled" : "acceptance_worker_failed"),
     exitCode,
-    signal
+    signal,
+    aggregatePresent: Boolean(aggregate)
   };
   assertNoSensitiveReportLeak(receipt, "acceptance failure diagnostic worker receipt");
   return Object.freeze(receipt);
@@ -719,8 +736,11 @@ export async function publishAcceptanceFailureDiagnostic({
   const failurePaths: any = failureDiagnosticPaths(repoRoot, paths?.id);
   const failureResult: any = validateWorkerFailureResult(workerResult);
   const aggregate: any = await readFailedAggregateReport(paths?.workspace, aggregateReportPath);
-  const targetName: any = aggregate ? path.posix.basename(aggregate.logicalPath) : "worker-exit.json";
-  const payload: any = aggregate?.raw ?? `${JSON.stringify(createWorkerExitReceipt(paths, failureResult), null, 2)}\n`;
+  if (aggregate?.aggregateReport?.sourceRevision && aggregate.aggregateReport.sourceRevision !== paths.sourceRevision) {
+    throw new Error("Acceptance failure diagnostic candidate does not match its worktree");
+  }
+  const targetName: any = "failure.json";
+  const payload: any = `${JSON.stringify(createFailureEnvelope(paths, failureResult, aggregate?.aggregateReport), null, 2)}\n`;
 
   await fs.mkdir(failurePaths.root, { recursive: true, mode: 0o700 });
   await fs.mkdir(failurePaths.staged, { recursive: false, mode: 0o700 });
@@ -733,7 +753,7 @@ export async function publishAcceptanceFailureDiagnostic({
     await pruneFailureDiagnostics(failurePaths.root);
     return Object.freeze({
       generationId: failurePaths.id,
-      kind: aggregate ? "aggregate" : "worker-exit",
+      kind: "failure-envelope",
       path: path.relative(repoRoot, path.join(failurePaths.committed, targetName)).split(path.sep).join("/")
     });
   } catch (error: any) {
@@ -796,6 +816,10 @@ export async function publishAcceptanceGeneration({
     repoRoot,
     verifyLedgerAnchor
   });
+  requireAggregate(
+    aggregateReport.sourceRevision === paths.sourceRevision,
+    "candidate-worktree-source-revision"
+  );
   assertNoSensitiveReportLeak(aggregateReport, "acceptance generation aggregate report");
   for (const inventoryEntry of releaseEvidenceInventory) {
     await validateOwnedReport(paths.workspace, inventoryEntry);
@@ -822,6 +846,7 @@ export async function publishAcceptanceGeneration({
       createdAt: new Date().toISOString(),
       aggregateReport: aggregateLogicalPath,
       selectedProfile: aggregateBinding.selectedProfile,
+      sourceRevision: aggregateReport.sourceRevision,
       candidateDigest: aggregateReport.candidateIdentity.candidate_digest,
       ledgerEventId: aggregateReport.ledgerAnchor.ledgerEventId,
       releaseEvidenceInventory,
@@ -900,7 +925,8 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
   } catch {
     throw new Error("Acceptance generation manifest profile is invalid");
   }
-  if (!BARE_SHA256_DIGEST.test(String(manifest.candidateDigest || "")) ||
+  if (!/^[a-f0-9]{40}$/u.test(String(manifest.sourceRevision || "")) ||
+      !BARE_SHA256_DIGEST.test(String(manifest.candidateDigest || "")) ||
       !String(manifest.ledgerEventId || "").trim()) {
     throw new Error("Acceptance generation manifest acceptance binding is invalid");
   }
@@ -976,6 +1002,7 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
   assertNoSensitiveReportLeak(aggregateReport, "resolved acceptance generation aggregate report");
   if (
     aggregateBinding.selectedProfile !== manifest.selectedProfile ||
+    aggregateReport.sourceRevision !== manifest.sourceRevision ||
     aggregateReport.candidateIdentity.candidate_digest !== manifest.candidateDigest ||
     aggregateReport.ledgerAnchor.ledgerEventId !== manifest.ledgerEventId
   ) {
@@ -984,32 +1011,17 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot?: any, {
   return { pointer, manifest, generationRoot };
 }
 
-export async function clearAccidentalCoreWorktree(repoRoot?: any, workspace: any = "") : Promise<any> {
-  const configured: any = spawnSync("git", ["config", "--get", "core.worktree"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    windowsHide: true
-  });
-  const value: any = String(configured.stdout || "").trim();
-  if (!value) {
-    return;
-  }
-  const normalizedWorkspace: any = String(workspace || "").trim();
-  if (
-    (normalizedWorkspace && path.resolve(value) === path.resolve(normalizedWorkspace)) ||
-    value.includes("meshrix-acceptance-")
-  ) {
-    spawnSync("git", ["config", "--unset", "core.worktree"], {
-      cwd: repoRoot,
+export async function removeAcceptanceGenerationWorkspace(paths?: any, { repoRoot = "" }: Record<string, any> = {}) : Promise<any> {
+  const ownerRoot: any = String(repoRoot || paths?.repoRoot || "").trim();
+  if (ownerRoot && paths?.workspace) {
+    const removed: any = spawnSync("git", ["worktree", "remove", "--force", paths.workspace], {
+      cwd: ownerRoot,
       encoding: "utf8",
       windowsHide: true
     });
+    if (removed.status !== 0) {
+      throw new Error("Acceptance generation candidate worktree removal failed");
+    }
   }
-}
-
-export async function removeAcceptanceGenerationWorkspace(paths?: any, { repoRoot = "" }: Record<string, any> = {}) : Promise<any> {
-  if (repoRoot) {
-    await clearAccidentalCoreWorktree(repoRoot, paths.workspace);
-  }
-  await fs.rm(paths.workspace, { recursive: true, force: true });
+  await fs.rm(paths?.workspaceRoot || path.dirname(paths.workspace), { recursive: true, force: true });
 }

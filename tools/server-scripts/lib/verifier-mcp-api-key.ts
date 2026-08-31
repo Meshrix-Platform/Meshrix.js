@@ -86,10 +86,18 @@ function toolMatchesAccess(tool: Record<string, any> = {}, access: Record<string
   const selectedToolsets: any = new Set<any>(access.toolsets || []);
   const selectedServices: any = new Set<any>(access.allowedServiceIds || []);
   const selectedCapabilities: any = new Set<any>(access.dynamicCapabilities || []);
+  const explicitDynamicSelection: any = Object.hasOwn(access, "dynamicCapabilities") ||
+    Object.hasOwn(access, "allowedServiceIds");
   if (Array.isArray(access.allowedTools) && access.allowedTools.includes(tool.id)) return true;
-  if ((tool.toolsets || []).some((value?: any) : any => selectedToolsets.has(value))) return true;
+  const dynamicCapabilityId: any = String(tool.dynamicCapability?.capabilityId || tool.capabilityId || "");
+  const upstreamServicePrefix: any = [...selectedCapabilities]
+    .map((capability?: any) : any => String(capability || ""))
+    .find((capability?: any) : any => capability.startsWith("cap:upstream:") && capability.includes(":tools-call-"));
+  if (upstreamServicePrefix && dynamicCapabilityId === `${upstreamServicePrefix.slice(0, upstreamServicePrefix.indexOf(":tools-call-"))}:tools-call`) return true;
+  if (selectedCapabilities.size > 0 && dynamicCapabilityId && selectedCapabilities.has(dynamicCapabilityId)) return true;
   if (tool.serviceId && selectedServices.has(tool.serviceId)) return true;
-  if (tool.capabilityId && selectedCapabilities.has(tool.capabilityId)) return true;
+  if (tool.dynamicCapability && explicitDynamicSelection) return false;
+  if ((tool.toolsets || []).some((value?: any) : any => selectedToolsets.has(value))) return true;
   return false;
 }
 
@@ -173,6 +181,24 @@ export async function issueVerifierMcpApiKey({
   const resources: any = verifierResourcePolicy(access);
   const selectedScopes: any[] = selectedTools
     .flatMap((tool?: any) : any => tool.requiredScopes || tool.scopes || []);
+  const selectedDynamicCapabilities: any[] = selectedTools
+    .map((tool?: any) : any => tool.dynamicCapability)
+    .filter((value?: any) : any => value && typeof value === "object" && !Array.isArray(value));
+  const derivedValues: any = (selector?: any) : any => [...new Set<any>(selectedDynamicCapabilities
+    .flatMap((capability?: any) : any => selector(capability, capability.resourceContext || {}))
+    .map((value?: any) : any => String(value || "").trim())
+    .filter(Boolean))];
+  const derivedServiceIds: any[] = derivedValues((capability?: any) : any => [capability.serviceId]);
+  const derivedCapabilityIds: any[] = derivedValues((capability?: any) : any => [capability.capabilityId]);
+  const derivedSecretBindingIds: any[] = derivedValues((capability?: any, resource?: any) : any => [
+    ...(capability.credentialBindingIds || []),
+    resource.secretBindingId,
+    ...(resource.secretBindingIds || [])
+  ]);
+  const derivedEgressClasses: any[] = derivedValues((_capability?: any, resource?: any) : any => [
+    resource.requestedEgress,
+    ...(resource.requestedEgresses || [])
+  ]);
   const created: any = await requestJson(`${serviceUrl}/api/operation-permission/v1/api-keys`, {
     method: "POST",
     headers: {
@@ -185,8 +211,8 @@ export async function issueVerifierMcpApiKey({
       expiresAt: new Date(Date.now() + Math.min(Number(access.expiresInMs) || 15 * 60_000, 60 * 60_000)).toISOString(),
       policy: {
         protocol: "mcp",
-        serviceIds: [...new Set<any>(access.allowedServiceIds || [])],
-        capabilityIds: [...new Set<any>(access.dynamicCapabilities || [])],
+        serviceIds: [...new Set<any>([...(access.allowedServiceIds || []), ...derivedServiceIds])],
+        capabilityIds: [...new Set<any>([...(access.dynamicCapabilities || []), ...derivedCapabilityIds])],
         toolsetIds: [...new Set<any>(access.toolsets || [])],
         allowedTools,
         deniedTools: [],
@@ -197,7 +223,16 @@ export async function issueVerifierMcpApiKey({
           targetIds: [...new Set<any>(access.targets || ["codex"])],
           connectorPackageIds: []
         },
-        resources,
+        resources: {
+          ...resources,
+          mode: access.resources?.mode === "unrestricted"
+            ? "unrestricted"
+            : derivedEgressClasses.length > 0 || derivedSecretBindingIds.length > 0
+              ? "restricted"
+              : resources.mode,
+          egressClasses: [...new Set<any>([...resources.egressClasses, ...derivedEgressClasses])],
+          secretBindingIds: [...new Set<any>([...resources.secretBindingIds, ...derivedSecretBindingIds])]
+        },
         processIdentity: { mode: "optional" },
         limits: {
           maxUses: Math.max(1, Number(access.maxUses) || 256),
@@ -224,13 +259,13 @@ export async function issueVerifierMcpApiKey({
 
 export function verifierMcpApiKeyHeaders({
   apiKey = "",
-  target = "codex",
+  target = "",
   extraHeaders = {}
 }: Record<string, any> = {}) : any {
   return {
     "Content-Type": "application/json",
     ...(apiKey ? { "X-Meshrix.js-Api-Key": apiKey } : {}),
-    "X-Meshrix.js-MCP-Target": target,
+    ...(target ? { "X-Meshrix.js-MCP-Target": target } : {}),
     ...extraHeaders
   };
 }

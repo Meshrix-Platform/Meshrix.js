@@ -1,7 +1,7 @@
 const READ_ACTIONS = Object.freeze([
-  Object.freeze({ label: "Refresh catalog", path: "/api/skill-hub/v1/skills" }),
-  Object.freeze({ label: "Refresh statistics", path: "/api/skill-hub/v1/stats" }),
-  Object.freeze({ label: "Refresh leaderboard", path: "/api/skill-hub/v1/leaderboard" })
+  Object.freeze({ label: "Refresh catalog", toolId: "skill_hub.list" }),
+  Object.freeze({ label: "Refresh statistics", toolId: "skill_hub.stats" }),
+  Object.freeze({ label: "Refresh leaderboard", toolId: "skill_hub.leaderboard" })
 ]);
 
 function element(name, attributes = {}, text = "") {
@@ -11,8 +11,9 @@ function element(name, attributes = {}, text = "") {
   return node;
 }
 
-export function mountPluginConsole({ element: root, signal } = {}) {
+export function mountPluginConsole({ element: root, invokeTool, signal } = {}) {
   if (!(root instanceof Element)) throw new TypeError("Skill Hub console requires a mount element.");
+  if (typeof invokeTool !== "function") throw new TypeError("Skill Hub console tool bridge is required.");
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
@@ -28,15 +29,8 @@ export function mountPluginConsole({ element: root, signal } = {}) {
       button.disabled = true;
       output.textContent = "Loading…";
       try {
-        const response = await fetch(action.path, {
-          method: "GET",
-          credentials: "same-origin",
-          signal: controller.signal
-        });
-        const payload = await response.json().catch(() => ({}));
-        output.textContent = response.ok
-          ? JSON.stringify(payload, null, 2)
-          : "The Skill Hub request was denied.";
+        const payload = await invokeTool(action.toolId, {});
+        output.textContent = JSON.stringify(payload, null, 2);
       } catch (error) {
         output.textContent = error?.name === "AbortError"
           ? "Request cancelled."

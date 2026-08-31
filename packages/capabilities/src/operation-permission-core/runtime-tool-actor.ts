@@ -29,11 +29,21 @@ export function toolActorFromAuthorization({
     organizationNodeId: subject.organizationNodeId || "",
     allowedWorkspaceIds: uniqueStrings(policy.allowedWorkspaceIds || subject.allowedWorkspaceIds || []),
     workspaceIds: uniqueStrings(policy.allowedWorkspaceIds || subject.allowedWorkspaceIds || []),
+    capabilities: uniqueStrings(policy.capabilities || subject.capabilities || []),
     dynamicCapabilities: uniqueStrings(policy.dynamicCapabilities || policy.capabilities || policy.metadata?.dynamicCapabilities || []),
+    maxRisk: String(policy.maxRisk || subject.maxRisk || ""),
+    allowedDataClasses: uniqueStrings(policy.allowedDataClasses || subject.allowedDataClasses || []),
+    allowedEgress: uniqueStrings(policy.allowedEgress || subject.allowedEgress || []),
+    allowedStaticSemanticFamilies: uniqueStrings(policy.allowedStaticSemanticFamilies || subject.allowedStaticSemanticFamilies || []),
+    allowedCapabilityDomains: uniqueStrings(policy.allowedCapabilityDomains || subject.allowedCapabilityDomains || []),
+    allowedCapabilityVerbs: uniqueStrings(policy.allowedCapabilityVerbs || subject.allowedCapabilityVerbs || []),
+    allowedResourceKinds: uniqueStrings(policy.allowedResourceKinds || subject.allowedResourceKinds || []),
+    allowedEffectKinds: uniqueStrings(policy.allowedEffectKinds || subject.allowedEffectKinds || []),
     allowedServiceIds: uniqueStrings(policy.allowedServiceIds || policy.metadata?.allowedServiceIds || []),
     allowedSecretBindings: uniqueStrings(policy.allowedSecretBindings || policy.metadata?.allowedSecretBindings || []),
     scopes: uniqueStrings([
       ...grantScopes,
+      ...policy.scopeIds || [],
       ...approvedScopes
     ])
   };

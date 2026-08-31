@@ -148,9 +148,10 @@ export function createUploadSessionHandlers({
           },
           errorCode: String(error?.code || "upload_session_create_failed")
         });
-        if (statusCode < 500) {
-          // 客户端输入导致的失败发生在任何受保护副作用之前：直接以该状态码
-          // 响应并返回，避免被分发层的“效果存疑”包装改写成 503。
+        if (statusCode < 500 && Number.isInteger(error?.statusCode)) {
+          // 客户端输入导致的失败发生在任何受保护副作用之前：仅当错误由
+          // 控制器显式构造（携带 statusCode，面向客户端）时才直接以该状态码
+          // 响应并返回，避免内部意外错误原样回显给客户端。
           sendJson(response, statusCode, {
             code: String(error?.code || "upload_session_create_failed"),
             error: String(error?.message || "请求处理失败。")

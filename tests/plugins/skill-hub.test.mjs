@@ -26,6 +26,41 @@ function sha(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+function pairwiseRef(kind, serviceRef, value) {
+  return `skill_hub_${kind}_${sha(JSON.stringify({
+    schemaVersion: "v0.0.1:skill-hub:pairwise-principal-1",
+    pluginId: "skill-hub",
+    serviceRef,
+    kind,
+    value
+  }))}`;
+}
+
+function bindTestHostContext(request, actor) {
+  const context = request.input?.meshrixContext;
+  assert.equal(context?.schemaVersion, "v0.0.1:skill-hub:host-context-1");
+  assert.equal(Object.hasOwn(context, "principal"), false);
+  const businessInput = { ...request.input };
+  delete businessInput.meshrixContext;
+  const principal = Object.freeze({
+    subjectRef: pairwiseRef("subject", request.serviceRef, actor),
+    tenantRef: pairwiseRef("tenant", request.serviceRef, "tenant-synthetic")
+  });
+  return Object.freeze({
+    ...request,
+    input: Object.freeze({
+      ...businessInput,
+      meshrixContext: Object.freeze({ ...context, principal })
+    }),
+    idempotencyKey: `skill-hub:${sha(JSON.stringify({
+      serviceRef: request.serviceRef,
+      operationRef: request.operationRef,
+      subjectRef: principal.subjectRef,
+      idempotencyKey: request.idempotencyKey
+    }))}`
+  });
+}
+
 function submission(skillId, workspaceId = "workspace-source") {
   return Object.freeze({
     contributionId: skillId,
@@ -167,10 +202,12 @@ async function fixture(t) {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
+  const forwardedRequests = [];
   const externalService = Object.freeze({
     async request(request) {
       assert.equal(request.serviceRef, "svc_skill_hub");
       assert.equal(request.operationRef.startsWith("skill_hub."), true);
+      forwardedRequests.push(structuredClone(request));
       const response = await fetch(`${baseUrl}/v1/operations/${request.operationRef}`, {
         method: "POST",
         headers: {
@@ -189,7 +226,7 @@ async function fixture(t) {
     await handler.close();
     await rm(dataRoot, { recursive: true, force: true });
   });
-  return { baseUrl, externalService, runtime };
+  return { baseUrl, externalService, forwardedRequests, runtime };
 }
 
 async function invoke(runtime, operationId, input = {}, {
@@ -200,11 +237,16 @@ async function invoke(runtime, operationId, input = {}, {
 } = {}) {
   const operation = runtime.contributions.operations[operationId];
   assert.ok(operation, `Missing operation ${operationId}`);
+  const boundExternalService = externalService && Object.freeze({
+    request(request, options) {
+      return externalService.request(bindTestHostContext(request, actor), options);
+    }
+  });
   return operation.execute({
     operation: operation.definition,
     input,
     call: callFor(actor, governance),
-    host: Object.freeze({ externalService, ...host })
+    host: Object.freeze({ externalService: boundExternalService, ...host })
   });
 }
 
@@ -242,8 +284,48 @@ test("Skill Hub service exposes health and the plugin contributes only remote ad
   ));
 });
 
+test("Skill Hub adapter rejects implicit workspace effects before any Host call", async (t) => {
+  const { externalService, forwardedRequests, runtime } = await fixture(t);
+  const submittedInput = { ...submission("missing-workspace-skill") };
+  delete submittedInput.workspaceId;
+  const sandboxRequest = { ...sandboxInput("missing-workspace-skill") };
+  delete sandboxRequest.workspaceId;
+  const invalidRequests = [
+    ["skill_hub.submit", submittedInput],
+    ["skill_hub.scan", sandboxRequest],
+    ["skill_hub.build", sandboxRequest],
+    ["skill_hub.execute", sandboxRequest],
+    ["skill_hub.download", { skillId: "missing-workspace-skill" }],
+    ["skill_hub.install", { skillId: "missing-workspace-skill" }],
+    ["skill_hub.usage.record", { skillId: "missing-workspace-skill" }],
+    ["skill_hub.permission.request", { skillId: "missing-workspace-skill" }],
+    ["skill_hub.permission.grant", { skillId: "missing-workspace-skill" }]
+  ];
+  for (const [operationId, input] of invalidRequests) {
+    const denied = await invoke(runtime, operationId, input, { externalService });
+    assert.equal(denied.statusCode, 400);
+    assert.equal(denied.body.error.code, "skill_hub_workspace_binding_invalid");
+  }
+  for (const input of [
+    { ...submittedInput, workspaceId: "" },
+    { ...submittedInput, workspaceId: 1 },
+    { ...submittedInput, workspace: "legacy-workspace" }
+  ]) {
+    const denied = await invoke(runtime, "skill_hub.submit", input, { externalService });
+    assert.equal(denied.statusCode, 400);
+    assert.equal(denied.body.error.code, "skill_hub_workspace_binding_invalid");
+  }
+  assert.equal(forwardedRequests.length, 0);
+
+  for (const operationId of ["skill_hub.search", "skill_hub.list", "skill_hub.stats", "skill_hub.leaderboard"]) {
+    const globalRead = await invoke(runtime, operationId, {}, { externalService });
+    assert.equal(globalRead.statusCode, 200);
+  }
+  assert.equal(forwardedRequests.length, 4);
+});
+
 test("Skill Hub remote lifecycle preserves sandbox execution, review separation, grants, adoption, and revocation", async (t) => {
-  const { externalService, runtime } = await fixture(t);
+  const { externalService, forwardedRequests, runtime } = await fixture(t);
   const sandbox = sandboxHost();
   const skillId = "skill-remote-lifecycle";
   const sourceWorkspace = "workspace-source";
@@ -269,7 +351,11 @@ test("Skill Hub remote lifecycle preserves sandbox execution, review separation,
   assert.equal(built.statusCode, 200);
   assert.equal(built.body.receipt.workloadKind, "skill_build");
 
-  const selfReview = await invoke(runtime, "skill_hub.review", { skillId, decision: "approved" }, {
+  const selfReview = await invoke(runtime, "skill_hub.review", {
+    skillId,
+    decision: "approved",
+    actorId: "reviewer-spoof"
+  }, {
     actor: "contributor-one", externalService
   });
   assert.equal(selfReview.statusCode, 400);
@@ -283,11 +369,17 @@ test("Skill Hub remote lifecycle preserves sandbox execution, review separation,
     actor: "publisher-one", externalService
   });
   assert.equal(published.body.skill.status, "published");
+  const detail = await invoke(runtime, "skill_hub.get", { skillId }, { externalService });
+  assert.equal(detail.statusCode, 200);
 
-  const installed = await invoke(runtime, "skill_hub.install", { skillId, targetWorkspaceId: adoptedWorkspace }, {
+  const installed = await invoke(runtime, "skill_hub.install", {
+    skillId,
+    targetWorkspaceId: `  ${adoptedWorkspace}  `
+  }, {
     actor: "consumer-one", externalService
   });
   assert.equal(installed.body.skill.status, "adopted");
+  assert.equal(installed.body.adoption.targetWorkspaceId, adoptedWorkspace);
 
   const request = await invoke(runtime, "skill_hub.permission.request", {
     skillId,
@@ -315,8 +407,16 @@ test("Skill Hub remote lifecycle preserves sandbox execution, review separation,
     }
   });
   assert.equal(granted.statusCode, 200);
-  assert.equal(granted.body.operationPermissionReceipt.receiptId, "grant-receipt-one");
-  assert.equal(recordedLoan.granteeId, "consumer-one");
+  assert.match(granted.body.operationPermissionReceipt.receiptId, /^sha256:[a-f0-9]{64}$/u);
+  assert.match(recordedLoan.granteeId, /^skill_hub_subject_[a-f0-9]{64}$/u);
+  assert.notEqual(recordedLoan.granteeId, "consumer-one");
+
+  const downloaded = await invoke(runtime, "skill_hub.download", {
+    skillId,
+    workspaceId: adoptedWorkspace
+  }, { actor: "consumer-one", externalService });
+  assert.equal(downloaded.statusCode, 200);
+  assert.equal(downloaded.body.downloadEvent.downloadEvent.workspaceId, adoptedWorkspace);
 
   const usage = await invoke(runtime, "skill_hub.usage.record", {
     skillId,
@@ -342,8 +442,24 @@ test("Skill Hub remote lifecycle preserves sandbox execution, review separation,
     actor: "maintainer-one", externalService
   });
   assert.equal(revoked.body.skill.status, "revoked");
-  const download = await invoke(runtime, "skill_hub.download", { skillId }, { externalService });
+  const download = await invoke(runtime, "skill_hub.download", {
+    skillId,
+    workspaceId: adoptedWorkspace
+  }, { externalService });
   assert.equal(download.statusCode, 410);
+  const wire = JSON.stringify(forwardedRequests);
+  for (const privateValue of [
+    "contributor-one",
+    "reviewer-one",
+    "consumer-one",
+    "reviewer-spoof",
+    "tenant-synthetic",
+    "grant-receipt-one",
+    "actorKind",
+    "authorized",
+    "current"
+  ]) assert.equal(wire.includes(privateValue), false, `External request leaked ${privateValue}`);
+  assert.equal(wire.includes("v0.0.1:skill-hub:host-context-1"), true);
 });
 
 test("Skill Hub adapter fails closed when the service or current governance is absent", async (t) => {

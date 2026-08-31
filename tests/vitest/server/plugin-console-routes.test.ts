@@ -39,8 +39,8 @@ function entry(patch: Partial<PluginConsoleEntry> = {}): PluginConsoleEntry {
     viewKey: "sampleView",
     routePath: "/admin/sample-plugin",
     componentId: "sample-plugin/AdminView",
-    assetUrl: "",
-    assetExport: "mountPluginConsole",
+    sandboxUrl: "",
+    bridgeVersion: "v0.0.1:plugin:console-bridge-1",
     artifactDigest: `sha256:${"a".repeat(64)}`,
     artifactGeneration: 1,
     label: "Sample plugin",
@@ -48,16 +48,16 @@ function entry(patch: Partial<PluginConsoleEntry> = {}): PluginConsoleEntry {
     toolIds: [],
     ...patch,
   };
-  if (!result.assetUrl) {
+  if (!result.sandboxUrl) {
     const digest: any = result.artifactDigest.replace(/^sha256:/u, "");
-    result.assetUrl = `/api/plugins/v1/console-assets/${result.pluginId}/${result.artifactGeneration}/${digest}/entry/asset.ts`;
+    result.sandboxUrl = `/api/plugins/v1/console-sandboxes/${result.pluginId}/${result.artifactGeneration}/${digest}/ZW50cnk.html`;
   }
   return result;
 }
 
 function createHost() : any {
   return {
-    loadAsset: vi.fn(async () : Promise<any> => "export function mountPluginConsole() { return () => {}; }"),
+    invokeTool: vi.fn(async () : Promise<any> => ({})),
   };
 }
 
@@ -76,7 +76,7 @@ describe("plugin console runtime routes", () : any => {
     expect(router.currentRoute.value.path).toBe("/admin/sample-plugin");
     expect(router.currentRoute.value.meta.pluginId).toBe("sample-plugin");
     expect(router.currentRoute.value.meta.title).toBe("Sample plugin");
-    expect(host.loadAsset).not.toHaveBeenCalled();
+    expect(host.invokeTool).not.toHaveBeenCalled();
 
     syncPluginConsoleRoutes(router, []);
     await new Promise((resolve?: any) : any => setTimeout(resolve, 0));
@@ -115,7 +115,7 @@ describe("plugin console runtime routes", () : any => {
       expect(loadComponent).toBeTypeOf("function");
       await expect(loadComponent?.()).resolves.toMatchObject({ name: expect.stringMatching(/^PluginConsole_/u) });
     }
-    expect(host.loadAsset).not.toHaveBeenCalled();
+    expect(host.invokeTool).not.toHaveBeenCalled();
 
     const router: any = createTestRouter();
     expect(() : any => syncPluginConsoleRoutes(router, sampleEntries, { host })).not.toThrow();
@@ -129,7 +129,7 @@ describe("plugin console runtime routes", () : any => {
     syncPluginConsoleRoutes(router, [entry()], { host });
     await router.push("/admin/sample-plugin");
     expect(router.currentRoute.value.path).toBe("/welcome");
-    expect(host.loadAsset).not.toHaveBeenCalled();
+    expect(host.invokeTool).not.toHaveBeenCalled();
 
     configureRuntimeRouteGuard(router, {
       ready: true,
@@ -139,19 +139,20 @@ describe("plugin console runtime routes", () : any => {
     });
     await router.push("/admin/sample-plugin");
     expect(router.currentRoute.value.path).toBe("/");
-    expect(host.loadAsset).not.toHaveBeenCalled();
+    expect(host.invokeTool).not.toHaveBeenCalled();
   });
 
   it("fails closed for missing assets and core route conflicts", () : any => {
     const router: any = createTestRouter();
     expect(() : any => syncPluginConsoleRoutes(router, [entry({
-      assetUrl: "https://invalid.example/plugin.ts",
+      sandboxUrl: "https://invalid.example/plugin.html",
     })])).toThrow(/component is unavailable/u);
     expect(() : any => syncPluginConsoleRoutes(router, [entry({ routePath: "/" })])).toThrow(/route conflicts/u);
   });
 
-  it("rejects same-origin compatibility exports and navigable sandbox URLs", () : any => {
-    expect(resolvePluginConsoleComponent(entry({ assetExport: "default" }))).toBeUndefined();
+  it("rejects legacy asset fields and invalid sandbox contracts", () : any => {
+    expect(resolvePluginConsoleComponent(entry({ assetExport: "mountPluginConsole" } as any))).toBeUndefined();
+    expect(resolvePluginConsoleComponent(entry({ assetUrl: "/legacy.ts" } as any))).toBeUndefined();
     expect(resolvePluginConsoleComponent(entry({ sandboxUrl: "/api/plugins/v1/console-assets/x/1/aa/entry.ts" }))).toBeUndefined();
     expect(resolvePluginConsoleComponent(entry({ bridgeVersion: "legacy.same-origin" }))).toBeUndefined();
   });
@@ -189,7 +190,7 @@ describe("plugin console runtime routes", () : any => {
       check(["workspace:read"], ["sample-feature"]),
       host,
     )).toBeTypeOf("function");
-    expect(host.loadAsset).not.toHaveBeenCalled();
+    expect(host.invokeTool).not.toHaveBeenCalled();
     expect(hasPluginConsoleRoute(slotEntry)).toBe(false);
     expect(isAdminPluginConsoleEntry(slotEntry)).toBe(false);
 

@@ -483,7 +483,9 @@ try {
   });
 
   await test("MCP discovery exposes gateway operations and read grants hide writes", async () : Promise<any> => {
-    const writeToken: any = await createGrant("verify-gateway-write", ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.gateway.maintain"]);
+    const writeToken: any = await createGrant("verify-gateway-write", ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.gateway.maintain"], {
+      resources: { mode: "unrestricted" }
+    });
     const capabilitiesPayload: any = await callMcp(writeToken, "meshrix.discovery", "meshrix.capabilities.list", {}, 1001);
     const capabilities: any = capabilitiesPayload.result?.structuredContent || {};
     const names: any = gatewayOperationNames(capabilities);
@@ -492,7 +494,12 @@ try {
     const forward: any = (capabilities.operations || []).find((operation?: any) : any => operation.name === "meshrix.gateway.forward");
     assert.equal(forward?._meta?.mcpOutlet, "meshrix.gateway");
 
-    const readToken: any = await createGrant("verify-gateway-read", ["meshrix.gateway.read"]);
+    const readToken: any = await createGrant("verify-gateway-read", ["meshrix.gateway.read"], {
+      dynamicCapabilities: [],
+      allowedServiceIds: [],
+      allowedSecretBindings: [],
+      resources: { mode: "unrestricted" }
+    });
     const readCapabilitiesPayload: any = await callMcp(readToken, "meshrix.discovery", "meshrix.capabilities.list", {}, 1002);
     const readNames: any = gatewayOperationNames(readCapabilitiesPayload.result?.structuredContent || {});
     assert.equal(readNames.has("meshrix.gateway.metrics"), true);

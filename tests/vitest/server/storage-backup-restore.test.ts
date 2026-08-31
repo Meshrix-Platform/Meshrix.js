@@ -117,6 +117,11 @@ describe("storage backup restore", () : any => {
     await writeFixture(userDataPath, "auth/token.json", JSON.stringify({ token: "abc" }));
     await writeFixture(userDataPath, "jobs/queue.json", JSON.stringify({ state: "queued" }));
     await writeFixture(userDataPath, "objects/index.dat", "objects");
+    const pendingObjectPath: any = await writeFixture(
+      userDataPath,
+      "objects/.pending/in-flight.tmp",
+      "partial object"
+    );
     await writeFixture(userDataPath, "generic-files/blob.bin", "raw data");
     await writeFixture(userDataPath, "protocol/core/runtime-state.json", JSON.stringify({ value: { ok: true } }));
     const fixtureDatabase: any = new Database(path.join(userDataPath, "state.sqlite"));
@@ -132,6 +137,7 @@ describe("storage backup restore", () : any => {
     await writeFixture(userDataPath, "secrets/values/provider.json", "fixture-secret-material");
     await writeFixture(userDataPath, "security/execution-sandbox-custody/master-key", "fixture-master-key");
     await writeFixture(userDataPath, "security/capability-kernel/runtime.sealing-key", "fixture-sealing-key");
+    await writeFixture(userDataPath, "security/process-identity/default/state.sealing-key", "fixture-nested-sealing-key");
     await writeFixture(userDataPath, "security/authorization/policy.json", "{\"revision\":1}");
 
     const manifest: any = await createStorageBackup({
@@ -161,7 +167,10 @@ describe("storage backup restore", () : any => {
     expect(paths.has("secrets/values/provider.json")).toBe(false);
     expect(paths.has("security/execution-sandbox-custody/master-key")).toBe(false);
     expect(paths.has("security/capability-kernel/runtime.sealing-key")).toBe(false);
+    expect(paths.has("security/process-identity/default/state.sealing-key")).toBe(false);
     expect(paths.has("security/authorization/policy.json")).toBe(true);
+    expect(paths.has("objects/.pending/in-flight.tmp")).toBe(false);
+    expect(await fs.readFile(pendingObjectPath, "utf8")).toBe("partial object");
     expect(manifest.secretCustody).toEqual({
       mode: "separate-custody-required",
       secretMaterialIncluded: false,
@@ -234,6 +243,14 @@ describe("storage backup restore", () : any => {
         userDataPath,
         backupId: manifest.backupId,
         includePaths: ["../outside", "notes/readme.txt"]
+      })
+    ).rejects.toMatchObject({ code: "backup_path_invalid" });
+
+    await expect(
+      restoreStorageBackup({
+        userDataPath,
+        backupId: manifest.backupId,
+        includePaths: ["objects/./.pending/in-flight.tmp"]
       })
     ).rejects.toMatchObject({ code: "backup_path_invalid" });
   });
@@ -542,6 +559,11 @@ describe("storage backup restore", () : any => {
     await fs.writeFile(path.join(userDataPath, "scope", "baseline.txt"), "drifted-scope", "utf8");
     await writeFixture(userDataPath, "scope/post-backup.txt", "keep-during-overlay");
     await writeFixture(userDataPath, "other/post-backup.txt", "remove-during-replacement");
+    const pendingObjectPath: any = await writeFixture(
+      userDataPath,
+      "objects/.pending/in-flight.tmp",
+      "partial object"
+    );
     await writeFixture(userDataPath, "secrets/values/operator.json", "separately-managed-secret");
     await writeFixture(userDataPath, "security/execution-sandbox-custody/master-key", "separately-managed-key");
 
@@ -567,6 +589,7 @@ describe("storage backup restore", () : any => {
     expect(preview.summary.delete).toBe(2);
     expect(preview.plannedActions.some((action?: any) : any => action.relativePath.startsWith("secrets/"))).toBe(false);
     expect(preview.plannedActions.some((action?: any) : any => action.relativePath.includes("master-key"))).toBe(false);
+    expect(preview.plannedActions.some((action?: any) : any => action.relativePath.startsWith("objects/.pending"))).toBe(false);
     expect(preview.plannedActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ relativePath: "scope/post-backup.txt", action: "delete", reason: "not_in_backup" }),
       expect.objectContaining({ relativePath: "other/post-backup.txt", action: "delete", reason: "not_in_backup" })
@@ -588,6 +611,7 @@ describe("storage backup restore", () : any => {
       .toBe("separately-managed-secret");
     expect(await fs.readFile(path.join(userDataPath, "security/execution-sandbox-custody/master-key"), "utf8"))
       .toBe("separately-managed-key");
+    expect(await fs.readFile(pendingObjectPath, "utf8")).toBe("partial object");
   });
 
   it("rejects malformed includePaths without expanding to replacement semantics", async () : Promise<any> => {

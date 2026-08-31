@@ -169,14 +169,13 @@ async function expectVerifiedConsoleAsset({ deployment, registry, runtime, recei
     artifactDigest: receipt.artifactDigest,
     artifactGeneration: 1
   });
-  const consoleAsset: any = await contributions.readConsoleAsset(consoleEntry.assetUrl);
+  const consoleAsset: any = await contributions.readConsoleSandbox(consoleEntry.sandboxUrl);
   expect(consoleAsset.bytes.toString("utf8")).toContain("mountPluginConsole");
 }
 
 describe("external plugin package installation", () : any => {
   const sharedSpacePackagePath: any = String(process.env.MESHRIX_TEST_SHARED_SPACE_PACKAGE || "").trim();
   const skillHubPackagePath: any = String(process.env.MESHRIX_TEST_SKILL_HUB_PACKAGE || "").trim();
-  const codingGithubPackagePath: any = String(process.env.MESHRIX_TEST_CODING_GITHUB_PACKAGE || "").trim();
 
   (sharedSpacePackagePath ? it : it.skip)("installs and activates Shared Space from an explicitly supplied closed package", async () : Promise<any> => {
     const { deployment, packageDigest, receipt, registry, runtime } = await installAndActivatePackage({
@@ -203,7 +202,7 @@ describe("external plugin package installation", () : any => {
       implementation: {
         componentId: "shared-space/WorkspaceLocalDirectoryPanel",
         assetPath: "console/index.mjs",
-        assetExport: "mountPluginConsole"
+        toolIds: ["sharedspace.localDir.list", "sharedspace.localDir.connect", "sharedspace.sync.apply"]
       }
     });
     await expectVerifiedConsoleAsset({
@@ -241,7 +240,7 @@ describe("external plugin package installation", () : any => {
       implementation: {
         componentId: "skill-hub/SkillHubView",
         assetPath: "console/index.mjs",
-        assetExport: "mountPluginConsole"
+        toolIds: ["skill_hub.list", "skill_hub.stats", "skill_hub.leaderboard"]
       }
     });
     await expectVerifiedConsoleAsset({
@@ -254,49 +253,7 @@ describe("external plugin package installation", () : any => {
     });
   });
 
-  (codingGithubPackagePath ? it : it.skip)("installs and activates coding-github from an explicitly supplied closed package", async () : Promise<any> => {
-    const { deployment, packageDigest, receipt, registry, runtime } = await installAndActivatePackage({
-      packagePath: codingGithubPackagePath,
-      pluginId: "coding-github",
-      configuration: {
-        enabled: true,
-        modules: { rest: true, mcp: true, codespaces: true, skillInstaller: true },
-        services: {
-          rest: { serviceRef: "service.fixture.github.rest", timeoutMs: 1_000 },
-          mcp: { serviceRef: "service.fixture.github.mcp", timeoutMs: 1_000 }
-        }
-      }
-    });
-    expect(receipt).toMatchObject({
-      schemaVersion: "v0.0.1:meshrix:plugin-package-installation-receipt-1",
-      pluginId: "coding-github",
-      packageDigest,
-      generation: 1,
-      state: "active"
-    });
-    expect(runtime.plugins.loadedPlugins).toEqual([{ id: "coding-github", version: "0.0.1" }]);
-    expect(Object.keys(runtime.contributions.operations)).toHaveLength(24);
-    expect(Object.keys(runtime.contributions.routes)).toHaveLength(24);
-    expect(Object.keys(runtime.contributions.mcpTools)).toHaveLength(24);
-    expect(runtime.contributions.consoleEntries["admin.coding-github"]).toMatchObject({
-      pluginId: "coding-github",
-      implementation: {
-        componentId: "coding-github/GitHubConnectorPanel",
-        assetPath: "console/index.mjs",
-        assetExport: "mountPluginConsole"
-      }
-    });
-    await expectVerifiedConsoleAsset({
-      deployment,
-      registry,
-      runtime,
-      receipt,
-      entryId: "admin.coding-github",
-      componentId: "coding-github/GitHubConnectorPanel"
-    });
-  });
-
-  ([sharedSpacePackagePath, skillHubPackagePath, codingGithubPackagePath].every(Boolean) ? it : it.skip)(
+  ([sharedSpacePackagePath, skillHubPackagePath].every(Boolean) ? it : it.skip)(
     "loads all verified external plugin packages into one Core deployment without contribution conflicts",
     async () : Promise<any> => {
       const { deployment, receipts, runtime } = await installAndActivatePackages([
@@ -312,30 +269,17 @@ describe("external plugin package installation", () : any => {
             enabled: true,
             service: { serviceRef: "service.fixture.skill-hub", timeoutMs: 30_000 }
           }
-        },
-        {
-          packagePath: codingGithubPackagePath,
-          pluginId: "coding-github",
-          configuration: {
-            enabled: true,
-            modules: { rest: true, mcp: true, codespaces: true, skillInstaller: true },
-            services: {
-              rest: { serviceRef: "service.fixture.github.rest", timeoutMs: 1_000 },
-              mcp: { serviceRef: "service.fixture.github.mcp", timeoutMs: 1_000 }
-            }
-          }
         }
       ]);
-      expect(receipts).toHaveLength(3);
+      expect(receipts).toHaveLength(2);
       expect(deployment.loadedPlugins.map(({ id, version }: Record<string, any>) : any => ({ id, version }))).toEqual(expect.arrayContaining([
         { id: "shared-space", version: "0.0.1" },
-        { id: "skill-hub", version: "0.0.1" },
-        { id: "coding-github", version: "0.0.1" }
+        { id: "skill-hub", version: "0.0.1" }
       ]));
-      expect(Object.keys(runtime.contributions.operations)).toHaveLength(65);
-      expect(Object.keys(runtime.contributions.routes)).toHaveLength(65);
-      expect(Object.keys(runtime.contributions.mcpTools)).toHaveLength(65);
-      expect(Object.keys(runtime.contributions.consoleEntries)).toHaveLength(3);
+      expect(Object.keys(runtime.contributions.operations)).toHaveLength(41);
+      expect(Object.keys(runtime.contributions.routes)).toHaveLength(41);
+      expect(Object.keys(runtime.contributions.mcpTools)).toHaveLength(41);
+      expect(Object.keys(runtime.contributions.consoleEntries)).toHaveLength(2);
     }
   );
 });

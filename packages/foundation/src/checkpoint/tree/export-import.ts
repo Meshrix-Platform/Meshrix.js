@@ -69,18 +69,25 @@ export async function exportCheckpointTreeProjection({
   proofRefs: CheckpointEventProof[];
 }> {
   const dataDir = resolveMeshrixPactiumDataDir(userDataPath);
+  const ownsRuntime = !pactiumRuntime;
   const runtime = normalizeMeshrixPactiumRuntime({ dataDir, pactiumRuntime });
-  const tree = await loadCheckpointTree({
-    userDataPath: dataDir,
-    treeId,
-    pactiumRuntime: runtime
-  });
-  if (!tree) {
-    return { tree: null, records: [], proofRefs: [] };
+  try {
+    const tree = await loadCheckpointTree({
+      userDataPath: dataDir,
+      treeId,
+      pactiumRuntime: runtime
+    });
+    if (!tree) {
+      return { tree: null, records: [], proofRefs: [] };
+    }
+    const records = Object.values(tree.nodes).map((node) => ({ ...node }));
+    const proofRefs = proofRefsFor(tree);
+    return { tree, records, proofRefs };
+  } finally {
+    // A runtime created here owns a storage lifecycle lease; releasing it is
+    // required so later restore/maintenance quiescence checks can pass.
+    if (ownsRuntime) await runtime.close?.();
   }
-  const records = Object.values(tree.nodes).map((node) => ({ ...node }));
-  const proofRefs = proofRefsFor(tree);
-  return { tree, records, proofRefs };
 }
 
 /**
@@ -113,7 +120,45 @@ export async function importCheckpointTreeProjection({
     throw new Error("records must be an array");
   }
   const dataDir = resolveMeshrixPactiumDataDir(userDataPath);
+  const ownsRuntime = !pactiumRuntime;
   const runtime = normalizeMeshrixPactiumRuntime({ dataDir, pactiumRuntime });
+  try {
+    return await importCheckpointTreeProjectionWithRuntime({
+      dataDir,
+      runtime,
+      treeId,
+      records,
+      metadata,
+      resumePolicy
+    });
+  } finally {
+    // A runtime created here owns a storage lifecycle lease; releasing it is
+    // required so later restore/maintenance quiescence checks can pass.
+    if (ownsRuntime) await runtime.close?.();
+  }
+}
+
+async function importCheckpointTreeProjectionWithRuntime({
+  dataDir,
+  runtime,
+  treeId = "",
+  records = [],
+  metadata = {},
+  resumePolicy = null
+}: {
+  dataDir: string;
+  runtime: MeshrixPactiumRuntime;
+  treeId: string;
+  records: unknown[];
+  metadata: unknown;
+  resumePolicy: unknown;
+}): Promise<{
+  imported: number;
+  skipped: number;
+  errors: Array<{ index: number; message: string }>;
+  tree: CheckpointTree;
+  proofRefs: CheckpointEventProof[];
+}> {
   const normalizedTreeId = text(treeId);
   if (!normalizedTreeId) {
     throw new Error("treeId is required");

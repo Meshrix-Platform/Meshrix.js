@@ -1,4 +1,5 @@
 const MACHINE_PATTERN: any = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/u;
+const REVISION_PATTERN: any = /^[a-f0-9]{40}$/u;
 
 export function failNativeOrbDeployment(code?: any, message?: any) : never {
   const error: Error & Record<string, any> = new Error(String(message || code));
@@ -10,6 +11,8 @@ export function parseNativeOrbDeploymentArgs(argv?: any) : any {
   const args: any[] = Array.isArray(argv) ? argv.map(String) : [];
   let machine: any = "";
   let publicOrigin: any = "";
+  let sourceRevision: any = "";
+  let loginInput: any = "";
   for (let indexValue: any = 0; indexValue < args.length; indexValue += 1) {
     const argument: any = args[indexValue];
     if (argument === "--machine") {
@@ -22,7 +25,17 @@ export function parseNativeOrbDeploymentArgs(argv?: any) : any {
       indexValue += 1;
       continue;
     }
-    failNativeOrbDeployment("native_orb_argument_unknown", "Use --machine and --origin.");
+    if (argument === "--candidate") {
+      sourceRevision = String(args[indexValue + 1] || "").trim();
+      indexValue += 1;
+      continue;
+    }
+    if (argument === "--login-input") {
+      loginInput = String(args[indexValue + 1] || "").trim();
+      indexValue += 1;
+      continue;
+    }
+    failNativeOrbDeployment("native_orb_argument_unknown", "Use --machine, --origin, --candidate, and --login-input.");
   }
   if (!MACHINE_PATTERN.test(machine)) {
     failNativeOrbDeployment("native_orb_machine_invalid", "OrbStack machine is required.");
@@ -44,5 +57,11 @@ export function parseNativeOrbDeploymentArgs(argv?: any) : any {
   ) {
     failNativeOrbDeployment("native_orb_origin_invalid", "The public origin must use port 7228 without credentials or a path.");
   }
-  return Object.freeze({ machine, publicOrigin: origin.origin });
+  if (!REVISION_PATTERN.test(sourceRevision)) {
+    failNativeOrbDeployment("native_orb_candidate_invalid", "An explicit accepted candidate commit is required.");
+  }
+  if (!loginInput || /[\r\n\0]/u.test(loginInput)) {
+    failNativeOrbDeployment("native_orb_login_input_invalid", "A private login input file is required.");
+  }
+  return Object.freeze({ machine, publicOrigin: origin.origin, sourceRevision, loginInput });
 }

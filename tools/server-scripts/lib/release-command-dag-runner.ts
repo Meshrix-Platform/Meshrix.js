@@ -75,6 +75,53 @@ function releaseCommandBlockedExitCodes(command: Record<string, any> = {}) : any
     .filter((value?: any) : any => Number.isInteger(value) && value === 2))];
 }
 
+export function selectReleaseCommandBatch({
+  completedCommandIds = [],
+  failedCommandIds = [],
+  heldLocks = [],
+  maxParallel = 1,
+  pendingCommands = [],
+  runningCount = 0
+}: Record<string, any> = {}) : any {
+  const completed: any = new Set<any>(uniqueStrings(completedCommandIds));
+  const failed: any = new Set<any>(uniqueStrings(failedCommandIds));
+  const occupiedLocks: any = new Set<any>(uniqueStrings(heldLocks));
+  const pending: any[] = asArray(pendingCommands);
+  const ready: any[] = pending.filter((command?: any) : any => {
+    const dependencies: any[] = uniqueStrings(command?.dependsOn);
+    return dependencies.every((dependency?: any) : any => completed.has(dependency)) &&
+      dependencies.every((dependency?: any) : any => !failed.has(dependency));
+  });
+  const exclusiveBarrier: any = ready.find((command?: any) : any => command?.exclusive === true) || null;
+  const barrierIndex: any = exclusiveBarrier ? pending.indexOf(exclusiveBarrier) : -1;
+  const candidates: any[] = exclusiveBarrier
+    ? ready.filter((command?: any) : any => pending.indexOf(command) < barrierIndex && command?.exclusive !== true)
+    : ready.filter((command?: any) : any => command?.exclusive !== true);
+  const selected: any[] = [];
+  const slots: any = Math.max(0, normalizedPositiveInteger(maxParallel, 1) - Number(runningCount || 0));
+
+  for (const command of candidates) {
+    if (selected.length >= slots) break;
+    if (occupiedLocks.has("__release_dag_exclusive__")) break;
+    const locks: any[] = releaseCommandLocks(command);
+    if (locks.some((lock?: any) : any => occupiedLocks.has(lock))) continue;
+    selected.push(command);
+    for (const lock of locks) occupiedLocks.add(lock);
+  }
+
+  if (
+    selected.length === 0 &&
+    exclusiveBarrier &&
+    Number(runningCount || 0) === 0 &&
+    occupiedLocks.size === 0 &&
+    slots > 0
+  ) {
+    selected.push(exclusiveBarrier);
+  }
+
+  return selected;
+}
+
 export function createReleaseCommandDeadlockDiagnostic({
   completedCommandIds = [],
   heldLocks = [],
@@ -256,24 +303,15 @@ export function estimateReleaseCommandWorstCaseMs(commands: any = [], options: R
   const heldLocks: any = new Set<any>();
   let elapsedMs: any = 0;
 
-  function dependenciesSatisfied(command: Record<string, any> = {}) : any {
-    return uniqueStrings(command.dependsOn).every((dependency?: any) : any => completed.has(dependency));
-  }
-
-  function locksAvailable(command: Record<string, any> = {}) : any {
-    const locks: any = releaseCommandLocks(command);
-    if (locks.includes("__release_dag_exclusive__") && running.size > 0) return false;
-    if (heldLocks.has("__release_dag_exclusive__")) return false;
-    return locks.every((lock?: any) : any => !heldLocks.has(lock));
-  }
-
   while (completed.size < commands.length) {
-    const startable: any = [...pending.values()]
-      .filter((command?: any) : any => dependenciesSatisfied(command) && locksAvailable(command))
-      .sort((left?: any, right?: any) : any => (idOrder.get(commandId(left)) || 0) - (idOrder.get(commandId(right)) || 0));
+    const startable: any = selectReleaseCommandBatch({
+      completedCommandIds: [...completed],
+      heldLocks: [...heldLocks],
+      maxParallel,
+      pendingCommands: [...pending.values()],
+      runningCount: running.size
+    });
     for (const command of startable) {
-      if (running.size >= maxParallel) break;
-      if (!locksAvailable(command)) continue;
       const id: any = commandId(command);
       pending.delete(id);
       const locks: any = releaseCommandLocks(command);
@@ -352,21 +390,17 @@ export async function runReleaseCommandDag({
     });
   }
 
-  function locksAvailable(command: Record<string, any> = {}) : any {
-    const locks: any = locksFor(command);
-    if (locks.includes("__release_dag_exclusive__") && running.size > 0) {
-      return false;
-    }
-    if (heldLocks.has("__release_dag_exclusive__")) {
-      return false;
-    }
-    return locks.every((lock?: any) : any => !heldLocks.has(lock));
-  }
-
   function startableCommands() : any {
-    return [...pending.values()]
-      .filter((command?: any) : any => dependenciesSatisfied(command) && nonPassingDependencies(command).length === 0 && locksAvailable(command))
-      .sort((a?: any, b?: any) : any => (idOrder.get(commandId(a)) || 0) - (idOrder.get(commandId(b)) || 0));
+    return selectReleaseCommandBatch({
+      completedCommandIds: [...completed.keys()],
+      failedCommandIds: [...completed.entries()]
+        .filter(([, result]: any[]) : any => result?.status !== "passed")
+        .map(([id]: any[]) : any => id),
+      heldLocks: [...heldLocks],
+      maxParallel: effectiveMaxParallel,
+      pendingCommands: [...pending.values()],
+      runningCount: running.size
+    });
   }
 
   function dependencyResult(command: Record<string, any> = {}, dependencyIds: any = []) : any {
@@ -527,7 +561,6 @@ export async function runReleaseCommandDag({
           terminate("SIGKILL");
           child.stdout?.destroy();
           child.stderr?.destroy();
-          finish({ code: 124, signal: "SIGKILL" });
         }, 5000);
       }, timeoutMs);
       child.stdout?.on("data", (chunk?: any) : any => {
@@ -566,9 +599,6 @@ export async function runReleaseCommandDag({
     for (const command of startableCommands()) {
       if (running.size >= effectiveMaxParallel) {
         break;
-      }
-      if (!locksAvailable(command)) {
-        continue;
       }
       const id: any = commandId(command);
       pending.delete(id);

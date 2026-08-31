@@ -1,22 +1,3 @@
-const ROUTE_ROOT = "/api/agent-workspaces";
-
-function encode(value) {
-  return encodeURIComponent(String(value || ""));
-}
-
-async function requestJson(url, { method = "GET", body, signal } = {}) {
-  const response = await fetch(url, {
-    method,
-    credentials: "same-origin",
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error("Shared Space request failed.");
-  return payload;
-}
-
 function element(tag, attributes = {}, text = "") {
   const node = document.createElement(tag);
   for (const [name, value] of Object.entries(attributes)) {
@@ -28,8 +9,9 @@ function element(tag, attributes = {}, text = "") {
   return node;
 }
 
-export function mountPluginConsole({ element: mountElement, signal } = {}) {
+export function mountPluginConsole({ element: mountElement, invokeTool, signal } = {}) {
   if (!(mountElement instanceof Element)) throw new TypeError("Shared Space console mount element is required.");
+  if (typeof invokeTool !== "function") throw new TypeError("Shared Space console tool bridge is required.");
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
@@ -49,7 +31,7 @@ export function mountPluginConsole({ element: mountElement, signal } = {}) {
     if (!workspaceId) return;
     status.textContent = "Loading…";
     try {
-      const payload = await requestJson(`${ROUTE_ROOT}/${encode(workspaceId)}/local-dir/mounts`, { signal: controller.signal });
+      const payload = await invokeTool("sharedspace.localDir.list", { workspaceId });
       list.replaceChildren(...(payload.mounts || []).map((mount) => {
         const item = element("li");
         const label = element(
@@ -64,14 +46,11 @@ export function mountPluginConsole({ element: mountElement, signal } = {}) {
           sync.disabled = true;
           status.textContent = "Synchronizing…";
           try {
-            await requestJson(`${ROUTE_ROOT}/${encode(workspaceId)}/local-dir/sync/apply`, {
-              method: "POST",
-              body: {
-                mountRef,
-                targetPath: String(mount.targetPath || ""),
-                deleteExtraneous: true
-              },
-              signal: controller.signal
+            await invokeTool("sharedspace.sync.apply", {
+              workspaceId,
+              mountRef,
+              targetPath: String(mount.targetPath || ""),
+              deleteExtraneous: true
             });
             status.textContent = "Synchronization completed.";
           } catch {
@@ -96,10 +75,12 @@ export function mountPluginConsole({ element: mountElement, signal } = {}) {
     connect.disabled = true;
     status.textContent = "Connecting…";
     try {
-      await requestJson(`${ROUTE_ROOT}/${encode(workspaceId)}/local-dir/connect`, {
-        method: "POST",
-        body: { sourcePath: selectedPath, targetPath: target.value.trim(), deleteExtraneous: true, maxFiles: 2000 },
-        signal: controller.signal
+      await invokeTool("sharedspace.localDir.connect", {
+        workspaceId,
+        sourcePath: selectedPath,
+        targetPath: target.value.trim(),
+        deleteExtraneous: true,
+        maxFiles: 2000
       });
       sourcePath.value = "";
       await loadMounts();

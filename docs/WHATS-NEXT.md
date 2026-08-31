@@ -4,15 +4,19 @@ The only current Meshrix.js outcome is a working product in real use.
 
 ## Required closure
 
-1. Fix concrete defects exposed by the current code, focused tests, startup,
+1. Use PLAN-005 as the sole current closure authority and keep optional work
+   separate.
+2. Fix concrete defects exposed by the current code, focused tests, startup,
    or an actual user journey.
-2. Run each changed capability's smallest owning check.
-3. Run `npm run verify:acceptance` once for the assembled clean candidate.
-4. Deploy that exact candidate as the single-origin Server + Web Console
+3. Run each changed capability's smallest owning check.
+4. Run `npm run verify:acceptance` once for the assembled clean candidate.
+5. Deploy that exact candidate as the single-origin Server + Web Console
    instance in the existing Linux virtual machine.
-5. Confirm health, Console loading, authentication, and one governed operation
+6. Confirm health, Console loading, authentication, and one governed operation
    against the deployed instance.
-6. Keep the instance running and use real failures and user friction as the
+7. Advance that unchanged commit through nightly, stable, and release branch
+   authority without publishing a tag or public asset.
+8. Keep the instance running and use real failures and user friction as the
    next iteration input.
 
 ## Decision rule
@@ -26,5 +30,5 @@ qualification, speculative safeguards, and future deployment shapes are not
 current product-completion criteria. They may be handled later when real use
 creates a concrete need.
 
-The completed Functional Convergence work is historical implementation
-context. It is not an active plan and must not be regenerated as pending work.
+Earlier planning generations are historical implementation context. They are
+not active Plans and must not be regenerated as pending work.

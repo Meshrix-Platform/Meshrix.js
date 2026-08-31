@@ -350,7 +350,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
             items,
             auditEvents: typeof registry.listAuditEvents === "function" ? await registry.listAuditEvents() : [],
             protocolVersion: "v0.0.1:skill-hub:runtime-1",
-            workspaceId: workspaceIdFrom(input),
+            workspaceId: typeof input.workspaceId === "string" ? input.workspaceId.trim() : "",
             contributionType: "skill",
             assetRecordProjector
           }),
@@ -555,7 +555,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
           ...input,
           actorId: callerId,
           adopterId: publicCallerIdClaim(["adopterId", "adopter-id"]),
-          targetWorkspaceId: input.targetWorkspaceId || input.workspaceId || workspaceIdFrom(input)
+          targetWorkspaceId: input.targetWorkspaceId
         });
         return result(200, protocolPayload({
           protocolVersion: "v0.0.1:skill-hub:runtime-1",

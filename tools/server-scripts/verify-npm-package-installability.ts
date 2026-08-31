@@ -653,7 +653,7 @@ async function runContainerAuthority() : Promise<any> {
     const image: any = String(deploymentIndex?.dockerPresets?.baseImages?.mainService || "");
     assert.match(
       image,
-      /^node:\d+\.\d+\.\d+-[a-z0-9.-]+@sha256:[a-f0-9]{64}$/u,
+      /^docker\.io\/library\/node:\d+\.\d+\.\d+-[a-z0-9.-]+@sha256:[a-f0-9]{64}$/u,
       "npm_package_container_image_not_pinned"
     );
 

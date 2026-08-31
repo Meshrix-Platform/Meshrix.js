@@ -506,7 +506,13 @@ export function createRuntimeLogger({
   }
 
   async function currentLogPath() : Promise<any> {
-    await fs.mkdir(logDir, { recursive: true });
+    if (closed) return "";
+    try {
+      await fs.mkdir(logDir, { recursive: true });
+    } catch (error: any) {
+      if (closed || error?.code === "ENOENT" || error?.code === "EACCES" || error?.code === "EPERM") return "";
+      throw error;
+    }
     let index: any = 0;
     while (index < 10_000) {
       const candidate: any = logPathFor(new Date(), index);
@@ -523,8 +529,9 @@ export function createRuntimeLogger({
     const now: any = Date.now();
     if (
       !force &&
-      now - lastCleanupAt < CLEANUP_INTERVAL_MS &&
-      bytesSinceCleanup < CLEANUP_BYTE_INTERVAL
+      (closed ||
+        now - lastCleanupAt < CLEANUP_INTERVAL_MS &&
+        bytesSinceCleanup < CLEANUP_BYTE_INTERVAL)
     ) {
       return;
     }
@@ -616,8 +623,13 @@ export function createRuntimeLogger({
     pendingRecords += 1;
     appendQueue = appendQueue.catch(() : any => null).then(async () : Promise<any> => {
       await cleanupOldLogs();
-      await fs.mkdir(logDir, { recursive: true });
-      await fs.appendFile(await currentLogPath(), line, "utf8");
+      if (closed) return;
+      const logPath = await currentLogPath();
+      if (!logPath) return;
+      await fs.appendFile(logPath, line, "utf8").catch((error?: any) : any => {
+        if (closed || error?.code === "ENOENT" || error?.code === "EACCES" || error?.code === "EPERM") return;
+        throw error;
+      });
       bytesSinceCleanup += Buffer.byteLength(line);
     }).finally(() : any => {
       pendingRecords -= 1;

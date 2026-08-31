@@ -724,6 +724,8 @@ export async function createHttpApplicationAssembly({
       loginRateLimiter,
       operationAuditStore,
       operationConcurrencyScope,
+      operationLockManager,
+      operationProofSubstrate: registeredOperationProofSubstrate,
       pluginContributions,
       proxyApiRequest,
       rateLimits,

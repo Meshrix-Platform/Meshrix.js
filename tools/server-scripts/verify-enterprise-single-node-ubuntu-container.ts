@@ -15,7 +15,8 @@ import {
 
 const modulePath: any = fileURLToPath(import.meta.url);
 const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
-const DELIVERY_PLAN: any = "end-to-end-release";
+const CORE_OPERATIONS_COMMAND: any =
+  "node tools/server-scripts/enterprise-operations-closure.ts";
 const ACCEPTANCE_IMAGE_DOCKERFILE: any =
   "tools/containers/enterprise-single-node-acceptance.Dockerfile";
 const WORKER_SUMMARY: any = "worker-summary.json";
@@ -34,9 +35,8 @@ const DIGEST_PINNED_IMAGE_PATTERN: any =
   /^(?:(?:[a-z0-9]+(?:[._/-][a-z0-9]+)*(?::[A-Za-z0-9._-]+)?)@)?sha256:[a-f0-9]{64}$/u;
 
 export const ENTERPRISE_SINGLE_NODE_PHASES: readonly any[] = Object.freeze([
-  "initialize-plan",
   "ubuntu-delivery",
-  "operations-checkpoint",
+  "operations-evidence",
   "offline-transfer-simulation",
   "platform-acceptance",
 ]);
@@ -386,10 +386,9 @@ function parseArgs(argv?: any) : any {
 
 export function createEnterpriseSingleNodeExecutionSchedule() : any {
   const phases: any[] = [
-    { id: "initialize-plan", dependsOn: [] },
-    { id: "ubuntu-delivery", dependsOn: ["initialize-plan"] },
-    { id: "operations-checkpoint", dependsOn: ["ubuntu-delivery"] },
-    { id: "offline-transfer-simulation", dependsOn: ["operations-checkpoint"] },
+    { id: "ubuntu-delivery", dependsOn: [] },
+    { id: "operations-evidence", dependsOn: ["ubuntu-delivery"] },
+    { id: "offline-transfer-simulation", dependsOn: ["operations-evidence"] },
     { id: "platform-acceptance", dependsOn: ["offline-transfer-simulation"] },
   ];
   const seen: any = new Set<any>();
@@ -488,28 +487,6 @@ async function runProcess({
   }
 }
 
-async function defaultRunBaseline({ repoRoot }: Record<string, any>) : Promise<any> {
-  const result: any = await runProcess({
-    executable: process.execPath,
-    args: ["tools/plan/rebuild-current-plan-baseline.ts"],
-    cwd: repoRoot,
-  });
-  requireCondition(result.exitCode === 0, "release_plan_initialization_failed");
-}
-
-export async function initializePlanWorkspace({
-  repoRoot,
-  planRoot = path.join(repoRoot, "docs", "plans"),
-  runBaseline = defaultRunBaseline,
-}: Record<string, any> = {}) : Promise<any> {
-  absoluteDirectory(repoRoot, "release_plan_repository_root_invalid");
-  absoluteDirectory(planRoot, "release_plan_root_invalid");
-  requireCondition(!(await pathExists(planRoot)), "release_plan_already_initialized");
-  await runBaseline({ repoRoot, planRoot });
-  requireCondition(await pathExists(planRoot), "release_plan_missing_after_initialization");
-  return Object.freeze({ initialized: true });
-}
-
 export function reduceEnterpriseSingleNodeFailure({ phase }: Record<string, any> = {}) : any {
   return Object.freeze({
     status: "failed",
@@ -522,66 +499,6 @@ export function reduceEnterpriseSingleNodeFailure({ phase }: Record<string, any>
 
 export async function assertCandidateWorktreeClean(repoRoot?: any) : Promise<any> {
   await assertCanonicalCandidateWorktreeClean({ repoRoot });
-}
-
-function safePlanOverlayPath(value?: any) : any {
-  const normalized: any = String(value || "").split(path.sep).join("/");
-  requireCondition(
-    normalized.length > 0 &&
-      normalized !== "." &&
-      !path.posix.isAbsolute(normalized) &&
-      !normalized.split("/").includes(".."),
-    "ubuntu_delivery_plan_overlay_path_invalid",
-  );
-  return normalized;
-}
-
-async function collectDirectoryFiles(root?: any, relativeRoot?: any) : Promise<any> {
-  const absoluteRoot: any = path.join(root, relativeRoot);
-  if (!(await pathExists(absoluteRoot))) return [];
-  const files: any[] = [];
-  const visit: any = async (relativeDirectory?: any) : Promise<any> => {
-    const entries: any = await fs.readdir(path.join(root, relativeDirectory), {
-      withFileTypes: true,
-    });
-    entries.sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
-    for (const entry of entries) {
-      const relativePath: any = safePlanOverlayPath(
-        path.posix.join(
-          relativeDirectory.split(path.sep).join(path.posix.sep),
-          entry.name,
-        ),
-      );
-      if (entry.isDirectory()) {
-        await visit(relativePath);
-      } else {
-        requireCondition(
-          entry.isFile(),
-          "ubuntu_delivery_plan_overlay_file_type_unsupported",
-        );
-        files.push(relativePath);
-      }
-    }
-  };
-  await visit(relativeRoot);
-  return files;
-}
-
-async function copyGeneratedPlanOverlay({ sourceRoot, destinationRoot }: Record<string, any>) : Promise<any> {
-  const relativePaths: any = await collectDirectoryFiles(sourceRoot, "docs/plans");
-  requireCondition(relativePaths.length > 0, "ubuntu_delivery_plan_overlay_missing");
-  for (const relativePath of relativePaths) {
-    const sourcePath: any = path.join(sourceRoot, relativePath);
-    const sourceStat: any = await fs.lstat(sourcePath);
-    requireCondition(
-      sourceStat.isFile(),
-      "ubuntu_delivery_plan_overlay_file_type_unsupported",
-    );
-    const destinationPath: any = path.join(destinationRoot, relativePath);
-    await fs.mkdir(path.dirname(destinationPath), { recursive: true });
-    await fs.copyFile(sourcePath, destinationPath);
-    await fs.chmod(destinationPath, sourceStat.mode & 0o111 ? 0o700 : 0o600);
-  }
 }
 
 async function loadOrCreateSourceCandidate({ repoRoot, sourceCandidatePath }: Record<string, any>) : Promise<any> {
@@ -669,13 +586,6 @@ function validateAcceptanceRunnerIdentity(identity?: any) : any {
     "ubuntu_acceptance_runner_identity_invalid",
   );
   return identity;
-}
-
-function commandEvidence(ref?: any, recordedAt?: any) : any {
-  return Object.freeze({
-    ...ref,
-    recorded_at: recordedAt,
-  });
 }
 
 async function loadAuditShards(repoRoot?: any) : Promise<any> {
@@ -767,10 +677,6 @@ async function materializeWorker({ candidateRoot, workerRoot, evidenceRoot }: Re
     candidate.package_lock_sha256 === `sha256:${sha256(lockfile)}`,
     "ubuntu_delivery_candidate_lockfile_mismatch",
   );
-  await copyGeneratedPlanOverlay({
-    sourceRoot: candidateRoot,
-    destinationRoot: workerRoot,
-  });
   requireCondition(
     await pathExists(CONTAINER_DEPENDENCY_ROOT),
     "ubuntu_delivery_admitted_dependencies_missing",
@@ -797,10 +703,12 @@ async function materializeWorker({ candidateRoot, workerRoot, evidenceRoot }: Re
   requireCondition(result.exitCode === 0, "ubuntu_delivery_worker_execution_failed");
 }
 
-function implementationNodes(checkpoints?: any) : any {
-  return checkpoints.filter((node?: any) : any =>
-    node.role === "implementation" &&
-    node.regression?.commands?.includes("node tools/server-scripts/enterprise-operations-closure.ts"));
+function productEvidenceUnits() : any {
+  return [{
+    id: "core-operations",
+    acceptance_criteria: [{ statement: "Core enterprise operations pass in the candidate environment." }],
+    regression: { commands: [CORE_OPERATIONS_COMMAND], criteria: [0] },
+  }];
 }
 
 function implementationCriteriaByNode(nodes?: any) : any {
@@ -856,14 +764,6 @@ async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Prom
     candidate.package_lock_sha256 === `sha256:${sha256(lockfile)}`,
     "ubuntu_delivery_candidate_mismatch",
   );
-  const checkpointsPath: any = path.join(
-    repoRoot,
-    "docs",
-    "plans",
-    DELIVERY_PLAN,
-    "Checkpoints.json",
-  );
-  const checkpoints: any = JSON.parse(await fs.readFile(checkpointsPath, "utf8"));
   const shards: any = await loadAuditShards(repoRoot);
   const fullRegressionCommands: any = fullRegressionCommandsFor(shards);
   const hostAuditObservation: any = JSON.parse(await fs.readFile(
@@ -877,7 +777,7 @@ async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Prom
   );
   const observed: any[] = [];
   let commandIndex: any = 0;
-  for (const node of implementationNodes(checkpoints)) {
+  for (const node of productEvidenceUnits()) {
     const commands: any[] = [];
     for (const command of node.regression?.commands ?? []) {
       commands.push(await runWorkerCommand({
@@ -943,15 +843,7 @@ async function recordWorkerEvidence({
       canonicalDigest(acceptanceRunner),
     "ubuntu_acceptance_runner_identity_mismatch",
   );
-  const checkpointsPath: any = path.join(
-    repoRoot,
-    "docs",
-    "plans",
-    DELIVERY_PLAN,
-    "Checkpoints.json",
-  );
-  const checkpoints: any = JSON.parse(await fs.readFile(checkpointsPath, "utf8"));
-  const deliveryImplementationNodes: any = implementationNodes(checkpoints);
+  const deliveryImplementationNodes: any = productEvidenceUnits();
   const criteriaByNode: any =
     implementationCriteriaByNode(deliveryImplementationNodes);
   const shards: any = await loadAuditShards(repoRoot);
@@ -966,38 +858,15 @@ async function recordWorkerEvidence({
       canonicalDigest(hostAuditObservation),
     "ubuntu_delivery_host_audit_evidence_mismatch",
   );
-  for (const node of deliveryImplementationNodes) {
-    const observed: any = validation.evidenceByNode.get(node.id);
-    requireCondition(observed, "ubuntu_delivery_node_evidence_missing");
-    const refs: any = observed.refs.map((ref?: any) : any =>
-      commandEvidence(ref, validation.recordedAt));
-    node.status = "completed";
-    node.candidate_digest = candidate.candidate_digest;
-    node.commit = { ...node.commit, delivered: candidate.source_revision };
-    const criteria: any = criteriaByNode.get(node.id);
-    requireCondition(criteria, "ubuntu_delivery_criterion_evidence_missing");
-    node.acceptance_criteria = node.acceptance_criteria.map((criterion?: any, index?: any) : any => {
-      requireCondition(
-        criteria.includes(index),
-        "ubuntu_delivery_criterion_evidence_missing",
-      );
-      return {
-        ...criterion,
-        checked: true,
-        evidence_refs: refs,
-      };
-    });
+  for (const unit of deliveryImplementationNodes) {
+    requireCondition(validation.evidenceByNode.has(unit.id), "ubuntu_delivery_node_evidence_missing");
+    requireCondition(criteriaByNode.has(unit.id), "ubuntu_delivery_criterion_evidence_missing");
   }
-  const temporary: any = `${checkpointsPath}.tmp-${crypto.randomUUID()}`;
-  await fs.writeFile(temporary, `${JSON.stringify(checkpoints, null, 2)}\n`, "utf8");
-  await fs.rename(temporary, checkpointsPath);
 }
 
 async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<string, any>) : Promise<any> {
   const schedule: any = createEnterpriseSingleNodeExecutionSchedule();
   requireCondition(schedule.valid, "enterprise_single_node_schedule_invalid");
-  const planRoot: any = path.join(repoRoot, "docs", "plans");
-  await initializePlanWorkspace({ repoRoot, planRoot });
   const candidate: any = await loadOrCreateSourceCandidate({
     repoRoot,
     sourceCandidatePath,
@@ -1075,7 +944,7 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
   }
   process.stdout.write(`${JSON.stringify({
     status: "passed",
-    operations_checkpoint_ready: true,
+    operations_evidence_ready: true,
     offline_simulation_ready: true,
     platform_acceptance_executed: !receiptOnly,
     candidate_digest: candidate.candidate_digest,
@@ -1113,10 +982,8 @@ async function main() : Promise<any> {
 const isDirectRun: any = process.argv[1] && path.resolve(process.argv[1]) === modulePath;
 if (isDirectRun) {
   main().catch((error?: any) : any => {
-    const phase: any = error?.message?.startsWith("release_plan_")
-      ? "initialize-plan"
-      : error?.message?.startsWith("operations_checkpoint_")
-        ? "operations-checkpoint"
+    const phase: any = error?.message?.startsWith("operations_evidence_")
+      ? "operations-evidence"
         : error?.message?.startsWith("cross_system_offline_transfer_")
           ? "offline-transfer-simulation"
           : error?.message?.startsWith("platform_acceptance_")

@@ -150,6 +150,19 @@ async function main() : Promise<any> {
       });
       assert.equal(resetImport.errors.length, 0, "reset import has no errors");
       assert.ok(resetImport.proofRefs.length > 0, "reset import keeps substrate proof refs");
+
+      // Owned-runtime export/import must release their storage lifecycle
+      // lease so a later restore quiescence check passes in this process.
+      const ownedExport: any = await exportCheckpointTreeProjection({ userDataPath, treeId });
+      assert.ok(ownedExport.tree, "owned-runtime export succeeds");
+      const ownedImport: any = await importCheckpointTreeProjection({
+        userDataPath,
+        treeId: checkpointTreeId("unit-import-owned", createHash("sha256").update("unit-owned").digest("hex").slice(0, 16)),
+        records: [
+          { nodeId: "owned-child", parentId: "root", label: "Owned child", status: "completed" }
+        ]
+      });
+      assert.equal(ownedImport.imported >= 1, true, "owned-runtime import succeeds");
     } finally {
       await substrate.close();
     }

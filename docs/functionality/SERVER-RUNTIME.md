@@ -15,6 +15,14 @@ The server runtime owns process startup, settings, HTTP lifecycle, operation dis
 - Dispatch registered operations through the governed runtime path.
 - Emit health and diagnostic information with private runtime data redaction.
 
+Plugin Console entries expose only a versioned, artifact-bound `sandboxUrl`
+and their declared plugin-owned tools. The server serves the verified module
+inside an authenticated `sandbox="allow-scripts"` document and dispatches every
+bridge call through the normal operation authorization, proof, locking, audit,
+and plugin controller path. Session, scope, route, enablement, and artifact
+generation are checked again for each call; the parent Console never imports
+plugin code.
+
 ## Runtime Data
 
 Runtime data includes SQLite metadata, raw objects, job records, upload sessions, settings, audit records, metrics, and checkpoint state. Public responses use redaction for server absolute paths, local user identity, raw tokens, and private payloads.
@@ -38,6 +46,15 @@ enter one per-data-directory lane and one reentrant compound Pactium
 transaction, so projection roots, event records, proof evidence, and receipts
 are committed together and are rolled back together on failure. The JSON
 backend is not presented as an ACID substitute for these capabilities.
+Merkle state commit verification replays the canonical, last-write-wins
+mutation set from the authenticated before-root and requires an exact
+after-root snapshot. It also verifies the exact event record and its complete
+partition hash chain, then verifies the bound Pactium Outcome envelope,
+historical verifier manifest, Ledger fact, result commitment, and full
+per-mutation state proofs. Mutation commits and root restores are explicit
+record kinds. Records without the event offset, true Intent/Outcome locators,
+historical verifier-manifest binding, or full proof profile are rejected as
+malformed weak records rather than accepted through a compatibility path.
 
 ### Operation Proof Persistence
 
@@ -102,6 +119,12 @@ of hiding a job. A malformed active-job payload is retained as a visible failed
 job with recovery diagnostics; an unreadable payload fails recovery without
 overwriting the original metadata.
 
+Storage backup and replacement restore treat `objects/.pending` as private
+atomic-write staging. Backup manifests accept only objects already published by
+rename, and replacement restore neither selects nor deletes an in-flight staged
+object. Restore manifests and explicit include paths that name the staging root
+are rejected.
+
 ## Default Deployment
 
 The default deployment is self-contained and uses repository-owned runtime services plus local storage. Optional middleware integrations require explicit configuration and verifier coverage.
@@ -149,7 +172,9 @@ Each selected plugin receives an opaque `pluginData` capability, not a data-root
 
 ### Host capability composition
 
-The mount manager grants Host capabilities only when both the verified signed manifest and explicit runtime configuration authorize them. Missing configuration grants none. The generic Host-owned `ArtifactSignerPort` uses the same intersection for signing purposes and returns only public verification facts, a context-bound signature, and a minimum receipt. Plugin configuration and plugin results never contain signing key material. Owner-scoped capabilities bind the verified artifact digest and numeric generation to the lifecycle ledger and recheck active state on each business admission. Process identity and controlled execution also require a short-lived, request-bound, audience-single-use Host invocation authorization; plugin-supplied identity or governance fields cannot replace its claims.
+For the immutable plugin set selected before startup, verified deployment is the authorization event: the signed manifest is the sole declaration of required Host capabilities and artifact-signing interaction purposes, so startup does not add a second approval step or a duplicate capability allow-list. A declared capability whose Host implementation or required Host-owned policy is unavailable fails plugin activation. Host capability policy, signing custody, and Console scope configuration remain server-owned and are removed from the configuration object exposed to plugin code. Ordinary per-plugin settings remain visible. Owner-scoped capabilities bind the verified artifact digest and numeric generation to the lifecycle ledger and recheck active state on each business admission. Process identity and controlled execution also require a short-lived, request-bound, audience-single-use Host invocation authorization; plugin-supplied identity or governance fields cannot replace its claims.
+
+After startup, a plugin may update its declared dynamic contributions without restarting the service. A future runtime configuration or artifact replacement must compare its effective Host authority and interaction surface with the active generation: unchanged authority, ordinary value changes, and authority reductions may apply atomically, while any added capability, signing purpose, operation, route, MCP tool, Console entry, state machine, verifier hook, mount, or widened Host policy requires an explicit administrator decision in the Console before activation. Until that decision succeeds, the active generation and configuration remain unchanged.
 
 Opaque payload custody is bounded by record count, total bytes, per-payload bytes, and a fixed TTL. Each record is bound to the exact owner generation, tenant, session, and turn scope, supports digest-checked idempotency, and is cleared when the consuming plugin generation closes. It is temporary custody, not durable plugin state.
 
@@ -157,19 +182,23 @@ Server composition creates Host-owned capabilities before plugin activation. Eac
 
 Controlled execution adapters are created only from explicit Host configuration. Every execution target supplies its own target reference, configured sandbox workload kind, output contract, capability set, and resource limits. The runtime does not infer a target, workload, policy, command, or host executable. Empty or incomplete configuration produces no production adapter and a requesting plugin fails closed. Lifecycle-safe bindings use existing Meshrix.js process-identity and sandbox owners; they do not add another identity store or execution path.
 
-Selected plugin modules are currently privileged in-process deployment code.
-Signed immutable artifacts and entry-path checks provide provenance, integrity,
-and declared-loading enforcement. Process-isolated plugin confinement remains
-remaining GATE work so hostile JavaScript cannot penetrate Core. Operators must
-review, sign, trust, and explicitly select the artifacts they deploy.
+Production activates each selected plugin in its own Host-created child process. The server process never imports a production plugin entrypoint and activation fails closed when the isolated process Host is unavailable. The child receives no inherited service environment or stdio and communicates with Core only through structured RPC projections of its manifest, ordinary settings, and declared narrow Host ports. Plugin shutdown closes its process after plugin-owned cleanup; a terminated process rejects outstanding calls instead of falling back to in-process execution. Test-only adapters may load fixtures in process, but production composition cannot select that seam.
 
-The [Execution Sandbox architecture](../architecture/EXECUTION-SANDBOX.md) isolates agent-controlled or otherwise untrusted workloads requested by trusted platform and plugin code. Isolating the plugin module itself remains remaining GATE confinement work. A plugin requests governed execution only through the narrow Host port and cannot receive a container socket, virtualization handle, host process API, raw credential, or host path. Empty or unavailable sandbox configuration denies execution, and the runtime has no host-process fallback. Manifest verifier contracts identify only verifier modules within the signed artifact and dedicated `plugin_verifier.*` workload kinds. The Host resolves the module from the verified snapshot, executes it only through the controlled sandbox, and accepts only a terminal receipt bound to the plugin, input digest, successful terminal state, and completed destruction.
+Process isolation is a runtime fault and module-state boundary, not an assertion that unreviewed plugin code is adversarially sandboxed from the machine. Plugins remain trusted server deployment artifacts: operators must review, sign, trust, and explicitly select them. The [Execution Sandbox architecture](../architecture/EXECUTION-SANDBOX.md) separately isolates agent-controlled or otherwise untrusted workloads requested by trusted platform and plugin code. A plugin requests governed execution only through the narrow Host port and cannot receive a container socket, virtualization handle, host process API, raw credential, or host path. Empty or unavailable sandbox configuration denies execution, and the runtime has no host-process fallback. Manifest verifier contracts identify only verifier modules within the signed artifact and dedicated `plugin_verifier.*` workload kinds. The Host resolves the module from the verified snapshot, executes it only through the controlled sandbox, and accepts only a terminal receipt bound to the plugin, input digest, successful terminal state, and completed destruction.
 
 The repository builds no product plugin implementation. Meshrix.js composition consumes only dynamic contributions from verified installed packages selected by explicit deployment configuration; it does not copy plugin operations into the static Meshrix.js registry or provide a parallel compatibility registration. With an empty plugin selection, no plugin operations, routes, MCP outlets, console entries, state machines, or verifier hooks are active, while generic Meshrix.js workspace and context operations remain available.
 
 Server bootstrap constructs the Core `agent-workspace-core` provider but never creates product data. An empty workspace store remains empty until an authenticated, authorized `agent_workspaces.create` operation succeeds. This keeps ownership, naming, audit evidence, and lifecycle intent explicit and avoids startup side effects.
 
 External single-plugin bundles use the closed package protocol in [Plugin Package and Loading](../protocols/PLUGIN-PACKAGE-AND-LOADING.md): source-neutral acquisition, payload and archive digests, verified custody, and a fenced lifecycle that stages only verified packages before atomic contribution publication. GitHub Release acquisition resolves one explicit repository, release, and prebuilt asset through the Release API under host, redirect, byte, time, retry, and cancellation budgets; it stops at content-addressed acquired bytes and never clones, builds, configures, stages, or enables a plugin. Offline local-package acquisition imports one explicit file under a configured import root with the same acquired-byte boundary, without network access, symlink following, path disclosure, or enablement side effects. `node tools/server-scripts/verify-plugin-bundle-protocol.ts` verifies the bundle cut. `npm run verify:plugin-runtime` verifies the installed-artifact manifest/runtime contract, installed-artifact independence, deployment-profile binding, default-off behavior, invalid selections, dependency ordering, removal recovery, rollback, retryable cleanup, path-opaque capabilities, Host-controlled verifier hooks, and packaged-source closure.
+
+Package activation accepts only one complete contribution transaction; there
+is no parallel direct-commit seam. Its registry participant remains reversible
+until the lifecycle generation is durably active. Publication, lifecycle-state,
+or finalization failure restores the prior contribution generation and the
+durable staged record. Rollback uncertainty keeps the plugin non-ready and is
+reported as `PLUGIN_PACKAGE_ROLLBACK_FAILED` rather than hidden behind an
+ordinary activation failure.
 
 ## Operation Routing
 

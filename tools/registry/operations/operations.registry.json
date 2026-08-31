@@ -5537,7 +5537,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "path": {
             "type": "string"
@@ -6318,7 +6320,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "path": {
             "type": "string"
@@ -6475,7 +6479,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "path": {
             "type": "string"
@@ -6619,16 +6625,23 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId"
+        ],
         "properties": {
           "confirm": {
             "type": "boolean"
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": []
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -6663,14 +6676,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "submit",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "submit",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -7231,8 +7252,18 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {},
-        "required": []
+        "required": [],
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "timeRange": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
       },
       "safety": {
         "risk": "read_only",
@@ -7267,14 +7298,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "report",
         "effectKind": "read",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "report",
         "effectKind": "read",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "receipt",
@@ -7527,7 +7566,12 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "targetWorkspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -7537,11 +7581,18 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "targetWorkspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -7576,14 +7627,24 @@
         "resourceKind": "contribution",
         "capabilityVerb": "request",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "request",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -7676,7 +7737,12 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "targetWorkspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -7686,11 +7752,18 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "targetWorkspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -7725,14 +7798,24 @@
         "resourceKind": "contribution",
         "capabilityVerb": "grant",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "grant",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -7824,7 +7907,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -7834,11 +7921,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -7873,14 +7962,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "scan",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "scan",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -7972,7 +8069,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -7982,11 +8083,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -8021,14 +8124,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "review",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "review",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -8120,7 +8231,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -8130,11 +8245,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -8169,14 +8286,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "preview",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "preview",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -8268,7 +8393,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -8278,11 +8407,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -8317,14 +8448,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "publish",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "publish",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -8416,7 +8555,12 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "targetWorkspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -8426,11 +8570,18 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "targetWorkspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -8465,14 +8616,24 @@
         "resourceKind": "contribution",
         "capabilityVerb": "adopt",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "adopt",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -8564,7 +8725,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -8574,11 +8739,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -8613,14 +8780,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "reject",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "reject",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -8712,7 +8887,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -8722,11 +8901,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "safe_write",
@@ -8761,14 +8942,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "request-changes",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "request-changes",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -8860,7 +9049,11 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "contributionId"
+        ],
         "properties": {
           "contributionId": {
             "type": "string"
@@ -8870,11 +9063,13 @@
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": [
-          "contributionId"
-        ]
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -8909,14 +9104,22 @@
         "resourceKind": "contribution",
         "capabilityVerb": "revoke",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "contribution",
         "capabilityVerb": "revoke",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -9326,16 +9529,23 @@
       ],
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
+        "required": [
+          "workspaceId"
+        ],
         "properties": {
           "confirm": {
             "type": "boolean"
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
-        },
-        "required": []
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -9370,14 +9580,22 @@
         "resourceKind": "workspace",
         "capabilityVerb": "set",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "workspace",
         "capabilityVerb": "set",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -9601,7 +9819,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -10417,7 +10637,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -10651,7 +10873,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -10880,7 +11104,9 @@
         ],
         "properties": {
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -11118,7 +11344,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -11352,7 +11580,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -11586,7 +11816,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -11821,7 +12053,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -12056,7 +12290,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -12291,7 +12527,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -12525,7 +12763,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -12753,7 +12993,9 @@
         ],
         "properties": {
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -12985,7 +13227,9 @@
         ],
         "properties": {
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -13222,7 +13466,9 @@
             "type": "boolean"
           },
           "workspaceId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           "semantic": {
             "type": "string"
@@ -20918,6 +21164,26 @@
         "audit",
         "operation-proof"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "workspaceId"
+        ],
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "safetyConfirm": {
+            "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
       "safety": {
         "risk": "repair_write",
         "readOnly": false,
@@ -20940,14 +21206,22 @@
         "resourceKind": "workspace",
         "capabilityVerb": "set",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "workspace",
         "capabilityVerb": "set",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -20961,19 +21235,6 @@
         "key": "workspace_governance.policy.set",
         "maxParallel": 1,
         "cost": 2
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {
-          "confirm": {
-            "type": "boolean"
-          },
-          "safetyConfirm": {
-            "type": "boolean"
-          }
-        }
       },
       "audit": {
         "enabled": true,
@@ -21037,6 +21298,26 @@
         "console:read"
       ],
       "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "workspaceId"
+        ],
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "safetyConfirm": {
+            "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
       "safety": {
         "risk": "safe_write",
         "readOnly": false,
@@ -21067,14 +21348,22 @@
         "resourceKind": "workspace",
         "capabilityVerb": "evaluate",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "workspace",
         "capabilityVerb": "evaluate",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -21088,19 +21377,6 @@
         "key": "workspace_governance.evaluate",
         "maxParallel": 1,
         "cost": 2
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {
-          "confirm": {
-            "type": "boolean"
-          },
-          "safetyConfirm": {
-            "type": "boolean"
-          }
-        }
       },
       "audit": {
         "enabled": true,
@@ -21172,6 +21448,32 @@
         "audit",
         "operation-proof"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "workspaceId",
+          "targetWorkspaceId"
+        ],
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "safetyConfirm": {
+            "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "targetWorkspaceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
       "safety": {
         "risk": "safe_write",
         "readOnly": false,
@@ -21194,14 +21496,24 @@
         "resourceKind": "workspace",
         "capabilityVerb": "share-grant",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "workspace",
         "capabilityVerb": "share-grant",
         "effectKind": "safe-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId",
+            "targetWorkspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -21215,19 +21527,6 @@
         "key": "workspace_governance.share_grant",
         "maxParallel": 1,
         "cost": 2
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {
-          "confirm": {
-            "type": "boolean"
-          },
-          "safetyConfirm": {
-            "type": "boolean"
-          }
-        }
       },
       "audit": {
         "enabled": true,
