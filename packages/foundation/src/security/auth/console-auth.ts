@@ -662,7 +662,7 @@ interface ConsoleAuthContract {
   authorizationGovernanceStore: ConsoleAuthResources["authorizationGovernanceStore"];
   tagManagementStore: unknown;
   authorizationEngine: ConsoleAuthResources["authorizationEngine"];
-  ensureInitialOwner(): Promise<Record<string, unknown>>;
+  ensureInitialOwner(credential?: Record<string, unknown>): Promise<Record<string, unknown>>;
   getBootstrapStatus(): ReturnType<typeof getEmptyBootstrapStatus>;
   hasUsers(): boolean;
   authorizeOperation(input?: AuthorizationInput): Promise<AuthorizationResult>;
@@ -918,13 +918,16 @@ function createConsoleAuthImplementation({
     };
   }
 
-  async function ensureInitialOwner()  {
+  async function ensureInitialOwner(credential?: Record<string, unknown>)  {
+    const supplied = credential !== undefined;
+    const username = supplied ? normalizeUsername(credential?.username) : "owner";
+    const password = supplied ? normalizePassword(credential?.password) : randomToken("sap_");
+    if (username !== "owner") {
+      throw new Error("Initial owner username must normalize to owner.");
+    }
     if (hasUsers()) {
       return { created: false };
     }
-
-    const username = "owner";
-    const password = randomToken("sap_");
     const user = await createUser({
       username,
       displayName: "Owner",
@@ -937,7 +940,7 @@ function createConsoleAuthImplementation({
       created: true,
       user,
       username,
-      password
+      ...(supplied ? {} : { password })
     };
   }
 

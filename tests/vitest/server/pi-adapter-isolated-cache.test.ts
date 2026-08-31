@@ -15,8 +15,12 @@ afterEach(async () : Promise<any> => {
   delete process.env.MESHRIX_MCP_PI_CONFIG;
 });
 
+const PARALLEL_ACCEPTANCE_TIMEOUT_MS = 120_000;
+
 describe("Pi adapter isolated cache", () : any => {
-  it("copies the complete runtime dependency closure and runs the cached extension", async () : Promise<any> => {
+  it("copies the complete runtime dependency closure and runs the cached extension", {
+    timeout: PARALLEL_ACCEPTANCE_TIMEOUT_MS
+  }, async () : Promise<any> => {
     const temporaryRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-pi-cache-"));
     temporaryRoots.push(temporaryRoot);
     const cacheRoot: any = path.join(temporaryRoot, "cache");

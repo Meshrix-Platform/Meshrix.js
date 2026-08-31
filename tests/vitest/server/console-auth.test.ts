@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import {
   buildConsoleOperationAuthorizationInput,
   CONSOLE_CSRF_COOKIE,
@@ -14,6 +15,10 @@ import {
   SESSION_INACTIVITY_TTL_MS
 } from "../../../packages/foundation/src/security/auth/console-auth-support.ts";
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
+import {
+  parseInitialOwnerCredential,
+  readPrivateOwnerCredentialFile
+} from "../../../tools/server-scripts/console-auth.ts";
 
 async function withTempAuth(callback?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-auth-"));
@@ -86,6 +91,111 @@ const PLUGIN_FEATURE_SCOPE_GRANTS: Readonly<Record<string, any>> = Object.freeze
 });
 
 describe("console auth boundary behavior", () : any => {
+  it("admits a supplied initial owner credential without replacing it on resume", async () : Promise<any> => {
+    await withTempAuth(async (auth?: any) : Promise<any> => {
+      const password: any = credentialFor("supplied-owner");
+      const created: any = await auth.ensureInitialOwner({ username: "Owner", password });
+      expect(created).toMatchObject({
+        created: true,
+        username: "owner"
+      });
+      expect(created).not.toHaveProperty("password");
+      await expect(auth.login({ username: "owner", password }, makeRequest())).resolves.toMatchObject({
+        session: { user: { username: "owner" } }
+      });
+      await expect(auth.ensureInitialOwner({ username: "owner", password: credentialFor("replacement") }))
+        .resolves.toEqual({ created: false });
+      await expect(auth.login({ username: "owner", password }, makeRequest())).resolves.toBeTruthy();
+    });
+  });
+
+  it("denies malformed supplied owner credentials before creating an account", async () : Promise<any> => {
+    await withTempAuth(async (auth?: any) : Promise<any> => {
+      await expect(auth.ensureInitialOwner({ username: "maintainer", password: credentialFor("denied") }))
+        .rejects.toThrow(/normalize to owner/u);
+      expect(auth.listUsers()).toHaveLength(0);
+      await expect(auth.ensureInitialOwner({ username: "owner", password: "short" })).rejects.toThrow(/10-256/u);
+      expect(auth.listUsers()).toHaveLength(0);
+    });
+  });
+
+  it("accepts only a bounded owner-only regular credential file", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-owner-input-"));
+    const validPath: any = path.join(root, "owner.json");
+    const linkPath: any = path.join(root, "owner-link.json");
+    try {
+      const value: any = { username: "owner", password: credentialFor("private-owner") };
+      const bytes: any = Buffer.from(JSON.stringify(value));
+      expect(parseInitialOwnerCredential(bytes)).toEqual(value);
+      await fs.writeFile(validPath, bytes, { mode: 0o600 });
+      expect(await readPrivateOwnerCredentialFile(validPath)).toEqual(value);
+      await fs.symlink(validPath, linkPath);
+      await expect(readPrivateOwnerCredentialFile(linkPath)).rejects.toThrow(/file_unsafe/u);
+      await fs.chmod(validPath, 0o644);
+      await expect(readPrivateOwnerCredentialFile(validPath)).rejects.toThrow(/file_unsafe/u);
+      expect(() : any => parseInitialOwnerCredential(Buffer.from(JSON.stringify({ ...value, extra: true })))).toThrow(/credential_invalid/u);
+      expect(() : any => parseInitialOwnerCredential(Buffer.from(JSON.stringify({ username: "owner", password: "short" })))).toThrow(/credential_invalid/u);
+      expect(() : any => parseInitialOwnerCredential(Buffer.alloc(8193, 0x61))).toThrow(/credential_invalid/u);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects owner passwords in argv without disclosing them", async () : Promise<any> => {
+    const secret: any = credentialFor("argv-owner-secret");
+    const result: any = spawnSync(process.execPath, [
+      "--conditions=source",
+      path.resolve("tools/server-scripts/console-auth.ts"),
+      "init-owner",
+      "--password",
+      secret
+    ], { encoding: "utf8", timeout: 30_000 });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}${result.stderr}`).not.toContain(secret);
+  });
+
+  it("imports the initial owner only through bounded stdin and returns fixed status", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-owner-stdin-"));
+    const secret: any = credentialFor("stdin-owner-secret");
+    const input: any = Buffer.from(JSON.stringify({ username: "owner", password: secret }), "utf8");
+    const args: any[] = [
+      "--conditions=source",
+      path.resolve("tools/server-scripts/console-auth.ts"),
+      "init-owner",
+      "--credential-stdin",
+      "--data-dir",
+      root
+    ];
+    try {
+      const created: any = spawnSync(process.execPath, args, {
+        encoding: "utf8",
+        input,
+        timeout: 30_000
+      });
+      expect(created.status).toBe(0);
+      expect(JSON.parse(created.stdout)).toEqual({
+        status: "created",
+        reason: "initial_owner_created"
+      });
+      expect(`${created.stdout}${created.stderr}${args.join(" ")}`).not.toContain(secret);
+
+      const resumed: any = spawnSync(process.execPath, args, {
+        encoding: "utf8",
+        input,
+        timeout: 30_000
+      });
+      expect(resumed.status).toBe(0);
+      expect(JSON.parse(resumed.stdout)).toEqual({
+        status: "already-initialized",
+        reason: "owner_exists"
+      });
+      expect(`${resumed.stdout}${resumed.stderr}`).not.toContain(secret);
+    } finally {
+      input.fill(0);
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("projects plugin-owned role scopes only for active features", () : any => {
     const inactiveRoles: any = createConsoleRoleCatalog({ activeFeatureIds: [] });
     for (const role of (Object.values(inactiveRoles) as any[])) {

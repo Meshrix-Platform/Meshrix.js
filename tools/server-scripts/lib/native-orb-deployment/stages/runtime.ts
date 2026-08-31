@@ -6,6 +6,15 @@ import { orbText, resolveServiceNodeExecutable, runOrb } from "../support.ts";
 const UNIT_PATTERN: any = /^[a-zA-Z0-9_.@-]+\.service$/u;
 const RUNTIME_ID_PATTERN: any = /^\d+\.\d+\.\d+:\d+$/u;
 
+export function assertExistingServiceActive(state?: any) : void {
+  if (String(state || "").trim() !== "active") {
+    failNativeOrbDeployment(
+      "native_orb_existing_service_inactive",
+      "Existing native Meshrix.js service must be active before an upgrade.",
+    );
+  }
+}
+
 export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> {
   const { machine } = context.parsed;
   const distribution: any = orbText(machine, [
@@ -24,6 +33,9 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   if (!UNIT_PATTERN.test(unit)) {
     failNativeOrbDeployment("native_orb_service_missing", "Existing native Meshrix.js service is unavailable.");
   }
+  assertExistingServiceActive(orbText(machine, [
+    "systemctl", "--user", "is-active", unit,
+  ], { allowFailure: true, timeout: 15_000 }));
   const currentWorkingDirectory: any = orbText(machine, [
     "systemctl", "--user", "show", unit, "-p", "WorkingDirectory", "--value",
   ], { timeout: 15_000 });
@@ -105,7 +117,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   const existingProgramValid: any = runOrb({
     machine,
     args: [
-      "node",
+      serviceNode,
       "-e",
       "const p=require(process.argv[1]);process.exit(p.name==='meshrix.js'?0:1)",
       path.posix.join(originalWorkingDirectory, "package.json"),
@@ -118,6 +130,7 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   }
 
   Object.assign(context, {
+    existingServiceActiveBeforeUpgrade: true,
     unit,
     currentWorkingDirectory,
     originalWorkingDirectory,

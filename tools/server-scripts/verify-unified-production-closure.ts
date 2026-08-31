@@ -1,0 +1,106 @@
+#!/usr/bin/env node
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/private-file-atomic.ts";
+import {
+  CURRENT_PLAN_CODE,
+  validateCurrentPlanAuthority,
+} from "../plan/current-plan-authority.ts";
+import { resolveCurrentAcceptanceGeneration } from "./lib/platform-acceptance-generation-store.ts";
+import { assertNoSensitiveReportLeak } from "./lib/sensitive-report-scan.ts";
+
+const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const outputPath = path.join(repoRoot, "build", "reports", "unified-production-closure.json");
+
+async function json(relativePath: string): Promise<any | null> {
+  try {
+    return JSON.parse(await fs.readFile(path.join(repoRoot, relativePath), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+async function acceptedCandidate(): Promise<{ sourceRevision: string; candidateDigest: string } | null> {
+  try {
+    const accepted = await resolveCurrentAcceptanceGeneration(repoRoot);
+    const sourceRevision = String(accepted.manifest.sourceRevision || "");
+    const candidateDigest = String(accepted.manifest.candidateDigest || "");
+    if (!/^[a-f0-9]{40}$/u.test(sourceRevision) || !/^[a-f0-9]{64}$/u.test(candidateDigest)) return null;
+    return { sourceRevision, candidateDigest };
+  } catch {
+    return null;
+  }
+}
+
+async function main() {
+  const reasons: string[] = [];
+  await validateCurrentPlanAuthority({ repoRoot });
+  const accepted = await acceptedCandidate();
+  const sourceRevision = accepted?.sourceRevision || "";
+  const candidateDigest = accepted?.candidateDigest || "";
+  const acceptedGenerationReady = accepted !== null;
+  if (!acceptedGenerationReady) {
+    reasons.push("accepted_candidate_missing");
+  }
+
+  const native = await json("build/reports/native-orb-production-use.json");
+  const nativeProductionUseReady = acceptedGenerationReady
+    && native?.schemaVersion === "v0.0.1:deployment:native-orb-production-use-report-1"
+    && native?.verifier === "tools/server-scripts/native-orb-deploy.ts"
+    && native?.releaseReady === true
+    && native?.sourceRevision === sourceRevision
+    && native?.candidateDigest === candidateDigest
+    && native?.existingServiceActiveBeforeUpgrade === true
+    && native?.rollbackAvailable === true;
+  const liveGovernedOperationReady = nativeProductionUseReady
+    && native?.healthOk === true
+    && native?.consoleOk === true
+    && native?.authenticationOk === true
+    && native?.governedOperationOk === true
+    && native?.candidateActive === true;
+  const activeServiceReady = nativeProductionUseReady && native?.serviceActive === true;
+  if (!nativeProductionUseReady || !liveGovernedOperationReady || !activeServiceReady) {
+    reasons.push("native_production_use_not_bound");
+  }
+  const promotion = await json("build/reports/branch-promotion.json");
+  const promotedBranches = promotion?.branches || {};
+  const branchPromotionReady = acceptedGenerationReady
+    && promotion?.schemaVersion === "v0.0.1:release:branch-promotion-report-1"
+    && promotion?.verifier === "tools/server-scripts/promote-release-branches.ts"
+    && promotion?.releaseReady === true
+    && promotion?.sourceRevision === sourceRevision
+    && promotion?.stableAuthorityValid === true
+    && promotion?.releaseAuthorityValid === true
+    && ["nightly", "stable", "release"].every((branch) => promotedBranches[branch] === sourceRevision)
+    && promotion?.publicationPerformed === false
+    && promotion?.policyMutationPerformed === false;
+  if (!branchPromotionReady) {
+    reasons.push("branch_promotion_not_bound");
+  }
+
+  const report: any = {
+    schemaVersion: "v0.0.1:release:unified-production-closure-report-1",
+    verifier: "tools/server-scripts/verify-unified-production-closure.ts",
+    generatedAt: new Date().toISOString(),
+    sourceRevision,
+    candidateDigest,
+    acceptedGenerationReady,
+    nativeProductionUseReady,
+    liveGovernedOperationReady,
+    activeServiceReady,
+    branchPromotionReady,
+    coreOnlyBoundary: true,
+    publicationPerformed: false,
+    currentPlan: CURRENT_PLAN_CODE,
+    reasons,
+    releaseReady: reasons.length === 0,
+    reportLeakScan: true
+  };
+  assertNoSensitiveReportLeak(report, "unified production closure report");
+  await writePrivateFileAtomic(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+  if (!report.releaseReady) process.exitCode = 1;
+}
+
+await main();

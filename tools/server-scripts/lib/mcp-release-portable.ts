@@ -102,8 +102,25 @@ function normalizeNodeVersion(version?: any) : any {
   return String(version).trim().startsWith("v") ? String(version).trim() : `v${String(version).trim()}`;
 }
 
-function validateNodeRuntimeLock(lock?: any) : any {
-  if (lock?.schemaVersion !== NODE_RUNTIME_LOCK_SCHEMA || !/^v\d+\.\d+\.\d+$/u.test(lock?.version || "")) {
+function hasExactKeys(value?: any, keys: readonly string[] = []) : boolean {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+}
+
+export function validateNodeRuntimeLock(lock?: any) : any {
+  if (!hasExactKeys(lock, [
+    "schemaVersion",
+    "version",
+    "distributionBaseUrl",
+    "checksumsFile",
+    "checksumsSha256",
+    "checksumsSizeBytes",
+    "signatureFile",
+    "signatureSha256",
+    "signatureSizeBytes",
+    "signer",
+    "targets",
+  ]) || lock?.schemaVersion !== NODE_RUNTIME_LOCK_SCHEMA || !/^v\d+\.\d+\.\d+$/u.test(lock?.version || "")) {
     throw new Error("node_runtime_lock_invalid");
   }
   if (lock.distributionBaseUrl !== "https://nodejs.org/dist") {
@@ -126,7 +143,13 @@ function validateNodeRuntimeLock(lock?: any) : any {
       throw new Error("node_runtime_lock_invalid_metadata_size");
     }
   }
-  if (!OPENPGP_FINGERPRINT_PATTERN.test(String(lock.signer?.fingerprint || ""))) {
+  if (!hasExactKeys(lock.signer, [
+    "fingerprint",
+    "releaseKeysCommit",
+    "publicKeyUrl",
+    "publicKeySha256",
+    "publicKeySizeBytes",
+  ]) || !OPENPGP_FINGERPRINT_PATTERN.test(String(lock.signer?.fingerprint || ""))) {
     throw new Error("node_runtime_lock_invalid_signer");
   }
   if (!/^[a-f0-9]{40}$/u.test(String(lock.signer?.releaseKeysCommit || ""))) {
@@ -158,6 +181,7 @@ function validateNodeRuntimeLock(lock?: any) : any {
   }
   for (const [target, descriptor] of targets) {
     if (!/^(?:macos|linux|windows)-(?:x64|arm64)$/u.test(target) ||
+        !hasExactKeys(descriptor, ["filename", "sha256", "sizeBytes"]) ||
         !/^[A-Za-z0-9._-]+$/u.test(String(descriptor?.filename || "")) ||
         !String(descriptor.filename).includes(lock.version) ||
         !SHA256_PATTERN.test(String(descriptor?.sha256 || "")) ||

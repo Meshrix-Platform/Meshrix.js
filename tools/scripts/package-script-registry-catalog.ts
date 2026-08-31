@@ -103,15 +103,38 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
     inputs: ["tools/server-scripts/instance-lifecycle.ts"], outputs: [],
   },
+  "bootstrap:native:orb": {
+    scriptName: "bootstrap:native:orb", command: "npm run bootstrap:native:orb", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "runtime-data",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: [
+      "packages/foundation/src/security/auth/**",
+      "packages/foundation/src/storage/private-file-atomic.ts",
+      "tools/release/node-runtime.lock.json",
+      "tools/server-scripts/native-orb-bootstrap.ts",
+      "tools/server-scripts/console-auth.ts",
+      "tools/server-scripts/README.md",
+      "tools/server-scripts/lib/mcp-release-*.ts",
+      "tools/server-scripts/lib/native-orb-bootstrap/**",
+      "tools/server-scripts/lib/native-orb-deployment/contract.ts",
+      "tools/server-scripts/lib/native-orb-deployment/support.ts",
+      "tools/server-scripts/lib/platform-acceptance-*.ts",
+      "tools/server-scripts/lib/sensitive-report-scan.ts"
+    ], outputs: ["build/reports/native-orb-bootstrap.json"],
+  },
   "deploy:native:orb": {
     scriptName: "deploy:native:orb", command: "npm run deploy:native:orb", category: "startup", subsystem: "server",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
     inputs: [
+      "packages/foundation/src/security/auth/**",
+      "packages/foundation/src/storage/private-file-atomic.ts",
       "tools/server-scripts/native-orb-deploy.ts",
+      "tools/server-scripts/console-auth.ts",
       "tools/server-scripts/README.md",
-      "tools/server-scripts/lib/native-orb-deployment/**"
-    ], outputs: [],
+      "tools/server-scripts/lib/native-orb-deployment/**",
+      "tools/server-scripts/lib/sensitive-report-scan.ts"
+    ], outputs: ["build/reports/native-orb-production-use.json"],
   },
   "start:optional": {
     scriptName: "start:optional", command: "npm run start:optional", category: "network-service", subsystem: "extensions",
@@ -122,7 +145,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/README.md",
       "plugins/registry/plugins.json",
       "plugins/agents/**",
-      "plugins/coding/github/**",
       "plugins/external-gateway/**",
       "plugins/model-gateway/**",
       "plugins/shared-space/**",
@@ -291,8 +313,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "package-lock.json",
       "tools/containers/enterprise-single-node-acceptance.Dockerfile",
-      "tools/plan/rebuild-current-plan-baseline.ts",
-      "tools/plan/reduce-end-to-end-release-receipt.ts",
       "tools/server-scripts/verify-cross-system-offline-transfer-evidence.ts",
       "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
     ],
@@ -322,6 +342,19 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "package-lock.json",
       "tools/server-scripts/verify-node-runtime-supply-chain.ts"
     ], outputs: ["build/reports/node-runtime-supply-chain.json"],
+  },
+  "verify:production-closure": {
+    scriptName: "verify:production-closure", command: "npm run verify:production-closure", category: "verifier", subsystem: "release-closure",
+    owner: "platform", tier: "release", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "tools/server-scripts/verify-unified-production-closure.ts",
+      "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
+      "build/acceptance-evidence/current.json",
+      "build/reports/native-orb-production-use.json",
+      "build/reports/branch-promotion.json"
+    ], outputs: ["build/reports/unified-production-closure.json"],
   },
   "release:prepare": {
     scriptName: "release:prepare", command: "npm run release:prepare", category: "version-control", subsystem: "release-package-version",
@@ -354,6 +387,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       ".github/workflows/ci.yml",
       ".github/workflows/release-branch.yml",
       "tools/server-scripts/promote-release-branches.ts",
+      "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
+      "build/acceptance-evidence/current.json",
       "tools/scripts/verify-git-publication.ts"
     ], outputs: [],
   },
@@ -434,13 +469,13 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:better-plan", command: "npm run verify:better-plan", category: "verifier", subsystem: "documentation",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-better-plan.ts", "tools/registry/fact-source-authority.registry.json", "README.md", "README.zh-CN.md", "docs/README.md", "docs/RUNBOOK.md", "docs/examples/README.md", "docs/COMPATIBILITY.md", "docs/architecture/ARCHITECTURE.md", "docs/architecture/EXECUTION-SANDBOX.md", "docs/protocols/PROTOCOLS.md", "docs/functionality/**", "docs/architecture/STATE-MACHINES.md"], outputs: ["build/reports/better-plan.json"],
+    inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts", "tools/server-scripts/verify-better-plan.ts"], outputs: ["build/reports/better-plan.json"],
   },
   "plan:next": {
     scriptName: "plan:next", command: "npm run plan:next", category: "maintenance", subsystem: "planning",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
-    inputs: ["docs/plans/Manifest.json", "docs/plans/end-to-end-release/DependencyMap.json", "docs/plans/**/Checkpoints.json", "tools/plan/*.ts"], outputs: [],
+    inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts"], outputs: [],
   },
   "verify:composition-source-package": {
     scriptName: "verify:composition-source-package", command: "npm run verify:composition-source-package", category: "packaging", subsystem: "release-source",
@@ -1008,6 +1043,28 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "plugins/*/plugin.json"
     ], outputs: ["build/reports/plugin-bundle-protocol.json", "build/reports/plugin-runtime.json"],
   },
+  "verify:plugin-console-isolation": {
+    scriptName: "verify:plugin-console-isolation", command: "npm run verify:plugin-console-isolation", category: "verifier", subsystem: "module-system",
+    owner: "platform-security", tier: "release", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "security", expectedDurationClass: "standard",
+    inputs: [
+      "tools/server-scripts/plugin-console-isolation-closure.ts",
+      "tools/server-scripts/lib/sensitive-report-scan.ts",
+      "apps/console/plugin-console-isolation.ts",
+      "apps/console/router/plugin-console-routes.ts",
+      "apps/server/runtime/http-server-plugin-console-sandbox.ts",
+      "packages/foundation/src/module-system/plugin-console-isolation.ts",
+      "packages/foundation/src/module-system/plugin-runtime.ts",
+      "packages/server-runtime/src/composition/plugin-console-sandbox-document.ts",
+      "packages/server-runtime/src/composition/plugin-contribution-registry.ts",
+      "tests/vitest/console/plugin-console-isolation.test.ts",
+      "tests/vitest/server/http-server-plugin-console-sandbox.test.ts",
+      "tests/vitest/server/plugin-contribution-registry.test.ts",
+      "tests/vitest/server/plugin-console-isolation.test.ts",
+      "tests/vitest/server/plugin-console-routes.test.ts",
+      "tests/vitest/server/plugin-runtime.test.ts"
+    ], outputs: ["build/reports/plugin-console-isolation.json"],
+  },
   "test:functional:frontend": {
     scriptName: "test:functional:frontend", command: "npm run test:functional:frontend", category: "test", subsystem: "console",
     owner: "frontend", tier: "integration", sideEffects: "none",
@@ -1069,7 +1126,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/plugins/**",
       "plugins/shared-space/**",
       "plugins/skill-hub/**",
-      "plugins/coding/github/**",
       "plugins/registry/plugins.json",
       "packages/contracts/src/plugins/**",
       "packages/foundation/src/module-system/**",
