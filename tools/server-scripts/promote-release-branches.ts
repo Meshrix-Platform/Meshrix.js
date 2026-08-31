@@ -13,8 +13,6 @@ const REVISION: any = /^[a-f0-9]{40}$/u;
 const BRANCHES: readonly any[] = Object.freeze(["nightly", "stable", "release"]);
 const POLL_INTERVAL_MS: any = 10_000;
 const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
-const MAX_GITHUB_ATTEMPTS: any = 3;
-const MAX_WORKFLOW_WAIT_MS: any = 30 * 60_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
@@ -82,7 +80,7 @@ function sleepSync(delayMs?: any) : any {
 
 function gh(args: any[] = [], code: any = "github_command_failed") : any {
   let announcedRetry: any = false;
-  for (let attempt: any = 1; attempt <= MAX_GITHUB_ATTEMPTS; attempt += 1) {
+  for (;;) {
     const result: any = spawnSync("gh", args, {
       cwd: repoRoot,
       encoding: "utf8",
@@ -91,7 +89,7 @@ function gh(args: any[] = [], code: any = "github_command_failed") : any {
       stdio: ["ignore", "pipe", "pipe"],
     });
     if (!result.error && result.status === 0) return String(result.stdout || "").trim();
-    if (!isTransientGithubFailure(result.stderr) || attempt === MAX_GITHUB_ATTEMPTS) throw failure(code);
+    if (!isTransientGithubFailure(result.stderr)) throw failure(code);
     if (!announcedRetry) {
       console.log("[release-promotion] github transport retry");
       announcedRetry = true;
@@ -334,9 +332,7 @@ function sleep(delayMs?: any) : any {
 
 async function waitForWorkflow(repository?: any, branch?: any, candidate?: any, workflowPath?: any) : Promise<any> {
   let lastState: any = "";
-  const deadline: any = Date.now() + MAX_WORKFLOW_WAIT_MS;
   for (;;) {
-    if (Date.now() >= deadline) throw failure(`${branch}_${path.basename(workflowPath, ".yml")}_wait_timeout`);
     const selected: any = selectLatestWorkflowRun(workflowRuns(repository, branch, candidate), {
       branch,
       candidate,
