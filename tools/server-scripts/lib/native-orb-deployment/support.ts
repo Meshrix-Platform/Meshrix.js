@@ -200,26 +200,8 @@ export async function loadPrivateLoginInputBytes(inputPath?: any) : Promise<Buff
   }
 }
 
-async function boundedResponseText(response?: Response, maximum = 64 * 1024) : Promise<string> {
-  const reader: any = response?.body?.getReader();
-  if (!reader) return "";
-  const chunks: any[] = [];
-  let total: any = 0;
-  try {
-    while (true) {
-      const item: any = await reader.read();
-      if (item.done) break;
-      total += item.value.byteLength;
-      if (total > maximum) throw new Error("native_orb_probe_body_too_large");
-      chunks.push(item.value);
-    }
-    return new TextDecoder().decode(Buffer.concat(
-      chunks.map((item?: any) : any => Buffer.from(item)),
-      total,
-    ));
-  } finally {
-    await reader.cancel().catch(() : any => {});
-  }
+async function discardResponseBody(response?: Response) : Promise<void> {
+  await response?.body?.cancel().catch(() : any => {});
 }
 
 const emptyOriginProbe = () : any => Object.freeze({
@@ -240,12 +222,12 @@ export async function probeNativeOrbOrigin(publicOrigin?: any, credentialBytes?:
       redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
-    await boundedResponseText(health);
+    await discardResponseBody(health);
     const root: any = await fetch(`${publicOrigin}/`, {
       redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
-    const body: any = await boundedResponseText(root);
+    const body: any = await root.text();
     let login: any;
     const requestBody: any = Buffer.from(credentialBytes);
     try {
@@ -259,7 +241,7 @@ export async function probeNativeOrbOrigin(publicOrigin?: any, credentialBytes?:
     } finally {
       requestBody.fill(0);
     }
-    const loginText: any = await boundedResponseText(login);
+    const loginText: any = await login.text();
     const loginPayload: any = loginText.trim() ? JSON.parse(loginText) : {};
     const setCookies: any[] = typeof login.headers.getSetCookie === "function"
       ? login.headers.getSetCookie()
@@ -277,7 +259,7 @@ export async function probeNativeOrbOrigin(publicOrigin?: any, credentialBytes?:
         },
         signal: AbortSignal.timeout(5000),
       });
-      await boundedResponseText(governed);
+      await discardResponseBody(governed);
       governedOperationOk = governed.ok === true;
     }
     return Object.freeze({

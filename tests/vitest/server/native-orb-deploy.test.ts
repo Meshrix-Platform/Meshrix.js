@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +39,7 @@ import {
   assertRollbackServiceRestored,
   candidateArchive,
   loadPrivateLoginInputBytes,
+  probeNativeOrbOrigin,
 } from "../../../tools/server-scripts/lib/native-orb-deployment/support.ts";
 import { assertNoSensitiveReportLeak } from "../../../tools/server-scripts/lib/sensitive-report-scan.ts";
 
@@ -181,6 +183,54 @@ describe("native OrbStack deployment", () : any => {
       })).rejects.toMatchObject({ code: "native_orb_bootstrap_login_input_invalid" });
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not reject a healthy deployment because response bodies exceed an arbitrary size", async () : Promise<any> => {
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      if (request.url === "/api/healthz") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true, detail: "x".repeat(96 * 1024) }));
+        return;
+      }
+      if (request.url === "/") {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end(`<!doctype html><html><body>${"console".repeat(16 * 1024)}</body></html>`);
+        return;
+      }
+      if (request.url === "/api/auth/login") {
+        response.writeHead(200, {
+          "content-type": "application/json",
+          "set-cookie": "meshrix_session=private-session; HttpOnly; SameSite=Strict",
+        });
+        response.end(JSON.stringify({ csrfToken: "csrf-token" }));
+        return;
+      }
+      if (request.url === "/api/console/state") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ state: "x".repeat(192 * 1024) }));
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve?: any) : any => server.listen(0, "127.0.0.1", resolve));
+    const address: any = server.address();
+    const credentials: any = Buffer.from(JSON.stringify({
+      username: "owner",
+      password: "private-owner-credential",
+    }), "utf8");
+    try {
+      await expect(probeNativeOrbOrigin(`http://127.0.0.1:${address.port}`, credentials))
+        .resolves.toMatchObject({
+          healthOk: true,
+          consoleOk: true,
+          authenticationOk: true,
+          governedOperationOk: true,
+        });
+    } finally {
+      credentials.fill(0);
+      await new Promise<void>((resolve?: any) : any => server.close(resolve));
     }
   });
 
