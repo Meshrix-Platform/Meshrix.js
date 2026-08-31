@@ -4,10 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/private-file-atomic.ts";
-import {
-  CURRENT_PLAN_CODE,
-  validateCurrentPlanAuthority,
-} from "../plan/current-plan-authority.ts";
 import { resolveCurrentAcceptanceGeneration } from "./lib/platform-acceptance-generation-store.ts";
 import { assertNoSensitiveReportLeak } from "./lib/sensitive-report-scan.ts";
 
@@ -36,7 +32,6 @@ async function acceptedCandidate(): Promise<{ sourceRevision: string; candidateD
 
 async function main() {
   const reasons: string[] = [];
-  await validateCurrentPlanAuthority({ repoRoot });
   const accepted = await acceptedCandidate();
   const sourceRevision = accepted?.sourceRevision || "";
   const candidateDigest = accepted?.candidateDigest || "";
@@ -93,7 +88,6 @@ async function main() {
     branchPromotionReady,
     coreOnlyBoundary: true,
     publicationPerformed: false,
-    currentPlan: CURRENT_PLAN_CODE,
     reasons,
     releaseReady: reasons.length === 0,
     reportLeakScan: true

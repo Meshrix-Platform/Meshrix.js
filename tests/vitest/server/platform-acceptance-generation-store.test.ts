@@ -65,7 +65,7 @@ async function fixtureRoot() : Promise<any> {
   await fs.mkdir(path.join(root, "node_modules"), { recursive: true });
   await fs.writeFile(
     path.join(root, ".gitignore"),
-    "/build/\n/docs/plans/\n/docs/reports/\n/node_modules/\n",
+    "/build/\n/local-workflow/\n/node_modules/\n",
     "utf8"
   );
   await fs.writeFile(path.join(root, "package.json"), "{}\n", "utf8");
@@ -363,12 +363,12 @@ describe("platform acceptance generation store", () : any => {
       "{\"preserved\":true}\n",
       "utf8"
     );
-    await fs.mkdir(path.join(repoRoot, "docs", "plans"), { recursive: true });
-    await fs.writeFile(path.join(repoRoot, "docs", "plans", "Checkpoints.json"), "[]\n", "utf8");
+    await fs.mkdir(path.join(repoRoot, "local-workflow"), { recursive: true });
+    await fs.writeFile(path.join(repoRoot, "local-workflow", "state.json"), "[]\n", "utf8");
     const first: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "first-generation" });
     await expect(fs.readFile(path.join(first.workspace, "build", "reports", "live-sentinel.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.readFile(path.join(first.workspace, "docs", "plans", "Checkpoints.json"), "utf8"))
+    await expect(fs.readFile(path.join(first.workspace, "local-workflow", "state.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
     await writeWorkerEvidence(first.workspace);
     await publishFixture({
