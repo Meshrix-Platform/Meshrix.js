@@ -303,6 +303,16 @@ learned on first use and does not turn client-declared machine data into an
 identity fact. Requests containing both a Grant credential and an API Key are
 ambiguous and denied.
 
+A scoped API Key may carry explicitly selected Core and upstream operations in
+one MCP audience. Authorization remains operation-relative: the current
+operation must satisfy its tool, toolset, scope, risk, and every resource fact
+it declares, but resource dimensions introduced only by another selected
+operation do not become a cross-operation availability gate. Dynamic upstream
+operations additionally require exact capability and service identities, a
+complete declared egress and resource tuple, and every declared credential
+binding. Discovery and execution call the same resource-policy predicate;
+missing, restricted-empty, partial, or mismatched dynamic facts fail closed.
+
 ## Plugin Host Security Ports
 
 `ArtifactSignerPort` is the Host custody boundary for plugin artifact signatures. For the immutable plugin set selected before startup, verified deployment authorizes exactly the purposes declared by the signed manifest; startup has no duplicate per-purpose approval list. Duplicate capability or signing allow-lists in per-plugin runtime configuration are rejected. A declaration without an available Host signer fails plugin activation. The Host resolves the configured local secret reference, signs a stable envelope containing the declared purpose, payload digest, and public context digest, and returns only the Ed25519 public key, key id, signature, and minimum receipt. Private key material, the secret reference, Host capability policy, and Console scope grants never enter the configuration exposed to plugin code, results, reports, or persistent plugin state.

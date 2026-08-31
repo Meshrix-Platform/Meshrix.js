@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createToolCatalog } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
+import { resolveResourceContext } from "../../../packages/foundation/src/security/authorization/authorization-resource-context.ts";
 
 const FIELD_GROUPS: Readonly<Record<string, any>> = Object.freeze({
   tenantId: ["tenantId", "tenant-id"],
@@ -139,6 +140,32 @@ describe("operation resource mapping", () : any => {
         workspaceId: expect.arrayContaining(["workspaceId"])
       }
     });
+  });
+
+  it("does not let a generic business field override a fixed authorization resource fact", () : any => {
+    expect(operationById("tag_management.tags.list").resource).toMatchObject({
+      resourceKind: "tag",
+      fieldMap: {}
+    });
+    expect(operationById("tag_management.tags.upsert").resource).toMatchObject({
+      resourceKind: "tag",
+      fieldMap: {}
+    });
+    expect(operationById("operation_permission.create_grant").resource.fieldMap.resourceKind)
+      .toEqual(expect.arrayContaining(["allowedResourceKinds", "metadata.allowedResourceKinds"]));
+    expect(resolveResourceContext({
+      operation: operationById("tag_management.tags.list"),
+      input: { kind: "custom" }
+    }).resourceKind).toBe("tag");
+    expect(resolveResourceContext({
+      operation: {
+        resourceContext: {
+          resourceKind: "tag",
+          fieldMap: { resourceKind: ["kind"] }
+        }
+      },
+      input: { kind: "custom" }
+    }).resourceKind).toBe("custom");
   });
 
   it("projects long-running upstream forwarding timeout from the operation registry", () : any => {

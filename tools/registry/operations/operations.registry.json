@@ -1636,22 +1636,14 @@
         "resourceKind": "tag",
         "capabilityVerb": "list",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "resourceContext": {
         "capabilityDomain": "tag_management",
         "resourceKind": "tag",
         "capabilityVerb": "list",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "proof": {
         "profile": "receipt",
@@ -1952,22 +1944,14 @@
         "resourceKind": "tag",
         "capabilityVerb": "upsert",
         "effectKind": "repair-write",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "resourceContext": {
         "capabilityDomain": "tag_management",
         "resourceKind": "tag",
         "capabilityVerb": "upsert",
         "effectKind": "repair-write",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "proof": {
         "profile": "full",
@@ -2437,22 +2421,14 @@
         "resourceKind": "tag",
         "capabilityVerb": "list",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "resourceContext": {
         "capabilityDomain": "tag_management",
         "resourceKind": "tag",
         "capabilityVerb": "list",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "proof": {
         "profile": "receipt",
@@ -10217,9 +10193,6 @@
           "workspaceId": [
             "workspaceId",
             "workspace-id"
-          ],
-          "resourceKind": [
-            "kind"
           ]
         }
       },
@@ -10232,9 +10205,6 @@
           "workspaceId": [
             "workspaceId",
             "workspace-id"
-          ],
-          "resourceKind": [
-            "kind"
           ]
         }
       },
@@ -10523,9 +10493,6 @@
           "workspaceId": [
             "workspaceId",
             "workspace-id"
-          ],
-          "resourceKind": [
-            "kind"
           ]
         }
       },
@@ -10538,9 +10505,6 @@
           "workspaceId": [
             "workspaceId",
             "workspace-id"
-          ],
-          "resourceKind": [
-            "kind"
           ]
         }
       },
@@ -14102,22 +14066,14 @@
         "resourceKind": "checkpoint",
         "capabilityVerb": "list",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "checkpoint",
         "capabilityVerb": "list",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "proof": {
         "profile": "receipt",
@@ -32669,22 +32625,14 @@
         "resourceKind": "operation_permission",
         "capabilityVerb": "metrics-export",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "resourceContext": {
         "capabilityDomain": "operation_permission",
         "resourceKind": "operation_permission",
         "capabilityVerb": "metrics-export",
         "effectKind": "read",
-        "fieldMap": {
-          "resourceKind": [
-            "kind"
-          ]
-        }
+        "fieldMap": {}
       },
       "proof": {
         "profile": "receipt",

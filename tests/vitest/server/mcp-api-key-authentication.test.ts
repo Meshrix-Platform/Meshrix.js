@@ -291,20 +291,28 @@ describe("direct MCP API key authentication", () : any => {
     expect(provider.listVisibleTools({ authorization }).map((tool: any) : any => tool.id)).toEqual(["system.health"]);
   });
 
-  it("shows only upstream tools allowed by the native API-key restriction and current audience evaluator", async () : Promise<any> => {
+  it("shows selected Core and exact upstream tools through one restricted API Key", async () : Promise<any> => {
     const base: any = authorizationContext();
     const context: any = authorizationContext({
       policy: {
         ...base.policy,
         serviceIds: ["service-allowed"],
         capabilityIds: ["cap:upstream:service-allowed:tools-call"],
-        toolsetIds: ["meshrix.gateway.read"],
+        toolsetIds: ["meshrix.runtime.read", "meshrix.gateway.read"],
         allowedTools: ["system.health"],
-        scopeIds: ["gateway:read"],
+        scopeIds: ["runtime:read", "gateway:read"],
         maximumRisk: "low",
         resources: {
           ...base.policy.resources,
-          secretBindingIds: ["secret-binding-allowed"]
+          mode: "restricted",
+          egressClasses: ["mcp"],
+          capabilityDomains: ["runtime", "upstream-gateway"],
+          capabilityVerbs: ["health", "tools/call"],
+          resourceKinds: ["system-health", "upstream-service-operation"],
+          effectKinds: ["read"],
+          secretBindingIds: ["secret-binding-allowed"],
+          allowedOrigins: [],
+          allowedCidrs: []
         }
       }
     });
@@ -322,6 +330,19 @@ describe("direct MCP API key authentication", () : any => {
         catalog: () : any => ({
           tools: [
             {
+              id: "system.health",
+              status: "active",
+              requiredScopes: ["runtime:read"],
+              toolsets: ["meshrix.runtime.read"],
+              risk: "read_only",
+              resourceContext: {
+                capabilityDomain: "runtime",
+                capabilityVerb: "health",
+                resourceKind: "system-health",
+                effectKind: "read"
+              }
+            },
+            {
               id: "upstream.service-allowed.echo",
               status: "active",
               upstreamProjectedOperation: true,
@@ -329,7 +350,29 @@ describe("direct MCP API key authentication", () : any => {
               requiredScopes: ["gateway:read"],
               toolsets: ["meshrix.gateway.read"],
               risk: "read_only",
-              dynamicCapability: { capabilityId: "cap:upstream:service-allowed:tools-call" }
+              resourceContext: {
+                requestedEgress: "mcp",
+                requestedEgresses: ["mcp"],
+                secretBindingId: "secret-binding-allowed",
+                secretBindingIds: ["secret-binding-allowed"],
+                capabilityDomain: "upstream-gateway",
+                capabilityVerb: "tools/call",
+                resourceKind: "upstream-service-operation"
+              },
+              dynamicCapability: {
+                capabilityId: "cap:upstream:service-allowed:tools-call",
+                serviceId: "service-allowed",
+                credentialBindingIds: ["secret-binding-allowed"],
+                resourceContext: {
+                  requestedEgress: "mcp",
+                  requestedEgresses: ["mcp"],
+                  secretBindingId: "secret-binding-allowed",
+                  secretBindingIds: ["secret-binding-allowed"],
+                  capabilityDomain: "upstream-gateway",
+                  capabilityVerb: "tools/call",
+                  resourceKind: "upstream-service-operation"
+                }
+              }
             },
             {
               id: "upstream.service-denied.admin",
@@ -354,7 +397,7 @@ describe("direct MCP API key authentication", () : any => {
       credentialKind: "scoped_api_key",
       restriction: {
         allowedServiceIds: ["service-allowed"],
-        scopes: ["gateway:read"]
+        scopes: ["runtime:read", "gateway:read"]
       },
       subject: {
         type: "scoped-api-key",
@@ -363,6 +406,7 @@ describe("direct MCP API key authentication", () : any => {
     });
     expect(authorization).not.toHaveProperty("grant");
     expect(provider.listVisibleTools({ authorization }).map((tool: any) : any => tool.id)).toEqual([
+      "system.health",
       "upstream.service-allowed.echo"
     ]);
     expect(evaluateProjectedOperationAudience).toHaveBeenCalledOnce();

@@ -266,9 +266,6 @@ function normalizePolicy(input: any, registry: any): any {
     );
     if (dynamicTools.length > 0) {
       const requestedDynamicCapabilities: any[] = [...normalized.capabilityIds];
-      if (requestedDynamicCapabilities.length === 0 && dynamicTools.length !== selectedTools.length) {
-        fail("api_key_input_invalid", "Dynamic upstream and ordinary tools must be issued in separate API Key policies.");
-      }
       const derived: any = (field?: any) : any => [...new Set<any>(dynamicTools
         .flatMap((tool?: any) : any => {
           const capability: any = tool.dynamicCapability || {};
@@ -330,31 +327,53 @@ function normalizePolicy(input: any, registry: any): any {
           ...(resource.secretBindingIds || [])
         ])
       ])].sort();
-      normalized.resources.capabilityDomains = [...new Set<any>([
-        ...normalized.resources.capabilityDomains,
-        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [resource.capabilityDomain])
-      ])].sort();
-      normalized.resources.capabilityVerbs = [...new Set<any>([
-        ...normalized.resources.capabilityVerbs,
-        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [resource.capabilityVerb])
-      ])].sort();
-      normalized.resources.resourceKinds = [...new Set<any>([
-        ...normalized.resources.resourceKinds,
-        ...derived((_tool?: any, _capability?: any, resource?: any) : any => [resource.resourceKind])
-      ])].sort();
       normalized.resources.mode = normalized.resources.mode === "unrestricted"
         ? "unrestricted"
         : "restricted";
-      const riskRank: any = { read_only: 0, low: 0, safe_write: 1, repair_write: 2, destructive: 2 };
-      const maximumRank: any = Math.max(...dynamicTools.map((tool?: any) : any =>
-        riskRank[String(tool.dynamicCapability?.risk || tool.risk || "read_only")] ?? 2
-      ));
-      normalized.maximumRisk = ["low", "medium", "high"][maximumRank] || "high";
     } else if (selectedTools.length > 0) {
       normalized.capabilityIds = [...new Set<any>([
         ...normalized.capabilityIds,
         ...selectedTools.map((tool?: any) : any => toolExecuteCapabilityId(tool.id))
       ])].sort();
+    }
+    const selectedResourceValues: any = (...keys: string[]) : any[] => [...new Set<any>(selectedTools
+      .flatMap((tool?: any) : any => {
+        const capability: any = object(tool?.dynamicCapability) ? tool.dynamicCapability : {};
+        const resources: any[] = [tool?.resourceContext, capability.resourceContext]
+          .filter((value?: any) : any => object(value));
+        return resources.flatMap((resource?: any) : any => keys.flatMap((key?: any) : any =>
+          Array.isArray(resource[key]) ? resource[key] : [resource[key]]
+        ));
+      })
+      .map((value?: any) : any => String(value || "").trim())
+      .filter(Boolean))].sort();
+    normalized.resources.semanticFamilies = [...new Set<any>([
+      ...normalized.resources.semanticFamilies,
+      ...selectedResourceValues("semanticFamily", "semanticFamilies", "staticSemanticFamilyId")
+    ])].sort();
+    normalized.resources.capabilityDomains = [...new Set<any>([
+      ...normalized.resources.capabilityDomains,
+      ...selectedResourceValues("capabilityDomain", "capabilityDomains")
+    ])].sort();
+    normalized.resources.capabilityVerbs = [...new Set<any>([
+      ...normalized.resources.capabilityVerbs,
+      ...selectedResourceValues("capabilityVerb", "capabilityVerbs")
+    ])].sort();
+    normalized.resources.resourceKinds = [...new Set<any>([
+      ...normalized.resources.resourceKinds,
+      ...selectedResourceValues("resourceKind", "resourceKinds")
+    ])].sort();
+    normalized.resources.effectKinds = [...new Set<any>([
+      ...normalized.resources.effectKinds,
+      ...selectedResourceValues("effectKind", "effectKinds")
+    ])].sort();
+    if (selectedTools.length > 0) {
+      const operationRiskRank: any = { read_only: 0, low: 0, safe_write: 1, medium: 1, repair_write: 2, destructive: 2, high: 2 };
+      const requestedRank: any = operationRiskRank[String(normalized.maximumRisk || "low")] ?? 0;
+      const selectedRank: any = Math.max(...selectedTools.map((tool?: any) : any =>
+        operationRiskRank[String(tool.dynamicCapability?.risk || tool.risk || "read_only")] ?? 2
+      ));
+      normalized.maximumRisk = ["low", "medium", "high"][Math.max(requestedRank, selectedRank)] || "high";
     }
   }
   return deepFreeze(JSON.parse(canonicalJson(normalized)));
@@ -409,6 +428,90 @@ const API_KEY_EVALUATOR_MAX_RISK: Readonly<Record<string, string>> = Object.free
   medium: "safe_write",
   high: "repair_write"
 });
+
+const API_KEY_RESOURCE_DIMENSIONS: ReadonlyArray<Readonly<Record<string, any>>> = Object.freeze([
+  Object.freeze({ policyKey: "workspaceIds", factKeys: Object.freeze(["workspaceId", "workspaceIds"]) }),
+  Object.freeze({ policyKey: "dataClassifications", factKeys: Object.freeze(["dataClassification", "dataClassifications"]) }),
+  Object.freeze({
+    policyKey: "egressClasses",
+    factKeys: Object.freeze(["egressClass", "egressClasses", "requestedEgress", "requestedEgresses"]),
+    dynamicRequired: true
+  }),
+  Object.freeze({
+    policyKey: "semanticFamilies",
+    factKeys: Object.freeze(["semanticFamily", "semanticFamilies", "staticSemanticFamilyId"])
+  }),
+  Object.freeze({
+    policyKey: "capabilityDomains",
+    factKeys: Object.freeze(["capabilityDomain", "capabilityDomains"]),
+    dynamicRequired: true
+  }),
+  Object.freeze({
+    policyKey: "capabilityVerbs",
+    factKeys: Object.freeze(["capabilityVerb", "capabilityVerbs"]),
+    dynamicRequired: true
+  }),
+  Object.freeze({
+    policyKey: "resourceKinds",
+    factKeys: Object.freeze(["resourceKind", "resourceKinds"]),
+    dynamicRequired: true
+  }),
+  Object.freeze({ policyKey: "effectKinds", factKeys: Object.freeze(["effectKind", "effectKinds"]) }),
+  Object.freeze({
+    policyKey: "secretBindingIds",
+    factKeys: Object.freeze(["secretBindingId", "secretBindingIds", "credentialBindingId", "credentialBindingIds"]),
+    dynamicDeclarationRequired: true
+  }),
+  Object.freeze({ policyKey: "allowedOrigins", factKeys: Object.freeze(["origin", "origins", "allowedOrigin", "allowedOrigins"]) }),
+  Object.freeze({ policyKey: "allowedCidrs", factKeys: Object.freeze(["cidr", "cidrs", "allowedCidr", "allowedCidrs"]) })
+]);
+
+function apiKeyResourceFactSources(operation: any): any[] {
+  const descriptor: any = object(operation?.dynamicCapability) ? operation.dynamicCapability : null;
+  return [
+    operation?.resourceContext,
+    operation?.resources,
+    descriptor?.resourceContext,
+    descriptor
+  ].filter((value?: any) : any => object(value));
+}
+
+function apiKeyResourceFacts(sources: any[], factKeys: readonly string[]): string[] {
+  return [...new Set<any>(sources
+    .flatMap((source?: any) : any => factKeys.flatMap((key?: any) : any =>
+      Array.isArray(source[key]) ? source[key] : [source[key]]
+    ))
+    .map((value?: any) : any => String(value || "").trim())
+    .filter(Boolean))].sort();
+}
+
+export function apiKeyResourcePolicyAllowsOperation(policy: any, operation: any): boolean {
+  const resources: any = object(policy?.resources) ? policy.resources : {};
+  if (resources.mode !== "restricted") return true;
+  const configured: any = API_KEY_RESOURCE_DIMENSIONS.some((dimension?: any) : any =>
+    Array.isArray(resources[dimension.policyKey]) && resources[dimension.policyKey].length > 0
+  );
+  if (!configured) return false;
+
+  const descriptor: any = object(operation?.dynamicCapability) ? operation.dynamicCapability : null;
+  const dynamicCapability: any = operation?.dynamicCapability === true || Boolean(descriptor) || Boolean(operation?.capabilityId);
+  const sources: any[] = apiKeyResourceFactSources(operation);
+  let matchedFacts: any = 0;
+  for (const dimension of API_KEY_RESOURCE_DIMENSIONS) {
+    const allowed: any = new Set<any>((Array.isArray(resources[dimension.policyKey])
+      ? resources[dimension.policyKey]
+      : []).map((value?: any) : any => String(value || "").trim()).filter(Boolean));
+    const facts: any[] = apiKeyResourceFacts(sources, dimension.factKeys);
+    const declared: any = sources.some((source?: any) : any =>
+      dimension.factKeys.some((key?: any) : any => Object.hasOwn(source, key))
+    );
+    if (dynamicCapability && dimension.dynamicRequired === true && facts.length === 0) return false;
+    if (dynamicCapability && dimension.dynamicDeclarationRequired === true && !declared) return false;
+    if (facts.length > 0 && (allowed.size === 0 || facts.some((fact?: any) : any => !allowed.has(fact)))) return false;
+    matchedFacts += facts.length;
+  }
+  return dynamicCapability || matchedFacts > 0;
+}
 
 export function apiKeyAuthorizationEvaluationInput(authorization: any): any {
   const policy: any = authorization?.policy;
@@ -510,28 +613,8 @@ function requireAllowedOperation(policy: any, operation: any): void {
     suppliedToolsets.some((value?: any) : any => policy.toolsetIds.includes(value)) ||
     suppliedScopes.some((value?: any) : any => policy.scopeIds.includes(value));
   if (!positiveAuthority) fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
-  if (policy.resources.mode === "restricted") {
-    const resource: any = operation?.resourceContext || operation?.resources || {};
-    const checks: any[] = [
-      [resource.workspaceId, policy.resources.workspaceIds],
-      [resource.dataClassification, policy.resources.dataClassifications],
-      [resource.egressClass, policy.resources.egressClasses],
-      [resource.semanticFamily, policy.resources.semanticFamilies],
-      [resource.capabilityDomain, policy.resources.capabilityDomains],
-      [resource.capabilityVerb, policy.resources.capabilityVerbs],
-      [resource.resourceKind, policy.resources.resourceKinds],
-      [resource.effectKind, policy.resources.effectKinds],
-      [resource.secretBindingId, policy.resources.secretBindingIds],
-      [resource.origin, policy.resources.allowedOrigins]
-    ];
-    const configuredChecks: any[] = checks.filter(([, allowed]) => Array.isArray(allowed) && allowed.length > 0);
-    const suppliedChecks: any[] = configuredChecks.filter(([fact]) => Boolean(fact));
-    const matchedRestriction: any = suppliedChecks.some(([fact, allowed]) => allowed.includes(fact));
-    if (configuredChecks.length === 0 ||
-        suppliedChecks.some(([fact, allowed]) => !allowed.includes(fact)) ||
-        !matchedRestriction) {
-      fail("api_key_policy_denied", "API Key resource policy denied the operation.", 403);
-    }
+  if (!apiKeyResourcePolicyAllowsOperation(policy, operation)) {
+    fail("api_key_policy_denied", "API Key resource policy denied the operation.", 403);
   }
 }
 
