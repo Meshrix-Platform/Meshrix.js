@@ -3897,6 +3897,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.accepted-candidate-receipt",
+      "kind": "other",
+      "description": "Minimal accepted-candidate receipt consumed by deployment and promotion workflows.",
+      "activeVersion": "v0.0.1:meshrix:accepted-candidate-receipt-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:accepted-candidate-receipt-1",
+          "ref": "meshrix.accepted-candidate-receipt@v0.0.1:meshrix:accepted-candidate-receipt-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current minimal deployment authorization contract produced by platform acceptance."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-accepted-candidate-receipt-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.platform-acceptance-execution-lease",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.platform-acceptance-execution-lease.",
@@ -3978,21 +4004,21 @@
       "artifactId": "meshrix.platform-acceptance-generation-pointer",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.platform-acceptance-generation-pointer.",
-      "activeVersion": "v0.0.1:meshrix:platform-acceptance-generation-pointer-1",
+      "activeVersion": "v0.0.1:meshrix:platform-acceptance-generation-pointer-2",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:platform-acceptance-generation-pointer-1",
-          "ref": "meshrix.platform-acceptance-generation-pointer@v0.0.1:meshrix:platform-acceptance-generation-pointer-1",
+          "version": "v0.0.1:meshrix:platform-acceptance-generation-pointer-2",
+          "ref": "meshrix.platform-acceptance-generation-pointer@v0.0.1:meshrix:platform-acceptance-generation-pointer-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
+            "notes": "Current pointer to the accepted-candidate receipt; legacy report-coupled pointers are not supported."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-generation-pointer-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-generation-pointer-2-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
             }
