@@ -11,6 +11,7 @@ import { createOperationProofSubstrate } from "../../../packages/foundation/src/
 import { assertNoSensitiveReportLeak } from "./sensitive-report-scan.ts";
 import { verifyAcceptanceEvidenceAnchor } from "./platform-acceptance-ledger-anchor.ts";
 import {
+  PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
   PLATFORM_ACCEPTANCE_STATE_MACHINE,
   requirePlatformAcceptanceProfile
 } from "./platform-acceptance-contract.ts";
@@ -39,9 +40,7 @@ export const ACCEPTANCE_GENERATION_BUDGETS: Readonly<Record<string, any>> = Obje
   maxEntryBytes: 32 * 1024 * 1024,
   maxGenerationBytes: 256 * 1024 * 1024,
   maxRetainedGenerations: 8,
-  maxRetainedFailures: 8,
-  publicationLockTimeoutMs: 5_000,
-  stalePublicationLockMs: 5 * 60 * 1000
+  maxRetainedFailures: 8
 });
 
 function normalizedLogicalPath(value?: any) : any {
@@ -199,36 +198,6 @@ export async function withAcceptanceExecutionLease(repoRoot?: any, action?: any)
   } finally {
     const current: any = await fs.readFile(leasePath, "utf8").then(JSON.parse).catch(() : any => null);
     if (current?.token === token) await fs.rm(leasePath, { force: true });
-  }
-}
-
-async function withPublicationLock(root?: any, action?: any) : Promise<any> {
-  await fs.mkdir(root, { recursive: true, mode: 0o700 });
-  const lockPath: any = path.join(root, "publication.lock");
-  const startedAt: any = Date.now();
-  while (true) {
-    let handle: any;
-    try {
-      handle = await fs.open(lockPath, "wx", 0o600);
-      try {
-        return await action();
-      } finally {
-        await handle.close().catch(() : any => {});
-        await fs.rm(lockPath, { force: true }).catch(() : any => {});
-      }
-    } catch (error: any) {
-      await handle?.close().catch(() : any => {});
-      if (error?.code !== "EEXIST") throw error;
-      const stat: any = await fs.stat(lockPath).catch(() : any => null);
-      if (stat && Date.now() - stat.mtimeMs > ACCEPTANCE_GENERATION_BUDGETS.stalePublicationLockMs) {
-        await fs.rm(lockPath, { force: true });
-        continue;
-      }
-      if (Date.now() - startedAt >= ACCEPTANCE_GENERATION_BUDGETS.publicationLockTimeoutMs) {
-        throw new Error("Acceptance generation publication lock timed out");
-      }
-      await new Promise((resolve?: any) : any => setTimeout(resolve, 20));
-    }
   }
 }
 
@@ -509,7 +478,7 @@ export async function validateAcceptedAggregateReport({
   repoRoot,
   verifyLedgerAnchor = verifyAggregateLedgerAnchor
 }: Record<string, any> = {}) : Promise<any> {
-  requireAggregate(aggregateReport?.schemaVersion === "v0.0.1:acceptance:platform-report-3", "schema");
+  requireAggregate(aggregateReport?.schemaVersion === PLATFORM_ACCEPTANCE_REPORT_SCHEMA, "schema");
   requireAggregate(aggregateReport?.verifier === "tools/server-scripts/verify-platform-acceptance.ts", "verifier");
   const selectedProfile: any = requirePlatformAcceptanceProfile(aggregateReport?.selectedProfile);
   requireAggregate(aggregateReport.status === "accepted", "status");
@@ -606,7 +575,7 @@ export async function validateAcceptedAggregateReport({
 function validateFailedAggregateReport(aggregateReport?: any) : any {
   requireAggregate(aggregateReport && typeof aggregateReport === "object" && !Array.isArray(aggregateReport),
     "failure-object");
-  requireAggregate(aggregateReport.schemaVersion === "v0.0.1:acceptance:platform-report-3", "failure-schema");
+  requireAggregate(aggregateReport.schemaVersion === PLATFORM_ACCEPTANCE_REPORT_SCHEMA, "failure-schema");
   requireAggregate(aggregateReport.verifier === "tools/server-scripts/verify-platform-acceptance.ts",
     "failure-verifier");
   requireAggregate(aggregateReport.acceptanceStandard === "functional-completeness" &&
@@ -885,16 +854,14 @@ export async function publishAcceptanceGeneration({
       receipt: "accepted-candidate.json",
       receiptSha256: receiptDigest.sha256
     };
-    await withPublicationLock(paths.root, async () : Promise<any> => {
-      const currentId: any = await currentGenerationId(paths.pointer);
-      if (currentId !== String(paths.baseGenerationId || "")) {
-        throw new Error("Acceptance generation publication fence rejected a stale run");
-      }
-      await writePrivateFileAtomic(paths.pointer, `${JSON.stringify(pointer, null, 2)}\n`);
-      await syncPathIfSupported(path.dirname(paths.pointer));
-      published = true;
-      await pruneCommittedGenerations(paths);
-    });
+    const currentId: any = await currentGenerationId(paths.pointer);
+    if (currentId !== String(paths.baseGenerationId || "")) {
+      throw new Error("Acceptance generation publication fence rejected a stale run");
+    }
+    await writePrivateFileAtomic(paths.pointer, `${JSON.stringify(pointer, null, 2)}\n`);
+    await syncPathIfSupported(path.dirname(paths.pointer));
+    published = true;
+    await pruneCommittedGenerations(paths);
     return { manifest, pointer, receipt };
   } catch (error: any) {
     await fs.rm(paths.stagedGeneration, { recursive: true, force: true });

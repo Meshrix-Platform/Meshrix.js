@@ -947,6 +947,10 @@ accepted-generation pointer. A successful run publishes one digest-bound
 accepted-candidate receipt. Detailed reports remain diagnostic evidence owned
 by acceptance; bootstrap, deployment, branch promotion, and production closure
 consume only the receipt and never revalidate the report inventory.
+Acceptance commands run until they exit or the operator cancels the run; the
+orchestrator does not convert elapsed wall-clock time into a failure. The CI
+job retains one infrastructure-level cap solely to contain abandoned runner
+cost, and that cap is not part of the acceptance result.
 
 For the first installation on a clean supported Ubuntu or Debian x64/arm64
 Orb target, create an owner-only (`0600`) non-symlink login input containing
@@ -1050,6 +1054,10 @@ same clean environment must not require source edits or ad hoc operator
 patches. Separate workflows are required for separate operating systems,
 architectures, hosts, cloud environments, network environments, and clean-host
 recovery targets.
+The phase commands themselves have no elapsed-time kill switch. Readiness and
+network probes may still bound an individual interaction so that an
+unresponsive endpoint produces a concrete failed check rather than occupying a
+connection forever.
 
 `run` executes the registered `prepare`, `start`, `verify`, `stop`, and
 `cleanup` phases and then reduces their receipts. Operators may invoke one

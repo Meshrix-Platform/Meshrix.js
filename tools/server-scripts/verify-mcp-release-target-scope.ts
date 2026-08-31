@@ -135,8 +135,7 @@ async function runNode(script?: any, args: any = []) : Promise<any> {
     result = await execFileAsync(process.execPath, [script, ...args], {
       cwd: process.cwd(),
       env: process.env,
-      maxBuffer: 4 * 1024 * 1024,
-      timeout: 30000
+      maxBuffer: 4 * 1024 * 1024
     });
   } catch (error: any) {
     result = {

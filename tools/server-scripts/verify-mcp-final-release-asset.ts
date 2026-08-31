@@ -113,7 +113,6 @@ async function runPortable(executable?: any, args?: any, isolatedRoot?: any) : P
       MESHRIX_MCP_TOKEN: "",
       MESHRIX_TOOL_TOKEN: ""
     },
-    timeout: 30000,
     maxBuffer: 4 * 1024 * 1024
   });
   if (String(result.stderr || "").trim()) {
@@ -191,7 +190,6 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
     const extractRoot: any = path.join(temporaryRoot, "extract");
     await fs.mkdir(extractRoot, { mode: 0o700 });
     await execFileAsync("tar", ["-xzf", archivePath, "-C", extractRoot], {
-      timeout: 30000,
       maxBuffer: 4 * 1024 * 1024
     });
     const extractedEntries: any = await fs.readdir(extractRoot, { withFileTypes: true });

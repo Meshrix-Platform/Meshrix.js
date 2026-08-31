@@ -11,11 +11,12 @@ import {
   assertNoSensitiveReportLeak,
   reportPayloadDigest,
 } from "./sensitive-report-scan.ts";
+import { PLATFORM_ACCEPTANCE_REPORT_SCHEMA } from "./platform-acceptance-contract.ts";
 
 export const REAL_MACHINE_VALIDATION_SCHEMA: any =
   "v0.0.1:meshrix:real-machine-validation-state-1";
 export const REAL_MACHINE_PHASE_RECEIPT_SCHEMA: any =
-  "v0.0.1:meshrix:real-machine-validation-phase-receipt-1";
+  "v0.0.1:meshrix:real-machine-validation-phase-receipt-2";
 export const REAL_MACHINE_REDUCED_RECEIPT_SCHEMA: any =
   "v0.0.1:meshrix:real-machine-validation-receipt-1";
 export const REAL_MACHINE_VALIDATION_PHASES: readonly any[] = Object.freeze([
@@ -68,10 +69,6 @@ const GIT_COMMIT_PATTERN: any = /^[a-f0-9]{40}$/u;
 const SAFE_CHECK_KEY_PATTERN: any = /^[a-z][a-zA-Z0-9]{0,63}$/u;
 const STATE_FILE: any = "state.json";
 const REDUCED_RECEIPT_FILE: any = "receipt.json";
-const DEFAULT_LOCK_TIMEOUT_MS: any = 5_000;
-const DEFAULT_STALE_LOCK_MS: any = 60_000;
-const DEFAULT_COMMAND_TIMEOUT_MS: any = 15 * 60_000;
-
 function workflowError(code?: any) : any {
   const error: Error & Record<string, any> = new Error(code);
   error.code = code;
@@ -168,7 +165,7 @@ export async function validateFunctionalPlatformAcceptanceReport(
     throw workflowError("real_machine_functional_report_invalid");
   }
   requireCondition(
-    report?.schemaVersion === "v0.0.1:acceptance:platform-report-3" &&
+    report?.schemaVersion === PLATFORM_ACCEPTANCE_REPORT_SCHEMA &&
       report?.acceptanceStandard === "functional-completeness" &&
       report?.claim === "functional-complete" &&
       report?.status === "accepted" &&
@@ -266,15 +263,9 @@ async function writeJsonAtomic(filePath?: any, value?: any) : Promise<any> {
 async function withRunLock(
   paths?: any,
   action?: any,
-  {
-    lockTimeoutMs = DEFAULT_LOCK_TIMEOUT_MS,
-    staleLockMs = DEFAULT_STALE_LOCK_MS,
-    now = () : any => Date.now(),
-  }: Record<string, any> = {},
 ) : Promise<any> {
   ensurePrivateDir(paths.root);
   const token: any = crypto.randomBytes(24).toString("hex");
-  const startedAt: any = now();
   while (true) {
     let handle: any;
     try {
@@ -286,15 +277,14 @@ async function withRunLock(
     } catch (error: any) {
       await handle?.close().catch(() : any => {});
       if (error?.code !== "EEXIST") throw error;
-      const stat: any = await fs.stat(paths.lock).catch(() : any => null);
-      if (stat && now() - stat.mtimeMs >= staleLockMs) {
+      const existing: any = await fs.readFile(paths.lock, "utf8")
+        .then(JSON.parse)
+        .catch(() : any => null);
+      if (Number.isInteger(existing?.pid) && !processIsAlive(existing.pid)) {
         await fs.rm(paths.lock, { force: true });
         continue;
       }
-      if (now() - startedAt >= lockTimeoutMs) {
-        throw workflowError("real_machine_run_lock_held");
-      }
-      await new Promise((resolve?: any) : any => setTimeout(resolve, 20));
+      throw workflowError("real_machine_run_lock_held");
     }
   }
   try {
@@ -304,6 +294,16 @@ async function withRunLock(
       .then(JSON.parse)
       .catch(() : any => null);
     if (lock?.token === token) await fs.rm(paths.lock, { force: true });
+  }
+}
+
+function processIsAlive(pid?: any) : any {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: any) {
+    return error?.code === "EPERM";
   }
 }
 
@@ -325,7 +325,6 @@ function normalizedRunnerResult(result: Record<string, any> = {}) : any {
   const selected: any = asRecord(result);
   return Object.freeze({
     exitCode: Number.isInteger(selected.exitCode) ? selected.exitCode : 1,
-    timedOut: selected.timedOut === true,
     durationMs: Number.isFinite(Number(selected.durationMs))
       ? Math.max(0, Math.floor(Number(selected.durationMs)))
       : 0,
@@ -347,17 +346,9 @@ function validateCommandSpec(spec: Record<string, any> = {}) : any {
       selected.args.every((item?: any) : any => typeof item === "string" && item.length <= 8192),
     "real_machine_command_invalid",
   );
-  const timeoutMs: any = selected.timeoutMs === undefined
-    ? DEFAULT_COMMAND_TIMEOUT_MS
-    : Number(selected.timeoutMs);
-  requireCondition(
-    Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 60 * 60_000,
-    "real_machine_command_timeout_invalid",
-  );
   return Object.freeze({
     executable: selected.executable,
     args: Object.freeze([...selected.args]),
-    timeoutMs,
     env: asRecord(selected.env),
     cwd: typeof selected.cwd === "string" && selected.cwd ? selected.cwd : undefined,
   });
@@ -402,26 +393,12 @@ export function createProcessCommandRunner({
         stdio: "ignore",
         windowsHide: true,
       });
-      let timedOut: any = false;
-      let forceTimer: any;
-      const timer: any = setTimeout(() : any => {
-        timedOut = true;
-        child.kill("SIGTERM");
-        forceTimer = setTimeout(() : any => child.kill("SIGKILL"), 5_000);
-        forceTimer.unref?.();
-      }, command.timeoutMs);
-      timer.unref?.();
       child.once("error", (error?: any) : any => {
-        clearTimeout(timer);
-        clearTimeout(forceTimer);
         reject(error);
       });
       child.once("close", (exitCode?: any) : any => {
-        clearTimeout(timer);
-        clearTimeout(forceTimer);
         resolve({
           exitCode: Number.isInteger(exitCode) ? exitCode : 1,
-          timedOut,
           durationMs: Math.max(0, now() - startedAt),
           checks: {},
         });
@@ -471,9 +448,8 @@ function phaseReceiptFacts({ state, phase, result, recordedAt }: Record<string, 
     functionalAcceptanceDigest: state.functionalAcceptanceDigest,
     sourceRevision: state.sourceRevision,
     phase,
-    status: result.exitCode === 0 && result.timedOut !== true ? "passed" : "failed",
+    status: result.exitCode === 0 ? "passed" : "failed",
     exitCode: result.exitCode,
-    timedOut: result.timedOut,
     durationMs: result.durationMs,
     checks: result.checks,
     recordedAt,
@@ -543,8 +519,6 @@ export function createRealMachineValidationWorkflow({
   runtimeArchitecture = process.arch,
   commandRunner,
   clock = () : any => new Date(),
-  lockTimeoutMs = DEFAULT_LOCK_TIMEOUT_MS,
-  staleLockMs = DEFAULT_STALE_LOCK_MS,
 }: Record<string, any> = {}) : any {
   const selectedRunId: any = safeId(runId, "real_machine_run_id_invalid");
   const paths: any = runPaths(stateRoot, selectedRunId);
@@ -670,9 +644,6 @@ export function createRealMachineValidationWorkflow({
         `real_machine_${phase}_failed`,
       );
       return publicRunProjection(receipt);
-    }, {
-      lockTimeoutMs,
-      staleLockMs,
     });
   }
 
@@ -751,9 +722,6 @@ export function createRealMachineValidationWorkflow({
       state.updatedAt = nowIso();
       await writeJsonAtomic(paths.state, state);
       return Object.freeze(reduced);
-    }, {
-      lockTimeoutMs,
-      staleLockMs,
     });
   }
 

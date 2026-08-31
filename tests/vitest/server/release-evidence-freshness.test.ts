@@ -56,9 +56,9 @@ describe("release evidence freshness and report drift", () : any => {
       { id: "dependent", dependsOn: ["blocker", "preflight"], blockedExitCodes: [] }
     ];
     const results: any[] = [
-      { id: "blocker", status: "blocked", exitCode: 2, timedOut: false, startedAt: "2026-07-10T00:00:00.000Z" },
-      { id: "preflight", status: "passed", exitCode: 0, timedOut: false, startedAt: "2026-07-10T00:00:00.000Z" },
-      { id: "dependent", status: "blocked", exitCode: 2, timedOut: false, startedAt: "", dependsOn: ["blocker", "preflight"] }
+      { id: "blocker", status: "blocked", exitCode: 2, startedAt: "2026-07-10T00:00:00.000Z" },
+      { id: "preflight", status: "passed", exitCode: 0, startedAt: "2026-07-10T00:00:00.000Z" },
+      { id: "dependent", status: "blocked", exitCode: 2, startedAt: "", dependsOn: ["blocker", "preflight"] }
     ];
     const reportEvidence: Record<string, any> = {
       "build/reports/blocker.json": { validationPassed: true, liveStatus: "blocked" }
@@ -102,23 +102,23 @@ describe("release evidence freshness and report drift", () : any => {
       "build/reports/blocker.json": { validationPassed: true, liveStatus: "blocked" }
     };
     const passedWithBlockedReport: any = validateBlockedCommandResults([
-      { id: "blocker", status: "passed", exitCode: 0, timedOut: false, startedAt: "2026-07-10T00:00:00.000Z" }
+      { id: "blocker", status: "passed", exitCode: 0, startedAt: "2026-07-10T00:00:00.000Z" }
     ], reportEvidence, [command]);
     expect(passedWithBlockedReport).toMatchObject({
       valid: false,
       invalidBlockedCommandIds: ["blocker"]
     });
     expect(validateBlockedCommandResults([
-      { id: "blocker", status: "passed", exitCode: 0, timedOut: false, startedAt: "2026-07-10T00:00:00.000Z" }
+      { id: "blocker", status: "passed", exitCode: 0, startedAt: "2026-07-10T00:00:00.000Z" }
     ], {}, [command])).toMatchObject({
       valid: false,
       invalidBlockedCommandIds: ["blocker"]
     });
 
     const failedPropagation: any = validateBlockedCommandResults([
-      { id: "blocker", status: "blocked", exitCode: 2, timedOut: false, startedAt: "2026-07-10T00:00:00.000Z" },
-      { id: "failed", status: "failed", exitCode: 1, timedOut: false, startedAt: "2026-07-10T00:00:00.000Z" },
-      { id: "dependent", status: "blocked", exitCode: 2, timedOut: false, startedAt: "", dependsOn: ["blocker", "failed"] }
+      { id: "blocker", status: "blocked", exitCode: 2, startedAt: "2026-07-10T00:00:00.000Z" },
+      { id: "failed", status: "failed", exitCode: 1, startedAt: "2026-07-10T00:00:00.000Z" },
+      { id: "dependent", status: "blocked", exitCode: 2, startedAt: "", dependsOn: ["blocker", "failed"] }
     ], reportEvidence, [
       command,
       { id: "failed" },

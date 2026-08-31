@@ -14,13 +14,13 @@ export async function runNativeOrbDeploymentStage(context?: any) : Promise<any> 
   }
   const activeWorkingDirectory: any = orbText(context.parsed.machine, [
     "systemctl", "--user", "show", context.unit, "-p", "WorkingDirectory", "--value",
-  ], { timeout: 15_000 });
+  ], {});
   if (activeWorkingDirectory !== context.releaseDirectory) {
     failNativeOrbDeployment("native_orb_candidate_activation_mismatch", "Native service did not activate the current candidate.");
   }
   const serviceActive: any = orbText(context.parsed.machine, [
     "systemctl", "--user", "is-active", context.unit,
-  ], { allowFailure: true, timeout: 15_000 }) === "active";
+  ], { allowFailure: true }) === "active";
   if (!serviceActive) {
     failNativeOrbDeployment("native_orb_service_inactive", "Native service is not active after verification.");
   }

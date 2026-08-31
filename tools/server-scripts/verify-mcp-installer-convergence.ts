@@ -149,8 +149,7 @@ async function runNode(script?: any, args: any = [], env: Record<string, any> = 
         ...process.env,
         ...env
       },
-      maxBuffer: 4 * 1024 * 1024,
-      timeout: 30000
+      maxBuffer: 4 * 1024 * 1024
     });
     if (closeStdin) {
       execution.child?.stdin?.end();
@@ -180,8 +179,7 @@ async function runNativeInstaller(args: any = [], env: Record<string, any> = {})
         ...process.env,
         ...env
       },
-      maxBuffer: 4 * 1024 * 1024,
-      timeout: 30000
+      maxBuffer: 4 * 1024 * 1024
     });
   } catch (error: any) {
     result = {

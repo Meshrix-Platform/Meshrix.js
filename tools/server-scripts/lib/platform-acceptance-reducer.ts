@@ -180,7 +180,7 @@ export function validateBlockedCommandResults(
       continue;
     }
     if (result.status !== "blocked") continue;
-    let valid: any = Boolean(command) && result.exitCode === 2 && result.timedOut !== true;
+    let valid: any = Boolean(command) && result.exitCode === 2;
     if (directResult) {
       valid = valid && command.blockedExitCodes?.includes(2) === true && Boolean(command.report) &&
         reportEvidence[command.report]?.validationPassed === true &&

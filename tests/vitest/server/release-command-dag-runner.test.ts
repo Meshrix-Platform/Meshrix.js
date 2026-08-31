@@ -1,12 +1,8 @@
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   createReleaseCommandDeadlockDiagnostic,
   createReleaseCommandSchedule,
-  estimateReleaseCommandWorstCaseMs,
   runReleaseCommandDag
 } from "../../../tools/server-scripts/lib/release-command-dag-runner.ts";
 
@@ -23,7 +19,6 @@ function fixtureCommand(id?: any, source?: any, overrides: Record<string, any> =
 async function run(commands?: any, overrides: Record<string, any> = {}) : Promise<any> {
   return runReleaseCommandDag({
     commands,
-    defaultTimeoutMs: 1_000,
     env: { ...process.env },
     maxParallel: 4,
     repoRoot: process.cwd(),
@@ -140,43 +135,6 @@ describe("release command DAG runner", () : any => {
     ]);
   });
 
-  it("terminates a command at its declared timeout", async () : Promise<any> => {
-    const result: any = await run([
-      fixtureCommand("timeout", "setInterval(() => {}, 1000)", { timeoutMs: 30 })
-    ]);
-
-    expect(result.results[0]).toMatchObject({
-      id: "timeout",
-      status: "failed",
-      exitCode: 124,
-      timedOut: true,
-      timeoutMs: 30
-    });
-  });
-
-  it("joins the owned descendant process tree before completing a timeout", async () : Promise<any> => {
-    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-tree-"));
-    const pidPath: any = path.join(root, "descendant.pid");
-    try {
-      const source: any = [
-        "const {spawn}=require('node:child_process');",
-        "const fs=require('node:fs');",
-        "const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});",
-        `fs.writeFileSync(${JSON.stringify(pidPath)},String(child.pid));`,
-        "setInterval(()=>{},1000);"
-      ].join("");
-      const result: any = await run([
-        fixtureCommand("timeout-tree", source, { timeoutMs: 500 })
-      ]);
-      expect(result.results[0]).toMatchObject({ status: "failed", timedOut: true });
-      const pid: any = Number(await fs.readFile(pidPath, "utf8"));
-      expect(Number.isInteger(pid)).toBe(true);
-      expect(() : any => process.kill(pid, 0)).toThrow();
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
-  });
-
   it("caps captured output by bytes without repeatedly copying the full stream", async () : Promise<any> => {
     const result: any = await run([
       fixtureCommand("noisy", "process.stdout.write('x'.repeat(10000)); process.exit(9)")
@@ -189,22 +147,13 @@ describe("release command DAG runner", () : any => {
     expect(Buffer.byteLength(result.results[0].errorTail, "utf8")).toBeLessThanOrEqual(66);
   });
 
-  it("estimates the same greedy lock and exclusive schedule used at runtime", async () : Promise<any> => {
+  it("runs the greedy lock and exclusive schedule without wall-clock budgets", async () : Promise<any> => {
     const commands: any[] = [
-      fixtureCommand("first", "setTimeout(() => {}, 30)", { timeoutMs: 2_000 }),
-      fixtureCommand("second", "setTimeout(() => {}, 10)", { timeoutMs: 1_000 }),
-      fixtureCommand("exclusive", "setTimeout(() => {}, 5)", { exclusive: true, timeoutMs: 2_000 }),
-      fixtureCommand("third", "setTimeout(() => {}, 10)", { timeoutMs: 1_000 })
+      fixtureCommand("first", "setTimeout(() => {}, 30)"),
+      fixtureCommand("second", "setTimeout(() => {}, 10)"),
+      fixtureCommand("exclusive", "setTimeout(() => {}, 5)", { exclusive: true }),
+      fixtureCommand("third", "setTimeout(() => {}, 10)")
     ];
-    expect(estimateReleaseCommandWorstCaseMs(commands, {
-      defaultTimeoutMs: 1_000,
-      env: {},
-      maxParallel: 2
-    })).toEqual({
-      commandCount: 4,
-      maxParallel: 2,
-      timeoutMs: 5_000
-    });
 
     const starts: any[] = [];
     const result: any = await run(commands, {

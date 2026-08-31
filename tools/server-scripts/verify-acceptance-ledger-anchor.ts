@@ -13,12 +13,13 @@ import {
   anchorAcceptanceEvidence,
   verifyAcceptanceEvidenceAnchor
 } from "./lib/platform-acceptance-ledger-anchor.ts";
+import { PLATFORM_ACCEPTANCE_REPORT_SCHEMA } from "./lib/platform-acceptance-contract.ts";
 
 async function main() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-ledger-anchor-"));
   const reportPath: any = path.join(root, "sample-report.json");
   await fs.writeFile(reportPath, `${JSON.stringify({
-    schemaVersion: "v0.0.1:acceptance:platform-report-3",
+    schemaVersion: PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
     status: "accepted",
     summary: { releaseReady: true }
   }, null, 2)}\n`, "utf8");

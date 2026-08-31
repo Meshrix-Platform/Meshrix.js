@@ -15,7 +15,6 @@ import {
 } from "./lib/release-command-dag-runner.ts";
 import { liveReadinessExitCode } from "./lib/live-readiness-exit-code.ts";
 const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const DEFAULT_PRODUCTION_READINESS_GATE_TIMEOUT_MS: any = 12 * 60 * 1000;
 
 export const PRODUCTION_READINESS_GATES: readonly any[] = Object.freeze([
   {
@@ -96,7 +95,7 @@ function buildProductionReadinessGateReport({
     finishedAt: finishedAt.toISOString(),
     verifier: "tools/server-scripts/production-readiness-gate.ts",
     algorithm: {
-      commandExecution: "Run server security verifiers as real Node processes through a bounded parallel DAG and aggregate only after every gate finishes.",
+      commandExecution: "Run server security verifiers as real Node processes through a parallel DAG and aggregate only after every gate finishes.",
       boundary: "This report reduces only Core-owned server security evidence. Optional plugin and downstream product evidence remain outside this reducer."
     },
     gateSchedule,
@@ -154,7 +153,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Preserve objective blockers as blocked (exit 2), not ordinary failures.
       blockedExitCodes: [2]
     })),
-    defaultTimeoutMs: DEFAULT_PRODUCTION_READINESS_GATE_TIMEOUT_MS,
     env: process.env,
     logPrefix: "production-readiness",
     maxParallel: productionGateParallelism(process.env),
@@ -170,7 +168,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     id: result.id,
     status: result.status,
     exitCode: result.exitCode,
-    timedOut: result.timedOut === true,
     durationMs: result.durationMs
   }));
   const missingEvidence: any = buildMissingEvidence(gateResults);

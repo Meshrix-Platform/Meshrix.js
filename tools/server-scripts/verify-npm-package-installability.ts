@@ -19,9 +19,6 @@ const execFileAsync: any = promisify(execFile);
 const DEFAULT_REPORT_PATH: any = "build/reports/npm-package-installability.json";
 const DEPLOYMENT_INDEX_PATH: any = "packages/foundation/config/deployment/index.json";
 const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
-const COMMAND_TIMEOUT_MS: any = 5 * 60 * 1000;
-const DOCKER_BUILD_TIMEOUT_MS: any = 25 * 60 * 1000;
-const DOCKER_RUN_TIMEOUT_MS: any = 20 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_BYTES: any = 64 * 1024 * 1024;
 const PLATFORM_ARTIFACT_PATTERN: any =
   /(?:^|\/)(?:build\/Release|prebuilds)\/|\.(?:node|dll|dylib|so(?:\.\d+)*)$/iu;
@@ -52,7 +49,6 @@ async function run(command?: any, args?: any, options: Record<string, any> = {})
   return execFileAsync(command, args, {
     cwd: options.cwd || process.cwd(),
     encoding: "utf8",
-    timeout: options.timeoutMs || COMMAND_TIMEOUT_MS,
     maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
     windowsHide: true,
     env: {
@@ -673,8 +669,7 @@ async function runContainerAuthority() : Promise<any> {
         "--build-arg",
         `NPM_REGISTRY=${OFFICIAL_NPM_REGISTRY}`,
         repoRoot
-      ],
-      { timeoutMs: DOCKER_BUILD_TIMEOUT_MS }
+      ]
     );
     const builtImageDigest: any = String(builtImage.stdout || "").match(
       /(?:sha256:)?([a-f0-9]{64})(?=\s|$)/u
@@ -722,8 +717,7 @@ async function runContainerAuthority() : Promise<any> {
     await runStage(
       "npm_package_fresh_container_verification_failed",
       "docker",
-      dockerArgs,
-      { timeoutMs: DOCKER_RUN_TIMEOUT_MS }
+      dockerArgs
     );
     const report: any = JSON.parse(await fs.readFile(evidencePath, "utf8"));
     assert.equal(report.summary?.freshContainer, true, "npm_package_container_evidence_invalid");
@@ -786,9 +780,7 @@ async function runContainerAuthority() : Promise<any> {
     );
     process.exitCode = 1;
   } finally {
-    await run("docker", ["image", "rm", "--force", verifierImageTag], {
-      timeoutMs: 2 * 60 * 1000
-    }).catch(() : any => {});
+    await run("docker", ["image", "rm", "--force", verifierImageTag]).catch(() : any => {});
     await fs.rm(wrapperTempRoot, { recursive: true, force: true });
   }
 }

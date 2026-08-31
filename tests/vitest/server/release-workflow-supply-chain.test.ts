@@ -30,11 +30,8 @@ import {
   normalizeMcpPortableTargets
 } from "../../../tools/server-scripts/lib/mcp-release-platforms.ts";
 import {
-  PLATFORM_ACCEPTANCE_JOB_BUDGET_MS,
-  PLATFORM_ACCEPTANCE_JOB_OVERHEAD_MS,
   PLATFORM_ACCEPTANCE_COMMANDS,
-  PLATFORM_ACCEPTANCE_PARALLELISM,
-  PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE
+  PLATFORM_ACCEPTANCE_PARALLELISM
 } from "../../../tools/server-scripts/verify-platform-acceptance.ts";
 import {
   hashCommand,
@@ -604,7 +601,7 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(verifier).toContain('"meshrix-mcp", "version", "--json"');
   });
 
-  it("gives the canonical fresh-container package simulation a bounded timeout", () : any => {
+  it("keeps CI cost caps separate from time-unbounded platform acceptance", () : any => {
     const workflow: any = read(".github/workflows/ci.yml");
     const releaseWorkflow: any = read(".github/workflows/release.yml");
     const verifier: any = read("tools/server-scripts/verify-npm-package-installability.ts");
@@ -629,25 +626,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(workflow).not.toContain("windows-installer-security:");
     expect(workflow).not.toContain("macos-latest");
     expect(workflow).not.toContain("windows-latest");
-    expect(verifier).toContain("const DOCKER_BUILD_TIMEOUT_MS: any = 25 * 60 * 1000;");
-    expect(verifier).toContain("const DOCKER_RUN_TIMEOUT_MS: any = 20 * 60 * 1000;");
-    expect(verifier.match(/\{ timeoutMs: DOCKER_BUILD_TIMEOUT_MS \}/gu)).toHaveLength(1);
-    expect(verifier.match(/\{ timeoutMs: DOCKER_RUN_TIMEOUT_MS \}/gu)).toHaveLength(1);
-    expect(verifier).not.toContain("{ timeoutMs: 15 * 60 * 1000 }");
-    expect(acceptanceCatalog).toContain(
-      "const NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS: any = 55 * 60 * 1000;"
-    );
-    expect(acceptanceCatalog.match(/timeoutMs: NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS/gu))
-      .toHaveLength(1);
-    const buildMinutes: any = Number(
-      verifier.match(/DOCKER_BUILD_TIMEOUT_MS(?:: any)? = (\d+) \* 60 \* 1000/u)?.[1]
-    );
-    const runMinutes: any = Number(
-      verifier.match(/DOCKER_RUN_TIMEOUT_MS(?:: any)? = (\d+) \* 60 \* 1000/u)?.[1]
-    );
-    const acceptanceMinutes: any = Number(
-      acceptanceCatalog.match(/NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS(?:: any)? = (\d+) \* 60 \* 1000/u)?.[1]
-    );
+    expect(verifier).not.toMatch(/COMMAND_TIMEOUT_MS|DOCKER_BUILD_TIMEOUT_MS|DOCKER_RUN_TIMEOUT_MS|timeoutMs/u);
+    expect(acceptanceCatalog).not.toMatch(/timeoutMs|TIMEOUT_MS|JOB_BUDGET|WORST_CASE/u);
     const canonicalJobMinutes: any = Number(
       portability.match(/timeout-minutes: (\d+)/u)?.[1]
     );
@@ -657,28 +637,16 @@ describe("release workflow supply-chain boundary", () : any => {
     const releaseVerify: any = jobSource(releaseWorkflow, "verify");
     const assembly: any = jobSource(releaseWorkflow, "assemble-release-assets");
     const ciAcceptanceMinutes: any = Number(ciAcceptance.match(/timeout-minutes: (\d+)/u)?.[1]);
-    const declaredAcceptanceJobMinutes: any = PLATFORM_ACCEPTANCE_JOB_BUDGET_MS / 60000;
 
-    expect([buildMinutes, runMinutes, acceptanceMinutes, canonicalJobMinutes])
-      .toEqual([25, 20, 55, 60]);
-    expect(acceptanceMinutes).toBeGreaterThan(buildMinutes + runMinutes);
-    expect(canonicalJobMinutes).toBeGreaterThan(buildMinutes + runMinutes);
+    expect(canonicalJobMinutes).toBe(60);
     expect(enterpriseDeliveryMinutes).toBe(120);
     expect(releaseVerify).toContain("timeout-minutes: 120");
     expect(releaseVerify).not.toContain("npm run verify:acceptance");
     expect(PLATFORM_ACCEPTANCE_PARALLELISM).toBe(4);
-    expect(PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE).toMatchObject({
-      commandCount: PLATFORM_ACCEPTANCE_COMMANDS.length,
-      maxParallel: 4
-    });
-    const privateDeploymentCommand: any = PLATFORM_ACCEPTANCE_COMMANDS.find((command?: any) : any =>
-      command.id === "private-deployment-internal-platform-e2e"
-    );
-    expect(privateDeploymentCommand?.timeoutMs).toBe(2 * 60 * 1000);
-    expect(PLATFORM_ACCEPTANCE_JOB_BUDGET_MS).toBeGreaterThanOrEqual(
-      PLATFORM_ACCEPTANCE_WORST_CASE_ESTIMATE.timeoutMs + PLATFORM_ACCEPTANCE_JOB_OVERHEAD_MS
-    );
-    expect([ciAcceptanceMinutes, declaredAcceptanceJobMinutes]).toEqual([395, 395]);
+    expect(PLATFORM_ACCEPTANCE_COMMANDS.every((command?: any) : any =>
+      !Object.hasOwn(command, "timeoutMs")
+    )).toBe(true);
+    expect(ciAcceptanceMinutes).toBe(395);
     expect(ciAcceptance).toContain('MESHRIX_RELEASE_PARALLELISM: "4"');
     expect(assembly).toContain("timeout-minutes: 60");
   });
@@ -768,7 +736,7 @@ describe("release workflow supply-chain boundary", () : any => {
         outputDir,
         "--platforms",
         "unsupported-platform"
-      ], { timeoutMs: 30000 })).rejects.toBeTruthy();
+      ])).rejects.toBeTruthy();
       await expect(fsPromises.access(outputDir)).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await fsPromises.rm(outputDir, { recursive: true, force: true });
@@ -783,7 +751,7 @@ describe("release workflow supply-chain boundary", () : any => {
       "--output-dir",
       outputDir,
       "--unsupported-option"
-    ], { timeoutMs: 30000 })).rejects.toBeTruthy();
+    ])).rejects.toBeTruthy();
     await expect(fsPromises.access(outputDir)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
@@ -912,7 +880,7 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(runbook).toContain("`RELEASE_SHA256SUMS.sigstore.json`");
   });
 
-  it("accepts only a strict npm dist-tag channel and bounds child processes", async () : Promise<any> => {
+  it("accepts only a strict npm dist-tag channel and lets release commands finish naturally", async () : Promise<any> => {
     expect(normalizeReleaseChannel("stable")).toBe("stable");
     expect(normalizeReleaseChannel("next-release")).toBe("next-release");
     for (const invalid of ["", "Stable", "v1", "1.0.0", "next release", "../next", "next_tag"]) {
@@ -920,8 +888,7 @@ describe("release workflow supply-chain boundary", () : any => {
     }
     await expect(run(
       process.execPath,
-      ["-e", "setTimeout(() => {}, 10000)"],
-      { timeoutMs: 25 }
-    )).rejects.toMatchObject({ killed: true });
+      ["-e", "setTimeout(() => process.stdout.write('done'), 40)"]
+    )).resolves.toMatchObject({ stdout: "done" });
   });
 });

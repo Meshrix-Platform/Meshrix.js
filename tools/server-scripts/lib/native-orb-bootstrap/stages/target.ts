@@ -36,18 +36,17 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
     "linger=$(loginctl show-user \"$USER\" -p Linger --value 2>/dev/null || true)",
     "systemctl --user show-environment >/dev/null 2>&1 || exit 20",
     "printf '%s\\n%s\\n%s\\n%s' \"$ID\" \"$arch\" \"$linger\" \"$HOME\"",
-  ].join("; ")], timeout: 15_000, code: "native_orb_bootstrap_target_unsupported" });
+  ].join("; ")], code: "native_orb_bootstrap_target_unsupported" });
   const { distribution, architecture, linger, home }: any = parseBootstrapTargetFacts(factsResult.stdout);
   const existingUnits: any = bootstrapOrbText(machine, ["sh", "-lc",
     "{ systemctl --user list-unit-files --type=service --no-legend; systemctl --user list-units --type=service --all --no-legend; } | awk 'tolower($1) ~ /meshrix/ {print $1}' | sort -u"],
-  { timeout: 15_000, code: "native_orb_bootstrap_service_probe_failed" });
+  { code: "native_orb_bootstrap_service_probe_failed" });
   const targetId: any = architecture === "x86_64" ? "linux-x64" : "linux-arm64";
   const layout: any = deriveBootstrapLayout(home, context.parsed.sourceRevision, "pending");
   const unitOnDisk: any = runOrb({
     machine,
     args: ["sh", "-lc", "test -e \"$1\" || test -L \"$1\"", "meshrix-bootstrap-unit", layout.unitPath],
     allowFailure: true,
-    timeout: 15_000,
   }).status === 0;
   let existingBootstrapUnit: any = false;
   if (existingUnits || unitOnDisk) {
@@ -56,11 +55,9 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
     }
     const activeState: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-active", "meshrix-js.service"], {
       allowFailure: true,
-      timeout: 15_000,
     });
     const enabledState: any = bootstrapOrbText(machine, ["systemctl", "--user", "is-enabled", "meshrix-js.service"], {
       allowFailure: true,
-      timeout: 15_000,
     });
     if (!["inactive", "failed", "unknown"].includes(activeState) || enabledState !== "disabled") {
       failNativeOrbBootstrap("native_orb_bootstrap_service_exists", "An active or enabled Meshrix service already exists.");
@@ -80,7 +77,7 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
     "for p in \"$@\"; do",
     "  if test -L \"$p\" || { test -e \"$p\" && test ! -d \"$p\"; }; then exit 31; fi",
     "done",
-  ].join("\n"), "meshrix-bootstrap-layout", ...layoutDirectories], allowFailure: true, timeout: 15_000 }).status !== 0;
+  ].join("\n"), "meshrix-bootstrap-layout", ...layoutDirectories], allowFailure: true }).status !== 0;
   if (unsafeLink) failNativeOrbBootstrap("native_orb_bootstrap_layout_unsafe", "The fixed bootstrap layout contains a link.");
   const fixedState: any = bootstrapOrbText(machine, ["sh", "-lc", [
     "if test ! -e \"$1\" && test ! -e \"$4\" && test ! -e \"$5\" && test ! -e \"$6\"; then test ! -e \"$8\" || { test -d \"$8\" && test ! -L \"$8\" && test \"$(stat -c %a \"$8\")\" = 700; } || exit 40; printf clean; exit 0; fi",
@@ -88,12 +85,12 @@ export async function runNativeOrbBootstrapStage(context?: any) : Promise<any> {
     "test -f \"$2\" && test ! -L \"$2\" && test \"$(stat -c %a \"$2\")\" = 600 && test \"$(cat \"$2\")\" = \"$3\" || exit 42",
     "for p in \"$1\" \"$4\" \"$5\" \"$6\" \"$7\" \"$8\" \"$9\"; do test ! -e \"$p\" || { test -d \"$p\" && test ! -L \"$p\" && test \"$(stat -c %a \"$p\")\" = 700; } || exit 43; done",
     "printf resumable",
-  ].join("\n"), "meshrix-bootstrap-fixed-state", layout.fixedRoot, layout.sourceMarkerPath, context.parsed.sourceRevision, layout.configRoot, layout.secretRoot, layout.dataDirectory, layout.releasesDirectory, pathParent(layout.runtimeRoot), layout.currentDirectory], { allowFailure: true, timeout: 15_000 });
+  ].join("\n"), "meshrix-bootstrap-fixed-state", layout.fixedRoot, layout.sourceMarkerPath, context.parsed.sourceRevision, layout.configRoot, layout.secretRoot, layout.dataDirectory, layout.releasesDirectory, pathParent(layout.runtimeRoot), layout.currentDirectory], { allowFailure: true });
   if (!["clean", "resumable"].includes(fixedState)) {
     failNativeOrbBootstrap("native_orb_bootstrap_layout_unsafe", "The fixed bootstrap layout is foreign or not safely resumable.");
   }
   assertBootstrapUnitResumeState({ existingBootstrapUnit, fixedState });
-  const username: any = bootstrapOrbText(machine, ["id", "-un"], { timeout: 15_000 });
+  const username: any = bootstrapOrbText(machine, ["id", "-un"], {});
   if (!/^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,63}$/u.test(username)) {
     failNativeOrbBootstrap("native_orb_bootstrap_target_unsupported", "Target user identity is unsupported.");
   }

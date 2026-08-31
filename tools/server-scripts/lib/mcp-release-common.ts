@@ -189,19 +189,13 @@ export async function writeFlattenedReleaseChecksumAuthority({ assetDirectories,
 
 export async function run(command?: any, args: any = [], options: Record<string, any> = {}) : Promise<any> {
   const resolved: any = resolveCommand(command, args);
-  const timeoutMs: any = options.timeoutMs ?? 600000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 900000) {
-    throw new Error("release_child_process_timeout_invalid");
-  }
   const result: any = await execFileAsync(resolved.command, resolved.args, {
     cwd: options.cwd || projectRoot,
     env: {
       ...process.env,
       ...(options.env || {})
     },
-    maxBuffer: 10 * 1024 * 1024,
-    timeout: timeoutMs,
-    killSignal: "SIGTERM"
+    maxBuffer: 10 * 1024 * 1024
   });
   return {
     stdout: result.stdout || "",

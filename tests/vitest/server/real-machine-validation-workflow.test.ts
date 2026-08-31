@@ -23,7 +23,7 @@ async function fixture() : Promise<any> {
   const stateRoot: any = path.join(root, "state");
   const functionalReportPath: any = path.join(root, "functional.json");
   await fs.writeFile(functionalReportPath, `${JSON.stringify({
-    schemaVersion: "v0.0.1:acceptance:platform-report-3",
+    schemaVersion: "v0.0.1:acceptance:platform-report-4",
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
     status: "accepted",
@@ -174,7 +174,6 @@ describe("real machine validation workflow", () : any => {
       "restoreStorageBackup",
       "publicCloudProbe",
       "docker",
-      "SIGTERM",
       "candidateEntryExecuted",
       "stoppedGracefully",
     ]) {
@@ -440,12 +439,10 @@ describe("real machine validation workflow", () : any => {
         await held;
         return { exitCode: 0, checks: { prepared: true } };
       },
-      { lockTimeoutMs: 1_000 },
     ));
     const second: any = createRealMachineValidationWorkflow(workflowOptions(
       fx,
       async () : Promise<any> => ({ exitCode: 0, checks: { prepared: true } }),
-      { lockTimeoutMs: 20 },
     ));
     try {
       const firstRun: any = first.prepare();
@@ -536,7 +533,6 @@ describe("real machine validation workflow", () : any => {
       },
     })).resolves.toMatchObject({
       exitCode: 0,
-      timedOut: false,
     });
   });
 });

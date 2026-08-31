@@ -1,7 +1,7 @@
 {
-  "prepare": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "prepare", "native-windows-x64"], "timeoutMs": 300000 },
-  "start": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "start", "native-windows-x64"], "timeoutMs": 300000 },
-  "verify": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "verify", "native-windows-x64"], "timeoutMs": 1800000 },
-  "stop": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "stop", "native-windows-x64"], "timeoutMs": 300000 },
-  "cleanup": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "cleanup", "native-windows-x64"], "timeoutMs": 300000 }
+  "prepare": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "prepare", "native-windows-x64"] },
+  "start": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "start", "native-windows-x64"] },
+  "verify": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "verify", "native-windows-x64"] },
+  "stop": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "stop", "native-windows-x64"] },
+  "cleanup": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "cleanup", "native-windows-x64"] }
 }
