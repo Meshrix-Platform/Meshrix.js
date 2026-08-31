@@ -754,7 +754,8 @@ describe("platform acceptance foundation ownership", () : any => {
     expect(foundation).toMatchObject({
       command: "npm",
       args: ["test"],
-      exclusive: true
+      exclusive: true,
+      timeoutMs: 35 * 60 * 1000
     });
     expect(foundation.resourceLocks).toEqual(expect.arrayContaining([
       "report:build/test-reports/latest.json",
