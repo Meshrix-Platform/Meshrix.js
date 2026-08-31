@@ -578,8 +578,31 @@ npm run verify:better-plan
 npm run verify:core-platform-surface-convergence
 ```
 
+PLAN-005 is the sole current production-use Plan. Its canonical Better Plan v3
+workspace is `docs/plans`: `Manifest.json` indexes the Plan,
+`production-use-closure/Plan.json` is the semantic source,
+`production-use-closure/Plan.md` is the generated projection, and
+`production-use-closure/Checkpoints.json` is execution state only. Never infer
+semantic authority from the projection or reconstruct missing state from an
+acceptance report.
+
+Use the same fail-closed authority for validation and next work:
+
+```bash
+npm run verify:better-plan
+npm run plan:next
+```
+
+An absent, malformed, or mismatched workspace requires Plan repair. These
+commands do not run functional acceptance, deploy a candidate, advance a
+branch, publish an artifact, or mutate checkpoints; only canonical Better Plan
+lifecycle commands may change execution state. Product acceptance, Linux
+deployment evidence, and branch advancement remain candidate evidence owned by
+their separate workflows. The Plan workspace remains a local process document
+and is excluded from public release artifacts.
+
 The reassembly profile covers the Core typecheck and build, public regression
-gate, capability surface convergence, and canonical acceptance-plan contract.
+gate, capability surface convergence, and acceptance contract.
 It does not execute the Functional Release Gate. Environment qualification,
 client compatibility, and plugin compatibility remain remaining required work.
 
@@ -915,6 +938,62 @@ belong in this gate whenever they can be executed without a particular real
 machine or external deployment. Exit code `0` means `passed`; every non-zero
 exit means `failed`.
 
+The acceptance orchestrator materializes the explicit Git commit in a detached
+private worktree. It never copies a dirty caller workspace, and a failed run
+retains one candidate-bound fixed-field failure envelope without moving the
+accepted-generation pointer.
+
+For the first installation on a clean supported Ubuntu or Debian x64/arm64
+Orb target, create an owner-only (`0600`) non-symlink login input containing
+exact UTF-8 JSON with only `username` and `password`; the normalized username
+must be `owner`. Keep this file under operator-private custody and run:
+
+```bash
+npm run bootstrap:native:orb -- \
+  --machine <target-id> \
+  --origin <server-url> \
+  --candidate <accepted-40-hex-commit> \
+  --login-input <private-login-input>
+```
+
+The bootstrap accepts only the current post-commit acceptance generation and
+archives that Git object rather than the caller's dirty tree. It installs the
+candidate-locked authenticated Node runtime, Core with
+`runtime.enabledPlugins: []`, external data/config/secrets, the private owner,
+and one enabled `meshrix-js.service` on port 7228. The login credential is
+validated and serialized once before the first target call, streamed through
+standard input, and not retained in arguments, service configuration, output,
+logs, or the receipt. Unsafe, linked, foreign, partial, or ambiguous fixed
+state fails closed. If activation or live verification fails, the bootstrap
+stops and disables the service and removes only its own unit; inactive
+installation state remains for diagnosis and an exact resume.
+The successful private receipt is `build/reports/native-orb-bootstrap.json`.
+
+After bootstrap has left the service active, deploy a later accepted commit to
+that existing native Linux target through the unchanged nine-stage Core
+upgrade catalog:
+
+```bash
+npm run deploy:native:orb -- \
+  --machine <target-id> \
+  --origin <server-url> \
+  --candidate <accepted-40-hex-commit> \
+  --login-input <private-login-input>
+```
+
+Reuse the same operator-custodied login input. The deployment
+builds in an inactive candidate release directory while the current service
+continues running, switches the systemd working directory atomically, and
+restores the prior activation if health, Console, authentication, governed
+read, candidate identity, or service activity cannot be proven. Retained
+evidence contains only bounded booleans and public candidate identities.
+
+After both local acceptance and existing-target verification, branch promotion
+uses the explicit accepted commit. Nightly feedback is bounded and
+non-gating; stable and release require their own exact successful authorities.
+No completed failed workflow is automatically retried, and this procedure
+does not publish tags or assets or modify branch policy.
+
 Inspect the sanitized functional DAG without executing it:
 
 ```bash
@@ -1161,6 +1240,11 @@ reported. A changed source or file set fails the operation without
 publishing a partial backup. Governed symbolic links, FIFOs, sockets, devices,
 and other non-regular filesystem artifacts are not backup inputs. Their
 presence fails the operation without following or deleting the artifact.
+
+Object files under `objects/.pending` are unpublished atomic-write staging and
+never enter a backup manifest. Backup creation and replacement restore leave
+that directory untouched; only objects already renamed into the published
+object tree are recoverable from a successful backup.
 
 Restore preview verifies the manifest metadata and the size and SHA-256 of every
 selected backup file. A restore without `includePaths` is a replacement of all

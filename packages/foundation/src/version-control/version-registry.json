@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-31",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -767,13 +767,13 @@
     },
     {
       "artifactId": "meshrix.better-plan-validation",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.better-plan-validation.",
-      "activeVersion": "v0.0.1:meshrix:better-plan-validation-1",
+      "kind": "report",
+      "description": "Bounded report for the sole canonical PLAN-005 authority.",
+      "activeVersion": "v0.0.1:meshrix:current-plan-authority-report-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:better-plan-validation-1",
-          "ref": "meshrix.better-plan-validation@v0.0.1:meshrix:better-plan-validation-1",
+          "version": "v0.0.1:meshrix:current-plan-authority-report-1",
+          "ref": "meshrix.better-plan-validation@v0.0.1:meshrix:current-plan-authority-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -783,9 +783,9 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-better-plan-validation-1-source",
+              "evidenceId": "v0-0-1-meshrix-current-plan-authority-report-1-source",
               "kind": "other",
-              "uri": "tools/plan/canonical-better-plan-validator.ts"
+              "uri": "tools/server-scripts/verify-better-plan.ts"
             }
           ]
         }
@@ -916,58 +916,6 @@
               "evidenceId": "v0-0-1-client-fingerprint-1-source",
               "kind": "other",
               "uri": "packages/foundation/src/security/process-identity/process-identity-core.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.coding-github.operation-result",
-      "kind": "schema",
-      "description": "Governed operation result schema for the repository-local Coding GitHub runtime plugin.",
-      "activeVersion": "v0.0.1:coding-github:operation-result-1",
-      "versions": [
-        {
-          "version": "v0.0.1:coding-github:operation-result-1",
-          "ref": "meshrix.coding-github.operation-result@v0.0.1:coding-github:operation-result-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current repository-local plugin contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-coding-github-operation-result-1-source",
-              "kind": "other",
-              "uri": "plugins/coding/github/runtime.mjs"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.coding-github.skill-install-state",
-      "kind": "store",
-      "description": "Governed persistent skill installation state for the repository-local Coding GitHub runtime plugin.",
-      "activeVersion": "v0.0.1:coding-github:skill-install-state-1",
-      "versions": [
-        {
-          "version": "v0.0.1:coding-github:skill-install-state-1",
-          "ref": "meshrix.coding-github.skill-install-state@v0.0.1:coding-github:skill-install-state-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current repository-local plugin state contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-coding-github-skill-install-state-1-source",
-              "kind": "other",
-              "uri": "plugins/coding/github/runtime/skill-install-state.mjs"
             }
           ]
         }
@@ -1269,6 +1217,58 @@
       ]
     },
     {
+      "artifactId": "meshrix.deployment.native-orb-production-use-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.deployment.native-orb-production-use-report.",
+      "activeVersion": "v0.0.1:deployment:native-orb-production-use-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:deployment:native-orb-production-use-report-1",
+          "ref": "meshrix.deployment.native-orb-production-use-report@v0.0.1:deployment:native-orb-production-use-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-deployment-native-orb-production-use-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/native-orb-deployment/support.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.deployment.native-orb-bootstrap-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.deployment.native-orb-bootstrap-report.",
+      "activeVersion": "v0.0.1:deployment:native-orb-bootstrap-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:deployment:native-orb-bootstrap-report-1",
+          "ref": "meshrix.deployment.native-orb-bootstrap-report@v0.0.1:deployment:native-orb-bootstrap-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-deployment-native-orb-bootstrap-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/native-orb-bootstrap/support.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.deployment.private-internal-platform-e2e-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.deployment.private-internal-platform-e2e-report.",
@@ -1351,32 +1351,6 @@
               "evidenceId": "v0-0-1-downstream-gateway-agent-tool-loop-report-1-source-2",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.end-to-end-release-plan-proof",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.end-to-end-release-plan-proof.",
-      "activeVersion": "v0.0.1:meshrix:end-to-end-release-plan-proof-3",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:end-to-end-release-plan-proof-3",
-          "ref": "meshrix.end-to-end-release-plan-proof@v0.0.1:meshrix:end-to-end-release-plan-proof-3",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-end-to-end-release-plan-proof-3-source",
-              "kind": "other",
-              "uri": "tools/plan/verify-end-to-end-release-plan.ts"
             }
           ]
         }
@@ -2652,6 +2626,37 @@
       ]
     },
     {
+      "artifactId": "meshrix.mcp.node-runtime-supply-chain-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.mcp.node-runtime-supply-chain-report.",
+      "activeVersion": "v0.0.1:mcp:node-runtime-supply-chain-report-2",
+      "versions": [
+        {
+          "version": "v0.0.1:mcp:node-runtime-supply-chain-report-2",
+          "ref": "meshrix.mcp.node-runtime-supply-chain-report@v0.0.1:mcp:node-runtime-supply-chain-report-2",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-mcp-node-runtime-supply-chain-report-2-source-1",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-node-runtime-supply-chain.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-mcp-node-runtime-supply-chain-report-2-source-2",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.mcp.proxy-transport-report",
       "kind": "protocol",
       "description": "Governed version registry entry for meshrix.mcp.proxy-transport-report.",
@@ -3830,32 +3835,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.organization-closure",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.organization-closure.",
-      "activeVersion": "v0.0.1:meshrix:organization-closure-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:organization-closure-1",
-          "ref": "meshrix.organization-closure@v0.0.1:meshrix:organization-closure-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-organization-closure-1-source",
-              "kind": "other",
-              "uri": "tools/plan/verify-organization-closure.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.performance.gateway-observation-report",
       "kind": "schema",
       "description": "Privacy-bounded aggregate gateway performance observation report schema.",
@@ -3918,84 +3897,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.plan-contract-receipt",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.plan-contract-receipt.",
-      "activeVersion": "v0.0.1:meshrix:plan-contract-receipt-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:plan-contract-receipt-1",
-          "ref": "meshrix.plan-contract-receipt@v0.0.1:meshrix:plan-contract-receipt-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-plan-contract-receipt-1-source",
-              "kind": "other",
-              "uri": "tools/plan/plan-final-receipt.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.plan-execution-selection",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.plan-execution-selection.",
-      "activeVersion": "v0.0.1:meshrix:plan-execution-selection-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:plan-execution-selection-1",
-          "ref": "meshrix.plan-execution-selection@v0.0.1:meshrix:plan-execution-selection-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-plan-execution-selection-1-source",
-              "kind": "other",
-              "uri": "tools/plan/select-next-plan-node.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.plan-final-receipt",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.plan-final-receipt.",
-      "activeVersion": "v0.0.1:meshrix:plan-final-receipt-4",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:plan-final-receipt-4",
-          "ref": "meshrix.plan-final-receipt@v0.0.1:meshrix:plan-final-receipt-4",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-plan-final-receipt-4-source",
-              "kind": "other",
-              "uri": "tools/plan/plan-final-receipt.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.platform-acceptance-execution-lease",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.platform-acceptance-execution-lease.",
@@ -4014,6 +3915,32 @@
           "evidenceRefs": [
             {
               "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-execution-lease-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.platform-acceptance-failure-envelope",
+      "kind": "other",
+      "description": "Governed version registry entry for meshrix.platform-acceptance-failure-envelope.",
+      "activeVersion": "v0.0.1:meshrix:platform-acceptance-failure-envelope-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:platform-acceptance-failure-envelope-1",
+          "ref": "meshrix.platform-acceptance-failure-envelope@v0.0.1:meshrix:platform-acceptance-failure-envelope-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-platform-acceptance-failure-envelope-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
             }
@@ -5823,6 +5750,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.release.branch-promotion-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.release.branch-promotion-report.",
+      "activeVersion": "v0.0.1:release:branch-promotion-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:release:branch-promotion-report-1",
+          "ref": "meshrix.release.branch-promotion-report@v0.0.1:release:branch-promotion-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-release-branch-promotion-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/promote-release-branches.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.release.composition-source-package-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.release.composition-source-package-report.",
@@ -6035,37 +5988,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.release.public-source-boundary-verifier",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.release.public-source-boundary-verifier.",
-      "activeVersion": "v0.0.1:release:public-source-boundary-verifier-1",
-      "versions": [
-        {
-          "version": "v0.0.1:release:public-source-boundary-verifier-1",
-          "ref": "meshrix.release.public-source-boundary-verifier@v0.0.1:release:public-source-boundary-verifier-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-release-public-source-boundary-verifier-1-source-1",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-release-public-source-boundary-verifier-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/verify-better-plan.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.release.runtime-assembly-package",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.release.runtime-assembly-package.",
@@ -6148,6 +6070,32 @@
               "evidenceId": "v0-0-1-release-source-package-manifest-4-source-2",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-composition-source.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.release.unified-production-closure-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.release.unified-production-closure-report.",
+      "activeVersion": "v0.0.1:release:unified-production-closure-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:release:unified-production-closure-report-1",
+          "ref": "meshrix.release.unified-production-closure-report@v0.0.1:release:unified-production-closure-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-release-unified-production-closure-report-1-source-1",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-unified-production-closure.ts"
             }
           ]
         }
@@ -7447,6 +7395,89 @@
       ]
     },
     {
+      "artifactId": "meshrix.skill-hub.host-context",
+      "kind": "protocol",
+      "description": "Minimal Meshrix-issued identity and operation context for calls to the independent Skill Hub service.",
+      "activeVersion": "v0.0.1:skill-hub:host-context-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:host-context-1",
+          "ref": "meshrix.skill-hub.host-context@v0.0.1:skill-hub:host-context-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current service-bound context contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-host-context-1-plugin-source",
+              "kind": "other",
+              "uri": "plugins/skill-hub/runtime/external-service-client.mjs"
+            },
+            {
+              "evidenceId": "v0-0-1-skill-hub-host-context-1-service-source",
+              "kind": "other",
+              "uri": "services/skill-hub/internal/application.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.idempotency-binding",
+      "kind": "protocol",
+      "description": "Subject-bound idempotency derivation for Meshrix-mediated Skill Hub operations.",
+      "activeVersion": "v0.0.1:skill-hub:idempotency-binding-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:idempotency-binding-1",
+          "ref": "meshrix.skill-hub.idempotency-binding@v0.0.1:skill-hub:idempotency-binding-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current service-and-subject idempotency binding."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-idempotency-binding-1-source",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/composition/plugin-contribution-controller.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.pairwise-principal",
+      "kind": "protocol",
+      "description": "Service-scoped opaque principal derivation for Meshrix-mediated Skill Hub operations.",
+      "activeVersion": "v0.0.1:skill-hub:pairwise-principal-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:pairwise-principal-1",
+          "ref": "meshrix.skill-hub.pairwise-principal@v0.0.1:skill-hub:pairwise-principal-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current service-scoped principal derivation contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-pairwise-principal-1-source",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/composition/plugin-contribution-controller.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.skill-hub.runtime",
       "kind": "protocol",
       "description": "Governed operation payload protocol for the independent Skill Hub service and its Meshrix adapter.",
@@ -8065,32 +8096,6 @@
               "evidenceId": "v0-0-1-state-machine-capability-acceptance-upstream-service-publishing-3-source",
               "kind": "manifest",
               "uri": "packages/foundation/src/workflow/state-machine/definitions/acceptance/upstream-service-publishing.json"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.state-machine.coding-github-skill-install",
-      "kind": "state_machine",
-      "description": "Governed skill installation lifecycle for the repository-local Coding GitHub runtime plugin.",
-      "activeVersion": "v0.0.1:state-machine:github-skill-install-1",
-      "versions": [
-        {
-          "version": "v0.0.1:state-machine:github-skill-install-1",
-          "ref": "meshrix.state-machine.coding-github-skill-install@v0.0.1:state-machine:github-skill-install-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current repository-local plugin state machine."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-state-machine-github-skill-install-1-source",
-              "kind": "manifest",
-              "uri": "plugins/coding/github/state-machines/skill-install.lifecycle.json"
             }
           ]
         }

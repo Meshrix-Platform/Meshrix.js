@@ -62,6 +62,21 @@ The canonical list is
 `tools/server-scripts/native-orb-deploy.ts`. Stage implementations live under
 `tools/server-scripts/lib/native-orb-deployment/stages/`.
 
+A clean target uses the separately invoked `bootstrap:native:orb` command
+before this upgrade workflow. Its explicit Core-only catalog contains exactly
+these ten stages in one predecessor chain: `target`, `candidate`, `runtime`,
+`install`, `dependencies`, `build`, `configure`, `owner`, `activate`, and
+`verify`. The bootstrap never loads or mutates the upgrade or optional-startup
+catalogs. It admits only Ubuntu or Debian x64/arm64 targets with a lingering
+systemd user manager, installs the runtime locked by the accepted candidate,
+creates external production secret custody, admits the owner credential from
+bounded private standard input, and publishes one `meshrix-js.service` unit.
+The login file is validated and serialized once before the first target call;
+the same bounded bytes are used for owner admission and live authentication.
+Failure after activation removes only that bootstrap-owned unit and leaves the
+inactive source, runtime, data, secrets, and operator login input for diagnosis
+and retry.
+
 ## Origin Selection
 
 The deployment entry point takes a `--origin` argument that is environment-
