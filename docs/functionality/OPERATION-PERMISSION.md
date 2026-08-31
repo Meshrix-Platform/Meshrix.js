@@ -77,6 +77,18 @@ accepts only strict `mxak1` credentials. Generic Grants continue to use
 `Authorization: Bearer` or `x-meshrix-tool-token`; the retired API-key-to-Grant
 header alias is not accepted.
 
+One API Key may select Core operations and dynamic upstream operations for the
+same MCP connection. Resource restrictions are evaluated against the current
+operation rather than treated as a requirement to match an unrelated selected
+operation: every resource fact declared by the current operation must match its
+explicit allow-list, while resource dimensions declared only by another
+selected operation neither hide nor authorize it. Restricted-empty still
+authorizes nothing. The server derives immutable operation-identity resource
+facts from the selected catalog entries. A dynamic upstream operation also
+requires its exact capability and service plus a complete egress, capability
+domain, capability verb, resource-kind, and credential-binding declaration;
+missing or mismatched required facts deny both discovery and execution.
+
 ## Tag Policy
 
 Tags are a universal governance abstraction for roles, skills, operations, documents, agents, upstream services, workspaces, and organizations. Deny tags take precedence over allow tags.

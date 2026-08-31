@@ -349,12 +349,20 @@ function operationFieldNames(operation: Record<string, any> = {}) : any {
   return output;
 }
 
-function normalizeResourceFieldMap(operation: Record<string, any> = {}, configuredFieldMap: Record<string, any> = {}) : any {
+function normalizeResourceFieldMap(
+  operation: Record<string, any> = {},
+  configuredFieldMap: Record<string, any> = {},
+  fixedResourceContext: Record<string, any> = {}
+) : any {
   const fields: any = operationFieldNames(operation);
   const output: Record<string, any> = {};
   for (const [resourceKey, aliases] of (Object.entries(RESOURCE_FIELD_ALIASES) as [string, any][])) {
     const configured: any = Array.isArray(configuredFieldMap[resourceKey]) ? configuredFieldMap[resourceKey] : [];
-    const present: any = aliases.filter((alias?: any) : any => fields.has(alias));
+    const hasFixedFact: any = Object.hasOwn(fixedResourceContext, resourceKey) &&
+      fixedResourceContext[resourceKey] !== undefined &&
+      fixedResourceContext[resourceKey] !== null &&
+      fixedResourceContext[resourceKey] !== "";
+    const present: any = hasFixedFact ? [] : aliases.filter((alias?: any) : any => fields.has(alias));
     const normalized: any = uniqueStrings([...configured, ...present]);
     if (normalized.length > 0) {
       output[resourceKey] = normalized;
@@ -412,20 +420,23 @@ function normalizeResourceContext(operation: Record<string, any> = {}, safety: R
   const idPrefix: any = String(operation.id || "").split(".").filter(Boolean)[0] || "operation";
   const resourceContext: any = compactResourceContext(operation.resourceContext);
   const resource: any = compactResourceContext(operation.resource);
-  const fieldMap: any = normalizeResourceFieldMap(operation, {
-    ...objectOrEmpty(resourceContext.fieldMap),
-    ...objectOrEmpty(resource.fieldMap)
-  });
   const inferred: Record<string, any> = {
     capabilityDomain: feature || idPrefix,
     resourceKind: inferOperationResourceKind(operation),
     capabilityVerb: inferOperationCapabilityVerb(operation),
     effectKind: inferOperationEffectKind(operation, safety)
   };
-  return {
+  const fixedResourceContext: any = {
     ...inferred,
     ...resourceContext,
-    ...resource,
+    ...resource
+  };
+  const fieldMap: any = normalizeResourceFieldMap(operation, {
+    ...objectOrEmpty(resourceContext.fieldMap),
+    ...objectOrEmpty(resource.fieldMap)
+  }, fixedResourceContext);
+  return {
+    ...fixedResourceContext,
     fieldMap
   };
 }

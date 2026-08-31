@@ -17,7 +17,10 @@ import {
   revokeDelegatedMcpGrantForPlatform
 } from "./tool-skill-management-provider-delegated-mcp.ts";
 import { authenticateMcpApiKey } from "./mcp-api-key-authentication.ts";
-import { apiKeyAuthorizationEvaluationInput } from "../operation-permission-core/api-key-distribution.ts";
+import {
+  apiKeyAuthorizationEvaluationInput,
+  apiKeyResourcePolicyAllowsOperation
+} from "../operation-permission-core/api-key-distribution.ts";
 
 export const OPERATION_PERMISSION_FACADE_PROTOCOL_VERSION: any = "v0.0.1:operation-permission:facade-1";
 const VISIBLE_TOOL_SNAPSHOT_SCHEMA: any = "v0.0.1:capabilities:visible-tool-snapshot-1";
@@ -575,25 +578,5 @@ function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
   const toolRiskRank: any = API_KEY_RISK_RANK[String(tool.risk || "read_only")];
   const maximumRiskRank: any = API_KEY_MAXIMUM_RISK_RANK[String(policy.maximumRisk || "")];
   if (!Number.isInteger(toolRiskRank) || !Number.isInteger(maximumRiskRank) || toolRiskRank > maximumRiskRank) return false;
-  if (policy.resources?.mode === "restricted") {
-    const resource: any = tool.resourceContext || dynamicCapability?.resourceContext || {};
-    const checks: any[] = [
-      [resource.workspaceId, policy.resources.workspaceIds],
-      [resource.dataClassification, policy.resources.dataClassifications],
-      [resource.egressClass, policy.resources.egressClasses],
-      [resource.semanticFamily, policy.resources.semanticFamilies],
-      [resource.capabilityDomain, policy.resources.capabilityDomains],
-      [resource.capabilityVerb, policy.resources.capabilityVerbs],
-      [resource.resourceKind, policy.resources.resourceKinds],
-      [resource.effectKind, policy.resources.effectKinds],
-      [resource.secretBindingId, policy.resources.secretBindingIds],
-      [resource.origin, policy.resources.allowedOrigins]
-    ];
-    const configuredChecks: any[] = checks.filter(([, allowed]: any[]) : any => Array.isArray(allowed) && allowed.length > 0);
-    const suppliedChecks: any[] = configuredChecks.filter(([fact]: any[]) : any => Boolean(fact));
-    if (configuredChecks.length === 0 ||
-        suppliedChecks.some(([fact, allowed]: any[]) : any => !allowed.includes(fact)) ||
-        !suppliedChecks.some(([fact, allowed]: any[]) : any => allowed.includes(fact))) return false;
-  }
-  return true;
+  return apiKeyResourcePolicyAllowsOperation(policy, tool);
 }

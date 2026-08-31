@@ -5,6 +5,7 @@ export {
   ApiKeyDistributionError,
   parseApiKeyCredential,
   apiKeyAuthorizationEvaluationInput,
+  apiKeyResourcePolicyAllowsOperation,
   reconcileApiKeyOwnerRecoveryAssignments,
   registerApiKeyOwnerRecoveryAssignmentSync
 } from "./api-key-distribution-worker-owner.ts";

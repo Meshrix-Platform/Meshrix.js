@@ -146,6 +146,151 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
 }
 
 describe("scoped API Key distribution", () : any => {
+  it("authorizes selected Core and exact upstream operations through one restricted API Key", async () : Promise<any> => {
+    const coreResource: any = {
+      capabilityDomain: "runtime",
+      capabilityVerb: "health",
+      resourceKind: "system-health",
+      effectKind: "repair-write"
+    };
+    const upstreamResource: any = {
+      serviceId: "opaque-service",
+      serviceIds: ["opaque-service"],
+      requestedEgress: "mcp",
+      requestedEgresses: ["mcp"],
+      secretBindingId: "secret-binding-opaque",
+      secretBindingIds: ["secret-binding-opaque"],
+      capabilityDomain: "upstream-gateway",
+      capabilityVerb: "tools/call",
+      resourceKind: "upstream-service-operation"
+    };
+    const capabilityId: any = "cap:upstream:opaque-service:tools-call-records-list";
+    const current: any = harness({
+      tools: [
+        {
+          id: "tools.echo",
+          toolsets: ["meshrix.runtime.read"],
+          requiredScopes: ["runtime:read"],
+          risk: "repair_write",
+          resourceContext: coreResource
+        },
+        {
+          id: "upstream.opaque-service.records-list",
+          serviceId: "opaque-service",
+          toolsets: ["meshrix.gateway.read"],
+          requiredScopes: ["gateway:read"],
+          risk: "read_only",
+          resourceContext: upstreamResource,
+          dynamicCapability: {
+            capabilityId,
+            serviceId: "opaque-service",
+            risk: "read_only",
+            requiredScopes: ["gateway:read"],
+            toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+            credentialBindingIds: ["secret-binding-opaque"],
+            resourceContext: upstreamResource
+          }
+        }
+      ],
+      toolsets: [
+        { id: "meshrix.runtime.read", requiredScopes: ["runtime:read"] },
+        { id: "meshrix.gateway.read", requiredScopes: ["gateway:read"] }
+      ],
+      scopes: [{ id: "runtime:read" }, { id: "gateway:read" }]
+    });
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Unified Core and upstream worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          serviceIds: [],
+          capabilityIds: [],
+          toolsetIds: ["meshrix.runtime.read", "meshrix.gateway.read"],
+          allowedTools: ["tools.echo", "upstream.opaque-service.records-list"],
+          scopeIds: ["runtime:read", "gateway:read"],
+          maximumRisk: "high",
+          resources: {
+            ...policy().resources,
+            mode: "restricted",
+            workspaceIds: []
+          },
+          limits: { maxUses: 20, requestsPerWindow: 20, windowSeconds: 60, maxConcurrentEffects: 4 }
+        })
+      });
+      expect(created.record.policy).toMatchObject({
+        serviceIds: ["opaque-service"],
+        capabilityIds: expect.arrayContaining([capabilityId]),
+        maximumRisk: "high",
+        resources: {
+          mode: "restricted",
+          egressClasses: ["mcp"],
+          capabilityDomains: ["runtime", "upstream-gateway"],
+          capabilityVerbs: ["health", "tools/call"],
+          resourceKinds: ["system-health", "upstream-service-operation"],
+          effectKinds: ["repair-write"],
+          secretBindingIds: ["secret-binding-opaque"]
+        }
+      });
+
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const coreOperation: any = {
+        toolId: "tools.echo",
+        toolsetIds: ["meshrix.runtime.read"],
+        scopeIds: ["runtime:read"],
+        risk: "repair_write",
+        resourceContext: coreResource
+      };
+      const upstreamOperation: any = {
+        toolId: "upstream.opaque-service.records-list",
+        serviceId: "opaque-service",
+        capabilityId,
+        dynamicCapability: true,
+        toolsetIds: ["meshrix.gateway.read", "upstream:opaque-service"],
+        scopeIds: ["gateway:read"],
+        risk: "read_only",
+        resourceContext: upstreamResource
+      };
+      await expect(current.provider.authorizeOperation({ authorization, operation: coreOperation }))
+        .resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(current.provider.authorizeOperation({ authorization, operation: upstreamOperation }))
+        .resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: { ...coreOperation, resourceContext: { ...coreResource, effectKind: "destructive" } }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: { ...upstreamOperation, capabilityId: `${capabilityId}-sibling` }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      const { requestedEgress: _removedEgress, requestedEgresses: _removedEgresses, ...missingEgress } = upstreamResource;
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: { ...upstreamOperation, resourceContext: missingEgress }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: {
+          ...upstreamOperation,
+          resourceContext: {
+            ...upstreamResource,
+            secretBindingId: "secret-binding-sibling",
+            secretBindingIds: ["secret-binding-sibling"]
+          }
+        }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+    } finally {
+      await current.close();
+    }
+  });
+
   it("preserves explicitly selected upstream tool capabilities beside the gateway operation capability", async () : Promise<any> => {
     const gatewayCapabilityId: any = "cap:upstream:opaque-service:tools-call";
     const selectedToolCapabilityId: any = `${gatewayCapabilityId}-records-list`;
@@ -231,6 +376,10 @@ describe("scoped API Key distribution", () : any => {
           resources: {
             ...policy().resources,
             workspaceIds: [],
+            egressClasses: ["mcp"],
+            capabilityDomains: ["upstream-gateway"],
+            capabilityVerbs: ["tools/call"],
+            resourceKinds: ["upstream-service-operation"],
             secretBindingIds: ["secret-binding-opaque"]
           }
         })
@@ -250,8 +399,12 @@ describe("scoped API Key distribution", () : any => {
         scopeIds: ["gateway:read"],
         risk: "read_only",
         resourceContext: {
+          requestedEgress: "mcp",
+          requestedEgresses: ["mcp"],
           secretBindingId: "secret-binding-opaque",
+          secretBindingIds: ["secret-binding-opaque"],
           capabilityDomain: "upstream-gateway",
+          capabilityVerb: "tools/call",
           resourceKind: "upstream-service-operation"
         }
       };

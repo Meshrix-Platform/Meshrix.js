@@ -95,8 +95,8 @@ function toolMatchesAccess(tool: Record<string, any> = {}, access: Record<string
     .find((capability?: any) : any => capability.startsWith("cap:upstream:") && capability.includes(":tools-call-"));
   if (upstreamServicePrefix && dynamicCapabilityId === `${upstreamServicePrefix.slice(0, upstreamServicePrefix.indexOf(":tools-call-"))}:tools-call`) return true;
   if (selectedCapabilities.size > 0 && dynamicCapabilityId && selectedCapabilities.has(dynamicCapabilityId)) return true;
-  if (tool.serviceId && selectedServices.has(tool.serviceId)) return true;
   if (tool.dynamicCapability && explicitDynamicSelection) return false;
+  if (tool.serviceId && selectedServices.has(tool.serviceId)) return true;
   if ((tool.toolsets || []).some((value?: any) : any => selectedToolsets.has(value))) return true;
   return false;
 }
