@@ -16,7 +16,10 @@ import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import { upstreamOperationCapabilityId } from "../../packages/agents/src/upstream-gateway/operation-capability.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
-import { runMcpGatewayLoadPhase } from "./lib/mcp-gateway-load-phase.ts";
+import {
+  MCP_GATEWAY_LOAD_FIXTURE_OPERATION_TIMEOUT_MS,
+  runMcpGatewayLoadPhase
+} from "./lib/mcp-gateway-load-phase.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./lib/upstream-gateway-verifier-publication.ts";
 
@@ -115,6 +118,7 @@ async function writeUpstreamGatewayConfig() : Promise<any> {
             operationKey: "echo",
             method: "GET",
             path: "/echo",
+            timeoutMs: MCP_GATEWAY_LOAD_FIXTURE_OPERATION_TIMEOUT_MS,
             risk: "read_only",
             requiredScopes: ["gateway:read"],
             payloadTransport: {
