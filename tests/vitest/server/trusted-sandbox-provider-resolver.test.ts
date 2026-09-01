@@ -330,7 +330,7 @@ describe("trusted sandbox provider resolver", () : any => {
     expect(administrativeState).not.toHaveProperty("executablePath");
   });
 
-  it("does not classify one OCI service as both rootless and rootful", async () : Promise<any> => {
+  it("discovers local Podman only through its non-root host identity", async () : Promise<any> => {
     const backend: Record<string, any> = {
       async descriptor() : Promise<any> {
         return { healthy: true, production: true, enforcedRestrictions: [] };
@@ -350,7 +350,7 @@ describe("trusted sandbox provider resolver", () : any => {
     const rootful: any = adapters.find(({ id }: Record<string, any>) : any => id === "oci.podman");
 
     expect((await rootless.probe()).healthy).toBe(true);
-    expect((await rootful.probe()).healthy).toBe(false);
+    expect(rootful).toBeUndefined();
   });
 
   it("rejects a conformance target whose observed OCI runtime class differs", async () : Promise<any> => {
