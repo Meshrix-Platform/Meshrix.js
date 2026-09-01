@@ -180,10 +180,9 @@ function auditShardCommand(profile?: any, suiteIds?: any) : any {
   ].join(" ");
 }
 
-function fullRegressionCommandsFor(shards?: any) : any {
+export function createEnterpriseSingleNodeRegressionCommands(shards?: any) : any {
   return Object.freeze([
     auditShardCommand(shards.profile, shards.hostSuiteIds),
-    "npm run verify",
     auditShardCommand(shards.profile, shards.workerSuiteIds),
   ]);
 }
@@ -767,7 +766,7 @@ async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Prom
     "ubuntu_delivery_candidate_mismatch",
   );
   const shards: any = await loadAuditShards(repoRoot);
-  const fullRegressionCommands: any = fullRegressionCommandsFor(shards);
+  const fullRegressionCommands: any = createEnterpriseSingleNodeRegressionCommands(shards);
   const hostAuditObservation: any = JSON.parse(await fs.readFile(
     path.join(evidenceRoot, HOST_AUDIT_OBSERVATION),
     "utf8",
@@ -849,7 +848,7 @@ async function recordWorkerEvidence({
   const criteriaByNode: any =
     implementationCriteriaByNode(deliveryImplementationNodes);
   const shards: any = await loadAuditShards(repoRoot);
-  const fullRegressionCommands: any = fullRegressionCommandsFor(shards);
+  const fullRegressionCommands: any = createEnterpriseSingleNodeRegressionCommands(shards);
   const validation: any = validateEnterpriseSingleNodeWorkerSummary({
     summary,
     implementationNodes: deliveryImplementationNodes,

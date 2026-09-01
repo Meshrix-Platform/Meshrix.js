@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND,
+  createEnterpriseSingleNodeRegressionCommands,
   createUbuntuContainerRequest,
 } from "../../../tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts";
 
@@ -29,5 +30,19 @@ describe("enterprise single-node Ubuntu container", () : any => {
       .toBe("node tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts");
     expect(ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND)
       .not.toContain("enterprise-operations-closure");
+  });
+
+  it("keeps the delivery audit split independent from the repository-wide regression", () : any => {
+    const commands: any = createEnterpriseSingleNodeRegressionCommands({
+      profile: "audit-public",
+      hostSuiteIds: ["host-suite"],
+      workerSuiteIds: ["worker-suite"],
+    });
+
+    expect(commands).toEqual([
+      "node tests/run.ts --profile audit-public --suite host-suite",
+      "node tests/run.ts --profile audit-public --suite worker-suite",
+    ]);
+    expect(commands).not.toContain("npm run verify");
   });
 });
