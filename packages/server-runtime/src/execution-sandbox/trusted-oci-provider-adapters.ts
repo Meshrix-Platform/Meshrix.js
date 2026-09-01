@@ -45,7 +45,6 @@ const FIXED_CANDIDATES: Readonly<Partial<Record<NodeJS.Platform, readonly OciCan
   ]),
   linux: Object.freeze([
     { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman" as const, binary: "podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.podman", providerClass: "podman", engine: "podman" as const, binary: "podman", runtimeClass: "crun", rootless: false },
     { id: "oci.rootless-docker", providerClass: "rootless-docker", engine: "docker" as const, binary: "docker", runtimeClass: "runc", rootless: true },
     { id: "oci.docker", providerClass: "docker", engine: "docker" as const, binary: "docker", runtimeClass: "runc", rootless: false }
   ])
