@@ -269,13 +269,25 @@ function absoluteDirectory(value?: any, code?: any) : any {
   return path.resolve(value);
 }
 
-export function createUbuntuContainerRequest({ image, candidateRoot, evidenceRoot }: Record<string, any> = {}) : any {
+export function createUbuntuContainerRequest({
+  image,
+  candidateRoot,
+  evidenceRoot,
+  uid = process.getuid?.() ?? 0,
+  gid = process.getgid?.() ?? 0,
+}: Record<string, any> = {}) : any {
   requireCondition(
     typeof image === "string" && DIGEST_PINNED_IMAGE_PATTERN.test(image),
     "ubuntu_acceptance_image_not_digest_pinned",
   );
+  requireCondition(
+    Number.isSafeInteger(uid) && uid >= 0 &&
+      Number.isSafeInteger(gid) && gid >= 0,
+    "ubuntu_acceptance_user_identity_invalid",
+  );
   const candidate: any = absoluteDirectory(candidateRoot, "ubuntu_acceptance_candidate_root_invalid");
   const evidence: any = absoluteDirectory(evidenceRoot, "ubuntu_acceptance_evidence_root_invalid");
+  const userIdentity: any = `${uid}:${gid}`;
   return Object.freeze({
     executable: "docker",
     args: Object.freeze([
@@ -283,10 +295,12 @@ export function createUbuntuContainerRequest({ image, candidateRoot, evidenceRoo
       "--rm",
       "--network",
       "none",
+      "--user",
+      userIdentity,
       "--env",
       "NODE_OPTIONS=--conditions=source",
       "--tmpfs",
-      "/worker:exec,mode=0700",
+      `/worker:exec,mode=0700,uid=${uid},gid=${gid}`,
       "--mount",
       `type=bind,src=${candidate},dst=/workspace,readonly`,
       "--mount",
@@ -345,13 +359,18 @@ async function runProcess({
   }
 }
 
-export function reduceEnterpriseSingleNodeFailure({ phase }: Record<string, any> = {}) : any {
+export function reduceEnterpriseSingleNodeFailure({ phase, cause }: Record<string, any> = {}) : any {
+  const safeCause: any = typeof cause === "string" &&
+      /^[a-z][a-z0-9_]{0,127}$/u.test(cause)
+    ? cause
+    : "enterprise_single_node_internal_failure";
   return Object.freeze({
     status: "failed",
     phase: typeof phase === "string" && ENTERPRISE_SINGLE_NODE_PHASES.includes(phase)
       ? phase
       : "unknown",
     code: "enterprise_single_node_phase_failed",
+    cause: safeCause,
   });
 }
 
@@ -693,11 +712,6 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
       `${JSON.stringify(acceptanceRunner, null, 2)}\n`,
       { encoding: "utf8", mode: 0o600 },
     ),
-    fs.writeFile(
-      path.join(evidenceRoot, WORKER_SUMMARY),
-      "",
-      { encoding: "utf8", mode: 0o600 },
-    ),
   ]);
   const request: any = createUbuntuContainerRequest({
     image,
@@ -787,7 +801,10 @@ if (isDirectRun) {
           : error?.message?.startsWith("platform_acceptance_")
             ? "platform-acceptance"
             : "ubuntu-delivery";
-    process.stderr.write(`${JSON.stringify(reduceEnterpriseSingleNodeFailure({ phase, error }))}\n`);
+    process.stderr.write(`${JSON.stringify(reduceEnterpriseSingleNodeFailure({
+      phase,
+      cause: error?.message,
+    }))}\n`);
     process.exitCode = 1;
   });
 }
