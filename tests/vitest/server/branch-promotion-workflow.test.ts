@@ -160,6 +160,7 @@ describe("branch promotion workflow", () : any => {
     expect(automation).not.toContain("_wait_timeout");
     expect(automation).not.toContain("resumedRunnerAssignmentFailures");
     expect(automation).not.toContain("resumeRequestedAttempt");
+    expect(automation).not.toContain('remoteRevision(repository, "nightly") !== candidate');
   });
 
   it("requires canonical accepted-generation resolution before promotion", () : any => {

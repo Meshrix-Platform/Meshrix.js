@@ -248,7 +248,6 @@ function advanceNightly(repository?: any, candidate?: any, dryRun: any = false) 
     return true;
   }
   git(["push", "--porcelain", "origin", `${candidate}:refs/heads/nightly`], "nightly_push_failed");
-  if (remoteRevision(repository, "nightly") !== candidate) throw failure("nightly_push_not_observed");
   console.log(`[release-promotion] nightly advanced to ${shortRevision(candidate)}`);
   return true;
 }
