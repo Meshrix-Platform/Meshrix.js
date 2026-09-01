@@ -58,6 +58,8 @@ vi.mock("../../../apps/console/lib/authorization-governance-client", () : any =>
 }));
 
 const apiKeyClientMocks: any = vi.hoisted(() : any => ({}));
+const futureExpiry = () : Date => new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000);
+const futureExpiryInput = () : string => futureExpiry().toISOString().slice(0, 16);
 
 vi.mock("../../../apps/console/lib/api-key-distribution-client", () : any => ({
   getApiKeyIssuerScopes: () : any => apiKeyClientMocks.current?.getIssuerScopes?.() || Promise.resolve(null),
@@ -126,7 +128,7 @@ function apiKeyRecord(overrides: Record<string, unknown> = {}) : any {
     },
     policyFingerprint: "policy-a", status: "active", lifecycleRevision: 1, useCount: 0,
     createdAt: "2026-08-01T00:00:00.000Z", rotatedAt: null, revokedAt: null,
-    expiresAt: "2026-09-01T00:00:00.000Z",
+    expiresAt: futureExpiry().toISOString(),
     ...overrides,
   };
 }
@@ -366,7 +368,7 @@ describe("connector configuration snippet", () : any => {
     });
     await controller.refresh();
     Object.assign(controller.draft.value, {
-      workloadDisplayName: "Build worker", organizationNodeId: "organization-a", expiresAt: "2026-09-01T08:00",
+      workloadDisplayName: "Build worker", organizationNodeId: "organization-a", expiresAt: futureExpiryInput(),
       selectedToolsetIds: ["toolset-a"], selectedTargetIds: ["codex"],
     });
     await controller.create();
@@ -415,7 +417,7 @@ describe("key-reveal step snippet rendering", () : any => {
     await wrapper.find('[data-testid="agent-target-select"]').setValue("codex");
     await wrapper.findAll(".api-key-form-grid input")[0].setValue("Build worker");
     await wrapper.findAll(".api-key-form-grid select")[1].setValue("organization-a");
-    await wrapper.findAll(".api-key-form-grid input")[1].setValue("2026-09-01T08:00");
+    await wrapper.findAll(".api-key-form-grid input")[1].setValue(futureExpiryInput());
     await wrapper.find('[data-testid="agent-setup-agent-step"] .primary-action').trigger("click");
     expect(wrapper.find('[data-testid="agent-setup-access-step"]').attributes("style") || "").not.toContain("display: none");
 
