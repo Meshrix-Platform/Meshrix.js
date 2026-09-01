@@ -25,6 +25,7 @@ interface BackendContext {
 }
 interface OciBackendOptions {
   id?: string; binary?: string; engine?: string; runtimeClass?: string; healthy?: boolean;
+  rootless?: boolean;
   hostUid?: number; hostGid?: number; commandRunner?: CommandRunner; retryDelay?: RetryDelay;
 }
 
@@ -126,14 +127,14 @@ export function classifyOciCommandFailure(stderr: unknown, stdout: unknown = "",
   return "oci_command_rejected";
 }
 
-function runtimeCreateArguments(engine: unknown, runtimeClass: unknown): string[] {
+function runtimeCreateArguments(engine: unknown, runtimeClass: unknown, rootless: boolean): string[] {
   const selectedEngine = requiredText(engine, "OCI sandbox backend engine");
   const selectedRuntimeClass = requiredText(runtimeClass, "OCI sandbox runtime class");
   if (selectedEngine === "podman") {
     if (selectedRuntimeClass !== "crun") {
       throw new Error("The Podman sandbox backend requires the verified crun runtime.");
     }
-    return [];
+    return rootless ? ["--userns", "keep-id"] : [];
   }
   if (selectedEngine === "docker" && selectedRuntimeClass === "runc") {
     return [];
@@ -297,6 +298,7 @@ export function createOciSandboxBackend({
   engine,
   runtimeClass,
   healthy = true,
+  rootless = false,
   hostUid = process.getuid?.(),
   hostGid = process.getgid?.(),
   commandRunner = runCommand,
@@ -453,7 +455,7 @@ export function createOciSandboxBackend({
       "--label", "meshrix.sandbox.managed=true",
       "--label", `meshrix.sandbox.run-digest=${identity.digest}`,
       "--pull", "never",
-      ...runtimeCreateArguments(selectedEngine, selectedRuntimeClass),
+      ...runtimeCreateArguments(selectedEngine, selectedRuntimeClass, rootless === true),
       "--network", "none",
       "--ipc", "none",
       "--cgroupns", "private",

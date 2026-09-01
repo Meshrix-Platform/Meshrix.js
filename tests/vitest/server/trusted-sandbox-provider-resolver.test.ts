@@ -378,13 +378,14 @@ describe("trusted sandbox provider resolver", () : any => {
         return { healthy: true, production: true, enforcedRestrictions: [] };
       }
     };
+    const backendFactory: any = vi.fn(() : any => backend);
     const target: any = await createOciBackendConformanceTarget({
       platform: "darwin",
       pathExists: (candidatePath?: any) : any => candidatePath === "podman",
       rootlessProbe: async () : Promise<any> => true,
       runtimeClassProbe: async () : Promise<any> => "crun",
       executableIdentityProbe: async () : Promise<any> => EXECUTABLE_IDENTITY_DIGEST,
-      backendFactory: () : any => backend
+      backendFactory
     });
 
     expect(target).toMatchObject({
@@ -393,5 +394,11 @@ describe("trusted sandbox provider resolver", () : any => {
       engine: "podman",
       backend
     });
+    expect(backendFactory).toHaveBeenCalledWith(expect.objectContaining({
+      id: "oci.rootless-podman",
+      engine: "podman",
+      runtimeClass: "crun",
+      rootless: true,
+    }));
   });
 });

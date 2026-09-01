@@ -17,7 +17,13 @@ interface OciCandidate {
 interface OciBackend {
   descriptor(): Promise<{ healthy?: boolean; enforcedRestrictions?: readonly string[]; [key: string]: unknown }>;
 }
-type BackendFactory = (input: { id: string; binary: string; engine: string; runtimeClass: string }) => OciBackend;
+type BackendFactory = (input: {
+  id: string;
+  binary: string;
+  engine: string;
+  runtimeClass: string;
+  rootless: boolean;
+}) => OciBackend;
 type RootlessProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<boolean>;
 type RuntimeClassProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<string>;
 type IdentityProbe = (candidate: OciCandidate) => Promise<string>;
@@ -170,7 +176,8 @@ export function createTrustedOciProviderAdapters({
         id: candidate.id,
         binary: resolveCandidateBinary(candidate, platform),
         engine: candidate.engine,
-        runtimeClass: candidate.runtimeClass
+        runtimeClass: candidate.runtimeClass,
+        rootless: candidate.rootless
       });
       return backend;
     };
@@ -294,7 +301,8 @@ export async function createOciBackendConformanceTarget({
       id: candidate.id,
       binary: resolvedBinary,
       engine: candidate.engine,
-      runtimeClass: candidate.runtimeClass
+      runtimeClass: candidate.runtimeClass,
+      rootless: candidate.rootless
     });
     let descriptor;
     try {
