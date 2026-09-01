@@ -109,13 +109,13 @@ make_fake_export() {
   printf '{"name":"@meshrix/console","type":"module"}\n' >"$destination/app/apps/console/package.json"
   printf '{}\n' >"$destination/app/tools/registry/state-machines/state-machine-integrity.registry.json"
   if [ "${OFFLINE_PACK_FAKE_PRIVACY_FIXTURE:-0}" = "1" ]; then
-    printf 'private path: <user-home>/offline-pack/work\n' >"$destination/app/dist/private.js"
+    printf '%s%s\n' 'private path: /Us' 'ers/offline-fixture/offline-pack/work' >"$destination/app/dist/private.js"
   fi
   if [ "${OFFLINE_PACK_FAKE_SECRET_FILE:-0}" = "1" ]; then
     printf 'synthetic=true\n' >"$destination/app/dist/.env"
   fi
   if [ "${OFFLINE_PACK_FAKE_SECRET_LITERAL:-0}" = "1" ]; then
-    printf '%s%s\n' 'AKIA' 'TEST-CASE-EXAMPLE' >"$destination/app/dist/credential.js"
+    printf '%s%s\n' 'AKIA' 'TESTCASEEXAMPLE0' >"$destination/app/dist/credential.js"
   fi
   if [ "${OFFLINE_PACK_FAKE_FORBIDDEN_DIR:-0}" = "1" ]; then
     mkdir -p "$destination/app/dist/reports"
@@ -344,7 +344,7 @@ NODE
   identity_log="$root/identity.log"
   assert_status 1 env OFFLINE_PACK_FAKE_PRIVACY_FIXTURE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$identity_log" || fail "developer-identity-status"
   grep -Fx 'offline-pack: developer-identity: app/dist/private.js' "$identity_log" >/dev/null || fail "developer-identity-category"
-  ! grep -Fq '<user-home>/offline-pack/work' "$identity_log" || fail "developer-identity-disclosed"
+  ! grep -Fq "$(printf '%s%s' '/Us' 'ers/offline-fixture/offline-pack/work')" "$identity_log" || fail "developer-identity-disclosed"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-failure"
   secret_file_log="$root/secret-file.log"
@@ -353,7 +353,7 @@ NODE
   secret_literal_log="$root/secret-literal.log"
   assert_status 1 env OFFLINE_PACK_FAKE_SECRET_LITERAL=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_literal_log" || fail "secret-literal-status"
   grep -Fx 'offline-pack: secret-literal: app/dist/credential.js' "$secret_literal_log" >/dev/null || fail "secret-literal-category"
-  ! grep -Fq 'AKIATEST-CASE-EXAMPLE' "$secret_literal_log" || fail "secret-literal-disclosed"
+  ! grep -Fq "$(printf '%s%s' 'AKIA' 'TESTCASEEXAMPLE0')" "$secret_literal_log" || fail "secret-literal-disclosed"
   forbidden_dir_log="$root/forbidden-directory.log"
   assert_status 1 env OFFLINE_PACK_FAKE_FORBIDDEN_DIR=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$forbidden_dir_log" || fail "forbidden-directory-status"
   grep -Fx 'offline-pack: forbidden-entry: app/dist/reports' "$forbidden_dir_log" >/dev/null || fail "forbidden-directory-category"
