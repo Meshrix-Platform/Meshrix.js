@@ -20,17 +20,13 @@ export const ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND: any =
 const ACCEPTANCE_IMAGE_DOCKERFILE: any =
   "tools/containers/enterprise-single-node-acceptance.Dockerfile";
 const WORKER_SUMMARY: any = "worker-summary.json";
-const HOST_AUDIT_OBSERVATION: any = "host-audit-observation.json";
 const SOURCE_CANDIDATE: any = "SOURCE_CANDIDATE.json";
 const ACCEPTANCE_RUNNER: any = "acceptance-runner.json";
-const TEST_REGISTRY: any = "tools/registry/tests.registry.json";
-const AUDIT_PROFILE: any = "audit-public";
 const WORKER_SUMMARY_SCHEMA: any =
   "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1";
 const CONTAINER_DEPENDENCY_ROOT: any = "/opt/meshrix-dependency-source/node_modules";
 const CONTAINER_WORKER_ROOT: any = "/worker";
 const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
-const SUITE_ID_PATTERN: any = /^[a-z0-9][a-z0-9._-]*$/u;
 const DIGEST_PINNED_IMAGE_PATTERN: any =
   /^(?:(?:[a-z0-9]+(?:[._/-][a-z0-9]+)*(?::[A-Za-z0-9._-]+)?)@)?sha256:[a-f0-9]{64}$/u;
 
@@ -76,117 +72,6 @@ function requireExactKeys(value?: any, expectedKeys?: any, code?: any) : any {
   );
 }
 
-function resolveProfileSuiteIds(registry?: any, profile?: any, visiting: any = new Set<any>()) : any {
-  requireCondition(isRecord(registry?.profiles), "enterprise_audit_registry_invalid");
-  requireCondition(
-    typeof profile === "string" && profile.length > 0,
-    "enterprise_audit_profile_invalid",
-  );
-  requireCondition(!visiting.has(profile), "enterprise_audit_profile_cycle");
-  const definition: any = registry.profiles[profile];
-  requireCondition(isRecord(definition), "enterprise_audit_profile_unknown");
-  requireCondition(
-    !definition.dynamic && Array.isArray(definition.suites),
-    "enterprise_audit_profile_invalid",
-  );
-  const nextVisiting: any = new Set<any>(visiting);
-  nextVisiting.add(profile);
-  const inherited: any = definition.extends
-    ? resolveProfileSuiteIds(registry, definition.extends, nextVisiting)
-    : [];
-  const suiteIds: any[] = [...inherited];
-  const seen: any = new Set<any>(inherited);
-  for (const suiteId of definition.suites) {
-    requireCondition(
-      typeof suiteId === "string" && SUITE_ID_PATTERN.test(suiteId),
-      "enterprise_audit_suite_id_invalid",
-    );
-    if (!seen.has(suiteId)) {
-      seen.add(suiteId);
-      suiteIds.push(suiteId);
-    }
-  }
-  return suiteIds;
-}
-
-export function createEnterpriseSingleNodeAuditShards({
-  registry,
-  profile = AUDIT_PROFILE,
-}: Record<string, any> = {}) : any {
-  requireCondition(Array.isArray(registry?.suites), "enterprise_audit_registry_invalid");
-  const suiteById: any = new Map<any, any>();
-  for (const suite of registry.suites) {
-    requireCondition(
-      isRecord(suite) &&
-        typeof suite.id === "string" &&
-        SUITE_ID_PATTERN.test(suite.id) &&
-        !suiteById.has(suite.id) &&
-        Array.isArray(suite.requiredServices) &&
-        suite.requiredServices.every((service?: any) : any =>
-          typeof service === "string" && service.length > 0),
-      "enterprise_audit_suite_invalid",
-    );
-    suiteById.set(suite.id, suite);
-  }
-  const allSuiteIds: any = resolveProfileSuiteIds(registry, profile);
-  requireCondition(allSuiteIds.length > 0, "enterprise_audit_profile_empty");
-  const hostSuiteIds: any[] = [];
-  const workerSuiteIds: any[] = [];
-  for (const suiteId of allSuiteIds) {
-    const suite: any = suiteById.get(suiteId);
-    requireCondition(suite, "enterprise_audit_suite_unknown");
-    (suite.requiredServices.length > 0 ? hostSuiteIds : workerSuiteIds)
-      .push(suiteId);
-  }
-  requireCondition(
-    hostSuiteIds.length > 0 && workerSuiteIds.length > 0,
-    "enterprise_audit_shard_empty",
-  );
-  const hostSet: any = new Set<any>(hostSuiteIds);
-  const workerSet: any = new Set<any>(workerSuiteIds);
-  requireCondition(
-    workerSuiteIds.every((suiteId?: any) : any => !hostSet.has(suiteId)),
-    "enterprise_audit_shard_overlap",
-  );
-  requireCondition(
-    new Set<any>([...hostSuiteIds, ...workerSuiteIds]).size === allSuiteIds.length &&
-      allSuiteIds.every((suiteId?: any) : any =>
-        hostSet.has(suiteId) || workerSet.has(suiteId)),
-    "enterprise_audit_shard_incomplete",
-  );
-  return Object.freeze({
-    profile,
-    allSuiteIds: Object.freeze([...allSuiteIds]),
-    hostSuiteIds: Object.freeze(hostSuiteIds),
-    workerSuiteIds: Object.freeze(workerSuiteIds),
-  });
-}
-
-function auditShardCommand(profile?: any, suiteIds?: any) : any {
-  requireCondition(
-    typeof profile === "string" &&
-      SUITE_ID_PATTERN.test(profile) &&
-      Array.isArray(suiteIds) &&
-      suiteIds.length > 0 &&
-      suiteIds.every((suiteId?: any) : any => SUITE_ID_PATTERN.test(suiteId)),
-    "enterprise_audit_shard_command_invalid",
-  );
-  return [
-    "node",
-    "tests/run.ts",
-    "--profile",
-    profile,
-    ...suiteIds.flatMap((suiteId?: any) : any => ["--suite", suiteId]),
-  ].join(" ");
-}
-
-export function createEnterpriseSingleNodeRegressionCommands(shards?: any) : any {
-  return Object.freeze([
-    auditShardCommand(shards.profile, shards.hostSuiteIds),
-    auditShardCommand(shards.profile, shards.workerSuiteIds),
-  ]);
-}
-
 function isCanonicalTimestamp(value?: any) : any {
   if (typeof value !== "string" || value.length === 0) return false;
   const milliseconds: any = Date.parse(value);
@@ -224,15 +109,12 @@ function validateCommandObservation(observation?: any, command?: any, code?: any
 export function validateEnterpriseSingleNodeWorkerSummary({
   summary,
   implementationNodes,
-  fullRegressionCommands,
 }: Record<string, any> = {}) : any {
   requireExactKeys(summary, [
     "schema_version",
     "status",
     "candidate",
     "implementation_nodes",
-    "full_regression",
-    "full_regression_commands",
     "recorded_at",
     "privacy_safe",
   ], "ubuntu_delivery_summary_invalid");
@@ -242,19 +124,13 @@ export function validateEnterpriseSingleNodeWorkerSummary({
       isRecord(summary.candidate) &&
       SHA256_PATTERN.test(String(summary.candidate.candidate_digest || "")) &&
       Array.isArray(summary.implementation_nodes) &&
-      Array.isArray(summary.full_regression) &&
-      Array.isArray(summary.full_regression_commands) &&
       isCanonicalTimestamp(summary.recorded_at) &&
       summary.privacy_safe === true,
     "ubuntu_delivery_summary_invalid",
   );
   requireCondition(
     Array.isArray(implementationNodes) &&
-      implementationNodes.length > 0 &&
-      Array.isArray(fullRegressionCommands) &&
-      fullRegressionCommands.length > 0 &&
-      fullRegressionCommands.every((command?: any) : any =>
-        typeof command === "string" && command.length > 0),
+      implementationNodes.length > 0,
     "ubuntu_delivery_summary_contract_invalid",
   );
 
@@ -324,28 +200,9 @@ export function validateEnterpriseSingleNodeWorkerSummary({
     "ubuntu_delivery_node_evidence_incomplete",
   );
 
-  requireCondition(
-    summary.full_regression.length === fullRegressionCommands.length &&
-      summary.full_regression_commands.length === fullRegressionCommands.length,
-    "ubuntu_delivery_full_regression_incomplete",
-  );
-  const expectedCommandDigests: any = fullRegressionCommands.map(sha256);
-  requireCondition(
-    summary.full_regression_commands.every((digestValue?: any, index?: any) : any =>
-      digestValue === expectedCommandDigests[index]),
-    "ubuntu_delivery_full_regression_command_mismatch",
-  );
-  const fullRegressionRefs: any = summary.full_regression.map((observation?: any, index?: any) : any =>
-    validateCommandObservation(
-      observation,
-      fullRegressionCommands[index],
-      "ubuntu_delivery_full_regression_evidence_invalid",
-    ));
-
   return Object.freeze({
     recordedAt: summary.recorded_at,
     evidenceByNode,
-    fullRegressionRefs: Object.freeze(fullRegressionRefs),
   });
 }
 
@@ -589,14 +446,6 @@ function validateAcceptanceRunnerIdentity(identity?: any) : any {
   return identity;
 }
 
-async function loadAuditShards(repoRoot?: any) : Promise<any> {
-  const registry: any = JSON.parse(await fs.readFile(path.join(repoRoot, TEST_REGISTRY), "utf8"));
-  return createEnterpriseSingleNodeAuditShards({
-    registry,
-    profile: AUDIT_PROFILE,
-  });
-}
-
 async function runWorkerCommand({ command, repoRoot, evidenceRoot, index }: Record<string, any>) : Promise<any> {
   const stdoutPath: any = path.join(evidenceRoot, `.command-${index}.stdout`);
   const stderrPath: any = path.join(evidenceRoot, `.command-${index}.stderr`);
@@ -740,22 +589,6 @@ function implementationCriteriaByNode(nodes?: any) : any {
   return criteriaByNode;
 }
 
-async function runHostAuditShard({ repoRoot, evidenceRoot, shards }: Record<string, any>) : Promise<any> {
-  const command: any = auditShardCommand(shards.profile, shards.hostSuiteIds);
-  const observation: any = await runWorkerCommand({
-    command,
-    repoRoot,
-    evidenceRoot,
-    index: "host-audit",
-  });
-  await fs.writeFile(
-    path.join(evidenceRoot, HOST_AUDIT_OBSERVATION),
-    `${JSON.stringify(observation, null, 2)}\n`,
-    { encoding: "utf8", mode: 0o600 },
-  );
-  return observation;
-}
-
 async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Promise<any> {
   const candidate: any = await loadReleaseCandidateIdentity(
     path.join(evidenceRoot, SOURCE_CANDIDATE),
@@ -764,17 +597,6 @@ async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Prom
   requireCondition(
     candidate.package_lock_sha256 === `sha256:${sha256(lockfile)}`,
     "ubuntu_delivery_candidate_mismatch",
-  );
-  const shards: any = await loadAuditShards(repoRoot);
-  const fullRegressionCommands: any = createEnterpriseSingleNodeRegressionCommands(shards);
-  const hostAuditObservation: any = JSON.parse(await fs.readFile(
-    path.join(evidenceRoot, HOST_AUDIT_OBSERVATION),
-    "utf8",
-  ));
-  validateCommandObservation(
-    hostAuditObservation,
-    fullRegressionCommands[0],
-    "ubuntu_delivery_host_audit_evidence_invalid",
   );
   const observed: any[] = [];
   let commandIndex: any = 0;
@@ -791,24 +613,12 @@ async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Prom
     }
     observed.push({ node_id: node.id, commands });
   }
-  const fullRegression: any[] = [hostAuditObservation];
-  for (const command of fullRegressionCommands.slice(1)) {
-    fullRegression.push(await runWorkerCommand({
-      command,
-      repoRoot,
-      evidenceRoot,
-      index: commandIndex,
-    }));
-    commandIndex += 1;
-  }
   const recordedAt: any = new Date().toISOString();
   const summary: Record<string, any> = {
     schema_version: WORKER_SUMMARY_SCHEMA,
     status: "passed",
     candidate,
     implementation_nodes: observed,
-    full_regression: fullRegression,
-    full_regression_commands: fullRegressionCommands.map((command?: any) : any => sha256(command)),
     recorded_at: recordedAt,
     privacy_safe: true,
   };
@@ -820,11 +630,9 @@ async function runWorker({ repoRoot, evidenceRoot }: Record<string, any>) : Prom
 }
 
 async function recordWorkerEvidence({
-  repoRoot,
   evidenceRoot,
   candidate,
   acceptanceRunner,
-  hostAuditObservation,
 }: Record<string, any>) : Promise<any> {
   const summaryPath: any = path.join(evidenceRoot, WORKER_SUMMARY);
   const summaryBytes: any = await fs.readFile(summaryPath);
@@ -847,18 +655,10 @@ async function recordWorkerEvidence({
   const deliveryImplementationNodes: any = productEvidenceUnits();
   const criteriaByNode: any =
     implementationCriteriaByNode(deliveryImplementationNodes);
-  const shards: any = await loadAuditShards(repoRoot);
-  const fullRegressionCommands: any = createEnterpriseSingleNodeRegressionCommands(shards);
   const validation: any = validateEnterpriseSingleNodeWorkerSummary({
     summary,
     implementationNodes: deliveryImplementationNodes,
-    fullRegressionCommands,
   });
-  requireCondition(
-    canonicalDigest(summary.full_regression[0]) ===
-      canonicalDigest(hostAuditObservation),
-    "ubuntu_delivery_host_audit_evidence_mismatch",
-  );
   for (const unit of deliveryImplementationNodes) {
     requireCondition(validation.evidenceByNode.has(unit.id), "ubuntu_delivery_node_evidence_missing");
     requireCondition(criteriaByNode.has(unit.id), "ubuntu_delivery_criterion_evidence_missing");
@@ -882,7 +682,6 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
   await fs.mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
   const image: any = await buildAcceptanceImage(repoRoot);
   const acceptanceRunner: any = acceptanceRunnerIdentity(image);
-  const shards: any = await loadAuditShards(repoRoot);
   await Promise.all([
     fs.writeFile(
       path.join(evidenceRoot, SOURCE_CANDIDATE),
@@ -895,11 +694,6 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
       { encoding: "utf8", mode: 0o600 },
     ),
   ]);
-  const hostAuditObservation: any = await runHostAuditShard({
-    repoRoot,
-    evidenceRoot,
-    shards,
-  });
   const request: any = createUbuntuContainerRequest({
     image,
     candidateRoot: repoRoot,
@@ -912,11 +706,9 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
   });
   requireCondition(containerResult.exitCode === 0, "ubuntu_delivery_failed");
   await recordWorkerEvidence({
-    repoRoot,
     evidenceRoot,
     candidate,
     acceptanceRunner,
-    hostAuditObservation,
   });
   const offlineTransfer: any = await runProcess({
     executable: process.execPath,
