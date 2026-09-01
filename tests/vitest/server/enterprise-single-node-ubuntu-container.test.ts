@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND,
   createUbuntuContainerRequest,
+  reduceEnterpriseSingleNodeFailure,
   validateEnterpriseSingleNodeWorkerSummary,
 } from "../../../tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts";
 
@@ -13,17 +14,22 @@ describe("enterprise single-node Ubuntu container", () : any => {
       image: `sha256:${"a".repeat(64)}`,
       candidateRoot: "/candidate",
       evidenceRoot: "/evidence",
+      uid: 1001,
+      gid: 1002,
     });
 
-    expect(request.args.slice(0, 7)).toEqual([
+    expect(request.args.slice(0, 9)).toEqual([
       "run",
       "--rm",
       "--network",
       "none",
+      "--user",
+      "1001:1002",
       "--env",
       "NODE_OPTIONS=--conditions=source",
       "--tmpfs",
     ]);
+    expect(request.args).toContain("/worker:exec,mode=0700,uid=1001,gid=1002");
   });
 
   it("keeps source delivery independent from released-image rollback evidence", () : any => {
@@ -31,6 +37,17 @@ describe("enterprise single-node Ubuntu container", () : any => {
       .toBe("node tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts");
     expect(ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND)
       .not.toContain("enterprise-operations-closure");
+  });
+
+  it("reports only privacy-safe internal failure codes", () : any => {
+    expect(reduceEnterpriseSingleNodeFailure({
+      phase: "ubuntu-delivery",
+      cause: "ubuntu_delivery_worker_execution_failed",
+    })).toMatchObject({ cause: "ubuntu_delivery_worker_execution_failed" });
+    expect(reduceEnterpriseSingleNodeFailure({
+      phase: "ubuntu-delivery",
+      cause: "failed at /private/path",
+    })).toMatchObject({ cause: "enterprise_single_node_internal_failure" });
   });
 
   it("records only the Ubuntu operation proof without embedding repository audits", () : any => {
