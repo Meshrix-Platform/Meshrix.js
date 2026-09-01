@@ -15,8 +15,8 @@ import {
 
 const modulePath: any = fileURLToPath(import.meta.url);
 const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
-const CORE_OPERATIONS_COMMAND: any =
-  "node tools/server-scripts/enterprise-operations-closure.ts";
+export const ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND: any =
+  "node tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts";
 const ACCEPTANCE_IMAGE_DOCKERFILE: any =
   "tools/containers/enterprise-single-node-acceptance.Dockerfile";
 const WORKER_SUMMARY: any = "worker-summary.json";
@@ -427,6 +427,8 @@ export function createUbuntuContainerRequest({ image, candidateRoot, evidenceRoo
       "--rm",
       "--network",
       "none",
+      "--env",
+      "NODE_OPTIONS=--conditions=source",
       "--tmpfs",
       "/worker:exec,mode=0700",
       "--mount",
@@ -707,7 +709,7 @@ function productEvidenceUnits() : any {
   return [{
     id: "core-operations",
     acceptance_criteria: [{ statement: "Core enterprise operations pass in the candidate environment." }],
-    regression: { commands: [CORE_OPERATIONS_COMMAND], criteria: [0] },
+    regression: { commands: [ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND], criteria: [0] },
   }];
 }
 
