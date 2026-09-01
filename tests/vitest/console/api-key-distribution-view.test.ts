@@ -10,6 +10,8 @@ import type {
 import type { OperationPermissionCatalog } from "../../../apps/console/lib/types/operation-permission";
 
 const ONE_TIME_SENTINEL = "opaque-one-time-credential";
+const futureExpiry = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000);
+const futureExpiryInput = () => futureExpiry().toISOString().slice(0, 16);
 
 const policy: ApiKeyPolicy = {
   protocol: "mcp",
@@ -72,7 +74,7 @@ function record(revision = 1, status: ApiKeyRecord["status"] = "active"): ApiKey
     organizationNodeId: "organization-a", organizationBreadcrumb: ["Group", "Organization A"],
     policy, policyFingerprint: "policy-a", status, lifecycleRevision: revision, useCount: 2,
     createdAt: "2026-08-01T00:00:00.000Z", rotatedAt: null, revokedAt: null,
-    expiresAt: "2026-09-01T00:00:00.000Z",
+    expiresAt: futureExpiry().toISOString(),
   };
 }
 
@@ -96,7 +98,7 @@ function client(overrides: Record<string, unknown> = {}) {
 
 function completeDraft(controller: ReturnType<typeof useConsoleApiKeyDistributionController>): void {
   Object.assign(controller.draft.value, {
-    workloadDisplayName: "Build worker", organizationNodeId: "organization-a", expiresAt: "2026-09-01T08:00",
+    workloadDisplayName: "Build worker", organizationNodeId: "organization-a", expiresAt: futureExpiryInput(),
     selectedToolsetIds: ["toolset-a"], selectedTargetIds: ["codex"],
   });
 }
@@ -201,7 +203,7 @@ describe("API key distribution console", () => {
     controller.importDraftConfig({
       workloadDisplayName: "Imported worker",
       organizationNodeId: "organization-a",
-      expiresAt: "2026-09-01T08:00",
+      expiresAt: futureExpiryInput(),
       selectedToolsetIds: ["toolset-a"],
       selectedTargetIds: ["codex"],
       resourcesUnrestricted: true,
