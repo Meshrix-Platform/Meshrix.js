@@ -27,6 +27,7 @@ import {
   requiredWorkflowPaths,
   runnerAssignmentRetryDelay,
   selectLatestWorkflowRun,
+  verifyUpdatedReference,
 } from "../../../tools/server-scripts/promote-release-branches.ts";
 
 const ROOT: any = path.resolve(import.meta.dirname, "../../..");
@@ -89,6 +90,13 @@ describe("branch promotion workflow", () : any => {
       .toEqual({ action: "already-current" });
     expect(() : any => promotionDecision({ current, candidate, ancestor: () : any => false }))
       .toThrow("promotion_not_fast_forward");
+    expect(verifyUpdatedReference(JSON.stringify({ object: { sha: candidate } }), candidate))
+      .toBe(candidate);
+    expect(() : any => verifyUpdatedReference(
+      JSON.stringify({ object: { sha: current } }),
+      candidate,
+      "stable_promotion_not_observed",
+    )).toThrow("stable_promotion_not_observed");
 
     expect(requiredWorkflowPaths("nightly")).toEqual([
       ".github/workflows/branch-flow.yml",

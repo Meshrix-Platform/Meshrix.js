@@ -133,6 +133,13 @@ export function promotionDecision({
   return { action: "advance" };
 }
 
+export function verifyUpdatedReference(response?: any, candidate?: any, code: any = "promotion_not_observed") : any {
+  const expected: any = requireRevision(candidate);
+  const actual: any = requireRevision(parseJson(response, `${code}_response_invalid`)?.object?.sha, `${code}_response_invalid`);
+  if (actual !== expected) throw failure(code);
+  return actual;
+}
+
 export function requiredWorkflowPaths(branch?: any) : any {
   const paths: any = WORKFLOW_PATHS[String(branch || "")];
   if (!paths) throw failure("promotion_branch_invalid");
@@ -262,14 +269,14 @@ function advanceProtectedBranch(repository?: any, branch?: any, upstream?: any, 
     console.log(`[release-promotion] ${branch} would advance to ${shortRevision(candidate)}`);
     return true;
   }
-  gh([
+  const response: any = gh([
     "api",
     "--method", "PATCH",
     `repos/${repository}/git/refs/heads/${branch}`,
     "-f", `sha=${candidate}`,
     "-F", "force=false",
   ], `${branch}_promotion_failed`);
-  if (remoteRevision(repository, branch) !== candidate) throw failure(`${branch}_promotion_not_observed`);
+  verifyUpdatedReference(response, candidate, `${branch}_promotion_not_observed`);
   console.log(`[release-promotion] ${branch} advanced to ${shortRevision(candidate)}`);
   return true;
 }
