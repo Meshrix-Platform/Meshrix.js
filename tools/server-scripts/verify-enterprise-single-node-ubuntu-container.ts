@@ -299,6 +299,8 @@ export function createUbuntuContainerRequest({
       userIdentity,
       "--env",
       "NODE_OPTIONS=--conditions=source",
+      "--env",
+      "HOME=/worker",
       "--tmpfs",
       `/worker:exec,mode=0700,uid=${uid},gid=${gid}`,
       "--mount",
