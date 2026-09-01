@@ -693,6 +693,11 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
       `${JSON.stringify(acceptanceRunner, null, 2)}\n`,
       { encoding: "utf8", mode: 0o600 },
     ),
+    fs.writeFile(
+      path.join(evidenceRoot, WORKER_SUMMARY),
+      "",
+      { encoding: "utf8", mode: 0o600 },
+    ),
   ]);
   const request: any = createUbuntuContainerRequest({
     image,
