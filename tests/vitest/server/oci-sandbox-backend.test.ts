@@ -193,6 +193,7 @@ describe("OCI sandbox backend", () : any => {
       binary: "/fixed/bin/podman",
       engine: "podman",
       runtimeClass: "crun",
+      rootless: false,
       commandRunner: async (_binary?: any, args?: any) : Promise<any> => {
         calls.push(args);
         if (args[0] === "inspect") return { code: 0, signal: "", bytes: 1, stdout: "0\n" };
@@ -203,6 +204,7 @@ describe("OCI sandbox backend", () : any => {
     await backend.run(context(paths));
     const createArgs: any = calls.find((args?: any) : any => args[0] === "create");
     expect(createArgs).not.toContain("--runtime");
+    expect(createArgs).not.toContain("--userns");
     const podmanScratch: any = createArgs.find((value?: any) : any => value.startsWith("/sandbox/scratch:"));
     expect(podmanScratch).toContain("size=16777216");
     expect(podmanScratch).toContain("mode=0700");
@@ -210,6 +212,28 @@ describe("OCI sandbox backend", () : any => {
     expect(podmanScratch).not.toContain("nr_inodes=");
     expect(podmanScratch).not.toContain("uid=");
     expect(podmanScratch).not.toContain("gid=");
+  });
+
+  it("preserves the host identity for rootless Podman bind mounts", async () : Promise<any> => {
+    const calls: any[] = [];
+    const backend: any = createOciSandboxBackend({
+      id: "oci.rootless-podman",
+      binary: "/fixed/bin/podman",
+      engine: "podman",
+      runtimeClass: "crun",
+      rootless: true,
+      commandRunner: async (_binary?: any, args?: any) : Promise<any> => {
+        calls.push(args);
+        if (args[0] === "inspect") return { code: 0, signal: "", bytes: 1, stdout: "0\n" };
+        return { code: 0, signal: "", bytes: 0, stdout: "" };
+      }
+    });
+    const paths: any = await sandboxPaths();
+    await backend.run(context(paths));
+    const createArgs: any = calls.find((args?: any) : any => args[0] === "create");
+    expect(createArgs.slice(createArgs.indexOf("--userns"), createArgs.indexOf("--userns") + 2))
+      .toEqual(["--userns", "keep-id"]);
+    expect(createArgs.indexOf("--userns")).toBeLessThan(createArgs.indexOf("--mount"));
   });
 
   it("rejects an unverified Podman runtime before container creation", async () : Promise<any> => {
