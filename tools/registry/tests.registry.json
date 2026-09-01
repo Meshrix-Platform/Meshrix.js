@@ -285,9 +285,6 @@
         "governance.tag-management",
         "governance.operation-permission-tag-audit",
         "governance.operation-permission-universal-tag-policy",
-        "governance.authorization-coverage",
-        "governance.enterprise-audit-retention-redaction",
-        "observability.semantic-baseline",
         "approval-governance",
         "architecture.facts",
         "governance.organization-model",
@@ -393,6 +390,9 @@
       "suites": [
         "governance.operation-permission-protocol-consistency",
         "governance.operation-permission-tag-governed-e2e",
+        "governance.authorization-coverage",
+        "governance.enterprise-audit-retention-redaction",
+        "observability.semantic-baseline",
         "governance.enterprise-authorization-enforcement",
         "governance.enterprise-observability-coverage",
         "upstream-gateway.e2e"
