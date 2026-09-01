@@ -18,7 +18,7 @@ describe("enterprise single-node Ubuntu container", () : any => {
       gid: 1002,
     });
 
-    expect(request.args.slice(0, 9)).toEqual([
+    expect(request.args.slice(0, 11)).toEqual([
       "run",
       "--rm",
       "--network",
@@ -27,6 +27,8 @@ describe("enterprise single-node Ubuntu container", () : any => {
       "1001:1002",
       "--env",
       "NODE_OPTIONS=--conditions=source",
+      "--env",
+      "HOME=/worker",
       "--tmpfs",
     ]);
     expect(request.args).toContain("/worker:exec,mode=0700,uid=1001,gid=1002");
