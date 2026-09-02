@@ -528,7 +528,7 @@ jobs:
           IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
           IMAGE_STATE="build/release/control/RELEASE_IMAGE_STATE.json" \
           SOURCE_CANDIDATE="build/release/control/release-authority/SOURCE_CANDIDATE.json" \
-          FUNCTIONAL_AUTHORITY="build/release/control/release-authority/platform-acceptance.json" \
+          FUNCTIONAL_AUTHORITY="build/release/control/release-authority/accepted-candidate.json" \
           DEPLOYMENT_AUTHORITY="build/release/control/release-authority/release-deployment.json" \
           node --input-type=module <<'NODE'
           import crypto from "node:crypto";
@@ -555,9 +555,10 @@ jobs:
             || !/^[a-f0-9]{64}$/u.test(sourceCandidate.candidate_digest || "")
             || functionalAuthority.status !== "accepted"
             || functionalAuthority.claim !== "functional-complete"
+            || functionalAuthority.releaseReady !== true
             || functionalAuthority.sourceRevision !== sourceCandidate.source_revision
             || imageAuthority.candidateDigest !== sourceCandidate.candidate_digest
-            || functionalAuthority.candidate_digest !== sourceCandidate.candidate_digest
+            || functionalAuthority.candidateDigest !== sourceCandidate.candidate_digest
             || deploymentAuthority.status !== "accepted"
             || deploymentAuthority.claim !== "release-deployment-verified"
             || deploymentAuthority.sourceRevision !== sourceCandidate.source_revision

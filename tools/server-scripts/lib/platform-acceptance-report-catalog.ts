@@ -1,4 +1,5 @@
 export const PLATFORM_ACCEPTANCE_REPORT_PATH: any = "build/reports/platform-acceptance.json";
+export const PLATFORM_ACCEPTANCE_RECEIPT_PATH: any = "build/reports/accepted-candidate.json";
 export const PLATFORM_ACCEPTANCE_GENERATION_ROOT: any = "build/acceptance-evidence";
 export const PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH: any = `${PLATFORM_ACCEPTANCE_GENERATION_ROOT}/current.json`;
 export const MCP_RELEASE_PORTABLE_ASSEMBLY_REPORT_PATH: any = "build/reports/mcp-release-portable-assembly.json";

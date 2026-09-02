@@ -22,7 +22,7 @@ on:
         required: true
         type: string
       functional_run_id:
-        description: Release workflow run containing functional-platform-acceptance
+        description: Release workflow run containing the accepted candidate authority
         required: true
         type: string
       public_base_url:
@@ -136,7 +136,7 @@ jobs:
       - name: Download the accepted functional-complete receipt
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: functional-platform-acceptance
+          name: release-authority-${{ inputs.source_revision }}
           path: build/functional-evidence
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ inputs.functional_run_id }}
@@ -222,7 +222,7 @@ jobs:
           --architecture "${{ contains(inputs.target, 'arm64') && 'arm64' || 'x64' }}"
           --environment "${{ inputs.target }}"
           --candidate "${{ steps.candidate.outputs.digest }}"
-          --functional-report "${{ github.workspace }}/build/functional-evidence/platform-acceptance.json"
+          --functional-receipt "${{ github.workspace }}/build/functional-evidence/accepted-candidate.json"
           --commands "${{ github.workspace }}/tools/server-scripts/real-machine-targets/${{ inputs.target }}.commands.json"
           --state-root "${{ runner.temp }}/meshrix-real-machine"
           --run-id "validation-${{ github.run_id }}-${{ github.run_attempt }}"

@@ -40,7 +40,7 @@ function parseArgs(args?: any) : any {
     "--target",
     "--architecture",
     "--candidate",
-    "--functional-report",
+    "--functional-receipt",
     "--commands",
   ]);
   for (let index: any = 1; index < args.length; index += 1) {
@@ -58,7 +58,7 @@ function parseArgs(args?: any) : any {
     target: valueAfter(args, "--target"),
     architecture: valueAfter(args, "--architecture"),
     candidateDigest: valueAfter(args, "--candidate"),
-    functionalAcceptanceReportPath: valueAfter(args, "--functional-report"),
+    functionalReceiptPath: valueAfter(args, "--functional-receipt"),
     commandsPath: valueAfter(args, "--commands"),
   });
 }

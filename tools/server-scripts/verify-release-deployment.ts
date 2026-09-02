@@ -19,7 +19,7 @@ import {
   assertReleaseDeploymentReceipt,
   sha256,
 } from "./lib/release-deployment/contract.ts";
-import { validateFunctionalPlatformAcceptanceReport } from "./lib/real-machine-validation-workflow.ts";
+import { validateAcceptedCandidateReceipt } from "./lib/platform-acceptance-generation-store.ts";
 import { validateReleaseCandidateIdentity } from "./verify-release-candidate-identity.ts";
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -547,15 +547,18 @@ async function verifyInputs(sourceCandidatePath: string, functionalReceiptPath: 
     fail("release_deployment_authority_input_invalid");
   }
   validateReleaseCandidateIdentity(candidate);
-  await validateFunctionalPlatformAcceptanceReport(path.resolve(functionalReceiptPath), {
-    candidateDigest: `sha256:${candidate.candidate_digest}`,
-    currentSourceRevision: candidate.source_revision,
-  });
-  if (functional.status !== "accepted" || functional.claim !== FUNCTIONAL_CLAIM ||
-    functional.sourceRevision !== candidate.source_revision ||
-    functional.candidate_digest !== candidate.candidate_digest) {
+  try {
+    const receipt = validateAcceptedCandidateReceipt(functional, {
+      candidateDigest: candidate.candidate_digest,
+      sourceRevision: candidate.source_revision,
+    });
+    if (!candidate.supported_profiles.includes(receipt.selectedProfile)) {
+      fail("release_deployment_functional_receipt_mismatch");
+    }
+  } catch {
     fail("release_deployment_functional_receipt_mismatch");
   }
+  if (functional.claim !== FUNCTIONAL_CLAIM) fail("release_deployment_functional_receipt_mismatch");
   const head = (await spawnBounded("git", ["rev-parse", "HEAD"], { captureStdout: true })).stdout.trim();
   if (head !== candidate.source_revision) fail("release_deployment_source_revision_mismatch");
   return {

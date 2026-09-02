@@ -158,7 +158,7 @@ export async function verifyReleaseAcceptanceStandards({
     "runs-on: ubuntu-24.04",
     "npm run server:verify:release-deployment",
     "SOURCE_CANDIDATE.json",
-    "platform-acceptance.json",
+    "accepted-candidate.json",
     "release-deployment.json",
     "release-authority-${{ github.sha }}",
   ];
@@ -220,7 +220,7 @@ export async function verifyReleaseAcceptanceStandards({
     "verify-real-machine-source-run.ts",
     "verify-real-machine-workflow-inputs.ts",
     "run-id: ${{ inputs.functional_run_id }}",
-    "name: functional-platform-acceptance",
+    "name: release-authority-${{ inputs.source_revision }}",
     "name: unsigned-release-image-${{ inputs.source_revision }}",
     "resolve-real-machine-candidate.ts",
     "MESHRIX_REAL_MACHINE_CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}",

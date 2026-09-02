@@ -9,6 +9,7 @@ import {
   ACCEPTANCE_REQUIRED_REPORTS
 } from "../../../tools/server-scripts/lib/platform-acceptance-command-catalog.ts";
 import {
+  PLATFORM_ACCEPTANCE_RECEIPT_PATH,
   PLATFORM_ACCEPTANCE_REPORT_PATH,
   PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST
 } from "../../../tools/server-scripts/lib/platform-acceptance-report-catalog.ts";
@@ -48,6 +49,7 @@ describe("acceptance gate provenance substrate", () => {
     expect(ACCEPTANCE_REQUIRED_REPORTS.length).toBeGreaterThan(0);
     expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/local-info-hygiene.json");
     expect(PLATFORM_ACCEPTANCE_REPORT_PATH).toBe("build/reports/platform-acceptance.json");
+    expect(PLATFORM_ACCEPTANCE_RECEIPT_PATH).toBe("build/reports/accepted-candidate.json");
     expect(() => buildReleaseReportOwnership(PLATFORM_ACCEPTANCE_COMMANDS)).not.toThrow();
     expect(PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST.length).toBeGreaterThan(0);
     expect(RELEASE_REPORT_PROVENANCE_SCHEMA).toMatch(/^v0\.0\.1:/u);

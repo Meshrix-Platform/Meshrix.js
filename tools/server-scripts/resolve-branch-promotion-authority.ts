@@ -21,12 +21,12 @@ import {
   assertReleaseDeploymentReceipt,
   sha256,
 } from "./lib/release-deployment/contract.ts";
-import { validateFunctionalPlatformAcceptanceReport } from "./lib/real-machine-validation-workflow.ts";
+import { validateAcceptedCandidateReceipt } from "./lib/platform-acceptance-generation-store.ts";
 import { validateReleaseCandidateIdentity } from "./verify-release-candidate-identity.ts";
 
 const STABLE_FILES = Object.freeze([
   "SOURCE_CANDIDATE.json",
-  "platform-acceptance.json",
+  "accepted-candidate.json",
   "stable-authority-manifest.json",
 ]);
 const RELEASE_FILES = Object.freeze([
@@ -119,13 +119,16 @@ async function validateFunctional(
   candidate: any,
 ): Promise<{ bytes: Buffer; digest: string }> {
   const bytes = await readBoundedFile(filePath);
-  await validateFunctionalPlatformAcceptanceReport(path.resolve(filePath), {
-    candidateDigest: `sha256:${candidate.candidate_digest}`,
-    currentSourceRevision: candidate.source_revision,
-  });
-  const report = JSON.parse(bytes.toString("utf8"));
-  if (report.candidate_digest !== candidate.candidate_digest) {
-    fail("promotion_authority_functional_candidate_mismatch");
+  try {
+    const receipt = validateAcceptedCandidateReceipt(JSON.parse(bytes.toString("utf8")), {
+      candidateDigest: candidate.candidate_digest,
+      sourceRevision: candidate.source_revision,
+    });
+    if (!candidate.supported_profiles.includes(receipt.selectedProfile)) {
+      fail("promotion_authority_functional_receipt_invalid");
+    }
+  } catch {
+    fail("promotion_authority_functional_receipt_invalid");
   }
   return { bytes, digest: sha256(bytes) };
 }
@@ -144,7 +147,7 @@ async function verifyStableBundle({
 }: Record<string, string>): Promise<any> {
   await requireExactBundleFiles(bundlePath, STABLE_FILES);
   const candidatePath = path.join(bundlePath, "SOURCE_CANDIDATE.json");
-  const functionalPath = path.join(bundlePath, "platform-acceptance.json");
+  const functionalPath = path.join(bundlePath, "accepted-candidate.json");
   const manifestPath = path.join(bundlePath, "stable-authority-manifest.json");
   const { bytes: candidateBytes, candidate } = await validatedCandidate(candidatePath);
   await compareExpectedCandidate(candidate, expectedCandidatePath);
@@ -170,7 +173,7 @@ async function verifyReleaseBundle({
 }: Record<string, string>): Promise<any> {
   await requireExactBundleFiles(bundlePath, RELEASE_FILES);
   const candidatePath = path.join(bundlePath, "SOURCE_CANDIDATE.json");
-  const functionalPath = path.join(bundlePath, "platform-acceptance.json");
+  const functionalPath = path.join(bundlePath, "accepted-candidate.json");
   const deploymentPath = path.join(bundlePath, "release-deployment.json");
   const stableManifestPath = path.join(bundlePath, "stable-authority-manifest.json");
   const releaseManifestPath = path.join(bundlePath, "release-authority-manifest.json");
