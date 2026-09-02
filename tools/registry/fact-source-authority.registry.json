@@ -98,7 +98,7 @@
     {
       "id": "release-deployment-verifier",
       "factKey": "release.deployment-verification",
-      "domain": "Deterministic external runtime-ui deployment verification over the exact stable source candidate and functional receipt, bounded synthetic request scenarios, deployment cleanup, and the fixed-size privacy-safe deployment receipt.",
+      "domain": "Deterministic external runtime-ui deployment verification over the exact stable source candidate and functional receipt, using process-isolated runtime and fixture containers on one disposable private network, unique MCP request identities, bounded synthetic request scenarios, exact-resource cleanup, and the fixed-size privacy-safe deployment receipt.",
       "authorityPath": "tools/server-scripts/verify-release-deployment.ts",
       "authorityRole": "release-deployment-verifier",
       "projectionPaths": [

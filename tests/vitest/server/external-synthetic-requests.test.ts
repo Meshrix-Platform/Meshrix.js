@@ -33,7 +33,8 @@ function sendJson(response: any, status: number, payload: any): void {
 }
 
 async function startOneOrigin({ malformedSuccess = false }: Record<string, any> = {}): Promise<any> {
-  const seen = { directProviderRoute: false, authorizedCalls: 0 };
+  const seen = { directProviderRoute: false, authorizedCalls: 0, requestIds: [] as number[] };
+  let providerFaultCalls = 0;
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://one-origin.invalid");
     if (request.method === "GET" && url.pathname === "/") {
@@ -63,6 +64,7 @@ async function startOneOrigin({ malformedSuccess = false }: Record<string, any> 
     let text = "";
     for await (const chunk of request) text += chunk;
     const body = JSON.parse(text || "{}");
+    seen.requestIds.push(Number(body.id));
     const model = body?.params?.arguments?.model;
     if (model === "fixture-openai-cancel") {
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -74,6 +76,19 @@ async function startOneOrigin({ malformedSuccess = false }: Record<string, any> 
       return;
     }
     const providerFault = model === "fixture-openai-fault";
+    if (providerFault) providerFaultCalls += 1;
+    if (providerFaultCalls === 4) {
+      sendJson(response, 429, {
+        jsonrpc: "2.0",
+        id: body.id,
+        error: {
+          code: -32000,
+          message: "Upstream gateway traffic limit exceeded.",
+          data: { code: "upstream_gateway_circuit_open", status: 429 },
+        },
+      });
+      return;
+    }
     const providerPayload = providerFault
       ? { error: { code: "provider_unavailable" } }
       : model.startsWith("fixture-anthropic")
@@ -126,6 +141,9 @@ describe("external synthetic deployment requests", () => {
         .toBe(FAST_BUDGETS["provider-fault"].requests);
       expect(service.seen.directProviderRoute).toBe(false);
       expect(service.seen.authorizedCalls).toBe(28);
+      expect(new Set(service.seen.requestIds).size).toBe(28);
+      expect([...service.seen.requestIds].sort((left, right) => left - right))
+        .toEqual(Array.from({ length: 28 }, (_unused, index) => index + 1));
       expect(JSON.stringify(aggregate)).not.toContain(service.origin);
       expect(JSON.stringify(aggregate)).not.toContain(CREDENTIAL);
     } finally {

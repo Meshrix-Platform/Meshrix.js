@@ -16,6 +16,7 @@ import {
   validateScenarioAggregate,
 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
 import { reduceDeploymentEvidence } from "../../../tools/server-scripts/reduce-release-deployment.ts";
+import { releaseDriverFailureCode } from "../../../tools/server-scripts/verify-release-deployment.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const SHA_REVISION = "a".repeat(40);
@@ -177,5 +178,16 @@ describe("release deployment smoke", () => {
       expect(result.status, `${script}: ${result.stderr}`).toBe(0);
       expect(result.stdout).toContain('"ok":true');
     }
+  });
+
+  it("retains only fixed driver failure codes for controller diagnostics", () => {
+    expect(releaseDriverFailureCode('{"ok":false,"code":"success:scenario_success_outcome_invalid"}\n'))
+      .toBe("release_deployment_driver_success_scenario_success_outcome_invalid");
+    expect(releaseDriverFailureCode('{"ok":false,"code":"provider-fault:scenario_provider_fault_outcome_invalid"}\n'))
+      .toBe("release_deployment_driver_provider_fault_scenario_provider_fault_outcome_invalid");
+    expect(releaseDriverFailureCode('{"ok":false,"code":"provider-fault:scenario_provider_fault_outcome_invalid","diagnosticCode":"provider_fault_jsonrpc_error"}\n'))
+      .toBe("release_deployment_driver_provider_fault_jsonrpc_error");
+    expect(releaseDriverFailureCode("private runtime data"))
+      .toBe("release_deployment_driver_failed");
   });
 });

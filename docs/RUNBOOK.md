@@ -700,9 +700,10 @@ Meshrix.js has three deliberately separate acceptance standards:
    skipped, stale, or failing required functional check fails this gate.
 2. **Release Deployment Verification** is the mandatory runtime-ui deployment
    closure for the exact stable candidate. On a GitHub-hosted `ubuntu-24.04`
-   runner it deploys the runtime-ui surface and drives bounded external
-   deterministic synthetic requests with no real model dependency, then
-   verifies termination and cleanup of every deployment resource. Its
+   runner it deploys the runtime-ui surface and a process-isolated fixture in
+   separate containers on one disposable private network, then drives bounded
+   external deterministic synthetic requests with no real model dependency
+   and verifies termination and cleanup of every deployment resource. Its
    fixed-size privacy-safe receipt is the named **Release Deployment Claim**.
 3. A **Real-Machine Verification Workflow** is remaining required work that
    independently repeats the exact accepted candidate on one declared
@@ -1024,10 +1025,12 @@ npm run server:verify:release-deployment -- \
   --cleanup-state <private-cleanup-state>
 ```
 
-The controller deploys the runtime-ui surface for the exact candidate, drives
-the bounded external deterministic synthetic request scenarios, verifies
-termination and cleanup, and writes one fixed-size privacy-safe deployment
-receipt with `capacityCertified: false`. Exit code `0` means the Release
+The controller deploys the runtime-ui surface and fixture in separate
+containers on one disposable private network for the exact candidate, drives
+the bounded external deterministic synthetic request scenarios with unique MCP
+request IDs, verifies termination and exact-resource cleanup, and writes one
+fixed-size privacy-safe deployment receipt with `capacityCertified: false`. Exit
+code `0` means the Release
 Deployment Claim is present; every non-zero exit means the claim is absent
 and tag publication for that commit is blocked. If the controller is
 interrupted, invoke the same exact-resource cleanup through

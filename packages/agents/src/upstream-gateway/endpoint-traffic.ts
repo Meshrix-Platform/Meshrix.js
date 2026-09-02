@@ -388,7 +388,10 @@ export function createEndpointTrafficController({
         traffic
       });
       persist();
+      const deniedReason: any = traffic.deniedReason || "traffic_limit_exceeded";
       throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), {
+        code: `upstream_gateway_${deniedReason}`,
+        reasonCode: `upstream_gateway_${deniedReason}`,
         status: 429,
         audit,
         details: {
