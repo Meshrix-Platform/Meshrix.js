@@ -16,8 +16,8 @@ export const RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA = "meshrix.release-deployment.a
 export const RELEASE_DEPLOYMENT_SCENARIOS = Object.freeze([
   "success",
   "concurrency",
-  "cancellation",
   "provider-fault",
+  "cancellation",
 ]);
 export const SCENARIO_BUDGETS: Readonly<Record<string, any>> = Object.freeze({
   success: Object.freeze({ requests: 4, concurrency: 2, timeoutMs: 10_000 }),

@@ -659,6 +659,70 @@ describe("operation-permission runtime (behavior)", () : any => {
     });
   });
 
+  it.each([
+    ["api_key_concurrency_limit_reached", "API Key concurrency limit reached."],
+    ["api_key_rate_limited", "API Key rate limit reached."],
+    ["api_key_use_limit_reached", "API Key use limit reached."]
+  ])("returns API Key capacity denial %s as a public 429", async (code, message) : Promise<any> => {
+    const denial: Error & Record<string, any> = new Error("private provider detail");
+    denial.code = code;
+    denial.statusCode = 429;
+    const fixture: any = createRuntimeFixture({
+      runtime: {
+        apiKeyDistributionProvider: {
+          reserveEffect: vi.fn(async () : Promise<never> => { throw denial; }),
+          revalidateEffect: vi.fn(),
+          releaseEffect: vi.fn()
+        }
+      }
+    });
+
+    const result: any = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest(),
+      apiKeyAuthorization: scopedApiKeyAuthorization()
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: 429,
+      payload: { error: { code, message } }
+    });
+    expect(fixture.store.appendExecution).toHaveBeenCalledWith(expect.objectContaining({
+      errorCode: code,
+      status: "failed"
+    }));
+  });
+
+  it("does not expose an unrecognized runtime failure", async () : Promise<any> => {
+    const fixture: any = createRuntimeFixture({
+      runtime: {
+        operationDispatcher: vi.fn(async () : Promise<never> => {
+          throw new Error("private runtime detail");
+        })
+      }
+    });
+
+    const result: any = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest()
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: 500,
+      payload: {
+        error: {
+          code: "tool_execution_failed",
+          message: "Tool execution failed."
+        }
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain("private runtime detail");
+  });
+
   it("revalidates the current grant before the dispatched operation effect", async () : Promise<any> => {
     let authorizationCall: any = 0;
     const authorizeRequest: any = vi.fn(async () : Promise<any> => {

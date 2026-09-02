@@ -69,6 +69,10 @@ plaintext exactly once. Storage and list responses retain only redacted identity
 policy, lineage, lifecycle, expiry, usage, rate, and concurrency metadata.
 Rotation preserves policy and accumulated use; revocation is terminal.
 
+Rate, concurrent-effect, and use-limit exhaustion return HTTP `429` with their
+stable API Key error code. Other execution failures retain a generic public
+error and do not expose runtime or provider details.
+
 Runtime selects one indexed public key id, compares its irreversible keyed
 verifier in constant time, reserves use atomically, and revalidates immediately
 before the protected effect. Expiry, exhaustion, lineage or policy change,
