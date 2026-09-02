@@ -10,7 +10,7 @@ import {
   createRealMachineValidationWorkflow,
   REAL_MACHINE_OPERATIONAL_PHASES,
   REAL_MACHINE_TARGET_COMMAND_MANIFESTS,
-  validateFunctionalPlatformAcceptanceReport,
+  validateFunctionalAcceptedCandidateReceipt,
   validateRealMachineTarget,
 } from "../../../tools/server-scripts/lib/real-machine-validation-workflow.ts";
 
@@ -21,23 +21,21 @@ const repoRoot: any = path.resolve(import.meta.dirname, "../../..");
 async function fixture() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-real-machine-"));
   const stateRoot: any = path.join(root, "state");
-  const functionalReportPath: any = path.join(root, "functional.json");
-  await fs.writeFile(functionalReportPath, `${JSON.stringify({
-    schemaVersion: "v0.0.1:acceptance:platform-report-4",
-    acceptanceStandard: "functional-completeness",
+  const functionalReceiptPath: any = path.join(root, "accepted-candidate.json");
+  await fs.writeFile(functionalReceiptPath, `${JSON.stringify({
+    schemaVersion: "v0.0.1:meshrix:accepted-candidate-receipt-1",
     claim: "functional-complete",
     status: "accepted",
+    releaseReady: true,
+    generationId: "real-machine-test-generation",
     selectedProfile: "enterprise-single-node",
     sourceRevision: SOURCE_REVISION,
-    summary: {
-      releaseReady: true,
-      reportLeakScan: true,
-    },
+    candidateDigest: CANDIDATE.slice("sha256:".length),
   })}\n`, { mode: 0o600 });
   return {
     root,
     stateRoot,
-    functionalReportPath,
+    functionalReceiptPath,
     close: () : any => fs.rm(root, { recursive: true, force: true }),
   };
 }
@@ -50,7 +48,7 @@ function workflowOptions(fx?: any, commandRunner?: any, overrides: Record<string
     target: "native-linux-x64",
     architecture: "x64",
     candidateDigest: CANDIDATE,
-    functionalAcceptanceReportPath: fx.functionalReportPath,
+    functionalReceiptPath: fx.functionalReceiptPath,
     currentSourceRevision: SOURCE_REVISION,
     runtimePlatform: "linux",
     runtimeArchitecture: "x64",
@@ -244,39 +242,39 @@ describe("real machine validation workflow", () : any => {
     }
   }, 90_000);
 
-  it("requires an accepted functional report bound to the candidate", async () : Promise<any> => {
+  it("requires an accepted candidate receipt bound to the candidate", async () : Promise<any> => {
     const fx: any = await fixture();
     try {
-      await expect(validateFunctionalPlatformAcceptanceReport(
-        fx.functionalReportPath,
+      await expect(validateFunctionalAcceptedCandidateReceipt(
+        fx.functionalReceiptPath,
         {
           candidateDigest: CANDIDATE,
           currentSourceRevision: SOURCE_REVISION,
         },
       )).resolves.toMatchObject({
-        reportDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        receiptDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
       });
-      const report: any = JSON.parse(await fs.readFile(fx.functionalReportPath, "utf8"));
-      report.summary.releaseReady = false;
-      await fs.writeFile(fx.functionalReportPath, JSON.stringify(report));
-      await expect(validateFunctionalPlatformAcceptanceReport(
-        fx.functionalReportPath,
+      const receipt: any = JSON.parse(await fs.readFile(fx.functionalReceiptPath, "utf8"));
+      receipt.releaseReady = false;
+      await fs.writeFile(fx.functionalReceiptPath, JSON.stringify(receipt));
+      await expect(validateFunctionalAcceptedCandidateReceipt(
+        fx.functionalReceiptPath,
         {
           candidateDigest: CANDIDATE,
           currentSourceRevision: SOURCE_REVISION,
         },
-      )).rejects.toThrow("real_machine_functional_acceptance_required");
+      )).rejects.toThrow("real_machine_functional_receipt_mismatch");
 
-      report.summary.releaseReady = true;
-      report.sourceRevision = "2".repeat(40);
-      await fs.writeFile(fx.functionalReportPath, JSON.stringify(report));
-      await expect(validateFunctionalPlatformAcceptanceReport(
-        fx.functionalReportPath,
+      receipt.releaseReady = true;
+      receipt.sourceRevision = "2".repeat(40);
+      await fs.writeFile(fx.functionalReceiptPath, JSON.stringify(receipt));
+      await expect(validateFunctionalAcceptedCandidateReceipt(
+        fx.functionalReceiptPath,
         {
           candidateDigest: CANDIDATE,
           currentSourceRevision: SOURCE_REVISION,
         },
-      )).rejects.toThrow("real_machine_functional_source_revision_mismatch");
+      )).rejects.toThrow("real_machine_functional_receipt_mismatch");
 
     } finally {
       await fx.close();

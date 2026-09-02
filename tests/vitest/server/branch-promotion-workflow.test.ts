@@ -408,14 +408,14 @@ describe("branch promotion workflow", () : any => {
       });
       const candidateText: any = `${JSON.stringify(candidate, null, 2)}\n`;
       const functional: any = {
-        schemaVersion: "v0.0.1:acceptance:platform-report-4",
-        acceptanceStandard: "functional-completeness",
+        schemaVersion: "v0.0.1:meshrix:accepted-candidate-receipt-1",
         claim: "functional-complete",
-        candidate_digest: candidate.candidate_digest,
         status: "accepted",
+        releaseReady: true,
+        generationId: "stable-test-generation",
         selectedProfile: "enterprise-single-node",
         sourceRevision: candidate.source_revision,
-        summary: { releaseReady: true, reportLeakScan: true },
+        candidateDigest: candidate.candidate_digest,
       };
       const functionalText: any = `${JSON.stringify(functional, null, 2)}\n`;
       const manifest: any = createStableAuthorityManifest({
@@ -438,7 +438,7 @@ describe("branch promotion workflow", () : any => {
       await Promise.all([
         fs.promises.writeFile(path.join(bundle, "SOURCE_CANDIDATE.json"), candidateText),
         fs.promises.writeFile(path.join(root, "expected.json"), candidateText),
-        fs.promises.writeFile(path.join(bundle, "platform-acceptance.json"), functionalText),
+        fs.promises.writeFile(path.join(bundle, "accepted-candidate.json"), functionalText),
         fs.promises.writeFile(path.join(bundle, "stable-authority-manifest.json"), `${JSON.stringify(manifest)}\n`),
         fs.promises.writeFile(path.join(root, "run.json"), `${JSON.stringify(run)}\n`),
       ]);

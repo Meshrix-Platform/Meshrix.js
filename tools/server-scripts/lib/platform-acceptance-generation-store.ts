@@ -23,7 +23,8 @@ import {
 } from "./platform-acceptance-requirement-evidence.ts";
 import {
   PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH,
-  PLATFORM_ACCEPTANCE_GENERATION_ROOT
+  PLATFORM_ACCEPTANCE_GENERATION_ROOT,
+  PLATFORM_ACCEPTANCE_RECEIPT_PATH
 } from "./platform-acceptance-report-catalog.ts";
 import { validateReleaseCandidateIdentity } from "../verify-release-candidate-identity.ts";
 
@@ -393,6 +394,52 @@ function sameValues(left?: any, right?: any) : any {
 
 function requireAggregate(condition?: any, code?: any) : any {
   if (!condition) throw new Error(`Acceptance generation aggregate contract is invalid: ${code}`);
+}
+
+export function validateAcceptedCandidateReceipt(
+  receipt?: any,
+  {
+    candidateDigest = "",
+    selectedProfile = "",
+    sourceRevision = ""
+  }: Record<string, any> = {}
+) : any {
+  requireAggregate(receipt && typeof receipt === "object" && !Array.isArray(receipt), "receipt-object");
+  requireAggregate(receipt.schemaVersion === ACCEPTED_CANDIDATE_RECEIPT_SCHEMA, "receipt-schema");
+  requireAggregate(receipt.claim === "functional-complete", "receipt-claim");
+  requireAggregate(receipt.status === "accepted" && receipt.releaseReady === true, "receipt-status");
+  requireAggregate(
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(String(receipt.generationId || "")),
+    "receipt-generation"
+  );
+  requirePlatformAcceptanceProfile(receipt.selectedProfile);
+  requireAggregate(/^[a-f0-9]{40}$/u.test(String(receipt.sourceRevision || "")), "receipt-source-revision");
+  requireAggregate(BARE_SHA256_DIGEST.test(String(receipt.candidateDigest || "")), "receipt-candidate-digest");
+  if (sourceRevision) {
+    requireAggregate(receipt.sourceRevision === sourceRevision, "receipt-source-revision-mismatch");
+  }
+  if (candidateDigest) {
+    requireAggregate(receipt.candidateDigest === candidateDigest, "receipt-candidate-digest-mismatch");
+  }
+  if (selectedProfile) {
+    requireAggregate(receipt.selectedProfile === selectedProfile, "receipt-profile-mismatch");
+  }
+  return Object.freeze(receipt);
+}
+
+export async function exportAcceptedCandidateReceipt(
+  repoRoot?: any,
+  receipt?: any,
+  outputPath: any = PLATFORM_ACCEPTANCE_RECEIPT_PATH
+) : Promise<any> {
+  const validated: any = validateAcceptedCandidateReceipt(receipt);
+  const logicalPath: any = normalizedLogicalPath(outputPath);
+  assertNoSensitiveReportLeak(validated, "accepted candidate receipt export");
+  await writePrivateFileAtomic(
+    path.join(repoRoot, ...logicalPath.split("/")),
+    `${JSON.stringify(validated, null, 2)}\n`
+  );
+  return logicalPath;
 }
 
 function validateCandidateIdentity(candidate?: any, selectedProfile?: any) : any {
@@ -893,24 +940,11 @@ export async function resolveCurrentAcceptedCandidate(repoRoot?: any) : Promise<
       receiptDigest.sha256 !== pointer.receiptSha256) {
     throw new Error("Accepted candidate receipt digest does not match its pointer");
   }
-  const receipt: any = JSON.parse(await fs.readFile(receiptPath, "utf8"));
-  if (
-    receipt?.schemaVersion !== ACCEPTED_CANDIDATE_RECEIPT_SCHEMA ||
-    receipt?.claim !== "functional-complete" ||
-    receipt?.status !== "accepted" ||
-    receipt?.releaseReady !== true ||
-    receipt?.generationId !== pointer.generationId
-  ) {
+  const receipt: any = validateAcceptedCandidateReceipt(
+    JSON.parse(await fs.readFile(receiptPath, "utf8"))
+  );
+  if (receipt.generationId !== pointer.generationId) {
     throw new Error("Accepted candidate receipt is invalid");
-  }
-  try {
-    requirePlatformAcceptanceProfile(receipt.selectedProfile);
-  } catch {
-    throw new Error("Accepted candidate receipt profile is invalid");
-  }
-  if (!/^[a-f0-9]{40}$/u.test(String(receipt.sourceRevision || "")) ||
-      !BARE_SHA256_DIGEST.test(String(receipt.candidateDigest || ""))) {
-    throw new Error("Accepted candidate receipt binding is invalid");
   }
   return { pointer, receipt, generationRoot };
 }

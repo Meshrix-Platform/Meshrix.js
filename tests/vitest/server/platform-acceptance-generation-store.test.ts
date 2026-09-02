@@ -23,10 +23,12 @@ import {
   ACCEPTANCE_GENERATION_BUDGETS,
   ACCEPTANCE_GENERATION_POINTER,
   createAcceptanceGenerationWorkspace,
+  exportAcceptedCandidateReceipt,
   publishAcceptanceGeneration,
   publishAcceptanceFailureDiagnostic,
   removeAcceptanceGenerationWorkspace,
   resolveCurrentAcceptedCandidate,
+  validateAcceptedCandidateReceipt,
   withAcceptanceExecutionLease
 } from "../../../tools/server-scripts/lib/platform-acceptance-generation-store.ts";
 
@@ -657,6 +659,36 @@ describe("platform acceptance generation store", () : any => {
     await fs.writeFile(receiptPath, `${JSON.stringify(receipt)}\n`, "utf8");
     await expect(resolveFixture(repoRoot))
       .rejects.toThrow("receipt digest does not match its pointer");
+    await removeAcceptanceGenerationWorkspace(paths);
+  });
+
+  it("validates the compact downstream receipt without reopening diagnostic reports", async () : Promise<any> => {
+    const repoRoot: any = await fixtureRoot();
+    const paths: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "receipt-contract" });
+    await writeWorkerEvidence(paths.workspace);
+    await publishFixture({
+      repoRoot,
+      paths,
+      requiredReports: ["build/reports/child.json"],
+      aggregateReportPath: "build/reports/platform-acceptance.json",
+      releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY
+    });
+    const current: any = await resolveFixture(repoRoot);
+    expect(validateAcceptedCandidateReceipt(current.receipt, {
+      candidateDigest: current.receipt.candidateDigest,
+      selectedProfile: "enterprise-single-node",
+      sourceRevision: current.receipt.sourceRevision
+    })).toEqual(current.receipt);
+    expect(() : any => validateAcceptedCandidateReceipt({
+      ...current.receipt,
+      releaseReady: false
+    })).toThrow("aggregate contract is invalid: receipt-status");
+    await expect(exportAcceptedCandidateReceipt(repoRoot, current.receipt))
+      .resolves.toBe("build/reports/accepted-candidate.json");
+    expect(JSON.parse(await fs.readFile(
+      path.join(repoRoot, "build", "reports", "accepted-candidate.json"),
+      "utf8"
+    ))).toEqual(current.receipt);
     await removeAcceptanceGenerationWorkspace(paths);
   });
 

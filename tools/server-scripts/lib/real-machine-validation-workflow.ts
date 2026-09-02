@@ -11,7 +11,7 @@ import {
   assertNoSensitiveReportLeak,
   reportPayloadDigest,
 } from "./sensitive-report-scan.ts";
-import { PLATFORM_ACCEPTANCE_REPORT_SCHEMA } from "./platform-acceptance-contract.ts";
+import { validateAcceptedCandidateReceipt } from "./platform-acceptance-generation-store.ts";
 
 export const REAL_MACHINE_VALIDATION_SCHEMA: any =
   "v0.0.1:meshrix:real-machine-validation-state-1";
@@ -143,55 +143,45 @@ export function validateRealMachineTarget({
   });
 }
 
-export async function validateFunctionalPlatformAcceptanceReport(
-  reportPath?: any,
+export async function validateFunctionalAcceptedCandidateReceipt(
+  receiptPath?: any,
   { candidateDigest = "", currentSourceRevision = "" }: Record<string, any> = {},
 ) : Promise<any> {
-  const selectedPath: any = String(reportPath || "").trim();
+  const selectedPath: any = String(receiptPath || "").trim();
   requireCondition(
     path.isAbsolute(selectedPath),
-    "real_machine_functional_report_path_invalid",
+    "real_machine_functional_receipt_path_invalid",
   );
   const stat: any = await fs.lstat(selectedPath).catch(() : any => null);
   requireCondition(
     stat?.isFile() && !stat.isSymbolicLink() && stat.size <= 4 * 1024 * 1024,
-    "real_machine_functional_report_unavailable",
+    "real_machine_functional_receipt_unavailable",
   );
   const bytes: any = await fs.readFile(selectedPath);
-  let report: any;
+  let receipt: any;
   try {
-    report = JSON.parse(bytes.toString("utf8"));
+    receipt = JSON.parse(bytes.toString("utf8"));
   } catch {
-    throw workflowError("real_machine_functional_report_invalid");
+    throw workflowError("real_machine_functional_receipt_invalid");
   }
-  requireCondition(
-    report?.schemaVersion === PLATFORM_ACCEPTANCE_REPORT_SCHEMA &&
-      report?.acceptanceStandard === "functional-completeness" &&
-      report?.claim === "functional-complete" &&
-      report?.status === "accepted" &&
-      report?.selectedProfile === "enterprise-single-node" &&
-      report?.summary?.releaseReady === true &&
-      report?.summary?.reportLeakScan === true,
-    "real_machine_functional_acceptance_required",
-  );
-  assertNoSensitiveReportLeak(report, "functional platform acceptance report");
-
-  if (candidateDigest) normalizeCandidateDigest(candidateDigest);
+  const selectedCandidate: any = normalizeCandidateDigest(candidateDigest);
   const selectedRevision: any = String(currentSourceRevision || "").trim();
   requireCondition(
     GIT_COMMIT_PATTERN.test(selectedRevision),
     "real_machine_checkout_source_revision_invalid",
   );
-  requireCondition(
-    GIT_COMMIT_PATTERN.test(String(report.sourceRevision || "")),
-    "real_machine_functional_source_revision_missing",
-  );
-  requireCondition(
-    report.sourceRevision === selectedRevision,
-    "real_machine_functional_source_revision_mismatch",
-  );
+  try {
+    validateAcceptedCandidateReceipt(receipt, {
+      candidateDigest: selectedCandidate.slice("sha256:".length),
+      selectedProfile: "enterprise-single-node",
+      sourceRevision: selectedRevision,
+    });
+  } catch {
+    throw workflowError("real_machine_functional_receipt_mismatch");
+  }
+  assertNoSensitiveReportLeak(receipt, "accepted candidate receipt");
   return Object.freeze({
-    reportDigest: sha256(bytes),
+    receiptDigest: sha256(bytes),
     sourceRevision: selectedRevision,
   });
 }
@@ -513,7 +503,7 @@ export function createRealMachineValidationWorkflow({
   target,
   architecture,
   candidateDigest,
-  functionalAcceptanceReportPath,
+  functionalReceiptPath,
   currentSourceRevision = "",
   runtimePlatform = process.platform,
   runtimeArchitecture = process.arch,
@@ -566,8 +556,8 @@ export function createRealMachineValidationWorkflow({
           runtimePlatform,
           runtimeArchitecture,
         });
-        const functional: any = await validateFunctionalPlatformAcceptanceReport(
-          functionalAcceptanceReportPath,
+        const functional: any = await validateFunctionalAcceptedCandidateReceipt(
+          functionalReceiptPath,
           {
             candidateDigest: selectedCandidate,
             currentSourceRevision: currentSourceRevision ||
@@ -583,7 +573,7 @@ export function createRealMachineValidationWorkflow({
           platform: selectedTarget.platform,
           architecture: selectedTarget.architecture,
           candidateDigest: selectedCandidate,
-          functionalAcceptanceDigest: functional.reportDigest,
+          functionalAcceptanceDigest: functional.receiptDigest,
           sourceRevision: functional.sourceRevision,
           phases: {},
           createdAt: nowIso(),

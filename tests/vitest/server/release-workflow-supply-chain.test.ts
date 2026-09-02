@@ -129,7 +129,7 @@ describe("release workflow supply-chain boundary", () : any => {
       "--source-candidate build/release/control/stable-authority/SOURCE_CANDIDATE.json"
     );
     expect(branchWorkflow).toContain(
-      "--functional-receipt build/release/control/stable-authority/platform-acceptance.json"
+      "--functional-receipt build/release/control/stable-authority/accepted-candidate.json"
     );
     expect(branchWorkflow).toContain("--output build/reports/release-deployment.json");
 
@@ -152,13 +152,13 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(sign).toContain("Download the revalidated release authority bundle");
     expect(sign).toContain("release-authority-${{ github.sha }}");
     expect(sign).toContain("release-authority/SOURCE_CANDIDATE.json");
-    expect(sign).toContain("release-authority/platform-acceptance.json");
+    expect(sign).toContain("release-authority/accepted-candidate.json");
     expect(sign).toContain("release-authority/release-deployment.json");
     expect(sign).toContain(
       "imageAuthority.candidateDigest !== sourceCandidate.candidate_digest"
     );
     expect(sign).toContain(
-      "functionalAuthority.candidate_digest !== sourceCandidate.candidate_digest"
+      "functionalAuthority.candidateDigest !== sourceCandidate.candidate_digest"
     );
     expect(sign).toContain("deploymentAuthority.functionalReceiptDigest");
     expect(sign).toContain("deploymentAuthority.cleanup !== true");
@@ -273,7 +273,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(functionalCheckpoint).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
     expect(functionalCheckpoint).toContain("verify-platform-acceptance.ts");
     expect(functionalCheckpoint).not.toContain("verify:npm-package-installability");
-    expect(functionalCheckpoint).toContain("if: ${{ always() }}");
+    expect(functionalCheckpoint).toContain("build/reports/accepted-candidate.json");
+    expect(functionalCheckpoint).not.toContain("if: ${{ always() }}");
     expect(stableSupplyChain).toContain("npm run verify:npm-package-installability");
     expect(stableSupplyChain).toContain("build/reports/npm-package-installability.json");
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
@@ -297,7 +298,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("npm run verify:real-machine --");
     expect(workflow).toContain("verify-release-acceptance-standards.ts");
-    expect(workflow).toContain("name: functional-platform-acceptance");
+    expect(workflow).toContain("name: release-authority-${{ inputs.source_revision }}");
+    expect(workflow).toContain("--functional-receipt");
     expect(workflow).toContain("run-id: ${{ inputs.functional_run_id }}");
     expect(workflow).toContain("source_revision:");
     expect(workflow).toContain("ref: ${{ inputs.source_revision }}");

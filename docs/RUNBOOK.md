@@ -1019,7 +1019,7 @@ candidate and its functional receipt:
 ```bash
 npm run server:verify:release-deployment -- \
   --source-candidate build/release/control/SOURCE_CANDIDATE.json \
-  --functional-receipt build/reports/platform-acceptance.json \
+  --functional-receipt build/reports/accepted-candidate.json \
   --output build/reports/release-deployment.json \
   --cleanup-state <private-cleanup-state>
 ```
@@ -1046,7 +1046,7 @@ npm run verify:real-machine -- \
   --target <target-id> \
   --architecture <architecture> \
   --candidate sha256:<candidate-digest> \
-  --functional-report <functional-acceptance-report>
+  --functional-receipt <accepted-candidate-receipt>
 ```
 
 Each workflow is a complete operational unit. It validates the functional

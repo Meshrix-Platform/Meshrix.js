@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   PLATFORM_ACCEPTANCE_REPORT_PATH,
+  PLATFORM_ACCEPTANCE_RECEIPT_PATH,
   PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST
 } from "./lib/platform-acceptance-report-catalog.ts";
 import {
@@ -73,6 +74,7 @@ import { reportPayloadDigest } from "../../packages/foundation/src/observability
 import {
   ACCEPTANCE_GENERATION_POINTER,
   createAcceptanceGenerationWorkspace,
+  exportAcceptedCandidateReceipt,
   publishAcceptanceGeneration,
   publishAcceptanceFailureDiagnostic,
   removeAcceptanceGenerationWorkspace,
@@ -581,6 +583,7 @@ async function runAcceptanceWorker() : Promise<any> {
 
 async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
   return withAcceptanceExecutionLease(authorityRoot, async () : Promise<any> => {
+    await removeReport(PLATFORM_ACCEPTANCE_RECEIPT_PATH);
     const paths: any = await createAcceptanceGenerationWorkspace(repoRoot, { authorityRoot });
     try {
       const result: any = await runAcceptanceGenerationWorker({
@@ -604,15 +607,16 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
         console.log(`[platform-acceptance] failureDiagnostic=${diagnostic.path}`);
         return;
       }
-      await publishAcceptanceGeneration({
+      const publication: any = await publishAcceptanceGeneration({
         repoRoot: authorityRoot,
         paths,
         requiredReports: ACCEPTANCE_REQUIRED_REPORTS,
         aggregateReportPath: REPORT_PATH,
         releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY
       });
+      await exportAcceptedCandidateReceipt(repoRoot, publication.receipt);
       console.log(
-        `[platform-acceptance] generation=${paths.id} published=${ACCEPTANCE_GENERATION_POINTER}`
+        `[platform-acceptance] generation=${paths.id} published=${ACCEPTANCE_GENERATION_POINTER} receipt=${PLATFORM_ACCEPTANCE_RECEIPT_PATH}`
       );
     } finally {
       await removeAcceptanceGenerationWorkspace(paths, { repoRoot });

@@ -100,7 +100,7 @@ jobs:
         run: >-
           npm run server:verify:release-deployment --
           --source-candidate build/release/control/stable-authority/SOURCE_CANDIDATE.json
-          --functional-receipt build/release/control/stable-authority/platform-acceptance.json
+          --functional-receipt build/release/control/stable-authority/accepted-candidate.json
           --output build/reports/release-deployment.json
           --cleanup-state "$RUNNER_TEMP/release-deployment-cleanup.json"
       - name: Remove exact run-scoped deployment resources
@@ -117,7 +117,7 @@ jobs:
           bundle="build/release/control/release-authority"
           mkdir -p "$bundle"
           cp "$stable/SOURCE_CANDIDATE.json" "$bundle/SOURCE_CANDIDATE.json"
-          cp "$stable/platform-acceptance.json" "$bundle/platform-acceptance.json"
+          cp "$stable/accepted-candidate.json" "$bundle/accepted-candidate.json"
           cp "$stable/stable-authority-manifest.json" "$bundle/stable-authority-manifest.json"
           cp build/reports/release-deployment.json "$bundle/release-deployment.json"
           node tools/server-scripts/resolve-branch-promotion-authority.ts create-release-manifest \
