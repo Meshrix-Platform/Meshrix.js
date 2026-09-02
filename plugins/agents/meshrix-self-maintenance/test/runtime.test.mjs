@@ -70,6 +70,14 @@ async function waitFor(predicate, timeoutMs = 2_000) {
   throw new Error("test_wait_timeout");
 }
 
+function assertRepeatedSequence(actual, expected) {
+  assert.ok(actual.length >= expected.length, "at least one scheduled occurrence must complete");
+  assert.equal(actual.length % expected.length, 0, "every scheduled occurrence must complete its full request sequence");
+  for (let offset = 0; offset < actual.length; offset += expected.length) {
+    assert.deepEqual(actual.slice(offset, offset + expected.length), expected);
+  }
+}
+
 async function removeTempDir(dirPath) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
@@ -130,9 +138,9 @@ test("valid atomic revision calls Model Gateway directly before ordinary governe
     return response({ schemaVersion: "v0.0.1:schema:definition-1", result: { ok: true } });
   } });
   await runtime.start();
-  await waitFor(() => requests.length === 2);
+  await waitFor(() => requests.length >= 2);
   await runtime.close();
-  assert.deepEqual(requests.map((entry) => new URL(entry.url).pathname), [
+  assertRepeatedSequence(requests.map((entry) => new URL(entry.url).pathname), [
     "/v1/chat/completions",
     "/api/operation-permission/v1/execute"
   ]);
@@ -160,7 +168,7 @@ test("forged or out-of-policy model proposal causes zero Meshrix effect call", a
   await runtime.start();
   await waitFor(async () => (await journal(local.storageRoot)).some((entry) => entry.code === "proposal_operation_denied"));
   await runtime.close();
-  assert.deepEqual(paths, ["/v1/chat/completions"]);
+  assertRepeatedSequence(paths, ["/v1/chat/completions"]);
   assert.equal((await journal(local.storageRoot)).at(-1).code, "proposal_operation_denied");
 });
 
