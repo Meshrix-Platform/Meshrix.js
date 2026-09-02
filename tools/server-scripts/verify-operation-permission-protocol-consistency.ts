@@ -263,7 +263,7 @@ async function verifyRevokedAndRateLimitParity() : Promise<any> {
   assert.deepEqual(rateDecisions, {
     http: "rate_limited",
     rpc: "rate_limited",
-    mcp: "deny"
+    mcp: "rate_limited"
   });
 
   return {
