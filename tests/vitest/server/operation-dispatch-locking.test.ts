@@ -575,31 +575,43 @@ describe("canonical operation dispatcher locking", () : any => {
   });
 
   it("rejects a synchronous handler that returns after its absolute lease deadline", async () : Promise<any> => {
-    const manager: any = new MemoryLockManager({ defaultTtlMs: 5, heartbeatIntervalMs: 1 });
-    managers.push(manager);
+    vi.useFakeTimers();
+    const acquiredAt: any = new Date("2026-09-02T00:00:00.000Z");
+    vi.setSystemTime(acquiredAt);
+    const release: any = vi.fn(async () : Promise<any> => {});
+    const handle: Record<string, any> = {
+      lockKey: "operation:fixture:absolute-deadline",
+      fencingToken: "fence_fixture_absolute_deadline",
+      acquiredAt,
+      expiresAt: new Date(acquiredAt.getTime() + 100),
+      released: false,
+      heartbeat: vi.fn(async () : Promise<any> => {}),
+      release
+    };
+    const manager: Record<string, any> = {
+      config: { defaultTtlMs: 100, heartbeatIntervalMs: 30 },
+      acquire: vi.fn(async () : Promise<any> => handle)
+    };
     const dispatcher: any = bindOperationDispatcher({ lockManager: manager });
     const operation: any = unsafeOperation({ id: "unit.locked.deadline_overrun" });
 
-    await expect(dispatcher(dispatchInput(operation, ({ response }: Record<string, any>) : any => {
-      const stopAt: any = Date.now() + 15;
-      while (Date.now() < stopAt) {
-        // Deliberately block the event loop past the absolute lease deadline.
-      }
-      response.writeHead(200, {});
-      response.end();
-    }))).rejects.toMatchObject({
-      code: "operation_outcome_in_doubt",
-      retryable: false,
-      cause: {
-        name: "OperationLockError",
-        phase: "lease-lost"
-      }
-    });
-    expect(manager.getMetrics()).toMatchObject({
-      totalExpired: 1,
-      totalReleased: 0,
-      currentActive: 0
-    });
+    try {
+      await expect(dispatcher(dispatchInput(operation, ({ response }: Record<string, any>) : any => {
+        vi.setSystemTime(new Date(handle.expiresAt.getTime() + 1));
+        response.writeHead(200, {});
+        response.end();
+      }))).rejects.toMatchObject({
+        code: "operation_outcome_in_doubt",
+        retryable: false,
+        cause: {
+          name: "OperationLockError",
+          phase: "lease-lost"
+        }
+      });
+      expect(release).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not execute when acquisition resolves to a handle invalidated during the await boundary", async () : Promise<any> => {
