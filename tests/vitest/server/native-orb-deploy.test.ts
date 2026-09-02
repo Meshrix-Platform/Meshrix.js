@@ -307,7 +307,7 @@ describe("native OrbStack deployment", () : any => {
   });
 
   it("writes a closed privacy-safe bootstrap receipt", async () : Promise<any> => {
-    const repoRoot: any = fs.mkdtempSync(path.join(process.cwd(), "build", "tmp-native-bootstrap-receipt-"));
+    const repoRoot: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-native-bootstrap-receipt-"));
     try {
       const stages: any = NATIVE_ORB_BOOTSTRAP_STAGE_SCRIPTS.map((stage?: any) : any => ({ id: stage.id, status: "completed" }));
       const report: any = await writeNativeOrbBootstrapReceipt({

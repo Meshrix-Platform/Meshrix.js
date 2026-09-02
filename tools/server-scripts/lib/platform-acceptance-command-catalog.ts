@@ -24,6 +24,7 @@ import {
 const REPORT_PATH: any = PLATFORM_ACCEPTANCE_REPORT_PATH;
 
 const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
+  command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { resourceLocks: ["container-runtime"], exclusive: true }),
   command("typecheck", "TypeScript project typecheck", "foundation", npmRun("typecheck"), "", ["types"]),
   command("console-build", "Console production build", "foundation", npmRun("build"), "", ["console", "build"]),
   command("foundation-tests", "Core public foundation gate", "foundation", npmTest(), "build/test-reports/latest.json", ["unit", "public-boundary", "secret-hygiene", "local-info", "registry", "root-hygiene"], {
@@ -37,7 +38,6 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
     ]
   }),
   command("composition-source-package", "Self-contained composition source package", "foundation", npmRun("verify:composition-source-package"), "build/reports/composition-source-package.json", ["source-package", "offline-release", "composition"]),
-  command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { dependsOn: ["foundation-tests"], resourceLocks: ["container-runtime"], exclusive: true }),
   command("security-alert-lifecycle", "Security alert lifecycle", "foundation", npmRun("verify:security-alert-lifecycle"), "build/reports/security-alert-lifecycle.json", ["security-alerts", "redaction"]),
   command("state-machines", "State machine definition integrity", "foundation", npmRun("server:verify:state-machines"), "build/reports/state-machines/latest.json", ["state-machine", "integrity", "acceptance"]),
   command("capability-acceptance-machines", "Capability acceptance state machine coverage", "foundation", npmRun("verify:capability-acceptance-machines"), "build/reports/capability-acceptance-machines.json", ["state-machine", "capability-plans", "acceptance"], { blockedExitCodes: [2] }),
