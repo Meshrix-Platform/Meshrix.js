@@ -802,7 +802,7 @@ async function attemptedProbe(operation?: any) : Promise<any> {
 export async function runOciAdversarialConformanceMatrix(target?: any, root?: any) : Promise<any> {
   const resourceProbe: any = await attemptedProbe(() : any => runBrokerProbe(target, root, RESOURCE_PROBE_SOURCE, {
     kind: "resource_probe",
-    resources: adversarialResources({ wallTimeMs: 1_000, cpuMillis: 250 }),
+    resources: adversarialResources({ wallTimeMs: 8_000, cpuMillis: 2_000 }),
     idempotencyKey: `resource-${crypto.randomUUID()}`,
     readResult: true
   }));

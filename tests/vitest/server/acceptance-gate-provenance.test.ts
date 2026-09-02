@@ -40,9 +40,12 @@ describe("acceptance gate provenance substrate", () => {
     expect(ids).toContain("foundation-tests");
     expect(ids).toContain("platform-acceptance-plan");
     expect(ids).toContain("typecheck");
-    expect(PLATFORM_ACCEPTANCE_COMMANDS.find((command) =>
+    const npmPackageCommand = PLATFORM_ACCEPTANCE_COMMANDS.find((command) =>
       command.id === "npm-package-installability"
-    )?.exclusive).toBe(true);
+    );
+    expect(npmPackageCommand?.exclusive).toBe(true);
+    expect(npmPackageCommand?.dependsOn).toEqual([]);
+    expect(PLATFORM_ACCEPTANCE_COMMANDS[0]?.id).toBe("npm-package-installability");
     expect(ACCEPTANCE_REQUIRED_REPORTS.length).toBeGreaterThan(0);
     expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/local-info-hygiene.json");
     expect(PLATFORM_ACCEPTANCE_REPORT_PATH).toBe("build/reports/platform-acceptance.json");
