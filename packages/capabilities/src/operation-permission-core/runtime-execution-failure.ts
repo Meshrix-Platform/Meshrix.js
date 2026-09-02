@@ -7,6 +7,37 @@ import {
   sourceIpFromRequest
 } from "./runtime-common.ts";
 
+const PUBLIC_API_KEY_CAPACITY_FAILURES: Readonly<Record<string, string>> = Object.freeze({
+  api_key_concurrency_limit_reached: "API Key concurrency limit reached.",
+  api_key_rate_limited: "API Key rate limit reached.",
+  api_key_use_limit_reached: "API Key use limit reached."
+});
+
+function executionFailureProjection(error: any): Readonly<Record<string, any>> {
+  const sourceCode: string = String(error?.code || "");
+  if (sourceCode === "tool_aborted") {
+    return Object.freeze({ code: sourceCode, message: error.message, status: 499 });
+  }
+  if (sourceCode === "tool_timeout") {
+    return Object.freeze({ code: sourceCode, message: error.message, status: 500 });
+  }
+  if (
+    Number(error?.statusCode || error?.status || 0) === 429 &&
+    Object.hasOwn(PUBLIC_API_KEY_CAPACITY_FAILURES, sourceCode)
+  ) {
+    return Object.freeze({
+      code: sourceCode,
+      message: PUBLIC_API_KEY_CAPACITY_FAILURES[sourceCode],
+      status: 429
+    });
+  }
+  return Object.freeze({
+    code: "tool_execution_failed",
+    message: "Tool execution failed.",
+    status: 500
+  });
+}
+
 export async function completeToolExecutionFailure({
   error,
   startedAtMs,
@@ -27,10 +58,8 @@ export async function completeToolExecutionFailure({
   startedAt
 }: Record<string, any>) : Promise<any> {
   const durationMs: any = Date.now() - startedAtMs;
-  const message: any = error instanceof Error ? error.message : "Tool execution failed.";
-  const errorCode: any = ["tool_timeout", "tool_aborted"].includes(error?.code)
-    ? error.code
-    : "tool_execution_failed";
+  const failure: any = executionFailureProjection(error);
+  const errorCode: any = failure.code;
   logTool("error", "operation_permission.execute.failed", {
     traceId,
     toolExecutionId,
@@ -88,13 +117,13 @@ export async function completeToolExecutionFailure({
   );
   return {
     ok: false,
-    status: errorCode === "tool_aborted" ? 499 : 500,
+    status: failure.status,
     payload: {
       schemaVersion: "v0.0.1:schema:definition-1",
       traceId,
       error: {
         code: errorCode,
-        message,
+        message: failure.message,
         details: {
           toolExecutionId,
           decisionId: policy.decisionId,

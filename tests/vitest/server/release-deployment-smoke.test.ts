@@ -54,6 +54,12 @@ function aggregate(): any {
 }
 
 describe("release deployment smoke", () => {
+  it("runs cancellation only after every scenario that requires a live response", () => {
+    expect(RELEASE_DEPLOYMENT_SCENARIOS.at(-1)).toBe("cancellation");
+    expect(RELEASE_DEPLOYMENT_SCENARIOS.indexOf("provider-fault"))
+      .toBeLessThan(RELEASE_DEPLOYMENT_SCENARIOS.indexOf("cancellation"));
+  });
+
   it("accepts only complete deterministic outcomes before latency interpretation", () => {
     const complete = aggregate();
     expect(validateDriverAggregate(complete)).toEqual([]);
