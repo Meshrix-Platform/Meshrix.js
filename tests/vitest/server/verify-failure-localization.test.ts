@@ -121,6 +121,7 @@ describe("pull-request verification feedback", () => {
     expect(gateSection).toContain("Audit checkpoint / console");
     expect(gateSection).toContain("needs: [repository-checkpoint, audit-console-evidence-checkpoint]");
     expect(gateSection).toContain("stable-console-build-${{ github.sha }}");
+    expect(gateSection).toMatch(/- name: Export compiled console assets\n\s+if: \$\{\{ always\(\) \}\}/u);
     expect(gateSection).toContain("stable-console-evidence-${{ github.sha }}");
     expect(gateSection).toContain("--profile audit-stable-resource");
     expect(gateSection).toContain("--profile audit-stable-sandbox");
