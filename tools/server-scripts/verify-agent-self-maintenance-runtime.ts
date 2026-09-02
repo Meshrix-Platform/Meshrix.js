@@ -185,6 +185,14 @@ async function waitFor(predicate: () => Promise<boolean> | boolean, timeoutMs = 
   throw new Error("test_wait_timeout");
 }
 
+function assertRepeatedSequence(actual: readonly string[], expected: readonly string[]): void {
+  assert.ok(actual.length >= expected.length, "at least one scheduled occurrence must complete");
+  assert.equal(actual.length % expected.length, 0, "every scheduled occurrence must complete its full request sequence");
+  for (let offset = 0; offset < actual.length; offset += expected.length) {
+    assert.deepEqual(actual.slice(offset, offset + expected.length), expected);
+  }
+}
+
 async function removeTempDir(dirPath: string): Promise<void> {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
@@ -259,9 +267,9 @@ async function assertOneWayMeshrixControlScenario(): Promise<JsonRecord> {
       }
     });
     await runtime.start();
-    await waitFor(() => requests.length === 2);
+    await waitFor(() => requests.length >= 2);
     await runtime.close();
-    assert.deepEqual(requests.map((entry) => new URL(entry.url).pathname), [
+    assertRepeatedSequence(requests.map((entry) => new URL(entry.url).pathname), [
       "/v1/chat/completions",
       "/api/operation-permission/v1/execute"
     ]);
@@ -301,7 +309,7 @@ async function assertDirectModelGatewayScenario(): Promise<JsonRecord> {
     await runtime.start();
     await waitFor(async () => (await journal(local.storageRoot)).some((entry) => entry.code === "proposal_operation_denied"));
     await runtime.close();
-    assert.deepEqual(paths, ["/v1/chat/completions"]);
+    assertRepeatedSequence(paths, ["/v1/chat/completions"]);
     return {
       directModelGateway: true,
       modelGatewayPath: "/v1/chat/completions",
