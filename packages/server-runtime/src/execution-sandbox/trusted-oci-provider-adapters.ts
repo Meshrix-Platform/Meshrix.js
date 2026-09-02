@@ -24,8 +24,8 @@ type BackendFactory = (input: {
   runtimeClass: string;
   rootless: boolean;
 }) => OciBackend;
-type RootlessProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<boolean>;
-type RuntimeClassProbe = (candidate: OciCandidate, options?: { timeoutMs?: number }) => Promise<string>;
+type RootlessProbe = (candidate: OciCandidate) => Promise<boolean>;
+type RuntimeClassProbe = (candidate: OciCandidate) => Promise<string>;
 type IdentityProbe = (candidate: OciCandidate) => Promise<string>;
 interface AdapterOptions {
   platform?: NodeJS.Platform;
@@ -75,19 +75,16 @@ function resolveCandidateBinary(candidate: OciCandidate, platform: NodeJS.Platfo
 
 function fixedInfoProbe(
   candidate: OciCandidate,
-  args: string[],
-  { timeoutMs = 2_000 }: { timeoutMs?: number } = {}
+  args: string[]
 ): Promise<string> {
   return new Promise<string>((resolve) => {
     let bytes = 0;
     let output = "";
     let settled = false;
     let child: ReturnType<typeof spawn>;
-    let timer: NodeJS.Timeout;
     const finish = (value: string) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
       resolve(value);
     };
     try {
@@ -100,11 +97,6 @@ function fixedInfoProbe(
       resolve("");
       return;
     }
-    timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      finish("");
-    }, timeoutMs);
-    timer.unref?.();
     child.stdout?.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
       if (bytes > 4 * 1024) {
@@ -126,26 +118,24 @@ function fixedInfoProbe(
 }
 
 async function fixedRootlessProbe(
-  candidate: OciCandidate,
-  options: { timeoutMs?: number } = {}
+  candidate: OciCandidate
 ): Promise<boolean> {
   const args = candidate.engine === "podman"
     ? ["info", "--format", "{{.Host.Security.Rootless}}"]
     : ["info", "--format", "{{json .SecurityOptions}}"];
-  const normalized = (await fixedInfoProbe(candidate, args, options)).toLowerCase();
+  const normalized = (await fixedInfoProbe(candidate, args)).toLowerCase();
   return candidate.engine === "podman"
     ? normalized === "true"
     : normalized.includes("rootless");
 }
 
 async function fixedRuntimeClassProbe(
-  candidate: OciCandidate,
-  options: { timeoutMs?: number } = {}
+  candidate: OciCandidate
 ): Promise<string> {
   const args = candidate.engine === "podman"
     ? ["info", "--format", "{{.Host.OCIRuntime.Name}}"]
     : ["info", "--format", "{{.DefaultRuntime}}"];
-  const normalized = (await fixedInfoProbe(candidate, args, options)).toLowerCase();
+  const normalized = (await fixedInfoProbe(candidate, args)).toLowerCase();
   return /^[a-z0-9][a-z0-9._-]{0,63}$/u.test(normalized) ? normalized : "";
 }
 
