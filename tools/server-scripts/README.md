@@ -61,6 +61,12 @@ The canonical list is
 `tools/server-scripts/lib/native-orb-deployment/catalog.ts`. The entry point is
 `tools/server-scripts/native-orb-deploy.ts`. Stage implementations live under
 `tools/server-scripts/lib/native-orb-deployment/stages/`.
+An upgrade never reads or verifies an administrator password. Its activation
+proof is limited to Core startup health, the Console surface, exact candidate
+identity, and service activity. Successful health after the restarted runtime
+has completed composition also proves that startup-owned storage schema
+initialization completed. Administrator authentication remains part of clean
+bootstrap and pre-release deployment verification, not an upgrade credential.
 
 A clean target uses the separately invoked `bootstrap:native:orb` command
 before this upgrade workflow. Its explicit Core-only catalog contains exactly

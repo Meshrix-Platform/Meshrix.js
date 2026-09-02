@@ -12,7 +12,6 @@ export function parseNativeOrbDeploymentArgs(argv?: any) : any {
   let machine: any = "";
   let publicOrigin: any = "";
   let sourceRevision: any = "";
-  let loginInput: any = "";
   for (let indexValue: any = 0; indexValue < args.length; indexValue += 1) {
     const argument: any = args[indexValue];
     if (argument === "--machine") {
@@ -30,12 +29,7 @@ export function parseNativeOrbDeploymentArgs(argv?: any) : any {
       indexValue += 1;
       continue;
     }
-    if (argument === "--login-input") {
-      loginInput = String(args[indexValue + 1] || "").trim();
-      indexValue += 1;
-      continue;
-    }
-    failNativeOrbDeployment("native_orb_argument_unknown", "Use --machine, --origin, --candidate, and --login-input.");
+    failNativeOrbDeployment("native_orb_argument_unknown", "Use --machine, --origin, and --candidate.");
   }
   if (!MACHINE_PATTERN.test(machine)) {
     failNativeOrbDeployment("native_orb_machine_invalid", "OrbStack machine is required.");
@@ -60,8 +54,5 @@ export function parseNativeOrbDeploymentArgs(argv?: any) : any {
   if (!REVISION_PATTERN.test(sourceRevision)) {
     failNativeOrbDeployment("native_orb_candidate_invalid", "An explicit accepted candidate commit is required.");
   }
-  if (!loginInput || /[\r\n\0]/u.test(loginInput)) {
-    failNativeOrbDeployment("native_orb_login_input_invalid", "A private login input file is required.");
-  }
-  return Object.freeze({ machine, publicOrigin: origin.origin, sourceRevision, loginInput });
+  return Object.freeze({ machine, publicOrigin: origin.origin, sourceRevision });
 }

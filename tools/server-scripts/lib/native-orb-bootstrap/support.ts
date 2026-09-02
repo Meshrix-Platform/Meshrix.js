@@ -206,12 +206,58 @@ export async function loadPrivateBootstrapCredentialBytes(inputPath?: unknown) :
 }
 
 export async function probeBootstrapOrigin(publicOrigin?: unknown, credentialBytes?: Uint8Array) : Promise<any> {
-  const probe: any = await probeNativeOrbOrigin(publicOrigin, credentialBytes);
+  const probe: any = await probeNativeOrbOrigin(publicOrigin);
+  let authenticationOk: any = false;
+  let governedOperationOk: any = false;
+  if (probe.healthOk && probe.consoleOk && credentialBytes instanceof Uint8Array && credentialBytes.byteLength > 0) {
+    let login: any;
+    const requestBody: any = Buffer.from(credentialBytes);
+    try {
+      login = await fetch(`${publicOrigin}/api/auth/login`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      login = null;
+    } finally {
+      requestBody.fill(0);
+    }
+    if (login) {
+      try {
+        const loginText: any = await login.text();
+        const loginPayload: any = loginText.trim() ? JSON.parse(loginText) : {};
+        const setCookies: any[] = typeof login.headers.getSetCookie === "function"
+          ? login.headers.getSetCookie()
+          : [login.headers.get("set-cookie")].filter(Boolean);
+        const cookie: any = String(setCookies[0] || "").split(";", 1)[0];
+        authenticationOk = login.ok === true && Boolean(cookie);
+        if (authenticationOk) {
+          const governed: any = await fetch(`${publicOrigin}/api/console/state`, {
+            method: "GET",
+            redirect: "manual",
+            headers: {
+              cookie,
+              ...(loginPayload?.csrfToken ? { "x-meshrix-csrf": String(loginPayload.csrfToken) } : {}),
+            },
+            signal: AbortSignal.timeout(5000),
+          });
+          await governed.body?.cancel().catch(() : any => {});
+          governedOperationOk = governed.ok === true;
+        }
+      } catch {
+        authenticationOk = false;
+        governedOperationOk = false;
+      }
+    }
+  }
   return Object.freeze({
     health: probe.healthOk ? "healthy" : "unhealthy",
     console: probe.consoleOk ? "available" : "unavailable",
-    authentication: probe.authenticationOk ? "authenticated" : "denied",
-    governedRead: probe.governedOperationOk ? "authorized" : "denied",
+    authentication: authenticationOk ? "authenticated" : "denied",
+    governedRead: governedOperationOk ? "authorized" : "denied",
   });
 }
 

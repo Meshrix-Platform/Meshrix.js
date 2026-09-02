@@ -127,10 +127,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
     inputs: [
-      "packages/foundation/src/security/auth/**",
       "packages/foundation/src/storage/private-file-atomic.ts",
       "tools/server-scripts/native-orb-deploy.ts",
-      "tools/server-scripts/console-auth.ts",
       "tools/server-scripts/README.md",
       "tools/server-scripts/lib/native-orb-deployment/**",
       "tools/server-scripts/lib/sensitive-report-scan.ts"

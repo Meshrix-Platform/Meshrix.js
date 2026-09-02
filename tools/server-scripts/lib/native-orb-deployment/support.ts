@@ -6,7 +6,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { writePrivateFileAtomic } from "../../../../packages/foundation/src/storage/private-file-atomic.ts";
-import { readPrivateOwnerCredentialFile } from "../../console-auth.ts";
 import { assertNoSensitiveReportLeak } from "../sensitive-report-scan.ts";
 import { failNativeOrbDeployment } from "./contract.ts";
 
@@ -180,21 +179,6 @@ export function writeRemoteFile(machine?: any, filePath?: any, contents?: any) :
   });
 }
 
-export async function loadPrivateLoginInputBytes(inputPath?: any) : Promise<Buffer> {
-  let credential: any;
-  try {
-    credential = await readPrivateOwnerCredentialFile(inputPath);
-  } catch {
-    failNativeOrbDeployment("native_orb_login_input_invalid", "Private login input is invalid.");
-  }
-  try {
-    return Buffer.from(JSON.stringify(credential), "utf8");
-  } finally {
-    credential.username = "";
-    credential.password = "";
-  }
-}
-
 async function discardResponseBody(response?: Response) : Promise<void> {
   await response?.body?.cancel().catch(() : any => {});
 }
@@ -202,16 +186,11 @@ async function discardResponseBody(response?: Response) : Promise<void> {
 const emptyOriginProbe = () : any => Object.freeze({
   healthOk: false,
   consoleOk: false,
-  authenticationOk: false,
-  governedOperationOk: false,
   healthz: 0,
   console: 0,
 });
 
-export async function probeNativeOrbOrigin(publicOrigin?: any, credentialBytes?: Uint8Array) : Promise<any> {
-  if (!(credentialBytes instanceof Uint8Array) || credentialBytes.byteLength === 0 || credentialBytes.byteLength > 8 * 1024) {
-    failNativeOrbDeployment("native_orb_login_input_invalid", "Private login input is invalid.");
-  }
+export async function probeNativeOrbOrigin(publicOrigin?: any) : Promise<any> {
   try {
     const health: any = await fetch(`${publicOrigin}/api/healthz`, {
       redirect: "manual",
@@ -223,40 +202,6 @@ export async function probeNativeOrbOrigin(publicOrigin?: any, credentialBytes?:
       signal: AbortSignal.timeout(5000),
     });
     const body: any = await root.text();
-    let login: any;
-    const requestBody: any = Buffer.from(credentialBytes);
-    try {
-      login = await fetch(`${publicOrigin}/api/auth/login`, {
-        method: "POST",
-        redirect: "manual",
-        headers: { "content-type": "application/json" },
-        body: requestBody,
-        signal: AbortSignal.timeout(5000),
-      });
-    } finally {
-      requestBody.fill(0);
-    }
-    const loginText: any = await login.text();
-    const loginPayload: any = loginText.trim() ? JSON.parse(loginText) : {};
-    const setCookies: any[] = typeof login.headers.getSetCookie === "function"
-      ? login.headers.getSetCookie()
-      : [login.headers.get("set-cookie")].filter(Boolean);
-    const cookie: any = String(setCookies[0] || "").split(";", 1)[0];
-    const authenticationOk: any = login.ok === true && Boolean(cookie);
-    let governedOperationOk: any = false;
-    if (authenticationOk) {
-      const governed: any = await fetch(`${publicOrigin}/api/console/state`, {
-        method: "GET",
-        redirect: "manual",
-        headers: {
-          cookie,
-          ...(loginPayload?.csrfToken ? { "x-meshrix-csrf": String(loginPayload.csrfToken) } : {}),
-        },
-        signal: AbortSignal.timeout(5000),
-      });
-      await discardResponseBody(governed);
-      governedOperationOk = governed.ok === true;
-    }
     return Object.freeze({
       healthOk: health.ok === true,
       consoleOk: root.ok === true
@@ -264,20 +209,9 @@ export async function probeNativeOrbOrigin(publicOrigin?: any, credentialBytes?:
         && /<!doctype html|<html/iu.test(body),
       healthz: Number(health.status),
       console: Number(root.status),
-      authenticationOk,
-      governedOperationOk,
     });
   } catch {
     return emptyOriginProbe();
-  }
-}
-
-export async function probeOrigin(publicOrigin?: any, loginInput?: any) : Promise<any> {
-  const credentialBytes: any = await loadPrivateLoginInputBytes(loginInput);
-  try {
-    return await probeNativeOrbOrigin(publicOrigin, credentialBytes);
-  } finally {
-    credentialBytes.fill(0);
   }
 }
 
@@ -318,7 +252,7 @@ export async function rollbackNativeOrbActivation(context?: any) : Promise<any> 
 
 export async function writeNativeOrbProductionUseReceipt(context?: any) : Promise<any> {
   const report: any = {
-    schemaVersion: "v0.0.1:deployment:native-orb-production-use-report-1",
+    schemaVersion: "v0.0.1:deployment:native-orb-production-use-report-2",
     verifier: "tools/server-scripts/native-orb-deploy.ts",
     generatedAt: new Date().toISOString(),
     sourceRevision: context.sourceRevision,
@@ -326,8 +260,6 @@ export async function writeNativeOrbProductionUseReceipt(context?: any) : Promis
     existingServiceActiveBeforeUpgrade: context.existingServiceActiveBeforeUpgrade === true,
     healthOk: context.probe?.healthOk === true,
     consoleOk: context.probe?.consoleOk === true,
-    authenticationOk: context.probe?.authenticationOk === true,
-    governedOperationOk: context.probe?.governedOperationOk === true,
     candidateActive: context.probe?.candidateActive === true,
     serviceActive: context.probe?.serviceActive === true,
     rollbackAvailable: true,
@@ -336,8 +268,6 @@ export async function writeNativeOrbProductionUseReceipt(context?: any) : Promis
     report.existingServiceActiveBeforeUpgrade,
     report.healthOk,
     report.consoleOk,
-    report.authenticationOk,
-    report.governedOperationOk,
     report.candidateActive,
     report.serviceActive,
   ].every(Boolean);
