@@ -53,7 +53,6 @@ const GOVERNED_NODE_RUNTIME_READ_PATHS: readonly string[] = Object.freeze([
   "/sys/fs/cgroup/memory.max",
   "/sys/fs/cgroup/pids.max"
 ]);
-const OCI_CONTROL_COMMAND_TIMEOUT_MS = 30_000;
 const OCI_TRANSIENT_CREATE_RETRY_DELAY_MS = 3_000;
 
 function waitForRetryDelay(milliseconds: number, signal?: AbortSignal | null): Promise<void> {
@@ -341,8 +340,7 @@ export function createOciSandboxBackend({
         }
         await commandRunner(executable, ["rm", "--force", name], {
           maxBytes: 16 * 1024,
-          allowFailure: true,
-          timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+          allowFailure: true
         });
         await retryDelay(OCI_TRANSIENT_CREATE_RETRY_DELAY_MS, options.signal);
         if (options.signal?.aborted) throw error;
@@ -359,8 +357,7 @@ export function createOciSandboxBackend({
     }
     try {
       await commandRunner(executable, ["version", "--format", "{{json .}}"], {
-        maxBytes: 16 * 1024,
-        timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+        maxBytes: 16 * 1024
       });
       return Object.freeze({
         id: backendId,
@@ -486,8 +483,7 @@ export function createOciSandboxBackend({
     containers.set(runId, name);
     await createContainer(args, {
       signal,
-      maxBytes: 16 * 1024,
-      timeoutMs: request.resources.wallTimeMs
+      maxBytes: 16 * 1024
     }, name);
     const execution = await commandRunner(executable, ["start", "--attach", name], {
       signal,
@@ -502,8 +498,7 @@ export function createOciSandboxBackend({
     ], {
       signal,
       maxBytes: 128,
-      captureStdout: true,
-      timeoutMs: request.resources.wallTimeMs
+      captureStdout: true
     });
     const workloadExitCode = Number.parseInt(inspected.stdout.trim(), 10);
     if (!Number.isSafeInteger(workloadExitCode) || workloadExitCode !== 0) {
@@ -525,8 +520,7 @@ export function createOciSandboxBackend({
     if (!name) return false;
     await commandRunner(executable, ["kill", name], {
       maxBytes: 16 * 1024,
-      allowFailure: true,
-      timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+      allowFailure: true
     });
     return true;
   }
@@ -537,8 +531,7 @@ export function createOciSandboxBackend({
     if (!name) return Object.freeze({ destroyed: true });
     const result = await commandRunner(executable, ["rm", "--force", name], {
       maxBytes: 16 * 1024,
-      allowFailure: true,
-      timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+      allowFailure: true
     });
     if (result.code === 0) containers.delete(runId);
     return Object.freeze({ destroyed: result.code === 0 });
@@ -549,8 +542,7 @@ export function createOciSandboxBackend({
     const results = await Promise.allSettled([...containers.entries()].map(async ([runId, name])  => {
       const result = await commandRunner(executable, ["rm", "--force", name], {
         maxBytes: 16 * 1024,
-        allowFailure: true,
-        timeoutMs: OCI_CONTROL_COMMAND_TIMEOUT_MS
+        allowFailure: true
       });
       if (result.code === 0) containers.delete(runId);
       if (result.code !== 0) throw new Error("OCI sandbox container cleanup failed.");
