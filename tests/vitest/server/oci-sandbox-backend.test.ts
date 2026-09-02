@@ -151,13 +151,17 @@ describe("OCI sandbox backend", () : any => {
     const dockerScratch: any = createArgs.find((value?: any) : any => value.startsWith("/sandbox/scratch:"));
     expect(dockerScratch).toContain("nr_inodes=256");
     expect(dockerScratch).toContain(`uid=${process.getuid()},gid=${process.getgid()}`);
-    for (const call of calls.filter((entry?: any) : any => ["create", "start", "inspect"].includes(entry.args[0]))) {
-      expect(call.options.timeoutMs).toBe(10_000);
-    }
+    expect(calls.find((call?: any) : any => call.args[0] === "create").options)
+      .not.toHaveProperty("timeoutMs");
+    expect(calls.find((call?: any) : any => call.args[0] === "start").options.timeoutMs)
+      .toBe(10_000);
+    expect(calls.find((call?: any) : any => call.args[0] === "inspect").options)
+      .not.toHaveProperty("timeoutMs");
 
     await expect(backend.run(context(paths))).rejects.toMatchObject({ code: "sandbox_runtime_failed" });
     await expect(backend.cleanup({ runId: "opaque-run-reference" })).resolves.toEqual({ destroyed: true });
-    expect(calls.find((call?: any) : any => call.args[0] === "rm").options.timeoutMs).toBe(30_000);
+    expect(calls.find((call?: any) : any => call.args[0] === "rm").options)
+      .not.toHaveProperty("timeoutMs");
   });
 
   it.each([
@@ -323,7 +327,8 @@ describe("OCI sandbox backend", () : any => {
       "inspect"
     ]);
     expect(calls[1].args.slice(0, 2)).toEqual(["rm", "--force"]);
-    expect(calls[1].options).toMatchObject({ allowFailure: true, timeoutMs: 30_000 });
+    expect(calls[1].options).toMatchObject({ allowFailure: true });
+    expect(calls[1].options).not.toHaveProperty("timeoutMs");
     expect(retryDelays).toEqual([3_000]);
   });
 
