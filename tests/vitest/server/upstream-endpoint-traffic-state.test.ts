@@ -162,6 +162,27 @@ describe("upstream endpoint traffic state retirement", () : any => {
     expect((Object.values(weights) as any[]).every((value?: any) : any => value === 0)).toBe(true);
   });
 
+  it("returns a stable reason code when an open circuit denies traffic", async () : Promise<any> => {
+    const { controller, endpointCircuits } = controllerWithState();
+    const service: any = serviceWithEndpoints([{ endpointId: "primary", weight: 1 }]);
+    const operation: Record<string, any> = { operationKey: "read", protocol: "http" };
+    endpointCircuits.set("svc_weighted::read::primary", {
+      consecutiveFailures: 3,
+      openedUntilMs: Date.now() + 60_000
+    });
+    await expect(controller.withTrafficSlot(
+      service,
+      operation,
+      {},
+      async () : Promise<any> => "unreachable"
+    )).rejects.toMatchObject({
+      code: "upstream_gateway_circuit_open",
+      reasonCode: "upstream_gateway_circuit_open",
+      status: 429,
+      details: { traffic: { deniedReason: "circuit_open" } }
+    });
+  });
+
   it("fails immediately when every configured endpoint is disabled", () : any => {
     const { controller, endpointCursors } = controllerWithState();
     const service: any = serviceWithEndpoints([

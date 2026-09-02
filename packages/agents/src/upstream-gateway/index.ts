@@ -1380,7 +1380,7 @@ export function createUpstreamGatewayRegistry({
           status: 0,
           latencyMs: Date.now() - startedAt,
           checkedAt: nowIso(),
-          error: error instanceof Error ? error.name : "health_failed"
+          error: text(error?.reasonCode || error?.code || (error instanceof Error ? error.name : "health_failed"))
         };
       } finally {
         clearTimeout(timeout);

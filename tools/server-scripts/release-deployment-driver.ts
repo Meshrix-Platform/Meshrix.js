@@ -138,11 +138,28 @@ function isExpectedSuccess(status: number, payload: any, sequence: number, proto
     );
 }
 
-function isExpectedProviderFault(status: number, payload: any, sequence: number): boolean {
+function providerFaultMismatch(status: number, payload: any, sequence: number): string {
   const projected = projectedToolPayload(payload, sequence);
-  return status >= 200 && status < 300 && projected?.ok === false &&
-    projected?.upstream?.status === 503 &&
-    projected?.response?.json?.error?.code === "provider_unavailable";
+  const rpcError = isRecord(payload?.error) ? payload.error : null;
+  if (rpcError?.data?.code === "upstream_gateway_circuit_open" &&
+      rpcError.data.status === 429 && status === 429) {
+    return "";
+  }
+  if (status < 200 || status >= 300) return "provider_fault_http_status_mismatch";
+  if (!projected) {
+    const rpcCode = String(rpcError?.data?.code || "");
+    return rpcError && /^[a-z][a-z0-9_]*$/u.test(rpcCode)
+      ? `provider_fault_jsonrpc_${rpcCode}`
+      : rpcError
+        ? "provider_fault_jsonrpc_error"
+        : "provider_fault_projection_missing";
+  }
+  if (projected.ok !== false) return "provider_fault_projection_outcome_mismatch";
+  if (projected.upstream?.status !== 503) return "provider_fault_upstream_status_mismatch";
+  if (projected.response?.json?.error?.code !== "provider_unavailable") {
+    return "provider_fault_code_mismatch";
+  }
+  return "";
 }
 
 async function requestOnce({
@@ -191,11 +208,11 @@ async function requestOnce({
     const body = await boundedResponse(response);
     if (body.overflow) return { bytes: body.bytes, outcome: "overflow", protocol };
     if (scenario === "provider-fault") {
+      const diagnostic = providerFaultMismatch(response.status, body.value, sequence);
       return {
         bytes: body.bytes,
-        outcome: isExpectedProviderFault(response.status, body.value, sequence)
-          ? "expectedFault"
-          : "unexpectedFailure",
+        diagnostic,
+        outcome: diagnostic ? "unexpectedFailure" : "expectedFault",
         protocol,
       };
     }
@@ -240,15 +257,18 @@ async function driveScenario({
   budget,
   openAiTool,
   anthropicTool,
+  sequenceOffset = 0,
 }: Record<string, any>): Promise<any> {
   const aggregate = emptyScenario(budget.requests);
+  const diagnostics = new Set<string>();
   const histogram = createHistogram({ lowest: 1, highest: 60_000_000, figures: 3 });
-  let nextSequence = 1;
+  let nextRequest = 1;
   const worker = async (): Promise<void> => {
     while (true) {
-      const sequence = nextSequence;
-      nextSequence += 1;
-      if (sequence > budget.requests) return;
+      const requestNumber = nextRequest;
+      nextRequest += 1;
+      if (requestNumber > budget.requests) return;
+      const sequence = sequenceOffset + requestNumber;
       aggregate.issued += 1;
       const started = performance.now();
       const result = await requestOnce({
@@ -270,6 +290,7 @@ async function driveScenario({
       aggregate.discardedBytes += result.bytes;
       aggregate[result.protocol === "openai" ? "openAi" : "anthropic"] += 1;
       aggregate[result.outcome] += 1;
+      if (result.diagnostic) diagnostics.add(result.diagnostic);
     }
   };
   await Promise.all(Array.from({ length: budget.concurrency }, () => worker()));
@@ -280,7 +301,7 @@ async function driveScenario({
     p95Ms: milliseconds(histogram.percentile(95)),
     p99Ms: milliseconds(histogram.percentile(99)),
   };
-  return aggregate;
+  return { aggregate, diagnostics: [...diagnostics].sort() };
 }
 
 export async function driveDeployment({
@@ -300,15 +321,21 @@ export async function driveDeployment({
   }
   if (probe) await probeRuntime(origin);
   const scenarios: Record<string, any> = {};
+  const scenarioDiagnostics: Record<string, string[]> = {};
+  let sequenceOffset = 0;
   for (const scenario of RELEASE_DEPLOYMENT_SCENARIOS) {
-    scenarios[scenario] = await driveScenario({
+    const driven = await driveScenario({
       origin,
       credential: privateCredential,
       scenario,
       budget: budgets[scenario],
       openAiTool,
       anthropicTool,
+      sequenceOffset,
     });
+    scenarios[scenario] = driven.aggregate;
+    scenarioDiagnostics[scenario] = driven.diagnostics;
+    sequenceOffset += budgets[scenario].requests;
   }
   const aggregate = {
     schemaVersion: RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA,
@@ -316,7 +343,17 @@ export async function driveDeployment({
     scenarios,
   };
   const reasons = validateDriverAggregate(aggregate);
-  if (reasons.length > 0) fail(reasons[0], reasons.join("; "));
+  if (reasons.length > 0) {
+    const error: any = Object.assign(new Error(reasons.join("; ")), {
+      code: reasons[0],
+    });
+    const scenario = reasons[0].split(":", 1)[0];
+    const diagnostic = scenarioDiagnostics[scenario]?.[0] || "";
+    if (/^provider_fault_[a-z][a-z0-9_]*$/u.test(diagnostic)) {
+      error.diagnosticCode = diagnostic;
+    }
+    throw error;
+  }
   return aggregate;
 }
 
@@ -376,7 +413,13 @@ async function main(): Promise<void> {
 const invoked = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
 if (invoked === import.meta.url) {
   main().catch((error: any) => {
-    process.stderr.write(`${JSON.stringify({ ok: false, code: error?.code || "release_driver_failed" })}\n`);
+    process.stderr.write(`${JSON.stringify({
+      ok: false,
+      code: error?.code || "release_driver_failed",
+      ...(/^provider_fault_[a-z][a-z0-9_]*$/u.test(String(error?.diagnosticCode || ""))
+        ? { diagnosticCode: error.diagnosticCode }
+        : {}),
+    })}\n`);
     process.exitCode = 1;
   });
 }

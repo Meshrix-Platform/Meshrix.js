@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "../../packages/contracts/src/upstream-service-publishing.ts";
-import { PROVIDER_MANIFEST_SCHEMA } from "../../services/model-gateway/contracts/provider-manifest-contract.mjs";
 import {
   FUNCTIONAL_CLAIM,
   RELEASE_DEPLOYMENT_CLAIM,
@@ -26,18 +24,18 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)))
 const FIXTURE_PROVIDER = "services/model-gateway/test/fixture-provider.mjs";
 const DRIVER_SCRIPT = "tools/server-scripts/release-deployment-driver.ts";
 const REDUCER_SCRIPT = "tools/server-scripts/reduce-release-deployment.ts";
-const CLEANUP_STATE_SCHEMA = "meshrix.release-deployment.cleanup/1";
+const CLEANUP_STATE_SCHEMA = "meshrix.release-deployment.cleanup/2";
 const READINESS_BUDGET_MS = 120_000;
 const MAX_CHILD_OUTPUT_BYTES = 64 * 1024;
-const MAX_CONTROL_RESPONSE_BYTES = 256 * 1024;
 const MAX_AUTHORITY_INPUT_BYTES = 4 * 1024 * 1024;
 const STATE_KEYS = Object.freeze([
   "backupVolume",
   "codexVolume",
   "containerName",
   "dataVolume",
-  "fixturePid",
+  "fixtureContainerName",
   "imageName",
+  "networkName",
   "resourceId",
   "schemaVersion",
   "tempRoot",
@@ -63,7 +61,13 @@ function boundedAppend(previous: string, chunk: Buffer): string {
 function spawnBounded(
   executable: string,
   args: string[],
-  { stdin = "", allowFailure = false, captureStdout = false }: Record<string, any> = {},
+  {
+    stdin = "",
+    allowFailure = false,
+    captureStdout = false,
+    captureStderr = false,
+    failureCode = "release_deployment_child_failed",
+  }: Record<string, any> = {},
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
@@ -73,6 +77,7 @@ function spawnBounded(
       windowsHide: true,
     });
     let stdout = "";
+    let stderr = "";
     let settled = false;
     const rejectOnce = (error: any): void => {
       if (settled) return;
@@ -103,7 +108,9 @@ function spawnBounded(
     stdoutStream.on("data", (chunk: Buffer) => {
       if (captureStdout) stdout = boundedAppend(stdout, chunk);
     });
-    stderrStream.on("data", () => { /* Raw child diagnostics are deliberately discarded. */ });
+    stderrStream.on("data", (chunk: Buffer) => {
+      if (captureStderr) stderr = boundedAppend(stderr, chunk);
+    });
     if (stdin) {
       const stdinStream = child.stdin;
       if (!stdinStream) {
@@ -118,31 +125,34 @@ function spawnBounded(
     child.once("close", (code, signal) => {
       if (!allowFailure && code !== 0) {
         rejectOnce(Object.assign(new Error("bounded child command failed"), {
-          code: "release_deployment_child_failed",
+          code: failureCode,
           exitCode: code,
           signal,
         }));
         return;
       }
-      resolveOnce({ code, signal, stdout });
+      resolveOnce({ code, signal, stderr, stdout });
     });
   });
 }
 
-async function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close();
-        reject(new Error("release deployment port unavailable"));
-        return;
-      }
-      server.close(() => resolve(address.port));
-    });
-  });
+export function releaseDriverFailureCode(stderr = ""): string {
+  const line = String(stderr).trim().split("\n").at(-1) || "";
+  let code = "";
+  let diagnosticCode = "";
+  try {
+    const payload = JSON.parse(line);
+    code = String(payload?.code || "");
+    diagnosticCode = String(payload?.diagnosticCode || "");
+  } catch { /* Use the generic code below. */ }
+  if (!/^(?:success|concurrency|cancellation|provider-fault):[a-z][a-z0-9_]*$/u.test(code) &&
+      !/^release_driver_[a-z][a-z0-9_]*$/u.test(code)) {
+    return "release_deployment_driver_failed";
+  }
+  if (/^provider_fault_[a-z][a-z0-9_]*$/u.test(diagnosticCode)) {
+    return `release_deployment_driver_${diagnosticCode}`;
+  }
+  return `release_deployment_driver_${code.replace(/[:-]/gu, "_")}`;
 }
 
 async function writeJsonAtomic(filePath: string, value: any): Promise<void> {
@@ -177,7 +187,9 @@ function validateCleanupState(value: any): any {
   const id = value.resourceId;
   const expected = {
     containerName: `meshrix-release-smoke-${id}`,
+    fixtureContainerName: `meshrix-release-fixture-${id}`,
     imageName: `meshrix-release-smoke:${id}`,
+    networkName: `meshrix-release-network-${id}`,
     dataVolume: `meshrix-release-data-${id}`,
     backupVolume: `meshrix-release-backup-${id}`,
     codexVolume: `meshrix-release-codex-${id}`,
@@ -186,58 +198,26 @@ function validateCleanupState(value: any): any {
     if (value[key] !== expectedValue) fail("release_deployment_cleanup_state_invalid");
   }
   const expectedRoot = path.join(os.tmpdir(), `meshrix-release-deployment-${id}`);
-  if (value.tempRoot !== expectedRoot ||
-    (!Number.isSafeInteger(value.fixturePid) || value.fixturePid < 0)) {
+  if (value.tempRoot !== expectedRoot) {
     fail("release_deployment_cleanup_state_invalid");
   }
   return value;
 }
 
-async function waitForProcessExit(pid: number): Promise<void> {
-  while (true) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-}
-
-async function stopExactFixture(state: any): Promise<void> {
-  const pid = state.fixturePid;
-  if (!pid) return;
-  const processProbe = await spawnBounded("ps", ["-ww", "-p", String(pid), "-o", "args="], {
-    allowFailure: true,
-    captureStdout: true,
-  });
-  if (processProbe.code !== 0) return;
-  const manifestPath = path.join(state.tempRoot, "fixture-manifest.json");
-  for (const identity of [
-    FIXTURE_PROVIDER,
-    `--manifest ${manifestPath}`,
-    "--host 0.0.0.0",
-    "--advertise-host host.docker.internal",
-  ]) {
-    if (!processProbe.stdout.includes(identity)) {
-      fail("release_deployment_fixture_identity_mismatch");
-    }
-  }
-  try { process.kill(pid, "SIGTERM"); } catch { return; }
-  await waitForProcessExit(pid);
-}
-
 async function dockerRemoveExact(state: any, strict: boolean): Promise<void> {
   const run = async (args: string[], allowFailure = false): Promise<any> => spawnBounded("docker", args, {
     allowFailure,
+    failureCode: "release_deployment_cleanup_child_failed",
   });
   const ready = await run(["info"], !strict);
   if (ready.code !== 0) {
     if (strict) fail("release_deployment_cleanup_engine_unavailable");
     return;
   }
-  if ((await run(["container", "inspect", state.containerName], true)).code === 0) {
-    await run(["rm", "--force", "--volumes", state.containerName]);
+  for (const container of [state.containerName, state.fixtureContainerName]) {
+    if ((await run(["container", "inspect", container], true)).code === 0) {
+      await run(["rm", "--force", "--volumes", container]);
+    }
   }
   for (const volume of [state.dataVolume, state.backupVolume, state.codexVolume]) {
     if ((await run(["volume", "inspect", volume], true)).code === 0) {
@@ -246,6 +226,9 @@ async function dockerRemoveExact(state: any, strict: boolean): Promise<void> {
   }
   if ((await run(["image", "inspect", state.imageName], true)).code === 0) {
     await run(["image", "rm", "--force", state.imageName]);
+  }
+  if ((await run(["network", "inspect", state.networkName], true)).code === 0) {
+    await run(["network", "rm", state.networkName]);
   }
 }
 
@@ -257,7 +240,6 @@ export async function cleanupReleaseDeployment(
   if (!text) return;
   let state: any;
   try { state = validateCleanupState(JSON.parse(text)); } catch (error) { throw error; }
-  await stopExactFixture(state);
   await dockerRemoveExact(state, strict);
   if (removePrivate) {
     await fs.rm(state.tempRoot, { recursive: true, force: true });
@@ -265,43 +247,30 @@ export async function cleanupReleaseDeployment(
   }
 }
 
-async function waitForFile(filePath: string, deadline: number): Promise<void> {
-  while (Date.now() < deadline) {
-    const stat = await fs.lstat(filePath).catch(() => null);
-    if (stat?.isFile() && !stat.isSymbolicLink()) return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  fail("release_deployment_fixture_start_failed");
-}
-
-async function startFixture(state: any, cleanupStatePath: string, readinessDeadline: number): Promise<any> {
-  const port = await freePort();
-  const manifestPath = path.join(state.tempRoot, "fixture-manifest.json");
-  const child = spawn(process.execPath, [
-    FIXTURE_PROVIDER,
+async function startFixtureContainer(state: any, readinessDeadline: number): Promise<string> {
+  const port = 7331;
+  const fixtureSource = path.join(REPO_ROOT, "services/model-gateway");
+  await spawnBounded("docker", [
+    "run", "--detach",
+    "--name", state.fixtureContainerName,
+    "--network", state.networkName,
+    "--mount", `type=bind,source=${fixtureSource},target=/meshrix-fixture,readonly`,
+    state.imageName,
+    "node", `/meshrix-fixture/${FIXTURE_PROVIDER.slice("services/model-gateway/".length)}`,
     "--port", String(port),
     "--host", "0.0.0.0",
-    "--advertise-host", "host.docker.internal",
-    "--manifest", manifestPath,
-  ], {
-    cwd: REPO_ROOT,
-    env: process.env,
-    stdio: ["ignore", "ignore", "ignore"],
-    windowsHide: true,
-  });
-  if (!child.pid) fail("release_deployment_fixture_start_failed");
-  state.fixturePid = child.pid;
-  await writeJsonAtomic(cleanupStatePath, state);
-  await waitForFile(manifestPath, Math.min(readinessDeadline, Date.now() + 15_000));
-  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-  const expectedUrl = `http://host.docker.internal:${port}`;
-  if (JSON.stringify(Object.keys(manifest).sort()) !==
-      JSON.stringify(["baseUrl", "scenarioSelection", "schemaVersion"].sort()) ||
-    manifest.schemaVersion !== PROVIDER_MANIFEST_SCHEMA || manifest.baseUrl !== expectedUrl ||
-    manifest.scenarioSelection !== "closed-model-identifiers") {
-    fail("release_deployment_fixture_manifest_invalid");
+    "--advertise-host", state.fixtureContainerName,
+  ], { failureCode: "release_deployment_fixture_start_failed" });
+  while (Date.now() < readinessDeadline) {
+    const probe = await spawnBounded("docker", [
+      "exec", state.fixtureContainerName,
+      "node", "--input-type=module", "-e",
+      `const response = await fetch("http://127.0.0.1:${port}/health"); if (!response.ok) process.exit(1);`,
+    ], { allowFailure: true });
+    if (probe.code === 0) return `http://${state.fixtureContainerName}:${port}`;
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  return { child, baseUrl: expectedUrl };
+  fail("release_deployment_fixture_start_failed");
 }
 
 async function waitForRuntime(origin: string, readinessDeadline: number): Promise<void> {
@@ -326,27 +295,10 @@ async function waitForRuntime(origin: string, readinessDeadline: number): Promis
 }
 
 async function readControlResponse(response: Response): Promise<any> {
-  const reader = response.body?.getReader();
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  if (reader) {
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      bytes += next.value.byteLength;
-      if (bytes > MAX_CONTROL_RESPONSE_BYTES) {
-        await reader.cancel().catch(() => undefined);
-        fail("release_deployment_control_response_overflow");
-      }
-      chunks.push(next.value);
-    }
-  }
-  let payload: any = {};
-  if (bytes > 0) {
-    try { payload = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8")); }
-    catch { fail("release_deployment_control_response_invalid"); }
-  }
-  return payload;
+  const text = await response.text();
+  if (!text) return {};
+  try { return JSON.parse(text); }
+  catch { fail("release_deployment_control_response_invalid"); }
 }
 
 function createConsoleSession(origin: string, readinessDeadline: number): any {
@@ -381,21 +333,47 @@ function createConsoleSession(origin: string, readinessDeadline: number): any {
   return { request, clear: () => { state.cookie = ""; state.csrf = ""; } };
 }
 
+function providerHealthFailureCode(payload: any): string {
+  const status = Number(payload?.status || payload?.endpoints?.[0]?.status || 0);
+  if (Number.isInteger(status) && status >= 100 && status <= 599) {
+    return `release_deployment_provider_unhealthy_status_${status}`;
+  }
+  const error = String(payload?.error || "").trim();
+  if (/^[a-z][a-z0-9_]{0,63}$/u.test(error)) {
+    return `release_deployment_provider_unhealthy_${error}`;
+  }
+  return "release_deployment_provider_unhealthy";
+}
+
+async function initializeOwner(imageName: string, dataVolume: string): Promise<string> {
+  const ownerPassword = randomBytes(32).toString("base64url");
+  const ownerCredential = Buffer.from(JSON.stringify({
+    username: "owner",
+    password: ownerPassword,
+  }), "utf8");
+  try {
+    await spawnBounded("docker", [
+      "run", "--rm", "--interactive",
+      "--mount", `source=${dataVolume},target=/app/data`,
+      imageName,
+      "node", "tools/server-scripts/console-auth.ts",
+      "init-owner", "--credential-stdin", "--data-dir", "data",
+    ], {
+      stdin: ownerCredential,
+      failureCode: "release_deployment_owner_initialization_failed",
+    });
+  } finally {
+    ownerCredential.fill(0);
+  }
+  return ownerPassword;
+}
+
 async function configureRuntime(
   origin: string,
-  containerName: string,
   fixtureUrl: string,
   readinessDeadline: number,
+  ownerPassword: string,
 ): Promise<any> {
-  const rotated = await spawnBounded("docker", [
-    "exec", containerName,
-    "node", "tools/server-scripts/console-auth.ts",
-    "set-password", "--username", "owner", "--generate-password",
-  ], {
-    captureStdout: true,
-  });
-  let ownerPassword = /new password:\s*(\S+)/u.exec(rotated.stdout)?.[1] || "";
-  if (!ownerPassword) fail("release_deployment_bootstrap_failed");
   const session = createConsoleSession(origin, readinessDeadline);
   const login = await session.request("/api/auth/login", {
     method: "POST",
@@ -481,7 +459,7 @@ async function configureRuntime(
   }
   if (!published) fail("release_deployment_provider_publish_timeout");
   const health = await session.request(`/api/gateway/v1/external-services/${encodeURIComponent(serviceId)}/health`);
-  if (!health.ok || health.payload?.ok !== true) fail("release_deployment_provider_unhealthy");
+  if (!health.ok || health.payload?.ok !== true) fail(providerHealthFailureCode(health.payload));
 
   const publicPrefix = serviceId.replace(/[^A-Za-z0-9_-]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 80);
   const toolNames = [
@@ -559,7 +537,10 @@ async function verifyInputs(sourceCandidatePath: string, functionalReceiptPath: 
     fail("release_deployment_functional_receipt_mismatch");
   }
   if (functional.claim !== FUNCTIONAL_CLAIM) fail("release_deployment_functional_receipt_mismatch");
-  const head = (await spawnBounded("git", ["rev-parse", "HEAD"], { captureStdout: true })).stdout.trim();
+  const head = (await spawnBounded("git", ["rev-parse", "HEAD"], {
+    captureStdout: true,
+    failureCode: "release_deployment_source_revision_unavailable",
+  })).stdout.trim();
   if (head !== candidate.source_revision) fail("release_deployment_source_revision_mismatch");
   return {
     candidate,
@@ -583,33 +564,46 @@ export async function verifyDeployment({
     dataVolume: `meshrix-release-data-${resourceId}`,
     backupVolume: `meshrix-release-backup-${resourceId}`,
     codexVolume: `meshrix-release-codex-${resourceId}`,
-    fixturePid: 0,
+    fixtureContainerName: `meshrix-release-fixture-${resourceId}`,
+    networkName: `meshrix-release-network-${resourceId}`,
     tempRoot: path.join(os.tmpdir(), `meshrix-release-deployment-${resourceId}`),
   });
   await fs.mkdir(state.tempRoot, { recursive: false, mode: 0o700 });
   await writeJsonAtomic(cleanupStatePath, state);
   let complete = false;
+  let ownerPassword = "";
   try {
     for (const volume of [state.dataVolume, state.backupVolume, state.codexVolume]) {
-      await spawnBounded("docker", ["volume", "create", volume]);
+      await spawnBounded("docker", ["volume", "create", volume], {
+        failureCode: "release_deployment_volume_create_failed",
+      });
     }
-    await spawnBounded("docker", ["build", "--target", "runtime-ui", "--tag", state.imageName, "."]);
+    await spawnBounded("docker", ["network", "create", state.networkName], {
+      failureCode: "release_deployment_network_create_failed",
+    });
+    await spawnBounded("docker", ["build", "--target", "runtime-ui", "--tag", state.imageName, "."], {
+      failureCode: "release_deployment_image_build_failed",
+    });
+    ownerPassword = await initializeOwner(state.imageName, state.dataVolume);
     const readinessDeadline = Date.now() + READINESS_BUDGET_MS;
-    const fixture = await startFixture(state, cleanupStatePath, readinessDeadline);
+    const fixtureUrl = await startFixtureContainer(state, readinessDeadline);
     await spawnBounded("docker", [
       "run", "--detach",
       "--name", state.containerName,
-      "--add-host", "host.docker.internal:host-gateway",
+      "--network", state.networkName,
       "--publish", "127.0.0.1::7228",
       "--mount", `source=${state.dataVolume},target=/app/data`,
       "--mount", `source=${state.backupVolume},target=/app/backups`,
       "--mount", `source=${state.codexVolume},target=/codex-home`,
       state.imageName,
-    ]);
+    ], { failureCode: "release_deployment_container_start_failed" });
     const portOutput = (await spawnBounded(
       "docker",
       ["port", state.containerName, "7228/tcp"],
-      { captureStdout: true },
+      {
+        captureStdout: true,
+        failureCode: "release_deployment_port_lookup_failed",
+      },
     )).stdout.trim();
     const port = Number(/:([0-9]+)$/u.exec(portOutput)?.[1] || 0);
     if (!Number.isSafeInteger(port) || port < 1 || port > 65535) fail("release_deployment_port_invalid");
@@ -617,10 +611,11 @@ export async function verifyDeployment({
     await waitForRuntime(origin, readinessDeadline);
     let control = await configureRuntime(
       origin,
-      state.containerName,
-      fixture.baseUrl,
+      fixtureUrl,
       readinessDeadline,
+      ownerPassword,
     );
+    ownerPassword = "";
     const aggregatePath = path.join(state.tempRoot, "driver-aggregate.json");
     const driver = await spawnBounded(process.execPath, [
       DRIVER_SCRIPT,
@@ -628,13 +623,14 @@ export async function verifyDeployment({
       "--openai-tool", control.openAiTool,
       "--anthropic-tool", control.anthropicTool,
       "--output", aggregatePath,
-    ], { stdin: `${control.credential}\n`, allowFailure: true });
-    if (driver.code !== 0) fail("release_deployment_driver_failed");
+    ], {
+      stdin: `${control.credential}\n`,
+      allowFailure: true,
+      captureStderr: true,
+    });
+    if (driver.code !== 0) fail(releaseDriverFailureCode(driver.stderr));
     control = { credential: "", openAiTool: "", anthropicTool: "" };
 
-    await stopExactFixture(state);
-    state.fixturePid = 0;
-    await writeJsonAtomic(cleanupStatePath, state);
     await dockerRemoveExact(state, true);
 
     const reducer = await spawnBounded(process.execPath, [
@@ -658,6 +654,7 @@ export async function verifyDeployment({
     complete = true;
     return receipt;
   } finally {
+    ownerPassword = "";
     if (!complete) await cleanupReleaseDeployment(cleanupStatePath).catch(() => undefined);
   }
 }
