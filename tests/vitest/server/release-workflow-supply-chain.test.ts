@@ -266,11 +266,16 @@ describe("release workflow supply-chain boundary", () : any => {
 
     const stableGate: any = jobSource(ciWorkflow, "functional-completeness");
     const functionalCheckpoint: any = jobSource(ciWorkflow, "functional-acceptance");
+    const stableSupplyChain: any = jobSource(ciWorkflow, "supply-chain");
     expect(stableGate).toContain("github.ref_name == 'stable'");
     expect(stableGate).not.toContain("github.ref_name == 'release'");
     expect(stableGate).toContain("name: Stable functional completeness release gate");
     expect(functionalCheckpoint).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
     expect(functionalCheckpoint).toContain("verify-platform-acceptance.ts");
+    expect(functionalCheckpoint).not.toContain("verify:npm-package-installability");
+    expect(functionalCheckpoint).toContain("if: ${{ always() }}");
+    expect(stableSupplyChain).toContain("npm run verify:npm-package-installability");
+    expect(stableSupplyChain).toContain("build/reports/npm-package-installability.json");
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
     expect(stableGate).toContain("name: stable-source-candidate-${{ github.sha }}");
     expect(stableGate).toContain("name: stable-functional-acceptance-${{ github.sha }}");

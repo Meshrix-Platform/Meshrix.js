@@ -793,17 +793,10 @@ describe("platform acceptance foundation ownership", () : any => {
   });
 
   it("requires a clean-installable host-neutral npm release set", () : any => {
-    const packageInstallability: any = PLATFORM_ACCEPTANCE_COMMANDS.find(
-      (command?: any) : any => command.id === "npm-package-installability"
-    );
-
-    expect(packageInstallability).toMatchObject({
-      acceptanceLayer: "foundation",
-      report: "build/reports/npm-package-installability.json"
-    });
-    expect(ACCEPTANCE_REQUIRED_REPORTS).toContain(
-      "build/reports/npm-package-installability.json"
-    );
+    expect(PLATFORM_ACCEPTANCE_COMMANDS.map((command?: any) : any => command.id))
+      .not.toContain("npm-package-installability");
+    expect(ACCEPTANCE_REQUIRED_REPORTS)
+      .not.toContain("build/reports/npm-package-installability.json");
     expect(requiredReportSpec("build/reports/npm-package-installability.json")).toMatchObject({
       schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
       verifier: "tools/server-scripts/verify-npm-package-installability.ts",

@@ -407,6 +407,7 @@ jobs:
           node tools/server-scripts/verify-platform-acceptance.ts
           --profile "$(node tools/server-scripts/verify-release-definition.ts --field acceptance.profile)"
       - name: Export the functional acceptance checkpoint
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stable-functional-acceptance-${{ github.sha }}
@@ -522,6 +523,8 @@ jobs:
           cache: "npm"
       - name: Install dependency graph without lifecycle scripts
         run: npm ci --ignore-scripts
+      - name: Verify the fresh-container npm release set
+        run: npm run verify:npm-package-installability
       - name: Audit dependencies
         run: npm audit --audit-level=high
       - name: Verify pinned Node runtime checksum signature
@@ -537,6 +540,7 @@ jobs:
           path: |
             build/reports/supply-chain/
             build/reports/node-runtime-supply-chain.json
+            build/reports/npm-package-installability.json
           if-no-files-found: error
           retention-days: 30
 

@@ -24,7 +24,6 @@ import {
 const REPORT_PATH: any = PLATFORM_ACCEPTANCE_REPORT_PATH;
 
 const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
-  command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { resourceLocks: ["container-runtime"], exclusive: true }),
   command("typecheck", "TypeScript project typecheck", "foundation", npmRun("typecheck"), "", ["types"]),
   command("console-build", "Console production build", "foundation", npmRun("build"), "", ["console", "build"]),
   command("foundation-tests", "Core public foundation gate", "foundation", npmTest(), "build/test-reports/latest.json", ["unit", "public-boundary", "secret-hygiene", "local-info", "registry", "root-hygiene"], {
@@ -102,7 +101,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("authorization-enforcement", "Enterprise authorization enforcement", "platform-capability", npmRun("verify:enterprise-authorization-enforcement"), "build/reports/enterprise-authorization-enforcement.json", ["platform-capability", "authorization"], { dependsOn: ["enterprise-governance-coverage", "operation-permission-protocol-consistency", "operation-permission-tag-governed-e2e"] }),
   command("observability-coverage", "Enterprise observability coverage", "platform-capability", npmRun("verify:enterprise-observability-coverage"), "build/reports/enterprise-observability-coverage.json", ["platform-capability", "observability"], { dependsOn: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "operation-permission-tag-governed-e2e"] }),
   command("storage-restore", "Storage production restore drill", "platform-capability", nodeCommand(["tools/server-scripts/verify-storage-production-restore-drill.ts"]), "build/reports/storage-production-restore-drill/latest.json", ["platform-capability", "storage", "backup-restore"], { resourceLocks: ["storage-restore"] }),
-  command("deployment-container-flow", "Fresh container deployment flow", "platform-capability", nodeCommand(["tools/server-scripts/verify-deployment-container-flow.ts"]), "build/reports/deployment-container-flow.json", ["platform-capability", "deployment", "container"], { dependsOn: ["npm-package-installability"], resourceLocks: ["container-runtime"] }),
+  command("deployment-container-flow", "Fresh container deployment flow", "platform-capability", nodeCommand(["tools/server-scripts/verify-deployment-container-flow.ts"]), "build/reports/deployment-container-flow.json", ["platform-capability", "deployment", "container"], { resourceLocks: ["container-runtime"] }),
   command("job-work-queue", "Job work queue verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-job-work-queue.ts"]), "build/reports/job-work-queue.json", ["platform-capability", "jobs"], { resourceLocks: ["work-queue"] }),
   command("job-work-queue-ceiling-conformance", "Job work queue ceiling conformance verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts"]), "build/reports/job-work-queue-ceiling-conformance.json", ["platform-capability", "jobs", "conformance"], { resourceLocks: ["work-queue"] }),
   command("work-queue-conformance", "Work queue conformance verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-work-queue-conformance.ts"]), "build/reports/work-queue/latest.json", ["platform-capability", "jobs"], { resourceLocks: ["work-queue"] }),
@@ -127,7 +126,6 @@ export const PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS: readonly any[] = Object.fr
   "deployment-container-flow",
   "downstream-mcp-audit",
   "mcp-release-portable-assembly",
-  "npm-package-installability",
   "upstream-fixture-transit",
   "upstream-gateway-e2e",
   "upstream-service-publishing",

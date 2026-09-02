@@ -947,6 +947,10 @@ accepted-generation pointer. A successful run publishes one digest-bound
 accepted-candidate receipt. Detailed reports remain diagnostic evidence owned
 by acceptance; bootstrap, deployment, branch promotion, and production closure
 consume only the receipt and never revalidate the report inventory.
+The fresh-container npm release-set authority is a separate supply-chain
+checkpoint. Stable promotion requires both that checkpoint and functional
+acceptance, so package installation is proven once in a clean job without
+coupling browser preparation or functional scheduling to package verification.
 Acceptance commands run until they exit or the operator cancels the run; the
 orchestrator does not convert elapsed wall-clock time into a failure. The CI
 job retains one infrastructure-level cap solely to contain abandoned runner
