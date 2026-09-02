@@ -33,13 +33,16 @@ import {
   validateCandidateRuntimeLock,
 } from "../../../tools/server-scripts/native-orb-bootstrap.ts";
 import { assertExistingServiceActive } from "../../../tools/server-scripts/lib/native-orb-deployment/stages/runtime.ts";
-import { writeNativeOrbBootstrapReceipt } from "../../../tools/server-scripts/lib/native-orb-bootstrap/support.ts";
+import {
+  probeBootstrapOrigin,
+  writeNativeOrbBootstrapReceipt,
+} from "../../../tools/server-scripts/lib/native-orb-bootstrap/support.ts";
 import {
   assertInactiveReleaseMutation,
   assertRollbackServiceRestored,
   candidateArchive,
-  loadPrivateLoginInputBytes,
   probeNativeOrbOrigin,
+  writeNativeOrbProductionUseReceipt,
 } from "../../../tools/server-scripts/lib/native-orb-deployment/support.ts";
 import { assertNoSensitiveReportLeak } from "../../../tools/server-scripts/lib/sensitive-report-scan.ts";
 
@@ -160,20 +163,14 @@ describe("native OrbStack deployment", () : any => {
     try {
       fs.writeFileSync(inputPath, JSON.stringify(expected), { mode: 0o600 });
       const bootstrapBytes: any = await loadPrivateBootstrapCredentialBytes(inputPath);
-      const upgradeBytes: any = await loadPrivateLoginInputBytes(inputPath);
       try {
         expect(JSON.parse(bootstrapBytes.toString("utf8"))).toEqual(expected);
-        expect(upgradeBytes.equals(bootstrapBytes)).toBe(true);
       } finally {
         bootstrapBytes.fill(0);
-        upgradeBytes.fill(0);
       }
 
       fs.symlinkSync(inputPath, linkPath);
       await expect(loadPrivateBootstrapCredentialBytes(linkPath)).rejects.toThrow(/file_unsafe/u);
-      await expect(loadPrivateLoginInputBytes(linkPath)).rejects.toMatchObject({
-        code: "native_orb_login_input_invalid",
-      });
       await expect(bootstrapNativeOrb({
         repoRoot: process.cwd(),
         machine: "meshrix-vm",
@@ -187,7 +184,9 @@ describe("native OrbStack deployment", () : any => {
   });
 
   it("does not reject a healthy deployment because response bodies exceed an arbitrary size", async () : Promise<any> => {
+    const requests: any[] = [];
     const server: any = http.createServer((request?: any, response?: any) : any => {
+      requests.push(request.url);
       if (request.url === "/api/healthz") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ ok: true, detail: "x".repeat(96 * 1024) }));
@@ -196,6 +195,35 @@ describe("native OrbStack deployment", () : any => {
       if (request.url === "/") {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         response.end(`<!doctype html><html><body>${"console".repeat(16 * 1024)}</body></html>`);
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve?: any) : any => server.listen(0, "127.0.0.1", resolve));
+    const address: any = server.address();
+    try {
+      await expect(probeNativeOrbOrigin(`http://127.0.0.1:${address.port}`))
+        .resolves.toMatchObject({
+          healthOk: true,
+          consoleOk: true,
+        });
+      expect(requests).toEqual(["/api/healthz", "/"]);
+    } finally {
+      await new Promise<void>((resolve?: any) : any => server.close(resolve));
+    }
+  });
+
+  it("keeps owner admission and authenticated read inside clean bootstrap", async () : Promise<any> => {
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      if (request.url === "/api/healthz") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (request.url === "/") {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end("<!doctype html><html><body>console</body></html>");
         return;
       }
       if (request.url === "/api/auth/login") {
@@ -208,7 +236,7 @@ describe("native OrbStack deployment", () : any => {
       }
       if (request.url === "/api/console/state") {
         response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({ state: "x".repeat(192 * 1024) }));
+        response.end(JSON.stringify({ ok: true }));
         return;
       }
       response.writeHead(404);
@@ -221,12 +249,12 @@ describe("native OrbStack deployment", () : any => {
       password: "private-owner-credential",
     }), "utf8");
     try {
-      await expect(probeNativeOrbOrigin(`http://127.0.0.1:${address.port}`, credentials))
-        .resolves.toMatchObject({
-          healthOk: true,
-          consoleOk: true,
-          authenticationOk: true,
-          governedOperationOk: true,
+      await expect(probeBootstrapOrigin(`http://127.0.0.1:${address.port}`, credentials))
+        .resolves.toEqual({
+          health: "healthy",
+          console: "available",
+          authentication: "authenticated",
+          governedRead: "authorized",
         });
     } finally {
       credentials.fill(0);
@@ -335,6 +363,39 @@ describe("native OrbStack deployment", () : any => {
     }
   });
 
+  it("writes a credential-free production upgrade receipt", async () : Promise<any> => {
+    const repoRoot: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-native-upgrade-receipt-"));
+    try {
+      await writeNativeOrbProductionUseReceipt({
+        repoRoot,
+        sourceRevision: "c".repeat(40),
+        candidateDigest: "d".repeat(64),
+        existingServiceActiveBeforeUpgrade: true,
+        probe: {
+          healthOk: true,
+          consoleOk: true,
+          candidateActive: true,
+          serviceActive: true,
+        },
+      });
+      const report: any = JSON.parse(fs.readFileSync(
+        path.join(repoRoot, "build", "reports", "native-orb-production-use.json"),
+        "utf8",
+      ));
+      expect(report).toMatchObject({
+        schemaVersion: "v0.0.1:deployment:native-orb-production-use-report-2",
+        healthOk: true,
+        consoleOk: true,
+        candidateActive: true,
+        serviceActive: true,
+        releaseReady: true,
+      });
+      expect(JSON.stringify(report)).not.toMatch(/authentication|credential|governedOperation|password/iu);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("provisions clean-target prerequisites and proves failed activation cleanup", () : any => {
     expect(BOOTSTRAP_REQUIRED_PACKAGES).toEqual([
       "ca-certificates", "xz-utils", "python3", "make", "g++"
@@ -357,13 +418,10 @@ describe("native OrbStack deployment", () : any => {
       "http://meshrix-vm.internal.example:7228",
       "--candidate",
       "a".repeat(40),
-      "--login-input",
-      "<input-file>",
     ])).toEqual({
       machine: "meshrix-vm",
       publicOrigin: "http://meshrix-vm.internal.example:7228",
       sourceRevision: "a".repeat(40),
-      loginInput: "<input-file>",
     });
     expect(() : any => parseNativeOrbDeploymentArgs([]))
       .toThrow(/OrbStack machine/);
@@ -374,8 +432,6 @@ describe("native OrbStack deployment", () : any => {
       "http://meshrix-vm.internal.example:7229",
       "--candidate",
       "a".repeat(40),
-      "--login-input",
-      "<input-file>",
     ])).toThrow(/port 7228/);
   });
 
@@ -421,7 +477,7 @@ describe("native OrbStack deployment", () : any => {
     }
   });
 
-  it("rejects credentials, paths, and unknown arguments", () : any => {
+  it("rejects origin credentials, paths, and unknown arguments", () : any => {
     const credentialOrigin: any = new URL("http://meshrix-vm.internal.example:7228");
     credentialOrigin.username = "owner";
     credentialOrigin.password = "secret";
@@ -432,8 +488,6 @@ describe("native OrbStack deployment", () : any => {
       credentialOrigin.toString(),
       "--candidate",
       "a".repeat(40),
-      "--login-input",
-      "<input-file>",
     ])).toThrow(/without credentials/);
     expect(() : any => parseNativeOrbDeploymentArgs([
       "--machine",
@@ -442,8 +496,6 @@ describe("native OrbStack deployment", () : any => {
       "http://meshrix-vm.internal.example:7228/api",
       "--candidate",
       "a".repeat(40),
-      "--login-input",
-      "<input-file>",
     ])).toThrow(/without credentials/);
     expect(() : any => parseNativeOrbDeploymentArgs([
       "--machine",
@@ -452,8 +504,6 @@ describe("native OrbStack deployment", () : any => {
       "http://meshrix-vm.internal.example:7228",
       "--candidate",
       "a".repeat(40),
-      "--login-input",
-      "<input-file>",
       "--fallback",
     ])).toThrow(/--candidate/);
   });

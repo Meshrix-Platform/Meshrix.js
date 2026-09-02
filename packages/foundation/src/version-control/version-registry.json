@@ -1220,11 +1220,11 @@
       "artifactId": "meshrix.deployment.native-orb-production-use-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.deployment.native-orb-production-use-report.",
-      "activeVersion": "v0.0.1:deployment:native-orb-production-use-report-1",
+      "activeVersion": "v0.0.1:deployment:native-orb-production-use-report-2",
       "versions": [
         {
-          "version": "v0.0.1:deployment:native-orb-production-use-report-1",
-          "ref": "meshrix.deployment.native-orb-production-use-report@v0.0.1:deployment:native-orb-production-use-report-1",
+          "version": "v0.0.1:deployment:native-orb-production-use-report-2",
+          "ref": "meshrix.deployment.native-orb-production-use-report@v0.0.1:deployment:native-orb-production-use-report-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1234,7 +1234,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-deployment-native-orb-production-use-report-1-source-1",
+              "evidenceId": "v0-0-1-deployment-native-orb-production-use-report-2-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/native-orb-deployment/support.ts"
             }
@@ -6105,11 +6105,11 @@
       "artifactId": "meshrix.release.unified-production-closure-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.release.unified-production-closure-report.",
-      "activeVersion": "v0.0.1:release:unified-production-closure-report-1",
+      "activeVersion": "v0.0.1:release:unified-production-closure-report-2",
       "versions": [
         {
-          "version": "v0.0.1:release:unified-production-closure-report-1",
-          "ref": "meshrix.release.unified-production-closure-report@v0.0.1:release:unified-production-closure-report-1",
+          "version": "v0.0.1:release:unified-production-closure-report-2",
+          "ref": "meshrix.release.unified-production-closure-report@v0.0.1:release:unified-production-closure-report-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -6119,7 +6119,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-release-unified-production-closure-report-1-source-1",
+              "evidenceId": "v0-0-1-release-unified-production-closure-report-2-source-1",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-unified-production-closure.ts"
             }

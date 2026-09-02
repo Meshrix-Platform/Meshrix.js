@@ -42,21 +42,19 @@ async function main() {
 
   const native = await json("build/reports/native-orb-production-use.json");
   const nativeProductionUseReady = acceptedGenerationReady
-    && native?.schemaVersion === "v0.0.1:deployment:native-orb-production-use-report-1"
+    && native?.schemaVersion === "v0.0.1:deployment:native-orb-production-use-report-2"
     && native?.verifier === "tools/server-scripts/native-orb-deploy.ts"
     && native?.releaseReady === true
     && native?.sourceRevision === sourceRevision
     && native?.candidateDigest === candidateDigest
     && native?.existingServiceActiveBeforeUpgrade === true
     && native?.rollbackAvailable === true;
-  const liveGovernedOperationReady = nativeProductionUseReady
+  const liveCoreReady = nativeProductionUseReady
     && native?.healthOk === true
     && native?.consoleOk === true
-    && native?.authenticationOk === true
-    && native?.governedOperationOk === true
     && native?.candidateActive === true;
   const activeServiceReady = nativeProductionUseReady && native?.serviceActive === true;
-  if (!nativeProductionUseReady || !liveGovernedOperationReady || !activeServiceReady) {
+  if (!nativeProductionUseReady || !liveCoreReady || !activeServiceReady) {
     reasons.push("native_production_use_not_bound");
   }
   const promotion = await json("build/reports/branch-promotion.json");
@@ -76,14 +74,14 @@ async function main() {
   }
 
   const report: any = {
-    schemaVersion: "v0.0.1:release:unified-production-closure-report-1",
+    schemaVersion: "v0.0.1:release:unified-production-closure-report-2",
     verifier: "tools/server-scripts/verify-unified-production-closure.ts",
     generatedAt: new Date().toISOString(),
     sourceRevision,
     candidateDigest,
     acceptedGenerationReady,
     nativeProductionUseReady,
-    liveGovernedOperationReady,
+    liveCoreReady,
     activeServiceReady,
     branchPromotionReady,
     coreOnlyBoundary: true,

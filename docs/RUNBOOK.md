@@ -991,15 +991,15 @@ upgrade catalog:
 npm run deploy:native:orb -- \
   --machine <target-id> \
   --origin <server-url> \
-  --candidate <accepted-40-hex-commit> \
-  --login-input <private-login-input>
+  --candidate <accepted-40-hex-commit>
 ```
 
-Reuse the same operator-custodied login input. The deployment
-builds in an inactive candidate release directory while the current service
-continues running, switches the systemd working directory atomically, and
-restores the prior activation if health, Console, authentication, governed
-read, candidate identity, or service activity cannot be proven. Retained
+The deployment never reads an administrator password. It builds in an inactive
+candidate release directory while the current service continues running,
+switches the systemd working directory atomically, and restores the prior
+activation if health, Console, candidate identity, or service activity cannot
+be proven. A successful health probe is emitted only after runtime composition,
+including startup-owned storage schema initialization, has completed. Retained
 evidence contains only bounded booleans and public candidate identities.
 
 After both local acceptance and existing-target verification, branch promotion
