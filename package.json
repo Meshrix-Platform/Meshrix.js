@@ -445,8 +445,6 @@
     "server:verify:protocol-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-protocol-boundary.ts",
     "server:deployment-index": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/deployment-index.ts",
     "verify:enterprise-single-node-offline-bundle": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/enterprise-single-node-offline-bundle.ts",
-    "plan:next": "cross-env NODE_OPTIONS=--conditions=source node tools/plan/current-plan-authority.ts next",
-    "verify:better-plan": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-better-plan.ts",
     "verify:platform-audit": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/core-platform-gap-audit.ts",
     "verify:docs": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/run-verifiers.ts --profile docs",
     "verify:skills": "node tools/validate-skills.mjs",

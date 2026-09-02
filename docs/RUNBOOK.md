@@ -414,19 +414,6 @@ start that bundle without the closure's stop and cleanup steps, run
 `npm run start:offline`. Stop it with `npm run stop:offline`. Restart the same
 offline stack with `npm run restart:offline`.
 
-The plan-scoped final receipt consumes those exact current reports:
-
-```bash
-node tools/server-scripts/functional-final.ts
-```
-
-It writes `build/reports/functional-final.json`. A reachable Linux VM from this
-macOS operator host is enough to close the current plan candidate. Prefer
-Ubuntu; accept Debian. This command is not `npm run verify:acceptance`.
-Project-level functional-complete, publication, production-readiness, native
-Linux, Ubuntu, Debian, and environment qualification remain remaining required
-work.
-
 Before an upgrade, invoke the governed `storage.backups.create` operation and
 retain its successful receipt; backups are written to the independent
 `meshrix-server-backups` volume. Keep the previous digest and pass it as
@@ -571,37 +558,16 @@ The report is `build/reports/agent-service-efficiency-profile.json`.
 
 For a source split, package extraction, ownership move, protocol separation,
 or feature-surface reassembly, use the repository-owned architecture and
-verification contracts. Inspect the changed-file closure before execution:
+verification contracts. Inspect the changed-file closure with:
 
 ```bash
-npm run verify:better-plan
 npm run verify:core-platform-surface-convergence
 ```
 
-PLAN-005 is the sole current production-use Plan. Its canonical Better Plan v3
-workspace is `docs/plans`: `Manifest.json` indexes the Plan,
-`production-use-closure/Plan.json` is the semantic source,
-`production-use-closure/Plan.md` is the generated projection, and
-`production-use-closure/Checkpoints.json` is execution state only. Never infer
-semantic authority from the projection or reconstruct missing state from an
-acceptance report.
-
-Use the same fail-closed authority for validation and next work:
-
-```bash
-npm run verify:better-plan
-npm run plan:next
-```
-
-An absent, malformed, or mismatched workspace requires Plan repair. These
-commands do not run functional acceptance, deploy a candidate, advance a
-branch, publish an artifact, or mutate checkpoints; only canonical Better Plan
-lifecycle commands may change execution state. Product acceptance, Linux
-deployment evidence, production-closure verification, and branch advancement
-remain candidate evidence owned by their separate workflows. Those product
-workflows never read or validate `docs/plans`; Plan validity cannot block or
-promote a product candidate. The Plan workspace remains a local process
-document and is excluded from public release artifacts.
+Temporary plans do not establish product status and must be removed after their
+verified outcome is integrated. Product acceptance, Linux deployment evidence,
+production-closure verification, and branch advancement remain separate
+candidate-bound authorities owned by their respective workflows.
 
 The reassembly profile covers the Core typecheck and build, public regression
 gate, capability surface convergence, and acceptance contract.
@@ -1007,6 +973,18 @@ uses the explicit accepted commit. Nightly feedback is bounded and
 non-gating; stable and release require their own exact successful authorities.
 No completed failed workflow is automatically retried, and this procedure
 does not publish tags or assets or modify branch policy.
+
+After branch promotion, reduce the accepted generation, existing-target
+deployment, live Core state, active service, and branch authority for that
+exact candidate:
+
+```bash
+npm run verify:production-closure
+```
+
+The command writes `build/reports/unified-production-closure.json`. A pass
+requires every input to bind the same immutable source revision and candidate
+digest. It does not publish a tag, package, image, GitHub Release, or asset.
 
 Inspect the sanitized functional DAG without executing it:
 

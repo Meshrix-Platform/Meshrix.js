@@ -31,11 +31,11 @@ independently establish another claim's readiness.
 
 ## Run the workflow
 
-Plan-scoped offline delivery and the current plan receipt may close on a Linux
-operating system inside a virtual machine. Prefer Ubuntu; accept Debian. A
-macOS operator host is allowed when that Linux VM is reachable. This path is
-not `npm run verify:acceptance`. Native Linux, Ubuntu, Debian, and environment
-qualification remain remaining required work after this workflow.
+Offline-delivery verification may run on a Linux operating system inside a
+virtual machine. Prefer Ubuntu; accept Debian. A macOS operator host is allowed
+when that Linux VM is reachable. This path is not `npm run
+verify:acceptance`. Native Linux, Ubuntu, Debian, and environment qualification
+remain separate claims owned by this workflow.
 
 Run the closed loop inside the Linux VM: environment check, repository
 contract discovery, build, runtime start, and health verification. Keep the

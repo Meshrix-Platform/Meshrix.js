@@ -8,7 +8,7 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[Overview](#overview) · [Status](docs/STATUS.md) · [Roadmap](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
+[Overview](#overview) · [Status](docs/STATUS.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
 
 </div>
 
@@ -19,11 +19,10 @@ English is the normative language of this repository's documentation; [简体中
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-> **Current outcome:** Meshrix.js is closing one enterprise single-node
-> functional candidate led by Agent-to-MCP Service collaboration efficiency,
-> with the required closures documented in
-> [What's Next](docs/WHATS-NEXT.md). Read it before planning, implementing, or
-> reviewing project work.
+> **Current outcome:** The 0.0.1 Core single-node production-use closure has
+> completed for the accepted candidate recorded by current evidence. New work
+> is driven by real use, explicit product decisions, and concrete defects; see
+> [Status](docs/STATUS.md) for the current evidence boundary.
 
 ---
 
@@ -168,7 +167,6 @@ never discovered from another source repository. See
 
 | Topic | Document |
 | --- | --- |
-| Product closure roadmap | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
 | Product goal and boundary | [PRODUCT.md](PRODUCT.md) |
 | Domain language | [CONTEXT.md](CONTEXT.md) |
 | Current status | [docs/STATUS.md](docs/STATUS.md) |

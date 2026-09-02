@@ -40,9 +40,9 @@ Do not rerun the full regression between individual subchanges. A protected
 resource, runtime-data probe, publication, or external effect requires explicit
 authorization and exact scope.
 
-Offline delivery and the current plan receipt may close on Linux inside a
-virtual machine. Prefer Ubuntu; accept Debian. Do not treat that path as native
-Linux support or as `npm run verify:acceptance`.
+Offline delivery may run on Linux inside a virtual machine. Prefer Ubuntu;
+accept Debian. Do not treat that path as native Linux support or as `npm run
+verify:acceptance`.
 
 ## Release boundary
 

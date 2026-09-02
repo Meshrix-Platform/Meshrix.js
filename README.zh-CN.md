@@ -8,7 +8,7 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[概览](#概览) · [当前状态](docs/STATUS.md) · [产品路线](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
+[概览](#概览) · [当前状态](docs/STATUS.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
 
 </div>
 
@@ -19,9 +19,9 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > 统一定义。
 
-> **当前目标：** Meshrix.js 正闭环一个由 Agent 与 MCP Service 协作效率主导的
-> 企业单节点功能候选，所需闭环详见 [What's Next](docs/WHATS-NEXT.md)。
-> 开始规划、实现或评审项目工作前，请先查看该文档。
+> **当前结果：** Meshrix.js 0.0.1 Core 企业单节点生产使用闭环已由当前证据所记录
+> 的已验收候选完成。后续工作由真实使用、明确的产品决策和具体缺陷驱动；当前证据
+> 边界见 [Status](docs/STATUS.md)。
 
 ---
 
@@ -142,7 +142,6 @@ OpenCode、Kimi 和 Pi 适配器；适配器必须由运维方显式启用，运
 
 | 主题 | 文档 |
 | --- | --- |
-| 产品闭环路线 | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
 | 产品目标与边界 | [PRODUCT.md](PRODUCT.md) |
 | 领域词汇 | [CONTEXT.md](CONTEXT.md) |
 | 当前状态 | [docs/STATUS.md](docs/STATUS.md) |

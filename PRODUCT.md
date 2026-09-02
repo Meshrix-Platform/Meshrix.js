@@ -160,4 +160,6 @@ These terms stay required and are not remaining work to weaken:
 - [Compatibility](docs/COMPATIBILITY.md) records exact runtime, protocol,
   adapter, and remaining environment-qualification evidence.
 - [Documentation index](docs/README.md) routes implemented technical facts.
-- [What's Next](docs/WHATS-NEXT.md) ranks remaining required work.
+- [Status](docs/STATUS.md) records current product and evidence state; concrete
+  future work belongs to its owning task or technical authority rather than a
+  perpetual roadmap.

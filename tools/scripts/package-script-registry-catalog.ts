@@ -463,18 +463,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/lock-backed-npm-registry.ts"
     ], outputs: ["build/reports/npm-package-installability.json"],
   },
-  "verify:better-plan": {
-    scriptName: "verify:better-plan", command: "npm run verify:better-plan", category: "verifier", subsystem: "documentation",
-    owner: "platform", tier: "hygiene", sideEffects: "build-output",
-    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
-    inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts", "tools/server-scripts/verify-better-plan.ts"], outputs: ["build/reports/better-plan.json"],
-  },
-  "plan:next": {
-    scriptName: "plan:next", command: "npm run plan:next", category: "maintenance", subsystem: "planning",
-    owner: "platform", tier: "hygiene", sideEffects: "none",
-    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
-    inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts"], outputs: [],
-  },
   "verify:composition-source-package": {
     scriptName: "verify:composition-source-package", command: "npm run verify:composition-source-package", category: "packaging", subsystem: "release-source",
     owner: "platform", tier: "release", sideEffects: "build-output",

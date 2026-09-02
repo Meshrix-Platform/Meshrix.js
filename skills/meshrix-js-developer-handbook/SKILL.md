@@ -54,7 +54,7 @@ module.
 
 ## Remaining host qualification
 
-A Linux VM may close offline delivery and the current plan receipt. Prefer
-Ubuntu; accept Debian. Native Linux qualification remains remaining required
-work after the named Real-Machine Verification Workflow. Project-level
+A Linux VM may provide offline-delivery evidence. Prefer Ubuntu; accept Debian.
+That evidence does not establish native Linux qualification, which remains
+owned by the named Real-Machine Verification Workflow. Project-level
 functional acceptance remains `npm run verify:acceptance`.
