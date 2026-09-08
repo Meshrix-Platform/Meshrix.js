@@ -6,24 +6,17 @@ PRODUCT_ID="meshrix-js"
 TARGET="runtime-ui"
 DEFAULT_PORT=7228
 SKILL_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(CDPATH= cd -- "$SKILL_DIR/../.." && pwd)"
-RELEASE_DEFINITION="$REPO_ROOT/tools/registry/release-definition.registry.json"
-DOCKERFILE="$REPO_ROOT/Dockerfile"
+REPO_ROOT=""
 PLATFORM=""
-OUT_ROOT="$REPO_ROOT/build/offline-pack"
+OUT_ROOT=""
 DRY_RUN=0
 PRIVATE_ROOT=""
 TREE_HELPER="$SKILL_DIR/validate-runtime-tree.mjs"
 BUILD_IDENTITIES=()
 
-for identity in "${HOME:-}" "$(hostname 2>/dev/null || true)" "$(git -C "$REPO_ROOT" config --get user.email 2>/dev/null || true)"; do
-  case "$identity" in ""|root|node|runner|build|localhost) continue ;; esac
-  BUILD_IDENTITIES+=("$identity")
-done
-
 usage() {
   cat <<'USAGE'
-Usage: pack-offline.sh --platform linux/amd64|linux/arm64 [--out DIR] [--dry-run]
+Usage: pack-offline.sh --repo DIR --platform linux/amd64|linux/arm64 [--out DIR] [--dry-run]
 USAGE
 }
 
@@ -50,6 +43,11 @@ trap interrupt INT TERM
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --repo)
+      [ "$#" -ge 2 ] || fail "invalid-option" "--repo"
+      REPO_ROOT="$2"
+      shift 2
+      ;;
     --platform)
       [ "$#" -ge 2 ] || fail "invalid-option" "--platform"
       PLATFORM="$2"
@@ -72,6 +70,16 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+[ -n "$REPO_ROOT" ] || fail "missing-repository" "repo-option"
+REPO_ROOT="$(CDPATH= cd -- "$REPO_ROOT" 2>/dev/null && pwd)" || fail "invalid-repository" "repo-option"
+RELEASE_DEFINITION="$REPO_ROOT/tools/registry/release-definition.registry.json"
+DOCKERFILE="$REPO_ROOT/Dockerfile"
+OUT_ROOT="${OUT_ROOT:-$REPO_ROOT/build/offline-pack}"
+for identity in "${HOME:-}" "$(hostname 2>/dev/null || true)" "$(git -C "$REPO_ROOT" config --get user.email 2>/dev/null || true)"; do
+  case "$identity" in ""|root|node|runner|build|localhost) continue ;; esac
+  BUILD_IDENTITIES+=("$identity")
+done
+
 case "$PLATFORM" in
   linux/amd64)
     ARCHITECTURE="amd64"
@@ -92,9 +100,8 @@ esac
 [ -f "$TREE_HELPER" ] || fail "runtime-validator" "validate-runtime-tree.mjs"
 command -v node >/dev/null 2>&1 || fail "missing-build-tool" "node"
 
-NODE_BASE_IMAGE="$(sed -nE 's/^ARG NODE_BASE_IMAGE=(node:[0-9][0-9A-Za-z.-]*@sha256:[0-9a-f]{64})$/\1/p' "$DOCKERFILE")"
+NODE_BASE_IMAGE="$(sed -nE 's|^ARG NODE_BASE_IMAGE=((docker[.]io/library/)?node:[0-9][0-9A-Za-z.-]*@sha256:[0-9a-f]{64})$|\1|p' "$DOCKERFILE")"
 [ "$(printf '%s\n' "$NODE_BASE_IMAGE" | sed '/^$/d' | wc -l | tr -d ' ')" = "1" ] || fail "build-definition" "NODE_BASE_IMAGE"
-case "$NODE_BASE_IMAGE" in node:*@sha256:????????????????????????????????????????????????????????????????) ;; *) fail "build-definition" "NODE_BASE_IMAGE" ;; esac
 
 release_fields="$({ node - "$RELEASE_DEFINITION" "$PLATFORM" <<'NODE'
 const fs = require("node:fs");

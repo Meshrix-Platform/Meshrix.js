@@ -24,7 +24,50 @@ function stableSessionIdentity(value?: any) : any {
   );
 }
 
-function mcpSessionKey({ service = {}, config = {}, credentialRevisions = [] }: Record<string, any> = {}) : any {
+function trustedExecutionIdentity(subject: Record<string, any> = {}) : any {
+  const grant: any = object(subject.grant);
+  const user: any = object(subject.user);
+  const principalId: any = text(
+    subject.subjectId ||
+    subject.workloadPrincipalId ||
+    user.subjectId ||
+    user.userId ||
+    grant.subjectId ||
+    subject.id
+  );
+  const grantId: any = text(subject.grantId || grant.id || grant.grantId);
+  if (!principalId && !grantId) {
+    return { principalId: "", grantId: "", trusted: false };
+  }
+  return {
+    principalId: principalId || grantId,
+    grantId: grantId || principalId,
+    trusted: true
+  };
+}
+
+function executionPrincipalRequiredError() : any {
+  return Object.assign(new Error("Trusted execution principal is required for a stateful upstream MCP session."), {
+    status: 403,
+    reasonCode: "upstream_mcp_execution_principal_required"
+  });
+}
+
+function mcpSessionPurpose(value: any = "discovery") : any {
+  const purpose: any = text(value);
+  if (purpose === "execution" || purpose === "health") return purpose;
+  return "discovery";
+}
+
+function mcpSessionKey({
+  service = {},
+  config = {},
+  credentialRevisions = [],
+  purpose = "discovery",
+  principalId = "",
+  grantId = ""
+}: Record<string, any> = {}) : any {
+  const sessionPurpose: any = mcpSessionPurpose(purpose);
   const identity: any = stableSessionIdentity({
     serviceId: text(service.serviceId),
     serviceUpdatedAt: text(service.updatedAt),
@@ -35,7 +78,14 @@ function mcpSessionKey({ service = {}, config = {}, credentialRevisions = [] }: 
         secretRef: text(entry.secretRef),
         revision: Number(entry.revision || 0)
       }))
-      .sort((left?: any, right?: any) : any => left.secretRef.localeCompare(right.secretRef))
+      .sort((left?: any, right?: any) : any => left.secretRef.localeCompare(right.secretRef)),
+    purpose: sessionPurpose,
+    ...(sessionPurpose === "execution"
+      ? {
+          principalId: text(principalId),
+          grantId: text(grantId)
+        }
+      : {})
   });
   return `upstream-mcp:${createHash("sha256").update(JSON.stringify(identity)).digest("hex")}`;
 }
@@ -240,7 +290,9 @@ export async function resolveMcpServiceConfigWithCredentials({
   userDataPath = "",
   service,
   operation = {},
-  secretKeyProvider = null
+  secretKeyProvider = null,
+  purpose = "discovery",
+  subject = null
 }: Record<string, any> = {}) : Promise<any> {
   const config: Record<string, any> = {
     ...mcpServiceConfig(service),
@@ -255,18 +307,30 @@ export async function resolveMcpServiceConfigWithCredentials({
     targetUrl: parseOptionalUrl(config.url || service.baseUrl || "")
   });
   const allowCredentialEnvironment: any = text(config.transport).toLowerCase() === "stdio";
+  const sessionPurpose: any = mcpSessionPurpose(purpose);
+  const trusted: any = sessionPurpose === "execution" ? trustedExecutionIdentity(subject || {}) : { trusted: false };
+  if (sessionPurpose === "execution" && trusted.trusted !== true) {
+    throw executionPrincipalRequiredError();
+  }
+  const serviceId: any = text(service.serviceId);
   return {
     ...config,
     sessionKey: mcpSessionKey({
       service,
       config,
-      credentialRevisions: credentials.credentialRevisions
+      credentialRevisions: credentials.credentialRevisions,
+      purpose: sessionPurpose,
+      principalId: trusted.principalId,
+      grantId: trusted.grantId
     }),
     sessionGeneration: mcpSessionGeneration({
       service,
       credentialRevisions: credentials.credentialRevisions
     }),
-    sessionScope: text(service.serviceId),
+    sessionScope: sessionPurpose === "execution"
+      ? `svc:${serviceId}:exec:${text(trusted.principalId)}:${text(trusted.grantId)}`
+      : `svc:${serviceId}:${sessionPurpose}`,
+    sessionKind: sessionPurpose === "execution" ? "stateful" : "ephemeral",
     headers: {
       ...object(config.headers),
       ...credentials.headers

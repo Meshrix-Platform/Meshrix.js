@@ -9,7 +9,7 @@ REAL_IMAGES=()
 REAL_CONTAINERS=()
 VERIFY_IDENTITIES=()
 
-for identity in "${HOME:-}" "$(hostname 2>/dev/null || true)" "$(git -C "$SKILL_DIR/../.." config --get user.email 2>/dev/null || true)"; do
+for identity in "${HOME:-}" "$(hostname 2>/dev/null || true)" "$(git config --get user.email 2>/dev/null || true)"; do
   case "$identity" in ""|root|node|runner|build|localhost) continue ;; esac
   VERIFY_IDENTITIES+=("$identity")
 done
@@ -193,20 +193,34 @@ FAKE
   export OFFLINE_PACK_FAKE_LOG="$log"
   export OFFLINE_PACK_FAKE_HELPER="$SKILL_DIR/test-offline-pack.sh"
 
-  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" --dry-run >"$root/dry-amd64"
-  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/arm64 --out "$out" --dry-run >"$root/dry-arm64"
+  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" --dry-run >"$root/dry-amd64"
+  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/arm64 --out "$out" --dry-run >"$root/dry-arm64"
   grep -Fx 'builder=docker buildx build --platform linux/amd64 --target runtime-ui --build-arg NODE_BASE_IMAGE=node:24.16.0-bookworm-slim@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --output type=local,dest=<private-temp> <repo-root>' "$root/dry-amd64" >/dev/null || fail "dry-run-builder-vector"
   grep -Fx 'artifact=meshrix-js-9.8.7-linux-arm64.tar.gz' "$root/dry-arm64" >/dev/null || fail "dry-run-artifact"
 
-  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" >/dev/null 2>&1 || fail "missing-platform-status"
-  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform darwin/arm64 >/dev/null 2>&1 || fail "unsupported-platform-status"
-  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --deps >/dev/null 2>&1 || fail "invalid-option-status"
-  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out >/dev/null 2>&1 || fail "missing-output-status"
+  mkdir -p "$root/installed/meshrix-js/references/offline-pack"
+  cp "$PACK_SCRIPT" "$SKILL_DIR/validate-runtime-tree.mjs" "$root/installed/meshrix-js/references/offline-pack/"
+  (cd "$root/installed" && bash meshrix-js/references/offline-pack/pack-offline.sh --repo "$fake_repo" --platform linux/amd64 --out "$out" --dry-run) >"$root/dry-installed"
+  cmp "$root/dry-amd64" "$root/dry-installed" >/dev/null || fail "installed-repository-selection"
+  [ ! -e "$log" ] || fail "dry-run-invoked-builder"
+
+  printf '%s\n' 'ARG NODE_BASE_IMAGE=docker.io/library/node:24.16.0-bookworm-slim@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >"$fake_repo/Dockerfile"
+  bash "$root/installed/meshrix-js/references/offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --dry-run >"$root/dry-qualified"
+  grep -F 'NODE_BASE_IMAGE=docker.io/library/node:24.16.0-bookworm-slim@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$root/dry-qualified" >/dev/null || fail "qualified-image-preserved"
+  printf '%s\n' 'ARG NODE_BASE_IMAGE=node:24.16.0-bookworm-slim' >"$fake_repo/Dockerfile"
+  assert_status 1 bash "$root/installed/meshrix-js/references/offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --dry-run >/dev/null 2>&1 || fail "unpinned-image-admitted"
+  printf '%s\n' 'ARG NODE_BASE_IMAGE=node:24.16.0-bookworm-slim@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >"$fake_repo/Dockerfile"
+
+  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 >/dev/null 2>&1 || fail "missing-repository-status"
+  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" >/dev/null 2>&1 || fail "missing-platform-status"
+  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform darwin/arm64 >/dev/null 2>&1 || fail "unsupported-platform-status"
+  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --deps >/dev/null 2>&1 || fail "invalid-option-status"
+  assert_status 1 "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out >/dev/null 2>&1 || fail "missing-output-status"
   mkdir -p "$root/symlink-target"
   symlink_out="$root/symlink-out"
   ln -s "$root/symlink-target" "$symlink_out"
   symlink_log="$root/symlink-output.log"
-  assert_status 1 env PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$symlink_out" >/dev/null 2>"$symlink_log" || fail "symlink-output-status"
+  assert_status 1 env PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$symlink_out" >/dev/null 2>"$symlink_log" || fail "symlink-output-status"
   grep -Fx 'offline-pack: invalid-output-root: configured-output' "$symlink_log" >/dev/null || fail "symlink-output-category"
   ! grep -Eq 'docker[[:space:]]+pull' "$SKILL_DIR/test-offline-pack.sh" || fail "real-harness-pulls-image"
   grep -Fq 'docker import --platform' "$SKILL_DIR/test-offline-pack.sh" || fail "real-harness-not-self-contained"
@@ -214,7 +228,7 @@ FAKE
   ! grep -Eq -- '--mou[n]t' "$SKILL_DIR/test-offline-pack.sh" || fail "real-harness-mount"
 
   success_log="$root/success.log"
-  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$success_log"
+  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$success_log"
   [ ! -s "$success_log" ] || fail "builder-private-channel"
   artifact="$out/meshrix-js-9.8.7-linux-amd64.tar.gz"
   [ -f "$artifact" ] || fail "contract-artifact-missing"
@@ -237,7 +251,7 @@ NODE
   mkdir "$out_arm64"
   blocked_log="$root/blocked.log"
   set +e
-  OFFLINE_PACK_FAKE_BUILDER_RESULT=transfer-blocked PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$blocked_log"
+  OFFLINE_PACK_FAKE_BUILDER_RESULT=transfer-blocked PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$blocked_log"
   blocked_status=$?
   set -e
   [ "$blocked_status" = "75" ] || fail "blocked-builder-status"
@@ -245,7 +259,7 @@ NODE
   ! grep -Fq 'private transfer detail' "$blocked_log" || fail "blocked-builder-diagnostic-disclosed"
   session_log="$root/session.log"
   set +e
-  OFFLINE_PACK_FAKE_BUILDER_RESULT=session-blocked PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$session_log"
+  OFFLINE_PACK_FAKE_BUILDER_RESULT=session-blocked PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$session_log"
   session_status=$?
   set -e
   [ "$session_status" = "75" ] || fail "blocked-session-status"
@@ -253,7 +267,7 @@ NODE
   ! grep -Fq 'rpc error' "$session_log" || fail "blocked-session-diagnostic-disclosed"
   ordinary_log="$root/ordinary.log"
   set +e
-  OFFLINE_PACK_FAKE_BUILDER_RESULT=ordinary-failure PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$ordinary_log"
+  OFFLINE_PACK_FAKE_BUILDER_RESULT=ordinary-failure PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$ordinary_log"
   ordinary_status=$?
   set -e
   [ "$ordinary_status" = "1" ] || fail "ordinary-builder-status"
@@ -263,7 +277,7 @@ NODE
   prove_start() { :; }
   PATH="$fake_bin:$PATH" verify_existing_output "$out" linux/amd64 >/dev/null
   [ "$(wc -l <"$log" | tr -d ' ')" = "4" ] || fail "existing-output-called-packer"
-  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$success_log"
+  PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/arm64 --out "$out_arm64" >/dev/null 2>"$success_log"
   [ ! -s "$success_log" ] || fail "builder-private-channel"
   artifact_arm64="$out_arm64/meshrix-js-9.8.7-linux-arm64.tar.gz"
   PATH="$fake_bin:$PATH" verify_existing_output "$out_arm64" linux/arm64 >/dev/null
@@ -342,36 +356,36 @@ if (JSON.stringify(value.surfaces) !== JSON.stringify({console:"/",api:"/api/",h
 NODE
   digest_before="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   identity_log="$root/identity.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_PRIVACY_FIXTURE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$identity_log" || fail "developer-identity-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_PRIVACY_FIXTURE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$identity_log" || fail "developer-identity-status"
   grep -Fx 'offline-pack: developer-identity: app/dist/private.js' "$identity_log" >/dev/null || fail "developer-identity-category"
   ! grep -Fq "$(printf '%s%s' '/Us' 'ers/offline-fixture/offline-pack/work')" "$identity_log" || fail "developer-identity-disclosed"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-failure"
   secret_file_log="$root/secret-file.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_FILE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_file_log" || fail "secret-file-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_FILE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_file_log" || fail "secret-file-status"
   grep -Fx 'offline-pack: forbidden-entry: app/dist/.env' "$secret_file_log" >/dev/null || fail "secret-file-category"
   secret_literal_log="$root/secret-literal.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_LITERAL=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_literal_log" || fail "secret-literal-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_LITERAL=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_literal_log" || fail "secret-literal-status"
   grep -Fx 'offline-pack: secret-literal: app/dist/credential.js' "$secret_literal_log" >/dev/null || fail "secret-literal-category"
   ! grep -Fq "$(printf '%s%s' 'AKIA' 'TESTCASEEXAMPLE0')" "$secret_literal_log" || fail "secret-literal-disclosed"
   forbidden_dir_log="$root/forbidden-directory.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_FORBIDDEN_DIR=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$forbidden_dir_log" || fail "forbidden-directory-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_FORBIDDEN_DIR=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$forbidden_dir_log" || fail "forbidden-directory-status"
   grep -Fx 'offline-pack: forbidden-entry: app/dist/reports' "$forbidden_dir_log" >/dev/null || fail "forbidden-directory-category"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-privacy-failure"
   unsafe_log="$root/unsafe-link.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_UNSAFE_LINK=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$unsafe_log" || fail "unsafe-link-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_UNSAFE_LINK=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$unsafe_log" || fail "unsafe-link-status"
   grep -Fx 'offline-pack: unsafe-runtime-entry: runtime-tree' "$unsafe_log" >/dev/null || fail "unsafe-link-category"
   ! grep -Fq '/private/offline-pack-fixture' "$unsafe_log" || fail "unsafe-link-disclosed"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-unsafe-link"
   special_log="$root/special-entry.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_SPECIAL_ENTRY=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$special_log" || fail "special-entry-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_SPECIAL_ENTRY=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$special_log" || fail "special-entry-status"
   grep -Fx 'offline-pack: unsafe-runtime-entry: runtime-tree' "$special_log" >/dev/null || fail "special-entry-category"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-special-entry"
   architecture_log="$root/architecture.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_WRONG_ARCH=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --platform linux/amd64 --out "$out" >/dev/null 2>"$architecture_log" || fail "wrong-architecture-status"
+  assert_status 1 env OFFLINE_PACK_FAKE_WRONG_ARCH=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$architecture_log" || fail "wrong-architecture-status"
   grep -Fx 'offline-pack: architecture-mismatch: bin/node' "$architecture_log" >/dev/null || fail "wrong-architecture-category"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-wrong-architecture"
@@ -589,6 +603,12 @@ run_existing_output() {
 
 run_real() {
   shift
+  [ "${1:-}" = "--repo" ] && [ "$#" -ge 3 ] || fail "missing-real-repository"
+  local repo identity
+  repo="$(CDPATH= cd -- "$2" 2>/dev/null && pwd)" || fail "invalid-real-repository"
+  identity="$(git -C "$repo" config --get user.email 2>/dev/null || true)"
+  case "$identity" in ""|root|node|runner|build|localhost) ;; *) VERIFY_IDENTITIES+=("$identity") ;; esac
+  shift 2
   [ "$#" -gt 0 ] || fail "missing-real-platform"
   command -v docker >/dev/null 2>&1 || fail "docker-unavailable"
   command -v file >/dev/null 2>&1 || fail "file-unavailable"
@@ -597,7 +617,7 @@ run_real() {
   TEST_PRIVATE_ROOT="$root"
   trap cleanup_test_root EXIT
   trap interrupt_test INT TERM
-  version="$(node -p 'require(process.argv[1]).release.version' "$SKILL_DIR/../../tools/registry/release-definition.registry.json" 2>/dev/null)" || fail "release-definition"
+  version="$(node -p 'require(process.argv[1]).release.version' "$repo/tools/registry/release-definition.registry.json" 2>/dev/null)" || fail "release-definition"
 
   for platform in "$@"; do
     case "$platform" in linux/amd64|linux/arm64) ;; *) fail "unsupported-real-platform" ;; esac
@@ -606,7 +626,7 @@ run_real() {
     pack_log="$root/$arch/pack.log"
     mkdir -p "$out" 2>/dev/null || fail "real-output-$arch"
     set +e
-    "$PACK_SCRIPT" --platform "$platform" --out "$out" >/dev/null 2>"$pack_log"
+    "$PACK_SCRIPT" --repo "$repo" --platform "$platform" --out "$out" >/dev/null 2>"$pack_log"
     pack_status=$?
     set -e
     if [ "$pack_status" = "75" ]; then
@@ -637,5 +657,5 @@ case "$MODE" in
   --contract) run_contract ;;
   --real) run_real "$@" ;;
   --existing-output) run_existing_output "$@" ;;
-  *) printf 'Usage: test-offline-pack.sh --contract | --real linux/amd64 [linux/arm64] | --existing-output --platform linux/amd64|linux/arm64 ROOT\n' >&2; exit 2 ;;
+  *) printf 'Usage: test-offline-pack.sh --contract | --real --repo DIR linux/amd64 [linux/arm64] | --existing-output --platform linux/amd64|linux/arm64 ROOT\n' >&2; exit 2 ;;
 esac

@@ -11,6 +11,11 @@ import { fetchJson } from "./http-json-client.ts";
 import { authHeaders, optionsWithDiscoveredBaseUrl, registryBaseUrls, resolveApiKey } from "./discovery.ts";
 import { installerOptions } from "./installer-options.ts";
 import { redactSensitiveText } from "./installer-output-safety.ts";
+import {
+  mcpModernJsonRpcMessage,
+  mcpModernRequestHeaders
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
+import { MCP_CONNECTOR_VERSION } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 
 export const MCP_STDIO_FRAMING_JSONL: any = "jsonl";
 export const MCP_STDIO_FRAMING_CONTENT_LENGTH: any = "content-length";
@@ -24,6 +29,20 @@ const MCP_UPDATE_NOTIFICATIONS: any = Object.freeze([
   "notifications/meshrix/skill_hub/catalog_changed",
   "notifications/meshrix/update_available"
 ]);
+const MCP_UPDATE_NOTIFICATION_FILTER: any = Object.freeze({
+  toolsListChanged: true,
+  meshrixSkillHubCatalogChanged: true,
+  meshrixUpdateAvailable: true
+});
+
+function modernizeOutgoingMcpMessage(message?: any) : any {
+  return mcpModernJsonRpcMessage(message, {
+    "io.modelcontextprotocol/clientInfo": {
+      name: "meshrix-mcp-connector",
+      version: MCP_CONNECTOR_VERSION
+    }
+  });
+}
 
 function positiveInteger(value?: any, fallback?: any, name?: any) : any {
   const resolved: any = value ?? fallback;
@@ -151,17 +170,16 @@ export async function forwardProxyMessage({
   proxySessionId
 }: Record<string, any>) : Promise<any> {
   const correlationSessionId: any = normalizeMcpProxySessionId(proxySessionId);
-  if (!correlationSessionId) {
-    throw new Error("MCP proxy session correlation is unavailable.");
-  }
-  const body: any = JSON.stringify(message);
+  const outgoing: any = modernizeOutgoingMcpMessage(message);
+  const body: any = JSON.stringify(outgoing);
   const response: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
     timeoutMs: HTTP_TIMEOUT_MS,
     signal,
     headers: {
       ...authHeaders(token, target),
-      [MCP_PROXY_SESSION_HEADER]: correlationSessionId
+      ...mcpModernRequestHeaders(outgoing),
+      ...(correlationSessionId ? { [MCP_PROXY_SESSION_HEADER]: correlationSessionId } : {})
     },
     body
   });
@@ -388,15 +406,9 @@ export function createProxyRequestDispatcher({
       if (activeRequest.cancelled) {
         return;
       }
-      const requestId: any = message.params.requestId;
       activeRequest.cancelled = true;
       activeRequest.controller.abort(requestCancellationError());
-      const hadReservation: any = releaseCancellationReservation(activeRequest);
-      forwardNotification({
-        jsonrpc: "2.0",
-        method: "notifications/cancelled",
-        params: { requestId }
-      }, { reserved: hadReservation });
+      releaseCancellationReservation(activeRequest);
       return;
     }
     if (!hasJsonRpcRequestId(message)) {
@@ -417,12 +429,7 @@ export function createProxyRequestDispatcher({
       }
       activeRequest.cancelled = true;
       activeRequest.controller.abort(requestCancellationError());
-      const hadReservation: any = releaseCancellationReservation(activeRequest);
-      forwardNotification({
-        jsonrpc: "2.0",
-        method: "notifications/cancelled",
-        params: { requestId }
-      }, { reserved: hadReservation });
+      releaseCancellationReservation(activeRequest);
     }
   }
 
@@ -611,21 +618,22 @@ export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessi
   let retryMs: any = 250;
   while (!signal?.aborted) {
     try {
+      const outgoing: any = modernizeOutgoingMcpMessage({
+        jsonrpc: "2.0",
+        id: "meshrix-auto-update-subscription",
+        method: "subscriptions/listen",
+        params: { notifications: MCP_UPDATE_NOTIFICATION_FILTER }
+      });
+      const correlationSessionId: any = normalizeMcpProxySessionId(proxySessionId);
       const response: any = await fetchImpl(`${baseUrl}/mcp`, {
         method: "POST",
         signal,
         headers: {
           ...authHeaders(token, target),
-          [MCP_PROXY_SESSION_HEADER]: normalizeMcpProxySessionId(proxySessionId),
-          accept: "text/event-stream",
-          "content-type": "application/json"
+          ...mcpModernRequestHeaders(outgoing, { accept: "text/event-stream" }),
+          ...(correlationSessionId ? { [MCP_PROXY_SESSION_HEADER]: correlationSessionId } : {})
         },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: "meshrix-auto-update-subscription",
-          method: "subscriptions/listen",
-          params: { notifications: MCP_UPDATE_NOTIFICATIONS }
-        })
+        body: JSON.stringify(outgoing)
       });
       if (!response.ok || !response.body) throw new Error(`MCP subscription failed with HTTP ${response.status}`);
       retryMs = 250;

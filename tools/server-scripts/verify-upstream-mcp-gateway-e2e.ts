@@ -37,6 +37,7 @@ import {
   verifierOpaqueServiceId
 } from "./lib/upstream-gateway-verifier-publication.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
+import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -164,11 +165,14 @@ async function api(method?: any, route?: any, body: any = undefined) : Promise<a
 }
 
 async function mcp(token?: any, body?: any) : Promise<any> {
-  const bodyText: any = JSON.stringify(body);
+  const wire: any = mcpModernHttpRequest(body, {
+    "X-Meshrix.js-Api-Key": token,
+    "X-Meshrix.js-MCP-Target": "opencode"
+  });
   return fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "opencode" },
-    body: bodyText
+    headers: wire.headers,
+    body: wire.body
   });
 }
 
@@ -403,17 +407,19 @@ try {
     assert.equal(called.status, 200, JSON.stringify(called.payload, null, 2));
     assert.equal(called.payload.error, undefined, JSON.stringify(called.payload, null, 2));
     assert.ok(called.payload.result, JSON.stringify(called.payload, null, 2));
+    assert.ok(Array.isArray(called.payload.result.content), JSON.stringify(called.payload.result, null, 2));
     assert.ok(called.payload.result.structuredContent, JSON.stringify(called.payload.result, null, 2));
     const structured: any = called.payload.result.structuredContent;
-    assert.equal(structured.upstreamMcp, true);
-    assert.equal(structured.toolName, PUBLIC_TOOL_NAME);
-    assert.equal(structured.payload.response.structuredContent.ok, true);
-    assert.equal(structured.payload.response.structuredContent.count, 1);
-    assert.equal(structured.payload.response.structuredContent.items[0]?.name, "alpha");
+    const governance: any = called.payload.result._meta?.["io.meshrix/governance"] || {};
+    assert.equal(structured.ok, true);
+    assert.equal(structured.count, 1);
+    assert.equal(structured.items[0]?.name, "alpha");
+    assert.equal(structured.upstreamMcp, undefined);
+    assert.equal(structured.payload?.response, undefined);
     return {
-      upstreamMcp: structured.upstreamMcp,
-      upstreamToolCount: structured.payload.response.structuredContent.count,
-      auditRecorded: Boolean(structured.payload.auditId)
+      nativeStructuredOk: structured.ok,
+      upstreamToolCount: structured.count,
+      auditRecorded: Boolean(governance.auditId)
     };
   });
 

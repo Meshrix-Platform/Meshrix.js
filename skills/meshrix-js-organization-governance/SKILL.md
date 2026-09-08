@@ -17,7 +17,11 @@ and for authorization projection; an unconfigured instance reports
 2. The configuring actor needs `auth:admin` (the initial owner has it).
    Log in through `POST <server-url>/api/auth/login` and use the session
    cookie plus CSRF headers on every mutating request.
-3. Governance, grants, and key lifecycle are owned by
+3. Use the organization shape already authorized for this instance. Needing an
+   API Key does not authorize publishing a default organization. Reuse prior
+   authorization for the same operation; prepare any undecided shape before
+   requesting that decision and continue independent work.
+4. Governance, grants, and key lifecycle are owned by
    `$meshrix-js-operation-permission`; this skill only publishes the
    organization shape.
 
@@ -44,7 +48,7 @@ template over a hand-written draft.
    The `draft` carries `schemaVersion`, `templateKey`, `templateName`,
    `description`, `organizationDepth`, `nodes`, `tags`, and `roles`.
 
-2. **Preview** (optional) validates the draft:
+2. **Preview** validates the draft before the helper publishes it:
 
    ```bash
    POST /api/authorization/organization-governance/preview
@@ -72,6 +76,23 @@ template over a hand-written draft.
   subjects and roles is owned by `$meshrix-js-operation-permission`.
 
 ## Boundaries
+
+The [configuration helper](scripts/configure-organization.mjs) takes an explicit
+origin, actor, and authorized built-in template. Resolve it from the skill
+directory, including when using an installed copy:
+
+```sh
+node <skill-dir>/scripts/configure-organization.mjs \
+  --origin <server-origin> --username <configuring-actor> \
+  --template <authorized-template> \
+  --password-stdin < <private-password-file>
+```
+
+Credentials enter through private standard input. The helper prints status
+only, leaves configured organizations intact, and uses the snapshot revision
+for preview and publication. An uncertain publication outcome needs a state
+check before retrying; there is no automatic retry or replacement. The script
+does not grant authority to publish merely because the actor can authenticate.
 
 Do not hand-edit the governance store or publish a draft that did not come
 from an import or an explicit operator-supplied template. Re-publishing

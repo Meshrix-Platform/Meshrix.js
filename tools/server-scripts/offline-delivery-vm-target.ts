@@ -9,6 +9,11 @@ import { gunzipSync } from "node:zlib";
 import { canonicalJson } from "../../packages/contracts/src/serialization/canonical-json.ts";
 import { MCP_INTERFACE_VERSION } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
+import {
   ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS,
 } from "./enterprise-single-node-offline-bundle.ts";
 import {
@@ -1017,53 +1022,49 @@ console.log(JSON.stringify({ ok: true, apiKey: issued.apiKey }));
   }
   const mcpUrl: any = `http://127.0.0.1:${hostPort}/mcp`;
   const origin: any = `http://127.0.0.1:${hostPort}`;
-  const commonMcpHeaders: any = {
-    "Content-Type": "application/json",
+  const discoverWire: any = mcpModernHttpRequest({
+    jsonrpc: "2.0",
+    id: 1,
+    method: MCP_DISCOVER_METHOD,
+    params: {},
+  }, {
     Origin: origin,
-    "MCP-Protocol-Version": "2025-06-18",
-  };
-  const initializeResponse: any = await fetch(mcpUrl, {
-    method: "POST",
-    headers: commonMcpHeaders,
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "offline-linux-vm", version: "0.0.0" },
-      },
-    }),
   });
-  const initializePayload: any = await initializeResponse.json().catch(() : any => ({}));
-  if (initializeResponse.ok !== true || initializePayload.error || initializePayload.result?.serverInfo?.name !== "Meshrix.js") {
+  const discoverResponse: any = await fetch(mcpUrl, {
+    method: "POST",
+    headers: discoverWire.headers,
+    body: discoverWire.body,
+  });
+  const discoverPayload: any = await discoverResponse.json().catch(() : any => ({}));
+  const discoverServerInfo: any = discoverPayload.result?._meta?.[MCP_META_SERVER_INFO] || {};
+  if (discoverResponse.ok !== true || discoverPayload.error || discoverServerInfo.name !== "Meshrix.js") {
     failOfflineDelivery(
-      "first_governed_call_initialize_failed",
+      "first_governed_call_discover_failed",
       "Disconnected lifecycle step failed closed.",
     );
   }
+  const callWire: any = mcpModernHttpRequest({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "meshrix.discovery",
+      arguments: {
+        apiVersion: MCP_INTERFACE_VERSION,
+        operation: "system.health",
+        input: {},
+        clientVersion: "offline-linux-vm",
+      },
+    },
+  }, {
+    Origin: origin,
+    "X-Meshrix.js-Api-Key": apiKey,
+    "X-Meshrix.js-MCP-Target": "codex",
+  });
   const mcpResponse: any = await fetch(mcpUrl, {
     method: "POST",
-    headers: {
-      ...commonMcpHeaders,
-      "X-Meshrix.js-Api-Key": apiKey,
-      "X-Meshrix.js-MCP-Target": "codex",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "meshrix.discovery",
-        arguments: {
-          apiVersion: MCP_INTERFACE_VERSION,
-          operation: "system.health",
-          input: {},
-          clientVersion: "offline-linux-vm",
-        },
-      },
-    }),
+    headers: callWire.headers,
+    body: callWire.body,
   });
   const mcpPayload: any = await mcpResponse.json().catch(() : any => ({}));
   const health: any = mcpPayload.result?.structuredContent || {};

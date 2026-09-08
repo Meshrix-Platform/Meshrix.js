@@ -11,18 +11,23 @@ interface SseLimits {
   maxCohortRecords: number;
   acknowledgementTimeoutMs: number;
 }
-interface SseResponse {
+interface SseLifetimeTarget {
+  once?(event: string, listener: () => void): void;
+  on?(event: string, listener: () => void): void;
+  off?(event: string, listener: () => void): void;
+  removeListener?(event: string, listener: () => void): void;
+}
+interface SseResponse extends SseLifetimeTarget {
   destroyed?: boolean;
   writableEnded?: boolean;
   writableLength?: number;
   write(chunk: string): boolean;
   destroy?(): void;
   end?(): void;
+  socket?: SseLifetimeTarget;
 }
-interface SseRequest {
-  socket?: { remoteAddress?: string };
-  once?(event: string, listener: () => void): void;
-  on?(event: string, listener: () => void): void;
+interface SseRequest extends SseLifetimeTarget {
+  socket?: { remoteAddress?: string } & SseLifetimeTarget;
 }
 interface PendingConvergence {
   sourceRevision: number;
@@ -40,6 +45,7 @@ interface SseConnection {
   grantId: string;
   grantIdDigest: string;
   proxySessionId: string;
+  subscriptionId?: string | number;
   grant: unknown;
   privateOnly: boolean;
   negotiatedCapabilities: readonly string[];
@@ -50,6 +56,7 @@ interface SseConnection {
   acknowledgementTimer?: NodeJS.Timeout | null;
   appliedAudienceRevision: number;
   fenced: boolean;
+  detachLifetime?: (() => void) | null;
 }
 type ConnectionIndex = Map<string, Set<SseConnection>>;
 type JsonRecord = Record<string, unknown>;
@@ -145,11 +152,30 @@ function closeResponse(response?: SseResponse): void {
   }
 }
 
+function bindLifetimeClose(
+  target: SseLifetimeTarget | null | undefined,
+  listener: () => void,
+  bindings: Array<{ target: SseLifetimeTarget; event: string; listener: () => void }>,
+  event = "close",
+): void {
+  if (!target) return;
+  if (typeof target.once === "function") target.once(event, listener);
+  else if (typeof target.on === "function") target.on(event, listener);
+  else return;
+  bindings.push({ target, event, listener });
+}
+
+function detachLifetime(connection: SseConnection | null | undefined): void {
+  connection?.detachLifetime?.();
+  if (connection) connection.detachLifetime = null;
+}
+
 function removeConnection(
   connection: SseConnection | null | undefined,
   { close = false }: { close?: boolean } = {},
 ): boolean {
   if (!connection || !activeSseConnections.delete(connection)) return false;
+  detachLifetime(connection);
   decrementCount(connectionsByRemoteAddress, connection.remoteAddress);
   decrementCount(connectionsByGrant, connection.grantId);
   removeFromSetIndex(
@@ -416,6 +442,7 @@ export function registerMcpSseConnection({
   partitionKeys = [],
   negotiatedCapabilities = [],
   proxySessionId = "",
+  subscriptionId,
 }: {
   request?: SseRequest;
   response?: SseResponse;
@@ -425,6 +452,7 @@ export function registerMcpSseConnection({
   partitionKeys?: unknown;
   negotiatedCapabilities?: unknown;
   proxySessionId?: unknown;
+  subscriptionId?: unknown;
 } = {}) {
   const normalizedGrantId = boundedIdentity(grantId);
   const remoteAddress = boundedIdentity(request?.socket?.remoteAddress);
@@ -442,16 +470,10 @@ export function registerMcpSseConnection({
       code: "mcp_sse_registration_invalid",
     };
   }
-  if (
-    normalizedCapabilities.includes("notifications/tools/list_changed") &&
-    !normalizedProxySessionId
-  ) {
-    return {
-      ok: false,
-      status: 400,
-      code: "mcp_sse_convergence_session_required",
-    };
-  }
+  const normalizedSubscriptionId =
+    typeof subscriptionId === "number" || typeof subscriptionId === "string"
+      ? subscriptionId
+      : undefined;
   if (activeSseConnections.size >= MCP_SSE_CONNECTION_LIMITS.total) {
     return capacityFailure("mcp_sse_total_capacity_exceeded");
   }
@@ -481,6 +503,7 @@ export function registerMcpSseConnection({
   const grantIdDigest = digestIdentity(normalizedGrantId);
   if (
     normalizedCapabilities.includes("notifications/tools/list_changed") &&
+    normalizedProxySessionId &&
     fencedProxySessions.has(
       proxySessionKey(grantIdDigest, normalizedProxySessionId),
     )
@@ -497,6 +520,7 @@ export function registerMcpSseConnection({
     grantId: normalizedGrantId,
     grantIdDigest,
     proxySessionId: normalizedProxySessionId,
+    subscriptionId: normalizedSubscriptionId,
     grant,
     privateOnly: privateOnly !== false,
     negotiatedCapabilities: Object.freeze(normalizedCapabilities),
@@ -518,11 +542,26 @@ export function registerMcpSseConnection({
   bindMcpSseConnectionPartitions(connection, normalizedPartitionKeys);
   ensureHeartbeatScheduler();
 
+  const lifetimeBindings: Array<{
+    target: SseLifetimeTarget;
+    event: string;
+    listener: () => void;
+  }> = [];
   const onClose = () => {
     removeConnection(connection);
   };
-  if (typeof request.once === "function") request.once("close", onClose);
-  else request.on!("close", onClose);
+  connection.detachLifetime = () => {
+    for (const binding of lifetimeBindings) {
+      if (typeof binding.target.off === "function") {
+        binding.target.off(binding.event, binding.listener);
+      } else if (typeof binding.target.removeListener === "function") {
+        binding.target.removeListener(binding.event, binding.listener);
+      }
+    }
+    lifetimeBindings.length = 0;
+  };
+  bindLifetimeClose(request, onClose, lifetimeBindings);
+  bindLifetimeClose(response, onClose, lifetimeBindings);
 
   return {
     ok: true,
@@ -646,6 +685,21 @@ export function broadcastMcpNotification(
           change: {
             ...change,
             affectedPartitions: scopedAffected,
+          },
+        },
+      };
+    }
+    if (connection.subscriptionId !== undefined) {
+      const current = record(deliveredPayload) || {};
+      const currentParams = record(current.params) || {};
+      const currentMeta = record(currentParams._meta) || {};
+      deliveredPayload = {
+        ...current,
+        params: {
+          ...currentParams,
+          _meta: {
+            ...currentMeta,
+            "io.modelcontextprotocol/subscriptionId": connection.subscriptionId,
           },
         },
       };

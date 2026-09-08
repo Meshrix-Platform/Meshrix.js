@@ -3,6 +3,7 @@ import {
   normalizePath,
   safeTargetUrl
 } from "../../../packages/agents/src/upstream-gateway/support.ts";
+import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 export function createRawMcpCaller({
   getServer,
@@ -11,11 +12,14 @@ export function createRawMcpCaller({
 }: Record<string, any>) : any {
   return async function callMcpRaw(token?: any, message?: any, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
     const server: any = getServer();
-    const body: any = JSON.stringify({ jsonrpc: "2.0", id, ...message });
+    const wire: any = mcpModernHttpRequest({ jsonrpc: "2.0", id, ...message }, {
+      "X-Meshrix.js-Api-Key": token,
+      "X-Meshrix.js-MCP-Target": "codex"
+    });
     const response: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "codex" },
-      body
+      headers: wire.headers,
+      body: wire.body
     });
     assert.equal(
       expectedStatuses.includes(response.status),

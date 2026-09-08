@@ -12,6 +12,7 @@ import {
   MCP_INTERFACE_VERSION,
   handleMeshrixMcpHttpRequest
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REPORT_PATH: any = "build/reports/operation-permission-tag-governance-audit.json";
@@ -61,7 +62,7 @@ function capturedJson(response?: any) : any {
 
 async function mcpCapabilityOperations(catalog?: any) : Promise<any> {
   const response: any = createCapturedHttpResponse();
-  const requestBody: any = Buffer.from(JSON.stringify({
+  const wire: any = mcpModernHttpRequest({
     jsonrpc: "2.0",
     id: "operation-permission-tag-governance-audit",
     method: "tools/call",
@@ -73,7 +74,8 @@ async function mcpCapabilityOperations(catalog?: any) : Promise<any> {
         input: {}
       }
     }
-  }));
+  });
+  const requestBody: any = Buffer.from(wire.body, "utf8");
   const provider: Record<string, any> = {
     async authorizeMcpClientRequest() : Promise<any> {
       return {
@@ -105,7 +107,10 @@ async function mcpCapabilityOperations(catalog?: any) : Promise<any> {
   await handleMeshrixMcpHttpRequest({
     request: {
       method: "POST",
-      headers: { "user-agent": "operation-permission-tag-governance-audit" },
+      headers: {
+        ...wire.headers,
+        "user-agent": "operation-permission-tag-governance-audit"
+      },
       socket: { remoteAddress: "127.0.0.1" }
     },
     response,

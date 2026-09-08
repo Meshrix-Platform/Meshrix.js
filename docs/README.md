@@ -9,7 +9,7 @@ This directory contains the formal technical documentation for installing,
 running, operating, integrating, and verifying Meshrix.js as a
 private-deployable internal platform.
 
-Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, executable verification commands, and remaining required work. A current inability is remaining work the project keeps closing, not a durable refusal.
+Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, executable verification commands, and gaps with an explicit owner and scope. A gap blocks the current task only when its accepted outcome requires that capability. Other gaps belong to their owning roadmap or workflow; neither an unverified capability nor a permanent refusal may be invented from a current limitation. Explicit product exclusions remain exclusions until a new decision changes them.
 
 ## Maintenance Invariants
 
@@ -140,11 +140,18 @@ are the complete maintenance authority for Meshrix.js:
 
 ## Verification
 
-After documentation changes, run:
+After documentation changes, validate the changed facts, referenced paths, and
+commands. For this documentation surface, use:
 
 ```bash
 npm run verify:docs
-npm test
-npm run verify:core-platform-surface-convergence
 git diff --check
 ```
+
+Add `npm run verify:core-platform-surface-convergence` only when the affected
+Core surface contract requires it. Skill changes use `npm run verify:skills`.
+Source behavior changes follow the regression planner; do not run the entire
+Core test profile merely to select checks for a documentation edit. Complete
+all changes, source review, repairs, and focused checks before the single final
+regression selected for the task. Final-regression failures require the
+developer's repair and rerun decision.

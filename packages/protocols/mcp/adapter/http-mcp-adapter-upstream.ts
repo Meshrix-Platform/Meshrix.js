@@ -4,6 +4,112 @@ export function isUpstreamMcpToolName(value: any = "") : any {
   return String(value || "").startsWith("upstream.");
 }
 
+export function parseAdapterPublicUpstreamMcpToolName(name: any = "") : any {
+  const raw: any = String(name || "").trim();
+  if (!raw.startsWith("upstream.")) return null;
+  const withoutPrefix: any = raw.slice("upstream.".length);
+  const dot: any = withoutPrefix.indexOf(".");
+  if (dot <= 0 || dot === withoutPrefix.length - 1) return null;
+  return {
+    prefix: withoutPrefix.slice(0, dot),
+    upstreamToolName: withoutPrefix.slice(dot + 1)
+  };
+}
+
+function publicServicePrefix(service: Record<string, any> = {}) : any {
+  const explicit: any = String(service.mcp?.toolNamePrefix || "").trim();
+  if (explicit) return explicit;
+  return String(service.serviceId || "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "service";
+}
+
+function projectedVisibleUpstreamTool({
+  toolName = "",
+  operationPermissionTools = [],
+  authorization = null
+}: Record<string, any> = {}) : any {
+  const grant: any = authorization?.grant || null;
+  const restriction: any = apiKeyRestrictionFromAuthorization(authorization);
+  const original: any = (Array.isArray(operationPermissionTools) ? operationPermissionTools : [])
+    .find((tool?: any) : any => tool?.upstreamProjectedOperation === true && tool.id === toolName);
+  if (!original) return null;
+  const projected: any = publicProjectedUpstreamTool(original);
+  if (!(restriction
+    ? restrictionCanSeeUpstreamMcpTool(projected, restriction)
+    : grantCanSeeUpstreamMcpTool(projected, grant))) {
+    return null;
+  }
+  return projected;
+}
+
+function indexedMcpServiceForPublicToolName({
+  toolName = "",
+  upstreamGatewayRegistry = null
+}: Record<string, any> = {}) : any {
+  if (typeof upstreamGatewayRegistry?.getMcpServiceForPublicToolName === "function") {
+    return upstreamGatewayRegistry.getMcpServiceForPublicToolName(toolName) || null;
+  }
+  const parsed: any = parseAdapterPublicUpstreamMcpToolName(toolName);
+  if (!parsed || typeof upstreamGatewayRegistry?.listServices !== "function") return null;
+  return (upstreamGatewayRegistry.listServices().items || []).find((candidate?: any) : any =>
+    publicServicePrefix(candidate) === parsed.prefix
+  ) || null;
+}
+
+export async function resolveVisibleUpstreamMcpTool({
+  toolName = "",
+  upstreamGatewayRegistry = null,
+  operationPermissionTools = [],
+  authorization = null,
+  signal = null
+}: Record<string, any> = {}) : Promise<any> {
+  const projected: any = projectedVisibleUpstreamTool({
+    toolName,
+    operationPermissionTools,
+    authorization
+  });
+  if (projected) return projected;
+  const grant: any = authorization?.grant || null;
+  const restriction: any = apiKeyRestrictionFromAuthorization(authorization);
+  const subject: any = authorization?.subject || null;
+  const service: any = indexedMcpServiceForPublicToolName({
+    toolName,
+    upstreamGatewayRegistry
+  });
+  if (!service) return null;
+  if (!(restriction
+    ? restrictionCanDiscoverUpstreamMcpService(service, restriction)
+    : grantCanDiscoverUpstreamMcpService(service, grant))) {
+    return null;
+  }
+  let tool: any = null;
+  if (typeof upstreamGatewayRegistry?.resolveMcpToolByPublicName === "function") {
+    tool = await upstreamGatewayRegistry.resolveMcpToolByPublicName(toolName, { signal }) || null;
+  } else if (typeof upstreamGatewayRegistry?.listMcpTools === "function") {
+    const listed: any = await upstreamGatewayRegistry.listMcpTools(
+      { serviceId: service.serviceId },
+      { signal }
+    );
+    tool = (listed?.items || []).find((item?: any) : any => item?.name === toolName) || null;
+  }
+  if (!tool || !isUpstreamMcpToolName(tool.name)) return null;
+  if (!(restriction
+    ? restrictionCanSeeUpstreamMcpTool(tool, restriction)
+    : grantCanSeeUpstreamMcpTool(tool, grant))) {
+    return null;
+  }
+  if (typeof upstreamGatewayRegistry?.evaluateDiscoveredMcpToolAudience === "function" &&
+    upstreamGatewayRegistry.evaluateDiscoveredMcpToolAudience({
+      grant,
+      restriction,
+      subject,
+      tool,
+      purpose: "execution"
+    })?.allowed !== true) {
+    return null;
+  }
+  return tool;
+}
+
 function publicProjectedUpstreamTool(tool: Record<string, any> = {}) : any {
   const dynamicCapability: any = tool.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
     ? tool.dynamicCapability
@@ -269,10 +375,15 @@ export async function listVisibleUpstreamMcpTools({
         while (cursor < candidateServiceIds.length) {
           if (signal?.aborted) throw signal.reason || new Error("Upstream MCP discovery was cancelled.");
           const index: any = cursor++;
-          responses[index] = await upstreamGatewayRegistry.listMcpTools(
-            { serviceId: candidateServiceIds[index] },
-            { signal }
-          );
+          try {
+            responses[index] = await upstreamGatewayRegistry.listMcpTools(
+              { serviceId: candidateServiceIds[index] },
+              { signal }
+            );
+          } catch (error: any) {
+            if (signal?.aborted || error?.name === "AbortError") throw error;
+            responses[index] = { items: [] };
+          }
         }
       }
     ));

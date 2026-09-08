@@ -7,6 +7,14 @@
 
 This runbook covers local startup, container startup, verification, and operational checks for the internal platform repository.
 
+Select commands for the accepted task outcome and its evidence claim.
+References to remaining work belong to the named capability or environment;
+they do not add every platform gap to the current task. Reuse explicit
+authorization for the same target, operation, and side-effect scope, and obtain
+a new decision for new targets or materially different effects. A command flag
+does not grant authority by itself. Prepare concrete actions and continue
+independent authorized work while any required decision is pending.
+
 ## Required Runtime
 
 - Node.js version range from `package.json`.
@@ -445,7 +453,7 @@ Before an unreliable-network deployment window, prepare the npm artifact cache:
 npm run server:prepare:npm-cache
 ```
 
-Container verification builds the Docker image with BuildKit dependency caches, starts compose, serves the real container, verifies MCP initialize, tools/list, `meshrix.capabilities.list`, `system.health`, destructive rejection, and cleanup:
+Container verification builds the Docker image with BuildKit dependency caches, starts compose, serves the real container, verifies MCP `server/discover`, tools/list, `meshrix.capabilities.list`, `system.health`, destructive rejection, and cleanup:
 
 ```bash
 npm run server:verify:deployment-flow
@@ -720,14 +728,18 @@ npm run verify:release-definition
 npm run release:prepare -- --check
 ```
 
-The detachable format-conversion integration can be checked separately when
-the sibling service and adapter repositories are available:
+The detachable format-conversion integration can be checked separately with
+explicitly supplied service and adapter artifacts. Inspect its steps first:
 
 ```bash
-npm run verify:release-journey
+npm run verify:release-journey -- --plan
 ```
 
-This command re-runs that integration scenario deterministically on an
+For an authorized run, supply the exact artifacts with `--adapter-source` and
+`--image-name`, as described below. This optional journey does not run merely
+because a Core release candidate is being prepared.
+
+An authorized execution runs that integration scenario deterministically on an
 isolated Docker Compose stack: it builds and starts the server plus the
 `format-convert` profile on a free loopback port with
 `MESHRIX_ADVERTISED_BASE_URL` set to the mapped URL, bootstraps the

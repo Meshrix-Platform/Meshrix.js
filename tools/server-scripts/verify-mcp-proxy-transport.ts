@@ -12,6 +12,10 @@ import {
   MCP_GATEWAY_TOOL_NAME,
   MCP_INTERFACE_VERSION
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { installerProcessEnv } from "./lib/mcp-neutral-peer-identity-support.ts";
@@ -50,7 +54,7 @@ const report: Record<string, any> = {
   algorithm: {
     transport: "Spawn the published meshrix-mcp proxy command as a child process and exchange JSON-RPC 2.0 messages over newline-delimited MCP stdio frames.",
     identity: "For every release target, create a real local MCP grant and persist the returned process identity package into an isolated file-backed process identity store before launching the proxy.",
-    protocol: "Verify initialize, tools/list, and meshrix.discovery tools/call through the proxy process for every target listed by MCP_SUPPORTED_TARGETS.",
+    protocol: "Verify server/discover, tools/list, and meshrix.discovery tools/call through the proxy process for every target listed by MCP_SUPPORTED_TARGETS.",
     redaction: "Report only target names, counts, statuses, and non-secret protocol booleans; temp roots, tokens, paths, and authorization material are scanned before write."
   },
   targets: [],
@@ -158,16 +162,9 @@ async function verifyTargetProxyTransport(target?: any) : Promise<any> {
   });
   try {
     const profile: any = proxy.profile;
-    const initialize: any = await proxy.request("initialize", {
-      protocolVersion: profile.protocolVersion,
-      capabilities: profile.capabilities,
-      clientInfo: profile.clientInfo
-    }, { id: 0 });
-    assert.equal(initialize.result?.serverInfo?.name, "Meshrix.js");
-    assert.equal(initialize.result?.capabilities?.tools?.listChanged, true);
-    await proxy.notify("notifications/initialized", {}, {
-      omitParams: profile.initializedParamsOmitted === true
-    });
+    const discover: any = await proxy.request(MCP_DISCOVER_METHOD, {}, { id: 0 });
+    assert.equal(discover.result?._meta?.[MCP_META_SERVER_INFO]?.name, "Meshrix.js");
+    assert.equal(discover.result?.capabilities?.tools?.listChanged, true);
 
     const toolsList: any = await proxy.request("tools/list", profile.toolsListParams || {}, {
       id: 1,
@@ -188,7 +185,7 @@ async function verifyTargetProxyTransport(target?: any) : Promise<any> {
     assert.equal(health.error, undefined, JSON.stringify(safeEvidence(health.error || {})));
     assert.equal(health.result?.structuredContent?.payload?.ok, true);
     const close: any = await proxy.close();
-    assert.equal(close.notifications, 0, "proxy must not reply to notifications/initialized");
+    assert.equal(close.notifications, 0, "proxy must not emit unexpected notifications");
     return {
       target,
       status: "verified",
@@ -203,8 +200,7 @@ async function verifyTargetProxyTransport(target?: any) : Promise<any> {
         framing: profile.framing
       },
       processIdentityStored: true,
-      initialized: true,
-      initializedNotificationSent: true,
+      discovered: true,
       unexpectedNotificationResponses: close.notifications,
       toolsListed: true,
       toolCount: tools.length,
@@ -258,7 +254,7 @@ try {
   const diagnostics: any = await runCompleteTargetDiagnostics({
     targets: MCP_SUPPORTED_TARGETS,
     runTarget: async (target?: any) : Promise<any> => {
-      process.stdout.write(`  ${target} proxy stdio initialize/list/call ... `);
+      process.stdout.write(`  ${target} proxy stdio discover/list/call ... `);
       const evidence: any = await verifyTargetProxyTransport(target);
       console.log("ok");
       return evidence;
@@ -270,8 +266,7 @@ try {
         status: "failed",
         proxyTransport: "stdio-jsonl",
         processIdentityStored: false,
-        initialized: false,
-        initializedNotificationSent: false,
+        discovered: false,
         unexpectedNotificationResponses: -1,
         toolsListed: false,
         healthCallOk: false,

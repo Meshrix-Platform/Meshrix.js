@@ -47,7 +47,7 @@
     {
       "feature": "upstream-gateway",
       "path": "src/upstream-gateway",
-      "fileCount": 21,
+      "fileCount": 22,
       "testSuites": [
         "upstream-gateway.e2e",
         "upstream-gateway.service-publishing",

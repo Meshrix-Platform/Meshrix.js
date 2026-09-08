@@ -13,6 +13,7 @@ import { authHeaders } from "../../../packages/protocols/mcp/adapter/gateway-ins
 import { handleMeshrixMcpHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
 import { normalizeMcpOperationEnvelope } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-request-validation.ts";
 import { listVisibleUpstreamMcpTools } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-upstream.ts";
+import { mcpModernHttpRequest } from "../../helpers/mcp-downstream-request.ts";
 
 const API_KEY: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
 
@@ -263,7 +264,7 @@ describe("direct MCP API key authentication", () : any => {
       }
     });
     const response: any = responseCapture();
-    const body: any = Buffer.from(JSON.stringify({
+    const wire: any = mcpModernHttpRequest({
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
@@ -271,11 +272,11 @@ describe("direct MCP API key authentication", () : any => {
         clientInfo: { name: "untrusted-client-label" },
         scopes: ["*"]
       }
-    }));
+    });
     await handleMeshrixMcpHttpRequest({
-      request: request({ "x-meshrix.js-api-key": API_KEY }),
+      request: request({ "x-meshrix.js-api-key": API_KEY, ...wire.headers }),
       response,
-      requestBody: body,
+      requestBody: Buffer.from(wire.body),
       method: "POST",
       url: new URL("https://meshrix.test/mcp"),
       toolSkillManagementProvider: provider
@@ -284,7 +285,7 @@ describe("direct MCP API key authentication", () : any => {
     expect(response.json()).toMatchObject({
       jsonrpc: "2.0",
       id: 1,
-      result: { tools: expect.any(Array) }
+      result: { resultType: "complete", tools: expect.any(Array) }
     });
     expect(authenticateRuntime).toHaveBeenCalledOnce();
     const authorization: any = await provider.authorizeRequest({ request: request({ "x-meshrix.js-api-key": API_KEY }) });
@@ -488,11 +489,11 @@ describe("direct MCP API key authentication", () : any => {
       }
     });
     const response: any = responseCapture();
-    const body: any = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }));
+    const wire: any = mcpModernHttpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     await handleMeshrixMcpHttpRequest({
-      request: request({ "x-meshrix.js-api-key": API_KEY }),
+      request: request({ "x-meshrix.js-api-key": API_KEY, ...wire.headers }),
       response,
-      requestBody: body,
+      requestBody: Buffer.from(wire.body),
       method: "POST",
       url: new URL("https://meshrix.test/mcp"),
       toolSkillManagementProvider: provider

@@ -10,14 +10,17 @@ Use this skill when an authorized local workflow needs a latest-version Meshrix.
 ## Command
 
 ```sh
-bash skills/meshrix-js-offline-pack/pack-offline.sh \
+bash <skill-dir>/pack-offline.sh \
+  --repo <product-repository> \
   --platform linux/amd64 \
   --out <private-output-root>
 ```
 
+`<skill-dir>` is this skill directory, whether in the source checkout or an installed package. `--repo` explicitly selects the product checkout; the script never infers it from its installation location.
+
 `--platform` is required and accepts only `linux/amd64` or `linux/arm64`. `--out` is optional and defaults to the repository-local `build/offline-pack` directory. `--dry-run` validates the release definition and prints the bounded build plan without writing output or invoking the builder.
 
-The build host requires Node.js, Docker Buildx, BSD tar or GNU tar, the `file` utility, and any network access needed by the existing `runtime-ui` build. The packer preserves the exact `NODE_BASE_IMAGE` digest declared by the Dockerfile while resolving that immutable official Node image through `public.ecr.aws/docker/library/node`. It never substitutes a tag or a different digest. The unpacked target requires a compatible Linux system, but no host Node.js, npm, compiler, registry, or container runtime.
+The build host requires Node.js, Docker Buildx, BSD tar or GNU tar, the `file` utility, and any network access needed by the existing `runtime-ui` build. The packer preserves the exact official Node image reference and digest declared by `NODE_BASE_IMAGE` in the Dockerfile. Both the `node:` shorthand and `docker.io/library/node:` spelling are supported only with a pinned SHA-256 digest. It never substitutes a tag, registry, or digest. The unpacked target requires a compatible Linux system, but no host Node.js, npm, compiler, registry, or container runtime.
 
 ## Contract
 
@@ -35,15 +38,16 @@ No product, protocol identifier, header, or compiled behavior is rewritten. The 
 ## Verification
 
 ```sh
-bash skills/meshrix-js-offline-pack/test-offline-pack.sh --contract
+bash <skill-dir>/test-offline-pack.sh --contract
 
-bash skills/meshrix-js-offline-pack/pack-offline.sh \
+bash <skill-dir>/pack-offline.sh \
+  --repo <product-repository> \
   --platform linux/amd64 \
   --out build/offline-pack-dry-run \
   --dry-run
 
-bash skills/meshrix-js-offline-pack/test-offline-pack.sh \
-  --real linux/amd64 linux/arm64
+bash <skill-dir>/test-offline-pack.sh \
+  --real --repo <product-repository> linux/amd64 linux/arm64
 ```
 
 The real verifier builds each requested platform once, checks the bundled Node executable and `better-sqlite3` native module architecture, imports the archive itself as a matching-platform `scratch` target, and starts it with networking disabled. It pulls no separate harness image and mounts no host content. The target contains only the bundle, with no host Node.js, npm, source checkout, registry, compiler, or container runtime. The verifier checks the Console root, health endpoint, single listener on port `7228`, one server process after probes, and clean termination.

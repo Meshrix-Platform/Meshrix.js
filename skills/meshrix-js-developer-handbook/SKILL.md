@@ -7,7 +7,10 @@ description: Meshrix.js developer handbook. Use when changing the product, relea
 
 This package is the **developer handbook**. It owns how Meshrix.js is built,
 packaged, and addressed. The **user handbook** is `$meshrix-js-user-handbook`.
-Do not mix those purposes in one closure.
+Keep source ownership, operating procedures, and evidence claims separate.
+One authorized user task may contain sequential development and instance
+verification; load the owning handbook for each step and retain its required
+operation approvals.
 
 `$meshrix-js` is the product identity and specialist-module library. It is not
 a second mixed handbook. Apply `$meshrix-js-repository` before editing the
@@ -20,6 +23,8 @@ product repository.
 - Change the published image target, platforms, or listen-address contract
 - Pack or verify a `runtime-ui` release or offline bundle
 - Write developer-facing evidence, verifiers, or release workflow
+- Develop repository-local native plugins, packaged client adapters, or
+  independent services using the [extension ownership reference](references/extensions.md)
 
 Do not use this package to start a published instance, log into the Console,
 or bridge an external service. That work belongs to `$meshrix-js-user-handbook`.
@@ -44,7 +49,11 @@ packing or verifying a `runtime-ui` release or offline bundle is a
 3. Keep the published address contract in `$meshrix-js-release-artifact-contract`.
 4. Run the narrowest owning verifier, then the repository-owned release
    definition check when the artifact or address contract changed.
-5. Treat commit and push as separate publication decisions.
+5. Commit only when covered by user authorization; treat push as a separate
+   publication decision. Review the staged tree and outgoing changes at their
+   respective boundaries. A source task may finish with verified, reviewable
+   changes when no commit was requested; a requested publication remains
+   incomplete until its authorized publication steps finish.
 
 Specialist development modules stay under `$meshrix-js`. Load only the module
 that owns the current change: repository, core-platform-operations,

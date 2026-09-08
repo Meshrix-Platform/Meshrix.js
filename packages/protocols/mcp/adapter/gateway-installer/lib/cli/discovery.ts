@@ -1,7 +1,12 @@
 import { randomBytes } from "node:crypto";
 
 import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
-import { MCP_PROTOCOL_VERSION } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO,
+  mcpModernJsonRpcMessage,
+  mcpModernRequestHeaders
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
 import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,
@@ -294,24 +299,22 @@ export function discardConfiguredApiKeyEnvironment(options: Record<string, any> 
 }
 
 export async function ensureService(baseUrl?: any) : Promise<any> {
-  const initialize: any = await fetchJson(`${baseUrl}/mcp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: MCP_PROTOCOL_VERSION,
-        capabilities: {},
-        clientInfo: { name: "meshrix-mcp-connector", version: packageJson.version }
-      }
-    })
+  const outgoing: any = mcpModernJsonRpcMessage({
+    jsonrpc: "2.0",
+    id: 1,
+    method: MCP_DISCOVER_METHOD,
+    params: {}
   });
-  if (!initialize.ok || initialize.payload?.result?.serverInfo?.name !== "Meshrix.js") {
+  const discover: any = await fetchJson(`${baseUrl}/mcp`, {
+    method: "POST",
+    headers: mcpModernRequestHeaders(outgoing),
+    body: JSON.stringify(outgoing)
+  });
+  const serverInfo: any = discover.payload?.result?._meta?.[MCP_META_SERVER_INFO] || {};
+  if (!discover.ok || serverInfo.name !== "Meshrix.js") {
     throw new Error(`Meshrix.js MCP is not available at ${baseUrl}/mcp.`);
   }
-  return initialize;
+  return discover;
 }
 
 export function authHeaders(token?: any, target: any = "") : any {
@@ -328,13 +331,21 @@ export function authHeaders(token?: any, target: any = "") : any {
 }
 
 export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<string, any>) : Promise<any> {
-  const toolsListBody: any = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+  const toolsListMessage: any = mcpModernJsonRpcMessage({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/list",
+    params: {}
+  });
   const toolsList: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
-    headers: authHeaders(token, target),
-    body: toolsListBody
+    headers: {
+      ...authHeaders(token, target),
+      ...mcpModernRequestHeaders(toolsListMessage)
+    },
+    body: JSON.stringify(toolsListMessage)
   });
-  const healthBody: any = JSON.stringify({
+  const healthMessage: any = mcpModernJsonRpcMessage({
     jsonrpc: "2.0",
     id: 3,
     method: "tools/call",
@@ -350,8 +361,11 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
   });
   const health: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
-    headers: authHeaders(token, target),
-    body: healthBody
+    headers: {
+      ...authHeaders(token, target),
+      ...mcpModernRequestHeaders(healthMessage)
+    },
+    body: JSON.stringify(healthMessage)
   });
   const tools: any = toolsList.payload?.result?.tools || [];
   const toolNames: any = new Set<any>(tools.map((tool?: any) : any => tool.name));

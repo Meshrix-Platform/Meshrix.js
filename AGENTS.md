@@ -25,6 +25,22 @@ its absence must never block a standard client. Capability authorization
 (protocol, toolsets, scopes, risk, dynamic capabilities) is the gate, not
 which product the caller happens to be.
 
+## Automatic Tool And Script Registration
+
+When an agent adds or changes a package script, verifier command, or other
+tool that belongs in the canonical registries, the agent completes that
+registration in the same change. Do not ask the maintainer for per-entry
+permission, and do not leave a new `package.json` script unclassified.
+
+Registration means an accurate explicit catalog entry (or the existing
+allowlist only when the script is a documented composite alias), with real
+inputs, outputs, tier, and side-effect metadata. Keep the current
+classification gates. Do not invent a second registration path, classify every
+matching prefix automatically, or treat a prefix pattern as a substitute for
+an explicit entry. This is standing repository-maintenance authorization. It
+does not change live MCP capability authorization or allow new external side
+effects.
+
 ## Deployment Script Boundary
 
 Before changing any deployment entry point, stage catalog, stage script,

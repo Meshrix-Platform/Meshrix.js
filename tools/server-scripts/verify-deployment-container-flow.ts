@@ -13,6 +13,11 @@ import { fileURLToPath } from "node:url";
 import { loadDeploymentIndex } from "./deployment-index.ts";
 import { createServerSourcePackage } from "./package-server-source.ts";
 import { verifierMcpRequestHeaders } from "./lib/verifier-mcp-api-key.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const engineIndex: any = process.argv.indexOf("--engine");
@@ -555,11 +560,11 @@ function mcpHeaders(token: any = "") : any {
 }
 
 async function mcp(method?: any, params: Record<string, any> = {}, { token = "", id = 1 }: Record<string, any> = {}) : Promise<any> {
-  const body: any = JSON.stringify({ jsonrpc: "2.0", id, method, params });
+  const wire: any = mcpModernHttpRequest({ jsonrpc: "2.0", id, method, params }, mcpHeaders(token));
   const response: any = await fetchJson("/mcp", {
     method: "POST",
-    headers: mcpHeaders(token),
-    body
+    headers: wire.headers,
+    body: wire.body
   });
   assert.equal(response.status, 200, JSON.stringify(safeEvidence(response.payload)));
   return response.payload;
@@ -774,12 +779,8 @@ try {
     });
     const readiness: any = await waitForServerReady();
     const containerHealth: any = waitForContainerHealthy();
-    const initialize: any = await mcp("initialize", {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "verify-deployment-container-flow", version: "0.0.0" }
-    }, { id: 1 });
-    assert.equal(initialize.result?.serverInfo?.name, "Meshrix.js");
+    const discover: any = await mcp(MCP_DISCOVER_METHOD, {}, { id: 1 });
+    assert.equal(discover.result?._meta?.[MCP_META_SERVER_INFO]?.name, "Meshrix.js");
     const inspected: any = inspectContainer();
     assert.equal(inspected.Image, expectedImageId);
     assert.equal(inspected.Config?.User, "10001:10001");
@@ -817,7 +818,7 @@ try {
       readinessMs: readiness.waitedMs,
       healthcheckMs: containerHealth.waitedMs,
       containerHealthy: true,
-      mcpInitializeOk: true,
+      mcpDiscoverOk: true,
       immutableImageIdMatched: true,
       buildDisabledDuringActivation: true,
       nonRootUid: 10001,
@@ -902,10 +903,16 @@ try {
       body: "{\"jsonrpc\":\"2.0\","
     });
     assert.equal(malformed.status >= 400, true);
+    const unauthenticatedWire: any = mcpModernHttpRequest({
+      jsonrpc: "2.0",
+      id: 91,
+      method: "tools/list",
+      params: {}
+    });
     const unauthenticated: any = await fetchJson("/mcp", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 91, method: "tools/list", params: {} })
+      headers: unauthenticatedWire.headers,
+      body: unauthenticatedWire.body
     });
     assert.equal(unauthenticated.payload.error?.code !== undefined, true);
     const discovery: any = await fetchJson("/api/mcp/discovery", {

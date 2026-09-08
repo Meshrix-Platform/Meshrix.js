@@ -408,13 +408,13 @@ try {
       ok: payload.ok === true,
       signedDiscovery: payload.checks?.signedDiscovery?.ok === true,
       discovery: payload.checks?.discovery?.ok === true,
-      initialize: payload.checks?.initialize?.ok === true,
+      discover: payload.checks?.discover?.ok === true,
       toolsSkipped: payload.checks?.toolsList?.skipped === true,
       systemHealthSkipped: payload.checks?.systemHealth?.skipped === true,
       nextCommand: payload.nextCommand || ""
     })}`);
     assert.equal(payload.checks?.discovery?.ok, true);
-    assert.equal(payload.checks?.initialize?.ok, true);
+    assert.equal(payload.checks?.discover?.ok, true);
     assertRedactedDeviceManifest(payload, "installer doctor", true);
     return {
       ok: payload.ok === true,
@@ -469,7 +469,7 @@ try {
     assert.equal(result.status, 0, "standalone mcp-doctor failed against real server");
     const payload: any = parseJsonOutput(result.stdout, "standalone mcp-doctor");
     assert.equal(payload.checks?.discovery?.ok, true);
-    assert.equal(payload.checks?.initialize?.ok, true);
+    assert.equal(payload.checks?.discover?.ok, true);
     assertRedactedDeviceManifest(payload, "standalone mcp-doctor", true);
     return {
       ok: payload.ok === true,

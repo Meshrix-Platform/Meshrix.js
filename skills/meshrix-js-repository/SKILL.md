@@ -10,7 +10,9 @@ Apply these rules to every task inside the Meshrix.js product repository.
 ## Repository Scope
 
 - Own the server, console, protocol gateway, Operation Permission, security, storage, and canonical acceptance reducer.
-- Treat client wire and lifecycle behavior as external to this repository.
+- External client products own their wire and lifecycle behavior. Packaged MCP
+  client adapters in `plugins/agents/` have their own local implementation and
+  verification boundary; they are not client product implementations.
 - Treat every server-to-client boundary as a versioned protocol boundary. The
   Meshrix.js server implementation, internal dependencies, plans, tests, gates,
   and acceptance receipts must not import, discover, execute, or wait for any
@@ -19,28 +21,38 @@ Apply these rules to every task inside the Meshrix.js product repository.
   neutral mock peers; client adoption, UI, cache behavior, platform lifecycle,
   packaging, and product evidence are independently owned compatibility facts
   that cannot block or promote a server receipt.
-- Keep optional parser, provider, and datastore implementations outside the
-  main product repository.
-- Use `npm test` before selecting validation tasks.
+- Optional native plugins and client adapters live under `plugins/`;
+  independently deployable services live under `services/`. Their local source
+  ownership does not make them mandatory Core deployment dependencies. Route
+  their development through the developer handbook's extension reference.
+- Select verification with `$meshrix-js-regression-planner` before running it.
+
+Existing explicit authorization remains valid for the same target, operation,
+and side-effect scope. Report findings promptly, continue authorized local
+work, and ask only for unresolved decisions or additional authority. Preserve
+the applicable AGENTS.md requirements for script repairs and final-regression
+failures; skill routing and successful checks do not grant that authority.
 
 ## Document Maintenance Gate
 
 - Read `docs/README.md` and `docs/RUNBOOK.md` before changing documentation,
   repository asset layout, ignore rules, or release manifests.
-- Read `docs/README.md` and `docs/RUNBOOK.md` before editing Meshrix.js technical
-  documentation.
 - Search existing docs first with `rg`; update the document that already owns the runtime feature, command, protocol, or configuration field.
 - Keep docs tied to executable commands, configuration fields, protocol surfaces, or runtime behavior.
 - Durable technical decisions must be recorded in the canonical public architecture, protocol, functionality, registry, or verifier source that owns the affected behavior.
-- Before treating documentation work as ready, run `npm test` or record objective blocker evidence.
+- Validate changed documentation against its owning facts, referenced paths,
+  and executable commands. Use `$meshrix-js-regression-planner` for the
+  required focused checks and any final integration scope.
 
 ## Repo Local-Info Hygiene / Skill Local-Info Hygiene
 
 - Before treating a change as commit-ready, run `npm run repo:local-info-hygiene`; it scans source, docs, fixtures, tests, and tools for real developer/server details and writes `build/reports/local-info-hygiene.json`.
 - Clean real user names, workstation paths, private hosts, public endpoints, SSH/admin metadata, non-placeholder email domains, and provider IDs to placeholders such as `<repo-root>`, `<user-home>`, `<server-url>`, `<service-url>`, `<public-api-host>`, `<admin-host>`, `<input-file>`, and `<output-file>`.
-- Authoritative Meshrix.js skills live only under `skills/`. Do not create
-  copied or compatibility skill entry points. Skill examples use the same
-  placeholders in prose, prompts, and bundled references.
+- Authoritative Meshrix.js skills live only under `skills/`. Distribution and
+  installed packages are generated projections of these sources; edit the
+  source and regenerate them together, never maintain a second instruction
+  authority. Skill examples use the same placeholders in prose, prompts, and
+  bundled references.
 
 ## 智能体入口与上下文范围
 
@@ -57,9 +69,9 @@ Apply these rules to every task inside the Meshrix.js product repository.
 - 前端控制台任务从 `apps/console/` 开始，只打开相关的 `apps/console/components/`、`apps/console/views/`、`apps/console/lib/` 和样式文件。
 - 服务端或运行时任务从 `packages/server-runtime/` 或 `apps/server/` 开始；domain 代码在 `packages/<domain>/` 下；只有涉及启动、挂载、运行行为或运维语义时再查阅 `docs/architecture/ARCHITECTURE.md`、`docs/functionality/SERVER-RUNTIME.md` 与 `docs/RUNBOOK.md`。
 - 安全、授权、风险控制或本地 stdio 边界任务从 `packages/foundation/src/security/` 开始，再查阅 `docs/functionality/SECURITY-AUTHORIZATION.md`；授权实现使用 `$meshrix-js-security-authorization`，新增外部或不可信输入面、漏洞修复和可突破性审查使用 `$meshrix-js-security-boundary-audit`。
-- MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。客户端实现细节不进入本仓库技能；Meshrix.js 安装契约仍是签名发现与连接器配置变更的权威。
+- MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。已打包的客户端适配器实现从 `plugins/agents/<target>/` 开始；外部客户端产品仍自行拥有其实现。Meshrix.js 安装契约是签名发现与连接器配置变更的权威。
 - 架构、策略或治理类任务先看 `tools/registry/`，再打开与主题对应的核心文档。
-- 开发者手册是 `$meshrix-js-developer-handbook`。用户手册是 `$meshrix-js-user-handbook`。不要把两份手册混在一次收口里。
+- 开发者手册是 `$meshrix-js-developer-handbook`，用户手册是 `$meshrix-js-user-handbook`。同一已授权任务可以依次包含开发与实例验证；分别使用对应手册，保留各自所有权、操作授权和证据声明。
 - 发布制品形状和对外地址规范使用 `$meshrix-js-release-artifact-contract`。运行中的实例使用和外部对接使用 `$meshrix-js-instance-usage`。
 - 测试任务先从失败测试或 verifier 本身开始；只有测试契约不清楚时再查阅 `docs/RUNBOOK.md`。
 - Operation Permission 或网关操作任务从 `docs/functionality/GATEWAY.md` 和 `docs/functionality/OPERATION-PERMISSION.md` 开始；分别使用共享的 `$meshrix-js-operation-permission` 或 `$meshrix-js-protocol-gateway` 技能。
@@ -70,7 +82,7 @@ Apply these rules to every task inside the Meshrix.js product repository.
 - 开始工作时建议说明当前 worktree、目标子系统和计划写入范围；先应用本技能的仓库级规则，再查看目标子系统对应小节，没有对应小节时再读取最近的 README。
 - 临时计划只用于组织当前复杂工作，不是产品状态或执行授权。实现与验证完成后删除计划工作区；产品事实写入拥有该事实的源码、状态文档、运行手册或候选绑定证据。项目级功能验收仍是 `npm run verify:acceptance`。
 - 如果任务需要跨子系统修改，建议切换到集成 worktree 或明确唯一负责人，再开始编辑。
-- 涉及入口文件或文档索引调整时，运行 `npm test` 或对应的入口健康检查。
+- 涉及入口文件或文档索引调整时，运行对应的入口健康检查；最终验证范围由 `$meshrix-js-regression-planner` 选择。
 
 ## 本地服务启动与实例复用
 
@@ -84,7 +96,7 @@ Apply these rules to every task inside the Meshrix.js product repository.
 
 - 每完成一个新功能或功能改造后，立刻运行覆盖该功能及上下游适配的最小验证；验证通过后，该功能才可视为一个可独立提交、可回滚的完整单元。
 - 上下游包括入口、调用方、API/CLI/UI、配置、注册表、数据迁移、文档、测试、fixtures、生成物和相关外部/平台适配；只验证功能自身而未验证上下游适配，不视为可提交。
-- 提交前运行覆盖本次改动的最小验证和 `npm test`；非交互环境必须在回复或 PR 说明中列出已运行命令、客观阻断或后续验证命令。
+- 提交前完成 `$meshrix-js-regression-planner` 选定的验证，复用当前候选的有效结果；非交互环境必须在回复或 PR 说明中列出已运行命令、客观阻断或后续验证命令。
 - 无法验证时，必须在当前回复、PR 说明或 issue 中留下客观原因、所需环境/平台/凭据/协作者和后续验证命令；没有客观阻断说明时继续修到上下游通过。
 
 ## 用户配置真实性
@@ -117,17 +129,19 @@ Apply these rules to every task inside the Meshrix.js product repository.
 
 - 本项目文档必须保持严肃、冷静、务实、准确。
 - 公开文档、规范文档、产品说明、功能说明、协议说明、运行说明和新增 Markdown 文档默认必须使用英文；只有文件名或目录明确标注为本地化版本（例如 `*.zh-CN.md`）或用户明确要求本地化内容时，才使用对应语言。
-- 文档只记录技术事实、运行方式、配置字段、协议边界、验证命令、决策结果和剩余必做工作。当前做不到的能力写成之后必须完成的缺口，而不是永久不做。
+- 文档只记录技术事实、运行方式、配置字段、协议边界、验证命令、决策结果和明确归属的能力缺口。只有已接受目标要求的缺口才是该目标的剩余必做工作。
 - 不记录未验证的背景说明、来源解释、内部讨论过程、夸张表述或未落实承诺。
 - 开源平台文档以企业私有化部署为前提，默认能力必须自包含；外部中间件只能写成可选增强或集成目标，不能写成基础运行依赖，除非代码和部署清单已经强制依赖。
-- 能力缺口必须以可验证事实描述，并指向代码路径、拥有该事实的技术文档或验证命令；不能用愿景描述替代实现状态，也不能把缺口写成项目明确拒绝。
+- 能力缺口必须以可验证事实描述，并指向代码路径、拥有该事实的技术文档或验证命令；不能用愿景描述替代实现状态，不能把未经决策的缺口写成永久拒绝或已经承诺的能力。
 
 ## Remaining required work
 
-A current gap is remaining required work. Record what is true today and keep
-closing it. Do not freeze “we do not do this” or “we cannot do this” as a
-durable Meshrix.js refusal. Fail-closed security invariants stay required until
-a stronger replacement lands.
+Record current gaps truthfully. Only gaps required by the accepted task outcome
+block that task's completion. Other gaps remain with their owning roadmap or
+workflow; explicitly excluded capabilities do not become commitments
+automatically. Do not present an unimplemented requirement as complete or an
+undecided limitation as a permanent refusal. Fail-closed security invariants
+remain required until a stronger replacement lands.
 
 ## Linux VM closure
 
@@ -136,7 +150,7 @@ Linux VM 内闭环交付、环境资格和真机验证由 `$meshrix-js-real-mach
 ## 验证范围
 
 - 迁移或重构行为改动在测试前先完成“功能迁移自查与长期门禁”要求；普通功能行为改动直接执行覆盖当前契约的最小上下游验证。
-- 每个可提交功能单元必须完成最小上下游验证，并在提交前通过 `npm test` 或更具体的局部门禁。
+- 每个可提交功能单元必须完成最小上下游验证；最终集成验证和失败处理统一遵循 `$meshrix-js-regression-planner` 及适用的 AGENTS.md。
 - 优先运行覆盖当前改动范围的最小 verifier。
 - 除非用户明确要求完整发布或 readiness 检查，否则不运行完整 `npm run server:verify`。
 - `package.json` 脚本较多，优先查询所需脚本名和局部片段，避免把整份文件作为默认上下文。

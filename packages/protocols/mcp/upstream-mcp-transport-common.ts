@@ -266,10 +266,12 @@ export function fallbackSessionKey(config: Record<string, any> = {}) : any {
 
 export function sessionIdentity(config: Record<string, any> = {}) : any {
   const explicitKey: any = text(config.sessionKey || config.mcp?.sessionKey);
+  const kind: any = text(config.sessionKind || config.mcp?.sessionKind);
   return {
     key: explicitKey || fallbackSessionKey(config),
     scope: text(config.sessionScope || config.mcp?.sessionScope),
-    generation: asObject(config.sessionGeneration || config.mcp?.sessionGeneration)
+    generation: asObject(config.sessionGeneration || config.mcp?.sessionGeneration),
+    kind: kind === "stateful" ? "stateful" : "ephemeral"
   };
 }
 

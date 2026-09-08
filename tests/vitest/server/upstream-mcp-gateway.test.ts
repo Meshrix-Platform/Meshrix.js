@@ -10,6 +10,7 @@ import {
   publicUpstreamOperationTool
 } from "../../../packages/agents/src/upstream-gateway/tool-projection.ts";
 import { handleMeshrixMcpHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+import { executionSubject, mcpModernBody, mcpModernHeaders } from "../../helpers/mcp-downstream-request.ts";
 
 function projectedFixtureTool({ name, title, description = "", inputSchema = { type: "object" }, annotations = {} }: Record<string, any>) : any {
   return publicUpstreamMcpTool({
@@ -220,15 +221,19 @@ function createResponse() : any {
 }
 
 async function callMcp({ body, provider, upstreamGatewayRegistry, signal = null }: Record<string, any>) : Promise<any> {
+  const modernBody: any = mcpModernBody(body);
   const response: any = createResponse();
   const handled: any = await handleMeshrixMcpHttpRequest({
     request: {
-      headers: { authorization: "Bearer test-token" },
+      headers: {
+        authorization: "Bearer test-token",
+        ...mcpModernHeaders(modernBody)
+      },
       socket: { remoteAddress: "127.0.0.1" },
       __meshrixRequestId: "req-1"
     },
     response,
-    requestBody: Buffer.from(JSON.stringify(body), "utf8"),
+    requestBody: Buffer.from(JSON.stringify(modernBody), "utf8"),
     method: "POST",
     url: new URL("/mcp", "http://127.0.0.1"),
     toolSkillManagementProvider: provider,
@@ -264,7 +269,14 @@ describe("upstream MCP gateway bridge", () : any => {
       tools: [{
         name: "repositories.get",
         title: "Read synthetic repository",
-        inputSchema: { type: "object", additionalProperties: false },
+        inputSchema: {
+          type: "object",
+          properties: {
+            repository: { type: "string" }
+          },
+          required: ["repository"],
+          additionalProperties: false
+        },
         annotations: { readOnlyHint: true }
       }]
     }));
@@ -304,7 +316,13 @@ describe("upstream MCP gateway bridge", () : any => {
         risk: "read_only"
       }]
     }]);
-    const subject: Record<string, any> = { scopes: ["gateway:read"] };
+    const subject: Record<string, any> = executionSubject({
+      dynamicCapabilities: [
+        "cap:upstream:plugin-mcp-fixture:demo-mcp-tools-list",
+        "cap:upstream:plugin-mcp-fixture:demo-mcp-tools-call",
+        "cap:upstream:plugin-mcp-fixture:tools-call-repositories-get"
+      ]
+    });
     try {
       const listed: any = await registry.requestPluginExternalService({
         pluginId: "demo",
@@ -403,6 +421,11 @@ describe("upstream MCP gateway bridge", () : any => {
       publicMcpToolPayload: vi.fn(async ({ payload }: Record<string, any>) : Promise<any> => payload)
     };
     const upstreamGatewayRegistry: Record<string, any> = {
+      getMcpServiceForPublicToolName: vi.fn(() : any => ({
+        serviceId: "fixture-upstream",
+        serviceProtocol: "mcp"
+      })),
+      resolveMcpToolByPublicName: vi.fn(async () : Promise<any> => visibleTool),
       listMcpTools: vi.fn(async () : Promise<any> => ({
         items: [visibleTool],
         count: 1
@@ -465,7 +488,7 @@ describe("upstream MCP gateway bridge", () : any => {
       const called: any = await registry.callMcpToolByPublicName(
         "upstream.fixture-upstream.records.list",
         { arguments: { owner: "sample-org" } },
-        { scopes: ["gateway:read"] }
+        executionSubject({ publicToolName: "upstream.fixture-upstream.records.list" })
       );
       expect(called).toMatchObject({
         ok: true,
@@ -510,7 +533,7 @@ describe("upstream MCP gateway bridge", () : any => {
       const called: any = await registry.callMcpToolByPublicName(
         "upstream.environment-fixture.environment.probe",
         { arguments: {} },
-        { scopes: ["gateway:read"] }
+        executionSubject({ publicToolName: "upstream.environment-fixture.environment.probe" })
       );
       expect(called.response.structuredContent).toEqual({
         unrelatedServerEnvVisible: false,
@@ -566,7 +589,7 @@ describe("upstream MCP gateway bridge", () : any => {
       const called: any = await registry.callMcpToolByPublicName(
         "upstream.response-policy-fixture.records.filtered",
         { arguments: {} },
-        { scopes: ["gateway:read"] }
+        executionSubject({ publicToolName: "upstream.response-policy-fixture.records.filtered" })
       );
       expect(called.response.structuredContent).toEqual({
         ok: true,
@@ -580,7 +603,7 @@ describe("upstream MCP gateway bridge", () : any => {
       await expect(registry.callMcpToolByPublicName(
         "upstream.response-policy-fixture.records.fail",
         { arguments: {} },
-        { scopes: ["gateway:read"] }
+        executionSubject({ publicToolName: "upstream.response-policy-fixture.records.fail" })
       )).rejects.toMatchObject({
         message: "Upstream MCP forwarding failed.",
         reasonCode: "upstream_mcp_call_failed"
@@ -634,7 +657,7 @@ describe("upstream MCP gateway bridge", () : any => {
       const called: any = await registry.callMcpToolByPublicName(
         "upstream.default-transparent-mcp.records.filtered",
         { arguments: {} },
-        { scopes: ["gateway:read"] }
+        executionSubject({ publicToolName: "upstream.default-transparent-mcp.records.filtered" })
       );
       expect(called.response.structuredContent).toEqual({
         ok: true,
@@ -676,7 +699,7 @@ describe("upstream MCP gateway bridge", () : any => {
       await expect(registry.callMcpToolByPublicName(
         "upstream.opaque-response-policy-fixture.records.opaque",
         { arguments: {} },
-        { scopes: ["gateway:read"] }
+        executionSubject({ publicToolName: "upstream.opaque-response-policy-fixture.records.opaque" })
       )).rejects.toMatchObject({
         message: "Upstream MCP forwarding failed.",
         reasonCode: "response_projection_unavailable",
@@ -748,7 +771,10 @@ describe("upstream MCP gateway bridge", () : any => {
       const pending: any = await registry.callMcpToolByPublicName(
         "upstream.fixture-upstream.records.purge",
         { arguments: { path: "README.md" } },
-        { scopes: ["gateway:write"] }
+        executionSubject({
+          scopes: ["gateway:write"],
+          publicToolName: "upstream.fixture-upstream.records.purge"
+        })
       );
       expect(pending).toMatchObject({
         status: "pending_approval",
@@ -800,6 +826,11 @@ describe("upstream MCP gateway bridge", () : any => {
       publicMcpToolPayload: vi.fn(async ({ payload }: Record<string, any>) : Promise<any> => payload)
     };
     const upstreamGatewayRegistry: Record<string, any> = {
+      getMcpServiceForPublicToolName: vi.fn(() : any => ({
+        serviceId: "fixture-upstream",
+        serviceProtocol: "mcp"
+      })),
+      resolveMcpToolByPublicName: vi.fn(async () : Promise<any> => visibleTool),
       listMcpTools: vi.fn(async () : Promise<any> => ({
         items: [visibleTool],
         count: 1
@@ -838,22 +869,16 @@ describe("upstream MCP gateway bridge", () : any => {
         arguments: { owner: "sample-org" }
       })
     }));
-    expect(called.payload.result.structuredContent).toMatchObject({
-      upstreamMcp: true,
-      toolName: "upstream.fixture-upstream.records.list",
-      operation: "upstream.fixture-upstream.tools-call",
-      payload: {
-        response: {
-          structuredContent: {
-            owner: "sample-org",
-            forwarded: true
-          }
-        },
-        auditId: "audit-1"
-      },
-      toolExecutionId: "tool-exec-1",
-      traceId: "trace-1"
+    expect(called.payload.result).toMatchObject({
+      resultType: "complete",
+      structuredContent: {
+        owner: "sample-org",
+        forwarded: true
+      }
     });
+    expect(called.payload.result).not.toHaveProperty("toolExecutionId");
+    expect(called.payload.result).not.toHaveProperty("traceId");
+    expect(JSON.stringify(called.payload.result)).not.toContain("audit-1");
   });
 
   it("does not contact MCP services outside the grant capability partition", async () : Promise<any> => {

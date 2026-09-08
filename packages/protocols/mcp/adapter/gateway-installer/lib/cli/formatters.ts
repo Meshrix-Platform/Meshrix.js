@@ -208,7 +208,7 @@ export function formatDoctorResult(result?: any) : any {
     "",
     `  [${checks.signedDiscovery?.ok ? "OK" : "FAIL"}] Signed discovery${checks.signedDiscovery?.baseUrl ? `: ${checks.signedDiscovery.baseUrl}` : ""}`,
     `  [${checks.discovery?.ok ? "OK" : "FAIL"}] Discovery${checks.discovery?.httpUrl ? `: ${checks.discovery.httpUrl}` : ""}`,
-    `  [${checks.initialize?.ok ? "OK" : "FAIL"}] MCP initialize${checks.initialize?.serverVersion ? `: ${checks.initialize.serverVersion}` : ""}`
+    `  [${checks.discover?.ok ? "OK" : "FAIL"}] MCP discover${checks.discover?.serverVersion ? `: ${checks.discover.serverVersion}` : ""}`
   ];
   if (checks.toolsList?.skipped) {
     lines.push("  [SKIP] Authenticated tools/list: token not provided");

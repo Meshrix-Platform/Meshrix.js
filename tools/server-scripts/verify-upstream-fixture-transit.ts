@@ -122,6 +122,8 @@ function failureEvidence(error?: any, phase: any = "") : any {
     phase: String(error?.verifierPhase || phase || ""),
     name: error instanceof Error ? error.name : typeof error,
     code: String(error?.code || ""),
+    reasonCode: String(error?.reasonCode || ""),
+    status: Number(error?.status || 0) || undefined,
     message: redactText(error?.message || String(error)).slice(-1000)
   };
 }
@@ -215,6 +217,37 @@ async function startFixtureHttpChild() : Promise<any> {
     });
   });
   return { child, url };
+}
+
+function transitExecutionSubject({
+  scopes = ["gateway:read"],
+  serviceId = UPSTREAM_FIXTURE_MCP_SERVICE_ID,
+  secretRef = MCP_SECRET_REF,
+  upstreamToolName = ""
+}: Record<string, any> = {}) : any {
+  const resolvedScopes: any = Array.isArray(scopes) ? scopes.map(String) : ["gateway:read"];
+  const bindings: any = upstreamFixtureGrantBindings({
+    serviceId,
+    secretRef,
+    toolNames: upstreamToolName ? [upstreamToolName] : []
+  });
+  return {
+    type: "tool-grant",
+    subjectId: "fixture-transit-subject",
+    grantId: "fixture-transit-grant",
+    grant: {
+      id: "fixture-transit-grant",
+      subjectId: "fixture-transit-subject",
+      scopes: resolvedScopes,
+      dynamicCapabilities: [...bindings.dynamicCapabilities],
+      allowedServiceIds: [...bindings.allowedServiceIds],
+      allowedSecretBindings: [...bindings.allowedSecretBindings]
+    },
+    scopes: resolvedScopes,
+    dynamicCapabilities: [...bindings.dynamicCapabilities],
+    allowedServiceIds: [...bindings.allowedServiceIds],
+    allowedSecretBindings: [...bindings.allowedSecretBindings]
+  };
 }
 
 function identityPayload(response: Record<string, any> = {}) : any {
@@ -494,7 +527,10 @@ try {
   const readOnlyCall: any = await runPhase("upstream-mcp-readonly-call", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.search`,
     { arguments: { query: "alpha", perPage: 1 } },
-    { scopes: ["gateway:read"] }
+    transitExecutionSubject({
+      scopes: ["gateway:read"],
+      upstreamToolName: "records.search"
+    })
   ));
   assert.equal(readOnlyCall.ok, true);
   assert.equal(readOnlyCall.serviceId, UPSTREAM_FIXTURE_MCP_SERVICE_ID);
@@ -506,7 +542,10 @@ try {
   const mcpIdentityCall: any = await runPhase("upstream-mcp-credential-proof", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.session.identity`,
     { arguments: {} },
-    { scopes: ["gateway:read"] }
+    transitExecutionSubject({
+      scopes: ["gateway:read"],
+      upstreamToolName: "session.identity"
+    })
   ));
   assert.equal(mcpIdentityCall.ok, true);
   const mcpIdentityProof: any = fixtureIdentityProof(identityPayload(mcpIdentityCall.response), mcpToken);
@@ -516,14 +555,20 @@ try {
   const stateIncrement: any = await runPhase("upstream-mcp-state-increment", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.state.increment`,
     { arguments: { amount: 2 } },
-    { scopes: ["gateway:write"] }
+    transitExecutionSubject({
+      scopes: ["gateway:write"],
+      upstreamToolName: "state.increment"
+    })
   ));
   assert.equal(stateIncrement.ok, true);
   assert.equal(identityPayload(stateIncrement.response).counter, 2);
   const stateAfterIncrement: any = await runPhase("upstream-mcp-state-probe", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.state.probe`,
     { arguments: {} },
-    { scopes: ["gateway:read"] }
+    transitExecutionSubject({
+      scopes: ["gateway:read"],
+      upstreamToolName: "state.probe"
+    })
   ));
   assert.equal(stateAfterIncrement.ok, true);
   assert.equal(
@@ -538,7 +583,12 @@ try {
   const remoteCall: any = await runPhase("upstream-mcp-http-transport-call", () : any => registry.callMcpToolByPublicName(
     `upstream.${MCP_REMOTE_TOOL_PREFIX}.records.get`,
     { arguments: { recordId: "record-002" } },
-    { scopes: ["gateway:read"] }
+    transitExecutionSubject({
+      scopes: ["gateway:read"],
+      serviceId: MCP_REMOTE_SERVICE_ID,
+      secretRef: MCP_REMOTE_SECRET_REF,
+      upstreamToolName: "records.get"
+    })
   ));
   assert.equal(remoteCall.ok, true);
   assert.equal(identityPayload(remoteCall.response).record?.recordId, "record-002");
@@ -592,7 +642,10 @@ try {
   const mcpPurgePending: any = await runPhase("upstream-mcp-destructive-guard", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.purge`,
     { arguments: {} },
-    { scopes: ["gateway:write"] }
+    transitExecutionSubject({
+      scopes: ["gateway:write"],
+      upstreamToolName: "records.purge"
+    })
   ));
   assert.equal(mcpPurgePending.status, "pending_approval");
   assert.equal(mcpPurgePending.risk, "repair_write");
@@ -600,7 +653,10 @@ try {
   const stateAfterGuards: any = await runPhase("fixture-state-integrity", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.state.probe`,
     { arguments: {} },
-    { scopes: ["gateway:read"] }
+    transitExecutionSubject({
+      scopes: ["gateway:read"],
+      upstreamToolName: "state.probe"
+    })
   ));
   const stateAfterGuardsPayload: any = identityPayload(stateAfterGuards.response);
   assert.equal(stateAfterGuardsPayload.purged, false, "destructive guard must not execute the purge");
@@ -703,8 +759,14 @@ try {
     }
   }));
   assert.equal(downstreamCall.statusCode, 200);
-  assert.equal(downstreamCall.payload?.result?.structuredContent?.upstreamMcp, true);
-  assert.equal(downstreamCall.payload?.result?.structuredContent?.toolName, readOnlyPublicTool);
+  assert.equal(downstreamCall.payload?.result?.structuredContent?.ok, true);
+  assert.equal(downstreamCall.payload?.result?.structuredContent?.upstreamMcp, undefined);
+  assert.ok(Array.isArray(downstreamCall.payload?.result?.content));
+  const readonlyGovernance: any = downstreamCall.payload?.result?._meta?.["io.meshrix/governance"];
+  if (readonlyGovernance !== undefined) {
+    assert.equal(typeof readonlyGovernance, "object");
+    assert.equal(Array.isArray(readonlyGovernance), false);
+  }
 
   const downstreamIdentityCall: any = await runPhase("downstream-identity-call", () : any => callDownstreamMcp({
     provider: downstreamProvider,
@@ -718,8 +780,14 @@ try {
     }
   }));
   assert.equal(downstreamIdentityCall.statusCode, 200);
-  assert.equal(downstreamIdentityCall.payload?.result?.structuredContent?.upstreamMcp, true);
-  assert.equal(downstreamIdentityCall.payload?.result?.structuredContent?.toolName, identityPublicTool);
+  assert.equal(downstreamIdentityCall.payload?.result?.structuredContent?.ok, true);
+  assert.equal(downstreamIdentityCall.payload?.result?.structuredContent?.upstreamMcp, undefined);
+  assert.ok(Array.isArray(downstreamIdentityCall.payload?.result?.content));
+  const identityGovernance: any = downstreamIdentityCall.payload?.result?._meta?.["io.meshrix/governance"];
+  if (identityGovernance !== undefined) {
+    assert.equal(typeof identityGovernance, "object");
+    assert.equal(Array.isArray(identityGovernance), false);
+  }
 
   await registry.flushRuntimeState();
   const runtimeWal: any = await fs.readFile(

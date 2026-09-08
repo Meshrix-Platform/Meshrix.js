@@ -15,21 +15,34 @@ import {
   MCP_GATEWAY_TOOL_NAME,
   MCP_INTERFACE_VERSION,
   MCP_PRIORITY_INSTALL_TARGETS,
+  MCP_PROTOCOL_VERSION,
   MCP_SERVER_VERSION,
   MCP_STABLE_TOOL_NAME,
   MCP_TOOLSET_VERSION
 } from "./http-mcp-adapter-constants.ts";
-import { buildMeshrixMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthorizationErrorData, mcpConnectorRuntimeMetadata, mcpDiscoveryBase, mcpInitializeResult, mcpPublicSupportedTargetDetails, mcpRuntimeMetadata, mcpSupportedTargetDetails, mcpVersionInfo, mcpHandshake } from "./http-mcp-adapter-discovery.ts";
+import { buildMeshrixMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthorizationErrorData, mcpConnectorRuntimeMetadata, mcpDiscoverResult, mcpDiscoveryBase, mcpPublicSupportedTargetDetails, mcpRuntimeMetadata, mcpSupportedTargetDetails, mcpVersionInfo, mcpHandshake } from "./http-mcp-adapter-discovery.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_SUBSCRIBE_METHOD,
+  evaluateMcpProtocolContract,
+  isMcpJsonRpcBatch,
+  mcpBatchRejectedError,
+  mcpMethodNotFoundError,
+  mcpSubscriptionAckNotification,
+  mcpSubscriptionIdFromRequest,
+  mcpToolsListResult,
+  parseMcpSubscriptionNotifications
+} from "./http-mcp-adapter-protocol.ts";
 import { broadcastMcpOperationReply, inferMcpTargetReceipt, projectMcpOperationPayload } from "./http-mcp-adapter-replies.ts";
 import { hasMcpAuthToken, isAllowedOrigin, normalizeMcpOperationEnvelope } from "./http-mcp-adapter-request-validation.ts";
-import { executeToolPayload, jsonRpcError, jsonRpcNotification, jsonRpcResult, mcpEnvelopePublic, mcpToolResult, parseRequestBody, publicMcpEnvelopeString, publicMcpEnvelopeValue } from "./http-mcp-adapter-response.ts";
+import { executeToolPayload, jsonRpcError, jsonRpcNotification, jsonRpcResult, mcpEnvelopePublic, mcpToolResult, parseRequestBody, publicMcpEnvelopeString, publicMcpEnvelopeValue, sendMcpJson } from "./http-mcp-adapter-response.ts";
 import {
   delegatedChildOperationFromMcpCall,
   mcpAuthSessionFromAuthorization,
   mcpAuthorizationId
 } from "./http-mcp-adapter-session.ts";
 import { meshrixCategorizedTools, mcpCapabilityFamilies, mcpOutletForOperation, mcpOutletForTool, mcpOutletSummary, operationOutletMismatchError, publicMcpTool } from "./http-mcp-adapter-tools.ts";
-import { isUpstreamMcpToolName, listVisibleUpstreamMcpTools } from "./http-mcp-adapter-upstream.ts";
+import { isUpstreamMcpToolName, listVisibleUpstreamMcpTools, resolveVisibleUpstreamMcpTool } from "./http-mcp-adapter-upstream.ts";
 import { executeUpstreamToolViaGatewayForward } from "./http-mcp-adapter-upstream-tools.ts";
 import {
   dispatchMcpMessageWithCancellation,
@@ -170,15 +183,9 @@ async function meshrixMetaResult({
   return null;
 }
 
-const MCP_SUBSCRIPTION_NOTIFICATIONS: any = new Set<any>([
-  "notifications/tools/list_changed",
-  "notifications/meshrix/skill_hub/catalog_changed",
-  "notifications/meshrix/update_available"
-]);
-
 async function openMcpSubscription({ request, response, requestBody, message, toolSkillManagementProvider, listenUrl = "", discoveryState = null }: Record<string, any>) : Promise<any> {
   if (!hasMcpAuthToken(request)) {
-    sendJson(response, 401, jsonRpcError(message?.id ?? null, -32001, "MCP subscription requires authentication.", {
+    sendMcpJson(response, 401, jsonRpcError(message?.id ?? null, -32001, "MCP subscription requires authentication.", {
       code: "mcp_subscription_authentication_required"
     }));
     return;
@@ -192,7 +199,7 @@ async function openMcpSubscription({ request, response, requestBody, message, to
     method: "POST"
   });
   if (!requestGrant?.ok) {
-    sendJson(
+    sendMcpJson(
       response,
       requestGrant?.status || 401,
       jsonRpcError(
@@ -204,11 +211,14 @@ async function openMcpSubscription({ request, response, requestBody, message, to
     );
     return;
   }
-  const requestedNotifications: any = (Array.isArray(message?.params?.notifications) ? message.params.notifications : [])
-    .map((value?: any) : any => String(value || "").trim())
-    .filter((value?: any) : any => MCP_SUBSCRIPTION_NOTIFICATIONS.has(value));
-  if (requestedNotifications.length === 0 || requestedNotifications.length !== message?.params?.notifications?.length) {
-    sendJson(response, 400, jsonRpcError(message?.id ?? null, -32602, "MCP subscription notification filter is invalid."));
+  const parsedNotifications: any = parseMcpSubscriptionNotifications(message?.params || {});
+  if (!parsedNotifications.ok) {
+    sendMcpJson(response, 400, jsonRpcError(message?.id ?? null, -32602, parsedNotifications.error));
+    return;
+  }
+  const subscriptionId: any = mcpSubscriptionIdFromRequest(message);
+  if (subscriptionId === "") {
+    sendMcpJson(response, 400, jsonRpcError(message?.id ?? null, -32600, "MCP subscription request id is required."));
     return;
   }
   const registration: any = registerConfiguredMcpSubscription({
@@ -220,13 +230,14 @@ async function openMcpSubscription({ request, response, requestBody, message, to
     partitionKeys: typeof toolSkillManagementProvider.audiencePartitionKeys === "function"
       ? toolSkillManagementProvider.audiencePartitionKeys({ authorization: requestGrant })
       : [],
-    negotiatedCapabilities: requestedNotifications,
+    negotiatedCapabilities: parsedNotifications.methods,
+    subscriptionId,
     proxySessionId: normalizeMcpProxySessionId(
       requestHeader(request, MCP_PROXY_SESSION_HEADER_LOWER)
     )
   });
   if (!registration?.ok || typeof registration.write !== "function") {
-    sendJson(
+    sendMcpJson(
       response,
       registration?.status || 503,
       jsonRpcError(message?.id ?? null, -32004, "MCP subscription capacity is unavailable.", {
@@ -238,10 +249,13 @@ async function openMcpSubscription({ request, response, requestBody, message, to
   response.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-store, no-transform",
-    Connection: "keep-alive"
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+    "MCP-Protocol-Version": MCP_PROTOCOL_VERSION
   });
-  const initialized: any = registration.write(`event: message\ndata: ${JSON.stringify(jsonRpcResult(message?.id ?? null, {
-    subscription: { notifications: requestedNotifications }
+  const initialized: any = registration.write(`event: message\ndata: ${JSON.stringify(mcpSubscriptionAckNotification({
+    subscriptionId,
+    notifications: parsedNotifications.notifications
   }))}\n\n`);
   if (!initialized) registration.close?.();
 }
@@ -282,7 +296,8 @@ async function handleMcpMessage({
         code: "catalog_convergence_acknowledgement_unauthorized"
       });
     }
-    const facts: any = parseMcpCatalogAcknowledgement(params);
+    const { _meta: _acknowledgementMeta, ...acknowledgementParams } = params;
+    const facts: any = parseMcpCatalogAcknowledgement(acknowledgementParams);
     if (!facts) {
       return jsonRpcError(id, -32602, "Catalog convergence acknowledgement is invalid.", {
         code: "catalog_convergence_acknowledgement_invalid"
@@ -305,12 +320,16 @@ async function handleMcpMessage({
     return null;
   }
 
-  if (method === "initialize") {
-    return jsonRpcResult(id, mcpInitializeResult({ listenUrl, discoveryState }));
+  if (method === MCP_DISCOVER_METHOD) {
+    return jsonRpcResult(id, mcpDiscoverResult({ listenUrl, discoveryState }));
   }
 
   if (method === "ping") {
-    return jsonRpcResult(id, {});
+    return jsonRpcResult(id, { resultType: "complete" });
+  }
+
+  if (method === "initialize") {
+    return mcpMethodNotFoundError(id);
   }
 
   if (method === "tools/list") {
@@ -341,16 +360,16 @@ async function handleMcpMessage({
     const catalogConvergence: any = typeof toolSkillManagementProvider?.audienceCatalogFacts === "function"
       ? toolSkillManagementProvider.audienceCatalogFacts({ authorization })
       : null;
-    return jsonRpcResult(id, {
+    return jsonRpcResult(id, mcpToolsListResult({
       tools: [
         ...meshrixCategorizedTools({ activeOutlets, visibleTools }),
         ...upstreamMcpTools
       ],
-      _meta: {
+      meta: {
         ...mcpRuntimeMetadata({ listenUrl, discoveryState }),
         ...(catalogConvergence ? { catalogConvergence } : {})
       }
-    });
+    }));
   }
 
   if (method === "tools/call") {
@@ -375,13 +394,13 @@ async function handleMcpMessage({
       const visibleCatalogTools: any = typeof toolSkillManagementProvider?.listVisibleTools === "function"
         ? toolSkillManagementProvider.listVisibleTools({ authorization })
         : [];
-      const visibleTools: any = await listVisibleUpstreamMcpTools({
+      const visibleTool: any = await resolveVisibleUpstreamMcpTool({
+        toolName,
         upstreamGatewayRegistry,
         operationPermissionTools: visibleCatalogTools,
         authorization,
         signal
       });
-      const visibleTool: any = visibleTools.find((tool?: any) : any => tool.name === toolName);
       if (!visibleTool) {
         return {
           httpStatus: 403,
@@ -674,7 +693,7 @@ async function handleMcpMessage({
     }));
   }
 
-  return jsonRpcError(id, -32601, "MCP method not found.");
+  return mcpMethodNotFoundError(id);
 }
 
 export async function handleMeshrixMcpHttpRequest({
@@ -764,12 +783,24 @@ export async function handleMeshrixMcpHttpRequest({
     logger?.warn?.("mcp.http.invalid_json", {
       requestId: request?.__meshrixRequestId || ""
     });
-    sendJson(response, 400, jsonRpcError(null, -32700, "MCP request body must be valid JSON."));
+    sendMcpJson(response, 400, jsonRpcError(null, -32700, "MCP request body must be valid JSON."));
     return true;
   }
 
-  const messages: any = Array.isArray(payload) ? payload : [payload];
-  if (!Array.isArray(payload) && payload?.method === "subscriptions/listen") {
+  if (isMcpJsonRpcBatch(payload)) {
+    const rejected: any = mcpBatchRejectedError();
+    sendMcpJson(response, rejected.httpStatus, rejected.body);
+    return true;
+  }
+
+  const message: any = payload;
+  const protocol: any = evaluateMcpProtocolContract({ request, message });
+  if (!protocol.ok) {
+    sendMcpJson(response, protocol.httpStatus || 400, protocol.body);
+    return true;
+  }
+
+  if (!Array.isArray(payload) && payload?.method === MCP_SUBSCRIBE_METHOD) {
     await openMcpSubscription({
       request,
       response,
@@ -781,7 +812,7 @@ export async function handleMeshrixMcpHttpRequest({
     });
     return true;
   }
-  const hasProtectedMessage: any = messages.some(isProtectedMcpMessage);
+  const hasProtectedMessage: any = isProtectedMcpMessage(message);
   const requestAuthorization: any = hasProtectedMessage
     ? await toolSkillManagementProvider.authorizeMcpClientRequest({
         request,
@@ -792,54 +823,46 @@ export async function handleMeshrixMcpHttpRequest({
         method
       })
     : null;
-  const cancellationOnly: any = messages.every((message?: any) : any => String(message?.method || "").startsWith("notifications/"));
+  const cancellationOnly: any = String(message?.method || "").startsWith("notifications/");
   if (hasProtectedMessage && !requestAuthorization?.ok && cancellationOnly) {
     response.writeHead(requestAuthorization?.status || 401, { "Cache-Control": "no-store" });
     response.end();
     return true;
   }
   const activeRequestRegistry: any = inFlightRequestRegistry || mcpInFlightRequestRegistryFor(toolSkillManagementProvider);
-  const results: any[] = [];
-  let httpStatus: any = 200;
-  for (const message of messages) {
-    const result: any = await dispatchMcpMessageWithCancellation({
+  const result: any = await dispatchMcpMessageWithCancellation({
+    message,
+    request,
+    authenticatedGrant: requestAuthorization,
+    registry: activeRequestRegistry,
+    parentSignal: signal,
+    execute: (messageSignal?: any) : any => handleMcpMessage({
       message,
       request,
-      authenticatedGrant: requestAuthorization,
-      registry: activeRequestRegistry,
-      parentSignal: signal,
-      execute: (messageSignal?: any) : any => handleMcpMessage({
-        message,
-        request,
-        requestBody,
-        url,
-        method,
-        toolSkillManagementProvider,
-        agentMcpGatewayPipeline,
-        upstreamGatewayRegistry,
-        listenUrl,
-        discoveryState,
-        signal: messageSignal,
-        requestAuthorization
-      })
-    });
-    if (!result) {
-      continue;
-    }
-    if (result.body) {
-      httpStatus = Math.max(httpStatus, result.httpStatus || 200);
-      results.push(result.body);
-    } else {
-      results.push(result);
-    }
-  }
+      requestBody,
+      url,
+      method,
+      toolSkillManagementProvider,
+      agentMcpGatewayPipeline,
+      upstreamGatewayRegistry,
+      listenUrl,
+      discoveryState,
+      signal: messageSignal,
+      requestAuthorization
+    })
+  });
 
-  if (results.length === 0) {
+  if (!result) {
     response.writeHead(202, { "Cache-Control": "no-store" });
     response.end();
     return true;
   }
 
-  sendJson(response, httpStatus, Array.isArray(payload) ? results : results[0]);
+  if (result.body) {
+    sendMcpJson(response, result.httpStatus || 200, result.body);
+    return true;
+  }
+
+  sendMcpJson(response, 200, result);
   return true;
 }

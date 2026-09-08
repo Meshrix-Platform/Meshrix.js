@@ -201,6 +201,10 @@
       "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
       "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-constants.js"
     },
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire": {
+      "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts",
+      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-client-wire.js"
+    },
     "#meshrix/protocols/http/controllers/system-controller-foundation-handlers": {
       "source": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
       "default": "./packages/protocols/dist/http/controllers/system-controller-foundation-handlers.js"
@@ -448,6 +452,7 @@
     "verify:platform-audit": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/core-platform-gap-audit.ts",
     "verify:docs": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/run-verifiers.ts --profile docs",
     "verify:skills": "node tools/validate-skills.mjs",
+    "verify:skill-tools": "node --test tools/skill-tests/operator-cli.test.mjs",
     "verify:core-platform-surface-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-surface-convergence.ts",
     "verify:core-platform-documentation-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-documentation-convergence.ts",
     "verify:runtime-refactor-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-refactor-convergence.ts",

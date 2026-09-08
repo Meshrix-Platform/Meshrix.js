@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { upstreamOperationCapabilityId } from "../../../packages/agents/src/upstream-gateway/operation-capability.ts";
+import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 import {
   bindVerifierApiKey,
@@ -198,23 +199,21 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     const events: any[] = [];
     let buffer: any = "";
     const url: any = `${server.url}/mcp`;
-    const body: any = JSON.stringify({
+    const wire: any = mcpModernHttpRequest({
       jsonrpc: "2.0",
       id: "tag-governed-e2e-subscription",
       method: "subscriptions/listen",
-      params: { notifications: ["notifications/tools/list_changed"] }
-    });
+      params: { notifications: { toolsListChanged: true } }
+    }, { Accept: "text/event-stream" });
     const stream: any = fetch(url, {
       method: "POST",
       headers: mcpHeaders(token, {
         method: "POST",
-        body,
+        body: wire.body,
         url,
-        extraHeaders: {
-          "X-Meshrix.js-Mcp-Proxy-Session": "taggovernede2esession"
-        }
+        extraHeaders: wire.headers
       }),
-      body,
+      body: wire.body,
       signal: controller.signal
     }).then(async (response?: any) : Promise<any> => {
       assert.equal(response.status, 200, "MCP SSE stream did not open");
@@ -270,7 +269,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
   }
 
   async function callMcpWithToolName(token?: any, toolName?: any, operation?: any, input: Record<string, any> = {}, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
-    const body: any = JSON.stringify({
+    const wire: any = mcpModernHttpRequest({
       jsonrpc: "2.0",
       id,
       method: "tools/call",
@@ -286,8 +285,8 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     });
     const response: any = await fetchJson("/mcp", {
       method: "POST",
-      headers: mcpHeaders(token, { body }),
-      body,
+      headers: mcpHeaders(token, { body: wire.body, extraHeaders: wire.headers }),
+      body: wire.body,
       expectedStatuses
     });
     return response.payload;

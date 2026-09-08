@@ -16,7 +16,7 @@ belongs to `$meshrix-js-html-report-contract`.
 ## Establish authority
 
 1. Run `git status --short` for every repository boundary before editing.
-2. Read [references/publishing-contract.md](../../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or client-matrix contract.
+2. Read [references/publishing-contract.md](../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or client-matrix contract.
 3. Keep the matrix separate from the verification lanes and the report contract: this skill owns protocol-version detection, installation, invocation, uninstall, and the fallback rule; `$meshrix-js-release-journey-producer` owns the lanes and receipt; `$meshrix-js-html-report-contract` owns the report projection.
 
 ## Organize the matrix by MCP protocol version

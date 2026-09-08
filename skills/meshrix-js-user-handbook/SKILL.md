@@ -7,8 +7,10 @@ description: Meshrix.js user handbook. Use when operating a published or offline
 
 This package is the **user handbook**. It owns how operators and external
 systems use a published or offline Meshrix.js instance. The **developer
-handbook** is `$meshrix-js-developer-handbook`. Do not mix those purposes in
-one closure.
+handbook** is `$meshrix-js-developer-handbook`. Keep source ownership,
+operating procedures, and evidence claims separate. One authorized user task
+may contain sequential development and instance verification; load the owning
+handbook for each step and retain its required operation approvals.
 
 `$meshrix-js` is the product identity and specialist-module library. It is not
 a second mixed handbook.

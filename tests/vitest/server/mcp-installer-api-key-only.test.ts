@@ -109,7 +109,13 @@ describe("MCP installer API Key-only input", () : any => {
     vi.stubGlobal("fetch", vi.fn(async () : Promise<any> => new Response(JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
-      result: { serverInfo: { name: "Meshrix.js" } }
+      result: {
+        resultType: "complete",
+        supportedVersions: ["2026-07-28"],
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": { name: "Meshrix.js", version: "0.0.1" }
+        }
+      }
     }), { status: 200, headers: { "Content-Type": "application/json" } })));
 
     await expect(installTargets({
@@ -165,12 +171,22 @@ describe("MCP installer API Key-only input", () : any => {
     const fetchMock: any = vi.fn(async (_url?: any, init?: any) : Promise<any> => {
       const request: any = JSON.parse(init.body);
       expect(request.method).toBe("subscriptions/listen");
-      expect(request.params.notifications).toEqual([
-        "notifications/tools/list_changed",
-        "notifications/meshrix/skill_hub/catalog_changed",
-        "notifications/meshrix/update_available"
-      ]);
+      expect(request.params.notifications).toEqual({
+        toolsListChanged: true,
+        meshrixSkillHubCatalogChanged: true,
+        meshrixUpdateAvailable: true
+      });
+      expect(request.id).toBe("meshrix-auto-update-subscription");
       return new Response([
+        "event: message\r\n",
+        `data: ${JSON.stringify({
+          jsonrpc: "2.0",
+          method: "notifications/subscriptions/acknowledged",
+          params: {
+            notifications: request.params.notifications,
+            _meta: { "io.modelcontextprotocol/subscriptionId": request.id }
+          }
+        })}\r\n\r\n`,
         "event: message\r\n",
         `data: ${JSON.stringify({ jsonrpc: "2.0", method: "notifications/meshrix/skill_hub/catalog_changed", params: { revision: 4, command: "must-not-run" } })}\r\n\r\n`
       ].join(""), { status: 200, headers: { "content-type": "text/event-stream" } });

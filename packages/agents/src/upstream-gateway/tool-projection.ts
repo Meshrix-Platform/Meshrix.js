@@ -1,11 +1,10 @@
-import {
-  CLOSED_EMPTY_JSON_OBJECT_SCHEMA,
-  compileClosedJsonSchema
-} from "@meshrix/foundation/security/closed-json-schema";
+import { CLOSED_EMPTY_JSON_OBJECT_SCHEMA } from "@meshrix/foundation/security/closed-json-schema";
+import { compileMcpToolJsonSchema } from "./mcp-tool-schema.ts";
 import {
   asArray,
   mcpToolRisk,
   normalizeRisk,
+  object,
   safePublicToolSegment,
   text
 } from "./support.ts";
@@ -19,23 +18,53 @@ function gatewayToolsetsForRisk(risk: any = "read_only") : any {
   return ["meshrix.gateway.write"];
 }
 
-function invalidToolSchemaError() : any {
+function invalidToolSchemaError(kind: any = "input") : any {
+  if (kind === "output") {
+    return Object.assign(new Error("Upstream tool output schema is invalid."), {
+      code: "upstream_tool_output_schema_invalid",
+      status: 502
+    });
+  }
   return Object.assign(new Error("Upstream tool input schema is invalid."), {
     code: "upstream_tool_schema_invalid",
     status: 502
   });
 }
 
-function projectedInputSchema(schema?: any, label?: any) : any {
+function projectedMcpSchema(
+  schema?: any,
+  label?: any,
+  { requireTopLevelObject = true, kind = "input" }: Record<string, any> = {}
+) : any {
   if (schema === undefined) return CLOSED_EMPTY_JSON_OBJECT_SCHEMA;
   try {
-    return compileClosedJsonSchema(schema, {
+    return compileMcpToolJsonSchema(schema, {
       label,
-      requireTopLevelObject: true
+      requireTopLevelObject
     }).schema;
   } catch {
-    throw invalidToolSchemaError();
+    throw invalidToolSchemaError(kind);
   }
+}
+
+function safeNamespacedUpstreamMeta(meta: Record<string, any> = {}) : any {
+  const output: Record<string, any> = {};
+  for (const [key, value] of Object.entries(object(meta)) as [string, any][]) {
+    if (typeof key !== "string" || !key.includes("/")) continue;
+    if (["toolExecutionId", "traceId", "auditId"].includes(key.split("/").pop() || "")) continue;
+    output[key] = value;
+  }
+  return output;
+}
+
+function mcpToolAnnotations(tool: Record<string, any> = {}, readOnly?: any) : any {
+  const annotations: any = object(tool.annotations);
+  return {
+    readOnlyHint: annotations.readOnlyHint === true || readOnly === true,
+    destructiveHint: annotations.destructiveHint === true,
+    ...(typeof annotations.idempotentHint === "boolean" ? { idempotentHint: annotations.idempotentHint } : {}),
+    ...(typeof annotations.openWorldHint === "boolean" ? { openWorldHint: annotations.openWorldHint } : {})
+  };
 }
 
 export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string, any> = {}) : any {
@@ -54,11 +83,19 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
     name: `upstream.${prefix}.${upstreamToolName}`,
     title: `${service.label || service.serviceId}: ${tool.title || upstreamToolName}`,
     description: tool.description || `Upstream MCP tool ${upstreamToolName} from ${service.label || service.serviceId}.`,
-    inputSchema: projectedInputSchema(tool.inputSchema, "Upstream MCP tool input schema"),
-    annotations: {
-      readOnlyHint: readOnly,
-      destructiveHint: tool.annotations?.destructiveHint === true
-    },
+    inputSchema: projectedMcpSchema(tool.inputSchema, "Upstream MCP tool input schema", {
+      requireTopLevelObject: true,
+      kind: "input"
+    }),
+    ...(tool.outputSchema === undefined
+      ? {}
+      : {
+          outputSchema: projectedMcpSchema(tool.outputSchema, "Upstream MCP tool output schema", {
+            requireTopLevelObject: false,
+            kind: "output"
+          })
+        }),
+    annotations: mcpToolAnnotations(tool, readOnly),
     _meta: {
       upstreamMcp: true,
       serviceId: service.serviceId,
@@ -69,7 +106,8 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
       resourceContext: dynamicCapability.resourceContext,
       toolsets: ["upstream-mcp", ...gatewayToolsetsForRisk(risk), `upstream:${service.serviceId}`],
       requiredScopes: readOnly ? ["gateway:read"] : ["gateway:write"],
-      risk
+      risk,
+      ...safeNamespacedUpstreamMeta(tool._meta)
     }
   };
 }
@@ -86,9 +124,10 @@ export function publicUpstreamOperationTool({ service = {}, operation = {} }: Re
     title: `${service.label || service.serviceId}: ${operation.label || operation.operationKey}`,
     description: operation.description ||
       `Configured upstream ${operation.protocol || "http"} operation ${operation.operationKey} from ${service.label || service.serviceId}.`,
-    inputSchema: projectedInputSchema(
+    inputSchema: projectedMcpSchema(
       operation.requestSchema,
-      "Configured upstream operation input schema"
+      "Configured upstream operation input schema",
+      { requireTopLevelObject: true, kind: "input" }
     ),
     annotations: {
       readOnlyHint: readOnly,

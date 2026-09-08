@@ -650,6 +650,10 @@ export async function createPortableBundle({
     path.join(portableProtocolsRoot, "mcp", "adapter", "http-mcp-adapter-constants.ts")
   );
   await fs.copyFile(
+    path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "http-mcp-adapter-client-wire.ts"),
+    path.join(portableProtocolsRoot, "mcp", "adapter", "http-mcp-adapter-client-wire.ts")
+  );
+  await fs.copyFile(
     path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "mcp-release-targets.ts"),
     path.join(portableProtocolsRoot, "mcp", "adapter", "mcp-release-targets.ts")
   );

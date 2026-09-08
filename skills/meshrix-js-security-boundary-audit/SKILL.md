@@ -10,7 +10,9 @@ description: Audit Meshrix.js code, APIs, console flows, MCP and agent paths, pl
 1. Run `git status --short` and apply the returned repository skill together with `$meshrix-js-security-authorization`.
 2. Read the target repository's canonical security document completely. For Meshrix.js, read `docs/functionality/SECURITY-AUTHORIZATION.md`, especially `Mandatory Attack-Resistance Boundary`, plus the capability document that owns the changed surface.
 3. Inspect `git status --short` before editing. Preserve unrelated and pre-existing worktree changes.
-4. Inspect the catalog-backed plan with `npm run verify:security` and `npm test` before selecting verification.
+4. Inspect the current security verifier and its selected tasks read-only before
+   running checks. Use `$meshrix-js-regression-planner` to choose the relevant
+   coverage; executing `npm run verify:security` or `npm test` is not planning.
 5. Keep the audit read-only when the user asks only for review or diagnosis. Implement a fix only when the request authorizes a change.
 6. Use synthetic, bounded fixtures. Never retrieve or expose production secrets, backend rows, prompts, files, logs, identities, paths, or other protected runtime data. Require explicit authorization before network probes, runtime-data access, destructive checks, or external effects.
 

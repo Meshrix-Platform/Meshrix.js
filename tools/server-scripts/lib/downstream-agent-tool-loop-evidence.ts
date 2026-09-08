@@ -19,10 +19,10 @@ export const DOWNSTREAM_AGENT_CANCELLATION_TARGET: any = DOWNSTREAM_AGENT_CLIENT
 export const DOWNSTREAM_AGENT_SCENARIO_ENV: any = "MESHRIX_DOWNSTREAM_AGENT_SCENARIO";
 
 const PUBLIC_TOOL: any = (toolName?: any) : any => `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.${toolName}`;
-const TURN_KINDS: readonly any[] = Object.freeze(["initialize", "tools/list", "tools/call"]);
+const TURN_KINDS: readonly any[] = Object.freeze(["server/discover", "tools/list", "tools/call"]);
 
 export const DOWNSTREAM_AGENT_CORE_TURN_IDS: readonly any[] = Object.freeze([
-  "initialize",
+  "discover",
   "list-tools",
   "read-only-call",
   "identity-call",
@@ -32,8 +32,8 @@ export const DOWNSTREAM_AGENT_CORE_TURN_IDS: readonly any[] = Object.freeze([
 export function defaultDownstreamAgentScenario() : any {
   return [
     {
-      turnId: "initialize",
-      kind: "initialize"
+      turnId: "discover",
+      kind: "server/discover"
     },
     {
       turnId: "list-tools",
@@ -48,14 +48,14 @@ export function defaultDownstreamAgentScenario() : any {
       kind: "tools/call",
       toolName: PUBLIC_TOOL("records.search"),
       arguments: { query: "alpha" },
-      expect: { upstreamMcp: true }
+      expect: { nativeStructured: true }
     },
     {
       turnId: "identity-call",
       kind: "tools/call",
       toolName: PUBLIC_TOOL("session.identity"),
       arguments: {},
-      expect: { upstreamMcp: true, credentialProof: true }
+      expect: { nativeStructured: true, credentialProof: true }
     },
     {
       turnId: "denied-destructive-call",
@@ -103,7 +103,7 @@ export function normalizeDownstreamAgentScenario(rawTurns?: any) : any {
       expect: {
         ...(Array.isArray(expect.visibleTools) ? { visibleTools: expect.visibleTools.map(String) } : {}),
         ...(Array.isArray(expect.hiddenTools) ? { hiddenTools: expect.hiddenTools.map(String) } : {}),
-        ...(expect.upstreamMcp === true ? { upstreamMcp: true } : {}),
+        ...(expect.nativeStructured === true ? { nativeStructured: true } : {}),
         ...(expect.credentialProof === true ? { credentialProof: true } : {}),
         ...(expect.deniedTool === true ? { deniedTool: true } : {})
       }
@@ -260,11 +260,8 @@ export function createDownstreamAgentToolLoopReadiness(report: Record<string, an
     if (item.protocol !== "mcp-stdio-jsonl-json-rpc") {
       reasons.push(`downstream-agent-tool-loop-transport-mismatch:${target}`);
     }
-    if (item.initialized !== true) {
-      reasons.push(`downstream-agent-tool-loop-initialize-failed:${target}`);
-    }
-    if (item.initializedNotificationSent !== true) {
-      reasons.push(`downstream-agent-tool-loop-initialized-notification-missing:${target}`);
+    if (item.discovered !== true) {
+      reasons.push(`downstream-agent-tool-loop-discover-failed:${target}`);
     }
     if (Number(item.unexpectedNotificationResponses ?? -1) !== 0) {
       reasons.push(`downstream-agent-tool-loop-notification-response-invalid:${target}`);

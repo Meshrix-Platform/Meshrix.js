@@ -7,6 +7,11 @@ import { promisify } from "node:util";
 import {
   MCP_STABLE_TOOL_NAME
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 let fatalReported: any = false;
 function reportFatal(error?: any) : any {
@@ -108,13 +113,13 @@ async function jsonFetch(url?: any, options: Record<string, any> = {}) : Promise
   };
 }
 
-function mcpRequest(method?: any, params: Record<string, any> = {}, id: any = 1) : any {
-  return {
+function mcpWire(method?: any, params: Record<string, any> = {}, id: any = 1, extraHeaders: Record<string, any> = {}) : any {
+  return mcpModernHttpRequest({
     jsonrpc: "2.0",
     id,
     method,
     params
-  };
+  }, extraHeaders);
 }
 
 async function readDeviceManifest() : Promise<any> {
@@ -239,7 +244,7 @@ const report: Record<string, any> = {
   baseUrl,
   signedDiscovery,
   discovery: null,
-  initialize: null,
+  discover: null,
   toolsList: null,
   systemHealth: null,
   deviceManifest: null,
@@ -247,33 +252,32 @@ const report: Record<string, any> = {
 };
 
 report.discovery = await jsonFetch(`${baseUrl}/api/mcp/discovery`);
-report.initialize = await jsonFetch(`${baseUrl}/mcp`, {
+const discoverWire: any = mcpWire(MCP_DISCOVER_METHOD, {}, 1);
+report.discover = await jsonFetch(`${baseUrl}/mcp`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(mcpRequest("initialize", {
-    protocolVersion: "2025-06-18",
-    capabilities: {},
-    clientInfo: { name: "meshrix-mcp-doctor", version: "1" }
-  }))
+  headers: discoverWire.headers,
+  body: discoverWire.body
 });
 
 if (token) {
+  const toolsListWire: any = mcpWire("tools/list", {}, 2, headers);
   report.toolsList = await jsonFetch(`${baseUrl}/mcp`, {
     method: "POST",
-    headers,
-    body: JSON.stringify(mcpRequest("tools/list", {}, 2))
+    headers: toolsListWire.headers,
+    body: toolsListWire.body
   });
-	  report.systemHealth = await jsonFetch(`${baseUrl}/mcp`, {
-	    method: "POST",
-	    headers,
-	    body: JSON.stringify(mcpRequest("tools/call", {
-	      name: "meshrix.discovery",
-	      arguments: {
-	        apiVersion: "v0.0.1:mcp:interface-1",
-	        operation: "system.health",
-        input: {}
-      }
-    }, 3))
+  const healthWire: any = mcpWire("tools/call", {
+    name: "meshrix.discovery",
+    arguments: {
+      apiVersion: "v0.0.1:mcp:interface-1",
+      operation: "system.health",
+      input: {}
+    }
+  }, 3, headers);
+  report.systemHealth = await jsonFetch(`${baseUrl}/mcp`, {
+    method: "POST",
+    headers: healthWire.headers,
+    body: healthWire.body
   });
 } else {
   report.toolsList = {
@@ -302,7 +306,7 @@ const hasValidOutletSet: any = hasStableOutlet && listedToolNames.size === liste
 
 const ok: any = report.signedDiscovery.ok
   && report.discovery.ok
-  && report.initialize.ok
+  && report.discover.ok
   && report.deviceManifest.ok
   && (!token || (
     report.toolsList.ok
@@ -334,13 +338,13 @@ console.log(JSON.stringify({
       localDiscoveryEntrypoint: report.discovery.payload?.localDiscovery?.entrypoint || null,
       localDiscoveryFiles: report.discovery.payload?.localDiscovery?.files || []
     },
-    initialize: {
-      ok: report.initialize.ok,
-      status: report.initialize.status,
-      serverName: report.initialize.payload?.result?.serverInfo?.name || "",
-      serverVersion: report.initialize.payload?.result?.serverInfo?.version || "",
-      listChanged: report.initialize.payload?.result?.capabilities?.tools?.listChanged === true,
-      stableToolName: report.initialize.payload?.result?._meta?.stableToolName || ""
+    discover: {
+      ok: report.discover.ok,
+      status: report.discover.status,
+      serverName: report.discover.payload?.result?._meta?.[MCP_META_SERVER_INFO]?.name || "",
+      serverVersion: report.discover.payload?.result?._meta?.[MCP_META_SERVER_INFO]?.version || "",
+      listChanged: report.discover.payload?.result?.capabilities?.tools?.listChanged === true,
+      stableToolName: report.discover.payload?.result?._meta?.stableToolName || ""
     },
     toolsList: {
       ok: report.toolsList.ok,

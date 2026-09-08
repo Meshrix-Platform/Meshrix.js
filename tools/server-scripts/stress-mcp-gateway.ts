@@ -21,6 +21,10 @@ import {
   runMcpGatewayLoadPhase
 } from "./lib/mcp-gateway-load-phase.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./lib/upstream-gateway-verifier-publication.ts";
 
 const REPORT_PATH: any = "build/reports/mcp-gateway-load.json";
@@ -173,10 +177,8 @@ function defaultIdentityHash({ publicKeyHash = "", clientFingerprint = {} }: Rec
   ].join("\n"), "utf8"))}`;
 }
 
-function mcpHeaders({ body = "" }: Record<string, any> = {}) : any {
-  void body;
+function mcpAuthHeaders() : any {
   return {
-    "Content-Type": "application/json",
     "X-Meshrix.js-Api-Key": token,
     "X-Meshrix.js-MCP-Target": "codex"
   };
@@ -200,11 +202,11 @@ function mcpRequest(id?: any, toolName?: any, operation?: any, input: Record<str
 }
 
 async function callMcp(body?: any) : Promise<any> {
-  const serialized: any = JSON.stringify(body);
+  const wire: any = mcpModernHttpRequest(body, mcpAuthHeaders());
   return fetchJson("/mcp", {
     method: "POST",
-    headers: mcpHeaders({ body: serialized }),
-    body: serialized
+    headers: wire.headers,
+    body: wire.body
   });
 }
 
@@ -329,22 +331,13 @@ try {
   await installAuthenticatedFetch(server);
   token = await createVerifierApiKey();
 
-  const initializeBody: any = JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "stress-mcp-gateway", version: "1" }
-      }
-    });
-  const initialize: any = await fetchJson("/mcp", {
-    method: "POST",
-    headers: mcpHeaders({ body: initializeBody }),
-    body: initializeBody
+  const discover: any = await callMcp({
+    jsonrpc: "2.0",
+    id: 1,
+    method: MCP_DISCOVER_METHOD,
+    params: {}
   });
-  assert.equal(initialize.status, 200, JSON.stringify(initialize.payload));
+  assert.equal(discover.status, 200, JSON.stringify(discover.payload));
 
   const safetyMonitor: any = createSafetyMonitor();
   const healthPhase: any = await runPhase(

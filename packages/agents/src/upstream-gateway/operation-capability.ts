@@ -2,6 +2,7 @@ import {
   asArray,
   hash,
   normalizeRisk,
+  object,
   safePublicToolSegment,
   text
 } from "./support.ts";
@@ -84,21 +85,78 @@ export function operationWithUpstreamCapability(service: Record<string, any> = {
   };
 }
 
+function hasOwn(value: Record<string, any> = {}, key?: any) : any {
+  return Boolean(value) && Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function subjectDeclaredAuthority(subject: Record<string, any> = {}, keys: any = []) : any {
+  return keys.some((key?: any) : any => hasOwn(subject, key));
+}
+
+function stringSet(values: any = []) : any {
+  return new Set<any>(asArray(values).map(text).filter(Boolean));
+}
+
+function governedSubjectCapabilitySet(subject: Record<string, any> = {}) : any {
+  if (subjectDeclaredAuthority(subject, ["dynamicCapabilities", "capabilities", "upstreamCapabilities"])) {
+    return stringSet([
+      ...asArray(subject.dynamicCapabilities),
+      ...asArray(subject.capabilities),
+      ...asArray(subject.upstreamCapabilities)
+    ]);
+  }
+  const grant: any = object(subject.grant);
+  const metadata: any = object(grant.metadata);
+  return stringSet([
+    ...asArray(grant.dynamicCapabilities),
+    ...asArray(grant.capabilities),
+    ...asArray(grant.upstreamCapabilities),
+    ...asArray(metadata.dynamicCapabilities),
+    ...asArray(metadata.capabilities),
+    ...asArray(metadata.upstreamCapabilities)
+  ]);
+}
+
+function governedSubjectAllowedServiceIds(subject: Record<string, any> = {}) : any {
+  if (subjectDeclaredAuthority(subject, ["allowedServiceIds"])) {
+    return stringSet(subject.allowedServiceIds);
+  }
+  const grant: any = object(subject.grant);
+  const metadata: any = object(grant.metadata);
+  return stringSet([
+    ...asArray(grant.allowedServiceIds),
+    ...asArray(metadata.allowedServiceIds)
+  ]);
+}
+
+function governedSubjectAllowedSecretBindings(subject: Record<string, any> = {}) : any {
+  if (subjectDeclaredAuthority(subject, ["allowedSecretBindings"])) {
+    return stringSet(subject.allowedSecretBindings);
+  }
+  const grant: any = object(subject.grant);
+  const metadata: any = object(grant.metadata);
+  return stringSet([
+    ...asArray(grant.allowedSecretBindings),
+    ...asArray(metadata.allowedSecretBindings)
+  ]);
+}
+
 export function evaluateDynamicOperationAuthorization(subject: Record<string, any> = {}, operation: Record<string, any> = {}) : any {
-  if (text(subject.type) !== "tool-grant") {
+  const subjectType: any = text(subject.type);
+  if (subjectType !== "tool-grant" && subjectType !== "scoped-api-key") {
     return { allowed: true, reasonCode: "not_tool_grant" };
   }
   const descriptor: any = operation.dynamicCapability || {};
   const capabilityId: any = text(descriptor.capabilityId);
-  const capabilities: any = new Set<any>(asArray(subject.dynamicCapabilities).map(text).filter(Boolean));
+  const capabilities: any = governedSubjectCapabilitySet(subject);
   if (!capabilityId || !capabilities.has(capabilityId)) {
     return { allowed: false, reasonCode: "missing_dynamic_upstream_capability", capabilityId };
   }
-  const allowedServiceIds: any = new Set<any>(asArray(subject.allowedServiceIds).map(text).filter(Boolean));
+  const allowedServiceIds: any = governedSubjectAllowedServiceIds(subject);
   if (allowedServiceIds.size > 0 && !allowedServiceIds.has(descriptor.serviceId)) {
     return { allowed: false, reasonCode: "upstream_service_binding_denied", capabilityId };
   }
-  const allowedSecretBindings: any = new Set<any>(asArray(subject.allowedSecretBindings).map(text).filter(Boolean));
+  const allowedSecretBindings: any = governedSubjectAllowedSecretBindings(subject);
   const missingCredentialBindings: any = asArray(descriptor.credentialBindingIds).map(text).filter(Boolean)
     .filter((bindingId?: any) : any =>
       !allowedSecretBindings.has(bindingId) && !capabilities.has(`${capabilityId}:${bindingId}`)

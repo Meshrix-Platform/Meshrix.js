@@ -1409,7 +1409,15 @@
         "tests/vitest/server/upstream-endpoint-traffic-state.test.ts",
         "tests/vitest/server/upstream-gateway-ssrf.test.ts",
         "tests/vitest/server/upstream-gateway-session-cancellation.test.ts",
-        "tests/vitest/server/mcp-proxy-cancellation.test.ts"
+        "tests/vitest/server/mcp-proxy-cancellation.test.ts",
+        "tests/vitest/server/mcp-downstream-protocol-headers.test.ts",
+        "tests/vitest/server/mcp-tool-schema-adapter.test.ts",
+        "tests/vitest/server/mcp-target-lookup-authorization.test.ts",
+        "tests/vitest/server/mcp-tool-refresh-single-flight.test.ts",
+        "tests/vitest/server/mcp-tool-result-bridge.test.ts",
+        "tests/vitest/server/mcp-operation-capability-attenuation.test.ts",
+        "tests/vitest/server/mcp-tools-list-pagination.test.ts",
+        "tests/vitest/server/mcp-execution-session-lifecycle.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",

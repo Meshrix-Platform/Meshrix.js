@@ -1,5 +1,12 @@
 # Runtime and Plugin Configuration
 
+Runtime Plugins are Meshrix.js-native extensions implemented in TypeScript for
+Node.js. Their process isolation does not make them general Services: they
+remain coupled to Meshrix.js Host contracts, lifecycle, capability
+registration, and governance. A language-independent remote capability that
+can deploy and serve clients without Meshrix.js is a Service; a native Plugin
+may adapt it, but the two boundaries remain distinct.
+
 ## Canonical sources
 
 - Read startup and instance-reuse behavior in `docs/RUNBOOK.md`.

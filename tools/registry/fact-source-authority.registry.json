@@ -404,7 +404,7 @@
     {
       "id": "downstream-agent-tool-loop-evidence",
       "factKey": "downstream-agent.tool-loop-evidence",
-      "domain": "Deterministic downstream agent tool loop evidence for every MCP release target: target-specific initialize, initialized notification, tools/list, tools/call, and denial turns through real meshrix-mcp proxy child processes over newline-delimited stdio JSON-RPC.",
+      "domain": "Deterministic downstream agent tool loop evidence for every MCP release target: target-specific server/discover, tools/list, tools/call, and denial turns through real meshrix-mcp proxy child processes over newline-delimited stdio JSON-RPC.",
       "authorityPath": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
       "authorityRole": "fixture-evidence-reducer",
       "projectionPaths": [

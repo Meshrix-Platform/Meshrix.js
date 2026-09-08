@@ -12,6 +12,7 @@ import {
   handleMeshrixMcpHttpRequest
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
 import { mcpOutletForTool as resolveMcpOutletForTool } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts";
+import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const DEFAULT_REPORT_PATH: any = "build/reports/downstream-mcp-completeness-audit.json";
@@ -168,7 +169,7 @@ function capturedJson(response?: any) : any {
 
 async function callMcpCapabilitiesList({ catalog }: Record<string, any>) : Promise<any> {
   const response: any = createCapturedHttpResponse();
-  const requestBody: any = Buffer.from(JSON.stringify({
+  const wire: any = mcpModernHttpRequest({
     jsonrpc: "2.0",
     id: "downstream-mcp-completeness-audit",
     method: "tools/call",
@@ -180,7 +181,8 @@ async function callMcpCapabilitiesList({ catalog }: Record<string, any>) : Promi
         input: {}
       }
     }
-  }));
+  });
+  const requestBody: any = Buffer.from(wire.body, "utf8");
   const provider: Record<string, any> = {
     async authorizeMcpClientRequest() : Promise<any> {
       return {
@@ -215,6 +217,7 @@ async function callMcpCapabilitiesList({ catalog }: Record<string, any>) : Promi
     request: {
       method: "POST",
       headers: {
+        ...wire.headers,
         "user-agent": "downstream-mcp-completeness-audit"
       },
       socket: { remoteAddress: "127.0.0.1" }

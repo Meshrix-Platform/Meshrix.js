@@ -22,6 +22,12 @@ Node.js backend are separate workspaces connected through versioned HTTP APIs.
 | Protocols | `packages/protocols/` | HTTP, MCP, pubsub, storage, checkpoint, console protocol facades, and native MCP installer scripts. |
 | Console | `apps/console/`, `packages/ui-console/` | Operator administration workflows. |
 
+Optional operator skill packages live under `skills/` as the `skill-tools`
+dependency layer. They are executable operator helpers and local skill
+contracts, not Core runtime. Repository tooling may import them for tests.
+Core, runtime, and protocol packages must not depend on skill tools, and skill
+tools must not import private Core internals.
+
 ## Edge And Semantic Gateway Layers
 
 Meshrix.js separates deployment-edge networking from governed application

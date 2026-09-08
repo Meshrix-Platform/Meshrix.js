@@ -17,7 +17,8 @@
         "ui-console",
         "apps",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -38,7 +39,8 @@
         "plugin-verifiers",
         "plugin-tests",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -55,7 +57,8 @@
         "server-runtime",
         "ui-console",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -73,7 +76,8 @@
         "ui-console",
         "apps",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -91,7 +95,8 @@
         "ui-console",
         "apps",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -109,7 +114,8 @@
         "ui-console",
         "apps",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -127,7 +133,8 @@
         "ui-console",
         "apps",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -145,7 +152,8 @@
         "server-runtime",
         "apps",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -163,7 +171,8 @@
         "agents",
         "capabilities",
         "plugins",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -182,7 +191,8 @@
       ],
       "forbiddenDependsOn": [
         "apps",
-        "tools"
+        "tools",
+        "skill-tools"
       ]
     },
     {
@@ -236,7 +246,30 @@
       ],
       "forbiddenDependsOn": [
         "apps",
-        "tools"
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "skill-tools",
+      "name": "Operator Skill Tools",
+      "directory": "skills",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "tools",
+        "model-gateway-contracts"
       ]
     },
     {
@@ -256,7 +289,8 @@
         "plugin-console",
         "plugin-verifiers",
         "plugin-tests",
-        "model-gateway-contracts"
+        "model-gateway-contracts",
+        "skill-tools"
       ],
       "forbiddenDependsOn": []
     }

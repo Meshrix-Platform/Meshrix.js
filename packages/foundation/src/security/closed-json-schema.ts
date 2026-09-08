@@ -14,6 +14,7 @@ export interface CompiledClosedJsonSchema {
 export interface CompileClosedJsonSchemaOptions {
   readonly label?: string;
   readonly requireTopLevelObject?: boolean;
+  readonly typeSemantics?: "closed" | "external";
 }
 
 type SchemaType = "array" | "boolean" | "integer" | "null" | "number" | "object" | "string";
@@ -31,6 +32,7 @@ type FiniteNumberKeyword = "maximum" | "minimum";
 interface CompilationContext {
   readonly active: WeakSet<object>;
   readonly label: string;
+  readonly typeSemantics: "closed" | "external";
   literalNodes: number;
   schemaNodes: number;
 }
@@ -236,8 +238,12 @@ function inferredTypes(source: Record<string, unknown>): Set<SchemaType> {
 }
 
 function assertKeywordTypeCompatibility(
-  source: Record<string, unknown>, types: SchemaType[], label: string, path: string
+  source: Record<string, unknown>, types: SchemaType[], label: string, path: string,
+  typeSemantics: "closed" | "external"
 ): SchemaType[] {
+  if (typeSemantics === "external") {
+    return types;
+  }
   const inferred = inferredTypes(source);
   if (types.length === 0 && inferred.size > 1) {
     throw schemaError(label, path, "mixes constraints for incompatible value types.");
@@ -251,6 +257,19 @@ function assertKeywordTypeCompatibility(
     }
   }
   return types;
+}
+
+function declaresObjectRoot(
+  node: CompiledSchemaNode,
+  typeSemantics: "closed" | "external"
+): boolean {
+  if (node.effectiveTypes.length > 0) {
+    return node.effectiveTypes.length === 1 && node.effectiveTypes[0] === "object";
+  }
+  if (typeSemantics === "external" && node.allOf.length > 0) {
+    return node.allOf.some((branch) => declaresObjectRoot(branch, typeSemantics));
+  }
+  return false;
 }
 
 function readNonNegativeInteger(
@@ -337,7 +356,9 @@ function compileSchemaNode(
       keywords.push(keyword);
     }
     const declaredTypes = readTypes(source, context.label, path);
-    const effectiveTypes = assertKeywordTypeCompatibility(source, declaredTypes, context.label, path);
+    const effectiveTypes = assertKeywordTypeCompatibility(
+      source, declaredTypes, context.label, path, context.typeSemantics
+    );
     const properties = new Map<string, CompiledSchemaNode>();
     let canonicalProperties: Record<string, ClosedJsonSchema> | undefined;
     if (Object.hasOwn(source, "properties")) {
@@ -673,16 +694,24 @@ function validateNode(
 
 export function compileClosedJsonSchema(
   schema?: unknown,
-  { label = "JSON schema", requireTopLevelObject = false }: CompileClosedJsonSchemaOptions = {}
+  {
+    label = "JSON schema",
+    requireTopLevelObject = false,
+    typeSemantics = "closed"
+  }: CompileClosedJsonSchemaOptions = {}
 ): CompiledClosedJsonSchema {
   const safeLabel = typeof label === "string" && label.trim()
     ? label.trim().slice(0, 160) : "JSON schema";
+  const resolvedSemantics: "closed" | "external" = typeSemantics === "external" ? "external" : "closed";
   const context: CompilationContext = {
-    active: new WeakSet<object>(), label: safeLabel, literalNodes: 0, schemaNodes: 0
+    active: new WeakSet<object>(),
+    label: safeLabel,
+    typeSemantics: resolvedSemantics,
+    literalNodes: 0,
+    schemaNodes: 0
   };
   const root = compileSchemaNode(schema, context, "$", 0);
-  if (requireTopLevelObject &&
-    (root.effectiveTypes.length !== 1 || root.effectiveTypes[0] !== "object")) {
+  if (requireTopLevelObject && !declaresObjectRoot(root, resolvedSemantics)) {
     throw schemaError(safeLabel, "$", "must declare an object root.");
   }
   const validate = (value?: unknown): ClosedJsonSchemaValidationResult => {

@@ -10,6 +10,10 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
 import { createMcpProxyStdioClient } from "./mcp-proxy-stdio-client.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO
+} from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { authHeaders } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts";
 import { resolveProxyCredentials } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
 
@@ -306,16 +310,11 @@ export async function runMcpJourney({
     redactText: redact
   });
   try {
-    const initialize: any = await client.request("initialize", {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "release-journey-gate", version: "0.0.1" }
-    });
-    receipt.initialize = {
-      serverName: String(initialize?.result?.serverInfo?.name || ""),
-      protocolVersion: String(initialize?.result?.protocolVersion || "")
+    const discover: any = await client.request(MCP_DISCOVER_METHOD, {});
+    receipt.discover = {
+      serverName: String(discover?.result?._meta?.[MCP_META_SERVER_INFO]?.name || ""),
+      supportedVersions: Array.isArray(discover?.result?.supportedVersions) ? discover.result.supportedVersions : []
     };
-    await client.notify("notifications/initialized", {});
 
     const toolsList: any = await client.request("tools/list", {});
     const toolNames: any = (toolsList?.result?.tools || []).map((tool?: any) : any => tool.name);
@@ -390,15 +389,10 @@ export async function runMcpDeniedCall({
     timeoutMs: 30_000,
     redactText: () : any => "[redacted]"
   });
-  let initialized: any = false;
+  let discovered: any = false;
   try {
-    await client.request("initialize", {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "meshrix-neutral-mcp-peer", version: "1" }
-    });
-    await client.notify("notifications/initialized", {});
-    initialized = true;
+    await client.request(MCP_DISCOVER_METHOD, {});
+    discovered = true;
     const response: any = await client.request("tools/call", {
       name: toolName,
       arguments: { arguments: { file: artifactReference, targetFormat: "pdf" } }
@@ -423,7 +417,7 @@ export async function runMcpDeniedCall({
     const denialStatus: any = Number(error?.statusCode || 0);
     const denialRpcCode: any = Number(error?.rpcCode || 0);
     if (
-      initialized ||
+      discovered ||
       [401, 403, 404].includes(denialStatus) ||
       denialRpcCode === -32601 ||
       /denied|forbidden|not_visible|unknown_tool|unauthorized|api_key_policy/iu.test(denialCode) ||
@@ -532,12 +526,7 @@ export async function runMcpApprovalRequest({
     redactText: redact
   });
   try {
-    await client.request("initialize", {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "release-journey-approval-gate", version: "0.0.1" }
-    });
-    await client.notify("notifications/initialized", {});
+    await client.request(MCP_DISCOVER_METHOD, {});
     const pending: any = await client.request("tools/call", {
       name: toolName,
       arguments: { arguments: { file: artifactReference, targetFormat: "pdf" } }

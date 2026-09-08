@@ -10,6 +10,11 @@ import process from "node:process";
 import tls from "node:tls";
 import { fileURLToPath } from "node:url";
 
+import {
+  MCP_DISCOVER_METHOD,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
+
 const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SHA256_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
 const GIT_COMMIT_PATTERN: any = /^[a-f0-9]{40}$/u;
@@ -534,12 +539,46 @@ function remoteHeaders(tokenEnvName?: any) : any {
     : {};
 }
 
-async function mcpProbe(url?: any, tokenEnvName?: any) : Promise<any> {
+async function mcpProbe(url?: any, tokenEnvName?: any, { dialect = "upstream-2025" }: Record<string, any> = {}) : Promise<any> {
   const commonHeaders: Record<string, any> = {
     "content-type": "application/json",
     accept: "application/json, text/event-stream",
     ...remoteHeaders(tokenEnvName),
   };
+  if (dialect === "meshrix-downstream") {
+    const discoverWire: any = mcpModernHttpRequest({
+      jsonrpc: "2.0",
+      id: "real-machine-probe",
+      method: MCP_DISCOVER_METHOD,
+      params: {},
+    }, commonHeaders);
+    const discover: any = await fetch(url, {
+      method: "POST",
+      headers: discoverWire.headers,
+      body: discoverWire.body,
+      signal: AbortSignal.timeout(30_000),
+    }).catch(() : any => null);
+    requireCondition(discover?.ok === true, "real_machine_remote_mcp_probe_failed");
+    const listWire: any = mcpModernHttpRequest({
+      jsonrpc: "2.0",
+      id: "real-machine-tools",
+      method: "tools/list",
+      params: {},
+    }, commonHeaders);
+    const response: any = await fetch(url, {
+      method: "POST",
+      headers: listWire.headers,
+      body: listWire.body,
+      signal: AbortSignal.timeout(30_000),
+    }).catch(() : any => null);
+    requireCondition(response?.ok === true, "real_machine_remote_mcp_probe_failed");
+    const text: any = await response.text();
+    requireCondition(
+      text.includes("result") || text.includes("event:"),
+      "real_machine_remote_mcp_probe_invalid",
+    );
+    return;
+  }
   const initialize: any = await fetch(url, {
     method: "POST",
     headers: commonHeaders,
@@ -623,10 +662,12 @@ async function publicCloudProbe() : Promise<any> {
   await mcpProbe(
     agentMcpUrl,
     "MESHRIX_REAL_MACHINE_PUBLIC_AGENT_MCP_TOKEN",
+    { dialect: "meshrix-downstream" },
   );
   await mcpProbe(
     upstreamMcpUrl,
     "MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_MCP_TOKEN",
+    { dialect: "upstream-2025" },
   );
   const faultUrl: any = requiredPublicUrl(
     "MESHRIX_REAL_MACHINE_PUBLIC_FAULT_URL",

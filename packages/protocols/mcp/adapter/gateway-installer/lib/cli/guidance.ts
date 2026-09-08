@@ -279,7 +279,7 @@ export function doctorGuidance(checks: Record<string, any> = {}, options: Record
   const scanCommand: any = shellCommandForScan({ includeUrl, baseUrl, tokenEnv });
   const installAutoCommand: any = shellCommandForInstall({ target: "auto", includeUrl, baseUrl, tokenEnv });
   const doctorWithTokenCommand: any = shellCommandForDoctor({ includeToken: true, includeUrl, baseUrl, tokenEnv });
-  if (!checks.signedDiscovery?.ok || !checks.discovery?.ok || !checks.initialize?.ok) {
+  if (!checks.signedDiscovery?.ok || !checks.discovery?.ok || !checks.discover?.ok) {
     return {
       nextCommand: discoverCommand,
       repairCommands: [
