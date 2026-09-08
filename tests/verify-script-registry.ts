@@ -1529,8 +1529,7 @@ const downstreamAgentToolLoopBaseReport: any = registeredReleaseReportFixture(DO
       status: "passed",
       realProxyTransport: true,
       protocol: "mcp-stdio-jsonl-json-rpc",
-      initialized: true,
-      initializedNotificationSent: true,
+      discovered: true,
       unexpectedNotificationResponses: 0,
       clientProtocolProfile: {
         target,
@@ -1578,9 +1577,9 @@ for (const [kind, mutate] of [
   ["missing-proxy-target", (report?: any) : any => { report.evidence.proxyClientTargets.pop(); }],
   ["destructive-tool-visible", (report?: any) : any => { report.evidence.proxyClientTargets[0].destructiveToolHidden = false; }],
   ["missing-target-credential-proof", (report?: any) : any => { report.evidence.proxyClientTargets[0].credentialProof.tokenProofMatchesIssuedCredential = false; }],
-  ["missing-initialized-notification", (report?: any) : any => { report.evidence.proxyClientTargets[0].initializedNotificationSent = false; }],
+  ["missing-discover", (report?: any) : any => { report.evidence.proxyClientTargets[0].discovered = false; }],
   ["wrong-client-framing", (report?: any) : any => { report.evidence.proxyClientTargets[0].clientProtocolProfile.framing = "content-length"; }],
-  ["missing-core-turn", (report?: any) : any => { report.evidence.proxyClientTargets[0].completedTurnIds = ["initialize"]; }],
+  ["missing-core-turn", (report?: any) : any => { report.evidence.proxyClientTargets[0].completedTurnIds = ["discover"]; }],
   ["missing-cancellation-closure", (report?: any) : any => { report.evidence.cancellationPropagation.upstreamCancellationObserved = false; }],
   ["missing-secret-store-credential-binding", (report?: any) : any => { delete report.evidence.secretStoreCredentialBinding; }]
 ]) {

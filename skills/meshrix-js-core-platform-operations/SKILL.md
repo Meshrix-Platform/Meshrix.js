@@ -21,7 +21,10 @@ service path may specialize data transfer, but it may not specialize policy.
 
 ## Work from current facts
 
-Run `git status --short` and inspect the core source that owns the behavior. Avoid copying command maps into documentation or skills; executable commands belong in `workflows/catalog.json`.
+Run `git status --short` and inspect the core source that owns the behavior.
+Read current command names from `package.json` and their owning implementation;
+use `docs/RUNBOOK.md` for purpose, prerequisites, and evidence meaning. Do not
+infer an executable workflow or authorization gate from an old catalog name.
 
 Route specialized work to:
 
@@ -46,10 +49,10 @@ Route specialized work to:
 - `$meshrix-js-storage-operations` for storage, uploads, checkpoints, or repair.
 - `$meshrix-js-platform-acceptance-workflow` for final readiness reduction.
 
-Offline delivery and the current plan receipt may close on Linux inside a
-virtual machine. Prefer Ubuntu; accept Debian. Native Linux and distribution
-qualification remain remaining required work after the named Real-Machine
-Verification Workflow. Project-level functional acceptance remains
-`npm run verify:acceptance`.
+Offline delivery may run on Linux inside a virtual machine. Prefer Ubuntu;
+accept Debian. That evidence does not establish native Linux or distribution
+qualification, which remains owned by the named Real-Machine Verification
+Workflow. Project-level functional acceptance remains `npm run
+verify:acceptance`.
 
-Plan verification with `npm test` or the changed-file profile.
+Select verification with `$meshrix-js-regression-planner`.

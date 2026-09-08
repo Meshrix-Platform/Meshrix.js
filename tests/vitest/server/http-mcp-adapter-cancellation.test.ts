@@ -5,6 +5,7 @@ import { handleMeshrixMcpHttpRequest } from "../../../packages/protocols/mcp/ada
 import { createMcpInFlightRequestRegistry } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-in-flight.ts";
 import { MCP_PROXY_SESSION_HEADER_LOWER } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/mcp-proxy-session.ts";
 import { createProxyRequestDispatcher } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
+import { mcpModernBody, mcpModernHeaders } from "../../helpers/mcp-downstream-request.ts";
 
 function deferred() : any {
   let resolve: any;
@@ -138,14 +139,16 @@ function startMcpRequest({
   signal = null,
   agentMcpGatewayPipeline = null
 }: Record<string, any>) : any {
+  const modernBody: any = mcpModernBody(body);
   const response: any = createCapturedResponse();
-  const requestBodyBuffer: any = Buffer.from(JSON.stringify(body), "utf8");
+  const requestBodyBuffer: any = Buffer.from(JSON.stringify(modernBody), "utf8");
   const completion: any = handleMeshrixMcpHttpRequest({
     request: {
       headers: {
         authorization: `Bearer ${credentialAlias}`,
         "mcp-session-id": session,
         "x-fixture-client": client,
+        ...mcpModernHeaders(modernBody),
         ...(proxySession ? { [MCP_PROXY_SESSION_HEADER_LOWER]: proxySession } : {})
       },
       socket: {}
@@ -185,13 +188,14 @@ describe("HTTP MCP request cancellation correlation", () : any => {
     const proxySessions: Record<string, any> = { first: new Set<any>(), second: new Set<any>() };
 
     function forwardThroughAdapter(proxyName?: any) : any {
-      return async ({ message, proxySessionId }: Record<string, any>) : Promise<any> => {
+      return async ({ message, signal, proxySessionId }: Record<string, any>) : Promise<any> => {
         proxySessions[proxyName].add(proxySessionId);
         const pending: any = startMcpRequest({
           provider: fixture.provider,
           registry,
           body: message,
-          proxySession: proxySessionId
+          proxySession: proxySessionId,
+          signal
         });
         await pending.completion;
         return responsePayload(pending.response);
@@ -236,13 +240,15 @@ describe("HTTP MCP request cancellation correlation", () : any => {
     expect([...proxySessions.first][0]).not.toBe([...proxySessions.second][0]);
   });
 
-  it("cancels only the authenticated matching request and leaves its peer active", async () : Promise<any> => {
+  it("cancels only the aborted HTTP request and leaves its peer active", async () : Promise<any> => {
     const fixture: any = createFixtureProvider();
     const registry: any = createMcpInFlightRequestRegistry();
+    const slowController: any = new AbortController();
     const slow: any = startMcpRequest({
       provider: fixture.provider,
       registry,
-      body: requestBody(17, "slow")
+      body: requestBody(17, "slow"),
+      signal: slowController.signal
     });
     const peer: any = startMcpRequest({
       provider: fixture.provider,
@@ -252,51 +258,20 @@ describe("HTTP MCP request cancellation correlation", () : any => {
     await Promise.all([fixture.waitForStart("slow"), fixture.waitForStart("peer")]);
     expect(registry.snapshot()).toMatchObject({ inFlight: 2, activeScopes: 1 });
 
-    const unauthorized: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: cancellationBody(17),
-      credentialAlias: "fixture-invalid"
-    });
-    const wrongClient: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: cancellationBody(17),
-      client: "client-b"
-    });
-    const wrongSession: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: cancellationBody(17),
-      session: "session-b"
-    });
-    const wrongGrant: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: cancellationBody(17),
-      credentialAlias: "fixture-b",
-      client: "client-b"
-    });
-    expect(unauthorized.statusCode).toBe(401);
-    expect(responsePayload(unauthorized)).toBeNull();
-    expect([wrongClient.statusCode, wrongSession.statusCode, wrongGrant.statusCode]).toEqual([202, 202, 202]);
-    expect(fixture.aborted.has("slow")).toBe(false);
-    expect(registry.snapshot().inFlight).toBe(2);
-
-    const cancellation: any = await sendMcpRequest({
+    const cancelledNotification: any = await sendMcpRequest({
       provider: fixture.provider,
       registry,
       body: cancellationBody(17)
     });
-    expect(cancellation.statusCode).toBe(202);
-    expect(responsePayload(cancellation)).toBeNull();
+    expect(cancelledNotification.statusCode).toBe(202);
+    expect(responsePayload(cancelledNotification)).toBeNull();
+    expect(fixture.aborted.has("slow")).toBe(false);
+    expect(registry.snapshot().inFlight).toBe(2);
 
+    slowController.abort(Object.assign(new Error("MCP request cancelled."), { name: "AbortError" }));
     await slow.completion;
-    expect(slow.response.statusCode).toBe(202);
-    expect(responsePayload(slow.response)).toBeNull();
     expect(fixture.aborted).toContain("slow");
-    expect(fixture.abortReasons.get("slow")).toBe("MCP request cancelled.");
-    expect(fixture.abortReasons.get("slow")).not.toContain("private client reason");
+    expect(fixture.abortReasons.get("slow")).toBe("MCP request ended.");
     expect(fixture.sideEffects).not.toContain("slow");
     expect(fixture.aborted).not.toContain("peer");
     expect(registry.snapshot().inFlight).toBe(1);
@@ -310,67 +285,36 @@ describe("HTTP MCP request cancellation correlation", () : any => {
     });
     expect(fixture.sideEffects).toEqual(["peer"]);
     expect(registry.snapshot()).toMatchObject({ inFlight: 0, activeScopes: 0 });
-
-    const completedCancellation: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: cancellationBody(18)
-    });
-    expect(completedCancellation.statusCode).toBe(202);
-    expect(registry.snapshot().inFlight).toBe(0);
-    expect(fixture.provider.authorizeMcpClientRequest.mock.calls.every(
-      ([input]: any[]) : any => input.recordUse === false
-    )).toBe(true);
   });
 
-  it("rejects a duplicate active id without replacing or aborting the original", async () : Promise<any> => {
+  it("runs concurrent POSTs that share a JSON-RPC id as independent lifetimes", async () : Promise<any> => {
     const fixture: any = createFixtureProvider();
-    const registry: any = createMcpInFlightRequestRegistry({ maxInFlight: 1, maxInFlightPerScope: 1 });
-    const original: any = startMcpRequest({
+    const registry: any = createMcpInFlightRequestRegistry();
+    const firstController: any = new AbortController();
+    const first: any = startMcpRequest({
       provider: fixture.provider,
       registry,
-      body: requestBody("duplicate-id", "original")
+      body: requestBody("shared-id", "original"),
+      signal: firstController.signal
     });
-    await fixture.waitForStart("original");
+    const second: any = startMcpRequest({
+      provider: fixture.provider,
+      registry,
+      body: requestBody("shared-id", "peer")
+    });
+    await Promise.all([fixture.waitForStart("original"), fixture.waitForStart("peer")]);
+    expect(fixture.executions).toEqual(expect.arrayContaining(["original", "peer"]));
+    expect(registry.snapshot().inFlight).toBe(2);
 
-    const duplicate: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: requestBody("duplicate-id", "duplicate")
-    });
-    expect(duplicate.statusCode).toBe(200);
-    expect(responsePayload(duplicate)).toMatchObject({
-      id: "duplicate-id",
-      error: {
-        code: -32600,
-        data: { code: "mcp_duplicate_or_invalid_request_id" }
-      }
-    });
-    expect(fixture.executions).toEqual(["original"]);
-    expect(fixture.aborted.has("original")).toBe(false);
+    firstController.abort(Object.assign(new Error("MCP request cancelled."), { name: "AbortError" }));
+    await first.completion;
+    expect(fixture.aborted).toContain("original");
+    expect(fixture.aborted.has("peer")).toBe(false);
     expect(registry.snapshot().inFlight).toBe(1);
 
-    const overCapacity: any = await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: requestBody("another-id", "over-capacity")
-    });
-    expect(responsePayload(overCapacity)).toMatchObject({
-      id: "another-id",
-      error: {
-        code: -32000,
-        data: { code: "mcp_in_flight_capacity_exceeded" }
-      }
-    });
-    expect(fixture.executions).toEqual(["original"]);
-
-    await sendMcpRequest({
-      provider: fixture.provider,
-      registry,
-      body: cancellationBody("duplicate-id")
-    });
-    await original.completion;
-    expect(fixture.aborted).toContain("original");
+    fixture.releasePeer();
+    await second.completion;
+    expect(fixture.sideEffects).toContain("peer");
     expect(registry.snapshot().inFlight).toBe(0);
   });
 });

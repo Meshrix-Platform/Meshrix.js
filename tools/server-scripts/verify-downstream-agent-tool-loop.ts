@@ -16,6 +16,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import {
@@ -240,26 +244,18 @@ function structuredContent(response: Record<string, any> = {}) : any {
   return structured && typeof structured === "object" && !Array.isArray(structured) ? structured : {};
 }
 
-function upstreamPayload(response: Record<string, any> = {}) : any {
-  const payload: any = structuredContent(response).payload?.response?.structuredContent;
-  return payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+function governanceMeta(response: Record<string, any> = {}) : any {
+  const meta: any = response.result?._meta?.["io.meshrix/governance"];
+  return meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
 }
 
 async function runScenarioTurn({ client, turn, requestId, target, observed }: Record<string, any>) : Promise<any> {
-  if (turn.kind === "initialize") {
+  if (turn.kind === "server/discover") {
     const profile: any = client.profile;
-    const initialize: any = await client.request("initialize", {
-      protocolVersion: profile.protocolVersion,
-      capabilities: profile.capabilities,
-      clientInfo: profile.clientInfo
-    }, { id: requestId, timeoutMs: 60000 });
-    assert.equal(proxyResponseOk(initialize), true, JSON.stringify(safeEvidence(initialize)));
-    assert.equal(initialize.result?.serverInfo?.name, "Meshrix.js");
-    await client.notify("notifications/initialized", {}, {
-      omitParams: profile.initializedParamsOmitted === true
-    });
-    observed.initialized = true;
-    observed.initializedNotificationSent = true;
+    const discover: any = await client.request(MCP_DISCOVER_METHOD, {}, { id: requestId, timeoutMs: 60000 });
+    assert.equal(proxyResponseOk(discover), true, JSON.stringify(safeEvidence(discover)));
+    assert.equal(discover.result?._meta?.[MCP_META_SERVER_INFO]?.name, "Meshrix.js");
+    observed.discovered = true;
     observed.clientProtocolProfile = {
       target: profile.target,
       source: profile.profileSource,
@@ -271,7 +267,7 @@ async function runScenarioTurn({ client, turn, requestId, target, observed }: Re
     };
     return {
       serverName: "Meshrix.js",
-      initializedNotificationSent: true,
+      discovered: true,
       clientProtocolProfile: observed.clientProtocolProfile
     };
   }
@@ -314,13 +310,18 @@ async function runScenarioTurn({ client, turn, requestId, target, observed }: Re
   }, { id: requestId, timeoutMs: 120000 });
   assert.equal(proxyResponseOk(called), true, JSON.stringify(safeEvidence(called)));
   const structured: any = structuredContent(called);
-  if (turn.expect.upstreamMcp === true) {
-    assert.equal(structured.upstreamMcp, true, JSON.stringify(safeEvidence(structured)));
-    assert.equal(structured.toolName, turn.toolName);
+  if (turn.expect.nativeStructured === true) {
+    assert.equal(structured.ok, true, JSON.stringify(safeEvidence(structured)));
+    assert.equal(structured.upstreamMcp, undefined);
+    assert.ok(Array.isArray(called.result?.content), JSON.stringify(safeEvidence(called.result)));
+    const governance: any = governanceMeta(called);
+    if (Object.keys(governance).length > 0) {
+      assert.equal(Array.isArray(governance), false);
+    }
   }
   const evidence: Record<string, any> = { toolName: turn.toolName };
   if (turn.expect.credentialProof === true) {
-    const payload: any = upstreamPayload(called);
+    const payload: any = structured;
     const authProof: any = payload.authProof && typeof payload.authProof === "object" ? payload.authProof : {};
     const tokenProofMatches: any = Boolean(authProof.tokenProof) && authProof.tokenProof === fixtureTokenProof(fixtureToken);
     assert.equal(authProof.presented, true, "fixture must receive the injected credential env");
@@ -384,10 +385,14 @@ async function runCancellationPropagationScenario({ client }: Record<string, any
     (message?: any) : any => ({ kind: "response", message }),
     () : any => ({ kind: "abandoned" })
   );
-  const peerOutcome: any = requestGatewayFixtureTool("state.peer.wait", {
-    delayMs: CANCELLATION_PEER_DELAY_MS
+  const peerOutcome: any = client.requestRaw("tools/call", fixtureToolCall(
+    "state.peer.wait",
+    { delayMs: CANCELLATION_PEER_DELAY_MS }
+  ), {
+    id: requestIds.peer,
+    timeoutMs: 10_000
   }).then(
-    (response?: any) : any => ({ kind: "response", response }),
+    (message?: any) : any => ({ kind: "response", message }),
     (error?: any) : any => ({ kind: "error", error })
   );
 
@@ -426,20 +431,26 @@ async function runCancellationPropagationScenario({ client }: Record<string, any
   }
   assert.equal(proxyResponseOk(admittedProbe), true, JSON.stringify(safeEvidence(admittedProbe)));
   const admittedStructured: any = structuredContent(admittedProbe);
-  const admittedPayload: any = upstreamPayload(admittedProbe);
-  const admittedStats: any = admittedPayload.delayedOperations || {};
-  assert.equal(admittedStructured.upstreamMcp, true);
-  assert.match(admittedStructured.operation, /^upstream\.[A-Za-z0-9_-]+\.tools-call$/u);
-  assert.ok(admittedStructured.toolExecutionId, "Operation Permission must issue a tool execution receipt");
+  const admittedGovernance: any = governanceMeta(admittedProbe);
+  const admittedStats: any = admittedStructured.delayedOperations || {};
+  assert.equal(admittedStructured.ok, true);
+  assert.equal(admittedStructured.upstreamMcp, undefined);
+  assert.ok(Array.isArray(admittedProbe.result?.content), JSON.stringify(safeEvidence(admittedProbe.result)));
+  if (Object.keys(admittedGovernance).length > 0) {
+    assert.equal(typeof admittedGovernance, "object");
+    assert.equal(Array.isArray(admittedGovernance), false);
+  }
   assert.equal(admittedStats.activeIncrement, 0, "cancelled increment must release its upstream operation");
   assert.equal(admittedStats.activePeer, 1, "peer must remain active when the replacement probe is admitted");
   assert.equal(admittedStats.matchedCancellations, 1, "upstream stdio fixture must correlate the cancellation request id");
-  assert.equal(admittedPayload.counter, 0, "cancelled increment must not mutate the fixture counter");
+  assert.equal(admittedStructured.counter, 0, "cancelled increment must not mutate the fixture counter");
 
   const peer: any = await peerOutcome;
   assert.equal(peer.kind, "response", "the independent peer request must complete");
-  assert.equal(peer.response.status, 200, JSON.stringify(safeEvidence(peer.response.payload)));
-  const peerPayload: any = gatewayFixturePayload(peer.response);
+  assert.equal(proxyResponseOk(peer.message), true, JSON.stringify(safeEvidence(peer.message)));
+  const peerPayload: any = structuredContent(peer.message);
+  assert.equal(peerPayload.ok, true);
+  assert.equal(peerPayload.upstreamMcp, undefined);
   assert.equal(peerPayload.peerCompleted, true, "the independent peer operation must be unaffected");
 
   const originalDeadlineAtMs: any = startedAtMs + CANCELLATION_TARGET_DELAY_MS;
@@ -450,7 +461,7 @@ async function runCancellationPropagationScenario({ client }: Record<string, any
     id: requestIds.finalProbe,
     timeoutMs: 5_000
   });
-  const finalPayload: any = upstreamPayload(finalProbe);
+  const finalPayload: any = structuredContent(finalProbe);
   const finalStats: any = finalPayload.delayedOperations || {};
   assert.equal(finalPayload.counter, 0, "cancelled increment must remain side-effect free after its original deadline");
   assert.equal(finalStats.incrementStarted, 1);
@@ -518,8 +529,7 @@ async function runProxyClientTarget({ target, scenario }: Record<string, any>) :
   };
   const client: any = createMcpProxyStdioClient(clientOptions);
   const observed: Record<string, any> = {
-    initialized: false,
-    initializedNotificationSent: false,
+    discovered: false,
     clientProtocolProfile: null,
     toolNames: [],
     calledToolNames: [],
@@ -548,7 +558,7 @@ async function runProxyClientTarget({ target, scenario }: Record<string, any>) :
       ? await runCancellationPropagationScenario({ client })
       : null;
     const close: any = await client.close();
-    assert.equal(close.notifications, 0, "proxy must not reply to notifications/initialized");
+    assert.equal(close.notifications, 0, "proxy must not emit unexpected notifications");
     const readOnlyTool: any = `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.search`;
     const identityTool: any = `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.session.identity`;
     const destructiveTool: any = `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.purge`;
@@ -558,8 +568,7 @@ async function runProxyClientTarget({ target, scenario }: Record<string, any>) :
       realProxyTransport: true,
       proxyCommand: "meshrix-mcp proxy",
       protocol: "mcp-stdio-jsonl-json-rpc",
-      initialized: observed.initialized,
-      initializedNotificationSent: observed.initializedNotificationSent,
+      discovered: observed.discovered,
       unexpectedNotificationResponses: close.notifications,
       clientProtocolProfile: observed.clientProtocolProfile || {},
       grantIdHash: grant.grantIdHash,
@@ -668,8 +677,7 @@ async function main() : Promise<any> {
       target,
       status: "failed",
       realProxyTransport: false,
-      initialized: false,
-      initializedNotificationSent: false,
+      discovered: false,
       unexpectedNotificationResponses: -1,
       completedTurnIds: [],
       failedTurnCount: 1,

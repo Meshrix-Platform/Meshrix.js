@@ -15,7 +15,7 @@ const markdownReportPath: any = path.join(reportDir, "architecture-graph.md");
 const dependencyRules: any = require("../registry/dependency-rules.registry.json");
 const rootPackageJson: any = require("../../package.json");
 
-const SOURCE_ROOTS: readonly any[] = Object.freeze(["apps", "packages", "plugins", "tools"]);
+const SOURCE_ROOTS: readonly any[] = Object.freeze(["apps", "packages", "plugins", "tools", "skills"]);
 const SOURCE_EXTENSIONS: any = new Set<any>([".js", ".mjs", ".ts", ".cjs", ".tsx", ".vue"]);
 const TARGET_EXTENSIONS: any = new Set<any>([...SOURCE_EXTENSIONS, ".css", ".json"]);
 const EXCLUDED_SEGMENTS: any = new Set<any>([

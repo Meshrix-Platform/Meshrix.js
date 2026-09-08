@@ -208,7 +208,18 @@ describe("runtime refactor routing and MCP discovery", () : any => {
     }]);
 
     const publicName: any = "upstream.discovery-fixture.records.list";
-    const subject: Record<string, any> = { scopes: ["gateway:read"] };
+    const subject: Record<string, any> = {
+      type: "tool-grant",
+      subjectId: "subject-1",
+      grantId: "grant-1",
+      grant: {
+        id: "grant-1",
+        subjectId: "subject-1",
+        dynamicCapabilities: ["cap:upstream:discovery-fixture:tools-call-records-list"]
+      },
+      scopes: ["gateway:read"],
+      dynamicCapabilities: ["cap:upstream:discovery-fixture:tools-call-records-list"]
+    };
     const first: any = await registry.callMcpToolByPublicName(publicName, { arguments: { owner: "a" } }, subject);
     expect(first).toMatchObject({ ok: true, serviceId: "discovery-fixture" });
     expect(listTools).toHaveBeenCalledTimes(1);

@@ -97,15 +97,38 @@ The publishing protocol uses catalog-change messages as scoped invalidation sign
 
 Compatible downstream consumers may compare the revision, perform an authenticated catalog list, validate the response, and replace their own cache partition. That consumer behavior is outside Core ownership. A stale consumer cache never authorizes execution because the server re-evaluates the current catalog and policy.
 
+### Upstream MCP execution sessions
+
+Upstream execution sessions are scoped to a trusted principal and grant, not to a TCP connection or child process. Effective state survives idle and maximum-lifetime timers and is not evicted for another caller. Lost upstream context returns an explicit state-loss error; the same logical session does not silently rebuild. Capacity rejection applies to new execution callers; existing callers keep a reserved ephemeral channel for catalog refresh and health. Grant or API-key rotation and revocation release matching execution sessions after in-flight work drains. Same-principal business contexts that must not share state need an explicit business handle.
+
 The published protocol is the complete server-client boundary. Core owns only server-side schema, negotiation, authentication, authorization, scoped notification, pull, acknowledgement, disconnect, and reconnect-fence semantics. Core plans, source, tests, gates, and receipts must not depend on a client repository, implementation, build, plan, test, report, or receipt. Server conformance is proven with protocol-owned schemas, frozen wire corpora, and neutral mock peers. Client adoption is independently verified by each client owner and cannot block or promote a server receipt.
 
 ### Downstream update subscriptions
 
-Downstream HTTP MCP uses protocol version `2026-07-28`. A connector that has
+Downstream HTTP MCP uses protocol revision `2026-07-28`. Ordinary success
+results use `resultType: "complete"`, including `meshrix/catalog/acknowledge`.
+Discover advertises `supportedVersions` and places server identity in
+`_meta["io.modelcontextprotocol/serverInfo"]`. Required request `_meta` and
+`MCP-Protocol-Version` / `Mcp-Method` headers must agree; `tools/call` also
+requires `Mcp-Name`. Malformed or unsafe header values are rejected even when
+they match the body. A name mismatch uses generic text and does not echo the
+body name or resource URI. HTTP POST accepts exactly one JSON-RPC request or
+notification; a batch is rejected before authorization or execution. Modern
+`initialize` is not a downstream method. Upstream MCP forwarding keeps its
+independent initialize/session revision.
+
+The published `meshrix-mcp-connector` package and the offline portable
+connector both depend on the shared `http-mcp-adapter-client-wire` contract,
+not the server protocol-owner module. Portable vendor assembly copies that
+module next to the existing constants vendor file. A connector that has
 explicitly persisted `autoUpdate: true` opens one authenticated
-`subscriptions/listen` POST stream and requests a closed notification set:
-tool-list invalidation, Skill Hub catalog invalidation, and Meshrix connector
-update availability. A false or absent preference opens no stream.
+`subscriptions/listen` POST stream and requests an object capability filter
+(`toolsListChanged` and the Meshrix extras). Known-but-unsupported types are
+omitted; `false` means not subscribed; unknown types are ignored. The
+subscription id is the original JSON-RPC request id. The first SSE event is
+`notifications/subscriptions/acknowledged`. A false or absent preference opens
+no stream. Standard clients do not need a proxy session header or a private
+identity header.
 
 Skill Hub exposes its own authenticated, cursor-resumable event stream. Core's
 external-service gateway owns that connection and credential, reduces each

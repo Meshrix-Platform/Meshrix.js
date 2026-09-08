@@ -17,7 +17,7 @@ export const SCRIPT_CATEGORIES: Readonly<Record<string, any>> = Object.freeze({
 
 /**
  * @typedef {"hygiene"|"unit"|"integration"|"external"|"release"} ScriptTier
- * @typedef {"none"|"build-output"|"runtime-data"|"network"|"docker"|"network-service"|"source-write"|"destructive"} ScriptSideEffect
+ * @typedef {"none"|"build-output"|"runtime-data"|"temp-files"|"network"|"docker"|"network-service"|"source-write"|"destructive"} ScriptSideEffect
  *
  * @typedef {Object} ScriptEntry
  * @property {string} scriptName - package.json script name
@@ -462,18 +462,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/verify-npm-package-installability.ts",
       "tools/server-scripts/lib/lock-backed-npm-registry.ts"
     ], outputs: ["build/reports/npm-package-installability.json"],
-  },
-  "verify:better-plan": {
-    scriptName: "verify:better-plan", command: "npm run verify:better-plan", category: "verifier", subsystem: "documentation",
-    owner: "platform", tier: "hygiene", sideEffects: "build-output",
-    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
-    inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts", "tools/server-scripts/verify-better-plan.ts"], outputs: ["build/reports/better-plan.json"],
-  },
-  "plan:next": {
-    scriptName: "plan:next", command: "npm run plan:next", category: "maintenance", subsystem: "planning",
-    owner: "platform", tier: "hygiene", sideEffects: "none",
-    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
-    inputs: ["docs/plans/Manifest.json", "docs/plans/production-use-closure/Plan.json", "docs/plans/production-use-closure/Plan.md", "docs/plans/production-use-closure/Checkpoints.json", "tools/plan/current-plan-authority.ts"], outputs: [],
   },
   "verify:composition-source-package": {
     scriptName: "verify:composition-source-package", command: "npm run verify:composition-source-package", category: "packaging", subsystem: "release-source",
@@ -1104,6 +1092,17 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     owner: "platform", tier: "integration", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
     inputs: ["tools/plugins/**", "plugins/**", "services/**", "tests/plugins/**"], outputs: ["build/plugins/**"],
+  },
+  "verify:skill-tools": {
+    scriptName: "verify:skill-tools", command: "npm run verify:skill-tools", category: "test", subsystem: "skill-tools",
+    owner: "platform", tier: "unit", sideEffects: "temp-files",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: [
+      "tools/skill-tests/operator-cli.test.mjs",
+      "skills/meshrix-js-api-key-issuance/scripts/issue-api-key.mjs",
+      "skills/meshrix-js-api-key-issuance/references/issuance-request.example.json",
+      "skills/meshrix-js-organization-governance/scripts/configure-organization.mjs"
+    ], outputs: [],
   },
   "verify:local-services": {
     scriptName: "verify:local-services", command: "npm run verify:local-services", category: "verifier", subsystem: "services",

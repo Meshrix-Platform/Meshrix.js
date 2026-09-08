@@ -1,123 +1,82 @@
 ---
 name: meshrix-js-api-key-issuance
-description: Issue a Meshrix.js organization-scoped API Key for a downstream MCP client (for example Command Code, Claude Code, or a custom connector) through the authenticated operation-permission API — including the organization-governance prerequisite check, minimal organization publication when unconfigured, policy construction, and key output. Use when a client needs an mxak1 key to call Meshrix.js MCP tools.
+description: Issue an organization-scoped Meshrix.js API Key with an explicitly selected policy and private credential delivery. Use when a downstream MCP client needs a new key; diagnose existing access before issuing another.
 ---
 
 # Meshrix.js API Key Issuance
 
-This skill owns **issuing an organization-scoped API Key** on a Meshrix.js
-instance for a downstream MCP client. It covers the full prerequisite chain:
-organization governance must be configured before a key can be scoped to a
-node, and the key policy binds protocol, toolsets, scopes, risk, audience,
-resources, process identity, limits, and the catalog fingerprint.
+Use the authenticated Operation Permission API for an authorized key request.
+The actor needs `auth:admin`. Existing authorization for the same instance,
+organization node, policy, expiry, and delivery destination remains valid.
+Creating a key does not authorize publishing organization governance or
+changing a client's configuration.
 
-## Establish authority
+## Prepare the request
 
-1. Run `git status --short` for every repository boundary before editing.
-2. The issuing actor needs `auth:admin` (the initial owner has it). Log in
-   through `POST <server-url>/api/auth/login` and use the session cookie plus
-   CSRF headers on every mutating request.
-3. This skill issues keys only. Operation Permission, grants, and gateway
-   behavior are owned by `$meshrix-js-operation-permission` and
-   `$meshrix-js-protocol-gateway`.
+Read the current Operation Permission catalog and
+`GET /api/operation-permission/v1/api-keys/issuer-scopes`. Select the authorized
+organization node from `eligibleNodes`; do not choose the first node by default.
+If organization governance is unconfigured, route the prerequisite to
+`$meshrix-js-organization-governance` with its own authorized organization shape.
 
-## Prerequisite: organization governance
+Start from the [request example](references/issuance-request.example.json) and
+replace every placeholder in a private working copy. It is an example, not an
+approved policy. Set the requested capabilities or tools, scopes, resource
+restrictions, process identity, limits, and expiry explicitly. Do not add
+gateway write access, high risk, or unrestricted resources as defaults.
 
-`GET <server-url>/api/authorization/organization-governance` reports
-`snapshot.configured`. When `configured` is `false`, key issuance fails with
-`api_key_scope_denied` (the `organizationNodeId` must be inside the issuer's
-eligible nodes). Configure the organization first through
-`$meshrix-js-organization-governance` — import a built-in template (for
-example `enterprise-group`) and publish it. Do not hand-write a minimal
-draft; the built-in templates are the default path.
+For upstream-projected operations, select the current dynamic capability IDs
+from the catalog. A successful login or MCP discover does not prove that the
+key exposes the intended tools. Diagnose `tools/list` against the existing
+policy and catalog before issuing more credentials.
 
-After publishing, `GET /api/operation-permission/v1/api-keys/issuer-scopes`
-returns `catalogFingerprint`, `serverAudience`, and `eligibleNodes`. Use the
-first `eligibleNodes[].nodeId` as `organizationNodeId`.
+`audience.targetIds: []` allows a standard client without a product identity
+header. Set a non-empty list only when that restriction is part of the request;
+a client does not need to belong to the packaged adapter catalog. The server
+owns policy validation and normalization in
+`packages/capabilities/src/operation-permission-core/api-key-distribution-worker-owner.ts`.
+The helper fills only `audience.serverAudience` and `catalogFingerprint` from
+the live issuer scope. If supplied bindings differ, review the changed
+authority before executing a revised request.
 
-## Issue the key
+## Execute and deliver privately
 
-`POST /api/operation-permission/v1/api-keys` with:
+Resolve [issue-api-key.mjs](scripts/issue-api-key.mjs) from this skill directory;
+it also works from the installed package. Run it with the approved request:
 
-```json
-{
-  "workloadDisplayName": "command-code",
-  "organizationNodeId": "<eligible node id>",
-  "expiresAt": "<ISO-8601 future timestamp>",
-  "policy": {
-    "protocol": "mcp",
-    "serviceIds": [],
-    "capabilityIds": ["<dynamic capability id>"],
-    "toolsetIds": ["meshrix.gateway.read", "meshrix.gateway.write"],
-    "allowedTools": [],
-    "deniedTools": [],
-    "scopeIds": ["gateway:read", "gateway:write"],
-    "maximumRisk": "high",
-    "audience": { "serverAudience": "<server-audience>", "targetIds": ["<target>"], "connectorPackageIds": [] },
-    "resources": {
-      "mode": "unrestricted", "workspaceIds": [], "dataClassifications": [], "egressClasses": [],
-      "semanticFamilies": [], "capabilityDomains": [], "capabilityVerbs": [], "resourceKinds": [],
-      "effectKinds": [], "secretBindingIds": [], "allowedOrigins": [], "allowedCidrs": []
-    },
-    "processIdentity": { "mode": "optional" },
-    "limits": { "maxUses": 100, "requestsPerWindow": 100, "windowSeconds": 3600, "maxConcurrentEffects": 4 },
-    "catalogFingerprint": "<from issuer-scopes>"
-  }
-}
+```sh
+node <skill-dir>/scripts/issue-api-key.mjs \
+  --origin <server-origin> --username <issuing-actor> \
+  --request <private-approved-request.json> \
+  --key-file <new-private-credential-file> \
+  --password-stdin < <private-password-file>
 ```
 
-Validation facts learned from the server (`api-key-distribution-worker-owner`):
+The password comes from a private input file or secret-provider pipe, never a
+command argument. The helper creates the specified credential file exclusively
+with mode `0600`, writes the key there once, and prints only delivery status.
+Use a private destination outside tracked repository content. Do not print the
+file, copy its contents into tool calls, or retain it in reports. Deliver it to
+the already-authorized client or credential store and remove temporary secret
+material when that handoff is complete.
 
-- `policy.protocol` must be `"mcp"` and `policy.maximumRisk` must be one of
-  `low | medium | high` (not the grant risk words); otherwise
-  `api_key_input_invalid`.
-- `policy.audience.targetIds` must be non-empty; use a Meshrix MCP client
-  target such as `opencode` (the MCP client catalog lives in
-  `packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts`).
-- All of `audience`, `resources`, `processIdentity`, `limits`, and
-  `catalogFingerprint` are required by the server even though the JSON schema
-  lists them as optional; omitting any fails with
-  `input.policy is missing a required property`.
-- To see **upstream-projected** tools (for example the ***REMOVED***
-  MCP tools behind the gateway), `policy.capabilityIds` must list each tool's
-  dynamic capability id (`cap:upstream:<serviceId>:<operationKey>`, visible in
-  the Operation Permission catalog as the tool's `dynamicCapability.capabilityId`).
-  Without it the key authenticates but `tools/list` returns zero tools.
+The helper logs in, checks governance and the exact eligible node, then issues
+once. It never publishes an organization, chooses a replacement node, broadens
+the supplied policy, or configures another application. It rejects unknown or
+missing arguments and invalid risk values before making requests; `--help`
+does not authenticate. The request JSON uses the server's current policy shape.
 
-The response body carries `apiKey` (the `mxak1`-prefixed plaintext) exactly
-once. Consume it in memory and never log, persist, or embed it in
-configuration that is committed.
+A transport failure during issuance can leave the outcome uncertain. Inspect
+the issuance record before retrying. If issuance succeeded but private delivery
+failed, reconcile or revoke that undelivered key through the owning API;
+do not silently create another. Login cookies, passwords, response bodies, and
+key plaintext never belong in ordinary output.
 
-## Configure the downstream client
+## Verify the intended access
 
-The client sends the key in the `X-Meshrix.js-Api-Key` header to
-`<server-url>/mcp` (Meshrix's MCP ingress). For Command Code:
-
-```bash
-cmd mcp add-json meshrix '{"type":"http","url":"<server-url>/mcp","headers":{"X-Meshrix.js-Api-Key":"<mxak1...>"}}'
-```
-
-Anonymous `initialize` succeeds but `tools/list` returns zero tools; the key
-is what projects the authorized tool catalog (for example
-`meshrix.gateway` upstream services).
-
-## Tooling
-
-`scripts/issue-api-key.mjs` runs the whole flow: login, governance check
-(with optional minimal publication), issuer-scope discovery, key issuance,
-and plaintext output.
-
-```bash
-node skills/meshrix-js-api-key-issuance/scripts/issue-api-key.mjs \
-  --origin http://127.0.0.1:7228 \
-  --username owner --password '...' \
-  --display-name command-code \
-  [--publish-minimal-org]
-```
-
-## Boundaries
-
-Never print the key except as the single script output. Never commit a key or
-a populated policy into a repository. Key rotation and revocation belong to
-the same API (`rotate` / `revoke`) and are owned by this skill's lifecycle;
-see `$meshrix-js-operation-permission` for grant semantics.
+The client sends the credential to `<server-origin>/mcp` using
+`X-Meshrix.js-Api-Key` or an accepted bearer header. Use
+`$meshrix-js-downstream-mcp-client-access` for an authorized client configuration
+change. Verify the selected catalog and allowed operation without claiming
+access outside the approved policy. Rotation and revocation use the same
+Operation Permission API; `$meshrix-js-operation-permission` owns their semantics.

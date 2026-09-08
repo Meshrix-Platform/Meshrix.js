@@ -8,6 +8,10 @@ import { promisify } from "node:util";
 
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import {
+  MCP_DISCOVER_METHOD,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
+import {
   MCP_SUPPORTED_TARGETS,
   MCP_TARGET_LABELS
 } from "../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
@@ -170,20 +174,17 @@ async function fetchJson(route?: any, options: Record<string, any> = {}) : Promi
   return { status: response.status, payload };
 }
 
-async function mcpInitialize() : Promise<any> {
+async function mcpDiscover() : Promise<any> {
+  const wire: any = mcpModernHttpRequest({
+    jsonrpc: "2.0",
+    id: 1,
+    method: MCP_DISCOVER_METHOD,
+    params: {}
+  });
   return fetchJson("/mcp", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "mcp-release-target-scope", version: "1" }
-      }
-    })
+    headers: wire.headers,
+    body: wire.body
   });
 }
 
@@ -245,12 +246,12 @@ try {
     };
   });
 
-  await test("real MCP initialize metadata exposes exactly the release targets", async () : Promise<any> => {
-    const initialize: any = await mcpInitialize();
-    assert.equal(initialize.status, 200);
-    const meta: any = initialize.payload?.result?._meta || {};
-    assertReleaseTargets(meta.priorityTargets || [], "initialize priorityTargets");
-    assertReleaseTargets(targetIds(meta.supportedTargets || []), "initialize supportedTargets");
+  await test("real MCP discover metadata exposes exactly the release targets", async () : Promise<any> => {
+    const discover: any = await mcpDiscover();
+    assert.equal(discover.status, 200);
+    const meta: any = discover.payload?.result?._meta || {};
+    assertReleaseTargets(meta.priorityTargets || [], "discover priorityTargets");
+    assertReleaseTargets(targetIds(meta.supportedTargets || []), "discover supportedTargets");
     return {
       priorityTargetCount: meta.priorityTargets?.length || 0,
       supportedTargetCount: meta.supportedTargets?.length || 0

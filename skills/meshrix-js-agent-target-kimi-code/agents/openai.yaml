@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Target Kimi Code"
-  short_description: "Reference kimi-code 适配项: forms, paths, sessions, access"
-  default_prompt: "Use $meshrix-js-agent-target-kimi-code as reference for kimi-code 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."
+  short_description: "Kimi Code CLI configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-kimi-code to locate Kimi Code CLI configuration facts and the current Meshrix.js MCP integration owner."

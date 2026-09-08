@@ -356,6 +356,8 @@ try {
       "app/package.json",
       "app/vendor/contracts/mcp-catalog-delivery.ts",
       "app/vendor/contracts/serialization/canonical-json.ts",
+      "app/vendor/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "app/vendor/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts",
       "app/README.md",
       "app/LICENSE",
       "LICENSE",

@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Target Copilot"
-  short_description: "Reference copilot 适配项: forms, paths, sessions, access"
-  default_prompt: "Use $meshrix-js-agent-target-copilot as reference for copilot 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."
+  short_description: "GitHub Copilot CLI configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-copilot to locate GitHub Copilot CLI configuration facts and the current Meshrix.js MCP integration owner."

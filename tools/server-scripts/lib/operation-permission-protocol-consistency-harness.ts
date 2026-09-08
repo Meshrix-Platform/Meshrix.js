@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./upstream-gateway-verifier-publication.ts";
 import { createProtocolConsistencyTokenHeaders } from "./operation-permission-protocol-consistency-helpers.ts";
 import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
@@ -322,7 +323,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     id: any = 1,
     expectedStatuses: any = [200, 202, 400, 401, 403, 410, 429]
   ) : Promise<any> {
-    const body: any = JSON.stringify({
+    const wire: any = mcpModernHttpRequest({
       jsonrpc: "2.0",
       id,
       method: "tools/call",
@@ -339,11 +340,9 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     const response: any = await fetchJson("/mcp", {
       method: "POST",
       headers: tokenHeaders(token, {
-        method: "POST",
-        route: "/mcp",
-        body
+        extraHeaders: wire.headers
       }),
-      body,
+      body: wire.body,
       expectedStatuses
     });
     return response.payload;

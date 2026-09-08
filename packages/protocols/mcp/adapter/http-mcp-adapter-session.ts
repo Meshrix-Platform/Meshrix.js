@@ -156,12 +156,43 @@ export function mcpSubjectFromGrant(grant: any = null) : any {
       toolsets: []
     };
   }
+  const metadata: any = grantMetadata(grant);
+  const dynamicCapabilities: any = normalizeGrantValues([
+    ...(Array.isArray(grant.dynamicCapabilities) ? grant.dynamicCapabilities : []),
+    ...(Array.isArray(grant.upstreamCapabilities) ? grant.upstreamCapabilities : []),
+    ...(Array.isArray(grant.capabilities) ? grant.capabilities : []),
+    ...(Array.isArray(metadata.dynamicCapabilities) ? metadata.dynamicCapabilities : []),
+    ...(Array.isArray(metadata.upstreamCapabilities) ? metadata.upstreamCapabilities : []),
+    ...(Array.isArray(metadata.capabilities) ? metadata.capabilities : [])
+  ], 512);
+  const allowedServiceIds: any = normalizeGrantValues([
+    ...(Array.isArray(grant.allowedServiceIds) ? grant.allowedServiceIds : []),
+    ...(Array.isArray(metadata.allowedServiceIds) ? metadata.allowedServiceIds : [])
+  ], 512);
+  const allowedSecretBindings: any = normalizeGrantValues([
+    ...(Array.isArray(grant.allowedSecretBindings) ? grant.allowedSecretBindings : []),
+    ...(Array.isArray(metadata.allowedSecretBindings) ? metadata.allowedSecretBindings : [])
+  ], 512);
+  const subjectId: any = String(grant.subjectId || grant.subject?.id || grant.id || "");
+  const grantId: any = String(grant.id || "");
   return {
     type: "tool-grant",
-    subjectId: String(grant.id || ""),
+    subjectId,
+    grantId,
+    grant: {
+      id: grantId,
+      subjectId,
+      dynamicCapabilities,
+      allowedServiceIds,
+      allowedSecretBindings
+    },
     label: String(grant.label || grant.id || ""),
     scopes: normalizeGrantValues(grant.scopes || [], 512),
-    toolsets: normalizeGrantValues(grant.toolsets || [], 256)
+    toolsets: normalizeGrantValues(grant.toolsets || [], 256),
+    dynamicCapabilities,
+    allowedServiceIds,
+    allowedSecretBindings,
+    maxRisk: String(grant.maxRisk || grant.max_risk || metadata.maxRisk || metadata.max_risk || "")
   };
 }
 
@@ -191,6 +222,8 @@ export function mcpSubjectFromAuthorization(authorization: any = null) : any {
   return {
     type: "scoped-api-key",
     subjectId: String(apiKeyAuthorization.workloadPrincipalId || ""),
+    grantId: String(authorization?.grant?.id || apiKeyAuthorization.id || ""),
+    grant: authorization?.grant || { id: String(authorization?.grant?.id || apiKeyAuthorization.id || "") },
     label: String(apiKeyAuthorization.workloadPrincipalId || ""),
     tenantId: "local",
     organizationNodeId: String(apiKeyAuthorization.organizationNodeId || ""),

@@ -60,8 +60,7 @@ export function createMcpProxyTransportReadiness(report: Record<string, any> = {
       reasons.push(`mcp-proxy-transport-process-identity-not-stored:${target}`);
     }
     if (
-      row.initialized !== true ||
-      row.initializedNotificationSent !== true ||
+      row.discovered !== true ||
       row.toolsListed !== true ||
       row.healthCallOk !== true
     ) {

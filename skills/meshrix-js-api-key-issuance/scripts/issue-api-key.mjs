@@ -1,111 +1,117 @@
 #!/usr/bin/env node
-// Issue a Meshrix.js organization-scoped API Key for a downstream MCP client.
-// Checks organization governance, discovers the issuer scope, and POSTs the
-// key with a policy that covers the requested gateway capability.
-//
-// Usage:
-//   node issue-api-key.mjs \
-//     --origin http://127.0.0.1:7228 \
-//     --username owner --password '...' \
-//     --display-name command-code \
-//     --capability cap:upstream:svc_...:tools-call \
-//     [--node organization:group] [--target opencode] [--risk high] [--days 30]
+import { open, readFile, unlink } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { parseArgs } from "node:util";
 
-function args() {
-  const out = {};
-  const a = process.argv.slice(2);
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i].startsWith("--")) {
-      const key = a[i].slice(2);
-      const camel = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-      out[camel] = a[i + 1];
-    }
+const usage = "Usage: issue-api-key.mjs --origin <server-origin> --username <actor> --request <approved-request.json> --key-file <new-private-file> --password-stdin";
+
+async function passwordFromStdin() {
+  if (process.stdin.isTTY) throw new Error("password-stdin-required");
+  process.stdin.setEncoding("utf8");
+  let value = "";
+  for await (const chunk of process.stdin) {
+    value += chunk;
+    if (Buffer.byteLength(value) > 8192) throw new Error("invalid-password-input");
   }
-  return out;
+  return value.replace(/\r?\n$/, "");
 }
 
-async function main() {
-  const opt = args();
-  const origin = String(opt.origin || "http://127.0.0.1:7228").replace(/\/$/, "");
-  const username = opt.username || "owner";
-  const password = opt.password || "";
-  const displayName = opt.displayName || "command-code";
-  const capabilityIds = String(opt.capability || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const risk = ["low", "medium", "high"].includes(opt.risk) ? opt.risk : "high";
-  const days = Number(opt.days || 30);
-  if (!password) throw new Error("--password is required");
-  if (capabilityIds.length === 0) throw new Error("--capability is required (dynamic capability id, e.g. cap:upstream:<serviceId>:<opKey>)");
+export async function issueApiKey(argv, { fetchImpl = globalThis.fetch, readPassword = passwordFromStdin } = {}) {
+  let options, origin, request;
+  try {
+    options = parseArgs({ args: argv, options: {
+      origin: { type: "string" }, username: { type: "string" },
+      request: { type: "string" }, "key-file": { type: "string" },
+      "password-stdin": { type: "boolean" }, help: { type: "boolean" },
+    } }).values;
+  } catch { throw new Error("invalid-arguments; use --help"); }
+  if (options.help) return usage;
+  if (!["origin", "username", "request", "key-file"].every((key) => options[key]?.trim()) || !options["password-stdin"]) {
+    throw new Error("missing-arguments; use --help");
+  }
+  try {
+    const url = new URL(options.origin);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error();
+    origin = url.origin;
+    request = JSON.parse(await readFile(options.request, "utf8"));
+  } catch { throw new Error("invalid-origin-or-request-file"); }
 
-  const login = await fetch(`${origin}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password }),
+  const policy = request?.policy;
+  if (typeof request?.workloadDisplayName !== "string" || !request.workloadDisplayName.trim() ||
+      typeof request?.organizationNodeId !== "string" || !request.organizationNodeId.trim() ||
+      !(Date.parse(request.expiresAt) > Date.now()) || policy?.protocol !== "mcp" ||
+      !["low", "medium", "high"].includes(policy.maximumRisk) ||
+      !["restricted", "unrestricted"].includes(policy.resources?.mode) ||
+      !["optional", "required"].includes(policy.processIdentity?.mode) ||
+      !policy.limits || !Array.isArray(policy.audience?.targetIds) ||
+      !Array.isArray(policy.audience?.connectorPackageIds) ||
+      !["serviceIds", "capabilityIds", "toolsetIds", "allowedTools", "deniedTools", "scopeIds"]
+        .every((key) => Array.isArray(policy[key]) && policy[key].every((value) => typeof value === "string"))) {
+    throw new Error("invalid-issuance-request");
+  }
+  let password;
+  try { password = await readPassword(); }
+  catch { throw new Error("invalid-password-input"); }
+  if (typeof password !== "string" || !password || Buffer.byteLength(password) > 8192) throw new Error("invalid-password-input");
+
+  // Reserve the operator-selected destination before creating a credential.
+  // Never overwrite another credential or follow an existing destination link.
+  let output;
+  try { output = await open(options["key-file"], "wx", 0o600); }
+  catch { throw new Error("key-destination-unavailable"); }
+  let delivered = false;
+  async function jsonRequest(route, init, stage) {
+    try {
+      const response = await fetchImpl(origin + route, { ...init, redirect: "error" });
+      if (!response.ok) throw new Error();
+      const payload = await response.json();
+      if (!payload || payload.ok === false) throw new Error();
+      return { response, payload };
+    } catch { throw new Error(stage + "-failed"); }
+  }
+  try {
+    const { response, payload: login } = await jsonRequest("/api/auth/login", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: options.username, password }),
+    }, "login");
+    const cookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+    if (!cookie || typeof login.csrfToken !== "string" || !login.csrfToken) throw new Error("login-session-unavailable");
+    const headers = { cookie, "content-type": "application/json", "x-meshrix-csrf": login.csrfToken, "x-meshrix-safety-confirm": "true" };
+    const { payload: governance } = await jsonRequest("/api/authorization/organization-governance", { headers: { cookie } }, "governance-check");
+    if (governance.snapshot?.configured !== true) throw new Error("organization-unconfigured; use the organization-governance workflow");
+    const { payload: scopes } = await jsonRequest("/api/operation-permission/v1/api-keys/issuer-scopes", { headers: { cookie } }, "issuer-scope");
+    if (!Array.isArray(scopes.eligibleNodes) || !scopes.eligibleNodes.some((node) => node.nodeId === request.organizationNodeId)) throw new Error("requested-node-not-eligible");
+    if (typeof scopes.serverAudience !== "string" || !scopes.serverAudience || typeof scopes.catalogFingerprint !== "string" || !scopes.catalogFingerprint) throw new Error("issuer-authority-unavailable");
+    if ((policy.audience.serverAudience && policy.audience.serverAudience !== scopes.serverAudience) ||
+        (policy.catalogFingerprint && policy.catalogFingerprint !== scopes.catalogFingerprint)) throw new Error("issuer-authority-changed; review the request");
+    // Only live authority bindings are filled in. The operator's policy is unchanged.
+    request.policy = { ...policy, audience: { ...policy.audience, serverAudience: scopes.serverAudience }, catalogFingerprint: scopes.catalogFingerprint };
+    let result;
+    try {
+      ({ payload: result } = await jsonRequest("/api/operation-permission/v1/api-keys", {
+        method: "POST", headers, body: JSON.stringify(request),
+      }, "key-issuance"));
+    } catch { throw new Error("key-issuance-outcome-uncertain; inspect issuance before retrying"); }
+    if (typeof result.apiKey !== "string" || !result.apiKey) throw new Error("key-response-invalid; inspect issuance before retrying");
+    try {
+      await output.writeFile(result.apiKey + "\n", "utf8");
+      await output.sync();
+      delivered = true;
+    } catch { throw new Error("key-created-but-delivery-failed; inspect and revoke the undelivered key before retrying"); }
+    return { ok: true, keyDelivered: true };
+  } finally {
+    await output.close().catch(() => {});
+    if (!delivered) await unlink(options["key-file"]).catch(() => {});
+    // Never automatically retry issuance or publish organization governance.
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  issueApiKey(process.argv.slice(2)).then((result) => {
+    console.log(typeof result === "string" ? result : JSON.stringify(result));
+  }).catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
   });
-  const loginPayload = await login.json();
-  if (!loginPayload.ok) throw new Error(`login failed: ${loginPayload.error || login.status}`);
-  const csrf = loginPayload.csrfToken;
-  const cookie = String(login.headers.get("set-cookie") || "").split(";")[0];
-  const headers = {
-    cookie,
-    "content-type": "application/json",
-    "x-meshrix-csrf": csrf,
-    "x-meshrix-safety-confirm": "true",
-  };
-
-  // Governance check
-  const governance = await (await fetch(`${origin}/api/authorization/organization-governance`, { headers: { cookie } })).json();
-  if (governance.snapshot?.configured !== true) {
-    throw new Error("organization governance is not configured; run $meshrix-js-organization-governance first");
-  }
-
-  // Issuer scope
-  const scopes = await (await fetch(`${origin}/api/operation-permission/v1/api-keys/issuer-scopes`, { headers: { cookie } })).json();
-  const nodeId = opt.node || scopes.eligibleNodes?.[0]?.nodeId || "";
-  const serverAudience = scopes.serverAudience || "";
-  const catalogFingerprint = scopes.catalogFingerprint || "";
-  if (!nodeId) throw new Error("no eligible organization node; configure organization governance first");
-  if (!catalogFingerprint) throw new Error("issuer scope did not return a catalog fingerprint");
-
-  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-  const body = {
-    workloadDisplayName: displayName,
-    organizationNodeId: nodeId,
-    expiresAt,
-    policy: {
-      protocol: "mcp",
-      serviceIds: [],
-      capabilityIds,
-      toolsetIds: ["meshrix.gateway.read", "meshrix.gateway.write"],
-      allowedTools: [],
-      deniedTools: [],
-      scopeIds: ["gateway:read", "gateway:write"],
-      maximumRisk: risk,
-      audience: { serverAudience, targetIds: [opt.target || "opencode"], connectorPackageIds: [] },
-      resources: {
-        mode: "unrestricted", workspaceIds: [], dataClassifications: [], egressClasses: [],
-        semanticFamilies: [], capabilityDomains: [], capabilityVerbs: [], resourceKinds: [],
-        effectKinds: [], secretBindingIds: [], allowedOrigins: [], allowedCidrs: [],
-      },
-      processIdentity: { mode: "optional" },
-      limits: { maxUses: 100, requestsPerWindow: 100, windowSeconds: 3600, maxConcurrentEffects: 4 },
-      catalogFingerprint,
-    },
-  };
-
-  const issued = await (await fetch(`${origin}/api/operation-permission/v1/api-keys`, {
-    method: "POST", headers, body: JSON.stringify(body),
-  })).json();
-  if (!issued.apiKey) throw new Error(`key issuance failed: ${JSON.stringify(issued.error || issued)}`);
-  console.log(JSON.stringify({
-    ok: true,
-    keyId: issued.record?.keyId,
-    displayPrefix: issued.record?.displayPrefix,
-    apiKey: issued.apiKey,
-    expiresAt: issued.record?.expiresAt,
-  }));
 }
-
-main().catch((error) => {
-  console.error(String(error?.message || error));
-  process.exit(1);
-});

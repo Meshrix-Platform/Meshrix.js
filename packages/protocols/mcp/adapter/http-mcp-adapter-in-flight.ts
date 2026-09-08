@@ -4,6 +4,7 @@ import {
   MCP_PROXY_SESSION_HEADER_LOWER,
   normalizeMcpProxySessionId
 } from "#meshrix/contracts/mcp-catalog-delivery";
+import { isUnauthenticatedMcpMethod } from "./http-mcp-adapter-protocol.ts";
 import { jsonRpcError } from "./http-mcp-adapter-response.ts";
 import { mcpAuthorizationId } from "./http-mcp-adapter-session.ts";
 
@@ -13,6 +14,8 @@ const MAX_SCOPE_PART_BYTES: any = 1_024;
 const MAX_REQUEST_ID_BYTES: any = 256;
 
 const registryByOwner: any = new WeakMap<object, any>();
+const requestLifetimeIds: any = new WeakMap<object, any>();
+let nextRequestLifetimeId: any = 1;
 
 export function isMcpCancellationNotification(message?: any) : any {
   return message?.method === "notifications/cancelled" &&
@@ -24,8 +27,7 @@ export function isProtectedMcpMessage(message?: any) : any {
   return isMcpCancellationNotification(message) || (
     Boolean(method) &&
     !method.startsWith("notifications/") &&
-    method !== "initialize" &&
-    method !== "ping"
+    !isUnauthenticatedMcpMethod(method)
   );
 }
 
@@ -106,6 +108,18 @@ function cancellationScopeFingerprint({ authenticatedGrant, request }: Record<st
     .digest("base64url");
 }
 
+function requestLifetimeKey(request?: any) : any {
+  if ((typeof request !== "object" && typeof request !== "function") || request === null) {
+    return "";
+  }
+  let lifetimeId: any = requestLifetimeIds.get(request);
+  if (!lifetimeId) {
+    lifetimeId = `http:${nextRequestLifetimeId++}`;
+    requestLifetimeIds.set(request, lifetimeId);
+  }
+  return lifetimeId;
+}
+
 function requestIdKey(requestId?: any) : any {
   if (typeof requestId === "number") {
     return Number.isSafeInteger(requestId) ? `n:${requestId}` : "";
@@ -137,11 +151,12 @@ export function createMcpInFlightRequestRegistry({
 
   function begin({ authenticatedGrant, request, requestId, parentSignal = null }: Record<string, any> = {}) : any {
     const scopeKey: any = cancellationScopeFingerprint({ authenticatedGrant, request });
+    const lifetimeKey: any = requestLifetimeKey(request);
     const idKey: any = requestIdKey(requestId);
-    if (!scopeKey || !idKey) {
+    if (!scopeKey || !lifetimeKey || !idKey) {
       return { ok: false, reason: "invalid_scope_or_request_id" };
     }
-    const key: any = `${scopeKey}:${idKey}`;
+    const key: any = `${scopeKey}:${lifetimeKey}:${idKey}`;
     if (entries.has(key)) {
       return { ok: false, reason: "duplicate_request_id" };
     }
@@ -156,7 +171,9 @@ export function createMcpInFlightRequestRegistry({
       completed: false,
       detachParent: null,
       key,
-      scopeKey
+      scopeKey,
+      lifetimeKey,
+      idKey
     };
     if (hasAbortSignal(parentSignal)) {
       const abortFromParent: any = () : any => {
@@ -199,11 +216,12 @@ export function createMcpInFlightRequestRegistry({
 
   function cancel({ authenticatedGrant, request, requestId }: Record<string, any> = {}) : any {
     const scopeKey: any = cancellationScopeFingerprint({ authenticatedGrant, request });
+    const lifetimeKey: any = requestLifetimeKey(request);
     const idKey: any = requestIdKey(requestId);
-    if (!scopeKey || !idKey) {
+    if (!scopeKey || !lifetimeKey || !idKey) {
       return false;
     }
-    const entry: any = entries.get(`${scopeKey}:${idKey}`);
+    const entry: any = entries.get(`${scopeKey}:${lifetimeKey}:${idKey}`);
     if (!entry || entry.completed) {
       return false;
     }
@@ -260,13 +278,6 @@ export async function dispatchMcpMessageWithCancellation({
   execute
 }: Record<string, any> = {}) : Promise<any> {
   if (isMcpCancellationNotification(message)) {
-    if (authenticatedGrant?.ok) {
-      registry.cancel({
-        authenticatedGrant,
-        request,
-        requestId: message?.params?.requestId
-      });
-    }
     return null;
   }
 

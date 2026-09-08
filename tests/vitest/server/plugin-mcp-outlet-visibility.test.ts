@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createCapturedResponse } from "../../../packages/server-runtime/src/composition/dispatch-operation-captured-response.ts";
 import { handleMeshrixMcpHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+import { mcpModernHttpRequest } from "../../helpers/mcp-downstream-request.ts";
 
 function responsePayload(response?: any) : any {
   return JSON.parse(Buffer.concat(response.chunks).toString("utf8"));
@@ -9,10 +10,14 @@ function responsePayload(response?: any) : any {
 
 async function mcpRequest(provider?: any, body?: any, headers: Record<string, any> = {}) : Promise<any> {
   const response: any = createCapturedResponse();
+  const isBatch: any = Array.isArray(body);
+  const wire: any = isBatch
+    ? { body: JSON.stringify(body), headers: { "content-type": "application/json" } }
+    : mcpModernHttpRequest(body);
   await handleMeshrixMcpHttpRequest({
-    request: { headers: { authorization: "Bearer fixture", ...headers }, socket: {} },
+    request: { headers: { authorization: "Bearer fixture", ...wire.headers, ...headers }, socket: {} },
     response,
-    requestBody: Buffer.from(JSON.stringify(body)),
+    requestBody: Buffer.from(wire.body),
     method: "POST",
     url: new URL("http://127.0.0.1/mcp"),
     toolSkillManagementProvider: provider,
@@ -49,22 +54,43 @@ const SAMPLE_OUTLET_DESCRIPTOR: Readonly<Record<string, any>> = Object.freeze({
 });
 
 describe("enabled plugin MCP outlets", () : any => {
-  it("authenticates one signed HTTP batch once before handling its messages", async () : Promise<any> => {
+  it("rejects an HTTP JSON-RPC batch before authorization or execution", async () : Promise<any> => {
     const runtime: any = provider([]);
-    runtime.authorizeMcpClientRequest
-      .mockResolvedValueOnce({ ok: true, grant: { id: "fixture", subject: {} } })
-      .mockResolvedValue({ ok: false, status: 401, reasonCode: "process_identity_nonce_replay" });
-
     const { response, payload } = await mcpRequest(runtime, [
       { jsonrpc: "2.0", id: 101, method: "tools/list", params: {} },
       { jsonrpc: "2.0", id: 102, method: "tools/list", params: {} }
     ]);
 
-    expect(response.statusCode).toBe(200);
-    expect(payload).toHaveLength(2);
-    expect(payload.every((entry?: any) : any => Array.isArray(entry.result?.tools))).toBe(true);
-    expect(runtime.authorizeMcpClientRequest).toHaveBeenCalledTimes(1);
-    expect(runtime.authorizeMcpClientRequest).toHaveBeenCalledWith(expect.objectContaining({ recordUse: false }));
+    expect(response.statusCode).toBe(400);
+    expect(payload.error).toMatchObject({
+      code: -32600,
+      message: "MCP Streamable HTTP accepts exactly one JSON-RPC request or notification per POST."
+    });
+    expect(runtime.authorizeMcpClientRequest).not.toHaveBeenCalled();
+    expect(runtime.listVisibleTools).not.toHaveBeenCalled();
+    expect(runtime.executeTool).not.toHaveBeenCalled();
+  });
+
+  it("authenticates each ordinary tools/list request independently", async () : Promise<any> => {
+    const runtime: any = provider([]);
+    const first: any = await mcpRequest(runtime, {
+      jsonrpc: "2.0",
+      id: 101,
+      method: "tools/list",
+      params: {}
+    });
+    const second: any = await mcpRequest(runtime, {
+      jsonrpc: "2.0",
+      id: 102,
+      method: "tools/list",
+      params: {}
+    });
+
+    expect(first.response.statusCode).toBe(200);
+    expect(second.response.statusCode).toBe(200);
+    expect(first.payload.result).toMatchObject({ resultType: "complete", tools: expect.any(Array) });
+    expect(second.payload.result).toMatchObject({ resultType: "complete", tools: expect.any(Array) });
+    expect(runtime.authorizeMcpClientRequest).toHaveBeenCalledTimes(2);
   });
 
   it("omits disabled plugin outlets from tools/list", async () : Promise<any> => {

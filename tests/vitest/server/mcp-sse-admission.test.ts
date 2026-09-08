@@ -13,6 +13,7 @@ import {
   registerMcpSseConnection,
   resetMcpSseConnectionStateForTests
 } from "../../../packages/server-runtime/src/state/sse-connection-state.ts";
+import { mcpModernBody, mcpModernHeaders } from "../../helpers/mcp-downstream-request.ts";
 
 function responseFixture({ writeResult = true }: Record<string, any> = {}) : any {
   return {
@@ -96,10 +97,20 @@ describe("MCP subscription admission", () : any => {
     const response: any = responseFixture();
     const authorizeMcpClientRequest: any = vi.fn();
 
+    const listenBody: any = mcpModernBody({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "subscriptions/listen",
+      params: { notifications: { toolsListChanged: true } }
+    });
+    request.headers = {
+      ...request.headers,
+      ...mcpModernHeaders(listenBody)
+    };
     await handleMeshrixMcpHttpRequest({
       request,
       response,
-      requestBody: Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "subscriptions/listen", params: { notifications: ["notifications/tools/list_changed"] } })),
+      requestBody: Buffer.from(JSON.stringify(listenBody)),
       method: "POST",
       url: new URL("http://127.0.0.1/mcp"),
       toolSkillManagementProvider: { authorizeMcpClientRequest }
@@ -116,9 +127,15 @@ describe("MCP subscription admission", () : any => {
     const request: any = new EventEmitter();
     request.method = "POST";
     request.url = "/mcp";
+    const listenBody: any = mcpModernBody({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "subscriptions/listen",
+      params: { notifications: { toolsListChanged: true } }
+    });
     request.headers = {
       authorization: "Bearer redacted",
-      "x-meshrix.js-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
+      ...mcpModernHeaders(listenBody)
     };
     request.socket = { remoteAddress: "127.0.0.2" };
     const response: any = responseFixture();
@@ -127,7 +144,7 @@ describe("MCP subscription admission", () : any => {
     await handleMeshrixMcpHttpRequest({
       request,
       response,
-      requestBody: Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "subscriptions/listen", params: { notifications: ["notifications/tools/list_changed"] } })),
+      requestBody: Buffer.from(JSON.stringify(listenBody)),
       method: "POST",
       url: new URL("http://127.0.0.1/mcp"),
       toolSkillManagementProvider: {
@@ -137,6 +154,14 @@ describe("MCP subscription admission", () : any => {
     });
 
     expect(response.statusCode).toBe(200);
+    const ack: any = JSON.parse(String(response.write.mock.calls[0][0]).replace(/^event: message\ndata: /, "").replace(/\n\n$/, ""));
+    expect(ack).toMatchObject({
+      method: "notifications/subscriptions/acknowledged",
+      params: {
+        notifications: { toolsListChanged: true },
+        _meta: { "io.modelcontextprotocol/subscriptionId": 2 }
+      }
+    });
     expect(audiencePartitionKeys).toHaveBeenCalledOnce();
     expect(getMcpSseConnectionState()).toMatchObject({
       activeConnectionCount: 1,
@@ -156,6 +181,48 @@ describe("MCP subscription admission", () : any => {
     }, { partitionKeys: ["opaque-partition-a"] })).toMatchObject({
       deliveredConnectionCount: 1
     });
+    const delivered: any = JSON.parse(String(response.write.mock.calls.at(-1)[0]).replace(/^event: message\ndata: /, "").replace(/\n\n$/, ""));
+    expect(delivered.params._meta["io.modelcontextprotocol/subscriptionId"]).toBe(2);
+    request.emit("close");
+  });
+
+  it("accepts an empty or unsupported filter without failing the stream", async () : Promise<any> => {
+    configureMcpNotificationBus({ registerSseConnection: registerMcpSseConnection });
+    const request: any = new EventEmitter();
+    request.method = "POST";
+    request.url = "/mcp";
+    const listenBody: any = mcpModernBody({
+      jsonrpc: "2.0",
+      id: "sub-empty",
+      method: "subscriptions/listen",
+      params: {
+        notifications: {
+          toolsListChanged: false,
+          promptsListChanged: true,
+          unknownCapability: true
+        }
+      }
+    });
+    request.headers = {
+      authorization: "Bearer redacted",
+      ...mcpModernHeaders(listenBody)
+    };
+    request.socket = { remoteAddress: "127.0.0.8" };
+    const response: any = responseFixture();
+    await handleMeshrixMcpHttpRequest({
+      request,
+      response,
+      requestBody: Buffer.from(JSON.stringify(listenBody)),
+      method: "POST",
+      url: new URL("http://127.0.0.1/mcp"),
+      toolSkillManagementProvider: {
+        authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-empty" } }))
+      }
+    });
+    expect(response.statusCode).toBe(200);
+    const ack: any = JSON.parse(String(response.write.mock.calls[0][0]).replace(/^event: message\ndata: /, "").replace(/\n\n$/, ""));
+    expect(ack.params.notifications).toEqual({});
+    expect(ack.params._meta["io.modelcontextprotocol/subscriptionId"]).toBe("sub-empty");
     request.emit("close");
   });
 
@@ -174,7 +241,7 @@ describe("MCP subscription admission", () : any => {
     };
     request.socket = { remoteAddress: "127.0.0.7" };
     const response: any = responseFixture();
-    const message: Record<string, any> = {
+    const message: Record<string, any> = mcpModernBody({
       jsonrpc: "2.0",
       id: 7,
       method: "meshrix/catalog/acknowledge",
@@ -184,8 +251,12 @@ describe("MCP subscription admission", () : any => {
         audienceRevision: 3,
         partitionKeys: ["opaque-partition-a"]
       }
-    };
+    });
     const requestBody: any = Buffer.from(JSON.stringify(message));
+    request.headers = {
+      ...request.headers,
+      ...mcpModernHeaders(message)
+    };
     const authorizeMcpClientRequest: any = vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-stream" } }));
 
     await handleMeshrixMcpHttpRequest({
@@ -268,6 +339,32 @@ describe("MCP subscription admission", () : any => {
       heartbeatSchedulerActive: false,
       remoteAddressCount: 0,
       grantCount: 0
+    });
+  });
+
+  it("removes a subscription when the response stream closes without a request close", () : any => {
+    const request: any = new EventEmitter();
+    request.socket = { remoteAddress: "127.0.0.8" };
+    const response: any = new EventEmitter();
+    Object.assign(response, responseFixture());
+    const registration: any = registerMcpSseConnection({
+      request,
+      response,
+      grantId: "grant-response-close",
+      grant: { id: "grant-response-close" },
+      privateOnly: true,
+      negotiatedCapabilities: ["notifications/tools/list_changed"],
+      proxySessionId: "abcdefghijklmnopqrstuvwx"
+    });
+    expect(registration.ok).toBe(true);
+    expect(getMcpSseConnectionState()).toMatchObject({
+      activeConnectionCount: 1,
+      heartbeatSchedulerActive: true
+    });
+    response.emit("close");
+    expect(getMcpSseConnectionState()).toMatchObject({
+      activeConnectionCount: 0,
+      heartbeatSchedulerActive: false
     });
   });
 

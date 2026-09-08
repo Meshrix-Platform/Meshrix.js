@@ -15,7 +15,7 @@ matrix belongs to `$meshrix-js-client-compatibility-matrix`.
 ## Establish authority
 
 1. Run `git status --short` for every repository boundary before editing.
-2. Read [references/publishing-contract.md](../../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or report contract.
+2. Read [references/publishing-contract.md](../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or report contract.
 3. Keep the report contract separate from the verification lanes: this skill owns the template, renderer, screenshots, and content contract; `$meshrix-js-release-journey-producer` owns the two verification lanes and the receipt.
 
 ## Maintain the report template first

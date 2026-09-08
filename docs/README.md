@@ -9,7 +9,7 @@ This directory contains the formal technical documentation for installing,
 running, operating, integrating, and verifying Meshrix.js as a
 private-deployable internal platform.
 
-Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, executable verification commands, and remaining required work. A current inability is remaining work the project keeps closing, not a durable refusal.
+Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, executable verification commands, and gaps with an explicit owner and scope. A gap blocks the current task only when its accepted outcome requires that capability. Other gaps belong to their owning roadmap or workflow; neither an unverified capability nor a permanent refusal may be invented from a current limitation. Explicit product exclusions remain exclusions until a new decision changes them.
 
 ## Maintenance Invariants
 
@@ -34,10 +34,10 @@ Deployment Verification from remaining Real-Machine Verification Workflows and
 their Environment Support Claims. Functional acceptance is a prerequisite for
 the exact-candidate runtime-ui deployment on `ubuntu-24.04` and for every
 real-machine workflow. A real-machine receipt never blocks, promotes, or
-changes functional acceptance. Offline delivery and the current plan receipt
-may close on Linux inside a virtual machine; Ubuntu is preferred and Debian is
-accepted. Native Linux, Ubuntu, and Debian qualification remain remaining
-required work after the named Real-Machine Verification Workflow.
+changes functional acceptance. Offline delivery may run on Linux inside a
+virtual machine; Ubuntu is preferred and Debian is accepted. That evidence does
+not establish native Linux, Ubuntu, or Debian qualification, which remains
+owned by the named Real-Machine Verification Workflow.
 
 Governance evidence and ordinary telemetry have different value. Protected
 access and side effects require the minimum bounded lifecycle proof. Routine
@@ -57,15 +57,11 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
-PLAN-005 and the [What's Next register](WHATS-NEXT.md) own the current
-production-use closure: fix concrete defects, pass functional acceptance once,
-deploy the accepted candidate, and iterate from real use. Its Better Plan v3
-semantic source is `plans/production-use-closure/Plan.json`; acceptance and
-publication evidence remain separate authorities. Product regression,
-deployment verification, production closure, and publication never read or
-validate the local Plan workspace. Historical planning,
-publication channels, compatibility matrices, and environment-qualification
-programs do not block this operational outcome.
+Temporary planning workspaces are execution aids, not durable product
+authorities. Delete them after their outcome is implemented and verified.
+Current product state belongs in [Status](STATUS.md); executable acceptance,
+deployment, production-closure, and publication facts belong to their owning
+commands and candidate-bound reports.
 
 ## Project Documents
 
@@ -87,7 +83,6 @@ programs do not block this operational outcome.
 | Topic | Document |
 | --- | --- |
 | Current status | [STATUS.md](STATUS.md) |
-| Product closure roadmap | [WHATS-NEXT.md](WHATS-NEXT.md) |
 | Release definition and publication | [RUNBOOK.md#release-definition-and-publication](RUNBOOK.md#release-definition-and-publication) |
 | Runtime operation | [RUNBOOK.md](RUNBOOK.md) |
 | Architecture | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
@@ -145,11 +140,18 @@ are the complete maintenance authority for Meshrix.js:
 
 ## Verification
 
-After documentation changes, run:
+After documentation changes, validate the changed facts, referenced paths, and
+commands. For this documentation surface, use:
 
 ```bash
 npm run verify:docs
-npm test
-npm run verify:core-platform-surface-convergence
 git diff --check
 ```
+
+Add `npm run verify:core-platform-surface-convergence` only when the affected
+Core surface contract requires it. Skill changes use `npm run verify:skills`.
+Source behavior changes follow the regression planner; do not run the entire
+Core test profile merely to select checks for a documentation edit. Complete
+all changes, source review, repairs, and focused checks before the single final
+regression selected for the task. Final-regression failures require the
+developer's repair and rerun decision.

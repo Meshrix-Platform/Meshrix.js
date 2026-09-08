@@ -98,10 +98,9 @@ describe("MCP stdio proxy cancellation", () : any => {
     expect(unrelatedRequestCompleted).toBe(true);
     expect(forwardedMessages.map(({ method }: Record<string, any>) : any => method)).toEqual([
       "tools/call",
-      "tools/call",
-      "notifications/cancelled"
+      "tools/call"
     ]);
-    expect(forwardedMessages.at(-1)?.params).toEqual({ requestId: "slow-request" });
+    expect(forwardedMessages.some((message?: any) : any => message.method === "notifications/cancelled")).toBe(false);
     expect(writes).toHaveLength(1);
     expect(writes.every(({ framing }: Record<string, any>) : any => framing === MCP_STDIO_FRAMING_CONTENT_LENGTH)).toBe(true);
     expect(writes.some(({ payload }: Record<string, any>) : any => payload.id === "slow-request")).toBe(false);
@@ -246,8 +245,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     await transport.close();
 
     expect(forwardedMessages.map(({ method }: Record<string, any>) : any => method)).toEqual([
-      "tools/call",
-      "notifications/cancelled"
+      "tools/call"
     ]);
     expect(writes).toEqual([{
       payload: {
@@ -358,11 +356,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     ]));
 
     expect(cancelled).toBe(true);
-    expect(forwarded.at(-1)).toEqual({
-      jsonrpc: "2.0",
-      method: "notifications/cancelled",
-      params: { requestId: "cancel-while-blocked" }
-    });
+    expect(forwarded.some((message?: any) : any => message.method === "notifications/cancelled")).toBe(false);
     expect(writable.write).toHaveBeenCalledTimes(1);
 
     writable.emit("drain");

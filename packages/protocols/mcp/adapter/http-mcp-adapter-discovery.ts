@@ -33,6 +33,14 @@ import {
   mcpPublicSupportedTargetDetails as releaseMcpPublicSupportedTargetDetails,
   mcpSupportedTargetDetails as releaseMcpSupportedTargetDetails
 } from "./mcp-release-targets.ts";
+import {
+  MCP_CACHE_SCOPE_PUBLIC,
+  MCP_DISCOVER_CACHE_TTL_MS,
+  MCP_META_SERVER_INFO,
+  mcpCacheFields,
+  mcpCompleteResult,
+  mcpInitializeCapabilities
+} from "./http-mcp-adapter-protocol.ts";
 import { parseRequestBody } from "./http-mcp-adapter-response.ts";
 
 export function mcpVersionInfo() : any {
@@ -484,20 +492,26 @@ export function mcpHandshake({ request = null, requestBody, listenUrl = "", disc
   };
 }
 
-export function mcpInitializeResult({ listenUrl = "", discoveryState = null }: Record<string, any> = {}) : any {
-  return {
-    protocolVersion: MCP_PROTOCOL_VERSION,
-    capabilities: {
-      tools: {
-        listChanged: true
-      }
-    },
-    serverInfo: {
-      name: "Meshrix.js",
-      version: MCP_SERVER_VERSION
-    },
-    _meta: mcpRuntimeMetadata({ listenUrl, discoveryState })
-  };
+export function mcpDiscoverResult({ listenUrl = "", discoveryState = null }: Record<string, any> = {}) : any {
+  const runtime: any = mcpRuntimeMetadata({ listenUrl, discoveryState });
+  const cache: any = mcpCacheFields({
+    ttlMs: MCP_DISCOVER_CACHE_TTL_MS,
+    cacheScope: MCP_CACHE_SCOPE_PUBLIC
+  });
+  return mcpCompleteResult({
+    supportedVersions: [MCP_PROTOCOL_VERSION],
+    capabilities: mcpInitializeCapabilities(),
+    instructions: runtime.capabilitiesSummary,
+    ttlMs: cache.ttlMs,
+    cacheScope: cache.cacheScope,
+    _meta: {
+      [MCP_META_SERVER_INFO]: {
+        name: "Meshrix.js",
+        version: MCP_SERVER_VERSION
+      },
+      ...runtime
+    }
+  });
 }
 
 function mcpToolResult(payload?: any) : any {

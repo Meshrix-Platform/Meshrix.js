@@ -13,6 +13,7 @@ import {
   stableJson,
   text
 } from "./support.ts";
+import { compileMcpToolJsonSchema } from "./mcp-tool-schema.ts";
 
 function parseJsonText(value: any = "") : any {
   const raw: any = String(value || "").trim();
@@ -216,6 +217,19 @@ export function createMcpForwarder({
         input.payload ||
         {}
     );
+    if (operation.inputSchema !== undefined) {
+      const compiled: any = compileMcpToolJsonSchema(operation.inputSchema, {
+        label: "Upstream MCP tool input schema",
+        requireTopLevelObject: true
+      });
+      const validation: any = compiled.validate(toolArguments);
+      if (validation?.ok !== true) {
+        throw Object.assign(new Error("Upstream MCP tool arguments do not match the advertised input schema."), {
+          status: 400,
+          reasonCode: "upstream_mcp_arguments_invalid"
+        });
+      }
+    }
     const requestBodyMetadata: any = bodyMetadata(toolArguments, operation.sensitiveBodyFields, {
       byteLength: Buffer.byteLength(stableJson(toolArguments)),
       contentType: "application/json"
@@ -227,7 +241,10 @@ export function createMcpForwarder({
     const abortContext: any = createAbortContext(options.signal || null, timeoutMs);
     try {
       const response: any = await mcpSessionManager.callTool(
-        await mcpServiceConfigWithCredentials(service, operation),
+        await mcpServiceConfigWithCredentials(service, operation, {
+          purpose: "execution",
+          subject: options.subject || null
+        }),
         {
           name: upstreamToolName,
           arguments: toolArguments

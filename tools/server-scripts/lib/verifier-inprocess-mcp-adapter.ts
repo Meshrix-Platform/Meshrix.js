@@ -1,5 +1,6 @@
 import { executeConsoleDomainOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
 import { handleMeshrixMcpHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 export function stableJson(value?: any) : any {
   if (value === null || value === undefined) return "null";
@@ -16,14 +17,17 @@ export function requiredArray(schema: Record<string, any> = {}) : any {
 
 export async function callDownstreamMcp({ body, provider, upstreamGatewayRegistry, token }: Record<string, any>) : Promise<any> {
   const response: any = createMemoryResponse();
+  const wire: any = mcpModernHttpRequest(body, {
+    authorization: `Bearer ${token || "gateway-verifier"}`
+  });
   const handled: any = await handleMeshrixMcpHttpRequest({
     request: {
-      headers: { authorization: `Bearer ${token || "gateway-verifier"}` },
+      headers: wire.headers,
       socket: { remoteAddress: "127.0.0.1" },
       __meshrixRequestId: "gateway-verifier"
     },
     response,
-    requestBody: Buffer.from(JSON.stringify(body), "utf8"),
+    requestBody: Buffer.from(wire.body, "utf8"),
     method: "POST",
     url: new URL("/mcp", "http://127.0.0.1"),
     toolSkillManagementProvider: provider,

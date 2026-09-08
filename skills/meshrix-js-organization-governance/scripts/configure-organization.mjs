@@ -1,86 +1,80 @@
 #!/usr/bin/env node
-// Configure organization governance on a Meshrix.js instance using a
-// built-in template: import -> preview -> publish.
-//
-// Usage:
-//   node configure-organization.mjs \
-//     --origin http://127.0.0.1:7228 \
-//     --username owner --password '...' \
-//     [--template enterprise-group]
-import fs from "node:fs";
+import { parseArgs } from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-function args() {
-  const out = {};
-  const a = process.argv.slice(2);
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i].startsWith("--")) {
-      const key = a[i].slice(2);
-      const camel = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-      out[camel] = a[i + 1];
-    }
+const usage = "Usage: configure-organization.mjs --origin <server-origin> --username <actor> --template <approved-template> --password-stdin";
+async function passwordFromStdin() {
+  if (process.stdin.isTTY) throw new Error("password-stdin-required");
+  process.stdin.setEncoding("utf8");
+  let value = "";
+  for await (const chunk of process.stdin) {
+    value += chunk;
+    if (Buffer.byteLength(value) > 8192) throw new Error("invalid-password-input");
   }
-  return out;
+  return value.replace(/\r?\n$/, "");
 }
 
-async function main() {
-  const opt = args();
-  const origin = String(opt.origin || "http://127.0.0.1:7228").replace(/\/$/, "");
-  const username = opt.username || "owner";
-  const password = opt.password || "";
-  const templateKey = opt.template || "enterprise-group";
-  if (!password) throw new Error("--password is required");
+export async function configureOrganization(argv, { fetchImpl = globalThis.fetch, readPassword = passwordFromStdin } = {}) {
+  let options, origin;
+  try {
+    options = parseArgs({ args: argv, options: {
+      origin: { type: "string" }, username: { type: "string" }, template: { type: "string" },
+      "password-stdin": { type: "boolean" }, help: { type: "boolean" },
+    } }).values;
+  } catch { throw new Error("invalid-arguments; use --help"); }
+  if (options.help) return usage;
+  if (!["origin", "username", "template"].every((key) => options[key]?.trim()) || !options["password-stdin"]) throw new Error("missing-arguments; use --help");
+  try {
+    const url = new URL(options.origin);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error();
+    origin = url.origin;
+  } catch { throw new Error("invalid-origin"); }
+  let password;
+  try { password = await readPassword(); }
+  catch { throw new Error("invalid-password-input"); }
+  if (typeof password !== "string" || !password || Buffer.byteLength(password) > 8192) throw new Error("invalid-password-input");
 
-  const login = await fetch(`${origin}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password }),
+  async function jsonRequest(route, init, stage) {
+    try {
+      const response = await fetchImpl(origin + route, { ...init, redirect: "error" });
+      if (!response.ok) throw new Error();
+      const payload = await response.json();
+      if (!payload || payload.ok === false) throw new Error();
+      return { response, payload };
+    } catch { throw new Error(stage + "-failed"); }
+  }
+  const { response, payload: login } = await jsonRequest("/api/auth/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: options.username, password }),
+  }, "login");
+  const cookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+  if (!cookie || typeof login.csrfToken !== "string" || !login.csrfToken) throw new Error("login-session-unavailable");
+  const headers = { cookie, "content-type": "application/json", "x-meshrix-csrf": login.csrfToken, "x-meshrix-safety-confirm": "true" };
+  const { payload: governance } = await jsonRequest("/api/authorization/organization-governance", { headers: { cookie } }, "governance-check");
+  const snapshot = governance.snapshot;
+  if (!snapshot || typeof snapshot.configured !== "boolean" || !Number.isInteger(snapshot.revision) || snapshot.revision < 0) throw new Error("governance-snapshot-invalid");
+  if (snapshot.configured) return { ok: true, alreadyConfigured: true };
+  const { payload: imported } = await jsonRequest("/api/authorization/organization-governance/import", {
+    method: "POST", headers, body: JSON.stringify({ templateKey: options.template }),
+  }, "template-import");
+  if (!imported.draft || typeof imported.draft !== "object" || Array.isArray(imported.draft)) throw new Error("template-draft-invalid");
+  const body = JSON.stringify({ ...imported.draft, expectedRevision: snapshot.revision });
+  const { payload: preview } = await jsonRequest("/api/authorization/organization-governance/preview", { method: "POST", headers, body }, "template-preview");
+  if (preview.ok !== true) throw new Error("template-preview-failed");
+  let published;
+  try {
+    ({ payload: published } = await jsonRequest("/api/authorization/organization-governance/publish", { method: "POST", headers, body }, "organization-publication"));
+  } catch { throw new Error("organization-publication-outcome-uncertain; inspect governance before retrying"); }
+  if (published.snapshot?.configured !== true) throw new Error("organization-publication-unconfirmed; inspect governance before retrying");
+  return { ok: true, configured: true };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  configureOrganization(process.argv.slice(2)).then((result) => {
+    console.log(typeof result === "string" ? result : JSON.stringify(result));
+  }).catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
   });
-  const loginPayload = await login.json();
-  if (!loginPayload.ok) throw new Error(`login failed: ${loginPayload.error || login.status}`);
-  const csrf = loginPayload.csrfToken;
-  const cookie = String(login.headers.get("set-cookie") || "").split(";")[0];
-  const headers = {
-    cookie,
-    "content-type": "application/json",
-    "x-meshrix-csrf": csrf,
-    "x-meshrix-safety-confirm": "true",
-  };
-
-  const governance = await (await fetch(`${origin}/api/authorization/organization-governance`, { headers: { cookie } })).json();
-  const snapshot = governance.snapshot || {};
-  if (snapshot.configured === true) {
-    console.log(JSON.stringify({ ok: true, alreadyConfigured: true, revision: snapshot.revision, templateKey: snapshot.templateKey }));
-    return;
-  }
-  const expectedRevision = Number(snapshot.revision || 0);
-
-  const imported = await (await fetch(`${origin}/api/authorization/organization-governance/import`, {
-    method: "POST", headers, body: JSON.stringify({ templateKey }),
-  })).json();
-  const draft = imported.draft;
-  if (!draft) throw new Error(`template import failed: ${imported.error || "no draft"}`);
-
-  const preview = await (await fetch(`${origin}/api/authorization/organization-governance/preview`, {
-    method: "POST", headers, body: JSON.stringify({ ...draft, expectedRevision }),
-  })).json();
-  if (!preview.ok) throw new Error(`preview failed: ${JSON.stringify(preview.error || preview)}`);
-
-  const published = await (await fetch(`${origin}/api/authorization/organization-governance/publish`, {
-    method: "POST", headers, body: JSON.stringify({ ...draft, expectedRevision }),
-  })).json();
-  if (!published.ok) throw new Error(`publish failed: ${JSON.stringify(published.error || published)}`);
-
-  const next = published.snapshot || {};
-  console.log(JSON.stringify({
-    ok: true,
-    configured: next.configured,
-    revision: next.revision,
-    templateKey: next.templateKey,
-    nodeCount: (next.nodes || []).length,
-  }));
 }
-
-main().catch((error) => {
-  console.error(String(error?.message || error));
-  process.exit(1);
-});

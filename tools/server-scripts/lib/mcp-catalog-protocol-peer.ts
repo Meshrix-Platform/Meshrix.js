@@ -8,6 +8,11 @@ import {
   parseMcpCatalogFacts,
   parseMcpCatalogInvalidation
 } from "../../../packages/contracts/src/mcp-catalog-delivery.ts";
+import {
+  MCP_META_SUBSCRIPTION_ID,
+  MCP_SUBSCRIPTION_ACK_METHOD
+} from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-protocol.ts";
+import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
 import {
   bindVerifierApiKey,
@@ -89,9 +94,9 @@ export function createMcpCatalogProtocolPeer({
   fetchImpl = globalThis.fetch
 }: Record<string, any> = {}) : any {
   const origin: any = String(baseUrl || "").replace(/\/+$/u, "");
-  const sessionId: any = normalizeMcpProxySessionId(proxySessionId);
-  if (!origin || !grant?.token || !grant?.identityByToken || !sessionId || typeof fetchImpl !== "function") {
-    throw new TypeError("Neutral MCP protocol peer requires an origin, grant, session, and fetch.");
+  const sessionId: any = proxySessionId ? normalizeMcpProxySessionId(proxySessionId) : "";
+  if (!origin || !grant?.token || !grant?.identityByToken || typeof fetchImpl !== "function") {
+    throw new TypeError("Neutral MCP protocol peer requires an origin, grant, and fetch.");
   }
   let sequence: any = 0;
   let stream: any = null;
@@ -104,14 +109,21 @@ export function createMcpCatalogProtocolPeer({
       method,
       url,
       body,
-      extraHeaders: { [MCP_PROXY_SESSION_HEADER]: sessionId, ...extraHeaders }
+      extraHeaders: {
+        ...(sessionId ? { [MCP_PROXY_SESSION_HEADER]: sessionId } : {}),
+        ...extraHeaders
+      }
     });
   }
 
   async function rpc(method?: any, params: Record<string, any> = {}) : Promise<any> {
     const url: any = `${origin}/mcp`;
-    const body: any = JSON.stringify({ jsonrpc: "2.0", id: `peer-${++sequence}`, method, params });
-    const response: any = await fetchImpl(url, { method: "POST", headers: headers({ body, url }), body });
+    const wire: any = mcpModernHttpRequest({ jsonrpc: "2.0", id: `peer-${++sequence}`, method, params });
+    const response: any = await fetchImpl(url, {
+      method: "POST",
+      headers: headers({ body: wire.body, url, extraHeaders: wire.headers }),
+      body: wire.body
+    });
     const payload: any = await response.json();
     return { status: response.status, payload };
   }
@@ -121,21 +133,22 @@ export function createMcpCatalogProtocolPeer({
     const controller: any = new AbortController();
     const events: any[] = [];
     const url: any = `${origin}/mcp`;
-    const body: any = JSON.stringify({
+    const listenId: any = `peer-subscription-${++sequence}`;
+    const wire: any = mcpModernHttpRequest({
       jsonrpc: "2.0",
-      id: `peer-subscription-${++sequence}`,
+      id: listenId,
       method: "subscriptions/listen",
-      params: { notifications: [MCP_CATALOG_LIST_CHANGED_METHOD] }
-    });
+      params: { notifications: { toolsListChanged: true } }
+    }, { Accept: "text/event-stream" });
     const response: any = await fetchImpl(url, {
       method: "POST",
       headers: headers({
         method: "POST",
         url,
-        body,
-        extraHeaders: { Accept: "text/event-stream" }
+        body: wire.body,
+        extraHeaders: wire.headers
       }),
-      body,
+      body: wire.body,
       signal: controller.signal
     });
     if (!response.ok || !response.body) {
@@ -194,7 +207,24 @@ export function createMcpCatalogProtocolPeer({
         stream = null;
       }
     };
-    return stream;
+    const deadline: any = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const ack: any = events[0];
+      if (ack?.method === MCP_SUBSCRIPTION_ACK_METHOD) {
+        assert.equal(
+          ack.params?._meta?.[MCP_META_SUBSCRIPTION_ID],
+          listenId,
+          "Neutral peer subscription acknowledgement did not carry the listen request id."
+        );
+        return stream;
+      }
+      if (ack) {
+        throw new Error(`Neutral peer first SSE event was ${String(ack.method || "unknown")}, not subscription acknowledgement.`);
+      }
+      await new Promise((resolve?: any) : any => setTimeout(resolve, 20));
+    }
+    await stream.close();
+    throw new Error("Neutral peer timed out waiting for subscription acknowledgement.");
   }
 
   async function pullCatalog({ timeoutMs = 5_000 }: Record<string, any> = {}) : Promise<any> {

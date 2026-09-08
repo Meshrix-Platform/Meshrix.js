@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Target Cursor"
-  short_description: "Reference cursor 适配项: forms, paths, sessions, access"
-  default_prompt: "Use $meshrix-js-agent-target-cursor as reference for cursor 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."
+  short_description: "Cursor Agent CLI configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-cursor to locate Cursor Agent CLI configuration facts and the current Meshrix.js MCP integration owner."

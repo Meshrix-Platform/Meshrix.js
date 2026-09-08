@@ -16,6 +16,7 @@ import {
   validateDriverAggregate,
   validateScenarioBudgets,
 } from "./lib/release-deployment/contract.ts";
+import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const MAX_CREDENTIAL_BYTES = 8 * 1024;
 const OPENAI_MODELS = Object.freeze({
@@ -186,23 +187,22 @@ async function requestOnce({
       }, cancelAfterMs)
     : null;
   try {
+    const wire = mcpModernHttpRequest({
+      jsonrpc: "2.0",
+      id: sequence,
+      method: "tools/call",
+      params: {
+        name: protocol === "openai" ? openAiTool : anthropicTool,
+        arguments: callArguments(protocol, scenario, sequence),
+      },
+    }, {
+      "X-Meshrix.js-Api-Key": credential,
+      "X-Meshrix.js-MCP-Target": "codex",
+    });
     const response = await fetch(`${origin}/mcp`, {
       method: "POST",
-      headers: {
-        accept: "application/json, text/event-stream",
-        "content-type": "application/json",
-        "X-Meshrix.js-Api-Key": credential,
-        "X-Meshrix.js-MCP-Target": "codex",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: sequence,
-        method: "tools/call",
-        params: {
-          name: protocol === "openai" ? openAiTool : anthropicTool,
-          arguments: callArguments(protocol, scenario, sequence),
-        },
-      }),
+      headers: wire.headers,
+      body: wire.body,
       signal: controller.signal,
     });
     const body = await boundedResponse(response);

@@ -1,10 +1,23 @@
-import { MCP_INTERFACE_VERSION } from "./http-mcp-adapter-constants.ts";
+import { MCP_INTERFACE_VERSION, MCP_PROTOCOL_VERSION } from "./http-mcp-adapter-constants.ts";
+
+export function sendMcpJson(response?: any, statusCode?: any, payload?: any, extraHeaders: Record<string, any> = {}) : any {
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
+    ...extraHeaders
+  });
+  response.end(JSON.stringify(payload));
+}
 
 export function jsonRpcResult(id?: any, result: Record<string, any> = {}) : any {
+  const payload: any = result && typeof result === "object" && !Array.isArray(result)
+    ? { resultType: "complete", ...result }
+    : result;
   return {
     jsonrpc: "2.0",
     id,
-    result
+    result: payload
   };
 }
 
@@ -42,13 +55,18 @@ export function executeToolPayload(result: Record<string, any> = {}) : any {
 export function mcpToolResult(payload?: any) : any {
   const structuredContent: any = payload?.result !== undefined ? payload.result : payload;
   return {
+    resultType: "complete",
     content: payload?.content || [
       {
         type: "text",
-        text: JSON.stringify(structuredContent ?? {}, null, 2)
+        text: JSON.stringify(structuredContent === undefined ? {} : structuredContent, null, 2)
       }
     ],
-    structuredContent
+    ...(payload?.isError === true ? { isError: true } : payload?.isError === false ? { isError: false } : {}),
+    structuredContent,
+    ...(payload?._meta && typeof payload._meta === "object" && !Array.isArray(payload._meta)
+      ? { _meta: payload._meta }
+      : {})
   };
 }
 

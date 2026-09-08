@@ -1,111 +1,72 @@
 ---
 name: meshrix-js-release-journey-producer
-description: Run the Meshrix.js pre-release upstream-service-publishing producer and its side-effect-free prepublication verifier — the two catalog-backed verification lanes, candidate-bound receipts, and the generated report outputs. Use before every Meshrix.js release candidate. The HTML report contract is owned by $meshrix-js-html-report-contract; the client compatibility matrix by $meshrix-js-client-compatibility-matrix; publishing to a running instance by $meshrix-js-upstream-service-publishing.
+description: Run the optional Meshrix.js external-service integration journey and bind its existing report bundle to a candidate. Keep Core functional evidence and external compatibility claims separate.
 ---
 
 # Meshrix.js Release Journey Producer
 
-This skill owns the **verification lanes and candidate receipt** of the
-upstream service publishing journey. The portable HTML report contract belongs
-to `$meshrix-js-html-report-contract`; the downstream client compatibility
-matrix belongs to `$meshrix-js-client-compatibility-matrix`; publishing a
-service to a running instance belongs to `$meshrix-js-upstream-service-publishing`.
+This skill owns the external-service integration journey and its candidate
+receipt. `$meshrix-js-html-report-contract` owns the portable HTML projection;
+`$meshrix-js-client-compatibility-matrix` owns client compatibility evidence;
+`$meshrix-js-upstream-service-publishing` owns the publication transaction.
 
-## Establish authority
+## Resolve the claim first
 
-1. Run `git status --short` for every repository boundary before editing.
-2. Read [references/publishing-contract.md](../../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or receipt contract.
-3. Keep the lanes separate from the report contract and the publication operation: this skill owns the two verification lanes and the receipt; `$meshrix-js-html-report-contract` owns the template, renderer, and screenshots; `$meshrix-js-upstream-service-publishing` owns the publication transaction.
+Read `docs/RUNBOOK.md` sections `Release Definition and Publication` and
+`Upstream Service Publishing Functional Evidence`, then inspect the current
+`package.json` entry points. The three operations have different prerequisites
+and evidence meanings:
 
-## Verify the closed loop
+| Operation | Entry point | Scope |
+| --- | --- | --- |
+| Core publishing verifier | `npm run verify:upstream-service-publishing` | Synthetic isolated production-path evidence required by the Functional Release Gate. Starts local runtime fixtures. |
+| External integration journey | `npm run verify:release-journey` | Optional service-and-adapter composition with explicitly supplied artifacts, containers, browser, and connector effects. |
+| Candidate bundle verifier | `npm run verify:upstream-service-publishing-candidate` | Checks already-produced bytes against the clean immutable tag and writes a bounded receipt. Starts no runtime journey. |
 
-Use two catalog-backed lanes and never conflate their claims:
+The optional integration is neither a Core functional-acceptance input nor a
+publication dependency. Its absence or failure cannot change a Core result.
+The mandatory Release Deployment Verification remains governed by the Runbook;
+an optional journey does not replace it.
 
-- `meshrix.upstream-service-prepublication` is the side-effect-free verifier
-  for an already-produced report bundle. It validates the template and every
-  candidate-bound artifact, then emits a bounded receipt. It must not start a
-  service, browser, container, client, upload, authorization, or invocation.
-- `meshrix.release-journey` is the side-effecting producer. It creates a fresh
-  isolated bundle and must run before every Meshrix.js release candidate; a cached
-  receipt never substitutes for this run.
+## Prepare, execute, and bind
 
-Plan the safe lane first, then run the complete producer with explicit
-side-effect admission:
+1. Inspect the working tree and preserve unrelated work. Read the
+   [publishing contract](../meshrix-js-upstream-service-publishing/references/publishing-contract.md)
+   when changing its capability or evidence contracts.
+2. Inspect the integration steps without starting the journey:
 
-```text
-npm run verify:upstream-service-publishing-candidate
-npm run verify:upstream-service-publishing-candidate
-npm run verify:upstream-service-publishing
-npm run verify:upstream-service-publishing
-```
+   ```sh
+   npm run verify:release-journey -- --plan
+   ```
 
-The safe lane fails closed when the template or any required artifact is
-missing, stale, reordered, dirty-candidate-bound, privacy-unsafe, or
-digest-mismatched. Its claim is limited to upstream publishing
-prepublication; it cannot emit `functional-complete`, overall `releaseReady`,
-or replace the platform acceptance reducer. The full journey remains outside
-the tag workflow until the external converter image and adapter bundle have
-immutable, owner-published digests. Never restore floating sibling-repository
-checkouts as a shortcut.
+3. For an authorized integration, use the explicitly supplied adapter and
+   converter image. Existing authorization for the same target, operation, and
+   effects remains valid; new effects require a decision. Run once:
 
-## Run the maintenance loop
+   ```sh
+   npm run verify:release-journey -- --adapter-source <adapter-package-dir> --image-name <local-image>
+   ```
 
-Before any side-effecting journey, run the safe maintenance loop:
+4. Run the candidate bundle verifier only after the required current artifacts
+   and the clean immutable tag already exist. Do not create or publish a tag
+   merely to satisfy this verifier. Missing evidence is not a successful plan
+   or a reason to rerun the same command unchanged.
 
-```text
-npm run generate:upstream-service-report-template
-npm run verify:upstream-service-report-template
-npm run vitest -- --run \
-  tests/vitest/server/upstream-service-publishing-candidate.test.ts \
-  tests/vitest/server/upstream-service-publishing-html.test.ts \
-  tests/vitest/server/release-journey.test.ts \
-  tests/vitest/server/release-workflow-supply-chain.test.ts
-npm run generate:upstream-service-publishing-report
-npm run verify:upstream-service-publishing-candidate
-```
+Never discover floating sibling source trees or silently substitute artifact
+owners. An explicit integration input does not become a Core dependency.
 
-Never hand-edit a generated report. The catalog-backed workflow must validate
-the tracked template before either the Core verifier or runtime release
-journey. The Core report and candidate receipt tasks must bind their declared
-outputs by byte length and SHA-256. The runtime task must bind every mandatory
-report output.
+## Maintain and verify
 
-Every blank template must remain portable, offline, bilingual, synthetic, and
-visibly marked `Not executed / 未执行`. It is neither release evidence nor a
-readiness authority and must not contain real screenshots, digests, runtime
-values, private paths, or `build/` artifact references.
+For template changes, use `npm run generate:upstream-service-report-template`
+and `npm run verify:upstream-service-report-template`. Generated reports remain
+projections of verified reports and actual screenshot bytes; never hand-edit
+them or turn a blank template into execution evidence. Select focused tests
+with `$meshrix-js-regression-planner`, instead of running every release task
+before an ordinary documentation change.
 
-## Outputs
-
-One successful run must converge on these outputs:
-
-- `build/reports/upstream-service-publishing.json` is the recomputable,
-  reducer-owned evidence authority.
-- `build/reports/release-journey.json` proves the isolated external-service,
-  connector, and downstream-agent journey.
-- `build/reports/upstream-service-publishing.html` is the offline,
-  single-file portable human-readable release report projected only from the
-  verified reports, actual publishing JSON, and digest-bound screenshot bytes.
-  Its content contract is owned by `$meshrix-js-html-report-contract`.
-- `docs/examples/upstream-service-publishing-report-template.html` is the
-  tracked, portable blank structural template. Its deterministic generator
-  must pass `--check` before the runtime journey.
-- `build/reports/upstream-service-publishing/upstream-service-basic-config.json`
-  is the actual JSON document used for the upstream publication request. The
-  HTML must embed its exact verified bytes as a downloadable data URL beside
-  the upstream basic-configuration screenshot and display its digest. The
-  embedded copy is not a substitute for the gate-owned source file.
-- `build/reports/upstream-service-publishing/screenshots/` contains only
-  screenshots captured from the running Meshrix.js Web Console.
-- `build/reports/upstream-service-publishing-candidate.json` is the bounded
-  external receipt that binds one release-definition version and tag, exact
-  source commit/tree, Core and journey reports, actual publishing JSON, final
-  HTML, and exactly eleven ordered screenshots by repository-relative path, byte
-  length, and SHA-256. It carries only the scoped
-  `upstream-publishing-prepublication-passed` claim.
-
-## Acceptance boundary
-
-Run this targeted closure first, then the canonical platform acceptance
-reducer. The paired capability reports provide mandatory scoped evidence, but
-only the platform reducer may declare the Meshrix.js functional release accepted.
+Read required artifact names and ordering from the release definition and
+candidate verifier. The external receipt carries only
+`upstream-publishing-prepublication-passed`; it cannot declare
+`functional-complete`, whole-platform readiness, or untested compatibility.
+After a failure, preserve truthful scoped evidence and follow the owning
+repair and authorization rules before another attempt.

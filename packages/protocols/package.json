@@ -30,6 +30,11 @@
       "source": "./mcp/adapter/http-mcp-adapter-constants.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-constants.js"
     },
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire": {
+      "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
+      "source": "./mcp/adapter/http-mcp-adapter-client-wire.ts",
+      "default": "./dist/mcp/adapter/http-mcp-adapter-client-wire.js"
+    },
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
@@ -108,6 +113,11 @@
       "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
       "source": "./mcp/adapter/http-mcp-adapter-constants.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-constants.js"
+    },
+    "./mcp/adapter/http-mcp-adapter-client-wire": {
+      "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
+      "source": "./mcp/adapter/http-mcp-adapter-client-wire.ts",
+      "default": "./dist/mcp/adapter/http-mcp-adapter-client-wire.js"
     },
     "./mcp/adapter/mcp-identity": {
       "types": "./dist/mcp/adapter/gateway-installer/mcp-identity.d.ts",

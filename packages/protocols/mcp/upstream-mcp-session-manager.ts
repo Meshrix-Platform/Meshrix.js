@@ -15,10 +15,13 @@ import {
 } from "./upstream-mcp-transport-common.ts";
 
 const DEFAULT_MAX_SESSIONS: any = 16;
+const DEFAULT_RESERVED_EPHEMERAL_SESSIONS: any = 2;
 const DEFAULT_IDLE_TTL_MS: any = 60_000;
 const DEFAULT_MAX_LIFETIME_MS: any = 15 * 60_000;
+const STATEFUL_SESSION_KIND: any = "stateful";
 const DEFAULT_MAX_CONCURRENT_PER_SESSION: any = 32;
 const MAX_RETIRED_KEYS_PER_SCOPE: any = 64;
+const EXECUTION_SCOPE_MARKER: any = ":exec:";
 
 function boundedInt(value?: any, fallback?: any, maximum: any = Number.MAX_SAFE_INTEGER) : any {
   return Math.min(positiveInt(value, fallback), maximum);
@@ -29,6 +32,31 @@ function capacityError(message?: any, code?: any) : any {
   error.code = code;
   error.status = 503;
   return error;
+}
+
+function statefulSessionLostError() : any {
+  const error: Error & Record<string, any> = new Error(
+    "Upstream MCP stateful session context was lost."
+  );
+  error.code = "UPSTREAM_MCP_STATEFUL_SESSION_LOST";
+  error.reasonCode = "upstream_mcp_stateful_session_lost";
+  error.status = 409;
+  error.mcpSessionFatal = true;
+  return error;
+}
+
+function executionScopeMatchesGrant(scopeValue?: any, grantIdValue?: any) : any {
+  const scope: any = text(scopeValue);
+  const grantId: any = text(grantIdValue);
+  if (!scope || !grantId) return false;
+  const markerAt: any = scope.indexOf(EXECUTION_SCOPE_MARKER);
+  if (markerAt < 0) return false;
+  const rest: any = scope.slice(markerAt + EXECUTION_SCOPE_MARKER.length);
+  const separator: any = rest.lastIndexOf(":");
+  if (separator <= 0 || separator === rest.length - 1) return false;
+  const principalId: any = rest.slice(0, separator);
+  const sessionGrantId: any = rest.slice(separator + 1);
+  return principalId === grantId || sessionGrantId === grantId;
 }
 
 function waitForPromise(promise?: any, signal?: any) : any {
@@ -66,6 +94,11 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     maxSessions * maxConcurrentRequestsPerSession,
     262_144
   );
+  const reservedEphemeralSessions: any = boundedInt(
+    options.reservedEphemeralSessions,
+    DEFAULT_RESERVED_EPHEMERAL_SESSIONS,
+    16
+  );
   const idleTtlMs: any = boundedInt(options.idleTtlMs, DEFAULT_IDLE_TTL_MS);
   const maxLifetimeMs: any = boundedInt(options.maxLifetimeMs, DEFAULT_MAX_LIFETIME_MS);
   const now: any = typeof options.now === "function" ? options.now : Date.now;
@@ -82,6 +115,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
   const creating: any = new Map<any, any>();
   const currentScopeKeys: any = new Map<any, any>();
   const retiredScopeKeys: any = new Map<any, any>();
+  const lostStatefulScopes: any = new Map<any, any>();
   let totalInFlight: any = 0;
   const drainWaiters: any = new Set<any>();
   let nextEntryId: any = 1;
@@ -121,15 +155,123 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     return closeEntry(entry, options);
   }
 
+  function isStatefulEntry(entry?: any) : any {
+    return entry?.kind === STATEFUL_SESSION_KIND;
+  }
+
+  function occupancy(kind?: any) : any {
+    const stateful: any = kind === STATEFUL_SESSION_KIND;
+    const countedScopes: any = new Set<any>();
+    let count: any = 0;
+    for (const entry of allEntries) {
+      if (isStatefulEntry(entry) !== stateful) continue;
+      count += 1;
+      if (entry.scope) countedScopes.add(entry.scope);
+    }
+    for (const pending of creating.values()) {
+      if ((pending.kind === STATEFUL_SESSION_KIND) !== stateful) continue;
+      count += 1;
+      if (pending.scope) countedScopes.add(pending.scope);
+    }
+    if (!stateful) return count;
+    for (const scope of lostStatefulScopes.keys()) {
+      if (countedScopes.has(scope)) continue;
+      count += 1;
+    }
+    return count;
+  }
+
+  function evictIdleEphemeral() : any {
+    const candidate: any = [...allEntries]
+      .filter((entry?: any) : any =>
+        entry.inFlight === 0 &&
+        !entry.closePromise &&
+        !isStatefulEntry(entry))
+      .sort((left?: any, right?: any) : any => left.lastUsedAt - right.lastUsedAt)[0];
+    return candidate ? retireEntry(candidate) : null;
+  }
+
+  async function waitForClosing(kind?: any) : Promise<any> {
+    const closing: any = [...allEntries]
+      .filter((entry?: any) : any => {
+        if (!entry.closePromise) return false;
+        if (!kind) return true;
+        return kind === STATEFUL_SESSION_KIND ? isStatefulEntry(entry) : !isStatefulEntry(entry);
+      })
+      .map((entry?: any) : any => entry.closePromise);
+    if (closing.length === 0) return false;
+    await Promise.race(closing);
+    return true;
+  }
+
+  function emptyGeneration() : any {
+    return {
+      present: false,
+      serviceRevision: 0,
+      credentialRevisions: new Map<any, any>()
+    };
+  }
+
+  function markStatefulLost(entry?: any) : any {
+    if (!entry?.scope || !entry?.key) return;
+    const current: any = currentScopeKeys.get(entry.scope);
+    lostStatefulScopes.set(entry.scope, {
+      key: entry.key,
+      generation: current?.generation || emptyGeneration()
+    });
+    rememberRetiredKey(entry.scope, entry.key);
+  }
+
+  function lostStatefulIdentity(identity?: any) : any {
+    if (!identity?.scope || identity.kind !== STATEFUL_SESSION_KIND) return false;
+    const lost: any = lostStatefulScopes.get(identity.scope);
+    if (!lost) return false;
+    const generation: any = normalizedGeneration(identity.generation);
+    if (generation.present && lost.generation?.present && compareGeneration(generation, lost.generation) > 0) {
+      lostStatefulScopes.delete(identity.scope);
+      return false;
+    }
+    return lost.key === identity.key;
+  }
+
+  function retireScopeRecords(scope?: any, { remove = false }: Record<string, any> = {}) : any {
+    let retired: any = 0;
+    const current: any = currentScopeKeys.get(scope);
+    if (current?.key) rememberRetiredKey(scope, current.key);
+    lostStatefulScopes.delete(scope);
+    for (const entry of allEntries) {
+      if (entry.scope !== scope) continue;
+      retireEntry(entry);
+      retired += 1;
+    }
+    for (const pending of creating.values()) {
+      if (pending.scope === scope) retired += 1;
+    }
+    if (remove) {
+      currentScopeKeys.delete(scope);
+      retiredScopeKeys.delete(scope);
+    } else if (current) {
+      currentScopeKeys.set(scope, { ...current, key: "" });
+    }
+    return retired;
+  }
+
   function sweepExpired(at: any = now()) : any {
     for (const entry of [...allEntries]) {
       if (entry.retired) {
         closeEntry(entry);
         continue;
       }
+      const transportFailed: any = entry.session.closed || entry.session.fatal;
+      if (isStatefulEntry(entry)) {
+        if (transportFailed) {
+          markStatefulLost(entry);
+          retireEntry(entry);
+        }
+        continue;
+      }
       const lifetimeExpired: any = at - entry.createdAt >= maxLifetimeMs;
       const idleExpired: any = entry.inFlight === 0 && at - entry.lastUsedAt >= idleTtlMs;
-      const transportFailed: any = entry.session.closed || entry.session.fatal;
       if (lifetimeExpired || idleExpired || transportFailed) retireEntry(entry);
     }
   }
@@ -141,7 +283,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     const at: any = now();
     let delay: any = idleTtlMs;
     for (const entry of allEntries) {
-      if (entry.retired) continue;
+      if (entry.retired || isStatefulEntry(entry)) continue;
       const lifetimeRemaining: any = maxLifetimeMs - (at - entry.createdAt);
       const idleRemaining: any = entry.inFlight > 0
         ? idleTtlMs
@@ -200,6 +342,9 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
   function adoptScope(scope?: any, key?: any, generationValue: Record<string, any> = {}) : any {
     if (!scope) return;
     const generation: any = normalizedGeneration(generationValue);
+    if (lostStatefulIdentity({ scope, key, generation: generationValue, kind: STATEFUL_SESSION_KIND })) {
+      throw statefulSessionLostError();
+    }
     const previous: any = currentScopeKeys.get(scope);
     const previousKey: any = previous?.key || "";
     if (previousKey === key) return;
@@ -224,37 +369,70 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     if (previousKey) {
       rememberRetiredKey(scope, previousKey);
     }
+    lostStatefulScopes.delete(scope);
     currentScopeKeys.set(scope, { key, generation });
     for (const entry of allEntries) {
       if (entry.scope === scope && entry.key !== key) retireEntry(entry);
     }
   }
 
-  async function ensureCapacity() : Promise<any> {
+  function releaseFailedInitializationScope(scope?: any, key?: any) : any {
+    if (!scope || !key) return;
+    const current: any = currentScopeKeys.get(scope);
+    if (!current || current.key !== key) return;
+    if (lostStatefulScopes.has(scope)) return;
+    for (const entry of allEntries) {
+      if (entry.scope === scope && entry.key === key) return;
+    }
+    for (const pending of creating.values()) {
+      if (pending.scope === scope) return;
+    }
+    currentScopeKeys.delete(scope);
+  }
+
+  async function ensureCapacity(kind?: any) : Promise<any> {
     sweepExpired();
-    while (allEntries.size + creating.size >= maxSessions) {
-      const candidate: any = [...allEntries]
-        .filter((entry?: any) : any => entry.inFlight === 0 && !entry.closePromise)
-        .sort((left?: any, right?: any) : any => left.lastUsedAt - right.lastUsedAt)[0];
-      if (!candidate) {
-        const closing: any = [...allEntries]
-          .map((entry?: any) : any => entry.closePromise)
-          .filter(Boolean);
-        if (closing.length > 0) {
-          await Promise.race(closing);
+    const wantStateful: any = kind === STATEFUL_SESSION_KIND;
+    while (true) {
+      const total: any = allEntries.size + creating.size;
+      const statefulOccupancy: any = occupancy(STATEFUL_SESSION_KIND);
+      const ephemeralOccupancy: any = occupancy("ephemeral");
+      if (wantStateful) {
+        if (statefulOccupancy >= maxSessions) {
+          if (await waitForClosing(STATEFUL_SESSION_KIND)) continue;
+          throw capacityError(
+            "Upstream MCP session capacity is currently exhausted.",
+            "UPSTREAM_MCP_SESSION_CAPACITY"
+          );
+        }
+        if (total < maxSessions) return;
+        const evicted: any = evictIdleEphemeral();
+        if (evicted) {
+          await evicted;
           continue;
         }
+        if (await waitForClosing()) continue;
         throw capacityError(
           "Upstream MCP session capacity is currently exhausted.",
           "UPSTREAM_MCP_SESSION_CAPACITY"
         );
       }
-      const closing: any = retireEntry(candidate);
-      if (closing) await closing;
+      if (total < maxSessions) return;
+      const evicted: any = evictIdleEphemeral();
+      if (evicted) {
+        await evicted;
+        continue;
+      }
+      if (ephemeralOccupancy < reservedEphemeralSessions) return;
+      if (await waitForClosing("ephemeral")) continue;
+      throw capacityError(
+        "Upstream MCP session capacity is currently exhausted.",
+        "UPSTREAM_MCP_SESSION_CAPACITY"
+      );
     }
   }
 
-  function beginCreation(config?: any, key?: any, scope?: any) : any {
+  function beginCreation(config?: any, key?: any, scope?: any, kind?: any) : any {
     const promise: any = (async () : Promise<any> => {
       let session: any;
       try {
@@ -270,6 +448,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
             id: nextEntryId++,
             key,
             scope,
+            kind: sessionIdentity(config).kind,
             session,
             createdAt: at,
             lastUsedAt: at,
@@ -285,11 +464,12 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
       } catch (error: any) {
         await withPoolLock(() : any => {
           if (creating.get(key)?.promise === promise) creating.delete(key);
+          releaseFailedInitializationScope(scope, key);
         });
         throw error;
       }
     })();
-    creating.set(key, { promise, scope });
+    creating.set(key, { promise, scope, kind: kind === STATEFUL_SESSION_KIND ? STATEFUL_SESSION_KIND : "ephemeral" });
     return promise;
   }
 
@@ -300,7 +480,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
       if (signal?.aborted) throw abortError();
       const decision: any = await withPoolLock(async () : Promise<any> => {
         if (closed) throw fatalSessionError("Upstream MCP session manager is closed.");
-        adoptScope(identity.scope, identity.key, identity.generation);
+        if (lostStatefulIdentity(identity)) throw statefulSessionLostError();
         sweepExpired();
         const existing: any = sessions.get(identity.key);
         if (existing && !existing.retired && !existing.session.closed && !existing.session.fatal) {
@@ -324,8 +504,16 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
         }
         const pendingCreation: any = creating.get(identity.key);
         if (pendingCreation) return { creation: pendingCreation.promise };
-        await ensureCapacity();
-        return { creation: beginCreation(config, identity.key, identity.scope) };
+        const previous: any = identity.scope ? currentScopeKeys.get(identity.scope) : null;
+        const replacing: any = Boolean(previous?.key && previous.key !== identity.key);
+        if (replacing) {
+          adoptScope(identity.scope, identity.key, identity.generation);
+        }
+        await ensureCapacity(identity.kind);
+        if (!replacing) {
+          adoptScope(identity.scope, identity.key, identity.generation);
+        }
+        return { creation: beginCreation(config, identity.key, identity.scope, identity.kind) };
       });
       if (decision.entry) return decision.entry;
       try {
@@ -363,7 +551,15 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
       try {
         return await operation(entry.session);
       } catch (error: any) {
-        if (error?.mcpSessionFatal || entry.session.fatal) retireEntry(entry);
+        await withPoolLock(() : any => {
+          if (error?.mcpSessionFatal || entry.session.fatal) retireEntry(entry);
+          if (error?.mcpSessionNotFound && isStatefulEntry(entry)) {
+            markStatefulLost(entry);
+          }
+        });
+        if (error?.mcpSessionNotFound && isStatefulEntry(entry)) {
+          throw statefulSessionLostError();
+        }
         if (error?.mcpSessionNotFound && attempt === 0 && !signal?.aborted) continue;
         throw error;
       } finally {
@@ -377,40 +573,108 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     retireScope(scopeValue: any = "", { remove = false }: Record<string, any> = {}) : any {
       const scope: any = text(scopeValue);
       if (!scope) return Promise.resolve({ retired: 0, removed: false });
+      return withPoolLock(() : any => ({
+        retired: retireScopeRecords(scope, { remove }),
+        removed: remove
+      }));
+    },
+    retireServiceScopes(serviceIdValue: any = "", { remove = false }: Record<string, any> = {}) : any {
+      const serviceId: any = text(serviceIdValue);
+      if (!serviceId) return Promise.resolve({ retired: 0, removed: false });
+      const prefix: any = `svc:${serviceId}:`;
       return withPoolLock(() : any => {
-        let retired: any = 0;
-        const current: any = currentScopeKeys.get(scope);
-        if (current?.key) rememberRetiredKey(scope, current.key);
-        for (const entry of allEntries) {
-          if (entry.scope !== scope) continue;
-          retireEntry(entry);
-          retired += 1;
+        const scopes: any = new Set<any>();
+        for (const scope of currentScopeKeys.keys()) {
+          if (scope === serviceId || String(scope).startsWith(prefix)) scopes.add(scope);
         }
-        for (const pending of creating.values()) {
-          if (pending.scope === scope) {
-            retired += 1;
+        for (const entry of allEntries) {
+          if (entry.scope === serviceId || String(entry.scope || "").startsWith(prefix)) {
+            scopes.add(entry.scope);
           }
         }
-        if (remove) {
-          currentScopeKeys.delete(scope);
-          retiredScopeKeys.delete(scope);
-        } else if (current) {
-          currentScopeKeys.set(scope, { ...current, key: "" });
+        for (const pending of creating.values()) {
+          if (pending.scope === serviceId || String(pending.scope || "").startsWith(prefix)) {
+            scopes.add(pending.scope);
+          }
         }
-        return { retired, removed: remove };
+        let retired: any = 0;
+        for (const scope of scopes) {
+          retired += retireScopeRecords(scope, { remove });
+        }
+        return { retired, removed: remove, scopes: scopes.size };
+      });
+    },
+    retireGrantScopes(grantIdValue: any = "", { remove = false }: Record<string, any> = {}) : any {
+      const grantId: any = text(grantIdValue);
+      if (!grantId) return Promise.resolve({ retired: 0, removed: false, scopes: 0 });
+      return withPoolLock(() : any => {
+        const scopes: any = new Set<any>();
+        for (const scope of currentScopeKeys.keys()) {
+          if (executionScopeMatchesGrant(scope, grantId)) scopes.add(scope);
+        }
+        for (const entry of allEntries) {
+          if (executionScopeMatchesGrant(entry.scope, grantId)) scopes.add(entry.scope);
+        }
+        for (const pending of creating.values()) {
+          if (executionScopeMatchesGrant(pending.scope, grantId)) scopes.add(pending.scope);
+        }
+        let retired: any = 0;
+        for (const scope of scopes) {
+          retired += retireScopeRecords(scope, { remove });
+        }
+        return { retired, removed: remove, scopes: scopes.size };
       });
     },
     async listTools(config: Record<string, any> = {}, requestOptions: Record<string, any> = {}) : Promise<any> {
       return execute(config, requestOptions.signal, async (session?: any) : Promise<any> => {
-        const result: any = await session.request("tools/list", {}, {
-          signal: requestOptions.signal,
-          onNotification: requestOptions.onNotification
+        const maxPages: any = 64;
+        const maxTools: any = 4_096;
+        const maxBytes: any = 8 * 1024 * 1024;
+        const seenCursors: any = new Set<any>();
+        const tools: any[] = [];
+        let cursor: any = undefined;
+        let bytes: any = 0;
+        for (let page = 1; page <= maxPages; page += 1) {
+          const result: any = await session.request("tools/list", cursor === undefined ? {} : { cursor }, {
+            signal: requestOptions.signal,
+            onNotification: requestOptions.onNotification
+          });
+          const pageTools: any = asArray(result.tools).filter((tool?: any) : any => tool && typeof tool === "object");
+          bytes += Buffer.byteLength(JSON.stringify(pageTools), "utf8");
+          if (tools.length + pageTools.length > maxTools || bytes > maxBytes) {
+            throw Object.assign(new Error("Upstream MCP tools/list exceeded the complete-list admission limit."), {
+              code: "upstream_mcp_tools_list_limit",
+              status: 502
+            });
+          }
+          tools.push(...pageTools);
+          if (result.nextCursor === undefined) {
+            return {
+              protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
+              initialized: session.initialized,
+              tools
+            };
+          }
+          if (typeof result.nextCursor !== "string") {
+            throw Object.assign(new Error("Upstream MCP tools/list returned an invalid cursor."), {
+              code: "upstream_mcp_tools_list_cursor_invalid",
+              status: 502
+            });
+          }
+          const nextCursor: any = result.nextCursor;
+          if (seenCursors.has(nextCursor)) {
+            throw Object.assign(new Error("Upstream MCP tools/list returned a repeated cursor."), {
+              code: "upstream_mcp_tools_list_cursor_repeated",
+              status: 502
+            });
+          }
+          seenCursors.add(nextCursor);
+          cursor = nextCursor;
+        }
+        throw Object.assign(new Error("Upstream MCP tools/list exceeded the page admission limit."), {
+          code: "upstream_mcp_tools_list_page_limit",
+          status: 502
         });
-        return {
-          protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
-          initialized: session.initialized,
-          tools: asArray(result.tools).filter((tool?: any) : any => tool && typeof tool === "object")
-        };
       });
     },
 
@@ -443,15 +707,18 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
         creatingSessionCount: creating.size,
         inFlightRequestCount: totalInFlight,
         maxSessions,
+        reservedEphemeralSessions,
         maxConcurrentRequests,
         maxConcurrentRequestsPerSession,
         trackedScopeCount: currentScopeKeys.size,
+        lostStatefulScopeCount: lostStatefulScopes.size,
         retiredGenerationCount: [...retiredScopeKeys.values()]
           .reduce((count?: any, keys?: any) : any => count + keys.size, 0),
         maxRetiredGenerationsPerScope: MAX_RETIRED_KEYS_PER_SCOPE,
         sessions: [...allEntries].map((entry?: any) : any => ({
           id: entry.id,
           transport: entry.session.transport,
+          kind: entry.kind || "ephemeral",
           state: entry.retired ? "retiring" : entry.session.fatal ? "failed" : "ready",
           inFlightRequestCount: entry.inFlight,
           ageMs: Math.max(0, at - entry.createdAt),
@@ -476,6 +743,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
           sessions.clear();
           currentScopeKeys.clear();
           retiredScopeKeys.clear();
+          lostStatefulScopes.clear();
         });
         await Promise.allSettled([...pendingCreations, ...closing]);
         await waitForRequestDrain();

@@ -13,6 +13,10 @@ import {
 } from "../../packages/foundation/src/security/process-identity/index.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  mcpModernHttpRequest
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const SECURITY_DESIGN_PATH: any = "docs/functionality/SECURITY-AUTHORIZATION.md";
@@ -41,13 +45,13 @@ function restoreCapabilityKernelEnv() : any {
   }
 }
 
-function mcpRequest(method?: any, params: Record<string, any> = {}, id: any = 1) : any {
-  return {
+function mcpWire(method?: any, params: Record<string, any> = {}, id: any = 1, extraHeaders: Record<string, any> = {}) : any {
+  return mcpModernHttpRequest({
     jsonrpc: "2.0",
     id,
     method,
     params
-  };
+  }, extraHeaders);
 }
 
 function apiKeyHeaders(token?: any) : any {
@@ -218,17 +222,14 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
     assert.equal(discovery.status, 200);
     assertNoPublicLocalStdioExposure(discovery.payload, "MCP discovery payload");
 
-    const initialize: any = await fetchJson(`${server.url}/mcp`, {
+    const discoverWire: any = mcpWire(MCP_DISCOVER_METHOD, {}, 1);
+    const discover: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mcpRequest("initialize", {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "verify-security-local-process-lockdown", version: "1" }
-      }, 1))
+      headers: discoverWire.headers,
+      body: discoverWire.body
     });
-    assert.equal(initialize.status, 200);
-    assertNoPublicLocalStdioExposure(initialize.payload.result, "MCP initialize result");
+    assert.equal(discover.status, 200);
+    assertNoPublicLocalStdioExposure(discover.payload.result, "MCP discover result");
 
     const verifierIdentity: any = createVerifierClientIdentity("codex");
     const apiKey: any = await issueVerifierMcpApiKey({
@@ -244,27 +245,26 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
     });
     assert.ok(apiKey.apiKey);
 
-    const mcpUrl: any = new URL("/mcp", server.url);
-    const toolsListBody: any = JSON.stringify(mcpRequest("tools/list", {}, 2));
+    const toolsListWire: any = mcpWire("tools/list", {}, 2, apiKeyHeaders(apiKey.apiKey));
     const toolsList: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": apiKey.apiKey, "X-Meshrix.js-MCP-Target": "codex" },
-      body: toolsListBody
+      headers: toolsListWire.headers,
+      body: toolsListWire.body
     });
     assert.equal(toolsList.status, 200);
     assertNoPublicLocalStdioExposure(toolsList.payload.result, "MCP tools/list result");
 
-    const capabilitiesBody: any = JSON.stringify(mcpRequest("tools/call", {
+    const capabilitiesWire: any = mcpWire("tools/call", {
       name: "meshrix.discovery",
       arguments: {
         apiVersion: "v0.0.1:mcp:interface-1",
         operation: "meshrix.capabilities.list"
       }
-    }, 3));
+    }, 3, apiKeyHeaders(apiKey.apiKey));
     const capabilities: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": apiKey.apiKey, "X-Meshrix.js-MCP-Target": "codex" },
-      body: capabilitiesBody
+      headers: capabilitiesWire.headers,
+      body: capabilitiesWire.body
     });
     assert.equal(capabilities.status, 200);
     assertNoPublicLocalStdioExposure(capabilities.payload.result, "MCP capabilities result");

@@ -5,6 +5,7 @@ import {
   packageJson,
   sharedHubContract
 } from "./constants.ts";
+import { MCP_META_SERVER_INFO } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
 import { normalizeTarget, option } from "./basic-utils.ts";
 import { loadMcpApiKeyCredential } from "./credential-store.ts";
 import { writeServerConfigProfile, serverConfigCommand } from "./device-config.ts";
@@ -150,10 +151,12 @@ export async function doctorCommand(options?: any) : Promise<any> {
   const token: any = providedToken || await loadMcpApiKeyCredential({ target, baseUrl: settings.baseUrl });
   const deviceManifestPath: any = discoveryRegistryPath(resolvedOptions);
   const discovery: any = await fetchJson(`${settings.baseUrl}/api/mcp/discovery`);
-  const initialize: any = await ensureService(settings.baseUrl);
-  const initializeMeta: any = initialize.payload?.result?._meta || {};
-  const initializeSupportedTargets: any = Array.isArray(initializeMeta.supportedTargets)
-    ? initializeMeta.supportedTargets.map((target?: any) : any => target.target).filter(Boolean)
+  const discover: any = await ensureService(settings.baseUrl);
+  const discoverResult: any = discover.payload?.result || {};
+  const discoverMeta: any = discoverResult._meta || {};
+  const serverInfo: any = discoverMeta[MCP_META_SERVER_INFO] || {};
+  const discoverSupportedTargets: any = Array.isArray(discoverMeta.supportedTargets)
+    ? discoverMeta.supportedTargets.map((target?: any) : any => target.target).filter(Boolean)
     : [];
   const checks: Record<string, any> = {
     signedDiscovery: {
@@ -168,16 +171,16 @@ export async function doctorCommand(options?: any) : Promise<any> {
       installerPackage: discovery.payload?.installer?.packageName || "",
       httpUrl: discovery.payload?.mcpServers?.meshrix?.httpUrl || ""
     },
-    initialize: {
+    discover: {
       ok: true,
-      serverName: initialize.payload?.result?.serverInfo?.name || "",
-      serverVersion: initialize.payload?.result?.serverInfo?.version || "",
-      stableToolName: initialize.payload?.result?._meta?.stableToolName || "",
-      listChanged: initialize.payload?.result?.capabilities?.tools?.listChanged === true,
-      sharedHubOk: initializeMeta.sharedHub?.directHttp === true,
-      sharedHub: initializeMeta.sharedHub || discovery.payload?.sharedHub || null,
-      priorityTargets: Array.isArray(initializeMeta.priorityTargets) ? initializeMeta.priorityTargets : [],
-      supportedTargets: initializeSupportedTargets
+      serverName: serverInfo.name || "",
+      serverVersion: serverInfo.version || "",
+      stableToolName: discoverMeta.stableToolName || "",
+      listChanged: discoverResult.capabilities?.tools?.listChanged === true,
+      sharedHubOk: discoverMeta.sharedHub?.directHttp === true,
+      sharedHub: discoverMeta.sharedHub || discovery.payload?.sharedHub || null,
+      priorityTargets: Array.isArray(discoverMeta.priorityTargets) ? discoverMeta.priorityTargets : [],
+      supportedTargets: discoverSupportedTargets
     },
     toolsList: {
       ok: false,
@@ -259,11 +262,11 @@ export async function doctorCommand(options?: any) : Promise<any> {
   return {
     ok: checks.signedDiscovery.ok
       && checks.discovery.ok
-      && checks.initialize.ok
+      && checks.discover.ok
       && (!token || (checks.toolsList.ok && checks.systemHealth.ok)),
     packageName: packageJson.name,
     packageVersion: packageJson.version,
-    sharedHub: checks.initialize.sharedHub,
+    sharedHub: checks.discover.sharedHub,
     ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv }),
     ...guidance,
     checks

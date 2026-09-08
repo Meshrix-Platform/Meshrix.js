@@ -54,6 +54,98 @@ function gatewayForwardInputForUpstreamTool(tool: Record<string, any> = {}, args
   return { ...base, body: input };
 }
 
+const RUNTIME_EVIDENCE_KEYS: any = new Set<any>([
+  "toolExecutionId",
+  "traceId",
+  "auditId"
+]);
+const GOVERNANCE_META_NAMESPACE: any = "io.meshrix/governance";
+
+function cloneJsonValue(value?: any) : any {
+  if (value === undefined) return undefined;
+  return structuredClone(value);
+}
+
+function projectConfiguredBusinessPayload(publicPayload?: any) : any {
+  const businessPayload: any = publicPayload?.result !== undefined ? publicPayload.result : publicPayload;
+  const projected: any = cloneJsonValue(businessPayload);
+  const evidence: Record<string, any> = {};
+  if (projected && typeof projected === "object" && !Array.isArray(projected)) {
+    for (const key of RUNTIME_EVIDENCE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(projected, key)) {
+        evidence[key] = projected[key];
+        delete projected[key];
+      }
+    }
+  }
+  return {
+    value: projected,
+    _meta: Object.keys(evidence).length > 0
+      ? { [GOVERNANCE_META_NAMESPACE]: evidence }
+      : undefined
+  };
+}
+
+function isCallToolResult(value?: any) : any {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (
+      Array.isArray(value.content) ||
+      value.structuredContent !== undefined ||
+      typeof value.isError === "boolean"
+    )
+  );
+}
+
+function safeNamespacedMeta(meta?: any) : any {
+  const source: any = plainObject(meta);
+  const output: Record<string, any> = {};
+  for (const [key, value] of Object.entries(source) as [string, any][]) {
+    if (typeof key !== "string" || !key.includes("/")) continue;
+    const leaf: any = key.split("/").pop();
+    if (RUNTIME_EVIDENCE_KEYS.has(key) || RUNTIME_EVIDENCE_KEYS.has(leaf)) continue;
+    output[key] = value;
+  }
+  return output;
+}
+
+function extractUpstreamCallToolResult(publicPayload?: any) : any {
+  const root: any = publicPayload && typeof publicPayload === "object" ? publicPayload : {};
+  const envelope: any = root.result && typeof root.result === "object" && !Array.isArray(root.result)
+    ? root.result
+    : root;
+  const candidates: any[] = [
+    envelope?.response,
+    envelope,
+    root.response,
+    root
+  ];
+  for (const candidate of candidates) {
+    if (isCallToolResult(candidate)) {
+      const content: any = Array.isArray(candidate.content)
+        ? candidate.content
+        : [{
+            type: "text",
+            text: candidate.structuredContent !== undefined
+              ? JSON.stringify(candidate.structuredContent)
+              : ""
+          }];
+      return {
+        resultType: "complete",
+        content,
+        ...(typeof candidate.isError === "boolean" ? { isError: candidate.isError } : {}),
+        ...(candidate.structuredContent !== undefined ? { structuredContent: candidate.structuredContent } : {}),
+        ...(Object.keys(safeNamespacedMeta(candidate._meta)).length > 0
+          ? { _meta: safeNamespacedMeta(candidate._meta) }
+          : {})
+      };
+    }
+  }
+  return null;
+}
+
 function artifactResourceFrom(value?: any, depth: any = 0) : any {
   if (!value || typeof value !== "object" || depth > 5) return null;
   if (
@@ -198,41 +290,45 @@ export async function executeUpstreamToolViaGatewayForward({
       })
     };
   }
-  const resultPayload: Record<string, any> = {
-    result: {
-      upstreamMcp: visibleTool?._meta?.upstreamMcp === true,
-      upstreamConfiguredOperation: visibleTool?._meta?.upstreamConfiguredOperation === true,
-      toolName,
-      operation: executionToolId,
-      capabilityId: dynamicCapability.capabilityId || visibleTool?._meta?.capabilityId || "",
-      dynamicCapability,
-      toolExecutionId: publicPayload?.toolExecutionId || result.payload?.toolExecutionId || "",
-      traceId: publicPayload?.traceId || result.payload?.traceId || "",
-      payload: publicPayload
+  if (visibleTool?._meta?.upstreamMcp === true) {
+    const extracted: any = extractUpstreamCallToolResult(publicPayload);
+    if (extracted) {
+      return jsonRpcResult(id, extracted);
     }
-  };
+  }
   const artifact: any = artifactResourceFrom(publicPayload);
   if (artifact) {
     const artifactReference: any = String(artifact.reference || "");
     const artifactId: any = artifactReference.startsWith("artifact:")
       ? artifactReference.slice("artifact:".length)
       : "";
-    resultPayload.content = [
-      {
-        type: "resource_link",
-        uri: artifact.uri,
+    return jsonRpcResult(id, mcpToolResult({
+      content: [
+        {
+          type: "resource_link",
+          uri: artifact.uri,
+          name: artifact.name,
+          mimeType: artifact.mediaType,
+          size: Number(artifact.byteLength)
+        },
+        {
+          type: "text",
+          text: `Artifact ready: ${artifact.name} (${artifact.mediaType}, ${Number(artifact.byteLength)} bytes). ` +
+            (artifactId
+              ? `Fetch it with meshrix-mcp fetch --artifact ${artifactId}.`
+              : "It can be fetched from the Meshrix.js gateway artifact download route.")
+        }
+      ],
+      result: {
         name: artifact.name,
-        mimeType: artifact.mediaType,
-        size: Number(artifact.byteLength)
-      },
-      {
-        type: "text",
-        text: `Artifact ready: ${artifact.name} (${artifact.mediaType}, ${Number(artifact.byteLength)} bytes). ` +
-          (artifactId
-            ? `Fetch it with meshrix-mcp fetch --artifact ${artifactId}.`
-            : "It can be fetched from the Meshrix.js gateway artifact download route.")
+        mediaType: artifact.mediaType,
+        byteLength: Number(artifact.byteLength)
       }
-    ];
+    }));
   }
-  return jsonRpcResult(id, mcpToolResult(resultPayload));
+  const projected: any = projectConfiguredBusinessPayload(publicPayload);
+  return jsonRpcResult(id, mcpToolResult({
+    result: projected.value,
+    ...(projected._meta ? { _meta: projected._meta } : {})
+  }));
 }

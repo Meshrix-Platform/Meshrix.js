@@ -399,6 +399,7 @@ export async function createServerConsoleOperationProviders({
             "api_key_revoke"
           ].includes(event?.reasonCode)) {
             disconnectMcpSseConnectionsByGrant(event.grantId);
+            await upstreamGatewayRegistry.retireMcpGrantScopes?.(event.grantId, { remove: true });
           }
           return Object.freeze({
             ...(result || {}),

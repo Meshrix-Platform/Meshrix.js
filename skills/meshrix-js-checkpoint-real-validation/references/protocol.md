@@ -121,6 +121,12 @@ Treat an unknown committed side effect, possible duplicate transaction, or secur
 
 ## 8. Repair and departure again
 
+The discovery scope of an Attempt ends at its first frozen checkpoint. Record
+later checkpoints as unexecuted; never cross the failure to collect them. The
+independent-suite discovery rule does not turn a sequential Route into a test
+matrix or allow receipts to be combined. Complete safe diagnosis and retain
+any applicable maintainer decision before applying a repair.
+
 For a product failure:
 
 1. Freeze the Attempt and preserve only privacy-safe evidence for the last pass and the failing checkpoint.
