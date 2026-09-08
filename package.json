@@ -596,7 +596,7 @@
     "better-sqlite3": "^12.9.0",
     "element-plus": "^2.13.7",
     "es-module-lexer": "^2.3.1",
-    "fflate": "^0.8.2",
+    "fflate": "^0.8.3",
     "marked": "^18.0.2",
     "pactium": "file:vendor/pactium-0.8.0.tgz",
     "pg": "^8.22.0",
@@ -604,7 +604,10 @@
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"
   },
-  "overrides": {},
+  "overrides": {
+    "fast-uri": "3.1.6",
+    "qs": "6.16.0"
+  },
   "devDependencies": {
     "@datadog/pprof": "^5.16.0",
     "@playwright/test": "^1.60.0",
