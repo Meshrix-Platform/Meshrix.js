@@ -1,0 +1,87 @@
+{
+  "name": "@meshrix/gateway",
+  "version": "0.0.1",
+  "description": "A programmable, policy-aware MCP gateway kernel for private deployments and embedded applications.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "dependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "ajv": "^8.20.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "source": "./src/schema/index.ts",
+      "default": "./dist/schema/index.js"
+    },
+    "./payload": {
+      "types": "./dist/payload/index.d.ts",
+      "source": "./src/payload/index.ts",
+      "default": "./dist/payload/index.js"
+    },
+    "./results": {
+      "types": "./dist/results/index.d.ts",
+      "source": "./src/results/index.ts",
+      "default": "./dist/results/index.js"
+    },
+    "./catalog": {
+      "types": "./dist/catalog/index.d.ts",
+      "source": "./src/catalog/index.ts",
+      "default": "./dist/catalog/index.js"
+    },
+    "./routing": {
+      "types": "./dist/routing/index.d.ts",
+      "source": "./src/routing/index.ts",
+      "default": "./dist/routing/index.js"
+    },
+    "./continuations": {
+      "types": "./dist/continuations/index.d.ts",
+      "source": "./src/continuations/index.ts",
+      "default": "./dist/continuations/index.js"
+    },
+    "./admission": {
+      "types": "./dist/admission/index.d.ts",
+      "source": "./src/admission/index.ts",
+      "default": "./dist/admission/index.js"
+    },
+    "./context": {
+      "types": "./dist/context/index.d.ts",
+      "source": "./src/context/index.ts",
+      "default": "./dist/context/index.js"
+    },
+    "./transit": {
+      "types": "./dist/transit/index.d.ts",
+      "source": "./src/transit/index.ts",
+      "default": "./dist/transit/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "source": "./src/config/index.ts",
+      "default": "./dist/config/index.js"
+    },
+    "./resources": {
+      "types": "./dist/resources/index.d.ts",
+      "source": "./src/resources/index.ts",
+      "default": "./dist/resources/index.js"
+    },
+    "./prompts": {
+      "types": "./dist/prompts/index.d.ts",
+      "source": "./src/prompts/index.ts",
+      "default": "./dist/prompts/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

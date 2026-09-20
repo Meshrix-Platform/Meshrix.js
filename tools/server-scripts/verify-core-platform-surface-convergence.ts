@@ -14,8 +14,8 @@ import {
 import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
-import { mcpOutletForTool } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts";
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import { mcpOutletForTool } from "../../packages/protocols/mcp/modern-downstream/tools.ts";
 import { createPluginDeploymentAuditCatalog } from "./lib/plugin-deployment-audit-catalog.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));

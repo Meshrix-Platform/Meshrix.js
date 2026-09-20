@@ -51,7 +51,6 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("model-gateway-admission", "Model Gateway admission verification", "foundation", nodeCommand(["--test", "services/model-gateway/test/admission.test.mjs"]), "", ["model-gateway", "admission"]),
   command("model-gateway-usage-accounting", "Model Gateway usage accounting verification", "foundation", nodeCommand(["--test", "services/model-gateway/test/persistence.test.mjs"]), "", ["model-gateway", "usage-accounting"]),
   command("model-gateway-adapter", "Model Gateway adapter and detachment verification", "foundation", npmRun("server:verify:model-gateway-detachment"), "", ["model-gateway", "adapter", "detachment"]),
-  command("gateway-boundary-final", "Mandatory dual-Gateway and detached lifecycle final boundary", "foundation", nodeCommand(["tools/server-scripts/gateway-boundary-final.ts"]), "build/reports/gateway-boundary-final.json", ["gateway", "traffic-model", "console-selection", "detachment", "maintenance"]),
   command("external-gateway-plugin", "External Gateway runtime plugin verification", "foundation", npmRun("server:verify:external-gateway"), "", ["external-gateway", "plugin", "production-controls"]),
   command("agent-self-maintenance-plugin", "Independent Agent self-maintenance plugin verification", "foundation", nodeCommand(["tools/server-scripts/verify-agent-self-maintenance-runtime.ts"]), "", ["agent", "self-maintenance", "plugin"], {
     ownedReports: [

@@ -268,7 +268,7 @@ Release Gate.
 
 `communication-service` belongs to the capability layer and records stable core protocol-facing services used by downstream clients. It declares **MCP Server** as `mcp-server-side`.
 
-The service provider keeps the MCP route target, protocol versions, and module path aligned with `downstream-client-aspect` and `packages/protocols/mcp/adapter/http-mcp-adapter.ts`. Optional protocol capabilities enter the runtime only through verified package contributions; the Core communication-service provider does not import or register product implementations.
+The service provider keeps the MCP route target, protocol versions, and module path aligned with `downstream-client-aspect` and `packages/protocols/mcp/modern-downstream/index.ts`. Optional protocol capabilities enter the runtime only through verified package contributions; the Core communication-service provider does not import or register product implementations.
 
 ## MCP Native Installer
 

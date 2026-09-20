@@ -6,9 +6,11 @@ const copies: any = [
   ["dist/packages/foundation/src", "packages/foundation/dist"],
   ["dist/packages/agents/src", "packages/agents/dist"],
   ["dist/packages/capabilities/src", "packages/capabilities/dist"],
+  ["dist/packages/gateway/src", "packages/gateway/dist"],
   ["dist/packages/server-runtime/src", "packages/server-runtime/dist"],
   ["dist/packages/protocols", "packages/protocols/dist"],
   ["dist/apps/server", "apps/server/dist"],
+  ["dist/apps/mcp-gateway-installer/src", "apps/mcp-gateway-installer/dist"],
   [
     "dist/packages/protocols/mcp/adapter/gateway-installer",
     "packages/protocols/mcp/adapter/gateway-installer/dist",

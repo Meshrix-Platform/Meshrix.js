@@ -6,6 +6,7 @@
   "license": "MIT",
   "workspaces": [
     "packages/contracts",
+    "packages/gateway",
     "packages/foundation",
     "packages/agents",
     "packages/capabilities",
@@ -14,6 +15,7 @@
     "packages/ui-console",
     "plugins/agents/*",
     "apps/server",
+    "apps/mcp-gateway-installer",
     "apps/console"
   ],
   "imports": {
@@ -193,10 +195,6 @@
       "source": "./packages/protocols/http/controllers/upstream-payload-transit-controller.ts",
       "default": "./packages/protocols/dist/http/controllers/upstream-payload-transit-controller.js"
     },
-    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": {
-      "source": "./packages/protocols/mcp/adapter/http-mcp-adapter.ts",
-      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter.js"
-    },
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants": {
       "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
       "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-constants.js"
@@ -204,6 +202,10 @@
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire": {
       "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts",
       "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-client-wire.js"
+    },
+    "#meshrix/protocols/mcp/notifications": {
+      "source": "./packages/protocols/mcp/notifications.ts",
+      "default": "./packages/protocols/dist/mcp/notifications.js"
     },
     "#meshrix/protocols/http/controllers/system-controller-foundation-handlers": {
       "source": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
@@ -364,8 +366,7 @@
     "tsconfig.json",
     "tsconfig.node.json",
     "tools/server-scripts/verify-public-boundary.ts",
-    "!apps/*/node_modules",
-    "!packages/*/node_modules",
+    "!**/node_modules",
     "dist/**/*"
   ],
   "//architecture-governance": {
@@ -549,7 +550,7 @@
     "server:verify:external-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-external-gateway-plugin.ts && npm --prefix plugins/external-gateway test && npx vitest run tests/vitest/server/external-gateway-plugin.test.ts",
     "server:verify:agent-self-maintenance-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-agent-self-maintenance-runtime.ts && npm --prefix plugins/agents/meshrix-self-maintenance test && npx vitest run tests/acceptance/agent-self-maintenance-directionality.test.ts",
     "server:verify:model-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-plugin.ts && npm --prefix plugins/model-gateway test",
-    "server:verify:model-gateway-detachment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-detachment.ts && npx vitest run tests/acceptance/model-gateway-adapter-boundary.test.ts tests/acceptance/agent-mcp-fixed-gateway-pipeline.test.ts tests/acceptance/gateway-application-stage-bypass.test.ts",
+    "server:verify:model-gateway-detachment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-detachment.ts",
     "server:verify:release-deployment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-deployment.ts",
     "server:verify:integration-task-supervisor": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-integration-task-supervisor.ts",
     "server:verify:trusted-forwarding": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-trusted-forwarding-invariants.ts",
@@ -565,11 +566,13 @@
     "server:stress:mcp-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/stress-mcp-gateway.ts",
     "server:stress:mcp-gateway-observed": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/observe-mcp-gateway-load.ts",
     "server:stress:gateway-platform": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/stress-gateway-platform-profile.ts",
+    "gateway:migrate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/migrate-gateway-config.ts",
+    "gateway:benchmark": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/benchmark-gateway.ts",
     "server:mcp:register": "sh packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh register",
     "setup": "npm install",
     "vitest": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",
     "vitest:coverage": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts --coverage",
-    "build:node": "tsc -p tsconfig.node.json && node tools/scripts/sync-typescript-package-dist.ts",
+    "build:node": "node tools/scripts/clean-node-build-output.ts && tsc -p tsconfig.node.json && node tools/scripts/sync-typescript-package-dist.ts",
     "build:web": "npm run build --workspace @meshrix/console",
     "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.tests.json --noEmit",
@@ -590,6 +593,7 @@
     "@meshrix/client-adapter-kit": "0.0.1",
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
     "@meshrix/protocols": "0.0.1",
     "@meshrix/server-runtime": "0.0.1",
     "@meshrix/ui-console": "0.0.1",

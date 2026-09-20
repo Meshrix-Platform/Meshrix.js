@@ -1,0 +1,14 @@
+{
+  "schema": "meshrix.gateway.task-001.baseline/v1",
+  "head": "6ffe1b99",
+  "baseline": "91e98202",
+  "treeIdentical": true,
+  "resetPerformed": false,
+  "focusedProfile": "npm run vitest -- tests/vitest/gateway --maxWorkers=2",
+  "observations": {
+    "schemaKeywordPath": "legacy closed-schema assumptions rejected standard 2020-12 keywords",
+    "businessTraceId": "field ownership was previously inferred from names",
+    "metadata": "hop metadata and application metadata had no explicit partition",
+    "fatalSessionRecovery": "stateful context loss required explicit terminal handling"
+  }
+}

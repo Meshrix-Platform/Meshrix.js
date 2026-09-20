@@ -5,7 +5,28 @@ import {
   runWithTraceContext,
   setTraceContextOnRequest
 } from "#meshrix/foundation/observability/trace-context";
-import { handleMeshrixMcpHttpRequest } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
+import {
+  buildMeshrixMcpDiscovery,
+  mcpHandshake
+} from "@meshrix/protocols/mcp/modern-downstream/discovery";
+import {
+  MCP_PROTOCOL_VERSION,
+  evaluateMcpProtocolContract,
+  mcpSubscriptionAckNotification,
+  mcpSubscriptionIdFromRequest,
+  parseMcpSubscriptionNotifications
+} from "@meshrix/protocols/mcp/modern-downstream/protocol";
+import { jsonRpcResult } from "@meshrix/protocols/mcp/modern-downstream/response";
+import {
+  acknowledgeConfiguredMcpCatalogConvergence,
+  registerConfiguredMcpSubscription
+} from "@meshrix/protocols/mcp/notifications";
+import {
+  MCP_CATALOG_ACKNOWLEDGE_METHOD,
+  MCP_PROXY_SESSION_HEADER_LOWER,
+  normalizeMcpProxySessionId,
+  parseMcpCatalogAcknowledgement
+} from "@meshrix/contracts/mcp-catalog-delivery";
 import {
   createRequestBodyAdmissionController,
   readRequestBody,
@@ -50,7 +71,6 @@ function classifiedRequestFailureReason(error?: any) : string {
     ["security-permissions-provider", "security_permissions"],
     ["authorization-engine", "authorization_engine"],
     ["operation-permission", "operation_permission"],
-    ["http-mcp-adapter", "mcp_adapter"]
   ].find(([needle]) => stack.includes(needle))?.[1] || "request";
   const kind = error instanceof TypeError
     ? /is not a function/iu.test(message)
@@ -78,6 +98,289 @@ function requestBodyLimitForRoute(method?: any, pathname?: any) : any {
     return UPLOAD_SESSION_MAX_CHUNK_BYTES;
   }
   return undefined;
+}
+
+function normalizedMcpOriginHost(value?: any) : any {
+  const host: any = String(value || "").trim().toLowerCase();
+  return host === "::1" || host === "[::1]" ? "localhost" : host.split(":")[0];
+}
+
+function isAllowedPlatformMcpOrigin(request?: any) : any {
+  const origin: any = String(request?.headers?.origin || "").trim();
+  if (!origin) return true;
+  try {
+    const parsed: any = new URL(origin);
+    return new Set<any>(["localhost", "127.0.0.1", "host.orb.internal"])
+      .has(normalizedMcpOriginHost(parsed.hostname));
+  } catch {
+    return false;
+  }
+}
+
+function parseMcpRequestBody(requestBody?: any) : any {
+  return JSON.parse(Buffer.from(requestBody || []).toString("utf8"));
+}
+
+function platformMcpSseFrame(payload?: any) : any {
+  return `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
+/**
+ * The SSE connection state module keys cancellation, convergence and fencing on
+ * the identity the operation-permission plane retires grants by, so a revoked
+ * credential disconnects its live subscriptions.
+ */
+function platformMcpGrantId(authorization?: any) : any {
+  if (authorization?.credentialKind === "scoped_api_key") {
+    return String(
+      authorization?.workloadPrincipalId ||
+      authorization?.apiKeyAuthorization?.workloadPrincipalId ||
+      authorization?.subject?.subjectId ||
+      authorization?.apiKeyAuthorization?.subject?.subjectId ||
+      ""
+    );
+  }
+  return String(authorization?.grant?.id || "");
+}
+
+/**
+ * A `subscriptions/listen` POST is answered as one SSE stream: the
+ * acknowledgement frame is written above the adapter's authorized event
+ * iterable, so the adapter keeps owning per-delivery re-authorization and the
+ * frame byte budget while the connection keeps its partition scope and its
+ * convergence deadline. When the client goes away, the response is closed and
+ * the adapter's subscription is released.
+ */
+async function openPlatformMcpSubscriptionStream({
+  request,
+  response,
+  requestBody,
+  url,
+  method,
+  payload,
+  result,
+  toolSkillManagementProvider
+}: Record<string, any>) : Promise<any> {
+  const closeAdapter: any = () : any => {
+    try {
+      result.close?.();
+    } catch {
+      // The adapter subscription is already released.
+    }
+  };
+  const parsedNotifications: any = parseMcpSubscriptionNotifications(payload?.params || {});
+  const subscriptionId: any = mcpSubscriptionIdFromRequest(payload);
+  const authorization: any = await toolSkillManagementProvider.authorizeMcpClientRequest({
+    request,
+    requiredScopes: [],
+    recordUse: false,
+    requestBody,
+    url: url || new URL("/mcp", "http://127.0.0.1"),
+    method
+  });
+  const partitionKeys: any = authorization?.ok === true &&
+    typeof toolSkillManagementProvider.audiencePartitionKeys === "function"
+    ? toolSkillManagementProvider.audiencePartitionKeys({ authorization })
+    : [];
+  const registration: any = registerConfiguredMcpSubscription({
+    request,
+    response,
+    grantId: platformMcpGrantId(authorization),
+    grant: authorization?.grant || null,
+    privateOnly: true,
+    partitionKeys,
+    negotiatedCapabilities: parsedNotifications.ok ? parsedNotifications.methods : [],
+    subscriptionId,
+    proxySessionId: normalizeMcpProxySessionId(
+      request?.headers?.[MCP_PROXY_SESSION_HEADER_LOWER]
+    )
+  });
+  if (!registration?.ok || typeof registration.write !== "function") {
+    closeAdapter();
+    sendJson(response, registration?.status || 503, {
+      jsonrpc: "2.0",
+      id: payload?.id ?? null,
+      error: {
+        code: -32004,
+        message: "MCP subscription capacity is unavailable.",
+        data: {
+          code: registration?.code || "mcp_subscription_registration_unavailable"
+        }
+      }
+    });
+    return;
+  }
+  response.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-store, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+    "MCP-Protocol-Version": MCP_PROTOCOL_VERSION
+  });
+  if (!registration.write(platformMcpSseFrame(mcpSubscriptionAckNotification({
+    subscriptionId,
+    notifications: parsedNotifications.ok ? parsedNotifications.notifications : {}
+  })))) {
+    registration.close?.();
+    closeAdapter();
+    return;
+  }
+  const scopedPartitionKeys: any = new Set<any>(
+    (Array.isArray(partitionKeys) ? partitionKeys : [])
+      .map((key?: any) : any => String(key || "").trim())
+      .filter(Boolean)
+  );
+  let released: any = false;
+  const releaseAdapter: any = () : any => {
+    if (released) return;
+    released = true;
+    closeAdapter();
+  };
+  const onClientGone: any = () : any => {
+    releaseAdapter();
+    registration.close?.();
+  };
+  request?.once?.("close", onClientGone);
+  response?.once?.("close", onClientGone);
+  try {
+    for await (const event of result.stream) {
+      if (released) break;
+      if (!event || typeof event !== "object") continue;
+      const changedPartitions: any = Array.isArray(event?.params?.change?.affectedPartitions)
+        ? event.params.change.affectedPartitions
+            .map((key?: any) : any => String(key || "").trim())
+            .filter(Boolean)
+        : [];
+      // A partition-scoped catalog change only reaches the audiences that
+      // published it, and it names only their own partitions: the connection's
+      // keys are that scope, exactly as they are for the notification bus.
+      const scopedChangedPartitions: any = changedPartitions
+        .filter((key?: any) : any => scopedPartitionKeys.has(key));
+      if (changedPartitions.length > 0 && scopedChangedPartitions.length === 0) continue;
+      const frame: any = changedPartitions.length > 0
+        ? {
+            ...event,
+            params: {
+              ...event.params,
+              change: { ...event.params.change, affectedPartitions: scopedChangedPartitions }
+            }
+          }
+        : event;
+      if (!registration.write(platformMcpSseFrame(frame))) break;
+    }
+  } catch {
+    // A broken downstream socket is a client disconnect, not an upstream fault.
+  } finally {
+    // The adapter subscription can end on its own when per-delivery
+    // re-authorization revokes this caller. The SSE connection outlives it so
+    // the client still converges on the catalog revision it was sent and can
+    // acknowledge it; the connection itself is closed by the subscription
+    // timeout, by revocation, or when the client goes away.
+    releaseAdapter();
+  }
+}
+
+async function handlePlatformMcpCatalogAcknowledgement({
+  request,
+  response,
+  requestBody,
+  url,
+  method,
+  payload,
+  toolSkillManagementProvider
+}: Record<string, any>) : Promise<any> {
+  const protocol: any = evaluateMcpProtocolContract({ request, message: payload });
+  if (!protocol.ok) {
+    sendJson(response, protocol.httpStatus || 400, protocol.body);
+    return true;
+  }
+  const authorization: any = await toolSkillManagementProvider.authorizeMcpClientRequest({
+    request,
+    requiredScopes: [],
+    recordUse: false,
+    requestBody,
+    url,
+    method
+  });
+  if (authorization?.ok !== true) {
+    sendJson(response, authorization?.status || 401, {
+      jsonrpc: "2.0",
+      id: payload?.id ?? null,
+      error: {
+        code: -32001,
+        message: "Catalog convergence acknowledgement requires authorization.",
+        data: { code: "catalog_convergence_acknowledgement_unauthorized" }
+      }
+    });
+    return true;
+  }
+  const { _meta: _acknowledgementMeta, ...acknowledgementParams } = payload?.params || {};
+  const facts: any = parseMcpCatalogAcknowledgement(acknowledgementParams);
+  if (!facts) {
+    sendJson(response, 400, {
+      jsonrpc: "2.0",
+      id: payload?.id ?? null,
+      error: {
+        code: -32602,
+        message: "Catalog convergence acknowledgement is invalid.",
+        data: { code: "catalog_convergence_acknowledgement_invalid" }
+      }
+    });
+    return true;
+  }
+  sendJson(response, 200, jsonRpcResult(payload?.id ?? null, acknowledgeConfiguredMcpCatalogConvergence({
+    grantId: platformMcpGrantId(authorization),
+    proxySessionId: normalizeMcpProxySessionId(
+      request?.headers?.[MCP_PROXY_SESSION_HEADER_LOWER]
+    ),
+    sourceRevision: facts.sourceRevision,
+    catalogRevision: facts.catalogRevision,
+    audienceRevision: facts.audienceRevision,
+    partitionKeys: facts.partitionKeys
+  })));
+  return true;
+}
+
+async function sendPlatformMcpAdapterResponse({
+  request,
+  response,
+  requestBody,
+  url,
+  method,
+  payload,
+  result,
+  toolSkillManagementProvider
+}: Record<string, any>) : Promise<any> {
+  if (result?.stream && typeof result.stream[Symbol.asyncIterator] === "function") {
+    await openPlatformMcpSubscriptionStream({
+      request,
+      response,
+      requestBody,
+      url,
+      method,
+      payload,
+      result,
+      toolSkillManagementProvider
+    });
+    return;
+  }
+  const status: any = Number.isInteger(result?.status) ? result.status : 502;
+  const headers: Record<string, any> = {
+    "Cache-Control": "no-store"
+  };
+  for (const [key, value] of Object.entries(result?.headers || {})) {
+    if (value !== undefined && value !== null) headers[key] = String(value);
+  }
+  if (result?.body === undefined) {
+    response.writeHead(status, headers);
+    response.end();
+    return;
+  }
+  response.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    ...headers
+  });
+  response.end(JSON.stringify(result.body));
 }
 
 export function apiKeyUploadOperation(method: any = "GET", pathname: any = "") : any {
@@ -215,7 +518,7 @@ export function createHttpServerRequestHandler({
   subjectRateLimiter,
   tenantRateLimiter,
   toolSkillManagementProvider,
-  agentMcpGatewayPipeline,
+  platformMcpGatewayAdapter,
   upstreamGatewayRegistryForMcp,
   ipRateLimiter,
   requestBodyAdmissionController = null
@@ -585,22 +888,118 @@ export function createHttpServerRequestHandler({
           }
 
           const discoveryState: any = getDiscoveryState();
-          if (
-            await handleMeshrixMcpHttpRequest({
+          if (url.pathname === "/.well-known/meshrix/mcp.json" || url.pathname === "/api/mcp/discovery") {
+            if (method !== "GET" && method !== "HEAD") {
+              response.writeHead(405, { Allow: "GET", "Cache-Control": "no-store" });
+              response.end();
+              return;
+            }
+            sendJson(response, 200, buildMeshrixMcpDiscovery({
+              listenUrl: getListenUrl(),
+              discoveryState
+            }));
+            return;
+          }
+
+          if (url.pathname === "/api/mcp/handshake") {
+            if (method !== "POST") {
+              response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
+              response.end();
+              return;
+            }
+            try {
+              const result: any = mcpHandshake({
+                request,
+                requestBody,
+                listenUrl: getListenUrl(),
+                discoveryState
+              });
+              sendJson(response, result.status, result.body);
+            } catch {
+              sendJson(response, 400, {
+                ok: false,
+                error: "MCP handshake body must be valid JSON."
+              });
+            }
+            return;
+          }
+
+          if (url.pathname === "/mcp") {
+            if (!platformMcpGatewayAdapter) {
+              sendJson(response, 503, {
+                jsonrpc: "2.0",
+                id: null,
+                error: {
+                  code: -32004,
+                  message: "MCP gateway adapter is unavailable."
+                }
+              });
+              return;
+            }
+            if (!isAllowedPlatformMcpOrigin(request)) {
+              sendJson(response, 403, {
+                jsonrpc: "2.0",
+                id: null,
+                error: {
+                  code: -32003,
+                  message: "MCP request origin is not allowed."
+                }
+              });
+              return;
+            }
+            if (method !== "POST") {
+              response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
+              response.end();
+              return;
+            }
+            let payload: any;
+            try {
+              payload = parseMcpRequestBody(requestBody);
+            } catch {
+              runtimeLogger.warn("mcp.http.invalid_json", {
+                requestId: request?.__meshrixRequestId || ""
+              });
+              sendJson(response, 400, {
+                jsonrpc: "2.0",
+                id: null,
+                error: {
+                  code: -32700,
+                  message: "MCP request body must be valid JSON."
+                }
+              });
+              return;
+            }
+            if (!Array.isArray(payload) && payload?.method === MCP_CATALOG_ACKNOWLEDGE_METHOD) {
+              await handlePlatformMcpCatalogAcknowledgement({
+                request,
+                response,
+                requestBody,
+                url,
+                method,
+                payload,
+                toolSkillManagementProvider
+              });
+              return;
+            }
+            const result: any = await platformMcpGatewayAdapter.handle({
+              method,
+              headers: request.headers,
+              body: payload,
+              rawRequest: request,
+              requestBody,
+              url,
+              signal: requestAbortController.signal
+            });
+            await sendPlatformMcpAdapterResponse({
               request,
               response,
               requestBody,
-              method,
               url,
-              toolSkillManagementProvider,
-              agentMcpGatewayPipeline,
-              upstreamGatewayRegistry: upstreamGatewayRegistryForMcp,
-              listenUrl: getListenUrl(),
-              discoveryState,
-              logger: runtimeLogger,
-              signal: requestAbortController.signal
-            })
-          ) {
+              method,
+              payload,
+              result,
+              toolSkillManagementProvider
+            });
             return;
           }
 

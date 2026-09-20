@@ -93,6 +93,8 @@ commands and candidate-bound reports.
 | MCP native installer architecture | [architecture/MCP-NATIVE-INSTALLER.md](architecture/MCP-NATIVE-INSTALLER.md) |
 | Generated state machines | [architecture/STATE-MACHINES.md](architecture/STATE-MACHINES.md) |
 | Protocols | [protocols/PROTOCOLS.md](protocols/PROTOCOLS.md) |
+| Gateway kernel architecture | [architecture/gateway.md](architecture/gateway.md) |
+| Gateway protocol boundary | [protocols/gateway.md](protocols/gateway.md) |
 | Plugin package format and loading | [protocols/PLUGIN-PACKAGE-AND-LOADING.md](protocols/PLUGIN-PACKAGE-AND-LOADING.md) |
 | Repository-local plugin implementation contract | [protocols/PLUGIN-IMPLEMENTATION-CONTRACT.md](protocols/PLUGIN-IMPLEMENTATION-CONTRACT.md) |
 | Format conversion API | [protocols/convert-api.md](protocols/convert-api.md) |

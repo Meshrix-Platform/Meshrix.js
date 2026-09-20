@@ -1,0 +1,35 @@
+name: Gateway preview candidate
+
+on:
+  pull_request:
+    paths:
+      - "packages/gateway/**"
+      - "packages/contracts/src/gateway/**"
+      - "packages/protocols/mcp/modern-*/**"
+      - "packages/protocols/mcp/legacy/**"
+      - "tests/vitest/gateway/**"
+      - "apps/mcp-gateway-installer/**"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck:node
+      - run: npm run vitest -- tests/vitest/gateway --maxWorkers=2
+      - run: npm run build:node
+      - run: npm pack --workspace @meshrix/gateway --dry-run --json

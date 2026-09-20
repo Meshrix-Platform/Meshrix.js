@@ -20,7 +20,6 @@ export const PATTERN_CLASSIFIED_SCRIPT_NAMES: readonly any[] = Object.freeze([
   "server:verify:external-gateway",
   "server:verify:integration-task-supervisor",
   "server:verify:model-gateway",
-  "server:verify:model-gateway-detachment",
   "server:verify:public-boundary",
   "server:verify:security-hardening",
   "server:verify:strategy-management",

@@ -2,13 +2,6 @@ import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const handleMeshrixMcpHttpRequestMock: any = vi.hoisted(() : any => vi.fn(async () : Promise<any> => false));
-
-vi.mock("#meshrix/protocols/mcp/adapter/http-mcp-adapter", () : any => ({
-  configureMcpNotificationBus: vi.fn(),
-  handleMeshrixMcpHttpRequest: handleMeshrixMcpHttpRequestMock
-}));
-
 import { createHttpServerRequestHandler } from "../../../apps/server/runtime/http-server-routes.ts";
 
 class CapturedResponse extends EventEmitter {
@@ -94,6 +87,7 @@ function createHandler(registeredCoreProvider?: any, options: Record<string, any
     subjectRateLimiter: { shouldAllow: () : any => ({ allowed: true }) },
     tenantRateLimiter: { shouldAllow: () : any => ({ allowed: true }) },
     toolSkillManagementProvider: {},
+    platformMcpGatewayAdapter: options.platformMcpGatewayAdapter || null,
     upstreamGatewayRegistryForMcp: null,
     ipRateLimiter: { shouldAllow: () : any => ({ allowed: true }) }
   });
@@ -101,7 +95,6 @@ function createHandler(registeredCoreProvider?: any, options: Record<string, any
 
 beforeEach(() : any => {
   vi.clearAllMocks();
-  handleMeshrixMcpHttpRequestMock.mockResolvedValue(false);
 });
 
 describe("HTTP request abort propagation", () : any => {
@@ -140,22 +133,24 @@ describe("HTTP request abort propagation", () : any => {
     expect(runtimeLogger.info).not.toHaveBeenCalledWith("http.request.completed", expect.anything());
   });
 
-  it("aborts the signal passed to direct MCP handling when the response closes", async () : Promise<any> => {
-    let observeMcp: any;
+  it("aborts the signal passed to the platform MCP gateway when the response closes", async () : Promise<any> => {
+    let observeMcpGateway: any;
     const mcpStarted: any = new Promise((resolve?: any) : any => {
-      observeMcp = resolve;
+      observeMcpGateway = resolve;
     });
-    handleMeshrixMcpHttpRequestMock.mockImplementation(async ({ signal }: Record<string, any>) : Promise<any> => {
-      observeMcp(signal);
-      if (!signal.aborted) {
-        await new Promise((resolve?: any) : any => signal.addEventListener("abort", resolve, { once: true }));
-      }
-      return true;
-    });
+    const platformMcpGatewayAdapter: Record<string, any> = {
+      handle: vi.fn(async ({ signal }: Record<string, any>) : Promise<any> => {
+        observeMcpGateway(signal);
+        if (!signal.aborted) {
+          await new Promise((resolve?: any) : any => signal.addEventListener("abort", resolve, { once: true }));
+        }
+        return { status: 202, headers: {} };
+      })
+    };
     const handler: any = createHandler({
       findProxyRegisteredApiRequest: vi.fn(() : any => null),
       dispatchRegisteredHttpOperation: vi.fn()
-    });
+    }, { platformMcpGatewayAdapter });
     const request: any = createRequest("/mcp");
     const response: any = new CapturedResponse();
     const pending: any = handler(request, response);

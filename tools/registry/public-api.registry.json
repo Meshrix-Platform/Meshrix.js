@@ -10,6 +10,13 @@
       "owner": "platform"
     },
     {
+      "alias": "#meshrix/agents/service-events",
+      "targetPath": "./packages/agents/src/service-events/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
       "alias": "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
       "targetPath": "./packages/agents/src/agent-workspace/agent-workspace-materialization-brand.ts",
       "status": "active",
@@ -73,6 +80,20 @@
       "owner": "platform"
     },
     {
+      "alias": "#meshrix/capabilities/gateway-credentials",
+      "targetPath": "./packages/capabilities/src/gateway-credentials/index.ts",
+      "status": "active",
+      "domainPackage": "capabilities",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/capabilities/gateway-policy",
+      "targetPath": "./packages/capabilities/src/gateway-policy/index.ts",
+      "status": "active",
+      "domainPackage": "capabilities",
+      "owner": "platform"
+    },
+    {
       "alias": "#meshrix/capabilities/skills/tool-skill-management-provider",
       "targetPath": "./packages/capabilities/src/skills/tool-skill-management-provider.ts",
       "status": "active",
@@ -82,6 +103,13 @@
     {
       "alias": "#meshrix/contracts/mcp-catalog-delivery",
       "targetPath": "./packages/contracts/src/mcp-catalog-delivery.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/gateway",
+      "targetPath": "./packages/contracts/src/gateway/index.ts",
       "status": "active",
       "domainPackage": "contracts",
       "owner": "platform"
@@ -493,6 +521,13 @@
       "owner": "platform"
     },
     {
+      "alias": "#meshrix/foundation/security/gateway-permit",
+      "targetPath": "./packages/foundation/src/security/gateway-permit/index.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
       "alias": "#meshrix/foundation/security/governed-execution-permit-authority",
       "targetPath": "./packages/foundation/src/security/governed-execution-permit-authority.ts",
       "status": "active",
@@ -668,6 +703,97 @@
       "owner": "platform"
     },
     {
+      "alias": "#meshrix/gateway/index",
+      "targetPath": "./packages/gateway/src/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/schema",
+      "targetPath": "./packages/gateway/src/schema/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/payload",
+      "targetPath": "./packages/gateway/src/payload/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/results",
+      "targetPath": "./packages/gateway/src/results/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/catalog",
+      "targetPath": "./packages/gateway/src/catalog/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/routing",
+      "targetPath": "./packages/gateway/src/routing/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/continuations",
+      "targetPath": "./packages/gateway/src/continuations/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/admission",
+      "targetPath": "./packages/gateway/src/admission/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/context",
+      "targetPath": "./packages/gateway/src/context/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/transit",
+      "targetPath": "./packages/gateway/src/transit/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/config",
+      "targetPath": "./packages/gateway/src/config/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/resources",
+      "targetPath": "./packages/gateway/src/resources/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/prompts",
+      "targetPath": "./packages/gateway/src/prompts/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
       "alias": "#meshrix/protocols/downstream-client-aspect/index",
       "targetPath": "./packages/protocols/downstream-client-aspect/index.ts",
       "status": "active",
@@ -710,8 +836,29 @@
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/protocols/mcp/adapter/http-mcp-adapter",
-      "targetPath": "./packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+      "alias": "#meshrix/protocols/mcp/adapter/gateway",
+      "targetPath": "./packages/protocols/mcp/adapter/gateway.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/mcp/legacy",
+      "targetPath": "./packages/protocols/mcp/legacy/index.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/mcp/modern-downstream",
+      "targetPath": "./packages/protocols/mcp/modern-downstream/index.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/mcp/modern-upstream",
+      "targetPath": "./packages/protocols/mcp/modern-upstream/index.ts",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
@@ -726,6 +873,13 @@
     {
       "alias": "#meshrix/server-runtime/composition/composition-root",
       "targetPath": "./packages/server-runtime/src/composition/composition-root.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/gateway-composition",
+      "targetPath": "./packages/server-runtime/src/composition/gateway-composition.ts",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { compileUpstreamOperationCapability } from "./operation-capability.ts";
-import { safePublicToolSegment } from "./support.ts";
+import { object, safePublicToolSegment, text } from "./support.ts";
 
 function digest(value?: any) : any {
   return createHash("sha256").update(String(value)).digest("base64url");
@@ -47,6 +47,63 @@ function projectedForwardInputSchema(operation: Record<string, any> = {}) : any 
       payload: { type: "object" }
     })
   });
+}
+
+const FORWARD_INPUT_KEYS: readonly string[] = Object.freeze([
+  "body",
+  "bodyJson",
+  "payload",
+  "query",
+  "params",
+  "rpcParams",
+  "arguments"
+]);
+
+function speaksForwardEnvelope(input: Record<string, any> = {}) : any {
+  return FORWARD_INPUT_KEYS.some((key: any) : any => Object.prototype.hasOwnProperty.call(input, key));
+}
+
+/**
+ * The governed input of a projected operation addressed as a tool.
+ *
+ * A projected operation is published as a tool, so a caller may send the operation's own
+ * arguments instead of the forward envelope the operation executes. Such a call must be
+ * shaped here — before the governed execution records, authorizes, and binds its input —
+ * because the input a permit is issued for and the input a pending approval records and
+ * replays must be the same one. A caller that already speaks the envelope keeps it as it
+ * is; bare arguments are placed where the operation's request representation reads them,
+ * and an MCP upstream tool call carries the upstream tool it addressed, which is per call
+ * and which an approved resume can no longer recover once the record is written.
+ *
+ * `discoveredToolCall` marks a call that addressed a discovered upstream tool by its own
+ * name. Such a tool publishes its own operation's request content as its input schema, not
+ * the forward envelope, so its caller's arguments are placed as the operation's arguments
+ * even when one of them happens to be named like an envelope key.
+ *
+ * Every fact used here comes from the platform's own projection of the operation (never
+ * from an upstream tool annotation).
+ */
+export function projectedOperationForwardInput(
+  metadata: Record<string, any> = {},
+  input: Record<string, any> = {},
+  { discoveredToolCall = false }: Record<string, any> = {}
+) : any {
+  const args: any = object(input);
+  const routed: Record<string, any> = {};
+  if (metadata.upstreamMcp === true) {
+    const toolName: any = text(metadata.upstreamToolName);
+    if (toolName) routed.toolName = toolName;
+  }
+  if (!discoveredToolCall && speaksForwardEnvelope(args)) return { ...routed, ...args };
+  const protocol: any = text(metadata.protocol).toLowerCase();
+  const declaredRequestMode: any = text(object(object(metadata.payloadTransport).request).mode);
+  if (declaredRequestMode === "artifact_body" || declaredRequestMode === "artifact_multipart") {
+    return { ...routed, arguments: args };
+  }
+  if (metadata.upstreamMcp === true || protocol === "mcp") return { ...routed, arguments: args };
+  if (protocol === "json-rpc") return { ...routed, rpcParams: args };
+  if (["GET", "HEAD"].includes(text(metadata.method).toUpperCase())) return { ...routed, query: args };
+  return { ...routed, body: args };
 }
 
 export function compileUpstreamOperationProjection(snapshot?: any) : any {
@@ -102,6 +159,10 @@ export function compileUpstreamOperationProjection(snapshot?: any) : any {
           serviceRevision: service.serviceRevision,
           operationKey: operation.operationKey,
           protocol: operation.protocol,
+          // The representation facts a caller's own arguments are placed by. They belong to
+          // the operator's projection of the operation, exactly as the discovered-tool
+          // projection already publishes them.
+          method: text(operation.method || "POST").toUpperCase(),
           payloadTransport: operation.payloadTransport || null,
           dynamicCapability: Object.freeze(dynamicCapability),
           resourceContext: Object.freeze(dynamicCapability.resourceContext)

@@ -654,21 +654,6 @@ export function publicService(service: Record<string, any> = {}) : any {
   };
 }
 
-export function mcpToolReadOnly(tool: Record<string, any> = {}) : any {
-  const annotations: any = object(tool.annotations);
-  if (annotations.destructiveHint === true) return false;
-  if (annotations.readOnlyHint === true) return true;
-  return false;
-}
-
-export function mcpToolRisk(tool: Record<string, any> = {}) : any {
-  const annotations: any = object(tool.annotations);
-  // MCP destructiveHint means high-impact / approval-worthy work.
-  // Meshrix.js "destructive" is a hard dispatcher block; map to repair_write instead.
-  if (annotations.destructiveHint === true) return "repair_write";
-  return mcpToolReadOnly(tool) ? "read_only" : "safe_write";
-}
-
 export function parsePublicUpstreamMcpToolName(name: any = "") : any {
   const raw: any = text(name);
   if (!raw.startsWith("upstream.")) return null;

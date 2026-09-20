@@ -14,8 +14,8 @@ import {
   MCP_CLIENT_TARGETS,
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
-import { mcpOutletForTool } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts";
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import { mcpOutletForTool } from "../../packages/protocols/mcp/modern-downstream/tools.ts";
 import { MCP_SUPPORTED_TARGETS } from "../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
 import { assertNoLeak as assertNoSensitiveLeak } from "../server-scripts/lib/report-evidence-safety.ts";
 import { createPluginDeploymentAuditCatalog } from "../server-scripts/lib/plugin-deployment-audit-catalog.ts";

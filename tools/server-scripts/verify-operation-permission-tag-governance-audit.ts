@@ -7,11 +7,7 @@ import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-r
 import { PROTOCOL_OPERATION_DEFINITIONS } from "#meshrix/contracts/operations/protocol-operation-definitions";
 import { operationFeatureId } from "#meshrix/contracts/operations/operation-feature-resolution";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.ts";
-import {
-  MCP_DISCOVERY_TOOL_NAME,
-  MCP_INTERFACE_VERSION,
-  handleMeshrixMcpHttpRequest
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+import { createPlatformMcpGateway } from "../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -37,45 +33,13 @@ function uniqueStrings(values: any = []) : any {
   return [...new Set<any>(values.map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
 }
 
-function createCapturedHttpResponse() : any {
-  return {
-    statusCode: 200,
-    headers: {},
-    chunks: [],
-    writeHead(statusCode?: any, headers: Record<string, any> = {}) : any {
-      this.statusCode = statusCode;
-      this.headers = { ...this.headers, ...headers };
-    },
-    end(chunk: any = "") : any {
-      if (chunk !== undefined && chunk !== null && chunk !== "") {
-        this.chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-      }
-      this.ended = true;
-    }
-  };
-}
-
-function capturedJson(response?: any) : any {
-  const text: any = Buffer.concat(response.chunks || []).toString("utf8").trim();
-  return text ? JSON.parse(text) : null;
-}
-
 async function mcpCapabilityOperations(catalog?: any) : Promise<any> {
-  const response: any = createCapturedHttpResponse();
   const wire: any = mcpModernHttpRequest({
     jsonrpc: "2.0",
     id: "operation-permission-tag-governance-audit",
-    method: "tools/call",
-    params: {
-      name: MCP_DISCOVERY_TOOL_NAME,
-      arguments: {
-        apiVersion: MCP_INTERFACE_VERSION,
-        operation: "meshrix.capabilities.list",
-        input: {}
-      }
-    }
+    method: "tools/list",
+    params: { limit: catalog.tools.length }
   });
-  const requestBody: any = Buffer.from(wire.body, "utf8");
   const provider: Record<string, any> = {
     async authorizeMcpClientRequest() : Promise<any> {
       return {
@@ -104,33 +68,35 @@ async function mcpCapabilityOperations(catalog?: any) : Promise<any> {
       };
     }
   };
-  await handleMeshrixMcpHttpRequest({
-    request: {
+  const platform = createPlatformMcpGateway({ toolSkillManagementProvider: provider });
+  await platform.gateway.start();
+  try {
+    const result: any = await platform.adapter.handle({
       method: "POST",
-      headers: {
-        ...wire.headers,
-        "user-agent": "operation-permission-tag-governance-audit"
+      headers: wire.headers,
+      body: wire.message,
+      rawRequest: {
+        method: "POST",
+        headers: { ...wire.headers, "user-agent": "operation-permission-tag-governance-audit" },
+        socket: { remoteAddress: "127.0.0.1" }
       },
-      socket: { remoteAddress: "127.0.0.1" }
-    },
-    response,
-    requestBody,
-    method: "POST",
-    url: new URL("http://127.0.0.1/mcp"),
-    toolSkillManagementProvider: provider
-  });
-  const payload: any = capturedJson(response);
-  if (response.statusCode !== 200 || payload?.error) {
-    const rpcCode: any = String(payload?.error?.data?.code || payload?.error?.code || "unknown");
-    throw new Error(
-      `MCP capabilities audit call failed (HTTP ${response.statusCode}, RPC ${rpcCode}).`
-    );
+      requestBody: Buffer.from(wire.body, "utf8"),
+      url: new URL("http://127.0.0.1/mcp")
+    } as any);
+    const payload: any = result.body;
+    if (result.status !== 200 || payload?.error) {
+      const rpcCode: any = String(payload?.error?.data?.code || payload?.error?.code || "unknown");
+      throw new Error(`MCP tools/list audit call failed (HTTP ${result.status}, RPC ${rpcCode}).`);
+    }
+    const tools: any[] = Array.isArray(payload?.result?.tools) ? payload.result.tools : [];
+    return tools.map((tool?: any) => ({
+      name: tool.name,
+      inputSchema: tool.inputSchema,
+      _meta: tool._meta || {}
+    }));
+  } finally {
+    await platform.close();
   }
-  const operations: any = payload?.result?.structuredContent?.operations || [];
-  if (!Array.isArray(operations)) {
-    throw new Error("MCP capabilities audit did not return operations.");
-  }
-  return operations;
 }
 
 async function readText(filePath?: any) : Promise<any> {

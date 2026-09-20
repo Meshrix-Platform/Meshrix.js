@@ -189,3 +189,11 @@ MIT。参见 [LICENSE](LICENSE)。
 <div align="center">
   <sub>Meshrix.js —— 默认自包含，为私有化部署而生。</sub>
 </div>
+
+## 可嵌入 Gateway 内核
+
+`@meshrix/gateway` 是独立的 programmable MCP gateway。它不要求 Console、
+Agent、插件或 SkillHub 才能启动；标准 MCP 客户端不需要 Meshrix 产品名或
+专用 connector 才能接入。现代 MCP 使用 `2026-07-28`，旧版本规则由隔离
+适配器单独负责。实现与样例见 [Gateway 架构](docs/architecture/gateway.md)、
+[协议边界](docs/protocols/gateway.md) 和 [Gateway 样例](docs/examples/gateway/README.md)。

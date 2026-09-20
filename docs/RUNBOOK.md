@@ -1393,6 +1393,15 @@ The current hardened OCI adapter accepts only the governed Node runtime profile.
 
 ## Evidence Handling
 
+### Gateway-only profile
+
+For a small embedded deployment, use `meshrix gateway-only --dry-run` for
+configuration diagnostics or `meshrix gateway-only --health` for a clean
+start/health/close check. This profile owns only the gateway kernel and does
+not start the Console, plugins, agents, or optional services. Configuration
+changes use the preview-then-apply migration command with an expected revision
+and backup; a local rollback never claims to reverse an external effect.
+
 - Reports use redacted evidence for secrets, grant tokens, local absolute paths, private runtime state, and raw prompts.
 - Keep complete machine-readable reports, raw output, and transient evidence under `build/`.
 - `docs/verification/regression.html` is the sole tracked projection: the full core regression generates it from bounded version, phase, lane, duration, and result metrics. Do not hand-edit it.

@@ -11,7 +11,7 @@ import {
   sanitizeMcpOutputValue,
   workspaceDirectoryFromWorkspaces
 } from "../../../packages/capabilities/src/skills/tool-skill-management-provider-workspace-projection.ts";
-import { mcpEnvelopePublic } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-response.ts";
+import { mcpEnvelopePublic } from "../../../packages/protocols/mcp/modern-downstream/response.ts";
 import {
   createArtifactTransitProvider,
   createWorkspaceArtifactFileStore
