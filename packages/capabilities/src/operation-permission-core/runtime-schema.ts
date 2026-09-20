@@ -4,7 +4,15 @@ import {
 } from "@meshrix/foundation/security/closed-json-schema";
 
 const compiledInputValidators: any = new WeakMap<object, any>();
-const POLICY_ONLY_INPUT_KEYS: any = new Set<any>(["tagPolicy"]);
+
+/**
+ * Caller-supplied keys that carry platform policy rather than operation input. They are
+ * stripped before an operation's closed input schema is validated, so a governed caller
+ * may attach a tag policy without every operation having to declare it. Any layer that
+ * validates operation input must apply the same strip, or the shared envelope key is
+ * rejected as an unexpected property.
+ */
+export const POLICY_ONLY_INPUT_KEYS: any = new Set<any>(["tagPolicy"]);
 
 function operationInputForSchemaValidation(input: Record<string, any> = {}) : any {
   if (!input || typeof input !== "object" || Array.isArray(input)) {

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.invalid/gateway-interop-config.schema.json",
+  "title": "Meshrix gateway interop runner configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "healthEndpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "startupTimeoutMs": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 120000
+    },
+    "requestTimeoutMs": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 120000
+    },
+    "candidateCommit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactDigest": {
+      "type": "string",
+      "pattern": "^(sha256:)?[a-f0-9]{64}$"
+    }
+  },
+  "oneOf": [
+    { "required": ["endpoint"] },
+    { "required": ["command"] }
+  ]
+}

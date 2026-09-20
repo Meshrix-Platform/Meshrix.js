@@ -12,6 +12,7 @@
     "@meshrix/capabilities": "0.0.1",
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
     "@meshrix/protocols": "0.0.1",
     "better-sqlite3": "^12.9.0",
     "pactium": "0.8.0"
@@ -103,8 +104,7 @@
     "#meshrix/protocols/downstream-client-aspect/index": "@meshrix/protocols/downstream-client-aspect/index",
     "#meshrix/protocols/http/controllers/jobs-controller": "@meshrix/protocols/http/controllers/jobs-controller",
     "#meshrix/protocols/http/controllers/system-controller": "@meshrix/protocols/http/controllers/system-controller",
-    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": "@meshrix/protocols/mcp/adapter/http-mcp-adapter",
-    "#meshrix/protocols/mcp/adapter/mcp-notification-bus": "@meshrix/protocols/mcp/adapter/mcp-notification-bus",
+    "#meshrix/protocols/mcp/notifications": "@meshrix/protocols/mcp/notifications",
     "#meshrix/protocols/pubsub/event-bus": "@meshrix/protocols/pubsub/event-bus",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/server-config": "@meshrix/foundation/config/server-config",
@@ -157,6 +157,11 @@
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
+    "./composition/gateway-composition": {
+      "types": "./dist/composition/gateway-composition.d.ts",
+      "source": "./src/composition/gateway-composition.ts",
+      "default": "./dist/composition/gateway-composition.js"
+    },
     "./composition/composition-root": {
       "types": "./dist/composition/composition-root.d.ts",
       "source": "./src/composition/composition-root.ts",

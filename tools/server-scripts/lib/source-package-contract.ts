@@ -8,6 +8,7 @@ export const SOURCE_PACKAGE_ROOTS: readonly string[] = Object.freeze([
   AUTHORIZED_VENDORED_PACKAGE_ROOT,
   "services/model-gateway/contracts",
   "apps/server",
+  "apps/mcp-gateway-installer",
   "apps/console",
   "content",
   "tools",

@@ -42,6 +42,7 @@ const scopedExcludedTestPatterns = isBackendFunctionalScope()
 
 const WORKSPACE_PACKAGE_DIRS: [string, string][] = [
   ["contracts", "packages/contracts"],
+  ["gateway", "packages/gateway"],
   ["foundation", "packages/foundation"],
   ["agents", "packages/agents"],
   ["capabilities", "packages/capabilities"],
@@ -88,6 +89,10 @@ function workspaceSourceAliases() : { find: any; replacement: string }[] {
     }
   }
   patterns.sort((left: any, right: any) : any => right[0].length - left[0].length);
+  // Exact aliases match by prefix too, so a shorter subpath such as
+  // `.../modern-downstream` would otherwise swallow `.../modern-downstream/discovery`
+  // purely because of its position in the exports map. Longest match wins.
+  exact.sort((left: any, right: any) : any => right.find.length - left.find.length);
   return [...exact, ...patterns.map((entry: any) : any => entry[1])];
 }
 

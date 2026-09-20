@@ -35,7 +35,7 @@ const VERIFIED_DOWNLOAD_GUIDANCE_FILES: any[] = [
   ".github/RELEASE_TEMPLATE.md",
   "docs/architecture/MCP-NATIVE-INSTALLER.md",
   "packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.ts",
-  "packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts",
+  "packages/protocols/mcp/modern-downstream/discovery.ts",
   "tools/server-scripts/lib/mcp-release-manifest.ts"
 ];
 

@@ -2,13 +2,6 @@ import { EventEmitter } from "node:events";
 import { PassThrough, Readable } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const handleMeshrixMcpHttpRequestMock: any = vi.hoisted(() : any => vi.fn(async () : Promise<any> => false));
-
-vi.mock("#meshrix/protocols/mcp/adapter/http-mcp-adapter", () : any => ({
-  configureMcpNotificationBus: vi.fn(),
-  handleMeshrixMcpHttpRequest: handleMeshrixMcpHttpRequestMock
-}));
-
 import {
   DEFAULT_MAX_BODY_BYTES,
   createRequestBodyAdmissionController,
@@ -116,7 +109,6 @@ function createHandler({ requestBodyAdmissionController, dispatchRegisteredHttpO
 
 beforeEach(() : any => {
   vi.clearAllMocks();
-  handleMeshrixMcpHttpRequestMock.mockResolvedValue(false);
 });
 
 describe("HTTP request body admission", () : any => {

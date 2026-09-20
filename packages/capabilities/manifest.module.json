@@ -26,6 +26,22 @@
       ]
     },
     {
+      "feature": "gateway-credentials",
+      "path": "src/gateway-credentials",
+      "fileCount": 1,
+      "testSuites": [
+        "gateway.*"
+      ]
+    },
+    {
+      "feature": "gateway-policy",
+      "path": "src/gateway-policy",
+      "fileCount": 1,
+      "testSuites": [
+        "gateway.*"
+      ]
+    },
+    {
       "feature": "operation-permission-core",
       "path": "src/operation-permission-core",
       "fileCount": 42,

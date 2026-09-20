@@ -17,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  compileUpstreamOperationProjection,
   createUpstreamGatewayRegistry,
   createUpstreamManifestSnapshotCommitter
 } from "../../packages/agents/src/upstream-gateway/index.ts";
@@ -75,6 +76,10 @@ const MCP_REMOTE_SECRET_REF: any = "secret://verify/upstream-fixture/mcp-remote-
 const MCP_REMOTE_SERVICE_ID: any = verifierOpaqueServiceId("fixture-mcp-remote");
 const MCP_REMOTE_TOOL_PREFIX: any = "fixture-remote";
 const GATEWAY_SCOPES: any[] = ["gateway:read", "gateway:write"];
+// The scope the operator declares for every fixture MCP service's `tools/call` operation.
+// Calls of discovered tools are authorized against that declaration, never against the
+// upstream tool's own readOnlyHint, so callers must hold it.
+const GATEWAY_WRITE_SCOPE: any[] = ["gateway:write"];
 
 function structuredOperation(operation?: any) : any {
   return {
@@ -429,7 +434,19 @@ try {
           mcp: mcpStdioConfig,
           credentialRefs: [MCP_SECRET_REF],
           requiredScopes: GATEWAY_SCOPES,
-          operations: [structuredOperation({ operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] })],
+          // Operator policy is the only source of risk, approval, and authorization scope
+          // (REQ-006): this one declaration governs every discovered tool of the service, and
+          // the upstream tools' own readOnlyHint/destructiveHint are reported but never lower
+          // the required scope or raise the class. Approval is deliberately not declared here:
+          // it would gate every discovered tool call, including the read-only ones the scenario
+          // asserts execute. The approval-gated destructive effect is declared on the REST
+          // service's own `records-purge` operation instead.
+          operations: [structuredOperation({
+            operationKey: "tools/call",
+            protocol: "mcp",
+            risk: "safe_write",
+            requiredScopes: GATEWAY_WRITE_SCOPE
+          })],
           trafficPolicy: { perMinute: 120, burst: 60 }
         },
         {
@@ -522,13 +539,24 @@ try {
   assert.deepEqual(requiredArray(projectedByUpstreamName.get("records.search").inputSchema), ["query"]);
   assert.deepEqual(requiredArray(projectedByUpstreamName.get("records.get").inputSchema), ["recordId"]);
   const purgeProjected: any = projectedByUpstreamName.get("records.purge");
-  assert.equal(purgeProjected._meta?.risk, "repair_write");
+  // The upstream tool declares destructiveHint, and the retired chain mapped that annotation
+  // straight to repair_write. Enforcement now follows the operator's declared class instead,
+  // so the annotation stays visible on the tool while the class stays safe_write (REQ-006).
+  assert.equal(purgeProjected.annotations?.destructiveHint, true);
+  assert.equal(purgeProjected._meta?.risk, "safe_write");
+  // One operator declaration governs every discovered tool of the service, so the upstream's
+  // readOnlyHint is reported but never lowers the required scope: a caller of a
+  // read-only-annotated tool must hold the operator's declared `tools/call` scope.
+  const searchProjected: any = projectedByUpstreamName.get("records.search");
+  assert.equal(searchProjected.annotations?.readOnlyHint, true);
+  assert.equal(searchProjected._meta?.risk, "safe_write");
+  assert.deepEqual(searchProjected._meta?.requiredScopes, ["gateway:write"]);
 
   const readOnlyCall: any = await runPhase("upstream-mcp-readonly-call", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.search`,
     { arguments: { query: "alpha", perPage: 1 } },
     transitExecutionSubject({
-      scopes: ["gateway:read"],
+      scopes: GATEWAY_WRITE_SCOPE,
       upstreamToolName: "records.search"
     })
   ));
@@ -543,7 +571,7 @@ try {
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.session.identity`,
     { arguments: {} },
     transitExecutionSubject({
-      scopes: ["gateway:read"],
+      scopes: GATEWAY_WRITE_SCOPE,
       upstreamToolName: "session.identity"
     })
   ));
@@ -566,7 +594,7 @@ try {
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.state.probe`,
     { arguments: {} },
     transitExecutionSubject({
-      scopes: ["gateway:read"],
+      scopes: GATEWAY_WRITE_SCOPE,
       upstreamToolName: "state.probe"
     })
   ));
@@ -584,7 +612,7 @@ try {
     `upstream.${MCP_REMOTE_TOOL_PREFIX}.records.get`,
     { arguments: { recordId: "record-002" } },
     transitExecutionSubject({
-      scopes: ["gateway:read"],
+      scopes: GATEWAY_WRITE_SCOPE,
       serviceId: MCP_REMOTE_SERVICE_ID,
       secretRef: MCP_REMOTE_SECRET_REF,
       upstreamToolName: "records.get"
@@ -638,28 +666,45 @@ try {
     { scopes: ["gateway:write"] }
   ));
   assert.equal(restPurgePending.status, "pending_approval");
+  assert.equal(restPurgePending.risk, "destructive");
 
-  const mcpPurgePending: any = await runPhase("upstream-mcp-destructive-guard", () : any => registry.callMcpToolByPublicName(
-    `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.purge`,
-    { arguments: {} },
-    transitExecutionSubject({
-      scopes: ["gateway:write"],
-      upstreamToolName: "records.purge"
-    })
-  ));
-  assert.equal(mcpPurgePending.status, "pending_approval");
-  assert.equal(mcpPurgePending.risk, "repair_write");
+  // Operator policy is the only source of risk and approval (REQ-006): this service's
+  // `tools/call` operation is declared safe_write without approval, so the fixture's
+  // destructive-annotated tool is not approval-gated through this class. It stays behind the
+  // scope the operator declares, so a caller without it is refused before any effect is
+  // attempted; the approval-gated destructive effect is exercised on the REST operation above,
+  // which the operator declares `destructive` + `requiresApproval`.
+  let mcpDestructiveScopeRejected: any = false;
+  await runPhase("upstream-mcp-destructive-guard", async () : Promise<any> => {
+    try {
+      await registry.callMcpToolByPublicName(
+        `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.records.purge`,
+        { arguments: {} },
+        transitExecutionSubject({
+          scopes: ["gateway:read"],
+          upstreamToolName: "records.purge"
+        })
+      );
+    } catch (error: any) {
+      mcpDestructiveScopeRejected = error?.status === 403 && /scope denied/i.test(String(error?.message || ""));
+    }
+    assert.equal(
+      mcpDestructiveScopeRejected,
+      true,
+      "a discovered tool call without the operator-declared scope must be refused."
+    );
+  });
 
   const stateAfterGuards: any = await runPhase("fixture-state-integrity", () : any => registry.callMcpToolByPublicName(
     `upstream.${UPSTREAM_FIXTURE_TOOL_PREFIX}.state.probe`,
     { arguments: {} },
     transitExecutionSubject({
-      scopes: ["gateway:read"],
+      scopes: GATEWAY_WRITE_SCOPE,
       upstreamToolName: "state.probe"
     })
   ));
   const stateAfterGuardsPayload: any = identityPayload(stateAfterGuards.response);
-  assert.equal(stateAfterGuardsPayload.purged, false, "destructive guard must not execute the purge");
+  assert.equal(stateAfterGuardsPayload.purged, false, "the refused purge must not execute");
   assert.equal(
     Number(stateAfterGuardsPayload.callCount || 0) >= 3,
     true,
@@ -740,12 +785,34 @@ try {
     token: downstreamGrant.token,
     body: { jsonrpc: "2.0", id: 101, method: "tools/list", params: {} }
   }));
-  assert.equal(downstreamList.handled, true);
+  // The platform MCP adapter answers with a protocol response, so the request was handled
+  // locally and did not fall through to an ungoverned path.
+  assert.equal(downstreamList.handled?.status, 200, "the platform MCP adapter must handle the downstream tools/list request.");
   assert.equal(downstreamList.statusCode, 200);
   const downstreamToolNames: any = (downstreamList.payload?.result?.tools || []).map((tool?: any) : any => tool.name);
   assert.equal(downstreamToolNames.includes(readOnlyPublicTool), true);
   assert.equal(downstreamToolNames.includes(identityPublicTool), true);
-  assert.equal(downstreamToolNames.includes(destructivePublicTool), false);
+  // The operator declares one class per service, so every discovered tool of the fixture MCP
+  // service is safe_write: the destructive-annotated tool is reported with the operator's class
+  // and stays visible to a safe_write audience (the annotation is a hint, not a class — REQ-006).
+  // The audience risk gate is exercised by the operator's own destructive-class declaration,
+  // which the same audience must not see. The gate is not vacuous: the destructive operation is
+  // present in the operator's projection and absent from this audience.
+  const destructiveOperationToolIds: any = compileUpstreamOperationProjection(publishedManifestSnapshot)
+    .operations
+    .filter((operation?: any) : any => operation?.safety?.risk === "destructive")
+    .map((operation?: any) : any => operation.toolId);
+  assert.equal(destructiveOperationToolIds.length > 0, true, "the operator must declare a destructive-class operation to gate.");
+  assert.deepEqual(
+    destructiveOperationToolIds.filter((toolId?: any) : any => downstreamToolNames.includes(toolId)),
+    [],
+    "no tool whose operator-declared class exceeds the audience maximum risk may be visible."
+  );
+  assert.equal(
+    downstreamToolNames.includes(destructivePublicTool),
+    true,
+    `a discovered tool keeps the operator's declared class, so its upstream annotation does not hide it. tools=${JSON.stringify(downstreamToolNames)} destructiveOps=${JSON.stringify(destructiveOperationToolIds)}`
+  );
 
   const downstreamCall: any = await runPhase("downstream-readonly-call", () : any => callDownstreamMcp({
     provider: downstreamProvider,
@@ -832,7 +899,10 @@ try {
           identityPayload(stateAfterIncrement.response).counter === 2,
         stdioStatefulSessionReuseProven: Number(stateAfterGuardsPayload.callCount || 0) >= 3,
         stdioStatefulSessionObservedCallCount: Number(stateAfterGuardsPayload.callCount || 0),
-        approvalBoundRiskProjected: purgeProjected._meta?.risk === "repair_write"
+        destructiveAnnotationNotRiskEvidence:
+          purgeProjected.annotations?.destructiveHint === true &&
+          purgeProjected._meta?.risk === "safe_write" &&
+          stableJson(purgeProjected._meta?.requiredScopes) === stableJson(GATEWAY_WRITE_SCOPE)
       },
       secretStoreCredentialBinding: {
         accepted: true,
@@ -848,16 +918,18 @@ try {
       },
       downstreamAgentProjection: {
         grantLabel: "Fixture downstream agent",
-        readOnlyToolVisible: true,
-        identityToolVisible: true,
-        destructiveToolHidden: true,
+        readOnlyToolVisible: downstreamToolNames.includes(readOnlyPublicTool),
+        identityToolVisible: downstreamToolNames.includes(identityPublicTool),
+        destructiveToolHidden: destructiveOperationToolIds.length > 0 &&
+          !destructiveOperationToolIds.some((toolId?: any) : any => downstreamToolNames.includes(toolId)),
+        destructiveAnnotatedToolVisible: downstreamToolNames.includes(destructivePublicTool),
         readOnlyCallOk: true,
         identityCallOk: true
       },
       deniedCalls: {
         missingReadScopeRejected: true,
-        destructiveWithoutApproval: mcpPurgePending.status,
-        restDestructiveWithoutApproval: restPurgePending.status
+        destructiveWithoutApproval: restPurgePending.status,
+        upstreamMcpDestructiveScopeRejected: mcpDestructiveScopeRejected
       }
     },
     notes: "Self-contained upstream fixture transit verification: REST and MCP registration, credential injection, stateful stdio session reuse, projection parity, risk governance, and downstream MCP projection all ran against the deterministic fixture with no external network or credentials."

@@ -25,6 +25,7 @@
   },
   "include": [
     "apps/server/**/*.ts",
+    "apps/mcp-gateway-installer/**/*.ts",
     "packages/**/*.ts",
     "tools/**/*.ts"
   ],

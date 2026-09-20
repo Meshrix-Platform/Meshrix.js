@@ -94,20 +94,10 @@
       "source": "./http/http-utils.ts",
       "default": "./dist/http/http-utils.js"
     },
-    "./mcp/adapter/http-mcp-adapter": {
-      "types": "./dist/mcp/adapter/http-mcp-adapter.d.ts",
-      "source": "./mcp/adapter/http-mcp-adapter.ts",
-      "default": "./dist/mcp/adapter/http-mcp-adapter.js"
-    },
     "./mcp/adapter/gateway-installer/connector-working-view": {
       "types": "./dist/mcp/adapter/gateway-installer/connector-working-view.d.ts",
       "source": "./mcp/adapter/gateway-installer/connector-working-view.ts",
       "default": "./dist/mcp/adapter/gateway-installer/connector-working-view.js"
-    },
-    "./mcp/adapter/mcp-notification-bus": {
-      "types": "./dist/mcp/adapter/mcp-notification-bus.d.ts",
-      "source": "./mcp/adapter/mcp-notification-bus.ts",
-      "default": "./dist/mcp/adapter/mcp-notification-bus.js"
     },
     "./mcp/adapter/http-mcp-adapter-constants": {
       "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
@@ -118,6 +108,56 @@
       "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
       "source": "./mcp/adapter/http-mcp-adapter-client-wire.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-client-wire.js"
+    },
+    "./mcp/adapter/gateway": {
+      "types": "./dist/mcp/adapter/gateway.d.ts",
+      "source": "./mcp/adapter/gateway.ts",
+      "default": "./dist/mcp/adapter/gateway.js"
+    },
+    "./mcp/modern-upstream": {
+      "types": "./dist/mcp/modern-upstream/index.d.ts",
+      "source": "./mcp/modern-upstream/index.ts",
+      "default": "./dist/mcp/modern-upstream/index.js"
+    },
+    "./mcp/modern-downstream": {
+      "types": "./dist/mcp/modern-downstream/index.d.ts",
+      "source": "./mcp/modern-downstream/index.ts",
+      "default": "./dist/mcp/modern-downstream/index.js"
+    },
+    "./mcp/modern-downstream/discovery": {
+      "types": "./dist/mcp/modern-downstream/discovery.d.ts",
+      "source": "./mcp/modern-downstream/discovery.ts",
+      "default": "./dist/mcp/modern-downstream/discovery.js"
+    },
+    "./mcp/modern-downstream/protocol": {
+      "types": "./dist/mcp/modern-downstream/protocol.d.ts",
+      "source": "./mcp/modern-downstream/protocol.ts",
+      "default": "./dist/mcp/modern-downstream/protocol.js"
+    },
+    "./mcp/modern-downstream/response": {
+      "types": "./dist/mcp/modern-downstream/response.d.ts",
+      "source": "./mcp/modern-downstream/response.ts",
+      "default": "./dist/mcp/modern-downstream/response.js"
+    },
+    "./mcp/modern-downstream/tools": {
+      "types": "./dist/mcp/modern-downstream/tools.d.ts",
+      "source": "./mcp/modern-downstream/tools.ts",
+      "default": "./dist/mcp/modern-downstream/tools.js"
+    },
+    "./mcp/authorization": {
+      "types": "./dist/mcp/authorization.d.ts",
+      "source": "./mcp/authorization.ts",
+      "default": "./dist/mcp/authorization.js"
+    },
+    "./mcp/notifications": {
+      "types": "./dist/mcp/notifications.d.ts",
+      "source": "./mcp/notifications.ts",
+      "default": "./dist/mcp/notifications.js"
+    },
+    "./mcp/legacy": {
+      "types": "./dist/mcp/legacy/index.d.ts",
+      "source": "./mcp/legacy/index.ts",
+      "default": "./dist/mcp/legacy/index.js"
     },
     "./mcp/adapter/mcp-identity": {
       "types": "./dist/mcp/adapter/gateway-installer/mcp-identity.d.ts",

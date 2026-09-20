@@ -47,7 +47,7 @@ import { compileUpstreamOperationCapability, evaluateDynamicOperationAuthorizati
 import { createMcpForwarder } from "./mcp-forwarder.ts";
 import { constructWithOwnedResourceCleanup, createForwardAbortContext } from "./registry-lifecycle.ts";
 import { fingerprint } from "./manifest-compiler.ts";
-import { upstreamProjectedOperationId } from "./operation-projection.ts";
+import { upstreamProjectedOperationId, projectedOperationForwardInput } from "./operation-projection.ts";
 import { createUpstreamManifestSnapshotCommitter } from "./manifest-snapshot-commit.ts";
 import { evaluateAudienceDecision } from "./audience-projection.ts";
 import {
@@ -73,6 +73,7 @@ export {
 } from "./publishing-application.ts";
 export {
   compileUpstreamOperationProjection,
+  projectedOperationForwardInput,
   upstreamProjectedOperationId
 } from "./operation-projection.ts";
 export {
@@ -1190,7 +1191,20 @@ export function createUpstreamGatewayRegistry({
     if (service.serviceProtocol === "mcp" || service.disabled) return [];
     return asArray(service.operations)
       .filter((operation?: any) : any => operation?.operationKey)
-      .map((operation?: any) : any => publicUpstreamOperationTool({ service, operation }));
+      .map((operation?: any) : any => {
+        const tool: any = publicUpstreamOperationTool({ service, operation });
+        // The projected operation carries the manifest revision facts that admitted it;
+        // a downstream catalog peer proves its own admission with them, so the tool must
+        // publish the same revision and digest the manifest authority recorded.
+        return Object.freeze({
+          ...tool,
+          _meta: Object.freeze({
+            ...object(tool._meta),
+            sourceRevision: manifestSnapshotRevision.sourceRevision,
+            sourceDigest: manifestSnapshotRevision.sourceDigest
+          })
+        });
+      });
   }
 
   async function resolvedMcpOperationForInput(service?: any, operation?: any, input: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {

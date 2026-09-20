@@ -182,6 +182,18 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
     inputs: ["tools/server-scripts/stress-gateway-platform-profile.ts", "tools/server-scripts/lib/release-evidence-readiness.ts", "tools/server-scripts/lib/release-evidence-freshness.ts", "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts"], outputs: ["build/reports/gateway-platform-profile.json"],
   },
+  "gateway:migrate": {
+    scriptName: "gateway:migrate", command: "npm run gateway:migrate", category: "maintenance", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "source-write",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: ["tools/server-scripts/migrate-gateway-config.ts", "docs/migrations/gateway-convergence.md"], outputs: ["<operator-selected-config-backup>"],
+  },
+  "gateway:benchmark": {
+    scriptName: "gateway:benchmark", command: "npm run gateway:benchmark", category: "verifier", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
+    inputs: ["tools/server-scripts/benchmark-gateway.ts", "packages/gateway/src/**"], outputs: ["<operator-selected-report>"],
+  },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",
     owner: "platform", tier: "integration", sideEffects: "build-output",
@@ -629,7 +641,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "apps/server/runtime/http-server.ts",
       "packages/agents/src/upstream-gateway/**",
       "packages/contracts/src/mcp-catalog-delivery.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter*.ts",
+      "packages/protocols/mcp/modern-downstream/**",
       "packages/server-runtime/src/state/sse-connection-state.ts",
       "tools/server-scripts/verify-upstream-service-publishing.ts",
       "tools/server-scripts/lib/mcp-catalog-protocol-peer.ts",
@@ -652,7 +664,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:downstream-agent-tool-loop", command: "npm run verify:downstream-agent-tool-loop", category: "verifier", subsystem: "downstream-gateway",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-downstream-agent-tool-loop.ts", "tools/server-scripts/upstream-fixture-service.ts", "tools/server-scripts/lib/upstream-fixture-service.ts", "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.ts", "tools/server-scripts/lib/upstream-fixture-grant.ts", "tools/server-scripts/lib/mcp-proxy-stdio-client.ts", "tools/server-scripts/lib/upstream-gateway-verifier-publication.ts", "packages/agents/src/upstream-gateway/**", "packages/protocols/mcp/upstream-mcp-*.ts", "packages/protocols/mcp/adapter/http-mcp-adapter*.ts", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**", "packages/foundation/src/security/secrets/**"], outputs: ["build/reports/downstream-agent-tool-loop.json"],
+    inputs: ["tools/server-scripts/verify-downstream-agent-tool-loop.ts", "tools/server-scripts/upstream-fixture-service.ts", "tools/server-scripts/lib/upstream-fixture-service.ts", "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.ts", "tools/server-scripts/lib/upstream-fixture-grant.ts", "tools/server-scripts/lib/mcp-proxy-stdio-client.ts", "tools/server-scripts/lib/upstream-gateway-verifier-publication.ts", "packages/agents/src/upstream-gateway/**", "packages/protocols/mcp/upstream-mcp-*.ts", "packages/protocols/mcp/modern-downstream/**", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**", "packages/foundation/src/security/secrets/**"], outputs: ["build/reports/downstream-agent-tool-loop.json"],
   },
   "verify:mcp-release-portable-assembly": {
     scriptName: "verify:mcp-release-portable-assembly", command: "npm run verify:mcp-release-portable-assembly", category: "verifier", subsystem: "downstream-mcp",
@@ -802,6 +814,16 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/verify-model-gateway-detachment.ts",
       "tools/server-scripts/verify-external-gateway-plugin.ts"
     ], outputs: ["build/reports/server-headless-verification.json"],
+  },
+  "server:verify:model-gateway-detachment": {
+    scriptName: "server:verify:model-gateway-detachment", command: "npm run server:verify:model-gateway-detachment", category: "verifier", subsystem: "model-gateway",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "audit", expectedDurationClass: "fast",
+    inputs: [
+      "package.json",
+      "tools/server-scripts/verify-model-gateway-detachment.ts",
+      "plugins/model-gateway/**"
+    ], outputs: [],
   },
   "server:verify:checkpoints": {
     scriptName: "server:verify:checkpoints", command: "npm run server:verify:checkpoints", category: "verifier", subsystem: "workspace",
@@ -982,7 +1004,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/server-runtime/src/composition/http-application-assembly.ts",
       "packages/server-runtime/src/composition/server-runtime-providers.ts",
       "packages/protocols/http/controllers/system-controller.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter-replies.ts",
+      "packages/protocols/mcp/notifications.ts",
       "packages/server-runtime/src/composition/console-domain/operation-executor.ts"
     ], outputs: ["build/reports/capability-acceptance-machines.json"],
   },
@@ -1023,7 +1045,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/server-runtime/src/composition/http-application-assembly.ts",
       "packages/server-runtime/src/composition/server-runtime-providers.ts",
       "packages/protocols/http/controllers/system-controller.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter-replies.ts",
+      "packages/protocols/mcp/notifications.ts",
       "packages/server-runtime/src/composition/console-domain/operation-executor.ts",
       "plugins/plugin.schema.json",
       "plugins/*/plugin.json"

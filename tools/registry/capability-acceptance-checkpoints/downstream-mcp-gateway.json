@@ -61,7 +61,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete downstream-mcp-gateway",
-      "target": "packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts, packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts, packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts, tools/verifiers/downstream-mcp-completeness-audit.ts"
+      "target": "packages/protocols/mcp/modern-downstream/index.ts, packages/protocols/mcp/modern-downstream/tools.ts, packages/protocols/mcp/modern-downstream/discovery.ts, packages/server-runtime/src/composition/gateway-composition.ts, tools/verifiers/downstream-mcp-completeness-audit.ts"
     },
     "next": [
       "a7025d7e-4d7d-4080-a4e6-11c35e6e0be9"

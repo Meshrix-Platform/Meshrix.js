@@ -953,7 +953,24 @@ async function main() : Promise<any> {
     tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "timeout");
   assert.ok(timeoutTool);
   const timeoutCall: any = await executionPeer.callTool(timeoutTool.name, { body: {} });
-  assert.ok(timeoutCall.payload?.error || timeoutCall.payload?.result?.structuredContent?.payload?.ok === false);
+  // A tool-level refusal travels in-band (`result.isError`) with the operation
+  // payload under `structuredContent`; a top-level JSON-RPC `error` is reserved
+  // for protocol faults. Commit 30167ca migrated the other MCP verifiers to this
+  // shape, so the refusal is required to be a timeout specifically, not merely
+  // "some error". The declared 2000 ms operation budget is enforced by the tool
+  // runtime, which is why the code is the runtime's timeout code.
+  assert.equal(
+    timeoutCall.payload?.result?.isError,
+    true,
+    `Forward timeout was not refused: ${JSON.stringify(timeoutCall.payload?.result?.structuredContent?.payload || timeoutCall.payload?.error || {})}`
+  );
+  assert.equal(
+    timeoutCall.payload?.result?.structuredContent?.payload?.error?.code,
+    "tool_timeout",
+    `Forward timeout was refused with an unexpected reason: ${JSON.stringify(timeoutCall.payload?.result?.structuredContent?.payload || {})}`
+  );
+  assert.equal(timeoutCall.payload?.result?.structuredContent?.payload?.response, undefined);
+  assert.equal(fixture.state.slowCalls, 1);
   observe("forward.timeout.rejected", "rejected", "replace", 2, 2);
   await observeUpstreamForwardCancellation({
     serverUrl: server.url,
@@ -972,7 +989,19 @@ async function main() : Promise<any> {
   assert.equal(fixture.state.calls, callsBeforeTraffic + 1);
   observe("forward.traffic.admitted", "admitted", "replace", 2, 2);
   const rejectedTraffic: any = await trafficPeer.callTool(trafficTool.name, { body: { value: "rate-limited" } });
-  assert.ok(rejectedTraffic.payload?.error);
+  const trafficRefusal: any = rejectedTraffic.payload?.result?.structuredContent?.payload;
+  assert.equal(
+    rejectedTraffic.payload?.result?.isError,
+    true,
+    `Rate-limited traffic was not refused: ${JSON.stringify(trafficRefusal || rejectedTraffic.payload?.error || rejectedTraffic.payload || {})}`
+  );
+  // The refusal must name the capacity reason, not merely be "some error"; the
+  // unchanged `fixture.state.calls` below proves no upstream effect occurred.
+  assert.equal(
+    trafficRefusal?.error?.code,
+    "api_key_rate_limited",
+    `Rate-limited traffic was refused with an unexpected reason: ${JSON.stringify(trafficRefusal || {})}`
+  );
   assert.equal(fixture.state.calls, callsBeforeTraffic + 1);
   observe("forward.traffic.rejected", "rejected", "replace", 2, 2);
   const deniedCall: any = await deniedPeer.callTool(upstreamTool.name, { body: { value: "denied" } });

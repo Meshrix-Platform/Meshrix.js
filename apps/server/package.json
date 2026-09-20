@@ -11,6 +11,7 @@
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
     "@meshrix/protocols": "0.0.1",
     "@meshrix/server-runtime": "0.0.1",
     "@meshrix/ui-console": "0.0.1"
@@ -24,7 +25,6 @@
     "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
     "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
     "#meshrix/protocols/http/controllers/upstream-payload-transit-controller": "@meshrix/protocols/http/controllers/upstream-payload-transit-controller",
-    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": "@meshrix/protocols/mcp/adapter/http-mcp-adapter",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/server-config": "@meshrix/foundation/config/server-config",
     "#meshrix/server-runtime/composition/console-domain/services": "@meshrix/server-runtime/composition/console-domain/services",

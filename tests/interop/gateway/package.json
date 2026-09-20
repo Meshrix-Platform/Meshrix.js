@@ -1,0 +1,18 @@
+{
+  "name": "@meshrix/gateway-interop-oracle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "scripts": {
+    "self-test": "node --test self-test.test.mjs",
+    "run:reference": "node run.mjs --mode reference --continue-on-failure",
+    "run:meshrix": "node run.mjs --mode meshrix --continue-on-failure"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "ajv": "8.20.0"
+  }
+}

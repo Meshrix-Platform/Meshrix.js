@@ -4,6 +4,7 @@ import { runNamedRpc, runRpc, runServerRpcCall, runToolsCommand } from "./lib/me
 import { runSecretCommand } from "./lib/meshrix-cli-secrets.ts";
 import { runSecurityCommand } from "./lib/meshrix-cli-security.ts";
 import { runUpload } from "./lib/meshrix-cli-upload.ts";
+import { runGatewayCommand } from "./lib/meshrix-cli-gateway.ts";
 
 function parseArgs(argv?: any) : any {
   const args: Record<string, any> = {
@@ -82,6 +83,7 @@ function usage() : any {
     "  meshrix tools metrics prune --confirm --body prune.json",
     "  meshrix tools grants list|create|rotate|revoke ...",
     "  meshrix tools policy preview --body preview.json",
+    "  meshrix gateway-only --dry-run|--health",
     "",
     "Global options:",
     "  --data-dir PATH         Directory for offline data resolution",
@@ -128,6 +130,10 @@ async function main() : Promise<any> {
   const args: any = parseArgs(process.argv.slice(2));
   if (args.help || args.h) {
     console.log(usage());
+    return;
+  }
+
+  if (await runGatewayCommand(args)) {
     return;
   }
 

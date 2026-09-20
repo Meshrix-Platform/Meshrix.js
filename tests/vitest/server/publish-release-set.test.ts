@@ -30,7 +30,7 @@ const AGENT_PLUGIN_PACKAGE_NAMES: readonly any[] = Object.freeze([
   "@meshrix/agent-pi-adapter",
   "@meshrix/client-adapter-kit"
 ]);
-const RELEASE_PACKAGE_COUNT: any = 17;
+const RELEASE_PACKAGE_COUNT: any = 18;
 
 function integrityFor(name?: any) : any {
   return `sha512-${createHash("sha512").update(`fixture:${name}`).digest("base64")}`;
@@ -141,6 +141,7 @@ describe("npm release-set publication", () : any => {
 
     expect(names).toHaveLength(RELEASE_PACKAGE_COUNT);
     expect(names).toContain("meshrix-mcp-connector");
+    expect(names).toContain("@meshrix/gateway");
     for (const packageName of AGENT_PLUGIN_PACKAGE_NAMES) expect(names).toContain(packageName);
     expect(names).not.toContain("@meshrix/server");
     expect(names).not.toContain("@meshrix/console");

@@ -97,7 +97,7 @@ const ADAPTER_VERSION = "0.0.1";
  * Copy-paste-runnable connector configuration for a frozen MCP client target
  * (mirrors the gateway installer MCP_CLIENT_TARGETS). Honest facts only: the
  * target's trusted adapter coordinate, the canonical Meshrix.js MCP server config
- * shape (http-mcp-adapter-discovery), and the token env channel. No invented
+ * shape (MCP discovery), and the token env channel. No invented
  * flags. Unknown targets return "" — the consumer renders guidance only.
  */
 export function buildConnectorConfigSnippet(target: string, keyMaterial: ApiKeyKeyMaterial): string {

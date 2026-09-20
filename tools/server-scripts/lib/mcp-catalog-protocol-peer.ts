@@ -11,7 +11,7 @@ import {
 import {
   MCP_META_SUBSCRIPTION_ID,
   MCP_SUBSCRIPTION_ACK_METHOD
-} from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-protocol.ts";
+} from "../../../packages/protocols/mcp/modern-downstream/protocol.ts";
 import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
 import {

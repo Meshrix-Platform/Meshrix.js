@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import {
   MCP_CONNECTOR_PACKAGE_NAME,
   MCP_CONNECTOR_VERSION
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import {
   MCP_STABLE_TOOL_NAME
 } from "../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts";

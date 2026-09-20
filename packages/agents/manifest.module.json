@@ -47,11 +47,19 @@
     {
       "feature": "upstream-gateway",
       "path": "src/upstream-gateway",
-      "fileCount": 22,
+      "fileCount": 23,
       "testSuites": [
         "upstream-gateway.e2e",
         "upstream-gateway.service-publishing",
         "runtime.operation-dispatch-lock"
+      ]
+    },
+    {
+      "feature": "service-events",
+      "path": "src/service-events",
+      "fileCount": 1,
+      "testSuites": [
+        "gateway.*"
       ]
     },
     {

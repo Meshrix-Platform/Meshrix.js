@@ -36,3 +36,11 @@ Public package publication, broad operating-system qualification, client
 compatibility certification, cloud matrices, and future multi-node work remain
 separate optional activities. They do not reopen the completed Core
 production-use closure.
+
+## Gateway convergence candidate
+
+The repository contains the focused `@meshrix/gateway` candidate and its
+modern/legacy MCP adapters. The candidate is verified by
+`npm run vitest -- tests/vitest/gateway --maxWorkers=2`; this focused receipt
+does not claim external-client adoption, package publication, or full-repo
+acceptance.

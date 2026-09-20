@@ -15,10 +15,10 @@ import {
   resetMcpSseConnectionStateForTests
 } from "../../../packages/server-runtime/src/state/sse-connection-state.ts";
 import {
+  configureMcpNotificationBus,
   broadcastAudienceCatalogInvalidation,
   broadcastMcpToolListChanged
-} from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-replies.ts";
-import { configureMcpNotificationBus } from "../../../packages/protocols/mcp/adapter/mcp-notification-bus.ts";
+} from "../../../packages/protocols/mcp/notifications.ts";
 import { broadcastMcpNotification as sseBroadcast } from "../../../packages/server-runtime/src/state/sse-connection-state.ts";
 
 function responseFixture({ writeResult = true }: Record<string, any> = {}) : any {

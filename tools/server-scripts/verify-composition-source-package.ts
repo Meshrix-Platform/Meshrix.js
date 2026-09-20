@@ -202,6 +202,7 @@ async function stageVerifierDependencyClosure(sourceRoot?: any) : Promise<any> {
     console: "apps/console",
     contracts: "packages/contracts",
     foundation: "packages/foundation",
+    gateway: "packages/gateway",
     protocols: "packages/protocols",
     server: "apps/server",
     "server-runtime": "packages/server-runtime",

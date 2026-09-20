@@ -49,6 +49,13 @@ usage. Only a concrete defect in an actively used path enters current work.
 
 ## Protocol and integration ownership
 
+The programmable gateway target is Node.js `>=22.18.0 <23 || >=24.3.0` with
+JSON Schema 2020-12 validation. Modern MCP uses `2026-07-28`; the explicitly
+isolated legacy profiles are `2025-03-26`, `2025-06-18`, and `2025-11-25`.
+Standard clients are admitted by protocol and authorization capability, not a
+hard-coded connector catalog. Package publication and external-client
+qualification remain separate evidence tracks.
+
 | Surface | Owner and boundary | Current status |
 | --- | --- | --- |
 | HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocols | Meshrix.js protocol and technical documents | Implemented scope is defined only by the owning documents and schemas. |

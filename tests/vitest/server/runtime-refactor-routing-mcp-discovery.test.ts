@@ -199,6 +199,9 @@ describe("runtime refactor routing and MCP discovery", () : any => {
       serviceId: "discovery-fixture",
       serviceProtocol: "mcp",
       label: "Discovery fixture",
+      // Operator-configured policy is the only source of the required scope; the upstream
+      // tool's own readOnlyHint annotation is reported but never grants access.
+      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only" }],
       mcp: {
         transport: "http",
         url: "https://example.invalid:443/mcp",

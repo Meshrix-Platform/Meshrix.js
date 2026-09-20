@@ -32,7 +32,7 @@ const ARCHITECTURE_NODES: readonly any[] = Object.freeze([
     ],
     implementationPaths: [
       "packages/capabilities/src/operation-permission-core/index.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter.ts"
+      "packages/protocols/mcp/modern-downstream/index.ts"
     ],
     gateIds: ["gateway-access", "operation-permission", "approval-workflow"]
   },
