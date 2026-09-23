@@ -62,4 +62,3 @@ export class QueueUpstream implements UpstreamPort {
 export function key(): Uint8Array {
   return new Uint8Array(Array.from({ length: 32 }, (_, index) => index + 1));
 }
-

@@ -7,4 +7,3 @@ describe("gateway-only CLI profile", () => {
     await expect(runGatewayOnly({ health: true })).resolves.toEqual({ profile: "gateway-only", health: "ok" });
   });
 });
-

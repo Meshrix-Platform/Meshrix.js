@@ -24,4 +24,3 @@ describe("isolated legacy MCP adapter", () => {
     expect(() => createLegacyMcpAdapter({ version: "2024-01-01", transport: { send: async () => response({}) } })).toThrowError(/Unsupported legacy/u);
   });
 });
-

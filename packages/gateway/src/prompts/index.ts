@@ -15,4 +15,3 @@ export interface PromptRequest {
   readonly arguments?: Readonly<Record<string, unknown>>;
   readonly signal?: AbortSignal;
 }
-

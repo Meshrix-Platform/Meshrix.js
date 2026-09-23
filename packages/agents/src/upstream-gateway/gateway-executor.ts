@@ -6,4 +6,3 @@ export function createGatewayExecutor(gateway: Gateway): Readonly<{
 }> {
   return Object.freeze({ execute: (context, invocation) => gateway.invoke(context, invocation) });
 }
-

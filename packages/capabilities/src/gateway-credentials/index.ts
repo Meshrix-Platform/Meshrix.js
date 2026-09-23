@@ -32,4 +32,3 @@ export class GatewayCredentialProvider implements CredentialProvider {
 export function createGatewayCredentialProvider(resolver: GatewayCredentialResolver, options: GatewayCredentialProviderOptions = {}): GatewayCredentialProvider {
   return new GatewayCredentialProvider(resolver, options);
 }
-

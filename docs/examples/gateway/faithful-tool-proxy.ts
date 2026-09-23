@@ -8,4 +8,3 @@ const gateway = createGateway({
 await gateway.start();
 console.log(await gateway.invoke(context, { routeRef: "tool.echo", method: "tools/call", params: { traceId: "business", value: "kept" } }));
 await gateway.close();
-

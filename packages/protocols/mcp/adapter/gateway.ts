@@ -10,4 +10,3 @@ export function createGatewayProtocolAdapter(gateway: Gateway): Readonly<{
     catalog: (context, query) => gateway.catalog(context, query)
   });
 }
-

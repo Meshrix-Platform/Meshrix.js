@@ -25,4 +25,3 @@ describe("gateway configuration migration", () => {
     await expect(applyGatewayMigration(input, { expectedRevision: "stale" })).rejects.toMatchObject({ code: "gateway_migration_rejected" });
   });
 });
-
