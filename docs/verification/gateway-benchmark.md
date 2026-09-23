@@ -4,6 +4,33 @@ This is an opt-in, source-CLI-only development experiment. It does not run in
 Core deployment, installation, acceptance or release, and does not change the
 gateway's implementation. [中文说明](gateway-benchmark.zh-CN.md).
 
+## Mandatory order: usable Meshrix first, performance second
+
+Before implementing or validating this benchmark, running a load experiment, or optimizing
+performance, establish current evidence that the same Meshrix candidate and relevant configuration
+are usable. Follow [the repository rule](../../AGENTS.md#functional-availability-before-benchmarking-and-optimization):
+
+1. Start the real backend through a supported entry point and complete an authorized operation.
+2. Open the real Console in a browser, verify assets/authentication/rendering, and complete a UI
+   action that reaches that backend and displays the correct result.
+3. Use a standard MCP client through real Meshrix to a controlled upstream and verify the result.
+4. Verify normal settlement/shutdown; record candidate, configuration, checks, observed results and
+   privacy-safe evidence with explicit passed/failed/not_run/blocked states.
+
+Builds, typechecks, a health endpoint, benchmark self-tests, Mock tests, npm/archive checks and image
+construction are not this evidence. A source-CLI fixture alone does not prove Console/backend
+usability. Neither the separate package nor `--profile fixture` exempts performance work from the
+prerequisite. Missing, failed or stale evidence pauses benchmark work; continue authorized functional
+diagnosis/repair instead. Relevant product/configuration changes require fresh affected checks.
+Do not execute performance work alongside the functional verification it depends on, and do not
+replace this bounded prerequisite with repeated full regressions. Final regression/review follow
+the functional and authorized performance work, not the other way around.
+
+This is an execution rule, not a claim that the benchmark CLI automatically verifies the frontend.
+The commands below apply only after the functional prerequisite is satisfied.
+
+## Explicit development installation and invocation
+
 The independent private `meshrix-node-benchmark` package is maintained only
 under `Meshrix.js-Benchmark/packages/node-benchmark` (outside this repository).
 Pack it explicitly from that directory, then install the resulting tarball in
