@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-memory-leak-detection
 description: Design, implement, and run bounded real-service memory-leak verification with a maintained allocation profiler, repeated post-warmup load, forced-GC sampling where supported, robust growth analysis, privacy-safe evidence, and strict cache/artifact separation. Use whenever a long-lived service, request path, listener, queue, cache, logger, persistence loop, scheduler, native binding, or dependency may retain memory across repeated work.
+audience: development
 ---
 
 # Meshrix.js Memory Leak Detection

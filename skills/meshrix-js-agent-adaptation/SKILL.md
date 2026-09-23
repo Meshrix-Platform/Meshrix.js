@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-adaptation
 description: Route Meshrix.js client configuration and compatibility questions to the matching agent reference and current MCP adapter owner. Distinguish vendor facts, implementation inventory, and verified qualification.
+audience: development
 ---
 
 # Meshrix.js Agent Adaptation

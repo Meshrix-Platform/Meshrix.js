@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-target-cursor
 description: Locate Cursor Agent CLI configuration facts and the current Meshrix.js MCP integration owner. Use for client setup or compatibility questions about this target.
+audience: usage
 ---
 
 # Agent target: Cursor Agent CLI

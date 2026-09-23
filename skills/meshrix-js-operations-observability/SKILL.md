@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-operations-observability
 description: Guide Meshrix.js health, diagnostics, metrics, traces, alerts, audit, repair evidence, and readiness-report production. Use for operational observability, alert lifecycle, bounded telemetry, report finalization, or production diagnosis.
+audience: development
 ---
 
 # Meshrix.js Operations Observability

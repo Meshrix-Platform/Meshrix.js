@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-core-platform-operations
 description: Maintain Meshrix.js core-owned server, console, platform capability, gateway, runtime, configuration, and acceptance behavior. Use for changes in the core repository that are not optional plugin implementations or client-owned behavior.
+audience: development
 ---
 
 # Meshrix.js Core Platform Operations

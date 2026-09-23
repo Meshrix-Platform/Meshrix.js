@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-client-compatibility-matrix
 description: Run the Meshrix.js downstream MCP protocol compatibility matrix for the upstream service publishing journey — verify each supported MCP protocol version through real or simulated consumers, install through the signed connector, invoke the debug operations, uninstall, and keep the matrix honest, including the simulated-fallback rule. Use when validating MCP protocol compatibility. The verification lanes are owned by $meshrix-js-release-journey-producer; the HTML report contract by $meshrix-js-html-report-contract.
+audience: development
 ---
 
 # Meshrix.js Client Compatibility Matrix

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-downstream-mcp-client-access
 description: Guide Console-issued API Key-only downstream MCP access through signed connector installation, protected proxy use, catalog refresh, governed operation approval, and local uninstall.
+audience: usage
 ---
 
 # Meshrix.js Downstream MCP Client Access

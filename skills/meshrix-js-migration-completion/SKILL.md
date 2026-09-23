@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-migration-completion
 description: Complete a Meshrix.js refactor, rename, ownership move, route move, or schema migration in one pass. Use when old implementations and compatibility artifacts must be removed after the new authority is established.
+audience: development
 ---
 
 # Meshrix.js Migration Completion

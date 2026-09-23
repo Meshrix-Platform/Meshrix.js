@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-target-kimi-code
 description: Locate Kimi Code CLI configuration facts and the current Meshrix.js MCP integration owner. Use for client setup or compatibility questions about this target.
+audience: usage
 ---
 
 # Agent target: Kimi Code CLI
