@@ -19,15 +19,18 @@ describe("bounded repeated gateway lifecycle measurements", () => {
     let promptAborts = 0;
     for (let cycle = 0; cycle < 6; cycle += 1) {
       const permits = createGatewayPermitAuthority({ now: () => clock });
+      let announceSink!: () => void;
+      const sinkEntered = new Promise<void>((resolve) => { announceSink = resolve; });
       const blocked = (kind: "resource" | "prompt", signal?: AbortSignal): Promise<never> => new Promise((_resolve, reject) => {
+        announceSink();
         const abort = () => { if (kind === "resource") resourceAborts += 1; else promptAborts += 1; reject(new DOMException("cancelled", "AbortError")); };
         if (signal?.aborted) abort();
         else signal?.addEventListener("abort", abort, { once: true });
       });
       const gateway = createTestGateway({ now: () => clock, policy: createGatewayPolicy({ now: () => clock }), permits,
         descriptors: [
-          descriptor({ kind: "resource", publicUri: "meshrix://fixture/slow", inputSchema: { type: "object" }, route: route({ logicalRoute: "resource", operation: "resources/read", upstreamIdentity: "same-peer", effectClass: "read" }) }),
-          descriptor({ kind: "prompt", publicName: "slow-prompt", inputSchema: { type: "object" }, route: route({ logicalRoute: "prompt", operation: "prompts/get", upstreamIdentity: "same-peer", effectClass: "read" }) })
+          descriptor({ kind: "resource", publicUri: "meshrix://fixture/slow", inputSchema: undefined, route: route({ logicalRoute: "resource", operation: "resources/read", upstreamIdentity: "same-peer", effectClass: "read" }) }),
+          descriptor({ kind: "prompt", publicName: "slow-prompt", inputSchema: undefined, route: route({ logicalRoute: "prompt", operation: "prompts/get", upstreamIdentity: "same-peer", effectClass: "read" }) })
         ], contextOptions: { maxActiveTotal: 64, maxTombstones: 16, tombstoneRetentionMs: 25, activeLifetimeMs: 50 },
         admissionOptions: { maxInFlight: 1, maxQueue: 20, defaultQueueDeadlineMs: 5000 },
         resources: { read: async ({ signal }) => blocked("resource", signal) },
@@ -35,6 +38,8 @@ describe("bounded repeated gateway lifecycle measurements", () => {
       });
       await gateway.start();
       try {
+        await gateway.catalogStore.preflightSchema({ type: "object" });
+        expect(gateway.stats().catalogRetention).toMatchObject({ schemaWorkers: { workers: 1, active: 0 } });
         for (let index = 0; index < 40; index += 1) {
           const business = gateway.createContext({ tenant: "synthetic", principal: `cycle-${cycle}-${index}`, grantRevision: "grant-1", credentialGeneration: "auth-1", routeRef: "resource" });
           gateway.contextStore.close(business.handle);
@@ -42,18 +47,19 @@ describe("bounded repeated gateway lifecycle measurements", () => {
         const subscription = gateway.subscribe(context, ["resource/updated"]);
         const next = subscription.events[Symbol.asyncIterator]().next();
         const active = cycle % 2 === 0 ? gateway.readResource(context, "meshrix://fixture/slow") : gateway.getPrompt(context, "slow-prompt");
-        await until(() => gateway.stats().admission.active === 1);
+        await Promise.race([sinkEntered, active.then((outcome) => { throw new Error(`Blocked sink did not start: ${outcome.kind === "failure" ? outcome.code : outcome.kind}`); })]);
+        expect(gateway.stats().admission.active).toBe(1);
         const queue = [
-          ...Array.from({ length: 7 }, () => gateway.readResource(context, "meshrix://fixture/slow")),
-          ...Array.from({ length: 8 }, () => gateway.getPrompt(context, "slow-prompt"))
+          ...Array.from({ length: 2 }, () => gateway.readResource(context, "meshrix://fixture/slow")),
+          ...Array.from({ length: 2 }, () => gateway.getPrompt(context, "slow-prompt"))
         ];
-        await until(() => gateway.stats().admission.queued === 15);
+        await until(() => gateway.stats().admission.queued === 4);
         const controlled = new AbortController();
         const cancelled = gateway.getPrompt(context, "slow-prompt", {}, controlled.signal);
-        await until(() => gateway.stats().admission.queued === 16);
-        expect(gateway.stats()).toMatchObject({ activeInvocations: 17, controllers: 17,
-          admission: { active: 1, queued: 16, timers: 16, buckets: 1 },
-          subscriptions: { streams: 1, waitingReaders: 1 }, catalogRetention: { routes: 2 } });
+        await until(() => gateway.stats().admission.queued === 5);
+        expect(gateway.stats()).toMatchObject({ activeInvocations: 6, controllers: 6,
+          admission: { active: 1, queued: 5, timers: 5, buckets: 1 },
+          subscriptions: { streams: 1, waitingReaders: 1 }, catalogRetention: { routes: 2, schemaWorkers: { workers: 1 } } });
         controlled.abort();
         expect((await cancelled).kind).toBe("failure");
         await gateway.close({ drainDeadline: 30 });
