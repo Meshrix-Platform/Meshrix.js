@@ -13,13 +13,13 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./schema": {
-      "types": "./dist/schema/index.d.ts",
       "source": "./src/schema/index.ts",
+      "types": "./dist/schema/index.d.ts",
       "default": "./dist/schema/index.js"
     },
     "./payload": {

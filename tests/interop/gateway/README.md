@@ -1,132 +1,37 @@
-# Gateway interoperability oracle
+# Independent gateway interoperability oracle
 
-This directory is an independent protocol oracle for the gateway convergence plan. It
-owns a neutral SDK peer, a separately encoded wire peer, payload, lifecycle and mutation
-oracles, a runner, and its own self-test. It does not import Meshrix source, and it never
-reaches into a candidate's internals: a candidate is only ever driven through its public
-entry (a child process on stdio, or an HTTP endpoint).
-
-Install and run it with:
+Run on supported Node 24 with the package's own lock (`npm ci --prefix tests/interop/gateway --ignore-scripts`). This directory imports no Meshrix product module. `@modelcontextprotocol/sdk@1.29.0` negotiates **2025-11-25 only**; its legacy comparison does not certify modern MCP. The separately encoded raw HTTP/JSON-RPC peer in a **child process** tests the declared 2026-07-28 profile without legacy `initialize`, `notifications/initialized` or `Mcp-Session-Id`: modern clients use `server/discover` and per-request `_meta`/protocol headers. Legacy peers alone use initialize/session. Raw JSON-RPC envelopes, method-specific result fields, metadata placement, resultType, value wrappers, catalog output schemas, dynamic InputResponses and peer-owned effect records are checked before normalization. Neither an HTTP status nor an internally claimed effect constitutes evidence.
 
 ```sh
-npm ci --prefix tests/interop/gateway --ignore-scripts
 node --test tests/interop/gateway/self-test.test.mjs
 node tests/interop/gateway/run.mjs --mode reference --continue-on-failure
-node tests/interop/gateway/run.mjs --mode meshrix --continue-on-failure
+node tests/interop/gateway/run.mjs --mode meshrix --config <private-run-config.json> --continue-on-failure --report <private-run-report.json>
 ```
 
-`MESHRIX_INTEROP_TRANSPORT=http` switches the reference profile from in-process dispatch
-to real loopback HTTP. Both profiles produce eight real observations and both are part of
-the declared acceptance.
+`--mode meshrix` **requires** explicit `--config` or `MESHRIX_INTEROP_CONFIG`. No default source fixture or implicit candidate can satisfy an installed-product claim. `fixtures/neutral-http-candidate.json` is a framework-only control; `fixtures/fix-b-candidate.json` is an old **source smoke** fixture, not a release candidate. A legacy SDK peer is not evidence of a modern handshake. The runner does not read product source, `#imports`, checkout internals, or inject `AuthenticatedContext`.
 
-## Candidate resolution
+## Public candidate input (contract v2)
 
-`--mode meshrix` resolves its candidate without ever inventing one:
+A JSON config has exactly one entry, `endpoint` or `command` with optional `args`/`cwd`, and `candidateKind` equal to `standalone-packed-http`, `platform-default-http`, `legacy-packed-http` or `reference-fixture`. `protocolVersion` defaults to `2026-07-28` and may name a declared legacy version. Use isolated synthetic credentials in `authorization`; neither credentials nor addresses are written to reports. Optional `publicMapping:{"toolName":"...","resourceUri":"...","promptName":"..."}` declares the actual public names/URI; the peer ledger independently verifies that these reach the original synthetic upstream identity and only protocol URI locations may be mapped (business payload remains unchanged). The candidate must be provisioned through its **public** configuration/authentication to reach the synthetic upstream peer; this runner starts that peer on an ephemeral loopback port and passes `MESHRIX_INTEROP_PEER_ENDPOINT` to a command candidate's environment. A candidate command announces its actual HTTP entry by printing one line `{"interopEndpoint":"http://127.0.0.1:<port>/mcp"}` after it listens. It must handle modern server/discover without initialize/session, or legacy initialize/initialized for the declared legacy profile, then tools/resources/prompts list and request/continuation on that network endpoint; on SIGTERM it drains and exits. The parent reaps it, and a failed reaping fails cleanup. Endpoint-only configurations can exercise transport but **cannot prove the running artifact digest** and therefore cannot pass an installed-candidate identity check.
 
-1. `--config <path>`, else
-2. `MESHRIX_INTEROP_CONFIG`, else
-3. the in-repo default, `fixtures/fix-b-candidate.json`, which points at the frozen
-   cross-Task candidate entry `tests/vitest/gateway/interop-candidate.mjs`.
+Packed profiles require `manifest` (a local path to JSON):
 
-The report records which of the three was used (`candidate.source`), the resolved config
-path, and the launched command/args/cwd as `candidate.identity`. A configured endpoint is
-never written into the report; an endpoint candidate records
-`{transport:"http", endpointRedacted:true}` instead.
+```json
+{
+  "schema": "meshrix.gateway-candidate-manifest/v1",
+  "candidateKind": "standalone-packed-http",
+  "commit": "<actual-candidate-revision>",
+  "serverInfo": { "name": "<actual-discover-name>", "version": "<actual-discover-version>" },
+  "artifacts": [{ "path": "<installed-entry-path>", "sha256": "<64-hex-file-digest>" }]
+}
+```
 
-A candidate that never completes its handshake is reported as `not_run` for all eight
-cases with a reason derived from what was observed (`candidate_startup_timeout`,
-`candidate_process_exited`, `candidate_protocol_not_jsonrpc`, ...), and the run exits
-non-zero. That is the declared CASE-O07 condition; it is never a disguised pass.
+All declared files are read and hashed at invocation, an executed command argument or binary must match one listed artifact, and discovered serverInfo must match the manifest. Paths under this oracle are disallowed as product artifacts. Never enter a source script as an installed candidate. An external endpoint without an independently bindable executed entry is reported non-passing even if its serverInfo happens to match a claimed manifest. The report contains only candidate kind, commit, executed entry digest, the fact of runtime binding, protocol, named assertions, case status, and cleanup counters; no manifest path, executable path, endpoint, token, nonce, business payload or stderr. Profile claims require actual execution of each profile. A `reference-fixture` pass is **not** a product pass.
 
-## The two observation profiles
+## Cases, mutations, and final gate
 
-The oracles assert different things depending on what a run can actually see.
+The self-test covers GC-066, GC-067, GC-069 through GC-073 with independent reference/process controls. It retains the original eight named mutants and adds ten precise counterexamples. A mutation is counted only if its intact live baseline passes and its own expected assertion rejects; explicit always-passing adjudicator injection proves that missed detection fails. The live HTTP proxy variants exercise encoding alias replay, empty permission/approval, dropped nonce answer, misplaced required metadata, resource value wrapping, unknown resultType, missing outputSchema, metadata and business fields. A process crash, timeout, unobserved effect, or absent candidate is `not_run`/`unobservable`, never a mutation kill. Each run owns its peer child, candidate child, ephemeral socket and report; concurrent runs never share mutable latest state.
 
-- `upstream-observable` (reference peers). The framework owns the peer, so it can assert
-  the neutral fixture's literal state tokens and inspect the upstream requests that were
-  recorded at the peer.
-- `public-entry` (any candidate). Only the public entry is visible. The asserted
-  properties are the ones that hold for any correct candidate, and none of them are
-  status-code recitals:
-  - an input-required round is issued with an opaque token and presenting it back completes
-    the call;
-  - a **tampered** token must not complete, which is what proves the token is required and
-    integrity-checked rather than echoed;
-  - a revoked context is refused while the same call under an authorized context completes
-    (the authorized clause is the control that stops a blanket-failing candidate from
-    looking secure);
-  - a refused call records no effect.
+The per-run `gc068` field stays `not_run` for reference controls and until an **external final original acceptance gate** combines the same actually installed candidate manifest across standalone and default-platform entries (and declared legacy profile). A single green per-profile result is partial product evidence, not GC-068 combined acceptance. If live authorization/approval facts cannot be supplied through a product's public configuration, do not translate this fixture's synthetic `_meta` control into a trusted context or claim GC-071 product coverage. Source smoke, package E2E, and product combined conformance remain separate.
 
-  A candidate's internal upstream requests are not observable from outside, so
-  `upstreamObservable` is `false` and `upstreamRequests` stays empty. It is not filled
-  with a synthesized request list.
-
-## Bad proxies and self-test
-
-Eight named bad proxies are applied to a real observation and each must be rejected by its
-own exact reason. A mutation is only attributable when the benign control passes first: if
-the base observation is already broken, the result is reported as
-`observation_not_intact` rather than being counted as a caught proxy.
-
-The self-test also carries negative controls that fail if an oracle degenerates: a
-hand-written `pass` with no measured timing does not satisfy the slow-path oracle, an
-already-broken base cannot produce an attributable rejection, and a degenerate candidate
-observation must produce eight explicit non-rejections rather than a runner crash.
-
-## Independent import boundary
-
-`run.mjs` decides the boundary by import relation rather than by path spelling. For every
-specifier in the tree it resolves what the specifier refers to: Node builtins and the
-pinned dependencies are allowed, this package's own name is itself, and a private
-`@meshrix/*` package, a bare `meshrix` package, a `#imports` alias, an undeclared package,
-a `file:` hand-off, or a relative specifier that escapes this directory is a violation.
-Matching only `packages/`-shaped strings previously missed `from '@meshrix/gateway'`.
-
-## Complete-result encoding
-
-The plan's normative wire skeleton spells a complete result flat
-(`{resultType, content, structuredContent, _meta}`). A candidate may instead nest the tool
-result under `value`. The adapter canonicalizes both and records which one it saw as
-`candidate.encodings.complete`, so the deviation stays visible in the report rather than
-being silently normalized away. Business-field fidelity is asserted on the real observed
-payload in either case.
-
-## Report
-
-The report is JSON on stdout and can be copied with `--report`. It carries the candidate
-identity and source, the specification/SDK/validator versions, the profile, the seed, the
-total case count, each stable case id with `pass`/`fail`/`not_run` and a stable reason, the
-control-flow outcome, and a resource-cleanup conclusion. Response bodies, credentials, and
-configured endpoints never enter it.
-
-Cleanup is measured, not asserted: every child process, socket and temporary directory the
-run creates is registered and released, and the report distinguishes `created` from
-outstanding `leaks`. A candidate child that had to be killed is reported as
-`candidate_process_not_reaped`.
-
-Exit status is `0` only when every case selected for this run genuinely passed, `2` when a
-required case could not run, and `1` when a case failed. `--continue-on-failure` changes how
-far a run gets and is reflected in `control`, but never changes what a case means.
-
-## Neutral fixtures
-
-`fixtures/neutral-candidate.mjs` (+ `.json`) is a framework-owned stdio candidate that
-wraps the same neutral fixture the reference peers use. It exists so the meshrix profile -
-candidate resolution, process launch, all eight cases, process reaping - can be proven
-end to end without TASK-001 and without a product candidate.
-`MESHRIX_INTEROP_CANDIDATE_VARIANT=drop-business-field` degrades it so the runner's failure
-handling and `--continue-on-failure` control flow can be observed against a real process.
-
-## Pinned versions and known limits
-
-The pinned reference versions are `@modelcontextprotocol/sdk@1.29.0` and `ajv@8.20.0`. The
-wire peer uses only Node's built-in HTTP and JSON APIs, so the SDK and wire encoders are
-independent implementations of the same declared contract.
-
-The SDK peer negotiates `2025-11-25` - the highest version the pinned SDK supports - while
-the target profile is `2026-07-28`. Both negotiated versions are recorded in the report
-rather than assumed equal, and the SDK request schemas are widened (`.loose()`) to accept
-the MRTR `requestState`/`inputResponses` fields the pinned SDK does not yet model. Both
-peers share the fixture definition, so CASE-O02 compares two independent transports and
-serializers over one declared contract; it is not an independent derivation of the
-business payload.
+`--continue-on-failure` preserves all case statuses and continues discovery. Exit 0 means the selected run's eight cases passed with complete cleanup, exit 1 means a named failure (possibly alongside not-run cases), and exit 2 means no assertion failure but required cases were not run. A successful framework fixture run still reports `productIntegration:not_run`, `gc068:not_run`. Reports are run-local and contain no mutable `latest` pointer. Unsupported profiles and unobservable upstream effects are non-passing; never infer no effect from HTTP 200/403.

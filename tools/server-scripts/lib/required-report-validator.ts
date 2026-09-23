@@ -344,7 +344,7 @@ export function validateRequiredReport(relativePath?: any, input?: any, {
   }
   if (expectedReleaseEvidenceProvenance) {
     const embedded: any = asRecord(report.releaseEvidenceProvenance);
-    for (const field of ["schemaVersion", "producer", "commandId"]) {
+    for (const field of ["schemaVersion", "producer", "commandId", ...(expectedReleaseEvidenceProvenance.runId ? ["runId", "candidateDigest"] : [])]) {
       if (
         !String(embedded[field] || "").trim() ||
         embedded[field] !== expectedReleaseEvidenceProvenance[field]

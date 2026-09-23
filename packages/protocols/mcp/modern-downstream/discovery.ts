@@ -496,7 +496,7 @@ export function mcpHandshake({ request = null, requestBody, listenUrl = "", disc
   };
 }
 
-export function mcpDiscoverResult({ listenUrl = "", discoveryState = null }: Record<string, any> = {}) : any {
+export function mcpDiscoverResult({ listenUrl = "", discoveryState = null, serverInfo = { name: "Meshrix.js", version: MCP_SERVER_VERSION } }: Record<string, any> = {}) : any {
   const runtime: any = mcpRuntimeMetadata({ listenUrl, discoveryState });
   const cache: any = mcpCacheFields({
     ttlMs: MCP_DISCOVER_CACHE_TTL_MS,
@@ -509,10 +509,7 @@ export function mcpDiscoverResult({ listenUrl = "", discoveryState = null }: Rec
     ttlMs: cache.ttlMs,
     cacheScope: cache.cacheScope,
     _meta: {
-      [MCP_META_SERVER_INFO]: {
-        name: "Meshrix.js",
-        version: MCP_SERVER_VERSION
-      },
+       [MCP_META_SERVER_INFO]: serverInfo,
       ...runtime
     }
   });

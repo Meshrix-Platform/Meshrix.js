@@ -88,6 +88,8 @@ export function reducePlatformAcceptanceRequirementEvidence({
   commands = [],
   results = [],
   reportEvidence = {},
+  runId = "",
+  candidateDigest = "",
   aggregateFacts = {}
 }: Record<string, any> = {}) : any {
   const commandById: any = new Map<any, any>(commands.map((command?: any) : any => [String(command?.id || ""), command]));
@@ -96,6 +98,7 @@ export function reducePlatformAcceptanceRequirementEvidence({
     const binding: any = PLATFORM_ACCEPTANCE_REQUIREMENT_EVIDENCE[requirement];
     const reasons: any[] = [];
     const reportPaths: any[] = [];
+    if (!String(runId).trim() || !String(candidateDigest).trim()) reasons.push("acceptance-run-unbound");
     for (const commandId of binding.commandIds) {
       const command: any = commandById.get(commandId);
       const status: any = resultById.get(commandId)?.status;
@@ -108,9 +111,9 @@ export function reducePlatformAcceptanceRequirementEvidence({
       for (const reportPath of command?.ownedReports || []) {
         reportPaths.push(reportPath);
         const evidence: any = reportEvidence[reportPath];
-        const factsReady: any = evidence?.factsReady === true || evidence?.releaseReady === true;
-        if (evidence?.validationPassed !== true || !factsReady ||
-            evidence?.reportLeakScan !== true || !String(evidence?.reducerSourceOfTruth || "").trim()) {
+        if (evidence?.validationPassed !== true || evidence?.factsReady !== true ||
+            evidence?.reportLeakScan !== true || !String(evidence?.reducerSourceOfTruth || "").trim() ||
+            evidence?.runId !== runId || evidence?.candidateDigest !== candidateDigest || evidence?.commandId !== commandId) {
           reasons.push(`report-evidence-not-ready:${reportPath}`);
         }
       }

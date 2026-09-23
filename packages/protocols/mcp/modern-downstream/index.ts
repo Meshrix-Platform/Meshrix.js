@@ -37,8 +37,8 @@ function isGatewayFailure(value: GatewayOutcome): value is Extract<GatewayOutcom
  */
 function completeToolResult(result: Exclude<GatewayOutcome, { readonly kind: "failure" }> & { readonly kind: "complete" }): Record<string, unknown> {
   const value = result.value;
-  const toolResult = isPlainRecord(value) && Array.isArray(value.content)
-    ? value
+  const toolResult: Record<string, unknown> = isPlainRecord(value) && (Array.isArray(value.content) || Object.hasOwn(value, "structuredContent"))
+    ? { ...value, ...(Array.isArray(value.content) ? {} : { content: [] }) }
     : {
         content: [{ type: "text", text: JSON.stringify(value ?? null, null, 2) }],
         structuredContent: value
@@ -50,13 +50,15 @@ function completeToolResult(result: Exclude<GatewayOutcome, { readonly kind: "fa
     ...(result.requestState === undefined ? {} : { requestState: result.requestState }),
     // A result the kernel answered without executing tags how far the effect got, so a
     // peer never reads a pending approval as a completed one.
-    ...(result.effectOutcome === undefined ? {} : { _meta: { "io.meshrix/effect-outcome": result.effectOutcome } })
+    ...(result.effectOutcome === undefined ? {} : { _meta: { ...(isPlainRecord(toolResult._meta) ? toolResult._meta : {}), "io.meshrix/effect-outcome": result.effectOutcome } })
   };
 }
 
-function toProtocolResult(result: Exclude<GatewayOutcome, { readonly kind: "failure" }>): Record<string, unknown> {
+function toProtocolResult(result: Exclude<GatewayOutcome, { readonly kind: "failure" }>, method?: string): Record<string, unknown> {
+  if (result.kind === "complete" && method === "resources/read" && isPlainRecord(result.value) && Array.isArray(result.value.contents)) return { resultType: "complete", ...result.value };
+  if (result.kind === "complete" && method === "prompts/get" && isPlainRecord(result.value) && Array.isArray(result.value.messages)) return { resultType: "complete", ...result.value };
   if (result.kind === "complete") return completeToolResult(result);
-  if (result.kind === "input_required") return { resultType: "input_required", inputRequests: result.inputRequests, ...(result.requestState === undefined ? {} : { requestState: result.requestState }) };
+  if (result.kind === "input_required") return { resultType: "input_required", ...(result.inputRequests === undefined ? {} : { inputRequests: result.inputRequests }), ...(result.requestState === undefined ? {} : { requestState: result.requestState }) };
   return { resultType: result.extension, value: result.value, ...(result.requestState === undefined ? {} : { requestState: result.requestState }) };
 }
 
@@ -106,14 +108,18 @@ function rpcError(id: unknown, code: number, message: string, data?: unknown): R
   return { jsonrpc: "2.0", id: id ?? null, error: { code, message, ...(data === undefined ? {} : { data }) } };
 }
 
-function failureResponse(id: unknown, outcome: GatewayOutcome): ModernDownstreamResponse {
-  if (!isGatewayFailure(outcome)) return json(200, { jsonrpc: "2.0", id, result: toProtocolResult(outcome) });
+function failureResponse(id: unknown, outcome: GatewayOutcome, method?: string): ModernDownstreamResponse {
+  if (!isGatewayFailure(outcome)) return json(200, { jsonrpc: "2.0", id, result: toProtocolResult(outcome, method) });
   const code = outcome.status === 401 ? -32001 : outcome.status === 403 ? -32003 : outcome.status === 404 ? -32004 : -32000;
   // Only the credential and throttling classes are HTTP-level signals. A failed tool call
   // is a JSON-RPC error on a 200 reply, so a peer reads the tagged outcome instead of
   // inferring it from a transport status.
   const status = outcome.status === 401 || outcome.status === 403 || outcome.status === 404 || outcome.status === 429 ? outcome.status : 200;
-  return json(status, rpcError(id, code, outcome.message, { code: outcome.code, effectOutcome: outcome.effectOutcome }));
+  const peerCode = outcome.origin === "peer" && outcome.code === "upstream_jsonrpc_error" && typeof outcome.details?.errorCode === "number" && Number.isSafeInteger(outcome.details.errorCode)
+    ? outcome.details.errorCode : code;
+  const peerData = outcome.origin === "peer" && outcome.code === "upstream_jsonrpc_error" && isPlainRecord(outcome.details?.errorData) ? outcome.details.errorData : {};
+  return json(status, rpcError(id, peerCode, outcome.message, { ...peerData, code: outcome.code, effectOutcome: outcome.effectOutcome,
+    ...(typeof outcome.details?.receiptId === "string" ? { receiptId: outcome.details.receiptId } : {}) }));
 }
 
 const EVENT_TYPE_BY_NOTIFICATION_METHOD: Readonly<Record<string, SubscriptionEvent["type"]>> = Object.freeze({
@@ -309,7 +315,7 @@ export class ModernDownstreamAdapter {
       params: { ...params, name: descriptor.upstreamName ?? operation, arguments: isPlainRecord(args.input) ? args.input : {} },
       signal: request.signal,
       ...(typeof args.requestState === "string" ? { requestState: args.requestState } : {}),
-      ...(Array.isArray(args.inputResponses) ? { inputResponses: args.inputResponses } : {})
+      ...(isPlainRecord(args.inputResponses) ? { inputResponses: args.inputResponses } : {})
     });
     return failureResponse(id, outletOperationAnswer({ outcome, descriptor, operation, envelope: args }));
   }
@@ -430,7 +436,7 @@ export class ModernDownstreamAdapter {
     // `server/discover` and `ping` are the unauthenticated handshake methods: a client
     // reads the discovery document before it holds a token.
     if (isUnauthenticatedMcpMethod(method)) {
-      return json(200, { jsonrpc: "2.0", id, result: method === MCP_DISCOVER_METHOD ? mcpDiscoverResult({}) : { resultType: "complete" } });
+       return json(200, { jsonrpc: "2.0", id, result: method === MCP_DISCOVER_METHOD ? mcpDiscoverResult({ serverInfo: this.#serverInfo }) : { resultType: "complete" } });
     }
     let context: AuthenticatedContext | undefined;
     try {
@@ -455,7 +461,7 @@ export class ModernDownstreamAdapter {
       const page = this.#gateway.catalog(context, { kind, cursor: typeof params.cursor === "string" ? params.cursor : undefined, limit: typeof params.limit === "number" ? params.limit : 50 });
       const key = kind === "tool" ? "tools" : kind === "prompt" ? "prompts" : kind === "resource_template" ? "resourceTemplates" : "resources";
       const resultMeta = kind === "tool" ? await this.#catalogResultMeta(context) : {};
-      return json(200, { jsonrpc: "2.0", id, result: { [key]: page.items.map((item) => kind === "tool" ? { name: item.publicName, description: item.description, inputSchema: item.inputSchema, _meta: item.metadata } : kind === "prompt" ? { name: item.publicName, description: item.description, _meta: item.metadata } : { uri: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata }), ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}), ...(Object.keys(resultMeta).length > 0 ? { _meta: resultMeta } : {}) } });
+      return json(200, { jsonrpc: "2.0", id, result: { resultType: "complete", [key]: page.items.map((item) => kind === "tool" ? { name: item.publicName, description: item.description, inputSchema: item.inputSchema, outputSchema: item.outputSchema, annotations: item.annotations, title: item.metadata?.title, _meta: item.metadata } : kind === "prompt" ? { name: item.publicName, description: item.description, arguments: item.metadata?.arguments, _meta: item.metadata } : kind === "resource_template" ? { uriTemplate: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata } : { uri: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata }), ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}), ...(Object.keys(resultMeta).length > 0 ? { _meta: resultMeta } : {}) } });
     }
     if (method === "tools/call") {
       const name = typeof params.name === "string" ? params.name : "";
@@ -477,19 +483,19 @@ export class ModernDownstreamAdapter {
         params: { ...params, name: descriptor.upstreamName ?? name },
         signal: request.signal,
         ...(typeof params.requestState === "string" ? { requestState: params.requestState } : {}),
-        ...(Array.isArray(params.inputResponses) ? { inputResponses: params.inputResponses } : {})
+        ...(isPlainRecord(params.inputResponses) ? { inputResponses: params.inputResponses } : {})
       });
       return failureResponse(id, outcome);
     }
     if (method === "resources/read") {
       const uri = typeof params.uri === "string" ? params.uri : "";
       if (!this.#gateway.readResource) return json(501, rpcError(id, -32601, "Resource reads are unavailable."));
-      return failureResponse(id, await this.#gateway.readResource(context, uri));
+       return failureResponse(id, await this.#gateway.readResource(context, uri, request.signal, typeof params.requestState === "string" ? params.requestState : undefined, isPlainRecord(params.inputResponses) ? params.inputResponses : undefined), method);
     }
     if (method === "prompts/get") {
       const name = typeof params.name === "string" ? params.name : "";
       if (!this.#gateway.getPrompt) return json(501, rpcError(id, -32601, "Prompt reads are unavailable."));
-      return failureResponse(id, await this.#gateway.getPrompt(context, name, isPlainRecord(params.arguments) ? params.arguments : {}));
+       return failureResponse(id, await this.#gateway.getPrompt(context, name, isPlainRecord(params.arguments) ? params.arguments : {}, request.signal, typeof params.requestState === "string" ? params.requestState : undefined, isPlainRecord(params.inputResponses) ? params.inputResponses : undefined), method);
     }
     if (method === "completion/complete") {
       if (!this.#gateway.completePrompt) return json(501, rpcError(id, -32601, "Prompt completion is unavailable."));

@@ -4,6 +4,7 @@ export interface AdmissionOptions {
   readonly maxInFlight?: number;
   readonly queueSize?: number;
   readonly defaultQueueDeadlineMs?: number;
+  readonly maxBuckets?: number;
 }
 
 interface Waiting<T> {
@@ -33,6 +34,7 @@ export class UpstreamAdmissionController {
   readonly #maxInFlight: number;
   readonly #queueSize: number;
   readonly #defaultQueueDeadlineMs: number;
+  readonly #maxBuckets: number;
   readonly #buckets = new Map<string, Bucket>();
   #closed = false;
 
@@ -40,6 +42,7 @@ export class UpstreamAdmissionController {
     this.#maxInFlight = boundedInteger(options.maxInFlight, 32, 1, 65_536);
     this.#queueSize = boundedInteger(options.queueSize, 128, 0, 1_000_000);
     this.#defaultQueueDeadlineMs = boundedInteger(options.defaultQueueDeadlineMs, 30_000, 1, 86_400_000);
+    this.#maxBuckets = boundedInteger(options.maxBuckets, 2048, 1, 65_536);
   }
 
   async run<T>(key: string, task: () => Promise<T>, options: { readonly signal?: AbortSignal; readonly deadline?: number } = {}): Promise<T> {
@@ -81,6 +84,7 @@ export class UpstreamAdmissionController {
         if (waiter.abortListener) waiter.signal?.removeEventListener("abort", waiter.abortListener);
         waiter.reject(admissionError("gateway_closing", "Gateway admission closed before execution.", 503));
       }
+      if (bucket.active === 0) this.#buckets.delete(bucket.key);
     }
   }
 
@@ -93,7 +97,8 @@ export class UpstreamAdmissionController {
       queued += bucket.queue.length;
       upstreams[key] = { active: bucket.active, queued: bucket.queue.length, completed: bucket.completed, rejected: bucket.rejected };
     }
-    return Object.freeze({ maxInFlight: this.#maxInFlight, queueSize: this.#queueSize, active, queued, upstreams });
+    const timers = [...this.#buckets.values()].reduce((count, bucket) => count + bucket.queue.filter((entry) => entry.timer !== undefined).length, 0);
+    return Object.freeze({ maxInFlight: this.#maxInFlight, queueSize: this.#queueSize, active, queued, timers, buckets: this.#buckets.size, upstreams });
   }
 
   async #execute<T>(bucket: Bucket, task: () => Promise<T>): Promise<T> {
@@ -105,6 +110,7 @@ export class UpstreamAdmissionController {
     } finally {
       bucket.active -= 1;
       this.#pump(bucket);
+      if (this.#closed && bucket.active === 0) this.#buckets.delete(bucket.key);
     }
   }
 
@@ -123,6 +129,11 @@ export class UpstreamAdmissionController {
     const normalized = key.trim() || "default";
     let bucket = this.#buckets.get(normalized);
     if (!bucket) {
+      if (this.#buckets.size >= this.#maxBuckets) {
+        const idle = [...this.#buckets].find(([, candidate]) => candidate.active === 0 && candidate.queue.length === 0)?.[0];
+        if (!idle) throw admissionError("admission_upstream_capacity", "Upstream admission capacity is exhausted.");
+        this.#buckets.delete(idle);
+      }
       bucket = { key: normalized, active: 0, completed: 0, rejected: 0, queue: [] };
       this.#buckets.set(normalized, bucket);
     }

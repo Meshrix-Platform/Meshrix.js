@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createGateway } from "@meshrix/gateway";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
-import { context, descriptor, QueueUpstream, response } from "../support";
+import { context, descriptor, QueueUpstream, response, createTestGateway as createGateway } from "../support";
 
 describe("modern MCP downstream adapter", () => {
   it("[CASE-P01 CASE-P04] accepts a neutral client and returns standard catalog and tool results", async () => {

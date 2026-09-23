@@ -190,6 +190,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
       mcpSessionManager: {
         listTools,
         callTool,
+        invokeGateway: async (config?: any, invocation?: any) : Promise<any> => callTool(config, { name: invocation?.params?.name, arguments: invocation?.params?.arguments }),
         async retireScope() : Promise<any> { return { retired: 0 }; },
         async close() : Promise<any> {}
       }
@@ -206,7 +207,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
         transport: "http",
         url: "https://example.invalid:443/mcp",
         toolNamePrefix: "discovery-fixture",
-        toolsCacheTtlMs: 150
+        toolsCacheTtlMs: 2_000
       }
     }]);
 
@@ -241,7 +242,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
       serviceDiscoveryCount: 1
     });
 
-    await new Promise((resolve?: any) : any => setTimeout(resolve, 200));
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 2_050));
     const third: any = await registry.callMcpToolByPublicName(publicName, { arguments: { owner: "c" } }, subject);
     expect(third).toMatchObject({ ok: true });
     expect(listTools).toHaveBeenCalledTimes(2);

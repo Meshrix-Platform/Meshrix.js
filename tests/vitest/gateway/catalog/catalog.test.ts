@@ -6,8 +6,8 @@ describe("gateway catalog and routing snapshots", () => {
   it("[CASE-C01] publishes immutable routes with stable collision aliases", () => {
     const store = new CatalogStore();
     store.publish([
-      descriptor({ upstreamName: "same", route: route({ logicalRoute: "r1" }) }),
-      descriptor({ upstreamName: "same", route: route({ logicalRoute: "r2", revision: "route-2" }) })
+      descriptor({ publicName: undefined, upstreamName: "same", route: route({ logicalRoute: "r1" }) }),
+      descriptor({ publicName: undefined, upstreamName: "same", route: route({ logicalRoute: "r2", revision: "route-2" }) })
     ]);
     const page = store.page(context, { kind: "tool", limit: 10 });
     expect(page.items).toHaveLength(2);

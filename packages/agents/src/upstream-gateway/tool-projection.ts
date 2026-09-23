@@ -1,5 +1,5 @@
 import { CLOSED_EMPTY_JSON_OBJECT_SCHEMA } from "@meshrix/foundation/security/closed-json-schema";
-import { compileMcpToolJsonSchema } from "./mcp-tool-schema.ts";
+import { assertExternalSchemaBudget } from "@meshrix/gateway/schema";
 import {
   asArray,
   normalizeRisk,
@@ -33,14 +33,13 @@ function invalidToolSchemaError(kind: any = "input") : any {
 function projectedMcpSchema(
   schema?: any,
   label?: any,
-  { requireTopLevelObject = true, kind = "input" }: Record<string, any> = {}
+  { requireTopLevelObject = true, kind = "input", closedWhenAbsent = false }: Record<string, any> = {}
 ) : any {
-  if (schema === undefined) return CLOSED_EMPTY_JSON_OBJECT_SCHEMA;
+  if (schema === undefined) return closedWhenAbsent ? CLOSED_EMPTY_JSON_OBJECT_SCHEMA : { type: "object" };
   try {
-    return compileMcpToolJsonSchema(schema, {
-      label,
-      requireTopLevelObject
-    }).schema;
+    if (requireTopLevelObject && (typeof schema !== "object" || schema === null || Array.isArray(schema) || "type" in schema && schema.type !== "object")) throw invalidToolSchemaError(kind);
+    assertExternalSchemaBudget(schema);
+    return structuredClone(schema);
   } catch {
     throw invalidToolSchemaError(kind);
   }
@@ -50,7 +49,7 @@ function safeNamespacedUpstreamMeta(meta: Record<string, any> = {}) : any {
   const output: Record<string, any> = {};
   for (const [key, value] of Object.entries(object(meta)) as [string, any][]) {
     if (typeof key !== "string" || !key.includes("/")) continue;
-    if (["toolExecutionId", "traceId", "auditId"].includes(key.split("/").pop() || "")) continue;
+    if (key.startsWith("io.meshrix/")) continue;
     output[key] = value;
   }
   return output;
@@ -58,12 +57,7 @@ function safeNamespacedUpstreamMeta(meta: Record<string, any> = {}) : any {
 
 function mcpToolAnnotations(tool: Record<string, any> = {}) : any {
   const annotations: any = object(tool.annotations);
-  return {
-    readOnlyHint: annotations.readOnlyHint === true,
-    destructiveHint: annotations.destructiveHint === true,
-    ...(typeof annotations.idempotentHint === "boolean" ? { idempotentHint: annotations.idempotentHint } : {}),
-    ...(typeof annotations.openWorldHint === "boolean" ? { openWorldHint: annotations.openWorldHint } : {})
-  };
+  return { ...annotations };
 }
 
 function operatorMcpOperation(service: Record<string, any> = {}) : Record<string, any> {
@@ -160,7 +154,7 @@ export function publicUpstreamOperationTool({ service = {}, operation = {} }: Re
     inputSchema: projectedMcpSchema(
       declaredRequestSchema(operation.requestSchema),
       "Configured upstream operation input schema",
-      { requireTopLevelObject: true, kind: "input" }
+      { requireTopLevelObject: true, kind: "input", closedWhenAbsent: true }
     ),
     annotations: {
       readOnlyHint: readOnly,

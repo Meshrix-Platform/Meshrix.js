@@ -6,7 +6,13 @@
   "license": "MIT",
   "type": "module",
   "engines": { "node": ">=22.18.0 <23 || >=24.3.0" },
-  "dependencies": { "@meshrix/gateway": "0.0.1" },
+  "dependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
+    "@meshrix/capabilities": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
+  },
   "bin": { "meshrix-gateway": "./dist/cli.js" },
   "exports": {
     ".": {

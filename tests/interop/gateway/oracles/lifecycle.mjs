@@ -1,6 +1,6 @@
 import { deepEqual } from './payload.mjs';
 
-export const EXPECTED_TOOL_STATE = 'opaque-fixture-state-1';
+export const EXPECTED_TOOL_STATE = 'b3BhcXVlLWZpeHR1cmUtc3RhdGUtMQ';
 export const EXPECTED_RESOURCE_STATE = 'opaque-resource-state-1';
 export const EXPECTED_PROMPT_STATE = 'opaque-prompt-state-1';
 
@@ -13,47 +13,19 @@ export function checkToolLifecycle(observation) {
     return reject('result_type_coerced_to_complete');
   }
   if (continued?.resultType !== 'complete') return reject('continuation_not_completed');
-  const continuationRequest = upstream.find(request => request.method === 'tools/call');
+  const continuationRequest = upstream.find(request => request.method === 'tools/call' && request.operationKey === 'effect-key-1' && request.inputResponses?.['confirm-name']);
+  if (!continuationRequest && upstream.some(request => request.method === 'tools/call' && request.operationKey === 'effect-key-1' && request.requestState === EXPECTED_TOOL_STATE)) {
+    return reject('input_responses_changed');
+  }
   if (!continuationRequest || continuationRequest.requestState !== EXPECTED_TOOL_STATE) {
     return reject('upstream_state_not_restored');
   }
-  if (!deepEqual(continuationRequest.inputResponses, {
-    'confirm-name': { action: 'accept', content: { label: 'demo' } }
+  const expectedNonce = initial.inputRequests?.['confirm-name']?.params?.message?.split(': ').at(-1);
+  if (!/^[0-9a-f]{32}$/.test(expectedNonce ?? '') || !deepEqual(continuationRequest.inputResponses, {
+    'confirm-name': { action: 'accept', content: { label: 'demo', nonce: expectedNonce } }
   })) {
     return reject('input_responses_changed');
   }
-  if (effects.length !== 1) return reject('effect_replayed');
-  if (effects[0]?.operationKey !== 'effect-key-1') return reject('effect_key_changed');
-  return accept();
-}
-
-/**
- * Multi-round-trip lifecycle for a candidate driven only through its public entry.
- *
- * The neutral fixture's literal state tokens are not available here, so the asserted
- * properties are the ones that hold for any correct candidate: an input-required round
- * is issued with an opaque token, presenting that token back completes the call, and a
- * tampered token must NOT complete. The last clause is what stops this from being a
- * status-code recital - a candidate that ignored `requestState` would complete the
- * tampered call too and fail here.
- */
-export function checkCandidateMrtrLifecycle(observation) {
-  const initial = observation?.tool?.initial;
-  const continued = observation?.tool?.continued;
-  const mrt = observation?.mrt;
-  const effects = observation?.tool?.effects ?? [];
-  if (initial?.resultType !== 'input_required') {
-    return reject(observation?.tool?.initialReason ?? 'result_type_coerced_to_complete');
-  }
-  if (typeof initial.requestState !== 'string' || initial.requestState.length < 8) {
-    return reject('request_state_not_issued');
-  }
-  if (continued?.resultType !== 'complete') {
-    return reject(observation?.tool?.continuedReason ?? 'continuation_not_completed');
-  }
-  if (!mrt || mrt.statePresentedBack !== true) return reject('upstream_state_not_restored');
-  if (mrt.tamperedRefused !== true) return reject('continuation_state_not_enforced');
-  if (effects.length === 0) return reject('effect_not_observed');
   if (effects.length !== 1) return reject('effect_replayed');
   if (effects[0]?.operationKey !== 'effect-key-1') return reject('effect_key_changed');
   return accept();

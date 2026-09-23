@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createGateway, compileExternalSchema, createSchemaValidator, GatewaySchemaError, JSON_SCHEMA_2020_12 } from "@meshrix/gateway";
-import { context, response, route } from "../support";
+import { compileExternalSchema, createSchemaValidator, GatewaySchemaError, JSON_SCHEMA_2020_12 } from "@meshrix/gateway";
+import { context, response, route, createTestGateway as createGateway } from "../support";
 
 describe("gateway external JSON Schema boundary", () => {
   it("[CASE-S01] [CASE-S03] supports standard numeric, tuple, pattern, and unevaluated keywords without rewriting input", () => {

@@ -12,14 +12,14 @@ describe("gateway result union", () => {
   });
 
   it("[CASE-P05] does not coerce unknown result types into complete results", () => {
-    expect(decodeUpstreamResult({ resultType: "unsupported", value: { ok: true } })).toMatchObject({ kind: "negotiated_extension", extension: "unsupported" });
+    expect(decodeUpstreamResult({ resultType: "unsupported", value: { ok: true } })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
     expect(decodeUpstreamResult({ resultType: "input_required", inputRequests: { ask: { method: "elicitation/create" } }, requestState: "opaque" })).toMatchObject({ kind: "input_required", upstreamState: { present: true, value: "opaque" } });
-    expect(decodeUpstreamResult({ resultType: "not-negotiated" })).toMatchObject({ kind: "failure", code: "negotiated_result_invalid" });
+    expect(decodeUpstreamResult({ resultType: "not-negotiated" })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
   });
 
   it("[CASE-P06] distinguishes protocol-shaped MCP results, peer errors, and gateway failures", () => {
     expect(decodeUpstreamResult({ content: [{ type: "text", text: "ok" }] })).toMatchObject({ kind: "complete" });
-    expect(decodeUpstreamResult(failure({ origin: "peer", code: "peer_failed", message: "peer", status: 502, effectOutcome: "failed" }))).toMatchObject({ kind: "failure", origin: "peer" });
+    expect(decodeUpstreamResult(failure({ origin: "peer", code: "peer_failed", message: "peer", status: 502, effectOutcome: "failed" }))).toMatchObject({ kind: "failure", origin: "protocol" });
     expect(decodeUpstreamResult(null)).toMatchObject({ kind: "failure", code: "upstream_result_invalid" });
   });
 });

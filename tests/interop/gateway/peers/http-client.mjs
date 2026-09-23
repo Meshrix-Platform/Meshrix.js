@@ -1,4 +1,5 @@
 import { FIXTURE_AUTH_ALLOW } from './fixture.mjs';
+import { validateRawWire } from '../oracles/raw-wire.mjs';
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -6,7 +7,8 @@ export function createHttpClient(endpoint, {
   protocolVersion,
   authorization = FIXTURE_AUTH_ALLOW,
   principal = 'fixture-principal',
-  requestTimeoutMs = DEFAULT_TIMEOUT_MS
+  requestTimeoutMs = DEFAULT_TIMEOUT_MS,
+  onWire
 } = {}) {
   let nextId = 1;
   let sessionId;
@@ -23,6 +25,16 @@ export function createHttpClient(endpoint, {
     if (sessionId) value['mcp-session-id'] = sessionId;
     if (negotiatedProtocolVersion) value['mcp-protocol-version'] = negotiatedProtocolVersion;
     return value;
+  }
+
+  function withProtocolMeta(params) {
+    if (negotiatedProtocolVersion !== '2026-07-28') return params;
+    return { ...params, _meta: {
+      ...(params._meta ?? {}),
+      'io.modelcontextprotocol/protocolVersion': negotiatedProtocolVersion,
+      'io.modelcontextprotocol/clientCapabilities': { elicitation: { form: {} } },
+      'io.modelcontextprotocol/clientInfo': { name: 'neutral-fixture-client', version: '1.0.0' }
+    } };
   }
 
   async function post(message) {
@@ -44,7 +56,7 @@ export function createHttpClient(endpoint, {
     } catch {
       throw new Error(`peer_invalid_response_${response.status}`);
     }
-    if (!response.ok) throw new Error(`peer_http_${response.status}`);
+    if (!response.ok && !body?.error) throw new Error(`peer_http_${response.status}`);
     return body;
   }
 
@@ -56,6 +68,14 @@ export function createHttpClient(endpoint, {
       return negotiatedProtocolVersion;
     },
     async initialize(clientProtocolVersion = protocolVersion) {
+      if (clientProtocolVersion === '2026-07-28') {
+        const discover = await this.request('server/discover');
+        return {
+          protocolVersion: clientProtocolVersion,
+          capabilities: discover.capabilities,
+          serverInfo: discover._meta?.['io.modelcontextprotocol/serverInfo']
+        };
+      }
       const response = await post({
         jsonrpc: '2.0',
         id: nextId++,
@@ -66,19 +86,24 @@ export function createHttpClient(endpoint, {
           clientInfo: { name: 'neutral-fixture-client', version: '1.0.0' }
         }
       });
-      if (!response?.result) throw new Error('initialize_missing_result');
+      const checked = validateRawWire(response, nextId - 1, 'initialize', { protocolVersion: negotiatedProtocolVersion });
+      if (!checked.ok) throw Object.assign(new Error(checked.reason), { reason: checked.reason });
       negotiatedProtocolVersion = response.result.protocolVersion ?? negotiatedProtocolVersion;
       await post({ jsonrpc: '2.0', method: 'notifications/initialized' });
       return response.result;
     },
     async request(method, params = {}) {
+      const id = nextId++;
+      const outboundParams = withProtocolMeta(params);
       const response = await post({
         jsonrpc: '2.0',
-        id: nextId++,
+        id,
         method,
-        params
+        params: outboundParams
       });
-      if (!response?.result) throw new Error(`${method}_missing_result`);
+      onWire?.({ method, id, params: outboundParams, response });
+      const checked = validateRawWire(response, id, method, { protocolVersion: negotiatedProtocolVersion });
+      if (!checked.ok) throw Object.assign(new Error(`${method}:${checked.reason}`), { reason: checked.reason, data: response?.error?.data, code: response?.error?.code });
       return response.result;
     },
     async notify(method, params = {}) {

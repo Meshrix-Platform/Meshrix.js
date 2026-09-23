@@ -1,10 +1,18 @@
 import type { AuthenticatedContext, CatalogDescriptor, RouteSnapshot, UpstreamPort, UpstreamResponse } from "@meshrix/contracts/gateway";
+import { createGateway, type GatewayOptions } from "@meshrix/gateway";
+import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
+import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
+
+/** Tests deliberately inject governance; the distributed kernel has no platform fallback. */
+export function createTestGateway(options: GatewayOptions = {}) {
+  return createGateway({ policy: createGatewayPolicy(), permits: createGatewayPermitAuthority(), ...options });
+}
 
 export const context: AuthenticatedContext = Object.freeze({
   tenant: "tenant-demo",
   principal: "principal-demo",
   authGeneration: "auth-1",
-  grant: Object.freeze({ revision: "grant-1" }),
+  grant: Object.freeze({ revision: "grant-1", routes: "all" }),
   trace: Object.freeze({ traceparent: "00-demo" })
 });
 

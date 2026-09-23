@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
+import { createHash } from "node:crypto";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { context, route } from "../support";
 
 describe("gateway policy and final permit", () => {
@@ -9,7 +11,7 @@ describe("gateway policy and final permit", () => {
     const invocation = { routeRef: "write", method: "tools/call", params: {} };
     const denied = policy.decide({ context, invocation, route: route({ logicalRoute: "write", effectClass: "destructive" }) });
     expect(denied).toMatchObject({ allowed: false, reasonCode: "approval_required" });
-    const allowed = policy.decide({ context: { ...context, grant: { revision: "g", approved: true } }, invocation, route: route({ logicalRoute: "write", effectClass: "destructive" }) });
+    const allowed = policy.decide({ context: { ...context, grant: { revision: "g", routes: ["write"] }, metadata: { approval: { status: "approved", ref: "approval-1", tenant: context.tenant, principal: context.principal, target: "endpoint.demo", routeRef: "write", routeRevision: "route-1", grantRevision: "g", method: "tools/call", inputDigest: createHash("sha256").update(canonicalJson({ method: invocation.method, routeRef: "write", params: invocation.params })).digest("hex"), expiresAt: Date.now() + 10000 } } }, invocation, route: route({ logicalRoute: "write", effectClass: "destructive" }) });
     expect(allowed.allowed).toBe(true);
   });
 

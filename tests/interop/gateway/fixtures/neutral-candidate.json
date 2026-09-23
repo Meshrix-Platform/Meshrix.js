@@ -1,9 +1,0 @@
-{
-  "command": "node",
-  "args": [
-    "tests/interop/gateway/fixtures/neutral-candidate.mjs"
-  ],
-  "cwd": ".",
-  "requestTimeoutMs": 5000,
-  "slowPathDelayMs": 15
-}

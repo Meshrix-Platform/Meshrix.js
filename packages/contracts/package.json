@@ -62,8 +62,8 @@
       "default": "./dist/gateway-transit/direct-transit-contract.js"
     },
     "./gateway": {
-      "types": "./dist/gateway/index.d.ts",
       "source": "./src/gateway/index.ts",
+      "types": "./dist/gateway/index.d.ts",
       "default": "./dist/gateway/index.js"
     },
     "./modules/manifest": {

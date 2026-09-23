@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createGateway, createContinuationCodec } from "@meshrix/gateway";
-import { context, descriptor, QueueUpstream, key, response } from "../support";
+import { createContinuationCodec } from "@meshrix/gateway";
+import { context, descriptor, QueueUpstream, key, response, createTestGateway as createGateway } from "../support";
 
 describe("gateway MRTR continuation binding", () => {
   it("[CASE-R01] wraps upstream requestState, restores it exactly, and carries input responses", async () => {
@@ -16,10 +16,10 @@ describe("gateway MRTR continuation binding", () => {
       if (first.kind !== "input_required") throw new Error("expected input_required");
       expect(first.requestState).toMatch(/^mxcs1\./u);
       expect(first.inputRequests).toEqual({ confirm: { method: "elicitation/create" } });
-      const second = await gateway.continue(context, first.requestState as string, [{ id: "confirm", action: "accept" }]);
-      expect(second).toMatchObject({ kind: "complete", value: { accepted: true } });
+      const second = await gateway.continue(context, first.requestState as string, { confirm: { action: "accept" } });
+      expect(second).toMatchObject({ kind: "complete", value: { value: { accepted: true } } });
       expect(upstream.requests[1].request.requestState).toBe("opaque-upstream-state");
-      expect(upstream.requests[1].request.params).toMatchObject({ inputResponses: [{ id: "confirm", action: "accept" }] });
+      expect(upstream.requests[1].request.params).toMatchObject({ inputResponses: { confirm: { action: "accept" } } });
     } finally {
       await gateway.close();
     }

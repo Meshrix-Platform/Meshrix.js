@@ -46,6 +46,10 @@ const assetCopies: any = [
     "packages/foundation/src/workflow/state-machine/definitions",
     "packages/foundation/dist/workflow/state-machine/definitions",
   ],
+  [
+    "dist/tools/server-scripts/migrate-gateway-config.js",
+    "apps/mcp-gateway-installer/dist/migration/migrate-gateway-config.js",
+  ],
 ] as const;
 
 for (const [source, target] of copies) {

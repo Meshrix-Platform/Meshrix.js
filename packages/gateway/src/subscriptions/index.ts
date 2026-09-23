@@ -125,6 +125,16 @@ export class SubscriptionHub {
     }
   }
 
+  stats(): Readonly<{ streams: number; queuedEvents: number; waitingReaders: number }> {
+    let queuedEvents = 0;
+    let waitingReaders = 0;
+    for (const listener of this.#listeners.values()) {
+      queuedEvents += listener.queue.length;
+      waitingReaders += listener.waiters.length;
+    }
+    return Object.freeze({ streams: this.#listeners.size, queuedEvents, waitingReaders });
+  }
+
   close(): void {
     for (const listener of [...this.#listeners.values()]) {
       listener.closed = true;

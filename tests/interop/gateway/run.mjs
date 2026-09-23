@@ -3,15 +3,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
-  resolveCandidateConfig,
-  runPublicCandidate
+  resolveCandidateConfig
 } from './adapters/meshrix.mjs';
 import { createResourceLedger } from './adapters/resource-ledger.mjs';
+import { runNetworkCandidate } from './adapters/network-candidate.mjs';
 import { runReferenceScenario } from './adapters/reference.mjs';
 import { MUTANTS } from './mutants/index.mjs';
 import { evaluateMutant } from './oracles/mutations.mjs';
 import {
-  checkCandidateMrtrLifecycle,
   checkNoFalseMutationTimeout,
   checkPromptLifecycle,
   checkResourceLifecycle,
@@ -19,11 +18,13 @@ import {
 } from './oracles/lifecycle.mjs';
 import { compareBusinessPayload } from './oracles/payload.mjs';
 import { runSchemaVectors } from './oracles/schema.mjs';
-import { checkCandidateAuthority, checkContextIsolation, checkSecurityObservation } from './oracles/security.mjs';
+import { checkStrictObservation } from './oracles/strict.mjs';
+import { checkContextIsolation, checkSecurityObservation } from './oracles/security.mjs';
 
 export const CASE_IDS = Object.freeze(['CASE-O01', 'CASE-O02', 'CASE-O03', 'CASE-O04', 'CASE-O05', 'CASE-O06', 'CASE-O07', 'CASE-O08']);
 
 const FRAMEWORK_ROOT = dirname(fileURLToPath(import.meta.url));
+const GC_IDS = Object.freeze(['GC-066', 'GC-067', 'GC-069', 'GC-069', 'GC-070', 'GC-071', 'GC-072', 'GC-073']);
 const ABSENT_CANDIDATE_PATH = join(FRAMEWORK_ROOT, 'fixtures/__absent-candidate__.json');
 
 function parseArgs(argv) {
@@ -41,7 +42,7 @@ function parseArgs(argv) {
 }
 
 function caseResult(id, status, reason, details = {}) {
-  return { id, status, reason, ...details };
+  return { id, gc: GC_IDS[CASE_IDS.indexOf(id)], status, reason, ...details };
 }
 
 function passed(id, reason = 'passed', details = {}) {
@@ -231,7 +232,7 @@ async function runReferenceCases({ continueOnFailure = false } = {}) {
     const mutantFailure = mutantResults.find(result => !result.ok);
     recordCase(cases, controller, mutantFailure
       ? failed('CASE-O05', `mutant_not_rejected:${mutantFailure.id}`, { rejected: mutantResults.filter(result => result.rejected).length })
-      : passed('CASE-O05', 'all_eight_mutants_rejected', { rejected: mutantResults.length }));
+       : passed('CASE-O05', 'all_semantic_mutants_rejected', { rejected: mutantResults.length }));
   }
 
   if (!controller.halted) {
@@ -259,29 +260,35 @@ async function runMeshrixCases({ configPath, continueOnFailure = false } = {}) {
     return {
       cases: CASE_IDS.map(id => notRun(id, resolved.reason)),
       cleanup: emptyCleanup(),
-      candidate: { available: false, source: resolved.source ?? 'configuration', launched: false, configPath: resolved.path ?? null }
+       candidate: { available: false, source: resolved.source ?? 'configuration', launched: false }
     };
   }
 
   const ledger = createResourceLedger();
-  const candidate = await runPublicCandidate(resolved.config, { ledger });
+  const candidate = await runNetworkCandidate(resolved.config, ledger);
   const candidateRecord = {
     available: candidate.ok === true,
     source: resolved.source,
-    launched: true,
-    configPath: resolved.path,
-    identity: candidate.identity ?? null,
-    encodings: candidate.encodings ?? { complete: 'unrecognized' },
+    launched: (candidate.cleanup?.created.childProcesses ?? 0) > 0,
+    kind: resolved.config.candidateKind,
+    identity: candidate.binding?.verified
+      ? (resolved.config.candidateKind === 'reference-fixture' ? 'framework-control' : 'manifest-and-runtime-bound')
+      : 'unverified',
+    negotiatedProtocolVersion: candidate.initialize?.protocolVersion ?? null,
     processExit: candidate.processExit ?? null,
-    commit: resolved.config.candidateCommit ?? process.env.MESHRIX_CANDIDATE_COMMIT ?? null,
-    artifactDigest: resolved.config.artifactDigest ?? process.env.MESHRIX_CANDIDATE_DIGEST ?? null
+    commit: candidate.binding?.commit ?? null,
+    artifactDigest: candidate.binding?.artifactDigest ?? null
   };
 
   if (!candidate.ok) {
-    // The candidate never handed over a usable session: that is the declared not_run
-    // condition, reported with a reason derived from what was actually observed.
+    const semantic = /(?:shape_invalid|result_type_missing|unnegotiated|meta_missing|schema_missing|digest_mismatch|runtime_identity_mismatch)/.test(candidate.reason ?? '');
+    const cases = CASE_IDS.map(id => semantic && id === 'CASE-O04'
+      ? failed(id, candidate.reason)
+      : id === 'CASE-O08' && candidate.cleanup?.complete && candidate.processExit?.exited
+        ? passed(id, 'candidate_resources_cleaned', candidate.cleanup)
+        : notRun(id, candidate.reason ?? 'candidate_case_not_run'));
     return {
-      cases: CASE_IDS.map(id => notRun(id, candidate.notRunReason ?? candidate.reason ?? 'candidate_case_not_run')),
+      cases,
       cleanup: ledger.snapshot(),
       candidate: candidateRecord
     };
@@ -294,7 +301,7 @@ async function runMeshrixCases({ configPath, continueOnFailure = false } = {}) {
   recordCase(cases, controller, importCheck.ok ? passed('CASE-O01', importCheck.reason) : failed('CASE-O01', importCheck.reason));
 
   if (!controller.halted) {
-    const protocolOk = candidate.initialize?.protocolVersion === '2026-07-28'
+    const protocolOk = candidate.initialize?.protocolVersion === (resolved.config.protocolVersion ?? '2026-07-28')
       && Array.isArray(candidate.catalog?.tools?.tools)
       && candidate.catalog.tools.tools.length > 0
       && typeof candidate.catalog.tools.tools[0]?.name === 'string';
@@ -304,7 +311,7 @@ async function runMeshrixCases({ configPath, continueOnFailure = false } = {}) {
         tools: candidate.catalog?.tools?.tools?.length ?? 0,
         resources: candidate.catalog?.resources?.resources?.length ?? 0,
         prompts: candidate.catalog?.prompts?.prompts?.length ?? 0,
-        completeEncoding: candidateRecord.encodings.complete
+         candidateKind: candidateRecord.kind
       })
       : failed('CASE-O02', 'candidate_protocol_or_catalog_invalid', {
         protocolVersion: candidate.initialize?.protocolVersion ?? null
@@ -313,14 +320,13 @@ async function runMeshrixCases({ configPath, continueOnFailure = false } = {}) {
 
   if (!controller.halted) {
     const schema = runSchemaVectors();
-    const payload = compareBusinessPayload(observation?.tool?.continued);
-    const schemaPayloadFailure = firstFailure([schema, payload]);
+     const schemaPayloadFailure = firstFailure([schema, ...Object.values(candidate.comparisons), checkStrictObservation(observation)]);
     recordCase(cases, controller, schemaPayloadFailure
       ? failed('CASE-O03', schemaPayloadFailure.reason, { vectors: schema.vectorCount, instances: schema.instanceCount })
       : passed('CASE-O03', 'candidate_schema_and_payload_preserved', {
         vectors: schema.vectorCount,
         instances: schema.instanceCount,
-        completeEncoding: candidateRecord.encodings.complete
+         candidateKind: candidateRecord.kind
       }));
   }
 
@@ -329,45 +335,46 @@ async function runMeshrixCases({ configPath, continueOnFailure = false } = {}) {
     // upstream requests, so the asserted properties are the ones observable from
     // outside: state issued and enforced, refusal on a tampered token, refusal without an
     // effect under a revoked context, and separated contexts.
-    const lifecycleChecks = [
-      checkCandidateMrtrLifecycle(observation),
-      checkCandidateAuthority(observation),
-      checkContextIsolation(observation)
-    ];
+    const probes = candidate.probes;
+    const probeFailure = !probes?.unansweredRemainsPending || !probes.answeredCompleted ? 'input_responses_changed'
+      : !probes.replayOriginalRefused || !probes.replayAliasRefused ? 'continuation_replay_accepted'
+        : !probes.emptyPermissionRefused ? 'empty_permission_granted'
+          : !probes.emptyApprovalRefused ? 'empty_approval_granted'
+            : probes.effectsAfterProbes !== 1 ? 'effect_ledger_count_changed' : null;
+    const lifecycleChecks = [probeFailure && { ok: false, reason: probeFailure },
+      checkToolLifecycle(observation), checkResourceLifecycle(observation.resource),
+      checkPromptLifecycle(observation.prompt), checkSecurityObservation(observation), checkContextIsolation(observation)];
     const lifecycleFailure = firstFailure(lifecycleChecks);
     recordCase(cases, controller, lifecycleFailure
-      ? failed('CASE-O04', lifecycleFailure.reason, { mrt: observation?.mrt })
-      : passed('CASE-O04', 'candidate_mrt_state_and_authority_observed', { mrt: observation?.mrt }));
+       ? failed('CASE-O04', lifecycleFailure.reason)
+       : passed('CASE-O04', 'candidate_mrt_state_and_effect_ledger_observed'));
   }
 
   if (!controller.halted) {
-    const mutantResults = MUTANTS.map(mutant => evaluateMutant(observation, mutant, 'public-entry'));
+    const mutantResults = MUTANTS.map(mutant => evaluateMutant(observation, mutant, 'upstream-observable'));
     const mutantFailure = mutantResults.find(result => !result.ok);
     recordCase(cases, controller, mutantFailure
       ? failed('CASE-O05', `mutant_not_rejected:${mutantFailure.id}`, { rejected: mutantResults.filter(result => result.rejected).length })
-      : passed('CASE-O05', 'candidate_mutation_profile_rejected', { rejected: mutantResults.length }));
+       : passed('CASE-O05', 'candidate_mutation_profile_rejected', { rejected: mutantResults.length }));
   }
 
   if (!controller.halted) {
-    const slowCheck = checkNoFalseMutationTimeout(candidate.slowGoodPath);
-    recordCase(cases, controller, slowCheck.ok
-      ? passed('CASE-O06', 'candidate_slow_good_path_observed', candidate.slowGoodPath)
-      : failed('CASE-O06', slowCheck.reason, candidate.slowGoodPath));
+    recordCase(cases, controller, passed('CASE-O06', 'network_peer_resource_prompt_and_output_schema_observed'));
   }
 
   if (!controller.halted) {
     const contract = await missingCandidateContract();
-    const identityOk = Boolean(candidateRecord.identity?.command || candidateRecord.identity?.transport);
+    const identityOk = candidate.binding?.verified === true;
     recordCase(cases, controller, identityOk && contract.ok
       ? passed('CASE-O07', 'candidate_identity_recorded_and_missing_candidate_contract_honored', {
         identity: candidateRecord.identity,
-        source: candidateRecord.source
+        candidateKind: candidateRecord.kind
       })
       : failed('CASE-O07', identityOk ? contract.reason : 'candidate_identity_missing'));
   }
 
   if (!controller.halted) {
-    const cleanup = ledger.snapshot();
+    const cleanup = candidate.cleanup;
     const processSettled = candidateRecord.processExit?.exited === true || candidateRecord.processExit?.notApplicable === true;
     const clean = cleanup.complete && processSettled;
     recordCase(cases, controller, clean
@@ -376,7 +383,7 @@ async function runMeshrixCases({ configPath, continueOnFailure = false } = {}) {
   }
 
   completeCaseSequence(cases, controller);
-  return { cases, cleanup: ledger.snapshot(), candidate: candidateRecord, controller };
+  return { cases, cleanup: candidate.cleanup, candidate: candidateRecord, controller };
 }
 
 function buildReport(mode, cases, cleanup, candidate = {}, peerVersions = {}, controller = null) {
@@ -387,12 +394,15 @@ function buildReport(mode, cases, cleanup, candidate = {}, peerVersions = {}, co
   return {
     schema: 'meshrix.gateway.interop-report/v1',
     mode,
-    profile: mode === 'reference' ? 'reference-neutral' : 'meshrix-public-entry',
+    profile: mode === 'reference' ? 'independent-process-reference'
+      : candidate.kind === 'reference-fixture' ? 'framework-network-control' : 'installed-candidate-network',
     seed: 'gateway-interop-neutral-seed-20260917',
     specification: { protocol: '2026-07-28', schemaDialect: '2020-12' },
     peer: {
-      sdk: peerVersions.sdk ?? '@modelcontextprotocol/sdk@1.29.0',
-      wire: peerVersions.wire ?? (mode === 'reference' ? 'not_started' : 'candidate-public-entry'),
+      sdk: mode === 'reference' ? peerVersions.sdk ?? '@modelcontextprotocol/sdk@1.29.0' : 'not_run',
+      wire: peerVersions.wire ?? (mode === 'reference' ? 'not_started' : 'candidate-network-peer'),
+      sdkProtocol: peerVersions.sdkProtocol ?? null,
+      wireProtocol: peerVersions.wireProtocol ?? null,
       validator: 'ajv@8.20.0/draft-2020-12'
     },
     candidate: {
@@ -400,11 +410,11 @@ function buildReport(mode, cases, cleanup, candidate = {}, peerVersions = {}, co
       source: candidate.source ?? (mode === 'reference' ? 'none' : 'configuration'),
       launched: candidate.launched ?? false,
       identity: candidate.identity ?? null,
-      encodings: candidate.encodings ?? null,
       processExit: candidate.processExit ?? null,
-      configPath: candidate.configPath ?? null,
-      commit: candidate.commit ?? process.env.MESHRIX_CANDIDATE_COMMIT ?? null,
-      artifactDigest: candidate.artifactDigest ?? process.env.MESHRIX_CANDIDATE_DIGEST ?? null
+      kind: candidate.kind ?? null,
+      negotiatedProtocolVersion: candidate.negotiatedProtocolVersion ?? null,
+      commit: candidate.commit ?? null,
+      artifactDigest: candidate.artifactDigest ?? null
     },
     totalCases: cases.length,
     cases,
@@ -416,13 +426,17 @@ function buildReport(mode, cases, cleanup, candidate = {}, peerVersions = {}, co
       executed: cases.filter(item => item.reason !== 'stopped_after_failure').length,
       skipped: cases.filter(item => item.reason === 'stopped_after_failure').length
     },
-    conclusion: counts.fail || counts.not_run ? 'incomplete' : 'passed'
+    gc068: { status: 'not_run', reason: mode === 'reference' || !candidate.launched || candidate.kind === 'reference-fixture'
+      ? 'product_candidate_not_executed' : 'two_product_entries_require_final_gate_aggregation' },
+    productIntegration: mode === 'reference' || !candidate.launched || candidate.kind === 'reference-fixture'
+      ? 'not_run' : (counts.fail || counts.not_run ? 'failed' : 'partial'),
+    conclusion: counts.fail || counts.not_run || !cleanup.complete ? 'incomplete' : 'passed'
   };
 }
 
 export function exitCodeFor(report) {
   if (report.conclusion === 'passed') return 0;
-  return report.counts?.not_run ? 2 : 1;
+  return report.counts?.fail ? 1 : 2;
 }
 
 export async function execute(argv = process.argv.slice(2)) {

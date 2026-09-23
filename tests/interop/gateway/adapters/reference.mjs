@@ -6,9 +6,8 @@ import {
   TARGET_PROTOCOL_VERSION
 } from '../peers/fixture.mjs';
 import { comparePromptPayload, compareResourcePayload, deepEqual } from '../oracles/payload.mjs';
-import { createMemorySdkPeer, createMemoryWirePeer } from '../peers/memory-peers.mjs';
 import { startSdkPeer } from '../peers/sdk-peer.mjs';
-import { startWirePeer } from '../peers/wire-peer.mjs';
+import { startProcessPeer } from '../peers/process-peer.mjs';
 
 const APP_META = {
   'business-id': 'order-demo',
@@ -28,15 +27,19 @@ function toolParams(overrides = {}) {
   };
 }
 
-const inputResponses = {
-  'confirm-name': { action: 'accept', content: { label: 'demo' } }
-};
+export function answersFor(challenge) {
+  const message = challenge?.inputRequests?.['confirm-name']?.params?.message;
+  const nonce = typeof message === 'string' ? message.split(': ').at(-1) : undefined;
+  if (!nonce || !/^[0-9a-f]{32}$/.test(nonce)) throw new Error('nonce_challenge_missing');
+  return { 'confirm-name': { action: 'accept', content: { label: 'demo', nonce } } };
+}
 
 async function runPeerScenario(peer) {
+  const rawWire = [];
   const client = await createPeerClient(peer, {
     protocolVersion: peer.protocolVersion,
     authorization: FIXTURE_AUTH_ALLOW,
-    principal: 'principal-alpha'
+    principal: 'principal-alpha', onWire: frame => rawWire.push(frame)
   });
   let clientSnapshot;
   try {
@@ -48,7 +51,7 @@ async function runPeerScenario(peer) {
     const initialTool = await client.request('tools/call', toolParams());
     const continuedTool = await client.request('tools/call', toolParams({
       requestState: initialTool.requestState,
-      inputResponses
+      inputResponses: answersFor(initialTool)
     }));
 
     const initialResource = await client.request('resources/read', {
@@ -58,7 +61,7 @@ async function runPeerScenario(peer) {
     const continuedResource = await client.request('resources/read', {
       uri: EXPECTED_RESOURCE_URI,
       requestState: initialResource.requestState,
-      inputResponses,
+      inputResponses: answersFor(initialResource),
       _meta: APP_META
     });
 
@@ -71,10 +74,10 @@ async function runPeerScenario(peer) {
       name: 'artifact-prompt',
       arguments: { label: 'demo' },
       requestState: initialPrompt.requestState,
-      inputResponses,
+      inputResponses: answersFor(initialPrompt),
       _meta: APP_META
     });
-    clientSnapshot = peer.snapshot();
+    clientSnapshot = await peer.snapshot();
 
     return {
       initialize,
@@ -95,7 +98,14 @@ async function runPeerScenario(peer) {
         continued: continuedPrompt,
         upstreamRequests: clientSnapshot.upstreamRequests.filter(request => request.method === 'prompts/get')
       },
-      snapshot: clientSnapshot
+      snapshot: clientSnapshot,
+      protocolVersion: peer.protocolVersion,
+      authority: { routes: ['route.demo'], authorized: true, approvals: [], destructiveApproved: false },
+      catalog: { tools, resources, prompts, subjects: [
+        { principal: 'principal-alpha', routes: ['route.demo'] },
+        { principal: 'principal-deny', routes: [] }
+      ] },
+      rawWire
     };
   } finally {
     await client.close();
@@ -114,18 +124,11 @@ async function observeSlowGoodPath(peer, transport) {
   const started = performance.now();
   let client;
   try {
-    client = peer.createClient
-      ? await peer.createClient({
-        protocolVersion: peer.protocolVersion,
-        authorization: FIXTURE_AUTH_ALLOW,
-        principal: 'principal-slow-good-path',
-        slowGoodPath: true
-      })
-      : createHttpClient(peer.endpoint, {
-        protocolVersion: peer.protocolVersion,
-        authorization: FIXTURE_AUTH_ALLOW,
-        principal: 'principal-slow-good-path'
-      });
+    client = createHttpClient(peer.endpoint, {
+      protocolVersion: peer.protocolVersion,
+      authorization: FIXTURE_AUTH_ALLOW,
+      principal: 'principal-slow-good-path'
+    });
     await client.initialize(peer.protocolVersion);
     const listed = await client.request('tools/list', { slowGoodPath: true });
     const elapsedMs = Math.round(performance.now() - started);
@@ -172,9 +175,12 @@ async function runUnauthorizedScenario(peer, effectCountBefore) {
         route: 'route.demo'
       },
       requestState: initial.requestState,
-      inputResponses
-    }));
-    const snapshot = peer.snapshot();
+       inputResponses: answersFor(initial)
+    })).catch(error => {
+      if (error?.code !== -32003) throw error;
+      return { resultType: 'denied', denialCode: 'authorization_required' };
+    });
+    const snapshot = await peer.snapshot();
     return {
       initial,
       unauthorized,
@@ -187,7 +193,6 @@ async function runUnauthorizedScenario(peer, effectCountBefore) {
 }
 
 async function createPeerClient(peer, options) {
-  if (peer.createClient) return peer.createClient(options);
   return createHttpClient(peer.endpoint, options);
 }
 
@@ -208,19 +213,13 @@ export async function runPeerScenarioWithSecurity(peer) {
 }
 
 export async function runReferenceScenario({ ledger } = {}) {
-  const transport = process.env.MESHRIX_INTEROP_TRANSPORT ?? 'memory';
-  const transportLabel = transport === 'http' ? 'node:http-jsonrpc' : 'node:http-jsonrpc/in-process-dispatch';
+  const transportLabel = 'node:http-jsonrpc';
   let sdkPeer;
   let wirePeer;
   const releaseSockets = [];
   try {
-    if (transport === 'http') {
-      sdkPeer = await startSdkPeer();
-      wirePeer = await startWirePeer();
-    } else {
-      sdkPeer = createMemorySdkPeer();
-      wirePeer = createMemoryWirePeer();
-    }
+    sdkPeer = await startSdkPeer();
+    wirePeer = await startProcessPeer(ledger);
     // The loopback listeners are real sockets this run owns; they are registered in the
     // ledger so the cleanup conclusion is a measurement of what was actually released.
     for (const [label, peer] of [['sdk-peer', sdkPeer], ['wire-peer', wirePeer]]) {
