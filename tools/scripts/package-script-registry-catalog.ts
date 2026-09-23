@@ -190,9 +190,21 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "gateway:benchmark": {
     scriptName: "gateway:benchmark", command: "npm run gateway:benchmark", category: "verifier", subsystem: "gateway",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "extended",
+    inputs: ["package.json", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/**", "tools/server-scripts/benchmark-gateway.ts", "tools/server-scripts/lib/runtime-performance-observer-preload.ts", "apps/mcp-gateway-installer/src/**", "packages/gateway/src/**", "packages/protocols/mcp/**", "packages/capabilities/src/**", "packages/foundation/src/**"], outputs: ["<operator-selected-local-report>"],
+  },
+  "test:gateway-benchmark": {
+    scriptName: "test:gateway-benchmark", command: "npm run test:gateway-benchmark", category: "test", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
     requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/benchmark-gateway.ts", "packages/gateway/src/**"], outputs: ["<operator-selected-report>"],
+    inputs: ["tests/run.ts", "tools/registry/tests.registry.json", "tests/vitest/gateway/performance/**", "tests/vitest/server/package-script-registry.test.ts", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/**"], outputs: ["build/reports/gateway-benchmark-tests.json"],
+  },
+  "test:gateway-benchmark:distribution": {
+    scriptName: "test:gateway-benchmark:distribution", command: "npm run test:gateway-benchmark:distribution", category: "test", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "extended",
+    inputs: ["tests/run.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tests/vitest/gateway/performance/distribution-*.test.ts"], outputs: ["build/reports/gateway-benchmark-distribution.json", "build/packages/**", "dist/**"],
   },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",

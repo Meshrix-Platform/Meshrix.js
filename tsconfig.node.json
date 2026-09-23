@@ -30,6 +30,7 @@
     "tools/**/*.ts"
   ],
   "exclude": [
+    "tools/server-scripts/benchmark-gateway.ts",
     "apps/console/**",
     "packages/ui-console/**",
     "tests/**",

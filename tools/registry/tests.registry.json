@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "generatedAt": "2026-07-22",
   "profiles": {
+    "gateway-benchmark": {
+      "description": "Deterministic real-MCP benchmark harness correctness (not a performance verdict)",
+      "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "repo.script-registry"],
+      "timeoutMs": 180000
+    },
+    "gateway-benchmark-distribution": {
+      "description": "Actual optional benchmark exclusion from product distributions",
+      "suites": ["gateway.benchmark-distribution"],
+      "timeoutMs": 1800000
+    },
     "core-baseline": {
       "description": "Shared repository and foundation baseline",
       "execution": {
@@ -458,6 +468,28 @@
     }
   },
   "suites": [
+    {
+      "id": "gateway.benchmark-node", "label": "Installed independent Node package correctness",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "node", "args": ["--test", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/privacy.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/schedule.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/transport.test.mjs"],
+      "sideEffects": "network-service", "timeoutClass": "standard", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
+    {
+      "id": "gateway.benchmark-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "npm", "args": ["run", "vitest", "--", "tests/vitest/gateway/performance/distribution-artifacts.test.ts", "--maxWorkers=1"],
+      "sideEffects": "container", "timeoutClass": "slow", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
+    {
+      "id": "gateway.benchmark-correctness",
+      "label": "Network benchmark harness and failure-accounting correctness",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "npm", "args": ["run", "vitest", "--", "tests/vitest/gateway/performance/benchmark.test.ts", "tests/vitest/gateway/performance/benchmark-boundary.test.ts", "tests/vitest/server/package-script-registry.test.ts", "--maxWorkers=2"],
+      "sideEffects": "network-service", "timeoutClass": "standard", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
     {
       "id": "regression.environment",
       "label": "Node, test, and Web Console type environment",

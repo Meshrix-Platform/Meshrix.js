@@ -11715,16 +11715,24 @@
       "artifactId": "meshrix.gateway.benchmark",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.gateway.benchmark.",
-      "activeVersion": "v0.0.1:meshrix:gateway-benchmark-1",
+      "activeVersion": "v0.0.1:meshrix:gateway-benchmark-node-1",
       "versions": [
+        {
+          "version": "v0.0.1:meshrix:gateway-benchmark-node-1",
+          "ref": "meshrix.gateway.benchmark@v0.0.1:meshrix:gateway-benchmark-node-1",
+          "lifecycle": "active",
+          "compatibility": { "newBindingsAllowed": true, "historicalResolutionAllowed": true, "notes": "Independent installed Node benchmark; finite network source-CLI observations, not conformance or a performance threshold." },
+          "artifactRefs": [],
+          "evidenceRefs": [{ "evidenceId": "v0-0-1-meshrix-gateway-benchmark-node-1-source", "kind": "other", "uri": "tools/server-scripts/benchmark-gateway.ts" }]
+        },
         {
           "version": "v0.0.1:meshrix:gateway-benchmark-1",
           "ref": "meshrix.gateway.benchmark@v0.0.1:meshrix:gateway-benchmark-1",
-          "lifecycle": "active",
+          "lifecycle": "deprecated",
           "compatibility": {
-            "newBindingsAllowed": true,
+            "newBindingsAllowed": false,
             "historicalResolutionAllowed": true,
-            "notes": "Gateway benchmark report schema produced by the bounded benchmark harness."
+            "notes": "Historical embedded callback/no-op report; not network benchmark evidence."
           },
           "artifactRefs": [],
           "evidenceRefs": [
