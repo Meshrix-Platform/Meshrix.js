@@ -24,14 +24,10 @@ Connect HTTP and MCP services, control tool access, and inspect calls from a web
 
 ## Quick start
 
-Try the pre-release from source. Requires Git, Node.js 24, and npm.
+[Download and extract the source](https://github.com/Meshrix-Platform/Meshrix.js/archive/refs/heads/nightly.zip) (pre-release). With Node.js 24 and npm installed, run from the project directory:
 
 ```bash
-git clone --branch nightly --single-branch https://github.com/Meshrix-Platform/Meshrix.js.git
-cd Meshrix.js
-npm ci
-npm run build
-npm run server:start -- --with-ui --strict-port
+node tools/start.mjs
 ```
 
 Open the web console at **http://127.0.0.1:7228**.

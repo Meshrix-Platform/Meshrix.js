@@ -24,14 +24,10 @@
 
 ## 快速开始
 
-从源码试用预发布版本（pre-release）。需要 Git、Node.js 24 和 npm。
+[下载并解压源码](https://github.com/Meshrix-Platform/Meshrix.js/archive/refs/heads/nightly.zip)（pre-release），安装 Node.js 24 和 npm，在项目目录运行：
 
 ```bash
-git clone --branch nightly --single-branch https://github.com/Meshrix-Platform/Meshrix.js.git
-cd Meshrix.js
-npm ci
-npm run build
-npm run server:start -- --with-ui --strict-port
+node tools/start.mjs
 ```
 
 打开 Web 控制台：**http://127.0.0.1:7228**。

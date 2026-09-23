@@ -18,7 +18,7 @@
 
 ## Develop Meshrix.js
 
-[Contributing](../CONTRIBUTING.md) · [Developer guide](development/README.md) · [Architecture](architecture/ARCHITECTURE.md) · [Technical references](development/README.md#technical-references)
+[Contributing](../CONTRIBUTING.md) · [Developer guide](development/README.md) · [Source startup](development/SOURCE-START.md) · [Architecture](architecture/ARCHITECTURE.md) · [Technical references](development/README.md#technical-references)
 
 Documentation conventions, repository layout, maintenance policies, and verification commands are in the [developer guide](development/README.md). Release procedures are in the [runbook](RUNBOOK.md#release-definition-and-publication).
 
