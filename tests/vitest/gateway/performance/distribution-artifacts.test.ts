@@ -10,7 +10,7 @@ import { createServerSourcePackage } from "../../../../tools/server-scripts/pack
 import { rewritePackedVendoredFileDependencies } from "../../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 
 const root = resolve(import.meta.dirname, "../../../..");
-const forbidden = /(?:^|\/)(?:meshrix-node-benchmark|node-benchmark|gateway-benchmark(?:\.[^.]+)?|gateway-benchmark\/|benchmark-gateway\.(?:ts|js|d\.ts|js\.map|d\.ts\.map))(?:\/|$)/u;
+const forbidden = /(?:^|\/)(?:meshrix-node-benchmark(?:-[^/]+\.tgz)?|node-benchmark|benchmark-gateway\.(?:ts|js|d\.ts|js\.map|d\.ts\.map))(?:\/|$)|(?:^|\/)(?:dist\/)?tools\/server-scripts\/lib\/gateway-benchmark(?:\/|$)|(?:^|\/)\.cache\/gateway-benchmark(?:\/|$)/u;
 const npm = (args: string[], cwd = root) => {
   const env = { ...process.env };
   // npm run propagates CLI-only configuration; an independent consumer has its own configuration.
@@ -46,6 +46,16 @@ function layerPaths(archive: string, layer: string): Promise<string[]> {
 }
 
 describe("materialized product benchmark exclusion", () => {
+  it("distinguishes allowed verification documentation from executable benchmark assets", () => {
+    expect(forbidden.test("app/docs/verification/gateway-benchmark.md")).toBe(false);
+    for (const path of ["app/tools/server-scripts/benchmark-gateway.ts",
+      "app/dist/tools/server-scripts/benchmark-gateway.js",
+      "app/tools/server-scripts/lib/gateway-benchmark/mock-upstream.ts",
+      "app/.cache/gateway-benchmark/package.json",
+      "app/tmp/meshrix-node-benchmark-0.1.0.tgz",
+      "app/node_modules/meshrix-node-benchmark/src/index.mjs"]) expect(forbidden.test(path)).toBe(true);
+  });
+
   it("packs a standalone tarball that imports from an empty consumer with zero dependencies", async () => {
     const scratch = await mkdtemp(join(tmpdir(), "benchmark-independent-consumer-"));
     try {
