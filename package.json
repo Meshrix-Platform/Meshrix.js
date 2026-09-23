@@ -468,6 +468,8 @@
     "verify:upstream-service-publishing-candidate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upstream-service-publishing-candidate.ts",
     "generate:upstream-service-report-template": "cross-env NODE_OPTIONS=--conditions=source node tools/generators/generate-upstream-service-publishing-report-template.ts",
     "generate:upstream-service-publishing-report": "cross-env NODE_OPTIONS=--conditions=source node tools/generators/generate-upstream-service-publishing-report.ts",
+    "docs:generate:layered-architecture": "node tools/generators/generate-layered-architecture-html.mjs",
+    "docs:check:layered-architecture": "node tools/generators/generate-layered-architecture-html.mjs --check",
     "verify:upstream-service-report-template": "cross-env NODE_OPTIONS=--conditions=source node tools/generators/generate-upstream-service-publishing-report-template.ts --check",
     "verify:upstream-fixture-transit": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upstream-fixture-transit.ts",
     "verify:mcp-release-portable-assembly": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-mcp-release-portable-assembly.ts",

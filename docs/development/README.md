@@ -58,7 +58,7 @@ Repository-local source, registries, documentation, and verification commands ar
 - [Runbook](../RUNBOOK.md) owns repository commands, runtime operation, deployment, and release procedures.
 - Capability and protocol documents own their implemented public behavior and objective limits.
 
-The [state-machine document](../architecture/STATE-MACHINES.md) is generated from `tools/registry/state-machines/state-machine-integrity.registry.json` by `node tools/generators/generate-state-machine-docs.ts`. Do not edit the projection manually. The architecture HTML diagrams are projections of `packages/contracts/src/modules/manifest.ts`; update their digest markers with `node tools/generators/generate-architecture-diagram-digests.ts`.
+The [state-machine document](../architecture/STATE-MACHINES.md) is generated from `tools/registry/state-machines/state-machine-integrity.registry.json` by `node tools/generators/generate-state-machine-docs.ts`. Do not edit the projection manually. The system/service architecture HTML diagrams are projections of `packages/contracts/src/modules/manifest.ts`; update their digest markers with `node tools/generators/generate-architecture-diagram-digests.ts`. The nested layered package diagram is regenerated with `npm run docs:generate:layered-architecture`.
 
 ## Validation
 
@@ -119,6 +119,7 @@ Temporary planning workspaces are execution aids, not durable product authoritie
 | Interactive regression snapshot | [Regression](../verification/regression.html) |
 | Architecture | [Architecture](../architecture/ARCHITECTURE.md) |
 | System architecture diagram | [System architecture](../architecture/MESHRIX-SYSTEM-ARCHITECTURE.html) |
+| Layered architecture diagram (packages/edges) | [Layered architecture](../architecture/MESHRIX-LAYERED-ARCHITECTURE.html) |
 | Service capability architecture diagram | [Service architecture](../architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html) |
 | Execution sandbox | [Execution sandbox](../architecture/EXECUTION-SANDBOX.md) |
 | MCP native installer | [MCP native installer](../architecture/MCP-NATIVE-INSTALLER.md) |

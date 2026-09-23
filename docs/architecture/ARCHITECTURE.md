@@ -9,6 +9,19 @@ Meshrix.js is an internally maintained, private-deployable gateway platform
 for agent access and governed service forwarding. Its Vue.js frontend and
 Node.js backend are separate workspaces connected through versioned HTTP APIs.
 
+## Layered package diagram
+
+The nested-rectangle layered architecture HTML is generated from package/plugin/service
+layout and dependency edges (not hand-drawn):
+
+- Diagram: [`MESHRIX-LAYERED-ARCHITECTURE.html`](./MESHRIX-LAYERED-ARCHITECTURE.html)
+- Regenerate: `npm run docs:generate:layered-architecture`
+- Stale check: `npm run docs:check:layered-architecture`
+
+It sits alongside the contracts-manifest projections
+[`MESHRIX-SYSTEM-ARCHITECTURE.html`](./MESHRIX-SYSTEM-ARCHITECTURE.html) and
+[`MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html`](./MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html).
+
 ## Runtime Shape
 
 | Layer | Roots | Responsibility |
