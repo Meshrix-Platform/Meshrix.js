@@ -68,6 +68,8 @@ The dictionary is one shared file: each copy-bearing feature owns one top-level 
 
 ## Documentation Rules
 
+The root READMEs are user entry points, not maintenance contracts. Keep their copy focused on useful capabilities, real console images, and a working quick start. Move language conventions, repository structure, architecture internals, release procedures, and verification details to their owning technical documents. See the [Developer Guide](docs/development/README.md#documentation-conventions) for placement and review rules.
+
 - Write technical facts, not intent narratives.
 - Keep documents tied to code paths, runtime behavior, configuration fields, protocol surfaces, or verification commands.
 - Record durable technical decisions in the canonical public architecture, protocol, functionality, registry, or verifier source that owns the affected behavior.
@@ -84,10 +86,10 @@ npm test -- --suite domains.manifest
 npm test
 ```
 
-For documentation-only changes, run at least:
+For documentation-only changes, follow the [documentation validation scope](docs/development/README.md#validation):
 
 ```bash
-npm test
+npm run verify:docs
 git diff --check
 ```
 
