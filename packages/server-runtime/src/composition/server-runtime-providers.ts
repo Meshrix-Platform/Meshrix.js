@@ -15,8 +15,10 @@ import {
 import { createWorkspaceAssetRegistry } from "#meshrix/agents/workspace-asset-registry/index";
 import { createToolSkillManagementProvider } from "#meshrix/capabilities/skills/tool-skill-management-provider";
 import { createOperationPermissionPlatform } from "#meshrix/capabilities/operation-permission-core/index";
-import { broadcastAudienceCatalogInvalidation } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
-import { broadcastConfiguredMcpNotification } from "#meshrix/protocols/mcp/adapter/mcp-notification-bus";
+import {
+  broadcastAudienceCatalogInvalidation,
+  broadcastConfiguredMcpNotification
+} from "#meshrix/protocols/mcp/notifications";
 import { disconnectMcpSseConnectionsByGrant } from "../state/sse-connection-state.ts";
 import {
   buildExecutiveReport,

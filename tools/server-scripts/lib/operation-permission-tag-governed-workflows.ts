@@ -247,20 +247,20 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       body: { proof: "must-not-forward" },
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 200, [200, 403]);
-    assertMcpDenied(deniedGatewayForward, "denied external service forward");
+    assertMcpDenied(deniedGatewayForward, "denied external service forward", "tag_policy_denied");
     assert.equal(fixtureState.echoCount, gatewayBefore);
 
     const deniedGatewayMetrics: any = await callMcp("meshrix.gateway.metrics", {
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 206, [200, 403]);
-    assertMcpDenied(deniedGatewayMetrics, "denied external service metrics");
+    assertMcpDenied(deniedGatewayMetrics, "denied external service metrics", "tag_policy_denied");
 
     const deniedDocumentDownload: any = await callMcp("meshrix.workspace.file.download", {
       workspaceId,
       path: "tag-governed/document.txt",
       tagPolicy: tagPolicy(ENTITY_REFS.document)
     }, 202, [200, 403]);
-    assertMcpDenied(deniedDocumentDownload, "denied document download");
+    assertMcpDenied(deniedDocumentDownload, "denied document download", "tag_policy_denied");
 
     const deniedWorkspaceUpload: any = await callMcp("meshrix.workspace.file.upload", {
       workspaceId,
@@ -268,7 +268,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       content: "must not be written\n",
       tagPolicy: tagPolicy(ENTITY_REFS.workspace)
     }, 203, [200, 403]);
-    assertMcpDenied(deniedWorkspaceUpload, "denied workspace upload");
+    assertMcpDenied(deniedWorkspaceUpload, "denied workspace upload", "tag_policy_denied");
 
     const deniedConsoleTagId: any = "custom:tag-governed-denied-console";
     const deniedConsole: any = await callMcp("meshrix.tagManagement.tags.upsert", {
@@ -277,7 +277,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       label: "Denied console tag",
       tagPolicy: tagPolicy(ENTITY_REFS.console)
     }, 205, [200, 403]);
-    assertMcpDenied(deniedConsole, "denied console tag upsert");
+    assertMcpDenied(deniedConsole, "denied console tag upsert", ["tag_policy_denied", "approval_required"]);
     const deniedConsoleGet: any = await api(
       "GET",
       `/api/tag-management/v1/tags/${encodeURIComponent(deniedConsoleTagId)}`,

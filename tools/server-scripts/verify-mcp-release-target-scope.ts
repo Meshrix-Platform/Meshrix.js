@@ -24,7 +24,7 @@ const REPORT_PATH: any = "build/reports/mcp-release-target-scope.json";
 const RELEASE_TARGETS: any = MCP_SUPPORTED_TARGETS;
 const RELEASE_LABELS: any = Object.freeze(RELEASE_TARGETS.map((target?: any) : any => MCP_TARGET_LABELS[target]));
 const PUBLIC_SCOPE_FILES: readonly any[] = Object.freeze([
-  "packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+  "packages/protocols/mcp/modern-downstream/index.ts",
   "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
   "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh",
   "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1",

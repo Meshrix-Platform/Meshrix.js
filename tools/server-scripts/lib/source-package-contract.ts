@@ -8,6 +8,7 @@ export const SOURCE_PACKAGE_ROOTS: readonly string[] = Object.freeze([
   AUTHORIZED_VENDORED_PACKAGE_ROOT,
   "services/model-gateway/contracts",
   "apps/server",
+  "apps/mcp-gateway-installer",
   "apps/console",
   "content",
   "tools",
@@ -49,6 +50,7 @@ export const ROOT_SOURCE_FILES: readonly string[] = Object.freeze([
 ]);
 
 export const INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS: readonly string[] = Object.freeze([
+  "tools/server-scripts/benchmark-gateway.ts",
   "docs/plans",
   "docs/reports"
 ]);

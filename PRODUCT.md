@@ -163,3 +163,11 @@ These terms stay required and are not remaining work to weaken:
 - [Status](docs/STATUS.md) records current product and evidence state; concrete
   future work belongs to its owning task or technical authority rather than a
   perpetual roadmap.
+
+## Programmable gateway product boundary
+
+The gateway kernel is a small public package with injected policy, credential,
+catalog, upstream, resource, prompt, and lifecycle ports. It is not a built-in
+general-purpose orchestrator. Modern MCP and explicitly supported legacy
+profiles share the same governed invocation boundary, while optional business
+events and collaboration remain separate adapters.

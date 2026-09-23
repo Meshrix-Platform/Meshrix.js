@@ -363,6 +363,16 @@
       "source": "./src/security/governed-execution-permit-authority.ts",
       "default": "./dist/security/governed-execution-permit-authority.js"
     },
+    "./security/gateway-permit": {
+      "types": "./dist/security/gateway-permit/index.d.ts",
+      "source": "./src/security/gateway-permit/index.ts",
+      "default": "./dist/security/gateway-permit/index.js"
+    },
+    "./security/gateway-continuation-ledger": {
+      "source": "./src/security/gateway-continuation-ledger.ts",
+      "types": "./dist/security/gateway-continuation-ledger.d.ts",
+      "default": "./dist/security/gateway-continuation-ledger.js"
+    },
     "./security/local-path-boundary": {
       "types": "./dist/security/local-path-boundary.d.ts",
       "source": "./src/security/local-path-boundary.ts",

@@ -10,6 +10,7 @@
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
     "@meshrix/protocols": "0.0.1",
     "better-sqlite3": "^12.9.0"
   },
@@ -40,6 +41,16 @@
       "types": "./dist/upstream-gateway/index.d.ts",
       "source": "./src/upstream-gateway/index.ts",
       "default": "./dist/upstream-gateway/index.js"
+    },
+    "./upstream-gateway/gateway-executor": {
+      "types": "./dist/upstream-gateway/gateway-executor.d.ts",
+      "source": "./src/upstream-gateway/gateway-executor.ts",
+      "default": "./dist/upstream-gateway/gateway-executor.js"
+    },
+    "./service-events": {
+      "types": "./dist/service-events/index.d.ts",
+      "source": "./src/service-events/index.ts",
+      "default": "./dist/service-events/index.js"
     },
     "./workspace-asset-registry/index": {
       "types": "./dist/workspace-asset-registry/index.d.ts",

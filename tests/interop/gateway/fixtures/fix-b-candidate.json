@@ -1,0 +1,10 @@
+{
+  "command": "node",
+  "args": [
+    "--conditions=source",
+    "tests/vitest/gateway/interop-candidate.mjs"
+  ],
+  "cwd": ".",
+  "requestTimeoutMs": 5000,
+  "slowPathDelayMs": 15
+}

@@ -4612,7 +4612,7 @@
             {
               "evidenceId": "v0-0-1-platform-stable-json-1-source",
               "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts"
+              "uri": "packages/protocols/mcp/modern-downstream/discovery.ts"
             }
           ]
         }
@@ -11686,62 +11686,112 @@
       ]
     },
     {
-      "artifactId": "meshrix.gateway-boundary-final.report",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.gateway-boundary-final.report.",
-      "activeVersion": "v0.0.1:gateway-boundary-final:report-1",
+      "artifactId": "meshrix.gateway.contract",
+      "kind": "schema",
+      "description": "Governed version registry entry for meshrix.gateway.contract.",
+      "activeVersion": "v0.0.1:meshrix:gateway-contract-1",
       "versions": [
         {
-          "version": "v0.0.1:gateway-boundary-final:report-1",
-          "ref": "meshrix.gateway-boundary-final.report@v0.0.1:gateway-boundary-final:report-1",
+          "version": "v0.0.1:meshrix:gateway-contract-1",
+          "ref": "meshrix.gateway.contract@v0.0.1:meshrix:gateway-contract-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Protocol-neutral gateway contract surface consumed by the kernel, the platform assembly and embedders."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-gateway-boundary-final-report-1-source-1",
+              "evidenceId": "v0-0-1-meshrix-gateway-contract-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-gateway-boundary-final-report-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/gateway-boundary-final.ts"
+              "uri": "packages/contracts/src/gateway/index.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.gateway-boundary-final.receipt",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.gateway-boundary-final.receipt.",
-      "activeVersion": "v0.0.1:gateway-boundary-final:receipt-1",
+      "artifactId": "meshrix.gateway.benchmark",
+      "kind": "other",
+      "description": "Governed version registry entry for meshrix.gateway.benchmark.",
+      "activeVersion": "v0.0.1:meshrix:gateway-benchmark-node-1",
       "versions": [
         {
-          "version": "v0.0.1:gateway-boundary-final:receipt-1",
-          "ref": "meshrix.gateway-boundary-final.receipt@v0.0.1:gateway-boundary-final:receipt-1",
+          "version": "v0.0.1:meshrix:gateway-benchmark-node-1",
+          "ref": "meshrix.gateway.benchmark@v0.0.1:meshrix:gateway-benchmark-node-1",
           "lifecycle": "active",
+          "compatibility": { "newBindingsAllowed": true, "historicalResolutionAllowed": true, "notes": "Independent installed Node benchmark; finite network source-CLI observations, not conformance or a performance threshold." },
+          "artifactRefs": [],
+          "evidenceRefs": [{ "evidenceId": "v0-0-1-meshrix-gateway-benchmark-node-1-source", "kind": "other", "uri": "tools/server-scripts/benchmark-gateway.ts" }]
+        },
+        {
+          "version": "v0.0.1:meshrix:gateway-benchmark-1",
+          "ref": "meshrix.gateway.benchmark@v0.0.1:meshrix:gateway-benchmark-1",
+          "lifecycle": "deprecated",
           "compatibility": {
-            "newBindingsAllowed": true,
+            "newBindingsAllowed": false,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Historical embedded callback/no-op report; not network benchmark evidence."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-gateway-boundary-final-receipt-1-source-1",
+              "evidenceId": "v0-0-1-meshrix-gateway-benchmark-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
+              "uri": "tools/server-scripts/benchmark-gateway.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.gateway.migration",
+      "kind": "other",
+      "description": "Governed version registry entry for meshrix.gateway.migration.",
+      "activeVersion": "v0.0.1:meshrix:gateway-migration-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:gateway-migration-1",
+          "ref": "meshrix.gateway.migration@v0.0.1:meshrix:gateway-migration-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Gateway configuration migration plan schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-gateway-boundary-final-receipt-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/gateway-boundary-final.ts"
+              "evidenceId": "v0-0-1-meshrix-gateway-migration-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/migrate-gateway-config.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.gateway.config",
+      "kind": "schema",
+      "description": "Governed version registry entry for meshrix.gateway.config.",
+      "activeVersion": "v0.0.1:meshrix:gateway-config-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:gateway-config-1",
+          "ref": "meshrix.gateway.config@v0.0.1:meshrix:gateway-config-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Migrated gateway service configuration schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-gateway-config-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/migrate-gateway-config.ts"
             }
           ]
         }

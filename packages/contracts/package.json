@@ -7,7 +7,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.18.0 <23 || >=24.3.0"
   },
   "type": "module",
   "exports": {
@@ -60,6 +60,11 @@
       "types": "./dist/gateway-transit/direct-transit-contract.d.ts",
       "source": "./src/gateway-transit/direct-transit-contract.ts",
       "default": "./dist/gateway-transit/direct-transit-contract.js"
+    },
+    "./gateway": {
+      "source": "./src/gateway/index.ts",
+      "types": "./dist/gateway/index.d.ts",
+      "default": "./dist/gateway/index.js"
     },
     "./modules/manifest": {
       "types": "./dist/modules/manifest.d.ts",

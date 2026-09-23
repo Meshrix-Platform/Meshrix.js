@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "generatedAt": "2026-07-22",
   "profiles": {
+    "gateway-benchmark": {
+      "description": "Deterministic real-MCP benchmark harness correctness (not a performance verdict)",
+      "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "repo.script-registry"],
+      "timeoutMs": 180000
+    },
+    "gateway-benchmark-distribution": {
+      "description": "Actual optional benchmark exclusion from product distributions",
+      "suites": ["gateway.benchmark-distribution"],
+      "timeoutMs": 1800000
+    },
     "core-baseline": {
       "description": "Shared repository and foundation baseline",
       "execution": {
@@ -458,6 +468,28 @@
     }
   },
   "suites": [
+    {
+      "id": "gateway.benchmark-node", "label": "Installed independent Node package correctness",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "node", "args": ["--test", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/privacy.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/schedule.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/transport.test.mjs"],
+      "sideEffects": "network-service", "timeoutClass": "standard", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
+    {
+      "id": "gateway.benchmark-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "npm", "args": ["run", "vitest", "--", "tests/vitest/gateway/performance/distribution-artifacts.test.ts", "--maxWorkers=1"],
+      "sideEffects": "container", "timeoutClass": "slow", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
+    {
+      "id": "gateway.benchmark-correctness",
+      "label": "Network benchmark harness and failure-accounting correctness",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "npm", "args": ["run", "vitest", "--", "tests/vitest/gateway/performance/benchmark.test.ts", "tests/vitest/gateway/performance/benchmark-boundary.test.ts", "tests/vitest/server/package-script-registry.test.ts", "--maxWorkers=2"],
+      "sideEffects": "network-service", "timeoutClass": "standard", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
     {
       "id": "regression.environment",
       "label": "Node, test, and Web Console type environment",
@@ -1117,7 +1149,6 @@
         "tests/vitest/server/delegated-mcp-parent-authority.test.ts",
         "tests/vitest/server/process-identity-nonce-conformance.test.ts",
         "tests/vitest/server/local-secret-crash-consistency.test.ts",
-        "tests/vitest/server/plugin-mcp-outlet-visibility.test.ts",
         "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts",
         "tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.ts",
         "tests/vitest/server/authorization-capability-binding-guard.test.ts",
@@ -1352,7 +1383,6 @@
         "tests/vitest/server/upstream-publishing-http-integration.test.ts",
         "tests/vitest/console/upstream-service-publish-client.test.ts",
         "tests/vitest/console/upstream-service-publish-view.test.ts",
-        "tests/vitest/server/upstream-mcp-gateway.test.ts",
         "tests/vitest/server/upstream-service-publishing-html.test.ts",
         "tests/vitest/server/release-journey-visual-evidence.test.ts"
       ],
@@ -1402,19 +1432,15 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/http-mcp-adapter-cancellation.test.ts",
-        "tests/vitest/server/mcp-sse-admission.test.ts",
+        "tests/vitest/gateway/modern-downstream/cancellation.test.ts",
         "tests/vitest/server/outbound-egress-policy.test.ts",
         "tests/vitest/server/upstream-mcp-session-manager.test.ts",
         "tests/vitest/server/upstream-endpoint-traffic-state.test.ts",
         "tests/vitest/server/upstream-gateway-ssrf.test.ts",
         "tests/vitest/server/upstream-gateway-session-cancellation.test.ts",
         "tests/vitest/server/mcp-proxy-cancellation.test.ts",
-        "tests/vitest/server/mcp-downstream-protocol-headers.test.ts",
         "tests/vitest/server/mcp-tool-schema-adapter.test.ts",
-        "tests/vitest/server/mcp-target-lookup-authorization.test.ts",
         "tests/vitest/server/mcp-tool-refresh-single-flight.test.ts",
-        "tests/vitest/server/mcp-tool-result-bridge.test.ts",
         "tests/vitest/server/mcp-operation-capability-attenuation.test.ts",
         "tests/vitest/server/mcp-tools-list-pagination.test.ts",
         "tests/vitest/server/mcp-execution-session-lifecycle.test.ts"
@@ -1439,8 +1465,7 @@
         "--",
         "tests/vitest/server/upstream-payload-contract.test.ts",
         "tests/vitest/server/upstream-payload-transit.test.ts",
-        "tests/vitest/server/upstream-artifact-transit.test.ts",
-        "tests/vitest/server/upstream-artifact-mcp-projection.test.ts"
+        "tests/vitest/server/upstream-artifact-transit.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -2887,6 +2912,27 @@
       "artifacts": [
         "build/reports/approval-governance.json"
       ]
+    },
+    {
+      "id": "gateway.task-001",
+      "label": "Meshrix Gateway convergence TASK-001 focused Vitest scope",
+      "owner": "platform",
+      "package": "gateway",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/gateway",
+        "--maxWorkers=2"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
     }
   ]
 }

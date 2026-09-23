@@ -9,11 +9,13 @@ WORKDIR app
 
 COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE ./
 COPY apps/server/package.json ./apps/server/package.json
+COPY apps/mcp-gateway-installer/package.json ./apps/mcp-gateway-installer/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY packages/agents/package.json ./packages/agents/package.json
 COPY packages/capabilities/package.json ./packages/capabilities/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/foundation/package.json ./packages/foundation/package.json
+COPY packages/gateway/package.json ./packages/gateway/package.json
 COPY packages/protocols/package.json ./packages/protocols/package.json
 COPY packages/server-runtime/package.json ./packages/server-runtime/package.json
 COPY packages/ui-console/package.json ./packages/ui-console/package.json
@@ -47,6 +49,7 @@ RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm
 FROM deps AS build
 
 COPY apps/server ./apps/server
+COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
 COPY services/model-gateway/contracts ./services/model-gateway/contracts
@@ -54,7 +57,7 @@ COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build:node
+RUN npm run build:node && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
 FROM deps AS build-ui
@@ -67,7 +70,7 @@ COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build
+RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
 FROM ${NODE_BASE_IMAGE} AS runtime

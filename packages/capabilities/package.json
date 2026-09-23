@@ -32,6 +32,16 @@
       "types": "./dist/skills/tool-skill-management-provider.d.ts",
       "source": "./src/skills/tool-skill-management-provider.ts",
       "default": "./dist/skills/tool-skill-management-provider.js"
+    },
+    "./gateway-policy": {
+      "types": "./dist/gateway-policy/index.d.ts",
+      "source": "./src/gateway-policy/index.ts",
+      "default": "./dist/gateway-policy/index.js"
+    },
+    "./gateway-credentials": {
+      "types": "./dist/gateway-credentials/index.d.ts",
+      "source": "./src/gateway-credentials/index.ts",
+      "default": "./dist/gateway-credentials/index.js"
     }
   },
   "files": [

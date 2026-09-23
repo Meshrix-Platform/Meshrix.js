@@ -1,0 +1,8 @@
+{
+  "candidateKind": "reference-fixture",
+  "command": "node",
+  "args": ["tests/interop/gateway/fixtures/neutral-http-candidate.mjs"],
+  "cwd": ".",
+  "startupTimeoutMs": 5000,
+  "requestTimeoutMs": 5000
+}

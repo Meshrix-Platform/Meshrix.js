@@ -9,8 +9,10 @@ import {
   authorizationSubject,
   authorizationSubjectId,
   authorizationSubjectType,
+  ESCALATION_ONLY_CONTEXT_KEY,
   nowIso,
   parseJsonObject,
+  pendingOperationContext,
   pendingResumeInput,
   policyRevisionSummary,
   randomId,
@@ -675,21 +677,33 @@ export function createToolExecutionRuntime({
       (policy.effect === "needsApproval" || policy.effect === "require_approval") &&
       !approvalAlreadySatisfiesCurrentPolicy;
     const pendingApprovalRequired: any = tool.requiresApproval === true;
+    // A front gate that refused the effect hands it here to record the pending approval
+    // instead. It only ever turns an execution into an approval, and a denial still stands,
+    // so honouring it cannot widen what the platform is willing to run. An invocation that
+    // already carries a trusted approval has nothing left to escalate: the approval is the
+    // answer, and re-recording it would suspend an operation the policy admits.
+    const escalationOnly: any =
+      context[ESCALATION_ONLY_CONTEXT_KEY] === true && policy.effect !== "deny" && !trustedApproval;
     if (
       !dryRun &&
-      policy.effect !== "dry_run_only" &&
+      (policy.effect !== "dry_run_only" || escalationOnly) &&
       (
+        escalationOnly ||
         governanceApprovalRequired ||
         (["allow", "require_confirmation"].includes(policy.effect) && pendingApprovalRequired && !trustedApproval)
       )
     ) {
       const durationMs: any = Date.now() - startedAtMs;
-      const approvalReasonCode: any = governanceApprovalRequired
-        ? policy.reasonCode || "governance_approval_required"
-        : "tool_approval_required";
-      const approvalReason: any = governanceApprovalRequired
-        ? policy.redactedReason || "Governance approval is required before execution."
-        : `Tool ${tool.id} requires approval before execution.`;
+      const approvalReasonCode: any = escalationOnly
+        ? "gateway_approval_required"
+        : governanceApprovalRequired
+          ? policy.reasonCode || "governance_approval_required"
+          : "tool_approval_required";
+      const approvalReason: any = escalationOnly
+        ? policy.redactedReason || "The gateway policy requires an explicit approval before execution."
+        : governanceApprovalRequired
+          ? policy.redactedReason || "Governance approval is required before execution."
+          : `Tool ${tool.id} requires approval before execution.`;
       const policyRequiredApproval: any = policy.requiredApproval && typeof policy.requiredApproval === "object" && !Array.isArray(policy.requiredApproval)
         ? policy.requiredApproval
         : {};
@@ -726,7 +740,7 @@ export function createToolExecutionRuntime({
         originalInput: input,
         resumeInput: pendingResumeInput(input, tool.operationId),
         ...(apiKeyAuthorization ? { credentialAuthorization: apiKeyAuthorization } : {}),
-        context,
+        context: pendingOperationContext(context),
         sourceIp: authorization.sourceIp || sourceIpFromRequest(request),
         userAgent: request?.headers?.["user-agent"] || "",
         expiresAt: context.expiresAt || context.approvalExpiresAt || ""

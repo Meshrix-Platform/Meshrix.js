@@ -214,3 +214,12 @@ MIT. See [LICENSE](LICENSE).
 <div align="center">
   <sub>Meshrix.js — self-contained by default, built for private deployment.</sub>
 </div>
+
+## Embeddable Gateway kernel
+
+`@meshrix/gateway` is a standalone programmable MCP gateway. It does not require the Console,
+agents, plugins or SkillHub to start, and a standard MCP client attaches without a Meshrix
+product name or a dedicated connector. Modern MCP uses `2026-07-28`; older protocol rules live
+in an isolated compatibility adapter. Implementation and samples: [Gateway
+architecture](docs/architecture/gateway.md), [protocol boundary](docs/protocols/gateway.md) and
+the [Gateway samples](docs/examples/gateway/README.md).

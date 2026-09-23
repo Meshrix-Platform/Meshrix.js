@@ -1,8 +1,7 @@
 import { CLOSED_EMPTY_JSON_OBJECT_SCHEMA } from "@meshrix/foundation/security/closed-json-schema";
-import { compileMcpToolJsonSchema } from "./mcp-tool-schema.ts";
+import { assertExternalSchemaBudget } from "@meshrix/gateway/schema";
 import {
   asArray,
-  mcpToolRisk,
   normalizeRisk,
   object,
   safePublicToolSegment,
@@ -34,14 +33,13 @@ function invalidToolSchemaError(kind: any = "input") : any {
 function projectedMcpSchema(
   schema?: any,
   label?: any,
-  { requireTopLevelObject = true, kind = "input" }: Record<string, any> = {}
+  { requireTopLevelObject = true, kind = "input", closedWhenAbsent = false }: Record<string, any> = {}
 ) : any {
-  if (schema === undefined) return CLOSED_EMPTY_JSON_OBJECT_SCHEMA;
+  if (schema === undefined) return closedWhenAbsent ? CLOSED_EMPTY_JSON_OBJECT_SCHEMA : { type: "object" };
   try {
-    return compileMcpToolJsonSchema(schema, {
-      label,
-      requireTopLevelObject
-    }).schema;
+    if (requireTopLevelObject && (typeof schema !== "object" || schema === null || Array.isArray(schema) || "type" in schema && schema.type !== "object")) throw invalidToolSchemaError(kind);
+    assertExternalSchemaBudget(schema);
+    return structuredClone(schema);
   } catch {
     throw invalidToolSchemaError(kind);
   }
@@ -51,33 +49,52 @@ function safeNamespacedUpstreamMeta(meta: Record<string, any> = {}) : any {
   const output: Record<string, any> = {};
   for (const [key, value] of Object.entries(object(meta)) as [string, any][]) {
     if (typeof key !== "string" || !key.includes("/")) continue;
-    if (["toolExecutionId", "traceId", "auditId"].includes(key.split("/").pop() || "")) continue;
+    if (key.startsWith("io.meshrix/")) continue;
     output[key] = value;
   }
   return output;
 }
 
-function mcpToolAnnotations(tool: Record<string, any> = {}, readOnly?: any) : any {
+function mcpToolAnnotations(tool: Record<string, any> = {}) : any {
   const annotations: any = object(tool.annotations);
-  return {
-    readOnlyHint: annotations.readOnlyHint === true || readOnly === true,
-    destructiveHint: annotations.destructiveHint === true,
-    ...(typeof annotations.idempotentHint === "boolean" ? { idempotentHint: annotations.idempotentHint } : {}),
-    ...(typeof annotations.openWorldHint === "boolean" ? { openWorldHint: annotations.openWorldHint } : {})
-  };
+  return { ...annotations };
+}
+
+function operatorMcpOperation(service: Record<string, any> = {}) : Record<string, any> {
+  return asArray(service.operations).find((operation: any) => text(operation?.operationKey || operation?.operationId) === "tools/call") || {};
+}
+
+function operatorMcpRisk(service: Record<string, any> = {}) : any {
+  return normalizeRisk(operatorMcpOperation(service).risk);
+}
+
+/**
+ * The request schema the operator actually declared.
+ *
+ * The normalized service model stores an undeclared request schema as an empty object
+ * (`support.ts` reads the manifest value through `object(...)`), so an empty object is that
+ * model's canonical "no input declared" value and has to compile as the platform's closed
+ * empty object, exactly as an undefined schema does. Passing it to the closed-schema
+ * compiler as a declared schema instead fails the whole projection, which also removes
+ * every other upstream tool from the catalog listing it is compiled for.
+ */
+function declaredRequestSchema(schema?: any) : any {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return undefined;
+  return Object.keys(schema).length === 0 ? undefined : schema;
 }
 
 export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string, any> = {}) : any {
   const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
   const upstreamToolName: any = text(tool.name);
-  const risk: any = mcpToolRisk(tool);
-  const readOnly: any = risk === "read_only";
+  const configuredOperation: any = operatorMcpOperation(service);
+  const risk: any = operatorMcpRisk(service);
+  const requiresApproval: any = configuredOperation.requiresApproval === true || risk === "repair_write" || risk === "destructive";
   const dynamicCapability: any = compileUpstreamOperationCapability(service, {
     operationKey: "tools/call",
     protocol: "mcp",
-    requiredScopes: readOnly ? ["gateway:read"] : ["gateway:write"],
+    requiredScopes: asArray(configuredOperation.requiredScopes || (risk === "read_only" ? ["gateway:read"] : ["gateway:write"])),
     risk,
-    requiresApproval: risk === "repair_write" || risk === "destructive"
+    requiresApproval
   }, { upstreamToolName });
   return {
     name: `upstream.${prefix}.${upstreamToolName}`,
@@ -95,9 +112,14 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
             kind: "output"
           })
         }),
-    annotations: mcpToolAnnotations(tool, readOnly),
+    annotations: mcpToolAnnotations(tool),
     _meta: {
+      ...safeNamespacedUpstreamMeta(tool._meta),
       upstreamMcp: true,
+      // The projected operation every discovered tool of this service executes as. It is
+      // the identity Operation Permission governs, so a peer (and the gateway sink) can
+      // address the governed operation rather than the discovered tool name alone.
+      toolId: `upstream.${safePublicToolSegment(service.serviceId)}.${safePublicToolSegment(configuredOperation.operationKey || "tools/call")}`,
       serviceId: service.serviceId,
       upstreamToolName,
       capabilityId: dynamicCapability.capabilityId,
@@ -105,9 +127,14 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
       dynamicCapability,
       resourceContext: dynamicCapability.resourceContext,
       toolsets: ["upstream-mcp", ...gatewayToolsetsForRisk(risk), `upstream:${service.serviceId}`],
-      requiredScopes: readOnly ? ["gateway:read"] : ["gateway:write"],
+      requiredScopes: asArray(configuredOperation.requiredScopes || (risk === "read_only" ? ["gateway:read"] : ["gateway:write"])),
       risk,
-      ...safeNamespacedUpstreamMeta(tool._meta)
+      requiresApproval,
+      "io.meshrix/gateway-policy": {
+        source: "operator-service-operation",
+        effectClass: risk,
+        requiresApproval
+      }
     }
   };
 }
@@ -125,9 +152,9 @@ export function publicUpstreamOperationTool({ service = {}, operation = {} }: Re
     description: operation.description ||
       `Configured upstream ${operation.protocol || "http"} operation ${operation.operationKey} from ${service.label || service.serviceId}.`,
     inputSchema: projectedMcpSchema(
-      operation.requestSchema,
+      declaredRequestSchema(operation.requestSchema),
       "Configured upstream operation input schema",
-      { requireTopLevelObject: true, kind: "input" }
+      { requireTopLevelObject: true, kind: "input", closedWhenAbsent: true }
     ),
     annotations: {
       readOnlyHint: readOnly,

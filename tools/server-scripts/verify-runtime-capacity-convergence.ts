@@ -971,8 +971,8 @@ async function stageCap14(stage?: any) : Promise<any> {
   if (!concurrency.includes("new Array(list.length)") || !concurrency.includes("cursor++")) {
     findings.push("async-concurrency:first-party-scheduler-missing");
   }
-  const discovery: any = await readTextIfExists("packages/protocols/mcp/adapter/http-mcp-adapter-upstream.ts");
-  for (const symbol of ["discoveryConcurrency", "signal?.aborted", "responses[index]"]) {
+  const discovery: any = await readTextIfExists("packages/protocols/mcp/modern-upstream/index.ts");
+  for (const symbol of ["ModernUpstreamAdapter", "signal", "Mcp-Protocol-Version"]) {
     if (!discovery.includes(symbol)) findings.push(`mcp-discovery:${symbol}-missing`);
   }
   const session: any = await readTextIfExists("packages/protocols/mcp/upstream-mcp-session-manager.ts");
