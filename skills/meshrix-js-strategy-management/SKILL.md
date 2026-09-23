@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-strategy-management
 description: Guide Meshrix.js deterministic policy preview for workflows, agents, routes, queues, and tools. Use for strategy preview, explanation, policy revision binding, dry-run boundaries, or strategy-management verification.
+audience: development
 ---
 
 # Meshrix.js Strategy Management

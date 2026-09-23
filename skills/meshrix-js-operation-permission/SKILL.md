@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-operation-permission
 description: Maintain Meshrix.js Operation Permission catalogs, operation groups, grants, risk policy, audit, metrics, bearer authorization, and the /api/operation-permission/v1 contract. Use for governed operation discovery, permission evaluation, or operation execution changes.
+audience: usage
 ---
 
 # Meshrix.js Operation Permission

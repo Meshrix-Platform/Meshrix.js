@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-protocol-gateway
 description: Maintain Meshrix.js downstream and upstream gateway behavior, including MCP ingress and egress, ACP relay carrying, external-service routing, identity propagation, filtering, audit, and protocol conformance. Use for gateway protocol or integration changes in the core repository.
+audience: development
 ---
 
 # Meshrix.js Protocol Gateway

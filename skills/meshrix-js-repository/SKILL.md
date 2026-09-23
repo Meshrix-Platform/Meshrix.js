@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-repository
 description: Apply the Meshrix.js main product repository rules for server, console, protocol gateway, Operation Permission, security, storage, and acceptance work. Use for any change inside the repository, including its console, server, agents, capabilities, and protocol adapter subsystems.
+audience: development
 ---
 
 # Meshrix.js Repository
@@ -51,8 +52,12 @@ failures; skill routing and successful checks do not grant that authority.
 - Authoritative Meshrix.js skills live only under `skills/`. Distribution and
   installed packages are generated projections of these sources; edit the
   source and regenerate them together, never maintain a second instruction
-  authority. Skill examples use the same placeholders in prose, prompts, and
-  bundled references.
+  authority. Install projections come from `npm run pack:usage-skills` (and
+  `prepack` / offline delivery), which copies only `audience: usage` skill
+  trees into `build/usage-skills`. The npm `files` list publishes that pack,
+  not the wholesale `skills/` tree. Development-audience skills remain
+  checkout-only. Skill examples use the same placeholders in prose, prompts,
+  and bundled references.
 
 ## 智能体入口与上下文范围
 

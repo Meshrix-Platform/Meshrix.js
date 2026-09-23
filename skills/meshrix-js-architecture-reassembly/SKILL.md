@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-architecture-reassembly
 description: Diagnose Meshrix.js architecture reassembly — source splits, package or ownership moves, protocol boundaries, composition-root changes, and capabilities whose consumers no longer agree with their authority — using the reassembly CLI inventory, the reassembly contract, and migration completion handoff. Delivery closure decisions are owned by $meshrix-js-delivery-closure.
+audience: development
 ---
 
 # Meshrix.js Architecture Reassembly

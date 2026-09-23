@@ -8,6 +8,7 @@ description: >-
   rerun. Meshrix.js Web Console routes use stable component targets in a real
   browser. Use for Agent-operated UI validation, not test-case matrices, unit
   tests, CI, functional acceptance, or environment qualification.
+audience: development
 ---
 
 # Meshrix.js Checkpoint Real Validation

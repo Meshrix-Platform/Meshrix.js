@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-platform-acceptance-workflow
 description: Run or inspect the canonical Meshrix.js functional-completeness release gate and its aggregate evidence report. Use for functional release acceptance, acceptance task changes, or aggregate development-environment evidence validation. The optional real-machine verification workflow is owned by $meshrix-js-real-machine-verification.
+audience: development
 ---
 
 # Meshrix.js Platform Acceptance Workflow

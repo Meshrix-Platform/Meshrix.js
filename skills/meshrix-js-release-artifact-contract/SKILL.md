@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-release-artifact-contract
 description: Developer-handbook chapter for the Meshrix.js published artifact shape and public address contract. Use from $meshrix-js-developer-handbook for release-definition, container-target, offline-packaging, or listen-address work. Do not operate a running instance from this chapter.
+audience: development
 ---
 
 # Meshrix.js Release Artifact Contract
