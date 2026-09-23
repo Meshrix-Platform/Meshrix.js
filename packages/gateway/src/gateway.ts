@@ -617,9 +617,11 @@ class GatewayKernelImpl implements GatewayKernel {
             if (invocation.contextHandle && isFatalUpstreamStatus(responseStatus(response))) {
               try { this.#contextStore.markLost(invocation.contextHandle, `upstream_http_${upstreamResponse.status}`); } catch { /* stale handles remain terminal */ }
             }
-            if (route.effectClass !== "read") await this.#permits.markOutcomeUnknown?.(consumed);
-            const failedHttp = failure({ origin: "peer", code: `upstream_http_${upstreamResponse.status}`, message: "Upstream returned an HTTP failure.", status: 502, effectOutcome: route.effectClass === "read" ? "failed" : "unknown" });
-            return route.effectClass === "read" ? failedHttp : withReceipt(failedHttp, consumed);
+            // An HTTP failure without a definitive JSON-RPC result is observed only
+            // after dispatch. Even a read has no proven result; never classify this
+            // permit as a known failure that could be replayed automatically.
+            await this.#permits.markOutcomeUnknown?.(consumed);
+            return withReceipt(failure({ origin: "peer", code: `upstream_http_${upstreamResponse.status}`, message: "Upstream returned an HTTP failure.", status: 502, effectOutcome: "unknown" }), consumed);
           }
           const wireBody = upstreamResponse ? responseBody(upstreamResponse) : response;
           const decoded = upstreamResponse && isGatewayFailure(wireBody)

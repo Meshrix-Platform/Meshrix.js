@@ -97,6 +97,22 @@ describe("gateway fault and uncertain-outcome boundaries", () => {
     }
   });
 
+  it("preserves an uncertain write and query-only receipt after HTTP 503 without another upstream send", async () => {
+    let sends = 0;
+    const gateway = createGateway({
+      upstream: { invoke: async () => { sends += 1; return response("synthetic transient peer failure", 503); } },
+      descriptors: [descriptor({ route: route({ effectClass: "safe_write" }) })]
+    });
+    await gateway.start();
+    try {
+      const result = await gateway.invoke(context, { routeRef: "route.demo", method: "tools/call", params: {} });
+      expect(result).toMatchObject({ kind: "failure", code: "upstream_http_503", effectOutcome: "unknown", details: { receiptId: expect.any(String) } });
+      const receiptId = result.kind === "failure" ? String(result.details?.receiptId) : "";
+      expect(await gateway.receiptStatus(context, receiptId)).toMatchObject({ receiptId, state: "outcome_unknown" });
+      expect(sends).toBe(1);
+    } finally { await gateway.close(); }
+  });
+
   it("requires a continuation codec for upstream input requests instead of making an implicit replay path", async () => {
     const gateway = createGateway({ upstream: { invoke: async () => response({ resultType: "input_required", inputRequests: [] }) }, descriptors: [descriptor()] });
     await gateway.start();
