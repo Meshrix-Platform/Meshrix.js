@@ -1,0 +1,83 @@
+{
+  "code": "PLAN-001",
+  "directory": "layered-architecture-html",
+  "dossier": {
+    "questions": [],
+    "status": "not_required"
+  },
+  "intent": {
+    "autonomy": {
+      "allow_in_scope_revision": true,
+      "allow_reviewer_repairs": true,
+      "blocked_branch_policy": "continue_independent_work",
+      "forbid_mid_execution_questions": true
+    },
+    "goal": "Deliver a maintainable nested-rectangle layered architecture HTML projection plus a deterministic regenerate/check script for Meshrix.js packages, services, apps, and plugins.",
+    "risk_boundary": [
+      "No false authorization or invented Tasks",
+      "Do not claim Designer or Reviewer sessions ran",
+      "Coordinate with any parallel branch work without treating it as Plan authority"
+    ],
+    "scope": {
+      "in": [
+        "Architecture HTML generator under tools/generators",
+        "Committed docs/architecture projection",
+        "npm scripts for generate and stale-check",
+        "Minimal pointers from architecture and development docs"
+      ],
+      "out": [
+        "Replacing existing system or service architecture diagrams",
+        "Runtime product behavior changes",
+        "Falsely authorizing or closing this Plan without Designer compile"
+      ]
+    },
+    "success": [
+      "Generator regenerates identical HTML",
+      "Committed projection matches generator output under check",
+      "docs/plan remains draft until Designer and authorize-plan complete"
+    ]
+  },
+  "ledger": {
+    "defaulted": [],
+    "observed": [
+      {
+        "fact": "Open Meshrix.js PR #86 (branch docs/layered-architecture-diagram) already adds tools/generators/generate-layered-architecture-html.mjs, docs/architecture/MESHRIX-LAYERED-ARCHITECTURE.html, and npm docs:generate/check:layered-architecture scripts. Treat that work as observed parallel progress, not as Designer completion or authorize-plan for PLAN-001.",
+        "source_refs": [
+          "https://github.com/Meshrix-Platform/Meshrix.js/pull/86",
+          "docs/architecture/",
+          "tools/generators/"
+        ]
+      },
+      {
+        "fact": "PLAN-001 remains phase draft with empty spec.tasks, null lifecycle.designer_session, and null lifecycle.authorization. Design-needed; not authorized.",
+        "source_refs": [
+          "docs/plan/layered-architecture-html/Plan.json"
+        ]
+      }
+    ],
+    "unresolved": [],
+    "user_decided": []
+  },
+  "lifecycle": {
+    "authorization": null,
+    "continuation_receipts": [],
+    "designer_session": null,
+    "reviewer_session": null,
+    "sealed": null
+  },
+  "phase": "draft",
+  "schema": "better-plan.plan/v3",
+  "spec": {
+    "architecture": {
+      "notes": [],
+      "summary": ""
+    },
+    "full_regression": {
+      "commands": [],
+      "paths": []
+    },
+    "requirements": [],
+    "tasks": []
+  },
+  "title": "Auto-generated layered architecture HTML and regen script"
+}

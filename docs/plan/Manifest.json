@@ -1,0 +1,11 @@
+{
+  "plans": [
+    {
+      "code": "PLAN-001",
+      "directory": "layered-architecture-html",
+      "plan": "layered-architecture-html/Plan.json",
+      "title": "Auto-generated layered architecture HTML and regen script"
+    }
+  ],
+  "schema": "better-plan.manifest/v3"
+}

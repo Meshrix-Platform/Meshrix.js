@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Better Plan"
+  short_description: "Plan large Meshrix.js deliveries before implementation"
+  default_prompt: "Use $meshrix-js-better-plan for multi-task or high-risk Meshrix.js work. Require docs/plan, run next-action / authorize-plan before implementation, and do not invent Tasks outside the Designer path."

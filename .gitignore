@@ -105,3 +105,7 @@ CLAUDE.md
 
 # Test-only placeholder data roots must never become repository content.
 /<user-data>/
+
+# Better Plan v3 workspace lock (transient)
+/docs/plan/.better-plan.lock
+/docs/plan/**/Report.html

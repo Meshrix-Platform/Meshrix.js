@@ -105,7 +105,16 @@ Dependency admission for private deployment is governed by [Private-Deployment D
 
 ### Plans and current status
 
-Temporary planning workspaces are execution aids, not durable product authorities. Delete them after their outcome is implemented and verified. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and candidate-bound reports.
+Complete-delivery planning uses the Better Plan v3 workspace at
+[`docs/plan/`](../plan/README.md) (`Manifest.json` schema
+`better-plan.manifest/v3`). Load `$meshrix-js-better-plan` before
+implementation for multi-task / high-risk / architecture-wide work. Validate
+with `python3 scripts/manifest_tool.py validate docs/plan`. Ad-hoc temporary
+planning scratch remains disposable after its outcome is verified; it is not a
+substitute for `docs/plan`. Current product state belongs in
+[Status](../STATUS.md); executable acceptance, deployment, production-closure,
+and publication facts belong to their owning commands and candidate-bound
+reports.
 
 ## Technical references
 
