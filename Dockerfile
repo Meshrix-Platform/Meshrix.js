@@ -57,7 +57,7 @@ COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build:node
+RUN npm run build:node && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
 FROM deps AS build-ui
@@ -70,7 +70,7 @@ COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build
+RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
 FROM ${NODE_BASE_IMAGE} AS runtime

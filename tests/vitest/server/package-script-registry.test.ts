@@ -60,4 +60,9 @@ describe("package script registry declarations", () : any => {
       ]
     });
   });
+  it("registers benchmark execution and correctness as distinct explicit contracts", () => {
+    expect(getDeclaredEntry("gateway:benchmark")).toMatchObject({ tier: "integration", sideEffects: "network-service", ciProfile: "performance" });
+    expect(getDeclaredEntry("test:gateway-benchmark")).toMatchObject({ tier: "integration", sideEffects: "network-service" });
+    expect(getDeclaredEntry("test:gateway-benchmark:distribution")).toMatchObject({ tier: "integration", sideEffects: "docker" });
+  });
 });
