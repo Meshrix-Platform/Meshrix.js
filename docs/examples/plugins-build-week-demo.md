@@ -93,7 +93,7 @@ When wiring the profile into a Core deployment:
 ## Related public surfaces
 
 - Product overview: [meshrix.io](https://meshrix.io)
-- Core documentation: [Meshrix documentation](https://github.com/Meshrix-Platform/Meshrix/tree/nightly/docs)
+- Core documentation: [Meshrix.js documentation](https://github.com/Meshrix-Platform/Meshrix.js/tree/nightly/docs)
 - Plugin source: the repository-local [`plugins/`](../../plugins/) tree
 - Plugin contract: [PLUGIN-IMPLEMENTATION-CONTRACT.md](../protocols/PLUGIN-IMPLEMENTATION-CONTRACT.md)
 - Installation: local adapter/package scripts in [`tools/plugins/`](../../tools/plugins/)
