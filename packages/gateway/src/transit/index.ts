@@ -103,4 +103,3 @@ export class MemoryArtifactStore {
 export function createOpaquePassThrough(): PassThrough {
   return new PassThrough({ objectMode: false });
 }
-

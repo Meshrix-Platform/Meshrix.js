@@ -72,4 +72,3 @@ export class DefaultGatewayPolicy implements GatewayPolicyPort {
 export function createGatewayPolicy(options: GatewayPolicyOptions = {}): DefaultGatewayPolicy {
   return new DefaultGatewayPolicy(options);
 }
-

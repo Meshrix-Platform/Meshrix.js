@@ -30,4 +30,3 @@ export function createRouteRegistry(descriptors: readonly CatalogDescriptor[] = 
   if (descriptors.length > 0) registry.publish(descriptors);
   return registry;
 }
-

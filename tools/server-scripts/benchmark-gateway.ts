@@ -58,4 +58,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     else console.log(text);
   }).catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
 }
-

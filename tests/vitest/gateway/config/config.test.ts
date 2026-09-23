@@ -11,4 +11,3 @@ describe("credential and custom-field boundaries", () => {
     expect(calls).toEqual(["secret://demo:endpoint.demo"]);
   });
 });
-

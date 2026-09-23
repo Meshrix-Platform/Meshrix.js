@@ -19,4 +19,3 @@ describe("optional service event boundary", () => {
     await gateway.close();
   });
 });
-

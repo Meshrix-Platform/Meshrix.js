@@ -21,4 +21,3 @@ describe("modern MCP upstream adapter", () => {
     expect(() => buildModernRequest({ id: 1, method: "initialize", params: {}, protocolVersion: "2026-07-28", headers: {} })).toThrowError(/initialize sessions/u);
   });
 });
-

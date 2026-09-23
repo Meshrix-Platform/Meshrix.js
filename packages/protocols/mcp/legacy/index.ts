@@ -46,4 +46,3 @@ export class LegacyMcpAdapter implements UpstreamPort {
 export function createLegacyMcpAdapter(input: { readonly version: string; readonly transport: LegacyTransport }): LegacyMcpAdapter {
   return new LegacyMcpAdapter(input);
 }
-

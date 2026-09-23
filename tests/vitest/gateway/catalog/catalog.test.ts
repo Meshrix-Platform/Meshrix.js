@@ -34,4 +34,3 @@ describe("gateway catalog and routing snapshots", () => {
     expect(page.items.map((item) => item.publicName)).toEqual(["demo"]);
   });
 });
-

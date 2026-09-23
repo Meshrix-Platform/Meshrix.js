@@ -10,4 +10,3 @@ await gateway.start();
 const first = await gateway.invoke(context, { routeRef: "tool.prepare", method: "tools/call", params: {} });
 if (first.kind === "input_required" && first.requestState) console.log(await gateway.continue(context, first.requestState, [{ id: "confirm", action: "accept" }]));
 await gateway.close();
-

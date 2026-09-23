@@ -34,4 +34,3 @@ export async function runGatewayCommand(args: Record<string, any>): Promise<bool
   }
   return true;
 }
-

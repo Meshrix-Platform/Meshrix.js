@@ -13,4 +13,3 @@ export interface ResourceRequest {
   readonly uri: string;
   readonly signal?: AbortSignal;
 }
-

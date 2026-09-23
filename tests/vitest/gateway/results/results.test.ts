@@ -23,4 +23,3 @@ describe("gateway result union", () => {
     expect(decodeUpstreamResult(null)).toMatchObject({ kind: "failure", code: "upstream_result_invalid" });
   });
 });
-

@@ -26,4 +26,3 @@ export function createServiceEventPort(): ServiceEventPort {
 export function createServiceEventAdapter(input: { readonly source: ServiceEventPort; readonly onEvent: (event: ServiceEvent) => void | Promise<void> }): () => void {
   return input.source.subscribe((event) => input.onEvent(event));
 }
-

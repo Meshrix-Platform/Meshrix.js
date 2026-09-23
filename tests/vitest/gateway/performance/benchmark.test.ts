@@ -16,4 +16,3 @@ describe("gateway performance evidence", () => {
     expect(report.measurements.operationsPerSecond).toBeGreaterThan(0);
   });
 });
-
