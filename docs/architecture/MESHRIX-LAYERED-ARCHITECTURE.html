@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meshrix.js Layered Architecture</title>
+<!-- layered-architecture-digest: sha256:97bf50b78bd29f98cc1c26595c7ef48bbe7328bf4e33e7fa37e9768f3bbcac2b -->
+<!-- generator: tools/generators/generate-layered-architecture-html.mjs -->
+<!-- schema: v0.1.0:docs:layered-architecture-html-1 -->
+<style>
+  :root {
+    color-scheme: light;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --bg: #f3f5f8;
+    --ink: #182026;
+    --muted: #506070;
+    --line: #c9d2dc;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: var(--bg); }
+  main { max-width: 1480px; margin: 0 auto; padding: 28px 20px 64px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  h2 { font-size: 18px; margin: 0 0 6px; }
+  h3, h4 { font-size: 14px; margin: 0 0 8px; }
+  p { line-height: 1.55; margin: 0 0 10px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  code { background: #edf1f6; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .band { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 16px 0; }
+  .canvas {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 18px;
+    padding: 18px;
+    background: linear-gradient(180deg, #e8eef6 0%, #f7f8fa 100%);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    min-width: 1100px;
+  }
+  .layer-block {
+    background: var(--card);
+    border: 2px solid var(--layer-accent, #2f6fed);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(24,32,38,0.04);
+  }
+  .layer-header {
+    padding: 12px 16px;
+    background: color-mix(in srgb, var(--layer-accent) 12%, white);
+    border-bottom: 1px solid color-mix(in srgb, var(--layer-accent) 35%, var(--line));
+  }
+  .layer-sub { color: var(--muted); font-size: 13px; margin: 0 0 4px; }
+  .layer-count { font-size: 12px; color: var(--muted); margin: 0; }
+  .layer-body { padding: 14px 16px 16px; }
+  .strip {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    background: #fafbfd;
+  }
+  .strip-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .modules-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .module {
+    flex: 0 0 auto;
+    width: 168px;
+    min-height: 112px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    border-top: 3px solid var(--layer-accent, #2f6fed);
+  }
+  .module.hub {
+    width: 188px;
+    border-top-color: #182026;
+    background: #f7fafc;
+    box-shadow: inset 0 0 0 1px #18202622;
+  }
+  .mod-label { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .mod-path, .pkg, .mod-meta { font-size: 11px; color: var(--muted); line-height: 1.35; word-break: break-all; }
+  .pkg { margin-top: 4px; }
+  .mod-meta { margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .shape-note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .adjacency {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .adj { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+  .adj li { margin: 2px 0; }
+  .adj-empty { font-size: 12px; color: var(--muted); margin: 0; }
+  .empty { color: var(--muted); font-size: 12px; padding: 8px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); font-size: 12px; }
+  th, td { text-align: left; border-bottom: 1px solid #e5e9ef; padding: 8px 10px; vertical-align: top; }
+  th { background: #edf1f6; }
+  footer.gen-footer {
+    margin-top: 28px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  footer.gen-footer code { font-size: 11px; }
+  .scroll-hint { overflow-x: auto; }
+  ol { margin: 8px 0 0; padding-left: 20px; }
+  li { margin: 4px 0; line-height: 1.45; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Meshrix.js Layered Architecture</h1>
+  <p class="meta">Auto-generated nested-rectangle view of packages, services, apps, and plugins. Not a hand-drawn diagram. Companion to <a href="./MESHRIX-SYSTEM-ARCHITECTURE.html">MESHRIX-SYSTEM-ARCHITECTURE.html</a> (contracts manifest projection).</p>
+  <p class="meta">Schema <code>v0.1.0:docs:layered-architecture-html-1</code> · digest <code>sha256:97bf50b78bd29f98cc1c26595c7ef48bbe7328bf4e33e7fa37e9768f3bbcac2b</code> · generatedAt <code>1970-01-01T00:00:00.000Z</code> (deterministic)</p>
+
+  <div class="scroll-hint">
+    <div class="canvas" role="img" aria-label="Meshrix layered architecture as nested rectangles">
+<section class="layer-block" data-layer="upstream-services" style="--layer-accent:#c45c26">
+  <header class="layer-header">
+    <h2>1. External / upstream services</h2>
+    <p class="layer-sub">Services that register into the Meshrix gateway (model, skill, file parsing).</p>
+    <p class="layer-count">3 modules</p>
+  </header>
+  <div class="layer-body">
+<div class="modules-row"><div class="module" title="Upstream file-parser service">
+  <div class="mod-label">file-parser</div>
+  <div class="mod-path">services/file-parser</div>
+  
+  <div class="mod-meta">in:0 out:0</div>
+</div>
+<div class="module" title="Upstream model service">
+  <div class="mod-label">model-gateway</div>
+  <div class="mod-path">services/model-gateway</div>
+  <div class="pkg">model-gateway-service</div>
+  <div class="mod-meta">in:0 out:0</div>
+</div>
+<div class="module" title="Upstream skill service">
+  <div class="mod-label">skill-hub</div>
+  <div class="mod-path">services/skill-hub</div>
+  <div class="pkg">@meshrix/service-skill-hub</div>
+  <div class="mod-meta">in:0 out:0</div>
+</div></div>
+<p class="shape-note">Shape: parallel — modules left → right from path/label order; edges listed below.</p>
+<div class="adjacency">
+  <div class="adj-col"><h4>Intra-layer edges</h4><p class="adj-empty">No intra-layer package edges.</p></div>
+  <div class="adj-col"><h4>Outbound edges</h4><p class="adj-empty">No outbound package edges from this layer.</p></div>
+</div>
+  </div>
+</section>
+<section class="layer-block" data-layer="gateway-internal" style="--layer-accent:#2f6fed">
+  <header class="layer-header">
+    <h2>2. Gateway-internal layers</h2>
+    <p class="layer-sub">Kernel (contracts/foundation), permissions (capabilities), and adapters (agents).</p>
+    <p class="layer-count">5 modules</p>
+  </header>
+  <div class="layer-body">
+<div class="strip" data-strip="kernel">
+  <div class="strip-title">Kernel</div>
+  <div class="modules-row"><div class="module" title="Operation/module contracts">
+  <div class="mod-label">contracts</div>
+  <div class="mod-path">packages/contracts</div>
+  <div class="pkg">@meshrix/contracts</div>
+  <div class="mod-meta">in:15 out:1</div>
+</div>
+<div class="module" title="Kernel: security, proof, pactium host, storage">
+  <div class="mod-label">foundation</div>
+  <div class="mod-path">packages/foundation</div>
+  <div class="pkg">@meshrix/foundation</div>
+  <div class="mod-meta">in:11 out:2</div>
+</div></div>
+</div>
+<div class="strip" data-strip="permissions">
+  <div class="strip-title">Permissions</div>
+  <div class="modules-row"><div class="module" title="Permissions / Operation Permission">
+  <div class="mod-label">capabilities</div>
+  <div class="mod-path">packages/capabilities</div>
+  <div class="pkg">@meshrix/capabilities</div>
+  <div class="mod-meta">in:3 out:6</div>
+</div></div>
+</div>
+<div class="strip" data-strip="adapters">
+  <div class="strip-title">Adapters</div>
+  <div class="modules-row"><div class="module" title="Agent gateway adapters &amp; workspace">
+  <div class="mod-label">agents</div>
+  <div class="mod-path">packages/agents</div>
+  <div class="pkg">@meshrix/agents</div>
+  <div class="mod-meta">in:3 out:6</div>
+</div>
+<div class="module" title="Registers model-gateway into Core (adapter plugin)">
+  <div class="mod-label">plugin-model-gateway</div>
+  <div class="mod-path">plugins/model-gateway</div>
+  <div class="pkg">@meshrix/plugin-model-gateway</div><div class="pkg">plugin:model-gateway</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div></div>
+</div>
+<div class="adjacency">
+  <div class="adj-col"><h4>Intra-layer edges</h4><ul class="adj"><li>agents → contracts (dependency-rules)</li><li>agents → contracts (package.json)</li><li>agents → foundation (dependency-rules)</li><li>agents → foundation (package.json)</li><li>capabilities → contracts (dependency-rules)</li><li>capabilities → contracts (package.json)</li><li>capabilities → foundation (dependency-rules)</li><li>capabilities → foundation (package.json)</li><li>contracts → foundation (dependency-rules)</li><li>foundation → contracts (dependency-rules)</li><li>foundation → contracts (package.json)</li><li>model-gateway → contracts (package.json)</li></ul></div>
+  <div class="adj-col"><h4>Outbound edges</h4><ul class="adj"><li>agents → protocols (dependency-rules)</li><li>agents → protocols (package.json)</li><li>capabilities → protocols (dependency-rules)</li><li>capabilities → protocols (package.json)</li></ul></div>
+</div>
+  </div>
+</section>
+<section class="layer-block" data-layer="mcp-relay" style="--layer-accent:#2aa66a">
+  <header class="layer-header">
+    <h2>3. MCP service layer and relay layer</h2>
+    <p class="layer-sub">Protocols (MCP/HTTP), server-runtime composition, and the server app entry.</p>
+    <p class="layer-count">3 modules</p>
+  </header>
+  <div class="layer-body">
+<div class="modules-row"><div class="module" title="Server process entry (MCP + HTTP)">
+  <div class="mod-label">apps/server</div>
+  <div class="mod-path">apps/server</div>
+  <div class="pkg">@meshrix/server</div>
+  <div class="mod-meta">in:0 out:5</div>
+</div>
+<div class="module" title="MCP / HTTP / pubsub protocol facades">
+  <div class="mod-label">protocols</div>
+  <div class="mod-path">packages/protocols</div>
+  <div class="pkg">@meshrix/protocols</div>
+  <div class="mod-meta">in:8 out:4</div>
+</div>
+<div class="module" title="Runtime composition &amp; relay host">
+  <div class="mod-label">server-runtime</div>
+  <div class="mod-path">packages/server-runtime</div>
+  <div class="pkg">@meshrix/server-runtime</div>
+  <div class="mod-meta">in:1 out:10</div>
+</div></div>
+<p class="shape-note">Shape: parallel — modules left → right from path/label order; edges listed below.</p>
+<div class="adjacency">
+  <div class="adj-col"><h4>Intra-layer edges</h4><ul class="adj"><li>server → protocols (package.json)</li><li>server → server-runtime (package.json)</li><li>server-runtime → protocols (dependency-rules)</li><li>server-runtime → protocols (package.json)</li></ul></div>
+  <div class="adj-col"><h4>Outbound edges</h4><ul class="adj"><li>protocols → contracts (dependency-rules)</li><li>protocols → contracts (package.json)</li><li>protocols → foundation (dependency-rules)</li><li>protocols → foundation (package.json)</li><li>server → contracts (package.json)</li><li>server → foundation (package.json)</li><li>server → ui-console (package.json)</li><li>server-runtime → agents (dependency-rules)</li><li>server-runtime → agents (package.json)</li><li>server-runtime → capabilities (dependency-rules)</li><li>server-runtime → capabilities (package.json)</li><li>server-runtime → contracts (dependency-rules)</li><li>server-runtime → contracts (package.json)</li><li>server-runtime → foundation (dependency-rules)</li><li>server-runtime → foundation (package.json)</li></ul></div>
+</div>
+  </div>
+</section>
+<section class="layer-block" data-layer="external-gateways" style="--layer-accent:#8a6fdf">
+  <header class="layer-header">
+    <h2>4. External gateways (supplements)</h2>
+    <p class="layer-sub">Optional LB/proxy-facing plugins. Meshrix does not reimplement Nginx/Caddy; these only supplement edge transport.</p>
+    <p class="layer-count">1 module</p>
+  </header>
+  <div class="layer-body">
+<div class="modules-row"><div class="module" title="Supplement: operator Caddy/Nginx/direct endpoints (not a Meshrix proxy product)">
+  <div class="mod-label">external-gateway</div>
+  <div class="mod-path">plugins/external-gateway</div>
+  <div class="pkg">@meshrix/plugin-external-gateway</div><div class="pkg">plugin:external-gateway</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div></div>
+<p class="shape-note">Shape: strip — modules left → right from path/label order; edges listed below.</p>
+<div class="adjacency">
+  <div class="adj-col"><h4>Intra-layer edges</h4><p class="adj-empty">No intra-layer package edges.</p></div>
+  <div class="adj-col"><h4>Outbound edges</h4><ul class="adj"><li>external-gateway → contracts (package.json)</li></ul></div>
+</div>
+  </div>
+</section>
+<section class="layer-block" data-layer="client-plugins" style="--layer-accent:#c9a227">
+  <header class="layer-header">
+    <h2>5. Client-side plugins / console</h2>
+    <p class="layer-sub">Agent client adapters, operator plugins, ui-console, and the console app.</p>
+    <p class="layer-count">13 modules</p>
+  </header>
+  <div class="layer-body">
+<div class="modules-row tree-shape"><div class="module hub" title="Shared client-adapter standard (hub)">
+  <div class="mod-label">client-adapter-kit</div>
+  <div class="mod-path">plugins/agents/client-adapter-kit</div>
+  <div class="pkg">@meshrix/client-adapter-kit</div>
+  <div class="mod-meta">in:7 out:0</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">antigravity</div>
+  <div class="mod-path">plugins/agents/antigravity</div>
+  <div class="pkg">@meshrix/agent-antigravity-adapter</div><div class="pkg">plugin:agent-antigravity</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Operator console app">
+  <div class="mod-label">apps/console</div>
+  <div class="mod-path">apps/console</div>
+  <div class="pkg">@meshrix/console</div>
+  <div class="mod-meta">in:0 out:2</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">claude-code</div>
+  <div class="mod-path">plugins/agents/claude-code</div>
+  <div class="pkg">@meshrix/agent-claude-code-adapter</div><div class="pkg">plugin:agent-claude-code</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">codex</div>
+  <div class="mod-path">plugins/agents/codex</div>
+  <div class="pkg">@meshrix/agent-codex-adapter</div><div class="pkg">plugin:agent-codex</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">kimi</div>
+  <div class="mod-path">plugins/agents/kimi</div>
+  <div class="pkg">@meshrix/agent-kimi-adapter</div><div class="pkg">plugin:agent-kimi</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">meshrix-self-maintenance</div>
+  <div class="mod-path">plugins/agents/meshrix-self-maintenance</div>
+  <div class="pkg">@meshrix/agent-self-maintenance</div><div class="pkg">plugin:agent-self-maintenance</div>
+  <div class="mod-meta">in:0 out:0</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">openclaw</div>
+  <div class="mod-path">plugins/agents/openclaw</div>
+  <div class="pkg">@meshrix/agent-openclaw-adapter</div><div class="pkg">plugin:agent-openclaw</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">opencode</div>
+  <div class="mod-path">plugins/agents/opencode</div>
+  <div class="pkg">@meshrix/agent-opencode-adapter</div><div class="pkg">plugin:agent-opencode</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Agent client-side adapter plugin">
+  <div class="mod-label">pi</div>
+  <div class="mod-path">plugins/agents/pi</div>
+  <div class="pkg">@meshrix/agent-pi-adapter</div><div class="pkg">plugin:agent-pi</div>
+  <div class="mod-meta">in:0 out:1</div>
+</div>
+<div class="module" title="Shared-space operator plugin">
+  <div class="mod-label">shared-space</div>
+  <div class="mod-path">plugins/shared-space</div>
+  <div class="pkg">plugin:shared-space</div>
+  <div class="mod-meta">in:0 out:0</div>
+</div>
+<div class="module" title="Skill-hub UI / operator plugin">
+  <div class="mod-label">skill-hub-plugin</div>
+  <div class="mod-path">plugins/skill-hub</div>
+  <div class="pkg">plugin:skill-hub</div>
+  <div class="mod-meta">in:0 out:0</div>
+</div>
+<div class="module" title="Reusable console components">
+  <div class="mod-label">ui-console</div>
+  <div class="mod-path">packages/ui-console</div>
+  <div class="pkg">@meshrix/ui-console</div>
+  <div class="mod-meta">in:2 out:5</div>
+</div></div>
+<p class="shape-note">Shape: tree — agent adapters depend on <code>client-adapter-kit</code> (hub).</p>
+<div class="adjacency">
+  <div class="adj-col"><h4>Intra-layer edges</h4><ul class="adj"><li>antigravity → client-adapter-kit (package.json)</li><li>claude-code → client-adapter-kit (package.json)</li><li>codex → client-adapter-kit (package.json)</li><li>console → ui-console (package.json)</li><li>kimi → client-adapter-kit (package.json)</li><li>openclaw → client-adapter-kit (package.json)</li><li>opencode → client-adapter-kit (package.json)</li><li>pi → client-adapter-kit (package.json)</li></ul></div>
+  <div class="adj-col"><h4>Outbound edges</h4><ul class="adj"><li>console → contracts (package.json)</li><li>ui-console → agents (dependency-rules)</li><li>ui-console → capabilities (dependency-rules)</li><li>ui-console → contracts (dependency-rules)</li><li>ui-console → foundation (dependency-rules)</li><li>ui-console → protocols (dependency-rules)</li></ul></div>
+</div>
+  </div>
+</section>
+    </div>
+  </div>
+
+<section class="legend band">
+  <h2>Layer assignment heuristics</h2>
+  <ol>
+    <li><strong>Upstream services</strong> — <code>services/*</code> directories that register into the gateway (model-gateway, skill-hub, file-parser).</li>
+    <li><strong>Gateway-internal</strong> — <code>packages/contracts</code> + <code>foundation</code> (kernel), <code>capabilities</code> (permissions), <code>agents</code> + <code>plugins/model-gateway</code> (adapters). <code>plugins/model-gateway</code> is a Core adapter plugin, not the upstream service itself.</li>
+    <li><strong>MCP + relay</strong> — <code>packages/protocols</code>, <code>packages/server-runtime</code>, <code>apps/server</code>.</li>
+    <li><strong>External gateways</strong> — <code>plugins/external-gateway</code> only; labeled as a supplement for operator-provided Caddy/Nginx/direct endpoints (Meshrix does not ship Nginx/Caddy as product modules).</li>
+    <li><strong>Client-side plugins / console</strong> — <code>plugins/agents/*</code>, <code>plugins/shared-space</code>, <code>plugins/skill-hub</code>, <code>packages/ui-console</code>, <code>apps/console</code>.</li>
+  </ol>
+  <p>Modules and edges are scanned from package manifests and <code>tools/registry/dependency-rules.registry.json</code>. No invented modules. Closest-honest layer wins when a path is ambiguous.</p>
+</section>
+
+  <section class="band">
+    <h2>All dependency edges</h2>
+    <p class="meta">Union of workspace <code>package.json</code> dependency edges and concrete <code>allowedDependsOn</code> links from <code>tools/registry/dependency-rules.registry.json</code>.</p>
+    <table>
+      <thead><tr><th>From</th><th>To</th><th>Kind</th></tr></thead>
+      <tbody>
+<tr><td>apps/console</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>apps/console</td><td>packages/ui-console</td><td>package.json</td></tr>
+<tr><td>apps/server</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>apps/server</td><td>packages/foundation</td><td>package.json</td></tr>
+<tr><td>apps/server</td><td>packages/protocols</td><td>package.json</td></tr>
+<tr><td>apps/server</td><td>packages/server-runtime</td><td>package.json</td></tr>
+<tr><td>apps/server</td><td>packages/ui-console</td><td>package.json</td></tr>
+<tr><td>packages/agents</td><td>packages/contracts</td><td>dependency-rules</td></tr>
+<tr><td>packages/agents</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>packages/agents</td><td>packages/foundation</td><td>dependency-rules</td></tr>
+<tr><td>packages/agents</td><td>packages/foundation</td><td>package.json</td></tr>
+<tr><td>packages/agents</td><td>packages/protocols</td><td>dependency-rules</td></tr>
+<tr><td>packages/agents</td><td>packages/protocols</td><td>package.json</td></tr>
+<tr><td>packages/capabilities</td><td>packages/contracts</td><td>dependency-rules</td></tr>
+<tr><td>packages/capabilities</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>packages/capabilities</td><td>packages/foundation</td><td>dependency-rules</td></tr>
+<tr><td>packages/capabilities</td><td>packages/foundation</td><td>package.json</td></tr>
+<tr><td>packages/capabilities</td><td>packages/protocols</td><td>dependency-rules</td></tr>
+<tr><td>packages/capabilities</td><td>packages/protocols</td><td>package.json</td></tr>
+<tr><td>packages/contracts</td><td>packages/foundation</td><td>dependency-rules</td></tr>
+<tr><td>packages/foundation</td><td>packages/contracts</td><td>dependency-rules</td></tr>
+<tr><td>packages/foundation</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>packages/protocols</td><td>packages/contracts</td><td>dependency-rules</td></tr>
+<tr><td>packages/protocols</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>packages/protocols</td><td>packages/foundation</td><td>dependency-rules</td></tr>
+<tr><td>packages/protocols</td><td>packages/foundation</td><td>package.json</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/agents</td><td>dependency-rules</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/agents</td><td>package.json</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/capabilities</td><td>dependency-rules</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/capabilities</td><td>package.json</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/contracts</td><td>dependency-rules</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/foundation</td><td>dependency-rules</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/foundation</td><td>package.json</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/protocols</td><td>dependency-rules</td></tr>
+<tr><td>packages/server-runtime</td><td>packages/protocols</td><td>package.json</td></tr>
+<tr><td>packages/ui-console</td><td>packages/agents</td><td>dependency-rules</td></tr>
+<tr><td>packages/ui-console</td><td>packages/capabilities</td><td>dependency-rules</td></tr>
+<tr><td>packages/ui-console</td><td>packages/contracts</td><td>dependency-rules</td></tr>
+<tr><td>packages/ui-console</td><td>packages/foundation</td><td>dependency-rules</td></tr>
+<tr><td>packages/ui-console</td><td>packages/protocols</td><td>dependency-rules</td></tr>
+<tr><td>plugins/agents/antigravity</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/agents/claude-code</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/agents/codex</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/agents/kimi</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/agents/openclaw</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/agents/opencode</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/agents/pi</td><td>plugins/agents/client-adapter-kit</td><td>package.json</td></tr>
+<tr><td>plugins/external-gateway</td><td>packages/contracts</td><td>package.json</td></tr>
+<tr><td>plugins/model-gateway</td><td>packages/contracts</td><td>package.json</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="gen-footer">
+    <div><strong>Generator:</strong> <code>tools/generators/generate-layered-architecture-html.mjs</code></div>
+    <div><strong>Output:</strong> <code>docs/architecture/MESHRIX-LAYERED-ARCHITECTURE.html</code></div>
+    <div><strong>Generated at:</strong> <code>1970-01-01T00:00:00.000Z</code> (fixed for deterministic regeneration; content-addressed by digest)</div>
+    <div><strong>Source digest:</strong> <code>sha256:97bf50b78bd29f98cc1c26595c7ef48bbe7328bf4e33e7fa37e9768f3bbcac2b</code></div>
+    <div><strong>Source inputs:</strong></div>
+    <ul><li><code>apps/console</code></li><li><code>apps/console/package.json</code></li><li><code>apps/server</code></li><li><code>apps/server/package.json</code></li><li><code>packages/agents</code></li><li><code>packages/agents/package.json</code></li><li><code>packages/capabilities</code></li><li><code>packages/capabilities/package.json</code></li><li><code>packages/contracts</code></li><li><code>packages/contracts/package.json</code></li><li><code>packages/foundation</code></li><li><code>packages/foundation/package.json</code></li><li><code>packages/protocols</code></li><li><code>packages/protocols/package.json</code></li><li><code>packages/server-runtime</code></li><li><code>packages/server-runtime/package.json</code></li><li><code>packages/ui-console</code></li><li><code>packages/ui-console/package.json</code></li><li><code>plugins/agents/antigravity</code></li><li><code>plugins/agents/antigravity/package.json</code></li><li><code>plugins/agents/antigravity/plugin.json</code></li><li><code>plugins/agents/claude-code</code></li><li><code>plugins/agents/claude-code/package.json</code></li><li><code>plugins/agents/claude-code/plugin.json</code></li><li><code>plugins/agents/client-adapter-kit</code></li><li><code>plugins/agents/client-adapter-kit/package.json</code></li><li><code>plugins/agents/codex</code></li><li><code>plugins/agents/codex/package.json</code></li><li><code>plugins/agents/codex/plugin.json</code></li><li><code>plugins/agents/kimi</code></li><li><code>plugins/agents/kimi/package.json</code></li><li><code>plugins/agents/kimi/plugin.json</code></li><li><code>plugins/agents/meshrix-self-maintenance</code></li><li><code>plugins/agents/meshrix-self-maintenance/package.json</code></li><li><code>plugins/agents/meshrix-self-maintenance/plugin.json</code></li><li><code>plugins/agents/openclaw</code></li><li><code>plugins/agents/openclaw/package.json</code></li><li><code>plugins/agents/openclaw/plugin.json</code></li><li><code>plugins/agents/opencode</code></li><li><code>plugins/agents/opencode/package.json</code></li><li><code>plugins/agents/opencode/plugin.json</code></li><li><code>plugins/agents/pi</code></li><li><code>plugins/agents/pi/package.json</code></li><li><code>plugins/agents/pi/plugin.json</code></li><li><code>plugins/external-gateway</code></li><li><code>plugins/external-gateway/package.json</code></li><li><code>plugins/external-gateway/plugin.json</code></li><li><code>plugins/model-gateway</code></li><li><code>plugins/model-gateway/package.json</code></li><li><code>plugins/model-gateway/plugin.json</code></li><li><code>plugins/shared-space</code></li><li><code>plugins/shared-space/plugin.json</code></li><li><code>plugins/skill-hub</code></li><li><code>plugins/skill-hub/plugin.json</code></li><li><code>services/file-parser</code></li><li><code>services/model-gateway</code></li><li><code>services/model-gateway/package.json</code></li><li><code>services/skill-hub</code></li><li><code>services/skill-hub/package.json</code></li><li><code>tools/generators/generate-layered-architecture-html.mjs</code></li><li><code>tools/registry/dependency-rules.registry.json</code></li></ul>
+    <div>Regenerate: <code>npm run docs:generate:layered-architecture</code> · Check: <code>npm run docs:generate:layered-architecture -- --check</code></div>
+  </footer>
+</main>
+</body>
+</html>
