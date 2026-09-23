@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-organization-governance
 description: Configure organization governance on a Meshrix.js instance — import a built-in organization template, preview the draft, and publish it so organization nodes exist for API Key issuance and authorization scoping. Use when an instance reports organization governance unconfigured or when API Key issuance fails with api_key_scope_denied.
+audience: usage
 ---
 
 # Meshrix.js Organization Governance

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-workspace-governed-sharing
 description: Guide Meshrix.js workspace asset management and governed sharing, including grants, ACLs, checkpoints, controlled local-directory access, mutation preview, compensation, and unsharing. Use for workspace files, sharing, local-directory sync, checkpoint restore, or Shared Space.
+audience: usage
 ---
 
 # Meshrix.js Workspace Governed Sharing

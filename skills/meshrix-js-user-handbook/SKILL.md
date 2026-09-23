@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-user-handbook
 description: Meshrix.js user handbook. Use when operating a published or offline instance, opening the Console, or connecting an external service or agent through the single public origin. Do not use this package to change the product, release definition, or published address contract.
+audience: usage
 ---
 
 # Meshrix.js User Handbook

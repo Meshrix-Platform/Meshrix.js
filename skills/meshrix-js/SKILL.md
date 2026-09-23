@@ -1,6 +1,7 @@
 ---
 name: meshrix-js
 description: Meshrix.js product identity and specialist skill routing. Use the developer handbook for product changes and the user handbook for operating an instance.
+audience: usage
 ---
 
 # Meshrix.js
@@ -14,10 +15,14 @@ uses `$meshrix`. Work touching both products keeps separate contracts, source,
 tests, evidence, and completion claims.
 
 Authoritative Meshrix.js skills live in this repository's `skills/` directory.
-Distribution and installed packages are generated from these sources. They
-are projections, not independent places to edit policy. Use the current
-repository's AGENTS.md, source, and command definitions when a distribution is
-stale; report the distribution defect and continue authorized work.
+Each skill declares `audience: usage` or `audience: development` in its
+YAML frontmatter. Usage skills ship with installs and offline projections
+(`npm run pack:usage-skills` → `build/usage-skills`); development skills stay
+in the repository checkout. Distribution and installed packages are generated
+from these sources. They are projections, not independent places to edit
+policy. Use the current repository's AGENTS.md, source, and command
+definitions when a distribution is stale; report the distribution defect and
+continue authorized work.
 
 Meshrix.js follows a self-owned implementation route for its core Node.js
 platform and infrastructure. Do not apply the public Go dependency-admission

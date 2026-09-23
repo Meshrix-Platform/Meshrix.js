@@ -366,6 +366,7 @@
     "tools/server-scripts/verify-public-boundary.ts",
     "!apps/*/node_modules",
     "!packages/*/node_modules",
+    "build/usage-skills/",
     "dist/**/*"
   ],
   "//architecture-governance": {
@@ -423,6 +424,10 @@
     "deploy:native:orb": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/native-orb-deploy.ts",
     "start:optional": "cross-env NODE_OPTIONS=--conditions=source node tools/optional-startup/start.ts",
     "pack:offline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/offline-delivery-pack.ts",
+    "pack:usage-skills": "node tools/pack-usage-skills.mjs",
+    "prepack": "npm run pack:usage-skills",
+    "prepublishOnly": "npm run pack:usage-skills",
+    "verify:usage-skills-pack": "node tools/validate-usage-skills-pack.mjs",
     "build": "npm run build:node && npm run build:web",
     "typecheck": "npm run typecheck:node && npm run typecheck:test && npm run typecheck:web",
     "test": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile core-public --continue-on-failure",

@@ -157,8 +157,28 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "tools/server-scripts/offline-delivery-pack.ts",
       "tools/server-scripts/offline-delivery-producer.ts",
-      "tools/server-scripts/offline-delivery-vm-target.ts"
-    ], outputs: ["build/offline-delivery-bundle"],
+      "tools/server-scripts/offline-delivery-vm-target.ts",
+      "tools/pack-usage-skills.mjs",
+      "skills/**"
+    ], outputs: ["build/offline-delivery-bundle", "build/usage-skills"],
+  },
+  "pack:usage-skills": {
+    scriptName: "pack:usage-skills", command: "npm run pack:usage-skills", category: "packaging", subsystem: "repository",
+    owner: "platform", tier: "hygiene", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: ["skills/**", "tools/pack-usage-skills.mjs"], outputs: ["build/usage-skills"],
+  },
+  "prepack": {
+    scriptName: "prepack", command: "npm run prepack", category: "packaging", subsystem: "repository",
+    owner: "platform", tier: "release", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: ["skills/**", "tools/pack-usage-skills.mjs"], outputs: ["build/usage-skills"],
+  },
+  "prepublishOnly": {
+    scriptName: "prepublishOnly", command: "npm run prepublishOnly", category: "packaging", subsystem: "repository",
+    owner: "platform", tier: "release", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: ["skills/**", "tools/pack-usage-skills.mjs"], outputs: ["build/usage-skills"],
   },
 
   // ── Build / packaging ──────────────────────────────────────────────────────
@@ -724,6 +744,12 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
     inputs: ["skills/**", "tools/validate-skills.mjs"], outputs: [],
+  },
+  "verify:usage-skills-pack": {
+    scriptName: "verify:usage-skills-pack", command: "npm run verify:usage-skills-pack", category: "verifier", subsystem: "repository",
+    owner: "platform", tier: "hygiene", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
+    inputs: ["build/usage-skills/**", "skills/**", "tools/validate-usage-skills-pack.mjs"], outputs: [],
   },
   "verify:repo-organization": {
     scriptName: "verify:repo-organization", command: "npm run verify:repo-organization", category: "verifier", subsystem: "repository",

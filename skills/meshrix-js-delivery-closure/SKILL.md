@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-delivery-closure
 description: Recover stalled Meshrix.js delivery and close a feature with a risk-proportionate heuristic workflow — diagnose, select a proportional depth, shape the closure, protect functional truth, classify findings, and close without looping. Use when a delivery is stuck, ambiguous, or needs a closure decision. Architecture reassembly diagnostics are owned by $meshrix-js-architecture-reassembly; frontend visual direction by $meshrix-js-frontend-visual-direction.
+audience: development
 ---
 
 # Meshrix.js Delivery Closure

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-release-journey-producer
 description: Run the optional Meshrix.js external-service integration journey and bind its existing report bundle to a candidate. Keep Core functional evidence and external compatibility claims separate.
+audience: development
 ---
 
 # Meshrix.js Release Journey Producer
