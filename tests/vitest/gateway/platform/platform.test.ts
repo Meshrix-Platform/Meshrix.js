@@ -63,17 +63,34 @@ describe("platform composition single invoke path", () => {
       expect(new Set(initialRoutes.map((item) => item.logicalRoute)).size).toBe(initialRoutes.length);
       expect(await platform.gateway.invoke({ ...context, grant: { revision: "grant-1", routeRefs: [destructiveRoute!.logicalRoute] } }, { routeRef: destructiveRoute!.logicalRoute, method: "tools/call", params: { arguments: {} } })).toMatchObject({ kind: "failure", code: "approval_required" });
       listed = [safeWriteTool];
-      await list();
+      const updatedList = await list();
       const rebuilt = platform.gateway.catalogStore.snapshot();
-      // No cross-subject residue: the rebuilt catalog holds the baseline outlets plus exactly
-      // the one upstream route still listed, and nothing of the service it no longer admits.
+      // The source catalog may retain an earlier route for another subject, but the
+      // current grant's authorization-partitioned view must omit the removed route.
       const rebuiltUpstreamRoutes = [...rebuilt.routes.values()].filter((item) => item.upstreamIdentity !== "meshrix-platform");
-      expect(rebuiltUpstreamRoutes).toHaveLength(1);
-      expect(rebuiltUpstreamRoutes[0]?.upstreamIdentity).toBe("upstream:service-b");
+      expect(rebuiltUpstreamRoutes).toHaveLength(2);
+      const visibleServices = (updatedList.body as { result: { tools: Array<{ _meta?: { serviceId?: string } }> } }).result.tools.map((item) => item._meta?.serviceId).filter(Boolean);
+      expect(visibleServices).toEqual(["service-b"]);
       expect(rebuilt.descriptors.slice(0, 2).map((item) => item.route.logicalRoute))
         .toEqual(["platform:operation:meshrix.discovery", "platform:operation:meshrix.gateway"]);
     } finally {
       await platform.close();
     }
+  });
+
+  it("[GC-034] a malformed upstream schema cannot evict a healthy neighbor", async () => {
+    const healthy = publicUpstreamMcpTool({ service: { serviceId: "healthy", operations: [{ operationKey: "tools/call", risk: "read_only" }] }, tool: { name: "read", inputSchema: { type: "object" } } });
+    const malformed = { ...healthy, name: "bad", inputSchema: { $ref: "https://external.invalid/schema" }, _meta: { ...healthy._meta, serviceId: "malformed" } };
+    const platform = createPlatformMcpGateway({
+      toolSkillManagementProvider: { authorizeMcpClientRequest: async () => ({ ok: true, grant: { revision: "grant-1", subjectId: "synthetic" } }), listVisibleTools: () => [] },
+      upstreamGatewayRegistry: { listMcpTools: async () => ({ items: [malformed, healthy] }), evaluateDiscoveredMcpToolAudience: () => ({ allowed: true }) }
+    });
+    await platform.gateway.start();
+    try {
+      const page = await platform.adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} } });
+      const tools = (page.body as { result: { tools: Array<{ _meta?: { serviceId?: string } }> } }).result.tools;
+      expect(tools.some((tool) => tool._meta?.serviceId === "healthy")).toBe(true);
+      expect(tools.some((tool) => tool._meta?.serviceId === "malformed")).toBe(false);
+    } finally { await platform.close(); }
   });
 });

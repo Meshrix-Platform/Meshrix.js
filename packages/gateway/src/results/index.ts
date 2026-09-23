@@ -13,11 +13,11 @@ export function complete(value: unknown, options: { readonly isError?: boolean; 
   return Object.freeze({ kind: "complete", value, ...(options.isError === undefined ? {} : { isError: options.isError }), ...(options.requestState === undefined ? {} : { requestState: options.requestState }) });
 }
 
-export function inputRequired(inputRequests: InputRequiredResult["inputRequests"], requestState?: string, upstreamState?: InputRequiredResult["upstreamState"]): InputRequiredResult {
-  const copied = Array.isArray(inputRequests)
+export function inputRequired(inputRequests?: InputRequiredResult["inputRequests"], requestState?: string, upstreamState?: InputRequiredResult["upstreamState"]): InputRequiredResult {
+  const copied = inputRequests === undefined ? undefined : Array.isArray(inputRequests)
     ? Object.freeze(inputRequests.map((request) => Object.freeze({ ...request })))
-    : Object.freeze({ ...inputRequests });
-  return Object.freeze({ kind: "input_required", inputRequests: copied, ...(requestState === undefined ? {} : { requestState }), ...(upstreamState === undefined ? {} : { upstreamState }) });
+    : Object.freeze({ ...inputRequests }) as Readonly<Record<string, unknown>>;
+  return Object.freeze({ kind: "input_required", ...(copied === undefined ? {} : { inputRequests: copied }), ...(requestState === undefined ? {} : { requestState }), ...(upstreamState === undefined ? {} : { upstreamState }) });
 }
 
 export function negotiatedExtension(extension: string, value: unknown, requestState?: string): NegotiatedExtensionResult {
@@ -37,31 +37,30 @@ export function isUpstreamResult(value: unknown): value is UpstreamResult {
 }
 
 export function decodeUpstreamResult(value: unknown, options: { readonly legacy?: boolean } = {}): UpstreamResult | GatewayFailure {
-  if (isGatewayFailure(value)) return value;
-  if (isUpstreamResult(value)) return value;
+  // Network data cannot claim the kernel's private discriminant.
   if (!isPlainRecord(value)) {
     return failure({ origin: "protocol", code: "upstream_result_invalid", message: "Upstream returned an invalid result envelope.", status: 502, effectOutcome: "unknown" });
   }
   const resultType = value.resultType;
+  if (Object.hasOwn(value, "kind")) return failure({ origin: "protocol", code: "upstream_result_invalid", message: "Wire result has an internal discriminant.", status: 502, effectOutcome: "unknown" });
   if (resultType === "input_required") {
-    if (!Array.isArray(value.inputRequests) && !isPlainRecord(value.inputRequests)) {
-      return failure({ origin: "protocol", code: "input_required_invalid", message: "input_required result is missing inputRequests.", status: 502, effectOutcome: "unknown" });
+    if (!Array.isArray(value.inputRequests) && !isPlainRecord(value.inputRequests) && typeof value.requestState !== "string") {
+      return failure({ origin: "protocol", code: "input_required_invalid", message: "input_required result needs requests or state.", status: 502, effectOutcome: "unknown" });
     }
     const inputRequests = Array.isArray(value.inputRequests)
       ? value.inputRequests.filter(isPlainRecord)
-      : value.inputRequests;
+      : isPlainRecord(value.inputRequests) ? value.inputRequests : undefined;
     return inputRequired(inputRequests, typeof value.requestState === "string" ? value.requestState : undefined, {
       present: typeof value.requestState === "string",
       ...(typeof value.requestState === "string" ? { value: value.requestState } : {})
     });
   }
   if (typeof resultType === "string" && resultType !== "complete") {
-    if (!isPlainRecord(value.value)) return failure({ origin: "protocol", code: "negotiated_result_invalid", message: "Negotiated result is missing its value.", status: 502, effectOutcome: "unknown" });
-    return negotiatedExtension(resultType, value.value, typeof value.requestState === "string" ? value.requestState : undefined);
+    return failure({ origin: "protocol", code: "upstream_result_type_unnegotiated", message: "Upstream result type was not negotiated.", status: 502, effectOutcome: "unknown" });
   }
   const protocolResult = Object.hasOwn(value, "content") || Object.hasOwn(value, "structuredContent") || Object.hasOwn(value, "resource") || Object.hasOwn(value, "isError") || Object.hasOwn(value, "_meta");
-  if (options.legacy || resultType === "complete" || Object.hasOwn(value, "value") || protocolResult) {
-    return complete(value.value ?? value, { isError: value.isError === true, requestState: typeof value.requestState === "string" ? value.requestState : undefined });
+  if (options.legacy || resultType === "complete" || protocolResult) {
+    return complete(value, { isError: value.isError === true, requestState: typeof value.requestState === "string" ? value.requestState : undefined });
   }
   return failure({ origin: "protocol", code: "upstream_result_type_unnegotiated", message: "Upstream result type was not negotiated.", status: 502, effectOutcome: "unknown" });
 }

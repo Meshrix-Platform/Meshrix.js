@@ -13,7 +13,8 @@ import {
   stableJson,
   text
 } from "./support.ts";
-import { compileMcpToolJsonSchema } from "./mcp-tool-schema.ts";
+import { createIsolatedSchemaValidator, GatewaySchemaError } from "@meshrix/gateway/schema";
+import { createForwardAbortContext } from "./registry-lifecycle.ts";
 
 function parseJsonText(value: any = "") : any {
   const raw: any = String(value || "").trim();
@@ -80,7 +81,7 @@ function prepareFilterableMcpResult(result: Record<string, any> = {}, operation:
   };
 }
 
-function publicMcpResult(result: Record<string, any> = {}, operation: Record<string, any> = {}) : any {
+export function publicMcpResult(result: Record<string, any> = {}, operation: Record<string, any> = {}) : any {
   const source: any = prepareFilterableMcpResult(result, operation);
   if (!responseFilteringConfigured(operation) && !responseSchemaConfigured(operation.responseSchema)) {
     return {
@@ -115,50 +116,9 @@ function publicMcpResult(result: Record<string, any> = {}, operation: Record<str
   };
 }
 
-function createAbortContext(parentSignal: any = null, timeoutMs: any = 0) : any {
-  if (
-    parentSignal !== null &&
-    parentSignal !== undefined &&
-    (
-      typeof parentSignal.aborted !== "boolean" ||
-      typeof parentSignal.addEventListener !== "function" ||
-      typeof parentSignal.removeEventListener !== "function"
-    )
-  ) {
-    throw new TypeError("Upstream MCP caller signal must be an AbortSignal.");
-  }
-  const controller: any = new AbortController();
-  let callerAborted: any = false;
-  let timedOut: any = false;
-  const abortFromCaller: any = () : any => {
-    if (controller.signal.aborted) return;
-    callerAborted = true;
-    controller.abort();
-  };
-  if (parentSignal?.aborted) {
-    abortFromCaller();
-  } else {
-    parentSignal?.addEventListener("abort", abortFromCaller, { once: true });
-  }
-  const timeout: any = setTimeout(() : any => {
-    if (controller.signal.aborted) return;
-    timedOut = true;
-    controller.abort();
-  }, Math.max(1, Number(timeoutMs || 1)));
-  timeout.unref?.();
-  return {
-    signal: controller.signal,
-    callerAborted: () : any => callerAborted,
-    timedOut: () : any => timedOut,
-    dispose() : any {
-      clearTimeout(timeout);
-      parentSignal?.removeEventListener("abort", abortFromCaller);
-    }
-  };
-}
-
 function safeFailure(error?: any, abortContext: any = null) : any {
-  const internalReasonCode: any = text(error?.reasonCode);
+  const authorityCode: any = text(error?.code);
+  const internalReasonCode: any = text(error?.reasonCode) || (/^upstream_final_effect_[a-z0-9_]+$/u.test(authorityCode) ? authorityCode : "");
   const callerAborted: any = abortContext?.callerAborted?.() === true ||
     internalReasonCode === "upstream_mcp_cancelled";
   const timedOut: any = !callerAborted && (
@@ -168,7 +128,7 @@ function safeFailure(error?: any, abortContext: any = null) : any {
     /timed out/iu.test(String(error?.message || ""))
   );
   return {
-    status: callerAborted ? 499 : timedOut ? 504 : Number(error?.status || 502),
+    status: callerAborted ? 499 : timedOut ? 504 : Number(error?.status || error?.statusCode || 502),
     reasonCode: internalReasonCode || (
       callerAborted
         ? "upstream_mcp_cancelled"
@@ -184,19 +144,20 @@ function safeFailure(error?: any, abortContext: any = null) : any {
   };
 }
 
-export function createMcpForwarder({
+/** Console response policy/audit adapter; protocol execution belongs solely to invokeTypedMcp. */
+export function createMcpExecutionAdapter({
   appendAudit,
-  mcpSessionManager,
-  mcpServiceConfigWithCredentials,
+  invokeTypedMcp,
+  claimMcpProtectedSink,
   persist,
   publicEndpoint,
   recordEndpointOutcome,
   recordMetric
 }: Record<string, any>) : any {
-  if (!mcpSessionManager || typeof mcpSessionManager.callTool !== "function") {
-    throw new TypeError("Upstream MCP forwarder requires a session manager.");
+  if (typeof invokeTypedMcp !== "function" || typeof claimMcpProtectedSink !== "function") {
+    throw new TypeError("Upstream MCP adapter requires the configured typed transport.");
   }
-  return async function forwardMcp(service?: any, operation?: any, input: Record<string, any> = {}, endpoint: any = null, options: Record<string, any> = {}) : Promise<any> {
+  return async function recordMcpExecution(service?: any, operation?: any, input: Record<string, any> = {}, endpoint: any = null, options: Record<string, any> = {}) : Promise<any> {
     const startedAt: any = Date.now();
     const upstreamToolName: any = text(
       input.toolName ||
@@ -218,17 +179,12 @@ export function createMcpForwarder({
         {}
     );
     if (operation.inputSchema !== undefined) {
-      const compiled: any = compileMcpToolJsonSchema(operation.inputSchema, {
-        label: "Upstream MCP tool input schema",
-        requireTopLevelObject: true
-      });
-      const validation: any = compiled.validate(toolArguments);
-      if (validation?.ok !== true) {
-        throw Object.assign(new Error("Upstream MCP tool arguments do not match the advertised input schema."), {
-          status: 400,
-          reasonCode: "upstream_mcp_arguments_invalid"
-        });
-      }
+      const validator = createIsolatedSchemaValidator();
+      try { await validator.compile(operation.inputSchema).assertValid(toolArguments, options.signal); }
+      catch (error) {
+        if (!(error instanceof GatewaySchemaError) || error.code !== "schema_validation_failed") throw error;
+        throw Object.assign(new Error("Upstream MCP tool arguments do not match the advertised input schema."), { status: 400, reasonCode: "upstream_mcp_arguments_invalid" });
+      } finally { await validator.close(); }
     }
     const requestBodyMetadata: any = bodyMetadata(toolArguments, operation.sensitiveBodyFields, {
       byteLength: Buffer.byteLength(stableJson(toolArguments)),
@@ -238,22 +194,15 @@ export function createMcpForwarder({
     const timeoutMs: any = Number.isSafeInteger(requestedTimeoutMs) && requestedTimeoutMs >= 100
       ? Math.min(operation.timeoutMs, requestedTimeoutMs)
       : operation.timeoutMs;
-    const abortContext: any = createAbortContext(options.signal || null, timeoutMs);
+    const abortContext: any = createForwardAbortContext(options.signal || null, timeoutMs);
     try {
-      const response: any = await mcpSessionManager.callTool(
-        await mcpServiceConfigWithCredentials(service, operation, {
-          purpose: "execution",
-          subject: options.subject || null
-        }),
-        {
-          name: upstreamToolName,
-          arguments: toolArguments
-        },
-        {
-          signal: abortContext.signal,
-          onNotification: options.onNotification || null
-        }
-      );
+      await claimMcpProtectedSink(service, operation, input, endpoint, options);
+      const response: any = await invokeTypedMcp(service, operation, {
+        name: upstreamToolName, arguments: toolArguments,
+        ...(input.inputResponses === undefined ? {} : { inputResponses: input.inputResponses }),
+        ...(input.requestState === undefined ? {} : { requestState: input.requestState })
+      }, { ...options, signal: abortContext.signal, requestState: input.requestState ?? options.requestState });
+      if (response.httpFailure) throw Object.assign(new Error("Upstream MCP peer returned HTTP failure."), { status: response.httpFailure.status, reasonCode: "upstream_mcp_call_failed" });
       const responseBytes: any = Buffer.byteLength(stableJson(response.result || {}));
       if (responseBytes > operation.responseMaxBytes) {
         recordMetric({ serviceId: service.serviceId, statusCode: 502, failed: true });

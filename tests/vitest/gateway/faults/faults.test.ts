@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGateway } from "@meshrix/gateway";
-import { context, descriptor, response, route, key } from "../support";
+import { context, descriptor, response, route, key, createTestGateway as createGateway } from "../support";
 
 describe("gateway fault and uncertain-outcome boundaries", () => {
   it("[CASE-L04] marks a stateful context lost on a fatal upstream 404", async () => {

@@ -6,6 +6,7 @@ import * as replayEffect from './replay-effect.mjs';
 import * as routeChange from './route-change.mjs';
 import * as authBypass from './auth-bypass.mjs';
 import * as wrongUriRewrite from './wrong-uri-rewrite.mjs';
+import { COUNTEREXAMPLES } from './new-counterexamples.mjs';
 
 export const MUTANTS = Object.freeze([
   dropBusinessField,
@@ -15,5 +16,6 @@ export const MUTANTS = Object.freeze([
   replayEffect,
   routeChange,
   authBypass,
-  wrongUriRewrite
+  wrongUriRewrite,
+  ...COUNTEREXAMPLES
 ]);

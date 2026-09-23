@@ -7,14 +7,16 @@ describe("modern MCP upstream adapter", () => {
     const calls: Array<{ request: Readonly<Record<string, unknown>>; headers: Readonly<Record<string, string>> }> = [];
     const adapter = createModernUpstreamAdapter({
       transport: {
-        async send(input) { calls.push(input); return response({ resultType: "complete", value: { ok: true } }); }
+         async send(input) { calls.push(input); return response(input.request.method === "server/discover" ? { jsonrpc: "2.0", id: input.request.id, result: { resultType: "complete", supportedVersions: ["2026-07-28"] } } : { resultType: "complete", value: { ok: true } }); }
       }
     });
     await adapter.invoke({ request: { id: 1, method: "tools/call", params: { name: "demo", arguments: { traceId: "business" } }, protocolVersion: "2026-07-28", requestState: "opaque-upstream-state", headers: {} }, route: route({ upstreamName: "server-tool" }) });
-    expect(calls).toHaveLength(1);
-    expect(calls[0].request).toMatchObject({ method: "tools/call", params: { name: "demo", requestState: "opaque-upstream-state" } });
-    expect(calls[0].headers).toMatchObject({ "Mcp-Method": "tools/call", "Mcp-Protocol-Version": "2026-07-28", "Mcp-Name": "server-tool" });
-    expect(calls[0].request.method).not.toBe("initialize");
+    expect(calls).toHaveLength(2);
+    expect(calls[0].request.method).toBe("server/discover");
+    expect(calls[0].request.params).toMatchObject({ _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { name: "meshrix-gateway" } } });
+    expect(calls[1].request).toMatchObject({ method: "tools/call", params: { name: "demo", requestState: "opaque-upstream-state" } });
+    expect(calls[1].headers).toMatchObject({ "Mcp-Method": "tools/call", "Mcp-Protocol-Version": "2026-07-28", "Mcp-Name": "server-tool" });
+    expect(calls.every((call) => call.request.method !== "initialize")).toBe(true);
   });
 
   it("rejects initialize at the modern boundary", () => {

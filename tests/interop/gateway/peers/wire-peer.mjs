@@ -1,5 +1,6 @@
 import { createServer as createHttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { validateUpstreamMeta } from '../oracles/raw-wire.mjs';
 import {
   FIXTURE_AUTH_ALLOW,
   FIXTURE_PEER_VERSION,
@@ -55,7 +56,7 @@ function headerValue(request, key) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export async function startWirePeer() {
+export async function startWirePeer({ protocolVersion = TARGET_PROTOCOL_VERSION } = {}) {
   const sessions = new Set();
   const observer = new FixtureObserver();
   const fixture = createFixtureState({ peerName: 'wire-peer', observer });
@@ -94,21 +95,42 @@ export async function startWirePeer() {
     }
 
     if (message.method === 'initialize') {
+      if (protocolVersion === TARGET_PROTOCOL_VERSION) {
+        writeJson(response, 400, rpcError(message.id, -32601, 'modern_initialize_not_supported'));
+        return;
+      }
+      if (message.params?.protocolVersion !== protocolVersion) {
+        writeJson(response, 200, rpcError(message.id, -32602, 'protocol_version_not_supported'));
+        return;
+      }
       const sessionId = randomUUID();
       sessions.add(sessionId);
       writeJson(response, 200, rpcResult(message.id, {
-        protocolVersion: TARGET_PROTOCOL_VERSION,
+        protocolVersion,
         capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'neutral-wire-peer', version: FIXTURE_PEER_VERSION },
         instructions: 'neutral fixture only'
-      }), { 'mcp-session-id': sessionId, 'mcp-protocol-version': TARGET_PROTOCOL_VERSION });
+      }), { 'mcp-session-id': sessionId, 'mcp-protocol-version': protocolVersion });
       observer.record('initialize', { protocolVersion: message.params?.protocolVersion });
       return;
     }
 
-    const sessionId = headerValue(request, 'mcp-session-id');
-    if (typeof sessionId !== 'string' || !sessions.has(sessionId)) {
-      writeJson(response, 404, rpcError(message.id ?? null, -32001, 'unknown_session'));
+    if (protocolVersion !== TARGET_PROTOCOL_VERSION) {
+      const sessionId = headerValue(request, 'mcp-session-id');
+      if (typeof sessionId !== 'string' || !sessions.has(sessionId)) {
+        writeJson(response, 404, rpcError(message.id ?? null, -32001, 'unknown_session'));
+        return;
+      }
+    } else if (headerValue(request, 'mcp-session-id')) {
+      writeJson(response, 400, rpcError(message.id ?? null, -32602, 'modern_session_not_supported'));
+      return;
+    }
+    if (headerValue(request, 'mcp-protocol-version') !== protocolVersion) {
+      writeJson(response, 400, rpcError(message.id ?? null, -32602, 'protocol_header_mismatch'));
+      return;
+    }
+    if (message.method === 'notifications/initialized' && protocolVersion === TARGET_PROTOCOL_VERSION) {
+      writeJson(response, 400, rpcError(null, -32601, 'modern_initialized_not_supported'));
       return;
     }
     if (message.method === 'notifications/initialized' || message.id === undefined) {
@@ -117,9 +139,20 @@ export async function startWirePeer() {
       return;
     }
 
+    if (protocolVersion === TARGET_PROTOCOL_VERSION && message.method !== 'ping' && !validateUpstreamMeta(message.params, request.headers).ok) {
+      observer.record('invalid_meta', { method: message.method });
+      writeJson(response, 400, rpcError(message.id, -32602, 'upstream_meta_missing_or_misplaced'));
+      return;
+    }
+
     try {
       let result;
-      if (message.method === 'ping') {
+      if (message.method === 'server/discover' && protocolVersion === TARGET_PROTOCOL_VERSION) {
+        observer.record('discover');
+        result = { resultType: 'complete', supportedVersions: [TARGET_PROTOCOL_VERSION],
+          capabilities: { tools: {}, resources: {}, prompts: {} },
+          _meta: { 'io.modelcontextprotocol/serverInfo': { name: 'neutral-wire-peer', version: FIXTURE_PEER_VERSION } } };
+      } else if (message.method === 'ping') {
         result = {};
       } else if (message.method === 'tools/list') {
         // Benign-but-slow path, identical to the in-process wire peer and to the
@@ -127,22 +160,26 @@ export async function startWirePeer() {
         if (message.params?.slowGoodPath === true) {
           await new Promise(resolve => setTimeout(resolve, SLOW_PATH_DELAY_MS));
         }
-        result = { tools: fixture.getTools() };
+        result = { resultType: 'complete', tools: fixture.getTools() };
       } else if (message.method === 'resources/list') {
-        result = { resources: fixture.getResources() };
+        result = { resultType: 'complete', resources: fixture.getResources() };
       } else if (message.method === 'prompts/list') {
-        result = { prompts: fixture.getPrompts() };
+        result = { resultType: 'complete', prompts: fixture.getPrompts() };
       } else if (['tools/call', 'resources/read', 'prompts/get'].includes(message.method)) {
         result = fixture.handle(message.method, message.params, {
           authorized: headerValue(request, 'authorization') === FIXTURE_AUTH_ALLOW,
           principal: headerValue(request, 'x-fixture-principal') ?? 'fixture-principal'
         });
+        if (result.resultType === 'denied') {
+          writeJson(response, 200, rpcError(message.id, -32003, 'authorization_required'));
+          return;
+        }
       } else {
         writeJson(response, 200, rpcError(message.id, -32601, 'method_not_found'));
         return;
       }
       writeJson(response, 200, rpcResult(message.id, result), {
-        'mcp-protocol-version': TARGET_PROTOCOL_VERSION
+        'mcp-protocol-version': protocolVersion
       });
     } catch (error) {
       observer.record('request_error', { kind: error instanceof Error ? error.name : 'unknown' });
@@ -169,7 +206,7 @@ export async function startWirePeer() {
 
   return {
     kind: 'wire',
-    protocolVersion: TARGET_PROTOCOL_VERSION,
+    protocolVersion,
     endpoint: `http://127.0.0.1:${port}/mcp`,
     server: httpServer,
     observer,

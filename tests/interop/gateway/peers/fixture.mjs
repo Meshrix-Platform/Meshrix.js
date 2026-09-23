@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { randomBytes } from 'node:crypto';
 
 export const FIXTURE_SEED = 'gateway-interop-neutral-seed-20260917';
 export const FIXTURE_PEER_VERSION = '1.0.0';
@@ -9,6 +10,7 @@ export const FIXTURE_AUTH_DENY = 'Bearer interop-fixture-deny';
 export const EXPECTED_ROUTE = 'route.demo';
 export const EXPECTED_RESOURCE_URI = 'fixture://artifact/order-demo';
 export const EXPECTED_OPERATION_KEY = 'effect-key-1';
+const TOOL_STATE = 'b3BhcXVlLWZpeHR1cmUtc3RhdGUtMQ'; // canonical unpadded base64url
 
 export const BUSINESS_PAYLOAD = Object.freeze({
   traceId: 'business-trace',
@@ -86,6 +88,7 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
   const name = peerName ?? 'neutral-peer';
   let closed = false;
   const acceptedOperationKeys = new Set();
+  const challenges = new Map();
 
   function resultMeta(status = 'ready') {
     return {
@@ -95,6 +98,8 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
   }
 
   function inputRequired(state, requestKind) {
+    if (!challenges.has(state)) challenges.set(state, randomBytes(16).toString('hex'));
+    const nonce = challenges.get(state);
     const prompt = requestKind === 'tool'
       ? 'Choose an artifact label'
       : requestKind === 'resource'
@@ -108,11 +113,11 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
           method: 'elicitation/create',
           params: {
             mode: 'form',
-            message: prompt,
+            message: `${prompt}: ${nonce}`,
             requestedSchema: {
               type: 'object',
-              properties: { label: { type: 'string' } },
-              required: ['label']
+              properties: { label: { type: 'string' }, nonce: { type: 'string' } },
+              required: ['label', 'nonce']
             }
           }
         }
@@ -120,9 +125,10 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
     };
   }
 
-  function hasAcceptedInput(params) {
+  function hasAcceptedInput(params, state) {
     const response = params?.inputResponses?.['confirm-name'];
-    return response?.action === 'accept' && typeof response.content?.label === 'string';
+    return response?.action === 'accept' && typeof response.content?.label === 'string'
+      && response.content.nonce === challenges.get(state);
   }
 
   function authorized(context) {
@@ -133,7 +139,10 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
     observer.recordUpstreamRequest({
       peer: name,
       method,
+      name: params?.name,
+      uri: params?.uri,
       route: params?.arguments?.route ?? EXPECTED_ROUTE,
+      operationKey: params?.arguments?.operationKey,
       requestState: params?.requestState,
       inputResponses: params?.inputResponses,
       principal: context?.principal ?? 'fixture-principal'
@@ -143,10 +152,10 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
   function handleTool(params = {}, context = {}) {
     const args = params.arguments ?? {};
     if (!params.requestState && !params.inputResponses) {
-      return inputRequired('opaque-fixture-state-1', 'tool');
+      return inputRequired(TOOL_STATE, 'tool');
     }
 
-    if (params.requestState !== 'opaque-fixture-state-1') {
+    if (params.requestState !== TOOL_STATE) {
       return {
         resultType: 'denied',
         denialCode: 'invalid_request_state',
@@ -164,8 +173,8 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
       };
     }
 
-    if (!hasAcceptedInput(params)) {
-      return inputRequired('opaque-fixture-state-1', 'tool');
+    if (!hasAcceptedInput(params, TOOL_STATE)) {
+      return inputRequired(TOOL_STATE, 'tool');
     }
 
     const operationKey = args.operationKey ?? EXPECTED_OPERATION_KEY;
@@ -228,7 +237,7 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
       observer.recordUnauthorizedAttempt({ method });
       return { resultType: 'denied', denialCode: 'authorization_required', _meta: resultMeta('denied') };
     }
-    if (!hasAcceptedInput(params)) {
+    if (!hasAcceptedInput(params, state)) {
       return inputRequired(state, method === 'resources/read' ? 'resource' : 'prompt');
     }
     if (method === 'resources/read') {
@@ -268,6 +277,7 @@ export function createFixtureState({ peerName, observer = new FixtureObserver() 
         name: EXPECTED_ROUTE,
         description: 'Neutral artifact preparation tool',
         inputSchema: TOOL_INPUT_SCHEMA,
+        outputSchema: { type: 'object', properties: { artifact: { type: 'string' } }, required: ['artifact'] },
         _meta: { 'com.example/tool': 'neutral' }
       }];
     },

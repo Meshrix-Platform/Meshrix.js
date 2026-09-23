@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGateway } from "@meshrix/gateway";
-import { context, descriptor, QueueUpstream, response, route } from "../support";
+import { context, descriptor, QueueUpstream, response, route, createTestGateway as createGateway } from "../support";
 
 /**
  * The kernel escalates an approval-required route to the platform's pending-approval runtime

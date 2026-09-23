@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   createGateway,
   type GatewayKernel,
@@ -36,6 +38,8 @@ export interface PlatformGatewayCompositionOptions extends GatewayOptions {
 export function createPlatformGateway(options: PlatformGatewayCompositionOptions = {}): GatewayKernel {
   return createGateway({
     ...options,
+    policy: options.policy ?? createGatewayPolicy(),
+    permits: options.permits ?? createGatewayPermitAuthority(),
     // `tagPolicy` and its peers carry platform policy, not operation input; the operation
     // permission core strips them before validating, so the kernel must not assert them
     // against the route's closed operation schema.
@@ -300,7 +304,7 @@ function upstreamToolDescriptor(tool: Record<string, any>, catalogRevision: stri
   const revision = `upstream:${catalogRevision}:${serviceId || "unknown"}:${name}`;
   const routeRef = `upstream:tool:${serviceId || "unknown"}:${name}`;
   const gatewayPolicy = isRecord(meta["io.meshrix/gateway-policy"]) ? meta["io.meshrix/gateway-policy"] : {};
-  const effectClass = effectClassForRisk(gatewayPolicy.effectClass);
+  const effectClass = effectClassForRisk(meta.upstreamConfiguredOperation === true ? meta.risk : gatewayPolicy.effectClass);
   return Object.freeze({
     kind: "tool",
     publicName: name,
@@ -384,7 +388,6 @@ function gatewayGrant({ authorization, routeRefs }: { readonly authorization: Re
     revision,
     tenant: text(authorization.tenantId || grant.tenantId || grant.tenant || subject.tenantId || "local"),
     principal: text(apiKey?.workloadPrincipalId || grant.subjectId || grant.id || subject.subjectId),
-    routes: Object.freeze([]),
     routeRefs: Object.freeze([...routeRefs]),
     methods: Object.freeze(["tools/call", "resources/read", "prompts/get", "completion/complete"]),
     ...(apiKey ? {
@@ -392,7 +395,6 @@ function gatewayGrant({ authorization, routeRefs }: { readonly authorization: Re
       toolsets: Object.freeze([...(policy.toolsetIds || [])]),
       dynamicCapabilities: Object.freeze([...(policy.capabilityIds || [])]),
       maxRisk: text(policy.maximumRisk),
-      ...(policy.maximumRisk === "destructive" ? { approved: true } : {})
     } : {})
   });
 }
@@ -500,6 +502,7 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
   const upstreamRegistry = options.upstreamGatewayRegistry || null;
   const logger = options.runtimeLogger || null;
   let publishedDescriptorSignature = "";
+  const knownDescriptors = new Map<string, CatalogDescriptor>();
 
   const upstream: UpstreamPort = Object.freeze({
     async invoke({ context, request, route, signal }: any): Promise<UpstreamResponse> {
@@ -544,19 +547,23 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         return response(resultEnvelope(result, projectedOperationValue(metadata, publicPayload)));
       }
       if (metadata.kind === "upstream-tool") {
-        if (!upstreamRegistry || typeof upstreamRegistry.callMcpToolByPublicName !== "function") {
+        if (!upstreamRegistry || typeof upstreamRegistry.executePublishedMcpRoute !== "function") {
           throw Object.assign(new Error("Upstream gateway registry is unavailable."), { code: "upstream_gateway_unavailable", status: 503 });
         }
-        const forwarded = await upstreamRegistry.callMcpToolByPublicName(
+        const forwarded = await upstreamRegistry.executePublishedMcpRoute(
           text(metadata.publicName),
           {
             arguments: requestArguments(request.params),
-            ...(request.requestState === undefined ? {} : { requestState: request.requestState })
+            ...(isRecord(request.params) && isRecord(request.params.inputResponses) ? { inputResponses: request.params.inputResponses } : {})
           },
-          authorizationSubject(authorization),
-          { signal }
+          { ...authorizationSubject(authorization), ...(isRecord(context.metadata?.verifiedApprovedPendingOperation) ? { approvedPendingOperation: context.metadata.verifiedApprovedPendingOperation } : {}) },
+          { signal, ...(request.requestState === undefined ? {} : { requestState: request.requestState }) }
         );
-        return response(resultEnvelope(forwarded, forwarded?.response ?? forwarded?.payload ?? null));
+        if (isRecord(forwarded) && typeof forwarded.status === "number" && Object.hasOwn(forwarded, "body")) return forwarded as UpstreamResponse;
+        const projected = forwarded?.response ?? forwarded?.resource ?? forwarded?.payload ?? null;
+        return response(isRecord(projected) && typeof projected.resultType === "string"
+          ? projected
+          : { resultType: "complete", structuredContent: projected, ...(forwarded?.ok === true ? {} : { isError: true }) });
       }
       throw Object.assign(new Error("Gateway route sink is not configured."), { code: "gateway_route_sink_unavailable", status: 503 });
     }
@@ -620,6 +627,13 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
     permits: createGatewayPermitAuthority(),
     approval,
     continuationKey: randomBytes(32),
+    currentAuthority: {
+      async read({ context }: { readonly context: AuthenticatedContext }): Promise<AuthenticatedContext> {
+        const original = context.metadata?.requestContext;
+        if (!isRecord(original)) throw Object.assign(new Error("The original request is required for current authority."), { code: "authority_request_missing", status: 403 });
+        return authenticate(original as ModernDownstreamRequest);
+      }
+    },
     upstream
   });
 
@@ -657,16 +671,25 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
                 tool,
                 purpose: "discovery"
               })
-            : upstreamRegistry.evaluateProjectedOperationAudience?.({
+            : meta.upstreamConfiguredOperation === true ? upstreamRegistry.evaluateProjectedOperationAudience?.({
                 grant: authorization.grant || null,
                 restriction: authorization.restriction || null,
                 subject: authorization.subject || authorizationSubject(authorization),
-                tool: { ...tool, upstreamProjectedOperation: true },
+                tool: { ...tool, upstreamProjectedOperation: true, serviceId: meta.serviceId, operationId: meta.operationKey, id: tool.name,
+                  requiredScopes: meta.requiredScopes, toolsets: meta.toolsets, risk: meta.risk, dynamicCapability: meta.dynamicCapability },
                 purpose: "discovery"
-              });
+              }) : { allowed: false };
           if (audience && audience.allowed !== true) continue;
           const descriptor = upstreamToolDescriptor(tool, catalogRevision);
-          if (descriptor) visible.push(descriptor);
+          if (descriptor) {
+            try {
+              if (descriptor.inputSchema !== undefined) await gateway.catalogStore.preflightSchema(descriptor.inputSchema, signal);
+              if (descriptor.outputSchema !== undefined) await gateway.catalogStore.preflightSchema(descriptor.outputSchema, signal);
+              visible.push(descriptor);
+            } catch {
+              logger?.warn?.("gateway.catalog.upstream_schema_invalid", { code: "upstream_schema_invalid" });
+            }
+          }
         }
       } catch {
         logger?.warn?.("gateway.catalog.upstream_unavailable", { code: "upstream_catalog_unavailable" });
@@ -676,7 +699,9 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
     for (const descriptor of visible) {
       unique.set(descriptor.route.logicalRoute, descriptor);
     }
-    const publishedDescriptors = [...unique.values()];
+    for (const [routeRef, descriptor] of unique) knownDescriptors.set(routeRef, descriptor);
+    if (knownDescriptors.size > 10_000) throw Object.assign(new Error("Gateway catalog source capacity is exhausted."), { code: "gateway_catalog_capacity", status: 503 });
+    const publishedDescriptors = [...knownDescriptors.values()].sort((left, right) => left.route.logicalRoute.localeCompare(right.route.logicalRoute));
     const descriptorSignature = JSON.stringify(publishedDescriptors);
     if (descriptorSignature !== publishedDescriptorSignature) {
       gateway.publishCatalog(publishedDescriptors);
@@ -717,15 +742,45 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         authorization.decisionId ||
         "gateway-auth"
     );
+    const grant = gatewayGrant({ authorization, routeRefs });
+    let approval: Record<string, unknown> | undefined;
+    let verifiedApprovedPendingOperation: Record<string, unknown> | undefined;
+    const rpc = isRecord(request.body) ? request.body : {};
+    if (rpc.method === "tools/call" && typeof toolProvider.verifyCurrentApprovedMcpOperation === "function") {
+      const params = isRecord(rpc.params) ? rpc.params : {};
+      const named = text(params.name);
+      const descriptor = visibleDescriptors.find((item) => item.kind === "tool" && item.publicName === named);
+      if (descriptor && descriptor.route.effectClass === "destructive") {
+        const metadata = isRecord(descriptor.route.metadata) ? descriptor.route.metadata : {};
+        const invocationParams = { ...params, name: descriptor.upstreamName ?? named };
+        const evidence = await toolProvider.verifyCurrentApprovedMcpOperation({
+          request: requestWithTransport.rawRequest || null, authorization, toolId: text(metadata.toolId),
+          operationInput: upstreamOperationInput(metadata, invocationParams)
+        });
+        if (evidence?.status === "approved" && typeof evidence.ref === "string" && typeof evidence.revision === "string" &&
+            Number.isFinite(evidence.expiresAt) && evidence.expiresAt > Date.now() && isRecord(evidence.approvedPendingOperation)) {
+          const routeRef = descriptor.route.logicalRoute;
+          approval = Object.freeze({ status: "approved", ref: evidence.ref, revision: evidence.revision,
+            tenant, principal, target: descriptor.route.endpointIdentity, routeRef, routeRevision: descriptor.route.revision,
+            grantRevision: String(grant.revision ?? authGeneration), method: "tools/call",
+            inputDigest: createHash("sha256").update(canonicalJson({ method: "tools/call", routeRef, params: invocationParams })).digest("hex"),
+            expiresAt: evidence.expiresAt });
+          verifiedApprovedPendingOperation = evidence.approvedPendingOperation;
+        }
+      }
+    }
     return Object.freeze({
       tenant,
       principal,
-      grant: gatewayGrant({ authorization, routeRefs }),
+      grant,
       authGeneration,
       metadata: Object.freeze({
         authorization,
         subject,
-        request: requestWithTransport.rawRequest || null
+        request: requestWithTransport.rawRequest || null,
+        requestContext: requestWithTransport,
+        ...(approval ? { approval } : {}),
+        ...(verifiedApprovedPendingOperation ? { verifiedApprovedPendingOperation } : {})
       })
     });
   }

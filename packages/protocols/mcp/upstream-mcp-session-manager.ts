@@ -697,6 +697,21 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
       });
     },
 
+    async invokeGateway(config: Record<string, any> = {}, invocation: Record<string, any> = {}, requestOptions: Record<string, any> = {}) : Promise<any> {
+      const method: any = text(invocation.method);
+      if (!method || !["tools/call", "resources/read", "prompts/get", "completion/complete"].includes(method)) {
+        throw Object.assign(new Error("Upstream MCP method is not published for gateway execution."), { code: "upstream_mcp_method_denied", status: 403 });
+      }
+      return execute(config, requestOptions.signal, async (session?: any) : Promise<any> => ({
+        protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
+        initialized: session.initialized,
+        result: await session.request(method, asObject(invocation.params), {
+          signal: requestOptions.signal,
+          onNotification: requestOptions.onNotification
+        })
+      }));
+    },
+
     snapshot() : any {
       const at: any = now();
       return {

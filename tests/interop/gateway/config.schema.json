@@ -4,11 +4,12 @@
   "title": "Meshrix gateway interop runner configuration",
   "type": "object",
   "additionalProperties": false,
+  "required": ["candidateKind"],
   "properties": {
     "endpoint": {
       "type": "string",
       "format": "uri",
-      "pattern": "^https?://"
+      "pattern": "^http://(127\\.0\\.0\\.1|localhost|\\[::1\\]):[0-9]+/mcp$"
     },
     "command": {
       "type": "string",
@@ -22,11 +23,6 @@
       "type": "string",
       "minLength": 1
     },
-    "healthEndpoint": {
-      "type": "string",
-      "format": "uri",
-      "pattern": "^https?://"
-    },
     "startupTimeoutMs": {
       "type": "integer",
       "minimum": 100,
@@ -37,13 +33,27 @@
       "minimum": 100,
       "maximum": 120000
     },
-    "candidateCommit": {
+    "candidateKind": {
+      "enum": ["standalone-packed-http", "platform-default-http", "legacy-packed-http", "reference-fixture"]
+    },
+    "manifest": {
       "type": "string",
       "minLength": 1
     },
-    "artifactDigest": {
-      "type": "string",
-      "pattern": "^(sha256:)?[a-f0-9]{64}$"
+    "authorization": {
+      "type": "string"
+    },
+    "protocolVersion": {
+      "enum": ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"]
+    },
+    "publicMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toolName": { "type": "string", "minLength": 1 },
+        "resourceUri": { "type": "string", "minLength": 1 },
+        "promptName": { "type": "string", "minLength": 1 }
+      }
     }
   },
   "oneOf": [

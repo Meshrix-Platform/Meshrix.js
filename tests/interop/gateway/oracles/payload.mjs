@@ -23,7 +23,7 @@ const EXPECTED_META = {
 
 export const EXPECTED_RESOURCE_URI = 'fixture://artifact/order-demo';
 
-export function compareBusinessPayload(result) {
+export function compareBusinessPayload(result, { resourceUri = EXPECTED_RESOURCE_URI } = {}) {
   if (!result || typeof result !== 'object') return reject('business_payload_missing');
   const actual = result.structuredContent;
   if (!actual || typeof actual !== 'object') return reject('business_field_missing');
@@ -47,7 +47,7 @@ export function compareBusinessPayload(result) {
   const contents = Array.isArray(result.content) ? result.content : [];
   const resource = contents.find(block => block?.type === 'resource');
   const resourceLink = contents.find(block => block?.type === 'resource_link');
-  if (resource?.resource?.uri !== EXPECTED_RESOURCE_URI || resourceLink?.uri !== EXPECTED_RESOURCE_URI) {
+  if (resource?.resource?.uri !== resourceUri || resourceLink?.uri !== resourceUri) {
     return reject('resource_uri_rewritten');
   }
   const image = contents.find(block => block?.type === 'image');
@@ -60,10 +60,10 @@ export function compareBusinessPayload(result) {
   return accept();
 }
 
-export function compareResourcePayload(result) {
+export function compareResourcePayload(result, { resourceUri = EXPECTED_RESOURCE_URI } = {}) {
   const content = result?.contents?.[0];
   if (!content) return reject('resource_payload_missing');
-  if (content.uri !== EXPECTED_RESOURCE_URI) return reject('resource_uri_rewritten');
+  if (content.uri !== resourceUri) return reject('resource_uri_rewritten');
   if (content.text !== 'artifact body' || content.mimeType !== 'text/plain') return reject('resource_payload_changed');
   return accept();
 }

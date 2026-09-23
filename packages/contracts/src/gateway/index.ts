@@ -52,7 +52,8 @@ export interface Invocation {
   readonly signal?: AbortSignal;
   readonly contextHandle?: string;
   readonly requestState?: string;
-  readonly inputResponses?: readonly Record<string, unknown>[];
+  /** MRTR responses keyed by the input-request name, not an ordered list. */
+  readonly inputResponses?: Readonly<Record<string, unknown>>;
   readonly operationKey?: string;
 }
 
@@ -97,6 +98,7 @@ export interface ExecutionPermit {
   readonly principal: string;
   readonly inputDigest: string;
   readonly routeRevision: string;
+  readonly routeRef?: string;
   readonly grantRevision: string;
   readonly policyRevision: string;
   readonly operationKey?: string;
@@ -105,6 +107,10 @@ export interface ExecutionPermit {
 }
 
 export interface ContinuationPayload {
+  /** Random authenticated identity; token spelling must never be its replay identity. */
+  readonly tokenId?: string;
+  /** In-memory replay profiles bind one-time tokens to the issuing process epoch. */
+  readonly issuerEpoch?: string;
   readonly generation: number;
   readonly tenant: string;
   readonly principal: string;
@@ -115,6 +121,7 @@ export interface ContinuationPayload {
   readonly method: string;
   readonly params: unknown;
   readonly paramsDigest: string;
+  readonly contextHandle?: string;
   readonly upstreamState: { readonly present: boolean; readonly value?: string };
   readonly effectClass: EffectClass;
   readonly oneTime: boolean;
@@ -125,6 +132,9 @@ export interface ContinuationPayload {
 export interface ContinuationCodec {
   seal(payload: ContinuationPayload): string;
   open(state: string, now?: number): ContinuationPayload;
+  claim?(state: string, payload: ContinuationPayload): void | Promise<void>;
+  settle?(state: string, outcome: "consumed" | "outcome_unknown"): void | Promise<void>;
+  release?(state: string): void | Promise<void>;
 }
 
 export interface CompleteResult {
@@ -142,7 +152,7 @@ export interface CompleteResult {
 
 export interface InputRequiredResult {
   readonly kind: "input_required";
-  readonly inputRequests: readonly Record<string, unknown>[] | Readonly<Record<string, unknown>>;
+  readonly inputRequests?: readonly Record<string, unknown>[] | Readonly<Record<string, unknown>>;
   readonly requestState?: string;
   readonly upstreamState?: { readonly present: boolean; readonly value?: string };
 }
@@ -200,6 +210,11 @@ export interface GatewayPolicyPort {
   }): PolicyDecision | Promise<PolicyDecision>;
 }
 
+/** Fresh authoritative facts, resolved after admission and again before a protected access. */
+export interface CurrentAuthorityPort {
+  read(input: { readonly context: AuthenticatedContext; readonly route: RouteSnapshot }): Promise<AuthenticatedContext>;
+}
+
 /**
  * The platform's approval/pending-operation mechanism, reached through the kernel.
  *
@@ -243,6 +258,8 @@ export interface PermitAuthorityPort {
     readonly prepared: PreparedInvocation;
   }): ExecutionPermit | Promise<ExecutionPermit>;
   markOutcomeUnknown?(permit: ExecutionPermit): ExecutionPermit | Promise<ExecutionPermit>;
+  lookup?(input: { readonly receiptId: string; readonly context: AuthenticatedContext }): ExecutionPermit | undefined | Promise<ExecutionPermit | undefined>;
+  stats?(): Readonly<Record<string, unknown>>;
 }
 
 export interface CredentialProvider {
@@ -336,6 +353,8 @@ export interface ResourcePort {
     readonly context: AuthenticatedContext;
     readonly route: RouteSnapshot;
     readonly uri: string;
+    readonly requestState?: string;
+    readonly inputResponses?: Readonly<Record<string, unknown>>;
     readonly signal?: AbortSignal;
   }): Promise<unknown>;
 }
@@ -346,6 +365,8 @@ export interface PromptPort {
     readonly route: RouteSnapshot;
     readonly name: string;
     readonly arguments?: Readonly<Record<string, unknown>>;
+    readonly requestState?: string;
+    readonly inputResponses?: Readonly<Record<string, unknown>>;
     readonly signal?: AbortSignal;
   }): Promise<unknown>;
   complete?(input: {
@@ -368,18 +389,24 @@ export interface GatewayStats {
   readonly activeInvocations: number;
   readonly catalogRevision: string;
   readonly admission: Readonly<Record<string, unknown>>;
+  readonly controllers?: number;
+  readonly contexts?: Readonly<{ readonly activeContexts: number; readonly retainedTombstones: number }>;
+  readonly catalogRetention?: Readonly<{ readonly routes: number; readonly schemaWorkers: Readonly<{ readonly workers: number; readonly active: number; readonly queued: number; readonly deadlineTimers: number }> }>;
+  readonly subscriptions?: Readonly<{ readonly streams: number; readonly queuedEvents: number; readonly waitingReaders: number }>;
+  readonly permits?: Readonly<Record<string, unknown>>;
 }
 
 export interface Gateway {
   start(): Promise<void>;
   close(options?: { readonly drainDeadline?: number }): Promise<void>;
   invoke(context: AuthenticatedContext, invocation: Invocation): Promise<GatewayOutcome>;
-  continue(context: AuthenticatedContext, requestState: string, inputResponses?: readonly Record<string, unknown>[]): Promise<GatewayOutcome>;
+  continue(context: AuthenticatedContext, requestState: string, inputResponses?: Readonly<Record<string, unknown>>, signal?: AbortSignal): Promise<GatewayOutcome>;
+  receiptStatus?(context: AuthenticatedContext, receiptId: string): Promise<GatewayFailure | { readonly receiptId: string; readonly state: ExecutionPermit["state"]; readonly expiresAt: number }>;
   catalog(context: AuthenticatedContext, query?: CatalogQuery): CatalogPage;
   subscribe(context: AuthenticatedContext, kinds?: readonly SubscriptionEvent["type"][]): Subscription;
   stats(): GatewayStats;
   publishCatalog?(descriptors: readonly CatalogDescriptor[]): string;
-  readResource?(context: AuthenticatedContext, uri: string, signal?: AbortSignal): Promise<GatewayOutcome>;
-  getPrompt?(context: AuthenticatedContext, name: string, args?: Readonly<Record<string, unknown>>, signal?: AbortSignal): Promise<GatewayOutcome>;
+  readResource?(context: AuthenticatedContext, uri: string, signal?: AbortSignal, requestState?: string, inputResponses?: Readonly<Record<string, unknown>>): Promise<GatewayOutcome>;
+  getPrompt?(context: AuthenticatedContext, name: string, args?: Readonly<Record<string, unknown>>, signal?: AbortSignal, requestState?: string, inputResponses?: Readonly<Record<string, unknown>>): Promise<GatewayOutcome>;
   completePrompt?(context: AuthenticatedContext, argument: Readonly<Record<string, unknown>>, signal?: AbortSignal): Promise<GatewayOutcome>;
 }

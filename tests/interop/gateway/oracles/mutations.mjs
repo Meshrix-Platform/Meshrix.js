@@ -1,28 +1,19 @@
 import { compareBusinessPayload } from './payload.mjs';
-import { checkCandidateMrtrLifecycle, checkToolLifecycle } from './lifecycle.mjs';
-import { checkCandidateAuthority, checkContextIsolation, checkSecurityObservation } from './security.mjs';
+import { checkToolLifecycle } from './lifecycle.mjs';
+import { checkSecurityObservation } from './security.mjs';
+import { checkStrictObservation } from './strict.mjs';
 
-export const OBSERVATION_PROFILES = Object.freeze(['upstream-observable', 'public-entry']);
-
-function checkSetFor(observation, profile) {
-  const resolved = profile ?? observation?.profile ?? 'upstream-observable';
-  if (resolved === 'public-entry') {
-    return [
-      compareBusinessPayload(observation?.tool?.continued),
-      checkCandidateMrtrLifecycle(observation),
-      checkCandidateAuthority(observation),
-      checkContextIsolation(observation)
-    ];
-  }
+function checkSetFor(observation) {
   return [
-    compareBusinessPayload(observation?.tool?.continued),
+    compareBusinessPayload(observation?.tool?.continued, { resourceUri: observation?.publicMapping?.resourceUri }),
     checkToolLifecycle(observation),
-    checkSecurityObservation(observation)
+    checkSecurityObservation(observation),
+    checkStrictObservation(observation)
   ];
 }
 
-export function evaluateObservation(observation, profile) {
-  const failed = checkSetFor(observation, profile).find(check => !check.ok);
+export function evaluateObservation(observation) {
+  const failed = checkSetFor(observation).find(check => !check.ok);
   return failed ?? { ok: true };
 }
 
@@ -32,10 +23,10 @@ export function evaluateObservation(observation, profile) {
  *
  * A candidate that produced no usable observation must not crash the runner: the
  * adjudicator returns an explicit non-rejection instead, so the case fails honestly and
- * the report still carries all eight rows. Cascading a `TypeError` out of here previously
+ * the report still carries every mutation row. Cascading a `TypeError` out of here previously
  * turned a candidate observation gap into a runner-level `not_run` for the whole run.
  */
-export function evaluateMutant(observation, mutant, profile) {
+export function evaluateMutant(observation, mutant, profile, adjudicate = evaluateObservation) {
   const base = {
     id: mutant.id,
     expectedReason: mutant.expectedReason,
@@ -49,7 +40,7 @@ export function evaluateMutant(observation, mutant, profile) {
   // A mutation is only attributable if the benign control passes first: if the base
   // observation is already broken, an oracle's rejection says nothing about the mutation,
   // so it is reported as such instead of being counted as a caught bad proxy.
-  if (evaluateObservation(observation, profile).ok !== true) {
+  if (adjudicate(observation, profile).ok !== true) {
     return { ...base, actualReason: 'observation_not_intact' };
   }
   let mutated;
@@ -58,7 +49,7 @@ export function evaluateMutant(observation, mutant, profile) {
   } catch {
     return { ...base, actualReason: 'mutant_application_failed' };
   }
-  const result = evaluateObservation(mutated, profile);
+  const result = adjudicate(mutated, profile);
   return {
     id: mutant.id,
     expectedReason: mutant.expectedReason,

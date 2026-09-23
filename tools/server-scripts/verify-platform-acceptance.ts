@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -188,6 +189,9 @@ async function buildReportEvidence(minimumTimestampMs?: any, expectedProvenanceB
       reducerSourceOfTruth: readiness.reducerSourceOfTruth || readiness.sourceOfTruth || "",
       validationSourceOfTruth: readiness.requiredReportValidationSourceOfTruth || "",
       specSourceOfTruth: readiness.requiredReportSpecSourceOfTruth || "",
+      runId: readiness.releaseReady === true ? expectedProvenanceByPath.get(reportPath)?.runId : "",
+      candidateDigest: readiness.releaseReady === true ? expectedProvenanceByPath.get(reportPath)?.candidateDigest : "",
+      commandId: readiness.releaseReady === true ? expectedProvenanceByPath.get(reportPath)?.commandId : "",
       reasons: readiness.reasons || []
     };
     if (readiness.requiredReportValidationPassed !== true) {
@@ -280,6 +284,7 @@ async function runAcceptanceWorker() : Promise<any> {
   }
 
   const startedAt: any = new Date();
+  const runId: string = randomUUID();
   const reportTreeBefore: any = await snapshotJsonReportFiles(repoRoot);
   await Promise.all(ACCEPTANCE_REQUIRED_REPORTS.map(removeReport));
   const commandEnv: Record<string, any> = {
@@ -315,7 +320,9 @@ async function runAcceptanceWorker() : Promise<any> {
     repoRoot,
     commands: PLATFORM_ACCEPTANCE_COMMANDS,
     results,
-    requiredReportPaths: ACCEPTANCE_REQUIRED_REPORTS
+    requiredReportPaths: ACCEPTANCE_REQUIRED_REPORTS,
+    runId,
+    candidateDigest: candidateIdentity.candidate_digest
   });
   const {
     evidence: reportEvidence,
@@ -452,6 +459,8 @@ async function runAcceptanceWorker() : Promise<any> {
     commands: PLATFORM_ACCEPTANCE_COMMANDS,
     results,
     reportEvidence,
+    runId,
+    candidateDigest: candidateIdentity.candidate_digest,
     aggregateFacts: {
       ledgerAnchorReady: Boolean(ledgerAnchor.ledgerEventId) && ledgerAnchor.verification?.ok === true,
       candidateIdentityReady: candidateIdentityReady &&

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGateway } from "@meshrix/gateway";
-import { context, descriptor, response, route } from "../support";
+import { context, descriptor, response, route, createTestGateway as createGateway } from "../support";
 
 describe("resource and prompt proxy ports", () => {
   it("re-authenticates resource and prompt operations through published routes", async () => {
@@ -18,7 +17,7 @@ describe("resource and prompt proxy ports", () => {
     try {
       expect(await gateway.readResource(context, "meshrix://public/document")).toMatchObject({ kind: "complete", value: { contents: [{ text: "document" }] } });
       expect(await gateway.getPrompt(context, "summarize", { traceId: "business" })).toMatchObject({ kind: "complete", value: { description: "summarize" } });
-      expect(await gateway.completePrompt(context, { name: "summarize", argument: "x" })).toMatchObject({ kind: "complete", value: { values: ["a"] } });
+      expect(await gateway.completePrompt({ ...context, grant: { ...context.grant, methods: ["completion/complete"] } }, { name: "summarize", argument: "x" })).toMatchObject({ kind: "complete", value: { values: ["a"] } });
       expect(resourceCalls).toEqual(["file://upstream/document"]);
       expect(promptCalls).toEqual(["summarize"]);
     } finally {

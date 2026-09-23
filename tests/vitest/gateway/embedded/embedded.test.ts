@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGateway } from "@meshrix/gateway";
-import { context, descriptor, QueueUpstream, response } from "../support";
+import { context, descriptor, QueueUpstream, response, createTestGateway as createGateway } from "../support";
 
 describe("embedded gateway composition", () => {
   it("[CASE-A05] has no construction side effects and owns only explicitly owned lifecycle resources", async () => {
@@ -31,7 +30,7 @@ describe("embedded gateway composition", () => {
     try {
       (original.route as { revision?: string }).revision = "mutated";
       const outcome = await gateway.invoke(context, { routeRef: "route.demo", method: "tools/call", params: { traceId: "business" } });
-      expect(outcome).toMatchObject({ kind: "complete", value: { traceId: "business" } });
+      expect(outcome).toMatchObject({ kind: "complete", value: { resultType: "complete", value: { traceId: "business" } } });
       expect(upstream.requests[0].route.revision).toBe("route-1");
     } finally {
       await gateway.close();
@@ -44,7 +43,7 @@ describe("embedded gateway composition", () => {
       upstream: { invoke: async () => { calls += 1; return response({ content: [] }); } },
       descriptors: [descriptor()],
       policy: {
-        decide: () => ({ allowed: true, authority: { decisionRef: "d", grantRevision: "g", policyRevision: "p", target: "endpoint.demo", effectClass: "read", expiresAt: Date.now() + 1000 } }),
+        decide: () => ({ allowed: true, authority: { decisionRef: "d", grantRevision: "grant-1", policyRevision: "p", target: "endpoint.demo", effectClass: "read", expiresAt: Date.now() + 1000 } }),
         revalidate: () => ({ allowed: false, reasonCode: "revoked_after_wait", message: "revoked" })
       }
     });
