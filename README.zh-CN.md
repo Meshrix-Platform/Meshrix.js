@@ -2,10 +2,10 @@
 
 <img src="docs/banner.svg" alt="Meshrix.js" width="100%" />
 
-**内部维护、私有化部署的智能体网关 —— 上游服务由此进，受治理的 MCP 访问由此出。**
+**公开源码、面向私有化部署的 MCP 平台 —— 为服务与智能体接入提供治理边界。**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-c9a96e?style=flat-square)](LICENSE)
-[![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
+[![源码许可证：MIT](https://img.shields.io/badge/%E6%BA%90%E7%A0%81%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-c9a96e?style=flat-square)](LICENSE)
+[![Node.js >=22.18.0 <23 || >=24.3.0](https://img.shields.io/badge/node-%3E%3D22.18.0%20%3C23%20%7C%7C%20%3E%3D24.3.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
 [概览](#概览) · [当前状态](docs/STATUS.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
@@ -19,9 +19,9 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > 统一定义。
 
-> **当前结果：** Meshrix.js 0.0.1 Core 企业单节点生产使用闭环已由当前证据所记录
-> 的已验收候选完成。后续工作由真实使用、明确的产品决策和具体缺陷驱动；当前证据
-> 边界见 [Status](docs/STATUS.md)。
+> **此前已验收范围：** Meshrix.js 0.0.1 Core 企业单节点生产使用闭环仅适用于其证据
+> 所指向的候选版本。该证据不代表当前 gateway convergence 候选或后续公开发布已通过验收；
+> 详见 [Status](docs/STATUS.md)。
 
 ---
 
@@ -34,8 +34,9 @@ Meshrix.js 使用 Vue.js Web Console 与 Node.js 服务端。前后端分别维�
 
 默认运行时自包含。元数据、raw objects、任务、设置、grant、审计记录和 checkpoint 存放在服务端数据目录。外部中间件和服务适配器作为面向特定部署集成的可选增强。
 
-> **当前状态：pre-release。** 源码可用、实现、验证、各发布渠道、环境资格与托管
-> 运营仍是分轨进行的剩余必做工作。规范状态见 [Status](docs/STATUS.md)。
+> **当前状态：pre-release。** 源码已公开。当前 gateway 候选和计划中的 0.0.1 公开发布仍需
+> 完成面向确切候选的实现与功能验证，并通过发布流程。环境资格与托管运营属于独立证据轨道；
+> 规范状态见 [Status](docs/STATUS.md)。
 
 Meshrix.js 将强制的功能验收与仍待完成的环境资格分开。
 `npm run verify:acceptance` 是 Functional Release Gate（功能完整有效发布门禁），
@@ -72,7 +73,7 @@ Meshrix.js 的产品边界是私有化部署中的服务端治理层：它拥有
 
 ## 快速开始
 
-要求 Node.js `^22.0.0 || ^24.0.0`。
+要求 Node.js `>=22.18.0 <23 || >=24.3.0`。
 
 **本地运行**
 
@@ -150,6 +151,7 @@ OpenCode、Kimi 和 Pi 适配器；适配器必须由运维方显式启用，运
 | 协议 | [docs/protocols/PROTOCOLS.md](docs/protocols/PROTOCOLS.md) |
 | 运行运维 | [docs/RUNBOOK.md](docs/RUNBOOK.md) |
 | 兼容性 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) |
+| 发布状态 | [docs/releases/README.md](docs/releases/README.md) |
 | 能力文档 | [docs/functionality/](docs/functionality/) |
 | 示例 | [docs/examples/README.md](docs/examples/README.md) |
 | 决策记录 | [docs/adrs/README.md](docs/adrs/README.md) |
@@ -180,11 +182,14 @@ npm run verify:acceptance
 | 贡献流程 | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 行为准则 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
 | 安全策略 | [SECURITY.md](SECURITY.md) |
+| 第三方声明 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | 变更日志 | [CHANGELOG.md](CHANGELOG.md) |
 
-## 许可证
+## 源码许可证
 
-MIT。参见 [LICENSE](LICENSE)。
+Meshrix.js 项目拥有的源码采用 MIT 许可证，详见 [LICENSE](LICENSE)。第三方依赖保留其 package
+metadata 与[第三方声明](THIRD_PARTY_NOTICES.md)中列出的各自条款。仓库许可证本身不代表集成平台
+发行物的完整条款。
 
 <div align="center">
   <sub>Meshrix.js —— 默认自包含，为私有化部署而生。</sub>

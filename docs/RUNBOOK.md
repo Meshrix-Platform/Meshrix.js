@@ -285,10 +285,11 @@ npm run release:package-server-source
 
 The command writes to `build/packages`. This is a source package: it excludes
 installed dependencies and container images, so a target host still needs
-network access while building the remaining npm artifacts. It includes the
-authorized vendored Pactium tarball under `vendor/` so `Dockerfile` `COPY vendor`
-and `npm ci` can resolve `file:vendor/pactium-*.tgz` without a public npmjs hit
-for that package.
+network access while building uncached npm artifacts. It retains the authorized
+Pactium archive under `vendor/` for the source-package contract. The Dockerfile
+copies that directory, but the root package resolves Pactium from the public npm
+registry at exact version `0.8.0`, with integrity pinned in `package-lock.json`;
+the source archive's vendor copy does not satisfy that npm dependency.
 
 Set `MESHRIX_HOST_PORT` to change the loopback host port. The Compose contract uses
 that same value for bootstrap, advertised, and active service URLs while the
@@ -837,11 +838,15 @@ Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
 the remaining Real-Machine Verification Workflows and cannot block publication.
 
-Meshrix.js `0.0.1` consumes exact file-vendored `pactium@0.8.0` from
-`vendor/pactium-0.8.0.tgz`. The server source archive and container build copy
-that tarball; they must not require a live npmjs fetch for Pactium. Public
-publication of Meshrix.js `0.0.1` remains remaining required work and is a
-separate npm-channel decision.
+Meshrix.js `0.0.1` declares the exact public registry dependency
+`pactium@0.8.0`; `package-lock.json` pins its registry tarball and SHA-512
+integrity. Its package metadata declares `GPL-3.0-or-later`, which does not by
+itself settle the integrated platform's distribution terms. The server source
+archive independently retains `vendor/pactium-0.8.0.tgz` under its authorized
+source-package contract, and the Dockerfile copies the vendor directory; npm
+installation resolves Pactium from the registry, not from that archive. Public
+publication of integrated Meshrix.js artifacts remains blocked on the separate
+distribution-license decision and the required release authority.
 
 The workflow stages a multi-platform container and compares the intended OCI
 manifest digest with the GHCR version tag before and after creating that tag.
@@ -880,7 +885,7 @@ registry signatures, SLSA provenance attestations, and monotonic `latest` or
 `next` state. A missing or older tag on an existing version fails closed because
 GitHub OIDC trusted publishing cannot repair dist-tags; a newer tag is preserved.
 Missing versions are then published by dependency topology with the root
-`meshrix` package last, and every registry postcondition is reverified.
+`meshrix.js` package last, and every registry postcondition is reverified.
 The published set is then installed without lifecycle scripts and checked with
 `npm audit signatures`, which cryptographically verifies registry signatures
 and provenance attestations. The GitHub Release becomes public only after this

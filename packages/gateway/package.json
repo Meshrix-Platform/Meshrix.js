@@ -23,58 +23,58 @@
       "default": "./dist/schema/index.js"
     },
     "./payload": {
-      "types": "./dist/payload/index.d.ts",
       "source": "./src/payload/index.ts",
+      "types": "./dist/payload/index.d.ts",
       "default": "./dist/payload/index.js"
     },
     "./results": {
-      "types": "./dist/results/index.d.ts",
       "source": "./src/results/index.ts",
+      "types": "./dist/results/index.d.ts",
       "default": "./dist/results/index.js"
     },
     "./catalog": {
-      "types": "./dist/catalog/index.d.ts",
       "source": "./src/catalog/index.ts",
+      "types": "./dist/catalog/index.d.ts",
       "default": "./dist/catalog/index.js"
     },
     "./routing": {
-      "types": "./dist/routing/index.d.ts",
       "source": "./src/routing/index.ts",
+      "types": "./dist/routing/index.d.ts",
       "default": "./dist/routing/index.js"
     },
     "./continuations": {
-      "types": "./dist/continuations/index.d.ts",
       "source": "./src/continuations/index.ts",
+      "types": "./dist/continuations/index.d.ts",
       "default": "./dist/continuations/index.js"
     },
     "./admission": {
-      "types": "./dist/admission/index.d.ts",
       "source": "./src/admission/index.ts",
+      "types": "./dist/admission/index.d.ts",
       "default": "./dist/admission/index.js"
     },
     "./context": {
-      "types": "./dist/context/index.d.ts",
       "source": "./src/context/index.ts",
+      "types": "./dist/context/index.d.ts",
       "default": "./dist/context/index.js"
     },
     "./transit": {
-      "types": "./dist/transit/index.d.ts",
       "source": "./src/transit/index.ts",
+      "types": "./dist/transit/index.d.ts",
       "default": "./dist/transit/index.js"
     },
     "./config": {
-      "types": "./dist/config/index.d.ts",
       "source": "./src/config/index.ts",
+      "types": "./dist/config/index.d.ts",
       "default": "./dist/config/index.js"
     },
     "./resources": {
-      "types": "./dist/resources/index.d.ts",
       "source": "./src/resources/index.ts",
+      "types": "./dist/resources/index.d.ts",
       "default": "./dist/resources/index.js"
     },
     "./prompts": {
-      "types": "./dist/prompts/index.d.ts",
       "source": "./src/prompts/index.ts",
+      "types": "./dist/prompts/index.d.ts",
       "default": "./dist/prompts/index.js"
     }
   },

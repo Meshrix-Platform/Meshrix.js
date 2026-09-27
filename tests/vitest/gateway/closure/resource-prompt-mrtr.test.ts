@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
-import { context, createTestGateway, descriptor, key, QueueUpstream, response, route } from "../support";
+import { context, createTestGateway, descriptor, key, modernHttpRequest, QueueUpstream, response, route } from "../support";
 
 describe("tools, resources and prompts over the modern downstream network boundary", () => {
   for (const scenario of [
@@ -15,7 +15,7 @@ describe("tools, resources and prompts over the modern downstream network bounda
       await gateway.start();
       try {
         const adapter = createModernDownstreamAdapter({ gateway, authenticate: () => context });
-        const send = async (params: Record<string, unknown>) => (await adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: scenario.method, method: scenario.method, params } })).body as Record<string, any>;
+        const send = async (params: Record<string, unknown>) => (await adapter.handle(modernHttpRequest(scenario.method, scenario.method, params))).body as Record<string, any>;
         const first = await send(scenario.params);
         expect(first.result).toMatchObject({ resultType: "input_required", requestState: expect.any(String) });
         const second = await send({ ...scenario.params, requestState: first.result.requestState, inputResponses: { confirm: { accepted: true } } });

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { modernHttpRequest } from "../support.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -59,7 +60,10 @@ describe("one canonical migration owner from the standalone CLI", () => {
         child!.once("exit", () => { clearTimeout(timeout); reject(new Error(`gateway exited during discovery: ${failureCode.trim()}`)); });
         child!.stdout!.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); const line = output.split("\n")[0]; if (line.endsWith("}")) { clearTimeout(timeout); resolve(JSON.parse(line).interopEndpoint); } });
       });
-      const send = async (method: string, params: Record<string, unknown> = {}) => (await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) })).json();
+      const send = async (method: string, params: Record<string, unknown> = {}) => {
+        const wire = modernHttpRequest(method, method, params);
+        return (await fetch(endpoint, { method: wire.method, headers: wire.headers, body: JSON.stringify(wire.body) })).json();
+      };
       expect((await send("tools/list")).result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: "synthetic" })]));
       expect((await send("tools/call", { name: "synthetic", arguments: {} })).result).toMatchObject({ resultType: "complete", content: [{ text: "stdio-upstream" }] });
       child.kill("SIGTERM");

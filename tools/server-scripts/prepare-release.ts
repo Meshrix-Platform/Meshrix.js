@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadReleaseDefinition } from "./verify-release-definition.ts";
+import { resolveReleaseWorkspaceDirectories } from "./publish-release-set.ts";
 
 const GATEWAY_INSTALLER_MANIFEST: any =
   "packages/protocols/mcp/adapter/gateway-installer/package.json";
@@ -136,9 +137,7 @@ async function loadReleaseState(rootDir?: any) : Promise<any> {
     );
   }
 
-  const workspaceDirectories: any = workspaces.map((workspace?: any) : any =>
-    normalizeRepositoryPath(workspace, "Workspace path")
-  );
+  const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({ rootDir, workspaces });
   const manifestPaths: any[] = [
     "package.json",
     ...workspaceDirectories.map(manifestPathForWorkspace),
@@ -306,7 +305,7 @@ function collectReleaseFindings(state?: any, version?: any) : any {
     }
     if (rootLock) {
       const rootWorkspaces: any = Array.isArray(rootLock.workspaces) ? rootLock.workspaces : [];
-      const packageWorkspaces: any = state.workspaceRecords.map(({ directory }: Record<string, any>) : any => directory);
+      const packageWorkspaces: any = state.rootPackage.value.workspaces;
       if (JSON.stringify(rootWorkspaces) !== JSON.stringify(packageWorkspaces)) {
         addFinding(findings, "package-lock.json", "release_lock_workspaces_mismatch", "packages[''].workspaces");
       }
@@ -379,7 +378,7 @@ function createDesiredFiles(state?: any, version?: any, date?: any) : any {
     throw releaseError("release_lock_root_missing", "package-lock.json must contain a root package entry.");
   }
   lock.packages[""].version = version;
-  lock.packages[""].workspaces = state.workspaceRecords.map(({ directory }: Record<string, any>) : any => directory);
+  lock.packages[""].workspaces = cloneJson(state.rootPackage.value.workspaces);
   for (const entry of (Object.values(lock.packages) as any[])) {
     if (entry && typeof entry === "object" && !Array.isArray(entry)) {
       synchronizeInternalDependencies(entry, version);

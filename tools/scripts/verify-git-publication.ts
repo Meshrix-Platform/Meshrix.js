@@ -6,8 +6,6 @@ import process from "node:process";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import { isAuthorizedVendoredPackage } from "../generators/generate-supply-chain-artifacts.ts";
-
 const ZERO_OID: any = "0".repeat(40);
 const MAX_TEXT_BYTES: any = 5 * 1024 * 1024;
 const PRIVATE_PATH_PREFIXES: readonly any[] = Object.freeze([
@@ -108,13 +106,14 @@ function integrityMatches(bytes?: any, integrity?: any) : any {
 }
 
 function isAuthorizedVendoredBinary(lockfile?: any, candidatePath?: any, bytes?: any) : any {
-  for (const [packagePath, packageEntry] of Object.entries(lockfile?.packages || {})) {
-    if (!isAuthorizedVendoredPackage(lockfile, packagePath, packageEntry)) continue;
-    const resolved: any = String((packageEntry as Record<string, any>)?.resolved || "");
-    if (resolved.slice("file:".length) !== candidatePath) continue;
-    return integrityMatches(bytes, (packageEntry as Record<string, any>)?.integrity);
-  }
-  return false;
+  const packageEntry: any = lockfile?.packages?.["node_modules/pactium"];
+  if (
+    candidatePath !== "vendor/pactium-0.8.0.tgz" ||
+    packageEntry?.version !== "0.8.0" ||
+    packageEntry?.resolved !== "https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz" ||
+    lockfile?.packages?.[""]?.dependencies?.pactium !== "0.8.0"
+  ) return false;
+  return integrityMatches(bytes, packageEntry.integrity);
 }
 
 function scanBytes(candidatePath?: any, bytes?: any, { lockfile = null }: Record<string, any> = {}) : any {
@@ -281,10 +280,10 @@ export function verifyOutgoingUpdates(input?: any) : any {
 export function runSelfTest() : any {
   const vendoredBytes: any = Buffer.from([0, 1, 2, 3]);
   const vendoredPath: any = "vendor/pactium-0.8.0.tgz";
-  const vendoredResolution: any = `file:${vendoredPath}`;
+  const vendoredResolution: any = "https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz";
   const vendoredLockfile: any = {
     packages: {
-      "": { dependencies: { pactium: vendoredResolution } },
+      "": { dependencies: { pactium: "0.8.0" } },
       "node_modules/pactium": {
         version: "0.8.0",
         resolved: vendoredResolution,
@@ -320,7 +319,7 @@ export function runSelfTest() : any {
       expected: ["private-publication-path"]
     },
     {
-      label: "lock-authorized vendored package",
+      label: "retained source archive matches public Pactium lock integrity",
       file: vendoredPath,
       bytes: vendoredBytes,
       lockfile: vendoredLockfile,

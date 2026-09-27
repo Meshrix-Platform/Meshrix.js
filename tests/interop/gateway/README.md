@@ -1,9 +1,9 @@
 # Independent gateway interoperability oracle
 
-Run on supported Node 24 with the package's own lock (`npm ci --prefix tests/interop/gateway --ignore-scripts`). This directory imports no Meshrix product module. `@modelcontextprotocol/sdk@1.29.0` negotiates **2025-11-25 only**; its legacy comparison does not certify modern MCP. The separately encoded raw HTTP/JSON-RPC peer in a **child process** tests the declared 2026-07-28 profile without legacy `initialize`, `notifications/initialized` or `Mcp-Session-Id`: modern clients use `server/discover` and per-request `_meta`/protocol headers. Legacy peers alone use initialize/session. Raw JSON-RPC envelopes, method-specific result fields, metadata placement, resultType, value wrappers, catalog output schemas, dynamic InputResponses and peer-owned effect records are checked before normalization. Neither an HTTP status nor an internally claimed effect constitutes evidence.
+Run on supported Node 24 with the package's own lock (`npm ci --prefix tests/interop/gateway --ignore-scripts`). This directory imports no Meshrix product module. `@modelcontextprotocol/sdk@1.29.0` negotiates **2025-11-25 only**; its legacy comparison does not certify modern MCP. The separately encoded raw HTTP/JSON-RPC peer in a **child process** tests the declared 2026-07-28 profile without legacy `initialize`, `notifications/initialized` or `Mcp-Session-Id`. Modern clients use `server/discover`, request `_meta`, and the required `MCP-Protocol-Version` and `Mcp-Method` headers; `Mcp-Name` is mirrored for tools/call, resources/read, and prompts/get, using the specification's Base64 sentinel encoding when needed. Legacy peers alone use initialize/session. Raw JSON-RPC envelopes, method-specific result fields, metadata placement, resultType, value wrappers, catalog output schemas, dynamic InputResponses and peer-owned effect records are checked before normalization. Neither an HTTP status nor an internally claimed effect constitutes evidence.
 
 ```sh
-node --test tests/interop/gateway/self-test.test.mjs
+node --test tests/interop/gateway/self-test.test.mjs tests/interop/gateway/peers/http-client.test.mjs
 node tests/interop/gateway/run.mjs --mode reference --continue-on-failure
 node tests/interop/gateway/run.mjs --mode meshrix --config <private-run-config.json> --continue-on-failure --report <private-run-report.json>
 ```

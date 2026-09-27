@@ -1,6 +1,6 @@
 ---
 name: meshrix-js-release-engineering-workflow
-description: Plan, implement, and verify substantial Meshrix.js delivery against the private repository release contract. This chapter belongs to $meshrix-js-developer-handbook. Published artifact shape belongs to $meshrix-js-release-artifact-contract.
+description: Plan, implement, and verify substantial Meshrix.js delivery against the repository release contract. This chapter belongs to $meshrix-js-developer-handbook. Published artifact shape belongs to $meshrix-js-release-artifact-contract.
 ---
 
 # Meshrix.js Release Engineering Workflow

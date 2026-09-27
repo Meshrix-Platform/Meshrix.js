@@ -195,7 +195,8 @@ export function mcpBatchRejectedError() : any {
 
 export function evaluateMcpProtocolContract({
   request = null,
-  message = null
+  message = null,
+  transport = "streamable-http"
 }: Record<string, any> = {}) : any {
   if (isJsonRpcNotification(message)) {
     return { ok: true, notification: true, protocolVersion: MCP_PROTOCOL_VERSION };
@@ -213,9 +214,9 @@ export function evaluateMcpProtocolContract({
     );
   }
   const bodyVersion: any = typeof meta[MCP_META_PROTOCOL_VERSION] === "string"
-    ? meta[MCP_META_PROTOCOL_VERSION].trim()
+    ? meta[MCP_META_PROTOCOL_VERSION]
     : "";
-  if (!bodyVersion) {
+  if (bodyVersion.length === 0) {
     return protocolError(
       message?.id,
       400,
@@ -232,72 +233,81 @@ export function evaluateMcpProtocolContract({
     );
   }
 
-  const rawVersionHeader: any = headerRaw(request, MCP_PROTOCOL_VERSION_HEADER);
-  const rawMethodHeader: any = headerRaw(request, MCP_METHOD_HEADER);
-  if (rawVersionHeader === undefined || rawVersionHeader === null || String(rawVersionHeader).trim() === "") {
-    return protocolError(
-      message?.id,
-      400,
-      MCP_ERROR_HEADER_MISMATCH,
-      "Required MCP-Protocol-Version header is missing."
-    );
-  }
-  if (rawMethodHeader === undefined || rawMethodHeader === null || String(rawMethodHeader) === "") {
-    return protocolError(
-      message?.id,
-      400,
-      MCP_ERROR_HEADER_MISMATCH,
-      "Required Mcp-Method header is missing."
-    );
-  }
-  const headerVersion: any = String(rawVersionHeader).trim();
-  const headerMethod: any = String(rawMethodHeader);
-  if (headerVersion !== bodyVersion) {
-    return protocolError(
-      message?.id,
-      400,
-      MCP_ERROR_HEADER_MISMATCH,
-      "MCP-Protocol-Version header does not match the request body protocol version."
-    );
-  }
-  if (headerMethod !== method) {
-    return protocolError(
-      message?.id,
-      400,
-      MCP_ERROR_HEADER_MISMATCH,
-      "Mcp-Method header does not match the JSON-RPC method."
-    );
-  }
+  if (transport === "streamable-http") {
+    const rawVersionHeader: any = headerRaw(request, MCP_PROTOCOL_VERSION_HEADER);
+    const rawMethodHeader: any = headerRaw(request, MCP_METHOD_HEADER);
+    if (rawVersionHeader === undefined || rawVersionHeader === null || String(rawVersionHeader).trim() === "") {
+      return protocolError(
+        message?.id,
+        400,
+        MCP_ERROR_HEADER_MISMATCH,
+        "Required MCP-Protocol-Version header is missing."
+      );
+    }
+    if (rawMethodHeader === undefined || rawMethodHeader === null || String(rawMethodHeader) === "") {
+      return protocolError(
+        message?.id,
+        400,
+        MCP_ERROR_HEADER_MISMATCH,
+        "Required Mcp-Method header is missing."
+      );
+    }
+    const headerVersion: any = String(rawVersionHeader).trim();
+    const headerMethod: any = String(rawMethodHeader);
+    if (headerVersion !== bodyVersion) {
+      return protocolError(
+        message?.id,
+        400,
+        MCP_ERROR_HEADER_MISMATCH,
+        "MCP-Protocol-Version header does not match the request body protocol version."
+      );
+    }
+    if (headerMethod !== method) {
+      return protocolError(
+        message?.id,
+        400,
+        MCP_ERROR_HEADER_MISMATCH,
+        "Mcp-Method header does not match the JSON-RPC method."
+      );
+    }
 
-  const nameField: any = MCP_NAME_BEARING_METHODS[method];
-  if (nameField) {
-    const rawNameHeader: any = headerRaw(request, MCP_NAME_HEADER);
-    if (rawNameHeader === undefined || rawNameHeader === null || String(rawNameHeader) === "") {
-      return protocolError(
-        message?.id,
-        400,
-        MCP_ERROR_HEADER_MISMATCH,
-        "Required Mcp-Name header is missing."
-      );
+    const nameField: any = MCP_NAME_BEARING_METHODS[method];
+    if (nameField) {
+      const rawNameHeader: any = headerRaw(request, MCP_NAME_HEADER);
+      if (rawNameHeader === undefined || rawNameHeader === null || String(rawNameHeader) === "") {
+        return protocolError(
+          message?.id,
+          400,
+          MCP_ERROR_HEADER_MISMATCH,
+          "Required Mcp-Name header is missing."
+        );
+      }
+      const decoded: any = decodeMcpHeaderValue(rawNameHeader);
+      if (!decoded.ok) {
+        return protocolError(
+          message?.id,
+          400,
+          MCP_ERROR_HEADER_MISMATCH,
+          "Mcp-Name header is malformed."
+        );
+      }
+      const bodyName: any = params[nameField];
+      if (decoded.value !== bodyName) {
+        return protocolError(
+          message?.id,
+          400,
+          MCP_ERROR_HEADER_MISMATCH,
+          "Mcp-Name header does not match the request body name."
+        );
+      }
     }
-    const decoded: any = decodeMcpHeaderValue(rawNameHeader);
-    if (!decoded.ok) {
-      return protocolError(
-        message?.id,
-        400,
-        MCP_ERROR_HEADER_MISMATCH,
-        "Mcp-Name header is malformed."
-      );
-    }
-    const bodyName: any = typeof params[nameField] === "string" ? params[nameField] : params[nameField];
-    if (decoded.value !== bodyName) {
-      return protocolError(
-        message?.id,
-        400,
-        MCP_ERROR_HEADER_MISMATCH,
-        "Mcp-Name header does not match the request body name."
-      );
-    }
+  } else if (transport !== "stdio") {
+    return protocolError(
+      message?.id,
+      400,
+      MCP_JSONRPC_INVALID_REQUEST,
+      "Unsupported MCP transport."
+    );
   }
 
   if (bodyVersion !== MCP_PROTOCOL_VERSION) {

@@ -582,101 +582,133 @@ class GatewayKernelImpl implements GatewayKernel {
         let consumed;
         try { consumed = await this.#permits.consume({ permit, context: liveContext, prepared }); }
         catch (error) { return failureFromError(error, "policy", "not_started"); }
-        let credential: unknown;
-        try {
-          const binding = isPlainRecord(route.metadata) && typeof route.metadata.credentialBinding === "string" ? route.metadata.credentialBinding : undefined;
-          if (binding && !this.#credentialProvider) return failure({ origin: "configuration", code: "credential_provider_missing", message: "Required credential provider is unavailable.", status: 503, effectOutcome: "not_started" });
-          if (binding) credential = await this.#credentialProvider!.resolve({ binding, audience: route.endpointIdentity, context: liveContext });
-        } catch (error) { return failureFromError(error, "policy", "not_started"); }
-        const finalRoute = this.catalogStore.resolve(route.logicalRoute);
-        const finalContext = this.#currentAuthority ? await this.#currentAuthority.read({ context: liveContext, route }) : liveContext;
-        if (!finalRoute || finalRoute.revision !== route.revision || finalRoute.endpointIdentity !== route.endpointIdentity || !safeContext(finalContext) || finalContext.tenant !== context.tenant || finalContext.principal !== context.principal || currentGrantRevision(finalContext) !== prepared.authority.grantRevision || currentCredentialGeneration(finalContext) !== currentCredentialGeneration(liveContext)) return failure({ origin: "policy", code: "authority_changed", message: "The target or authorization changed before dispatch.", status: 403, effectOutcome: "not_started" });
-        const finalDecision = this.#policy.revalidate ? await this.#policy.revalidate({ context: finalContext, invocation: prepared.invocation, route, authority: prepared.authority }) : await this.#policy.decide({ context: finalContext, invocation: prepared.invocation, route });
-        if (!finalDecision.allowed) return failure({ origin: "policy", code: finalDecision.reasonCode ?? "policy_changed", message: "Current authorization was revoked before dispatch.", status: 403, effectOutcome: "not_started" });
-        const request: import("@meshrix/contracts/gateway").UpstreamRequest = {
-          id: `gw-${++this.#invocationId}`,
-          method: invocation.method,
-          params: invocation.params,
-          protocolVersion: route.protocolVersion,
-          ...(upstreamState?.present ? { requestState: upstreamState.value ?? "" } : {}),
-          headers: Object.freeze({ "Mcp-Method": invocation.method, "Mcp-Protocol-Version": route.protocolVersion, ...(route.upstreamName ? { "Mcp-Name": route.upstreamName } : {}) }),
-          trace: finalContext.trace
+        const effectful = route.effectClass !== "read";
+        const terminalPersistenceFailure = (): GatewayFailure => failure({ origin: "lifecycle", code: "gateway_intent_settlement_failed", message: "The gateway could not persist the execution outcome.", status: 503, effectOutcome: "unknown" });
+        const preSinkResult = async (outcome: GatewayFailure): Promise<GatewayFailure> => {
+          if (!effectful) return outcome;
+          try { await this.#permits.transition?.(consumed, "not_started"); return outcome; }
+          catch { return withReceipt(failure({ ...outcome, effectOutcome: "unknown" }), consumed); }
+        };
+        const recordUnknown = async (): Promise<boolean> => {
+          try { await this.#permits.markOutcomeUnknown?.(consumed); return true; }
+          catch { return false; }
+        };
+        const recordTerminal = async (phase: "succeeded" | "failed"): Promise<boolean> => {
+          if (!effectful) return true;
+          try { await this.#permits.transition?.(consumed, phase); return true; }
+          catch { return false; }
         };
         try {
-          const response = await invokeSink({ context: finalContext, request, route, credential, signal: controller.signal });
-          if (response && typeof response === "object" && "status" in response && Number(response.status) === 404) {
-            if (invocation.contextHandle) {
-              try { this.#contextStore.markLost(invocation.contextHandle, "upstream_404"); } catch { /* stale handles remain terminal */ }
+          const binding = isPlainRecord(route.metadata) && typeof route.metadata.credentialBinding === "string" ? route.metadata.credentialBinding : undefined;
+          if (binding && !this.#credentialProvider) return await preSinkResult(failure({ origin: "configuration", code: "credential_provider_missing", message: "Required credential provider is unavailable.", status: 503, effectOutcome: "not_started" }));
+          const credential = binding ? await this.#credentialProvider!.resolve({ binding, audience: route.endpointIdentity, context: liveContext }) : undefined;
+          if (effectful) await this.#permits.transition?.(consumed, "dispatch_started");
+          const finalContext = this.#currentAuthority ? await this.#currentAuthority.read({ context: liveContext, route }) : liveContext;
+          if (!safeContext(finalContext) || finalContext.tenant !== context.tenant || finalContext.principal !== context.principal || currentGrantRevision(finalContext) !== prepared.authority.grantRevision || currentCredentialGeneration(finalContext) !== currentCredentialGeneration(liveContext)) return await preSinkResult(failure({ origin: "policy", code: "authority_changed", message: "The target or authorization changed before dispatch.", status: 403, effectOutcome: "not_started" }));
+          const finalDecision = this.#policy.revalidate ? await this.#policy.revalidate({ context: finalContext, invocation: prepared.invocation, route, authority: prepared.authority }) : await this.#policy.decide({ context: finalContext, invocation: prepared.invocation, route });
+          if (!finalDecision.allowed) return await preSinkResult(failure({ origin: "policy", code: finalDecision.reasonCode ?? "policy_changed", message: "Current authorization was revoked before dispatch.", status: 403, effectOutcome: "not_started" }));
+          const finalRoute = this.catalogStore.resolve(route.logicalRoute);
+          if (!finalRoute || finalRoute.revision !== route.revision || finalRoute.endpointIdentity !== route.endpointIdentity) return await preSinkResult(failure({ origin: "policy", code: "route_changed", message: "The target changed before dispatch.", status: 409, effectOutcome: "not_started" }));
+          try { throwIfAborted(controller.signal); }
+          catch (error) { return await preSinkResult(failureFromError(error, "admission", "cancelled")); }
+          const request: import("@meshrix/contracts/gateway").UpstreamRequest = {
+            id: `gw-${++this.#invocationId}`,
+            method: invocation.method,
+            params: invocation.params,
+            protocolVersion: route.protocolVersion,
+            ...(upstreamState?.present ? { requestState: upstreamState.value ?? "" } : {}),
+            headers: Object.freeze({ "Mcp-Method": invocation.method, "Mcp-Protocol-Version": route.protocolVersion, ...(route.upstreamName ? { "Mcp-Name": route.upstreamName } : {}) }),
+            trace: finalContext.trace
+          };
+          try {
+            const response = await invokeSink({ context: finalContext, request, route, credential, signal: controller.signal, permit: consumed });
+            if (response && typeof response === "object" && "status" in response && Number(response.status) === 404) {
+              if (invocation.contextHandle) {
+                try { this.#contextStore.markLost(invocation.contextHandle, "upstream_404"); } catch { /* stale handles remain terminal */ }
+              }
+              if (effectful && !await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+              const lost = failure({ origin: "peer", code: "upstream_context_lost", message: "The upstream no longer recognizes the stateful context.", status: 410, effectOutcome: route.effectClass === "read" ? "failed" : "unknown" });
+              return route.effectClass === "read" ? lost : withReceipt(lost, consumed);
             }
-            if (route.effectClass !== "read") await this.#permits.markOutcomeUnknown?.(consumed);
-            const lost = failure({ origin: "peer", code: "upstream_context_lost", message: "The upstream no longer recognizes the stateful context.", status: 410, effectOutcome: route.effectClass === "read" ? "failed" : "unknown" });
-            return route.effectClass === "read" ? lost : withReceipt(lost, consumed);
-          }
-          const upstreamResponse = response && typeof response === "object" && "status" in response ? response as UpstreamResponse : undefined;
-          if (upstreamResponse && upstreamResponse.status >= 400 && !(isPlainRecord(upstreamResponse.body) && Object.hasOwn(upstreamResponse.body, "error"))) {
-            if (invocation.contextHandle && isFatalUpstreamStatus(responseStatus(response))) {
-              try { this.#contextStore.markLost(invocation.contextHandle, `upstream_http_${upstreamResponse.status}`); } catch { /* stale handles remain terminal */ }
+            const upstreamResponse = response && typeof response === "object" && "status" in response ? response as UpstreamResponse : undefined;
+            if (upstreamResponse && upstreamResponse.status >= 400 && !(isPlainRecord(upstreamResponse.body) && Object.hasOwn(upstreamResponse.body, "error"))) {
+              if (invocation.contextHandle && isFatalUpstreamStatus(responseStatus(response))) {
+                try { this.#contextStore.markLost(invocation.contextHandle, `upstream_http_${upstreamResponse.status}`); } catch { /* stale handles remain terminal */ }
+              }
+              // An HTTP failure without a definitive JSON-RPC result is observed only
+              // after dispatch. Even a read has no proven result; never classify this
+              // permit as a known failure that could be replayed automatically.
+              if (!await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+              return withReceipt(failure({ origin: "peer", code: `upstream_http_${upstreamResponse.status}`, message: "Upstream returned an HTTP failure.", status: 502, effectOutcome: "unknown" }), consumed);
             }
-            // An HTTP failure without a definitive JSON-RPC result is observed only
-            // after dispatch. Even a read has no proven result; never classify this
-            // permit as a known failure that could be replayed automatically.
-            await this.#permits.markOutcomeUnknown?.(consumed);
-            return withReceipt(failure({ origin: "peer", code: `upstream_http_${upstreamResponse.status}`, message: "Upstream returned an HTTP failure.", status: 502, effectOutcome: "unknown" }), consumed);
-          }
-          const wireBody = upstreamResponse ? responseBody(upstreamResponse) : response;
-          const decoded = upstreamResponse && isGatewayFailure(wireBody)
-            ? wireBody
-            : !upstreamResponse && isUpstreamResult(response)
-              ? response
-              : decodeUpstreamResult(wireBody, { legacy: route.protocolVersion !== "2026-07-28" });
-          if (decoded.kind === "failure") {
-            if (upstreamResponse && isGatewayFailure(wireBody) && route.effectClass !== "read") {
-              await this.#permits.markOutcomeUnknown?.(consumed);
-              return withReceipt(failure({ ...decoded, effectOutcome: "unknown" }), consumed);
+            const wireBody = upstreamResponse ? responseBody(upstreamResponse) : response;
+            const decoded = upstreamResponse && isGatewayFailure(wireBody)
+              ? wireBody
+              : !upstreamResponse && isUpstreamResult(response)
+                ? response
+                : decodeUpstreamResult(wireBody, { legacy: route.protocolVersion !== "2026-07-28" });
+            if (decoded.kind === "failure") {
+              if (upstreamResponse && isGatewayFailure(wireBody) && effectful) {
+                if (!await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+                return withReceipt(failure({ ...decoded, effectOutcome: "unknown" }), consumed);
+              }
+              if (invocation.contextHandle && (isFatalUpstreamStatus(responseStatus(response)) || decoded.origin === "protocol" || decoded.origin === "transport")) {
+                try { this.#contextStore.markLost(invocation.contextHandle, decoded.code); } catch { /* stale handles remain terminal */ }
+              }
+              if (effectful) {
+                if (decoded.origin === "peer" && decoded.effectOutcome === "failed") {
+                  if (!await recordTerminal("failed")) return withReceipt(terminalPersistenceFailure(), consumed);
+                  return decoded;
+                }
+                if (!await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+                return withReceipt(failure({ ...decoded, effectOutcome: "unknown" }), consumed);
+              }
+              return decoded;
             }
-            if (invocation.contextHandle && (isFatalUpstreamStatus(responseStatus(response)) || decoded.origin === "protocol" || decoded.origin === "transport")) {
-              try { this.#contextStore.markLost(invocation.contextHandle, decoded.code); } catch { /* stale handles remain terminal */ }
+            if (decoded.kind === "negotiated_extension") {
+              if (effectful && !await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+              return decoded;
             }
-            if (decoded.effectOutcome === "unknown" && route.effectClass !== "read") {
-              await this.#permits.markOutcomeUnknown?.(consumed);
-              return withReceipt(decoded, consumed);
+            if (decoded.kind === "input_required") {
+              if (!this.#continuation) {
+                if (effectful && !await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+                const unavailable = failure({ origin: "continuation", code: "continuation_unavailable", message: "The upstream requested input but this gateway profile has no continuation codec.", status: 501, effectOutcome: route.effectClass === "read" ? "failed" : "unknown" });
+                return route.effectClass === "read" ? unavailable : withReceipt(unavailable, consumed);
+              }
+              if (effectful && !await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+              const rawState = decoded.upstreamState !== undefined
+                ? { present: decoded.upstreamState.present, ...(decoded.upstreamState.present ? { value: decoded.upstreamState.value ?? "" } : {}) }
+                : Object.hasOwn(decoded, "requestState") && decoded.requestState !== undefined
+                  ? { present: true, value: decoded.requestState }
+                  : { present: false as const };
+              const originalParams = continuationBusinessParams(invocation.params);
+              const token = this.#continuation.seal({ generation: continuationGeneration === undefined ? 1 : continuationGeneration + 1, tenant: context.tenant, principal: context.principal, grantRevision: String(context.grant.revision ?? context.authGeneration), routeRef: route.logicalRoute, endpointIdentity: route.endpointIdentity, routeRevision: route.revision, method: invocation.method, params: originalParams, paramsDigest: continuationParamsDigest(originalParams), ...(invocation.contextHandle ? { contextHandle: invocation.contextHandle } : {}), upstreamState: rawState, effectClass: route.effectClass, oneTime: route.effectClass !== "read", issuedAt: this.#now(), expiresAt: this.#now() + 5 * 60_000 });
+              return inputRequired(decoded.inputRequests, token);
             }
+            if (routeSchemas?.output) {
+              try { await routeSchemas.output.assertValid(isPlainRecord(decoded.value) && Object.hasOwn(decoded.value, "structuredContent") ? decoded.value.structuredContent : decoded.value, controller.signal); }
+              catch (error) {
+                const outcome = route.effectClass === "read" ? "failed" : "unknown" as const;
+                if (outcome === "unknown" && !await recordUnknown()) return withReceipt(terminalPersistenceFailure(), consumed);
+                const rejected = schemaFailure(error, "output", outcome);
+                return outcome === "unknown" ? withReceipt(rejected, consumed) : rejected;
+              }
+            }
+            if (effectful && !await recordTerminal(decoded.isError === true ? "failed" : "succeeded")) return withReceipt(terminalPersistenceFailure(), consumed);
             return decoded;
-          }
-          if (decoded.kind === "input_required") {
-            if (!this.#continuation) {
-              if (route.effectClass !== "read") await this.#permits.markOutcomeUnknown?.(consumed);
-              const unavailable = failure({ origin: "continuation", code: "continuation_unavailable", message: "The upstream requested input but this gateway profile has no continuation codec.", status: 501, effectOutcome: route.effectClass === "read" ? "failed" : "unknown" });
-              return route.effectClass === "read" ? unavailable : withReceipt(unavailable, consumed);
+          } catch (error) {
+            if (invocation.contextHandle && !(error instanceof Error && error.name === "AbortError")) {
+              try { this.#contextStore.markLost(invocation.contextHandle, "upstream_fatal"); } catch { /* stale handles remain terminal */ }
             }
-            const rawState = decoded.upstreamState !== undefined
-              ? { present: decoded.upstreamState.present, ...(decoded.upstreamState.present ? { value: decoded.upstreamState.value ?? "" } : {}) }
-              : Object.hasOwn(decoded, "requestState") && decoded.requestState !== undefined
-                ? { present: true, value: decoded.requestState }
-                : { present: false as const };
-            const originalParams = continuationBusinessParams(invocation.params);
-            const token = this.#continuation.seal({ generation: continuationGeneration === undefined ? 1 : continuationGeneration + 1, tenant: context.tenant, principal: context.principal, grantRevision: String(context.grant.revision ?? context.authGeneration), routeRef: route.logicalRoute, endpointIdentity: route.endpointIdentity, routeRevision: route.revision, method: invocation.method, params: originalParams, paramsDigest: continuationParamsDigest(originalParams), ...(invocation.contextHandle ? { contextHandle: invocation.contextHandle } : {}), upstreamState: rawState, effectClass: route.effectClass, oneTime: route.effectClass !== "read", issuedAt: this.#now(), expiresAt: this.#now() + 5 * 60_000 });
-            return inputRequired(decoded.inputRequests, token);
+            // Once the final sink is entered, a write may have reached the peer before a
+            // disconnect, decode error, persistence failure, or local abort becomes observable.
+            if (effectful) { await recordUnknown(); return withReceipt(failureFromError(error, "transport", "unknown"), consumed); }
+            return failureFromError(error, "transport", "failed");
           }
-          if (routeSchemas?.output) {
-            try { await routeSchemas.output.assertValid(isPlainRecord(decoded.value) && Object.hasOwn(decoded.value, "structuredContent") ? decoded.value.structuredContent : decoded.value, controller.signal); }
-            catch (error) {
-              const outcome = route.effectClass === "read" ? "failed" : "unknown" as const;
-              if (outcome === "unknown") await this.#permits.markOutcomeUnknown?.(consumed);
-              const rejected = schemaFailure(error, "output", outcome);
-              return outcome === "unknown" ? withReceipt(rejected, consumed) : rejected;
-            }
-          }
-          return decoded;
         } catch (error) {
-          if (invocation.contextHandle && !(error instanceof Error && error.name === "AbortError")) {
-            try { this.#contextStore.markLost(invocation.contextHandle, "upstream_fatal"); } catch { /* stale handles remain terminal */ }
-          }
-          // Once the final sink is entered, a write may have reached the peer before a
-          // timeout, disconnect, decode error, or local abort becomes observable.
-          const unknown = route.effectClass !== "read";
-          if (unknown) { await this.#permits.markOutcomeUnknown?.(consumed); return withReceipt(failureFromError(error, "transport", "unknown"), consumed); }
-          return failureFromError(error, "transport", route.effectClass === "read" ? "failed" : "not_started");
+          const cancelled = error instanceof Error && error.name === "AbortError";
+          const outcome = failureFromError(error, cancelled ? "admission" : "policy", cancelled ? "cancelled" : "not_started");
+          return await preSinkResult(outcome);
         }
       }, { signal: controller.signal, deadline: invocation.deadline });
       return result;

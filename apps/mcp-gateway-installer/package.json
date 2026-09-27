@@ -16,8 +16,8 @@
   "bin": { "meshrix-gateway": "./dist/cli.js" },
   "exports": {
     ".": {
-      "types": "./dist/cli.d.ts",
       "source": "./src/cli.ts",
+      "types": "./dist/cli.d.ts",
       "default": "./dist/cli.js"
     }
   },

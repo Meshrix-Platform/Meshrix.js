@@ -1,16 +1,11 @@
-import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  createLockBackedNpmRegistry,
-  rewritePackedVendoredFileDependencies
-} from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
+import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 
 const REPO_ROOT: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const VENDOR_TARBALL: any = path.join(REPO_ROOT, "vendor/pactium-0.8.0.tgz");
@@ -24,26 +19,36 @@ afterEach(async () : Promise<any> => {
   registryHandle = null;
 });
 
-describe("lock-backed npm registry file: packages", () : any => {
-  it("serves lock-vendored pactium 0.8.0 from the local mirror without a public npmjs hit", async () : Promise<any> => {
+describe("lock-backed npm registry artifacts", () : any => {
+  it("serves the exact public lock-resolved pactium bytes from an isolated cache", async () : Promise<any> => {
     expect(PACTIUM_LOCK.version).toBe("0.8.0");
-    expect(String(PACTIUM_LOCK.resolved)).toMatch(/^file:/u);
-    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-pactium-"));
+    expect(PACTIUM_LOCK.resolved).toBe("https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz");
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-pactium-public-"));
     try {
-      await fs.copyFile(VENDOR_TARBALL, path.join(root, "pactium-0.8.0.tgz"));
+      const cacheRoot: any = path.join(root, "cache");
+      const token: any = String(PACTIUM_LOCK.integrity).split(/\s+/u)
+        .find((candidate?: any) : any => candidate.startsWith("sha512-"));
+      expect(token).toBeTruthy();
+      const digest: any = Buffer.from(token.slice("sha512-".length), "base64");
+      expect(digest.byteLength).toBe(64);
+      const cachePath: any = path.join(
+        cacheRoot,
+        "_cacache",
+        "content-v2",
+        "sha512",
+        digest.toString("hex").slice(0, 2),
+        digest.toString("hex").slice(2, 4),
+        digest.toString("hex").slice(4)
+      );
+      await fs.mkdir(path.dirname(cachePath), { recursive: true });
+      const expectedBytes: any = await fs.readFile(VENDOR_TARBALL);
+      await fs.writeFile(cachePath, expectedBytes);
       const lockPath: any = path.join(root, "package-lock.json");
       await fs.writeFile(lockPath, `${JSON.stringify({
         packages: {
-          "node_modules/pactium": {
-            name: "pactium",
-            version: "0.8.0",
-            resolved: "file:pactium-0.8.0.tgz",
-            integrity: PACTIUM_LOCK.integrity
-          }
+          "node_modules/pactium": PACTIUM_LOCK
         }
       })}\n`);
-      const cacheRoot: any = path.join(root, "cache");
-      await fs.mkdir(cacheRoot);
       registryHandle = await createLockBackedNpmRegistry({
         lockPath,
         cacheRoot,
@@ -62,11 +67,12 @@ describe("lock-backed npm registry file: packages", () : any => {
       const versionBody: any = await version.json();
       expect(String(versionBody.dist.tarball)).toContain(new URL(origin).host);
       expect(String(versionBody.dist.tarball)).not.toContain("registry.npmjs.org");
+      expect(versionBody.dist.integrity).toBe(PACTIUM_LOCK.integrity);
 
       const tarball: any = await fetch(versionBody.dist.tarball);
       expect(tarball.status).toBe(200);
       const bytes: any = Buffer.from(await tarball.arrayBuffer());
-      expect(bytes.byteLength).toBeGreaterThan(0);
+      expect(bytes).toEqual(expectedBytes);
 
       const missing: any = await fetch(new URL("pactium/0.7.0", origin));
       expect(missing.status).toBe(404);
@@ -75,31 +81,28 @@ describe("lock-backed npm registry file: packages", () : any => {
     }
   });
 
-  it("rewrites packed file:vendor specs to lock versions so the local mirror can serve them", async () : Promise<any> => {
-    const execFileAsync: any = promisify(execFile);
-    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-rewrite-"));
+  it("rejects a file-backed lock record before looking up the referenced archive", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-nonregistry-spec-"));
     try {
-      const packageRoot: any = path.join(root, "package");
-      await fs.mkdir(packageRoot);
-      await fs.writeFile(path.join(packageRoot, "package.json"), `${JSON.stringify({
-        name: "meshrix.js",
-        version: "0.0.1",
-        dependencies: {
-          pactium: "file:vendor/pactium-0.8.0.tgz"
+      const lockPath: any = path.join(root, "package-lock.json");
+      await fs.writeFile(lockPath, `${JSON.stringify({
+        packages: {
+          "node_modules/pactium": {
+            name: "pactium",
+            version: "0.8.0",
+            resolved: "file:missing-pactium-0.8.0.tgz",
+            integrity: PACTIUM_LOCK.integrity
+          }
         }
-      }, null, 2)}\n`);
-      const tarballPath: any = path.join(root, "packed.tgz");
-      await execFileAsync("tar", ["-czf", tarballPath, "-C", root, "package"]);
-      expect(await rewritePackedVendoredFileDependencies(tarballPath)).toBe(true);
-      const extractRoot: any = path.join(root, "extracted");
-      await fs.mkdir(extractRoot);
-      await execFileAsync("tar", ["-xzf", tarballPath, "-C", extractRoot]);
-      const rewritten: any = JSON.parse(
-        await fs.readFile(path.join(extractRoot, "package", "package.json"), "utf8")
-      );
-      expect(rewritten.dependencies.pactium).toBe("0.8.0");
+      })}\n`);
+      await expect(createLockBackedNpmRegistry({
+        lockPath,
+        cacheRoot: path.join(root, "empty-cache"),
+        extraTarballs: []
+      })).rejects.toThrow("npm_package_lock_registry_untrusted");
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
 });

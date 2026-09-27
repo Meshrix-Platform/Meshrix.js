@@ -226,8 +226,8 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
     })();
   }
 
-  async function openTransportFetch(init?: any) : Promise<any> {
-    const result: any = await fetchTransport(url, init, { config: normalized });
+  async function openTransportFetch(init?: any, transportOptions: Record<string, any> = {}) : Promise<any> {
+    const result: any = await fetchTransport(url, init, { config: normalized, ...transportOptions });
     const response: any = result?.response || result;
     if (!response || typeof response !== "object") {
       throw new Error("Upstream MCP http transport did not return a response.");
@@ -354,7 +354,9 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
         headers: headers({ includeSession: initialized }),
         body: JSON.stringify(jsonRpcRequest(id, method, params)),
         signal: controller.signal
-      });
+      }, method === "tools/call" && typeof requestOptions.beforeSend === "function"
+        ? { beforeFetch: requestOptions.beforeSend }
+        : {});
       const response: any = transportFetch.response;
       if (response.status === 404 && initialized && sessionId) {
         await response.body?.cancel().catch(() : any => undefined);

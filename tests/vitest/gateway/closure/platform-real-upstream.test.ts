@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../../packages/agents/src/upstream-gateway/index.ts";
 import { createPlatformMcpGateway } from "@meshrix/server-runtime/composition/gateway-composition";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
+import { modernHttpRequest } from "../support.ts";
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { while (cleanup.length) await cleanup.pop()!(); });
@@ -48,7 +49,7 @@ describe("configured default platform upstream transport", () => {
     });
     cleanup.push(() => platform.close());
     await platform.gateway.start();
-    const call = async (method: string, params: Record<string, unknown> = {}) => platform.adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: method, method, params } });
+    const call = async (method: string, params: Record<string, unknown> = {}) => platform.adapter.handle(modernHttpRequest(method, method, params));
     const listed = await call("tools/list");
     const tools = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string } }> } }).result.tools;
     const published = tools.find((tool) => tool._meta?.serviceId === "synthetic");
@@ -95,7 +96,7 @@ describe("configured default platform upstream transport", () => {
     });
     cleanup.push(() => platform.close());
     await platform.gateway.start();
-    const send = async (method: string, params: Record<string, unknown> = {}) => platform.adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: method, method, params } });
+    const send = async (method: string, params: Record<string, unknown> = {}) => platform.adapter.handle(modernHttpRequest(method, method, params));
     const listed = await send("tools/list");
     const tool = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string } }> } }).result.tools.find((entry) => entry._meta?.serviceId === "legacy");
     expect(tool, JSON.stringify({ visibleNames: (listed.body as { result: { tools: Array<{ name: string }> } }).result.tools.map((entry) => entry.name), peerMethods: calls.map((entry) => entry.method) })).toBeDefined();

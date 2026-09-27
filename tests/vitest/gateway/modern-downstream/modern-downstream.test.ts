@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
-import { context, descriptor, QueueUpstream, response, createTestGateway as createGateway } from "../support";
+import { context, descriptor, modernHttpRequest, modernRequestMessage, QueueUpstream, response, createTestGateway as createGateway } from "../support";
 
 describe("modern MCP downstream adapter", () => {
   it("[CASE-P01 CASE-P04] accepts a neutral client and returns standard catalog and tool results", async () => {
@@ -9,12 +9,12 @@ describe("modern MCP downstream adapter", () => {
     await gateway.start();
     try {
       const adapter = createModernDownstreamAdapter({ gateway });
-      const initialized = await adapter.handle({ method: "POST", headers: { "content-type": "application/json", "mcp-method": "initialize" }, body: { jsonrpc: "2.0", id: 1, method: "initialize", params: {}, clientInfo: { name: "unlisted-client", version: "1" } }, context });
-      expect(initialized.status).toBe(200);
-      const listed = await adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }, context });
+      const initialized = await adapter.handle({ ...modernHttpRequest("initialize", 1), context });
+      expect(initialized).toMatchObject({ status: 404, body: { error: { code: -32601 } } });
+      const listed = await adapter.handle({ ...modernHttpRequest("tools/list", 2), context });
       expect(listed.status).toBe(200);
-      expect(listed.body).toMatchObject({ result: { tools: [{ name: "demo" }] } });
-      const called = await adapter.handle({ method: "POST", headers: { "content-type": "application/json", "mcp-method": "tools/call", "mcp-name": "demo" }, body: { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "demo", arguments: { traceId: "business" } } }, context });
+      expect(listed.body).toMatchObject({ result: { tools: [{ name: "demo" }], ttlMs: 0, cacheScope: "private" } });
+      const called = await adapter.handle({ ...modernHttpRequest("tools/call", 3, { name: "demo", arguments: { traceId: "business" } }), context });
       expect(called.status).toBe(200);
       expect(called.body).toMatchObject({ result: { resultType: "complete" } });
       expect(upstream.requests[0].request.params).toMatchObject({ name: "demo" });
@@ -29,12 +29,60 @@ describe("modern MCP downstream adapter", () => {
     await gateway.start();
     try {
       const adapter = createModernDownstreamAdapter({ gateway });
-      expect((await adapter.handle({ method: "POST", headers: { "content-type": "application/json", "mcp-method": "tools/list" }, body: { jsonrpc: "2.0", id: 1, method: "tools/call", params: {} }, context })).status).toBe(400);
-      expect((await adapter.handle({ method: "POST", headers: { "content-type": "application/json", "mcp-protocol-version": "old-version" }, body: { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }, context })).status).toBe(400);
-      expect((await adapter.handle({ method: "POST", headers: { "content-type": "application/json", "mcp-name": "other" }, body: { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "demo" } }, context })).status).toBe(400);
-      expect((await adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: 4, method: "subscriptions/listen", params: {} }, context })).status).toBe(400);
+      const mismatch = modernHttpRequest("tools/list", 1, {}, {}, { "Mcp-Method": "tools/call" });
+      expect(await adapter.handle({ ...mismatch, context })).toMatchObject({ status: 400, body: { error: { code: -32020 } } });
+      const oldVersion = modernHttpRequest("tools/list", 2, {}, { "io.modelcontextprotocol/protocolVersion": "old-version" }, { "MCP-Protocol-Version": "old-version" });
+      expect(await adapter.handle({ ...oldVersion, context })).toMatchObject({ status: 400, body: { error: { code: -32022 } } });
+      const nameMismatch = modernHttpRequest("tools/call", 3, { name: "demo" });
+      nameMismatch.headers["Mcp-Name"] = "other";
+      expect(await adapter.handle({ ...nameMismatch, context })).toMatchObject({ status: 400, body: { error: { code: -32020 } } });
+      const subscription = await adapter.handle({ ...modernHttpRequest("subscriptions/listen", 4), context });
+      expect(subscription).toMatchObject({ status: 400, body: { error: { code: -32602 } } });
+      const missingHeader = modernHttpRequest("tools/list", 5);
+      delete (missingHeader.headers as Record<string, string>)["Mcp-Method"];
+      expect(await adapter.handle({ ...missingHeader, context })).toMatchObject({ status: 400, body: { error: { code: -32020 } } });
+      const missingMetadata = { ...modernHttpRequest("tools/list", 6), body: { jsonrpc: "2.0", id: 6, method: "tools/list", params: {} } };
+      expect(await adapter.handle({ ...missingMetadata, context })).toMatchObject({ status: 400, body: { error: { code: -32602 } } });
       expect((await adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: [], context })).status).toBe(400);
       expect(upstream.requests).toHaveLength(0);
+    } finally {
+      await gateway.close();
+    }
+  });
+
+  it("returns private zero-TTL metadata for every authorization-scoped catalog and resource-read result", async () => {
+    const gateway = {
+      catalog: () => ({ items: [] }),
+      readResource: async () => ({ kind: "complete" as const, value: { contents: [], ttlMs: 60_000, cacheScope: "public" } })
+    };
+    const adapter = createModernDownstreamAdapter({ gateway: gateway as any });
+    for (const method of ["tools/list", "resources/list", "resources/templates/list", "prompts/list"]) {
+      const result = await adapter.handle({ ...modernHttpRequest(method, method), context });
+      expect(result.body).toMatchObject({ result: { ttlMs: 0, cacheScope: "private" } });
+    }
+    const readRequest = modernHttpRequest("resources/read", "resource-read", { uri: "demo://private/资料" });
+    expect(readRequest.headers["Mcp-Name"]).toMatch(/^=\?base64\?/u);
+    const resource = await adapter.handle({ ...readRequest, context });
+    expect(resource.body).toMatchObject({ result: { contents: [], ttlMs: 0, cacheScope: "private" } });
+  });
+
+  it("requires request metadata on stdio without requiring HTTP mirror headers", async () => {
+    const upstream = new QueueUpstream();
+    const gateway = createGateway({ upstream, descriptors: [descriptor()] });
+    await gateway.start();
+    try {
+      const adapter = createModernDownstreamAdapter({ gateway });
+      const invalidRequests = [
+        { jsonrpc: "2.0", id: "stdio-missing", method: "tools/call", params: { name: "demo", arguments: {} } },
+        { jsonrpc: "2.0", id: "stdio-malformed", method: "tools/call", params: { name: "demo", arguments: {}, _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": [] } } }
+      ];
+      for (const body of invalidRequests) {
+        expect(await adapter.handle({ transport: "stdio", method: "POST", body, context })).toMatchObject({ status: 400, body: { error: { code: -32602 } } });
+        expect(upstream.requests).toHaveLength(0);
+      }
+      const accepted = await adapter.handle({ transport: "stdio", method: "POST", body: modernRequestMessage("tools/call", "stdio-valid", { name: "demo", arguments: {} }), context });
+      expect(accepted).toMatchObject({ status: 200, body: { result: { resultType: "complete" } } });
+      expect(upstream.requests).toHaveLength(1);
     } finally {
       await gateway.close();
     }
@@ -56,12 +104,7 @@ describe("modern MCP downstream adapter", () => {
         },
         subscriptionByteBudget: 4096
       });
-      const opened = await adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: "sub-1", method: "subscriptions/listen", params: { notifications: { toolsListChanged: true } } },
-        context
-      });
+      const opened = await adapter.handle({ ...modernHttpRequest("subscriptions/listen", "sub-1", { notifications: { toolsListChanged: true } }), context });
       expect(opened.status).toBe(200);
       expect(opened.body).toMatchObject({ result: { subscriptionId: "sub-1", transport: "post-stream" } });
       const iterator = opened.stream?.[Symbol.asyncIterator]();
@@ -88,12 +131,7 @@ describe("modern MCP downstream adapter", () => {
     await gateway.start();
     try {
       const adapter = createModernDownstreamAdapter({ gateway, subscriptionByteBudget: 256 });
-      const opened = await adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: "sub-budget", method: "subscriptions/listen", params: { notifications: { toolsListChanged: true } } },
-        context
-      });
+      const opened = await adapter.handle({ ...modernHttpRequest("subscriptions/listen", "sub-budget", { notifications: { toolsListChanged: true } }), context });
       expect(opened.status).toBe(200);
       const iterator = opened.stream?.[Symbol.asyncIterator]();
       gateway.publishEvent(context, { type: "tools/list_changed", revision: "oversized", payload: { blob: "x".repeat(1024) } });
@@ -114,12 +152,7 @@ describe("modern MCP downstream adapter", () => {
         gateway,
         authenticate: async () => (authorized ? context : { ...context, grant: Object.freeze({ revision: "grant-2" }) })
       });
-      const opened = await adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: "sub-revoke", method: "subscriptions/listen", params: { notifications: { toolsListChanged: true } } },
-        context
-      });
+      const opened = await adapter.handle({ ...modernHttpRequest("subscriptions/listen", "sub-revoke", { notifications: { toolsListChanged: true } }), context });
       expect(opened.status).toBe(200);
       const iterator = opened.stream?.[Symbol.asyncIterator]();
       authorized = false;
@@ -143,15 +176,9 @@ describe("modern MCP downstream adapter", () => {
         ["promptsListChanged", "prompts/list_changed"],
         ["resourceUpdated", "resource/updated"]
       ] as const;
-      const initialized = await adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, context });
-      const capabilities = (initialized.body as { result: { capabilities: Record<string, unknown> } }).result.capabilities;
-      expect(capabilities).toEqual({ tools: { listChanged: true }, resources: { listChanged: true }, prompts: { listChanged: true }, subscriptions: { listen: true } });
-      const opened = await adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: "sub-cap", method: "subscriptions/listen", params: { notifications: Object.fromEntries(declared.map(([flag]) => [flag, true])) } },
-        context
-      });
+      const initialized = await adapter.handle({ ...modernHttpRequest("initialize", 1), context });
+      expect(initialized).toMatchObject({ status: 404, body: { error: { code: -32601 } } });
+      const opened = await adapter.handle({ ...modernHttpRequest("subscriptions/listen", "sub-cap", { notifications: Object.fromEntries(declared.map(([flag]) => [flag, true])) }), context });
       expect(opened.status).toBe(200);
       const iterator = opened.stream?.[Symbol.asyncIterator]();
       for (const [flag, eventType] of declared) {
@@ -160,20 +187,10 @@ describe("modern MCP downstream adapter", () => {
       }
       await iterator?.return?.();
       opened.close?.();
-      const undeclared = await adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: "sub-undeclared", method: "subscriptions/listen", params: { notifications: { resourceSubscriptions: true } } },
-        context
-      });
+      const undeclared = await adapter.handle({ ...modernHttpRequest("subscriptions/listen", "sub-undeclared", { notifications: { resourceSubscriptions: true } }), context });
       expect(undeclared.status).toBe(400);
-      const unadvertisedMethod = await adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: "res-sub", method: "resources/subscribe", params: { uri: "demo://resource" } },
-        context
-      });
-      expect(unadvertisedMethod.status).toBe(400);
+      const unadvertisedMethod = await adapter.handle({ ...modernHttpRequest("resources/subscribe", "res-sub", { uri: "demo://resource" }), context });
+      expect(unadvertisedMethod).toMatchObject({ status: 404, body: { error: { code: -32601 } } });
     } finally {
       await gateway.close();
     }

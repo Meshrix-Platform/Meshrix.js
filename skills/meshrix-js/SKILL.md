@@ -7,11 +7,13 @@ description: Meshrix.js product identity and specialist skill routing. Use the d
 
 ## Product and authority
 
-Meshrix.js owns its private Node.js platform. Keep its implementation, paths,
-commands, evidence, and history private; never project them into the public
-Meshrix repository or describe public work as originating here. Public Go work
-uses `$meshrix`. Work touching both products keeps separate contracts, source,
-tests, evidence, and completion claims.
+Meshrix.js is the open-source Node.js MCP platform maintained in this
+repository. Public source documentation may describe its implementation,
+repository-relative paths, commands, and verified results. Credentials,
+personal or machine identity, private deployment details, and runtime payloads
+remain private. Source availability does not establish release or acceptance.
+Independent Go implementation work uses its own repository and `$meshrix`;
+preserve its source assets, contracts, tests, evidence, and completion claims.
 
 Authoritative Meshrix.js skills live in this repository's `skills/` directory.
 Distribution and installed packages are generated from these sources. They
@@ -20,12 +22,12 @@ repository's AGENTS.md, source, and command definitions when a distribution is
 stale; report the distribution defect and continue authorized work.
 
 Meshrix.js follows a self-owned implementation route for its core Node.js
-platform and infrastructure. Do not apply the public Go dependency-admission
+platform and infrastructure. Do not apply an independent Go implementation's dependency-admission
 table here or replace owned protocol, gateway, permission, queue, state, plugin,
 storage, audit, or runtime authorities with third-party frameworks merely
-because the Go product admits them. Existing runtime, UI, database-driver,
+because that implementation admits them. Existing runtime, UI, database-driver,
 cryptographic, and edge utility dependencies do not transfer those authorities.
-Any exception requires an explicit maintainer decision for this private product.
+Any exception requires an explicit maintainer decision for this platform.
 
 ## Route the task
 

@@ -224,7 +224,7 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     if (!closed) markFatal();
   });
 
-  function writePayload(payload?: any) : any {
+  function writePayload(payload?: any, beforeWrite?: () => void | Promise<void>, signal?: AbortSignal) : any {
     if (fatalError) return Promise.reject(fatalError);
     if (closed || !child.stdin?.writable) {
       return Promise.reject(fatalSessionError("Upstream MCP stdio session is closed."));
@@ -237,29 +237,34 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     activeWrites += 1;
     queuedWriteBytes += bytes;
     updateReferences();
-    const write: any = writeChain.then(() : any => new Promise((resolve?: any, reject?: any) : any => {
-      let callbackDone: any = false;
-      let drained: any = false;
-      const complete: any = () : any => {
-        if (callbackDone && drained) resolve();
-      };
-      try {
-        const accepted: any = child.stdin.write(serialized, "utf8", (error?: any) : any => {
-          if (error) reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
-          else {
-            callbackDone = true;
+    const write: any = writeChain.then(async () : Promise<any> => {
+      if (beforeWrite && signal?.aborted) throw abortError();
+      await beforeWrite?.();
+      if (beforeWrite && signal?.aborted) throw abortError();
+      return new Promise((resolve?: any, reject?: any) : any => {
+        let callbackDone: any = false;
+        let drained: any = false;
+        const complete: any = () : any => {
+          if (callbackDone && drained) resolve();
+        };
+        try {
+          const accepted: any = child.stdin.write(serialized, "utf8", (error?: any) : any => {
+            if (error) reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
+            else {
+              callbackDone = true;
+              complete();
+            }
+          });
+          if (accepted) drained = true;
+          else child.stdin.once("drain", () : any => {
+            drained = true;
             complete();
-          }
-        });
-        if (accepted) drained = true;
-        else child.stdin.once("drain", () : any => {
-          drained = true;
-          complete();
-        });
-      } catch (error: any) {
-        reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
-      }
-    }));
+          });
+        } catch (error: any) {
+          reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
+        }
+      });
+    });
     writeChain = write.catch(() : any => {});
     return write.finally(() : any => {
         activeWrites = Math.max(0, activeWrites - 1);
@@ -312,7 +317,13 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
       requestOptions.signal?.addEventListener("abort", abortListener, { once: true });
       updateReferences();
     });
-    void writePayload(payload).catch((error?: any) : any => {
+    const beforeWrite = method === "tools/call" && typeof requestOptions.beforeSend === "function"
+      ? async () : Promise<void> => {
+          await requestOptions.beforeSend();
+          if (requestOptions.signal?.aborted) throw abortError();
+        }
+      : undefined;
+    void writePayload(payload, beforeWrite, requestOptions.signal).catch((error?: any) : any => {
       finishEntry(id, (entry?: any) : any => entry.reject(error));
     });
     return promise.then((result?: any) : any => {

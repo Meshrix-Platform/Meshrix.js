@@ -14,33 +14,33 @@
   },
   "exports": {
     "./operation-permission-core/index": {
-      "types": "./dist/operation-permission-core/index.d.ts",
       "source": "./src/operation-permission-core/index.ts",
+      "types": "./dist/operation-permission-core/index.d.ts",
       "default": "./dist/operation-permission-core/index.js"
     },
     "./operation-permission-core/runtime-schema": {
-      "types": "./dist/operation-permission-core/runtime-schema.d.ts",
       "source": "./src/operation-permission-core/runtime-schema.ts",
+      "types": "./dist/operation-permission-core/runtime-schema.d.ts",
       "default": "./dist/operation-permission-core/runtime-schema.js"
     },
     "./operation-permission-core/store": {
-      "types": "./dist/operation-permission-core/store.d.ts",
       "source": "./src/operation-permission-core/store.ts",
+      "types": "./dist/operation-permission-core/store.d.ts",
       "default": "./dist/operation-permission-core/store.js"
     },
     "./skills/tool-skill-management-provider": {
-      "types": "./dist/skills/tool-skill-management-provider.d.ts",
       "source": "./src/skills/tool-skill-management-provider.ts",
+      "types": "./dist/skills/tool-skill-management-provider.d.ts",
       "default": "./dist/skills/tool-skill-management-provider.js"
     },
     "./gateway-policy": {
-      "types": "./dist/gateway-policy/index.d.ts",
       "source": "./src/gateway-policy/index.ts",
+      "types": "./dist/gateway-policy/index.d.ts",
       "default": "./dist/gateway-policy/index.js"
     },
     "./gateway-credentials": {
-      "types": "./dist/gateway-credentials/index.d.ts",
       "source": "./src/gateway-credentials/index.ts",
+      "types": "./dist/gateway-credentials/index.d.ts",
       "default": "./dist/gateway-credentials/index.js"
     }
   },

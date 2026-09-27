@@ -3,7 +3,7 @@ import { createGatewayExecutor } from "@meshrix/agents/upstream-gateway/gateway-
 import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-gateway/tool-projection.ts";
 import { createGatewayProtocolAdapter } from "@meshrix/protocols/mcp/adapter/gateway";
 import { createPlatformGateway, createPlatformMcpGateway, executeThroughPlatformGateway } from "@meshrix/server-runtime/composition/gateway-composition";
-import { context, descriptor, QueueUpstream, response } from "../support";
+import { context, descriptor, modernHttpRequest, QueueUpstream, response } from "../support";
 
 describe("platform composition single invoke path", () => {
   it("[CASE-A06] routes protocol, agent, and platform composition through one gateway port", async () => {
@@ -45,11 +45,7 @@ describe("platform composition single invoke path", () => {
     });
     await platform.gateway.start();
     try {
-      const list = () => platform.adapter.handle({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }
-      });
+      const list = () => platform.adapter.handle(modernHttpRequest("tools/list", 1));
       await list();
       const initialRoutes = [...platform.gateway.catalogStore.snapshot().routes.values()];
       // The platform MCP baseline publishes the two stable categorized outlets as the first
@@ -87,7 +83,7 @@ describe("platform composition single invoke path", () => {
     });
     await platform.gateway.start();
     try {
-      const page = await platform.adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} } });
+      const page = await platform.adapter.handle(modernHttpRequest("tools/list", 1));
       const tools = (page.body as { result: { tools: Array<{ _meta?: { serviceId?: string } }> } }).result.tools;
       expect(tools.some((tool) => tool._meta?.serviceId === "healthy")).toBe(true);
       expect(tools.some((tool) => tool._meta?.serviceId === "malformed")).toBe(false);

@@ -43,6 +43,9 @@ export function decodeUpstreamResult(value: unknown, options: { readonly legacy?
   }
   const resultType = value.resultType;
   if (Object.hasOwn(value, "kind")) return failure({ origin: "protocol", code: "upstream_result_invalid", message: "Wire result has an internal discriminant.", status: 502, effectOutcome: "unknown" });
+  if (Object.hasOwn(value, "isError") && typeof value.isError !== "boolean") {
+    return failure({ origin: "protocol", code: "upstream_result_invalid", message: "Upstream isError must be a boolean.", status: 502, effectOutcome: "unknown" });
+  }
   if (resultType === "input_required") {
     if (!Array.isArray(value.inputRequests) && !isPlainRecord(value.inputRequests) && typeof value.requestState !== "string") {
       return failure({ origin: "protocol", code: "input_required_invalid", message: "input_required result needs requests or state.", status: 502, effectOutcome: "unknown" });
@@ -58,8 +61,7 @@ export function decodeUpstreamResult(value: unknown, options: { readonly legacy?
   if (typeof resultType === "string" && resultType !== "complete") {
     return failure({ origin: "protocol", code: "upstream_result_type_unnegotiated", message: "Upstream result type was not negotiated.", status: 502, effectOutcome: "unknown" });
   }
-  const protocolResult = Object.hasOwn(value, "content") || Object.hasOwn(value, "structuredContent") || Object.hasOwn(value, "resource") || Object.hasOwn(value, "isError") || Object.hasOwn(value, "_meta");
-  if (options.legacy || resultType === "complete" || protocolResult) {
+  if (options.legacy || resultType === "complete") {
     return complete(value, { isError: value.isError === true, requestState: typeof value.requestState === "string" ? value.requestState : undefined });
   }
   return failure({ origin: "protocol", code: "upstream_result_type_unnegotiated", message: "Upstream result type was not negotiated.", status: 502, effectOutcome: "unknown" });

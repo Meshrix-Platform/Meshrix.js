@@ -17,8 +17,18 @@ describe("gateway result union", () => {
     expect(decodeUpstreamResult({ resultType: "not-negotiated" })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
   });
 
-  it("[CASE-P06] distinguishes protocol-shaped MCP results, peer errors, and gateway failures", () => {
-    expect(decodeUpstreamResult({ content: [{ type: "text", text: "ok" }] })).toMatchObject({ kind: "complete" });
+  it("[CASE-P06] requires a negotiated result type for modern wire results and preserves explicit legacy decoding", () => {
+    const contentOnly = { content: [{ type: "text", text: "ok" }] };
+    expect(decodeUpstreamResult(contentOnly)).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated", effectOutcome: "unknown" });
+    expect(decodeUpstreamResult({ structuredContent: { ok: true } })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
+    expect(decodeUpstreamResult({ resource: { uri: "fixture://resource" } })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
+    expect(decodeUpstreamResult({ isError: true, content: [] })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
+    expect(decodeUpstreamResult({ _meta: { fixture: true } })).toMatchObject({ kind: "failure", code: "upstream_result_type_unnegotiated" });
+    expect(decodeUpstreamResult(contentOnly, { legacy: true })).toMatchObject({ kind: "complete" });
+    expect(decodeUpstreamResult({ resultType: "complete", content: [] })).toMatchObject({ kind: "complete", isError: false });
+    expect(decodeUpstreamResult({ resultType: "complete", isError: true })).toMatchObject({ kind: "complete", isError: true });
+    expect(decodeUpstreamResult({ resultType: "complete", isError: false })).toMatchObject({ kind: "complete", isError: false });
+    expect(decodeUpstreamResult({ resultType: "complete", isError: "true" })).toMatchObject({ kind: "failure", code: "upstream_result_invalid", origin: "protocol", effectOutcome: "unknown" });
     expect(decodeUpstreamResult(failure({ origin: "peer", code: "peer_failed", message: "peer", status: 502, effectOutcome: "failed" }))).toMatchObject({ kind: "failure", origin: "protocol" });
     expect(decodeUpstreamResult(null)).toMatchObject({ kind: "failure", code: "upstream_result_invalid" });
   });

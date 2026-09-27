@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createServer as createSecureServer } from "node:https";
 import { createSecureContext } from "node:tls";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
 import { createGateway } from "@meshrix/gateway";
@@ -13,14 +13,18 @@ import { createIsolatedSchemaValidator } from "@meshrix/gateway/schema";
 import type { AuthenticatedContext, CatalogDescriptor, RouteSnapshot, UpstreamPort } from "@meshrix/contracts/gateway";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
-import { fetchWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
+import { createSqliteGatewayContinuationLedger } from "@meshrix/foundation/security/gateway-continuation-ledger";
+import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import { createLegacyMcpAdapter } from "@meshrix/protocols/mcp/legacy";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
 import { createModernUpstreamAdapter } from "@meshrix/protocols/mcp/modern-upstream";
+import { fetchRpc, MAX_UPSTREAM_MESSAGE_BYTES as MAX_REQUEST_BYTES, StdioPeerTransport } from "./upstream-transport.ts";
 
-const MAX_REQUEST_BYTES = 1024 * 1024;
+const MAX_ALLOWED_ORIGINS = 64;
+const MAX_ORIGIN_BYTES = 2048;
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = new Set(["2025-03-26", "2025-06-18", "2025-11-25"]);
+const CLI_STDOUT_CANCELLED = Symbol("cli-stdout-cancelled");
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): value is RecordValue {
@@ -30,6 +34,33 @@ function configError(code: string, message: string): Error & { code: string } {
   return Object.assign(new Error(message), { code });
 }
 function digest(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
+function normalizeOrigin(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > MAX_ORIGIN_BYTES || Buffer.byteLength(value, "utf8") > MAX_ORIGIN_BYTES || !/^https?:\/\/[^/?#]+$/iu.test(value)) return undefined;
+  try {
+    const origin = new URL(value);
+    if (value.includes("@") || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) return undefined;
+    return origin.origin;
+  } catch { return undefined; }
+}
+function configuredOrigins(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.length > MAX_ALLOWED_ORIGINS) throw configError("gateway_origin_invalid", "Remote allowedOrigins must be a bounded list of HTTP or HTTPS origins.");
+  const normalized = value.map(normalizeOrigin);
+  if (normalized.some((origin) => origin === undefined)) throw configError("gateway_origin_invalid", "Remote allowedOrigins contains an invalid origin.");
+  return Object.freeze([...new Set(normalized as string[])]);
+}
+function requestOriginAllowed(request: IncomingMessage, allowed: ReadonlySet<string>): boolean {
+  let found = false;
+  let value: string | undefined;
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    if (request.rawHeaders[index]?.toLowerCase() !== "origin") continue;
+    if (found) return false;
+    found = true;
+    value = request.rawHeaders[index + 1];
+  }
+  if (!found) return true;
+  const normalized = normalizeOrigin(value);
+  return normalized !== undefined && allowed.has(normalized);
+}
 function localUrl(value: string): URL {
   const url = new URL(value);
   if (url.protocol !== "http:" || !["127.0.0.1", "[::1]"].includes(url.hostname) || url.username || url.password || url.search || url.hash) throw configError("gateway_target_unsafe", "The local profile only permits literal loopback HTTP upstreams without URL credentials.");
@@ -66,7 +97,7 @@ interface RuntimeConfig {
   readonly profile: "local" | "remote";
   readonly listen: { readonly host: string; readonly port: number };
   readonly services: readonly ServiceConfig[];
-  readonly remoteAuth?: { readonly bearerTokenEnv: string; readonly tlsCertEnv: string; readonly tlsKeyEnv: string; readonly allowedServiceIds: readonly string[]; readonly allowLoopbackUpstreams: boolean; readonly expiresAt?: number };
+  readonly remoteAuth?: { readonly bearerTokenEnv: string; readonly tlsCertEnv: string; readonly tlsKeyEnv: string; readonly allowedServiceIds: readonly string[]; readonly allowedOrigins: readonly string[]; readonly allowLoopbackUpstreams: boolean; readonly expiresAt?: number };
 }
 
 async function loadConfig(path?: string): Promise<RuntimeConfig> {
@@ -91,7 +122,8 @@ async function loadConfig(path?: string): Promise<RuntimeConfig> {
     catch { throw configError("gateway_tls_invalid", "Remote TLS identity is invalid."); }
     const expiresAt = remote.expiresAt === undefined ? undefined : Date.parse(String(remote.expiresAt));
     if (expiresAt !== undefined && (!Number.isFinite(expiresAt) || expiresAt <= Date.now())) throw configError("gateway_remote_auth_invalid", "Remote grant expiration is invalid.");
-    remoteAuth = { bearerTokenEnv, tlsCertEnv, tlsKeyEnv, allowedServiceIds: Object.freeze([...remote.allowedServiceIds]), allowLoopbackUpstreams: remote.allowLoopbackUpstreams === true, ...(expiresAt === undefined ? {} : { expiresAt }) };
+    const allowedOrigins = remote.allowedOrigins === undefined ? Object.freeze([]) : configuredOrigins(remote.allowedOrigins);
+    remoteAuth = { bearerTokenEnv, tlsCertEnv, tlsKeyEnv, allowedServiceIds: Object.freeze([...remote.allowedServiceIds]), allowedOrigins, allowLoopbackUpstreams: remote.allowLoopbackUpstreams === true, ...(expiresAt === undefined ? {} : { expiresAt }) };
   }
   if (provided.services !== undefined && !Array.isArray(provided.services)) throw configError("gateway_services_invalid", "Services must be an array.");
   const rawServices = Array.isArray(provided.services) ? provided.services : [];
@@ -143,113 +175,41 @@ async function version(): Promise<string> {
   return manifest.version;
 }
 
-async function fetchRpc(endpoint: string, request: Readonly<Record<string, unknown>>, headers: Readonly<Record<string, string>>, signal?: AbortSignal, remote?: RuntimeConfig["remoteAuth"]) {
-  const boundedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000);
-  const init = { method: "POST", body: JSON.stringify(request), headers, redirect: "manual" as const, signal: boundedSignal };
-  const literalLoopback = ["127.0.0.1", "[::1]"].includes(new URL(endpoint).hostname);
-  const pinned = remote ? await fetchWithPinnedDns({ url: endpoint, init, maxRedirects: 0,
-    policies: remote.allowLoopbackUpstreams && literalLoopback ? { egress: { allowLocalForDevelopment: true } } : {}, label: "gateway.remote.upstream" }) : undefined;
-  const response = pinned?.response ?? await fetch(endpoint, init);
-  const chunks: Buffer[] = [];
-  let size = 0;
-  try { if (response.body) {
-    const reader = response.body.getReader();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = Buffer.from(value);
-        size += chunk.length;
-        if (size > MAX_REQUEST_BYTES) throw configError("gateway_response_oversize", "Peer response exceeds the configured budget.");
-        chunks.push(chunk);
-      }
-    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-  } } finally { await pinned?.close(); }
-  const text = Buffer.concat(chunks).toString("utf8");
-  return { status: response.status, headers: Object.fromEntries(response.headers), body: text ? JSON.parse(text) as unknown : null };
-}
-
-class StdioPeerTransport {
-  readonly #child: ChildProcess;
-  readonly #pending = new Map<string, { resolve: (value: { status: number; body: unknown }) => void; reject: (error: unknown) => void; timer: ReturnType<typeof setTimeout>; abort: () => void; signal?: AbortSignal }>();
-  #partial = "";
-  #closed = false;
-
-  constructor(service: ServiceConfig) {
-    if (!service.command) throw configError("gateway_stdio_invalid", "Stdio peer command is unavailable.");
-    this.#child = spawn(service.command, [...(service.args ?? [])], { stdio: ["pipe", "pipe", "pipe"], shell: false,
-      env: { ...(process.env.PATH ? { PATH: process.env.PATH } : {}), ...service.env } });
-    this.#child.stderr?.on("data", () => {});
-    this.#child.stdin?.on("error", () => this.#fail(configError("gateway_stdio_lost", "Stdio peer input closed unexpectedly.")));
-    this.#child.stdout?.setEncoding("utf8");
-    this.#child.stdout?.on("data", (chunk: string) => {
-      this.#partial += chunk;
-      if (Buffer.byteLength(this.#partial) > MAX_REQUEST_BYTES) { this.#fail(configError("gateway_response_oversize", "Stdio peer response exceeded the budget.")); return; }
-      let boundary: number;
-      while ((boundary = this.#partial.indexOf("\n")) >= 0) {
-        const line = this.#partial.slice(0, boundary).trim();
-        this.#partial = this.#partial.slice(boundary + 1);
-        if (!line) continue;
-        let body: RecordValue;
-        try { const parsed: unknown = JSON.parse(line); if (!record(parsed)) throw new Error("bad response"); body = parsed; }
-        catch { this.#fail(configError("gateway_stdio_invalid", "Stdio peer sent invalid JSON-RPC.")); return; }
-        const id = String(body.id ?? "");
-        const waiting = this.#pending.get(id);
-        if (!waiting) continue;
-        this.#pending.delete(id);
-        clearTimeout(waiting.timer);
-        waiting.signal?.removeEventListener("abort", waiting.abort);
-        waiting.resolve({ status: 200, body });
-      }
-    });
-    this.#child.once("error", () => this.#fail(configError("gateway_stdio_lost", "Stdio peer failed to start.")));
-    this.#child.once("exit", () => this.#fail(configError("gateway_stdio_lost", "Stdio peer exited.")));
-  }
-
-  #fail(error: unknown): void {
-    if (this.#closed) return;
-    this.#closed = true;
-    for (const [id, pending] of this.#pending) {
-      clearTimeout(pending.timer);
-      pending.signal?.removeEventListener("abort", pending.abort);
-      pending.reject(error);
-      this.#pending.delete(id);
+function createDurablePermitAuthority(descriptors: readonly CatalogDescriptor[]) {
+  const effectfulRoutes = new Set(descriptors.filter((item) => item.route.effectClass !== "read").map((item) => item.route.logicalRoute));
+  const dataRoot = ServerConfig.getDataDir();
+  const ledgerPath = join(dataRoot, "gateway", "execution.sqlite");
+  let ledger: ReturnType<typeof createSqliteGatewayContinuationLedger> | undefined;
+  const openLedger = () => {
+    if (!ledger) {
+      ledger = createSqliteGatewayContinuationLedger({ filePath: ledgerPath, ownershipRoot: dataRoot });
     }
-    if (this.#child.exitCode === null) this.#child.kill("SIGTERM");
-  }
-
-  send({ request, signal }: { readonly request: Readonly<Record<string, unknown>>; readonly signal?: AbortSignal }): Promise<{ status: number; body: unknown }> {
-    if (this.#closed || !this.#child.stdin?.writable) return Promise.reject(configError("gateway_stdio_lost", "Stdio peer is unavailable."));
-    const wire = `${JSON.stringify(request)}\n`;
-    if (Buffer.byteLength(wire) > MAX_REQUEST_BYTES) return Promise.reject(configError("gateway_request_oversize", "Stdio request exceeds the budget."));
-    const id = request.id;
-    if (id === undefined) { this.#child.stdin.write(wire); return Promise.resolve({ status: 202, body: null }); }
-    const key = String(id);
-    if (this.#pending.has(key)) return Promise.reject(configError("gateway_stdio_duplicate_id", "Stdio request identity is already active."));
-    return new Promise((resolve, reject) => {
-      const abort = () => { const pending = this.#pending.get(key); if (pending) { clearTimeout(pending.timer); this.#pending.delete(key); reject(configError("gateway_stdio_cancelled", "Stdio request was cancelled.")); } };
-      const timer = setTimeout(() => {
-        this.#pending.delete(key);
-        signal?.removeEventListener("abort", abort);
-        reject(configError("gateway_stdio_timeout", "Stdio peer exceeded its response deadline."));
-      }, 30_000);
-      this.#pending.set(key, { resolve, reject, timer, abort, signal });
-      signal?.addEventListener("abort", abort, { once: true });
-      if (signal?.aborted) { abort(); return; }
-      this.#child.stdin!.write(wire);
-    });
-  }
-
-  async close(): Promise<void> {
-    if (this.#child.exitCode === null) {
-      const exited = new Promise<void>((resolve) => this.#child.once("exit", () => resolve()));
-      this.#fail(configError("gateway_stdio_closed", "Stdio peer was closed."));
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try { await Promise.race([exited, new Promise<void>((resolve) => { timer = setTimeout(resolve, 1000); })]); }
-      finally { if (timer) clearTimeout(timer); }
-      if (this.#child.exitCode === null) { this.#child.kill("SIGKILL"); await exited; }
-    }
-  }
+    return ledger;
+  };
+  const receiptOwner = {
+    recordIssued(permit: import("@meshrix/contracts/gateway").ExecutionPermit): void {
+      if (!permit.routeRef || !effectfulRoutes.has(permit.routeRef)) return;
+      openLedger().recordIssuedWithIntent(permit);
+    },
+    recordConsumed(id: string): void {
+      const selected = ledger;
+      if (selected?.hasIntent(id)) selected.recordConsumed(id);
+    },
+    recordUnknown(id: string): void {
+      const selected = ledger;
+      if (selected?.hasIntent(id)) selected.recordUnknown(id);
+    },
+    transitionIntent(permit: import("@meshrix/contracts/gateway").ExecutionPermit, phase: "dispatch_started" | "not_started" | "succeeded" | "failed"): void {
+      const selected = ledger;
+      if (!selected || !selected.hasIntent(permit.id)) throw configError("gateway_intent_missing", "The durable execution intent is unavailable.");
+      selected.transitionExecutionIntent(permit, phase);
+    },
+    lookupReceipt(id: string) { return ledger?.lookupReceipt(id); }
+  };
+  return Object.freeze({
+    authority: createGatewayPermitAuthority({ receiptLedger: receiptOwner }),
+    close(): void { ledger?.close(); ledger = undefined; }
+  });
 }
 
 async function createRuntime(config: RuntimeConfig, serverVersion: string, signal?: AbortSignal) {
@@ -300,19 +260,20 @@ async function createRuntime(config: RuntimeConfig, serverVersion: string, signa
   }
   await externalSchemas.close();
   let gateway;
+  const permitOwner = createDurablePermitAuthority(descriptors);
   try {
     if (signal?.aborted) throw configError("gateway_start_cancelled", "Gateway startup was cancelled.");
     gateway = createGateway({
-    policy: createGatewayPolicy(), permits: createGatewayPermitAuthority(), descriptors,
+    policy: createGatewayPolicy(), permits: permitOwner.authority, descriptors,
     credentialProvider: { async resolve({ binding }) { const authorization = credentials.get(binding); if (!authorization) throw configError("gateway_credential_missing", "Credential binding is unavailable."); return { Authorization: authorization }; } },
     continuationKey: randomBytes(32),
-    upstream: { async invoke(input) { const adapter = transports.get(input.route.upstreamIdentity); if (!adapter) throw configError("gateway_target_missing", "Upstream target is unavailable."); return adapter.invoke(input); }, async close() { await Promise.all([...transports.values()].map((adapter) => adapter.close?.())); } },
+    upstream: { async invoke(input) { const adapter = transports.get(input.route.upstreamIdentity); if (!adapter) throw configError("gateway_target_missing", "Upstream target is unavailable."); return adapter.invoke(input); }, async close() { try { await Promise.all([...transports.values()].map((adapter) => adapter.close?.())); } finally { permitOwner.close(); } } },
     ownedUpstream: true, serverInfo: { name: "meshrix-gateway", version: serverVersion }
   });
   await gateway.start(); }
   catch (error) {
     if (gateway) await gateway.close({ drainDeadline: 1000 }).catch(() => {});
-    else await Promise.allSettled([...transports.values()].map((adapter) => adapter.close?.()));
+    else { await Promise.allSettled([...transports.values()].map((adapter) => adapter.close?.())); permitOwner.close(); }
     throw error;
   }
   const context: AuthenticatedContext = { tenant: config.profile, principal: config.profile === "local" ? "local-client" : "remote-operator", authGeneration: `${config.profile}-1`, grant: { revision: `${config.profile}-1`,
@@ -333,15 +294,49 @@ async function createRuntime(config: RuntimeConfig, serverVersion: string, signa
   return { gateway, adapter, authenticated };
 }
 
-async function requestJson(request: IncomingMessage): Promise<unknown> {
+async function requestJson(request: IncomingMessage, shutdownSignal?: AbortSignal): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > MAX_REQUEST_BYTES) throw configError("gateway_request_oversize", "Request exceeds the configured byte budget.");
-    chunks.push(chunk);
+  const cancelIncompleteBody = () => { if (!request.complete) request.destroy(); };
+  shutdownSignal?.addEventListener("abort", cancelIncompleteBody, { once: true });
+  try {
+    if (shutdownSignal?.aborted) cancelIncompleteBody();
+    for await (const chunk of request) {
+      size += chunk.length;
+      if (size > MAX_REQUEST_BYTES) throw configError("gateway_request_oversize", "Request exceeds the configured byte budget.");
+      chunks.push(chunk);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  } finally {
+    shutdownSignal?.removeEventListener("abort", cancelIncompleteBody);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+}
+
+type OutputDrainResult = "drained" | "closed" | "error" | "cancelled";
+
+function waitForOutputDrain(output: NodeJS.WriteStream, signal: AbortSignal): Promise<OutputDrainResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result: OutputDrainResult) => {
+      if (settled) return;
+      settled = true;
+      output.off("drain", onDrain);
+      output.off("close", onOutputClosed);
+      output.off("error", onOutputError);
+      signal.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
+    const onDrain = () => finish("drained");
+    const onOutputClosed = () => finish("closed");
+    const onOutputError = () => finish("error");
+    const onAbort = () => finish("cancelled");
+    output.once("drain", onDrain);
+    output.once("close", onOutputClosed);
+    output.once("error", onOutputError);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) finish("cancelled");
+    else if (output.destroyed || output.writableEnded || !output.writable) finish("closed");
+  });
 }
 
 export interface GatewayOnlyCliOptions { readonly health?: boolean; readonly dryRun?: boolean; readonly config?: string; }
@@ -368,8 +363,15 @@ export async function serveGateway(configPath?: string): Promise<void> {
   finally { process.off("SIGTERM", cancelStartup); process.off("SIGINT", cancelStartup); }
   const { gateway, adapter, authenticated } = runtime;
   let stopping = false;
+  const shutdownLifetime = new AbortController();
+  const allowedOrigins = new Set(config.remoteAuth?.allowedOrigins ?? []);
   const handler = async (request: IncomingMessage, response: ServerResponse) => {
     try {
+      if (!requestOriginAllowed(request, allowedOrigins)) {
+        response.writeHead(403, { "Cache-Control": "no-store", "Content-Type": "application/json" });
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32003, message: "MCP request origin is not allowed." } }));
+        return;
+      }
       if (config.remoteAuth && !authenticated(request.headers.authorization)) { response.writeHead(401).end(); return; }
       if (request.url === "/health" && request.method === "GET") {
         response.setHeader("Content-Type", "application/json");
@@ -377,7 +379,7 @@ export async function serveGateway(configPath?: string): Promise<void> {
         return;
       }
       if (request.url !== "/mcp") { response.writeHead(404).end(); return; }
-      const body = await requestJson(request);
+      const body = await requestJson(request, shutdownLifetime.signal);
       const controller = new AbortController();
       const disconnected = () => { if (!response.writableEnded) controller.abort(); };
       response.once("close", disconnected);
@@ -402,6 +404,7 @@ export async function serveGateway(configPath?: string): Promise<void> {
         }
       } finally { response.off("close", disconnected); }
     } catch {
+      if (response.destroyed || (shutdownLifetime.signal.aborted && !request.complete)) return;
       if (response.headersSent) { response.end(); return; }
       response.writeHead(400, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Gateway request was rejected." } }));
@@ -410,21 +413,42 @@ export async function serveGateway(configPath?: string): Promise<void> {
   const server = config.remoteAuth
     ? createSecureServer({ key: process.env[config.remoteAuth.tlsKeyEnv]!, cert: process.env[config.remoteAuth.tlsCertEnv]! }, handler)
     : createServer(handler);
+  let shutdownHandler: (() => void) | undefined;
   try {
     await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(config.listen.port, config.listen.host, resolve); });
     const address = server.address();
     if (!address || typeof address === "string") throw configError("gateway_listener_failed", "Gateway listener has no TCP address.");
+    if (config.profile === "local") {
+      const localOrigin = normalizeOrigin(`http://127.0.0.1:${address.port}`);
+      if (localOrigin) allowedOrigins.add(localOrigin);
+    }
     process.stdout.write(`${JSON.stringify({ interopEndpoint: `${config.remoteAuth ? "https" : "http"}://127.0.0.1:${address.port}/mcp` })}\n`);
-    await new Promise<void>((resolve) => {
-      const shutdown = () => { if (stopping) return; stopping = true; server.close(() => resolve()); };
-      process.once("SIGTERM", shutdown);
-      process.once("SIGINT", shutdown);
+    await new Promise<void>((resolve, reject) => {
+      shutdownHandler = () => {
+        if (stopping) return;
+        stopping = true;
+        const httpClosed = new Promise<void>((complete) => { server.close(() => complete()); });
+        shutdownLifetime.abort();
+        const gatewayClosed = gateway.close({ drainDeadline: 5_000 }).finally(() => {
+          // Gateway close ends subscriptions and settles calls before remaining sockets become idle.
+          server.closeIdleConnections();
+        });
+        void Promise.all([httpClosed, gatewayClosed]).then(() => resolve(), reject);
+      };
+      process.on("SIGTERM", shutdownHandler);
+      process.on("SIGINT", shutdownHandler);
     });
-  } finally { await gateway.close({ drainDeadline: 5_000 }); }
+  } finally {
+    if (shutdownHandler) {
+      process.off("SIGTERM", shutdownHandler);
+      process.off("SIGINT", shutdownHandler);
+    }
+    await gateway.close({ drainDeadline: 5_000 });
+  }
 }
 
 /** Standard newline-framed MCP over stdio; stdout never carries readiness or diagnostics. */
-export async function serveStdioGateway(configPath?: string): Promise<void> {
+async function serveStdioGatewayUntilStop(configPath?: string): Promise<typeof CLI_STDOUT_CANCELLED | undefined> {
   const config = await loadConfig(configPath);
   if (config.remoteAuth) throw configError("gateway_remote_stdio_unsupported", "Remote profile requires an authenticated TLS listener.");
   const startup = new AbortController();
@@ -440,6 +464,7 @@ export async function serveStdioGateway(configPath?: string): Promise<void> {
   const stop = () => { lifetime.abort(); lines.close(); process.stdin.pause(); };
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
+  let cancelledBackpressuredOutput = false;
   try {
     for await (const line of lines) {
       if (!line.trim()) continue;
@@ -447,7 +472,7 @@ export async function serveStdioGateway(configPath?: string): Promise<void> {
       try {
         if (Buffer.byteLength(line, "utf8") > MAX_REQUEST_BYTES) throw configError("gateway_request_oversize", "Stdio request exceeds the byte budget.");
         const body: unknown = JSON.parse(line);
-        const answer = await adapter.handle({ method: "POST", headers: { "content-type": "application/json", "mcp-protocol-version": MODERN_VERSION }, body, signal: lifetime.signal });
+        const answer = await adapter.handle({ transport: "stdio", method: "POST", body, signal: lifetime.signal });
         if (answer.stream) {
           answer.close?.();
           throw configError("gateway_stdio_stream_unsupported", "Stdio transport cannot expose HTTP event streams.");
@@ -458,7 +483,16 @@ export async function serveStdioGateway(configPath?: string): Promise<void> {
       }
       if (reply !== undefined) {
         const serialized = JSON.stringify(reply);
-        if (!process.stdout.write(`${serialized}\n`)) await new Promise<void>((resolve) => process.stdout.once("drain", resolve));
+        if (!process.stdout.write(`${serialized}\n`)) {
+          const drainResult = await waitForOutputDrain(process.stdout, lifetime.signal);
+          if (drainResult !== "drained") {
+            const lifecycleCancelled = drainResult === "cancelled";
+            stop();
+            // The CLI entry may abandon this reply after owned resources finish closing.
+            cancelledBackpressuredOutput = lifecycleCancelled;
+            break;
+          }
+        }
       }
     }
   } finally {
@@ -467,6 +501,11 @@ export async function serveStdioGateway(configPath?: string): Promise<void> {
     lines.close();
     await gateway.close({ drainDeadline: 5_000 });
   }
+  return cancelledBackpressuredOutput ? CLI_STDOUT_CANCELLED : undefined;
+}
+
+export async function serveStdioGateway(configPath?: string): Promise<void> {
+  await serveStdioGatewayUntilStop(configPath);
 }
 
 /** The installed and source CLIs invoke the same authoritative migration owner. */
@@ -491,12 +530,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   const transport = transportIndex >= 0 ? process.argv[transportIndex + 1] : "http";
   const option = (flag: string) => { const index = process.argv.indexOf(flag); return index >= 0 ? process.argv[index + 1] : undefined; };
   const action = command === "serve"
-    ? transport === "http" ? serveGateway(config) : transport === "stdio" ? serveStdioGateway(config) : Promise.reject(configError("gateway_transport_invalid", "Expected http or stdio."))
+    ? transport === "http" ? serveGateway(config) : transport === "stdio" ? serveStdioGatewayUntilStop(config) : Promise.reject(configError("gateway_transport_invalid", "Expected http or stdio."))
     : command === "check" || command === "health" ? runGatewayOnly({ config }).then((value) => { process.stdout.write(`${JSON.stringify(value)}\n`); })
     : command === "migrate" && ["preview", "apply", "restore"].includes(process.argv[3] ?? "")
       ? migrateGateway(process.argv[3] as "preview" | "apply" | "restore", option("--input") ?? "", {
           expectedRevision: option("--expected-revision"), backupRevision: option("--backup-revision"), backupPath: option("--backup")
         }).then((report) => { process.stdout.write(`${JSON.stringify(report)}\n`); })
     : Promise.reject(configError("gateway_command_invalid", "Expected serve, check, or health."));
-  action.catch((error: unknown) => { process.stderr.write(`${String((error as { code?: unknown })?.code ?? "gateway_failed")}\n`); process.exitCode = 1; });
+  action.then((result) => {
+    if (result === CLI_STDOUT_CANCELLED) process.exit(0);
+  }).catch((error: unknown) => { process.stderr.write(`${String((error as { code?: unknown })?.code ?? "gateway_failed")}\n`); process.exitCode = 1; });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCatalogStore } from "@meshrix/gateway";
-import { context, descriptor, route, createTestGateway } from "../support";
+import { context, descriptor, modernHttpRequest, route, createTestGateway } from "../support";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
 
 describe("source catalog versus authorized views", () => {
@@ -61,7 +61,7 @@ describe("source catalog versus authorized views", () => {
     await gateway.start();
     try {
       const adapter = createModernDownstreamAdapter({ gateway, authenticate: () => context });
-      const send = async (method: string, params: Record<string, unknown> = {}) => (await adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: method, method, params } })).body as Record<string, any>;
+      const send = async (method: string, params: Record<string, unknown> = {}) => (await adapter.handle(modernHttpRequest(method, method, params))).body as Record<string, any>;
       expect((await send("tools/list")).result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: "catalog-tool", title: "Catalog Tool", inputSchema: { type: "object", properties: { value: { type: "string" } } }, outputSchema: { type: "object", properties: { ok: { type: "boolean" } } }, annotations: { readOnlyHint: true, arbitraryHint: "business" } })]));
       expect((await send("prompts/list")).result.prompts).toEqual(expect.arrayContaining([expect.objectContaining({ name: "catalog-prompt", arguments: [{ name: "label", required: true }] })]));
       expect((await send("tools/call", { name: "catalog-tool", arguments: {} })).error.data.code).toBe("effect_class_unknown");

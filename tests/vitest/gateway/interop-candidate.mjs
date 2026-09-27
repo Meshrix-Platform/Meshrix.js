@@ -124,8 +124,8 @@ try {
       await new Promise(resolve => setTimeout(resolve, 15));
     }
     const response = await adapter.handle({
+      transport: "stdio",
       method: "POST",
-      headers: { "content-type": "application/json" },
       body: message,
       context: contextFor(message)
     });

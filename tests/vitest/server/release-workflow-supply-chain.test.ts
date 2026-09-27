@@ -8,8 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SUPPLY_CHAIN_MANIFEST_SCHEMA_VERSION,
-  buildSupplyChainArtifacts,
-  isAuthorizedVendoredPackage
+  buildSupplyChainArtifacts
 } from "../../../tools/generators/generate-supply-chain-artifacts.ts";
 import {
   normalizeReleaseChannel,
@@ -846,20 +845,22 @@ describe("release workflow supply-chain boundary", () : any => {
     }
   });
 
-  it("requires registry dependencies to use the official origin and admits only the governed Pactium archive", () : any => {
+  it("requires every external dependency, including Pactium, to use the official registry", () : any => {
     const lockfile: any = JSON.parse(read("package-lock.json"));
     const externalEntries: any = (Object.entries(lockfile.packages) as [string, any][])
       .filter(([packagePath, packageEntry]: any[]) : any => packagePath.startsWith("node_modules/") && packageEntry.link !== true);
-    const registryEntries: any = externalEntries.filter(([packagePath, packageEntry]: any[]) : any => (
-      !isAuthorizedVendoredPackage(lockfile, packagePath, packageEntry)
-    ));
+    const registryEntries: any = externalEntries;
     expect(registryEntries.length).toBeGreaterThan(0);
-    expect(externalEntries.some(([packagePath, packageEntry]: any[]) : any => (
-      isAuthorizedVendoredPackage(lockfile, packagePath, packageEntry)
-    ))).toBe(true);
     for (const [, packageEntry] of registryEntries) {
       expect(new URL(packageEntry.resolved).origin).toBe("https://registry.npmjs.org");
     }
+    expect(lockfile.packages[""].dependencies.pactium).toBe("0.8.0");
+    expect(lockfile.packages["node_modules/pactium"]).toMatchObject({
+      version: "0.8.0",
+      resolved: "https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz",
+      license: "GPL-3.0-or-later"
+    });
+    expect(lockfile.packages["node_modules/pactium"].integrity).toMatch(/^sha512-/u);
 
     const fixture: any = structuredClone(lockfile);
     fixture.packages[registryEntries[0][0]].resolved = "https://registry.example.test/package.tgz";
@@ -868,6 +869,7 @@ describe("release workflow supply-chain boundary", () : any => {
 
     const vendoredFixture: any = structuredClone(lockfile);
     vendoredFixture.packages["node_modules/pactium"].resolved = "file:vendor/other-package.tgz";
+    vendoredFixture.packages[""].dependencies.pactium = "file:vendor/other-package.tgz";
     expect(() : any => buildSupplyChainArtifacts(`${JSON.stringify(vendoredFixture)}\n`))
       .toThrow("official npm registry origin");
   });

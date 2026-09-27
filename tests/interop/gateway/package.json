@@ -7,7 +7,7 @@
     "node": ">=22.18.0 <23 || >=24.3.0"
   },
   "scripts": {
-    "self-test": "node --test self-test.test.mjs",
+    "self-test": "node --test self-test.test.mjs peers/http-client.test.mjs",
     "run:reference": "node run.mjs --mode reference --continue-on-failure",
     "run:meshrix": "node run.mjs --mode meshrix --continue-on-failure"
   },

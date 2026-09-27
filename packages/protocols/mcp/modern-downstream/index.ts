@@ -1,6 +1,12 @@
 import type { AuthenticatedContext, CatalogDescriptor, Gateway, GatewayOutcome, SubscriptionEvent } from "@meshrix/contracts/gateway";
 import {
+  MCP_DISCOVER_METHOD,
   MCP_SUBSCRIBE_METHOD,
+  evaluateMcpProtocolContract,
+  isUnauthenticatedMcpMethod,
+  mcpCacheFields,
+  mcpCompleteResult,
+  mcpMethodNotFoundError,
   mcpSubscriptionIdFromRequest,
   parseMcpSubscriptionNotifications
 } from "./protocol.ts";
@@ -10,11 +16,6 @@ import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME
 } from "../adapter/http-mcp-adapter-constants.ts";
-import {
-  MCP_DISCOVER_METHOD,
-  isUnauthenticatedMcpMethod,
-  mcpCompleteResult
-} from "./protocol.ts";
 import { mcpDiscoverResult } from "./discovery.ts";
 import { mcpVersionInfo } from "./discovery.ts";
 import { mcpEnvelopePublic } from "./response.ts";
@@ -55,7 +56,7 @@ function completeToolResult(result: Exclude<GatewayOutcome, { readonly kind: "fa
 }
 
 function toProtocolResult(result: Exclude<GatewayOutcome, { readonly kind: "failure" }>, method?: string): Record<string, unknown> {
-  if (result.kind === "complete" && method === "resources/read" && isPlainRecord(result.value) && Array.isArray(result.value.contents)) return { resultType: "complete", ...result.value };
+  if (result.kind === "complete" && method === "resources/read" && isPlainRecord(result.value) && Array.isArray(result.value.contents)) return { resultType: "complete", ...result.value, ...mcpCacheFields() };
   if (result.kind === "complete" && method === "prompts/get" && isPlainRecord(result.value) && Array.isArray(result.value.messages)) return { resultType: "complete", ...result.value };
   if (result.kind === "complete") return completeToolResult(result);
   if (result.kind === "input_required") return { resultType: "input_required", ...(result.inputRequests === undefined ? {} : { inputRequests: result.inputRequests }), ...(result.requestState === undefined ? {} : { requestState: result.requestState }) };
@@ -63,6 +64,7 @@ function toProtocolResult(result: Exclude<GatewayOutcome, { readonly kind: "fail
 }
 
 export interface ModernDownstreamRequest {
+  readonly transport?: "streamable-http" | "stdio";
   readonly method: string;
   readonly headers?: Readonly<Record<string, string | string[] | undefined>>;
   readonly body: unknown;
@@ -128,6 +130,20 @@ const EVENT_TYPE_BY_NOTIFICATION_METHOD: Readonly<Record<string, SubscriptionEve
   "notifications/prompts/list_changed": "prompts/list_changed",
   "notifications/resources/updated": "resource/updated"
 });
+
+const SUPPORTED_MODERN_METHODS: ReadonlySet<string> = new Set([
+  MCP_DISCOVER_METHOD,
+  "ping",
+  MCP_SUBSCRIBE_METHOD,
+  "tools/list",
+  "resources/list",
+  "resources/templates/list",
+  "prompts/list",
+  "tools/call",
+  "resources/read",
+  "prompts/get",
+  "completion/complete"
+]);
 
 function subscriptionAuthority(context: AuthenticatedContext): string {
   return JSON.stringify({
@@ -423,16 +439,27 @@ export class ModernDownstreamAdapter {
   }
 
   async handle(request: ModernDownstreamRequest): Promise<ModernDownstreamResponse> {
+    const transport = request.transport ?? "streamable-http";
     const headers = headersOf(request.headers);
-    if (request.method.toUpperCase() !== "POST") return json(405, rpcError(null, -32600, "MCP gateway requires POST."));
+    if (transport !== "streamable-http" && transport !== "stdio") return json(400, rpcError(null, -32600, "Unsupported MCP transport."));
+    if (transport === "streamable-http" && request.method.toUpperCase() !== "POST") return json(405, rpcError(null, -32600, "MCP gateway requires POST."));
     const contentType = headers["content-type"] ?? "application/json";
-    if (!contentType.toLocaleLowerCase().startsWith("application/json")) return json(415, rpcError(null, -32700, "MCP gateway requires application/json."));
+    if (transport === "streamable-http" && !contentType.toLocaleLowerCase().startsWith("application/json")) return json(415, rpcError(null, -32700, "MCP gateway requires application/json."));
     if (Array.isArray(request.body)) return json(400, rpcError(null, -32600, "Batch JSON-RPC requests are not supported on this endpoint."));
     if (!isPlainRecord(request.body) || request.body.jsonrpc !== "2.0" || typeof request.body.method !== "string") return json(400, rpcError(null, -32600, "Invalid JSON-RPC request."));
     const id = request.body.id;
     const method = request.body.method;
-    if (headers["mcp-method"] && headers["mcp-method"] !== method) return json(400, rpcError(id, -32600, "Mcp-Method does not match the JSON-RPC method."));
-    if (headers["mcp-protocol-version"] && headers["mcp-protocol-version"] !== "2026-07-28") return json(400, rpcError(id, -32600, "Unsupported MCP protocol version."));
+    const protocol = evaluateMcpProtocolContract({ request, message: request.body, transport });
+    if (!protocol.ok) return json(protocol.httpStatus || 400, protocol.body);
+    if (protocol.notification) {
+      // Notifications have no JSON-RPC response and cannot execute this request surface.
+      // Streamable HTTP acknowledges the empty response; stdio writes no frame.
+      return Object.freeze({ status: 202, headers: Object.freeze({}) });
+    }
+    if (!SUPPORTED_MODERN_METHODS.has(method)) {
+      const unsupported = mcpMethodNotFoundError(id);
+      return json(unsupported.httpStatus, unsupported.body);
+    }
     // `server/discover` and `ping` are the unauthenticated handshake methods: a client
     // reads the discovery document before it holds a token.
     if (isUnauthenticatedMcpMethod(method)) {
@@ -452,8 +479,6 @@ export class ModernDownstreamAdapter {
       return json(safeStatus, rpcError(id, safeStatus === 403 ? -32003 : -32001, message, code ? { code } : undefined));
     }
     if (!context) return json(401, rpcError(id, -32001, "Authenticated context is required."));
-    if (method === "initialize") return json(200, { jsonrpc: "2.0", id, result: { protocolVersion: "2026-07-28", capabilities: { tools: { listChanged: true }, resources: { listChanged: true }, prompts: { listChanged: true }, subscriptions: { listen: true } }, serverInfo: this.#serverInfo } });
-    if (method === "notifications/initialized" || method === "notifications/cancelled") return Object.freeze({ status: 202, headers: Object.freeze({}) });
     const params = isPlainRecord(request.body.params) ? request.body.params : {};
     if (method === MCP_SUBSCRIBE_METHOD) return this.#subscriptionResponse(request, context, id, params);
     if (method === "tools/list" || method === "resources/list" || method === "resources/templates/list" || method === "prompts/list") {
@@ -461,7 +486,7 @@ export class ModernDownstreamAdapter {
       const page = this.#gateway.catalog(context, { kind, cursor: typeof params.cursor === "string" ? params.cursor : undefined, limit: typeof params.limit === "number" ? params.limit : 50 });
       const key = kind === "tool" ? "tools" : kind === "prompt" ? "prompts" : kind === "resource_template" ? "resourceTemplates" : "resources";
       const resultMeta = kind === "tool" ? await this.#catalogResultMeta(context) : {};
-      return json(200, { jsonrpc: "2.0", id, result: { resultType: "complete", [key]: page.items.map((item) => kind === "tool" ? { name: item.publicName, description: item.description, inputSchema: item.inputSchema, outputSchema: item.outputSchema, annotations: item.annotations, title: item.metadata?.title, _meta: item.metadata } : kind === "prompt" ? { name: item.publicName, description: item.description, arguments: item.metadata?.arguments, _meta: item.metadata } : kind === "resource_template" ? { uriTemplate: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata } : { uri: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata }), ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}), ...(Object.keys(resultMeta).length > 0 ? { _meta: resultMeta } : {}) } });
+      return json(200, { jsonrpc: "2.0", id, result: { resultType: "complete", [key]: page.items.map((item) => kind === "tool" ? { name: item.publicName, description: item.description, inputSchema: item.inputSchema, outputSchema: item.outputSchema, annotations: item.annotations, title: item.metadata?.title, _meta: item.metadata } : kind === "prompt" ? { name: item.publicName, description: item.description, arguments: item.metadata?.arguments, _meta: item.metadata } : kind === "resource_template" ? { uriTemplate: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata } : { uri: item.publicUri, name: item.publicName, description: item.description, _meta: item.metadata }), ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}), ...mcpCacheFields(), ...(Object.keys(resultMeta).length > 0 ? { _meta: resultMeta } : {}) } });
     }
     if (method === "tools/call") {
       const name = typeof params.name === "string" ? params.name : "";
@@ -476,7 +501,6 @@ export class ModernDownstreamAdapter {
           effectOutcome: "not_started"
         }));
       }
-      if (headers["mcp-name"] && headers["mcp-name"] !== name && headers["mcp-name"] !== descriptor.publicName) return json(400, rpcError(id, -32600, "Mcp-Name does not match the requested tool."));
       const outcome = await this.#gateway.invoke(context, {
         routeRef: descriptor.route.logicalRoute,
         method,

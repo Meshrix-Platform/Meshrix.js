@@ -1,4 +1,5 @@
 import type { RouteSnapshot, UpstreamPort, UpstreamRequest, UpstreamResponse } from "@meshrix/contracts/gateway";
+import { MCP_NAME_BEARING_METHODS, encodeMcpHeaderValue } from "../adapter/http-mcp-adapter-client-wire.ts";
 
 export interface ModernUpstreamTransport {
   send(input: { readonly request: Readonly<Record<string, unknown>>; readonly headers: Readonly<Record<string, string>>; readonly signal?: AbortSignal }): Promise<UpstreamResponse>;
@@ -62,16 +63,17 @@ export class ModernUpstreamAdapter implements UpstreamPort {
       await discovery;
     }
     const wire = buildModernRequest(input.request);
-    const name = input.route.upstreamName;
+    const params = wire.params as Record<string, unknown>;
+    const nameField = MCP_NAME_BEARING_METHODS[wire.method];
+    const name = nameField ? params[nameField] : undefined;
     const headers = Object.freeze({
       "Content-Type": "application/json",
       Accept: "application/json, text/event-stream",
       "Mcp-Method": input.request.method,
       "Mcp-Protocol-Version": input.request.protocolVersion,
-      ...(name ? { "Mcp-Name": name } : {}),
+      ...(name !== undefined && name !== null ? { "Mcp-Name": encodeMcpHeaderValue(name) } : {}),
       ...(input.credential && typeof input.credential === "object" && !Array.isArray(input.credential) ? Object.fromEntries(Object.entries(input.credential as Record<string, unknown>).filter(([key, value]) => typeof value === "string" && /^(authorization|x-[a-z0-9-]+)$/iu.test(key)).map(([key, value]) => [key, String(value)])) : {})
     });
-    const params = wire.params as Record<string, unknown>;
     return this.#transport.send({ request: { ...wire, params: { ...params, _meta: { ...(params._meta as Record<string, unknown>), "io.modelcontextprotocol/clientInfo": this.#clientInfo } } }, headers, signal: input.signal });
   }
 

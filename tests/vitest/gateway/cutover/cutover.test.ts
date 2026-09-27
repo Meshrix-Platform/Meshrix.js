@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createHttpServerRequestHandler } from "../../../../apps/server/runtime/http-server-routes.ts";
 import { createPlatformMcpGateway } from "../../../../packages/server-runtime/src/composition/gateway-composition.ts";
+import { modernHttpRequest } from "../support.ts";
 import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME
@@ -102,20 +103,15 @@ describe("default HTTP MCP gateway cutover", () => {
     });
     await platform.gateway.start();
     try {
-      const body = JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: { name: "system.health", arguments: {} }
-      });
+      const wire = modernHttpRequest("tools/call", 1, { name: "system.health", arguments: {} });
+      const body = JSON.stringify(wire.body);
       const request: any = Readable.from([Buffer.from(body)]);
       request.method = "POST";
       request.url = "/mcp";
       request.headers = {
+        ...wire.headers,
         "content-type": "application/json",
         "content-length": String(Buffer.byteLength(body)),
-        "mcp-method": "tools/call",
-        "mcp-name": "system.health"
       };
       request.socket = { remoteAddress: "127.0.0.1", encrypted: false };
       const response = new CapturedResponse();
@@ -143,7 +139,6 @@ describe("default HTTP MCP gateway cutover", () => {
     }));
     const body = JSON.stringify({
       jsonrpc: "2.0",
-      id: 2,
       method: "notifications/initialized"
     });
     const request: any = Readable.from([Buffer.from(body)]);
@@ -202,11 +197,13 @@ describe("default HTTP MCP gateway cutover", () => {
     });
     await platform.gateway.start();
     try {
-      const body = JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} });
+      const wire = modernHttpRequest("tools/list", 3);
+      const body = JSON.stringify(wire.body);
       const request: any = Readable.from([Buffer.from(body)]);
       request.method = "POST";
       request.url = "/mcp";
       request.headers = {
+        ...wire.headers,
         "content-type": "application/json",
         "content-length": String(Buffer.byteLength(body)),
         "x-meshrix.js-api-key": "key-cutover"
@@ -233,11 +230,12 @@ describe("default HTTP MCP gateway cutover", () => {
         request: expect.objectContaining({ headers: expect.objectContaining({ "x-meshrix.js-api-key": "key-cutover" }) })
       }));
 
-      const deniedBody = JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/list", params: {} });
+      const deniedWire = modernHttpRequest("tools/list", 4);
+      const deniedBody = JSON.stringify(deniedWire.body);
       const deniedRequest: any = Readable.from([Buffer.from(deniedBody)]);
       deniedRequest.method = "POST";
       deniedRequest.url = "/mcp";
-      deniedRequest.headers = { "content-type": "application/json" };
+      deniedRequest.headers = { ...deniedWire.headers, "content-length": String(Buffer.byteLength(deniedBody)) };
       deniedRequest.socket = { remoteAddress: "127.0.0.1", encrypted: false };
       const deniedResponse = new CapturedResponse();
       await handlerFor(platform.adapter as unknown as Record<string, unknown>)(deniedRequest, deniedResponse);
