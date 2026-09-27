@@ -10,7 +10,7 @@ import {
   releaseGeneratedAtFromSourceDateEpoch,
   releaseManifest
 } from "./lib/mcp-release-manifest.ts";
-import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
+import { npmCliArgs, parseNpmPackJson, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 import {
   MCP_ASSET_PLATFORM_BY_PORTABLE_TARGET,
   MCP_RELEASE_TARGETS
@@ -313,7 +313,9 @@ async function verifyReproducibleConnectorTarball(inputDir?: any, expectedName?:
         }
       }
     );
-    const [packed] = JSON.parse(stdout);
+    const packedArtifacts: any[] = parseNpmPackJson(stdout);
+    assert.equal(packedArtifacts.length, 1, "mcp_release_repack_artifact_count_invalid");
+    const [packed] = packedArtifacts;
     assert.equal(packed?.filename, expectedName, "mcp_release_connector_tarball_name_mismatch");
     assert.equal(
       await sha256(path.join(temporary, expectedName)),

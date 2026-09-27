@@ -131,7 +131,12 @@ async function installNpmPackage(adapter?: any, tree?: any) : Promise<any> {
     ]);
     let publishedIntegrity: any = "";
     try {
-      publishedIntegrity = JSON.parse(String(viewed.stdout || "").trim());
+      const parsed: any = JSON.parse(String(viewed.stdout || "").trim());
+      if (!Array.isArray(parsed)) {
+        publishedIntegrity = parsed;
+      } else if (parsed.length === 1 && !Array.isArray(parsed[0])) {
+        publishedIntegrity = parsed[0];
+      }
     } catch {}
     if (publishedIntegrity !== adapter.integrity) {
       throw adapterError("CLIENT_ADAPTER_INTEGRITY_MISMATCH", "Client adapter package integrity does not match the trusted release index.");

@@ -7,7 +7,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
+import {
+  npmCliArgs,
+  parseNpmExactViewJson,
+  parseNpmPackJson,
+  resolveNpmCliInvocation
+} from "./lib/npm-cli-invocation.ts";
 import { assertReleaseVersion } from "./prepare-release.ts";
 
 const execFileAsync: any = promisify(execFile);
@@ -448,7 +453,7 @@ function assertSuccessfulResult(result?: any, code?: any, message?: any) : any {
 function parsePackArtifact(stdout?: any, packageRecord?: any) : any {
   let artifacts: any;
   try {
-    artifacts = JSON.parse(String(stdout || ""));
+    artifacts = parseNpmPackJson(stdout);
   } catch {
     throw publicationError(
       "release_set_pack_output_invalid",
@@ -520,7 +525,7 @@ function registryVersionMissing(result?: any) : any {
 
 function parseRegistryJson(result?: any, code?: any, message?: any) : any {
   try {
-    return JSON.parse(String(result.stdout || ""));
+    return parseNpmExactViewJson(result.stdout);
   } catch {
     throw publicationError(code, message);
   }

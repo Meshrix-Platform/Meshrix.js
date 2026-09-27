@@ -70,7 +70,11 @@ function addPublishedVersion(registry?: any, packageRecord?: any, {
   registry.set(tagsKey(packageRecord.name), { [tag]: taggedVersion });
 }
 
-function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<string, any> = {}) : any {
+function createInjectedNpmRunner({
+  registry = new Map<any, any>(),
+  packFormat = "legacy",
+  viewFormat = "legacy"
+}: Record<string, any> = {}) : any {
   const calls: any[] = [];
   const publishCalls: any[] = [];
   const tarballs: any = new Map<any, any>();
@@ -88,14 +92,15 @@ function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<stri
         integrity,
         name: manifest.name
       });
+      const artifact = {
+        name: manifest.name,
+        version: manifest.version,
+        filename,
+        integrity
+      };
       return {
         exitCode: 0,
-        stdout: JSON.stringify([{
-          name: manifest.name,
-          version: manifest.version,
-          filename,
-          integrity
-        }]),
+        stdout: JSON.stringify(packFormat === "npm12" ? { [manifest.name]: artifact } : [artifact]),
         stderr: ""
       };
     }
@@ -104,7 +109,12 @@ function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<stri
       if (!registry.has(key)) {
         return { exitCode: 1, stdout: "", stderr: "npm error code E404" };
       }
-      return { exitCode: 0, stdout: JSON.stringify(registry.get(key)), stderr: "" };
+      const metadata = registry.get(key);
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify(viewFormat === "npm12" ? [metadata] : metadata),
+        stderr: ""
+      };
     }
     if (args[0] === "publish") {
       const tarball: any = tarballs.get(args[1]);
@@ -204,8 +214,11 @@ describe("npm release-set publication", () : any => {
     expect(injected.calls.every(({ args }: Record<string, any>) : any => args[0] === "pack")).toBe(true);
   });
 
-  it("preflights every package against the registry without publication credentials or mutations", async () : Promise<any> => {
-    const injected: any = createInjectedNpmRunner();
+  it.each([
+    { label: "legacy", packFormat: "legacy", viewFormat: "legacy" },
+    { label: "npm 12", packFormat: "npm12", viewFormat: "npm12" }
+  ])("preflights every package against the registry using $label JSON output", async ({ packFormat, viewFormat }: Record<string, any>) : Promise<any> => {
+    const injected: any = createInjectedNpmRunner({ packFormat, viewFormat });
     const result: any = await publishReleaseSet({
       rootDir: ROOT,
       preflight: true,
@@ -229,6 +242,39 @@ describe("npm release-set publication", () : any => {
     ))).toBe(false);
   });
 
+  it("rejects ambiguous pack and exact-coordinate registry results", async () : Promise<any> => {
+    const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
+    const first: any = releaseSet.packages[0];
+    const registry: any = new Map<any, any>();
+    addPublishedVersion(registry, first);
+    const injected: any = createInjectedNpmRunner({ registry, packFormat: "npm12", viewFormat: "npm12" });
+    const duplicatePackRunner: any = async (args?: any, context?: any) : Promise<any> => {
+      const result: any = await injected.runner(args, context);
+      if (args[0] !== "pack") return result;
+      const parsed: any = JSON.parse(result.stdout);
+      const record: any = parsed[Object.keys(parsed)[0]];
+      return { ...result, stdout: JSON.stringify({ [record.name]: [record, record] }) };
+    };
+    await expect(publishReleaseSet({
+      rootDir: ROOT,
+      runner: duplicatePackRunner,
+      environment: {}
+    })).rejects.toMatchObject({ code: "release_set_pack_output_invalid" });
+
+    const duplicateViewRunner: any = async (args?: any, context?: any) : Promise<any> => {
+      const result: any = await injected.runner(args, context);
+      if (args[0] !== "view" || args[2] !== "dist" || result.exitCode !== 0) return result;
+      const [metadata] = JSON.parse(result.stdout);
+      return { ...result, stdout: JSON.stringify([metadata, metadata]) };
+    };
+    await expect(publishReleaseSet({
+      rootDir: ROOT,
+      runner: duplicateViewRunner,
+      environment: {}
+    })).rejects.toMatchObject({ code: "release_set_registry_distribution_invalid" });
+    expect(injected.publishCalls).toHaveLength(0);
+  });
+
   it("keeps local dry-run and registry preflight as separate modes", () : any => {
     expect(parsePublishArguments(["--preflight", "--tag", "next"]))
       .toEqual({ dryRun: false, preflight: true, tag: "next", help: false });
@@ -236,12 +282,15 @@ describe("npm release-set publication", () : any => {
       .toThrowError(expect.objectContaining({ code: "release_set_argument_conflict" }));
   });
 
-  it("publishes missing tarballs with provenance once and skips matching immutable versions on rerun", async () : Promise<any> => {
+  it.each([
+    { label: "legacy", packFormat: "legacy", viewFormat: "legacy" },
+    { label: "npm 12", packFormat: "npm12", viewFormat: "npm12" }
+  ])("publishes missing tarballs with provenance once and skips matching immutable versions on rerun ($label output)", async ({ packFormat, viewFormat }: Record<string, any>) : Promise<any> => {
     const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
     const alreadyPublished: any = releaseSet.packages[0];
     const registry: any = new Map<any, any>();
     addPublishedVersion(registry, alreadyPublished);
-    const injected: any = createInjectedNpmRunner({ registry });
+    const injected: any = createInjectedNpmRunner({ registry, packFormat, viewFormat });
 
     const first: any = await publishReleaseSet({
       rootDir: ROOT,
