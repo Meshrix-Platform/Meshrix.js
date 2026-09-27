@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createModernDownstreamAdapter } from "../../../../packages/protocols/mcp/modern-downstream/index.ts";
-import { context, descriptor } from "../support.ts";
+import { context, descriptor, modernHttpRequest } from "../support.ts";
 
 describe("modern MCP downstream cancellation", () => {
   it("[CASE-F02] passes the HTTP request signal into the single gateway invoke boundary", async () => {
@@ -17,14 +17,7 @@ describe("modern MCP downstream cancellation", () => {
     const adapter = createModernDownstreamAdapter({ gateway });
 
     const result = await adapter.handle({
-      method: "POST",
-      headers: { "content-type": "application/json", "mcp-method": "tools/call" },
-      body: {
-        jsonrpc: "2.0",
-        id: "cancel-1",
-        method: "tools/call",
-        params: { name: "demo", arguments: {} }
-      },
+      ...modernHttpRequest("tools/call", "cancel-1", { name: "demo", arguments: {} }),
       context,
       signal: controller.signal
     });

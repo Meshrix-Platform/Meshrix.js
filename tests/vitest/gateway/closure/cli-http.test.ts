@@ -5,19 +5,56 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { modernHttpRequest } from "../support.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const children: ChildProcess[] = [];
-afterEach(async () => { await Promise.all(children.splice(0).map(async (child) => { if (child.exitCode !== null) return; child.kill("SIGTERM"); await new Promise((resolve) => child.once("exit", resolve)); })); });
+async function stopTestChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill("SIGTERM");
+  await new Promise<void>((resolve) => {
+    const onExit = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => { child.off("exit", onExit); if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); resolve(); }, 1_000);
+    child.once("exit", onExit);
+  });
+  if (child.exitCode === null && child.signalCode === null) await new Promise<void>((resolve) => child.once("exit", () => resolve()));
+}
+afterEach(async () => { await Promise.all(children.splice(0).map(stopTestChild)); });
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
+function withTestWatchdog<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Controlled upstream fixture did not settle.")), timeoutMs); })
+  ]).finally(() => { if (timer) clearTimeout(timer); });
+}
 
 describe("gateway-only installed command entry surface", () => {
   it("[GC-056 GC-057 partial] serves a real local MCP endpoint and sends modern metadata without initialize", async () => {
     const observed: Array<{ method: string; params: Record<string, unknown> }> = [];
+    const heldCalls: Array<{ readonly started: ReturnType<typeof deferred<void>>; readonly closed: ReturnType<typeof deferred<boolean>>; readonly release: ReturnType<typeof deferred<void>> }> = [];
+    const allHolds: Array<{ readonly started: ReturnType<typeof deferred<void>>; readonly closed: ReturnType<typeof deferred<boolean>>; readonly release: ReturnType<typeof deferred<void>> }> = [];
     const peer = createServer(async (request, response) => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(chunk);
       const wire = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       observed.push(wire);
+      if (wire.method === "tools/call" && wire.params?.arguments?.hold === true) {
+        const hold = heldCalls.shift();
+        if (!hold) throw new Error("No controlled hold was prepared for the upstream call.");
+        hold.started.resolve();
+        const peerClosed = new Promise<boolean>((resolve) => response.once("close", () => resolve(true)));
+        const fixtureReleased = hold.release.promise.then(() => false);
+        const cancelled = await Promise.race([peerClosed, fixtureReleased]);
+        hold.closed.resolve(cancelled);
+        if (cancelled) return;
+      }
       const result = wire.method === "server/discover"
         ? { resultType: "complete", supportedVersions: ["2026-07-28"] }
         : wire.method === "tools/list"
@@ -54,19 +91,55 @@ describe("gateway-only installed command entry surface", () => {
         });
       });
       const send = async (method: string, params: Record<string, unknown> = {}) => {
-        const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", "Mcp-Protocol-Version": "2026-07-28" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+        const wire = modernHttpRequest(method, method, params);
+        const response = await fetch(endpoint, { method: wire.method, headers: wire.headers, body: JSON.stringify(wire.body) });
         return response.json();
       };
       expect((await send("tools/list")).result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: "synthetic" })]));
       const result = await send("tools/call", { name: "synthetic", arguments: {} });
       expect(result.result).toMatchObject({ resultType: "complete", structuredContent: { source: "peer" } });
       expect((await send("tools/call", { name: "synthetic", arguments: {} })).result).toMatchObject({ resultType: "complete", structuredContent: { source: "peer" } });
+      const callCountBeforeMalformed = observed.filter((item) => item.method === "tools/call").length;
+      const malformedRequest = modernHttpRequest("tools/list", "malformed-json");
+      const malformedResponse = await fetch(endpoint, { method: malformedRequest.method, headers: malformedRequest.headers, body: "{", signal: AbortSignal.timeout(1_000) });
+      expect(malformedResponse.status).toBe(400);
+      expect(await malformedResponse.json()).toMatchObject({ error: { code: -32600 } });
+      expect(observed.filter((item) => item.method === "tools/call")).toHaveLength(callCountBeforeMalformed);
+
+      const clientDisconnect = { started: deferred<void>(), closed: deferred<boolean>(), release: deferred<void>() };
+      heldCalls.push(clientDisconnect);
+      allHolds.push(clientDisconnect);
+      const disconnected = new AbortController();
+      const heldCall = modernHttpRequest("tools/call", "client-disconnect", { name: "synthetic", arguments: { hold: true } });
+      const disconnectedCall = fetch(endpoint, { method: heldCall.method, headers: heldCall.headers, body: JSON.stringify(heldCall.body), signal: disconnected.signal });
+      await clientDisconnect.started.promise;
+      disconnected.abort();
+      await expect(disconnectedCall).rejects.toMatchObject({ name: "AbortError" });
+      await expect(withTestWatchdog(clientDisconnect.closed.promise, 2_000)).resolves.toBe(true);
+
       expect(observed.some((item) => item.method === "initialize")).toBe(false);
       expect(observed.find((item) => item.method === "tools/call")?.params._meta).toMatchObject({ "io.modelcontextprotocol/protocolVersion": "2026-07-28" });
+
+      const shutdown = { started: deferred<void>(), closed: deferred<boolean>(), release: deferred<void>() };
+      heldCalls.push(shutdown);
+      allHolds.push(shutdown);
+      const heldDuringShutdown = modernHttpRequest("tools/call", "cli-shutdown", { name: "synthetic", arguments: { hold: true } });
+      const shutdownCall = fetch(endpoint, { method: heldDuringShutdown.method, headers: heldDuringShutdown.headers, body: JSON.stringify(heldDuringShutdown.body) })
+        .then(async (response) => ({ status: response.status, body: await response.json() }), (error: unknown) => ({ error }));
+      await shutdown.started.promise;
       cli.kill("SIGTERM");
-      await new Promise((resolve) => cli.once("exit", resolve));
+      const shutdownOutcome = await withTestWatchdog(shutdownCall, 8_000);
+      expect(shutdownOutcome).toBeDefined();
+      await expect(withTestWatchdog(shutdown.closed.promise, 2_000)).resolves.toBe(true);
+      if (cli.exitCode === null && cli.signalCode === null) {
+        await withTestWatchdog(new Promise<void>((resolve) => cli.once("exit", () => resolve())), 2_000);
+      }
       expect(cli.exitCode).toBe(0);
-    } finally { await new Promise<void>((resolve) => peer.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
+    } finally {
+      for (const hold of allHolds) hold.release.resolve();
+      await new Promise<void>((resolve) => peer.close(() => resolve()));
+      await rm(directory, { recursive: true, force: true });
+    }
   }, 20_000);
 
   it("[GC-065] returns two independently owned peer facts unchanged across a gateway restart", async () => {
@@ -108,7 +181,10 @@ describe("gateway-only installed command entry surface", () => {
         });
       };
       let endpoint = await start();
-      const send = async (method: string, params: Record<string, unknown> = {}) => (await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) })).json();
+      const send = async (method: string, params: Record<string, unknown> = {}) => {
+        const wire = modernHttpRequest(method, method, params);
+        return (await fetch(endpoint, { method: wire.method, headers: wire.headers, body: JSON.stringify(wire.body) })).json();
+      };
       const listed = (await send("tools/list")).result.tools.map((item: { name: string }) => item.name);
       expect(listed).toEqual(expect.arrayContaining(["alpha", "beta"]));
       expect((await send("tools/call", { name: "alpha", arguments: {} })).result.structuredContent).toEqual({ source: "alpha", version: 1 });

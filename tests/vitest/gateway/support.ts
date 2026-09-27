@@ -2,6 +2,7 @@ import type { AuthenticatedContext, CatalogDescriptor, RouteSnapshot, UpstreamPo
 import { createGateway, type GatewayOptions } from "@meshrix/gateway";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
+import { mcpModernJsonRpcMessage, mcpModernRequestHeaders } from "@meshrix/protocols/mcp/modern-downstream/protocol";
 
 /** Tests deliberately inject governance; the distributed kernel has no platform fallback. */
 export function createTestGateway(options: GatewayOptions = {}) {
@@ -15,6 +16,19 @@ export const context: AuthenticatedContext = Object.freeze({
   grant: Object.freeze({ revision: "grant-1", routes: "all" }),
   trace: Object.freeze({ traceparent: "00-demo" })
 });
+
+export function modernRequestMessage(method: string, id: string | number, params: Record<string, unknown> = {}, extraMeta: Record<string, unknown> = {}): Record<string, unknown> {
+  return mcpModernJsonRpcMessage({ jsonrpc: "2.0", id, method, params }, extraMeta);
+}
+
+export function modernHttpRequest(method: string, id: string | number, params: Record<string, unknown> = {}, extraMeta: Record<string, unknown> = {}, extraHeaders: Record<string, string> = {}) {
+  const body = modernRequestMessage(method, id, params, extraMeta);
+  return {
+    method: "POST",
+    headers: mcpModernRequestHeaders(body, { "content-type": "application/json", ...extraHeaders }),
+    body
+  };
+}
 
 export function route(overrides: Partial<RouteSnapshot> = {}): RouteSnapshot {
   return Object.freeze({

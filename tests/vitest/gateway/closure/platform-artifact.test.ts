@@ -8,6 +8,7 @@ import { createUpstreamGatewayRegistry } from "../../../../packages/agents/src/u
 import { createPlatformMcpGateway } from "@meshrix/server-runtime/composition/gateway-composition";
 import { createArtifactTransitProvider } from "../../../../packages/server-runtime/src/composition/artifact-transit-provider.ts";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
+import { modernHttpRequest } from "../support.ts";
 
 describe("default platform binary/artifact boundary", () => {
   it("[GC-046 partial] keeps multipart bytes, declared headers and owner-bound range download", async () => {
@@ -41,7 +42,7 @@ describe("default platform binary/artifact boundary", () => {
         toolSkillManagementProvider: { authorizeMcpClientRequest: async () => ({ ok: true, grant: { id: "grant", revision: "grant", subjectId: "owner", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] }, subject: { type: "tool-grant", subjectId: "owner", grantId: "grant", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] } }), listVisibleTools: async () => [] }
       });
       await platform.gateway.start();
-      const send = async (method: string, params: Record<string, unknown> = {}) => platform!.adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id: method, method, params } });
+      const send = async (method: string, params: Record<string, unknown> = {}) => platform!.adapter.handle(modernHttpRequest(method, method, params));
       const listed = await send("tools/list");
       const tool = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string } }> } }).result.tools.find((entry) => entry._meta?.serviceId === "format");
       expect(tool, JSON.stringify(listed.body)).toBeDefined();

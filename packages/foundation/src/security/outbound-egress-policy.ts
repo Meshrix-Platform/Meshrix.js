@@ -97,6 +97,7 @@ export interface FetchWithPinnedDnsOptions extends OutboundEgressOptions {
   init?: Parameters<FetchImplementation>[1];
   lookup?: DnsLookup;
   fetchImpl?: FetchImplementation;
+  beforeFetch?: () => void | Promise<void>;
   maxRedirects?: number;
 }
 
@@ -405,11 +406,12 @@ function globalRequestInit(init: Parameters<FetchImplementation>[1]): globalThis
   return init as globalThis.RequestInit | undefined;
 }
 
-async function fetchPinnedDnsHop({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, fetchImpl }: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
+async function fetchPinnedDnsHop({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, fetchImpl, beforeFetch }: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
   const decision = await assertOutboundRuntimeEgressAllowed({ url, label, policyPreset, policies, lookup });
   const pinned = createPinnedDnsDispatcher(decision);
   try {
     const requestInit = { ...init, ...(pinned.dispatcher ? { dispatcher: pinned.dispatcher } : {}) };
+    await beforeFetch?.();
     const response = fetchImpl ? await fetchImpl(url, requestInit) : pinned.dispatcher ? await undiciFetch(url, requestInit) : await globalThis.fetch(url, globalRequestInit(init));
     return { response, decision, egressDecision: decision, pinnedDns: pinned.pinnedDns, close: pinned.close };
   } catch (error: unknown) {

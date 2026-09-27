@@ -2,10 +2,10 @@
 
 <img src="docs/banner.svg" alt="Meshrix.js" width="100%" />
 
-**Internal, private-deployable agent gateway — upstream services in, governed MCP access out.**
+**Publicly available source for a private-deployable MCP platform that governs service and agent access.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-c9a96e?style=flat-square)](LICENSE)
-[![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
+[![Source license: MIT](https://img.shields.io/badge/source%20license-MIT-c9a96e?style=flat-square)](LICENSE)
+[![Node.js >=22.18.0 <23 || >=24.3.0](https://img.shields.io/badge/node-%3E%3D22.18.0%20%3C23%20%7C%7C%20%3E%3D24.3.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
 [Overview](#overview) · [Status](docs/STATUS.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
@@ -19,10 +19,10 @@ English is the normative language of this repository's documentation; [简体中
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-> **Current outcome:** The 0.0.1 Core single-node production-use closure has
-> completed for the accepted candidate recorded by current evidence. New work
-> is driven by real use, explicit product decisions, and concrete defects; see
-> [Status](docs/STATUS.md) for the current evidence boundary.
+> **Previous accepted scope:** The 0.0.1 Core single-node production-use
+> closure applies only to the candidate named by its evidence. It does not
+> establish acceptance of the current gateway-convergence candidate or the
+> planned public release; see [Status](docs/STATUS.md).
 
 ---
 
@@ -42,9 +42,10 @@ grants, audit records, and checkpoints are stored under the server data
 directory. External middleware and service adapters are optional extensions
 for deployment-specific integrations.
 
-> **Current state: pre-release.** Source availability, implementation,
-> verification, publication channels, environment qualification, and hosted
-> operation remain remaining required work on separate evidence tracks. See
+> **Current state: pre-release.** The source is public. The current gateway
+> candidate and planned 0.0.1 public release still require candidate-specific
+> implementation, functional verification, and publication. Environment
+> qualification and hosted operation remain separate evidence tracks. See
 > [Status](docs/STATUS.md).
 
 Meshrix.js separates mandatory functional acceptance from remaining environment
@@ -86,7 +87,7 @@ flow, and deployment boundaries.
 
 ## Quick Start
 
-Requires Node.js `^22.0.0 || ^24.0.0`.
+Requires Node.js `>=22.18.0 <23 || >=24.3.0`.
 
 **Local runtime**
 
@@ -175,6 +176,7 @@ never discovered from another source repository. See
 | Protocols | [docs/protocols/PROTOCOLS.md](docs/protocols/PROTOCOLS.md) |
 | Runtime operation | [docs/RUNBOOK.md](docs/RUNBOOK.md) |
 | Compatibility | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) |
+| Release status | [docs/releases/README.md](docs/releases/README.md) |
 | Capability documents | [docs/functionality/](docs/functionality/) |
 | Examples | [docs/examples/README.md](docs/examples/README.md) |
 | Decision records | [docs/adrs/README.md](docs/adrs/README.md) |
@@ -205,11 +207,16 @@ npm run verify:acceptance
 | Contribution process | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Code of conduct | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
 | Security policy | [SECURITY.md](SECURITY.md) |
+| Third-party notices | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
 
-## License
+## Source license
 
-MIT. See [LICENSE](LICENSE).
+Meshrix.js project-owned source is licensed under MIT; see [LICENSE](LICENSE).
+Third-party dependencies retain their own terms as stated in their package
+metadata and [third-party notices](THIRD_PARTY_NOTICES.md). The repository
+license does not by itself state the terms for an integrated platform
+distribution.
 
 <div align="center">
   <sub>Meshrix.js — self-contained by default, built for private deployment.</sub>

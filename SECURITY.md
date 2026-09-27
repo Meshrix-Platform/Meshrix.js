@@ -15,7 +15,7 @@ The repository is in pre-release state until the release gate is completed. Secu
 
 Do not report vulnerabilities through public issues.
 
-Use private vulnerability reporting in the repository host, or contact the maintainers through the published project contact channel. Include enough technical evidence for triage:
+Submit reports through the repository's [private vulnerability reporting form](https://github.com/Meshrix-Platform/Meshrix.js/security/advisories/new). Include enough technical evidence for triage:
 
 - affected component or operation;
 - reproduction steps;

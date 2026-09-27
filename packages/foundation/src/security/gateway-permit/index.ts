@@ -15,12 +15,15 @@ export interface DurableGatewayReceiptPort {
   recordIssued(permit: ExecutionPermit): void;
   recordConsumed(receiptId: string): void;
   recordUnknown(receiptId: string): void;
+  transitionIntent?(permit: ExecutionPermit, phase: "dispatch_started" | "not_started" | "succeeded" | "failed"): void;
   lookupReceipt(receiptId: string): ExecutionPermit | undefined;
 }
 
 export class GatewayPermitAuthority implements PermitAuthorityPort {
   readonly #now: () => number;
   readonly #permits = new Map<string, ExecutionPermit>();
+  readonly #intentPermits = new Set<string>();
+  readonly #executingIntents = new Set<string>();
   readonly #maxRecords: number;
   readonly #receiptLedger?: DurableGatewayReceiptPort;
   #nextExpiry = Number.POSITIVE_INFINITY;
@@ -35,7 +38,11 @@ export class GatewayPermitAuthority implements PermitAuthorityPort {
     if (now < this.#nextExpiry) return;
     this.#nextExpiry = Number.POSITIVE_INFINITY;
     for (const [id, permit] of this.#permits) {
-      if (permit.expiresAt <= now) this.#permits.delete(id);
+      if (this.#executingIntents.has(id)) continue;
+      if (permit.expiresAt <= now) {
+        this.#permits.delete(id);
+        this.#intentPermits.delete(id);
+      }
       else this.#nextExpiry = Math.min(this.#nextExpiry, permit.expiresAt);
     }
   }
@@ -63,6 +70,7 @@ export class GatewayPermitAuthority implements PermitAuthorityPort {
     });
     this.#receiptLedger?.recordIssued(permit);
     this.#permits.set(permit.id, permit);
+    if (input.prepared.route.effectClass !== "read") this.#intentPermits.add(permit.id);
     this.#nextExpiry = Math.min(this.#nextExpiry, permit.expiresAt);
     return permit;
   }
@@ -77,16 +85,40 @@ export class GatewayPermitAuthority implements PermitAuthorityPort {
     const consumed = Object.freeze({ ...current, state: "consumed" as const });
     this.#receiptLedger?.recordConsumed(current.id);
     this.#permits.set(current.id, consumed);
+    if (this.#intentPermits.has(current.id)) this.#executingIntents.add(current.id);
     return consumed;
   }
 
   markOutcomeUnknown(permit: ExecutionPermit): ExecutionPermit {
     const current = this.#permits.get(permit.id);
-    if (!current || current.state !== "consumed") deny("permit_unknown", "Execution permit is unavailable.");
-    const updated = Object.freeze({ ...current, state: "outcome_unknown" as const });
-    this.#receiptLedger?.recordUnknown(current.id);
-    this.#permits.set(updated.id, updated);
-    return updated;
+    if (!current || current !== permit || current.state !== "consumed") deny("permit_unknown", "Execution permit is unavailable.");
+    try {
+      this.#receiptLedger?.recordUnknown(current.id);
+      const updated = Object.freeze({ ...current, state: "outcome_unknown" as const });
+      this.#permits.set(updated.id, updated);
+      return updated;
+    } finally {
+      this.#executingIntents.delete(current.id);
+      this.#intentPermits.delete(current.id);
+      this.#nextExpiry = Math.min(this.#nextExpiry, current.expiresAt);
+    }
+  }
+
+  transition(permit: ExecutionPermit, phase: "dispatch_started" | "not_started" | "succeeded" | "failed"): void {
+    const current = this.#permits.get(permit.id);
+    if (!current || current !== permit || current.state !== "consumed" || !this.#executingIntents.has(current.id)) deny("permit_transition_invalid", "Execution permit is unavailable for this outcome transition.");
+    if (phase === "dispatch_started") {
+      this.#receiptLedger?.transitionIntent?.(current, phase);
+      return;
+    }
+    try { this.#receiptLedger?.transitionIntent?.(current, phase); }
+    finally {
+      // A completed invocation no longer needs active-execution protection even if
+      // settlement failed; the durable dispatch fence remains unresolved in that case.
+      this.#executingIntents.delete(current.id);
+      this.#intentPermits.delete(current.id);
+      this.#nextExpiry = Math.min(this.#nextExpiry, current.expiresAt);
+    }
   }
 
   lookup(input: { readonly receiptId: string; readonly context: AuthenticatedContext }): ExecutionPermit | undefined {

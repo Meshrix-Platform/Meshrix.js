@@ -45,7 +45,7 @@ import { publicTagPolicyDecision } from "./tag-policy-decision.ts";
 import { createEndpointTrafficController } from "./endpoint-traffic.ts";
 import { callerApprovalOverrideFields, pendingApproval, trustedApprovalForForward } from "./approval.ts";
 import { compileUpstreamOperationCapability, evaluateDynamicOperationAuthorization, operationWithUpstreamCapability } from "./operation-capability.ts";
-import { createMcpExecutionAdapter, publicMcpResult } from "./mcp-execution-adapter.ts";
+import { createMcpExecutionAdapter, normalizeMcpResultForDownstream, publicMcpResult } from "./mcp-execution-adapter.ts";
 import { constructWithOwnedResourceCleanup, createForwardAbortContext } from "./registry-lifecycle.ts";
 import { fingerprint } from "./manifest-compiler.ts";
 import { upstreamProjectedOperationId, projectedOperationForwardInput } from "./operation-projection.ts";
@@ -295,7 +295,7 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  function fetchConfiguredMcpUpstream(url?: any, init?: any, { config = {} }: Record<string, any> = {}) : any {
+  function fetchConfiguredMcpUpstream(url?: any, init?: any, { config = {}, beforeFetch }: Record<string, any> = {}) : any {
     return fetchWithPinnedDns({
       url,
       label: `upstream-gateway.${text(config.gatewayServiceId || "mcp")}.mcp`,
@@ -304,7 +304,8 @@ export function createUpstreamGatewayRegistry({
           allowLocalForConfiguredModelService: config.allowLocalNetwork === true
         }
       },
-      init
+      init,
+      beforeFetch
     });
   }
 
@@ -348,8 +349,60 @@ export function createUpstreamGatewayRegistry({
     operation,
     input,
     endpoint,
-    inputDigest
+    inputDigest,
+    targetSelectorInputDigest = inputDigest
   }: Record<string, any>) : any {
+    const mcpConfig: Record<string, any> = object(service?.mcp);
+    if (service?.serviceProtocol === "mcp" || text(operation?.protocol).toLowerCase() === "mcp") {
+      const transport = text(mcpConfig.transport || "stdio").toLowerCase();
+      const stdio = transport === "stdio";
+      const mcpTargetUrl: URL | null = stdio ? null : new URL(text(mcpConfig.url || service.baseUrl));
+      const launchIdentityDigest = stdio ? sha256Canonical({
+        command: text(mcpConfig.command),
+        args: asArray(mcpConfig.args).map((argument?: any) : any => String(argument))
+      }) : "";
+      const mcpConfigurationVersion = text(mcpConfig.protocolVersion);
+      const protocolVersionHint = text(mcpConfig.protocolVersionHint);
+      const callDigest = text(inputDigest) || digestFinalProtectedSinkInput(object(input));
+      const targetSelectorDigest = text(targetSelectorInputDigest) || callDigest;
+      const targetTuple: Readonly<Record<string, any>> = Object.freeze({
+        schemaVersion: "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        protocol: "mcp",
+        transport,
+        method: "tools/call",
+        endpointId: text(endpoint?.endpointId || "primary"),
+        ...(stdio ? { launchIdentityDigest } : { url: mcpTargetUrl?.toString() || "" }),
+        callDigest,
+        mcpConfigurationVersion,
+        protocolVersionHint,
+        manifestSetRevision: manifestSnapshotRevision.sourceRevision,
+        manifestSetDigest: manifestSnapshotRevision.sourceDigest,
+        serviceRevision: service.serviceRevision,
+        manifestDigest: service.manifestDigest
+      });
+      const resourceRevision = sha256Canonical({
+        schemaVersion: "v0.0.1:upstream-gateway:structured-resource-revision-1",
+        manifestSetRevision: targetTuple.manifestSetRevision,
+        manifestSetDigest: targetTuple.manifestSetDigest,
+        serviceRevision: targetTuple.serviceRevision,
+        manifestDigest: targetTuple.manifestDigest,
+        transport,
+        ...(stdio ? { launchIdentityDigest } : { url: mcpTargetUrl?.toString() || "" }),
+        mcpConfigurationVersion,
+        protocolVersionHint
+      });
+      return Object.freeze({
+        targetUrl: mcpTargetUrl,
+        method: stdio ? "stdio" : "POST",
+        protocol: "mcp",
+        rpcMethod: "tools/call",
+        targetSelector: Object.freeze({ inputDigest: targetSelectorDigest, operationKey: operation.operationKey, serviceId: service.serviceId }),
+        effect: Object.freeze({ kind: stdio ? "upstream-mcp-stdio-tools-call" : "upstream-mcp-http-tools-call", targetDigest: sha256Canonical(targetTuple) }),
+        resourceRevision
+      });
+    }
     const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
     const method: any = configuredHttpMethod(operation);
     const protocol: any = text(operation.protocol || "http").toLowerCase();
@@ -450,7 +503,7 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  function currentMcpTargetFacts({ serviceId, operationKey, endpointId, input, inputDigest }: Record<string, any>) : any {
+  function currentMcpTargetFacts({ serviceId, operationKey, endpointId, input, inputDigest, targetSelectorInputDigest = inputDigest }: Record<string, any>) : any {
     const currentService: any = services.get(text(serviceId));
     const currentOperation: any = asArray(currentService?.operations).find((candidate?: any) : any => candidate.operationKey === operationKey);
     if (!currentService || currentService.disabled === true || !currentOperation ||
@@ -459,14 +512,16 @@ export function createUpstreamGatewayRegistry({
     }
     const endpoint: any = endpointsFor(currentService).find((candidate?: any) : any => text(candidate.endpointId || "primary") === text(endpointId || "primary"));
     if (!endpoint) throw Object.assign(new Error("The current upstream MCP target is unavailable."), { code: "upstream_final_effect_resource_stale", statusCode: 403 });
-    return structuredTargetFacts({ service: currentService, operation: operationWithUpstreamCapability(currentService, currentOperation), input, endpoint, inputDigest });
+    return structuredTargetFacts({ service: currentService, operation: operationWithUpstreamCapability(currentService, currentOperation), input, endpoint, inputDigest, targetSelectorInputDigest });
   }
 
   async function claimMcpProtectedSink(service: any, operation: any, input: Record<string, any>, endpoint: any, options: Record<string, any>): Promise<any> {
     const sinkInput: any = clone(input);
-    const providerInput: any = input?.[PROJECTED_PROVIDER_INPUT];
-    const sinkInputDigest: any = digestFinalProtectedSinkInput(providerInput ? clone(providerInput) : sinkInput);
-    const targetFacts: any = structuredTargetFacts({ service, operation, input: sinkInput, endpoint, inputDigest: sinkInputDigest });
+    const mcpCallInput: any = object(options.mcpCallInput || sinkInput);
+    const providerInput: any = mcpCallInput?.[PROJECTED_PROVIDER_INPUT];
+    const sinkInputDigest: any = digestFinalProtectedSinkInput(providerInput ? clone(providerInput) : mcpCallInput);
+    const targetSelectorInputDigest: any = digestFinalProtectedSinkInput(sinkInput);
+    const targetFacts: any = structuredTargetFacts({ service, operation, input: mcpCallInput, endpoint, inputDigest: sinkInputDigest, targetSelectorInputDigest });
     const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
     if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) finalEffectAuthorityRequired();
     return claimProtectedSinkAttempt({
@@ -476,7 +531,7 @@ export function createUpstreamGatewayRegistry({
       resourceRevision: targetFacts.resourceRevision,
       resolveCurrentResource: async () : Promise<any> => {
         const currentFacts: any = currentMcpTargetFacts({ serviceId: service.serviceId, operationKey: operation.operationKey,
-          endpointId: endpoint?.endpointId || "primary", input: sinkInput, inputDigest: sinkInputDigest });
+          endpointId: endpoint?.endpointId || "primary", input: mcpCallInput, inputDigest: sinkInputDigest, targetSelectorInputDigest });
         return Object.freeze({ effect: currentFacts.effect, resourceRevision: currentFacts.resourceRevision });
       }
     });
@@ -694,21 +749,32 @@ export function createUpstreamGatewayRegistry({
         const pinned: any = await fetchConfiguredMcpUpstream(config.url, {
           method: "POST", headers: { ...object(config.headers), ...object(headers), "content-type": "application/json" },
           body: JSON.stringify(request), signal
-        }, { config });
-        const response: any = pinned.response;
-        const bytes: any = await readResponseBufferWithLimit(response, operation.responseMaxBytes);
-        return { status: response.status, headers: Object.fromEntries(response.headers.entries()), body: JSON.parse(bytes.toString("utf8")) };
+        }, { config, ...(request.method === "tools/call" && typeof options.beforeSend === "function" ? { beforeFetch: options.beforeSend } : {}) });
+        try {
+          const response: any = pinned.response;
+          const bytes: any = await readResponseBufferWithLimit(response, operation.responseMaxBytes);
+          return { status: response.status, headers: Object.fromEntries(response.headers.entries()), body: JSON.parse(bytes.toString("utf8")) };
+        } finally {
+          await pinned.close().catch(() : any => {});
+        }
       } };
       const adapter: any = createModernUpstreamAdapter({ transport });
       try {
         const response: any = await adapter.invoke({ request: { id: requestId, method: "tools/call", params,
           protocolVersion, headers: {}, ...(options.requestState !== undefined ? { requestState: options.requestState } : {}) },
           route: { upstreamName: params.name, protocolVersion }, signal: options.signal });
-        return { requestId, protocolVersion, ...(response.status >= 400 ? { httpFailure: response } : { result: object(response.body)?.result ?? response.body }) };
+        const body = object(response.body);
+        if (response.status >= 400) return { requestId, protocolVersion, httpFailure: response };
+        if (Object.hasOwn(body, "error")) return { requestId, protocolVersion, jsonRpcError: response.body };
+        return { requestId, protocolVersion, result: Object.hasOwn(body, "result") ? body.result : response.body };
       } finally { await adapter.close(); }
     }
     if (typeof upstreamMcpSessions.invokeGateway !== "function") throw Object.assign(new Error("Typed legacy MCP session port is unavailable."), { status: 503, reasonCode: "upstream_mcp_transport_unavailable" });
-    const response: any = await upstreamMcpSessions.invokeGateway(config, { method: "tools/call", params }, { signal: options.signal, onNotification: options.onNotification });
+    const response: any = await upstreamMcpSessions.invokeGateway(config, { method: "tools/call", params }, {
+      signal: options.signal,
+      onNotification: options.onNotification,
+      ...(typeof options.beforeSend === "function" ? { beforeSend: options.beforeSend } : {})
+    });
     return { requestId, protocolVersion, result: response.result };
   }
 
@@ -1501,20 +1567,74 @@ export function createUpstreamGatewayRegistry({
       rejectCallerApprovalOverride(input, service, operation, subject);
       if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) return pendingApproval(service, operation);
       return withTrafficSlot(service, operation, preview, async (_traffic?: any, endpoint?: any) : Promise<any> => {
-        const params: Record<string, any> = { name: target.upstreamToolName, arguments: object(input.arguments),
+        const args = object(input.arguments);
+        const readOnly = text(operation.risk || operation.safety?.risk).toLowerCase() === "read_only";
+        const mcpCallInput: Record<string, any> = {
+          name: target.upstreamToolName,
+          arguments: args,
           ...(options.requestState !== undefined ? { requestState: options.requestState } : {}),
-          ...(input.inputResponses !== undefined ? { inputResponses: input.inputResponses } : {}) };
-        const { requestId, result, httpFailure }: any = await invokeTypedMcp(service, operation, params, { ...options, subject });
+          ...(input.inputResponses !== undefined ? { inputResponses: input.inputResponses } : {})
+        };
+        let effectLifecycle: any = null;
+        if (!readOnly) {
+          const lifecyclePort = options.platformEffectLifecycle;
+          if (typeof lifecyclePort?.prepare !== "function") {
+            throw Object.assign(new Error("Durable operation proof is unavailable for this MCP effect."), {
+              code: "operation_proof_unavailable",
+              status: 503
+            });
+          }
+          const targetFacts = structuredTargetFacts({
+            service,
+            operation,
+            input: mcpCallInput,
+            endpoint,
+            inputDigest: digestFinalProtectedSinkInput(mcpCallInput)
+          });
+          effectLifecycle = await lifecyclePort.prepare({
+            service,
+            operation,
+            input: mcpCallInput,
+            endpoint,
+            targetFacts,
+            upstreamToolName: target.upstreamToolName,
+            subject
+          });
+        }
+        const beforeSend = effectLifecycle ? async () : Promise<void> => {
+          await effectLifecycle.beginDispatch();
+          await claimMcpProtectedSink(service, operation, mcpCallInput, endpoint, {
+            ...options,
+            finalProtectedSinkPermit: effectLifecycle.finalProtectedSinkPermit
+          });
+          effectLifecycle.markDispatchStarted();
+        } : undefined;
+        const { requestId, result, httpFailure, jsonRpcError, protocolVersion }: any = await invokeTypedMcp(service, operation, mcpCallInput, {
+          ...options,
+          subject,
+          ...(beforeSend ? { beforeSend } : {})
+        });
         if (httpFailure) return httpFailure;
-        if (result?.resultType === "input_required") return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
-        if (typeof result?.resultType === "string" && result.resultType !== "complete") return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
-        const publicResponse: any = publicMcpResult(object(result), operation);
+        if (jsonRpcError) {
+          return { status: 200, body: jsonRpcError, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (result?.resultType === "input_required") {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (typeof result?.resultType === "string" && result.resultType !== "complete") {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (!result || typeof result !== "object" || Array.isArray(result)) {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        const publicResponse: any = publicMcpResult(result, operation);
+        const projectedResult = normalizeMcpResultForDownstream(publicResponse.result, protocolVersion);
         const audit: any = appendAudit("upstream.mcp.gateway.completed", { serviceId: service.serviceId, operationKey: operation.operationKey,
-          upstreamToolName: target.upstreamToolName, protocol: "mcp", endpoint: publicEndpoint(endpoint), responseBytes: Buffer.byteLength(JSON.stringify(publicResponse.result)) });
+          upstreamToolName: target.upstreamToolName, protocol: "mcp", endpoint: publicEndpoint(endpoint), responseBytes: Buffer.byteLength(JSON.stringify(projectedResult)) });
         recordEndpointOutcome(service, operation, endpoint, { statusCode: 200, ok: true });
         recordMetric({ serviceId: service.serviceId, statusCode: 200, failed: false });
         persist();
-        return { status: 200, body: { jsonrpc: "2.0", id: requestId, result: { resultType: "complete", ...object(publicResponse.result) } }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName, auditId: audit.auditId };
+        return { status: 200, body: { jsonrpc: "2.0", id: requestId, result: projectedResult }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName, auditId: audit.auditId };
       });
     },
     previewPolicy(input: Record<string, any> = {}, subject: Record<string, any> = {}) : any {

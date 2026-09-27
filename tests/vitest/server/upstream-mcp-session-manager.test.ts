@@ -30,9 +30,10 @@ function delay(ms?: any) : any {
 function createLoopbackHttpManager(options: Record<string, any> = {}) : any {
   return createUpstreamMcpSessionManager({
     ...options,
-    fetchTransport: async (url?: any, init?: any) : Promise<any> => ({
-      response: await fetch(url, init)
-    })
+    fetchTransport: async (url?: any, init?: any, context: Record<string, any> = {}) : Promise<any> => {
+      await context.beforeFetch?.();
+      return { response: await fetch(url, init) };
+    }
   });
 }
 
@@ -145,6 +146,7 @@ async function createHttpFixture({
     initializations: [],
     initializedNotifications: [],
     calls: [],
+    effectCount: 0,
     cancellations: [],
     deletions: [],
     clientResponses: [],
@@ -242,6 +244,17 @@ async function createHttpFixture({
       return;
     }
     const name: any = message.params?.name;
+    if (name === "recover-effect") {
+      evidence.effectCount += 1;
+      if (evidence.effectCount === 1) {
+        activeSessions.delete(sessionId);
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      jsonResponse(response, 200, { jsonrpc: "2.0", id: message.id, result: { structuredContent: { value: evidence.effectCount } } });
+      return;
+    }
     if (name === "recover" && !evidence.recovered) {
       evidence.recovered = true;
       activeSessions.delete(sessionId);
@@ -545,6 +558,70 @@ describe("upstream MCP managed sessions", () : any => {
     expect(fixture.evidence.deletions).toContain("session-2");
     expect(openedTransports).toBeGreaterThan(0);
     expect(closedTransports).toBe(openedTransports);
+  });
+
+  it("does not resend a tools/call after session recovery replays its durable dispatch fence", async () : Promise<any> => {
+    const fixture: any = await createHttpFixture();
+    const manager: any = createLoopbackHttpManager({ idleTtlMs: 5000 });
+    managers.add(manager);
+    const config: Record<string, any> = {
+      transport: "streamable-http",
+      url: fixture.url,
+      timeoutMs: 1000,
+      sessionKey: "http-dispatch-fence-recovery",
+      sessionScope: "http-dispatch-fence-recovery"
+    };
+    let admissions = 0;
+    await expect(manager.invokeGateway(config, {
+      method: "tools/call",
+      params: { name: "recover-effect", arguments: {} }
+    }, {
+      async beforeSend() {
+        admissions += 1;
+        if (admissions > 1) throw Object.assign(new Error("dispatch receipt already exists"), { code: "dispatch_receipt_replayed" });
+      }
+    })).rejects.toMatchObject({ mcpSessionFatal: true });
+    expect(admissions).toBe(2);
+    expect(fixture.evidence.calls.filter((call: any) => call.name === "recover-effect")).toHaveLength(1);
+    expect(fixture.evidence.effectCount).toBe(1);
+  });
+
+  it("runs stdio admission after queued writes are ready and never writes an aborted queued call", async () : Promise<any> => {
+    const manager: any = createUpstreamMcpSessionManager({ idleTtlMs: 5000 });
+    managers.add(manager);
+    const config: Record<string, any> = stdioConfig({
+      sessionKey: "stdio-dispatch-fence-queue",
+      sessionScope: "stdio-dispatch-fence-queue"
+    });
+    let releaseFirst!: () => void;
+    let announceFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const firstAdmission = new Promise<void>((resolve) => { announceFirst = resolve; });
+    let queuedAdmissions = 0;
+    const first = manager.invokeGateway(config, {
+      method: "tools/call",
+      params: { name: "state.increment", arguments: {} }
+    }, {
+      async beforeSend() {
+        announceFirst();
+        await firstGate;
+      }
+    });
+    await firstAdmission;
+    const controller = new AbortController();
+    const queued = manager.invokeGateway(config, {
+      method: "tools/call",
+      params: { name: "state.increment", arguments: {} }
+    }, {
+      signal: controller.signal,
+      beforeSend() { queuedAdmissions += 1; }
+    });
+    controller.abort();
+    await expect(queued).rejects.toMatchObject({ name: "AbortError" });
+    releaseFirst();
+    await expect(first).resolves.toMatchObject({ result: { structuredContent: { value: 1 } } });
+    expect(queuedAdmissions).toBe(0);
+    await expect(manager.callTool(config, { name: "state.probe" })).resolves.toMatchObject({ result: { structuredContent: { value: 1 } } });
   });
 
   it("evicts at capacity and reaps idle HTTP sessions", async () : Promise<any> => {

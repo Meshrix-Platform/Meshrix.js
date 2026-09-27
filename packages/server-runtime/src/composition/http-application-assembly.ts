@@ -622,6 +622,7 @@ export async function createHttpApplicationAssembly({
   const platformMcpGateway: any = createPlatformMcpGateway({
     toolSkillManagementProvider,
     upstreamGatewayRegistry: consoleOperationProviders.upstreamGatewayRegistry,
+    operationProofSubstrate: registeredOperationProofSubstrate,
     runtimeLogger,
     platformName: "meshrix-platform"
   });

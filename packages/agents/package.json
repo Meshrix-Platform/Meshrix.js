@@ -16,60 +16,60 @@
   },
   "exports": {
     "./agent-memory/index": {
-      "types": "./dist/agent-memory/index.d.ts",
       "source": "./src/agent-memory/index.ts",
+      "types": "./dist/agent-memory/index.d.ts",
       "default": "./dist/agent-memory/index.js"
     },
     "./agent-workspace/agent-workspace-materialization": null,
     "./agent-workspace/agent-workspace-materialization-brand": {
-      "types": "./dist/agent-workspace/agent-workspace-materialization-brand.d.ts",
       "source": "./src/agent-workspace/agent-workspace-materialization-brand.ts",
+      "types": "./dist/agent-workspace/agent-workspace-materialization-brand.d.ts",
       "default": "./dist/agent-workspace/agent-workspace-materialization-brand.js"
     },
     "./agent-workspace/agent-workspace-materialization-file-worker": null,
     "./agent-workspace/agent-workspace-materialization-port": {
-      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
       "source": "./src/agent-workspace/agent-workspace-materialization-port.ts",
+      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
       "default": "./dist/agent-workspace/agent-workspace-materialization-port.js"
     },
     "./agent-workspace/index": {
-      "types": "./dist/agent-workspace/index.d.ts",
       "source": "./src/agent-workspace/index.ts",
+      "types": "./dist/agent-workspace/index.d.ts",
       "default": "./dist/agent-workspace/index.js"
     },
     "./upstream-gateway/index": {
-      "types": "./dist/upstream-gateway/index.d.ts",
       "source": "./src/upstream-gateway/index.ts",
+      "types": "./dist/upstream-gateway/index.d.ts",
       "default": "./dist/upstream-gateway/index.js"
     },
     "./upstream-gateway/gateway-executor": {
-      "types": "./dist/upstream-gateway/gateway-executor.d.ts",
       "source": "./src/upstream-gateway/gateway-executor.ts",
+      "types": "./dist/upstream-gateway/gateway-executor.d.ts",
       "default": "./dist/upstream-gateway/gateway-executor.js"
     },
     "./service-events": {
-      "types": "./dist/service-events/index.d.ts",
       "source": "./src/service-events/index.ts",
+      "types": "./dist/service-events/index.d.ts",
       "default": "./dist/service-events/index.js"
     },
     "./workspace-asset-registry/index": {
-      "types": "./dist/workspace-asset-registry/index.d.ts",
       "source": "./src/workspace-asset-registry/index.ts",
+      "types": "./dist/workspace-asset-registry/index.d.ts",
       "default": "./dist/workspace-asset-registry/index.js"
     },
     "./workspace-contribution": {
-      "types": "./dist/workspace-contribution/index.d.ts",
       "source": "./src/workspace-contribution/index.ts",
+      "types": "./dist/workspace-contribution/index.d.ts",
       "default": "./dist/workspace-contribution/index.js"
     },
     "./workspace-contribution/index": {
-      "types": "./dist/workspace-contribution/index.d.ts",
       "source": "./src/workspace-contribution/index.ts",
+      "types": "./dist/workspace-contribution/index.d.ts",
       "default": "./dist/workspace-contribution/index.js"
     },
     "./workspace-governance/index": {
-      "types": "./dist/workspace-governance/index.d.ts",
       "source": "./src/workspace-governance/index.ts",
+      "types": "./dist/workspace-governance/index.d.ts",
       "default": "./dist/workspace-governance/index.js"
     }
   },

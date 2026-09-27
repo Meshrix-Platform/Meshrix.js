@@ -165,6 +165,43 @@ describe("release package version preparation", () : any => {
     });
   });
 
+  it("prepares expanded agent workspaces while preserving the declared workspace patterns", async () : Promise<any> => {
+    await withFixture({}, async (rootDir?: any) : Promise<any> => {
+      const workspaces = [...WORKSPACES, "plugins/agents/*"];
+      const rootPackage = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
+      const lock = JSON.parse(await fs.readFile(path.join(rootDir, "package-lock.json"), "utf8"));
+      rootPackage.workspaces = workspaces;
+      lock.packages[""].workspaces = workspaces;
+      for (const [directory, name, isPrivate] of [
+        ["plugins/agents/published", "@meshrix/agent-published", false],
+        ["plugins/agents/internal", "@meshrix/agent-internal", true]
+      ] as const) {
+        const manifest = { name, version: INITIAL_VERSION, private: isPrivate, dependencies: { "@meshrix/contracts": INITIAL_VERSION } };
+        await writeJson(rootDir, `${directory}/package.json`, manifest);
+        lock.packages[directory] = manifest;
+        lock.packages[`node_modules/${name}`] = { resolved: directory, link: true };
+      }
+      await writeJson(rootDir, "package.json", rootPackage);
+      await writeJson(rootDir, "package-lock.json", lock);
+
+      const version = "1.2.3";
+      await expect(prepareRelease({ rootDir, version, date: "2026-07-11" })).resolves.toMatchObject({
+        ok: true, manifestCount: 6, workspaceCount: 4
+      });
+      const preparedRoot = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
+      const preparedLock = JSON.parse(await fs.readFile(path.join(rootDir, "package-lock.json"), "utf8"));
+      expect(preparedRoot.workspaces).toEqual(workspaces);
+      expect(preparedLock.packages[""].workspaces).toEqual(workspaces);
+      for (const directory of ["plugins/agents/published", "plugins/agents/internal"]) {
+        expect(JSON.parse(await fs.readFile(path.join(rootDir, directory, "package.json"), "utf8"))).toMatchObject({
+          version, dependencies: { "@meshrix/contracts": version }
+        });
+        expect(preparedLock.packages[directory].version).toBe(version);
+      }
+      await expect(prepareRelease({ rootDir, version, check: true })).resolves.toMatchObject({ ok: true, changedFiles: [] });
+    });
+  });
+
   it("keeps check mode read-only and rejects invalid versions or inconsistent lock dependencies", async () : Promise<any> => {
     expect(parseReleaseArguments(["--check", INITIAL_VERSION])).toMatchObject({
       check: true,

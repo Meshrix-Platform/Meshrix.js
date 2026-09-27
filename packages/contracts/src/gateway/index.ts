@@ -258,6 +258,8 @@ export interface PermitAuthorityPort {
     readonly prepared: PreparedInvocation;
   }): ExecutionPermit | Promise<ExecutionPermit>;
   markOutcomeUnknown?(permit: ExecutionPermit): ExecutionPermit | Promise<ExecutionPermit>;
+  /** Persist the server-owned effect boundary without extending the client permit or MCP request shape. */
+  transition?(permit: ExecutionPermit, phase: "dispatch_started" | "not_started" | "succeeded" | "failed"): void | Promise<void>;
   lookup?(input: { readonly receiptId: string; readonly context: AuthenticatedContext }): ExecutionPermit | undefined | Promise<ExecutionPermit | undefined>;
   stats?(): Readonly<Record<string, unknown>>;
 }
@@ -291,6 +293,8 @@ export interface UpstreamPort {
     readonly context?: AuthenticatedContext;
     readonly request: UpstreamRequest;
     readonly route: RouteSnapshot;
+    /** Exact server-owned permit for internal effect evidence; never serialized onto MCP wire. */
+    readonly permit?: ExecutionPermit;
     readonly credential?: unknown;
     readonly signal?: AbortSignal;
   }): Promise<UpstreamResponse | UpstreamResult>;

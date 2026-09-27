@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
@@ -9,13 +9,20 @@ import {
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { POLICY_ONLY_INPUT_KEYS } from "@meshrix/capabilities/operation-permission-core/runtime-schema";
 import { projectedOperationForwardInput } from "@meshrix/agents/upstream-gateway/index";
+import { createFinalProtectedSinkAttempt, digestFinalProtectedSinkInput } from "@meshrix/foundation/security/final-protected-sink-permit";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
+import {
+  MCP_DISPATCH_ADMISSION_RECEIPT_OPERATION_ID,
+  MCP_DISPATCH_PARENT_INTENT_REF_PREFIX
+} from "@meshrix/foundation/proof/proof-substrate/index";
 import type {
   AuthenticatedContext,
   CatalogDescriptor,
   GatewayApprovalPort,
   GatewayOutcome,
+  ExecutionPermit,
   Invocation,
+  PermitAuthorityPort,
   RouteSnapshot,
   UpstreamPort,
   UpstreamResponse
@@ -55,6 +62,7 @@ export async function executeThroughPlatformGateway(input: { readonly gateway: G
 export interface PlatformMcpGatewayOptions {
   readonly toolSkillManagementProvider: Record<string, any>;
   readonly upstreamGatewayRegistry?: Record<string, any> | null;
+  readonly operationProofSubstrate?: Record<string, any> | null;
   readonly runtimeLogger?: Record<string, any> | null;
   readonly platformName?: string;
 }
@@ -500,12 +508,244 @@ function executionContextFromRequest(request: unknown): Record<string, any> {
 export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): PlatformMcpGateway {
   const toolProvider = options.toolSkillManagementProvider;
   const upstreamRegistry = options.upstreamGatewayRegistry || null;
+  const operationProofSubstrate = options.operationProofSubstrate || null;
   const logger = options.runtimeLogger || null;
   let publishedDescriptorSignature = "";
   const knownDescriptors = new Map<string, CatalogDescriptor>();
+  const activeMcpLifecycleByPermit = new Map<string, Record<string, any>>();
+
+  function settleMcpLifecycleForPermit(permit: ExecutionPermit, completion: Record<string, any>): Promise<void> | void {
+    const lifecycle = activeMcpLifecycleByPermit.get(permit.id);
+    if (!lifecycle) return;
+    activeMcpLifecycleByPermit.delete(permit.id);
+    return lifecycle.settle(completion);
+  }
+
+  const basePermitAuthority = createGatewayPermitAuthority();
+  const platformPermitAuthority: PermitAuthorityPort = Object.freeze<PermitAuthorityPort>({
+    issue: (input) => basePermitAuthority.issue(input),
+    consume: (input) => basePermitAuthority.consume(input),
+    async markOutcomeUnknown(permit): Promise<ExecutionPermit> {
+      const lifecycle = activeMcpLifecycleByPermit.get(permit.id);
+      try {
+        const updated = await basePermitAuthority.markOutcomeUnknown(permit);
+        if (lifecycle) {
+          await settleMcpLifecycleForPermit(permit, {
+            status: lifecycle.dispatchStarted ? "in_doubt" : "denied",
+            outcomeKind: lifecycle.dispatchStarted ? "mcp-dispatch-outcome-unknown" : "mcp-effect-not-started"
+          });
+        }
+        return updated;
+      } finally {
+        activeMcpLifecycleByPermit.delete(permit.id);
+      }
+    },
+    async transition(permit, phase): Promise<void> {
+      if (phase === "dispatch_started") {
+        await basePermitAuthority.transition(permit, phase);
+        return;
+      }
+      const lifecycle = activeMcpLifecycleByPermit.get(permit.id);
+      try {
+        await basePermitAuthority.transition(permit, phase);
+        if (!lifecycle) return;
+        const status = phase === "succeeded" && lifecycle.dispatchStarted
+          ? "succeeded"
+          : phase === "failed" && lifecycle.dispatchStarted
+            ? "failed"
+            : phase === "not_started" && !lifecycle.dispatchStarted
+              ? "denied"
+              : "in_doubt";
+        await settleMcpLifecycleForPermit(permit, {
+          status,
+          outcomeKind: status === "succeeded" ? "mcp-response-validated" :
+            status === "failed" ? "mcp-tool-error-validated" :
+              status === "denied" ? "mcp-effect-not-started" : "mcp-dispatch-outcome-unknown"
+        });
+      } finally {
+        activeMcpLifecycleByPermit.delete(permit.id);
+      }
+    },
+    lookup: (input) => basePermitAuthority.lookup(input),
+    stats: () => basePermitAuthority.stats()
+  });
+
+  function protectedSinkAuthorityFacts({ context, authorization, operation, route }: Record<string, any>): Record<string, any> {
+    const metadata = isRecord(context?.metadata) ? context.metadata : {};
+    const grant = isRecord(context?.grant) ? context.grant : {};
+    const subject = authorizationSubject(authorization);
+    return {
+      subject: {
+        generation: text(context?.authGeneration),
+        subjectId: text(context?.principal),
+        tenantId: text(context?.tenant),
+        type: text(subject.type) || "mcp-client"
+      },
+      context: {
+        approvalRevision: text(isRecord(metadata.approval) ? metadata.approval.revision : "") || "not-required",
+        grantRevision: text(grant.revision) || text(context?.authGeneration),
+        policyRevision: text(route?.policyRef),
+        riskRevision: text(operation?.risk || operation?.safety?.risk) || "unknown",
+        workloadGeneration: text(context?.authGeneration)
+      }
+    };
+  }
+
+  async function prepareDiscoveredMcpEffect(input: Record<string, any>): Promise<Record<string, any>> {
+    if (!operationProofSubstrate || typeof operationProofSubstrate.beginLifecycle !== "function" ||
+        typeof operationProofSubstrate.recordReceipt !== "function" || typeof operationProofSubstrate.finishLifecycle !== "function") {
+      throw Object.assign(new Error("Durable operation proof is unavailable for this MCP effect."), {
+        code: "operation_proof_unavailable",
+        status: 503
+      });
+    }
+    const { context, authorization, operation, route, service, targetFacts, signal, permit } = input;
+    if (!permit || !text(permit.id)) {
+      throw Object.assign(new Error("The consumed gateway permit is unavailable for MCP intent binding."), {
+        code: "operation_intent_permit_unavailable",
+        status: 503
+      });
+    }
+    const inputArguments = isRecord(input.arguments) ? input.arguments : {};
+    const authority = protectedSinkAuthorityFacts({ context, authorization, operation, route });
+    const operationId = `upstream.mcp.${text(service?.serviceId)}.${text(operation?.operationKey) || "tools/call"}`;
+    const workspaceId = `platform:${text(context?.tenant)}:${text(service?.serviceId)}`;
+    const intent = await operationProofSubstrate.beginLifecycle({
+      operationId,
+      workspaceId,
+      idempotencyKey: randomUUID(),
+      semantic: `upstream-mcp:${text(service?.serviceId)}:${text(input.upstreamToolName)}`,
+      input: inputArguments,
+      subject: authority.subject,
+      risk: {
+        risk: text(operation?.risk || operation?.safety?.risk) || "unknown",
+        requiresApproval: operation?.requiresApproval === true
+      },
+      targetKind: "upstream-mcp",
+      targetRef: {
+        serviceId: text(service?.serviceId),
+        operationKey: text(operation?.operationKey) || "tools/call",
+        endpointId: text(input.endpoint?.endpointId) || "primary",
+        upstreamToolName: text(input.upstreamToolName)
+      },
+      policyDecision: { decision: "allow", source: "platform-mcp-gateway" }
+    });
+    if (!intent?.ledgerEventId || !intent?.pactium?.intentId) {
+      throw Object.assign(new Error("Durable operation intent was not recorded."), {
+        code: "operation_intent_unavailable",
+        status: 503
+      });
+    }
+    const finish = async (completion: Record<string, any>): Promise<void> => {
+      if (typeof operationProofSubstrate.finishLifecycle !== "function") return;
+      await operationProofSubstrate.finishLifecycle({
+        entry: intent,
+        status: text(completion.status) || "in_doubt",
+        outcomeKind: text(completion.outcomeKind) || text(completion.status) || "in_doubt",
+        error: text(completion.error),
+        result: isRecord(completion.result) ? completion.result : {},
+        receiptRefs: completion.receiptLedgerEventId ? [completion.receiptLedgerEventId] : []
+      });
+    };
+    let dispatchStarted = false;
+    let dispatchFenceRecorded = false;
+    let dispatchReceiptLedgerEventId = "";
+    let settled = false;
+    let finalProtectedSinkPermit: any;
+    try {
+      finalProtectedSinkPermit = createFinalProtectedSinkAttempt({
+        audience: "upstream-mcp-final-effect",
+        subject: authority.subject,
+        operationId,
+        requestDigest: text(targetFacts?.targetSelector?.inputDigest) || digestFinalProtectedSinkInput(inputArguments),
+        context: authority.context,
+        targetSelector: targetFacts?.targetSelector,
+        proofRef: intent.ledgerEventId,
+        authorization: {
+          decisionId: text(authorization?.authorizationDecision?.decisionId || authorization?.decisionId),
+          grantRevision: authority.context.grantRevision,
+          policyRevision: authority.context.policyRevision
+        },
+        approval: {
+          approvalRevision: authority.context.approvalRevision,
+          required: operation?.requiresApproval === true
+        },
+        risk: {
+          class: authority.context.riskRevision
+        },
+        signal,
+        revalidateCurrentAuthority: async (): Promise<Record<string, any>> => {
+          try {
+            const current = await authenticate(input.requestContext as ModernDownstreamRequest);
+            const currentAuthorization = isRecord(current.metadata?.authorization) ? current.metadata.authorization : {};
+            const currentAuthority = protectedSinkAuthorityFacts({ context: current, authorization: currentAuthorization, operation, route });
+            const currentRouteRefs = Array.isArray(current.grant?.routeRefs) ? current.grant.routeRefs.map(text) : [];
+            return {
+              allowed: currentRouteRefs.includes(text(route?.logicalRoute)) &&
+                canonicalJson(currentAuthority.subject) === canonicalJson(authority.subject) &&
+                canonicalJson(currentAuthority.context) === canonicalJson(authority.context),
+              revoked: false,
+              subject: currentAuthority.subject,
+              context: currentAuthority.context
+            };
+          } catch {
+            return { allowed: false, revoked: true };
+          }
+        }
+      });
+    } catch (error) {
+      try {
+        await finish({ status: "denied", outcomeKind: "protected-sink-attempt-creation-failed" });
+      } catch {
+        // An unsettled intent remains unresolved when its owner cannot persist the denial.
+      }
+      throw error;
+    }
+    const lifecycle = {
+      finalProtectedSinkPermit,
+      async beginDispatch(): Promise<string> {
+        const receipt = await operationProofSubstrate.recordReceipt({
+          operationId: MCP_DISPATCH_ADMISSION_RECEIPT_OPERATION_ID,
+          workspaceId,
+          idempotencyKey: `${intent.pactium.intentId}:dispatch-admission`,
+          semantic: `dispatch-fence:${operationId}`,
+          subject: authority.subject,
+          status: "in_doubt",
+          outcomeKind: "dispatch-fence-established",
+          hostEvidenceRefs: [`${MCP_DISPATCH_PARENT_INTENT_REF_PREFIX}${intent.ledgerEventId}`]
+        });
+        if (receipt?.disposition !== "recorded" || receipt?.replayed === true || !receipt?.ledgerEventId) {
+          throw Object.assign(new Error("The durable MCP dispatch boundary was not newly recorded."), {
+            code: "operation_dispatch_admission_unavailable",
+            status: 503
+          });
+        }
+        dispatchFenceRecorded = true;
+        dispatchReceiptLedgerEventId = receipt.ledgerEventId;
+        return dispatchReceiptLedgerEventId;
+      },
+      markDispatchStarted(): void {
+        if (!dispatchFenceRecorded) throw new Error("The durable MCP dispatch fence is unavailable.");
+        dispatchStarted = true;
+      },
+      async settle(completion: Record<string, any>): Promise<void> {
+        if (settled) return;
+        settled = true;
+        const receiptLedgerEventId = text(completion.receiptLedgerEventId) || dispatchReceiptLedgerEventId;
+        await finish({
+          ...completion,
+          receiptLedgerEventId,
+          status: completion.status || (dispatchStarted ? "in_doubt" : "denied")
+        });
+      },
+      get dispatchStarted(): boolean { return dispatchStarted; }
+    };
+    activeMcpLifecycleByPermit.set(permit.id, lifecycle);
+    return lifecycle;
+  }
 
   const upstream: UpstreamPort = Object.freeze({
-    async invoke({ context, request, route, signal }: any): Promise<UpstreamResponse> {
+    async invoke({ context, request, route, signal, permit }: any): Promise<UpstreamResponse> {
       const metadata = isRecord(route.metadata) ? route.metadata : {};
       const authorization = isRecord(context?.metadata?.authorization) ? context.metadata.authorization : {};
       const rawRequest = context?.metadata?.request || null;
@@ -557,7 +797,23 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
             ...(isRecord(request.params) && isRecord(request.params.inputResponses) ? { inputResponses: request.params.inputResponses } : {})
           },
           { ...authorizationSubject(authorization), ...(isRecord(context.metadata?.verifiedApprovedPendingOperation) ? { approvedPendingOperation: context.metadata.verifiedApprovedPendingOperation } : {}) },
-          { signal, ...(request.requestState === undefined ? {} : { requestState: request.requestState }) }
+          {
+            signal,
+            ...(request.requestState === undefined ? {} : { requestState: request.requestState }),
+            platformEffectLifecycle: {
+              prepare: (effect: Record<string, any>) => prepareDiscoveredMcpEffect({
+                ...effect,
+                context,
+                authorization,
+                route,
+                requestContext: context.metadata?.requestContext,
+                arguments: effect.input,
+                upstreamToolName: effect.upstreamToolName,
+                permit,
+                signal
+              })
+            }
+          }
         );
         if (isRecord(forwarded) && typeof forwarded.status === "number" && Object.hasOwn(forwarded, "body")) return forwarded as UpstreamResponse;
         const projected = forwarded?.response ?? forwarded?.resource ?? forwarded?.payload ?? null;
@@ -624,7 +880,7 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
   const gateway = createPlatformGateway({
     platformName: options.platformName,
     policy: createGatewayPolicy({ revision: "platform-gateway-policy-1" }),
-    permits: createGatewayPermitAuthority(),
+    permits: platformPermitAuthority,
     approval,
     continuationKey: randomBytes(32),
     currentAuthority: {
@@ -802,7 +1058,21 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
     gateway,
     adapter,
     async close(closeOptions = {}): Promise<void> {
-      await gateway.close(closeOptions);
+      try {
+        await gateway.close(closeOptions);
+      } finally {
+        for (const [permitId, lifecycle] of activeMcpLifecycleByPermit) {
+          try {
+            await lifecycle.settle({
+              status: lifecycle.dispatchStarted ? "in_doubt" : "denied",
+              outcomeKind: lifecycle.dispatchStarted ? "mcp-gateway-shutdown-outcome-unknown" : "mcp-gateway-shutdown-before-effect"
+            });
+          } catch {
+            // The persisted dispatch receipt remains conservatively in doubt if settlement fails.
+          }
+          activeMcpLifecycleByPermit.delete(permitId);
+        }
+      }
     }
   });
 }

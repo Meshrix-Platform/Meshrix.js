@@ -6,12 +6,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
-import {
-  createLockBackedNpmRegistry,
-  rewritePackedVendoredFileDependencies
-} from "./lib/lock-backed-npm-registry.ts";
+import { createLockBackedNpmRegistry } from "./lib/lock-backed-npm-registry.ts";
 import { assertNoLeak } from "./lib/report-evidence-safety.ts";
 import { discoverReleaseSet } from "./publish-release-set.ts";
 
@@ -26,9 +24,6 @@ const argv: any = process.argv.slice(2);
 const inContainer: any = argv.includes("--in-container");
 const hostPlatformProbe: any = argv.includes("--host-platform-probe");
 const requiredHostProbe: any = argv.includes("--required-host-probe");
-if (hostPlatformProbe && requiredHostProbe) {
-  throw new Error("npm_package_probe_mode_conflict");
-}
 const npmCli: any = resolveNpmCliInvocation();
 
 function argumentValue(name?: any) : any {
@@ -42,6 +37,52 @@ function npmCommand() : any {
 
 function npmArgs(args?: any) : any {
   return npmCliArgs(npmCli, args);
+}
+
+export async function packInstallabilityArtifacts({
+  packageRecords,
+  packDirectory,
+  runPack
+}: Record<string, any>) : Promise<any[]> {
+  const packedArtifacts: any[] = [];
+  for (const packageRecord of packageRecords) {
+    const packed: any = await runPack(packageRecord, packDirectory);
+    const artifacts: any = JSON.parse(packed.stdout);
+    assert.equal(artifacts.length, 1, "npm_package_pack_artifact_count_invalid");
+    const artifact: any = artifacts[0];
+    assert.equal(artifact?.name, packageRecord.name, "npm_package_release_set_artifact_mismatch");
+    assert.equal(artifact?.version, packageRecord.version, "npm_package_release_set_version_mismatch");
+    const filename: any = String(artifact?.filename || "");
+    assert.ok(filename && path.basename(filename) === filename, "npm_package_pack_filename_invalid");
+    const tarballPath: any = path.join(packDirectory, filename);
+    const tarballStat: any = await fs.lstat(tarballPath);
+    assert.ok(tarballStat.isFile() && !tarballStat.isSymbolicLink(), "npm_package_pack_tarball_invalid");
+    packedArtifacts.push({ ...artifact, tarballPath });
+  }
+  return packedArtifacts;
+}
+
+export async function prepareInstallabilityConsumer({
+  consumerDirectory,
+  packedArtifacts
+}: Record<string, any>) : Promise<void> {
+  const dependencies: any = Object.fromEntries(
+    packedArtifacts.map((artifact?: any) : any => [
+      String(artifact.name),
+      `file:${artifact.tarballPath}`
+    ])
+  );
+  await fs.mkdir(consumerDirectory, { recursive: true });
+  await fs.writeFile(
+    path.join(consumerDirectory, "package.json"),
+    `${JSON.stringify({
+      name: "meshrix-package-verifier",
+      private: true,
+      version: "0.0.0",
+      dependencies
+    }, null, 2)}\n`,
+    "utf8"
+  );
 }
 
 async function run(command?: any, args?: any, options: Record<string, any> = {}) : Promise<any> {
@@ -360,20 +401,16 @@ try {
 
   const packDirectory: any = path.join(tempRoot, "pack");
   await fs.mkdir(packDirectory, { recursive: true });
-  const packedArtifacts: any[] = [];
-  for (const packageRecord of releaseSet.packages) {
-    const packed: any = await runProbeStage(
+  const packedArtifacts: any[] = await packInstallabilityArtifacts({
+    packageRecords: releaseSet.packages,
+    packDirectory,
+    runPack: (packageRecord?: any, destination?: any) : any => runProbeStage(
       "npm_package_release_set_pack_failed",
       npmCommand(),
-      npmArgs(["pack", "--json", "--ignore-scripts", "--pack-destination", packDirectory]),
+      npmArgs(["pack", "--json", "--ignore-scripts", "--pack-destination", destination]),
       { cwd: packageRecord.absoluteDirectory }
-    );
-    const artifacts: any = JSON.parse(packed.stdout);
-    assert.equal(artifacts.length, 1, "npm_package_pack_artifact_count_invalid");
-    assert.equal(artifacts[0]?.name, packageRecord.name, "npm_package_release_set_artifact_mismatch");
-    assert.equal(artifacts[0]?.version, releaseSet.version, "npm_package_release_set_version_mismatch");
-    packedArtifacts.push(artifacts[0]);
-  }
+    )
+  });
 
   let packedFileCount: any = 0;
   const tarballPaths: any[] = [];
@@ -392,12 +429,7 @@ try {
       false,
       "npm_package_platform_artifact_forbidden"
     );
-    const filename: any = String(artifact.filename || "");
-    assert.ok(filename && path.basename(filename) === filename, "npm_package_pack_filename_invalid");
-    tarballPaths.push(path.join(packDirectory, filename));
-  }
-  for (const tarballPath of tarballPaths) {
-    await rewritePackedVendoredFileDependencies(tarballPath);
+    tarballPaths.push(artifact.tarballPath);
   }
   const rootArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === rootPackage.name);
   const connectorArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === "meshrix-mcp-connector");
@@ -434,23 +466,7 @@ try {
   });
 
   const consumerDirectory: any = path.join(tempRoot, "consumer");
-  await fs.mkdir(consumerDirectory, { recursive: true });
-  const releaseSetDependencies: any = Object.fromEntries(
-    packedArtifacts.map((artifact?: any, index?: any) : any => [
-      String(artifact.name),
-      `file:${tarballPaths[index]}`
-    ])
-  );
-  await fs.writeFile(
-    path.join(consumerDirectory, "package.json"),
-    `${JSON.stringify({
-      name: "meshrix-package-verifier",
-      private: true,
-      version: "0.0.0",
-      dependencies: releaseSetDependencies
-    }, null, 2)}\n`,
-    "utf8"
-  );
+  await prepareInstallabilityConsumer({ consumerDirectory, packedArtifacts });
   const registryMirror: any = freshContainer === true
     ? await createLockBackedNpmRegistry({
         lockPath: "package-lock.json",
@@ -785,12 +801,17 @@ async function runContainerAuthority() : Promise<any> {
   }
 }
 
-if (inContainer || hostPlatformProbe || requiredHostProbe) {
-  await runProbe({
-    reportPath: argumentValue("--report-path") || DEFAULT_REPORT_PATH,
-    freshContainer: inContainer,
-    requiredReleaseProbe: requiredHostProbe
-  });
-} else {
-  await runContainerAuthority();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (hostPlatformProbe && requiredHostProbe) {
+    throw new Error("npm_package_probe_mode_conflict");
+  }
+  if (inContainer || hostPlatformProbe || requiredHostProbe) {
+    await runProbe({
+      reportPath: argumentValue("--report-path") || DEFAULT_REPORT_PATH,
+      freshContainer: inContainer,
+      requiredReleaseProbe: requiredHostProbe
+    });
+  } else {
+    await runContainerAuthority();
+  }
 }

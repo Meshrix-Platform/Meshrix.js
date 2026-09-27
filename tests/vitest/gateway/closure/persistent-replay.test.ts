@@ -1,14 +1,133 @@
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm, stat } from "node:fs/promises";
+import Database from "better-sqlite3";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { ExecutionPermit } from "@meshrix/contracts/gateway";
 import { createContinuationCodec } from "@meshrix/gateway";
 import { createSqliteGatewayContinuationLedger } from "@meshrix/foundation/security/gateway-continuation-ledger";
+import { acquireStorageMaintenanceLock } from "../../../../packages/foundation/src/storage/storage-lifecycle-lock.ts";
 import { context, createTestGateway, descriptor, route } from "../support";
 
 describe("persistent one-time continuation ownership", () => {
+  it("retains prepared and dispatched effect fences in the existing owned ledger across reopen", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "meshrix-execution-intent-ledger-"));
+    const filePath = join(directory, "gateway", "execution.sqlite");
+    const ownershipRoot = directory;
+    const permit: ExecutionPermit = Object.freeze({ id: "permit_synthetic", audience: "synthetic-endpoint", target: "synthetic-endpoint",
+      tenant: "synthetic-tenant", principal: "synthetic-principal", inputDigest: "synthetic-input", routeRevision: "route-v1",
+      routeRef: "synthetic:tool:write", grantRevision: "grant-v1", policyRevision: "policy-v1", expiresAt: Date.now() + 60_000, state: "issued" });
+    const persistedState = () => {
+      const db = new Database(filePath, { readonly: true, fileMustExist: true });
+      try { return (db.prepare("SELECT state FROM gateway_execution_intents WHERE intent_id = ?").get(permit.id) as { state: string } | undefined)?.state; }
+      finally { db.close(); }
+    };
+    try {
+      const preparedStore = createSqliteGatewayContinuationLedger({ filePath, ownershipRoot });
+      preparedStore.recordIssuedWithIntent(permit);
+      expect(persistedState()).toBe("prepared");
+      preparedStore.close();
+
+      const reopenedPrepared = createSqliteGatewayContinuationLedger({ filePath, ownershipRoot });
+      expect(persistedState()).toBe("prepared");
+      const consumed = Object.freeze({ ...permit, state: "consumed" as const });
+      reopenedPrepared.recordConsumed(permit.id);
+      reopenedPrepared.transitionExecutionIntent(consumed, "dispatch_started");
+      expect(persistedState()).toBe("dispatch_started");
+      reopenedPrepared.recordUnknown(permit.id);
+      expect(persistedState()).toBe("in_doubt");
+      expect(reopenedPrepared.lookupReceipt(permit.id)?.state).toBe("outcome_unknown");
+      reopenedPrepared.close();
+
+      const afterRestart = createSqliteGatewayContinuationLedger({ filePath, ownershipRoot });
+      expect(persistedState()).toBe("in_doubt");
+      expect(() => afterRestart.transitionExecutionIntent(consumed, "dispatch_started")).toThrowError(expect.objectContaining({ code: "gateway_intent_transition_conflict" }));
+      afterRestart.close();
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("bounds terminal intent history while refusing to evict a full unresolved set", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "meshrix-execution-intent-capacity-"));
+    const filePath = join(directory, "gateway", "execution.sqlite");
+    const ledger = createSqliteGatewayContinuationLedger({ filePath, ownershipRoot: directory, maxIntentEntries: 1, maxTerminalEntries: 2 });
+    const permitFor = (id: string): ExecutionPermit => Object.freeze({ id, audience: "synthetic-endpoint", target: "synthetic-endpoint",
+      tenant: "synthetic-tenant", principal: "synthetic-principal", inputDigest: `input-${id}`, routeRevision: "route-v1",
+      routeRef: "synthetic:tool:write", grantRevision: "grant-v1", policyRevision: "policy-v1", expiresAt: Date.now() + 60_000, state: "issued" });
+    const readStates = () => {
+      const db = new Database(filePath, { readonly: true, fileMustExist: true });
+      try { return db.prepare("SELECT state FROM gateway_execution_intents ORDER BY intent_id").pluck().all() as string[]; }
+      finally { db.close(); }
+    };
+    try {
+      for (let index = 0; index < 4; index += 1) {
+        const permit = permitFor(`terminal-${index}`);
+        ledger.recordIssuedWithIntent(permit);
+        ledger.transitionExecutionIntent(Object.freeze({ ...permit, state: "consumed" }), "not_started");
+      }
+      expect(readStates().sort()).toEqual(["not_started", "not_started"]);
+
+      const unresolved = permitFor("unresolved");
+      ledger.recordIssuedWithIntent(unresolved);
+      expect(ledger.hasIntent(unresolved.id)).toBe(true);
+      expect(() => ledger.recordIssuedWithIntent(permitFor("blocked"))).toThrowError(expect.objectContaining({ code: "gateway_intent_capacity" }));
+      expect(ledger.hasIntent("blocked")).toBe(false);
+      expect(readStates().sort()).toEqual(["not_started", "not_started", "prepared"]);
+    } finally { ledger.close(); await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("retains the last completed terminal fact when an older long-running intent finishes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "meshrix-execution-intent-settlement-order-"));
+    const filePath = join(directory, "gateway", "execution.sqlite");
+    let now = 10_000;
+    const ledger = createSqliteGatewayContinuationLedger({ filePath, ownershipRoot: directory, now: () => now, maxIntentEntries: 3, maxTerminalEntries: 2 });
+    const permitFor = (id: string): ExecutionPermit => Object.freeze({ id, audience: "synthetic-endpoint", target: "synthetic-endpoint",
+      tenant: "synthetic-tenant", principal: "synthetic-principal", inputDigest: `input-${id}`, routeRevision: "route-v1",
+      routeRef: "synthetic:tool:write", grantRevision: "grant-v1", policyRevision: "policy-v1", expiresAt: now + 60_000, state: "issued" });
+    const persisted = () => {
+      const db = new Database(filePath, { readonly: true, fileMustExist: true });
+      try { return db.prepare("SELECT intent_id, state FROM gateway_execution_intents ORDER BY intent_id").all() as Array<{ intent_id: string; state: string }>; }
+      finally { db.close(); }
+    };
+    try {
+      const long = permitFor("z-long-running");
+      ledger.recordIssuedWithIntent(long);
+      ledger.transitionExecutionIntent(Object.freeze({ ...long, state: "consumed" }), "dispatch_started");
+
+      for (const id of ["a-terminal-old", "b-terminal-new"]) {
+        now += 10;
+        const terminal = permitFor(id);
+        ledger.recordIssuedWithIntent(terminal);
+        ledger.transitionExecutionIntent(Object.freeze({ ...terminal, state: "consumed" }), "not_started");
+      }
+      expect(persisted()).toHaveLength(3);
+
+      now += 10;
+      ledger.transitionExecutionIntent(Object.freeze({ ...long, state: "consumed" }), "succeeded");
+      expect(persisted()).toEqual([
+        { intent_id: "b-terminal-new", state: "not_started" },
+        { intent_id: "z-long-running", state: "succeeded" }
+      ]);
+    } finally { ledger.close(); await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("holds the existing data-root runtime lease so restore cannot replace the live intent ledger", async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), "meshrix-intent-storage-owner-"));
+    const ledger = createSqliteGatewayContinuationLedger({ filePath: join(dataRoot, "gateway", "execution.sqlite"), ownershipRoot: dataRoot });
+    let maintenance: Awaited<ReturnType<typeof acquireStorageMaintenanceLock>> | undefined;
+    try {
+      maintenance = await acquireStorageMaintenanceLock(dataRoot);
+      await expect(maintenance.assertRestoreQuiesced()).rejects.toMatchObject({ code: "storage_restore_runtime_active" });
+      ledger.close();
+      await expect(maintenance.assertRestoreQuiesced()).resolves.toBeUndefined();
+    } finally {
+      ledger.close();
+      await maintenance?.release();
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
   it("[GC-006 GC-008] keeps consumed and unknown claims across process-like key restarts", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-continuation-ledger-"));
     const filePath = join(directory, "continuations.sqlite");

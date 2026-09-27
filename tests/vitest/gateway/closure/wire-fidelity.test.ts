@@ -3,7 +3,7 @@ import { decodeUpstreamResult, compileExternalSchema } from "@meshrix/gateway";
 import { buildModernRequest } from "@meshrix/protocols/mcp/modern-upstream";
 import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-gateway/tool-projection.ts";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
-import { context, createTestGateway, descriptor, QueueUpstream, response, route } from "../support";
+import { context, createTestGateway, descriptor, modernHttpRequest, QueueUpstream, response, route } from "../support";
 
 describe("PR82 externally validated MCP wire", () => {
   it("[GC-023 GC-024 GC-029] preserves the complete envelope and rejects unknown and private discriminants", () => {
@@ -44,7 +44,7 @@ describe("PR82 externally validated MCP wire", () => {
     await gateway.start();
     try {
       const adapter = createModernDownstreamAdapter({ gateway, authenticate: () => context });
-      const send = async (id: number) => adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id, method: "tools/call", params: { name: "demo", arguments: {} } } });
+      const send = async (id: number) => adapter.handle(modernHttpRequest("tools/call", id, { name: "demo", arguments: {} }));
       const rejected = await send(1);
       expect(rejected).toMatchObject({ status: 200, body: { error: { code: -32042, message: "Synthetic peer refusal", data: { field: "value", code: "upstream_jsonrpc_error" } } } });
       expect(JSON.stringify(rejected.body)).not.toMatch(/synthetic-private|synthetic-stack/u);
@@ -61,7 +61,7 @@ describe("PR82 externally validated MCP wire", () => {
     await gateway.start();
     try {
       const adapter = createModernDownstreamAdapter({ gateway, authenticate: () => context });
-      const send = async (id: number) => adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, body: { jsonrpc: "2.0", id, method: "tools/call", params: { name: "demo", arguments: {} } } });
+      const send = async (id: number) => adapter.handle(modernHttpRequest("tools/call", id, { name: "demo", arguments: {} }));
       expect((await send(1)).body).toMatchObject({ result: { resultType: "complete", content: [{ text: "plain business" }], structuredContent: { count: 1 }, _meta: { businessId: "synthetic" } } });
       expect((await send(2)).body).toMatchObject({ error: { data: { code: "schema_validation_failed" } } });
     } finally { await gateway.close(); }

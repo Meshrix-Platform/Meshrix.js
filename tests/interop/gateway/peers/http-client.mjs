@@ -1,7 +1,31 @@
+import { Buffer } from 'node:buffer';
 import { FIXTURE_AUTH_ALLOW } from './fixture.mjs';
 import { validateRawWire } from '../oracles/raw-wire.mjs';
 
 const DEFAULT_TIMEOUT_MS = 5000;
+const MODERN_PROTOCOL_VERSION = '2026-07-28';
+const NAME_FIELDS = Object.freeze({
+  'tools/call': 'name',
+  'resources/read': 'uri',
+  'prompts/get': 'name'
+});
+
+function encodeHeaderValue(value) {
+  const text = String(value);
+  if (text.startsWith('=?base64?') && text.endsWith('?=')) {
+    return `=?base64?${Buffer.from(text, 'utf8').toString('base64')}?=`;
+  }
+  if (text !== text.trim()) {
+    return `=?base64?${Buffer.from(text, 'utf8').toString('base64')}?=`;
+  }
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code !== 0x09 && code !== 0x20 && (code < 0x21 || code > 0x7e)) {
+      return `=?base64?${Buffer.from(text, 'utf8').toString('base64')}?=`;
+    }
+  }
+  return text;
+}
 
 export function createHttpClient(endpoint, {
   protocolVersion,
@@ -15,7 +39,7 @@ export function createHttpClient(endpoint, {
   let negotiatedProtocolVersion = protocolVersion;
   let closed = false;
 
-  function headers() {
+  function headers(message = undefined) {
     const value = {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
@@ -24,11 +48,17 @@ export function createHttpClient(endpoint, {
     };
     if (sessionId) value['mcp-session-id'] = sessionId;
     if (negotiatedProtocolVersion) value['mcp-protocol-version'] = negotiatedProtocolVersion;
+    if (negotiatedProtocolVersion === MODERN_PROTOCOL_VERSION && message?.id !== undefined && typeof message.method === 'string') {
+      value['mcp-method'] = message.method;
+      const nameField = NAME_FIELDS[message.method];
+      const name = nameField ? message.params?.[nameField] : undefined;
+      if (name !== undefined && name !== null) value['mcp-name'] = encodeHeaderValue(name);
+    }
     return value;
   }
 
   function withProtocolMeta(params) {
-    if (negotiatedProtocolVersion !== '2026-07-28') return params;
+    if (negotiatedProtocolVersion !== MODERN_PROTOCOL_VERSION) return params;
     return { ...params, _meta: {
       ...(params._meta ?? {}),
       'io.modelcontextprotocol/protocolVersion': negotiatedProtocolVersion,
@@ -41,7 +71,7 @@ export function createHttpClient(endpoint, {
     if (closed) throw new Error('client_closed');
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: headers(),
+      headers: headers(message),
       body: JSON.stringify(message),
       signal: AbortSignal.timeout(requestTimeoutMs)
     });

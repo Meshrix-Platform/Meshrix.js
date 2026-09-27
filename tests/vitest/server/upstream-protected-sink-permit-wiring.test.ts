@@ -246,8 +246,33 @@ function authorizationResult({
 function serviceDescriptor(baseUrl?: any, {
   httpMethod = "POST",
   httpProtocol = "http",
-  httpRpcMethod = "http-write"
+  httpRpcMethod = "http-write",
+  mcp = false
 }: Record<string, any> = {}) : any {
+  if (mcp) {
+    return structuredUpstreamServiceFixture({
+      allowLocalNetwork: true,
+      baseUrl,
+      credentialRefs: [SECRET_REF],
+      mcp: {
+        protocolVersion: "2025-06-18",
+        toolNamePrefix: SERVICE_ID,
+        transport: "http",
+        url: `${baseUrl}/mcp`
+      },
+      operations: [{
+        method: "POST",
+        operationKey: "tools/call",
+        path: "/",
+        protocol: "mcp",
+        requiredScopes: ["gateway:write"],
+        risk: "safe_write"
+      }],
+      serviceId: SERVICE_ID,
+      serviceProtocol: "mcp",
+      trafficPolicy: { burst: 20, maxConcurrent: 4, perMinute: 20 }
+    });
+  }
   return structuredUpstreamServiceFixture({
     allowLocalNetwork: true,
     baseUrl,
@@ -329,11 +354,24 @@ async function startUpstreamPeer(name?: any, events?: any) : Promise<any> {
       method: request.method,
       pathname: new URL(request.url || "/", "http://127.0.0.1").pathname
     });
+    if (body?.method === "notifications/initialized") {
+      response.writeHead(202, { "cache-control": "no-store" }).end();
+      return;
+    }
+    const result: any = body?.method === "initialize"
+      ? { protocolVersion: "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name, version: "1" } }
+      : body?.method === "tools/list"
+        ? { tools: [{ name: "echo", inputSchema: { type: "object", properties: {
+            label: { type: "string" }, url: { type: "string" }, path: { type: "string" }, headers: { type: "object" }
+          }, required: ["label"], additionalProperties: false } }] }
+        : body?.method === "tools/call"
+          ? { content: [{ type: "text", text: "accepted" }], structuredContent: { accepted: true, toolName: body.params?.name } }
+          : { accepted: true, peer: name };
     const payload: any = body?.jsonrpc === "2.0"
       ? {
           jsonrpc: "2.0",
           id: body.id,
-          result: { accepted: true, peer: name }
+          result
         }
       : { accepted: true, peer: name };
     response.writeHead(200, {
@@ -354,7 +392,7 @@ async function startUpstreamPeer(name?: any, events?: any) : Promise<any> {
   };
 }
 
-async function createCredentialBoundRegistry(events?: any, baseUrl?: any) : Promise<any> {
+async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawService: Record<string, any> = serviceDescriptor(baseUrl)) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(
     path.join(os.tmpdir(), "meshrix-final-effect-wiring-")
   );
@@ -378,8 +416,8 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any) : Prom
     userDataPath
   });
   cleanupTasks.push(() : any => registry.close());
-  installService(registry, baseUrl, 1);
-  const target: any = new URL(baseUrl);
+  installService(registry, baseUrl, 1, { rawService });
+  const target: any = new URL(rawService.serviceProtocol === "mcp" ? rawService.mcp.url : baseUrl);
   await initializeLocalSecret({
     dataDir: userDataPath,
     keyProvider: secretKeyProvider,
@@ -393,7 +431,9 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any) : Prom
       scope: {
         allowedHosts: [target.hostname],
         allowedProtocols: [target.protocol.replace(/:$/u, "")],
-        scopes: ["gateway:write"],
+        scopes: rawService.serviceProtocol === "mcp"
+          ? ["gateway:read", "gateway:write"]
+          : ["gateway:write"],
         serviceId: SERVICE_ID
       },
       secretRef: SECRET_REF
@@ -1258,6 +1298,60 @@ describe("governed upstream final-effect permit wiring", () : any => {
       });
       expect(credentialReads).not.toHaveBeenCalled();
       expect(peer.requests).toHaveLength(0);
+    }
+  );
+
+  it.each([
+    ["revoked authority", { allowed: false, revoked: true }, false],
+    ["changed configured MCP target", { allowed: true, revoked: false }, true]
+  ])(
+    "rechecks the existing MCP sink permit after session setup for %s with zero tools/call bytes",
+    async (_label?: any, finalState?: any, changeTarget?: any) : Promise<any> => {
+      const events: any[] = [];
+      const permits: any[] = [];
+      const gate: any = deferred();
+      const original: any = await startUpstreamPeer("mcp-original", events);
+      const replacement: any = changeTarget
+        ? await startUpstreamPeer("mcp-replacement", events)
+        : null;
+      const originalService = serviceDescriptor(original.baseUrl, { mcp: true });
+      const { credentialReads, registry } = await createCredentialBoundRegistry(events, original.baseUrl, originalService);
+      const started: any = startDispatch({
+        events,
+        finalGate: gate,
+        finalState,
+        inputOverrides: {
+          arguments: {
+            label: "mcp-protected-write",
+            url: "https://tool-argument.invalid/",
+            path: "/tool-argument-is-not-a-route",
+            headers: { authorization: "tool-argument-is-not-a-credential" }
+          },
+          toolName: "echo"
+        },
+        operationKey: "tools/call",
+        permits,
+        registry
+      });
+
+      await vi.waitFor(() : any => {
+        expect(events).toContain("final-protected-sink-revalidate");
+      });
+      expect(credentialReads).toHaveBeenCalled();
+      expect(original.requests.some((request?: any) => request.body?.method === "initialize")).toBe(true);
+      expect(original.requests.some((request?: any) => request.body?.method === "tools/list")).toBe(true);
+      expect(original.requests.some((request?: any) => request.body?.method === "tools/call")).toBe(false);
+
+      if (changeTarget) {
+        const nextService = serviceDescriptor(replacement.baseUrl, { mcp: true });
+        installService(registry, replacement.baseUrl, 2, { rawService: nextService });
+      }
+      gate.resolve();
+      await expectDispatchDenied(started);
+
+      expect(permits).toHaveLength(1);
+      expect(original.requests.filter((request?: any) => request.body?.method === "tools/call")).toHaveLength(0);
+      expect(replacement?.requests.filter((request?: any) => request.body?.method === "tools/call") || []).toHaveLength(0);
     }
   );
 

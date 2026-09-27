@@ -116,6 +116,15 @@ export function publicMcpResult(result: Record<string, any> = {}, operation: Rec
   };
 }
 
+export function normalizeMcpResultForDownstream(result: Record<string, any>, upstreamProtocolVersion: unknown): Record<string, any> {
+  const source = object(result);
+  if (result && typeof result === "object" && !Array.isArray(result) &&
+      text(upstreamProtocolVersion) !== "2026-07-28" && !Object.hasOwn(source, "resultType")) {
+    return { resultType: "complete", ...source };
+  }
+  return source;
+}
+
 function safeFailure(error?: any, abortContext: any = null) : any {
   const authorityCode: any = text(error?.code);
   const internalReasonCode: any = text(error?.reasonCode) || (/^upstream_final_effect_[a-z0-9_]+$/u.test(authorityCode) ? authorityCode : "");
@@ -196,13 +205,26 @@ export function createMcpExecutionAdapter({
       : operation.timeoutMs;
     const abortContext: any = createForwardAbortContext(options.signal || null, timeoutMs);
     try {
-      await claimMcpProtectedSink(service, operation, input, endpoint, options);
-      const response: any = await invokeTypedMcp(service, operation, {
-        name: upstreamToolName, arguments: toolArguments,
+      const mcpCallInput: Record<string, any> = {
+        name: upstreamToolName,
+        arguments: toolArguments,
         ...(input.inputResponses === undefined ? {} : { inputResponses: input.inputResponses }),
-        ...(input.requestState === undefined ? {} : { requestState: input.requestState })
-      }, { ...options, signal: abortContext.signal, requestState: input.requestState ?? options.requestState });
+        ...(input.requestState === undefined && options.requestState === undefined ? {} : { requestState: input.requestState ?? options.requestState })
+      };
+      const beforeSend = async (): Promise<void> => {
+        await claimMcpProtectedSink(service, operation, input, endpoint, {
+          ...options,
+          mcpCallInput
+        });
+      };
+      const response: any = await invokeTypedMcp(service, operation, mcpCallInput, {
+        ...options,
+        signal: abortContext.signal,
+        requestState: input.requestState ?? options.requestState,
+        beforeSend
+      });
       if (response.httpFailure) throw Object.assign(new Error("Upstream MCP peer returned HTTP failure."), { status: response.httpFailure.status, reasonCode: "upstream_mcp_call_failed" });
+      if (response.jsonRpcError) throw Object.assign(new Error("Upstream MCP peer returned a JSON-RPC error."), { status: 502, reasonCode: "upstream_jsonrpc_error" });
       const responseBytes: any = Buffer.byteLength(stableJson(response.result || {}));
       if (responseBytes > operation.responseMaxBytes) {
         recordMetric({ serviceId: service.serviceId, statusCode: 502, failed: true });
@@ -225,6 +247,7 @@ export function createMcpExecutionAdapter({
         });
       }
       const publicResponse: any = publicMcpResult(response.result || {}, operation);
+      const projectedResult = normalizeMcpResultForDownstream(publicResponse.result, response.protocolVersion);
       const responseBodyMetadata: any = bodyMetadata(
         publicResponse.result,
         operation.sensitiveBodyFields,
@@ -267,7 +290,7 @@ export function createMcpExecutionAdapter({
           responseBytes,
           durationMs: Date.now() - startedAt
         },
-        response: publicResponse.result,
+        response: projectedResult,
         auditId: audit.auditId
       };
     } catch (error: any) {

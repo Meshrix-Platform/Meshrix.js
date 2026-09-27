@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createPlatformMcpGateway } from "@meshrix/server-runtime/composition/gateway-composition";
 import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-gateway/tool-projection.ts";
 import { createToolSkillManagementProvider } from "../../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
+import { modernHttpRequest } from "../support.ts";
 
 const tool = publicUpstreamMcpTool({
   service: { serviceId: "synthetic", operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "repair_write", requiredScopes: ["gateway:write"], requiresApproval: true }] },
@@ -31,7 +32,7 @@ function fixture() {
 
 async function call(platform: ReturnType<typeof createPlatformMcpGateway>, value: string, runtimeApproval = true) {
   const rawRequest = runtimeApproval ? { __meshrixToolRuntimeAuthorization: { approvedPendingOperation: { pendingOperationId: "synthetic-pending" } } } : {};
-  return platform.adapter.handle({ method: "POST", headers: { "content-type": "application/json" }, rawRequest, body: { jsonrpc: "2.0", id: "call", method: "tools/call", params: { name: tool.name, arguments: { value } } } });
+  return platform.adapter.handle({ ...modernHttpRequest("tools/call", "call", { name: tool.name, arguments: { value } }), rawRequest });
 }
 
 describe("verified current approved operation", () => {

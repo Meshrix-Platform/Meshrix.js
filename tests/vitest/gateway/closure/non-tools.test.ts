@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
-import { context, createTestGateway, descriptor, route } from "../support";
+import { context, createTestGateway, descriptor, modernHttpRequest, route } from "../support";
 
 describe("non-tool MCP methods", () => {
   it("[GC-043 GC-045 partial] lists a resource template, projects only URI fields and leaves ordinary text unchanged", async () => {
@@ -14,7 +14,7 @@ describe("non-tool MCP methods", () => {
     try {
       const adapter = createModernDownstreamAdapter({ gateway, authenticate: (request) => request.headers?.["x-subject"] === "outsider"
         ? { ...context, principal: "outsider", grant: { revision: "other", routes: [] } } : context });
-      const send = async (method: string, params: Record<string, unknown> = {}, outsider = false) => (await adapter.handle({ method: "POST", headers: { "content-type": "application/json", ...(outsider ? { "x-subject": "outsider" } : {}) }, body: { jsonrpc: "2.0", id: method, method, params } })).body as Record<string, any>;
+      const send = async (method: string, params: Record<string, unknown> = {}, outsider = false) => (await adapter.handle(modernHttpRequest(method, method, params, {}, outsider ? { "x-subject": "outsider" } : {}))).body as Record<string, any>;
       const listed = await send("resources/templates/list");
       const uriTemplate = listed.result.resourceTemplates.find((item: Record<string, unknown>) => item.name === "templated")?.uriTemplate as string;
       expect(uriTemplate).toContain("{name}");
@@ -44,7 +44,7 @@ describe("non-tool MCP methods", () => {
         if (subject === a && revokedA) throw Object.assign(new Error("grant revoked"), { status: 403 });
         return subject;
       } });
-      const subscribe = async (subject: string) => adapter.handle({ method: "POST", headers: { "content-type": "application/json", "x-subject": subject }, body: { jsonrpc: "2.0", id: subject, method: "subscriptions/listen", params: { notifications: { resourceUpdated: true } } } });
+      const subscribe = async (subject: string) => adapter.handle(modernHttpRequest("subscriptions/listen", subject, { notifications: { resourceUpdated: true } }, {}, { "x-subject": subject }));
       const aStream = await subscribe("a");
       const bStream = await subscribe("b");
       expect(aStream.status).toBe(200);

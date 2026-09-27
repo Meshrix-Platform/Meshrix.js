@@ -6,7 +6,7 @@ implementation, verification, release, support, or hosted operation.
 | Term | Meaning |
 | --- | --- |
 | **Meshrix.js** | The full private-deployable governance platform for connecting operators, agent clients, services, plugins, workspaces, and governed effects. |
-| **Meshrix.js repository** | The private repository that implements the complete Meshrix.js platform. |
+| **Meshrix.js repository** | The public-source repository that develops Meshrix.js for deployments whose operators control configuration, credentials, data custody, runtime boundaries, and operating decisions. |
 | **Private deployment** | A Meshrix.js installation whose operator owns its configuration, credentials, data custody, runtime boundary, and operating decisions. |
 | **Principal** | An authenticated subject whose current identity and authority are evaluated for an operation. |
 | **Operation** | A named, bounded action exposed through a Meshrix.js-owned governance boundary. |

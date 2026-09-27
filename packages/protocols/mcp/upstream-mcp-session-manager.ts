@@ -707,7 +707,10 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
         initialized: session.initialized,
         result: await session.request(method, asObject(invocation.params), {
           signal: requestOptions.signal,
-          onNotification: requestOptions.onNotification
+          onNotification: requestOptions.onNotification,
+          ...(method === "tools/call" && typeof requestOptions.beforeSend === "function"
+            ? { beforeSend: requestOptions.beforeSend }
+            : {})
         })
       }));
     },

@@ -7,7 +7,6 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { resolveReleaseWorkspaceDirectories } from "../../../../tools/server-scripts/publish-release-set.ts";
 import { createServerSourcePackage } from "../../../../tools/server-scripts/package-server-source.ts";
-import { rewritePackedVendoredFileDependencies } from "../../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 
 const root = resolve(import.meta.dirname, "../../../..");
 const forbidden = /(?:^|\/)(?:meshrix-node-benchmark(?:-[^/]+\.tgz)?|node-benchmark|benchmark-gateway\.(?:ts|js|d\.ts|js\.map|d\.ts\.map))(?:\/|$)|(?:^|\/)(?:dist\/)?tools\/server-scripts\/lib\/gateway-benchmark(?:\/|$)|(?:^|\/)\.cache\/gateway-benchmark(?:\/|$)/u;
@@ -124,7 +123,6 @@ describe("materialized product benchmark exclusion", () => {
       for (const directory of release) {
         const record = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch], resolve(root, directory)))[0];
         const file = join(scratch, record.filename);
-        await rewritePackedVendoredFileDependencies(file);
         packages.push({ name: record.name, file });
       }
       const consumer = join(scratch, "consumer");
