@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { resolveReleaseWorkspaceDirectories } from "../../../../tools/server-scripts/publish-release-set.ts";
 import { createServerSourcePackage } from "../../../../tools/server-scripts/package-server-source.ts";
+import { parseNpmPackJson } from "../../../../tools/server-scripts/lib/npm-cli-invocation.ts";
 
 const root = resolve(import.meta.dirname, "../../../..");
 const forbidden = /(?:^|\/)(?:meshrix-node-benchmark(?:-[^/]+\.tgz)?|node-benchmark|benchmark-gateway\.(?:ts|js|d\.ts|js\.map|d\.ts\.map))(?:\/|$)|(?:^|\/)(?:dist\/)?tools\/server-scripts\/lib\/gateway-benchmark(?:\/|$)|(?:^|\/)\.cache\/gateway-benchmark(?:\/|$)/u;
@@ -58,7 +59,7 @@ describe("materialized product benchmark exclusion", () => {
   it("packs a standalone tarball that imports from an empty consumer with zero dependencies", async () => {
     const scratch = await mkdtemp(join(tmpdir(), "benchmark-independent-consumer-"));
     try {
-      const packed = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch],
+      const packed = parseNpmPackJson(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch],
         resolve(root, "../Meshrix.js-Benchmark/packages/node-benchmark")))[0];
       expect(packed.files.some((entry: { path: string }) => entry.path === "src/index.mjs")).toBe(true);
       expect(packed.files.some((entry: { path: string }) => entry.path.startsWith("../"))).toBe(false);
@@ -93,7 +94,7 @@ describe("materialized product benchmark exclusion", () => {
       const release = [".", ...await resolveReleaseWorkspaceDirectories({ rootDir: root, workspaces: manifest.workspaces }),
         "packages/protocols/mcp/adapter/gateway-installer"];
       for (const directory of release) {
-        const record = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch], resolve(root, directory)))[0];
+        const [record] = parseNpmPackJson(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch], resolve(root, directory)));
         const archive = join(scratch, record.filename);
         assertClean(record.files.map((file: { path: string }) => file.path));
         assertClean(tar(["-tf", archive]));
@@ -121,7 +122,7 @@ describe("materialized product benchmark exclusion", () => {
         "packages/protocols/mcp/adapter/gateway-installer"];
       const packages = [] as Array<{ name: string; file: string }>;
       for (const directory of release) {
-        const record = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch], resolve(root, directory)))[0];
+        const [record] = parseNpmPackJson(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", scratch], resolve(root, directory)));
         const file = join(scratch, record.filename);
         packages.push({ name: record.name, file });
       }

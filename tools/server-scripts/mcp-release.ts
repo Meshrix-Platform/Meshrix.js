@@ -22,6 +22,7 @@ import {
 } from "./lib/mcp-release-manifest.ts";
 import { createPortableBundle, resolveBundledNodeVersion } from "./lib/mcp-release-portable.ts";
 import { normalizeMcpPortableTargets } from "./lib/mcp-release-platforms.ts";
+import { parseNpmPackJson } from "./lib/npm-cli-invocation.ts";
 
 function parseArgs(argv?: any) : any {
   const valueArguments: any = new Set<any>([
@@ -89,7 +90,8 @@ async function main() : Promise<any> {
   const pack: any = await run("npm", ["pack", "--json", "--pack-destination", outputDir], {
     cwd: connectorRoot
   });
-  const packResult: any = JSON.parse(pack.stdout || "[]")[0];
+  const packedArtifacts: any[] = parseNpmPackJson(pack.stdout);
+  const packResult: any = packedArtifacts.length === 1 ? packedArtifacts[0] : null;
   if (!packResult?.filename) {
     throw new Error("npm pack did not return a tarball filename.");
   }

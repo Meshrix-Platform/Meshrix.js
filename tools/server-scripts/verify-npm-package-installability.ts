@@ -8,7 +8,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
+import { npmCliArgs, parseNpmPackJson, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 import { createLockBackedNpmRegistry } from "./lib/lock-backed-npm-registry.ts";
 import { assertNoLeak } from "./lib/report-evidence-safety.ts";
 import { discoverReleaseSet } from "./publish-release-set.ts";
@@ -47,7 +47,7 @@ export async function packInstallabilityArtifacts({
   const packedArtifacts: any[] = [];
   for (const packageRecord of packageRecords) {
     const packed: any = await runPack(packageRecord, packDirectory);
-    const artifacts: any = JSON.parse(packed.stdout);
+    const artifacts: any = parseNpmPackJson(packed.stdout);
     assert.equal(artifacts.length, 1, "npm_package_pack_artifact_count_invalid");
     const artifact: any = artifacts[0];
     assert.equal(artifact?.name, packageRecord.name, "npm_package_release_set_artifact_mismatch");

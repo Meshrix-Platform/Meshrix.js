@@ -48,7 +48,10 @@ async function main() {
     if (!notice.includes(marker)) throw new Error(`mixed license notice omits ${marker}`);
   }
   const pack = await run(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--dry-run", "--json", "--ignore-scripts"]);
-  const report = JSON.parse(pack.stdout.trim())[0];
+  const parsedPack = JSON.parse(pack.stdout.trim());
+  const reports = Array.isArray(parsedPack) ? parsedPack : Object.values(parsedPack || {});
+  if (reports.length !== 1) throw new Error("npm pack returned an unexpected artifact count");
+  const [report] = reports;
   const packed = new Set((report.files || []).map((entry) => String(entry.path || "").replace(/^package\//u, "")));
   for (const file of ["services/file-parser/format-convert/go.mod", "services/file-parser/format-convert/LICENSE", "plugins/LICENSE-APACHE-2.0", "plugins/registry/plugins.json", "THIRD_PARTY_NOTICES.md"]) {
     if (![...packed].some((entry) => entry === file || entry.startsWith(`${file}/`))) throw new Error(`npm dry-run omitted ${file}`);

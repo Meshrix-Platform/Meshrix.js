@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { parseNpmPackJson } from "../../../../tools/server-scripts/lib/npm-cli-invocation.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const WORKSPACES = ["@meshrix/contracts", "@meshrix/gateway"] as const;
@@ -49,9 +50,7 @@ function run(command: string, args: readonly string[], cwd: string): CommandResu
 }
 
 function packRecords(stdout: string): Array<Record<string, unknown>> {
-  const parsed = JSON.parse(stdout || "[]") as unknown;
-  if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>;
-  return Object.values(parsed as Record<string, unknown>).flatMap((value) => (Array.isArray(value) ? (value as Array<Record<string, unknown>>) : []));
+  return parseNpmPackJson(stdout) as Array<Record<string, unknown>>;
 }
 
 function consumerScript(): string {
