@@ -615,7 +615,10 @@ function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
   const dynamicCapability: any = tool.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
     ? tool.dynamicCapability
     : null;
-  if (!dynamicCapability && (policy.deniedTools || []).includes(toolId)) return false;
+  if (!dynamicCapability) {
+    if ((policy.deniedTools || []).includes(toolId)) return false;
+    if ((policy.allowedTools || []).length > 0 && !policy.allowedTools.includes(toolId)) return false;
+  }
   const requiredScopes: any[] = Array.isArray(tool.requiredScopes) ? tool.requiredScopes : [];
   const toolsets: any[] = Array.isArray(tool.toolsets) ? tool.toolsets : [];
   const toolsetDenied: any = dynamicCapability
