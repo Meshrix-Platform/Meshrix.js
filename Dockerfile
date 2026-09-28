@@ -63,6 +63,7 @@ RUN npm prune --omit=dev
 FROM deps AS build-ui
 
 COPY apps/server ./apps/server
+COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
 COPY services/model-gateway/contracts ./services/model-gateway/contracts
