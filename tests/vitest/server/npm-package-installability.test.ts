@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -16,7 +17,8 @@ const execFileAsync: any = promisify(execFile);
 const REPO_ROOT: any = path.resolve(import.meta.dirname, "../../..");
 const ROOT_LOCK: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package-lock.json"), "utf8"));
 const PACTIUM_LOCK: any = ROOT_LOCK.packages["node_modules/pactium"];
-const PACTIUM_TARBALL: any = path.join(REPO_ROOT, "vendor/pactium-0.8.0.tgz");
+const PACTIUM_VERSION: any = "0.8.1";
+const PACTIUM_RESOLVED: any = `https://registry.npmjs.org/pactium/-/pactium-${PACTIUM_VERSION}.tgz`;
 
 function npmEnvironment(root?: any, registry?: any) : any {
   const allowedNames: any[] = [
@@ -53,13 +55,48 @@ async function runNpm(args?: any[], cwd?: any, env?: any) : Promise<any> {
   }
 }
 
-async function prepareRegistryFixture(root?: any) : Promise<any> {
-  expect(PACTIUM_LOCK.resolved).toBe("https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz");
-  expect(PACTIUM_LOCK.license).toBe("GPL-3.0-or-later");
-  const integrityToken: any = String(PACTIUM_LOCK.integrity).split(/\s+/u)
-    .find((candidate?: any) : any => candidate.startsWith("sha512-"));
-  expect(integrityToken).toBeTruthy();
-  const digest: any = Buffer.from(integrityToken.slice("sha512-".length), "base64");
+async function createSyntheticPactiumArtifact(root?: any) : Promise<any> {
+  const packageDirectory: any = path.join(root, "synthetic-pactium");
+  const packDirectory: any = path.join(root, "synthetic-pactium-pack");
+  await fs.mkdir(packageDirectory, { recursive: true });
+  await fs.mkdir(packDirectory, { recursive: true });
+  await fs.writeFile(path.join(packageDirectory, "package.json"), `${JSON.stringify({
+    name: "pactium",
+    version: PACTIUM_VERSION,
+    main: "index.js",
+    license: "MIT"
+  }, null, 2)}\n`);
+  await fs.writeFile(path.join(packageDirectory, "index.js"), "module.exports = { version: '0.8.1' };\n");
+  await fs.writeFile(path.join(packageDirectory, "LICENSE"), "MIT synthetic fixture\n");
+  const environment: any = npmEnvironment(root);
+  await fs.mkdir(environment.HOME, { recursive: true });
+  await fs.mkdir(environment.npm_config_cache, { recursive: true });
+  await fs.writeFile(environment.npm_config_userconfig, "", "utf8");
+  await runNpm(
+    ["pack", "--ignore-scripts", "--pack-destination", packDirectory],
+    packageDirectory,
+    environment
+  );
+  const artifacts: any[] = (await fs.readdir(packDirectory)).filter((name?: any) : any => name.endsWith(".tgz"));
+  expect(artifacts).toHaveLength(1);
+  const tarballPath: any = path.join(packDirectory, artifacts[0]);
+  const bytes: any = await fs.readFile(tarballPath);
+  const integrity: any = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
+  return {
+    tarballPath,
+    bytes,
+    lockEntry: {
+      name: "pactium",
+      version: PACTIUM_VERSION,
+      resolved: PACTIUM_RESOLVED,
+      integrity,
+      license: "MIT"
+    }
+  };
+}
+
+async function prepareRegistryFixture(root?: any, artifact?: any) : Promise<any> {
+  const digest: any = Buffer.from(artifact.lockEntry.integrity.slice("sha512-".length), "base64");
   expect(digest.byteLength).toBe(64);
   const cacheRoot: any = path.join(root, "registry-cache");
   const cachePath: any = path.join(
@@ -72,20 +109,41 @@ async function prepareRegistryFixture(root?: any) : Promise<any> {
     digest.toString("hex").slice(4)
   );
   await fs.mkdir(path.dirname(cachePath), { recursive: true });
-  await fs.copyFile(PACTIUM_TARBALL, cachePath);
+  await fs.writeFile(cachePath, artifact.bytes);
   const lockPath: any = path.join(root, "fixture-lock.json");
   await fs.writeFile(lockPath, `${JSON.stringify({
-    packages: { "node_modules/pactium": PACTIUM_LOCK }
+    packages: { "node_modules/pactium": artifact.lockEntry }
   })}\n`);
   return createLockBackedNpmRegistry({ lockPath, cacheRoot, extraTarballs: [] });
 }
 
 describe("npm artifact installability source", () : any => {
-  it("rejects the unchanged unshipped file dependency and installs the unchanged registry artifact", async () : Promise<void> => {
+  it("pins the exact public Pactium artifact in each runtime manifest and the root lock", async () : Promise<void> => {
+    const rootManifest: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package.json"), "utf8"));
+    const foundationManifest: any = JSON.parse(await fs.readFile(
+      path.join(REPO_ROOT, "packages/foundation/package.json"), "utf8"
+    ));
+    const runtimeManifest: any = JSON.parse(await fs.readFile(
+      path.join(REPO_ROOT, "packages/server-runtime/package.json"), "utf8"
+    ));
+    expect(rootManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(foundationManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(runtimeManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(ROOT_LOCK.packages[""].dependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(PACTIUM_LOCK).toMatchObject({
+      version: PACTIUM_VERSION,
+      resolved: PACTIUM_RESOLVED,
+      license: "MIT"
+    });
+    expect(PACTIUM_LOCK.integrity).toMatch(/^sha512-[A-Za-z0-9+/]+=*$/u);
+  });
+
+  it("rejects the unshipped file dependency and installs the synthetic registry fixture", async () : Promise<void> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-package-artifact-fixture-"));
     let registry: any = null;
     try {
-      registry = await prepareRegistryFixture(root);
+      const pactiumArtifact: any = await createSyntheticPactiumArtifact(root);
+      registry = await prepareRegistryFixture(root, pactiumArtifact);
       const environment: any = npmEnvironment(root, registry.registry);
       await fs.mkdir(environment.HOME, { recursive: true });
       await fs.mkdir(environment.npm_config_cache, { recursive: true });
@@ -95,13 +153,13 @@ describe("npm artifact installability source", () : any => {
       const vendorDirectory: any = path.join(packageDirectory, "vendor");
       await fs.mkdir(packageDirectory, { recursive: true });
       await fs.mkdir(vendorDirectory, { recursive: true });
-      await fs.copyFile(PACTIUM_TARBALL, path.join(vendorDirectory, "pactium-0.8.0.tgz"));
+      await fs.copyFile(pactiumArtifact.tarballPath, path.join(vendorDirectory, `pactium-${PACTIUM_VERSION}.tgz`));
       const candidateManifest: any = {
         name: "meshrix.js",
         version: "0.0.1",
         main: "index.js",
         files: ["index.js"],
-        dependencies: { pactium: "file:vendor/pactium-0.8.0.tgz" }
+        dependencies: { pactium: `file:vendor/pactium-${PACTIUM_VERSION}.tgz` }
       };
       await fs.writeFile(path.join(packageDirectory, "package.json"), `${JSON.stringify(candidateManifest, null, 2)}\n`);
       await fs.writeFile(path.join(packageDirectory, "index.js"), "module.exports = require('pactium');\n");
@@ -139,7 +197,7 @@ describe("npm artifact installability source", () : any => {
       )).rejects.toThrow("synthetic_npm_command_failed_");
       expect(await fs.readFile(localArtifact.tarballPath)).toEqual(localBytes);
 
-      candidateManifest.dependencies.pactium = "0.8.0";
+      candidateManifest.dependencies.pactium = PACTIUM_VERSION;
       await fs.writeFile(path.join(packageDirectory, "package.json"), `${JSON.stringify(candidateManifest, null, 2)}\n`);
       const registryArtifact: any = await packCandidate(path.join(root, "packed-registry"));
       const registryBytes: any = await fs.readFile(registryArtifact.tarballPath);
@@ -149,7 +207,7 @@ describe("npm artifact installability source", () : any => {
         { encoding: "utf8" }
       );
       const packedManifest: any = JSON.parse(packageJsonOutput.stdout);
-      expect(packedManifest.dependencies.pactium).toBe("0.8.0");
+      expect(packedManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
       expect(registryArtifact.files.some((file?: any) : any => String(file.path).startsWith("vendor/"))).toBe(false);
 
       const registryConsumer: any = path.join(root, "consumer-registry");
@@ -169,9 +227,9 @@ describe("npm artifact installability source", () : any => {
       const installedPactium: any = JSON.parse(await fs.readFile(
         path.join(registryConsumer, "node_modules/pactium/package.json"), "utf8"
       ));
-      expect(installedCandidate.dependencies.pactium).toBe("0.8.0");
-      expect(installedPactium.version).toBe("0.8.0");
-      expect(installedPactium.license).toBe("GPL-3.0-or-later");
+      expect(installedCandidate.dependencies.pactium).toBe(PACTIUM_VERSION);
+      expect(installedPactium.version).toBe(PACTIUM_VERSION);
+      expect(installedPactium.license).toBe("MIT");
       expect(await fs.readFile(registryArtifact.tarballPath)).toEqual(registryBytes);
     } finally {
       await registry?.close();

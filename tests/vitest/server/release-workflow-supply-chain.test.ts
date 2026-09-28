@@ -854,11 +854,21 @@ describe("release workflow supply-chain boundary", () : any => {
     for (const [, packageEntry] of registryEntries) {
       expect(new URL(packageEntry.resolved).origin).toBe("https://registry.npmjs.org");
     }
-    expect(lockfile.packages[""].dependencies.pactium).toBe("0.8.0");
+    const pactiumVersion: any = "0.8.1";
+    const pactiumResolved: any = `https://registry.npmjs.org/pactium/-/pactium-${pactiumVersion}.tgz`;
+    for (const manifestPath of [
+      "package.json",
+      "packages/foundation/package.json",
+      "packages/server-runtime/package.json"
+    ]) {
+      const manifest: any = JSON.parse(read(manifestPath));
+      expect(manifest.dependencies.pactium).toBe(pactiumVersion);
+    }
+    expect(lockfile.packages[""].dependencies.pactium).toBe(pactiumVersion);
     expect(lockfile.packages["node_modules/pactium"]).toMatchObject({
-      version: "0.8.0",
-      resolved: "https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz",
-      license: "GPL-3.0-or-later"
+      version: pactiumVersion,
+      resolved: pactiumResolved,
+      license: "MIT"
     });
     expect(lockfile.packages["node_modules/pactium"].integrity).toMatch(/^sha512-/u);
 

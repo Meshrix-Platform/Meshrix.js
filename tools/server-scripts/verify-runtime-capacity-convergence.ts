@@ -813,7 +813,7 @@ async function stageCap10b() : Promise<any> {
     if (!source.includes(symbol)) findings.push(`pactium-cas:${symbol}-missing`);
   }
   const manifest: any = JSON.parse(await readPactiumText("package.json"));
-  if (manifest.version !== "0.8.0") findings.push("pactium-package:expected-0.8.0");
+  if (manifest.version !== "0.8.1") findings.push("pactium-package:expected-0.8.1");
   const suite: any = await runPactiumTest("tests/pactium/runtime-capacity.test.mjs");
   assert.strictEqual(findings.length, 0, `Pactium pin findings: ${findings.join(", ")}`);
   return { stage: "cap-10b", passed: true, counters: { findings: 0, focusedSuites: 1 }, suiteResults: [suite], capacityCertified: false };
@@ -822,17 +822,17 @@ async function stageCap10b() : Promise<any> {
 async function stageCap11() : Promise<any> {
   const findings: any[] = [];
   const manifest: any = JSON.parse(await readText("package.json"));
-  if (manifest.dependencies?.pactium !== "0.8.0") {
+  if (manifest.dependencies?.pactium !== "0.8.1") {
     findings.push("meshrix:exact-pactium-artifact-missing");
   }
   const lock: any = JSON.parse(await readText("package-lock.json"));
   const pactiumLock: any = lock.packages?.["node_modules/pactium"];
-  if (lock.packages?.[""]?.dependencies?.pactium !== "0.8.0") {
+  if (lock.packages?.[""]?.dependencies?.pactium !== "0.8.1") {
     findings.push("meshrix-lock:exact-pactium-dependency-missing");
   }
   if (
-    pactiumLock?.version !== "0.8.0" ||
-    pactiumLock?.resolved !== "https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz"
+    pactiumLock?.version !== "0.8.1" ||
+    pactiumLock?.resolved !== "https://registry.npmjs.org/pactium/-/pactium-0.8.1.tgz"
   ) {
     findings.push("meshrix-lock:exact-pactium-registry-artifact-missing");
   }

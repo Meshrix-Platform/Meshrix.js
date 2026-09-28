@@ -15,7 +15,7 @@
     "@meshrix/gateway": "0.0.1",
     "@meshrix/protocols": "0.0.1",
     "better-sqlite3": "^12.9.0",
-    "pactium": "0.8.0"
+    "pactium": "0.8.1"
   },
   "imports": {
     "#meshrix/agents/agent-memory/index": "@meshrix/agents/agent-memory/index",
