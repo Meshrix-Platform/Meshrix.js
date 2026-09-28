@@ -62,6 +62,7 @@ function createFakeController() {
   });
   return {
     applyProfile: vi.fn(),
+    clearUnavailableMcpSelections: vi.fn(),
     busy: ref(false),
     copied,
     connectorSnippet: ref("# Standard MCP Streamable HTTP connection (2026-07-28)\n# X-Meshrix.js-Api-Key: ${MESHRIX_MCP_TOKEN}"),
@@ -78,6 +79,7 @@ function createFakeController() {
       workloadDisplayName: "Build worker", organizationNodeId: "organization-a",
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 16),
       selectedToolsetIds: [] as string[], allowedTools: [] as string[], selectedProfileId: "",
+      selectedMcpTools: [],
       maximumRisk: "low", serverAudience: "", selectedClientGuide: "generic", selectedTargetIds: [] as string[],
       resourcesUnrestricted: true, selectedDataClassifications: [] as string[], workspaceIds: "",
       requestsPerMinute: null as number | null, maxConcurrentEffects: null as number | null,
@@ -91,6 +93,11 @@ function createFakeController() {
     inferredSummaryItems: ref([]),
     loading: ref(false),
     maximumRiskOptions: ref([{ value: "low", label: "Low" }]),
+    mcpToolSelection: ref({ status: "available", services: [], tools: [] }),
+    mcpToolOptions: ref([]),
+    selectedMcpToolFacts: ref([]),
+    unavailableSelectedMcpTools: ref([]),
+    toggleMcpToolSelection: vi.fn(),
     mutatingKeyId: ref(""),
     nodes: ref([{ nodeId: "organization-a", name: "Organization A", breadcrumb: [], nodeType: "organization" }]),
     oneTimeSecret,

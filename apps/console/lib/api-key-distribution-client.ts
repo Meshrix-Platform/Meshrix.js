@@ -167,8 +167,8 @@ export function revokeApiKey(
   expectedLifecycleRevision: number,
   reasonCode: "administrator_revoked" = "administrator_revoked",
 ): Promise<ApiKeyRecord> {
-  return postJson<ApiKeyRecord>(`${ENDPOINT}/${encodePathSegment(keyId)}/revoke`, {
+  return postJson<{ record: ApiKeyRecord }>(`${ENDPOINT}/${encodePathSegment(keyId)}/revoke`, {
     expectedLifecycleRevision,
     reasonCode,
-  }, { safetyConfirm: true });
+  }, { safetyConfirm: true }).then((result) => result.record);
 }
