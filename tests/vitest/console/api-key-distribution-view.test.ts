@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConsoleApiKeyDistributionController } from "../../../apps/console/composables/console-api-key-distribution-controller";
 import { apiKeyDistributionText } from "../../../apps/console/i18n/api-key-distribution";
+import { revokeApiKey } from "../../../apps/console/lib/api-key-distribution-client";
 import type {
   ApiKeyIssuerScopes,
   ApiKeyOneTimeResult,
@@ -392,6 +393,39 @@ describe("API key distribution console", () => {
     expect(controller.catalogMismatch.value).toBe(true);
     expect(controller.draftValid.value).toBe(false);
     expect(controller.error.value).toMatch(/目录|catalog/u);
+  });
+
+  it("replaces the displayed key with the HTTP revocation record while retaining its policy", async () => {
+    const active = record();
+    const revoked = { ...active, status: "revoked" as const, lifecycleRevision: 2, revokedAt: new Date().toISOString() };
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
+      url === "/api/auth/session"
+        ? { csrfToken: "fixture-csrf" }
+        : { schemaVersion: "v0.0.1:schema:definition-1", record: revoked },
+    ), { headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = useConsoleApiKeyDistributionController({
+      client: client({ list: vi.fn(async () => ({ records: [active], nextCursor: null })), revoke: revokeApiKey }) as any,
+      confirmAction: vi.fn(async () => true),
+    });
+    await controller.refresh();
+    await controller.revoke(controller.records.value[0]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/operation-permission/v1/api-keys/key-public-id/revoke",
+      expect.objectContaining({
+        method: "POST", credentials: "same-origin",
+        headers: expect.objectContaining({ "x-meshrix-safety-confirm": "true", "x-meshrix-csrf": "fixture-csrf" }),
+        body: JSON.stringify({ expectedLifecycleRevision: 1, reasonCode: "administrator_revoked" }),
+      }),
+    );
+    expect(controller.records.value).toEqual([revoked]);
+    expect(controller.records.value[0].policy.allowedTools).toEqual(active.policy.allowedTools);
+    expect(controller.records.value[0].policy.limits).toEqual(active.policy.limits);
+    expect(controller.records.value[0].useCount).toBe(active.useCount);
+    expect(controller.status.value).toMatch(/永久撤销|permanently revoked/u);
+    expect(controller.error.value).toBe("");
+    expect(controller.oneTimeSecret.value).toBe("");
   });
 
   it("binds rotate and revoke to the displayed lifecycle revision and never offers archive semantics", async () => {
