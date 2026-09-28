@@ -140,7 +140,8 @@ const store: any = createOperationPermissionWorkerOwner({
   securityPermissions,
   changeListener: workerData.hasChangeListener ? hostProxy("change.notify") : null,
   proofSubstrate,
-  metricRetention: workerData.metricRetention
+  metricRetention: workerData.metricRetention,
+  recoverStaleApiKeyEffectReservations: workerData.recoverStaleApiKeyEffectReservations === true
 });
 const apiKeyProvider: any = createApiKeyDistributionWorkerOwner({
   store,
@@ -187,6 +188,7 @@ async function handle(message?: any) : Promise<void> {
       resolvedCapabilities: []
     };
     if (method === "close") {
+      await Promise.resolve(apiKeyProvider.close());
       await Promise.resolve(store.close());
       reply.result = null;
     } else {

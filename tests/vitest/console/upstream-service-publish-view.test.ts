@@ -58,6 +58,22 @@ function publication(revision: number, digest: any = "a".repeat(64)) : any {
   };
 }
 
+function portableMcpDocument(): Record<string, any> {
+  return {
+    kind: "meshrix.upstream-service",
+    schemaVersion: "v0.0.1:upstream-service:portable-import-2",
+    serviceKey: "inventory-mcp",
+    descriptor: {
+      serviceProtocol: "mcp",
+      mcp: {
+        transport: "http",
+        url: "https://service.invalid/mcp",
+        protocolVersion: "2026-07-28",
+      },
+    },
+  };
+}
+
 beforeEach(() : any => {
   vi.clearAllMocks();
   pageRefreshHandler.mockClear();
@@ -161,7 +177,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     const protocol: any = wrapper.find('select');
     expect((protocol.element as HTMLSelectElement).value).toBe("");
     expect((protocol.element as HTMLSelectElement).selectedIndex).toBe(0);
-    expect(wrapper.text()).not.toContain("MCP");
+    expect(wrapper.find('option[value="mcp"]').exists()).toBe(true);
 
     await wrapper.find('#upstream-service-key').setValue("inventory");
     await protocol.setValue("http");
@@ -185,6 +201,65 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
     expect(window.localStorage.length).toBe(0);
     expect(wrapper.text()).toContain('"status": "healthy"');
+  });
+
+  it("publishes an explicitly entered modern remote MCP descriptor without HTTP operation fields", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+
+    await wrapper.find('#upstream-service-key').setValue("inventory-mcp");
+    await wrapper.find('#upstream-service-protocol').setValue("mcp");
+    await wrapper.find('#upstream-mcp-transport').setValue("http");
+    await wrapper.find('#upstream-mcp-url').setValue("https://service.invalid/mcp");
+    await wrapper.find('#upstream-mcp-protocol-version').setValue("2026-07-28");
+    await wrapper.find(".form-actions .primary").trigger("click");
+    await flushPromises();
+
+    expect(client.createUpstreamService).toHaveBeenCalledWith("inventory-mcp", {
+      serviceProtocol: "mcp",
+      references: [],
+      mcp: {
+        transport: "http",
+        url: "https://service.invalid/mcp",
+        protocolVersion: "2026-07-28",
+      },
+    }, 0);
+    expect(client.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
+    expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
+    wrapper.unmount();
+  });
+
+  it("publishes MCP after clearing errors from an invalid HTTP tool path", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+
+    await wrapper.find('#upstream-service-key').setValue("inventory-mcp");
+    await wrapper.find('#upstream-service-protocol').setValue("http");
+    const operationsTab: any = wrapper.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Tool paths");
+    await operationsTab!.trigger("click");
+    await wrapper.find(".operation-builder .table-action").trigger("click");
+    expect(wrapper.text()).toContain("Complete all required tool path fields.");
+
+    const basicTab: any = wrapper.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Service information");
+    await basicTab!.trigger("click");
+    await wrapper.find('#upstream-service-protocol').setValue("mcp");
+    expect(wrapper.findAll('[role="tab"]').some((tab: any) => tab.text() === "Tool paths")).toBe(false);
+    await wrapper.find('#upstream-mcp-transport').setValue("http");
+    await wrapper.find('#upstream-mcp-url').setValue("https://service.invalid/mcp");
+    await wrapper.find('#upstream-mcp-protocol-version').setValue("2026-07-28");
+    await wrapper.find(".form-actions .primary").trigger("click");
+    await flushPromises();
+
+    expect(client.createUpstreamService).toHaveBeenCalledWith("inventory-mcp", {
+      serviceProtocol: "mcp",
+      references: [],
+      mcp: {
+        transport: "http",
+        url: "https://service.invalid/mcp",
+        protocolVersion: "2026-07-28",
+      },
+    }, 0);
+    wrapper.unmount();
   });
 
   it("registers the title-bar page refresh handler without rendering duplicate toolbar actions", async () : Promise<any> => {
@@ -330,7 +405,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       serviceKey: "replacement",
       descriptor: {
         serviceProtocol: "http",
-        baseUrl: "https://service.invalid:443",
+        baseUrl: "https://service.invalid",
         tags: ["portable"],
         operations: [{
           operationKey: "list", method: "GET", path: "/items",
@@ -357,6 +432,35 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect((serviceKey.element as HTMLInputElement).value).toBe("replacement");
     expect(client.createUpstreamService).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("Draft loaded. Review it, then select Publish.");
+    wrapper.unmount();
+  });
+
+  it("imports and submits the canonical modern MCP HTTP descriptor through the same publish flow", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    const importer: any = wrapper.findComponent({ name: "PortableServiceImportPanel" });
+    await importer.find("textarea").setValue(JSON.stringify(portableMcpDocument()));
+    await importer.find('[data-action="validate-service-json"]').trigger("click");
+    await importer.find('[data-action="load-service-draft"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('#upstream-service-protocol').element).toHaveProperty("value", "mcp");
+    expect(wrapper.find('#upstream-mcp-transport').element).toHaveProperty("value", "http");
+    expect(wrapper.find('#upstream-mcp-url').element).toHaveProperty("value", "https://service.invalid/mcp");
+    expect(wrapper.find('#upstream-mcp-protocol-version').element).toHaveProperty("value", "2026-07-28");
+    expect(wrapper.findAll('[role="tab"]').some((tab: any) => tab.text() === "Tool paths")).toBe(false);
+    await wrapper.find(".form-actions .primary").trigger("click");
+    await flushPromises();
+
+    expect(client.createUpstreamService).toHaveBeenCalledWith("inventory-mcp", {
+      serviceProtocol: "mcp",
+      mcp: {
+        transport: "http",
+        url: "https://service.invalid/mcp",
+        protocolVersion: "2026-07-28",
+      },
+      references: [],
+    }, 0);
     wrapper.unmount();
   });
 
@@ -425,7 +529,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       serviceKey: "inventory",
       descriptor: {
         serviceProtocol: "http",
-        baseUrl: "https://service.invalid:443",
+        baseUrl: "https://service.invalid",
         healthPath: "/healthz",
         operations: [{
           operationKey: "list", method: "GET", path: "/items",
@@ -460,7 +564,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
 
     expect(client.createUpstreamService).toHaveBeenCalledWith("inventory", {
       serviceProtocol: "http",
-      baseUrl: "https://service.invalid:443",
+      baseUrl: "https://service.invalid",
       healthPath: "/healthz",
       operations: [{
         operationKey: "list", method: "GET", path: "/items",
@@ -586,6 +690,69 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
         }]
       }
     }))).not.toThrow();
+  });
+
+  it("accepts a canonical modern MCP HTTP import without top-level baseUrl or operations", () : any => {
+    const document = portableMcpDocument();
+    document.descriptor = {
+      ...document.descriptor,
+      allowLocalNetwork: false,
+      permissions: { requiredScopes: ["catalog:read"] },
+      audience: { organizations: ["org-example"] },
+      references: [{
+        type: "credential",
+        reference: "secret://vault/catalog",
+        revision: 4,
+        use: "request-auth",
+        host: "service.example",
+        protocol: "https",
+      }],
+      mcp: {
+        ...document.descriptor.mcp,
+        headers: { "x-valorius-project": "example-context" },
+      },
+    };
+    expect(parsePortableUpstreamServiceImport(JSON.stringify(document))).toMatchObject({
+      serviceKey: "inventory-mcp",
+      descriptor: {
+        serviceProtocol: "mcp",
+        allowLocalNetwork: false,
+        permissions: { requiredScopes: ["catalog:read"] },
+        audience: { organizations: ["org-example"] },
+        references: [{
+          type: "credential",
+          reference: "secret://vault/catalog",
+          revision: 4,
+          use: "request-auth",
+        }],
+        mcp: {
+          transport: "http",
+          url: "https://service.invalid/mcp",
+          protocolVersion: "2026-07-28",
+          headers: { "x-valorius-project": "example-context" },
+        },
+      },
+    });
+  });
+
+  it("rejects unsupported MCP transport/version, routing fields, unsafe URLs and inline credentials", () : any => {
+    const mutations: Array<(document: Record<string, any>) => void> = [
+      (document) => { document.descriptor.mcp.transport = "stdio"; },
+      (document) => { document.descriptor.mcp.protocolVersion = "2027-01-01"; },
+      (document) => { document.descriptor.mcp.command = "run"; },
+      (document) => { document.descriptor.mcp.url = "https://service.invalid:65536/mcp"; },
+      (document) => { document.descriptor.mcp.url = `https://${["fixture", "placeholder"].join(":")}@service.invalid/mcp`; },
+      (document) => { document.descriptor.operations = []; },
+      (document) => { document.descriptor.risk = "safe_write"; },
+      (document) => { document.descriptor.mcp.headers = { authorization: "Bearer redacted-placeholder-value" }; },
+      (document) => { document.descriptor.mcp.headers = { "x-context": "Bearer redacted-placeholder-value" }; },
+      (document) => { document.descriptor.references = [{ type: "credential", value: "inline" }]; },
+    ];
+    for (const mutate of mutations) {
+      const document = portableMcpDocument();
+      mutate(document);
+      expect(() => parsePortableUpstreamServiceImport(JSON.stringify(document))).toThrow();
+    }
   });
 
   it("keeps publication evidence while reporting a failed runtime health result", async () : Promise<any> => {

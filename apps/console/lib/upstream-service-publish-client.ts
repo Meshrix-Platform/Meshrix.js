@@ -5,6 +5,7 @@ import type {
   UpstreamPayloadTransport,
   UpstreamRequestRepresentationMode,
   UpstreamResponseRepresentationMode,
+  UpstreamMcpDescriptor,
   UpstreamServiceDescriptor,
 } from "@meshrix/contracts/upstream-service-publishing";
 
@@ -14,6 +15,7 @@ export type {
   UpstreamPayloadTransport,
   UpstreamRequestRepresentationMode,
   UpstreamResponseRepresentationMode,
+  UpstreamMcpDescriptor,
   UpstreamServiceDescriptor,
 };
 

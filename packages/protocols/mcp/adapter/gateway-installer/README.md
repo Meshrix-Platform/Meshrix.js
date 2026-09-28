@@ -43,3 +43,13 @@ node packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts doctor 
 
 Install/config discovery is not proof that the real stdio proxy transport works;
 proxy readiness is covered by the MCP proxy transport verifiers.
+
+After a proxy request or artifact download is admitted, the connector applies
+no implicit elapsed-time cutoff to its response headers or body; an explicit
+caller-selected helper budget remains active. The `proxy` and
+`fetch` commands cancel owned requests and subscriptions when their input ends,
+the caller aborts, or the process receives SIGINT or SIGTERM. Artifact downloads
+retain the existing size and digest checks and remove only their private partial
+file when canceled or failed. Discovery and other control requests keep their
+existing bounded timeouts. This describes the Meshrix connector runtime; it does
+not qualify timeout behavior in third-party MCP clients or SDKs.

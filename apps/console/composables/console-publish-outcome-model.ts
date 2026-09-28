@@ -52,6 +52,7 @@ export type InterpretedHealthCheck = {
   /** Flat dictionary key into the `publishOutcome` group. */
   label: string;
   status: InterpretedHealthStatus;
+  statusCode?: number;
   remediation?: { route: string; query?: Record<string, string> };
 };
 
@@ -107,11 +108,18 @@ export function interpretUpstreamHealth(payload: unknown, serviceId: string): In
   const endpoints: unknown[] = Array.isArray(record.endpoints) ? record.endpoints : [];
   for (const endpoint of endpoints) {
     const endpointRecord: Record<string, any> = isRecord(endpoint) ? endpoint : {};
+    const publicEndpoint: Record<string, any> = isRecord(endpointRecord.endpoint) ? endpointRecord.endpoint : {};
+    const endpointId = isRecord(endpointRecord.endpoint)
+      ? (typeof publicEndpoint.endpointId === "string" ? publicEndpoint.endpointId : "")
+      : (typeof endpointRecord.endpoint === "string" ? endpointRecord.endpoint : "");
     const healthy: boolean = endpointRecord.ok === true;
     checks.push({
-      id: String(endpointRecord.endpoint ?? ""),
+      id: endpointId,
       label: "checkEndpoint",
       status: healthy ? "pass" : "fail",
+      ...(Number.isSafeInteger(endpointRecord.status) && endpointRecord.status >= 100 && endpointRecord.status <= 599
+        ? { statusCode: endpointRecord.status }
+        : {}),
       ...(healthy ? {} : { remediation: gatewayDetailRemediation(serviceId) }),
     });
   }

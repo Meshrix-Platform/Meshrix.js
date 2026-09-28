@@ -28,7 +28,8 @@ import {
   createServerConsoleDomainServices,
   createServerConsoleOperationProviders,
   createServerOperationPermissionPlatform,
-  createServerToolSkillManagementProvider
+  createServerToolSkillManagementProvider,
+  readAuthorizedMcpToolSelection
 } from "./server-runtime-providers.ts";
 
 const API_KEY_AUDIENCE_MAX_RISK: Readonly<Record<string, string>> = Object.freeze({
@@ -546,6 +547,12 @@ export async function createHttpApplicationAssembly({
     consoleAuth,
     securityPermissions,
     proofSubstrate: registeredOperationProofSubstrate,
+    readMcpToolSelection: ({ authorization, signal }: Record<string, any> = {}) => readAuthorizedMcpToolSelection({
+      registry: consoleOperationProviders.upstreamGatewayRegistry,
+      operationRegistry: operationPermissionPlatformRef?.registry,
+      authorization,
+      signal
+    }),
     logger: runtimeLogger
   });
   operationPermissionPlatformRef = operationPermissionPlatform;

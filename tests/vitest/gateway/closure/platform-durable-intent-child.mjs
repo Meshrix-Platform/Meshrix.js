@@ -66,13 +66,7 @@ const proofPort = {
     return entry;
   }
 };
-const registry = createUpstreamGatewayRegistry(mode === "stdio" ? {} : {
-  mcpSessionManager: {
-    listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object", properties: { label: { type: "string" } }, required: ["label"] } }] }),
-    retireScope: async () => ({ retired: 0 }),
-    close: async () => {}
-  }
-});
+const registry = createUpstreamGatewayRegistry();
 await installUpstreamRuntimeServices(registry, [{
   serviceId: "durable-fixture",
   serviceProtocol: "mcp",

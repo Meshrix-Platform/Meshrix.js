@@ -205,12 +205,32 @@ export function createOperationPermissionHttpRouter({
       const scopes: any = await platform.apiKeyDistributionProvider.getIssuerScopes({
         subjectId: resolvedByFromAuthorization(authorization)
       });
+      let mcpToolSelection: Record<string, any> = {
+        status: "unavailable",
+        services: [],
+        tools: []
+      };
+      const hasEligibleIssuerScope: any = Array.isArray(scopes?.eligibleNodes) && scopes.eligibleNodes.length > 0;
+      if (hasEligibleIssuerScope && typeof platform.readMcpToolSelection === "function") {
+        try {
+          const selected: any = await platform.readMcpToolSelection({ authorization, signal });
+          if (selected && typeof selected === "object" && !Array.isArray(selected)) {
+            mcpToolSelection = selected;
+          }
+        } catch (error: any) {
+          if (signal?.aborted) throw error;
+          logRouter("warn", "operation_permission.http.mcp_tool_selection_unavailable", {
+            requestId: request?.__meshrixRequestId || ""
+          });
+        }
+      }
       const requestHost: any = String(request?.headers?.host || request?.headers?.[":authority"] || "")
         .split(",")[0]
         .trim();
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
         ...scopes,
+        mcpToolSelection,
         ...(requestHost ? { serverAudience: requestHost } : {})
       });
     }

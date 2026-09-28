@@ -331,9 +331,8 @@ function validateRemoteUrl(value?: any, field?: any) : any {
   } catch {
     throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must be a remote URL.`);
   }
-  const hasExplicitPort: any = /^https?:\/\/(?:\[[^\]]+\]|[^/:?#]+):[0-9]{1,5}(?:[/?#]|$)/u.test(value);
-  if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || !hasExplicitPort) {
-    throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must use an HTTP transport with an explicit port and no embedded credentials.`);
+  if (!/^https?:\/\//iu.test(value) || !["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must use an HTTP(S) URL without embedded credentials.`);
   }
 }
 
@@ -376,11 +375,23 @@ function validateRemoteMcpDescriptor(descriptor?: any) : any {
   }
   const remoteUrl: any = mcp.url || mcp.endpoint || mcp.baseUrl || descriptor.baseUrl;
   validateRemoteUrl(remoteUrl, "descriptor.mcp.url");
+  validateOptionalExecutionTimeout(mcp.timeoutMs, "descriptor.mcp.timeoutMs");
   if (descriptor.operations !== undefined) {
     throw publishingError(
       "upstream_publishing_descriptor_invalid",
       400,
       "Developer-published MCP services derive tools/call from the remote catalog and do not accept operations arrays."
+    );
+  }
+}
+
+function validateOptionalExecutionTimeout(value?: any, field: any = "timeoutMs") : any {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647) {
+    throw publishingError(
+      "upstream_publishing_descriptor_invalid",
+      400,
+      `${field} must be a positive whole number of milliseconds within the supported timer range.`
     );
   }
 }
@@ -425,6 +436,7 @@ function validateDescriptorSafety(descriptor?: any) : any {
     for (const operation of descriptor.operations) {
       assertPlainObject(operation, "Publishing operation must be an object.");
       assertClosedFields(operation, OPERATION_FIELDS, "Publishing operation");
+      validateOptionalExecutionTimeout(operation.timeoutMs, "descriptor.operations.timeoutMs");
       if (typeof operation.operationKey !== "string" || !SAFE_KEY.test(operation.operationKey)) {
         throw publishingError("upstream_publishing_descriptor_invalid", 400, "Publishing operationKey is invalid.");
       }

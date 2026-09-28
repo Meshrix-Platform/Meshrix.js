@@ -6,6 +6,7 @@ import {
   createUpstreamPublishingApplication,
   UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
 } from "../../../packages/agents/src/upstream-gateway/publishing-application.ts";
+import { normalizeService } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 
@@ -52,7 +53,8 @@ function subject(subjectId: any = "developer-one", scopes: any = ["gateway:write
 }
 
 async function harness() : Promise<any> {
-  const store: any = createServiceManifestStore({ storageRoot: await temporaryRoot() });
+  const storageRoot: any = await temporaryRoot();
+  const store: any = createServiceManifestStore({ storageRoot });
   const audit: any[] = [];
   const commitManifestSet: any = vi.fn((input?: any) : any => store.writerPort.commitManifestSet(input));
   const application: any = createUpstreamPublishingApplication({
@@ -60,7 +62,7 @@ async function harness() : Promise<any> {
     readerPort: { getSnapshot: store.getCandidateSnapshot },
     auditPort: { append: async (event?: any) : Promise<any> => audit.push(event) }
   });
-  return { application, audit, commitManifestSet, store };
+  return { application, audit, commitManifestSet, storageRoot, store };
 }
 
 afterEach(async () : Promise<any> => {
@@ -125,6 +127,139 @@ describe("upstream publishing application", () : any => {
     expect(record.manifest.payload.descriptor.operations[0].payloadTransport).toEqual({
       request: structuredJsonPayloadTransport().request
     });
+  });
+
+  it("publishes HTTP, JSON-RPC, and MCP URLs with omitted or standard ports and reloads normalized HTTP state", async () : Promise<any> => {
+    const descriptors: Array<Record<string, any>> = [
+      {
+        serviceKey: "http-standard-port-reload",
+        url: "https://api.example:443/v1",
+        descriptor: {
+          serviceProtocol: "http",
+          label: "HTTP standard port reload",
+          baseUrl: "https://api.example:443/v1",
+          operations: [{
+            operationKey: "read",
+            method: "GET",
+            path: "/v1",
+            payloadTransport: structuredJsonPayloadTransport()
+          }]
+        }
+      },
+      {
+        serviceKey: "json-rpc-port",
+        url: "https://rpc.example:443/rpc",
+        descriptor: {
+          serviceProtocol: "json-rpc",
+          label: "JSON-RPC endpoint ports",
+          baseUrl: "https://rpc.example/rpc",
+          endpoints: [{ endpointId: "primary", baseUrl: "https://rpc.example:443/rpc", weight: 1 }],
+          operations: [{
+            operationKey: "lookup",
+            method: "POST",
+            path: "/rpc",
+            jsonRpcMethod: "catalog.lookup",
+            payloadTransport: structuredJsonPayloadTransport()
+          }]
+        }
+      },
+      {
+        serviceKey: "mcp-default-port",
+        url: "https://mcp.example/mcp",
+        descriptor: {
+          serviceProtocol: "mcp",
+          label: "MCP default port",
+          mcp: {
+            transport: "http",
+            url: "https://mcp.example/mcp",
+            protocolVersion: "2026-07-28"
+          }
+        }
+      }
+    ];
+
+    for (const [index, entry] of descriptors.entries()) {
+      const { application, storageRoot, store } = await harness();
+      const result: any = await application.execute(command({
+        serviceKey: entry.serviceKey,
+        idempotencyKey: `create-${entry.serviceKey}`,
+        descriptor: entry.descriptor
+      }), subject());
+      expect(result).toMatchObject({ ok: true, state: "publishing", serviceRevision: 1 });
+
+      const snapshot: any = index === 0
+        ? await createServiceManifestStore({ storageRoot }).getCandidateSnapshot()
+        : await store.getCandidateSnapshot();
+      const record: any = snapshot.getService(result.serviceId);
+      expect(record.manifest.payload.descriptor.serviceProtocol).toBe(entry.descriptor.serviceProtocol);
+      const storedUrl: any = entry.descriptor.serviceProtocol === "mcp"
+        ? record.manifest.payload.descriptor.mcp.url
+        : record.manifest.payload.descriptor.endpoints?.[0]?.baseUrl || record.manifest.payload.descriptor.baseUrl;
+      expect(storedUrl).toBe(entry.url);
+
+      if (index === 0) {
+        const reloadedDescriptor: any = record.manifest.payload.descriptor;
+        const runtimeService: any = normalizeService({ ...reloadedDescriptor, serviceId: result.serviceId });
+        const normalizedAgain: any = normalizeService(runtimeService);
+        expect(runtimeService.baseUrl).toBe("https://api.example/v1");
+        expect(normalizedAgain.baseUrl).toBe(runtimeService.baseUrl);
+        const parsedRuntimeUrl: any = new URL(runtimeService.baseUrl);
+        expect({
+          protocol: parsedRuntimeUrl.protocol,
+          hostname: parsedRuntimeUrl.hostname,
+          pathname: parsedRuntimeUrl.pathname
+        }).toEqual({ protocol: "https:", hostname: "api.example", pathname: "/v1" });
+      }
+    }
+  });
+
+  it("rejects embedded credentials and malformed ports at HTTP, JSON-RPC endpoint, and MCP publishing boundaries", async () : Promise<any> => {
+    const credentials = `${["fixture", "placeholder"].join(":")}@`;
+    const invalidDescriptors: Array<{ descriptor: Record<string, any>; message: string }> = [
+      {
+        descriptor: {
+          serviceProtocol: "http",
+          label: "Invalid HTTP URL",
+          baseUrl: `https://${credentials}api.example/v1`,
+          operations: [{ operationKey: "read", method: "GET", path: "/v1", payloadTransport: structuredJsonPayloadTransport() }]
+        },
+        message: "descriptor.baseUrl must use an HTTP(S) URL without embedded credentials."
+      },
+      {
+        descriptor: {
+          serviceProtocol: "json-rpc",
+          label: "Invalid JSON-RPC endpoint",
+          baseUrl: "https://rpc.example/rpc",
+          endpoints: [{ endpointId: "primary", baseUrl: "https://rpc.example:65536/rpc", weight: 1 }],
+          operations: [{
+            operationKey: "lookup",
+            method: "POST",
+            path: "/rpc",
+            jsonRpcMethod: "catalog.lookup",
+            payloadTransport: structuredJsonPayloadTransport()
+          }]
+        },
+        message: "descriptor.endpoints.baseUrl must be a remote URL."
+      },
+      {
+        descriptor: {
+          serviceProtocol: "mcp",
+          label: "Invalid MCP URL",
+          mcp: { transport: "http", url: `https://${credentials}mcp.example/mcp`, protocolVersion: "2026-07-28" }
+        },
+        message: "descriptor.mcp.url must use an HTTP(S) URL without embedded credentials."
+      }
+    ];
+
+    for (const [index, entry] of invalidDescriptors.entries()) {
+      const { application, audit, commitManifestSet } = await harness();
+      await expect(application.execute(command({ descriptor: entry.descriptor }), subject())).rejects.toMatchObject({
+        statusCode: 400,
+        message: entry.message
+      });
+      expect(commitManifestSet, `descriptor ${index}`).not.toHaveBeenCalled();
+      expect(audit, `descriptor ${index}`).toEqual([]);
+    }
   });
 
   it("projects publishing until the durable terminal snapshot and paired revision facts agree", async () : Promise<any> => {

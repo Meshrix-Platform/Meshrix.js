@@ -164,8 +164,8 @@ describe("interpretUpstreamHealth payload mapping", () : any => {
       endpointCount: 2,
       healthyEndpointCount: 1,
       endpoints: [
-        { endpoint: "https://primary.invalid:443", ok: true, status: 200 },
-        { endpoint: "https://secondary.invalid:443", ok: false, status: 503 },
+        { endpoint: { endpointId: "primary", weight: 1 }, ok: true, status: 200 },
+        { endpoint: { endpointId: "secondary", weight: 1 }, ok: false, status: 404 },
       ],
       latencyMs: 12,
       checkedAt: "2026-08-05T00:00:00.000Z",
@@ -175,14 +175,16 @@ describe("interpretUpstreamHealth payload mapping", () : any => {
     expect(interpreted.ok).toBe(false);
     expect(interpreted.checks).toHaveLength(2);
     expect(interpreted.checks[0]).toMatchObject({
-      id: "https://primary.invalid:443",
+      id: "primary",
       label: "checkEndpoint",
       status: "pass",
+      statusCode: 200,
     });
     expect(interpreted.checks[1]).toMatchObject({
-      id: "https://secondary.invalid:443",
+      id: "secondary",
       label: "checkEndpoint",
       status: "fail",
+      statusCode: 404,
     });
     // The failed endpoint carries a gateway-detail remediation with the service.
     expect(interpreted.checks[1].remediation).toEqual({
@@ -295,7 +297,7 @@ describe("view-level outcome rendering", () : any => {
       status: 503,
       endpointCount: 1,
       healthyEndpointCount: 0,
-      endpoints: [{ endpoint: "https://service.invalid:443", ok: false, status: 503 }],
+      endpoints: [{ endpoint: { endpointId: "primary", weight: 1 }, ok: false, status: 404 }],
       latencyMs: 15,
       checkedAt: "2026-08-05T00:00:00.000Z",
     });
@@ -322,7 +324,9 @@ describe("view-level outcome rendering", () : any => {
     expect(failCheck.exists()).toBe(true);
     expect(failCheck.text()).toContain(outcomeMessages.checkEndpoint);
     expect(failCheck.text()).toContain(outcomeMessages.statusFail);
-    expect(failCheck.text()).toContain("https://service.invalid:443");
+    expect(failCheck.text()).toContain("primary");
+    expect(failCheck.text()).toContain("HTTP 404");
+    expect(failCheck.text()).not.toContain("[object Object]");
     const link: any = failCheck.find("a.health-check-remediation");
     expect(link.exists()).toBe(true);
     expect(link.text()).toBe(outcomeMessages.remediateGatewayDetail);

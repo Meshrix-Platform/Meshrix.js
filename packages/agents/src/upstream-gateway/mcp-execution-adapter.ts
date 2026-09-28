@@ -11,6 +11,7 @@ import {
   asArray,
   object,
   stableJson,
+  normalizeOptionalTimeoutMs,
   text
 } from "./support.ts";
 import { createIsolatedSchemaValidator, GatewaySchemaError } from "@meshrix/gateway/schema";
@@ -199,10 +200,16 @@ export function createMcpExecutionAdapter({
       byteLength: Buffer.byteLength(stableJson(toolArguments)),
       contentType: "application/json"
     });
-    const requestedTimeoutMs: any = Number(options.timeoutMs || 0);
-    const timeoutMs: any = Number.isSafeInteger(requestedTimeoutMs) && requestedTimeoutMs >= 100
-      ? Math.min(operation.timeoutMs, requestedTimeoutMs)
-      : operation.timeoutMs;
+    const timeoutMs: any = Object.hasOwn(options, "timeoutMs") && options.timeoutMs === null
+      ? null
+      : (() : any => {
+          const budgets: any[] = [
+            normalizeOptionalTimeoutMs(options.timeoutMs, "request.timeoutMs"),
+            normalizeOptionalTimeoutMs(operation.timeoutMs, "operation.timeoutMs"),
+            normalizeOptionalTimeoutMs(service.mcp?.timeoutMs, "mcp.timeoutMs")
+          ].filter((value?: any) : any => value !== undefined);
+          return budgets.length ? Math.min(...budgets) : null;
+        })();
     const abortContext: any = createForwardAbortContext(options.signal || null, timeoutMs);
     try {
       const mcpCallInput: Record<string, any> = {
@@ -220,6 +227,7 @@ export function createMcpExecutionAdapter({
       const response: any = await invokeTypedMcp(service, operation, mcpCallInput, {
         ...options,
         signal: abortContext.signal,
+        timeoutMs: null,
         requestState: input.requestState ?? options.requestState,
         beforeSend
       });

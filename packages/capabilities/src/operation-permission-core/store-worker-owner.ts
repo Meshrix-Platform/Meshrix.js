@@ -79,7 +79,8 @@ export function createOperationPermissionWorkerOwner({
   securityPermissions = null,
   changeListener = null,
   proofSubstrate = null,
-  metricRetention = null
+  metricRetention = null,
+  recoverStaleApiKeyEffectReservations = false
 }: Record<string, any>) : any {
   const rootPath: any = path.join(userDataPath, "operation-permission");
   fs.mkdirSync(rootPath, { recursive: true });
@@ -89,7 +90,7 @@ export function createOperationPermissionWorkerOwner({
   let resolvedCapabilityBindingGuard: any = null;
   try {
     db = openSqliteDatabase(getOperationPermissionDatabasePath(userDataPath));
-    ensureSchema(db);
+    ensureSchema(db, { recoverStaleApiKeyEffectReservations });
     securityHelperClient = (!capabilityKeyProvider && !capabilityBindingGuard && isEnabled(
       process.env.MESHRIX_TOOL_GRANT_CAPABILITY_SECURITY_HELPER ||
         process.env.MESHRIX_CAPABILITY_SECURITY_HELPER

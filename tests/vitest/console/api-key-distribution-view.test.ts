@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useConsoleApiKeyDistributionController } from "../../../apps/console/composables/console-api-key-distribution-controller";
+import { apiKeyDistributionText } from "../../../apps/console/i18n/api-key-distribution";
 import type {
   ApiKeyIssuerScopes,
   ApiKeyOneTimeResult,
@@ -66,6 +67,57 @@ const catalog: OperationPermissionCatalog = {
     },
   ],
 };
+
+const mcpBaseOperation = {
+  id: "upstream.service-mcp.tools-call", version: "1", label: "MCP service call", description: "",
+  owner: "meshrix", source: "operation-backed", operationId: "op.mcp.call", handlerId: "system.handleUpstreamGatewayOperation",
+  toolsets: ["mcp-only"], requiredScopes: ["gateway:read"], risk: "read_only", readOnly: true, destructive: false,
+  concurrency: { workloadClass: "light", maxParallel: 64, cost: 1 }, requiresApproval: false, approvalScope: "",
+  timeoutMs: null, maxResultBytes: 1024, status: "active", tags: [], serviceId: "service-mcp",
+  upstreamProjectedOperation: true, protocol: "mcp", operationKey: "tools/call",
+  dynamicCapability: { capabilityId: "base-capability-not-selectable" },
+} as any;
+
+const mcpCatalog: OperationPermissionCatalog = {
+  ...catalog,
+  toolsets: [...catalog.toolsets, { id: "mcp-only", label: "MCP service operation", requiredScopes: ["gateway:read"], maxRisk: "read_only" }],
+  profiles: [...catalog.profiles, {
+    id: "profile-mcp-only", label: "MCP base operation", agentType: "reader", toolsets: ["mcp-only"],
+    toolAllow: [mcpBaseOperation.id], toolDeny: [], maxRisk: "read_only", approvalPolicy: "",
+    concurrencyLimit: 1, sandboxPolicy: "", auditTags: [],
+  }],
+  tools: [...catalog.tools, mcpBaseOperation],
+};
+
+const discoveredMcpTool = {
+  serviceId: "service-mcp",
+  publicName: "upstream.service-mcp.read_records",
+  label: "Read records",
+  operationToolId: mcpBaseOperation.id,
+  capabilityId: "cap:upstream:service-mcp:tools-call-read-records",
+  risk: "read_only",
+  requiredScopes: ["gateway:read"],
+  toolsets: ["upstream-mcp", "upstream-read", "upstream:service-mcp"],
+};
+
+const siblingMcpTool = {
+  ...discoveredMcpTool,
+  publicName: "upstream.service-mcp.write_records",
+  label: "Write records",
+  capabilityId: "cap:upstream:service-mcp:tools-call-write-records",
+  risk: "read_only",
+};
+
+function mcpIssuerScopes(tools = [discoveredMcpTool], status: "available" | "partial" | "unavailable" = "available") {
+  return {
+    ...scopes,
+    mcpToolSelection: {
+      status,
+      services: [{ serviceId: "service-mcp", label: "MCP service", status, toolCount: tools.length }],
+      tools,
+    },
+  };
+}
 
 function record(revision = 1, status: ApiKeyRecord["status"] = "active"): ApiKeyRecord {
   return {
@@ -187,6 +239,116 @@ describe("API key distribution console", () => {
     }));
   });
 
+  it("grants a current discovered MCP tool only after explicit identity selection", async () => {
+    const api = client({
+      getIssuerScopes: vi.fn(async () => mcpIssuerScopes([discoveredMcpTool, siblingMcpTool])),
+      getCatalog: vi.fn(async () => mcpCatalog),
+    });
+    const controller = useConsoleApiKeyDistributionController({
+      client: api as any, confirmAction: vi.fn(async () => true),
+    });
+    await controller.refresh();
+    expect(controller.toolsetOptions.value.map((option) => option.value)).not.toContain("mcp-only");
+
+    controller.applyProfile("profile-mcp-only");
+    expect(controller.draft.value.selectedToolsetIds).toEqual([]);
+    expect(controller.draft.value.allowedTools).toEqual([]);
+    expect(controller.draft.value.selectedMcpTools).toEqual([]);
+
+    controller.toggleMcpToolSelection(discoveredMcpTool);
+    const allowedToolSummary = () => controller.inferredSummaryItems.value
+      .find((item) => /允许的工具|Allowed tools/u.test(item.label))?.value;
+    expect(allowedToolSummary()).toBe(apiKeyDistributionText("1 个", "1 tools"));
+    controller.toggleMcpToolSelection(siblingMcpTool);
+    expect(allowedToolSummary()).toBe(apiKeyDistributionText("2 个", "2 tools"));
+    controller.toggleMcpToolSelection(siblingMcpTool);
+    Object.assign(controller.draft.value, {
+      workloadDisplayName: "MCP reader",
+      organizationNodeId: "organization-a",
+      expiresAt: futureExpiryInput(),
+      selectedToolsetIds: [],
+      allowedTools: [],
+    });
+    expect(controller.draft.value.selectedMcpTools).toEqual([{
+      serviceId: discoveredMcpTool.serviceId,
+      publicName: discoveredMcpTool.publicName,
+    }]);
+    expect(controller.draftValid.value).toBe(true);
+    expect(controller.draftConfigDocument.value.selectedMcpTools).toEqual(controller.draft.value.selectedMcpTools);
+
+    await controller.create();
+    const input = api.create.mock.calls[0][0];
+    expect(input.policy).toMatchObject({
+      serviceIds: ["service-mcp"],
+      capabilityIds: [discoveredMcpTool.capabilityId],
+      toolsetIds: ["mcp-only"],
+      allowedTools: [mcpBaseOperation.id],
+      scopeIds: ["gateway:read"],
+    });
+    expect(input.policy.capabilityIds).not.toContain(mcpBaseOperation.dynamicCapability.capabilityId);
+  });
+
+  it("keeps removed tool identities visible and blocks key creation until they are cleared", async () => {
+    const api = client({ getIssuerScopes: vi.fn()
+      .mockResolvedValueOnce(mcpIssuerScopes())
+      .mockResolvedValueOnce(mcpIssuerScopes([], "unavailable")),
+      getCatalog: vi.fn(async () => mcpCatalog),
+    });
+    const controller = useConsoleApiKeyDistributionController({
+      client: api as any, confirmAction: vi.fn(async () => true),
+    });
+    await controller.refresh();
+    controller.toggleMcpToolSelection(discoveredMcpTool);
+    Object.assign(controller.draft.value, {
+      workloadDisplayName: "MCP reader", organizationNodeId: "organization-a", expiresAt: futureExpiryInput(),
+    });
+    expect(controller.draftValid.value).toBe(true);
+
+    await controller.refresh();
+    expect(controller.unavailableSelectedMcpTools.value).toEqual([{
+      serviceId: discoveredMcpTool.serviceId,
+      publicName: discoveredMcpTool.publicName,
+    }]);
+    expect(controller.draftValid.value).toBe(false);
+    await controller.create();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps a branded connection guide separate from an unrestricted client audience", async () => {
+    const api = client();
+    const controller = useConsoleApiKeyDistributionController({
+      client: api as any, confirmAction: vi.fn(async () => true),
+    });
+    await controller.refresh();
+    completeDraft(controller);
+    controller.draft.value.selectedClientGuide = "generic";
+    controller.draft.value.selectedTargetIds = [];
+
+    expect(controller.draftValid.value).toBe(true);
+    await controller.create();
+    const createInput = api.create.mock.calls[0][0];
+    expect(createInput.policy.audience.targetIds).toEqual([]);
+    expect(createInput.policy).toMatchObject({
+      allowedTools: ["tool.read", "tool.write"],
+      toolsetIds: ["toolset-a"],
+      serviceIds: ["service-a"],
+      capabilityIds: ["capability-a", "capability-b"],
+      audience: { serverAudience: "server-a" },
+      resources: { mode: "unrestricted" },
+      limits: { maxUses: 2_000_000_000 },
+    });
+    expect(createInput.expiresAt).toBe(new Date(controller.draft.value.expiresAt).toISOString());
+    expect(controller.connectorSnippet.value).toContain("MCP 2026-07-28 over Streamable HTTP");
+    expect(controller.connectorSnippet.value).toContain("X-Meshrix.js-Api-Key: ${MESHRIX_MCP_TOKEN}");
+    expect(controller.connectorSnippet.value).not.toContain("opaque-one-time-credential");
+    expect(controller.connectorSnippet.value).not.toContain("@meshrix/agent-codex-adapter");
+
+    controller.dismissSecret();
+    controller.draft.value.selectedClientGuide = "codex";
+    await controller.create();
+    expect(api.create.mock.calls[1][0].policy.audience.targetIds).toEqual([]);
+  });
+
   it("applies a catalog profile to prefill toolsets", async () => {
     const controller = useConsoleApiKeyDistributionController({ client: client() as any });
     await controller.refresh();
@@ -205,11 +367,13 @@ describe("API key distribution console", () => {
       organizationNodeId: "organization-a",
       expiresAt: futureExpiryInput(),
       selectedToolsetIds: ["toolset-a"],
+      selectedClientGuide: "codex",
       selectedTargetIds: ["codex"],
       resourcesUnrestricted: true,
     });
     expect(controller.draft.value.workloadDisplayName).toBe("Imported worker");
     expect(controller.draft.value.selectedToolsetIds).toEqual(["toolset-a"]);
+    expect(controller.draft.value.selectedClientGuide).toBe("codex");
     expect(controller.draft.value.allowedTools).toEqual(["tool.read", "tool.write"]);
     expect(controller.draft.value.selectedTargetIds).toEqual(["codex"]);
     expect(controller.status.value).toMatch(/JSON|表单|form/u);
@@ -252,14 +416,24 @@ describe("API key distribution console", () => {
     expect(view).toContain("OptionBar");
     expect(view).toContain("ConsoleDescriptionList");
     expect(view).toContain("selectedToolsetIds");
+    expect(view).toContain("mcpToolOptions");
+    expect(view).toContain("toggleMcpToolSelection");
+    expect(view).toContain('data-testid="api-key-mcp-tool-selection"');
+    expect(view).toContain("Platform limit applies when empty");
+    expect(view).not.toContain("Empty = unlimited");
     expect(view).toContain('layout="list"');
     expect(view).toContain("调用限制");
     expect(view).toContain("每分钟调用次数");
     expect(view).toContain("最大并发量");
-    expect(view).toContain("三步完成 Agent MCP 接入");
+    expect(view).toContain("三步完成 MCP 接入");
     expect(view).toContain('data-testid="agent-setup-agent-step"');
-    expect(view).toContain('data-testid="agent-target-select"');
-    expect(view).toContain("targetId ? [targetId] : []");
+    expect(view).toContain('data-testid="client-guide-select"');
+    expect(view).toContain('data-testid="client-audience-restriction"');
+    expect(view).toContain("draft.selectedClientGuide");
+    expect(view).toContain("draft.selectedTargetIds");
+    expect(view).toContain("No brand-based client restriction");
+    expect(view).toContain('to="/admin/organization-governance"');
+    expect(view).toContain("organization structure and publish it in Organization Governance first");
     expect(view).toContain('data-testid="agent-setup-access-step"');
     expect(view).toContain('data-testid="agent-setup-review-step"');
     expect(view).toContain("高级设置");

@@ -105,8 +105,11 @@ export function createUpstreamGatewayOperationExecutor(dependencies: Record<stri
         return result(200, protocolPayload(registry.previewPolicy(input, subject)));
       }
       if (id.startsWith("upstream_operation.")) {
+        // Operation Permission already owns the operation budget through its dispatch signal;
+        // direct HTTP/RPC dispatchers must let the registry apply configured service budgets.
         const forward: any = await registry.forwardProjectedOperation(id, input, subject, {
           signal: context.signal || null,
+          ...(context.operationBudgetOwned === true ? { timeoutMs: null } : {}),
           responseAdapter: context.transport === "mcp" ? "artifact" : "structured",
           finalProtectedSinkPermit: context.finalProtectedSinkPermit || null
         });

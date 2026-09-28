@@ -91,6 +91,7 @@ export async function createServerOperationPermissionPlatform({
   consoleAuth,
   securityPermissions,
   proofSubstrate = null,
+  readMcpToolSelection = null,
   logger
 }: Record<string, any>) : Promise<any> {
   const operationDispatcher: any = bindOperationDispatcher({
@@ -109,6 +110,7 @@ export async function createServerOperationPermissionPlatform({
     consoleAuth,
     securityPermissions,
     proofSubstrate,
+    readMcpToolSelection,
     logger
   });
 }
@@ -157,6 +159,89 @@ export function createServerUpstreamGatewayRegistry({
       });
     }
   });
+}
+
+export async function readAuthorizedMcpToolSelection({
+  registry,
+  operationRegistry,
+  authorization,
+  signal = null
+}: Record<string, any> = {}) : Promise<any> {
+  if (authorization?.ok !== true || !registry || typeof registry.listServices !== "function") {
+    throw new TypeError("MCP tool selection requires an authorized Console issuer and upstream registry.");
+  }
+  const services: any[] = registry.listServices()?.items || [];
+  const enabledMcpServices: any[] = services.filter((service?: any) =>
+    service?.serviceProtocol === "mcp" && service.disabled !== true && Boolean(service.serviceId),
+  );
+  const serviceResults: any[] = await Promise.all(enabledMcpServices.map(async (service?: any) : Promise<any> => {
+    const serviceId: any = String(service.serviceId);
+    const label: any = String(service.label || serviceId).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 160);
+    const facts: any[] = [];
+    let invalidProjection = false;
+    try {
+      const listed: any = await registry.listMcpTools({ serviceId }, { signal });
+      for (const tool of Array.isArray(listed?.items) ? listed.items : []) {
+        const meta: any = tool?._meta && typeof tool._meta === "object" ? tool._meta : {};
+        const dynamic: any = meta.dynamicCapability && typeof meta.dynamicCapability === "object"
+          ? meta.dynamicCapability
+          : {};
+        const operationToolId: any = String(meta.toolId || "");
+        const operation: any = operationRegistry?.getTool?.(operationToolId);
+        const publicName: any = String(tool?.name || "").trim();
+        const capabilityId: any = String(dynamic.capabilityId || meta.capabilityId || "").trim();
+        const risk: any = String(meta.risk || dynamic.risk || "").trim();
+        const requiredScopes: any = Array.isArray(meta.requiredScopes)
+          ? meta.requiredScopes.filter((value?: any) : any => typeof value === "string" && value.trim()).map((value?: any) : any => value.trim())
+          : [];
+        const toolsets: any = Array.isArray(meta.toolsets)
+          ? meta.toolsets.filter((value?: any) : any => typeof value === "string" && value.trim()).map((value?: any) : any => value.trim())
+          : [];
+        if (meta.upstreamMcp !== true || !publicName || !capabilityId
+          || !["read_only", "safe_write", "repair_write", "destructive"].includes(risk)
+          || !operation || operation.upstreamProjectedOperation !== true
+          || operation.protocol !== "mcp" || operation.operationKey !== "tools/call"
+          || operation.serviceId !== serviceId || operationToolId !== operation.id) {
+          invalidProjection = true;
+          continue;
+        }
+        facts.push({
+          serviceId,
+          publicName,
+          label: String(tool?.title || publicName).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 240),
+          operationToolId,
+          capabilityId,
+          risk,
+          requiredScopes: [...new Set(requiredScopes)],
+          toolsets: [...new Set(toolsets)]
+        });
+      }
+      return {
+        service: { serviceId, label, status: invalidProjection ? "partial" : "available", toolCount: facts.length },
+        tools: facts
+      };
+    } catch (error: any) {
+      if (signal?.aborted) throw error;
+      return {
+        service: { serviceId, label, status: "unavailable", toolCount: 0 },
+        tools: []
+      };
+    }
+  }));
+  const serviceFacts: any[] = serviceResults.map((result?: any) : any => result.service);
+  const tools: any[] = serviceResults.flatMap((result?: any) : any => result.tools);
+  const availableCount: any = serviceFacts.filter((service?: any) : any => service.status === "available").length;
+  const partialCount: any = serviceFacts.filter((service?: any) : any => service.status === "partial").length;
+  const unavailableCount: any = serviceFacts.filter((service?: any) : any => service.status === "unavailable").length;
+  return {
+    status: unavailableCount === 0 && partialCount === 0
+      ? "available"
+      : availableCount > 0 || partialCount > 0
+        ? "partial"
+        : "unavailable",
+    services: serviceFacts,
+    tools
+  };
 }
 
 export async function createServerConsoleOperationProviders({

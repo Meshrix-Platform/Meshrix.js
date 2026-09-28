@@ -624,8 +624,7 @@ export function createApiKeyDistributionWorkerOwner({
   securityPermissions = null,
   verifierKeyProvider,
   now = () : any => Date.now(),
-  randomBytes = (size: number) : any => crypto.randomBytes(size),
-  effectLeaseTtlMs = 5 * 60 * 1000
+  randomBytes = (size: number) : any => crypto.randomBytes(size)
 }: Record<string, any> = {}): any {
   if (!store?.db || !verifierKeyProvider?.getKey || !verifierKeyProvider?.currentGeneration) {
     throw new Error("API Key distribution dependencies are unavailable.");
@@ -1019,9 +1018,6 @@ export function createApiKeyDistributionWorkerOwner({
     db.prepare(`DELETE FROM api_key_usage_windows WHERE rowid IN (
       SELECT rowid FROM api_key_usage_windows WHERE expires_at <= ? ORDER BY expires_at ASC LIMIT 256
     )`).run(timestamp);
-    db.prepare(`DELETE FROM api_key_effect_leases WHERE rowid IN (
-      SELECT rowid FROM api_key_effect_leases WHERE expires_at <= ? ORDER BY expires_at ASC LIMIT 256
-    )`).run(timestamp);
   }
 
   async function reserveEffect(input: Record<string, any> = {}): Promise<any> {
@@ -1033,7 +1029,6 @@ export function createApiKeyDistributionWorkerOwner({
       const { row, record } = assertAuthorizationCurrent(input.authorization);
       cleanupExpiredEphemeralState(timestamp);
       db.prepare("DELETE FROM api_key_usage_windows WHERE key_id = ? AND expires_at <= ?").run(row.key_id, timestamp);
-      db.prepare("DELETE FROM api_key_effect_leases WHERE key_id = ? AND expires_at <= ?").run(row.key_id, timestamp);
       const windowMs: any = record.policy.limits.windowSeconds * 1000;
       const windowStart: any = Math.floor(timestamp / windowMs) * windowMs;
       const usage: any = db.prepare("SELECT request_count FROM api_key_usage_windows WHERE key_id = ? AND window_start = ?")
@@ -1041,8 +1036,8 @@ export function createApiKeyDistributionWorkerOwner({
       if (Number(usage?.request_count || 0) >= record.policy.limits.requestsPerWindow) {
         fail("api_key_rate_limited", "API Key rate limit reached.", 429);
       }
-      const leases: any = db.prepare("SELECT count(*) AS count FROM api_key_effect_leases WHERE key_id = ? AND expires_at > ?")
-        .get(row.key_id, timestamp);
+      const leases: any = db.prepare("SELECT count(*) AS count FROM api_key_effect_leases WHERE key_id = ?")
+        .get(row.key_id);
       if (Number(leases?.count || 0) >= record.policy.limits.maxConcurrentEffects) {
         fail("api_key_concurrency_limit_reached", "API Key concurrency limit reached.", 429);
       }
@@ -1056,16 +1051,14 @@ export function createApiKeyDistributionWorkerOwner({
         VALUES (?, ?, 1, ?) ON CONFLICT(key_id, window_start) DO UPDATE SET request_count = request_count + 1`)
         .run(row.key_id, windowStart, windowStart + windowMs * 2);
       db.prepare(`INSERT INTO api_key_effect_leases
-        (key_id, lease_id, lifecycle_revision, policy_fingerprint, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)`)
-        .run(row.key_id, leaseId, record.lifecycleRevision, record.policyFingerprint,
-          timestamp + effectLeaseTtlMs, new Date(timestamp).toISOString());
+        (key_id, lease_id, lifecycle_revision, policy_fingerprint, created_at)
+        VALUES (?, ?, ?, ?, ?)`)
+        .run(row.key_id, leaseId, record.lifecycleRevision, record.policyFingerprint, new Date(timestamp).toISOString());
       return Object.freeze({
         keyId: row.key_id,
         leaseId,
         lifecycleRevision: record.lifecycleRevision,
-        policyFingerprint: record.policyFingerprint,
-        expiresAt: new Date(timestamp + effectLeaseTtlMs).toISOString()
+        policyFingerprint: record.policyFingerprint
       });
     })();
     return result;
@@ -1077,19 +1070,21 @@ export function createApiKeyDistributionWorkerOwner({
     return revalidateAuthorization(input.authorization);
   }
 
-  async function revalidateEffect(lease: any): Promise<void> {
+  async function revalidateEffect(lease: any): Promise<any> {
     if (!object(lease)) fail("api_key_revision_stale", "API Key effect lease is invalid.", 409);
     const activeLease: any = db.prepare(`SELECT * FROM api_key_effect_leases
       WHERE key_id = ? AND lease_id = ?`).get(String(lease.keyId || ""), String(lease.leaseId || ""));
-    if (!activeLease || Number(activeLease.expires_at) <= now()) {
-      fail("api_key_revision_stale", "API Key effect lease expired.", 409);
-    }
+    if (!activeLease) fail("api_key_revision_stale", "API Key effect reservation is unavailable.", 409);
     const row: any = getRow(activeLease.key_id);
     const record: any = recordFromRow(row, now());
     // Exhaustion caused by this reservation is allowed; all other terminal/lifecycle changes fence it.
-    if (!record || !["active", "exhausted"].includes(record.status) || row.status === "revoked" || row.status === "expired" ||
+    if (!record || (row && Date.parse(row.expires_at) <= now()) || !["active", "exhausted"].includes(record.status) ||
+        row.status === "revoked" || row.status === "expired" ||
         record.lifecycleRevision !== activeLease.lifecycle_revision ||
         record.policyFingerprint !== activeLease.policy_fingerprint) {
+      if (row && Date.parse(row.expires_at) <= now()) {
+        fail("api_key_inactive", "API Key expired before effect.", 410);
+      }
       fail("api_key_revision_stale", "API Key lifecycle changed before effect.", 409);
     }
     const { nodesById } = currentNodes();
@@ -1097,6 +1092,15 @@ export function createApiKeyDistributionWorkerOwner({
         organizationLineageDigest(record.organizationNodeId, nodesById) !== record.organizationLineageDigest) {
       fail("api_key_inactive", "API Key organization lineage changed.", 410);
     }
+    return Object.freeze({
+      credentialKind: "scoped_api_key",
+      keyId: record.keyId,
+      workloadPrincipalId: record.workloadPrincipalId,
+      organizationNodeId: record.organizationNodeId,
+      lifecycleRevision: record.lifecycleRevision,
+      policyFingerprint: record.policyFingerprint,
+      policy: record.policy
+    });
   }
 
   async function releaseEffect(lease: any): Promise<void> {
@@ -1107,6 +1111,10 @@ export function createApiKeyDistributionWorkerOwner({
 
   function explainLookupPlan(): any[] {
     return db.prepare("EXPLAIN QUERY PLAN SELECT * FROM api_key_records WHERE key_id = ?").all("_probe_");
+  }
+
+  function close(): void {
+    db.prepare("DELETE FROM api_key_effect_leases").run();
   }
 
   return Object.freeze({
@@ -1122,6 +1130,7 @@ export function createApiKeyDistributionWorkerOwner({
     reserveEffect,
     revalidateEffect,
     releaseEffect,
+    close,
     explainLookupPlan
   });
 }

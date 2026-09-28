@@ -5,7 +5,7 @@
 **公开源码、面向私有化部署的 MCP 平台 —— 为服务与智能体接入提供治理边界。**
 
 [![源码许可证：MIT](https://img.shields.io/badge/%E6%BA%90%E7%A0%81%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-c9a96e?style=flat-square)](LICENSE)
-[![Node.js >=22.18.0 <23 || >=24.3.0](https://img.shields.io/badge/node-%3E%3D22.18.0%20%3C23%20%7C%7C%20%3E%3D24.3.0-4fc3f7?style=flat-square)](package.json)
+[![Node.js >=22.19.0 <23 || >=24.3.0 <25](https://img.shields.io/badge/node-%3E%3D22.19.0%20%3C23%20%7C%7C%20%3E%3D24.3.0%20%3C25-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
 [概览](#概览) · [当前状态](docs/STATUS.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
@@ -73,7 +73,7 @@ Meshrix.js 的产品边界是私有化部署中的服务端治理层：它拥有
 
 ## 快速开始
 
-要求 Node.js `>=22.18.0 <23 || >=24.3.0`。
+要求 Node.js `>=22.19.0 <23 || >=24.3.0 <25`。
 
 **本地运行**
 

@@ -168,6 +168,7 @@ beforeEach(() : any => {
 });
 
 afterEach(() : any => {
+  vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
   document.body.innerHTML = "";
   unregisterConsoleConfirmHost();
@@ -360,7 +361,15 @@ describe("connector configuration snippet", () : any => {
     expect(buildConnectorConfigSnippet("unknown-client", { keyId: "k", displayPrefix: "p" })).toBe("");
   });
 
-  it("scopes the revealed snippet to the first chosen target and copies without acknowledging storage", async () : Promise<any> => {
+  it("uses the resolved HTTPS audience for a named connector without adding a client timeout", () : any => {
+    vi.stubGlobal("window", { location: { protocol: "https:", host: "console.example.test" } });
+    const snippet = buildConnectorConfigSnippet("codex", { keyId: "k", displayPrefix: "p" }, "mcp.example.test:7443");
+    const json = JSON.parse(snippet.slice(snippet.indexOf("{"), snippet.lastIndexOf("}") + 1));
+    expect(json.mcpServers.meshrix.httpUrl).toBe("https://mcp.example.test:7443/mcp");
+    expect(json.mcpServers.meshrix).not.toHaveProperty("timeout");
+  });
+
+  it("builds the revealed snippet for the selected guide without narrowing the key audience", async () : Promise<any> => {
     const client: any = apiKeyClient();
     const copyText: any = vi.fn(async () : Promise<boolean> => true);
     const controller: any = useConsoleApiKeyDistributionController({
@@ -369,11 +378,12 @@ describe("connector configuration snippet", () : any => {
     await controller.refresh();
     Object.assign(controller.draft.value, {
       workloadDisplayName: "Build worker", organizationNodeId: "organization-a", expiresAt: futureExpiryInput(),
-      selectedToolsetIds: ["toolset-a"], selectedTargetIds: ["codex"],
+      selectedToolsetIds: ["toolset-a"], selectedClientGuide: "codex", selectedTargetIds: [],
     });
     await controller.create();
 
     expect(controller.connectorSnippet.value).toContain("codex");
+    expect(client.create.mock.calls[0][0].policy.audience.targetIds).toEqual([]);
     expect(controller.connectorSnippet.value).toContain("key-public-id");
     expect(controller.connectorSnippet.value).toContain("mxak1.pub");
     expect(controller.connectorSnippet.value).toContain(CONNECTOR_SNIPPET_SECRET_PLACEHOLDER);
@@ -414,7 +424,7 @@ describe("key-reveal step snippet rendering", () : any => {
       expect(button).toBeDefined();
       await button.trigger("click");
     };
-    await wrapper.find('[data-testid="agent-target-select"]').setValue("codex");
+    await wrapper.find('[data-testid="client-guide-select"]').setValue("codex");
     await wrapper.findAll(".api-key-form-grid input")[0].setValue("Build worker");
     await wrapper.findAll(".api-key-form-grid select")[1].setValue("organization-a");
     await wrapper.findAll(".api-key-form-grid input")[1].setValue(futureExpiryInput());

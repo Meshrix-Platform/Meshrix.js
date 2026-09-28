@@ -6,7 +6,9 @@ description: Publish an external service (HTTP, JSON-RPC, MCP, or host stdio com
 # Meshrix.js Upstream Service Publishing
 
 This skill owns **publishing a service into a Meshrix.js instance** through
-the authenticated upstream publication path. The release verification lanes
+the authenticated upstream publication path. The portable service document
+and Console MCP form admit remote HTTP only; host stdio remains an internal
+legacy runtime path and is not portable. The release verification lanes
 belong to `$meshrix-js-release-journey-producer`, the portable HTML report to
 `$meshrix-js-html-report-contract`, and the client compatibility matrix to
 `$meshrix-js-client-compatibility-matrix`; do not run those lanes from this
@@ -41,7 +43,7 @@ The Core terminal success is `server_published` after the gateway, Operation Per
 ## Enforce security and consistency
 
 - Treat user input as untrusted data, not as configuration syntax. Normalize through a closed schema, reject unknown and duplicate keys, bound bytes, depth, collections, and strings, and reject prototype keys and control characters.
-- Derive storage paths from server-owned identifiers. Do not accept a caller path, filename, command, environment-variable name, arbitrary header name, or template fragment.
+- Derive storage paths from server-owned identifiers. Do not accept a caller path, filename, command, environment-variable name, or template fragment. Allow request-context headers only through the declarative `descriptor.mcp.headers` field; keep credentials in typed references.
 - Store private keys, tokens, and certificate material only through typed secret references. Bind each reference to the service, target, protocol, scopes, and revision before materialization.
 - Separate the control-plane writer identity from the gateway reader identity. Reject symlinks and non-regular files; validate ownership and mode before loading.
 - Use durable staging, file synchronization, atomic replacement, directory synchronization, revision digests, and rollback. Do not mutate a live descriptor object in place.
@@ -116,7 +118,7 @@ CSRF token (`X-CSRF-Token` and `X-Meshrix-CSRF`), and
   "descriptor": {
     "serviceProtocol": "http",              // http | json-rpc | mcp
     "label": "My Service",
-    "baseUrl": "http://host:port",          // explicit port, no credentials
+    "baseUrl": "https://api.example/v1",    // HTTP(S), optional port, no credentials
     "allowLocalNetwork": true,              // required for private/loopback targets
     "operations": [{
       "operationKey": "root",
@@ -149,6 +151,7 @@ MCP services derive tools/call from the remote catalog and must not carry an
   "mcp": {
     "transport": "http",                  // remote HTTP only; stdio is rejected
     "url": "http://<service-host>:<port>/mcp",  // must pass the remote-URL validation
+    "protocolVersion": "2026-07-28",     // modern HTTP discovery, without initialize/session
     "headers": {                          // optional declarative request headers
       "x-valorius-project": "<project>"   // supported per ADR-0001; values are
     }                                     // plain strings, injection syntax rejected
@@ -175,12 +178,15 @@ actual addresses, tokens, and scopes for the instance at hand.
    `curl` the MCP endpoint before publishing: a `401`/`403` response proves
    reachability (the service is asking for credentials), while a timeout or
    connection failure means the port is not exposed.
-2. **Confirm the MCP protocol version.** The gateway accepts the supported set
-   in `MCP_SUPPORTED_PROTOCOL_VERSIONS` (see
-   `packages/protocols/mcp/upstream-mcp-transport-common.ts`). The server
-   selects the version it returns during `initialize`; if the upstream service
-   speaks an older version, either upgrade it or add the version to the
-   supported set.
+2. **Select the protocol version supported by the upstream endpoint.** Remote
+   HTTP `2026-07-28` uses modern `server/discover` without an initialize or
+   session handshake. The legacy HTTP/session path and internal legacy stdio
+   path use their configured legacy versions and initialize/session lifecycle.
+   `MCP_SUPPORTED_PROTOCOL_VERSIONS` in
+   `packages/protocols/mcp/upstream-mcp-transport-common.ts` describes the
+   legacy path, not modern discovery. Portable MCP documents require a remote
+   HTTP transport. Do not add an unsupported version for one peer without
+   updating the owning transport contract and its verification.
 3. **Non-sensitive request context goes in `mcp.headers`** (for example
    `x-valorius-project`). Sensitive material (Authorization, API keys) must
    never go there: the publishing contract rejects it with
@@ -242,10 +248,11 @@ actual addresses, tokens, and scopes for the instance at hand.
   first.
 - `upstream_publishing_idempotency_invalid` / `service_key_invalid`:
   idempotency key or service key fails its pattern.
-- `descriptor.baseUrl must be a remote URL`: the URL is missing or does not
-  carry an explicit port; check the actual request body, not only the format.
-- `descriptor.baseUrl must use an HTTP transport with an explicit port`:
-  add the port, strip credentials.
+- `descriptor.baseUrl must be a remote URL`: the URL is missing or malformed;
+  check the actual request body, not only the format.
+- `descriptor.baseUrl must use an HTTP(S) URL without embedded credentials`:
+  use HTTP or HTTPS and remove any username or password from the URL. The port
+  may be omitted to use the scheme default or specified explicitly.
 - Health `ok: false` with `status: 0`: the gateway egress policy rejected or
   could not reach the target. Loopback/private targets need
   `allowLocalNetwork: true`; special hostnames such as `host.docker.internal`

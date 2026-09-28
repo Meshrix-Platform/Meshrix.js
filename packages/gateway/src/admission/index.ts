@@ -1,5 +1,7 @@
 import { abortError, boundedInteger } from "../utils.ts";
 
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 export interface AdmissionOptions {
   readonly maxInFlight?: number;
   readonly queueSize?: number;
@@ -12,7 +14,7 @@ interface Waiting<T> {
   readonly resolve: (value: T | PromiseLike<T>) => void;
   readonly reject: (reason?: unknown) => void;
   readonly signal?: AbortSignal;
-  readonly deadline: number;
+  readonly deadline?: number;
   timer?: ReturnType<typeof setTimeout>;
   abortListener?: () => void;
   settled: boolean;
@@ -33,7 +35,7 @@ function admissionError(code: string, message: string, status = 429): Error & { 
 export class UpstreamAdmissionController {
   readonly #maxInFlight: number;
   readonly #queueSize: number;
-  readonly #defaultQueueDeadlineMs: number;
+  readonly #defaultQueueDeadlineMs?: number;
   readonly #maxBuckets: number;
   readonly #buckets = new Map<string, Bucket>();
   #closed = false;
@@ -41,7 +43,10 @@ export class UpstreamAdmissionController {
   constructor(options: AdmissionOptions = {}) {
     this.#maxInFlight = boundedInteger(options.maxInFlight, 32, 1, 65_536);
     this.#queueSize = boundedInteger(options.queueSize, 128, 0, 1_000_000);
-    this.#defaultQueueDeadlineMs = boundedInteger(options.defaultQueueDeadlineMs, 30_000, 1, 86_400_000);
+    if (options.defaultQueueDeadlineMs !== undefined && (!Number.isSafeInteger(options.defaultQueueDeadlineMs) || options.defaultQueueDeadlineMs < 1)) {
+      throw new RangeError("The upstream queue deadline must be a positive safe integer.");
+    }
+    this.#defaultQueueDeadlineMs = options.defaultQueueDeadlineMs;
     this.#maxBuckets = boundedInteger(options.maxBuckets, 2048, 1, 65_536);
   }
 
@@ -54,13 +59,21 @@ export class UpstreamAdmissionController {
       throw admissionError("admission_queue_full", "The upstream admission queue is full.");
     }
     if (options.signal?.aborted) throw abortError();
-    const deadline = options.deadline ?? Date.now() + this.#defaultQueueDeadlineMs;
+    const deadline = options.deadline ?? (this.#defaultQueueDeadlineMs === undefined ? undefined : Date.now() + this.#defaultQueueDeadlineMs);
+    if (deadline !== undefined && !Number.isSafeInteger(deadline)) {
+      bucket.rejected += 1;
+      throw admissionError("admission_queue_deadline_invalid", "The request queue deadline must be a safe integer timestamp.", 400);
+    }
+    if (deadline !== undefined && deadline <= Date.now()) {
+      bucket.rejected += 1;
+      throw admissionError("admission_queue_deadline", "The request expired while waiting for upstream capacity.");
+    }
     return new Promise<T>((resolve, reject) => {
-      const waiter: Waiting<T> = { task, resolve, reject, signal: options.signal, deadline, settled: false };
+      const waiter: Waiting<T> = { task, resolve, reject, signal: options.signal, ...(deadline !== undefined ? { deadline } : {}), settled: false };
       const rejectWaiter = (reason: unknown): void => {
         if (waiter.settled) return;
         waiter.settled = true;
-        if (waiter.timer) clearTimeout(waiter.timer);
+        if (waiter.timer !== undefined) clearTimeout(waiter.timer);
         if (waiter.abortListener) waiter.signal?.removeEventListener("abort", waiter.abortListener);
         const index = bucket.queue.indexOf(waiter as Waiting<unknown>);
         if (index >= 0) bucket.queue.splice(index, 1);
@@ -70,8 +83,19 @@ export class UpstreamAdmissionController {
       const onAbort = (): void => rejectWaiter(abortError());
       waiter.abortListener = onAbort;
       options.signal?.addEventListener("abort", onAbort, { once: true });
-      waiter.timer = setTimeout(() => rejectWaiter(admissionError("admission_queue_deadline", "The request expired while waiting for upstream capacity.")), Math.max(0, deadline - Date.now()));
       bucket.queue.push(waiter as Waiting<unknown>);
+      if (deadline !== undefined) {
+        const armDeadlineTimer = (): void => {
+          if (waiter.settled) return;
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) {
+            rejectWaiter(admissionError("admission_queue_deadline", "The request expired while waiting for upstream capacity."));
+            return;
+          }
+          waiter.timer = setTimeout(armDeadlineTimer, Math.min(MAX_TIMER_DELAY_MS, remaining));
+        };
+        armDeadlineTimer();
+      }
     });
   }
 
@@ -80,7 +104,7 @@ export class UpstreamAdmissionController {
     for (const bucket of this.#buckets.values()) {
       for (const waiter of bucket.queue.splice(0)) {
         waiter.settled = true;
-        if (waiter.timer) clearTimeout(waiter.timer);
+        if (waiter.timer !== undefined) clearTimeout(waiter.timer);
         if (waiter.abortListener) waiter.signal?.removeEventListener("abort", waiter.abortListener);
         waiter.reject(admissionError("gateway_closing", "Gateway admission closed before execution.", 503));
       }
@@ -119,8 +143,13 @@ export class UpstreamAdmissionController {
       const waiter = bucket.queue.shift();
       if (!waiter || waiter.settled) continue;
       waiter.settled = true;
-      if (waiter.timer) clearTimeout(waiter.timer);
+      if (waiter.timer !== undefined) clearTimeout(waiter.timer);
       if (waiter.abortListener) waiter.signal?.removeEventListener("abort", waiter.abortListener);
+      if (waiter.deadline !== undefined && waiter.deadline <= Date.now()) {
+        bucket.rejected += 1;
+        waiter.reject(admissionError("admission_queue_deadline", "The request expired while waiting for upstream capacity."));
+        continue;
+      }
       void this.#execute(bucket, waiter.task).then(waiter.resolve, waiter.reject);
     }
   }

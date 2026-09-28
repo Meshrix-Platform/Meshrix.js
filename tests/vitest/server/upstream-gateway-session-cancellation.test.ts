@@ -21,9 +21,13 @@ vi.mock("@meshrix/foundation/security/secrets/local-secret-store", () : any => (
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { resolveMcpServiceConfigWithCredentials } from "../../../packages/agents/src/upstream-gateway/credential-material.ts";
 import { compileUpstreamOperationCapability } from "../../../packages/agents/src/upstream-gateway/operation-capability.ts";
+import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
+import { createPlatformMcpGateway } from "../../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { createUpstreamGatewayOperationExecutor } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/upstream-gateway-executor.ts";
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { modernHttpRequest } from "../gateway/support.ts";
 
 function fixtureTools() : any {
   return ["state.increment", "state.probe", "work.slow", "work.peer"].map((name?: any) : any => ({
@@ -46,20 +50,14 @@ async function registryFixture(mcpSessionManager?: any, overrides: Record<string
         maxConcurrent: 2
       },
       mcp: {
-        transport: "stdio",
-        command: "fixture-command",
+        transport: "http",
+        url: "https://session-fixture.invalid/mcp",
+        protocolVersion: "2025-06-18",
         env: { FIXTURE_TOKEN: "private-config-value" },
         toolNamePrefix: "session-fixture",
         toolsCacheTtlMs: 60_000,
         timeoutMs: 10_000
       },
-      operations: [{
-        operationKey: "tools/call",
-        protocol: "mcp",
-        risk: "read_only",
-        requiredScopes: ["gateway:read"],
-        timeoutMs: 10_000
-      }],
       ...overrides
     }];
   const registry: any = createUpstreamGatewayRegistry({
@@ -69,11 +67,44 @@ async function registryFixture(mcpSessionManager?: any, overrides: Record<string
   installUpstreamRuntimeServices(registry, services);
   return {
     registry,
+    userDataPath,
     async cleanup() : Promise<any> {
       await registry.close();
       await fs.rm(userDataPath, { recursive: true, force: true });
     }
   };
+}
+
+function controlledSessionManager(onCall: (input: Record<string, any>) => Promise<any>, observedConfigs: any[] = []) : any {
+  return createUpstreamMcpSessionManager({
+    fetchTransport: async (_url: string, init: Record<string, any>, options: Record<string, any> = {}) : Promise<Response> => {
+      const config = options.config || {};
+      observedConfigs.push(config);
+      const message = JSON.parse(String(init.body || "{}"));
+      const sessionId = `fixture-${config.sessionKey || "session"}`;
+      const headers = { "content-type": "application/json", "mcp-session-id": sessionId };
+      if (String(init.method || "POST").toUpperCase() === "DELETE") return new Response(null, { status: 204, headers });
+      if (message.method === "initialize") {
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: {
+          protocolVersion: "2025-06-18",
+          capabilities: { tools: {} },
+          serverInfo: { name: "session-fixture", version: "1" }
+        } }), { status: 200, headers });
+      }
+      if (message.method === "notifications/initialized" || message.method === "notifications/cancelled") {
+        return new Response(null, { status: 202, headers });
+      }
+      if (message.method === "tools/list") {
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { tools: fixtureTools() } }), { status: 200, headers });
+      }
+      if (message.method === "tools/call") {
+        if (typeof options.beforeFetch === "function") await options.beforeFetch();
+        const result = await onCall({ config, call: message.params || {}, signal: init.signal });
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }), { status: 200, headers });
+      }
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Unsupported fixture method." } }), { status: 200, headers });
+    }
+  });
 }
 
 const SESSION_PUBLIC_TOOLS: readonly any[] = Object.freeze([
@@ -85,7 +116,7 @@ const SESSION_PUBLIC_TOOLS: readonly any[] = Object.freeze([
 
 function readSubject(overrides: Record<string, any> = {}) : any {
   return executionSubject({
-    scopes: ["gateway:read"],
+    scopes: ["gateway:read", "gateway:write"],
     publicToolNames: [...SESSION_PUBLIC_TOOLS],
     ...overrides
   });
@@ -116,11 +147,80 @@ function observePromise(promise?: any) : any {
   );
 }
 
+function publicGatewayFailure(response: any) : string {
+  return JSON.stringify({
+    status: response?.status,
+    code: response?.body?.error?.data?.code || response?.body?.error?.code || "",
+    message: String(response?.body?.error?.message || "").slice(0, 160)
+  });
+}
+
 function rejectStartupIfSettledEarly(observed?: any, label?: any) : any {
   return observed.then((outcome?: any) : any => {
     if (outcome.status === "rejected") throw outcome.reason;
-    throw new Error(`${label} completed before both requests started.`);
+    throw new Error(`${label} completed before both requests started: ${publicGatewayFailure(outcome.value)}`);
   });
+}
+
+async function authorizedPlatformFixture(mcpSessionManager?: any, overrides: Record<string, any> = {}, initialSubject: any = readSubject()) : Promise<any> {
+  const fixture: any = await registryFixture(mcpSessionManager, overrides);
+  const proofSubstrate: any = createOperationProofSubstrate({ dataDir: path.join(fixture.userDataPath, "proof") });
+  let activeSubject: any = initialSubject;
+  const platform: any = createPlatformMcpGateway({
+    upstreamGatewayRegistry: fixture.registry,
+    operationProofSubstrate: proofSubstrate,
+    toolSkillManagementProvider: {
+      authorizeMcpClientRequest: async () => ({
+        ok: true,
+        tenantId: "session-fixture-tenant",
+        workloadPrincipalId: activeSubject.subjectId,
+        grant: { ...activeSubject.grant, scopes: activeSubject.scopes },
+        subject: { ...activeSubject, grant: { ...activeSubject.grant, scopes: activeSubject.scopes } }
+      }),
+      listVisibleTools: () => []
+    }
+  });
+  let requestId = 0;
+  const send = (method: string, params: Record<string, any> = {}, subject: any = initialSubject, options: Record<string, any> = {}) => {
+    activeSubject = subject;
+    return platform.adapter.handle({
+      ...modernHttpRequest(method, `session-${++requestId}`, params),
+      ...(options.signal ? { signal: options.signal } : {})
+    });
+  };
+
+  try {
+    await platform.gateway.start();
+    const listed: any = await send("tools/list");
+    const tools: any[] = listed.body?.result?.tools || [];
+    const namesByUpstreamTool: any = new Map(
+      tools
+        .filter((tool?: any) : any => tool?._meta?.serviceId === "session-fixture")
+        .map((tool?: any) : any => [tool._meta.upstreamToolName, tool.name])
+    );
+    if (!namesByUpstreamTool.size) throw new Error("Authorized session fixture tools were not published.");
+    return {
+      registry: fixture.registry,
+      platform,
+      proofSubstrate,
+      namesByUpstreamTool,
+      call(toolName: string, args: Record<string, any> = {}, subject: any = initialSubject, options: Record<string, any> = {}) {
+        const publicName = namesByUpstreamTool.get(toolName);
+        if (!publicName) throw new Error("Authorized session fixture tool is unavailable.");
+        return send("tools/call", { name: publicName, arguments: args }, subject, options);
+      },
+      async cleanup() : Promise<void> {
+        await platform.close();
+        await proofSubstrate.close();
+        await fixture.cleanup();
+      }
+    };
+  } catch (error) {
+    await platform.close();
+    await proofSubstrate.close();
+    await fixture.cleanup();
+    throw error;
+  }
 }
 
 describe("upstream gateway session ownership and cancellation", () : any => {
@@ -159,58 +259,28 @@ describe("upstream gateway session ownership and cancellation", () : any => {
   it("keeps increment and probe on one registry-owned upstream session identity", async () : Promise<any> => {
     const stateByKey: any = new Map<any, any>();
     const observedConfigs: any[] = [];
-    const manager: Record<string, any> = {
-      async listTools(config?: any) : Promise<any> {
-        observedConfigs.push(config);
-        return { initialized: {}, tools: fixtureTools() };
-      },
-      async callTool(config?: any, call?: any) : Promise<any> {
-        observedConfigs.push(config);
-        const sessionKey: any = String(config.sessionKey || "");
-        if (call.name === "state.increment") {
-          stateByKey.set(sessionKey, Number(stateByKey.get(sessionKey) || 0) + 1);
-        }
-        return {
-          initialized: {},
-          result: { structuredContent: { state: Number(stateByKey.get(sessionKey) || 0) } }
-        };
-      },
-      close: vi.fn(async () : Promise<any> => {})
-    };
-    const { registry, cleanup } = await registryFixture(manager);
+    const manager: any = controlledSessionManager(async ({ config, call }: Record<string, any>) : Promise<any> => {
+      const sessionKey: any = String(config.sessionKey || "");
+      if (call.name === "state.increment") {
+        stateByKey.set(sessionKey, Number(stateByKey.get(sessionKey) || 0) + 1);
+      }
+      return { structuredContent: { state: Number(stateByKey.get(sessionKey) || 0) } };
+    }, observedConfigs);
+    const closeManager = vi.spyOn(manager, "close");
+    const { registry, call, cleanup } = await authorizedPlatformFixture(manager);
     const primary: any = readSubject();
     const other: any = otherSubject();
 
     try {
-      await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.increment",
-        { arguments: {} },
-        primary
-      );
-      const probed: any = await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.probe",
-        { arguments: {} },
-        primary
-      );
-      await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.increment",
-        { arguments: {} },
-        other
-      );
-      const otherProbed: any = await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.probe",
-        { arguments: {} },
-        other
-      );
-      const primaryAgain: any = await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.probe",
-        { arguments: {} },
-        primary
-      );
+      await call("state.increment", {}, primary);
+      const probed: any = await call("state.probe", {}, primary);
+      await call("state.increment", {}, other);
+      const otherProbed: any = await call("state.probe", {}, other);
+      const primaryAgain: any = await call("state.probe", {}, primary);
 
-      expect(probed.response.structuredContent).toEqual({ state: 1 });
-      expect(otherProbed.response.structuredContent).toEqual({ state: 1 });
-      expect(primaryAgain.response.structuredContent).toEqual({ state: 1 });
+      expect(probed.body?.result?.structuredContent, publicGatewayFailure(probed)).toEqual({ state: 1 });
+      expect(otherProbed.body?.result?.structuredContent, publicGatewayFailure(otherProbed)).toEqual({ state: 1 });
+      expect(primaryAgain.body?.result?.structuredContent, publicGatewayFailure(primaryAgain)).toEqual({ state: 1 });
       const discoveryConfigs: any[] = observedConfigs.filter(isDiscoveryConfig);
       const executionConfigs: any[] = observedConfigs.filter(isExecutionConfig);
       const primaryKeys: any[] = executionConfigs
@@ -230,27 +300,21 @@ describe("upstream gateway session ownership and cancellation", () : any => {
     } finally {
       await cleanup();
     }
-    expect(manager.close).toHaveBeenCalledOnce();
+    expect(closeManager).toHaveBeenCalledOnce();
   });
 
   it("changes the session identity when a referenced credential revision changes", async () : Promise<any> => {
     const callConfigs: any[] = [];
-    const manager: Record<string, any> = {
-      async listTools() : Promise<any> {
-        return { initialized: {}, tools: fixtureTools() };
-      },
-      async callTool(config?: any) : Promise<any> {
-        callConfigs.push(config);
-        return { initialized: {}, result: { structuredContent: { ok: true } } };
-      },
-      close: vi.fn(async () : Promise<any> => {})
-    };
+    const manager: any = controlledSessionManager(async ({ config }: Record<string, any>) : Promise<any> => {
+      callConfigs.push(config);
+      return { structuredContent: { ok: true } };
+    });
     secretMaterial.revision = 1;
     secretMaterial.value = "private-secret-generation-one";
     const credentialRef: any = "secret://fixture/session";
     const probeCapability: any = compileUpstreamOperationCapability(
       { serviceId: "session-fixture", serviceProtocol: "mcp", credentialRefs: [credentialRef] },
-      { operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] },
+      { operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] },
       { upstreamToolName: "state.probe" }
     );
     const credentialSubject: any = readSubject({
@@ -265,23 +329,17 @@ describe("upstream gateway session ownership and cancellation", () : any => {
         allowedSecretBindings: [...probeCapability.credentialBindingIds]
       }
     });
-    const { registry, cleanup } = await registryFixture(manager, {
+    const { call, cleanup } = await authorizedPlatformFixture(manager, {
       credentialRefs: [credentialRef]
-    });
+    }, credentialSubject);
 
     try {
-      await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.probe",
-        { arguments: {} },
-        credentialSubject
-      );
+      const first: any = await call("state.probe", {}, credentialSubject);
+      expect(first.body?.result, publicGatewayFailure(first)).toBeDefined();
       secretMaterial.revision = 2;
       secretMaterial.value = "private-secret-generation-two";
-      await registry.callMcpToolByPublicName(
-        "upstream.session-fixture.state.probe",
-        { arguments: {} },
-        credentialSubject
-      );
+      const second: any = await call("state.probe", {}, credentialSubject);
+      expect(second.body?.result, publicGatewayFailure(second)).toBeDefined();
 
       expect(callConfigs).toHaveLength(2);
       expect(callConfigs[0].sessionKey).not.toBe(callConfigs[1].sessionKey);
@@ -332,20 +390,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
   });
 
   it("preserves caller cancellation while discovering upstream MCP tools", async () : Promise<any> => {
-    const manager: Record<string, any> = {
-      async listTools(_config: any, { signal }: Record<string, any>) : Promise<any> {
-        if (signal?.aborted) {
-          throw Object.assign(new Error("private discovery cancellation detail"), {
-            name: "AbortError"
-          });
-        }
-        return { initialized: {}, tools: fixtureTools() };
-      },
-      async callTool() : Promise<any> {
-        return { initialized: {}, result: { structuredContent: {} } };
-      },
-      close: vi.fn(async () : Promise<any> => {})
-    };
+    const manager: any = controlledSessionManager(async () : Promise<any> => ({ structuredContent: {} }));
     const { registry, cleanup } = await registryFixture(manager);
     const abortController: any = new AbortController();
     abortController.abort(new Error("private caller cancellation detail"));
@@ -373,53 +418,37 @@ describe("upstream gateway session ownership and cancellation", () : any => {
     const slowStarted: any = new Promise((resolve?: any) : any => { markSlowStarted = resolve; });
     const peerStarted: any = new Promise((resolve?: any) : any => { markPeerStarted = resolve; });
     const peerRelease: any = new Promise((resolve?: any) : any => { releasePeer = resolve; });
-    const manager: Record<string, any> = {
-      async listTools() : Promise<any> {
-        return { initialized: {}, tools: fixtureTools() };
-      },
-      async callTool(_config: any, call: any, { signal }: Record<string, any>) : Promise<any> {
-        if (call.name === "work.slow") {
-          markSlowStarted();
-          await new Promise((resolve?: any, reject?: any) : any => {
-            const cancel: any = () : any => {
-              cancelNotifications += 1;
-              const error: any = Object.assign(new Error("private upstream cancellation detail"), {
-                name: "AbortError",
-                reasonCode: "upstream_mcp_cancelled"
-              });
-              reject(error);
-            };
-            if (signal.aborted) cancel();
-            else signal.addEventListener("abort", cancel, { once: true });
-          });
-          slowSideEffects += 1;
-        }
-        if (call.name === "work.peer") {
-          markPeerStarted();
-          await peerRelease;
-          peerSideEffects += 1;
-          return { initialized: {}, result: { structuredContent: { completed: true } } };
-        }
-        return { initialized: {}, result: { structuredContent: {} } };
-      },
-      close: vi.fn(async () : Promise<any> => {})
-    };
-    const { registry, cleanup } = await registryFixture(manager);
+    const manager: any = controlledSessionManager(async ({ call, signal }: Record<string, any>) : Promise<any> => {
+      if (call.name === "work.slow") {
+        markSlowStarted();
+        await new Promise((resolve?: any, reject?: any) : any => {
+          const cancel: any = () : any => {
+            cancelNotifications += 1;
+            const error: any = Object.assign(new Error("private upstream cancellation detail"), {
+              name: "AbortError",
+              reasonCode: "upstream_mcp_cancelled"
+            });
+            reject(error);
+          };
+          if (signal.aborted) cancel();
+          else signal.addEventListener("abort", cancel, { once: true });
+        });
+        slowSideEffects += 1;
+      }
+      if (call.name === "work.peer") {
+        markPeerStarted();
+        await peerRelease;
+        peerSideEffects += 1;
+        return { structuredContent: { completed: true } };
+      }
+      return { structuredContent: {} };
+    });
+    const { registry, call, proofSubstrate, cleanup } = await authorizedPlatformFixture(manager);
     const abortController: any = new AbortController();
 
     try {
-      await registry.listMcpTools();
-      const slow: any = registry.callMcpToolByPublicName(
-        "upstream.session-fixture.work.slow",
-        { arguments: {} },
-        readSubject(),
-        { signal: abortController.signal }
-      );
-      const peer: any = registry.callMcpToolByPublicName(
-        "upstream.session-fixture.work.peer",
-        { arguments: {} },
-        readSubject()
-      );
+      const slow: any = call("work.slow", {}, readSubject(), { signal: abortController.signal });
+      const peer: any = call("work.peer", {}, readSubject());
       const slowObserved: any = observePromise(slow);
       const peerObserved: any = observePromise(peer);
       const started: any = Promise.all([slowStarted, peerStarted]);
@@ -436,12 +465,9 @@ describe("upstream gateway session ownership and cancellation", () : any => {
 
       abortController.abort(new Error("private caller cancellation detail"));
       const cancelled: any = await slowObserved;
-      expect(cancelled.status).toBe("rejected");
-      expect(cancelled.reason).toMatchObject({
-        status: 499,
-        reasonCode: "upstream_mcp_cancelled",
-        message: "Upstream MCP request was cancelled."
-      });
+      expect(cancelled.status).toBe("fulfilled");
+      expect(cancelled.value.status).toBe(200);
+      expect(cancelled.value.body.error?.data).toMatchObject({ code: "ABORT_ERR", effectOutcome: "unknown" });
       expect(registry.previewPolicy({
         serviceId: "session-fixture",
         operationKey: "tools/call"
@@ -451,8 +477,8 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       const peerCompleted: any = await peerObserved;
       expect(peerCompleted.status).toBe("fulfilled");
       expect(peerCompleted.value).toMatchObject({
-        ok: true,
-        response: { structuredContent: { completed: true } }
+        status: 200,
+        body: { result: { structuredContent: { completed: true } } }
       });
       expect(registry.previewPolicy({
         serviceId: "session-fixture",
@@ -461,10 +487,12 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       expect(cancelNotifications).toBe(1);
       expect(slowSideEffects).toBe(0);
       expect(peerSideEffects).toBe(1);
-      const auditText: any = JSON.stringify(registry.listAudit({ limit: 20 }));
-      expect(auditText).toContain("upstream_mcp_cancelled");
-      expect(auditText).not.toContain("private caller cancellation detail");
-      expect(auditText).not.toContain("private upstream cancellation detail");
+      const cancellationText: any = JSON.stringify(cancelled.value.body);
+      expect(cancellationText).not.toContain("private caller cancellation detail");
+      expect(cancellationText).not.toContain("private upstream cancellation detail");
+      const receipts: any[] = await proofSubstrate.listReceipts({ limit: 100 });
+      const operationReceipts: any[] = receipts.filter((receipt?: any) : any => receipt.operationId === "upstream.mcp.session-fixture.tools/call");
+      expect(operationReceipts.map((receipt?: any) : any => receipt.status)).toEqual(expect.arrayContaining(["in_doubt", "succeeded"]));
     } finally {
       abortController.abort();
       releasePeer?.();

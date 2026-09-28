@@ -168,6 +168,8 @@ These terms stay required and are not remaining work to weaken:
 
 The gateway kernel is a small public package with injected policy, credential,
 catalog, upstream, resource, prompt, and lifecycle ports. It is not a built-in
-general-purpose orchestrator. Modern MCP and explicitly supported legacy
-profiles share the same governed invocation boundary, while optional business
-events and collaboration remain separate adapters.
+general-purpose orchestrator. Downstream MCP client access and upstream service
+adaptation are separate protocol boundaries. Each declared profile must use the
+same governed invocation boundary; an upstream adapter does not establish
+support for a downstream client profile. Optional business events and
+collaboration remain separate adapters.

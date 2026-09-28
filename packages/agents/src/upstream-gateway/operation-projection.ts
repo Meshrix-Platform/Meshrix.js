@@ -24,86 +24,43 @@ function projectedForwardInputSchema(operation: Record<string, any> = {}) : any 
   const requestSchema: any = operation.requestSchema && typeof operation.requestSchema === "object" && !Array.isArray(operation.requestSchema)
     ? operation.requestSchema
     : { type: "object" };
-  const requestProperties: any = requestSchema.properties && typeof requestSchema.properties === "object" && !Array.isArray(requestSchema.properties)
-    ? requestSchema.properties
-    : {};
-  return Object.freeze({
-    type: "object",
-    additionalProperties: true,
-    // Declare forward envelope fields so Operation Permission keeps body/query wrappers
-    // when MCP/console callers use the same shape as gateway.forward.
-    properties: Object.freeze({
-      ...requestProperties,
-      serviceId: { type: "string" },
-      operationKey: { type: "string" },
-      toolName: { type: "string" },
-      arguments: { type: "object" },
-      query: { type: "object" },
-      params: { type: "object" },
-      rpcParams: { type: "object" },
-      rpcId: { type: "string" },
-      body: {},
-      bodyJson: {},
-      payload: { type: "object" }
-    })
-  });
-}
-
-const FORWARD_INPUT_KEYS: readonly string[] = Object.freeze([
-  "body",
-  "bodyJson",
-  "payload",
-  "query",
-  "params",
-  "rpcParams",
-  "arguments"
-]);
-
-function speaksForwardEnvelope(input: Record<string, any> = {}) : any {
-  return FORWARD_INPUT_KEYS.some((key: any) : any => Object.prototype.hasOwnProperty.call(input, key));
+  if (Object.keys(requestSchema).length === 0) return { type: "object" };
+  // Operation Permission publishes and validates the caller's actual arguments. Keep the
+  // complete operator-declared schema intact; the internal forwarding envelope is formed
+  // only after that input has been approved and bound to its execution.
+  return structuredClone(requestSchema);
 }
 
 /**
- * The governed input of a projected operation addressed as a tool.
+ * Map the caller's declared arguments to the configured operation's internal forward
+ * representation. This runs after Operation Permission has validated and bound the raw
+ * argument object. In particular, argument names such as `body` and `query` have no special
+ * meaning here: they remain business data inside the selected representation.
  *
- * A projected operation is published as a tool, so a caller may send the operation's own
- * arguments instead of the forward envelope the operation executes. Such a call must be
- * shaped here — before the governed execution records, authorizes, and binds its input —
- * because the input a permit is issued for and the input a pending approval records and
- * replays must be the same one. A caller that already speaks the envelope keeps it as it
- * is; bare arguments are placed where the operation's request representation reads them,
- * and an MCP upstream tool call carries the upstream tool it addressed, which is per call
- * and which an approved resume can no longer recover once the record is written.
- *
- * `discoveredToolCall` marks a call that addressed a discovered upstream tool by its own
- * name. Such a tool publishes its own operation's request content as its input schema, not
- * the forward envelope, so its caller's arguments are placed as the operation's arguments
- * even when one of them happens to be named like an envelope key.
- *
- * Every fact used here comes from the platform's own projection of the operation (never
- * from an upstream tool annotation).
+ * Every routing fact comes from the platform's own operation projection (never from an
+ * upstream tool annotation).
  */
 export function projectedOperationForwardInput(
   metadata: Record<string, any> = {},
-  input: Record<string, any> = {},
-  { discoveredToolCall = false }: Record<string, any> = {}
+  input: Record<string, any> = {}
 ) : any {
   const args: any = object(input);
-  const routed: Record<string, any> = {};
   if (metadata.upstreamMcp === true) {
     const toolName: any = text(metadata.upstreamToolName);
-    if (toolName) routed.toolName = toolName;
+    if (toolName) return { toolName, arguments: args };
+    // A service-level MCP tools/call operation is an internal authority record. Its
+    // established caller supplies the complete {toolName, arguments} call envelope.
+    return args;
   }
-  if (!discoveredToolCall && speaksForwardEnvelope(args)) return { ...routed, ...args };
   const protocol: any = text(metadata.protocol).toLowerCase();
   const declaredRequestMode: any = text(object(object(metadata.payloadTransport).request).mode);
   if (declaredRequestMode === "artifact_body" || declaredRequestMode === "artifact_multipart") {
-    return { ...routed, arguments: args };
+    return { arguments: args };
   }
-  if (metadata.upstreamMcp === true || protocol === "mcp") return { ...routed, arguments: args };
-  if (protocol === "json-rpc") return { ...routed, rpcParams: args };
-  if (["GET", "HEAD"].includes(text(metadata.method).toUpperCase())) return { ...routed, query: args };
-  return { ...routed, body: args };
+  if (protocol === "mcp") return { arguments: args };
+  if (protocol === "json-rpc") return { rpcParams: args };
+  if (["GET", "HEAD"].includes(text(metadata.method).toUpperCase())) return { query: args };
+  return { body: args };
 }
 
 export function compileUpstreamOperationProjection(snapshot?: any) : any {
@@ -138,7 +95,11 @@ export function compileUpstreamOperationProjection(snapshot?: any) : any {
         concurrency: risk === "read_only"
           ? { workloadClass: "light", maxParallel: 64, cost: 1 }
           : { workloadClass: "standard", key: `upstream:${serviceId}`, maxParallel: 1, cost: 2 },
-        execution: { timeoutMs: operation.timeoutMs || 30_000 },
+        execution: {
+          timeoutMs: operation.timeoutMs ??
+            (service.serviceProtocol === "mcp" ? service.mcp?.timeoutMs : undefined) ??
+            null
+        },
         safety: {
           risk,
           requiresConfirmation: requiresApproval,

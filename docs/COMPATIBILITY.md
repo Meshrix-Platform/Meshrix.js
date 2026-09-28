@@ -50,10 +50,18 @@ usage. Only a concrete defect in an actively used path enters current work.
 ## Protocol and integration ownership
 
 The programmable gateway target is Node.js `>=22.18.0 <23 || >=24.3.0` with
-JSON Schema 2020-12 validation. Modern MCP uses `2026-07-28`; the explicitly
-isolated legacy profiles are `2025-03-26`, `2025-06-18`, and `2025-11-25`.
-Standard clients are admitted by protocol and authorization capability, not a
-hard-coded connector catalog. Package publication and external-client
+JSON Schema 2020-12 validation. Protocol support is directional:
+
+| Boundary | Implemented protocol scope |
+| --- | --- |
+| Core downstream MCP HTTP ingress | Modern `2026-07-28` requests. Legacy `initialize` client sessions are not implemented at this ingress. |
+| Configured platform upstream MCP | Modern HTTP `2026-07-28`; legacy HTTP and local stdio `2025-03-26` and `2025-06-18`. |
+| Independently exported legacy upstream adapter | `LegacyMcpAdapter` implements the upstream port for `2025-03-26`, `2025-06-18`, and `2025-11-25`. It is not a legacy downstream server entry point. |
+
+Standard clients are admitted by the declared protocol and authorization
+capability, not a hard-coded connector catalog. The observed SDK 1.29.0 legacy
+initialization failure does not qualify other SDK versions or modern
+negotiation configurations. Package publication and exact external-client
 qualification remain separate evidence tracks.
 
 | Surface | Owner and boundary | Current status |
@@ -91,9 +99,11 @@ When Meshrix.js 1.0.0 is cut, delete the Deprecated wrappers and retarget caller
 
 ## MCP client targets
 
-Meshrix.js verifies only its neutral connector boundary. The documented
-downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity,
-OpenCode, Pi, and Kimi CLI. A named client becomes qualified only when the
+A standard client can use the declared Core MCP profile with the instance URL
+and a suitably scoped credential. Console connection guides do not impose a
+client-brand audience restriction; an operator may select such a restriction
+explicitly. Packaged connector targets include OpenClaw, Codex, Claude Code,
+Antigravity, OpenCode, Pi, and Kimi CLI. A named client becomes qualified only when the
 operator supplies an exact adapter artifact with a named client version and
 configuration plus current lifecycle evidence. Those client qualifications
 remain remaining required work until that evidence exists.

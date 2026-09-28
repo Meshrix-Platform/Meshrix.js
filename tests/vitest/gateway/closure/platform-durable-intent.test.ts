@@ -93,6 +93,19 @@ async function controlledPeer(counterPath: string) {
         response.end(JSON.stringify({ jsonrpc: "2.0", id: wire.id, result: { resultType: "complete", supportedVersions: ["2026-07-28"] } }));
         return;
       }
+      if (wire.method === "tools/list") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: wire.id, result: { resultType: "complete", tools: [{
+          name: "echo",
+          inputSchema: {
+            type: "object",
+            properties: { label: { type: "string" }, url: { type: "string" }, path: { type: "string" }, headers: { type: "object" } },
+            required: ["label"],
+            additionalProperties: false
+          }
+        }] } }));
+        return;
+      }
       if (wire.method !== "tools/call") {
         response.writeHead(404).end();
         return;
@@ -220,12 +233,12 @@ describe("platform discovered-tool durable dispatch intent", () => {
     const root = await makeRoot();
     const peer = await controlledPeer(path.join(root, "peer-effect-count"));
     peers.push(peer);
-    const discovery = peer.holdNextDiscovery();
     const started = await startCandidate(path.join(root, "discovery-revoked-candidate"), peer.url, "normal");
+    const discovery = peer.holdNextDiscovery();
     started.process.send({ type: "call", arguments: { label: "revoke-during-discovery" } });
     const intent = await started.process.waitFor("intent");
     expect(intent.ledgerEventId).toBeTruthy();
-    await peer.waitForDiscovery(1);
+    await peer.waitForDiscovery(2);
     expect(await peer.count()).toBe(0);
 
     started.process.send({ type: "revoke-authority" });

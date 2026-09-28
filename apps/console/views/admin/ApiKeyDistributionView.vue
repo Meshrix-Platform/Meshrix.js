@@ -30,11 +30,13 @@ defineOptions({ name: "ApiKeyDistributionView" });
 
 const {
   applyProfile, busy, connectorSnippet, copied, copyConnectorSnippet, copySecret, create,
+  clearUnavailableMcpSelections,
   creating, dataClassificationOptions, dismissSecret, draft, draftConfigDocument,
   draftMissingHints, draftValid, eligible, error, importDraftConfig, inferredSummaryItems,
   loading, maximumRiskOptions, mutatingKeyId, nodes, oneTimeSecret, profileOptions, records,
-  refresh, revealedRecord, revoke, rotate, scopes, snippetCopied, status, targetOptions,
-  toolsetOptions,
+  refresh, revealedRecord, revoke, rotate, scopes, snippetCopied, status, targetOptions, clientGuideOptions,
+  toolsetOptions, mcpToolSelection, mcpToolOptions, unavailableSelectedMcpTools,
+  selectedMcpToolFacts, toggleMcpToolSelection,
 } = useConsoleApiKeyDistributionController();
 
 const t = apiKeyDistributionText;
@@ -47,24 +49,29 @@ let revealReturnFocus: HTMLElement | null = null;
 
 const setupStep = ref(1);
 const setupSteps = computed(() => [
-  { id: 1, label: t("选择 Agent", "Choose Agent"), hint: t("目标与身份", "Target and identity") },
+  { id: 1, label: t("连接与身份", "Connection and identity"), hint: t("客户端指引与身份", "Client guide and identity") },
   { id: 2, label: t("选择能力", "Choose Access"), hint: t("工具与资源", "Tools and resources") },
   { id: 3, label: t("确认连接", "Review"), hint: t("检查后生成", "Review and generate") },
 ]);
 const agentStepReady = computed(() => Boolean(
-  draft.value.selectedTargetIds.length
-  && draft.value.workloadDisplayName.trim()
+  draft.value.workloadDisplayName.trim()
   && draft.value.organizationNodeId
   && draft.value.expiresAt
   && Number.isFinite(Date.parse(draft.value.expiresAt))
   && Date.parse(draft.value.expiresAt) > Date.now()
 ));
 const accessStepReady = computed(() => Boolean(
-  draft.value.selectedToolsetIds.length && draft.value.allowedTools.length
+  ((draft.value.selectedToolsetIds.length && draft.value.allowedTools.length) || selectedMcpToolFacts.value.length)
+  && unavailableSelectedMcpTools.value.length === 0
 ));
-const selectedAgentLabels = computed(() => targetOptions.value
+const selectedClientGuideLabels = computed(() => clientGuideOptions.value
+  .filter((option) => draft.value.selectedClientGuide === option.value)
+  .map((option) => option.label));
+const selectedTargetLabels = computed(() => targetOptions.value
   .filter((option) => draft.value.selectedTargetIds.includes(option.value))
   .map((option) => option.label));
+const usesGenericClientGuide = computed(() => !draft.value.selectedClientGuide
+  || draft.value.selectedClientGuide === "generic");
 const selectedToolsetLabels = computed(() => toolsetOptions.value
   .filter((option) => draft.value.selectedToolsetIds.includes(option.value))
   .map((option) => option.label));
@@ -77,11 +84,6 @@ function canOpenSetupStep(step: number): boolean {
 
 function openSetupStep(step: number): void {
   if (canOpenSetupStep(step)) setupStep.value = step;
-}
-
-function selectAgentTarget(event: Event): void {
-  const targetId = event.target instanceof HTMLSelectElement ? event.target.value : "";
-  draft.value.selectedTargetIds = targetId ? [targetId] : [];
 }
 
 // Reveal state machine: revealed -> acknowledged -> dismissed. The
@@ -231,9 +233,9 @@ usePageRefreshHandler(
   <section class="api-key-distribution-layout">
     <header class="section-header api-key-distribution-header">
       <div>
-        <span class="api-key-page-eyebrow">{{ t("Agent MCP 接入", "Agent MCP access") }}</span>
-        <h2>{{ t("连接一个 Agent", "Connect an Agent") }}</h2>
-        <p>{{ t("选择 Agent、需要的能力和使用范围，Meshrix.js 会生成受限的连接资料。签名、凭据保存与缓存细节由连接器处理。", "Choose an Agent, the access it needs, and its resource scope. Meshrix.js generates bounded connection details while the connector handles signing, credential storage, and cache details.") }}</p>
+        <span class="api-key-page-eyebrow">{{ t("MCP 客户端接入", "MCP client access") }}</span>
+        <h2>{{ t("创建 MCP 连接", "Create an MCP connection") }}</h2>
+        <p>{{ t("选择连接指引、需要的能力和使用范围。连接指引只帮助配置客户端，不会限制密钥受众；只有明确选择客户端受众限制时才会写入授权策略。", "Choose connection guidance, the access it needs, and its resource scope. The guide only helps configure a client and does not restrict key audience; an audience restriction is added only when you explicitly select one.") }}</p>
         <p class="journey-disambiguation" data-testid="journey-disambiguation">
           {{ msg.journey.clientKeyDecision }}
           <RouterLink to="/admin/operation-permission" class="journey-cross-link">
@@ -255,7 +257,10 @@ usePageRefreshHandler(
     </section>
     <section v-else-if="!eligible" class="surface-card api-key-empty" data-access="restricted-empty">
       <strong>{{ t("当前账号没有可管理的组织范围", "No manageable organization scope") }}</strong>
-      <p>{{ t("页面不会推断全局权限。请由组织权限管理员分配明确的密钥管理范围。", "This page does not infer global authority. Ask an organization administrator to assign an explicit key-management scope.") }}</p>
+      <p>{{ t("如果实例尚未配置组织治理，管理员需要先在组织治理页导入或编辑明确的组织结构并完成发布；如果组织已经配置，则需要管理员为你的账号分配明确的密钥管理范围。此页面不会推断全局权限。", "If organization governance is not configured, an administrator must import or edit an explicit organization structure and publish it in Organization Governance first. If governance is already configured, an administrator must assign your account an explicit key-management scope. This page never infers global authority.") }}</p>
+      <RouterLink to="/admin/organization-governance" class="table-action" data-testid="organization-governance-link">
+        {{ t("打开组织治理", "Open Organization Governance") }}
+      </RouterLink>
     </section>
 
     <template v-else>
@@ -296,11 +301,14 @@ usePageRefreshHandler(
           v-if="oneTimeSecret"
           class="api-key-connector-snippet"
           data-testid="api-key-connector-snippet"
-          :aria-label="msg.journey.snippetTitle"
+          :aria-label="usesGenericClientGuide ? t('MCP 客户端连接指引', 'MCP client connection guide') : msg.journey.snippetTitle"
         >
-          <h4>{{ msg.journey.snippetTitle }}</h4>
+          <h4>{{ usesGenericClientGuide ? t("配置 MCP 客户端", "Configure your MCP client") : msg.journey.snippetTitle }}</h4>
           <template v-if="connectorSnippet">
-            <p class="api-key-connector-snippet-note">{{ msg.journey.snippetSecretNote }}</p>
+            <p v-if="usesGenericClientGuide" class="api-key-connector-snippet-note" data-testid="generic-client-secret-note">
+              {{ t("请将一次性密钥保存在客户端可用的本地环境变量或 Secret Manager 中，再按下方指引配置请求头。本页面只提供占位符，不会替你保存凭据。", "Save the one-time key in a local environment variable or secret manager available to your client, then configure the request header below. This page only provides a placeholder; it does not store the credential for you.") }}
+            </p>
+            <p v-else class="api-key-connector-snippet-note">{{ msg.journey.snippetSecretNote }}</p>
             <pre class="api-key-connector-snippet-code">{{ connectorSnippet }}</pre>
             <button
               class="table-action"
@@ -308,7 +316,7 @@ usePageRefreshHandler(
               data-testid="api-key-connector-snippet-copy"
               @click="copyConnectorSnippet"
             >
-              {{ snippetCopied ? msg.journey.snippetCopied : msg.journey.snippetCopy }}
+              {{ snippetCopied ? msg.journey.snippetCopied : (usesGenericClientGuide ? t("复制连接指引", "Copy connection guide") : msg.journey.snippetCopy) }}
             </button>
           </template>
           <p v-else class="api-key-connector-snippet-guidance" data-testid="api-key-connector-snippet-guidance">
@@ -321,12 +329,12 @@ usePageRefreshHandler(
         <div class="section-header api-key-setup-header">
           <div>
             <span class="api-key-step-kicker">{{ t("快速接入", "Quick setup") }}</span>
-            <h3>{{ t("三步完成 Agent MCP 接入", "Connect Agent MCP in three steps") }}</h3>
+            <h3>{{ t("三步完成 MCP 接入", "Set up MCP access in three steps") }}</h3>
             <p>{{ t("常用选项在主流程中完成；只有需要精细限制时才展开高级设置。", "Complete the common choices in the main flow. Open advanced settings only when you need finer limits.") }}</p>
           </div>
         </div>
 
-        <nav class="api-key-setup-steps" :aria-label="t('Agent 接入步骤', 'Agent setup steps')">
+        <nav class="api-key-setup-steps" :aria-label="t('MCP 接入步骤', 'MCP setup steps')">
           <button
             v-for="step in setupSteps"
             :key="step.id"
@@ -349,14 +357,14 @@ usePageRefreshHandler(
         <section v-show="setupStep === 1" class="api-key-step-panel" data-testid="agent-setup-agent-step">
           <div class="api-key-step-intro">
             <span>01</span>
-            <div><h4>{{ t("这个连接给谁使用？", "Who will use this connection?") }}</h4><p>{{ t("先选择 Agent，再给这条连接一个便于识别的名称。", "Choose the Agent first, then give this connection a recognizable name.") }}</p></div>
+            <div><h4>{{ t("如何配置客户端？", "How will the client connect?") }}</h4><p>{{ t("选择一份连接指引即可；它不会自动限制授权范围。", "Choose a connection guide. It does not set an authorization restriction.") }}</p></div>
           </div>
           <div class="api-key-form-grid">
-            <label><span>{{ t("Agent", "Agent") }}</span>
-              <select :value="draft.selectedTargetIds[0] || ''" :disabled="busy" data-testid="agent-target-select" @change="selectAgentTarget">
-                <option value="">{{ t("选择一个 Agent", "Choose an Agent") }}</option>
-                <option v-for="option in targetOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            <label><span>{{ t("客户端连接指引", "Client connection guide") }}</span>
+              <select v-model="draft.selectedClientGuide" :disabled="busy" data-testid="client-guide-select">
+                <option v-for="option in clientGuideOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
+              <small>{{ clientGuideOptions.find((option) => option.value === draft.selectedClientGuide)?.description }}</small>
             </label>
             <label><span>{{ t("连接名称", "Connection name") }}</span><input v-model.trim="draft.workloadDisplayName" :disabled="busy" autocomplete="off" :placeholder="t('例如：团队开发 Agent', 'For example: Team development Agent')" /></label>
             <label><span>{{ t("所属团队或组织", "Owning team or organization") }}</span>
@@ -397,9 +405,59 @@ usePageRefreshHandler(
             layout="list"
           />
 
+          <section class="api-key-mcp-tool-selection" data-testid="api-key-mcp-tool-selection">
+            <h4>{{ t("当前发现的上游 MCP 工具", "Currently discovered upstream MCP tools") }}</h4>
+            <p>{{ t("只勾选当前发现的具体工具；以后新增的工具不会自动加入密钥授权。", "Select each currently discovered tool explicitly. Tools added later will not be added to this key automatically.") }}</p>
+            <p v-if="mcpToolSelection.status === 'unavailable'" data-discovery="unavailable">
+              {{ t("暂时无法读取 MCP 工具发现状态。请稍后刷新；普通目录工具仍可单独选择。", "MCP tool discovery is temporarily unavailable. Refresh later; ordinary catalog tools can still be selected.") }}
+            </p>
+            <p v-else-if="mcpToolSelection.status === 'partial'" data-discovery="partial">
+              {{ t("部分 MCP 服务暂时无法读取。可选择下方当前已确认的工具；未确认的服务不会获得授权。", "Some MCP services could not be read. You may select the confirmed tools below; unavailable services receive no access.") }}
+            </p>
+            <p v-else-if="mcpToolOptions.length === 0" data-discovery="empty">
+              {{ t("当前没有可选择的上游 MCP 工具。", "No upstream MCP tools are currently available for selection.") }}
+            </p>
+            <ul v-if="mcpToolSelection.services.length" class="api-key-mcp-service-status">
+              <li v-for="service in mcpToolSelection.services" :key="service.serviceId" :data-service-status="service.status">
+                <strong>{{ service.label }}</strong>
+                <span>{{ service.status === 'available' ? t("可用", "Available") : service.status === 'partial' ? t("部分可用", "Partially available") : t("暂不可用", "Unavailable") }}</span>
+              </li>
+            </ul>
+            <div v-if="mcpToolOptions.length" class="api-key-mcp-tool-options">
+              <label v-for="tool in mcpToolOptions" :key="`${tool.serviceId}:${tool.publicName}`">
+                <input
+                  type="checkbox"
+                  :checked="tool.selected"
+                  :disabled="busy"
+                  :data-service-id="tool.serviceId"
+                  :data-public-name="tool.publicName"
+                  @change="toggleMcpToolSelection(tool)"
+                />
+                <span><strong>{{ tool.label }}</strong><small>{{ tool.publicName }} · {{ tool.serviceId }}</small></span>
+              </label>
+            </div>
+            <div v-if="unavailableSelectedMcpTools.length" class="api-key-mcp-stale-selection" role="status">
+              <p>{{ t("部分已选工具不在当前发现结果中。移除这些旧选择，或刷新后重新选择当前工具。", "Some selected tools are absent from current discovery. Remove these old selections or refresh and choose a current tool.") }}</p>
+              <ul>
+                <li v-for="tool in unavailableSelectedMcpTools" :key="`${tool.serviceId}:${tool.publicName}`">{{ tool.publicName }} · {{ tool.serviceId }}</li>
+              </ul>
+              <button type="button" class="table-action" :disabled="busy" @click="clearUnavailableMcpSelections">
+                {{ t("移除不可用选择", "Remove unavailable selections") }}
+              </button>
+            </div>
+          </section>
+
           <details class="api-key-policy-section api-key-advanced-settings">
-            <summary>{{ t("高级设置", "Advanced settings") }} <span>{{ t("资源、风险、调用限制与 JSON", "Resources, risk, call limits, and JSON") }}</span></summary>
+            <summary>{{ t("高级设置", "Advanced settings") }} <span>{{ t("客户端受众、资源、风险、调用限制与 JSON", "Client audience, resources, risk, call limits, and JSON") }}</span></summary>
             <div class="api-key-advanced-grid">
+              <MultiChoiceCardGroup
+                v-model="draft.selectedTargetIds"
+                :options="targetOptions"
+                :title="t('客户端受众限制（可选）', 'Client audience restriction (optional)')"
+                :summary="t('留空表示不按品牌限制客户端；只有选择具体目标时才把这些目标写入密钥授权策略。客户端仍需支持 MCP 2026-07-28 Streamable HTTP，并使用下方生成的 API key。', 'Leave empty to avoid a brand-based restriction. Selected targets are written to the key policy only when explicitly chosen. The client must still support MCP 2026-07-28 Streamable HTTP and use the generated API key.')"
+                :disabled="busy"
+                data-testid="client-audience-restriction"
+              />
               <FeatureToggle
                 v-model="draft.resourcesUnrestricted"
                 :disabled="busy"
@@ -430,11 +488,11 @@ usePageRefreshHandler(
                 </label>
                 <label>
                   <span>{{ t("每分钟调用次数", "Calls per minute") }}</span>
-                  <input v-model.number="draft.requestsPerMinute" type="number" min="1" :disabled="busy" :placeholder="t('留空不限制', 'Empty = unlimited')" />
+                  <input v-model.number="draft.requestsPerMinute" type="number" min="1" :disabled="busy" :placeholder="t('留空时使用平台限制', 'Platform limit applies when empty')" />
                 </label>
                 <label>
                   <span>{{ t("最大并发量", "Maximum concurrency") }}</span>
-                  <input v-model.number="draft.maxConcurrentEffects" type="number" min="1" :disabled="busy" :placeholder="t('留空不限制', 'Empty = unlimited')" />
+                  <input v-model.number="draft.maxConcurrentEffects" type="number" min="1" :disabled="busy" :placeholder="t('留空时使用平台限制', 'Platform limit applies when empty')" />
                 </label>
               </div>
               <div class="api-key-import-row">
@@ -472,15 +530,17 @@ usePageRefreshHandler(
             <div><h4>{{ t("确认后生成连接资料", "Review and generate connection details") }}</h4><p>{{ t("连接资料只显示一次；Agent 的每次调用仍由服务端权限策略决定。", "Connection details are shown once. Every Agent call remains subject to server-side policy.") }}</p></div>
           </div>
           <div class="api-key-review-summary">
-            <div><span>{{ t("Agent", "Agent") }}</span><strong>{{ selectedAgentLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
+            <div><span>{{ t("客户端连接指引", "Client connection guide") }}</span><strong>{{ selectedClientGuideLabels.join(t("、", ", ")) || t("标准 MCP 客户端", "Standard MCP client") }}</strong></div>
+            <div><span>{{ t("授权受众限制", "Authorization audience restriction") }}</span><strong>{{ selectedTargetLabels.join(t("、", ", ")) || t("未按客户端品牌限制", "No brand-based client restriction") }}</strong></div>
             <div><span>{{ t("能力", "Access") }}</span><strong>{{ selectedToolsetLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
             <div><span>{{ t("资源", "Resources") }}</span><strong>{{ draft.resourcesUnrestricted ? t("全部资源", "All resources") : t("限定资源", "Restricted resources") }}</strong></div>
           </div>
           <div class="api-key-trust-summary">
-            <strong>{{ t("接下来由系统处理", "Handled for you") }}</strong>
+            <strong>{{ usesGenericClientGuide ? t("客户端配置与保护", "Client setup and protection") : t("接下来由系统处理", "Handled for you") }}</strong>
             <ul>
-              <li>{{ t("生成仅用于所选 Agent、组织和能力的受限凭据。", "Generate a credential bounded to the selected Agent, organization, and access.") }}</li>
-              <li>{{ t("连接器把凭据保存在私有存储中，Agent 配置不包含明文。", "Store the credential in the connector's private store; Agent configuration contains no plaintext.") }}</li>
+              <li>{{ t("凭据受所选组织、能力、资源和有效期约束；客户端品牌只有在明确设置受众限制时才参与授权。", "The credential is bounded by the selected organization, access, resources, and expiry. Client brand affects authorization only when an audience restriction is explicitly set.") }}</li>
+              <li v-if="usesGenericClientGuide">{{ t("请在客户端的本地 Secret Manager 或环境变量中保存密钥，不要把明文写入普通配置文件。", "Save the key in the client's local secret manager or environment variable; do not put plaintext in a regular configuration file.") }}</li>
+              <li v-else>{{ t("连接器把凭据保存在私有存储中，Agent 配置不包含明文。", "The connector stores the credential privately; the Agent configuration contains no plaintext.") }}</li>
               <li>{{ t("每次调用继续经过 Operation Permission，不因接入而扩大权限。", "Keep every call behind Operation Permission without expanding authority.") }}</li>
             </ul>
           </div>

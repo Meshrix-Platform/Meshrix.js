@@ -90,6 +90,33 @@ export const UPSTREAM_SERVICE_OPERATION_FIELDS = Object.freeze([
   "payloadTransport"
 ]);
 
+export const UPSTREAM_MCP_DESCRIPTOR_FIELDS = Object.freeze([
+  "transport",
+  "url",
+  "endpoint",
+  "baseUrl",
+  "headers",
+  "toolNamePrefix",
+  "prefix",
+  "protocolVersion",
+  "toolsCacheTtlMs",
+  "timeoutMs"
+] as const);
+
+export const UPSTREAM_MCP_REMOTE_TRANSPORTS = Object.freeze([
+  "http",
+  "https",
+  "remote",
+  "streamable-http",
+  "sse"
+] as const);
+
+export const UPSTREAM_MCP_PROTOCOL_VERSIONS = Object.freeze([
+  "2025-03-26",
+  "2025-06-18",
+  "2026-07-28"
+] as const);
+
 export const UPSTREAM_PAYLOAD_TRANSPORT_FIELDS = Object.freeze(["request", "response"]);
 export const UPSTREAM_PAYLOAD_REQUEST_FIELDS = Object.freeze([
   "mode",
@@ -134,11 +161,27 @@ export type UpstreamResponseRepresentationMode =
   | "artifact";
 
 export interface TypedServiceReference {
-  type?: string;
-  value?: string;
-  reference?: string;
-  revision?: number;
-  use?: string;
+  type: "credential" | "certificate" | "private-key" | "trust-anchor";
+  reference: string;
+  revision: number;
+  use: string;
+  operationKey?: string;
+  host?: string;
+  protocol?: string;
+  scopes?: string[];
+}
+
+export interface UpstreamMcpDescriptor {
+  transport: typeof UPSTREAM_MCP_REMOTE_TRANSPORTS[number];
+  url?: string;
+  endpoint?: string;
+  baseUrl?: string;
+  headers?: Record<string, string>;
+  toolNamePrefix?: string;
+  prefix?: string;
+  protocolVersion: typeof UPSTREAM_MCP_PROTOCOL_VERSIONS[number];
+  toolsCacheTtlMs?: number;
+  timeoutMs?: number;
 }
 
 export interface UpstreamPayloadTransport {
@@ -158,13 +201,14 @@ export interface UpstreamServiceOperation {
   operationKey: string;
   method: string;
   path: string;
+  timeoutMs?: number;
   risk?: string;
   requiresApproval?: boolean;
   payloadTransport: UpstreamPayloadTransport;
 }
 
 export interface UpstreamServiceDescriptor {
-  serviceProtocol: "http" | "json-rpc";
+  serviceProtocol: "http" | "json-rpc" | "mcp";
   label?: string;
   description?: string;
   baseUrl?: string;
@@ -174,6 +218,7 @@ export interface UpstreamServiceDescriptor {
   tags?: string[];
   references?: TypedServiceReference[];
   operations?: UpstreamServiceOperation[];
+  mcp?: UpstreamMcpDescriptor;
   interfaceSchemas?: Record<string, unknown>;
   permissions?: Record<string, unknown>;
   approvalPolicy?: Record<string, unknown>;
@@ -192,12 +237,24 @@ export interface PortableUpstreamServiceImport {
 
 const SAFE_SERVICE_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,63}(?:\/[A-Za-z][A-Za-z0-9_.-]{0,63}){0,3}$/u;
 const PORTABLE_DOCUMENT_FIELDS = new Set(["kind", "schemaVersion", "serviceKey", "descriptor"]);
-const PORTABLE_DESCRIPTOR_FIELDS = new Set(
-  UPSTREAM_SERVICE_DESCRIPTOR_FIELDS.filter((field) => field !== "mcp")
-);
+const PORTABLE_DESCRIPTOR_FIELDS = new Set(UPSTREAM_SERVICE_DESCRIPTOR_FIELDS);
 const ENDPOINT_FIELDS = new Set(UPSTREAM_SERVICE_ENDPOINT_FIELDS);
 const OPERATION_FIELDS = new Set(UPSTREAM_SERVICE_OPERATION_FIELDS);
 const PAYLOAD_TRANSPORT_FIELDS = new Set(UPSTREAM_PAYLOAD_TRANSPORT_FIELDS);
+const MCP_DESCRIPTOR_FIELDS = new Set(UPSTREAM_MCP_DESCRIPTOR_FIELDS);
+const MCP_REMOTE_TRANSPORTS = new Set<string>(UPSTREAM_MCP_REMOTE_TRANSPORTS);
+const MCP_PROTOCOL_VERSIONS = new Set<string>(UPSTREAM_MCP_PROTOCOL_VERSIONS);
+const REFERENCE_FIELDS = new Set([
+  "type", "reference", "revision", "use", "operationKey", "host", "protocol", "scopes"
+]);
+const REFERENCE_SCHEMES: Readonly<Record<TypedServiceReference["type"], ReadonlySet<string>>> = Object.freeze({
+  credential: new Set(["credential", "secret"]),
+  certificate: new Set(["certificate"]),
+  "private-key": new Set(["private-key"]),
+  "trust-anchor": new Set(["trust-anchor"])
+});
+const SENSITIVE_MCP_HEADER_NAME = /(?:password|passphrase|secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|authorization|cookie|api[_-]?key|credential|private[_-]?key|certificate)/iu;
+const INLINE_SECRET_VALUE = /-----BEGIN [A-Z0-9 ]+-----|\b(?:Bearer|Basic)\s+[A-Za-z0-9+/=_-]{8,}|\b(?:gh[pousr]_|github_pat_|sk-)[A-Za-z0-9._-]{8,}\b|\bxox[baprs]-[A-Za-z0-9-]{8,}\b|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b|^[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/iu;
 
 export function isUpstreamPublishingAction(value?: unknown) {
   return typeof value === "string" && UPSTREAM_PUBLISHING_ACTIONS.includes(value);
@@ -270,17 +327,116 @@ function validatePortablePayloadTransport(
   }
 }
 
-function assertPortableRemoteUrl(value: unknown, field: string): void {
-  if (typeof value !== "string" || !value) throw new Error(`${field} must be a remote URL.`);
+export function isUpstreamServiceRemoteUrl(value: unknown): value is string {
+  if (typeof value !== "string" || !value) return false;
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new Error(`${field} must be a remote URL.`);
+    return false;
   }
-  const hasExplicitPort = /^https?:\/\/(?:\[[^\]]+\]|[^/:?#]+):[0-9]{1,5}(?:[/?#]|$)/u.test(value);
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || !hasExplicitPort) {
-    throw new Error(`${field} must use HTTP(S), an explicit port, and no embedded credentials.`);
+  return /^https?:\/\//iu.test(value) && ["http:", "https:"].includes(url.protocol) &&
+    Boolean(url.hostname) && !url.username && !url.password;
+}
+
+function assertPortableRemoteUrl(value: unknown, field: string): void {
+  if (!isUpstreamServiceRemoteUrl(value)) {
+    throw new Error(`${field} must use an HTTP(S) URL without embedded credentials.`);
+  }
+}
+
+function validatePortableReference(value: unknown, index: number): void {
+  if (!isPlainObject(value)) throw new Error(`descriptor.references[${index}] must be an object.`);
+  const unsupported = unknownFields(value, REFERENCE_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown descriptor.references[${index}] field(s): ${unsupported.join(", ")}.`);
+  if (typeof value.type !== "string" || !Object.hasOwn(REFERENCE_SCHEMES, value.type)) {
+    throw new Error(`descriptor.references[${index}].type must name a supported reference type.`);
+  }
+  if (typeof value.reference !== "string" || value.reference.length > 512 ||
+      !/^[a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9._~:/-]+$/u.test(value.reference)) {
+    throw new Error(`descriptor.references[${index}].reference must be a typed reference URI.`);
+  }
+  const scheme = value.reference.slice(0, value.reference.indexOf(":"));
+  if (!REFERENCE_SCHEMES[value.type as TypedServiceReference["type"]].has(scheme) || /[@?#]/u.test(value.reference)) {
+    throw new Error(`descriptor.references[${index}].reference does not match its declared type.`);
+  }
+  if (!Number.isSafeInteger(value.revision) || Number(value.revision) < 1) {
+    throw new Error(`descriptor.references[${index}].revision must be a positive safe integer.`);
+  }
+  if (typeof value.use !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(value.use)) {
+    throw new Error(`descriptor.references[${index}].use is invalid.`);
+  }
+  if (value.operationKey !== undefined && (typeof value.operationKey !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(value.operationKey))) {
+    throw new Error(`descriptor.references[${index}].operationKey is invalid.`);
+  }
+  if (value.host !== undefined && (typeof value.host !== "string" || value.host.length > 253 ||
+      !/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/u.test(value.host))) {
+    throw new Error(`descriptor.references[${index}].host is invalid.`);
+  }
+  if (value.protocol !== undefined && (typeof value.protocol !== "string" ||
+      !/^[a-z][a-z0-9+.-]{0,31}$/u.test(value.protocol))) {
+    throw new Error(`descriptor.references[${index}].protocol is invalid.`);
+  }
+  if (value.scopes !== undefined) {
+    if (!Array.isArray(value.scopes) || value.scopes.length > 128 || value.scopes.some((scope) =>
+      typeof scope !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(scope)
+    ) || new Set(value.scopes).size !== value.scopes.length) {
+      throw new Error(`descriptor.references[${index}].scopes must contain unique valid scope identifiers.`);
+    }
+  }
+}
+
+function validatePortableMcpDescriptor(value: unknown, descriptor: Record<string, unknown>): void {
+  if (!isPlainObject(value)) throw new Error("descriptor.mcp must be an object.");
+  const unsupported = unknownFields(value, MCP_DESCRIPTOR_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown descriptor.mcp field(s): ${unsupported.join(", ")}.`);
+  if (typeof value.transport !== "string" || !MCP_REMOTE_TRANSPORTS.has(value.transport.toLowerCase())) {
+    throw new Error("descriptor.mcp.transport must select a supported remote HTTP transport.");
+  }
+  if (typeof value.protocolVersion !== "string" || !MCP_PROTOCOL_VERSIONS.has(value.protocolVersion)) {
+    throw new Error("descriptor.mcp.protocolVersion must select a supported upstream MCP version.");
+  }
+  const remoteUrl = value.url || value.endpoint || value.baseUrl || descriptor.baseUrl;
+  assertPortableRemoteUrl(remoteUrl, "descriptor.mcp.url");
+  if (Object.hasOwn(descriptor, "operations")) {
+    throw new Error("MCP descriptors derive tools from the remote catalog and cannot include operations.");
+  }
+  if (value.headers !== undefined) {
+    if (!isPlainObject(value.headers)) throw new Error("descriptor.mcp.headers must be an object of declarative request headers.");
+    for (const [name, headerValue] of Object.entries(value.headers)) {
+      if (!name || name.length > 128 || name.normalize("NFC") !== name ||
+          /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/u.test(name) ||
+          name === "__proto__" || name === "prototype" || name === "constructor") {
+        throw new Error("MCP request header names are invalid.");
+      }
+      if (SENSITIVE_MCP_HEADER_NAME.test(name)) {
+        throw new Error("Sensitive header names must use a typed credential reference.");
+      }
+      if (typeof headerValue !== "string" || !headerValue || headerValue.normalize("NFC") !== headerValue || headerValue.length > 8_192 ||
+          /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/u.test(headerValue) ||
+          /\$\{|\{\{|<%|\bfile:\/\//u.test(headerValue) || INLINE_SECRET_VALUE.test(headerValue)) {
+        throw new Error("MCP request headers must contain non-sensitive declarative string values.");
+      }
+    }
+  }
+  for (const field of ["toolNamePrefix", "prefix"]) {
+    if (value[field] !== undefined && typeof value[field] !== "string") {
+      throw new Error(`descriptor.mcp.${field} must be a string.`);
+    }
+  }
+  for (const field of ["toolsCacheTtlMs", "timeoutMs"]) {
+    if (value[field] !== undefined && (typeof value[field] !== "number" || !Number.isFinite(value[field]))) {
+      throw new Error(`descriptor.mcp.${field} must be a finite number.`);
+    }
+  }
+  validateOptionalExecutionTimeout(value.timeoutMs, "descriptor.mcp.timeoutMs");
+}
+
+function validateOptionalExecutionTimeout(value: unknown, field: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647) {
+    throw new Error(`${field} must be a positive whole number of milliseconds within the supported timer range.`);
   }
 }
 
@@ -289,8 +445,26 @@ function validatePortableDescriptor(
 ): asserts descriptor is Record<string, unknown> & UpstreamServiceDescriptor {
   const unsupported = unknownFields(descriptor, PORTABLE_DESCRIPTOR_FIELDS);
   if (unsupported.length) throw new Error(`Unknown descriptor field(s): ${unsupported.join(", ")}.`);
-  if (descriptor.serviceProtocol !== "http" && descriptor.serviceProtocol !== "json-rpc") {
-    throw new Error('descriptor.serviceProtocol must be "http" or "json-rpc".');
+  if (descriptor.serviceProtocol !== "http" && descriptor.serviceProtocol !== "json-rpc" && descriptor.serviceProtocol !== "mcp") {
+    throw new Error('descriptor.serviceProtocol must be "http", "json-rpc", or "mcp".');
+  }
+  if (descriptor.allowLocalNetwork !== undefined && typeof descriptor.allowLocalNetwork !== "boolean") {
+    throw new Error("descriptor.allowLocalNetwork must be boolean.");
+  }
+  if (descriptor.serviceProtocol === "mcp") {
+    validatePortableMcpDescriptor(descriptor.mcp, descriptor);
+    if (descriptor.references !== undefined) {
+      if (!Array.isArray(descriptor.references)) throw new Error("descriptor.references must be an array.");
+      descriptor.references.forEach(validatePortableReference);
+    }
+    return;
+  }
+  if (descriptor.mcp !== undefined) {
+    throw new Error("descriptor.mcp is only valid when serviceProtocol is \"mcp\".");
+  }
+  if (descriptor.references !== undefined) {
+    if (!Array.isArray(descriptor.references)) throw new Error("descriptor.references must be an array.");
+    descriptor.references.forEach(validatePortableReference);
   }
   if (descriptor.baseUrl === undefined && (!Array.isArray(descriptor.endpoints) || descriptor.endpoints.length === 0)) {
     throw new Error("descriptor requires baseUrl or at least one endpoint.");
@@ -316,6 +490,7 @@ function validatePortableDescriptor(
     if (unsupportedOperationFields.length) {
       throw new Error(`Unknown descriptor.operations[${index}] field(s): ${unsupportedOperationFields.join(", ")}.`);
     }
+    validateOptionalExecutionTimeout(operation.timeoutMs, `descriptor.operations[${index}].timeoutMs`);
     validatePortablePayloadTransport(operation.payloadTransport, index, descriptor.serviceProtocol);
   });
 }

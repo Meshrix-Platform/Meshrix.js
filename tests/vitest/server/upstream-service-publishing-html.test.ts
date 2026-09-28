@@ -56,7 +56,6 @@ const BASIC_CONFIG_DOCUMENT: Readonly<Record<string, any>> = Object.freeze({
         path: "/v1/convert",
         risk: "safe_write",
         requiredScopes: ["gateway:write"],
-        timeoutMs: 30_000,
         payloadTransport: {
           request: {
             mode: "artifact_multipart",
@@ -433,6 +432,7 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain("application/pdf");
     expect(html).toContain("104857600 B");
     expect(html).toContain("30000 ms");
+    expect(html).toContain('data-en="No configured execution deadline"');
     expect(html).toContain(BASIC_CONFIG_SHA256);
     expect(html).toContain("not a standalone download endpoint");
     expect(html).toContain("不是独立的下载接口");

@@ -7,6 +7,7 @@ import PublishServiceForm from "./upstream-service-publish/PublishServiceForm.vu
 import PortableServiceImportPanel from "./upstream-service-publish/PortableServiceImportPanel.vue";
 import {
   UPSTREAM_SERVICE_DESCRIPTOR_FIELDS,
+  UPSTREAM_MCP_REMOTE_TRANSPORTS,
   type PortableUpstreamServiceImport,
 } from "@meshrix/contracts/upstream-service-publishing";
 import type { PublishDescriptorForm } from "./upstream-service-publish/publish-form-model";
@@ -44,6 +45,7 @@ const formEditorFields = [
   "serviceKey", "operationKey", "method", "path", "risk",
   "requestRepresentationMode", "responseRepresentationMode", "requestMaxBytes", "responseMaxBytes",
   "requestMediaTypes", "responseMediaTypes",
+  "mcpTransport", "mcpUrl", "mcpProtocolVersion",
   "credentialMode", "credentialSelection", "savedCredentialOptions",
 ] as const;
 const localDraftFields = [...new Set([...UPSTREAM_SERVICE_DESCRIPTOR_FIELDS, ...formEditorFields])];
@@ -87,6 +89,9 @@ function emptyForm(): PublishDescriptorForm {
   description: "",
   serviceProtocol: "",
   baseUrl: "",
+  mcpTransport: "",
+  mcpUrl: "",
+  mcpProtocolVersion: "",
   operations: [],
   references: [],
   operationKey: "",
@@ -103,6 +108,16 @@ function emptyForm(): PublishDescriptorForm {
   credentialSelection: "",
   savedCredentialOptions: [],
   };
+}
+
+function loadMcpEditorFields(descriptor: Pick<UpstreamServiceDescriptor | PublishDescriptorForm, "mcp" | "baseUrl">): void {
+  const mcp = descriptor.mcp;
+  const configuredTransport = String(mcp?.transport || "").toLowerCase();
+  form.mcpTransport = UPSTREAM_MCP_REMOTE_TRANSPORTS.some((transport) => transport === configuredTransport)
+    ? "http"
+    : "";
+  form.mcpUrl = String(mcp?.url || mcp?.endpoint || mcp?.baseUrl || descriptor.baseUrl || "");
+  form.mcpProtocolVersion = String(mcp?.protocolVersion || "");
 }
 
 const form = reactive<PublishDescriptorForm>(emptyForm());
@@ -234,6 +249,7 @@ function loadImportedDraft(document: PortableUpstreamServiceImport) {
   Object.assign(form, document.descriptor);
   form.operations = [...(document.descriptor.operations || [])];
   form.references = [...(document.descriptor.references || [])];
+  loadMcpEditorFields(document.descriptor);
   form.savedCredentialOptions = [...form.references];
   form.credentialMode = form.references.length ? "saved" : "none";
   form.credentialSelection = form.references.length ? "0" : "";
@@ -250,6 +266,7 @@ async function selectService(serviceId: string) {
     selectedServiceRevision.value = result.service.serviceRevision;
     setRevision.value = result.setRevision;
     Object.assign(form, result.service.descriptor || {});
+    loadMcpEditorFields(result.service.descriptor || {});
     form.references = [...result.service.references];
     form.savedCredentialOptions = [...form.references];
     form.credentialMode = form.references.length ? "saved" : "none";
@@ -275,6 +292,10 @@ function applyLocalDraftForm(draftForm: Record<string, unknown>) {
   const hasCredentialEditorState = Object.prototype.hasOwnProperty.call(draftForm, "credentialMode") ||
     Object.prototype.hasOwnProperty.call(draftForm, "savedCredentialOptions");
   Object.assign(form, draftForm);
+  if (form.serviceProtocol === "mcp" &&
+      !["mcpTransport", "mcpUrl", "mcpProtocolVersion"].some((field) => Object.hasOwn(draftForm, field))) {
+    loadMcpEditorFields(form);
+  }
   if (!hasCredentialEditorState) {
     form.savedCredentialOptions = [...(form.references || [])];
     form.credentialMode = form.references?.length ? "saved" : "none";
@@ -287,11 +308,26 @@ function descriptorPayload(): UpstreamServiceDescriptor {
     "serviceKey", "operationKey", "method", "path", "risk",
     "requestRepresentationMode", "responseRepresentationMode", "requestMaxBytes", "responseMaxBytes",
     "requestMediaTypes", "responseMediaTypes",
+    "mcpTransport", "mcpUrl", "mcpProtocolVersion",
     "credentialMode", "credentialSelection", "savedCredentialOptions"
   ]);
-  return Object.fromEntries(Object.entries(form).filter(([key, value]: readonly any[]) =>
+  const descriptor: Record<string, unknown> = Object.fromEntries(Object.entries(form).filter(([key, value]: readonly any[]) =>
     !excluded.has(key) && value !== undefined && value !== ""
-  )) as unknown as UpstreamServiceDescriptor;
+  ));
+  if (form.serviceProtocol === "mcp") {
+    delete descriptor.baseUrl;
+    delete descriptor.operations;
+    const mcp: Record<string, unknown> = { ...(form.mcp || {}) };
+    delete mcp.endpoint;
+    delete mcp.baseUrl;
+    mcp.transport = form.mcpTransport;
+    mcp.url = form.mcpUrl;
+    mcp.protocolVersion = form.mcpProtocolVersion;
+    descriptor.mcp = mcp;
+  } else {
+    delete descriptor.mcp;
+  }
+  return descriptor as unknown as UpstreamServiceDescriptor;
 }
 
 async function publishService() {
@@ -481,6 +517,7 @@ usePageRefreshHandler(
           <span class="health-check-label">{{ outcomeMessages[check.label] }}</span>
           <span class="health-check-status">{{ outcomeMessages[healthStatusLabelKeys[check.status]] }}</span>
           <code v-if="check.id" class="health-check-detail">{{ check.id }}</code>
+          <code v-if="check.statusCode !== undefined" class="health-check-detail">HTTP {{ check.statusCode }}</code>
           <RouterLink
             v-if="check.remediation"
             :to="{ path: check.remediation.route, query: check.remediation.query }"
