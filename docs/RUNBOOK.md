@@ -288,7 +288,7 @@ installed dependencies and container images, so a target host still needs
 network access while building uncached npm artifacts. It retains the authorized
 Pactium archive under `vendor/` for the source-package contract. The Dockerfile
 copies that directory, but the root package resolves Pactium from the public npm
-registry at exact version `0.8.0`, with integrity pinned in `package-lock.json`;
+registry at exact version `0.8.1`, with integrity pinned in `package-lock.json`;
 the source archive's vendor copy does not satisfy that npm dependency.
 
 Set `MESHRIX_HOST_PORT` to change the loopback host port. The Compose contract uses
@@ -839,14 +839,16 @@ functional artifact requirements. Native host execution is performed only by
 the remaining Real-Machine Verification Workflows and cannot block publication.
 
 Meshrix.js `0.0.1` declares the exact public registry dependency
-`pactium@0.8.0`; `package-lock.json` pins its registry tarball and SHA-512
-integrity. Its package metadata declares `GPL-3.0-or-later`, which does not by
-itself settle the integrated platform's distribution terms. The server source
-archive independently retains `vendor/pactium-0.8.0.tgz` under its authorized
-source-package contract, and the Dockerfile copies the vendor directory; npm
-installation resolves Pactium from the registry, not from that archive. Public
-publication of integrated Meshrix.js artifacts remains blocked on the separate
-distribution-license decision and the required release authority.
+`pactium@0.8.1`; `package-lock.json` pins its canonical registry tarball and
+SHA-512 integrity, and the published package metadata declares MIT. The server
+source archive independently retains `vendor/pactium-0.8.0.tgz`, whose original
+GPL-3.0-or-later identity remains governed by the source-package contract. The
+Dockerfile copies that vendor directory, while npm installation resolves the
+runtime dependency from the registry rather than from the archive. These are
+distinct artifacts: the runtime package's MIT metadata does not relabel the
+retained archive or certify the terms of the complete Meshrix.js distribution.
+Publication of integrated Meshrix.js artifacts remains subject to full-package
+license review and the required release authority.
 
 The workflow stages a multi-platform container and compares the intended OCI
 manifest digest with the GHCR version tag before and after creating that tag.

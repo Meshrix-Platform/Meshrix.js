@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,9 +9,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 
 const REPO_ROOT: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const VENDOR_TARBALL: any = path.join(REPO_ROOT, "vendor/pactium-0.8.0.tgz");
 const LOCK: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package-lock.json"), "utf8"));
-const PACTIUM_LOCK: any = LOCK.packages["node_modules/pactium"];
+const ROOT_PACTIUM_LOCK: any = LOCK.packages["node_modules/pactium"];
+const PACTIUM_VERSION: any = "0.8.1";
+const PACTIUM_RESOLVED: any = `https://registry.npmjs.org/pactium/-/pactium-${PACTIUM_VERSION}.tgz`;
+const SYNTHETIC_TARBALL_BYTES: any = Buffer.from("synthetic pactium 0.8.1 registry fixture\n");
+const SYNTHETIC_PACTIUM_LOCK: any = {
+  name: "pactium",
+  version: PACTIUM_VERSION,
+  resolved: PACTIUM_RESOLVED,
+  integrity: `sha512-${createHash("sha512").update(SYNTHETIC_TARBALL_BYTES).digest("base64")}`,
+  license: "MIT"
+};
 
 let registryHandle: any = null;
 
@@ -20,13 +30,21 @@ afterEach(async () : Promise<any> => {
 });
 
 describe("lock-backed npm registry artifacts", () : any => {
-  it("serves the exact public lock-resolved pactium bytes from an isolated cache", async () : Promise<any> => {
-    expect(PACTIUM_LOCK.version).toBe("0.8.0");
-    expect(PACTIUM_LOCK.resolved).toBe("https://registry.npmjs.org/pactium/-/pactium-0.8.0.tgz");
-    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-pactium-public-"));
+  it("records the exact public Pactium resolution in the root lock", async () : Promise<any> => {
+    expect(LOCK.packages[""].dependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(ROOT_PACTIUM_LOCK).toMatchObject({
+      version: PACTIUM_VERSION,
+      resolved: PACTIUM_RESOLVED,
+      license: "MIT"
+    });
+    expect(ROOT_PACTIUM_LOCK.integrity).toMatch(/^sha512-[A-Za-z0-9+/]+=*$/u);
+  });
+
+  it("serves synthetic bytes from a matching isolated lock and cache", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "lock-backed-pactium-synthetic-"));
     try {
       const cacheRoot: any = path.join(root, "cache");
-      const token: any = String(PACTIUM_LOCK.integrity).split(/\s+/u)
+      const token: any = String(SYNTHETIC_PACTIUM_LOCK.integrity).split(/\s+/u)
         .find((candidate?: any) : any => candidate.startsWith("sha512-"));
       expect(token).toBeTruthy();
       const digest: any = Buffer.from(token.slice("sha512-".length), "base64");
@@ -41,12 +59,12 @@ describe("lock-backed npm registry artifacts", () : any => {
         digest.toString("hex").slice(4)
       );
       await fs.mkdir(path.dirname(cachePath), { recursive: true });
-      const expectedBytes: any = await fs.readFile(VENDOR_TARBALL);
+      const expectedBytes: any = SYNTHETIC_TARBALL_BYTES;
       await fs.writeFile(cachePath, expectedBytes);
       const lockPath: any = path.join(root, "package-lock.json");
       await fs.writeFile(lockPath, `${JSON.stringify({
         packages: {
-          "node_modules/pactium": PACTIUM_LOCK
+          "node_modules/pactium": SYNTHETIC_PACTIUM_LOCK
         }
       })}\n`);
       registryHandle = await createLockBackedNpmRegistry({
@@ -60,14 +78,14 @@ describe("lock-backed npm registry artifacts", () : any => {
       const packument: any = await fetch(new URL("pactium", origin));
       expect(packument.status).toBe(200);
       const packumentBody: any = await packument.json();
-      expect(packumentBody.versions["0.8.0"]).toBeTruthy();
+      expect(packumentBody.versions[PACTIUM_VERSION]).toBeTruthy();
 
-      const version: any = await fetch(new URL("pactium/0.8.0", origin));
+      const version: any = await fetch(new URL(`pactium/${PACTIUM_VERSION}`, origin));
       expect(version.status).toBe(200);
       const versionBody: any = await version.json();
       expect(String(versionBody.dist.tarball)).toContain(new URL(origin).host);
       expect(String(versionBody.dist.tarball)).not.toContain("registry.npmjs.org");
-      expect(versionBody.dist.integrity).toBe(PACTIUM_LOCK.integrity);
+      expect(versionBody.dist.integrity).toBe(SYNTHETIC_PACTIUM_LOCK.integrity);
 
       const tarball: any = await fetch(versionBody.dist.tarball);
       expect(tarball.status).toBe(200);
@@ -89,9 +107,9 @@ describe("lock-backed npm registry artifacts", () : any => {
         packages: {
           "node_modules/pactium": {
             name: "pactium",
-            version: "0.8.0",
-            resolved: "file:missing-pactium-0.8.0.tgz",
-            integrity: PACTIUM_LOCK.integrity
+            version: PACTIUM_VERSION,
+            resolved: `file:missing-pactium-${PACTIUM_VERSION}.tgz`,
+            integrity: SYNTHETIC_PACTIUM_LOCK.integrity
           }
         }
       })}\n`);
