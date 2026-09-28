@@ -19,6 +19,13 @@ import { STRATEGY_PERMISSION_OPERATION_DEFINITIONS } from "../../../packages/con
 
 const temporaryDirectories: string[] = [];
 
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: any) => void;
+  const promise = new Promise<T>((settle, fail) => { resolve = settle; reject = fail; });
+  return { promise, resolve, reject };
+}
+
 afterEach(async () : Promise<any> => {
   await Promise.all(temporaryDirectories.splice(0).map((directory?: any) : any =>
     fs.promises.rm(directory, { recursive: true, force: true })));
@@ -137,10 +144,13 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
   });
   const provider: any = createApiKeyDistributionProvider({ store });
   return {
+    directory,
+    registry,
     store,
     governance,
     provider,
     advance(ms: number) : any { timestamp += ms; },
+    now() : number { return timestamp; },
     close() : any { return store.close(); }
   };
 }
@@ -771,6 +781,192 @@ describe("scoped API Key distribution", () : any => {
         keyId: revocable.record.keyId,
         expectedLifecycleRevision: revoked.lifecycleRevision
       })).rejects.toMatchObject({ code: "api_key_inactive" });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("holds one invocation reservation beyond five minutes and releases it only after execution settles", async () : Promise<any> => {
+    const current: any = harness();
+    const entered = deferred<void>();
+    const finish = deferred<void>();
+    let revalidate: (() => Promise<any>) | null = null;
+    const operation = {
+      toolId: "tools.echo",
+      risk: "low",
+      resourceContext: { workspaceId: "workspace-1" }
+    };
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Long-running worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          limits: { maxUses: 3, requestsPerWindow: 10, windowSeconds: 3600, maxConcurrentEffects: 1 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const execution = current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: async ({ revalidate: check }: Record<string, any>) : Promise<string> => {
+          revalidate = check;
+          entered.resolve();
+          await finish.promise;
+          await check();
+          return "settled";
+        }
+      });
+      await entered.promise;
+      current.advance(6 * 60 * 1000);
+      await expect(revalidate?.()).resolves.toMatchObject({
+        credentialKind: "scoped_api_key",
+        keyId: created.record.keyId,
+        lifecycleRevision: created.record.lifecycleRevision
+      });
+      await expect(current.provider.reserveEffect({ authorization, operation }))
+        .rejects.toMatchObject({ code: "api_key_concurrency_limit_reached" });
+      finish.resolve();
+      await expect(execution).resolves.toBe("settled");
+      await expect(current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: async () : Promise<string> => "next"
+      })).resolves.toBe("next");
+      await expect(current.provider.list({ subjectId: "admin", status: "active" }))
+        .resolves.toMatchObject({ items: [expect.objectContaining({ keyId: created.record.keyId, useCount: 2 })] });
+    } finally {
+      finish.resolve();
+      await current.close();
+    }
+  });
+
+  it("completes an exhausted reserved last use but still enforces actual key expiry", async () : Promise<any> => {
+    const current: any = harness();
+    const entered = deferred<void>();
+    const finish = deferred<void>();
+    let revalidate: (() => Promise<any>) | null = null;
+    const operation = {
+      toolId: "tools.echo",
+      risk: "low",
+      resourceContext: { workspaceId: "workspace-1" }
+    };
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Last-use worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-03T00:01:00.000Z",
+        policy: policy("catalog-1", {
+          limits: { maxUses: 1, requestsPerWindow: 10, windowSeconds: 3600, maxConcurrentEffects: 1 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const execution = current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: async ({ revalidate: check }: Record<string, any>) : Promise<string> => {
+          revalidate = check;
+          await check();
+          entered.resolve();
+          await finish.promise;
+          return "last-use-completed";
+        }
+      });
+      await entered.promise;
+      await expect(current.provider.list({ subjectId: "admin", status: "exhausted" }))
+        .resolves.toMatchObject({ items: [expect.objectContaining({ keyId: created.record.keyId, useCount: 1 })] });
+      await expect(current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      })).rejects.toMatchObject({ code: "api_key_use_limit_reached" });
+      current.advance(60_001);
+      await expect(revalidate?.()).rejects.toMatchObject({ code: "api_key_inactive" });
+      finish.resolve();
+      await expect(execution).resolves.toBe("last-use-completed");
+    } finally {
+      finish.resolve();
+      await current.close();
+    }
+  });
+
+  it("cancels and drains an owned invocation before closing and reopening its SQLite owner", async () : Promise<any> => {
+    const current: any = harness();
+    const entered = deferred<void>();
+    const operation = {
+      toolId: "tools.echo",
+      risk: "low",
+      resourceContext: { workspaceId: "workspace-1" }
+    };
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Closable worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          limits: { maxUses: 3, requestsPerWindow: 10, windowSeconds: 3600, maxConcurrentEffects: 1 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const execution = current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: ({ signal }: Record<string, any>) => new Promise<string>((resolve) => {
+          entered.resolve();
+          if (signal.aborted) resolve("cancelled");
+          else signal.addEventListener("abort", () => resolve("cancelled"), { once: true });
+        })
+      });
+      await entered.promise;
+      await current.provider.close();
+      await expect(execution).resolves.toBe("cancelled");
+      expect(() => createOperationPermissionStore({
+        userDataPath: current.directory,
+        registry: current.registry,
+        securityPermissions: current.governance.securityPermissions,
+        capabilityBindingGuard: false,
+        apiKeyVerifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91))
+      })).toThrowError(expect.objectContaining({ code: "operation_permission_owner_active" }));
+      await current.close();
+
+      const reopenedStore: any = createOperationPermissionStore({
+        userDataPath: current.directory,
+        registry: current.registry,
+        securityPermissions: current.governance.securityPermissions,
+        capabilityBindingGuard: false,
+        apiKeyVerifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91)),
+        apiKeyClock: () => current.now()
+      });
+      const reopenedProvider: any = createApiKeyDistributionProvider({ store: reopenedStore });
+      try {
+        const lease = await reopenedProvider.reserveEffect({ authorization, operation });
+        await reopenedProvider.releaseEffect(lease);
+      } finally {
+        await reopenedStore.close();
+      }
     } finally {
       await current.close();
     }

@@ -46,7 +46,7 @@ describe("MCP release manifest", () : any => {
       packageJson: {
         name: "meshrix-mcp-connector",
         version: "0.0.1",
-        engines: { node: "^22.0.0 || ^24.0.0" },
+        engines: { node: ">=22.19.0 <23 || >=24.3.0 <25" },
       },
       tarballName: "meshrix-mcp-connector-0.0.1.tgz",
       checksum: "1".repeat(64),

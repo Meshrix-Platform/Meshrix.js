@@ -25,11 +25,12 @@
     "pi"
   ],
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
-    "@meshrix/protocols": "0.0.1"
+    "@meshrix/protocols": "0.0.1",
+    "undici": "^8.8.0"
   },
   "imports": {
     "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",

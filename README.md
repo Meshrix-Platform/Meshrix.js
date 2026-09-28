@@ -5,7 +5,7 @@
 **Publicly available source for a private-deployable MCP platform that governs service and agent access.**
 
 [![Source license: MIT](https://img.shields.io/badge/source%20license-MIT-c9a96e?style=flat-square)](LICENSE)
-[![Node.js >=22.18.0 <23 || >=24.3.0](https://img.shields.io/badge/node-%3E%3D22.18.0%20%3C23%20%7C%7C%20%3E%3D24.3.0-4fc3f7?style=flat-square)](package.json)
+[![Node.js >=22.19.0 <23 || >=24.3.0 <25](https://img.shields.io/badge/node-%3E%3D22.19.0%20%3C23%20%7C%7C%20%3E%3D24.3.0%20%3C25-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
 [Overview](#overview) · [Status](docs/STATUS.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
@@ -87,7 +87,7 @@ flow, and deployment boundaries.
 
 ## Quick Start
 
-Requires Node.js `>=22.18.0 <23 || >=24.3.0`.
+Requires Node.js `>=22.19.0 <23 || >=24.3.0 <25`.
 
 **Local runtime**
 

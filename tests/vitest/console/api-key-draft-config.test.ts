@@ -8,19 +8,23 @@ const context = {
   knownNodeIds: new Set(["organization:group", "group:team"]),
   knownToolsetIds: new Set(["toolset-a", "toolset-b"]),
   knownTargetIds: new Set(["codex", "openclaw"]),
+  knownClientGuideIds: new Set(["generic", "codex", "openclaw"]),
   knownClassificationIds: new Set(["public", "internal"]),
   knownProfileIds: new Set(["profile-a"]),
+  knownMcpToolIdentities: new Set(["service-a\0upstream.service-a.read"]),
 };
 
 describe("api-key draft config", () => {
-  it("parses simplified draft fields and filters unknown ids", () => {
+  it("parses draft fields while filtering unknown capability ids", () => {
     const next = parseApiKeyDraftConfig({
       workloadDisplayName: "Worker",
       organizationNodeId: "organization:group",
       expiresAt: "2026-09-01T08:00:00.000Z",
+      selectedClientGuide: "generic",
       maximumRisk: "medium",
       selectedToolsetIds: ["toolset-a", "missing"],
-      selectedTargetIds: ["codex", "unknown"],
+      selectedMcpTools: [{ serviceId: "service-a", publicName: "upstream.service-a.read" }],
+      selectedTargetIds: ["codex"],
       resourcesUnrestricted: false,
       selectedDataClassifications: ["public", "secret"],
       workspaceIds: ["ws-1", "ws-2"],
@@ -31,8 +35,10 @@ describe("api-key draft config", () => {
     expect(next.workloadDisplayName).toBe("Worker");
     expect(next.organizationNodeId).toBe("organization:group");
     expect(next.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(next.selectedClientGuide).toBe("generic");
     expect(next.maximumRisk).toBe("medium");
     expect(next.selectedToolsetIds).toEqual(["toolset-a"]);
+    expect(next.selectedMcpTools).toEqual([{ serviceId: "service-a", publicName: "upstream.service-a.read" }]);
     expect(next.selectedTargetIds).toEqual(["codex"]);
     expect(next.resourcesUnrestricted).toBe(false);
     expect(next.selectedDataClassifications).toEqual(["public"]);
@@ -41,7 +47,7 @@ describe("api-key draft config", () => {
     expect(next.maxConcurrentEffects).toBe(4);
   });
 
-  it("accepts create-request shaped policy fragments", () => {
+  it("preserves explicit create-request audience restrictions and empty restrictions", () => {
     const next = parseApiKeyDraftConfig({
       workloadDisplayName: "From policy",
       organizationNodeId: "group:team",
@@ -61,6 +67,30 @@ describe("api-key draft config", () => {
     expect(next.resourcesUnrestricted).toBe(true);
     expect(next.requestsPerMinute).toBe(120);
     expect(next.maxConcurrentEffects).toBe(2);
+
+    const unrestricted = parseApiKeyDraftConfig({
+      workloadDisplayName: "Generic client",
+      selectedClientGuide: "codex",
+      selectedTargetIds: [],
+      policy: { audience: { targetIds: [] } },
+    }, context);
+    expect(unrestricted).toMatchObject({ selectedClientGuide: "codex", selectedTargetIds: [] });
+  });
+
+  it("rejects an unknown imported audience target instead of silently broadening the key", () => {
+    expect(() => parseApiKeyDraftConfig({
+      workloadDisplayName: "Imported restricted key",
+      policy: { audience: { targetIds: ["retired-target"] } },
+    }, context)).toThrow(/unknown audience restriction/u);
+  });
+
+  it("rejects imported MCP tools that are not in the current authorized discovery snapshot", () => {
+    expect(() => parseApiKeyDraftConfig({
+      selectedMcpTools: [{ serviceId: "service-a", publicName: "upstream.service-a.retired" }],
+    }, context)).toThrow(/unavailable MCP tool selection/u);
+    expect(() => parseApiKeyDraftConfig({
+      selectedMcpTools: [{ serviceId: "service-a", publicName: "upstream.service-a.read", capabilityId: "arbitrary" }],
+    }, context)).toThrow(/unsupported fields/u);
   });
 
   it("round-trips the current draft document shape", () => {
@@ -68,10 +98,12 @@ describe("api-key draft config", () => {
       workloadDisplayName: "Round trip",
       organizationNodeId: "organization:group",
       expiresAt: "2026-09-01T08:00",
+      selectedClientGuide: "generic",
       maximumRisk: "low",
       selectedProfileId: "",
       selectedToolsetIds: ["toolset-a"],
-      selectedTargetIds: ["codex"],
+      selectedMcpTools: [{ serviceId: "service-a", publicName: "upstream.service-a.read" }],
+      selectedTargetIds: [],
       resourcesUnrestricted: true,
       selectedDataClassifications: [],
       workspaceIds: "",
@@ -80,8 +112,10 @@ describe("api-key draft config", () => {
     });
     expect(parseApiKeyDraftConfig(document, context)).toMatchObject({
       workloadDisplayName: "Round trip",
+      selectedClientGuide: "generic",
       selectedToolsetIds: ["toolset-a"],
-      selectedTargetIds: ["codex"],
+      selectedMcpTools: [{ serviceId: "service-a", publicName: "upstream.service-a.read" }],
+      selectedTargetIds: [],
       resourcesUnrestricted: true,
     });
   });

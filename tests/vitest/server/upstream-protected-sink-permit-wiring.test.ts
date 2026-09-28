@@ -665,18 +665,20 @@ function startDispatch({
       authorityOmission: executionAuthorityOmission
     });
   });
-  const input: Record<string, any> = {
-    body: {
-      message: `${operationKey}-request`
-    },
-    ...(includeTargetSelector
-      ? {
-          operationKey,
-          serviceId: SERVICE_ID
-        }
-      : {}),
-    ...inputOverrides
-  };
+  const input: Record<string, any> = operationContract?._meta?.upstreamProjectedOperation === true
+    ? { message: `${operationKey}-request`, ...inputOverrides }
+    : {
+        body: {
+          message: `${operationKey}-request`
+        },
+        ...(includeTargetSelector
+          ? {
+              operationKey,
+              serviceId: SERVICE_ID
+            }
+          : {}),
+        ...inputOverrides
+      };
   const requestBody: any = Buffer.from(JSON.stringify(input));
   const dispatch: any = dispatchOperation({
     actor: AUTH_SESSION.user,
@@ -863,6 +865,7 @@ function expectOrdered(events?: any, expected?: any) : any {
 }
 
 afterEach(async () : Promise<any> => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   while (cleanupTasks.length > 0) {
     await cleanupTasks.pop()();
@@ -1185,6 +1188,109 @@ describe("governed upstream final-effect permit wiring", () : any => {
     ]);
   });
 
+  it("keeps a real dispatcher attempt through preparation beyond 60 seconds before the protected effect", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const createdAt: any = Date.now();
+    const events: any[] = [];
+    const permits: any[] = [];
+    const handlerGate: any = deferred();
+    const peer: any = await startUpstreamPeer("long-preparation", events);
+    const { credentialReads, registry } = await createCredentialBoundRegistry(events, peer.baseUrl);
+    const started: any = startDispatch({
+      events,
+      handlerGate,
+      operationKey: "http-write",
+      permits,
+      registry
+    });
+
+    try {
+      await vi.waitFor(() : any => {
+        expect(events).toContain("handler-entry");
+        expect(permits).toHaveLength(1);
+      });
+      vi.setSystemTime(createdAt + 75_001);
+      handlerGate.resolve();
+      await expect(started.dispatch).resolves.toMatchObject({ ok: true, statusCode: 200 });
+
+      expect(credentialReads).toHaveBeenCalledOnce();
+      expect(peer.requests).toHaveLength(1);
+      expectOrdered(events, [
+        "revalidate:execution",
+        "handler-entry",
+        "final-protected-sink-revalidate",
+        "credential-read",
+        "network-request:long-preparation"
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["revocation", "cancellation"])(
+    "denies a delayed dispatcher attempt after 60 seconds on %s with zero effects",
+    async (change?: any) : Promise<any> => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const createdAt: any = Date.now();
+      const events: any[] = [];
+      const permits: any[] = [];
+      const handlerGate: any = deferred();
+      const finalGate: any = deferred();
+      const finalState: any = { allowed: true, revoked: false };
+      const controller: any = new AbortController();
+      const peer: any = await startUpstreamPeer(`long-preparation-${change}`, events);
+      const { credentialReads, registry } = await createCredentialBoundRegistry(events, peer.baseUrl);
+      const started: any = startDispatch({
+        events,
+        finalGate,
+        finalState,
+        handlerGate,
+        operationKey: "http-write",
+        permits,
+        registry,
+        signal: change === "cancellation" ? controller.signal : null
+      });
+      let released = false;
+
+      try {
+        await vi.waitFor(() : any => {
+          expect(events).toContain("handler-entry");
+          expect(permits).toHaveLength(1);
+        });
+        vi.setSystemTime(createdAt + 75_001);
+        if (change === "revocation") {
+          finalState.allowed = false;
+          finalState.revoked = true;
+        }
+        released = true;
+        handlerGate.resolve();
+        await vi.waitFor(() : any => {
+          expect(events).toContain("final-protected-sink-revalidate");
+        });
+        if (change === "cancellation") controller.abort(new Error("fixture caller cancellation"));
+        finalGate.resolve();
+        await expectDispatchDenied(started);
+
+        expect(events).toContain("final-protected-sink-revalidate");
+        expect(permits).toHaveLength(1);
+        expect(credentialReads).not.toHaveBeenCalled();
+        expect(peer.requests).toHaveLength(0);
+      } finally {
+        if (!released) {
+          if (change === "revocation") {
+            finalState.allowed = false;
+            finalState.revoked = true;
+          } else {
+            controller.abort(new Error("fixture cleanup cancellation"));
+          }
+          handlerGate.resolve();
+        }
+        finalGate.resolve();
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it("rejects a missing sink permit before credential resolution or network", async () : Promise<any> => {
     const events: any[] = [];
     const peer: any = await startUpstreamPeer("missing", events);
@@ -1451,9 +1557,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
             events.push("downstream-input-substituted");
             return {
               ...input,
-              rpcParams: {
-                message: "substituted-after-dispatch"
-              }
+              message: "substituted-after-dispatch"
             };
           }
         : (input?: any) : any => {
@@ -1471,10 +1575,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
         includeTargetSelector: !projected,
         inputOverrides: projected
           ? {
-              rpcId: "fixed-projected-request",
-              rpcParams: {
-                message: "authorized-before-dispatch"
-              }
+              message: "authorized-before-dispatch"
             }
           : {},
         operationContract,

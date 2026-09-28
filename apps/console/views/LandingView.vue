@@ -44,7 +44,7 @@ const ctaLabel = computed(() => (isZh.value ? "进入控制台" : "Open Console"
       <span class="landing-divider">|</span>
       <span>&copy; 2026 Meshrix.js Contributors</span>
       <span class="landing-sep">&middot;</span>
-      <span>GPL Licensed</span>
+      <span>MIT Licensed</span>
     </footer>
   </div>
 </template>

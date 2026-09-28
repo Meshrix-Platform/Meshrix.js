@@ -4,12 +4,13 @@
   "description": "Meshrix.js MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
   "license": "MIT",
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1"
+    "@meshrix/foundation": "0.0.1",
+    "undici": "^8.8.0"
   },
   "imports": {
     "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",

@@ -1970,7 +1970,7 @@ function renderInterfaceCatalogRows(catalog?: any) : any {
     <td><code>${escapeHtml(operation.method)} ${escapeHtml(operation.path)}</code></td>
     <td><code>${escapeHtml(operation.requestMode)} · ${escapeHtml(operation.requestMediaTypes.join(", "))}</code><small>${bilingual(`Required file; optional targetFormat; external file budget ${catalog.externalFileBudgetBytes} B; request envelope ${operation.requestMaxBytes} B`, `必填 file；可选 targetFormat；外部文件预算 ${catalog.externalFileBudgetBytes} B；请求封装上限 ${operation.requestMaxBytes} B`)}</small></td>
     <td><code>${escapeHtml(operation.responseMode)} · ${escapeHtml(operation.responseMediaTypes.join(", "))}</code><small>${bilingual(`Artifact response; byte ranges enabled; maximum ${operation.responseMaxBytes} B`, `制品响应；支持字节范围；上限 ${operation.responseMaxBytes} B`)}</small></td>
-    <td><code>${escapeHtml(operation.requiredScopes.join(", "))} · ${escapeHtml(operation.risk)} · ${escapeHtml(operation.timeoutMs)} ms</code><small>${bilingual(operation.approvalRequired ? "Request approval required; forwarded through the governed Meshrix.js gateway" : "No approval wait; Grant, scope, risk, owner, permit, and audit checks remain enforced by the Meshrix.js gateway", operation.approvalRequired ? "需要请求级审批；通过受治理的 Meshrix.js 网关转发" : "无需等待审批；Meshrix.js 网关仍执行 Grant、权限域、风险、所有者、许可与审计检查")}</small></td>
+    <td><code>${escapeHtml(operation.requiredScopes.join(", "))} · ${escapeHtml(operation.risk)} · ${operation.timeoutMs === undefined ? bilingual("No configured execution deadline", "未配置执行期限") : `${escapeHtml(operation.timeoutMs)} ms`}</code><small>${bilingual(operation.approvalRequired ? "Request approval required; forwarded through the governed Meshrix.js gateway" : "No approval wait; Grant, scope, risk, owner, permit, and audit checks remain enforced by the Meshrix.js gateway", operation.approvalRequired ? "需要请求级审批；通过受治理的 Meshrix.js 网关转发" : "无需等待审批；Meshrix.js 网关仍执行 Grant、权限域、风险、所有者、许可与审计检查")}</small></td>
   </tr>`).join("");
   return `${healthRow}${operationRows}`;
 }
@@ -2069,8 +2069,8 @@ function readVerifiedUpstreamServiceInterfaces({ journeyReport, sourceText }: Re
       || !Array.isArray(operation?.requiredScopes)
       || !operation.requiredScopes.includes("gateway:write")
       || operation?.risk !== "safe_write"
-      || !Number.isSafeInteger(operation?.timeoutMs)
-      || operation.timeoutMs <= 0
+      || (operation?.timeoutMs !== undefined &&
+        (!Number.isSafeInteger(operation.timeoutMs) || operation.timeoutMs <= 0 || operation.timeoutMs > 2_147_483_647))
     ) {
       throw interfaceCatalogError();
     }

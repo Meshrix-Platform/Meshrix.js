@@ -70,7 +70,6 @@ export const MCP_STABLE_TOOL_NAME: any = "meshrix.discovery";
 export const MCP_INTERFACE_VERSION: any = "v0.0.1:mcp:interface-1";
 export const BOOTSTRAP_INSTALL_SCRIPT: any = "meshrix-mcp-install.sh";
 export const BOOTSTRAP_INSTALL_SCRIPT_ZH_CN: any = "meshrix-mcp-install.zh-CN.sh";
-export const HTTP_TIMEOUT_MS: any = 300000;
 export const SUPPORTED_TARGETS: any = MCP_SUPPORTED_TARGETS;
 export const PRIORITY_INSTALL_TARGETS: any = MCP_PRIORITY_INSTALL_TARGETS;
 export const PRIORITY_INSTALL_TARGET: any = MCP_PRIORITY_INSTALL_TARGET;

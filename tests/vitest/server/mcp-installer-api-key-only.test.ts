@@ -168,6 +168,11 @@ describe("MCP installer API Key-only input", () : any => {
   it("opens one filtered subscription for an opted-in connector and only forwards update notifications", async () : Promise<any> => {
     const controller: any = new AbortController();
     const received: any[] = [];
+    const dispatcher: any = { close: vi.fn(async () : Promise<any> => {}), destroy: vi.fn(async () : Promise<any> => {}) };
+    const dispatcherFactory: any = vi.fn((options?: any) : any => {
+      expect(options).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+      return dispatcher;
+    });
     const fetchMock: any = vi.fn(async (_url?: any, init?: any) : Promise<any> => {
       const request: any = JSON.parse(init.body);
       expect(request.method).toBe("subscriptions/listen");
@@ -198,14 +203,18 @@ describe("MCP installer API Key-only input", () : any => {
       proxySessionId: "abcdefghijklmnopqrstuvwx",
       signal: controller.signal,
       fetchImpl: fetchMock,
+      dispatcherFactory,
       onNotification(notification?: any) : any {
         received.push(notification);
         controller.abort();
       }
     });
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBe(dispatcher);
     expect(received).toHaveLength(1);
     expect(received[0].params).toEqual({ revision: 4, command: "must-not-run" });
+    expect(dispatcher.destroy).toHaveBeenCalledOnce();
+    expect(dispatcher.close).not.toHaveBeenCalled();
   });
 
   it("uses only the API Key credential header", () : any => {

@@ -3,7 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { createAgentWorkspace } from "../../../packages/agents/src/agent-workspace/index.ts";
 import {
@@ -16,7 +16,13 @@ import {
   createArtifactTransitProvider,
   createWorkspaceArtifactFileStore
 } from "../../../packages/server-runtime/src/composition/artifact-transit-provider.ts";
-import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+
+function deferred() : any {
+  let resolve: any;
+  const promise: any = new Promise((settle?: any) : any => { resolve = settle; });
+  return { promise, resolve };
+}
 
 const cleanup: any[] = [];
 
@@ -25,6 +31,78 @@ afterEach(async () : Promise<any> => {
 });
 
 describe("owner-bound upstream artifact transit", () : any => {
+  it("keeps an artifact response alive beyond retired implicit timeout durations", async () : Promise<any> => {
+    const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-artifact-lifetime-test-"));
+    cleanup.push(() : any => fs.rm(root, { recursive: true, force: true }));
+    const responseGate: any = deferred();
+    const responseStarted: any = deferred();
+    const peer: any = http.createServer(async (request?: any, response?: any) : Promise<any> => {
+      for await (const _chunk of request) { /* drain */ }
+      response.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-disposition": "attachment; filename=delayed.pdf"
+      });
+      responseStarted.resolve();
+      await responseGate.promise;
+      if (!response.destroyed) response.end(Buffer.from("%PDF-delayed-artifact"));
+    });
+    await new Promise((resolve?: any, reject?: any) : any => {
+      peer.once("error", reject);
+      peer.listen(0, "127.0.0.1", resolve);
+    });
+    cleanup.push(() : any => new Promise((resolve?: any) : any => peer.close(resolve)));
+
+    const artifactPort: any = await createArtifactTransitProvider({
+      userDataPath: root,
+      uploadSessionStore: { async resolveUploadSessionFiles() : Promise<any> { return []; } },
+      uploadCustodyReadPort: { async open() : Promise<any> { throw new Error("No uploaded input expected."); } },
+      getListenUrl: () : any => "http://gateway.invalid"
+    });
+    cleanup.push(() : any => artifactPort.close());
+    const registry: any = createUpstreamGatewayRegistry({
+      artifactTransitPort: artifactPort,
+      claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ test: true })
+    });
+    cleanup.push(() : any => registry.close());
+    installUpstreamRuntimeServices(registry, [{
+      serviceId: "artifact-lifetime",
+      serviceProtocol: "http",
+      baseUrl: `http://127.0.0.1:${peer.address().port}`,
+      allowLocalNetwork: true,
+      operations: [{
+        operationKey: "fetch-report",
+        method: "GET",
+        path: "/report",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        payloadTransport: {
+          request: structuredJsonPayloadTransport().request,
+          response: { mode: "artifact", maxBytes: 1024, mediaTypes: ["application/pdf"] }
+        }
+      }]
+    }]);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    let settled: any = false;
+    const forwarding: any = registry.forward({
+      serviceId: "artifact-lifetime",
+      operationKey: "fetch-report",
+      query: {}
+    }, { subjectId: "artifact-owner", scopes: ["gateway:read"] }, { responseAdapter: "artifact" })
+      .then((value: any) => {
+        settled = true;
+        return value;
+      });
+    await responseStarted.promise;
+    await vi.advanceTimersByTimeAsync(300_001);
+    expect(settled).toBe(false);
+    responseGate.resolve();
+    await expect(forwarding).resolves.toMatchObject({
+      ok: true,
+      resource: { name: "delayed.pdf", mediaType: "application/pdf" }
+    });
+  });
+
   it("streams an uploaded artifact as multipart, stores the response, and serves a byte range", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-artifact-transit-test-"));
     cleanup.push(() : any => fs.rm(root, { recursive: true, force: true }));

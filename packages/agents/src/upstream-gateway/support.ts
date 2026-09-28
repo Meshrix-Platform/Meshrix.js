@@ -19,6 +19,7 @@ export const UPSTREAM_GATEWAY_PROTOCOL_VERSION: any = "v0.0.1:upstream-gateway:s
 export const MAX_UPSTREAM_ENDPOINTS: any = 64;
 export const MAX_UPSTREAM_ENDPOINT_WEIGHT: any = 100;
 export const MAX_UPSTREAM_TOTAL_ENDPOINT_WEIGHT: any = 1_024;
+export const MAX_UPSTREAM_TIMEOUT_MS: any = 2_147_483_647;
 
 /** Retired startup config path. Ordinary runtime must not load this file. */
 
@@ -92,18 +93,13 @@ export function normalizeBaseUrl(value?: any, { required = true }: Record<string
     if (!required) return "";
     throw new Error("Upstream service baseUrl is required.");
   }
-  const authority: any = raw.match(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/?#]+)/u)?.[1] || "";
-  const hostPort: any = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority;
-  const hasExplicitPort: any = /:\d+$/u.test(hostPort);
   const parsed: any = new URL(raw);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Upstream service baseUrl must use http or https.");
+  if (!/^https?:\/\//iu.test(raw) || !["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Upstream service baseUrl must use HTTP or HTTPS.");
   }
-  if (!hasExplicitPort) {
-    throw new Error("Upstream service baseUrl must include an explicit port.");
+  if (parsed.username || parsed.password) {
+    throw new Error("Upstream service baseUrl must not include embedded credentials.");
   }
-  parsed.username = "";
-  parsed.password = "";
   parsed.hash = "";
   return parsed.toString().replace(/\/+$/, "");
 }
@@ -394,6 +390,7 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
     ...(approvalLayers.length > 0 ? { approvalLayers: [...new Set<any>(approvalLayers)] } : { approvalLayers: [] })
   };
   const payloadTransport: any = serviceProtocol === "mcp" ? null : compilePayloadTransport(input);
+  const timeoutMs: any = normalizeOptionalTimeoutMs(input.timeoutMs, "operation.timeoutMs");
   return {
     operationKey,
     label: text(input.label || operationKey),
@@ -407,7 +404,7 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
     requiresApproval: input.requiresApproval === true || risk === "repair_write" || risk === "destructive",
     approvalScope: text(input.approvalScope || approvalInput.approvalScope),
     requiredApproval,
-    timeoutMs: Math.max(100, Math.min(Number(input.timeoutMs || 3000), 30000)),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
     responseMaxBytes: payloadTransport?.response.maxBytes || 8 * 1024 * 1024,
     jsonRpcMethod: text(input.jsonRpcMethod || input.rpcMethod || input.methodName || operationKey),
     sensitiveBodyFields: normalizeSensitiveBodyFields(input.sensitiveBodyFields || input.redactedBodyFields),
@@ -421,6 +418,14 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
     responseSchema: object(input.responseSchema),
     ...(payloadTransport ? { payloadTransport } : {})
   };
+}
+
+export function normalizeOptionalTimeoutMs(value: any, label: any = "timeoutMs") : any {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > MAX_UPSTREAM_TIMEOUT_MS) {
+    throw new TypeError(`${label} must be a positive whole number of milliseconds within the supported timer range.`);
+  }
+  return value;
 }
 
 export function normalizeMcpTransport(value?: any) : any {
@@ -443,6 +448,8 @@ export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Re
   const headers: any = Object.fromEntries((Object.entries(rawHeaders) as [string, any][])
     .map(([key, value]: any[]) : any => [text(key), text(value)])
     .filter(([key]: any[]) : any => key));
+  const rawTimeoutMs: any = Object.hasOwn(source, "timeoutMs") ? source.timeoutMs : previous.timeoutMs;
+  const timeoutMs: any = normalizeOptionalTimeoutMs(rawTimeoutMs, "mcp.timeoutMs");
   return {
     protocolVersion: "v0.0.1:upstream-gateway:mcp-service-1",
     transport,
@@ -454,7 +461,7 @@ export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Re
     protocolVersionHint: text(source.protocolVersion || previous.protocolVersionHint || ""),
     toolNamePrefix: safePublicToolSegment(source.toolNamePrefix || source.prefix || previous.toolNamePrefix || serviceId),
     toolsCacheTtlMs: Math.max(0, Math.min(Number(source.toolsCacheTtlMs ?? previous.toolsCacheTtlMs ?? 30_000), 600_000)),
-    timeoutMs: Math.max(100, Math.min(Number(source.timeoutMs || previous.timeoutMs || 30_000), 300_000))
+    ...(timeoutMs === undefined ? {} : { timeoutMs })
   };
 }
 
@@ -484,7 +491,7 @@ export function publicMcpConfig(config: Record<string, any> = {}) : any {
     headerCount: Object.keys(object(config.headers)).length,
     toolNamePrefix: config.toolNamePrefix || "",
     toolsCacheTtlMs: Number(config.toolsCacheTtlMs || 0),
-    timeoutMs: Number(config.timeoutMs || 0)
+    ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs })
   };
 }
 

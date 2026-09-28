@@ -1,10 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { context, createTestGateway, descriptor, route } from "../support";
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
 
 async function until(predicate: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 250; attempt += 1) {
     if (predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("Synthetic invocation did not reach the expected lifecycle phase.");
+}
+
+async function untilEventLoop(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error("Synthetic invocation did not reach the expected lifecycle phase.");
 }
@@ -67,4 +81,92 @@ describe("gateway lifecycle under pressure", () => {
       expect((await Promise.all(blocked)).every((outcome) => outcome.kind === "complete")).toBe(true);
     } finally { release(); await gateway.close({ drainDeadline: 5000 }); }
   }, 10_000);
+
+  it("[GC-051] an actual gateway invocation survives the former implicit queue cutoff", async () => {
+    const hold = deferred<void>();
+    const firstEntered = deferred<void>();
+    const secondEntered = deferred<void>();
+    let upstreamCalls = 0;
+    const gateway = createTestGateway({
+      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: "synthetic" }, effectClass: "read" }) })],
+      admissionOptions: { maxInFlight: 1, queueSize: 2 },
+      credentialProvider: { resolve: async () => ({ Authorization: "synthetic" }) },
+      upstream: { invoke: async () => {
+        upstreamCalls += 1;
+        if (upstreamCalls === 1) { firstEntered.resolve(); await hold.promise; }
+        else secondEntered.resolve();
+        return { status: 200, body: { resultType: "complete", content: [] } };
+      } }
+    });
+    const calls: Array<ReturnType<typeof gateway.invoke>> = [];
+    await gateway.start();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    try {
+      const longLivedContext = { ...context, grant: { ...context.grant, expiresAt: Date.now() + 120_000 } };
+      calls.push(gateway.invoke(longLivedContext, { routeRef: "route.demo", method: "tools/call", params: {} }));
+      await firstEntered.promise;
+      calls.push(gateway.invoke(longLivedContext, { routeRef: "route.demo", method: "tools/call", params: {} }));
+      await untilEventLoop(() => gateway.stats().admission.queued === 1);
+
+      expect(gateway.stats().admission).toMatchObject({ active: 1, queued: 1, timers: 0 });
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(gateway.stats().admission).toMatchObject({ active: 1, queued: 1, timers: 0 });
+      expect(upstreamCalls).toBe(1);
+
+      hold.resolve();
+      expect((await calls[0]).kind).toBe("complete");
+      await secondEntered.promise;
+      expect((await calls[1]).kind).toBe("complete");
+      expect(upstreamCalls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+      hold.resolve();
+      await Promise.allSettled(calls);
+      await gateway.close();
+    }
+  });
+
+  it("[GC-052] revalidates revoked authority after dequeue before permit, credential, or upstream effect", async () => {
+    const hold = deferred<void>();
+    const firstEntered = deferred<void>();
+    let revoked = false;
+    let credentialCalls = 0;
+    let upstreamCalls = 0;
+    const gateway = createTestGateway({
+      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: "synthetic" }, effectClass: "read" }) })],
+      admissionOptions: { maxInFlight: 1, queueSize: 1 },
+      currentAuthority: { read: async ({ context: original }) => ({ ...original, grant: { ...original.grant, revoked } }) },
+      credentialProvider: { resolve: async () => { credentialCalls += 1; return { Authorization: "synthetic" }; } },
+      upstream: { invoke: async () => {
+        upstreamCalls += 1;
+        if (upstreamCalls === 1) { firstEntered.resolve(); await hold.promise; }
+        return { status: 200, body: { resultType: "complete", content: [] } };
+      } }
+    });
+    const calls: Array<ReturnType<typeof gateway.invoke>> = [];
+    await gateway.start();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    try {
+      calls.push(gateway.invoke(context, { routeRef: "route.demo", method: "tools/call", params: {} }));
+      await firstEntered.promise;
+      calls.push(gateway.invoke(context, { routeRef: "route.demo", method: "tools/call", params: {} }));
+      await untilEventLoop(() => gateway.stats().admission.queued === 1);
+      expect(gateway.stats().admission).toMatchObject({ active: 1, queued: 1, timers: 0 });
+      revoked = true;
+
+      hold.resolve();
+      expect((await calls[0]).kind).toBe("complete");
+      expect(await calls[1]).toMatchObject({ kind: "failure", code: "grant_revoked", effectOutcome: "not_started" });
+      expect({ credentialCalls, upstreamCalls, permits: gateway.stats().permits }).toMatchObject({
+        credentialCalls: 1,
+        upstreamCalls: 1,
+        permits: { records: 1 }
+      });
+    } finally {
+      vi.useRealTimers();
+      hold.resolve();
+      await Promise.allSettled(calls);
+      await gateway.close();
+    }
+  });
 });

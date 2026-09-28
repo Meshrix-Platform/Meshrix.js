@@ -4,7 +4,7 @@
   "description": "Meshrix.js pure infrastructure primitives — security, policy, config, storage, proof, checkpoint, workflow, observability, module-system",
   "license": "MIT",
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
   "imports": {
@@ -497,6 +497,11 @@
       "source": "./src/storage/storage-kernel.ts",
       "types": "./dist/storage/storage-kernel.d.ts",
       "default": "./dist/storage/storage-kernel.js"
+    },
+    "./storage/storage-lifecycle-lock": {
+      "source": "./src/storage/storage-lifecycle-lock.ts",
+      "types": "./dist/storage/storage-lifecycle-lock.d.ts",
+      "default": "./dist/storage/storage-lifecycle-lock.js"
     },
     "./storage/storage-ports": {
       "source": "./src/storage/storage-ports.ts",

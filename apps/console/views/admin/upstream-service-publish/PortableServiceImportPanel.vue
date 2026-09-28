@@ -27,31 +27,18 @@ const sourceName = ref("");
 const portableDocumentPlaceholder =
   `{"kind":"${PORTABLE_UPSTREAM_SERVICE_KIND}",` +
   `"schemaVersion":"${PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION}",` +
-  '"serviceKey":"inventory","descriptor":{...}}';
+  '"serviceKey":"inventory","descriptor":{"serviceProtocol":"mcp","mcp":{"transport":"http","url":"https://service.example:443/mcp","protocolVersion":"2026-07-28"}}}';
 const portableDocumentTemplate: PortableUpstreamServiceImport = {
   kind: PORTABLE_UPSTREAM_SERVICE_KIND,
   schemaVersion: PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
   serviceKey: "replace-with-service-key",
   descriptor: {
-    serviceProtocol: "http",
-    baseUrl: "https://service.example:443",
-    operations: [{
-      operationKey: "replace-with-operation-key",
-      method: "GET",
-      path: "/replace-with-path",
-      payloadTransport: {
-        request: {
-          mode: "structured_json",
-          maxBytes: 1_048_576,
-          mediaTypes: ["application/json"],
-        },
-        response: {
-          mode: "structured_json",
-          maxBytes: 1_048_576,
-          mediaTypes: ["application/json"],
-        },
-      },
-    }],
+    serviceProtocol: "mcp",
+    mcp: {
+      transport: "http",
+      url: "https://service.example:443/mcp",
+      protocolVersion: "2026-07-28",
+    },
   },
 };
 
@@ -105,7 +92,7 @@ function loadDraft() {
 <template>
   <ConfigFoldCard class="portable-import-panel" title="Import service JSON" subtitle="Loads a draft only">
     <div class="import-intro">
-      <p>Paste or choose a portable service document, then load it into the editable draft for review.</p>
+      <p>Import an HTTP, JSON-RPC, or remote MCP HTTP descriptor. MCP imports use remote URLs and never include commands or stdio configuration.</p>
       <div class="import-source-actions">
         <button
           class="table-action"

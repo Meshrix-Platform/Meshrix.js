@@ -254,6 +254,38 @@ export function createToolExecutionRuntime({
     return { ok: true, operationCount: operationsById.size };
   }
 
+  async function runApiKeyMcpInvocation({
+    authorization,
+    toolId,
+    dynamicCapability = null,
+    signal = null,
+    execute
+  }: Record<string, any> = {}): Promise<any> {
+    if (typeof execute !== "function") throw new TypeError("MCP invocation requires an execution callback.");
+    if (authorization === null || authorization === undefined) {
+      return execute({ signal, revalidate: async () : Promise<void> => {} });
+    }
+    if (authorization?.credentialKind !== "scoped_api_key") {
+      throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+        code: "api_key_authority_unavailable",
+        statusCode: 503
+      });
+    }
+    const tool = toolWithDynamicCapability(registry.getTool(String(toolId || "")), { dynamicCapability });
+    if (!tool || typeof apiKeyDistributionProvider?.withEffectReservation !== "function") {
+      throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+        code: "api_key_authority_unavailable",
+        statusCode: 503
+      });
+    }
+    return apiKeyDistributionProvider.withEffectReservation({
+      authorization,
+      operation: apiKeyOperationForTool(tool),
+      signal,
+      execute
+    });
+  }
+
   function logTool(level?: any, event?: any, details: Record<string, any> = {}) : any {
     if (!logger || typeof logger[level] !== "function") {
       return;
@@ -931,25 +963,33 @@ export function createToolExecutionRuntime({
         return denyInvalidInput(schemaValidation);
       }
 
-    let apiKeyEffectLease: any = null;
+    let apiKeyEffectRevalidate: (() => Promise<any>) | null = null;
     const revalidateAuthorization: any = async () : Promise<any> => {
       let currentAuthorization: any;
       if (apiKeyAuthorization) {
-        if (!apiKeyEffectLease) {
+        if (!apiKeyEffectRevalidate) {
           currentAuthorization = {
             ok: false,
             status: 409,
-            reasonCode: "api_key_effect_lease_required",
+            reasonCode: "api_key_effect_reservation_required",
             error: "API Key effect reservation is unavailable."
           };
         } else {
-          await apiKeyDistributionProvider.revalidateEffect(apiKeyEffectLease);
-          currentAuthorization = {
-            ok: true,
-            restriction: policyRestriction,
-            subject: runtimeSubject,
-            apiKeyAuthorization
-          };
+          const currentApiKeyAuthorization = await apiKeyEffectRevalidate();
+          currentAuthorization = currentApiKeyAuthorization?.credentialKind === "scoped_api_key" &&
+            currentApiKeyAuthorization.keyId === apiKeyAuthorization.keyId
+            ? {
+                ok: true,
+                restriction: policyRestriction,
+                subject: runtimeSubject,
+                apiKeyAuthorization: currentApiKeyAuthorization
+              }
+            : {
+                ok: false,
+                status: 409,
+                reasonCode: "api_key_revision_stale",
+                error: "API Key effect authority could not be revalidated."
+              };
         }
       } else {
         currentAuthorization = await store.authorizeRequest({
@@ -1167,51 +1207,64 @@ export function createToolExecutionRuntime({
         : null
     };
     try {
-      if (apiKeyAuthorization && dryRun !== true) {
-        if (!apiKeyDistributionProvider?.reserveEffect) {
-          throw Object.assign(new Error("API Key effect reservation provider is unavailable."), {
-            code: "api_key_authority_unavailable",
-            statusCode: 503
-          });
-        }
-        apiKeyEffectLease = await apiKeyDistributionProvider.reserveEffect({
-          authorization: apiKeyAuthorization,
-          operation: apiKeyOperation
-        });
-        await apiKeyDistributionProvider.revalidateEffect(apiKeyEffectLease);
-      }
       const toolActor: any = toolActorFromAuthorization({
         authorization,
         trustedApproval,
         operation,
         tool
       });
-      await runWithAbortableTimeout(
-        (signal?: any) : any => operationDispatcher({
-          operation,
-          controllers,
-          request,
-          response: captured,
-          requestBody: directRequest.requestBody,
-          url: directRequest.url,
-          params: directRequest.params,
-          input: operationInput,
-          transport: "operation-permission",
-          method: operation.http?.method || "POST",
-          authorizeOperation: null,
-          revalidateAuthorization,
-          operationAuditStore,
-          operationProofSubstrate,
-          concurrencyScope: operationConcurrencyScope,
-          logger,
-          authSession: { user: toolActor },
-          actor: toolActor,
-          skipAuthorization: true,
-          signal
-        }),
-        tool.timeoutMs,
-        signal
-      );
+      const dispatch = async (dispatchSignal: any) : Promise<void> => {
+        await runWithAbortableTimeout(
+          (signal?: any) : any => operationDispatcher({
+            operation,
+            controllers,
+            request,
+            response: captured,
+            requestBody: directRequest.requestBody,
+            url: directRequest.url,
+            params: directRequest.params,
+            input: operationInput,
+            transport: "operation-permission",
+            operationBudgetOwned: true,
+            method: operation.http?.method || "POST",
+            authorizeOperation: null,
+            revalidateAuthorization,
+            operationAuditStore,
+            operationProofSubstrate,
+            concurrencyScope: operationConcurrencyScope,
+            logger,
+            authSession: { user: toolActor },
+            actor: toolActor,
+            skipAuthorization: true,
+            signal
+          }),
+          tool.timeoutMs,
+          dispatchSignal
+        );
+      };
+      if (apiKeyAuthorization && dryRun !== true) {
+        if (typeof apiKeyDistributionProvider?.withEffectReservation !== "function") {
+          throw Object.assign(new Error("API Key effect reservation provider is unavailable."), {
+            code: "api_key_authority_unavailable",
+            statusCode: 503
+          });
+        }
+        await apiKeyDistributionProvider.withEffectReservation({
+          authorization: apiKeyAuthorization,
+          operation: apiKeyOperation,
+          signal,
+          execute: async ({ signal: ownedSignal, revalidate }: Record<string, any>) : Promise<void> => {
+            apiKeyEffectRevalidate = revalidate;
+            try {
+              await dispatch(ownedSignal);
+            } finally {
+              apiKeyEffectRevalidate = null;
+            }
+          }
+        });
+      } else {
+        await dispatch(signal);
+      }
       const buffer: any = capturedBuffer(captured);
       const statusCode: any = captured.statusCode || 200;
       const payload: any = parseCapturedJson(captured);
@@ -1387,9 +1440,7 @@ export function createToolExecutionRuntime({
         input, request, store, inputBytes, publishEvent, startedAt
       });
     } finally {
-      if (apiKeyEffectLease) {
-        await apiKeyDistributionProvider.releaseEffect(apiKeyEffectLease).catch(() : any => {});
-      }
+      apiKeyEffectRevalidate = null;
       request.__meshrixToolRuntimeAuthorization = previousAuthorization;
     }
   }
@@ -1402,5 +1453,5 @@ export function createToolExecutionRuntime({
     apiKeyDistributionProvider
   });
 
-  return { refreshOperations, executeTool, resumePendingOperation };
+  return { refreshOperations, executeTool, resumePendingOperation, runApiKeyMcpInvocation };
 }

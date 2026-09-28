@@ -168,13 +168,17 @@ describe("operation resource mapping", () : any => {
     }).resourceKind).toBe("custom");
   });
 
-  it("projects long-running upstream forwarding timeout from the operation registry", () : any => {
+  it("keeps upstream business forwarding unbounded unless a caller chooses a budget", () : any => {
     const catalog: any = createToolCatalog({ operations: SERVER_API_OPERATIONS });
     const gatewayForward: any = catalog.tools.find((tool?: any) : any => tool.id === "meshrix.gateway.forward");
+    const gatewayTransit: any = catalog.tools.find((tool?: any) : any => tool.id === "meshrix.gateway.payloadTransit");
     const gatewayMetrics: any = catalog.tools.find((tool?: any) : any => tool.id === "meshrix.gateway.metrics");
 
-    expect(operationById("gateway.forward").execution?.timeoutMs).toBe(180_000);
-    expect(gatewayForward?.timeoutMs).toBe(180_000);
+    expect(operationById("gateway.forward").execution?.timeoutMs).toBeNull();
+    expect(operationById("gateway.payload.transit").execution?.timeoutMs).toBeNull();
+    expect(gatewayForward?.timeoutMs).toBeNull();
+    expect(gatewayTransit).toBeDefined();
+    expect(gatewayTransit?.timeoutMs).toBeNull();
     expect(gatewayMetrics?.timeoutMs).toBe(30_000);
   });
 });

@@ -1,15 +1,40 @@
 ---
 name: meshrix-js-downstream-mcp-client-access
-description: Guide Console-issued API Key-only downstream MCP access through signed connector installation, protected proxy use, catalog refresh, governed operation approval, and local uninstall.
+description: Connect standard MCP clients with Console-issued scoped API Keys, or install an optional signed connector; preserve current tool authorization and credential custody.
 ---
 
 # Meshrix.js Downstream MCP Client Access
 
-Read the current Meshrix.js native-installer architecture and MCP gateway contract. This flow covers
-connector-managed downstream clients; official external client product behavior remains client-owned.
+Read the current MCP gateway contract for the implemented downstream protocol
+profile. A conforming client can connect directly to the instance; its product
+name does not grant or prevent access. External client behavior remains
+client-owned, and upstream protocol adapters do not establish downstream
+protocol support.
 
-Use only the signed connector target matrix and documented local or container-bridge endpoints.
-Do not generalize this workflow to arbitrary remote clients.
+## Standard HTTP MCP access
+
+1. An authorized issuer creates a Console API Key for the selected organization
+   and workload policy. Select the intended tools and their current capabilities.
+   Leave client-product audience restrictions empty unless explicitly required.
+2. Connect to `<server-url>/mcp` with a client configured for the declared
+   downstream profile. Supply the key through protected secret input using
+   `X-Meshrix.js-Api-Key` or the accepted bearer authentication header. Keep it
+   out of command arguments, ordinary configuration, logs and reports.
+3. Discover and list the current authorized tools, then invoke the selected
+   operation. Successful authentication alone does not prove tool access;
+   diagnose protocol or policy errors against the declared profile and current
+   key policy. Do not add a product identity header or issue a broader key as an
+   automatic workaround.
+4. Catalog refresh, per-call authorization, approval, revocation and expiry use
+   the same platform owners as connector-managed access. A connection guide is
+   client configuration help, not an audience restriction or qualification claim.
+
+## Optional signed connector installation
+
+This path covers packaged connector-managed clients. Read the native-installer
+architecture and use the signed connector target matrix and documented local
+or container-bridge endpoints for installation. These installation requirements
+do not apply to the direct HTTP MCP path above.
 
 For client install/data/config/session path templates and adapter-facing layout of
 a named MCP target, use the repository-local connector and installer contracts
@@ -17,7 +42,7 @@ as the only layout authority. Meshrix.js installer contracts
 remain authoritative for signed discovery, credential handling, and
 connector-owned config mutation.
 
-## Canonical transaction
+### Connector transaction
 
 1. An authenticated administrator creates a short-lived, least-privilege API Key in Console Key
    Distribution. The key is scoped to the workload, organization branch, server audience, connector
@@ -43,13 +68,15 @@ connector-owned config mutation.
 8. Uninstall removes only the connector-managed client configuration and local adapter material.
    It requires no credential, credential lookup, or server request; cleanup failures remain visible.
 
-## Required invariants
+## Shared and connector-specific invariants
 
 - Only a Console-issued scoped API Key authenticates an ordinary downstream MCP client.
 - Plaintext exists only in the one-time Console response, approved transfer channel, and direct
   process memory. Register verifier values with the redaction tracker before any output.
-- Signed release/discovery verification and the supported-target matrix remain mandatory.
-- Client configuration contains the environment-variable name, never plaintext.
+- Packaged connector installation requires signed release/discovery verification
+  and the supported-target matrix. Direct standard MCP access does not require
+  connector installation or a client-product audience restriction.
+- Packaged connector configuration contains the environment-variable name, never plaintext.
 - Tool visibility is the current server policy projection; client-declared scope is not authority.
 - Operation approval remains a separate, post-authentication Operation Permission control.
 - Generic process identity and delegated-child bindings remain independent where their canonical

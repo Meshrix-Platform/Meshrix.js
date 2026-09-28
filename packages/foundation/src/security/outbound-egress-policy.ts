@@ -37,6 +37,11 @@ export interface OutboundEgressOptions {
   label?: string;
 }
 
+export interface OutboundResponseTimeouts {
+  headersTimeout?: number;
+  bodyTimeout?: number;
+}
+
 export interface OutboundEgressDecision {
   schemaVersion: typeof OUTBOUND_EGRESS_DECISION_VERSION;
   ok: boolean;
@@ -99,6 +104,7 @@ export interface FetchWithPinnedDnsOptions extends OutboundEgressOptions {
   fetchImpl?: FetchImplementation;
   beforeFetch?: () => void | Promise<void>;
   maxRedirects?: number;
+  responseTimeouts?: OutboundResponseTimeouts;
 }
 
 export interface RequestWithPinnedDnsOptions extends OutboundEgressOptions {
@@ -338,31 +344,34 @@ function selectedPinnedDnsAddress(decision: OutboundRuntimeEgressDecision): DnsA
   return addresses.find((record) => !record.restricted) ?? addresses[0] ?? null;
 }
 
-function createPinnedDnsDispatcher(decision: OutboundRuntimeEgressDecision): PinnedDnsDispatcher {
+function createPinnedDnsDispatcher(decision: OutboundRuntimeEgressDecision, responseTimeouts?: OutboundResponseTimeouts): PinnedDnsDispatcher {
   const pinned = selectedPinnedDnsAddress(decision);
-  if (!pinned?.address) return { dispatcher: undefined, pinnedDns: null, async close() {} };
+  if (!pinned?.address && !responseTimeouts) return { dispatcher: undefined, pinnedDns: null, async close() {} };
   const expectedHost = normalizeHost(decision.host);
-  const address = pinned.address.trim();
-  const family = Number(pinned.family || net.isIP(address) || 0);
+  const address = String(pinned?.address || "").trim();
+  const family = Number(pinned?.family || net.isIP(address) || 0);
   const dispatcher = new Agent({
-    connect: {
-      lookup(hostname, options, callback) {
-        const requestedHost = normalizeHost(hostname);
-        if (requestedHost && expectedHost && requestedHost !== expectedHost) {
-          callback(new Error(`Pinned DNS lookup rejected unexpected host: ${requestedHost}`), "", 0);
-          return;
+    ...(pinned?.address ? {
+      connect: {
+        lookup(hostname, options, callback) {
+          const requestedHost = normalizeHost(hostname);
+          if (requestedHost && expectedHost && requestedHost !== expectedHost) {
+            callback(new Error(`Pinned DNS lookup rejected unexpected host: ${requestedHost}`), "", 0);
+            return;
+          }
+          if (options?.all) {
+            callback(null, [{ address, family }]);
+            return;
+          }
+          callback(null, address, family);
         }
-        if (options?.all) {
-          callback(null, [{ address, family }]);
-          return;
-        }
-        callback(null, address, family);
       }
-    }
+    } : {}),
+    ...(responseTimeouts || {})
   });
   return {
     dispatcher,
-    pinnedDns: { host: expectedHost, address, family, addressCategory: pinned.addressCategory, restricted: pinned.restricted },
+    pinnedDns: pinned?.address ? { host: expectedHost, address, family, addressCategory: pinned.addressCategory, restricted: pinned.restricted } : null,
     async close(): Promise<void> { await dispatcher.close(); }
   };
 }
@@ -406,9 +415,9 @@ function globalRequestInit(init: Parameters<FetchImplementation>[1]): globalThis
   return init as globalThis.RequestInit | undefined;
 }
 
-async function fetchPinnedDnsHop({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, fetchImpl, beforeFetch }: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
+async function fetchPinnedDnsHop({ url = "", label = "outbound.url", policyPreset = "", policies = {}, init = {}, lookup = defaultDnsLookup, fetchImpl, beforeFetch, responseTimeouts }: FetchWithPinnedDnsOptions = {}): Promise<PinnedFetchResult> {
   const decision = await assertOutboundRuntimeEgressAllowed({ url, label, policyPreset, policies, lookup });
-  const pinned = createPinnedDnsDispatcher(decision);
+  const pinned = createPinnedDnsDispatcher(decision, responseTimeouts);
   try {
     const requestInit = { ...init, ...(pinned.dispatcher ? { dispatcher: pinned.dispatcher } : {}) };
     await beforeFetch?.();

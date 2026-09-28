@@ -122,7 +122,11 @@ function upstreamGatewayOperation({
       cost: risk === "read_only" ? 1 : 2
     },
     execution: {
-      timeoutMs: Math.max(100, Math.min(Number(timeoutMs || 30_000), 300_000))
+      timeoutMs: timeoutMs === null
+        ? null
+        : typeof timeoutMs === "number" && Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 2_147_483_647
+          ? timeoutMs
+          : (() : never => { throw new TypeError("Operation execution timeout must be a positive whole number within the supported timer range."); })()
     },
     safety: {
       risk,
@@ -245,7 +249,7 @@ const UPSTREAM_GATEWAY_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
     scopes: ["gateway:write"],
     risk: "safe_write",
     maxParallel: 16,
-    timeoutMs: 180_000,
+    timeoutMs: null,
     required: ["serviceId", "operationKey"]
   }),
   upstreamGatewayOperation({
@@ -255,7 +259,7 @@ const UPSTREAM_GATEWAY_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
     scopes: ["gateway:write"],
     risk: "safe_write",
     maxParallel: 16,
-    timeoutMs: 300_000,
+    timeoutMs: null,
     params: [
       ...UPSTREAM_GATEWAY_SERVICE_ID_PARAMS,
       { name: "operationKey", aliases: ["operation-key", "operationKey"], required: true }

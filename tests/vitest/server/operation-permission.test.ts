@@ -46,6 +46,7 @@ vi.mock("@meshrix/protocols/http/http-utils", () : any => ({
 }));
 
 import { createOperationPermissionHttpRouter } from "../../../packages/capabilities/src/operation-permission-core/http.ts";
+import { createToolCatalog } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
 import { createToolExecutionRuntime } from "../../../packages/capabilities/src/operation-permission-core/runtime.ts";
 import { pendingResumeInput } from "../../../packages/capabilities/src/operation-permission-core/runtime-common.ts";
 import {
@@ -440,6 +441,23 @@ beforeEach(() : any => {
 });
 
 describe("operation-permission runtime (behavior)", () : any => {
+  it("keeps the standard execution deadline for unrelated operations with no upstream lifetime marker", () : any => {
+    const catalog = createToolCatalog({ operations: [{
+      id: "unrelated.operation",
+      toolId: "unrelated.tool",
+      featureId: "test",
+      label: "Unrelated operation",
+      target: { controller: "test", method: "run" },
+      http: { method: "POST", path: "/test" },
+      inputSchema: { type: "object" },
+      safety: { risk: "read_only" },
+      toolsets: ["meshrix.runtime.read"],
+      requiredScopes: ["test:run"]
+    }] });
+
+    expect(catalog.tools[0].timeoutMs).toBe(30_000);
+  });
+
   it("preserves opaque secret-reference arrays without persisting secret material", () : any => {
     expect(pendingResumeInput({
       capabilities: {
@@ -519,8 +537,12 @@ describe("operation-permission runtime (behavior)", () : any => {
       scopeIds: ["gateway:read"],
       maximumRisk: "low"
     };
-    const reserveEffect: any = vi.fn(async () : Promise<any> => ({ leaseId: "lease-dynamic-tool" }));
     const authorizeOperation: any = vi.fn(async () : Promise<any> => authorization);
+    const revalidateEffect: any = vi.fn(async () : Promise<any> => authorization);
+    const withEffectReservation: any = vi.fn(async ({ signal, execute }: Record<string, any>) : Promise<any> => {
+      await revalidateEffect();
+      return execute({ signal, revalidate: revalidateEffect });
+    });
     const fixture: any = createRuntimeFixture({
       tool: {
         serviceId: "static-dispatcher",
@@ -533,9 +555,7 @@ describe("operation-permission runtime (behavior)", () : any => {
       runtime: {
         apiKeyDistributionProvider: {
           authorizeOperation,
-          reserveEffect,
-          revalidateEffect: vi.fn(async () : Promise<any> => authorization),
-          releaseEffect: vi.fn(async () : Promise<any> => undefined)
+          withEffectReservation
         }
       }
     });
@@ -589,7 +609,8 @@ describe("operation-permission runtime (behavior)", () : any => {
         resourceContext: dynamicCapability.resourceContext
       })
     }));
-    expect(reserveEffect).toHaveBeenCalledWith(expect.objectContaining({
+    expect(withEffectReservation).toHaveBeenCalledWith(expect.objectContaining({
+      authorization,
       operation: {
         id: fixture.tool.id,
         toolId: fixture.tool.id,
@@ -670,9 +691,7 @@ describe("operation-permission runtime (behavior)", () : any => {
     const fixture: any = createRuntimeFixture({
       runtime: {
         apiKeyDistributionProvider: {
-          reserveEffect: vi.fn(async () : Promise<never> => { throw denial; }),
-          revalidateEffect: vi.fn(),
-          releaseEffect: vi.fn()
+          withEffectReservation: vi.fn(async () : Promise<never> => { throw denial; })
         }
       }
     });
@@ -1318,11 +1337,11 @@ describe("operation-permission runtime (behavior)", () : any => {
   it("resumes an API Key pending approval only after lifecycle revalidation", async () : Promise<any> => {
     const authorization: any = scopedApiKeyAuthorization();
     let pendingRecord: any = null;
+    const withEffectReservation: any = vi.fn(async ({ signal, execute }: Record<string, any>) : Promise<any> =>
+      execute({ signal, revalidate: async () : Promise<any> => authorization }));
     const apiKeyDistributionProvider: Record<string, any> = {
       revalidateAuthorization: vi.fn(() : any => authorization),
-      reserveEffect: vi.fn(async () : Promise<any> => ({ leaseId: "lease-api-key" })),
-      revalidateEffect: vi.fn(async () : Promise<any> => authorization),
-      releaseEffect: vi.fn(async () : Promise<any> => undefined)
+      withEffectReservation
     };
     const fixture: any = createRuntimeFixture({
       tool: { requiresApproval: true },
@@ -1367,7 +1386,7 @@ describe("operation-permission runtime (behavior)", () : any => {
     expect(resumed).toMatchObject({ ok: true, status: 200 });
     expect(apiKeyDistributionProvider.revalidateAuthorization).toHaveBeenCalledWith(authorization);
     expect(fixture.store.getGrant).not.toHaveBeenCalled();
-    expect(apiKeyDistributionProvider.reserveEffect).toHaveBeenCalled();
+    expect(withEffectReservation).toHaveBeenCalled();
   });
 
   it("fails a pending API Key approval closed when its lifecycle revision is stale", async () : Promise<any> => {

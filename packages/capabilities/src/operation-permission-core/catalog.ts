@@ -76,16 +76,15 @@ function normalizeRisk(operation: Record<string, any> = {}) : any {
 }
 
 function operationTimeoutMs(operation: Record<string, any> = {}, fallback: any = 30_000) : any {
-  const raw: any = operation.execution?.timeoutMs ??
-    operation.target?.timeoutMs ??
-    operation.safety?.timeoutMs ??
-    operation.timeoutMs ??
-    fallback;
-  const value: any = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    return fallback;
+  const sources: any[] = [operation.execution, operation.target, operation.safety, operation];
+  const source: any = sources.find((candidate?: any) => candidate && Object.hasOwn(candidate, "timeoutMs"));
+  if (!source) return fallback;
+  const raw: any = source.timeoutMs;
+  if (raw === null) return null;
+  if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 1 || raw > 2_147_483_647) {
+    throw new TypeError("Operation execution timeout must be a positive whole number within the supported timer range, or null for no deadline.");
   }
-  return Math.max(100, Math.min(Math.trunc(value), 300_000));
+  return raw;
 }
 
 function inferToolsets(operation?: any, scopes: any = [], toolId: any = "", risk: any = "read_only") : any {

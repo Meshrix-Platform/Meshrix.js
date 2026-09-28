@@ -146,7 +146,15 @@ export async function runWithAbortableTimeout(run?: any, timeoutMs?: any, parent
     throw new TypeError("Timed tool execution parent signal must be an AbortSignal.");
   }
   if (parentSignal?.aborted) throw abortedError();
-  const normalizedTimeout: any = Math.max(1, Number(timeoutMs || 30_000));
+  const normalizedTimeout: any = timeoutMs === undefined
+    ? 30_000
+    : timeoutMs === null
+      ? null
+      : timeoutMs;
+  if (normalizedTimeout !== null &&
+      (typeof normalizedTimeout !== "number" || !Number.isSafeInteger(normalizedTimeout) || normalizedTimeout < 1 || normalizedTimeout > 2_147_483_647)) {
+    throw new TypeError("Timed tool execution timeout must be a positive whole number within the supported timer range, or null for no deadline.");
+  }
   const abortController: any = new AbortController();
   let terminalFailure: any = null;
   let timer: any = null;
@@ -158,12 +166,14 @@ export async function runWithAbortableTimeout(run?: any, timeoutMs?: any, parent
   try {
     parentSignal?.addEventListener?.("abort", abortFromParent, { once: true });
     if (parentSignal?.aborted) abortFromParent();
-    timer = setTimeout(() : any => {
-      if (terminalFailure) return;
-      terminalFailure = timeoutError(normalizedTimeout);
-      abortController.abort(terminalFailure);
-    }, normalizedTimeout);
-    timer.unref?.();
+    if (normalizedTimeout !== null) {
+      timer = setTimeout(() : any => {
+        if (terminalFailure) return;
+        terminalFailure = timeoutError(normalizedTimeout);
+        abortController.abort(terminalFailure);
+      }, normalizedTimeout);
+      timer.unref?.();
+    }
     const result: any = await run(abortController.signal);
     if (terminalFailure) throw terminalFailure;
     return result;

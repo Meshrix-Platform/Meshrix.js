@@ -1,4 +1,3 @@
-import { CLOSED_EMPTY_JSON_OBJECT_SCHEMA } from "@meshrix/foundation/security/closed-json-schema";
 import { assertExternalSchemaBudget } from "@meshrix/gateway/schema";
 import {
   asArray,
@@ -33,9 +32,9 @@ function invalidToolSchemaError(kind: any = "input") : any {
 function projectedMcpSchema(
   schema?: any,
   label?: any,
-  { requireTopLevelObject = true, kind = "input", closedWhenAbsent = false }: Record<string, any> = {}
+  { requireTopLevelObject = true, kind = "input" }: Record<string, any> = {}
 ) : any {
-  if (schema === undefined) return closedWhenAbsent ? CLOSED_EMPTY_JSON_OBJECT_SCHEMA : { type: "object" };
+  if (schema === undefined) return { type: "object" };
   try {
     if (requireTopLevelObject && (typeof schema !== "object" || schema === null || Array.isArray(schema) || "type" in schema && schema.type !== "object")) throw invalidToolSchemaError(kind);
     assertExternalSchemaBudget(schema);
@@ -66,21 +65,6 @@ function operatorMcpOperation(service: Record<string, any> = {}) : Record<string
 
 function operatorMcpRisk(service: Record<string, any> = {}) : any {
   return normalizeRisk(operatorMcpOperation(service).risk);
-}
-
-/**
- * The request schema the operator actually declared.
- *
- * The normalized service model stores an undeclared request schema as an empty object
- * (`support.ts` reads the manifest value through `object(...)`), so an empty object is that
- * model's canonical "no input declared" value and has to compile as the platform's closed
- * empty object, exactly as an undefined schema does. Passing it to the closed-schema
- * compiler as a declared schema instead fails the whole projection, which also removes
- * every other upstream tool from the catalog listing it is compiled for.
- */
-function declaredRequestSchema(schema?: any) : any {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return undefined;
-  return Object.keys(schema).length === 0 ? undefined : schema;
 }
 
 export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string, any> = {}) : any {
@@ -135,47 +119,6 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
         effectClass: risk,
         requiresApproval
       }
-    }
-  };
-}
-
-export function publicUpstreamOperationTool({ service = {}, operation = {} }: Record<string, any> = {}) : any {
-  const prefix: any = safePublicToolSegment(service.serviceId);
-  const operationSegment: any = safePublicToolSegment(operation.operationKey);
-  const risk: any = normalizeRisk(operation.risk);
-  const readOnly: any = risk === "read_only";
-  const dynamicCapability: any = compileUpstreamOperationCapability(service, operation);
-  const toolId: any = `upstream.${prefix}.${operationSegment}`;
-  return {
-    name: toolId,
-    title: `${service.label || service.serviceId}: ${operation.label || operation.operationKey}`,
-    description: operation.description ||
-      `Configured upstream ${operation.protocol || "http"} operation ${operation.operationKey} from ${service.label || service.serviceId}.`,
-    inputSchema: projectedMcpSchema(
-      declaredRequestSchema(operation.requestSchema),
-      "Configured upstream operation input schema",
-      { requireTopLevelObject: true, kind: "input", closedWhenAbsent: true }
-    ),
-    annotations: {
-      readOnlyHint: readOnly,
-      destructiveHint: risk === "destructive"
-    },
-    _meta: {
-      upstreamConfiguredOperation: true,
-      toolId,
-      serviceId: service.serviceId,
-      operationKey: operation.operationKey,
-      capabilityId: dynamicCapability.capabilityId,
-      requiredCapabilities: [dynamicCapability.capabilityId],
-      dynamicCapability,
-      resourceContext: dynamicCapability.resourceContext,
-      protocol: operation.protocol || "http",
-      method: operation.method || "POST",
-      payloadTransport: operation.payloadTransport || null,
-      toolsets: ["upstream-gateway", ...gatewayToolsetsForRisk(risk), `upstream:${service.serviceId}`],
-      requiredScopes: asArray(operation.requiredScopes),
-      risk,
-      requiresApproval: operation.requiresApproval === true
     }
   };
 }

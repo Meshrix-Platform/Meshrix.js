@@ -56,7 +56,7 @@ function packRecords(stdout: string): Array<Record<string, unknown>> {
 function consumerScript(): string {
   return [
     'import { createGateway } from "@meshrix/gateway";',
-    "const upstream = { invoke: async () => ({ status: 200, headers: { \"content-type\": \"application/json\" }, body: { content: [{ type: \"text\", text: \"ok\" }] } }) };",
+    "const upstream = { invoke: async () => ({ status: 200, headers: { \"content-type\": \"application/json\" }, body: { resultType: \"complete\", content: [{ type: \"text\", text: \"ok\" }] } }) };",
     'const route = { logicalRoute: "route.demo", upstreamIdentity: "upstream.demo", endpointIdentity: "endpoint.demo", protocolVersion: "2026-07-28", schemaDigest: "schema-demo", policyRef: "policy-demo", revision: "route-1", effectClass: "read", operation: "tools/call", upstreamName: "demo" };',
     'const descriptor = { kind: "tool", publicName: "demo", upstreamName: "demo", description: "Demo tool", inputSchema: { type: "object" }, route };',
     'const context = { tenant: "tenant-demo", principal: "principal-demo", authGeneration: "auth-1", grant: { revision: "grant-1", routes: ["route.demo"] } };',
@@ -82,7 +82,7 @@ describe("gateway distribution candidate", () => {
     // `dist/` is gitignored build output that can lag behind `src/`; rebuild so the
     // packed candidate is the reviewed source rather than a stale artifact.
     const build = run("npm", ["run", "build:node"], repoRoot);
-    expect(build.status, `npm run build:node failed:\n${build.stderr}`).toBe(0);
+    expect(build.status, `npm run build:node failed:\n${build.stdout}\n${build.stderr}`).toBe(0);
     const packed = run("npm", ["pack", "--workspace", WORKSPACES[0], "--workspace", WORKSPACES[1], "--pack-destination", packDir, "--json", "--ignore-scripts", "--silent"], repoRoot);
     expect(packed.status, `npm pack failed:\n${packed.stderr}`).toBe(0);
     artifacts = packRecords(packed.stdout).map((record) => {
@@ -139,7 +139,7 @@ describe("gateway distribution candidate", () => {
     expect(JSON.parse(executed.stdout.trim())).toEqual({ catalogNames: ["demo"], kind: "complete" });
     // The installed gateway consumes the contract from the sibling artifact, not from repo source.
     const installedContracts = JSON.parse(readFileSync(join(consumer, "node_modules/@meshrix/contracts/package.json"), "utf8")) as { engines?: { node?: string } };
-    const repo = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as { engines?: { node?: string } };
-    expect(installedContracts.engines?.node).toBe(repo.engines?.node);
+    const sourceContracts = JSON.parse(readFileSync(join(repoRoot, "packages/contracts/package.json"), "utf8")) as { engines?: { node?: string } };
+    expect(installedContracts.engines?.node).toBe(sourceContracts.engines?.node);
   }, 300_000);
 });

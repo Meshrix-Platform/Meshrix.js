@@ -6,6 +6,9 @@ import { publicUpstreamMcpTool } from "../../../packages/agents/src/upstream-gat
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
+import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createPlatformMcpGateway } from "../../../packages/server-runtime/src/composition/gateway-composition.ts";
+import { modernHttpRequest } from "../gateway/support.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -219,12 +222,14 @@ describe("MCP tool JSON Schema adapter", () : any => {
 
   it("enforces the external schema through governed MCP execution", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-schema-exec-"));
-    const callTool: any = async (_config?: any, request?: any) : Promise<any> => ({
-      result: {
+    let effectCount = 0;
+    const callTool: any = async (_config?: any, request?: any) : Promise<any> => {
+      effectCount += 1;
+      return { result: {
         content: [{ type: "text", text: "ok" }],
         structuredContent: request.arguments
-      }
-    });
+      } };
+    };
     const registry: any = createUpstreamGatewayRegistry({
       userDataPath: root,
       mcpSessionManager: {
@@ -241,7 +246,10 @@ describe("MCP tool JSON Schema adapter", () : any => {
             }
           }]
         }),
-        callTool,
+        async invokeGateway(config: any, invocation: any, options: any) {
+          await options.beforeSend?.();
+          return callTool(config, invocation.params);
+        },
         async retireServiceScopes() : Promise<any> { return { retired: 0 }; },
         async close() : Promise<any> {}
       }
@@ -255,23 +263,38 @@ describe("MCP tool JSON Schema adapter", () : any => {
         toolNamePrefix: "schema-service"
       }
     }]);
+    const proof = createOperationProofSubstrate({ dataDir: path.join(root, "proof") });
+    const subject = executionSubject({ publicToolName: "upstream.schema-service.echo" });
+    const platform = createPlatformMcpGateway({
+      upstreamGatewayRegistry: registry,
+      operationProofSubstrate: proof,
+      toolSkillManagementProvider: {
+        authorizeMcpClientRequest: async () => ({
+          ok: true,
+          tenantId: "schema-fixture-tenant",
+          subject,
+          grant: { ...subject.grant, revision: "schema-fixture-grant-r1", scopes: subject.scopes }
+        }),
+        listVisibleTools: () => []
+      }
+    });
     try {
-      await expect(registry.callMcpToolByPublicName(
-        "upstream.schema-service.echo",
-        { arguments: { name: "abcd" } },
-        executionSubject({ publicToolName: "upstream.schema-service.echo" })
-      )).rejects.toMatchObject({
-        status: 400,
-        reasonCode: "upstream_mcp_arguments_invalid"
+      await platform.gateway.start();
+      const call = (name: string) => platform.adapter.handle(modernHttpRequest("tools/call", `schema-${name}`, {
+        name: "upstream.schema-service.echo", arguments: { name }
+      }));
+      expect(await call("abcd")).toMatchObject({
+        status: 200,
+        body: { error: { data: { code: "schema_validation_failed", effectOutcome: "not_started" } } }
       });
-      const accepted: any = await registry.callMcpToolByPublicName(
-        "upstream.schema-service.echo",
-        { arguments: { name: "abcde" } },
-        executionSubject({ publicToolName: "upstream.schema-service.echo" })
-      );
-      expect(accepted.response.structuredContent).toEqual({ name: "abcde" });
+      expect(effectCount).toBe(0);
+      const accepted: any = await call("abcde");
+      expect(accepted.body.result.structuredContent).toEqual({ name: "abcde" });
+      expect(effectCount).toBe(1);
     } finally {
+      await platform.close();
       await registry.close();
+      await proof.close();
       await fs.rm(root, { recursive: true, force: true });
     }
   });

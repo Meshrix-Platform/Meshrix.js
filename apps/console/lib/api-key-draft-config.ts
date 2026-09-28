@@ -2,9 +2,11 @@ export type ApiKeyDraftConfigFields = {
   workloadDisplayName: string;
   organizationNodeId: string;
   expiresAt: string;
+  selectedClientGuide: string;
   maximumRisk: "low" | "medium" | "high";
   selectedProfileId: string;
   selectedToolsetIds: string[];
+  selectedMcpTools: Array<{ serviceId: string; publicName: string }>;
   selectedTargetIds: string[];
   resourcesUnrestricted: boolean;
   selectedDataClassifications: string[];
@@ -17,9 +19,11 @@ export type ApiKeyDraftConfigDocument = {
   workloadDisplayName?: string;
   organizationNodeId?: string;
   expiresAt?: string;
+  selectedClientGuide?: string;
   maximumRisk?: "low" | "medium" | "high";
   selectedProfileId?: string;
   selectedToolsetIds?: string[];
+  selectedMcpTools?: Array<{ serviceId: string; publicName: string }>;
   selectedTargetIds?: string[];
   resourcesUnrestricted?: boolean;
   selectedDataClassifications?: string[];
@@ -48,8 +52,10 @@ export type ApiKeyDraftConfigContext = {
   knownNodeIds: ReadonlySet<string>;
   knownToolsetIds: ReadonlySet<string>;
   knownTargetIds: ReadonlySet<string>;
+  knownClientGuideIds: ReadonlySet<string>;
   knownClassificationIds: ReadonlySet<string>;
   knownProfileIds: ReadonlySet<string>;
+  knownMcpToolIdentities: ReadonlySet<string>;
 };
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -112,9 +118,11 @@ export function draftToConfigDocument(draft: ApiKeyDraftConfigFields): ApiKeyDra
     workloadDisplayName: draft.workloadDisplayName,
     organizationNodeId: draft.organizationNodeId,
     expiresAt: draft.expiresAt,
+    selectedClientGuide: draft.selectedClientGuide,
     maximumRisk: draft.maximumRisk,
     selectedProfileId: draft.selectedProfileId || undefined,
     selectedToolsetIds: [...draft.selectedToolsetIds],
+    selectedMcpTools: draft.selectedMcpTools.map(({ serviceId, publicName }) => ({ serviceId, publicName })),
     selectedTargetIds: [...draft.selectedTargetIds],
     resourcesUnrestricted: draft.resourcesUnrestricted,
     selectedDataClassifications: [...draft.selectedDataClassifications],
@@ -145,6 +153,38 @@ export function parseApiKeyDraftConfig(
     : null;
 
   const next: Partial<ApiKeyDraftConfigFields> = {};
+
+  if (root.selectedMcpTools !== undefined) {
+    if (!Array.isArray(root.selectedMcpTools)) {
+      throw new Error("selectedMcpTools must be an array of current MCP tool identities.");
+    }
+    const identities = root.selectedMcpTools.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error(`selectedMcpTools[${index}] must identify a serviceId and publicName.`);
+      }
+      const item = entry as Record<string, unknown>;
+      if (Object.keys(item).some((key) => key !== "serviceId" && key !== "publicName")) {
+        throw new Error(`selectedMcpTools[${index}] contains unsupported fields.`);
+      }
+      if (typeof item.serviceId !== "string" || typeof item.publicName !== "string") {
+        throw new Error(`selectedMcpTools[${index}] must identify a serviceId and publicName.`);
+      }
+      const serviceId = item.serviceId.trim();
+      const publicName = item.publicName.trim();
+      const identity = `${serviceId}\0${publicName}`;
+      if (!serviceId || !publicName || !context.knownMcpToolIdentities.has(identity)) {
+        throw new Error("selectedMcpTools contains an unavailable MCP tool selection.");
+      }
+      return { serviceId, publicName };
+    });
+    const seen = new Set<string>();
+    next.selectedMcpTools = identities.filter((item) => {
+      const identity = `${item.serviceId}\0${item.publicName}`;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    });
+  }
   const workloadDisplayName = optionalString(root.workloadDisplayName, "workloadDisplayName");
   if (workloadDisplayName !== undefined) next.workloadDisplayName = workloadDisplayName;
 
@@ -158,6 +198,14 @@ export function parseApiKeyDraftConfig(
 
   const expiresAt = optionalString(root.expiresAt, "expiresAt");
   if (expiresAt !== undefined) next.expiresAt = expiresAt ? toDatetimeLocal(expiresAt) : "";
+
+  const selectedClientGuide = optionalString(root.selectedClientGuide, "selectedClientGuide");
+  if (selectedClientGuide !== undefined) {
+    if (!context.knownClientGuideIds.has(selectedClientGuide)) {
+      throw new Error(`selectedClientGuide is unknown: ${selectedClientGuide}`);
+    }
+    next.selectedClientGuide = selectedClientGuide;
+  }
 
   const maximumRisk = optionalString(root.maximumRisk ?? policy?.maximumRisk, "maximumRisk");
   if (maximumRisk !== undefined) {
@@ -183,10 +231,10 @@ export function parseApiKeyDraftConfig(
   );
   if (toolsetIds) next.selectedToolsetIds = toolsetIds;
 
-  const targetIds = filterKnown(
-    optionalStringList(root.selectedTargetIds ?? audience?.targetIds, "selectedTargetIds"),
-    context.knownTargetIds,
-  );
+  const targetIds = optionalStringList(root.selectedTargetIds ?? audience?.targetIds, "selectedTargetIds");
+  if (targetIds?.some((targetId) => !context.knownTargetIds.has(targetId))) {
+    throw new Error("selectedTargetIds contains an unknown audience restriction.");
+  }
   if (targetIds) next.selectedTargetIds = targetIds;
 
   const resourcesUnrestricted = optionalBoolean(root.resourcesUnrestricted, "resourcesUnrestricted");

@@ -5,6 +5,25 @@ export function apiKeyDistributionText(zh: string, en: string): string {
   return resolveEffectiveConsoleLocale(currentConsoleLocale.value) === "en" ? en : zh;
 }
 
+export function apiKeyDraftConfigErrorText(message: string): string {
+  if (message.includes("selectedMcpTools contains an unavailable MCP tool selection")) {
+    return apiKeyDistributionText(
+      "导入配置包含当前不可用的 MCP 工具选择。请刷新并从当前发现结果中重新选择。",
+      "The imported config selects an unavailable MCP tool. Refresh and select from current discovery.",
+    );
+  }
+  if (message.includes("selectedTargetIds contains an unknown audience restriction")) {
+    return apiKeyDistributionText(
+      "导入配置包含未知客户端受众限制；请确认后再应用，避免意外放宽权限。",
+      "The imported config contains an unknown client audience restriction. Review it before applying so the key is not broadened unintentionally.",
+    );
+  }
+  if (message.includes("selectedClientGuide is unknown")) {
+    return apiKeyDistributionText("连接指引选项未知。", "The client guide option is unknown.");
+  }
+  return message;
+}
+
 export function apiKeyStatusText(status: ApiKeyStatus): string {
   return ({
     active: apiKeyDistributionText("可用", "Active"),

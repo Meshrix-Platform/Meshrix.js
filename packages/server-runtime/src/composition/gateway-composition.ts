@@ -246,23 +246,13 @@ function platformToolDescriptor(tool: Record<string, any>, catalogRevision: stri
  */
 const UPSTREAM_DESCRIPTOR_META_KEYS: readonly string[] = Object.freeze([
   "upstreamMcp",
-  "upstreamProjectedOperation",
-  "upstreamConfiguredOperation",
   "toolId",
   "capabilityId",
   "requiredCapabilities",
-  "method",
-  "serviceRevision",
-  "sourceRevision",
-  "sourceDigest",
-  "protocol",
-  "payloadTransport",
   "requiredScopes",
   "toolsets",
   "risk",
   "requiresApproval",
-  "capabilityId",
-  "requiredCapabilities",
   "dynamicCapability",
   "resourceContext",
   "io.meshrix/gateway-policy"
@@ -285,11 +275,7 @@ function upstreamToolMetadata({ meta, serviceId, upstreamToolName, operationKey 
 }
 
 const UPSTREAM_ROUTE_PROJECTION_KEYS: readonly string[] = Object.freeze([
-  "upstreamMcp",
-  "upstreamConfiguredOperation",
-  "protocol",
-  "method",
-  "payloadTransport"
+  "upstreamMcp"
 ]);
 
 function upstreamRouteProjectionFacts(meta: Record<string, any>): Readonly<Record<string, unknown>> {
@@ -312,7 +298,7 @@ function upstreamToolDescriptor(tool: Record<string, any>, catalogRevision: stri
   const revision = `upstream:${catalogRevision}:${serviceId || "unknown"}:${name}`;
   const routeRef = `upstream:tool:${serviceId || "unknown"}:${name}`;
   const gatewayPolicy = isRecord(meta["io.meshrix/gateway-policy"]) ? meta["io.meshrix/gateway-policy"] : {};
-  const effectClass = effectClassForRisk(meta.upstreamConfiguredOperation === true ? meta.risk : gatewayPolicy.effectClass);
+  const effectClass = effectClassForRisk(gatewayPolicy.effectClass);
   return Object.freeze({
     kind: "tool",
     publicName: name,
@@ -458,22 +444,16 @@ function isProjectedUpstreamRoute(metadata: Record<string, any>): boolean {
 }
 
 /**
- * The Operation Permission input for a route that projects an upstream operation.
- *
- * A projected operation is addressed as a tool, so the caller's arguments have to become
- * the operation's forward input here, at the boundary where the call enters governed
- * execution: the input this hands over is the one a permit is issued for, the one a pending
- * approval records as its original input, and the one an approved resume replays. Shaping it
- * anywhere later would bind the effect to an input the record does not hold.
- *
- * A discovered upstream tool is addressed by its own name, so its caller sends that tool's
- * arguments rather than the operation's forward envelope; the governed operation tool is
- * addressed by the operation's own name and does take the envelope.
+ * Keep a configured projected operation's declared arguments unchanged through governed
+ * validation, approval and permit binding. Its registry executor creates the internal
+ * forwarding representation only after that authority has been established. A discovered
+ * upstream MCP tool retains the session owner's `{ toolName, arguments }` call shape.
  */
 function upstreamOperationInput(metadata: Record<string, any>, params: unknown): Record<string, any> {
   const args = requestArguments(params);
   if (!isProjectedUpstreamRoute(metadata)) return args;
-  return projectedOperationForwardInput(metadata, args, { discoveredToolCall: metadata.kind === "upstream-tool" });
+  if (metadata.upstreamProjectedOperation === true && metadata.upstreamMcp !== true) return args;
+  return projectedOperationForwardInput(metadata, args);
 }
 
 function response(body: unknown): UpstreamResponse {
@@ -676,6 +656,35 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         signal,
         revalidateCurrentAuthority: async (): Promise<Record<string, any>> => {
           try {
+            if (typeof input.revalidateApiKeyReservation === "function") {
+              const currentApiKeyAuthorization = await input.revalidateApiKeyReservation();
+              const currentAuthorization = {
+                ...authorization,
+                apiKeyAuthorization: currentApiKeyAuthorization
+              };
+              const currentDescriptors = await syncCatalog(currentAuthorization, signal);
+              const currentRouteRefs = currentDescriptors.map((descriptor) => descriptor.route.logicalRoute);
+              const currentContext = {
+                ...context,
+                authGeneration: text(currentApiKeyAuthorization?.policyFingerprint),
+                grant: gatewayGrant({ authorization: currentAuthorization, routeRefs: currentRouteRefs }),
+                metadata: { ...context.metadata, authorization: currentAuthorization }
+              };
+              const currentAuthority = protectedSinkAuthorityFacts({
+                context: currentContext,
+                authorization: currentAuthorization,
+                operation,
+                route
+              });
+              return {
+                allowed: currentRouteRefs.includes(text(route?.logicalRoute)) &&
+                  canonicalJson(currentAuthority.subject) === canonicalJson(authority.subject) &&
+                  canonicalJson(currentAuthority.context) === canonicalJson(authority.context),
+                revoked: false,
+                subject: currentAuthority.subject,
+                context: currentAuthority.context
+              };
+            }
             const current = await authenticate(input.requestContext as ModernDownstreamRequest);
             const currentAuthorization = isRecord(current.metadata?.authorization) ? current.metadata.authorization : {};
             const currentAuthority = protectedSinkAuthorityFacts({ context: current, authorization: currentAuthorization, operation, route });
@@ -790,31 +799,55 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         if (!upstreamRegistry || typeof upstreamRegistry.executePublishedMcpRoute !== "function") {
           throw Object.assign(new Error("Upstream gateway registry is unavailable."), { code: "upstream_gateway_unavailable", status: 503 });
         }
-        const forwarded = await upstreamRegistry.executePublishedMcpRoute(
-          text(metadata.publicName),
-          {
-            arguments: requestArguments(request.params),
-            ...(isRecord(request.params) && isRecord(request.params.inputResponses) ? { inputResponses: request.params.inputResponses } : {})
-          },
-          { ...authorizationSubject(authorization), ...(isRecord(context.metadata?.verifiedApprovedPendingOperation) ? { approvedPendingOperation: context.metadata.verifiedApprovedPendingOperation } : {}) },
-          {
-            signal,
-            ...(request.requestState === undefined ? {} : { requestState: request.requestState }),
-            platformEffectLifecycle: {
-              prepare: (effect: Record<string, any>) => prepareDiscoveredMcpEffect({
-                ...effect,
-                context,
-                authorization,
-                route,
-                requestContext: context.metadata?.requestContext,
-                arguments: effect.input,
-                upstreamToolName: effect.upstreamToolName,
-                permit,
-                signal
-              })
+        const runPublishedRoute = ({ signal: invocationSignal, revalidate }: Record<string, any>) =>
+          upstreamRegistry.executePublishedMcpRoute(
+            text(metadata.publicName),
+            {
+              arguments: requestArguments(request.params),
+              ...(isRecord(request.params) && isRecord(request.params.inputResponses) ? { inputResponses: request.params.inputResponses } : {})
+            },
+            { ...authorizationSubject(authorization), ...(isRecord(context.metadata?.verifiedApprovedPendingOperation) ? { approvedPendingOperation: context.metadata.verifiedApprovedPendingOperation } : {}) },
+            {
+              signal: invocationSignal,
+              beforeSend: async () : Promise<void> => {
+                if (invocationSignal?.aborted) {
+                  throw Object.assign(new Error("MCP invocation was cancelled."), { code: "tool_aborted" });
+                }
+                await revalidate();
+              },
+              ...(request.requestState === undefined ? {} : { requestState: request.requestState }),
+              platformEffectLifecycle: {
+                prepare: (effect: Record<string, any>) => prepareDiscoveredMcpEffect({
+                  ...effect,
+                  context,
+                  authorization,
+                  route,
+                  requestContext: context.metadata?.requestContext,
+                  arguments: effect.input,
+                  upstreamToolName: effect.upstreamToolName,
+                  permit,
+                  signal: invocationSignal,
+                  ...(authorization.credentialKind === "scoped_api_key" ? { revalidateApiKeyReservation: revalidate } : {})
+                })
+              }
             }
-          }
-        );
+          );
+        const forwarded = typeof toolProvider.runApiKeyMcpInvocation === "function"
+          ? await toolProvider.runApiKeyMcpInvocation({
+              authorization,
+              toolId: text(metadata.toolId),
+              dynamicCapability: isRecord(metadata.dynamicCapability) ? metadata.dynamicCapability : null,
+              signal,
+              execute: runPublishedRoute
+            })
+          : authorization.credentialKind === "scoped_api_key"
+            ? (() : never => {
+                throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+                  code: "api_key_authority_unavailable",
+                  status: 503
+                });
+              })()
+            : await runPublishedRoute({ signal, revalidate: async () : Promise<void> => {} });
         if (isRecord(forwarded) && typeof forwarded.status === "number" && Object.hasOwn(forwarded, "body")) return forwarded as UpstreamResponse;
         const projected = forwarded?.response ?? forwarded?.resource ?? forwarded?.payload ?? null;
         return response(isRecord(projected) && typeof projected.resultType === "string"
@@ -910,6 +943,10 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
       if (descriptor) visible.push(descriptor);
     }
     for (const tool of Array.isArray(tools) ? tools : []) {
+      // The projected service-level MCP tools/call operation backs the discovered-tool
+      // authority/approval path below; publishing it as another callable tool would expose
+      // a generic second route alongside the actual per-tool MCP discoveries.
+      if (tool?.upstreamProjectedOperation === true && tool.protocol === "mcp" && tool.operationKey === "tools/call") continue;
       const descriptor = isRecord(tool) ? platformToolDescriptor(tool, catalogRevision) : null;
       if (descriptor) visible.push(descriptor);
     }
@@ -927,14 +964,7 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
                 tool,
                 purpose: "discovery"
               })
-            : meta.upstreamConfiguredOperation === true ? upstreamRegistry.evaluateProjectedOperationAudience?.({
-                grant: authorization.grant || null,
-                restriction: authorization.restriction || null,
-                subject: authorization.subject || authorizationSubject(authorization),
-                tool: { ...tool, upstreamProjectedOperation: true, serviceId: meta.serviceId, operationId: meta.operationKey, id: tool.name,
-                  requiredScopes: meta.requiredScopes, toolsets: meta.toolsets, risk: meta.risk, dynamicCapability: meta.dynamicCapability },
-                purpose: "discovery"
-              }) : { allowed: false };
+            : { allowed: false };
           if (audience && audience.allowed !== true) continue;
           const descriptor = upstreamToolDescriptor(tool, catalogRevision);
           if (descriptor) {

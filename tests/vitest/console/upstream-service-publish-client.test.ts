@@ -45,6 +45,30 @@ describe("upstream service publishing client contract", () : any => {
     expect(payload.descriptor).not.toHaveProperty("trafficPolicy");
   });
 
+  it("passes a remote MCP HTTP descriptor through the existing authenticated create command", async () : Promise<any> => {
+    const descriptor = {
+      serviceProtocol: "mcp" as const,
+      mcp: {
+        transport: "http" as const,
+        url: "https://service.example:443/mcp",
+        protocolVersion: "2026-07-28" as const,
+      },
+      references: [],
+    };
+    await createUpstreamService("inventory-mcp", descriptor, 9);
+
+    expect(bridge.sendJson).toHaveBeenCalledWith(
+      "/api/gateway/v1/services",
+      "POST",
+      expect.objectContaining({
+        action: "create",
+        serviceKey: "inventory-mcp",
+        expectedSetRevision: 9,
+        descriptor,
+      })
+    );
+  });
+
   it("binds replacement and removal to the server service id and both expected revisions", async () : Promise<any> => {
     await replaceUpstreamService("svc_fixture", { serviceProtocol: "json-rpc" }, 2, 7);
     expect(bridge.sendJson.mock.calls[0].slice(0, 2)).toEqual([

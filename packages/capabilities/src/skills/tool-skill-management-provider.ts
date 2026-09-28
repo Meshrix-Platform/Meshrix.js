@@ -463,6 +463,27 @@ export function createToolSkillManagementProvider({
     });
   }
 
+  async function runApiKeyMcpInvocation({ authorization = null, ...input }: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (typeof current.runtime?.runApiKeyMcpInvocation !== "function") {
+      throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+        code: "api_key_authority_unavailable",
+        statusCode: 503
+      });
+    }
+    let keyAuthorization: any = null;
+    if (authorization?.credentialKind === "scoped_api_key") {
+      keyAuthorization = authorization.apiKeyAuthorization;
+      if (keyAuthorization?.credentialKind !== "scoped_api_key") {
+        throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+          code: "api_key_authority_unavailable",
+          statusCode: 503
+        });
+      }
+    }
+    return current.runtime.runApiKeyMcpInvocation({ ...input, authorization: keyAuthorization });
+  }
+
   async function resolveMcpWorkspaceInput({ input, request, context = {}, signal = null }: Record<string, any> = {}) : Promise<any> {
     if (!inputMayNeedWorkspaceResolution(input)) {
       return { input, workspaceDirectory: null };
@@ -558,6 +579,7 @@ export function createToolSkillManagementProvider({
     listVisibleTools,
     resolveActiveTool,
     executeTool,
+    runApiKeyMcpInvocation,
     resolveMcpWorkspaceInput,
     publicMcpToolPayload,
     createDelegatedMcpGrant,

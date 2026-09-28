@@ -47,14 +47,21 @@ through its Agent connectivity reference.
 
 ## Connect an external agent or client to Meshrix.js
 
-Point the connector at `<server-url>`, not at a Vite console port and not at a
-guessed second API port. Authenticate with a Console-issued scoped API Key
-through the signed connector. Client configuration stores connector metadata,
-not the key.
+A standard MCP client connects to `<server-url>/mcp` using a Console-issued
+scoped API Key and the declared downstream protocol profile. No client-product
+registration or packaged connector is required. Supply the credential through
+protected secret input; do not place it in command arguments, ordinary client
+configuration, logs or reports. Tool access follows the key's selected policy.
 
-Use `$meshrix-js-downstream-mcp-client-access` and the matching agent-target
-skill. Treat Operation Permission grants as a separate transaction from
-connector installation.
+Packaged signed connectors are an optional integration path. Point them at the
+same `<server-url>`; their installation and credential-custody requirements
+remain owned by the connector workflow. Client configuration stores connector
+metadata, not the key.
+
+Use `$meshrix-js-downstream-mcp-client-access` for either path and the matching
+agent-target skill only when installing that packaged integration. Treat
+Operation Permission grants as a separate transaction from connector
+installation.
 
 ## Operate the instance
 

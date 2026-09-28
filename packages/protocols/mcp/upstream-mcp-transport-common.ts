@@ -7,7 +7,14 @@ export const MCP_SUPPORTED_PROTOCOL_VERSIONS: readonly any[] = Object.freeze([
   "2025-03-26",
   MCP_DEFAULT_PROTOCOL_VERSION
 ]);
-export const DEFAULT_MCP_REQUEST_TIMEOUT_MS: any = 30_000;
+export const DEFAULT_MCP_INITIALIZE_TIMEOUT_MS: any = 30_000;
+export const DEFAULT_MCP_CONTROL_TIMEOUT_MS: any = 30_000;
+const MAX_MCP_REQUEST_TIMEOUT_MS: any = 2_147_483_647;
+export const MCP_TOOLS_LIST_LIMITS: Readonly<Record<string, number>> = Object.freeze({
+  pages: 64,
+  tools: 4_096,
+  bytes: 8 * 1024 * 1024
+});
 
 const ENV_REF_PATTERN: any = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$/;
 const ENV_TEMPLATE_PATTERN: any = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
@@ -43,9 +50,36 @@ export function text(value?: any) : any {
   return String(value ?? "").trim();
 }
 
-export function positiveInt(value?: any, fallback: any = DEFAULT_MCP_REQUEST_TIMEOUT_MS) : any {
+export function positiveInt(value?: any, fallback: any = 0) : any {
   const number: any = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+}
+
+export function validateMcpRequestTimeoutMs(value?: any) : any {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value <= 0 ||
+    value > MAX_MCP_REQUEST_TIMEOUT_MS
+  ) {
+    throw new RangeError("MCP request timeout must be a positive integer supported by the runtime.");
+  }
+  return value;
+}
+
+export function requestTimeoutMs(
+  requestOptions: Record<string, any> = {},
+  normalizedConfig: Record<string, any> = {}
+) : any {
+  if (requestOptions.timeoutMs === null) {
+    if (requestOptions.signal) return 0;
+    throw new TypeError("An unset MCP request timeout requires an owning cancellation signal.");
+  }
+  if (requestOptions.timeoutMs !== undefined) {
+    return validateMcpRequestTimeoutMs(requestOptions.timeoutMs);
+  }
+  if (normalizedConfig.timeoutMs === undefined) return 0;
+  return validateMcpRequestTimeoutMs(normalizedConfig.timeoutMs);
 }
 
 export function resolveEnvString(value?: any, env: any = process.env) : any {
@@ -87,14 +121,21 @@ export function parseJson(value?: any) : any {
 export function normalizeTransportConfig(config: Record<string, any> = {}) : any {
   const source: any = asObject(config.mcp || config);
   const transport: any = text(source.transport || source.type || "stdio").toLowerCase();
-  return {
+  const configuredTimeoutMs: any = source.timeoutMs !== undefined
+    ? source.timeoutMs
+    : source.timeout !== undefined
+      ? source.timeout
+      : config.timeoutMs;
+  const timeoutMs: any = configuredTimeoutMs === undefined
+    ? undefined
+    : validateMcpRequestTimeoutMs(configuredTimeoutMs);
+  const normalized: Record<string, any> = {
     ...source,
-    transport,
-    timeoutMs: positiveInt(
-      source.timeoutMs || source.timeout || config.timeoutMs,
-      DEFAULT_MCP_REQUEST_TIMEOUT_MS
-    )
+    transport
   };
+  if (timeoutMs > 0) normalized.timeoutMs = timeoutMs;
+  else delete normalized.timeoutMs;
+  return normalized;
 }
 
 export function requestedProtocolVersion(config: Record<string, any> = {}) : any {
@@ -182,6 +223,68 @@ export function assertJsonRpcResponse(payload?: any, id?: any) : any {
     throw error;
   }
   return payload.result ?? {};
+}
+
+export async function collectCompleteMcpToolsList(
+  requestPage: (cursor: string | undefined) => Promise<Record<string, any>>
+) : Promise<any[]> {
+  const seenCursors: any = new Set<any>();
+  const seenToolNames: any = new Set<any>();
+  const tools: any[] = [];
+  let cursor: any = undefined;
+  let bytes: any = 0;
+  for (let page = 1; page <= MCP_TOOLS_LIST_LIMITS.pages; page += 1) {
+    const result: any = await requestPage(cursor);
+    if (!result || typeof result !== "object" || Array.isArray(result) || !Array.isArray(result.tools)) {
+      throw Object.assign(new Error("Upstream MCP tools/list returned an invalid page."), {
+        code: "upstream_mcp_tools_list_malformed",
+        status: 502
+      });
+    }
+    if (result.tools.some((tool?: any) : any => !tool || typeof tool !== "object" || Array.isArray(tool) || typeof tool.name !== "string" || !text(tool.name))) {
+      throw Object.assign(new Error("Upstream MCP tools/list returned an invalid tool."), {
+        code: "upstream_mcp_tools_list_malformed",
+        status: 502
+      });
+    }
+    for (const tool of result.tools) {
+      const name: any = text(tool.name);
+      if (seenToolNames.has(name)) {
+        throw Object.assign(new Error("Upstream MCP tools/list returned a duplicate tool name."), {
+          code: "upstream_mcp_tools_list_malformed",
+          status: 502
+        });
+      }
+      seenToolNames.add(name);
+    }
+    bytes += Buffer.byteLength(JSON.stringify(result.tools), "utf8");
+    if (tools.length + result.tools.length > MCP_TOOLS_LIST_LIMITS.tools || bytes > MCP_TOOLS_LIST_LIMITS.bytes) {
+      throw Object.assign(new Error("Upstream MCP tools/list exceeded the complete-list admission limit."), {
+        code: "upstream_mcp_tools_list_limit",
+        status: 502
+      });
+    }
+    tools.push(...result.tools);
+    if (result.nextCursor === undefined) return tools;
+    if (typeof result.nextCursor !== "string") {
+      throw Object.assign(new Error("Upstream MCP tools/list returned an invalid cursor."), {
+        code: "upstream_mcp_tools_list_cursor_invalid",
+        status: 502
+      });
+    }
+    if (seenCursors.has(result.nextCursor)) {
+      throw Object.assign(new Error("Upstream MCP tools/list returned a repeated cursor."), {
+        code: "upstream_mcp_tools_list_cursor_repeated",
+        status: 502
+      });
+    }
+    seenCursors.add(result.nextCursor);
+    cursor = result.nextCursor;
+  }
+  throw Object.assign(new Error("Upstream MCP tools/list exceeded the page admission limit."), {
+    code: "upstream_mcp_tools_list_page_limit",
+    status: 502
+  });
 }
 
 export function abortError(message: any = "Upstream MCP request was cancelled.") : any {

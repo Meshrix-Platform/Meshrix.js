@@ -18,7 +18,12 @@ describe("configured default platform upstream transport", () => {
       wire.push({ method: body.method, headers: request.headers, params: body.params });
       const result = body.method === "server/discover"
         ? { resultType: "complete", supportedVersions: ["2026-07-28"] }
-        : { resultType: "complete", content: [{ type: "text", text: "real-peer" }], structuredContent: { source: "real-peer" }, _meta: { businessId: "metadata-kept" } };
+        : body.method === "tools/list"
+          ? { resultType: "complete", tools: [{ name: "echo", inputSchema: recursiveSchema, outputSchema: { type: "object", properties: { source: { type: "string" } }, required: ["source"] } }] }
+          : body.method === "tools/call"
+            ? { resultType: "complete", content: [{ type: "text", text: "real-peer" }], structuredContent: { source: "real-peer" }, _meta: { businessId: "metadata-kept" } }
+            : null;
+      if (result === null) { response.writeHead(404).end(); return; }
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result }));
     });
@@ -28,10 +33,7 @@ describe("configured default platform upstream transport", () => {
     if (!address || typeof address === "string") throw new Error("peer has no TCP address");
     const legacyForward = vi.fn(() => { throw new Error("old forwarder must not run"); });
     const recursiveSchema = { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", $defs: { payload: { type: "object", properties: { value: { type: "string", minLength: 1 }, next: { $ref: "#/$defs/payload" } }, required: ["value"] } }, properties: { payload: { $ref: "#/$defs/payload" } }, required: ["payload"] };
-    const registry = createUpstreamGatewayRegistry({ mcpSessionManager: {
-      listTools: async () => ({ tools: [{ name: "echo", inputSchema: recursiveSchema, outputSchema: { type: "object", properties: { source: { type: "string" } }, required: ["source"] } }] }),
-      callTool: legacyForward, invokeGateway: async (config: { protocolVersion?: string }) => { throw new Error(`unexpected legacy protocol ${config.protocolVersion ?? "absent"}`); }, retireScope: async () => ({ retired: 0 }), close: async () => {}
-    } });
+    const registry = createUpstreamGatewayRegistry();
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [{ serviceId: "synthetic", serviceProtocol: "mcp", label: "synthetic", allowLocalNetwork: true,
       operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
@@ -41,29 +43,40 @@ describe("configured default platform upstream transport", () => {
       if (property === "callMcpToolByPublicName") return legacyForward;
       return Reflect.get(target, property);
     } });
+    const internalMcpAuthorityRecord = {
+      id: "upstream.synthetic.tools-call",
+      upstreamProjectedOperation: true,
+      serviceId: "synthetic",
+      operationKey: "tools/call",
+      protocol: "mcp",
+      inputSchema: { type: "object" }
+    };
     const platform = createPlatformMcpGateway({ upstreamGatewayRegistry: noOldForward,
       toolSkillManagementProvider: {
         authorizeMcpClientRequest: async () => ({ ok: true, credentialKind: "scoped_api_key", grant: { id: "grant-1", revision: "grant-1", subjectId: "caller", scopes: ["gateway:read"], dynamicCapabilities: ["cap:upstream:synthetic:tools-call-echo"] }, subject: { type: "tool-grant", subjectId: "caller", grantId: "grant-1", scopes: ["gateway:read"], dynamicCapabilities: ["cap:upstream:synthetic:tools-call-echo"] } }),
-        listVisibleTools: async () => []
+        listVisibleTools: () => [internalMcpAuthorityRecord]
       }
     });
     cleanup.push(() => platform.close());
     await platform.gateway.start();
     const call = async (method: string, params: Record<string, unknown> = {}) => platform.adapter.handle(modernHttpRequest(method, method, params));
     const listed = await call("tools/list");
-    const tools = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string } }> } }).result.tools;
-    const published = tools.find((tool) => tool._meta?.serviceId === "synthetic");
+    const tools = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string; upstreamToolName?: string } }> } }).result.tools;
+    const serviceTools = tools.filter((tool) => tool._meta?.serviceId === "synthetic");
+    expect(serviceTools.map((tool) => tool.name)).toEqual(["upstream.synthetic.echo"]);
+    expect(tools.some((tool) => tool.name === internalMcpAuthorityRecord.id)).toBe(false);
+    const published = serviceTools.find((tool) => tool._meta?.upstreamToolName === "echo");
     expect(published).toBeDefined();
     expect(published?.inputSchema).toMatchObject({ $defs: { payload: { required: ["value"] } } });
     expect((await call("tools/call", { name: published!.name, arguments: { payload: { value: 2 } } })).body).toMatchObject({ error: { data: { code: "schema_validation_failed" } } });
-    expect(wire).toHaveLength(0);
+    expect(wire.map((item) => item.method)).toEqual(["server/discover", "tools/list"]);
     const result = await call("tools/call", { name: published!.name, arguments: { payload: { value: "定義✳" }, _meta: { businessId: "input-kept" } } });
     expect(result.body).toMatchObject({ result: { resultType: "complete", structuredContent: { source: "real-peer" }, _meta: { businessId: "metadata-kept" } } });
-    expect(wire.map((item) => item.method)).toEqual(["server/discover", "tools/call"]);
-    expect(wire[1].headers["x-context-scope"]).toBe("synthetic");
-    expect(wire[1].params._meta).toMatchObject({ "io.modelcontextprotocol/protocolVersion": "2026-07-28" });
-    expect((wire[1].params.arguments as { _meta: unknown })._meta).toEqual({ businessId: "input-kept" });
-    expect((wire[1].params.arguments as { payload: { value: string } }).payload.value).toBe("定義✳");
+    expect(wire.map((item) => item.method)).toEqual(["server/discover", "tools/list", "server/discover", "tools/call"]);
+    expect(wire[3].headers["x-context-scope"]).toBe("synthetic");
+    expect(wire[3].params._meta).toMatchObject({ "io.modelcontextprotocol/protocolVersion": "2026-07-28" });
+    expect((wire[3].params.arguments as { _meta: unknown })._meta).toEqual({ businessId: "input-kept" });
+    expect((wire[3].params.arguments as { payload: { value: string } }).payload.value).toBe("定義✳");
     expect(legacyForward).not.toHaveBeenCalled();
   }, 15_000);
 

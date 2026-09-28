@@ -2,6 +2,8 @@ import {
   abortError,
   assertNegotiatedProtocolVersion,
   assertJsonRpcResponse,
+  DEFAULT_MCP_CONTROL_TIMEOUT_MS,
+  DEFAULT_MCP_INITIALIZE_TIMEOUT_MS,
   fatalSessionError,
   initializeParams,
   jsonRpcNotification,
@@ -12,6 +14,7 @@ import {
   parseJson,
   positiveInt,
   protocolError,
+  requestTimeoutMs,
   requestedProtocolVersion,
   resolveStringRecord,
   text,
@@ -264,7 +267,10 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
   async function postOneWay(payload?: any, method?: any, timeoutMs: any = normalized.timeoutMs) : Promise<any> {
     if (closed) throw fatalSessionError("Upstream MCP http session is closed.");
     const controller: any = new AbortController();
-    const timeout: any = setTimeout(() : any => controller.abort(), positiveInt(timeoutMs, normalized.timeoutMs));
+    const timeout: any = setTimeout(
+      () : any => controller.abort(),
+      positiveInt(timeoutMs, DEFAULT_MCP_CONTROL_TIMEOUT_MS)
+    );
     timeout.unref?.();
     let transportFetch: any = null;
     try {
@@ -327,6 +333,7 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
     if (requestOptions.signal?.aborted) throw abortError();
     if (closed) throw fatalSessionError("Upstream MCP http session is closed.");
     if (fatal) throw fatalSessionError("Upstream MCP http session is unavailable.");
+    const requestTimeout: any = requestTimeoutMs(requestOptions, normalized);
     const id: any = nextId++;
     const controller: any = new AbortController();
     let settleActiveRequest: any;
@@ -342,11 +349,13 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
       controller.abort();
     };
     requestOptions.signal?.addEventListener("abort", abortListener, { once: true });
-    const timeout: any = setTimeout(() : any => {
-      timedOut = true;
-      controller.abort();
-    }, positiveInt(requestOptions.timeoutMs, normalized.timeoutMs));
-    timeout.unref?.();
+    const timeout: any = requestTimeout > 0
+      ? setTimeout(() : any => {
+          timedOut = true;
+          controller.abort();
+        }, requestTimeout)
+      : null;
+    timeout?.unref?.();
     let transportFetch: any = null;
     try {
       transportFetch = await openTransportFetch({
@@ -406,7 +415,7 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
       throw fatalSessionError("Upstream MCP http request failed.", error);
     } finally {
       await closeTransportFetch(transportFetch);
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       requestOptions.signal?.removeEventListener("abort", abortListener);
       activeRequests.delete(id);
       settleActiveRequest();
@@ -436,8 +445,12 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
   }
 
   try {
+    const initializeTimeoutMs: any = positiveInt(
+      normalized.timeoutMs,
+      DEFAULT_MCP_INITIALIZE_TIMEOUT_MS
+    );
     initializedResult = await request("initialize", initializeParams(normalized), {
-      timeoutMs: normalized.timeoutMs,
+      timeoutMs: initializeTimeoutMs,
       cancelNotification: false
     });
     protocolVersion = assertNegotiatedProtocolVersion(initializedResult, protocolVersion);
