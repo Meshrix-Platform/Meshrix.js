@@ -6,7 +6,7 @@ import { defineComponent, ref } from "vue";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import ApiKeyDistributionView from "../../../apps/console/views/admin/ApiKeyDistributionView.vue";
 import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
-import type { ApiKeyPolicy, ApiKeyRecord } from "../../../apps/console/lib/api-key-distribution-client";
+import type { ApiKeyMcpToolSelection, ApiKeyPolicy, ApiKeyRecord } from "../../../apps/console/lib/api-key-distribution-client";
 
 const ONE_TIME_SENTINEL = "opaque-one-time-credential";
 const ROTATED_SENTINEL = "opaque-rotated-credential";
@@ -95,7 +95,7 @@ function createFakeController() {
     maximumRiskOptions: ref([{ value: "low", label: "Low" }]),
     mcpToolSelection: ref({ status: "available", services: [], tools: [] }),
     mcpToolOptions: ref([]),
-    selectedMcpToolFacts: ref([]),
+    selectedMcpToolFacts: ref<ApiKeyMcpToolSelection[]>([]),
     unavailableSelectedMcpTools: ref([]),
     toggleMcpToolSelection: vi.fn(),
     mutatingKeyId: ref(""),
@@ -120,7 +120,7 @@ function createFakeController() {
       { value: "generic", label: "Standard MCP client", description: "MCP 2026-07-28" },
       { value: "codex", label: "Codex", description: "codex" },
     ]),
-    toolsetOptions: ref([]),
+    toolsetOptions: ref<Array<{ value: string; label: string }>>([]),
   };
 }
 
@@ -170,6 +170,42 @@ afterEach(() => {
 });
 
 describe("API key one-time reveal guard", () => {
+  it.each([
+    { locale: "en" as const, accessLabel: "Access", separator: ", " },
+    { locale: "zh-CN" as const, accessLabel: "能力", separator: "、" },
+  ])("shows selected MCP tools and toolsets in the $locale confirmation summary", async ({ locale, accessLabel, separator }) => {
+    setConsoleLocaleState(locale);
+    const { controller, wrapper } = await mountConsoleView((state) => {
+      state.selectedMcpToolFacts.value = [{
+        serviceId: "service-inventory",
+        publicName: "upstream.service-inventory.inspect_inventory",
+        label: "Inventory: inspect_inventory",
+        operationToolId: "upstream.service-inventory.tools-call",
+        capabilityId: "cap:upstream:service-inventory:tools-call-inspect_inventory",
+        risk: "safe_write",
+        requiredScopes: ["gateway:write"],
+        toolsets: ["upstream-mcp"],
+      }];
+      state.toolsetOptions.value = [
+        { value: "toolset-read", label: "Workspace read" },
+        { value: "toolset-write", label: "Workspace write" },
+      ];
+    });
+    await wrapper.find('[data-testid="agent-setup-step-3"]').trigger("click");
+    const review = wrapper.find('[data-testid="agent-setup-review-step"]');
+    expect(review.isVisible()).toBe(true);
+    const access = review.findAll(".api-key-review-summary > div")
+      .find((entry) => entry.find("span").text() === accessLabel)!;
+    expect(access.find("strong").text()).toBe("Inventory: inspect_inventory");
+
+    controller.draft.value.selectedToolsetIds = ["toolset-read"];
+    controller.draft.value.allowedTools = ["workspace.read"];
+    await flushPromises();
+    expect(access.find("strong").text()).toBe(["Workspace read", "Inventory: inspect_inventory"].join(separator));
+    expect(access.text()).not.toContain("Workspace write");
+    wrapper.unmount();
+  });
+
   it("keeps connection guidance separate from the optional authorization audience control", async () => {
     const { controller, wrapper } = await mountConsoleView();
     const clientGuide = wrapper.find('[data-testid="client-guide-select"]');
