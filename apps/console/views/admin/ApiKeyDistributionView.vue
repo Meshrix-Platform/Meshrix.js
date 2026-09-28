@@ -72,9 +72,12 @@ const selectedTargetLabels = computed(() => targetOptions.value
   .map((option) => option.label));
 const usesGenericClientGuide = computed(() => !draft.value.selectedClientGuide
   || draft.value.selectedClientGuide === "generic");
-const selectedToolsetLabels = computed(() => toolsetOptions.value
-  .filter((option) => draft.value.selectedToolsetIds.includes(option.value))
-  .map((option) => option.label));
+const selectedAccessLabels = computed(() => [
+  ...toolsetOptions.value
+    .filter((option) => draft.value.selectedToolsetIds.includes(option.value))
+    .map((option) => option.label),
+  ...selectedMcpToolFacts.value.map((tool) => tool.label),
+]);
 
 function canOpenSetupStep(step: number): boolean {
   if (step <= 1) return true;
@@ -532,7 +535,7 @@ usePageRefreshHandler(
           <div class="api-key-review-summary">
             <div><span>{{ t("客户端连接指引", "Client connection guide") }}</span><strong>{{ selectedClientGuideLabels.join(t("、", ", ")) || t("标准 MCP 客户端", "Standard MCP client") }}</strong></div>
             <div><span>{{ t("授权受众限制", "Authorization audience restriction") }}</span><strong>{{ selectedTargetLabels.join(t("、", ", ")) || t("未按客户端品牌限制", "No brand-based client restriction") }}</strong></div>
-            <div><span>{{ t("能力", "Access") }}</span><strong>{{ selectedToolsetLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
+            <div><span>{{ t("能力", "Access") }}</span><strong>{{ selectedAccessLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
             <div><span>{{ t("资源", "Resources") }}</span><strong>{{ draft.resourcesUnrestricted ? t("全部资源", "All resources") : t("限定资源", "Restricted resources") }}</strong></div>
           </div>
           <div class="api-key-trust-summary">
