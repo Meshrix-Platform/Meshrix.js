@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { useConsoleApiKeyDistributionController } from "../../../../apps/console/composables/console-api-key-distribution-controller.ts";
 import { createOperationPermissionPlatform } from "../../../../packages/capabilities/src/operation-permission-core/index.ts";
+import { OPERATION_REGISTRY_GOVERNED_DEFINITIONS } from "../../../../packages/contracts/src/operations/operation-registry-governed-definitions.ts";
 import { API_KEY_MANAGEMENT_ACTION } from "../../../../packages/foundation/src/security/authorization/api-key-issuer-authority.ts";
 import { createMemoryApiKeyVerifierKeyProvider } from "../../../../packages/foundation/src/security/authorization/api-key-verifier-key-provider.ts";
 import { createOperationProofSubstrate } from "../../../../packages/foundation/src/proof/proof-substrate/index.ts";
@@ -78,9 +79,30 @@ function operationPermissionResponseBody(response: Record<string, any>): any {
 }
 
 describe("platform MCP key selection closure", () => {
+  it.each([
+    { label: "exact selection", allowedTools: ["meshrix.gateway.metrics"], deniedTools: [], expected: ["meshrix.gateway.metrics"] },
+    { label: "explicit deny before allow", allowedTools: ["meshrix.gateway.metrics"], deniedTools: ["meshrix.gateway.metrics"], expected: [] },
+    { label: "broad configured toolset", allowedTools: [], deniedTools: [], expected: ["meshrix.gateway.metrics", "meshrix.gateway.audit"] },
+    { label: "explicit deny within a broad toolset", allowedTools: [], deniedTools: ["meshrix.gateway.metrics"], expected: ["meshrix.gateway.audit"] },
+  ])("preserves static API-key $label", ({ allowedTools, deniedTools, expected }) => {
+    const tools = ["meshrix.gateway.metrics", "meshrix.gateway.audit"].map((id) => ({
+      id, status: "active", risk: "read_only", requiredScopes: ["gateway:read"], toolsets: ["gateway-read"],
+    }));
+    const provider = createToolSkillManagementProvider({ operationPermissionPlatform: { catalog: () => ({ tools }) } });
+    const authorization = {
+      credentialKind: "scoped_api_key",
+      apiKeyAuthorization: { policy: {
+        protocol: "mcp", allowedTools, deniedTools, scopeIds: ["gateway:read"], toolsetIds: ["gateway-read"],
+        maximumRisk: "low", resources: { mode: "unrestricted" },
+      } },
+    };
+    expect(provider.listVisibleTools({ authorization }).map((tool: { id: string }) => tool.id)).toEqual(expected);
+  });
+
   it("issues exact discovered capabilities and enforces them through the production MCP gateway", async () => {
     let readTools = ["read_selected", "read_sibling"];
     const effects: Array<{ service: string; tool: string }> = [];
+    const dispatchedOperations: string[] = [];
     const peer = createServer(async (request, response) => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -158,10 +180,19 @@ describe("platform MCP key selection closure", () => {
         response.end(JSON.stringify(result.payload));
       },
     });
+    const staticOperationIds = ["gateway.metrics", "external_services.create", "gateway.forward", "gateway.payload.transit"];
+    const staticOperations = OPERATION_REGISTRY_GOVERNED_DEFINITIONS.filter((operation: { id: string }) => staticOperationIds.includes(operation.id));
+    expect(staticOperations).toHaveLength(staticOperationIds.length);
+    const unselectedStaticTools = [
+      "meshrix.gateway.metrics", "meshrix.gateway.externalServices.create", "meshrix.gateway.forward", "meshrix.gateway.payloadTransit",
+    ];
     operationPermission = await createOperationPermissionPlatform({
       userDataPath: path.join(tempRoot, "operation-permission"),
-      operations: projection.operations,
-      operationDispatcher: (input: Record<string, any>) => dispatchOperation(input),
+      operations: [...projection.operations, ...staticOperations],
+      operationDispatcher: (input: Record<string, any>) => {
+        dispatchedOperations.push(String(input.operationId || ""));
+        return dispatchOperation(input);
+      },
       controllers: { system: controllerHandlers },
       securityPermissions,
       proofSubstrate: proof,
@@ -175,6 +206,8 @@ describe("platform MCP key selection closure", () => {
       logger: { debug() {}, info() {}, warn() {}, error() {} },
     });
     cleanup.push(() => operationPermission!.close());
+    expect(operationPermission.registry.getCatalog().tools.map((tool: { id: string }) => tool.id))
+      .toEqual(expect.arrayContaining(unselectedStaticTools));
 
     toolProvider = createToolSkillManagementProvider({
       operationPermissionPlatform: operationPermission,
@@ -268,6 +301,25 @@ describe("platform MCP key selection closure", () => {
         url: new URL("http://meshrix.test/mcp"),
       });
     };
+    const expectExactCatalog = async (credential: string, names: string[], selectedNames: string[]) => {
+      expect(names).toEqual(expect.arrayContaining(["meshrix.discovery", "meshrix.gateway", ...selectedNames]));
+      for (const name of unselectedStaticTools) expect(names).not.toContain(name);
+      const capabilities = await call(credential, "tools/call", {
+        name: "meshrix.discovery", arguments: { operation: "meshrix.capabilities.list" },
+      });
+      expect(capabilities.status).toBe(200);
+      const capabilityNames = (capabilities.body as any).result.structuredContent.operations.map((operation: { name: string }) => operation.name);
+      expect(capabilityNames).toEqual(expect.arrayContaining(selectedNames));
+      for (const name of unselectedStaticTools) expect(capabilityNames).not.toContain(name);
+      const dispatchedBefore = [...dispatchedOperations];
+      const effectsBefore = [...effects];
+      for (const operation of unselectedStaticTools) {
+        const denied = await call(credential, "tools/call", { name: "meshrix.gateway", arguments: { operation, input: {} } });
+        expect(denied.body).toMatchObject({ error: { data: { code: "operation_not_published", effectOutcome: "not_started" } } });
+      }
+      expect(dispatchedOperations).toEqual(dispatchedBefore);
+      expect(effects).toEqual(effectsBefore);
+    };
     const readListing = await call(readKey, "tools/list");
     const readListingErrorCode = String(
       (readListing.body as any)?.error?.data?.code
@@ -283,6 +335,7 @@ describe("platform MCP key selection closure", () => {
     expect(readNames).toContain(selectedRead!.publicName);
     expect(readNames).not.toContain(siblingRead!.publicName);
     expect(readNames).not.toContain(selectedWrite!.publicName);
+    await expectExactCatalog(readKey, readNames, [selectedRead!.publicName]);
     const readResult = await call(readKey, "tools/call", { name: selectedRead!.publicName, arguments: {} });
     expect(readResult.body).toMatchObject({ result: { resultType: "complete" } });
     expect(effects).toEqual([{ service: "reader", tool: "read_selected" }]);
@@ -308,6 +361,7 @@ describe("platform MCP key selection closure", () => {
     expect(writeNames).toContain(selectedWrite!.publicName);
     expect(writeNames).not.toContain(siblingRead!.publicName);
     expect(writeNames).not.toContain(siblingWrite!.publicName);
+    await expectExactCatalog(writeKey, writeNames, [selectedRead!.publicName, selectedWrite!.publicName]);
     const writeResult = await call(writeKey, "tools/call", { name: selectedWrite!.publicName, arguments: {} });
     expect(writeResult.body).toMatchObject({ result: { resultType: "complete" } });
     expect(effects.filter((effect) => effect.service === "writer")).toEqual([{ service: "writer", tool: "write_selected" }]);
