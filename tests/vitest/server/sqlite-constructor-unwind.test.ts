@@ -12,6 +12,26 @@ const DatabaseMock: any = vi.hoisted(() : any => vi.fn(function DatabaseFixture(
 const authorizationFacades: any = vi.hoisted(() : any => []);
 const authorizationFactory: any = vi.hoisted(() : any => ({ failure: null }));
 const tempRoots: any[] = [];
+const permissionConstruction = vi.hoisted(() => ({ failure: null as Error | null }));
+const ownedCapabilitySecurity = vi.hoisted(() => ({ close: vi.fn() }));
+vi.mock("../../../packages/capabilities/src/operation-permission-core/store-grants.ts", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../../packages/capabilities/src/operation-permission-core/store-grants.ts")>();
+  return {
+    ...original,
+    createGrantStoreMethods: (...args: Parameters<typeof original.createGrantStoreMethods>) => {
+      if (permissionConstruction.failure) throw permissionConstruction.failure;
+      return original.createGrantStoreMethods(...args);
+    }
+  };
+});
+vi.mock("@meshrix/foundation/security/authorization/opaque-capability-key", async (importOriginal) => ({
+  ...await importOriginal<object>(),
+  createOpaqueCapabilityKeyProvider: () => ownedCapabilitySecurity
+}));
+vi.mock("@meshrix/foundation/security/authorization/capability-binding-guard", async (importOriginal) => ({
+  ...await importOriginal<object>(),
+  createCapabilityBindingGuard: () => ownedCapabilitySecurity
+}));
 
 vi.mock("better-sqlite3", () : any => ({ default: DatabaseMock }));
 vi.mock("../../../packages/foundation/src/security/authorization/authorization-store.ts", () : any => ({
@@ -122,6 +142,7 @@ beforeEach(() : any => {
   databases.length = 0;
   authorizationFacades.length = 0;
   authorizationFactory.failure = null;
+  permissionConstruction.failure = null;
 });
 
 afterEach(() : any => {
@@ -184,7 +205,7 @@ describe("SQLite constructor unwind", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("unwinds operation-permission security resources after a late construction failure", () : any => {
+  it("preserves borrowed operation-permission resources when schema initialization fails", () : any => {
     const failure: any = new Error("operation permission statements failed");
     const capabilitySecurity: Record<string, any> = { close: vi.fn() };
     const database: Record<string, any> = {
@@ -205,7 +226,36 @@ describe("SQLite constructor unwind", () : any => {
     }));
 
     expect(thrown).toBe(failure);
-    expect(capabilitySecurity.close).toHaveBeenCalledOnce();
+    expect(capabilitySecurity.close).not.toHaveBeenCalled();
+    expect(database.close).toHaveBeenCalledOnce();
+  });
+
+  it.each(["borrowed", "owned"] as const)("unwinds only owned security resources after late construction failure (%s)", (ownership) => {
+    const database = databaseFixture({ migrationVersion: Number.MAX_SAFE_INTEGER });
+    const borrowed = { close: vi.fn() };
+    databases.push(database);
+    permissionConstruction.failure = new Error("synthetic late permission construction failure");
+    expect(() => createOperationPermissionWorkerOwner({
+      userDataPath: tempUserDataPath(),
+      ...(ownership === "borrowed" ? { capabilityKeyProvider: borrowed, capabilityBindingGuard: borrowed } : {})
+    })).toThrow(permissionConstruction.failure);
+    expect(borrowed.close).not.toHaveBeenCalled();
+    expect(ownedCapabilitySecurity.close).toHaveBeenCalledTimes(ownership === "owned" ? 1 : 0);
+    expect(database.close).toHaveBeenCalledOnce();
+  });
+
+  it.each(["borrowed", "owned"] as const)("closes only owned security resources once during normal shutdown (%s)", (ownership) => {
+    const database = databaseFixture({ migrationVersion: Number.MAX_SAFE_INTEGER });
+    const borrowed = { close: vi.fn() };
+    databases.push(database);
+    const store = createOperationPermissionWorkerOwner({
+      userDataPath: tempUserDataPath(),
+      ...(ownership === "borrowed" ? { capabilityKeyProvider: borrowed, capabilityBindingGuard: borrowed } : {})
+    });
+    store.close();
+    store.close();
+    expect(borrowed.close).not.toHaveBeenCalled();
+    expect(ownedCapabilitySecurity.close).toHaveBeenCalledTimes(ownership === "owned" ? 1 : 0);
     expect(database.close).toHaveBeenCalledOnce();
   });
 
