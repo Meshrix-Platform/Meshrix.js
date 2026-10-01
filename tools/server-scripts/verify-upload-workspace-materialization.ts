@@ -366,6 +366,7 @@ async function main() : Promise<any> {
         "packages/agents/src/agent-workspace/agent-workspace-materialization.ts",
         "packages/server-runtime/src/composition/composition-root.ts",
         "packages/server-runtime/src/jobs/upload-workspace-materialization/engine.ts",
+        "packages/server-runtime/src/jobs/upload-workspace-materialization/runtime.ts",
         "packages/server-runtime/src/jobs/upload-workspace-materialization/transaction-store.ts",
         "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts",
         verifier

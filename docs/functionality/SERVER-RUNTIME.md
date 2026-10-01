@@ -119,6 +119,23 @@ of hiding a job. A malformed active-job payload is retained as a visible failed
 job with recovery diagnostics; an unreadable payload fails recovery without
 overwriting the original metadata.
 
+## Upload Workspace Materialization
+
+The materialization feature under
+`packages/server-runtime/src/jobs/upload-workspace-materialization/` owns one
+explicit durable state model (`model.ts`), one private SQLite schema and
+transaction store (`schema.ts`, `transaction-store.ts`), and one runtime that
+owns queue registration, deduplicated admission, ordered restart
+reconciliation, execution wiring, cancellation, and the queue/store lifetime
+(`runtime.ts`). `composition/upload-workspace-materialization-provider.ts` only
+asserts the root-owned workspace materialization port, injects the concrete
+ports, and returns the runtime. One component owns each database transaction
+and the queue: the runtime enqueues one deduplicated work item per request,
+reconciles persisted queued or running requests in request-ref order before new
+admission, keeps admitted work during shutdown, and does not close an injected
+transaction store. Schema initialization failure closes only the store's own
+database handle.
+
 Storage backup and replacement restore treat `objects/.pending` as private
 atomic-write staging. Backup manifests accept only objects already published by
 rename, and replacement restore neither selects nor deletes an in-flight staged
