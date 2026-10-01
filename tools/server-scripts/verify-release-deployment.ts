@@ -17,6 +17,12 @@ import {
   assertReleaseDeploymentReceipt,
   sha256,
 } from "./lib/release-deployment/contract.ts";
+import {
+  observeReleaseDeploymentEnvironment,
+  readReleaseDeploymentCleanupState,
+  RELEASE_DEPLOYMENT_CLEANUP_STATE_SCHEMA,
+  validateReleaseDeploymentCleanupState,
+} from "./lib/release-deployment/authority.ts";
 import { validateAcceptedCandidateReceipt } from "./lib/platform-acceptance-generation-store.ts";
 import { validateReleaseCandidateIdentity } from "./verify-release-candidate-identity.ts";
 
@@ -24,25 +30,16 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)))
 const FIXTURE_PROVIDER = "services/model-gateway/test/fixture-provider.mjs";
 const DRIVER_SCRIPT = "tools/server-scripts/release-deployment-driver.ts";
 const REDUCER_SCRIPT = "tools/server-scripts/reduce-release-deployment.ts";
-const CLEANUP_STATE_SCHEMA = "meshrix.release-deployment.cleanup/2";
 const READINESS_BUDGET_MS = 120_000;
 const MAX_CHILD_OUTPUT_BYTES = 64 * 1024;
 const MAX_AUTHORITY_INPUT_BYTES = 4 * 1024 * 1024;
-const STATE_KEYS = Object.freeze([
-  "backupVolume",
-  "codexVolume",
-  "containerName",
-  "dataVolume",
-  "fixtureContainerName",
-  "imageName",
-  "networkName",
-  "resourceId",
-  "schemaVersion",
-  "tempRoot",
-]);
 
 function fail(code: string, detail = code): never {
   throw Object.assign(new Error(detail), { code });
+}
+
+export function standardMcpClientAudience(serverAudience: string): Record<string, any> {
+  return { serverAudience, targetIds: [], connectorPackageIds: [] };
 }
 
 function remainingBudget(deadline: number, code: string, cap = Number.POSITIVE_INFINITY): number {
@@ -175,35 +172,6 @@ async function readBoundedAuthorityFile(filePath: string): Promise<Buffer> {
   return fs.readFile(filePath);
 }
 
-function validateCleanupState(value: any): any {
-  if (!value || typeof value !== "object" || Array.isArray(value) ||
-    JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...STATE_KEYS].sort()) ||
-    value.schemaVersion !== CLEANUP_STATE_SCHEMA ||
-    !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(
-      String(value.resourceId || ""),
-    )) {
-    fail("release_deployment_cleanup_state_invalid");
-  }
-  const id = value.resourceId;
-  const expected = {
-    containerName: `meshrix-release-smoke-${id}`,
-    fixtureContainerName: `meshrix-release-fixture-${id}`,
-    imageName: `meshrix-release-smoke:${id}`,
-    networkName: `meshrix-release-network-${id}`,
-    dataVolume: `meshrix-release-data-${id}`,
-    backupVolume: `meshrix-release-backup-${id}`,
-    codexVolume: `meshrix-release-codex-${id}`,
-  };
-  for (const [key, expectedValue] of Object.entries(expected)) {
-    if (value[key] !== expectedValue) fail("release_deployment_cleanup_state_invalid");
-  }
-  const expectedRoot = path.join(os.tmpdir(), `meshrix-release-deployment-${id}`);
-  if (value.tempRoot !== expectedRoot) {
-    fail("release_deployment_cleanup_state_invalid");
-  }
-  return value;
-}
-
 async function dockerRemoveExact(state: any, strict: boolean): Promise<void> {
   const run = async (args: string[], allowFailure = false): Promise<any> => spawnBounded("docker", args, {
     allowFailure,
@@ -219,7 +187,7 @@ async function dockerRemoveExact(state: any, strict: boolean): Promise<void> {
       await run(["rm", "--force", "--volumes", container]);
     }
   }
-  for (const volume of [state.dataVolume, state.backupVolume, state.codexVolume]) {
+  for (const volume of [state.dataVolume, state.backupVolume]) {
     if ((await run(["volume", "inspect", volume], true)).code === 0) {
       await run(["volume", "rm", "--force", volume]);
     }
@@ -236,10 +204,9 @@ export async function cleanupReleaseDeployment(
   cleanupStatePath: string,
   { strict = true, removePrivate = true }: Record<string, any> = {},
 ): Promise<void> {
-  const text = await fs.readFile(cleanupStatePath, "utf8").catch(() => "");
-  if (!text) return;
-  let state: any;
-  try { state = validateCleanupState(JSON.parse(text)); } catch (error) { throw error; }
+  const stat = await fs.lstat(cleanupStatePath).catch(() => null);
+  if (!stat) return;
+  const state = await readReleaseDeploymentCleanupState(cleanupStatePath);
   await dockerRemoveExact(state, strict);
   if (removePrivate) {
     await fs.rm(state.tempRoot, { recursive: true, force: true });
@@ -490,11 +457,7 @@ async function configureRuntime(
         deniedTools: [],
         scopeIds,
         maximumRisk: "high",
-        audience: {
-          serverAudience: new URL(origin).host,
-          targetIds: ["codex"],
-          connectorPackageIds: [],
-        },
+        audience: standardMcpClientAudience(new URL(origin).host),
         resources: {
           mode: "unrestricted",
           workspaceIds: [], dataClassifications: [], egressClasses: [], semanticFamilies: [],
@@ -554,16 +517,18 @@ export async function verifyDeployment({
   outputPath,
   cleanupStatePath,
 }: Record<string, string>): Promise<any> {
+  const controllerEnvironment = await observeReleaseDeploymentEnvironment();
   const inputs = await verifyInputs(sourceCandidatePath, functionalReceiptPath);
   const resourceId = randomUUID();
-  const state = validateCleanupState({
-    schemaVersion: CLEANUP_STATE_SCHEMA,
+  const state = validateReleaseDeploymentCleanupState({
+    schemaVersion: RELEASE_DEPLOYMENT_CLEANUP_STATE_SCHEMA,
     resourceId,
+    sourceRevision: inputs.candidate.source_revision,
+    candidateDigest: inputs.candidate.candidate_digest,
     imageName: `meshrix-release-smoke:${resourceId}`,
     containerName: `meshrix-release-smoke-${resourceId}`,
     dataVolume: `meshrix-release-data-${resourceId}`,
     backupVolume: `meshrix-release-backup-${resourceId}`,
-    codexVolume: `meshrix-release-codex-${resourceId}`,
     fixtureContainerName: `meshrix-release-fixture-${resourceId}`,
     networkName: `meshrix-release-network-${resourceId}`,
     tempRoot: path.join(os.tmpdir(), `meshrix-release-deployment-${resourceId}`),
@@ -573,7 +538,7 @@ export async function verifyDeployment({
   let complete = false;
   let ownerPassword = "";
   try {
-    for (const volume of [state.dataVolume, state.backupVolume, state.codexVolume]) {
+    for (const volume of [state.dataVolume, state.backupVolume]) {
       await spawnBounded("docker", ["volume", "create", volume], {
         failureCode: "release_deployment_volume_create_failed",
       });
@@ -594,7 +559,6 @@ export async function verifyDeployment({
       "--publish", "127.0.0.1::7228",
       "--mount", `source=${state.dataVolume},target=/app/data`,
       "--mount", `source=${state.backupVolume},target=/app/backups`,
-      "--mount", `source=${state.codexVolume},target=/codex-home`,
       state.imageName,
     ], { failureCode: "release_deployment_container_start_failed" });
     const portOutput = (await spawnBounded(
@@ -639,14 +603,15 @@ export async function verifyDeployment({
       "--source-revision", inputs.candidate.source_revision,
       "--candidate-digest", inputs.candidate.candidate_digest,
       "--functional-receipt-digest", inputs.functionalReceiptDigest,
-      "--cleanup-verified",
+      "--cleanup-state", cleanupStatePath,
       "--output", outputPath,
     ], { allowFailure: true });
     if (reducer.code !== 0) fail("release_deployment_reducer_failed");
     const receipt = JSON.parse(await fs.readFile(outputPath, "utf8"));
     assertReleaseDeploymentReceipt(receipt);
     if (receipt.claim !== RELEASE_DEPLOYMENT_CLAIM || receipt.runtimeUiTarget !== RUNTIME_UI_TARGET ||
-      receipt.runner !== UBUNTU_RUNNER) {
+      receipt.executionEnvironment?.runner !== UBUNTU_RUNNER ||
+      Object.keys(controllerEnvironment).some((key) => receipt.executionEnvironment?.[key] !== controllerEnvironment[key])) {
       fail("release_deployment_receipt_identity_invalid");
     }
     await fs.rm(state.tempRoot, { recursive: true, force: true });
@@ -670,11 +635,7 @@ async function main(): Promise<void> {
     }
     process.stdout.write(`${JSON.stringify({
       ok: true,
-      fixtureProcess: true,
-      runtimeUiContainer: true,
-      externalDriver: true,
-      independentReducer: true,
-      runner: UBUNTU_RUNNER,
+      selfTest: "controller-source-structure",
     })}\n`);
     return;
   }

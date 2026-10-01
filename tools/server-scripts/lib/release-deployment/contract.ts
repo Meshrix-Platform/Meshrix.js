@@ -40,13 +40,13 @@ export const RECEIPT_RETAINED_FIELDS = Object.freeze([
   "capacityCertified",
   "claim",
   "cleanup",
+  "executionEnvironment",
   "externalBoundary",
   "functionalReceiptDigest",
   "histogramBuckets",
   "privacy",
   "processSeparation",
   "releaseDeploymentVerified",
-  "runner",
   "runtimeUiTarget",
   "scenarios",
   "schemaVersion",
@@ -74,6 +74,31 @@ const LATENCY_KEYS = Object.freeze(["maxMs", "p50Ms", "p95Ms", "p99Ms"]);
 const PROCESS_KEYS = Object.freeze(["controller", "driver", "fixture", "reducer", "service"]);
 const PRIVACY_KEYS = Object.freeze(["containsRuntimeValues", "retainedFields"]);
 const CACHE_KEYS = Object.freeze(["buildCachePreserved", "dependencyCachePreserved"]);
+export const EXECUTION_ENVIRONMENT_KEYS = Object.freeze([
+  "architecture",
+  "nodeVersion",
+  "platform",
+  "runner",
+  "runnerEnvironment",
+]);
+
+export function validateReleaseExecutionEnvironment(environment: any): string[] {
+  if (!exactKeys(environment, EXECUTION_ENVIRONMENT_KEYS)) {
+    return ["release_deployment_environment_fields_invalid"];
+  }
+  const reasons: string[] = [];
+  if (environment.platform !== "linux") reasons.push("release_deployment_environment_platform_invalid");
+  if (environment.architecture !== "x64") reasons.push("release_deployment_environment_architecture_invalid");
+  if (environment.runner !== UBUNTU_RUNNER) reasons.push("release_deployment_environment_runner_invalid");
+  if (environment.runnerEnvironment !== "github-hosted" && environment.runnerEnvironment !== "local") {
+    reasons.push("release_deployment_environment_runner_context_invalid");
+  }
+  if (typeof environment.nodeVersion !== "string" ||
+    !/^24\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(environment.nodeVersion)) {
+    reasons.push("release_deployment_environment_runtime_invalid");
+  }
+  return reasons;
+}
 
 export function sha256(value: any): string {
   return createHash("sha256").update(value).digest("hex");
@@ -201,10 +226,11 @@ export function validateScenarioAggregate(aggregate: any, scenario = ""): string
 }
 
 export function validateDriverAggregate(aggregate: any): string[] {
-  if (!exactKeys(aggregate, ["externalBoundary", "scenarios", "schemaVersion"])) {
+  if (!exactKeys(aggregate, ["executionEnvironment", "externalBoundary", "scenarios", "schemaVersion"])) {
     return ["release_driver_aggregate_fields_invalid"];
   }
   const reasons: string[] = [];
+  reasons.push(...validateReleaseExecutionEnvironment(aggregate.executionEnvironment));
   if (aggregate.schemaVersion !== RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA) {
     reasons.push("release_driver_aggregate_schema_invalid");
   }
@@ -245,7 +271,7 @@ export function validateReleaseDeploymentReceipt(receipt: any): string[] {
   if (!/^[a-f0-9]{64}$/u.test(String(receipt.candidateDigest || ""))) reasons.push("release_deployment_receipt_candidate_digest_invalid");
   if (!/^[a-f0-9]{64}$/u.test(String(receipt.functionalReceiptDigest || ""))) reasons.push("release_deployment_receipt_functional_digest_invalid");
   if (receipt.runtimeUiTarget !== RUNTIME_UI_TARGET) reasons.push("release_deployment_receipt_target_invalid");
-  if (receipt.runner !== UBUNTU_RUNNER) reasons.push("release_deployment_receipt_runner_invalid");
+  reasons.push(...validateReleaseExecutionEnvironment(receipt.executionEnvironment));
   if (receipt.externalBoundary !== true) reasons.push("release_deployment_receipt_external_boundary_invalid");
   if (receipt.releaseDeploymentVerified !== true) reasons.push("release_deployment_receipt_verification_invalid");
   if (!exactKeys(receipt.processSeparation, PROCESS_KEYS) ||
@@ -293,17 +319,17 @@ export function createReleaseDeploymentReceipt({
   sourceRevision,
   candidateDigest,
   functionalReceiptDigest,
+  executionEnvironment,
   scenarios,
-  cleanupVerified = false,
 }: Record<string, any> = {}): any {
   const aggregate = {
     schemaVersion: RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA,
     externalBoundary: true,
+    executionEnvironment,
     scenarios,
   };
   const aggregateReasons = validateDriverAggregate(aggregate);
   if (aggregateReasons.length > 0) fail(aggregateReasons[0], aggregateReasons.join("; "));
-  if (cleanupVerified !== true) fail("release_deployment_cleanup_unverified");
   const receipt = {
     schemaVersion: RELEASE_DEPLOYMENT_RECEIPT_SCHEMA,
     status: "accepted",
@@ -311,8 +337,8 @@ export function createReleaseDeploymentReceipt({
     sourceRevision,
     candidateDigest,
     functionalReceiptDigest,
+    executionEnvironment,
     runtimeUiTarget: RUNTIME_UI_TARGET,
-    runner: UBUNTU_RUNNER,
     externalBoundary: true,
     processSeparation: {
       controller: true,
