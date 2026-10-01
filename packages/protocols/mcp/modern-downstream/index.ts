@@ -1,4 +1,5 @@
 import type { AuthenticatedContext, CatalogDescriptor, Gateway, GatewayOutcome, SubscriptionEvent } from "@meshrix/contracts/gateway";
+import { GATEWAY_PUBLIC_FAILURES } from "@meshrix/contracts/gateway";
 import {
   MCP_DISCOVER_METHOD,
   MCP_SUBSCRIBE_METHOD,
@@ -471,8 +472,8 @@ export class ModernDownstreamAdapter {
       const status = Number((error as { status?: unknown; statusCode?: unknown })?.status ?? (error as { statusCode?: unknown })?.statusCode ?? 401);
       const safeStatus = Number.isInteger(status) && status >= 400 && status <= 599 ? status : 401;
       // Authentication failures use a closed public message by status class. The
-      // platform's stable reason code may travel with the refusal so a peer reads
-      // why the credential was rejected; arbitrary exception text never does.
+      // contract's declared reason code may travel with the refusal. A code's
+      // spelling alone does not establish that it is safe to disclose.
       const message = safeStatus === 403
         ? "Access denied."
         : safeStatus === 429
@@ -481,7 +482,7 @@ export class ModernDownstreamAdapter {
             ? "Authentication is unavailable."
             : "Authentication failed.";
       const reasonCode = String((error as { code?: unknown })?.code ?? "").trim();
-      const code = /^[a-z][a-z0-9_]{0,63}$/u.test(reasonCode) ? reasonCode : undefined;
+      const code = Object.hasOwn(GATEWAY_PUBLIC_FAILURES, reasonCode) ? reasonCode : undefined;
       return json(safeStatus, rpcError(id, safeStatus === 403 ? -32003 : -32001, message, code ? { code } : undefined));
     }
     if (!context) return json(401, rpcError(id, -32001, "Authenticated context is required."));

@@ -129,7 +129,6 @@ function declaredPublicFailureCode(error: unknown): GatewayPublicFailureCode | u
 }
 
 function failureFromError(error: unknown, origin: GatewayFailure["origin"], effectOutcome: GatewayFailure["effectOutcome"]): GatewayFailure {
-  if (isGatewayFailure(error) && Object.isFrozen(error)) return failure({ ...error, origin, effectOutcome });
   if (error instanceof Error && error.name === "AbortError") {
     const cancelled = GATEWAY_PUBLIC_FAILURES.operation_cancelled;
     return failure({ origin, code: "operation_cancelled", message: cancelled.message, status: cancelled.status, effectOutcome });

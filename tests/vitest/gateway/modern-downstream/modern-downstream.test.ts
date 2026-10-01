@@ -197,7 +197,7 @@ describe("modern MCP downstream adapter", () => {
   });
 
   it("[GC-028] projects authentication diagnostics to a closed public refusal", async () => {
-    const privateMarker = "<authentication-private-diagnostic>";
+    const privateMarker = "synthetic_authentication_private_diagnostic";
     const upstream = new QueueUpstream();
     const gateway = createGateway({ upstream, descriptors: [descriptor()] });
     await gateway.start();
