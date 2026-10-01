@@ -109,31 +109,44 @@ jobs:
           # A label and a clean scan are not admission. The exact proposed
           # revision needs a current non-dismissed approving review from an
           # authorized maintainer; a later changes-requested or dismissed
-          # review revokes the conclusion.
-          reviews=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/reviews?per_page=100")
-          approved=$(printf '%s' "$reviews" | jq -r --arg head "$head_sha" '
-            [ .[]
-              | select(.user.login != "dependabot[bot]")
-              | select(.author_association == "MEMBER" or .author_association == "OWNER" or .author_association == "COLLABORATOR")
-              | select(.commit_id == $head) ]
-            | sort_by(.user.login)
+          # review revokes the conclusion. Repository association is not write authority;
+          # query current repository permissions before using a review.
+          reviews=$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/reviews?per_page=100")
+          latest_reviews=$(printf '%s' "$reviews" | jq -c '
+            add
+            | map(select(.user.type == "User" and
+                (.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")))
+            | sort_by(.user.login, .id)
             | group_by(.user.login)
-            | map(last)
-            | any(.state == "APPROVED")')
-          if [ "$approved" != 'true' ]; then
+            | map(last)')
+          approved=false
+          rejected=false
+          while IFS= read -r review; do
+            reviewer=$(printf '%s' "$review" | jq -r '.user.login')
+            permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${reviewer}/permission" --jq '.permission')
+            case "$permission" in write|admin) ;; *) continue ;; esac
+            review_state=$(printf '%s' "$review" | jq -r '.state')
+            review_head=$(printf '%s' "$review" | jq -r '.commit_id')
+            if [ "$review_state" = 'CHANGES_REQUESTED' ]; then
+              rejected=true
+            elif [ "$review_state" = 'APPROVED' ] && [ "$review_head" = "$head_sha" ]; then
+              approved=true
+            fi
+          done < <(printf '%s' "$latest_reviews" | jq -c '.[]')
+          if [ "$approved" != 'true' ] || [ "$rejected" = 'true' ]; then
             exit 0
           fi
 
           # Elapsed checks are read for the same head, so an admission review
           # that arrives after CI does not require a redundant CI run, and the
           # head cannot change between the check and the merge request.
-          checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${head_sha}/check-runs?per_page=100")
+          checks=$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/commits/${head_sha}/check-runs?per_page=100")
           for required_job in \
             'Pull request verification' \
             'Dependency review'; do
             conclusion=$(printf '%s' "$checks" | jq -r \
               --arg name "$required_job" \
-              '[.check_runs[] | select(.name == $name)] | if length == 1 then .[0].conclusion else "missing" end')
+              '[.[].check_runs[] | select(.name == $name and .app.slug == "github-actions")] | sort_by(.id) | if length > 0 then last.conclusion else "missing" end')
             if [ "$conclusion" != 'success' ]; then
               exit 0
             fi
