@@ -1,36 +1,120 @@
 {
   "name": "@meshrix/ui-console",
   "version": "0.0.1",
-  "description": "Meshrix.js reusable console components, typed API clients, route registry",
+  "description": "Reusable Vue components and browser-side helpers for Meshrix.js consoles",
   "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },
   "type": "module",
+  "scripts": {
+    "build": "vite build --config vite.config.ts && vue-tsc -p tsconfig.build.json",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build"
+  },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2"
   },
   "peerDependencies": {
+    "element-plus": "^2.13.7",
     "vue": "^3.5.32"
   },
   "exports": {
-    "./binary-checkbox": "./src/BinaryCheckbox.vue",
-    "./BinaryCheckbox": "./src/BinaryCheckbox.vue",
-    "./bridge-http": "./src/bridge-http.ts",
-    "./browser-downloads": "./src/browser-downloads.ts",
-    "./browser-window": "./src/browser-window.ts",
-    "./console-client-display-utils": "./src/console-client-display-utils.ts",
-    "./console-format-utils": "./src/console-format-utils.ts",
-    "./error-message": "./src/error-message.ts",
-    "./option-bar": "./src/OptionBar.vue",
-    "./OptionBar": "./src/OptionBar.vue",
-    "./page-refresh": "./src/page-refresh.ts",
-    "./rpc-client": "./src/rpc-client.ts",
-    "./status-pill": "./src/StatusPill.vue",
-    "./StatusPill": "./src/StatusPill.vue",
-    "./workspaces-view-context": "./src/workspaces-view-context.ts"
+    "./binary-checkbox": {
+      "types": "./dist/types/binary-checkbox.d.ts",
+      "source": "./src/binary-checkbox.ts",
+      "import": "./dist/binary-checkbox.js",
+      "default": "./dist/binary-checkbox.js"
+    },
+    "./BinaryCheckbox": {
+      "types": "./dist/types/binary-checkbox.d.ts",
+      "source": "./src/binary-checkbox.ts",
+      "import": "./dist/binary-checkbox.js",
+      "default": "./dist/binary-checkbox.js"
+    },
+    "./bridge-http": {
+      "types": "./dist/types/bridge-http.d.ts",
+      "source": "./src/bridge-http.ts",
+      "import": "./dist/bridge-http.js",
+      "default": "./dist/bridge-http.js"
+    },
+    "./browser-downloads": {
+      "types": "./dist/types/browser-downloads.d.ts",
+      "source": "./src/browser-downloads.ts",
+      "import": "./dist/browser-downloads.js",
+      "default": "./dist/browser-downloads.js"
+    },
+    "./browser-window": {
+      "types": "./dist/types/browser-window.d.ts",
+      "source": "./src/browser-window.ts",
+      "import": "./dist/browser-window.js",
+      "default": "./dist/browser-window.js"
+    },
+    "./console-client-display-utils": {
+      "types": "./dist/types/console-client-display-utils.d.ts",
+      "source": "./src/console-client-display-utils.ts",
+      "import": "./dist/console-client-display-utils.js",
+      "default": "./dist/console-client-display-utils.js"
+    },
+    "./console-format-utils": {
+      "types": "./dist/types/console-format-utils.d.ts",
+      "source": "./src/console-format-utils.ts",
+      "import": "./dist/console-format-utils.js",
+      "default": "./dist/console-format-utils.js"
+    },
+    "./error-message": {
+      "types": "./dist/types/error-message.d.ts",
+      "source": "./src/error-message.ts",
+      "import": "./dist/error-message.js",
+      "default": "./dist/error-message.js"
+    },
+    "./option-bar": {
+      "types": "./dist/types/option-bar.d.ts",
+      "source": "./src/option-bar.ts",
+      "import": "./dist/option-bar.js",
+      "default": "./dist/option-bar.js"
+    },
+    "./OptionBar": {
+      "types": "./dist/types/option-bar.d.ts",
+      "source": "./src/option-bar.ts",
+      "import": "./dist/option-bar.js",
+      "default": "./dist/option-bar.js"
+    },
+    "./page-refresh": {
+      "types": "./dist/types/page-refresh.d.ts",
+      "source": "./src/page-refresh.ts",
+      "import": "./dist/page-refresh.js",
+      "default": "./dist/page-refresh.js"
+    },
+    "./rpc-client": {
+      "types": "./dist/types/rpc-client.d.ts",
+      "source": "./src/rpc-client.ts",
+      "import": "./dist/rpc-client.js",
+      "default": "./dist/rpc-client.js"
+    },
+    "./status-pill": {
+      "types": "./dist/types/status-pill.d.ts",
+      "source": "./src/status-pill.ts",
+      "import": "./dist/status-pill.js",
+      "default": "./dist/status-pill.js"
+    },
+    "./StatusPill": {
+      "types": "./dist/types/status-pill.d.ts",
+      "source": "./src/status-pill.ts",
+      "import": "./dist/status-pill.js",
+      "default": "./dist/status-pill.js"
+    },
+    "./workspaces-view-context": {
+      "types": "./dist/types/workspaces-view-context.d.ts",
+      "source": "./src/workspaces-view-context.ts",
+      "import": "./dist/workspaces-view-context.js",
+      "default": "./dist/workspaces-view-context.js"
+    },
+    "./styles.css": "./dist/styles.css"
   },
+  "sideEffects": ["./dist/styles.css"],
   "files": [
+    "dist/**/*",
     "src/**/*",
     "README.md",
     "LICENSE",

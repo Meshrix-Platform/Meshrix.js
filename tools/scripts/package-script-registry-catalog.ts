@@ -1220,7 +1220,7 @@ export const UNCLASSIFIED_ALLOWLIST: readonly any[] = Object.freeze([
   "generate:upstream-service-report-template", // Deterministic tracked template writer
   "platform:audit:report",    // Open-platform report alias
   "downstream:mcp:audit:report", // Downstream MCP report alias
-  "console:verify",           // Console build and typecheck composite
+  "console:verify",           // UI package and Console build/typecheck composite
   "vitest",                   // Vitest runner
   "vitest:coverage",          // Vitest with coverage
   "repo:branch-flow",         // Branch flow verification
