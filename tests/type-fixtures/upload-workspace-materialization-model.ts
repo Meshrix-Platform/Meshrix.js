@@ -30,6 +30,12 @@ import type {
   PublicationReservation
 } from "../../packages/server-runtime/src/jobs/upload-workspace-materialization/model.ts";
 
+import {
+  createUploadWorkspaceMaterializationRuntime,
+  type CreateMaterializationRuntimeOptions
+} from "../../packages/server-runtime/src/jobs/upload-workspace-materialization/runtime.ts";
+import { createUploadWorkspaceMaterializationProvider } from "../../packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts";
+
 declare const admittedState: MaterializationAdmittedState;
 declare const publicationIntent: PublicationIntent;
 declare const publicationReserved: PublicationReservation;
@@ -81,4 +87,16 @@ export function rejectedPorts() : void {
   createUploadWorkspaceMaterialization({ authorityPort, custodyReadPort, resourcePort, workspacePort: {}, transactionStore, resolveOperation, auditPort, proofPort });
   // @ts-expect-error the transaction contract does not expose arbitrary commands
   transactionStore.someUnknownCommand({});
+}
+
+// Production runtime wiring has the same checked boundaries as the engine.
+declare const runtimeOptions: CreateMaterializationRuntimeOptions;
+export function runtimeBoundaries(): void {
+  void createUploadWorkspaceMaterializationRuntime(runtimeOptions);
+  // @ts-expect-error a storage port cannot silently lose its transaction methods
+  void createUploadWorkspaceMaterializationRuntime({ ...runtimeOptions, transactionStore: { get: async () => null } });
+  // @ts-expect-error a queue owner must return an awaitable close barrier
+  void createUploadWorkspaceMaterializationRuntime({ ...runtimeOptions, queueApplicationPort: { registerQueue: async () => ({ close: false }) } });
+  // @ts-expect-error composition cannot silently omit runtime dependencies
+  void createUploadWorkspaceMaterializationProvider({ workspaceMaterializationPort: {} });
 }

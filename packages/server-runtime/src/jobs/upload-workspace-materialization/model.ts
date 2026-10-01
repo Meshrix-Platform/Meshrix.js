@@ -2711,7 +2711,7 @@ export interface MaterializationTransactionPort {
     Promise<MaterializationPublicationIntentState>;
   recordPublicationPrepared(
     requestRef: string,
-    input: MaterializationRecordPublicationInput<PublicationPrepared>
+    input: MaterializationFenceInput & { readonly publication: unknown }
   ): MaterializationPublicationPreparedState |
     Promise<MaterializationPublicationPreparedState>;
   recordPublished(
@@ -2720,7 +2720,7 @@ export interface MaterializationTransactionPort {
   ): MaterializationDurableState | Promise<MaterializationDurableState>;
   recordTempReserved(
     requestRef: string,
-    input: MaterializationRecordPublicationInput<PublicationReservation>
+    input: MaterializationFenceInput & { readonly publication: unknown }
   ): MaterializationTempReservedState |
     Promise<MaterializationTempReservedState>;
   renew(requestRef: string, input: MaterializationFenceInput): unknown;
@@ -2867,7 +2867,7 @@ export interface MaterializationTargetInspection {
 }
 
 export interface MaterializationLeaseGuardInput {
-  readonly leaseGuard: () => unknown;
+  readonly leaseGuard: () => boolean | void | Promise<boolean | void>;
   readonly signal?: AbortSignal | null;
 }
 
@@ -2880,7 +2880,7 @@ export interface MaterializationPreimageCapture {
 }
 
 export interface MaterializationWorkspaceRecoveryInput {
-  readonly leaseGuard: () => unknown;
+  readonly leaseGuard: () => boolean | void | Promise<boolean | void>;
   readonly preimage: MaterializationPreimage | null;
   readonly publication: MaterializationPublication | null;
   readonly signal: AbortSignal | null;
@@ -2905,7 +2905,7 @@ export interface MaterializationRecoveryResult {
   readonly code?: string;
   readonly status?: number;
   readonly disposition?: "retry" | "committed";
-  readonly receipt?: MaterializationPublishedReceipt;
+  readonly receipt?: unknown;
   readonly workspaceRevision?: string;
 }
 
@@ -2915,13 +2915,15 @@ export interface MaterializationPublicationCallbackInput {
   readonly stateOperationId: string;
 }
 
-export interface MaterializationReservationCallbackInput
-  extends MaterializationPublicationCallbackInput {
+export interface MaterializationReservationCallbackInput {
+  readonly publicationId: string;
+  readonly stateOperationId: string;
   readonly reservationDigest: string;
 }
 
-export interface MaterializationProofCallbackInput
-  extends MaterializationPublicationCallbackInput {
+export interface MaterializationProofCallbackInput {
+  readonly publicationId: string;
+  readonly stateOperationId: string;
   readonly proofDigest: string;
 }
 
@@ -2939,14 +2941,14 @@ export interface MaterializationReceiptCallbackInput
 
 export interface MaterializationWorkspaceMaterializeInput {
   readonly publication: PublicationIntent;
-  readonly leaseGuard: () => unknown;
+  readonly leaseGuard: () => boolean | void | Promise<boolean | void>;
   readonly signal: AbortSignal | null;
   readonly claimPublicationAuthority: () => Promise<AsyncIterable<Buffer>>;
   readonly recordTempReserved: (
-    publication: PublicationReservation
+    publication: unknown
   ) => Promise<PublicationReservation>;
   readonly recordPublicationPrepared: (
-    publication: PublicationPrepared
+    publication: unknown
   ) => Promise<PublicationPrepared>;
   readonly afterDirectoryWorkerBoundBeforeReserve?: (
     input: MaterializationPublicationCallbackInput
@@ -2987,7 +2989,7 @@ export interface MaterializationWorkspaceSession {
   ): Promise<MaterializationRecoveryResult>;
   materialize(
     input: MaterializationWorkspaceMaterializeInput
-  ): Promise<MaterializationPublishedReceipt>;
+  ): Promise<unknown>;
 }
 
 export interface MaterializationWorkspacePort {

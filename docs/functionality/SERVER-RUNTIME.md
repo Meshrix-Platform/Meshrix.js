@@ -133,8 +133,14 @@ ports, and returns the runtime. One component owns each database transaction
 and the queue: the runtime enqueues one deduplicated work item per request,
 reconciles persisted queued or running requests in request-ref order before new
 admission, keeps admitted work during shutdown, and does not close an injected
-transaction store. Schema initialization failure closes only the store's own
-database handle.
+transaction store. Concrete domain, store, queue, and composition ports are checked
+by TypeScript through the production wiring; untrusted publication receipts enter
+as unknown and are narrowed at their existing validation boundary. Close seals new
+calls, joins admitted API operations, drains queue handlers without an implicit
+deadline, then releases owned storage. Concurrent close callers share that barrier;
+a failed attempt preserves storage and permits a cleanup retry. An explicitly
+bounded queue observation never removes an active registration. Schema
+initialization failure closes only the store's own database handle.
 
 Storage backup and replacement restore treat `objects/.pending` as private
 atomic-write staging. Backup manifests accept only objects already published by

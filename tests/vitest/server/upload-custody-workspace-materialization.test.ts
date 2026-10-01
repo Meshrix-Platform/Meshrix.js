@@ -2129,6 +2129,32 @@ describe(
       ).rejects.toMatchObject({ code: "ENOENT" });
     });
 
+    it("joins in-progress admission and repeated close calls before releasing its queue", async () => {
+      const fixture = await createFixture();
+      const runtime = await fixture.openRuntime();
+      const upload = await createCompletedUpload(fixture, Buffer.from("close-admission"), "close-admission");
+      const pause = createPausePoint();
+      fixture.faultHooks.afterTransactionCreatedBeforeEnqueue = pause.hook;
+      const admission = submitMaterialization(fixture, runtime, upload);
+      await pause.reached;
+      let closed = false;
+      const firstClose = runtime.provider.close();
+      expect(runtime.provider.close()).toBe(firstClose);
+      const closing = firstClose.then(() => { closed = true; });
+      try {
+        await expect(runtime.provider.get("not-admitted")).rejects.toMatchObject({ code: "materialization_provider_closing" });
+        expect(closed).toBe(false);
+        expect(runtime.queueApplicationPort.describe().queueCount).toBe(1);
+      } finally {
+        pause.release();
+      }
+      const admitted = await admission;
+      expect(admitted.payload.accepted).toBe(true);
+      await closing;
+      expect(runtime.queueApplicationPort.describe().queueCount).toBe(0);
+      expect(await runtime.transactionStore.get(admitted.payload.requestRef)).toMatchObject({ status: "queued" });
+    });
+
     it("admits only the canonical logical target and denies changed authority after bounded precommit reads but before protected effects", async () : Promise<any> => {
       const fixture: any = await createFixture();
       const runtime: any = await fixture.openRuntime();

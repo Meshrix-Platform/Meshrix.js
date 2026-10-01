@@ -17,7 +17,7 @@ async function waitForCompleted(queue?: any, workItemId?: any) : Promise<any> {
 }
 
 describe("queue application port", () : any => {
-  it("drains an in-flight handler before closing a queue facet", async () : Promise<any> => {
+  it.each([undefined, 0])("drains an in-flight handler after close observation timeout %s", async (timeoutMs) => {
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "queue-facet-close-"));
     const port: any = await createQueueApplicationPort({ userDataPath });
     let release: any;
@@ -35,12 +35,23 @@ describe("queue application port", () : any => {
       await queue.enqueue({ dedupeKey: "close-drain", payloadRef: { kind: "test" }, ownerRef: { capability: "test-close-drain" } });
       void queue.requestDispatch();
       await started;
+      if (timeoutMs !== undefined) {
+        await expect(queue.close({ timeoutMs })).rejects.toThrow(/did not drain/u);
+        expect(port.describe().queueCount).toBe(1);
+      }
       let closed: any = false;
-      const closing: any = queue.close().then(() : any => { closed = true; });
+      const firstClose = queue.close();
+      expect(queue.close()).toBe(firstClose);
+      const closing = firstClose.then(() => { closed = true; });
+      let ownerClosed = false;
+      const ownerClosing = port.close().then(() => { ownerClosed = true; });
       await new Promise((resolve?: any) : any => setTimeout(resolve, 20));
       expect(closed).toBe(false);
+      expect(ownerClosed).toBe(false);
       release();
       await closing;
+      await ownerClosing;
+      expect(ownerClosed).toBe(true);
       expect(port.describe().queueCount).toBe(0);
       expect(() : any => queue.enqueue({ dedupeKey: "late" })).toThrow(/closed/u);
     } finally {
