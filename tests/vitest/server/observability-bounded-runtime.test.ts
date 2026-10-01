@@ -55,7 +55,7 @@ describe("bounded observability primitives", () : any => {
         }
       },
       credentials: {
-        authorization: "Bearer synthetic-authorization-token",
+        authorization: "Bearer synthetic",
         accessToken: "synthetic-access-token",
         upstreamSecret: "synthetic-upstream-secret",
         apiKey: "synthetic-api-key",
