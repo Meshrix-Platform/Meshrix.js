@@ -24,6 +24,7 @@ import {
   canonicalizeTypedReferenceManifest,
   SERVICE_MANIFEST_SCHEMA_VERSION
 } from "@meshrix/foundation/storage/storage-ports";
+import type { TypedManifestReference } from "@meshrix/foundation/storage/storage-ports";
 import { compileClosedJsonSchema } from "@meshrix/foundation/security/closed-json-schema";
 import { parseWithDuplicateRejection, rejectPollutionKeys, rejectUnsafeUnicode } from "./manifest-compiler.ts";
 import { compilePayloadTransport } from "./payload-contract.ts";
@@ -549,7 +550,28 @@ export interface UpstreamPublishingExecuteOptions extends UpstreamPublishingRequ
   expectedServiceId?: string;
 }
 
+/**
+ * Authoritative owner context for the composition-owned declarative config
+ * loader. It is deliberately a read/preflight result; publication still goes
+ * through the normal revision-checked command path.
+ */
+export interface UpstreamConfigServicePreparation {
+  serviceId: string;
+  action: "create" | "replace";
+  expectedServiceRevision: number;
+  expectedSetRevision: number;
+  currentDescriptor: Readonly<Record<string, unknown>> | null;
+  currentReferences: readonly TypedManifestReference[];
+  publishedReferences: readonly TypedManifestReference[];
+}
+
 export interface UpstreamPublishingApplication {
+  prepareConfigFileService(
+    serviceKey: string,
+    descriptor: Readonly<Record<string, unknown>>,
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingRequestOptions
+  ): Promise<UpstreamConfigServicePreparation>;
   list(
     subject?: UpstreamPublishingSubject | null,
     options?: UpstreamPublishingRequestOptions
@@ -633,6 +655,44 @@ export function createUpstreamPublishingApplication({
   }
 
   return Object.freeze({
+    async prepareConfigFileService(
+      serviceKey?: string,
+      inputDescriptor?: Readonly<Record<string, unknown>>,
+      subject?: UpstreamPublishingSubject | null,
+      { signal }: UpstreamPublishingRequestOptions = {}
+    ): Promise<UpstreamConfigServicePreparation> {
+      if (typeof publishedReaderPort?.getSnapshot !== "function") {
+        throw publishingError(
+          "upstream_publishing_publication_state_unavailable",
+          503,
+          "Configuration publication requires the authoritative published snapshot reader."
+        );
+      }
+      const authenticated: any = authenticate(subject);
+      if (!isUpstreamServiceKey(serviceKey)) {
+        throw publishingError("upstream_publishing_service_key_invalid", 400, "Configuration requires a canonical serviceKey.");
+      }
+      const serviceId: any = opaqueServiceId(authenticated.subjectId, serviceKey);
+      const ownerRef: any = `urn:meshrix:subject:${digest("upstream-owner", authenticated.subjectId)}`;
+      const snapshot: any = await readerPort.getSnapshot({ signal });
+      const existing: any = snapshot.getService(serviceId);
+      existingOwnership(existing, ownerRef);
+      const action: "create" | "replace" = existing ? "replace" : "create";
+      authorize(authenticated, action);
+      const descriptor: any = descriptorFromCommand({ action, descriptor: inputDescriptor }, existing);
+      const publishedSnapshot: any = await publishedReaderPort.getSnapshot({ signal });
+      const publishedRecord: any = publishedSnapshot?.getService?.(serviceId) || null;
+      existingOwnership(publishedRecord, ownerRef);
+      return Object.freeze({
+        serviceId,
+        action,
+        expectedServiceRevision: existing?.serviceRevision || 0,
+        expectedSetRevision: snapshot.setRevision,
+        currentDescriptor: existing?.manifest?.payload?.descriptor || null,
+        currentReferences: Object.freeze([...(existing?.manifest?.references || [])]),
+        publishedReferences: Object.freeze([...(publishedRecord?.manifest?.references || [])])
+      });
+    },
     async list(subject?: UpstreamPublishingSubject | null, { signal }: UpstreamPublishingRequestOptions = {}) : Promise<UpstreamServiceListResponse> {
       const authenticated: any = readSubject(subject);
       const snapshot: any = await readerPort.getSnapshot({ signal });
