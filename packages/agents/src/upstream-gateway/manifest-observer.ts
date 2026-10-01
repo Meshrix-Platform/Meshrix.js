@@ -1,4 +1,10 @@
 import { normalizeService } from "./support.ts";
+import type {
+  UpstreamGatewayManifestObserver,
+  UpstreamGatewayManifestObserverOptions,
+  UpstreamGatewayObservedManifestSnapshot,
+  UpstreamGatewayServiceRecord
+} from "./registry-types.ts";
 
 const DEFAULT_POLL_INTERVAL_MS: any = 500;
 const MANIFEST_DIGEST: any = /^[a-f0-9]{64}$/u;
@@ -31,7 +37,7 @@ function deepFreezeRuntimeValue(value?: any) : any {
   return Object.isFrozen(value) ? value : Object.freeze(value);
 }
 
-function runtimeServiceFromRecord(record?: any) : any {
+function runtimeServiceFromRecord(record?: any) : UpstreamGatewayServiceRecord | null {
   assertRecordIdentity(record);
   const state: any = record?.manifest?.payload?.state;
   if (state === "removed") return null;
@@ -75,7 +81,7 @@ function runtimeServiceFromRecord(record?: any) : any {
   });
 }
 
-function immutableRuntimeSnapshot(storageSnapshot?: any) : any {
+function immutableRuntimeSnapshot(storageSnapshot: any) : UpstreamGatewayObservedManifestSnapshot {
   const records: any = storageSnapshot.listServices();
   if (!Array.isArray(records)) {
     throw new Error("Upstream manifest service listing is invalid.");
@@ -110,21 +116,21 @@ export function createUpstreamManifestObserver({
   onSnapshot,
   onError = null,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS
-}: Record<string, any>) : any {
+}: UpstreamGatewayManifestObserverOptions) : UpstreamGatewayManifestObserver {
   if (typeof readerPort?.getSnapshot !== "function" || typeof onSnapshot !== "function") {
     throw new TypeError("Upstream manifest observer requires a reader port and snapshot callback.");
   }
-  const interval: any = Math.max(10, Math.min(Number(pollIntervalMs || DEFAULT_POLL_INTERVAL_MS), 60_000));
-  let acceptedSetRevision: any = -1;
-  let acceptedSetDigest: any = "";
-  let building: any = false;
-  let pending: any = false;
-  let closed: any = false;
-  let timer: any = null;
-  let activeScan: any = null;
-  const lifecycleAbort: any = new AbortController();
+  const interval: number = Math.max(10, Math.min(Number(pollIntervalMs || DEFAULT_POLL_INTERVAL_MS), 60_000));
+  let acceptedSetRevision: number = -1;
+  let acceptedSetDigest: string = "";
+  let building: boolean = false;
+  let pending: boolean = false;
+  let closed: boolean = false;
+  let timer: NodeJS.Timeout | null = null;
+  let activeScan: Promise<unknown> | null = null;
+  const lifecycleAbort: AbortController = new AbortController();
 
-  async function report(error?: any, reasonCode?: any) : Promise<any> {
+  async function report(error?: any, reasonCode: string = "manifest_observation_failed") : Promise<void> {
     try {
       await onError?.(Object.freeze({ reasonCode, errorCode: String(error?.code || "manifest_observation_failed") }));
     } catch {
@@ -132,7 +138,7 @@ export function createUpstreamManifestObserver({
     }
   }
 
-  function schedule(delay: any = interval) : any {
+  function schedule(delay: number = interval) : void {
     if (closed) return;
     if (timer) {
       if (delay !== 0) return;
@@ -146,7 +152,7 @@ export function createUpstreamManifestObserver({
     timer.unref?.();
   }
 
-  async function executeScan({ signal, force }: Record<string, any>) : Promise<any> {
+  async function executeScan({ signal, force }: { signal?: AbortSignal; force: boolean }) : Promise<unknown> {
     try {
       const scanSignal: any = signal
         ? AbortSignal.any([signal, lifecycleAbort.signal])
@@ -185,7 +191,7 @@ export function createUpstreamManifestObserver({
     }
   }
 
-  function scan({ signal, force = false }: Record<string, any> = {}) : any {
+  function scan({ signal, force = false }: { signal?: AbortSignal; force?: boolean } = {}) : Promise<unknown> {
     if (closed) {
       return Promise.resolve(Object.freeze({ outcome: "closed", setRevision: acceptedSetRevision }));
     }

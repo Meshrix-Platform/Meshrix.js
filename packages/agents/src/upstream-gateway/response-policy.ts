@@ -112,7 +112,7 @@ function tryParseJson(value?: any) : any {
   }
 }
 
-export function normalizeSensitiveBodyFields(value?: any) : any {
+export function normalizeSensitiveBodyFields(value?: unknown) : string[] {
   return asArray(value)
     .map(text)
     .map((item?: any) : any => item.replace(/\[(\d+|\*)\]/g, "[]").toLowerCase())
@@ -128,7 +128,7 @@ function responseFieldPathParts(value: any = "") : any {
   return normalized.split(".").map(text).filter(Boolean);
 }
 
-export function normalizeResponseBodyFields(value?: any) : any {
+export function normalizeResponseBodyFields(value?: unknown) : string[] {
   return asArray(value)
     .map((item?: any) : any => responseFieldPathParts(item).join("."))
     .filter(Boolean);

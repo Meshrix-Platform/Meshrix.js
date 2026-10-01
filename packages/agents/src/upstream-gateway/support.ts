@@ -14,6 +14,15 @@ import {
   hasTrafficPolicyInput
 } from "./policy-source.ts";
 import { compilePayloadTransport } from "./payload-contract.ts";
+import type {
+  UpstreamGatewayExistingService,
+  UpstreamGatewayMcpConfig,
+  UpstreamGatewayNormalizedService,
+  UpstreamGatewayOperationRecord,
+  UpstreamGatewayPublicMcpConfig,
+  UpstreamGatewayPublicService,
+  UpstreamGatewayServiceRecord
+} from "./registry-types.ts";
 
 export const UPSTREAM_GATEWAY_PROTOCOL_VERSION: any = "v0.0.1:upstream-gateway:service-registry-1";
 export const MAX_UPSTREAM_ENDPOINTS: any = 64;
@@ -373,7 +382,7 @@ export function redactSecretInput(input: Record<string, any> = {}) : any {
   };
 }
 
-export function normalizeOperation(input: Record<string, any> = {}, index: any = 0, { serviceProtocol = "http" }: Record<string, any> = {}) : any {
+export function normalizeOperation(input: Record<string, any> = {}, index: any = 0, { serviceProtocol = "http" }: Record<string, any> = {}) : UpstreamGatewayOperationRecord {
   const operationKey: any = text(input.operationKey || input.operationId || input.key || input.name || `operation-${index + 1}`);
   const method: any = normalizeMethod(input.method, "POST");
   const risk: any = normalizeRisk(input.risk);
@@ -436,7 +445,7 @@ export function normalizeMcpTransport(value?: any) : any {
   return transport === "stdio" ? "stdio" : transport;
 }
 
-export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Record<string, any> = {}, { serviceId = "" }: Record<string, any> = {}) : any {
+export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Record<string, any> = {}, { serviceId = "" }: Record<string, any> = {}) : UpstreamGatewayMcpConfig {
   const source: any = object(input.mcp || input.upstreamMcp || input);
   const previous: any = object(existing.mcp);
   const transport: any = normalizeMcpTransport(source.transport || source.type || previous.transport || "stdio");
@@ -480,7 +489,7 @@ export function publicUrl(value: any = "") : any {
   }
 }
 
-export function publicMcpConfig(config: Record<string, any> = {}) : any {
+export function publicMcpConfig(config: Record<string, any> = {}) : UpstreamGatewayPublicMcpConfig {
   return {
     protocolVersion: config.protocolVersion || "v0.0.1:upstream-gateway:mcp-service-1",
     transport: config.transport || "stdio",
@@ -534,7 +543,7 @@ export function normalizeCircuitBreaker(input: Record<string, any> = {}) : any {
   };
 }
 
-export function normalizeService(input: Record<string, any> = {}, existing: Record<string, any> = {}) : any {
+export function normalizeService(input: Record<string, any> = {}, existing: UpstreamGatewayExistingService = {}) : UpstreamGatewayNormalizedService {
   const serviceId: any = text(input.serviceId || input.id || existing.serviceId || stableId("upstream", {
     baseUrl: input.baseUrl,
     label: input.label
@@ -611,10 +620,11 @@ export function normalizeService(input: Record<string, any> = {}, existing: Reco
   };
 }
 
-export function publicService(service: Record<string, any> = {}) : any {
+export function publicService(service: UpstreamGatewayServiceRecord) : UpstreamGatewayPublicService {
   const {
     credentialRefs: privateCredentialRefs,
     credentialReferences: _privateCredentialReferences,
+    mcp: privateMcpConfig,
     ...publicFields
   } = service;
   const endpointRef: any = service.baseUrl
@@ -657,11 +667,14 @@ export function publicService(service: Record<string, any> = {}) : any {
       circuitBreakerInherited: endpoint.circuitBreakerInherited === true
     })),
     endpointCount: asArray(service.endpoints).length || (endpointRef ? 1 : 0),
-    ...(service.serviceProtocol === "mcp" ? { mcp: publicMcpConfig(service.mcp) } : {})
+    ...(service.serviceProtocol === "mcp" ? { mcp: publicMcpConfig(privateMcpConfig || {}) } : {})
   };
 }
 
-export function parsePublicUpstreamMcpToolName(name: any = "") : any {
+export function parsePublicUpstreamMcpToolName(name: any = "") : Readonly<{
+  prefix: string;
+  upstreamToolName: string;
+}> | null {
   const raw: any = text(name);
   if (!raw.startsWith("upstream.")) return null;
   const withoutPrefix: any = raw.slice("upstream.".length);
@@ -673,7 +686,9 @@ export function parsePublicUpstreamMcpToolName(name: any = "") : any {
   };
 }
 
-export function mcpServiceConfig(service: Record<string, any> = {}) : any {
+export function mcpServiceConfig(
+  service: UpstreamGatewayServiceRecord | UpstreamGatewayNormalizedService
+) : Readonly<Record<string, unknown>> {
   return {
     ...object(service.mcp),
     protocolVersion: service.mcp?.protocolVersionHint || undefined

@@ -5,6 +5,10 @@ import {
   compileAudienceProjection,
   createAudiencePublicationEvent
 } from "./audience-projection.ts";
+import type {
+  UpstreamGatewayManifestSnapshotCommitter,
+  UpstreamGatewayManifestSnapshotCommitterOptions
+} from "./registry-types.ts";
 
 const PUBLICATION_EVENT_SCHEMA_VERSION: any = "v0.0.1:upstream-gateway:catalog-publication-1";
 const PUBLICATION_EVENT_TOPIC: any = "upstream.catalog_published";
@@ -34,16 +38,16 @@ function affectedServiceOperations(projection: Record<string, any> = {}) : any {
 
 export function createUpstreamManifestSnapshotCommitter({
   registry,
-  getBaseOperations = () : any => [],
-  getOperationPermissionPlatform = () : any => null,
+  getBaseOperations = () : readonly unknown[] => [],
+  getOperationPermissionPlatform = () : unknown => null,
   getGrants = null,
-  getTagStore = () : any => null,
-  getPolicyRevision = () : any => 0,
-  getTagRevision = () : any => 0,
+  getTagStore = () : unknown => null,
+  getPolicyRevision = () : unknown => 0,
+  getTagRevision = () : unknown => 0,
   protocolEventBus = null,
   onAudiencePublished = null,
-  now = () : any => new Date().toISOString()
-}: Record<string, any> = {}) : any {
+  now = () : string => new Date().toISOString()
+}: UpstreamGatewayManifestSnapshotCommitterOptions) : UpstreamGatewayManifestSnapshotCommitter {
   if (!registry || typeof registry.replaceFromManifestSnapshot !== "function") {
     throw new TypeError("Upstream manifest snapshot committer requires a gateway registry.");
   }

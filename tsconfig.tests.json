@@ -11,7 +11,8 @@
   "include": [
     "tests/run.ts",
     "tests/verify-script-registry.ts",
-    "tests/verify-secret-hygiene.ts"
+    "tests/verify-secret-hygiene.ts",
+    "tests/type-fixtures/upstream-gateway-boundaries.ts"
   ],
   "exclude": [
     "node_modules/**",
