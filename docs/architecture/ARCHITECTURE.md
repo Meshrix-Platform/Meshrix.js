@@ -9,18 +9,29 @@ Meshrix.js is an internally maintained, private-deployable gateway platform
 for agent access and governed service forwarding. Its Vue.js frontend and
 Node.js backend are separate workspaces connected through versioned HTTP APIs.
 
-## Runtime Shape
+## Target Module Map
 
-| Layer | Roots | Responsibility |
-| --- | --- | --- |
-| Apps | `apps/server/`, `apps/console/` | Separate Node.js server and Vue.js console entry points. |
-| Contracts | `packages/contracts/` | Operation registry, module facts, generated contract data. |
-| Foundation | `packages/foundation/` | Security, authorization, redaction, state machines, storage primitives, config, observability. |
-| Server Runtime | `packages/server-runtime/` | Composition, HTTP lifecycle, settings, jobs, upload state, providers. |
-| Capabilities | `packages/capabilities/` | Operation Permission, capability providers, audit, metrics. |
-| Agents | `packages/agents/` | Agent gateway, workspace files, sessions, contributions, maintenance runtime. |
-| Protocols | `packages/protocols/` | HTTP, MCP, pubsub, storage, checkpoint, console protocol facades, and native MCP installer scripts. |
-| Console | `apps/console/`, `packages/ui-console/` | Operator administration workflows. |
+The table below is the required ownership, direction, and public-boundary map
+for the maintained modules. It states target constraints, not observed
+completion: engineering closure additionally requires the actual entry points,
+producer/consumer types, composition wiring, state and transaction owners, and
+resource lifecycles to match it, with focused evidence. The machine-checkable
+portion lives in the registries and graph verifier listed under
+[Where The Facts Live](#where-the-facts-live); a rule document, one verifier
+pass, or an ADR does not by itself establish architectural completion.
+
+| Module | Roots | Responsibility | Required boundary |
+| --- | --- | --- | --- |
+| Contracts | `packages/contracts` | Dependency-free workspace contracts, DTOs, operation and module facts, and pure validation. No storage, service locator, domain execution, or infrastructure imports. | No workspace dependency. Foundation may depend on Contracts, never the reverse. Internal generation helpers stay private. |
+| Foundation | `packages/foundation` | Reusable security, storage, state-machine, config, and observability primitives. Resource implementations own their connection, key, and transaction cleanup; product decisions stay in their domain owner. | Contracts only. Private backend details and keys stay private; a narrow server-env export exists only for actual callers. No upward dependency into domains, runtime, apps, or tools. |
+| Gateway kernel | `packages/gateway` | Protocol-neutral request pipeline, admission, final route and authority checks, bounded schema isolation, and public result classification. | Contracts only; policy, credentials, and upstreams arrive through injected ports. Worker and pipeline internals stay private. One request context owns cancellation and settlement. |
+| Agents and Capabilities | `packages/agents`, `packages/capabilities` | Agents owns service publishing, registry snapshots, sessions, and domain application lifetimes. Capabilities owns Operation Permission and governance decisions plus capability implementations. | Contracts, Foundation, and deliberate Protocols surfaces; inter-domain capabilities are injected by server-runtime. Neither reaches into the other or the kernel; private maps, caches, flights, and stores are never mutable external authority. |
+| Protocols | `packages/protocols` | HTTP and MCP parsing, serialization, protocol sessions, and transport projections. Business, persistence, and security decisions are ports. | Contracts and Foundation only. Expose the registered protocol/controller facade; keep helper modules private. |
+| Server runtime | `packages/server-runtime` | Composition binds actual implementations and lifecycle order. Feature modules own jobs, persistence, and coordination; the materialization feature splits model, transactional store, and runtime. | May depend on the domain packages and Gateway. Composition adapters do not absorb DDL, state machines, recovery loops, or queue ownership. |
+| Applications and Console | `apps/server`, `apps/console`, `packages/ui-console` | The server application owns process and HTTP startup and shutdown. The Console owns presentation, local drafts, and observer lifetimes, never backend publication facts. | Consume deliberate public surfaces and browser-safe contracts; shared HTTP DTOs belong to Contracts. No runtime stateful backend factory in UI code. |
+| Standalone Gateway app | `apps/mcp-gateway-installer` | A narrow private application composition root owns its configuration migration. The CLI and the maintained repository command enter the same component. | Exact public package dependencies, including the Capabilities policy binding. Production code does not import tools, and config migration is not a supported external export. |
+| Extensions and skills | `plugins`, `skills` | Optional verified plugins contribute capabilities through narrow Core-owned Host ports with separate installation, activation, and authorization. Skills route owned development and operations workflows. | Core never imports a plugin implementation; plugins never read cross-component private implementation; no runtime-to-skill dependency. |
+| Repository and release tooling | `tools` | Owned white-box verifiers and generators inspect implementation. Shipped startup entry closures are production consumers. Prepare, verify, and publish commands depend downward on pure release metadata. | Tooling may depend on the layers it inspects. Actual product runtime closures obey reusable-package facades; no production-to-tool implementation dependency and no cross-command release cycle. |
 
 Optional operator skill packages live under `skills/` as the `skill-tools`
 dependency layer. They are executable operator helpers and local skill
@@ -81,6 +92,72 @@ Automated gates continue to enforce objective structure: registered dependency d
 `npm run verify:repo-organization` records this policy in `build/reports/repo-organization.json`. The report explicitly marks the numeric line-count gate as disabled and includes a non-blocking TypeScript AST advisory. That advisory may identify independent exported declaration components as review candidates and shared-state or module-initialization coupling as mechanical-split cautions. It does not prove that a file must or cannot be split, and its findings never determine the Functional Release Gate result.
 
 Every completed split migrates callers, exports, configuration, registries, tests, fixtures, generated projections, and documentation to the new boundary, then removes the superseded path and compatibility artifacts.
+
+## State, Lifetime And Composition Ownership
+
+One component owns each mutable state and resource lifetime. Other components
+use explicit commands, queries, events, or read-only contracts; they never share
+writable internals. Composition binds concrete implementations to typed ports
+and never absorbs a domain, storage, or protocol implementation. There is no
+generic dependency-injection framework: composition constructs the real
+objects, passes explicit ports, and registers close actions.
+
+| State or resource | Sole owner | Wiring and teardown |
+| --- | --- | --- |
+| Gateway request, admission, and worker lifetime | Gateway kernel request and admission instance (`packages/gateway/src/gateway.ts`, `packages/gateway/src/admission/index.ts`) | The transport supplies the caller signal; `gateway-composition` supplies authority, credential, egress, and upstream ports. One request context settles once. Cancellation is observed before every admission execution branch, so an already-cancelled task is never invoked. Close releases queued waiters, listeners, and worker resources exactly once. |
+| Upstream registry, route snapshots, sessions, flights, and caches | Agents upstream registry and session manager (`packages/agents/src/upstream-gateway/`) | One commit authority publishes the durable manifest and immutable snapshot; the registry maintains derived routes and publication facts. Console and protocols query or propose through registered operations and never mutate stored maps. server-runtime injects the schema capability and security ports. The registry owns created lifetimes, cancels pending work on close, and does not close an injected resource. |
+| Publishing durable authority and terminal facts | Agents publishing application plus its durable writer and snapshot reader (`packages/agents/src/upstream-gateway/publishing-application.ts`) | The server owns one closed command, durable publication, and terminal facts. Shared command/result DTOs live in Contracts. The Console owns only its observation: a slow, stopped, or interrupted observation is not a server failure and never cancels accepted work. |
+| Materialization durable rows, fences, and queue | The materialization feature under `packages/server-runtime/src/jobs/upload-workspace-materialization/` | Target separation: explicit state model, transactional store, and runtime admission/reconcile/settle. `composition/upload-workspace-materialization-provider.ts` only binds ports. One owner controls each database transaction and the queue; recovery is ordered before new admission; no DDL, row hydration, state transition, or reconcile loop lives in composition. |
+| Publication observation in the Console | The selected Console view observer (`apps/console/lib/upstream-service-publish-client.ts`, `apps/console/views/admin/UpstreamServicePublishView.vue`) | One observer per selected publication owns its GET requests and timer, and cancels or replaces them on unmount, selection change, or explicit stop. Resume queries the same accepted service id and revision. Stale completion from a previous selection is ignored. |
+| Process and composition resource lifetime | Server composition root (`packages/server-runtime/src/composition/composition-root.ts`) | Creating a resource registers its close action in `resourceClosers`; shutdown runs closers in reverse registration order, retains a failed closer for retry, and never closes an externally injected resource. `apps/server` owns the process and HTTP lifecycle; `tools/server-scripts/start-server.ts` is a thin production entry into the same composition. |
+
+## Public Surfaces, Private Siblings And Edge Kinds
+
+- **Public surfaces.** A workspace package exposes only its declared
+  `package.json` `exports` subpaths. Cross-package production consumers under
+  `apps/**`, `packages/**`, `plugins/**`, and the shipped startup closure import
+  those public subpaths, never a relative path into another package's source.
+  Private siblings remain unexported; sharing a helper inside one package is not
+  an API. Adding an export is a contract decision, not a refactor convenience.
+- **Application privacy.** `apps/**` packages are `private: true`.
+  `apps/mcp-gateway-installer` is a deliberate private composition layer; its
+  configuration-migration module is not a published API, and the maintained
+  repository command is a thin entry into the same application-owned component.
+- **Type-only versus runtime edges.** Layer allow/deny rules apply to every
+  resolvable import and re-export. Static runtime imports and re-exports
+  additionally form the runtime graph whose strongly connected components are
+  checked for cycles. `import type` and named type specifiers are removed only
+  from that runtime-cycle computation; they remain subject to layering and
+  public/private rules. Dynamic imports are classified separately and never
+  become static runtime edges. Console type-only and lazy-route relations are
+  therefore not runtime cycles.
+- **Contracts independence.** Contracts has no workspace dependency, and
+  Foundation may depend on Contracts, never the reverse. Where an existing
+  policy allowance or fixture still records a wider direction, aligning it with
+  this rule is architecture-guard work; it is not a reason to add a runtime
+  import or a broad exception.
+- **Tooling versus production entries.** `tools/**` is owned repository tooling
+  that may read implementation white-box for verification, generation, and
+  release preparation. White-box inspection does not create a supported API.
+  Production runtime closures must not import tools; the standalone application
+  owns its migration implementation and tooling delegates inward.
+- **Plugin and skill isolation.** Core never imports a plugin implementation.
+  Verified plugins use narrow Core-owned Host ports, and installation,
+  activation, and authorization remain separate admissions. Skills route owned
+  development and operations workflows and are not a runtime dependency.
+
+## Where The Facts Live
+
+| Fact | Owner and executable surface |
+| --- | --- |
+| Layer dependency direction and edges | `tools/registry/dependency-rules.registry.json`; verifier `tools/verifiers/architecture-graph.ts` (`npm run server:verify:architecture-graph`) |
+| Module ownership and facts | `tools/registry/modules.registry.json` and the owned `manifest.module.json` files under `packages/**` |
+| Public exports and aliases | `packages/*/package.json` `exports`, `tools/registry/public-api.registry.json` |
+| Repository and source layout | `tools/registry/repo-layout.registry.json`, `tools/registry/architecture-layout-*.ts`, `npm run verify:repo-organization` |
+| Test ownership and suites | `tools/registry/tests.registry.json` |
+| Release definition and acceptance facts | `tools/registry/release-definition.registry.json`, `tools/registry/release-acceptance-standards.registry.json` |
+| Fact source authority | `tools/registry/fact-source-authority.registry.json` |
+| Normative behavior | [Governed Execution And Minimum Evidence](GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md) for the permit invariant; [gateway.md](gateway.md), [SERVER-RUNTIME](../functionality/SERVER-RUNTIME.md), [GATEWAY](../functionality/GATEWAY.md), and [STATE-MACHINES.md](STATE-MACHINES.md) for their owned behavior. |
 
 ## Core Flow
 
@@ -297,10 +374,22 @@ The runtime performance and maintainability refactor converged on one owner per 
 
 ## Verification
 
+These commands cover different scopes. A passing run establishes only its
+declared scope and current revision; it does not close architecture work that
+still requires production wiring, exports, producer/consumer types, and
+state/lifecycle evidence.
+
 ```bash
-npm run typecheck
+npm run server:verify:architecture-graph   # writes build/reports/architecture-graph.json
+npm test -- --suite architecture.import-graph --continue-on-failure
 npm test -- --suite domains.manifest
-npm test
+npm run verify:repo-organization
+npm run typecheck
 npm run verify:core-platform-surface-convergence
 npm run verify:private-deployment-internal-platform-e2e
 ```
+
+The graph verifier proves resolvable dependency direction and static runtime
+cycles within its declared scanner roots. Ownership, lifecycle, and cohesion
+that static imports cannot prove remain a continuous review responsibility.
+Record an ADR only after implemented structures and checks substantiate it.
