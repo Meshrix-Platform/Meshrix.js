@@ -12,7 +12,8 @@
     "tests/run.ts",
     "tests/verify-script-registry.ts",
     "tests/verify-secret-hygiene.ts",
-    "tests/type-fixtures/upstream-gateway-boundaries.ts"
+    "tests/type-fixtures/upstream-gateway-boundaries.ts",
+    "tests/type-fixtures/upstream-publishing-contract.ts"
   ],
   "exclude": [
     "node_modules/**",

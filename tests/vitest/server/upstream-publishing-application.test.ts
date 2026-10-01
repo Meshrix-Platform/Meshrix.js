@@ -4,8 +4,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createUpstreamPublishingApplication,
-  UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
+  UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+  type UpstreamPublishingApplication,
 } from "../../../packages/agents/src/upstream-gateway/publishing-application.ts";
+import type { UpstreamServiceCreateCommand } from "@meshrix/contracts/upstream-service-publishing";
 import { normalizeService } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
@@ -18,8 +20,8 @@ async function temporaryRoot() : Promise<any> {
   return root;
 }
 
-function command(overrides: Record<string, any> = {}) : any {
-  return JSON.stringify({
+function command(overrides: Record<string, any> = {}) : string {
+  const base: UpstreamServiceCreateCommand = {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action: "create",
     serviceKey: "inventory",
@@ -44,8 +46,8 @@ function command(overrides: Record<string, any> = {}) : any {
         payloadTransport: structuredJsonPayloadTransport()
       }]
     },
-    ...overrides
-  });
+  };
+  return JSON.stringify({ ...base, ...overrides });
 }
 
 function subject(subjectId: any = "developer-one", scopes: any = ["gateway:write", "gateway:maintain"]) : any {
@@ -57,7 +59,7 @@ async function harness() : Promise<any> {
   const store: any = createServiceManifestStore({ storageRoot });
   const audit: any[] = [];
   const commitManifestSet: any = vi.fn((input?: any) : any => store.writerPort.commitManifestSet(input));
-  const application: any = createUpstreamPublishingApplication({
+  const application: UpstreamPublishingApplication = createUpstreamPublishingApplication({
     writerPort: { commitManifestSet },
     readerPort: { getSnapshot: store.getCandidateSnapshot },
     auditPort: { append: async (event?: any) : Promise<any> => audit.push(event) }
@@ -265,7 +267,7 @@ describe("upstream publishing application", () : any => {
   it("projects publishing until the durable terminal snapshot and paired revision facts agree", async () : Promise<any> => {
     const store: any = createServiceManifestStore({ storageRoot: await temporaryRoot() });
     let publicationFacts: any = null;
-    const application: any = createUpstreamPublishingApplication({
+    const application: UpstreamPublishingApplication = createUpstreamPublishingApplication({
       writerPort: store.writerPort,
       readerPort: { getSnapshot: store.getCandidateSnapshot },
       publishedReaderPort: store.readerPort,
@@ -479,7 +481,7 @@ describe("upstream publishing application", () : any => {
   it("fails closed when redacted audit persistence fails", async () : Promise<any> => {
     const store: any = createServiceManifestStore({ storageRoot: await temporaryRoot() });
     const commitManifestSet: any = vi.fn((input?: any) : any => store.writerPort.commitManifestSet(input));
-    const application: any = createUpstreamPublishingApplication({
+    const application: UpstreamPublishingApplication = createUpstreamPublishingApplication({
       writerPort: { commitManifestSet },
       readerPort: { getSnapshot: store.getCandidateSnapshot },
       auditPort: { append: async () : Promise<any> => { throw new Error("audit unavailable"); } }

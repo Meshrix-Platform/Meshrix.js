@@ -8,7 +8,7 @@ import { computed, ref, type ComputedRef, type Ref } from "vue";
 //
 // Server-contract verdict (design §8): the publish client exposes three
 // client-derivable boundaries — (1) the create/replace request (one opaque
-// call returning `PublishingResult`), (2) the gateway-publication polling loop
+// call returning `UpstreamServicePublishingResult`), (2) the gateway-publication polling loop
 // (`waitForUpstreamServicePublication`, sequential client-side calls), and
 // (3) the runtime health check. The plan's four-stage server model folds
 // "operation permission publication" inside the request/response contract, so

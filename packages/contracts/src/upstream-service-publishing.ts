@@ -20,6 +20,17 @@ export const UPSTREAM_PUBLISHING_STATES = Object.freeze([
   "removed"
 ]);
 
+export const UPSTREAM_SERVICE_STATES = Object.freeze([
+  "publishing",
+  "disabled",
+  "removed"
+] as const);
+
+export const UPSTREAM_PUBLICATION_STATUSES = Object.freeze([
+  "publishing",
+  "server_published"
+] as const);
+
 export const UPSTREAM_REQUEST_REPRESENTATION_MODES = Object.freeze([
   "structured_json",
   "opaque_stream",
@@ -160,6 +171,10 @@ export type UpstreamResponseRepresentationMode =
   | "opaque_stream"
   | "artifact";
 
+export type UpstreamPublishingAction = "create" | "replace" | "disable" | "remove" | "republish";
+export type UpstreamServiceState = typeof UPSTREAM_SERVICE_STATES[number];
+export type UpstreamServicePublicationStatus = typeof UPSTREAM_PUBLICATION_STATUSES[number];
+
 export interface TypedServiceReference {
   type: "credential" | "certificate" | "private-key" | "trust-anchor";
   reference: string;
@@ -179,7 +194,8 @@ export interface UpstreamMcpDescriptor {
   headers?: Record<string, string>;
   toolNamePrefix?: string;
   prefix?: string;
-  protocolVersion: typeof UPSTREAM_MCP_PROTOCOL_VERSIONS[number];
+  /** Required by portable import validation; the command path normalizes a default. */
+  protocolVersion?: typeof UPSTREAM_MCP_PROTOCOL_VERSIONS[number];
   toolsCacheTtlMs?: number;
   timeoutMs?: number;
 }
@@ -189,21 +205,39 @@ export interface UpstreamPayloadTransport {
     mode: UpstreamRequestRepresentationMode;
     maxBytes?: number;
     mediaTypes?: string[];
+    artifactArgument?: string;
+    multipart?: {
+      artifactParts: Array<Record<string, unknown>>;
+      scalarFields?: Array<Record<string, unknown>>;
+      maxParts?: number;
+    };
   };
   response?: {
     mode: UpstreamResponseRepresentationMode;
     maxBytes?: number;
     mediaTypes?: string[];
+    allowRanges?: boolean;
   };
 }
 
 export interface UpstreamServiceOperation {
   operationKey: string;
+  label?: string;
+  protocol?: string;
   method: string;
   path: string;
-  timeoutMs?: number;
+  requiredScopes?: string[];
   risk?: string;
   requiresApproval?: boolean;
+  approvalScope?: string;
+  requiredApproval?: Record<string, unknown>;
+  approvalLayers?: Array<Record<string, unknown>>;
+  timeoutMs?: number;
+  jsonRpcMethod?: string;
+  sensitiveBodyFields?: string[];
+  publicResponseFields?: string[];
+  requestSchema?: Record<string, unknown>;
+  responseSchema?: Record<string, unknown>;
   payloadTransport: UpstreamPayloadTransport;
 }
 
@@ -213,6 +247,7 @@ export interface UpstreamServiceDescriptor {
   description?: string;
   baseUrl?: string;
   endpoints?: Array<Record<string, unknown>>;
+  healthPath?: string;
   allowLocalNetwork?: boolean;
   visibility?: string;
   dataClass?: string;
@@ -234,6 +269,128 @@ export interface PortableUpstreamServiceImport {
   schemaVersion: typeof PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION;
   serviceKey: string;
   descriptor: UpstreamServiceDescriptor;
+}
+
+/**
+ * Authorized publishing command shapes carried on the public publishing
+ * boundary. The Agents ingress still parses raw command bytes, enforces the
+ * closed field set, ownership, expected revisions, idempotency, and typed
+ * reference safety; these types describe the command a producer sends and do
+ * not replace that validation. A portable import document keeps its own
+ * `PortableUpstreamServiceImport` semantics and is not a command.
+ */
+export interface UpstreamServicePublishingCommandBase {
+  schemaVersion: typeof UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION;
+  expectedServiceRevision: number;
+  expectedSetRevision: number;
+  idempotencyKey: string;
+}
+
+export interface UpstreamServiceCreateCommand extends UpstreamServicePublishingCommandBase {
+  action: "create";
+  serviceKey: string;
+  descriptor: UpstreamServiceDescriptor;
+}
+
+export interface UpstreamServiceReplaceCommand extends UpstreamServicePublishingCommandBase {
+  action: "replace";
+  serviceId: string;
+  descriptor: UpstreamServiceDescriptor;
+}
+
+export interface UpstreamServiceDisableCommand extends UpstreamServicePublishingCommandBase {
+  action: "disable";
+  serviceId: string;
+}
+
+export interface UpstreamServiceRemoveCommand extends UpstreamServicePublishingCommandBase {
+  action: "remove";
+  serviceId: string;
+}
+
+export interface UpstreamServiceRepublishCommand extends UpstreamServicePublishingCommandBase {
+  action: "republish";
+  serviceId: string;
+  descriptor?: UpstreamServiceDescriptor;
+}
+
+export type UpstreamServicePublishingCommand =
+  | UpstreamServiceCreateCommand
+  | UpstreamServiceReplaceCommand
+  | UpstreamServiceDisableCommand
+  | UpstreamServiceRemoveCommand
+  | UpstreamServiceRepublishCommand;
+
+/**
+ * Durable service state and publication facts. A durable service is only
+ * `publishing`, `disabled`, or `removed`. The separate publication object is
+ * `publishing` until the durable published snapshot and the catalog, audience,
+ * and protocol revision chain agree, and only `server_published` carries the
+ * terminal source/catalog/audience/protocol facts.
+ */
+export interface UpstreamServicePublicationTerminalFacts {
+  sourceRevision: number;
+  sourceDigest: string;
+  catalogRevision: string;
+  audienceRevision: number;
+  protocolRevision: number;
+}
+
+export interface UpstreamServicePublishingPublication {
+  publicationRef: string;
+  status: "publishing";
+  candidateRevision: number;
+  candidateDigest: string;
+}
+
+export interface UpstreamServiceServerPublishedPublication {
+  publicationRef: string;
+  status: "server_published";
+  candidateRevision: number;
+  candidateDigest: string;
+  terminal: UpstreamServicePublicationTerminalFacts;
+}
+
+export type UpstreamServicePublication =
+  | UpstreamServicePublishingPublication
+  | UpstreamServiceServerPublishedPublication;
+
+/** Accepted mutation receipt returned before the durable candidate publishes. */
+export interface UpstreamServicePublishingResult {
+  ok: true;
+  serviceId: string;
+  state: UpstreamServiceState;
+  serviceRevision: number;
+  setRevision: number;
+  manifestDigest: string;
+  receiptRef: string;
+  publication: UpstreamServicePublishingPublication;
+  replayed: boolean;
+}
+
+export interface PublishedUpstreamServiceSummary {
+  serviceId: string;
+  state: UpstreamServiceState;
+  serviceRevision: number;
+  manifestDigest: string;
+  publication: UpstreamServicePublication;
+}
+
+export interface PublishedUpstreamServiceDetail extends PublishedUpstreamServiceSummary {
+  descriptor: UpstreamServiceDescriptor | null;
+  references: readonly TypedServiceReference[];
+}
+
+export interface UpstreamServiceListResponse {
+  ok: true;
+  setRevision: number;
+  services: readonly PublishedUpstreamServiceSummary[];
+}
+
+export interface UpstreamServiceDetailResponse {
+  ok: true;
+  setRevision: number;
+  service: PublishedUpstreamServiceDetail;
 }
 
 const SAFE_SERVICE_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,63}(?:\/[A-Za-z][A-Za-z0-9_.-]{0,63}){0,3}$/u;
