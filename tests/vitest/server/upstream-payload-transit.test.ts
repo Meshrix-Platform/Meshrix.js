@@ -31,7 +31,7 @@ function opaqueTransport(maxBytes: any = 1024 * 1024) : any {
 }
 
 function registryFor(baseUrl?: any, maxBytes: any = 1024 * 1024) : any {
-  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
+  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
   installUpstreamRuntimeServices(registry, [{
     serviceId: "binary-fixture",
     serviceProtocol: "http",

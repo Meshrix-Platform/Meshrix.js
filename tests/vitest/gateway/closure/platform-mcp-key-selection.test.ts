@@ -133,7 +133,7 @@ describe("platform MCP key selection closure", () => {
 
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-key-selection-"));
     cleanup.push(() => fs.rm(tempRoot, { recursive: true, force: true }));
-    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     const portableWriteDescriptor = {
       serviceProtocol: "mcp",

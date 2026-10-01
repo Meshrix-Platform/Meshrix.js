@@ -8,7 +8,7 @@ import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gat
 
 describe("platform composition single invoke path", () => {
   it("[CASE-A06] routes protocol, agent, and platform composition through one gateway port", async () => {
-    const gateway = createPlatformGateway({ upstream: new QueueUpstream([response({ resultType: "complete", value: "ok" })]), descriptors: [descriptor()] });
+    const gateway = createPlatformGateway({ upstream: new QueueUpstream(Array.from({ length: 3 }, () => response({ resultType: "complete", value: "ok" }))), descriptors: [descriptor()] });
     await gateway.start();
     try {
       const protocol = createGatewayProtocolAdapter(gateway);
