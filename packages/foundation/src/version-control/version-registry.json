@@ -2908,12 +2908,12 @@
     {
       "artifactId": "meshrix.meshrix.provenance",
       "kind": "other",
-      "description": "Governed version registry entry for meshrix.meshrix.provenance.",
-      "activeVersion": "v0.0.1:meshrix:provenance-2",
+      "description": "Governed version registry entry for the unsigned local build-input report.",
+      "activeVersion": "v0.0.1:meshrix:build-input-report-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:provenance-2",
-          "ref": "meshrix.meshrix.provenance@v0.0.1:meshrix:provenance-2",
+          "version": "v0.0.1:meshrix:build-input-report-1",
+          "ref": "meshrix.meshrix.provenance@v0.0.1:meshrix:build-input-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -2923,7 +2923,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-provenance-2-source",
+              "evidenceId": "v0-0-1-meshrix-build-input-report-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/generate-provenance.ts"
             }
