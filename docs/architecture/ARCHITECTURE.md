@@ -150,7 +150,7 @@ objects, passes explicit ports, and registers close actions.
 
 | Fact | Owner and executable surface |
 | --- | --- |
-| Layer dependency direction and edges | `tools/registry/dependency-rules.registry.json`; verifier `tools/verifiers/architecture-graph.ts` (`npm run server:verify:architecture-graph`) |
+| Layer dependency direction, edge kinds, runtime cycles, and public facades | `tools/registry/dependency-rules.registry.json`; verifier `tools/verifiers/architecture-graph.ts` (`npm run server:verify:architecture-graph`) |
 | Module ownership and facts | `tools/registry/modules.registry.json` and the owned `manifest.module.json` files under `packages/**` |
 | Public exports and aliases | `packages/*/package.json` `exports`, `tools/registry/public-api.registry.json` |
 | Repository and source layout | `tools/registry/repo-layout.registry.json`, `tools/registry/architecture-layout-*.ts`, `npm run verify:repo-organization` |
@@ -389,7 +389,12 @@ npm run verify:core-platform-surface-convergence
 npm run verify:private-deployment-internal-platform-e2e
 ```
 
-The graph verifier proves resolvable dependency direction and static runtime
-cycles within its declared scanner roots. Ownership, lifecycle, and cohesion
-that static imports cannot prove remain a continuous review responsibility.
-Record an ADR only after implemented structures and checks substantiate it.
+The graph verifier classifies every resolved edge as static runtime, type-only,
+or dynamic, then proves resolvable dependency direction, public package
+facades for production consumers and declared `package.json` `bin` entry
+closures, and acyclic static runtime imports within its declared scanner
+roots. Type-only and dynamic edges are excluded only from the runtime cycle
+computation; layer and facade rules still apply to them. Ownership, lifecycle,
+and cohesion that static imports cannot prove remain a continuous review
+responsibility. Record an ADR only after implemented structures and checks
+substantiate it.
