@@ -44,7 +44,7 @@ function sourceCandidate(sourceRevision: any = COMMIT) : any {
         manifest_sha256: "6".repeat(64)
       }
     ],
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: `sha256:${"4".repeat(64)}`
   });
 }

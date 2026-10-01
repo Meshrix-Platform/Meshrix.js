@@ -388,7 +388,7 @@ npm test -- --suite domains.manifest
 npm run verify:repo-organization
 npm run typecheck
 npm run verify:core-platform-surface-convergence
-npm run verify:private-deployment-internal-platform-e2e
+npm run verify:single-node:internal-platform-e2e
 ```
 
 The graph verifier classifies every resolved edge as static runtime, type-only,

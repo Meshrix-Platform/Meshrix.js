@@ -26,7 +26,7 @@ describe("platform acceptance ledger anchoring", () => {
         evidenceContext: {
           sourceRevision: "a".repeat(40),
           sourceTreeDigest: `sha256:${"f".repeat(64)}`,
-          selectedProfile: "enterprise-single-node",
+          selectedProfile: "single-node",
           commandDagDigest: `sha256:${"b".repeat(64)}`,
           ownedReportsInventoryDigest: `sha256:${"c".repeat(64)}`,
           candidateDigest: "d".repeat(64),

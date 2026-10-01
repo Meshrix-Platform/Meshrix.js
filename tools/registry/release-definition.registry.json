@@ -41,7 +41,7 @@
     ]
   },
   "acceptance": {
-    "profile": "enterprise-single-node",
+    "profile": "single-node",
     "commandId": "platform-acceptance",
     "stableRequiredClaim": "functional-complete",
     "releaseRequiredClaim": "release-deployment-verified",

@@ -15,22 +15,22 @@ import {
 
 const modulePath: any = fileURLToPath(import.meta.url);
 const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
-export const ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND: any =
+export const SINGLE_NODE_OPERATION_COMMAND: any =
   "node tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts";
 const ACCEPTANCE_IMAGE_DOCKERFILE: any =
-  "tools/containers/enterprise-single-node-acceptance.Dockerfile";
+  "tools/containers/single-node-acceptance.Dockerfile";
 const WORKER_SUMMARY: any = "worker-summary.json";
 const SOURCE_CANDIDATE: any = "SOURCE_CANDIDATE.json";
 const ACCEPTANCE_RUNNER: any = "acceptance-runner.json";
 const WORKER_SUMMARY_SCHEMA: any =
-  "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1";
+  "v0.0.1:meshrix:single-node-ubuntu-evidence-1";
 const CONTAINER_DEPENDENCY_ROOT: any = "/opt/meshrix-dependency-source/node_modules";
 const CONTAINER_WORKER_ROOT: any = "/worker";
 const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
 const DIGEST_PINNED_IMAGE_PATTERN: any =
   /^(?:(?:[a-z0-9]+(?:[._/-][a-z0-9]+)*(?::[A-Za-z0-9._-]+)?)@)?sha256:[a-f0-9]{64}$/u;
 
-export const ENTERPRISE_SINGLE_NODE_PHASES: readonly any[] = Object.freeze([
+export const SINGLE_NODE_PHASES: readonly any[] = Object.freeze([
   "ubuntu-delivery",
   "operations-evidence",
   "offline-transfer-simulation",
@@ -106,7 +106,7 @@ function validateCommandObservation(observation?: any, command?: any, code?: any
   });
 }
 
-export function validateEnterpriseSingleNodeWorkerSummary({
+export function validateSingleNodeWorkerSummary({
   summary,
   implementationNodes,
 }: Record<string, any> = {}) : any {
@@ -220,13 +220,13 @@ function parseArgs(argv?: any) : any {
   ]);
   for (let index: any = 0; index < argv.length; index += 1) {
     const value: any = argv[index];
-    requireCondition(known.has(value), "enterprise_single_node_argument_invalid");
+    requireCondition(known.has(value), "single_node_argument_invalid");
     if (value === "--evidence-root" || value === "--source-candidate") {
       requireCondition(
         argv[index + 1] && !known.has(argv[index + 1]),
         value === "--evidence-root"
-          ? "enterprise_single_node_evidence_root_missing"
-          : "enterprise_single_node_source_candidate_missing",
+          ? "single_node_evidence_root_missing"
+          : "single_node_source_candidate_missing",
       );
       index += 1;
     }
@@ -240,7 +240,7 @@ function parseArgs(argv?: any) : any {
   });
 }
 
-export function createEnterpriseSingleNodeExecutionSchedule() : any {
+export function createSingleNodeExecutionSchedule() : any {
   const phases: any[] = [
     { id: "ubuntu-delivery", dependsOn: [] },
     { id: "operations-evidence", dependsOn: ["ubuntu-delivery"] },
@@ -311,7 +311,7 @@ export function createUbuntuContainerRequest({
       "/workspace",
       image,
       "node",
-      "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts",
+      "tools/server-scripts/verify-single-node-ubuntu-container.ts",
       "--worker",
       "--evidence-root",
       "/evidence",
@@ -361,17 +361,17 @@ async function runProcess({
   }
 }
 
-export function reduceEnterpriseSingleNodeFailure({ phase, cause }: Record<string, any> = {}) : any {
+export function reduceSingleNodeFailure({ phase, cause }: Record<string, any> = {}) : any {
   const safeCause: any = typeof cause === "string" &&
       /^[a-z][a-z0-9_]{0,127}$/u.test(cause)
     ? cause
-    : "enterprise_single_node_internal_failure";
+    : "single_node_internal_failure";
   return Object.freeze({
     status: "failed",
-    phase: typeof phase === "string" && ENTERPRISE_SINGLE_NODE_PHASES.includes(phase)
+    phase: typeof phase === "string" && SINGLE_NODE_PHASES.includes(phase)
       ? phase
       : "unknown",
-    code: "enterprise_single_node_phase_failed",
+    code: "single_node_phase_failed",
     cause: safeCause,
   });
 }
@@ -404,7 +404,7 @@ async function buildAcceptanceImage(repoRoot?: any) : Promise<any> {
     );
     return configured;
   }
-  const tag: any = "meshrix-enterprise-single-node-acceptance:local";
+  const tag: any = "meshrix-single-node-acceptance:local";
   const build: any = await runProcess({
     executable: "docker",
     args: [
@@ -562,7 +562,7 @@ async function materializeWorker({ candidateRoot, workerRoot, evidenceRoot }: Re
     args: [
       path.join(
         workerRoot,
-        "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts",
+        "tools/server-scripts/verify-single-node-ubuntu-container.ts",
       ),
       "--worker-execute",
       "--evidence-root",
@@ -577,8 +577,8 @@ async function materializeWorker({ candidateRoot, workerRoot, evidenceRoot }: Re
 function productEvidenceUnits() : any {
   return [{
     id: "core-operations",
-    acceptance_criteria: [{ statement: "Core enterprise operations pass in the candidate environment." }],
-    regression: { commands: [ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND], criteria: [0] },
+    acceptance_criteria: [{ statement: "Core operations pass in the candidate environment." }],
+    regression: { commands: [SINGLE_NODE_OPERATION_COMMAND], criteria: [0] },
   }];
 }
 
@@ -676,7 +676,7 @@ async function recordWorkerEvidence({
   const deliveryImplementationNodes: any = productEvidenceUnits();
   const criteriaByNode: any =
     implementationCriteriaByNode(deliveryImplementationNodes);
-  const validation: any = validateEnterpriseSingleNodeWorkerSummary({
+  const validation: any = validateSingleNodeWorkerSummary({
     summary,
     implementationNodes: deliveryImplementationNodes,
   });
@@ -687,8 +687,8 @@ async function recordWorkerEvidence({
 }
 
 async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<string, any>) : Promise<any> {
-  const schedule: any = createEnterpriseSingleNodeExecutionSchedule();
-  requireCondition(schedule.valid, "enterprise_single_node_schedule_invalid");
+  const schedule: any = createSingleNodeExecutionSchedule();
+  requireCondition(schedule.valid, "single_node_schedule_invalid");
   const candidate: any = await loadOrCreateSourceCandidate({
     repoRoot,
     sourceCandidatePath,
@@ -697,7 +697,7 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
     repoRoot,
     "build",
     "reports",
-    "enterprise-single-node-ubuntu",
+    "single-node-ubuntu",
   );
   await fs.rm(evidenceRoot, { recursive: true, force: true });
   await fs.mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
@@ -749,7 +749,7 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
       args: [
         "tools/server-scripts/verify-platform-acceptance.ts",
         "--profile",
-        "enterprise-single-node",
+        "single-node",
       ],
       cwd: repoRoot,
       env: process.env,
@@ -768,7 +768,7 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
 async function main() : Promise<any> {
   const args: any = parseArgs(process.argv.slice(2));
   if (args.worker) {
-    requireCondition(args.evidenceRoot, "enterprise_single_node_evidence_root_missing");
+    requireCondition(args.evidenceRoot, "single_node_evidence_root_missing");
     await materializeWorker({
       candidateRoot: defaultRepoRoot,
       workerRoot: CONTAINER_WORKER_ROOT,
@@ -777,7 +777,7 @@ async function main() : Promise<any> {
     return;
   }
   if (args.workerExecute) {
-    requireCondition(args.evidenceRoot, "enterprise_single_node_evidence_root_missing");
+    requireCondition(args.evidenceRoot, "single_node_evidence_root_missing");
     await runWorker({
       repoRoot: defaultRepoRoot,
       evidenceRoot: path.resolve(args.evidenceRoot),
@@ -803,7 +803,7 @@ if (isDirectRun) {
           : error?.message?.startsWith("platform_acceptance_")
             ? "platform-acceptance"
             : "ubuntu-delivery";
-    process.stderr.write(`${JSON.stringify(reduceEnterpriseSingleNodeFailure({
+    process.stderr.write(`${JSON.stringify(reduceSingleNodeFailure({
       phase,
       cause: error?.message,
     }))}\n`);

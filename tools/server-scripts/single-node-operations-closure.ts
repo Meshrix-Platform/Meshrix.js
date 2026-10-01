@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
- * Candidate-bound enterprise operations closure.
+ * Candidate-bound single-node operations closure.
  *
- * Composes existing enterprise evidence producers for governed MCP, denial
+ * Composes existing platform capability evidence producers for governed MCP, denial
  * and uncertainty, diagnostics, emergency administration, key lifecycle,
  * clean-root restore, and N-1 upgrade / failed rollback. This oracle does
  * not certify capacity, production-readiness, or environment support.
@@ -23,8 +23,8 @@ import { createStorageBackup } from "../../packages/foundation/src/storage/backu
 import { restoreStorageBackup } from "../../packages/foundation/src/storage/restore-execution.ts";
 import {
   createFileUpgradeJournal,
-  executeEnterpriseUpgradeRollback
-} from "./upgrade/enterprise-upgrade-rollback.ts";
+  executeSingleNodeUpgradeRollback
+} from "./upgrade/single-node-upgrade-rollback.ts";
 import {
   assertNoSensitiveReportLeak,
   assertReportProvenance,
@@ -32,25 +32,25 @@ import {
   finalizeSensitiveReport
 } from "./lib/sensitive-report-scan.ts";
 
-export const ENTERPRISE_OPERATIONS_CLOSURE_SCHEMA: any =
-  "v0.0.1:meshrix:enterprise-operations-closure-report-1";
-export const ENTERPRISE_OPERATIONS_CLOSURE_VERIFIER: any =
-  "tools/server-scripts/enterprise-operations-closure.ts";
-export const ENTERPRISE_OPERATIONS_CLOSURE_REPORT_RELATIVE_PATH: any =
-  "build/reports/enterprise-operations-closure.json";
-export const ENTERPRISE_OPERATIONS_CLOSURE_FOCUSED_SUITE: any =
-  "tests/vitest/server/enterprise-operations-closure.test.ts";
-export const ENTERPRISE_OPERATIONS_NON_CERTIFICATION_REASON: any =
-  "enterprise_operations_closure_does_not_certify_capacity";
-export const ENTERPRISE_OPERATIONS_PROFILE: any = "enterprise-single-node";
-export const ENTERPRISE_OPERATIONS_REQUIREMENTS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_OPERATIONS_CLOSURE_SCHEMA: any =
+  "v0.0.1:meshrix:single-node-operations-closure-report-1";
+export const SINGLE_NODE_OPERATIONS_CLOSURE_VERIFIER: any =
+  "tools/server-scripts/single-node-operations-closure.ts";
+export const SINGLE_NODE_OPERATIONS_CLOSURE_REPORT_RELATIVE_PATH: any =
+  "build/reports/single-node-operations-closure.json";
+export const SINGLE_NODE_OPERATIONS_CLOSURE_FOCUSED_SUITE: any =
+  "tests/vitest/server/single-node-operations-closure.test.ts";
+export const SINGLE_NODE_OPERATIONS_NON_CERTIFICATION_REASON: any =
+  "single_node_operations_closure_does_not_certify_capacity";
+export const SINGLE_NODE_OPERATIONS_PROFILE: any = "single-node";
+export const SINGLE_NODE_OPERATIONS_REQUIREMENTS: readonly any[] = Object.freeze([
   "REQ-EFF-RELEASE",
   "REQ-BASELINE-CONSOLE-ADMINISTRATION",
   "REQ-BASELINE-CONTAINER-DEPLOYMENT",
   "REQ-BASELINE-MANDATORY-GATEWAY-PIPELINE"
 ]);
 
-export const ENTERPRISE_OPERATIONS_SLOT_IDS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_OPERATIONS_SLOT_IDS: readonly any[] = Object.freeze([
   "governed-mcp-journey",
   "denial-and-uncertainty",
   "diagnostics",
@@ -60,7 +60,7 @@ export const ENTERPRISE_OPERATIONS_SLOT_IDS: readonly any[] = Object.freeze([
   "n-minus-one-upgrade-and-failed-rollback"
 ]);
 
-export const ENTERPRISE_OPERATIONS_ENVIRONMENT_BLOCKERS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_OPERATIONS_ENVIRONMENT_BLOCKERS: readonly any[] = Object.freeze([
   "container_environment_unavailable",
   "key_material_unavailable",
   "restore_environment_unavailable"
@@ -77,22 +77,22 @@ const FORBIDDEN_SUPPORT_CLAIM: any =
   /\b(?:os support|architecture support|cloud support|production-ready|production ready|environment support)\b/iu;
 
 const SOURCE_FILES: readonly any[] = Object.freeze([
-  ENTERPRISE_OPERATIONS_CLOSURE_VERIFIER,
-  "tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts",
-  "tools/server-scripts/verify-enterprise-authorization-enforcement.ts",
-  "tools/server-scripts/verify-enterprise-governance-coverage.ts",
-  "tools/server-scripts/verify-enterprise-observability-coverage.ts",
+  SINGLE_NODE_OPERATIONS_CLOSURE_VERIFIER,
+  "tools/server-scripts/upgrade/single-node-upgrade-rollback.ts",
+  "tools/server-scripts/verify-authorization-enforcement.ts",
+  "tools/server-scripts/verify-authorization-governance.ts",
+  "tools/server-scripts/verify-observability-coverage.ts",
   "tools/server-scripts/verify-console-administration-coverage.ts",
   "tools/server-scripts/verify-model-gateway-plugin.ts",
   "tools/server-scripts/verify-model-gateway-detachment.ts",
   "tools/server-scripts/verify-external-gateway-plugin.ts"
 ]);
 
-export const ENTERPRISE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
   Object.freeze({
-    id: "enterprise-governance-coverage",
-    script: "tools/server-scripts/verify-enterprise-governance-coverage.ts",
-    reportPath: "build/reports/enterprise-governance-coverage.json",
+    id: "authorization-governance",
+    script: "tools/server-scripts/verify-authorization-governance.ts",
+    reportPath: "build/reports/authorization-governance-coverage.json",
     timeoutMs: 120_000,
     dependsOn: Object.freeze([])
   }),
@@ -111,20 +111,20 @@ export const ENTERPRISE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
     dependsOn: Object.freeze([])
   }),
   Object.freeze({
-    id: "enterprise-enforcement-coverage",
-    script: "tools/server-scripts/verify-enterprise-authorization-enforcement.ts",
-    reportPath: "build/reports/enterprise-authorization-enforcement.json",
+    id: "authorization-enforcement",
+    script: "tools/server-scripts/verify-authorization-enforcement.ts",
+    reportPath: "build/reports/authorization-enforcement.json",
     timeoutMs: 120_000,
     dependsOn: Object.freeze([
-      "enterprise-governance-coverage",
+      "authorization-governance",
       "operation-permission-protocol-consistency",
       "operation-permission-tag-governed-e2e"
     ])
   }),
   Object.freeze({
-    id: "enterprise-audit-retention-redaction",
-    script: "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts",
-    reportPath: "build/reports/enterprise-audit-retention-redaction.json",
+    id: "audit-retention-redaction",
+    script: "tools/server-scripts/verify-audit-retention-redaction.ts",
+    reportPath: "build/reports/audit-retention-redaction.json",
     timeoutMs: 120_000,
     dependsOn: Object.freeze([])
   }),
@@ -143,13 +143,13 @@ export const ENTERPRISE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
     dependsOn: Object.freeze([])
   }),
   Object.freeze({
-    id: "enterprise-observability-coverage",
-    script: "tools/server-scripts/verify-enterprise-observability-coverage.ts",
-    reportPath: "build/reports/enterprise-observability-coverage.json",
+    id: "observability-coverage",
+    script: "tools/server-scripts/verify-observability-coverage.ts",
+    reportPath: "build/reports/observability-coverage.json",
     timeoutMs: 120_000,
     dependsOn: Object.freeze([
       "operation-permission-tag-governed-e2e",
-      "enterprise-audit-retention-redaction",
+      "audit-retention-redaction",
       "observability-semantics"
     ])
   }),
@@ -197,13 +197,13 @@ export const ENTERPRISE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
   })
 ]);
 
-export const ENTERPRISE_OPERATIONS_SLOTS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_OPERATIONS_SLOTS: readonly any[] = Object.freeze([
   Object.freeze({
     id: "governed-mcp-journey",
     producers: Object.freeze([
       "operation-permission-tag-governed-e2e",
-      "enterprise-governance-coverage",
-      "enterprise-enforcement-coverage",
+      "authorization-governance",
+      "authorization-enforcement",
       "model-gateway",
       "model-gateway-detachment",
       "external-gateway"
@@ -214,7 +214,7 @@ export const ENTERPRISE_OPERATIONS_SLOTS: readonly any[] = Object.freeze([
     id: "denial-and-uncertainty",
     producers: Object.freeze([
       "operation-permission-tag-governed-e2e",
-      "enterprise-enforcement-coverage"
+      "authorization-enforcement"
     ]),
     inProcess: Object.freeze(["uncertainty"])
   }),
@@ -222,7 +222,7 @@ export const ENTERPRISE_OPERATIONS_SLOTS: readonly any[] = Object.freeze([
     id: "diagnostics",
     producers: Object.freeze([
       "observability-runtime-acceptance",
-      "enterprise-observability-coverage"
+      "observability-coverage"
     ]),
     inProcess: Object.freeze([])
   }),
@@ -264,11 +264,11 @@ function uniqueStrings(values: any = []) : any {
 }
 
 function producerById(producerId?: any) : any {
-  return ENTERPRISE_OPERATIONS_PRODUCERS.find((entry?: any) : any => entry.id === producerId) || null;
+  return SINGLE_NODE_OPERATIONS_PRODUCERS.find((entry?: any) : any => entry.id === producerId) || null;
 }
 
-export function orderedEnterpriseOperationsProducers() : any {
-  const remaining: any[] = [...ENTERPRISE_OPERATIONS_PRODUCERS];
+export function orderedSingleNodeOperationsProducers() : any {
+  const remaining: any[] = [...SINGLE_NODE_OPERATIONS_PRODUCERS];
   const ordered: any[] = [];
   const done: any = new Set<any>();
   while (remaining.length > 0) {
@@ -276,7 +276,7 @@ export function orderedEnterpriseOperationsProducers() : any {
       (entry.dependsOn || []).every((dependency?: any) : any => done.has(dependency))
     );
     if (readyIndex < 0) {
-      throw new Error("Enterprise operations producer catalog has a dependency cycle.");
+      throw new Error("Single-node operations producer catalog has a dependency cycle.");
     }
     const next: any = remaining.splice(readyIndex, 1)[0];
     ordered.push(next);
@@ -287,12 +287,12 @@ export function orderedEnterpriseOperationsProducers() : any {
 
 export function assertCapacityNeverCertified(value: Record<string, any> = {}) : any {
   if (value.capacityCertified === true || value.summary?.capacityCertified === true) {
-    throw new Error("Enterprise operations closure must never certify capacity.");
+    throw new Error("Single-node operations closure must never certify capacity.");
   }
   return true;
 }
 
-export function assertEnterpriseOperationsNonClaims(value: Record<string, any> = {}) : any {
+export function assertSingleNodeOperationsNonClaims(value: Record<string, any> = {}) : any {
   assertCapacityNeverCertified(value);
   if (
     value.productionReady === true
@@ -302,11 +302,11 @@ export function assertEnterpriseOperationsNonClaims(value: Record<string, any> =
     || value.releaseReady === true
     || value.summary?.releaseReady === true
   ) {
-    throw new Error("Enterprise operations closure must not claim production-readiness or environment support.");
+    throw new Error("Single-node operations closure must not claim production-readiness or environment support.");
   }
   const text: any = JSON.stringify(value);
   if (FORBIDDEN_SUPPORT_CLAIM.test(text)) {
-    throw new Error("Enterprise operations closure must not claim OS, architecture, cloud, or environment support.");
+    throw new Error("Single-node operations closure must not claim OS, architecture, cloud, or environment support.");
   }
   return true;
 }
@@ -363,21 +363,21 @@ function slotBlocker(slot?: any, bundle: Record<string, any> = {}) : any {
   return "";
 }
 
-export function reduceEnterpriseOperationsClosure(input: Record<string, any> = {}) : any {
+export function reduceSingleNodeOperationsClosure(input: Record<string, any> = {}) : any {
   const producers: any = isObject(input.producers) ? input.producers : {};
   const inProcess: any = isObject(input.inProcess) ? input.inProcess : {};
   const candidate: any = isObject(input.candidate) ? input.candidate : {};
   const slots: any[] = [];
   const environmentBlockers: any[] = [];
 
-  if (candidate.profile !== ENTERPRISE_OPERATIONS_PROFILE) {
-    throw new Error("Enterprise operations closure requires the enterprise-single-node profile.");
+  if (candidate.profile !== SINGLE_NODE_OPERATIONS_PROFILE) {
+    throw new Error("Single-node operations closure requires the single-node profile.");
   }
   if (!/^sha256:[a-f0-9]{64}$/u.test(String(candidate.digest || ""))) {
-    throw new Error("Enterprise operations closure requires one candidate digest.");
+    throw new Error("Single-node operations closure requires one candidate digest.");
   }
 
-  for (const slot of ENTERPRISE_OPERATIONS_SLOTS) {
+  for (const slot of SINGLE_NODE_OPERATIONS_SLOTS) {
     const missingProducers: any[] = [];
     const failedProducers: any[] = [];
     for (const producerId of slot.producers) {
@@ -390,7 +390,7 @@ export function reduceEnterpriseOperationsClosure(input: Record<string, any> = {
     const missingInProcess: any[] = slot.inProcess.filter((key?: any) : any => !inProcessOk(inProcess, key));
     const blocker: any = slotBlocker(slot, inProcess);
     let status: any = "passed";
-    if (blocker && ENTERPRISE_OPERATIONS_ENVIRONMENT_BLOCKERS.includes(blocker)) {
+    if (blocker && SINGLE_NODE_OPERATIONS_ENVIRONMENT_BLOCKERS.includes(blocker)) {
       status = "blocked";
       environmentBlockers.push(blocker);
     } else if (failedProducers.length > 0 || missingProducers.length > 0 || missingInProcess.length > 0) {
@@ -409,12 +409,12 @@ export function reduceEnterpriseOperationsClosure(input: Record<string, any> = {
   const scenarioAccepted: any = slots.every((slot?: any) : any => slot.status === "passed");
   return {
     candidate: {
-      profile: ENTERPRISE_OPERATIONS_PROFILE,
+      profile: SINGLE_NODE_OPERATIONS_PROFILE,
       digest: candidate.digest,
       identityKind: "source-closure"
     },
     producers: Object.fromEntries(
-      ENTERPRISE_OPERATIONS_PRODUCERS.map((spec?: any) : any => [
+      SINGLE_NODE_OPERATIONS_PRODUCERS.map((spec?: any) : any => [
         spec.id,
         publicProducer(producers[spec.id] || { id: spec.id, script: spec.script, reportPath: spec.reportPath })
       ])
@@ -437,32 +437,32 @@ export function reduceEnterpriseOperationsClosure(input: Record<string, any> = {
     capacityCertified: false,
     productionReady: false,
     environmentSupportClaimed: false,
-    nonCertificationReason: ENTERPRISE_OPERATIONS_NON_CERTIFICATION_REASON
+    nonCertificationReason: SINGLE_NODE_OPERATIONS_NON_CERTIFICATION_REASON
   };
 }
 
-export function buildEnterpriseOperationsClosureReport(
+export function buildSingleNodeOperationsClosureReport(
   reduction: Record<string, any> = {},
   extras: Record<string, any> = {}
 ) : any {
-  assertEnterpriseOperationsNonClaims(reduction);
+  assertSingleNodeOperationsNonClaims(reduction);
   if (reduction.capacityCertified !== false) {
-    throw new Error("Enterprise operations closure must keep capacityCertified false.");
+    throw new Error("Single-node operations closure must keep capacityCertified false.");
   }
   const slotIds: any = (reduction.slots || []).map((slot?: any) : any => slot.id);
-  if (JSON.stringify(slotIds) !== JSON.stringify([...ENTERPRISE_OPERATIONS_SLOT_IDS])) {
-    throw new Error("Enterprise operations closure must report every required slot.");
+  if (JSON.stringify(slotIds) !== JSON.stringify([...SINGLE_NODE_OPERATIONS_SLOT_IDS])) {
+    throw new Error("Single-node operations closure must report every required slot.");
   }
   return {
-    schemaVersion: ENTERPRISE_OPERATIONS_CLOSURE_SCHEMA,
-    verifier: ENTERPRISE_OPERATIONS_CLOSURE_VERIFIER,
+    schemaVersion: SINGLE_NODE_OPERATIONS_CLOSURE_SCHEMA,
+    verifier: SINGLE_NODE_OPERATIONS_CLOSURE_VERIFIER,
     generatedAt: extras.generatedAt || "1970-01-01T00:00:00.000Z",
-    requirements: [...ENTERPRISE_OPERATIONS_REQUIREMENTS],
+    requirements: [...SINGLE_NODE_OPERATIONS_REQUIREMENTS],
     candidate: reduction.candidate,
     capacityCertified: false,
     productionReady: false,
     environmentSupportClaimed: false,
-    nonCertificationReason: ENTERPRISE_OPERATIONS_NON_CERTIFICATION_REASON,
+    nonCertificationReason: SINGLE_NODE_OPERATIONS_NON_CERTIFICATION_REASON,
     summary: {
       slotCount: reduction.slots.length,
       passedSlotCount: reduction.slots.filter((slot?: any) : any => slot.status === "passed").length,
@@ -473,9 +473,9 @@ export function buildEnterpriseOperationsClosureReport(
       capacityCertified: false,
       productionReady: false,
       environmentSupportClaimed: false,
-      nonCertificationReason: ENTERPRISE_OPERATIONS_NON_CERTIFICATION_REASON,
+      nonCertificationReason: SINGLE_NODE_OPERATIONS_NON_CERTIFICATION_REASON,
       focusedSuitePassed: extras.focusedSuitePassed === true,
-      producerCount: ENTERPRISE_OPERATIONS_PRODUCERS.length
+      producerCount: SINGLE_NODE_OPERATIONS_PRODUCERS.length
     },
     environmentBlockers: [...reduction.environmentBlockers],
     slots: reduction.slots,
@@ -484,22 +484,22 @@ export function buildEnterpriseOperationsClosureReport(
   };
 }
 
-export function assertEnterpriseOperationsClosure(report: Record<string, any> = {}) : any {
-  assertEnterpriseOperationsNonClaims(report);
-  if (report.schemaVersion !== ENTERPRISE_OPERATIONS_CLOSURE_SCHEMA) {
-    throw new Error("Enterprise operations closure schema is invalid.");
+export function assertSingleNodeOperationsClosure(report: Record<string, any> = {}) : any {
+  assertSingleNodeOperationsNonClaims(report);
+  if (report.schemaVersion !== SINGLE_NODE_OPERATIONS_CLOSURE_SCHEMA) {
+    throw new Error("Single-node operations closure schema is invalid.");
   }
-  if (report.verifier !== ENTERPRISE_OPERATIONS_CLOSURE_VERIFIER) {
-    throw new Error("Enterprise operations closure verifier path is invalid.");
+  if (report.verifier !== SINGLE_NODE_OPERATIONS_CLOSURE_VERIFIER) {
+    throw new Error("Single-node operations closure verifier path is invalid.");
   }
   if (report.summary?.scenarioAccepted === true && report.environmentBlockers?.length > 0) {
-    throw new Error("Enterprise operations closure must not accept a blocked environment as green.");
+    throw new Error("Single-node operations closure must not accept a blocked environment as green.");
   }
   if (
     report.summary?.scenarioAccepted === true
     && (report.slots || []).some((slot?: any) : any => slot.status !== "passed")
   ) {
-    throw new Error("Enterprise operations closure must not accept incomplete slots.");
+    throw new Error("Single-node operations closure must not accept incomplete slots.");
   }
   return true;
 }
@@ -519,7 +519,7 @@ export function passingProducerFixture(producerId?: any) : any {
 
 export function passingProducerMap() : any {
   return Object.fromEntries(
-    ENTERPRISE_OPERATIONS_PRODUCERS.map((spec?: any) : any => [spec.id, passingProducerFixture(spec.id)])
+    SINGLE_NODE_OPERATIONS_PRODUCERS.map((spec?: any) : any => [spec.id, passingProducerFixture(spec.id)])
   );
 }
 
@@ -580,7 +580,7 @@ function memoryPorts({ candidateHealthy = true, restoreSucceeds = true }: Record
 
 export async function executeUpgradeStateMachineProof() : Promise<any> {
   const rolledBackPorts: any = memoryPorts({ candidateHealthy: false, restoreSucceeds: true });
-  const rolledBack: any = await executeEnterpriseUpgradeRollback({
+  const rolledBack: any = await executeSingleNodeUpgradeRollback({
     candidateImage: FIXTURE_CANDIDATE_IMAGE,
     previousImage: FIXTURE_PREVIOUS_IMAGE,
     ...rolledBackPorts
@@ -588,13 +588,13 @@ export async function executeUpgradeStateMachineProof() : Promise<any> {
   const inDoubtPorts: any = memoryPorts({ candidateHealthy: false, restoreSucceeds: false });
   let inDoubt: any = false;
   try {
-    await executeEnterpriseUpgradeRollback({
+    await executeSingleNodeUpgradeRollback({
       candidateImage: FIXTURE_CANDIDATE_IMAGE,
       previousImage: FIXTURE_PREVIOUS_IMAGE,
       ...inDoubtPorts
     });
   } catch (error: any) {
-    inDoubt = error?.code === "enterprise_upgrade_rollback_in_doubt";
+    inDoubt = error?.code === "single_node_upgrade_rollback_in_doubt";
   }
   return {
     rolledBack: rolledBack?.outcome === "rolled-back" && rolledBack?.ok === false,
@@ -740,14 +740,14 @@ export async function executeAdmittedDigestRollback({
       `${JSON.stringify({ version: 1, name: "before" }, null, 2)}\n`,
       "utf8"
     );
-    const result: any = await executeEnterpriseUpgradeRollback({
+    const result: any = await executeSingleNodeUpgradeRollback({
       candidateImage,
       previousImage,
       candidate: {
         async admit(image?: any) : Promise<any> {
           if (!inspectImage(image)) {
-            throw Object.assign(new Error("enterprise_upgrade_candidate_digest_required"), {
-              code: "enterprise_upgrade_candidate_digest_required"
+            throw Object.assign(new Error("single_node_upgrade_candidate_digest_required"), {
+              code: "single_node_upgrade_candidate_digest_required"
             });
           }
         }
@@ -854,14 +854,14 @@ function spawnProducer(spec?: any, repoRoot?: any) : Promise<any> {
   });
 }
 
-export async function executeEnterpriseOperationsProducers({
+export async function executeSingleNodeOperationsProducers({
   repoRoot = repoRootFromMeta(),
   candidateImage = "",
   previousImage = ""
 }: Record<string, any> = {}) : Promise<any> {
   const producers: Record<string, any> = {};
-  for (const spec of orderedEnterpriseOperationsProducers()) {
-    process.stderr.write(`[enterprise-operations-closure] producer=${spec.id}\n`);
+  for (const spec of orderedSingleNodeOperationsProducers()) {
+    process.stderr.write(`[single-node-operations-closure] producer=${spec.id}\n`);
     const spawned: any = await spawnProducer(spec, repoRoot);
     const report: any = await readProducerReport(repoRoot, spec.reportPath);
     producers[spec.id] = {
@@ -914,7 +914,7 @@ function runFocusedSuite(repoRoot?: any) : any {
     "run",
     "--config",
     "vitest.config.ts",
-    ENTERPRISE_OPERATIONS_CLOSURE_FOCUSED_SUITE
+    SINGLE_NODE_OPERATIONS_CLOSURE_FOCUSED_SUITE
   ], {
     cwd: repoRoot,
     encoding: "utf8",
@@ -925,7 +925,7 @@ function runFocusedSuite(repoRoot?: any) : any {
     }
   });
   return {
-    suite: ENTERPRISE_OPERATIONS_CLOSURE_FOCUSED_SUITE,
+    suite: SINGLE_NODE_OPERATIONS_CLOSURE_FOCUSED_SUITE,
     passed: result.status === 0,
     exitCode: result.status,
     outputBytes: Buffer.byteLength(`${result.stdout || ""}${result.stderr || ""}`, "utf8")
@@ -938,7 +938,7 @@ function argValue(argv: any = [], name?: any) : any {
   return "";
 }
 
-export async function runEnterpriseOperationsClosure({
+export async function runSingleNodeOperationsClosure({
   repoRoot = repoRootFromMeta(),
   writeReport = true,
   runFocusedTests = false,
@@ -950,25 +950,25 @@ export async function runEnterpriseOperationsClosure({
   inProcess = null
 }: Record<string, any> = {}) : Promise<any> {
   if (executeProducers !== true && (!isObject(producers) || !isObject(inProcess))) {
-    throw new Error("Enterprise operations closure refuses a green receipt without producer evidence.");
+    throw new Error("Single-node operations closure refuses a green receipt without producer evidence.");
   }
   const executed: any = executeProducers === true
-    ? await executeEnterpriseOperationsProducers({ repoRoot, candidateImage, previousImage })
+    ? await executeSingleNodeOperationsProducers({ repoRoot, candidateImage, previousImage })
     : { producers, inProcess };
   const sourceRevision: any = await computeVerifierSourceRevision(repoRoot, SOURCE_FILES);
   const candidate: any = {
-    profile: ENTERPRISE_OPERATIONS_PROFILE,
+    profile: SINGLE_NODE_OPERATIONS_PROFILE,
     digest: sourceRevision,
     identityKind: "source-closure"
   };
-  const reduction: any = reduceEnterpriseOperationsClosure({
+  const reduction: any = reduceSingleNodeOperationsClosure({
     candidate,
     producers: executed.producers,
     inProcess: executed.inProcess
   });
 
   let focusedSuite: any = {
-    suite: ENTERPRISE_OPERATIONS_CLOSURE_FOCUSED_SUITE,
+    suite: SINGLE_NODE_OPERATIONS_CLOSURE_FOCUSED_SUITE,
     passed: runFocusedTests !== true,
     exitCode: 0,
     outputBytes: 0
@@ -977,36 +977,36 @@ export async function runEnterpriseOperationsClosure({
     focusedSuite = runFocusedSuite(repoRoot);
   }
 
-  const report: any = buildEnterpriseOperationsClosureReport(reduction, {
+  const report: any = buildSingleNodeOperationsClosureReport(reduction, {
     generatedAt,
     focusedSuitePassed: focusedSuite.passed === true
   });
   const provenance: Record<string, any> = {
-    producer: "meshrix-core-enterprise-operations-closure",
-    commandId: "enterprise-operations-closure",
+    producer: "meshrix-core-single-node-operations-closure",
+    commandId: "single-node-operations-closure",
     sourceRevision
   };
   const finalized: any = finalizeSensitiveReport(report, { provenance });
-  assertNoSensitiveReportLeak(finalized, "enterprise operations closure report");
+  assertNoSensitiveReportLeak(finalized, "single-node operations closure report");
   assertReportProvenance(finalized, provenance);
-  assertEnterpriseOperationsClosure(finalized);
+  assertSingleNodeOperationsClosure(finalized);
   assertCapacityNeverCertified(finalized);
 
   if (writeReport === true) {
-    const absolutePath: any = path.join(repoRoot, ENTERPRISE_OPERATIONS_CLOSURE_REPORT_RELATIVE_PATH);
+    const absolutePath: any = path.join(repoRoot, SINGLE_NODE_OPERATIONS_CLOSURE_REPORT_RELATIVE_PATH);
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     await fs.writeFile(absolutePath, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
   }
 
   if (runFocusedTests === true && focusedSuite.passed !== true) {
     throw new Error(
-      `Focused suite failed: ${ENTERPRISE_OPERATIONS_CLOSURE_FOCUSED_SUITE} exit=${focusedSuite.exitCode}`
+      `Focused suite failed: ${SINGLE_NODE_OPERATIONS_CLOSURE_FOCUSED_SUITE} exit=${focusedSuite.exitCode}`
     );
   }
 
   return {
     report: finalized,
-    reportPath: ENTERPRISE_OPERATIONS_CLOSURE_REPORT_RELATIVE_PATH,
+    reportPath: SINGLE_NODE_OPERATIONS_CLOSURE_REPORT_RELATIVE_PATH,
     focusedSuite: {
       suite: focusedSuite.suite,
       passed: focusedSuite.passed,
@@ -1017,12 +1017,12 @@ export async function runEnterpriseOperationsClosure({
 }
 
 async function main(argv: any = process.argv.slice(2)) : Promise<any> {
-  const result: any = await runEnterpriseOperationsClosure({
+  const result: any = await runSingleNodeOperationsClosure({
     writeReport: true,
     runFocusedTests: true,
     executeProducers: true,
-    candidateImage: argValue(argv, "--candidate") || process.env.MESHRIX_ENTERPRISE_CANDIDATE_IMAGE || "",
-    previousImage: argValue(argv, "--previous") || process.env.MESHRIX_ENTERPRISE_PREVIOUS_IMAGE || ""
+    candidateImage: argValue(argv, "--candidate") || process.env.MESHRIX_SINGLE_NODE_CANDIDATE_IMAGE || "",
+    previousImage: argValue(argv, "--previous") || process.env.MESHRIX_SINGLE_NODE_PREVIOUS_IMAGE || ""
   });
   process.stdout.write(`${JSON.stringify({
     ok: result.report.summary.scenarioAccepted === true,

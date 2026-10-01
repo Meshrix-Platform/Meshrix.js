@@ -64,8 +64,8 @@ export function reduceControlledExecutionConvergence({
   );
   requireCondition(
     currentCandidate.supported_profiles.length === 1 &&
-      currentCandidate.supported_profiles[0] === "enterprise-single-node",
-    "Enterprise single-node release candidate profile is missing",
+      currentCandidate.supported_profiles[0] === "single-node",
+    "Single-node release candidate profile is missing",
   );
   requireCondition(!containsSensitiveReportData(currentCandidate), "Controlled execution release candidate is privacy-unsafe");
   const leafEvidence: any[] = [];

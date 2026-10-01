@@ -312,7 +312,7 @@ describe("branch promotion workflow", () : any => {
     expect(stableGate).toContain("github.ref_name == 'stable'");
     expect(stableGate).not.toContain("github.ref_name == 'release'");
     expect(stableGate).toContain(
-      "needs: [stable-candidate, repository-checkpoint, audit-reduction, enterprise-delivery, functional-acceptance, supply-chain]"
+      "needs: [stable-candidate, repository-checkpoint, audit-reduction, single-node-delivery, functional-acceptance, supply-chain]"
     );
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
     expect(stableGate).toContain("name: stable-source-candidate-${{ github.sha }}");
@@ -404,7 +404,7 @@ describe("branch promotion workflow", () : any => {
           version: "0.0.1",
         }],
         reportInventoryDigest: `sha256:${"f".repeat(64)}`,
-        supportedProfiles: ["enterprise-single-node"],
+        supportedProfiles: ["single-node"],
       });
       const candidateText: any = `${JSON.stringify(candidate, null, 2)}\n`;
       const functional: any = {
@@ -413,7 +413,7 @@ describe("branch promotion workflow", () : any => {
         status: "accepted",
         releaseReady: true,
         generationId: "stable-test-generation",
-        selectedProfile: "enterprise-single-node",
+        selectedProfile: "single-node",
         sourceRevision: candidate.source_revision,
         candidateDigest: candidate.candidate_digest,
       };

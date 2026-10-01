@@ -4,18 +4,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  createEnterpriseSingleNodeCloudDeploymentPlan,
-  validateEnterpriseSecretCustody,
-} from "../../../tools/server-scripts/enterprise-single-node-cloud-deployment.ts";
+  createSingleNodeCloudDeploymentPlan,
+  validateSingleNodeSecretCustody,
+} from "../../../tools/server-scripts/single-node-cloud-deployment.ts";
 
 const CANDIDATE: any =
   "registry.example/meshrix-js/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const PREVIOUS: any =
   "registry.example/meshrix-js/runtime@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-describe("enterprise single-node cloud deployment", () : any => {
+describe("single-node cloud deployment", () : any => {
   it("activates an admitted immutable candidate without build or network access", () : any => {
-    const plan: any = createEnterpriseSingleNodeCloudDeploymentPlan({
+    const plan: any = createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       offline: true,
       secretKeySourceConfigured: true,
@@ -46,7 +46,7 @@ describe("enterprise single-node cloud deployment", () : any => {
   });
 
   it("keeps rollback bound to a different prior digest and governed restore operations", () : any => {
-    const plan: any = createEnterpriseSingleNodeCloudDeploymentPlan({
+    const plan: any = createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       previousImage: PREVIOUS,
       secretKeySourceConfigured: true,
@@ -68,21 +68,21 @@ describe("enterprise single-node cloud deployment", () : any => {
   });
 
   it("rejects floating tags, raw image ids, and same-candidate rollback", () : any => {
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: "registry.example/meshrix-js/runtime:latest",
       secretKeySourceConfigured: true,
       proofSignerSecretSourceConfigured: true,
       securePublicBaseUrlConfigured: true,
       trustedProxyConfigured: true,
     })).toThrow("cloud_deployment_candidate_digest_required");
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: `sha256:${"a".repeat(64)}`,
       secretKeySourceConfigured: true,
       proofSignerSecretSourceConfigured: true,
       securePublicBaseUrlConfigured: true,
       trustedProxyConfigured: true,
     })).toThrow("cloud_deployment_candidate_digest_required");
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       previousImage: CANDIDATE,
       secretKeySourceConfigured: true,
@@ -90,24 +90,24 @@ describe("enterprise single-node cloud deployment", () : any => {
       securePublicBaseUrlConfigured: true,
       trustedProxyConfigured: true,
     })).toThrow("cloud_deployment_previous_candidate_must_differ");
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       proofSignerSecretSourceConfigured: true,
       securePublicBaseUrlConfigured: true,
       trustedProxyConfigured: true,
     })).toThrow("cloud_deployment_secret_key_source_required");
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       secretKeySourceConfigured: true,
       proofSignerSecretSourceConfigured: true,
     })).toThrow("cloud_deployment_secure_public_base_url_required");
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       secretKeySourceConfigured: true,
       securePublicBaseUrlConfigured: true,
       trustedProxyConfigured: true,
     })).toThrow("cloud_deployment_proof_signer_secret_source_required");
-    expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
+    expect(() : any => createSingleNodeCloudDeploymentPlan({
       candidateImage: CANDIDATE,
       secretKeySourceConfigured: true,
       proofSignerSecretSourceConfigured: true,
@@ -122,17 +122,17 @@ describe("enterprise single-node cloud deployment", () : any => {
     try {
       await fs.writeFile(encryptionSecretPath, "a".repeat(64), { mode: 0o600 });
       await fs.writeFile(proofSignerSecretPath, "a".repeat(64), { mode: 0o600 });
-      await expect(validateEnterpriseSecretCustody({
+      await expect(validateSingleNodeSecretCustody({
         encryptionSecretPath,
         proofSignerSecretPath
       })).rejects.toThrow("cloud_deployment_secret_custody_separation_required");
 
       await fs.writeFile(proofSignerSecretPath, "b".repeat(64), { mode: 0o600 });
-      await expect(validateEnterpriseSecretCustody({
+      await expect(validateSingleNodeSecretCustody({
         encryptionSecretPath,
         proofSignerSecretPath
       })).resolves.toEqual({ ready: true, distinct: true, external: true });
-      await expect(validateEnterpriseSecretCustody({
+      await expect(validateSingleNodeSecretCustody({
         encryptionSecretPath,
         proofSignerSecretPath: encryptionSecretPath
       })).rejects.toThrow("cloud_deployment_secret_custody_separation_required");

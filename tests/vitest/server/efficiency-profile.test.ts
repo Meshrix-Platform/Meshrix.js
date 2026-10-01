@@ -44,7 +44,7 @@ function serialized(value?: any) : any {
 describe("named agent-service efficiency profile", () : any => {
   it("freezes equivalent workloads including concurrent change and the warm thresholds", () : any => {
     expect(EFFICIENCY_NAMED_PROFILE).toBe("warm");
-    expect(EFFICIENCY_OWNER_PROFILE).toBe("enterprise-single-node");
+    expect(EFFICIENCY_OWNER_PROFILE).toBe("single-node");
     expect(EFFICIENCY_PROFILE_WORKLOAD_IDS).toEqual([
       ...INTERACTION_COST_WORKLOAD_IDS,
       "concurrent-change"

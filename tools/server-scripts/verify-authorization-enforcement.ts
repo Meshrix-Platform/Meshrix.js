@@ -9,8 +9,8 @@ import { dispatchOperation } from "../../packages/server-runtime/src/composition
 import { releaseEvidenceReady } from "./lib/release-evidence-readiness.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const REPORT_PATH: any = "build/reports/enterprise-authorization-enforcement.json";
-const GOVERNANCE_REPORT: any = "build/reports/enterprise-governance-coverage.json";
+const REPORT_PATH: any = "build/reports/authorization-enforcement.json";
+const GOVERNANCE_REPORT: any = "build/reports/authorization-governance-coverage.json";
 const TAG_GOVERNED_E2E_REPORT: any = "build/reports/operation-permission-tag-governed-e2e.json";
 const PROTOCOL_CONSISTENCY_REPORT: any = "build/reports/operation-permission-protocol-consistency.json";
 const OPERATION_DISPATCHER_SOURCE: any = "packages/server-runtime/src/composition/dispatch-operation-core.ts";
@@ -99,7 +99,7 @@ function assertNoReportLeak(report?: any) : any {
   const text: any = JSON.stringify(report);
   for (const [kind, pattern] of SENSITIVE_REPORT_PATTERNS) {
     if (pattern.test(text)) {
-      throw new Error(`Enterprise authorization enforcement report contains sensitive local or runtime data: ${kind}.`);
+      throw new Error(`Authorization enforcement report contains sensitive local or runtime data: ${kind}.`);
     }
   }
 }
@@ -306,7 +306,7 @@ async function main() : Promise<any> {
 
   const missingRuntimeEvidence: any[] = [];
   if (governance.summary?.releaseReady !== true || governance.summary?.failingOperationCount !== 0) {
-    missingRuntimeEvidence.push("enterprise_governance_coverage_not_release_ready");
+    missingRuntimeEvidence.push("authorization_governance_coverage_not_release_ready");
   }
   if (!reportEvidence.tagGovernedE2e.releaseReady || !reportEvidence.tagGovernedE2e.reportLeakScan) {
     missingRuntimeEvidence.push("tag_governed_e2e_not_release_ready");
@@ -333,9 +333,9 @@ async function main() : Promise<any> {
   const failingOperations: any = governedMutations.filter((row?: any) : any => row.findings.length);
   const releaseReady: any = failingOperations.length === 0 && missingRuntimeEvidence.length === 0;
   const report: Record<string, any> = {
-    schemaVersion: "v0.0.1:authorization:enterprise-enforcement-report-1",
+    schemaVersion: "v0.0.1:authorization:authorization-enforcement-report-1",
     generatedAt: new Date().toISOString(),
-    verifier: "tools/server-scripts/verify-enterprise-authorization-enforcement.ts",
+    verifier: "tools/server-scripts/verify-authorization-enforcement.ts",
     sourceOfTruth: {
       operations: "packages/contracts/src/operations/operation-registry.ts",
       operationPermissionCatalog: "packages/capabilities/src/operation-permission-core/catalog.ts",
@@ -382,7 +382,7 @@ async function main() : Promise<any> {
   await fs.writeFile(repoPath(REPORT_PATH), `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   if (!releaseReady) {
-    console.error(`[enterprise-authorization-enforcement] report=${REPORT_PATH}`);
+    console.error(`[authorization-enforcement] report=${REPORT_PATH}`);
     for (const row of failingOperations.slice(0, 20)) {
       console.error(`- ${row.operationId}: ${row.findings.join(",")}`);
     }
@@ -392,8 +392,8 @@ async function main() : Promise<any> {
     process.exit(1);
   }
 
-  console.log(`[enterprise-authorization-enforcement] report=${REPORT_PATH}`);
-  console.log(`[enterprise-authorization-enforcement] governedMutations=${governedMutations.length} releaseReady=true`);
+  console.log(`[authorization-enforcement] report=${REPORT_PATH}`);
+  console.log(`[authorization-enforcement] governedMutations=${governedMutations.length} releaseReady=true`);
 }
 
 await main();

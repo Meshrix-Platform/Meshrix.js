@@ -11,8 +11,8 @@ function rootPackage() : any {
   return {
     scripts: {
       "verify:acceptance": "node tools/server-scripts/verify-platform-acceptance.ts",
-      "verify:enterprise-single-node:ubuntu-container":
-        "node tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts",
+      "verify:single-node:ubuntu-container":
+        "node tools/server-scripts/verify-single-node-ubuntu-container.ts",
       "verify:mcp-release-portable-assembly":
         "node tools/server-scripts/verify-mcp-release-portable-assembly.ts",
       "verify:real-machine":

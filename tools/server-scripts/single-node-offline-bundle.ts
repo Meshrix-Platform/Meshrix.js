@@ -18,14 +18,14 @@ import {
   buildReleaseImageAuthority,
 } from "./lib/release-image-evidence.ts";
 
-export const ENTERPRISE_OFFLINE_BUNDLE_SCHEMA: any =
-  "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1";
-export const ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA: any =
+  "v0.0.1:meshrix:single-node-offline-bundle-1";
+export const SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS: readonly any[] = Object.freeze([
   "linux/amd64",
   "linux/arm64",
 ]);
 
-const SIGNING_PURPOSE: any = "enterprise-offline-bundle";
+const SIGNING_PURPOSE: any = "single-node-offline-bundle";
 const DIGEST_PATTERN: any = /^[a-f0-9]{64}$/u;
 const DIGEST_WITH_ALGO_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
 const INVENTORY_KEYS: readonly any[] = Object.freeze([
@@ -180,7 +180,7 @@ function buildOfflineComposeYaml(image?: any) : any {
   requireString(
     image,
     new RegExp(`${IMAGE_NAME_PATTERN.source.slice(1, -1)}@${DIGEST_WITH_ALGO_PATTERN.source.slice(1, -1)}`, "u"),
-    "enterprise_offline_bundle_compose_invalid",
+    "single_node_offline_bundle_compose_invalid",
     "Offline Compose image is invalid.",
   );
   return [
@@ -297,12 +297,12 @@ function safeRelativePath(candidate?: any) : any {
 function parseJsonText(text?: any, code?: any) : any {
   const payload: any = String(text || "").trim();
   if (!payload) {
-    fail(code || "enterprise_offline_bundle_payload_missing", "Payload is missing.");
+    fail(code || "single_node_offline_bundle_payload_missing", "Payload is missing.");
   }
   try {
     return JSON.parse(payload);
   } catch {
-    fail(code || "enterprise_offline_bundle_payload_invalid", "Payload is not valid JSON.");
+    fail(code || "single_node_offline_bundle_payload_invalid", "Payload is not valid JSON.");
   }
 }
 
@@ -317,14 +317,14 @@ function parseDigest(input?: any) : any {
   return requireString(
     input,
     DIGEST_WITH_ALGO_PATTERN,
-    "enterprise_offline_bundle_digest_invalid",
+    "single_node_offline_bundle_digest_invalid",
     "A digest must be a prefixed sha256 value.",
   );
 }
 
 function validateInventoryPaths(entries?: any) : any {
   if (!Array.isArray(entries)) {
-    fail("enterprise_offline_bundle_files_invalid", "Inventory files must be an array.");
+    fail("single_node_offline_bundle_files_invalid", "Inventory files must be an array.");
   }
   const rawKeys: any = new Set<any>();
   const canonicalKeys: any = new Set<any>();
@@ -332,23 +332,23 @@ function validateInventoryPaths(entries?: any) : any {
   const out: any[] = [];
   for (const item of entries) {
     if (!isObject(item)) {
-      fail("enterprise_offline_bundle_file_entry_invalid", "Inventory file entry is invalid.");
+      fail("single_node_offline_bundle_file_entry_invalid", "Inventory file entry is invalid.");
     }
     const normalized: any = safeRelativePath(item.path);
     if (!normalized) {
       fail(
-        "enterprise_offline_bundle_inventory_traversal_path",
+        "single_node_offline_bundle_inventory_traversal_path",
         "Inventory file path is invalid.",
       );
     }
     if (rawKeys.has(normalized)) {
-      fail("enterprise_offline_bundle_file_duplicate", "Inventory contains duplicated path.");
+      fail("single_node_offline_bundle_file_duplicate", "Inventory contains duplicated path.");
     }
     rawKeys.add(normalized);
     const folded: any = normalized.toLowerCase();
     if (canonicalKeys.has(folded)) {
       fail(
-        "enterprise_offline_bundle_case_collision",
+        "single_node_offline_bundle_case_collision",
         "Inventory contains a case/Unicode collision.",
       );
     }
@@ -360,7 +360,7 @@ function validateInventoryPaths(entries?: any) : any {
       const priorPrefix: any = canonicalPrefixes.get(foldedPrefix);
       if (priorPrefix !== undefined && priorPrefix !== rawPrefix) {
         fail(
-          "enterprise_offline_bundle_case_collision",
+          "single_node_offline_bundle_case_collision",
           "Inventory contains a case/Unicode path-prefix collision.",
         );
       }
@@ -376,13 +376,13 @@ function validateInventoryPaths(entries?: any) : any {
 
 function assertNoSymlinkOrSpecial(stat?: any, label?: any) : any {
   if (stat.isSymbolicLink()) {
-    fail("enterprise_offline_bundle_symlink_denied", `${label} is a symlink.`);
+    fail("single_node_offline_bundle_symlink_denied", `${label} is a symlink.`);
   }
   if (!stat.isFile()) {
-    fail("enterprise_offline_bundle_special_file", `${label} is not a regular file.`);
+    fail("single_node_offline_bundle_special_file", `${label} is not a regular file.`);
   }
   if ((stat.mode & 0o111) !== 0) {
-    fail("enterprise_offline_bundle_executable_file", `${label} is executable.`);
+    fail("single_node_offline_bundle_executable_file", `${label} is executable.`);
   }
 }
 
@@ -399,7 +399,7 @@ async function readRegularFileNoFollow(
   const normalized: any = safeRelativePath(relativePath);
   if (!normalized) {
     fail(
-      "enterprise_offline_bundle_inventory_traversal_path",
+      "single_node_offline_bundle_inventory_traversal_path",
       "Bundle file path is invalid.",
     );
   }
@@ -407,7 +407,7 @@ async function readRegularFileNoFollow(
   const absolutePath: any = path.resolve(root, normalized.split("/").join(path.sep));
   if (!isPathWithin(path.resolve(root), absolutePath)) {
     fail(
-      "enterprise_offline_bundle_inventory_traversal_path",
+      "single_node_offline_bundle_inventory_traversal_path",
       "Bundle file escapes its root.",
     );
   }
@@ -416,10 +416,10 @@ async function readRegularFileNoFollow(
   try {
     resolvedPath = await fs.realpath(absolutePath);
   } catch {
-    fail("enterprise_offline_bundle_file_unavailable", "Bundle file is unavailable.");
+    fail("single_node_offline_bundle_file_unavailable", "Bundle file is unavailable.");
   }
   if (!isPathWithin(rootRealPath, resolvedPath)) {
-    fail("enterprise_offline_bundle_symlink_denied", "Bundle file resolves outside its root.");
+    fail("single_node_offline_bundle_symlink_denied", "Bundle file resolves outside its root.");
   }
 
   let handle: any;
@@ -436,19 +436,19 @@ async function readRegularFileNoFollow(
       && (before.mode & 0o777) !== expectedMode
     ) {
       fail(
-        "enterprise_offline_bundle_file_mode_invalid",
+        "single_node_offline_bundle_file_mode_invalid",
         "Bundle file mode is invalid.",
       );
     }
     if (before.nlink !== 1) {
-      fail("enterprise_offline_bundle_hardlink_denied", "Hard-linked bundle files are denied.");
+      fail("single_node_offline_bundle_hardlink_denied", "Hard-linked bundle files are denied.");
     }
     if (before.size > MAX_SINGLE_FILE_BYTES) {
-      fail("enterprise_offline_bundle_file_budget_exceeded", "Bundle file exceeds its size budget.");
+      fail("single_node_offline_bundle_file_budget_exceeded", "Bundle file exceeds its size budget.");
     }
     if (captureBytes && before.size > maxCaptureBytes) {
       fail(
-        "enterprise_offline_bundle_file_budget_exceeded",
+        "single_node_offline_bundle_file_budget_exceeded",
         "Bundle metadata exceeds its in-memory byte budget.",
       );
     }
@@ -469,7 +469,7 @@ async function readRegularFileNoFollow(
       bytesRead += chunk.length;
       if (bytesRead > before.size || bytesRead > MAX_SINGLE_FILE_BYTES) {
         fail(
-          "enterprise_offline_bundle_file_changed_during_read",
+          "single_node_offline_bundle_file_changed_during_read",
           "Bundle file exceeded its validated size while being read.",
         );
       }
@@ -487,7 +487,7 @@ async function readRegularFileNoFollow(
           );
           if (bytesWritten <= 0) {
             fail(
-              "enterprise_offline_bundle_output_write_failed",
+              "single_node_offline_bundle_output_write_failed",
               "Bundle output write did not make progress.",
             );
           }
@@ -505,7 +505,7 @@ async function readRegularFileNoFollow(
       || bytesRead !== after.size
     ) {
       fail(
-        "enterprise_offline_bundle_file_changed_during_read",
+        "single_node_offline_bundle_file_changed_during_read",
         "Bundle file changed while it was being read.",
       );
     }
@@ -520,7 +520,7 @@ async function readRegularFileNoFollow(
         || (destinationStat.mode & 0o777) !== 0o600
       ) {
         fail(
-          "enterprise_offline_bundle_output_write_failed",
+          "single_node_offline_bundle_output_write_failed",
           "Bundle output file is invalid.",
         );
       }
@@ -534,13 +534,13 @@ async function readRegularFileNoFollow(
       path: normalized,
     });
   } catch (error: any) {
-    if (error?.code?.startsWith?.("enterprise_offline_bundle_")) {
+    if (error?.code?.startsWith?.("single_node_offline_bundle_")) {
       throw error;
     }
     fail(
       destinationPath
-        ? "enterprise_offline_bundle_output_write_failed"
-        : "enterprise_offline_bundle_file_unavailable",
+        ? "single_node_offline_bundle_output_write_failed"
+        : "single_node_offline_bundle_file_unavailable",
       destinationPath
         ? "Bundle output could not be written."
         : "Bundle file is unavailable.",
@@ -554,7 +554,7 @@ async function readRegularFileNoFollow(
 async function collectRegularFiles(root?: any, { expectedMode }: Record<string, any> = {}) : Promise<any> {
   const rootStat: any = await fs.lstat(root);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
-    fail("enterprise_offline_bundle_oci_layout_invalid", "OCI layout root must be a real directory.");
+    fail("single_node_offline_bundle_oci_layout_invalid", "OCI layout root must be a real directory.");
   }
   const stack: any[] = [{ directory: root, depth: 0 }];
   const files: any[] = [];
@@ -563,7 +563,7 @@ async function collectRegularFiles(root?: any, { expectedMode }: Record<string, 
   while (stack.length > 0) {
     const { directory: current, depth } = stack.pop();
     if (depth > MAX_BUNDLE_DEPTH) {
-      fail("enterprise_offline_bundle_depth_budget_exceeded", "Bundle directory depth exceeds its budget.");
+      fail("single_node_offline_bundle_depth_budget_exceeded", "Bundle directory depth exceeds its budget.");
     }
     const entries: any[] = [];
     const directoryHandle: any = await fs.opendir(current);
@@ -571,7 +571,7 @@ async function collectRegularFiles(root?: any, { expectedMode }: Record<string, 
       totalEntries += 1;
       if (totalEntries > MAX_BUNDLE_ENTRIES) {
         fail(
-          "enterprise_offline_bundle_entry_count_exceeded",
+          "single_node_offline_bundle_entry_count_exceeded",
           "Bundle exceeds its directory-entry budget.",
         );
       }
@@ -583,7 +583,7 @@ async function collectRegularFiles(root?: any, { expectedMode }: Record<string, 
       if (entry.isDirectory()) {
         const directoryStat: any = await fs.lstat(absolutePath);
         if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-          fail("enterprise_offline_bundle_special_file", "Bundle directory entry is unsafe.");
+          fail("single_node_offline_bundle_special_file", "Bundle directory entry is unsafe.");
         }
         stack.push({ directory: absolutePath, depth: depth + 1 });
         continue;
@@ -592,7 +592,7 @@ async function collectRegularFiles(root?: any, { expectedMode }: Record<string, 
       const normalized: any = safeRelativePath(rel);
       if (!normalized) {
         fail(
-          "enterprise_offline_bundle_inventory_traversal_path",
+          "single_node_offline_bundle_inventory_traversal_path",
           "Encountered illegal file path.",
         );
       }
@@ -602,10 +602,10 @@ async function collectRegularFiles(root?: any, { expectedMode }: Record<string, 
       });
       totalBytes += inspected.size;
       if (totalBytes > MAX_TOTAL_BYTES) {
-        fail("enterprise_offline_bundle_total_budget_exceeded", "Bundle exceeds its total byte budget.");
+        fail("single_node_offline_bundle_total_budget_exceeded", "Bundle exceeds its total byte budget.");
       }
       if (files.length >= MAX_BUNDLE_FILES) {
-        fail("enterprise_offline_bundle_file_count_exceeded", "Bundle exceeds its file-count budget.");
+        fail("single_node_offline_bundle_file_count_exceeded", "Bundle exceeds its file-count budget.");
       }
       files.push({
         path: normalized,
@@ -628,7 +628,7 @@ function assertDescriptorShape(
   descriptor?: any,
   {
     allowedMediaTypes,
-    code = "enterprise_offline_bundle_oci_descriptor_invalid",
+    code = "single_node_offline_bundle_oci_descriptor_invalid",
   }: Record<string, any> = {},
 ) : any {
   if (
@@ -671,13 +671,13 @@ async function readVerifiedDescriptorBlob(
   );
   if (inspected.size !== descriptor.size) {
     fail(
-      options.sizeCode || "enterprise_offline_bundle_oci_descriptor_size",
+      options.sizeCode || "single_node_offline_bundle_oci_descriptor_size",
       "OCI descriptor size does not match its blob.",
     );
   }
   if (inspected.digest !== descriptor.digest) {
     fail(
-      options.digestCode || "enterprise_offline_bundle_oci_descriptor_digest",
+      options.digestCode || "single_node_offline_bundle_oci_descriptor_digest",
       "OCI descriptor digest does not match its blob.",
     );
   }
@@ -691,25 +691,25 @@ async function assertManifestForPlatform(ociLayoutPath?: any, platform?: any, de
   const [expectedOs, expectedArchitecture] = String(platform).split("/");
   if (
     expectedOs !== "linux"
-    || !ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.includes(platform)
+    || !SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.includes(platform)
     || descriptor.platform?.os !== expectedOs
     || descriptor.platform?.architecture !== expectedArchitecture
   ) {
     fail(
-      "enterprise_offline_bundle_oci_platform_invalid",
+      "single_node_offline_bundle_oci_platform_invalid",
       "Runtime manifest platform is invalid.",
     );
   }
 
   const manifestBlob: any = await readVerifiedDescriptorBlob(ociLayoutPath, descriptor, {
     allowedMediaTypes: new Set<any>([OCI_IMAGE_MANIFEST_MEDIA_TYPE]),
-    code: "enterprise_offline_bundle_oci_manifest_media_type",
-    sizeCode: "enterprise_offline_bundle_oci_manifest_size",
-    digestCode: "enterprise_offline_bundle_oci_manifest_digest",
+    code: "single_node_offline_bundle_oci_manifest_media_type",
+    sizeCode: "single_node_offline_bundle_oci_manifest_size",
+    digestCode: "single_node_offline_bundle_oci_manifest_digest",
   });
   const manifest: any = parseJsonText(
     manifestBlob.bytes.toString("utf8"),
-    "enterprise_offline_bundle_oci_manifest_invalid",
+    "single_node_offline_bundle_oci_manifest_invalid",
   );
   if (
     manifest.schemaVersion !== 2
@@ -718,24 +718,24 @@ async function assertManifestForPlatform(ociLayoutPath?: any, platform?: any, de
     || !Array.isArray(manifest.layers)
     || manifest.layers.length === 0
   ) {
-    fail("enterprise_offline_bundle_oci_manifest_invalid", "Runtime manifest is malformed.");
+    fail("single_node_offline_bundle_oci_manifest_invalid", "Runtime manifest is malformed.");
   }
   if (manifest.config.mediaType !== OCI_CONFIG_MEDIA_TYPE) {
     fail(
-      "enterprise_offline_bundle_oci_config_media_type",
+      "single_node_offline_bundle_oci_config_media_type",
       "Runtime config media type is malformed.",
     );
   }
 
   const configBlob: any = await readVerifiedDescriptorBlob(ociLayoutPath, manifest.config, {
     allowedMediaTypes: new Set<any>([OCI_CONFIG_MEDIA_TYPE]),
-    code: "enterprise_offline_bundle_oci_config_media_type",
-    sizeCode: "enterprise_offline_bundle_oci_config_size",
-    digestCode: "enterprise_offline_bundle_oci_config_digest",
+    code: "single_node_offline_bundle_oci_config_media_type",
+    sizeCode: "single_node_offline_bundle_oci_config_size",
+    digestCode: "single_node_offline_bundle_oci_config_digest",
   });
   const config: any = parseJsonText(
     configBlob.bytes.toString("utf8"),
-    "enterprise_offline_bundle_oci_config_invalid",
+    "single_node_offline_bundle_oci_config_invalid",
   );
   if (
     config.os !== expectedOs
@@ -749,7 +749,7 @@ async function assertManifestForPlatform(ociLayoutPath?: any, platform?: any, de
     )
   ) {
     fail(
-      "enterprise_offline_bundle_oci_config_platform_mismatch",
+      "single_node_offline_bundle_oci_config_platform_mismatch",
       "Runtime config platform does not match its index descriptor.",
     );
   }
@@ -761,9 +761,9 @@ async function assertManifestForPlatform(ociLayoutPath?: any, platform?: any, de
   for (const layer of manifest.layers) {
     const layerBlob: any = await readVerifiedDescriptorBlob(ociLayoutPath, layer, {
       allowedMediaTypes: OCI_LAYER_MEDIA_TYPES,
-      code: "enterprise_offline_bundle_oci_layer_media_type",
-      sizeCode: "enterprise_offline_bundle_oci_layer_size",
-      digestCode: "enterprise_offline_bundle_oci_layer_digest",
+      code: "single_node_offline_bundle_oci_layer_media_type",
+      sizeCode: "single_node_offline_bundle_oci_layer_size",
+      digestCode: "single_node_offline_bundle_oci_layer_digest",
       captureBytes: false,
     });
     reachablePaths.add(layerBlob.relativePath);
@@ -778,13 +778,13 @@ async function assertAttestationManifest(
 ) : Promise<any> {
   const attestationBlob: any = await readVerifiedDescriptorBlob(ociLayoutPath, descriptor, {
     allowedMediaTypes: new Set<any>([OCI_IMAGE_MANIFEST_MEDIA_TYPE]),
-    code: "enterprise_offline_bundle_attestation_media_type",
-    sizeCode: "enterprise_offline_bundle_attestation_size",
-    digestCode: "enterprise_offline_bundle_attestation_digest",
+    code: "single_node_offline_bundle_attestation_media_type",
+    sizeCode: "single_node_offline_bundle_attestation_size",
+    digestCode: "single_node_offline_bundle_attestation_digest",
   });
   const manifest: any = parseJsonText(
     attestationBlob.bytes.toString("utf8"),
-    "enterprise_offline_bundle_attestation_invalid",
+    "single_node_offline_bundle_attestation_invalid",
   );
   if (
     manifest.schemaVersion !== 2
@@ -794,7 +794,7 @@ async function assertAttestationManifest(
     || manifest.layers.length === 0
   ) {
     fail(
-      "enterprise_offline_bundle_attestation_invalid",
+      "single_node_offline_bundle_attestation_invalid",
       "Attestation manifest is malformed.",
     );
   }
@@ -805,15 +805,15 @@ async function assertAttestationManifest(
     || manifest.subject.mediaType !== runtimeDescriptor.mediaType
   ) {
     fail(
-      "enterprise_offline_bundle_attestation_binding",
+      "single_node_offline_bundle_attestation_binding",
       "Attestation subject is mismatched.",
     );
   }
 
   const configBlob: any = await readVerifiedDescriptorBlob(ociLayoutPath, manifest.config, {
-    code: "enterprise_offline_bundle_attestation_config_invalid",
-    sizeCode: "enterprise_offline_bundle_attestation_config_size",
-    digestCode: "enterprise_offline_bundle_attestation_config_digest",
+    code: "single_node_offline_bundle_attestation_config_invalid",
+    sizeCode: "single_node_offline_bundle_attestation_config_size",
+    digestCode: "single_node_offline_bundle_attestation_config_digest",
     captureBytes: false,
   });
   const reachablePaths: any = new Set<any>([
@@ -822,9 +822,9 @@ async function assertAttestationManifest(
   ]);
   for (const layer of manifest.layers) {
     const layerBlob: any = await readVerifiedDescriptorBlob(ociLayoutPath, layer, {
-      code: "enterprise_offline_bundle_attestation_layer_invalid",
-      sizeCode: "enterprise_offline_bundle_attestation_layer_size",
-      digestCode: "enterprise_offline_bundle_attestation_layer_digest",
+      code: "single_node_offline_bundle_attestation_layer_invalid",
+      sizeCode: "single_node_offline_bundle_attestation_layer_size",
+      digestCode: "single_node_offline_bundle_attestation_layer_digest",
       captureBytes: false,
     });
     reachablePaths.add(layerBlob.relativePath);
@@ -841,7 +841,7 @@ function normalizeReleaseImageEvidence(releaseImageEvidence?: any) : any {
     || typeof releaseImageEvidence.reused !== "boolean"
   ) {
     fail(
-      "enterprise_offline_bundle_release_evidence_invalid",
+      "single_node_offline_bundle_release_evidence_invalid",
       "Release image evidence is invalid.",
     );
   }
@@ -859,7 +859,7 @@ function normalizeReleaseImageEvidence(releaseImageEvidence?: any) : any {
   ]) {
     if (typeof releaseImageEvidence[key] !== "string") {
       fail(
-        "enterprise_offline_bundle_release_evidence_invalid",
+        "single_node_offline_bundle_release_evidence_invalid",
         "Release image evidence text is invalid.",
       );
     }
@@ -872,13 +872,13 @@ function normalizeReleaseImageEvidence(releaseImageEvidence?: any) : any {
       || totalBytes > MAX_RELEASE_EVIDENCE_BYTES
     ) {
       fail(
-        "enterprise_offline_bundle_release_evidence_invalid",
+        "single_node_offline_bundle_release_evidence_invalid",
         "Release image evidence exceeds its byte budget.",
       );
     }
     parseJsonText(
       value,
-      "enterprise_offline_bundle_release_evidence_invalid",
+      "single_node_offline_bundle_release_evidence_invalid",
     );
     normalized[key] = value;
   }
@@ -892,36 +892,36 @@ function validateReleaseAuthority({
 }: Record<string, any>) : any {
   const candidate: any = validateReleaseCandidateIdentity(sourceCandidate);
   if (!isObject(releaseImageAuthority)) {
-    fail("enterprise_offline_bundle_release_authority_invalid", "Release authority is invalid.");
+    fail("single_node_offline_bundle_release_authority_invalid", "Release authority is invalid.");
   }
   if (!exactKeys(releaseImageAuthority, RELEASE_AUTHORITY_KEYS)) {
     fail(
-      "enterprise_offline_bundle_release_authority_invalid",
+      "single_node_offline_bundle_release_authority_invalid",
       "Release authority keys are invalid.",
     );
   }
   if (releaseImageAuthority.schemaVersion !== RELEASE_IMAGE_AUTHORITY_SCHEMA) {
     fail(
-      "enterprise_offline_bundle_release_authority_schema",
+      "single_node_offline_bundle_release_authority_schema",
       "Release authority schema is invalid.",
     );
   }
   if (releaseImageAuthority.candidateDigest !== candidate.candidate_digest) {
     fail(
-      "enterprise_offline_bundle_candidate_mismatch",
+      "single_node_offline_bundle_candidate_mismatch",
       "Release authority does not bind to source candidate.",
     );
   }
   if (releaseImageAuthority.sourceCommit !== candidate.source_revision) {
     fail(
-      "enterprise_offline_bundle_source_commit_mismatch",
+      "single_node_offline_bundle_source_commit_mismatch",
       "Release authority source commit does not match its candidate.",
     );
   }
   requireString(
     releaseImageAuthority.image,
     IMAGE_NAME_PATTERN,
-    "enterprise_offline_bundle_release_authority_image",
+    "single_node_offline_bundle_release_authority_image",
     "Release authority image name is invalid.",
   );
   for (const key of [
@@ -935,31 +935,31 @@ function validateReleaseAuthority({
     requireString(
       releaseImageAuthority[key],
       /^[^\u0000-\u001f\u007f]{1,512}$/u,
-      "enterprise_offline_bundle_release_authority_invalid",
+      "single_node_offline_bundle_release_authority_invalid",
       "Release authority text field is invalid.",
     );
   }
   const platforms: any = releaseImageAuthority.platforms;
-  if (JSON.stringify(platforms) !== JSON.stringify(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS)) {
+  if (JSON.stringify(platforms) !== JSON.stringify(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS)) {
     fail(
-      "enterprise_offline_bundle_platform_mismatch",
+      "single_node_offline_bundle_platform_mismatch",
       "Release authority platform set is invalid.",
     );
   }
   const imageDigest: any = requireString(
     releaseImageAuthority.digest,
     DIGEST_WITH_ALGO_PATTERN,
-    "enterprise_offline_bundle_release_authority_digest",
+    "single_node_offline_bundle_release_authority_digest",
     "Release authority image digest is invalid.",
   );
   if (
     !Array.isArray(releaseImageAuthority.platformEvidence)
-    || releaseImageAuthority.platformEvidence.length !== ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length
+    || releaseImageAuthority.platformEvidence.length !== SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length
     || releaseImageAuthority.provenanceVerified !== true
     || releaseImageAuthority.sbomVerified !== true
   ) {
     fail(
-      "enterprise_offline_bundle_release_authority_evidence",
+      "single_node_offline_bundle_release_authority_evidence",
       "Release authority evidence is incomplete.",
     );
   }
@@ -972,7 +972,7 @@ function validateReleaseAuthority({
     requireString(
       releaseImageAuthority[key],
       DIGEST_PATTERN,
-      "enterprise_offline_bundle_release_authority_evidence",
+      "single_node_offline_bundle_release_authority_evidence",
       "Release authority evidence digest is invalid.",
     );
   }
@@ -997,13 +997,13 @@ function validateReleaseAuthority({
     });
   } catch {
     fail(
-      "enterprise_offline_bundle_release_evidence_invalid",
+      "single_node_offline_bundle_release_evidence_invalid",
       "Release image evidence cannot rebuild its authority.",
     );
   }
   if (canonicalJson(rebuiltAuthority) !== canonicalJson(releaseImageAuthority)) {
     fail(
-      "enterprise_offline_bundle_release_authority_evidence",
+      "single_node_offline_bundle_release_authority_evidence",
       "Release image evidence does not reproduce its authority.",
     );
   }
@@ -1026,10 +1026,10 @@ function buildDescriptorClosureFromIndex(index?: any) : any {
   if (
     !isObject(index)
     || !Array.isArray(index.manifests)
-    || index.manifests.length !== ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length * 2
+    || index.manifests.length !== SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length * 2
   ) {
     fail(
-      "enterprise_offline_bundle_oci_manifest_set_mismatch",
+      "single_node_offline_bundle_oci_manifest_set_mismatch",
       "OCI index must contain the exact runtime and attestation descriptor set.",
     );
   }
@@ -1038,7 +1038,7 @@ function buildDescriptorClosureFromIndex(index?: any) : any {
   for (const entry of index.manifests) {
     if (!isObject(entry)) {
       fail(
-        "enterprise_offline_bundle_oci_manifest_invalid",
+        "single_node_offline_bundle_oci_manifest_invalid",
         "OCI index descriptor is malformed.",
       );
     }
@@ -1052,7 +1052,7 @@ function buildDescriptorClosureFromIndex(index?: any) : any {
       || entry.size <= 0
     ) {
       fail(
-        "enterprise_offline_bundle_oci_manifest_invalid",
+        "single_node_offline_bundle_oci_manifest_invalid",
         "OCI index descriptor is malformed.",
       );
     }
@@ -1062,46 +1062,46 @@ function buildDescriptorClosureFromIndex(index?: any) : any {
       const annotations: any = isObject(entry.annotations) ? entry.annotations : {};
       if (annotations["vnd.docker.reference.type"] !== "attestation-manifest") {
         fail(
-          "enterprise_offline_bundle_oci_attestation_invalid",
+          "single_node_offline_bundle_oci_attestation_invalid",
           "Attestation descriptor annotations are missing.",
         );
       }
       const subjectDigest: any = String(annotations["vnd.docker.reference.digest"] || "");
       if (!DIGEST_WITH_ALGO_PATTERN.test(subjectDigest)) {
         fail(
-          "enterprise_offline_bundle_oci_attestation_subject",
+          "single_node_offline_bundle_oci_attestation_subject",
           "Attestation subject digest invalid.",
         );
       }
       if (attestBySubject.has(subjectDigest)) {
         fail(
-          "enterprise_offline_bundle_oci_attestation_invalid",
+          "single_node_offline_bundle_oci_attestation_invalid",
           "Attestation subject is duplicated.",
         );
       }
       attestBySubject.set(subjectDigest, entry);
       continue;
     }
-    if (!ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.includes(platform)) {
+    if (!SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.includes(platform)) {
       fail(
-        "enterprise_offline_bundle_oci_platform_set_mismatch",
+        "single_node_offline_bundle_oci_platform_set_mismatch",
         "OCI index contains an unsupported runtime platform.",
       );
     }
     if (runtimeMap.has(platform)) {
       fail(
-        "enterprise_offline_bundle_oci_platform_set_mismatch",
+        "single_node_offline_bundle_oci_platform_set_mismatch",
         "OCI index contains a duplicate runtime platform.",
       );
     }
     runtimeMap.set(platform, entry);
   }
   if (
-    runtimeMap.size !== ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length
-    || attestBySubject.size !== ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length
+    runtimeMap.size !== SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length
+    || attestBySubject.size !== SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length
   ) {
     fail(
-      "enterprise_offline_bundle_oci_manifest_set_mismatch",
+      "single_node_offline_bundle_oci_manifest_set_mismatch",
       "OCI index descriptor coverage is incomplete.",
     );
   }
@@ -1118,23 +1118,23 @@ async function inspectAuthoritativeOciLayout({
   try {
     rootStat = await fs.lstat(ociLayoutPath);
   } catch {
-    fail("enterprise_offline_bundle_oci_layout_invalid", "OCI layout root is unavailable.");
+    fail("single_node_offline_bundle_oci_layout_invalid", "OCI layout root is unavailable.");
   }
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
-    fail("enterprise_offline_bundle_oci_layout_invalid", "OCI layout root must be a real directory.");
+    fail("single_node_offline_bundle_oci_layout_invalid", "OCI layout root must be a real directory.");
   }
 
   const layoutFile: any = await readRegularFileNoFollow(ociLayoutPath, "oci-layout");
   const layout: any = parseJsonText(
     layoutFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_oci_layout_invalid",
+    "single_node_offline_bundle_oci_layout_invalid",
   );
   if (
     !exactKeys(layout, ["imageLayoutVersion"])
     || layout.imageLayoutVersion !== "1.0.0"
   ) {
     fail(
-      "enterprise_offline_bundle_oci_layout_invalid",
+      "single_node_offline_bundle_oci_layout_invalid",
       "OCI layout marker is invalid.",
     );
   }
@@ -1142,24 +1142,24 @@ async function inspectAuthoritativeOciLayout({
   const indexFile: any = await readRegularFileNoFollow(ociLayoutPath, "index.json");
   if (prefixedSha256(indexFile.bytes) !== imageDigest) {
     fail(
-      "enterprise_offline_bundle_image_digest_mismatch",
+      "single_node_offline_bundle_image_digest_mismatch",
       "OCI index digest is not authoritative.",
     );
   }
   const indexText: any = indexFile.bytes.toString("utf8");
   if (sha256(indexText.trim()) !== releaseImageAuthority.manifestSha256) {
     fail(
-      "enterprise_offline_bundle_release_authority_evidence",
+      "single_node_offline_bundle_release_authority_evidence",
       "OCI index does not match the release authority evidence.",
     );
   }
   const index: any = parseJsonText(
     indexText,
-    "enterprise_offline_bundle_oci_index_invalid",
+    "single_node_offline_bundle_oci_index_invalid",
   );
   if (index.mediaType !== OCI_IMAGE_INDEX_MEDIA_TYPE || index.schemaVersion !== 2) {
     fail(
-      "enterprise_offline_bundle_oci_index_invalid",
+      "single_node_offline_bundle_oci_index_invalid",
       "OCI index mediaType or schemaVersion is invalid.",
     );
   }
@@ -1169,11 +1169,11 @@ async function inspectAuthoritativeOciLayout({
   for (const evidence of releaseImageAuthority.platformEvidence) {
     if (
       !isObject(evidence)
-      || !ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.includes(evidence.platform)
+      || !SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.includes(evidence.platform)
       || evidenceByPlatform.has(evidence.platform)
     ) {
       fail(
-        "enterprise_offline_bundle_release_authority_evidence",
+        "single_node_offline_bundle_release_authority_evidence",
         "Release authority platform evidence is invalid.",
       );
     }
@@ -1182,11 +1182,11 @@ async function inspectAuthoritativeOciLayout({
 
   const reachablePaths: any = new Set<any>(["oci-layout", "index.json"]);
   const descriptorClosure: any[] = [];
-  for (const platform of ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS) {
+  for (const platform of SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS) {
     const descriptor: any = runtimeMap.get(platform);
     if (!descriptor) {
       fail(
-        "enterprise_offline_bundle_oci_platform_missing",
+        "single_node_offline_bundle_oci_platform_missing",
         "Runtime platform manifest is missing.",
       );
     }
@@ -1202,7 +1202,7 @@ async function inspectAuthoritativeOciLayout({
     const attestation: any = attestBySubject.get(descriptor.digest);
     if (!attestation) {
       fail(
-        "enterprise_offline_bundle_attestation_missing",
+        "single_node_offline_bundle_attestation_missing",
         "Runtime attestation manifest is missing.",
       );
     }
@@ -1223,7 +1223,7 @@ async function inspectAuthoritativeOciLayout({
       || !exactKeys(evidence, ["platform", "subjectDigest", "attestationDigest"])
     ) {
       fail(
-        "enterprise_offline_bundle_release_authority_evidence",
+        "single_node_offline_bundle_release_authority_evidence",
         "Release authority platform evidence does not match the OCI closure.",
       );
     }
@@ -1236,9 +1236,9 @@ async function inspectAuthoritativeOciLayout({
     });
   }
 
-  if (evidenceByPlatform.size !== ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length) {
+  if (evidenceByPlatform.size !== SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length) {
     fail(
-      "enterprise_offline_bundle_release_authority_evidence",
+      "single_node_offline_bundle_release_authority_evidence",
       "Release authority platform evidence coverage is incomplete.",
     );
   }
@@ -1251,7 +1251,7 @@ async function inspectAuthoritativeOciLayout({
     || actualPaths.some((entry?: any, indexValue?: any) : any => entry !== expectedPaths[indexValue])
   ) {
     fail(
-      "enterprise_offline_bundle_unexpected_file",
+      "single_node_offline_bundle_unexpected_file",
       "OCI layout must contain exactly the reachable descriptor closure.",
     );
   }
@@ -1263,7 +1263,7 @@ async function inspectAuthoritativeOciLayout({
   });
 }
 
-export async function buildEnterpriseOfflineBundleInventory({
+export async function buildSingleNodeOfflineBundleInventory({
   sourceCandidate,
   releaseImageAuthority,
   releaseImageEvidence,
@@ -1275,7 +1275,7 @@ export async function buildEnterpriseOfflineBundleInventory({
     releaseImageEvidence,
   });
   if (typeof ociLayoutPath !== "string" || ociLayoutPath.trim() === "") {
-    fail("enterprise_offline_bundle_oci_layout_invalid", "OCI layout path is required.");
+    fail("single_node_offline_bundle_oci_layout_invalid", "OCI layout path is required.");
   }
 
   const inspectedLayout: any = await inspectAuthoritativeOciLayout({
@@ -1285,10 +1285,10 @@ export async function buildEnterpriseOfflineBundleInventory({
   });
   const normalizedFiles: any = validateInventoryPaths(inspectedLayout.files);
   const inventory: Readonly<Record<string, any>> = Object.freeze({
-    schema_version: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+    schema_version: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
     candidate_digest: candidate.candidate_digest,
     image_digest: imageDigest,
-    platforms: [...ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS],
+    platforms: [...SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS],
     compose: {
       image: `${releaseImageAuthority.image}@${imageDigest}`,
       pull_policy: "never",
@@ -1304,12 +1304,12 @@ export async function buildEnterpriseOfflineBundleInventory({
     inventory_digest,
   });
   if (!DIGEST_PATTERN.test(finalInventory.inventory_digest)) {
-    fail("enterprise_offline_bundle_inventory_digest_invalid", "Inventory digest is malformed.");
+    fail("single_node_offline_bundle_inventory_digest_invalid", "Inventory digest is malformed.");
   }
   return finalInventory;
 }
 
-export async function validateEnterpriseOfflineBundleInventory({
+export async function validateSingleNodeOfflineBundleInventory({
   inventory,
   ociLayoutPath,
   sourceCandidate,
@@ -1317,47 +1317,47 @@ export async function validateEnterpriseOfflineBundleInventory({
   releaseImageEvidence,
 }: Record<string, any> = {}) : Promise<any> {
   if (!isObject(inventory)) {
-    fail("enterprise_offline_bundle_inventory_invalid", "Inventory is invalid.");
+    fail("single_node_offline_bundle_inventory_invalid", "Inventory is invalid.");
   }
   const files: any = validateInventoryPaths(inventory.files || []);
   for (const entry of files) {
     if (entry.symlink === true) {
-      fail("enterprise_offline_bundle_symlink_denied", "Inventory declares a symlink.");
+      fail("single_node_offline_bundle_symlink_denied", "Inventory declares a symlink.");
     }
     if (typeof entry.mode === "number" && (entry.mode & 0o111) !== 0) {
-      fail("enterprise_offline_bundle_executable_file", "Inventory declares an executable file.");
+      fail("single_node_offline_bundle_executable_file", "Inventory declares an executable file.");
     }
   }
   const actualFiles: any = await collectRegularFiles(ociLayoutPath);
   if (actualFiles.length !== files.length) {
-    fail("enterprise_offline_bundle_unexpected_file", "Inventory file count mismatch.");
+    fail("single_node_offline_bundle_unexpected_file", "Inventory file count mismatch.");
   }
   if (!exactKeys(inventory, INVENTORY_KEYS)) {
-    fail("enterprise_offline_bundle_inventory_invalid", "Inventory keys are invalid.");
+    fail("single_node_offline_bundle_inventory_invalid", "Inventory keys are invalid.");
   }
-  if (inventory.schema_version !== ENTERPRISE_OFFLINE_BUNDLE_SCHEMA) {
-    fail("enterprise_offline_bundle_schema_invalid", "Inventory schema is invalid.");
+  if (inventory.schema_version !== SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA) {
+    fail("single_node_offline_bundle_schema_invalid", "Inventory schema is invalid.");
   }
   if (
     JSON.stringify(inventory.platforms)
-    !== JSON.stringify(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS)
+    !== JSON.stringify(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS)
   ) {
     fail(
-      "enterprise_offline_bundle_platform_mismatch",
+      "single_node_offline_bundle_platform_mismatch",
       "Inventory platform set is invalid.",
     );
   }
   for (const entry of files) {
     if (!exactKeys(entry, ["path", "digest", "size", "mode"])) {
       fail(
-        "enterprise_offline_bundle_file_entry_invalid",
+        "single_node_offline_bundle_file_entry_invalid",
         "Inventory file entry keys are invalid.",
       );
     }
     requireString(
       entry.digest,
       DIGEST_WITH_ALGO_PATTERN,
-      "enterprise_offline_bundle_file_digest_invalid",
+      "single_node_offline_bundle_file_digest_invalid",
       "Inventory file digest is invalid.",
     );
     if (
@@ -1366,7 +1366,7 @@ export async function validateEnterpriseOfflineBundleInventory({
       || entry.size > MAX_SINGLE_FILE_BYTES
     ) {
       fail(
-        "enterprise_offline_bundle_file_size_mismatch",
+        "single_node_offline_bundle_file_size_mismatch",
         "Inventory file size is invalid.",
       );
     }
@@ -1378,12 +1378,12 @@ export async function validateEnterpriseOfflineBundleInventory({
   });
   if (candidate.candidate_digest !== inventory.candidate_digest) {
     fail(
-      "enterprise_offline_bundle_candidate_mismatch",
+      "single_node_offline_bundle_candidate_mismatch",
       "Inventory candidate digest is not authoritative.",
     );
   }
   if (imageDigest !== inventory.image_digest) {
-    fail("enterprise_offline_bundle_image_digest_mismatch", "Inventory image digest mismatch.");
+    fail("single_node_offline_bundle_image_digest_mismatch", "Inventory image digest mismatch.");
   }
 
   const expectedComposeImage: any = `${releaseImageAuthority.image}@${imageDigest}`;
@@ -1403,7 +1403,7 @@ export async function validateEnterpriseOfflineBundleInventory({
     !Array.isArray(inventory.compose.descriptor_closure) ||
     inventory.compose.optional_service !== false
   ) {
-    fail("enterprise_offline_bundle_compose_invalid", "Inventory compose shape is invalid.");
+    fail("single_node_offline_bundle_compose_invalid", "Inventory compose shape is invalid.");
   }
 
   const inspectedLayout: any = await inspectAuthoritativeOciLayout({
@@ -1416,7 +1416,7 @@ export async function validateEnterpriseOfflineBundleInventory({
     canonicalJson(inspectedLayout.descriptorClosure)
     !== canonicalJson(inventory.compose.descriptor_closure)
   ) {
-    fail("enterprise_offline_bundle_descriptor_closure_mismatch", "Descriptor closure is not authoritative.");
+    fail("single_node_offline_bundle_descriptor_closure_mismatch", "Descriptor closure is not authoritative.");
   }
 
   const actualMap: any = new Map<any, any>();
@@ -1424,7 +1424,7 @@ export async function validateEnterpriseOfflineBundleInventory({
   for (const entry of actualFiles) {
     const lower: any = entry.path.toLowerCase();
     if (canonicalSet.has(lower)) {
-      fail("enterprise_offline_bundle_case_collision", "OCI filesystem contains case collision.");
+      fail("single_node_offline_bundle_case_collision", "OCI filesystem contains case collision.");
     }
     canonicalSet.add(lower);
     actualMap.set(entry.path, entry);
@@ -1433,16 +1433,16 @@ export async function validateEnterpriseOfflineBundleInventory({
   for (const entry of files) {
     const actual: any = actualMap.get(entry.path);
     if (!actual) {
-      fail("enterprise_offline_bundle_unexpected_file", "Inventory references missing file.");
+      fail("single_node_offline_bundle_unexpected_file", "Inventory references missing file.");
     }
     if (entry.size !== actual.size) {
-      fail("enterprise_offline_bundle_file_size_mismatch", "File size mismatch.");
+      fail("single_node_offline_bundle_file_size_mismatch", "File size mismatch.");
     }
     if (actual.digest !== entry.digest) {
-      fail("enterprise_offline_bundle_file_digest_invalid", "File digest mismatch.");
+      fail("single_node_offline_bundle_file_digest_invalid", "File digest mismatch.");
     }
     if (typeof entry.mode !== "number" || (entry.mode & 0o111)) {
-      fail("enterprise_offline_bundle_executable_file", "Inventory file is invalid.");
+      fail("single_node_offline_bundle_executable_file", "Inventory file is invalid.");
     }
   }
 
@@ -1455,7 +1455,7 @@ export async function validateEnterpriseOfflineBundleInventory({
     files,
   };
   if (computeInventoryDigest(expectedInventory) !== inventory.inventory_digest) {
-    fail("enterprise_offline_bundle_inventory_digest_invalid", "Inventory digest mismatch.");
+    fail("single_node_offline_bundle_inventory_digest_invalid", "Inventory digest mismatch.");
   }
 
   return Object.freeze({ ok: true, inventory_digest: inventory.inventory_digest });
@@ -1478,7 +1478,7 @@ async function copyOciFilesToOutput({ sourceRoot, outputRoot, files }: Record<st
       || source.digest !== entry.digest
     ) {
       fail(
-        "enterprise_offline_bundle_source_changed",
+        "single_node_offline_bundle_source_changed",
         "OCI source changed after inventory validation.",
       );
     }
@@ -1513,15 +1513,15 @@ function buildAuthorities(
 ) : any {
   const sourceCandidateSnapshot: any = snapshotJson(
     sourceCandidate,
-    "enterprise_offline_bundle_candidate_invalid",
+    "single_node_offline_bundle_candidate_invalid",
   );
   const releaseAuthoritySnapshot: any = snapshotJson(
     releaseImageAuthority,
-    "enterprise_offline_bundle_release_authority_invalid",
+    "single_node_offline_bundle_release_authority_invalid",
   );
   const releaseEvidenceSnapshot: any = snapshotJson(
     normalizeReleaseImageEvidence(releaseImageEvidence),
-    "enterprise_offline_bundle_release_evidence_invalid",
+    "single_node_offline_bundle_release_evidence_invalid",
   );
   const authorities: Record<string, any> = {
     source_candidate: sourceCandidateSnapshot,
@@ -1535,7 +1535,7 @@ function buildAuthorities(
 
 function buildPayloadDigest(inventory?: any, compose?: any, authorities?: any) : any {
   return `sha256:${sha256(canonicalJson({
-    schema_version: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+    schema_version: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
     candidate_digest: inventory.candidate_digest,
     image_digest: inventory.image_digest,
     platforms: [...inventory.platforms],
@@ -1555,14 +1555,14 @@ function validateSignerResponse({
 }: Record<string, any>) : any {
   if (!isObject(signature)) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer returned an invalid response.",
     );
   }
   requireString(
     signature.keyId,
     KEY_ID_PATTERN,
-    "enterprise_offline_bundle_signature_invalid",
+    "single_node_offline_bundle_signature_invalid",
     "Signer key id is invalid.",
   );
   if (
@@ -1574,7 +1574,7 @@ function validateSignerResponse({
     || signature.contextDigest !== contextDigest
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer response does not match its request.",
     );
   }
@@ -1584,7 +1584,7 @@ function validateSignerResponse({
     || Buffer.from(signature.signature, "base64url").length !== 64
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer response signature is invalid.",
     );
   }
@@ -1605,7 +1605,7 @@ function validateSignerResponse({
     || receipt.secretRevision < 1
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer receipt is invalid.",
     );
   }
@@ -1632,7 +1632,7 @@ function validateSignerResponse({
       !== canonicalJson(expectedSignedEnvelope)
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer response envelope is invalid.",
     );
   }
@@ -1655,7 +1655,7 @@ function verifySignerResponseWithExternalTrust(
     : undefined;
   if (!isTrustedEd25519PublicJwk(keyJwk, signature.keyId)) {
     fail(
-      "enterprise_offline_bundle_signer_trust_missing",
+      "single_node_offline_bundle_signer_trust_missing",
       "Signer response requires an external public trust anchor.",
     );
   }
@@ -1664,7 +1664,7 @@ function verifySignerResponseWithExternalTrust(
     publicKey = crypto.createPublicKey({ key: keyJwk, format: "jwk" });
   } catch {
     fail(
-      "enterprise_offline_bundle_signer_trust_missing",
+      "single_node_offline_bundle_signer_trust_missing",
       "Signer response trust anchor is invalid.",
     );
   }
@@ -1679,13 +1679,13 @@ function verifySignerResponseWithExternalTrust(
     );
   } catch {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer response verification failed.",
     );
   }
   if (!valid) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signer response signature is invalid.",
     );
   }
@@ -1700,7 +1700,7 @@ async function prepareAtomicOutput(outputRoot?: any) : Promise<any> {
     || !parentStat.isDirectory()
   ) {
     fail(
-      "enterprise_offline_bundle_output_root_invalid",
+      "single_node_offline_bundle_output_root_invalid",
       "Output parent must be a real directory.",
     );
   }
@@ -1711,23 +1711,23 @@ async function prepareAtomicOutput(outputRoot?: any) : Promise<any> {
     targetExists = true;
     if (targetStat.isSymbolicLink() || !targetStat.isDirectory()) {
       fail(
-        "enterprise_offline_bundle_output_root_invalid",
+        "single_node_offline_bundle_output_root_invalid",
         "Output root must be a real directory.",
       );
     }
     if ((await fs.readdir(target)).length !== 0) {
       fail(
-        "enterprise_offline_bundle_output_not_empty",
+        "single_node_offline_bundle_output_not_empty",
         "Output root must be empty.",
       );
     }
   } catch (error: any) {
-    if (error?.code?.startsWith?.("enterprise_offline_bundle_")) {
+    if (error?.code?.startsWith?.("single_node_offline_bundle_")) {
       throw error;
     }
     if (error?.code !== "ENOENT") {
       fail(
-        "enterprise_offline_bundle_output_root_invalid",
+        "single_node_offline_bundle_output_root_invalid",
         "Output root is unavailable.",
       );
     }
@@ -1750,7 +1750,7 @@ async function commitAtomicOutput({ target, targetExists, stage }: Record<string
         || (await fs.readdir(target)).length !== 0
       ) {
         fail(
-          "enterprise_offline_bundle_output_root_changed",
+          "single_node_offline_bundle_output_root_changed",
           "Output root changed during assembly.",
         );
       }
@@ -1758,11 +1758,11 @@ async function commitAtomicOutput({ target, targetExists, stage }: Record<string
     }
     await fs.rename(stage, target);
   } catch (error: any) {
-    if (error?.code?.startsWith?.("enterprise_offline_bundle_")) {
+    if (error?.code?.startsWith?.("single_node_offline_bundle_")) {
       throw error;
     }
     fail(
-      "enterprise_offline_bundle_output_commit_failed",
+      "single_node_offline_bundle_output_commit_failed",
       "Offline bundle output could not be committed atomically.",
     );
   }
@@ -1789,16 +1789,16 @@ async function writeBytesExclusive(filePath?: any, value?: any) : Promise<any> {
       || (stat.mode & 0o777) !== 0o600
     ) {
       fail(
-        "enterprise_offline_bundle_output_write_failed",
+        "single_node_offline_bundle_output_write_failed",
         "Bundle metadata output is invalid.",
       );
     }
   } catch (error: any) {
-    if (error?.code?.startsWith?.("enterprise_offline_bundle_")) {
+    if (error?.code?.startsWith?.("single_node_offline_bundle_")) {
       throw error;
     }
     fail(
-      "enterprise_offline_bundle_output_write_failed",
+      "single_node_offline_bundle_output_write_failed",
       "Bundle metadata output could not be written.",
     );
   } finally {
@@ -1817,7 +1817,7 @@ async function writeTextExclusive(filePath?: any, value?: any) : Promise<any> {
   await writeBytesExclusive(filePath, value);
 }
 
-export async function assembleEnterpriseOfflineBundle({
+export async function assembleSingleNodeOfflineBundle({
   sourceCandidate,
   releaseImageAuthority,
   releaseImageEvidence,
@@ -1828,31 +1828,31 @@ export async function assembleEnterpriseOfflineBundle({
   outputRoot,
 }: Record<string, any> = {}) : Promise<any> {
   if (typeof artifactSigner?.sign !== "function") {
-    fail("enterprise_offline_bundle_signer_missing", "artifactSigner.sign is required.");
+    fail("single_node_offline_bundle_signer_missing", "artifactSigner.sign is required.");
   }
   requireString(
     artifactSigner.keyId,
     KEY_ID_PATTERN,
-    "enterprise_offline_bundle_signer_missing",
+    "single_node_offline_bundle_signer_missing",
     "artifactSigner.keyId is required.",
   );
   if (typeof outputRoot !== "string" || outputRoot.trim() === "") {
-    fail("enterprise_offline_bundle_output_root_missing", "outputRoot is required.");
+    fail("single_node_offline_bundle_output_root_missing", "outputRoot is required.");
   }
   if (optionalServiceEnabled !== false) {
     fail(
-      "enterprise_offline_bundle_optional_service_denied",
-      "Optional services are disabled in the enterprise single-node bundle.",
+      "single_node_offline_bundle_optional_service_denied",
+      "Optional services are disabled in the single-node bundle.",
     );
   }
 
-  const inventory: any = await buildEnterpriseOfflineBundleInventory({
+  const inventory: any = await buildSingleNodeOfflineBundleInventory({
     sourceCandidate,
     releaseImageAuthority,
     releaseImageEvidence,
     ociLayoutPath,
   });
-  await validateEnterpriseOfflineBundleInventory({
+  await validateSingleNodeOfflineBundleInventory({
     inventory,
     ociLayoutPath,
     sourceCandidate,
@@ -1862,7 +1862,7 @@ export async function assembleEnterpriseOfflineBundle({
 
   const compose: any = snapshotJson(
     inventory.compose,
-    "enterprise_offline_bundle_compose_invalid",
+    "single_node_offline_bundle_compose_invalid",
   );
 
   const authorities: any = buildAuthorities(
@@ -1872,7 +1872,7 @@ export async function assembleEnterpriseOfflineBundle({
   );
   const payloadDigest: any = buildPayloadDigest(inventory, compose, authorities);
   const context: Record<string, any> = {
-    schema: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+    schema: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
     inventory_digest: inventory.inventory_digest,
     compose,
     authority_digests: {
@@ -1909,7 +1909,7 @@ export async function assembleEnterpriseOfflineBundle({
   safeSignature.receipt = validatedSignerResponse.safeReceipt;
 
   const bundle: Readonly<Record<string, any>> = Object.freeze({
-    schema_version: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+    schema_version: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
     candidate_digest: inventory.candidate_digest,
     image_digest: inventory.image_digest,
     platforms: [...inventory.platforms],
@@ -1933,7 +1933,7 @@ export async function assembleEnterpriseOfflineBundle({
     || isPathWithin(outputPath, sourceRealPath)
   ) {
     fail(
-      "enterprise_offline_bundle_output_source_overlap",
+      "single_node_offline_bundle_output_source_overlap",
       "Output root must not overlap the OCI source.",
     );
   }
@@ -2032,7 +2032,7 @@ export async function assembleEnterpriseOfflineBundle({
         authorities.release_image_evidence.sbomText,
       ),
     ]);
-    await loadEnterpriseOfflineBundle(atomicOutput.stage);
+    await loadSingleNodeOfflineBundle(atomicOutput.stage);
     await commitAtomicOutput(atomicOutput);
   } catch (error: any) {
     await fs.rm(atomicOutput.stage, { recursive: true, force: true });
@@ -2059,7 +2059,7 @@ function validateBundleAuthorities(bundle?: any) : any {
     )
   ) {
     fail(
-      "enterprise_offline_bundle_authorities_invalid",
+      "single_node_offline_bundle_authorities_invalid",
       "Bundle authorities are invalid.",
     );
   }
@@ -2070,7 +2070,7 @@ function validateBundleAuthorities(bundle?: any) : any {
       !== authorities.release_image_authority_sha256
   ) {
     fail(
-      "enterprise_offline_bundle_authorities_invalid",
+      "single_node_offline_bundle_authorities_invalid",
       "Bundle authority digest is invalid.",
     );
   }
@@ -2086,7 +2086,7 @@ function validateBundleAuthorities(bundle?: any) : any {
       !== `${authorities.release_image_authority.image}@${imageDigest}`
   ) {
     fail(
-      "enterprise_offline_bundle_authorities_invalid",
+      "single_node_offline_bundle_authorities_invalid",
       "Bundle authorities do not match its identity.",
     );
   }
@@ -2147,7 +2147,7 @@ function validateReceipt(signature?: any) : any {
     || !exactKeys(receipt, SAFE_RECEIPT_FIELDS)
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signature receipt is invalid.",
     );
   }
@@ -2167,17 +2167,17 @@ function validateReceipt(signature?: any) : any {
     )
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signature receipt does not match its envelope.",
     );
   }
 }
 
-export async function loadEnterpriseOfflineBundle(bundleRoot?: any) : Promise<any> {
+export async function loadSingleNodeOfflineBundle(bundleRoot?: any) : Promise<any> {
   const rootStat: any = await fs.lstat(bundleRoot);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
     fail(
-      "enterprise_offline_bundle_output_root_invalid",
+      "single_node_offline_bundle_output_root_invalid",
       "Bundle root must be a real directory.",
     );
   }
@@ -2231,35 +2231,35 @@ export async function loadEnterpriseOfflineBundle(bundleRoot?: any) : Promise<an
     ]);
   const unsignedBundle: any = parseJsonText(
     unsignedFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   const signature: any = parseJsonText(
     signatureFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   const inventory: any = parseJsonText(
     inventoryFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   const compose: any = parseJsonText(
     composeFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   const sourceCandidate: any = parseJsonText(
     candidateFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   const releaseImageAuthority: any = parseJsonText(
     authorityFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   const evidenceCoordinates: any = parseJsonText(
     evidenceCoordinatesFile.bytes.toString("utf8"),
-    "enterprise_offline_bundle_output_metadata_invalid",
+    "single_node_offline_bundle_output_metadata_invalid",
   );
   if (!isObject(unsignedBundle) || !exactKeys(unsignedBundle, UNSIGNED_BUNDLE_KEYS)) {
     fail(
-      "enterprise_offline_bundle_output_metadata_invalid",
+      "single_node_offline_bundle_output_metadata_invalid",
       "Stored bundle manifest is invalid.",
     );
   }
@@ -2287,7 +2287,7 @@ export async function loadEnterpriseOfflineBundle(bundleRoot?: any) : Promise<an
       !== canonicalJson(bundle.authorities?.release_image_evidence)
   ) {
     fail(
-      "enterprise_offline_bundle_output_metadata_mismatch",
+      "single_node_offline_bundle_output_metadata_mismatch",
       "Stored bundle metadata is inconsistent.",
     );
   }
@@ -2303,7 +2303,7 @@ export async function loadEnterpriseOfflineBundle(bundleRoot?: any) : Promise<an
   };
   if (canonicalJson(inventory) !== canonicalJson(expectedInventory)) {
     fail(
-      "enterprise_offline_bundle_output_metadata_mismatch",
+      "single_node_offline_bundle_output_metadata_mismatch",
       "Stored inventory is inconsistent.",
     );
   }
@@ -2335,13 +2335,13 @@ export async function loadEnterpriseOfflineBundle(bundleRoot?: any) : Promise<an
     || expectedPaths.some((entry?: any, indexValue?: any) : any => entry !== actualPaths[indexValue])
   ) {
     fail(
-      "enterprise_offline_bundle_unexpected_file",
+      "single_node_offline_bundle_unexpected_file",
       "Stored bundle contains an unexpected file set.",
     );
   }
 
   const authorities: any = validateBundleAuthorities(bundle);
-  await validateEnterpriseOfflineBundleInventory({
+  await validateSingleNodeOfflineBundleInventory({
     inventory,
     ociLayoutPath: path.join(bundleRoot, "files"),
     sourceCandidate: authorities.source_candidate,
@@ -2351,7 +2351,7 @@ export async function loadEnterpriseOfflineBundle(bundleRoot?: any) : Promise<an
   return Object.freeze(bundle);
 }
 
-export async function verifyEnterpriseOfflineBundle({
+export async function verifySingleNodeOfflineBundle({
   bundle,
   bundleRoot,
   trustedPublicKeys = Object.freeze({}),
@@ -2361,37 +2361,37 @@ export async function verifyEnterpriseOfflineBundle({
   if (bundleRoot !== undefined) {
     if (typeof bundleRoot !== "string" || bundleRoot.trim() === "") {
       fail(
-        "enterprise_offline_bundle_output_root_invalid",
+        "single_node_offline_bundle_output_root_invalid",
         "Bundle root is invalid.",
       );
     }
-    const stored: any = await loadEnterpriseOfflineBundle(bundleRoot);
+    const stored: any = await loadSingleNodeOfflineBundle(bundleRoot);
     if (bundle && canonicalJson(bundle) !== canonicalJson(stored)) {
       fail(
-        "enterprise_offline_bundle_output_metadata_mismatch",
+        "single_node_offline_bundle_output_metadata_mismatch",
         "Stored bundle metadata does not match the supplied bundle.",
       );
     }
     bundle = stored;
   }
   if (!isObject(bundle) || !isObject(bundle.signature)) {
-    fail("enterprise_offline_bundle_signature_missing", "Bundle signature missing.");
+    fail("single_node_offline_bundle_signature_missing", "Bundle signature missing.");
   }
   if (!exactKeys(bundle, BUNDLE_KEYS)) {
     fail(
-      "enterprise_offline_bundle_invalid",
+      "single_node_offline_bundle_invalid",
       "Bundle keys are invalid.",
     );
   }
   if (
-    bundle.schema_version !== ENTERPRISE_OFFLINE_BUNDLE_SCHEMA
+    bundle.schema_version !== SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA
     || !DIGEST_PATTERN.test(String(bundle.candidate_digest || ""))
     || !DIGEST_WITH_ALGO_PATTERN.test(String(bundle.image_digest || ""))
     || !DIGEST_PATTERN.test(String(bundle.inventory_digest || ""))
     || JSON.stringify(bundle.platforms)
-      !== JSON.stringify(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS)
+      !== JSON.stringify(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS)
   ) {
-    fail("enterprise_offline_bundle_invalid", "Bundle identity is invalid.");
+    fail("single_node_offline_bundle_invalid", "Bundle identity is invalid.");
   }
   if (
     !isObject(bundle.compose)
@@ -2410,7 +2410,7 @@ export async function verifyEnterpriseOfflineBundle({
     || !Array.isArray(bundle.files)
   ) {
     fail(
-      "enterprise_offline_bundle_compose_invalid",
+      "single_node_offline_bundle_compose_invalid",
       "Bundle compose contract is invalid.",
     );
   }
@@ -2427,7 +2427,7 @@ export async function verifyEnterpriseOfflineBundle({
       || entry.mode !== 0o600
     ) {
       fail(
-        "enterprise_offline_bundle_file_entry_invalid",
+        "single_node_offline_bundle_file_entry_invalid",
         "Bundle file inventory is invalid.",
       );
     }
@@ -2443,7 +2443,7 @@ export async function verifyEnterpriseOfflineBundle({
     }) !== bundle.inventory_digest
   ) {
     fail(
-      "enterprise_offline_bundle_inventory_digest_invalid",
+      "single_node_offline_bundle_inventory_digest_invalid",
       "Bundle inventory digest is invalid.",
     );
   }
@@ -2451,17 +2451,17 @@ export async function verifyEnterpriseOfflineBundle({
   const { signature } = bundle;
   if (!exactKeys(signature, SIGNATURE_KEYS)) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Bundle signature keys are invalid.",
     );
   }
   if (signature.purpose !== SIGNING_PURPOSE) {
-    fail("enterprise_offline_bundle_signature_purpose_invalid", "Bundle signature purpose is invalid.");
+    fail("single_node_offline_bundle_signature_purpose_invalid", "Bundle signature purpose is invalid.");
   }
   requireString(
     signature.keyId,
     KEY_ID_PATTERN,
-    "enterprise_offline_bundle_signature_missing_key",
+    "single_node_offline_bundle_signature_missing_key",
     "Signature keyId missing.",
   );
   if (
@@ -2473,7 +2473,7 @@ export async function verifyEnterpriseOfflineBundle({
     || !BASE64URL_PATTERN.test(signature.signature)
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Bundle signature metadata is invalid.",
     );
   }
@@ -2488,17 +2488,17 @@ export async function verifyEnterpriseOfflineBundle({
     ? trustedPublicKeys[signature.keyId]
     : undefined;
   if (!isTrustedEd25519PublicJwk(keyJwk, signature.keyId)) {
-    fail("enterprise_offline_bundle_unknown_key", "Unknown signature key.");
+    fail("single_node_offline_bundle_unknown_key", "Unknown signature key.");
   }
   let publicKey: any;
   try {
     publicKey = crypto.createPublicKey({ key: keyJwk, format: "jwk" });
   } catch {
-    fail("enterprise_offline_bundle_unknown_key", "Unknown signature key.");
+    fail("single_node_offline_bundle_unknown_key", "Unknown signature key.");
   }
 
   const context: Record<string, any> = {
-    schema: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+    schema: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
     inventory_digest: bundle.inventory_digest,
     compose: bundle.compose,
     authority_digests: {
@@ -2514,7 +2514,7 @@ export async function verifyEnterpriseOfflineBundle({
   };
   const expectedContextDigest: any = `sha256:${sha256(canonicalJson(context))}`;
   if (signature.contextDigest !== expectedContextDigest) {
-    fail("enterprise_offline_bundle_signature_invalid", "Signature context digest is invalid.");
+    fail("single_node_offline_bundle_signature_invalid", "Signature context digest is invalid.");
   }
 
   validateReceipt(signature);
@@ -2525,7 +2525,7 @@ export async function verifyEnterpriseOfflineBundle({
     receiptDigest: `sha256:${sha256(canonicalJson(signature.receipt))}`,
   };
   if (canonicalJson(signature.signedEnvelope) !== canonicalJson(expectedSignedEnvelope)) {
-    fail("enterprise_offline_bundle_signature_invalid", "Signed envelope mismatch.");
+    fail("single_node_offline_bundle_signature_invalid", "Signed envelope mismatch.");
   }
 
   const expectedPayloadDigest: any = `sha256:${sha256(canonicalJson({
@@ -2545,7 +2545,7 @@ export async function verifyEnterpriseOfflineBundle({
     authorities: bundle.authorities,
   }))}`;
   if (expectedPayloadDigest !== signature.payloadDigest) {
-    fail("enterprise_offline_bundle_signature_invalid", "Payload digest mismatch.");
+    fail("single_node_offline_bundle_signature_invalid", "Payload digest mismatch.");
   }
 
   const packedEnvelope: any = Buffer.from(canonicalJson(expectedSignedEnvelope), "utf8");
@@ -2555,7 +2555,7 @@ export async function verifyEnterpriseOfflineBundle({
     || signatureBytes.toString("base64url") !== signature.signature
   ) {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signature encoding is invalid.",
     );
   }
@@ -2564,17 +2564,17 @@ export async function verifyEnterpriseOfflineBundle({
     valid = crypto.verify(null, packedEnvelope, publicKey, signatureBytes);
   } catch {
     fail(
-      "enterprise_offline_bundle_signature_invalid",
+      "single_node_offline_bundle_signature_invalid",
       "Signature verification failed.",
     );
   }
   if (!valid) {
-    fail("enterprise_offline_bundle_signature_invalid", "Invalid signature.");
+    fail("single_node_offline_bundle_signature_invalid", "Invalid signature.");
   }
 
   if (replayGuard !== undefined && typeof replayGuard?.consume !== "function") {
     fail(
-      "enterprise_offline_bundle_replay_guard_invalid",
+      "single_node_offline_bundle_replay_guard_invalid",
       "Replay guard is invalid.",
     );
   }
@@ -2590,12 +2590,12 @@ export async function verifyEnterpriseOfflineBundle({
       consumed = await replayGuard.consume({ signatureId });
     } catch {
       fail(
-        "enterprise_offline_bundle_replay_guard_failed",
+        "single_node_offline_bundle_replay_guard_failed",
         "Replay guard failed closed.",
       );
     }
     if (consumed !== true) {
-      fail("enterprise_offline_bundle_signature_replay", "Signature replay detected.");
+      fail("single_node_offline_bundle_signature_replay", "Signature replay detected.");
     }
   }
 
@@ -2634,7 +2634,7 @@ async function createMinimalFixtureOci(root?: any) : Promise<any> {
   await fs.writeFile(path.join(root, "oci-layout"), JSON.stringify({ imageLayoutVersion: "1.0.0" }));
   const descriptors: any[] = [];
 
-  for (const platform of ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS) {
+  for (const platform of SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS) {
     const arch: any = platform.split("/")[1];
     const config: any = canonicalJson({
       os: "linux",
@@ -2745,7 +2745,7 @@ async function buildFixture(root?: any) : Promise<any> {
         manifest_sha256: "5".repeat(64),
       },
     ],
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
   });
 
   const indexText: any = await fs.readFile(path.join(root, "index.json"), "utf8");
@@ -2927,7 +2927,7 @@ async function buildFixture(root?: any) : Promise<any> {
   };
 }
 
-export async function createEnterpriseOfflineBundleFixture(
+export async function createSingleNodeOfflineBundleFixture(
   ociLayoutPath?: any,
 ) : Promise<any> {
   const root: any = typeof ociLayoutPath === "string" && ociLayoutPath.trim() !== ""
@@ -2936,7 +2936,7 @@ export async function createEnterpriseOfflineBundleFixture(
   return buildFixture(root);
 }
 
-export async function runEnterpriseOfflineBundleFixture({
+export async function runSingleNodeOfflineBundleFixture({
   sourceCandidate,
   releaseImageAuthority,
   releaseImageEvidence,
@@ -2961,7 +2961,7 @@ export async function runEnterpriseOfflineBundleFixture({
     && suppliedFixtureFields.length !== 6
   ) {
     fail(
-      "enterprise_offline_bundle_fixture_arguments_invalid",
+      "single_node_offline_bundle_fixture_arguments_invalid",
       "Fixture authority arguments must be supplied together.",
     );
   }
@@ -2988,7 +2988,7 @@ export async function runEnterpriseOfflineBundleFixture({
     if (!outputRoot) {
       ownedRoots.push(resolvedOutput);
     }
-    const bundle: any = await assembleEnterpriseOfflineBundle({
+    const bundle: any = await assembleSingleNodeOfflineBundle({
       sourceCandidate,
       releaseImageAuthority,
       releaseImageEvidence,
@@ -2999,7 +2999,7 @@ export async function runEnterpriseOfflineBundleFixture({
       optionalServiceEnabled: false,
     });
 
-    const verified: any = await verifyEnterpriseOfflineBundle({
+    const verified: any = await verifySingleNodeOfflineBundle({
       bundle,
       bundleRoot: resolvedOutput,
       trustedPublicKeys,
@@ -3026,11 +3026,11 @@ const invokedDirectly: any = process.argv[1]
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   if (!process.argv.includes("--fixture")) {
-    process.stderr.write("Usage: node tools/server-scripts/enterprise-single-node-offline-bundle.ts --fixture\n");
+    process.stderr.write("Usage: node tools/server-scripts/single-node-offline-bundle.ts --fixture\n");
     process.exitCode = 1;
   } else {
     (async () : Promise<any> => {
-      const result: any = await runEnterpriseOfflineBundleFixture();
+      const result: any = await runSingleNodeOfflineBundleFixture();
       const safeResult: Record<string, any> = {
         ok: true,
         schema_version: result.schema_version,
@@ -3045,7 +3045,7 @@ if (invokedDirectly) {
       process.stdout.write(`${JSON.stringify(safeResult)}\n`);
     })().catch((error?: any) : any => {
       process.stderr.write(`${JSON.stringify({
-        code: error?.code || "enterprise_offline_bundle_failed",
+        code: error?.code || "single_node_offline_bundle_failed",
       })}\n`);
       process.exitCode = 1;
     });

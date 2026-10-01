@@ -5,9 +5,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
-  loadEnterpriseOfflineBundle,
-  verifyEnterpriseOfflineBundle,
-} from "./enterprise-single-node-offline-bundle.ts";
+  loadSingleNodeOfflineBundle,
+  verifySingleNodeOfflineBundle,
+} from "./single-node-offline-bundle.ts";
 import {
   OFFLINE_DELIVERY_FIRST_GOVERNED_CALL,
   OFFLINE_DELIVERY_LIFECYCLE_STEPS,
@@ -257,14 +257,14 @@ export async function transferAndVerifyOfflineDeliveryBundle({
       "Offline transfer roots are required.",
     );
   }
-  const sourceBundle: any = await loadEnterpriseOfflineBundle(sourceRoot);
+  const sourceBundle: any = await loadSingleNodeOfflineBundle(sourceRoot);
   const copied: any = await copyExactTree(sourceRoot, targetRoot);
-  const verified: any = await verifyEnterpriseOfflineBundle({
+  const verified: any = await verifySingleNodeOfflineBundle({
     bundleRoot: targetRoot,
     trustedPublicKeys,
     replayGuard: createOneShotReplayGuard(),
   });
-  const targetBundle: any = await loadEnterpriseOfflineBundle(targetRoot);
+  const targetBundle: any = await loadSingleNodeOfflineBundle(targetRoot);
   if (
     sourceBundle.inventory_digest !== targetBundle.inventory_digest
     || sourceBundle.candidate_digest !== targetBundle.candidate_digest

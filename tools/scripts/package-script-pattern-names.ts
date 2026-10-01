@@ -49,10 +49,10 @@ export const PATTERN_CLASSIFIED_SCRIPT_NAMES: readonly any[] = Object.freeze([
   "verify:core-platform-documentation-convergence",
   "verify:core-platform-surface-convergence",
   "verify:downstream-mcp-audit",
-  "verify:enterprise-audit-retention-redaction",
-  "verify:enterprise-authorization-enforcement",
-  "verify:enterprise-observability-coverage",
-  "verify:enterprise-single-node-offline-bundle",
+  "verify:audit-retention-redaction",
+  "verify:authorization-enforcement",
+  "verify:observability-coverage",
+  "verify:single-node-offline-bundle",
   "verify:operation-permission-domain-model",
   "verify:operation-permission-domain-model:report",
   "verify:operation-permission-protocol-consistency",
@@ -60,7 +60,7 @@ export const PATTERN_CLASSIFIED_SCRIPT_NAMES: readonly any[] = Object.freeze([
   "verify:operation-permission-tag-governed-e2e",
   "verify:operation-permission-universal-tag-policy",
   "verify:platform-audit",
-  "verify:private-deployment-internal-platform-e2e",
+  "verify:single-node:internal-platform-e2e",
   "verify:upstream-gateway",
   "verify:upstream-mcp-gateway"
 ]);

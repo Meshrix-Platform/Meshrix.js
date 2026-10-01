@@ -372,7 +372,7 @@ function dockerContext(ctx?: any) : any {
     "-f",
     "docker-compose.yml",
     "-f",
-    "docker-compose.enterprise.yml",
+    "docker-compose.single-node.yml",
     "-p",
     project,
   ];

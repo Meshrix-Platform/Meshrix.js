@@ -14,8 +14,8 @@ import {
   mcpModernHttpRequest
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import {
-  ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS,
-} from "./enterprise-single-node-offline-bundle.ts";
+  SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS,
+} from "./single-node-offline-bundle.ts";
 import {
   ACCEPTANCE_REQUIRED_REPORTS,
   PLATFORM_ACCEPTANCE_COMMANDS,
@@ -320,7 +320,7 @@ async function writeDualArchOciLayout({
     { mode: 0o600 },
   );
   const descriptors: any[] = [];
-  for (const platform of ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS) {
+  for (const platform of SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS) {
     const exported: any = platforms[platform];
     if (!exported) {
       failOfflineDelivery(
@@ -473,7 +473,7 @@ async function buildVmSourceCandidate(repoRoot?: any) : Promise<any> {
     }),
   );
   const profiles: any = Object.keys(PLATFORM_ACCEPTANCE_PROFILES).sort();
-  if (profiles.length !== 1 || profiles[0] !== "enterprise-single-node") {
+  if (profiles.length !== 1 || profiles[0] !== "single-node") {
     failOfflineDelivery(
       "offline_delivery_vm_candidate_identity_failed",
       "Linux VM candidate identity failed.",
@@ -489,7 +489,7 @@ async function buildVmSourceCandidate(repoRoot?: any) : Promise<any> {
     releaseDefinitionSha256: prefixedSha256(releaseDefinition),
     packageLockSha256: prefixedSha256(packageLock),
     releasePackages,
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: releaseEvidenceInventoryDigest(inventory),
   });
 }
@@ -499,7 +499,7 @@ function buildVmProvenance({
 }: Record<string, any> = {}) : any {
   const startedOn: any = "2026-08-14T00:00:00.000Z";
   const finishedOn: any = "2026-08-14T00:00:01.000Z";
-  return Object.fromEntries(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => [
+  return Object.fromEntries(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => [
     platform,
     {
       SLSA: {
@@ -543,7 +543,7 @@ function buildVmProvenance({
 }
 
 function buildVmSbom() : any {
-  return Object.fromEntries(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => [
+  return Object.fromEntries(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => [
     platform,
     {
       SPDX: {
@@ -1122,7 +1122,7 @@ export function createLinuxVmLifecycleRunner({
       const tarPath: any = path.join(os.tmpdir(), `meshrix-offline-import-${process.pid}.tar`);
       await writeDockerArchiveFromOciPlatform({
         ociRoot: path.join(targetRoot, "files"),
-        platform: ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.includes(platform) ? platform : "linux/arm64",
+        platform: SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.includes(platform) ? platform : "linux/arm64",
         outputTar: tarPath,
         tag: VM_IMAGE_TAG,
       });

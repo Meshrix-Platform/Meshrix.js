@@ -40,7 +40,7 @@ function pathIsWithin(parent?: any, child?: any) : any {
     (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
-function enterpriseEnvironmentConfigured({
+function singleNodeEnvironmentConfigured({
   secretKeySourceConfigured = false,
   proofSignerSecretSourceConfigured = false,
   securePublicBaseUrlConfigured = false,
@@ -72,7 +72,7 @@ function composeActivation(project?: any) : any {
       "-f",
       "docker-compose.yml",
       "-f",
-      "docker-compose.enterprise.yml",
+      "docker-compose.single-node.yml",
       "-p",
       project,
       "up",
@@ -86,7 +86,7 @@ function composeActivation(project?: any) : any {
   });
 }
 
-export function createEnterpriseSingleNodeCloudDeploymentPlan({
+export function createSingleNodeCloudDeploymentPlan({
   candidateImage,
   previousImage = "",
   project = "meshrix",
@@ -108,7 +108,7 @@ export function createEnterpriseSingleNodeCloudDeploymentPlan({
     "cloud_deployment_previous_candidate_must_differ",
   );
   const selectedProject: any = projectName(project);
-  enterpriseEnvironmentConfigured({
+  singleNodeEnvironmentConfigured({
     secretKeySourceConfigured,
     proofSignerSecretSourceConfigured,
     securePublicBaseUrlConfigured,
@@ -128,7 +128,7 @@ export function createEnterpriseSingleNodeCloudDeploymentPlan({
         requirement: "registry transport is required only before activation",
       };
   return Object.freeze({
-    profile: "enterprise-single-node",
+    profile: "single-node",
     candidateImage: candidate,
     previousImage: previous || null,
     environment: Object.freeze({
@@ -156,7 +156,7 @@ export function createEnterpriseSingleNodeCloudDeploymentPlan({
             "-f",
             "docker-compose.yml",
             "-f",
-            "docker-compose.enterprise.yml",
+            "docker-compose.single-node.yml",
             "-p",
             selectedProject,
             "ps",
@@ -245,7 +245,7 @@ async function validateExternalHexSecretSource({
   }
 }
 
-export async function validateEnterpriseSecretCustody({
+export async function validateSingleNodeSecretCustody({
   encryptionSecretPath = "",
   proofSignerSecretPath = "",
 }: Record<string, any> = {}) : Promise<any> {
@@ -271,14 +271,14 @@ async function main() : Promise<any> {
   const args: any = process.argv.slice(2);
   requireCondition(
     args[0] === "plan",
-    "Usage: enterprise-single-node-cloud-deployment.ts plan --candidate <digest-reference> [--previous <digest-reference>] [--offline] [--project <name>]",
+    "Usage: single-node-cloud-deployment.ts plan --candidate <digest-reference> [--previous <digest-reference>] [--offline] [--project <name>]",
   );
   const index: any = await loadDeploymentIndex({ cwd: repoRoot });
   requireCondition(
     index.dockerPresets?.mainService?.immutableCandidate?.offlineStartRequiresPreloadedImage === true,
     "cloud_deployment_index_contract_missing",
   );
-  await validateEnterpriseSecretCustody({
+  await validateSingleNodeSecretCustody({
     encryptionSecretPath: process.env.MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE,
     proofSignerSecretPath: process.env.MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE,
   });
@@ -302,7 +302,7 @@ async function main() : Promise<any> {
     trustedProxies: process.env.MESHRIX_TRUSTED_PROXIES,
     cookieSecure: "always"
   });
-  const plan: any = createEnterpriseSingleNodeCloudDeploymentPlan({
+  const plan: any = createSingleNodeCloudDeploymentPlan({
     candidateImage: valueAfter(args, "--candidate"),
     previousImage: valueAfter(args, "--previous"),
     project: valueAfter(args, "--project") || "meshrix",

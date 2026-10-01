@@ -26,7 +26,7 @@ const BASELINE_CAPABILITY_FEATURES: Readonly<Record<string, any>> = Object.freez
   "upstream-gateway": ["upstream-gateway"],
   "downstream-mcp": ["downstream-mcp", "operation-permission-core"],
   "strategy-management": ["strategy-management"],
-  "enterprise-governance": ["security-permissions", "tag-management", "operation-permission-core", "devops-core"],
+  "governance-observability": ["security-permissions", "tag-management", "operation-permission-core", "devops-core"],
   "console-administration": ["console-shell"],
   "container-deployment": ["devops-core"],
   storage: ["storage-core"],

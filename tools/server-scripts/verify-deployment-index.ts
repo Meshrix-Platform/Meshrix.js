@@ -7,10 +7,10 @@ import { loadDeploymentIndex } from "./deployment-index.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const index: any = await loadDeploymentIndex({ cwd: repoRoot });
-const [dockerfile, compose, enterpriseCompose, packageJson] = await Promise.all([
+const [dockerfile, compose, singleNodeCompose, packageJson] = await Promise.all([
   fs.readFile(path.join(repoRoot, "Dockerfile"), "utf8"),
   fs.readFile(path.join(repoRoot, "docker-compose.yml"), "utf8"),
-  fs.readFile(path.join(repoRoot, "docker-compose.enterprise.yml"), "utf8"),
+  fs.readFile(path.join(repoRoot, "docker-compose.single-node.yml"), "utf8"),
   fs.readFile(path.join(repoRoot, "package.json"), "utf8").then(JSON.parse)
 ]);
 
@@ -21,7 +21,7 @@ assert.equal(index.dockerPresets?.mainService?.runtime?.hostPublishAddress, "127
 assert.equal(index.dockerPresets?.mainService?.runtime?.hostPublishAddressEnv, "MESHRIX_BIND_ADDRESS");
 assert.equal(index.dockerPresets?.mainService?.runtime?.advertisedHostEnv, "MESHRIX_ADVERTISED_HOST");
 assert.equal(index.dockerPresets?.mainService?.runtime?.publicBaseUrlEnv, "MESHRIX_PUBLIC_BASE_URL");
-assert.equal(index.dockerPresets?.mainService?.enterpriseComposeOverlay, "docker-compose.enterprise.yml");
+assert.equal(index.dockerPresets?.mainService?.singleNodeComposeOverlay, "docker-compose.single-node.yml");
 assert.equal(index.dockerPresets?.mainService?.runtime?.uid, 10001);
 assert.equal(index.dockerPresets?.mainService?.runtime?.gid, 10001);
 assert.equal(index.dockerPresets?.mainService?.runtime?.readOnlyRootFilesystem, true);
@@ -82,21 +82,21 @@ assert.equal(
   "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/deployment-index.ts"
 );
 assert.equal(
-  packageJson.scripts?.["verify:enterprise-single-node-offline-bundle"],
-  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/enterprise-single-node-offline-bundle.ts"
+  packageJson.scripts?.["verify:single-node-offline-bundle"],
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/single-node-offline-bundle.ts"
 );
-const offlineBundle: any = index.offlineBundles?.enterpriseSingleNode;
-assert.ok(offlineBundle, "enterpriseSingleNode offline bundle contract must exist");
-assert.equal(offlineBundle?.id, "meshrix-offline-bundle-enterprise-single-node");
+const offlineBundle: any = index.offlineBundles?.singleNode;
+assert.ok(offlineBundle, "singleNode offline bundle contract must exist");
+assert.equal(offlineBundle?.id, "meshrix-offline-bundle-single-node");
 assert.equal(
   offlineBundle?.builder,
-  "tools/server-scripts/enterprise-single-node-offline-bundle.ts"
+  "tools/server-scripts/single-node-offline-bundle.ts"
 );
 assert.equal(
   offlineBundle?.verifier,
-  "tools/server-scripts/enterprise-single-node-offline-bundle.ts"
+  "tools/server-scripts/single-node-offline-bundle.ts"
 );
-assert.equal(offlineBundle?.targetProfile, "enterprise-single-node");
+assert.equal(offlineBundle?.targetProfile, "single-node");
 assert.equal(offlineBundle?.payload, "oci-layout");
 assert.deepEqual(offlineBundle?.platforms, ["linux/amd64", "linux/arm64"]);
 assert.equal(offlineBundle?.verificationPolicy?.requiresNetwork, false);
@@ -153,16 +153,16 @@ assert.match(compose, /meshrix-server-backups:\/app\/backups/u);
 assert.match(compose, /MESHRIX_BACKUP_ROOT: \/app\/backups/u);
 assert.match(compose, /meshrix-codex-home:\/codex-home/u);
 assert.doesNotMatch(compose, /^\s+network_mode:\s+host\s*$/mu);
-assert.match(enterpriseCompose, /MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE: \/run\/secrets\/meshrix-local-secret-master-key/u);
-assert.match(enterpriseCompose, /MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY: production/u);
-assert.match(enterpriseCompose, /MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE: \/run\/secrets\/meshrix-operation-proof-signer-secret/u);
-assert.match(enterpriseCompose, /MESHRIX_PRODUCTION_INGRESS_MODE: trusted-proxy/u);
-assert.match(enterpriseCompose, /MESHRIX_TRUSTED_PROXIES:\?MESHRIX_TRUSTED_PROXIES is required/u);
-assert.match(enterpriseCompose, /MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT: "1"/u);
-assert.match(enterpriseCompose, /MESHRIX_PUBLIC_BASE_URL:\?MESHRIX_PUBLIC_BASE_URL is required/u);
-assert.match(enterpriseCompose, /MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE:\?MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE is required/u);
-assert.match(enterpriseCompose, /MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE:\?MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE is required/u);
-assert.doesNotMatch(enterpriseCompose, /[0-9a-f]{64}/u);
+assert.match(singleNodeCompose, /MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE: \/run\/secrets\/meshrix-local-secret-master-key/u);
+assert.match(singleNodeCompose, /MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY: production/u);
+assert.match(singleNodeCompose, /MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE: \/run\/secrets\/meshrix-operation-proof-signer-secret/u);
+assert.match(singleNodeCompose, /MESHRIX_PRODUCTION_INGRESS_MODE: trusted-proxy/u);
+assert.match(singleNodeCompose, /MESHRIX_TRUSTED_PROXIES:\?MESHRIX_TRUSTED_PROXIES is required/u);
+assert.match(singleNodeCompose, /MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT: "1"/u);
+assert.match(singleNodeCompose, /MESHRIX_PUBLIC_BASE_URL:\?MESHRIX_PUBLIC_BASE_URL is required/u);
+assert.match(singleNodeCompose, /MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE:\?MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE is required/u);
+assert.match(singleNodeCompose, /MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE:\?MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE is required/u);
+assert.doesNotMatch(singleNodeCompose, /[0-9a-f]{64}/u);
 assert.match(dockerfile, /^STOPSIGNAL SIGTERM$/mu);
 assert.match(dockerfile, /^HEALTHCHECK /mu);
 assert.match(dockerfile, /mkdir -p data backups \.\.\/codex-home/u);
@@ -207,7 +207,7 @@ assert.ok(
 );
 await fs.access(path.join(repoRoot, "tools/server-scripts/verify-deployment-container-flow.ts"));
 await fs.access(path.join(repoRoot, "tools/server-scripts/prepare-npm-artifact-cache.ts"));
-await fs.access(path.join(repoRoot, "tools/server-scripts/enterprise-single-node-cloud-deployment.ts"));
+await fs.access(path.join(repoRoot, "tools/server-scripts/single-node-cloud-deployment.ts"));
 await fs.access(path.join(repoRoot, offlineBundle?.builder || ""));
 await fs.access(path.join(repoRoot, index.sourcePackages.mainService.builder));
 

@@ -4,8 +4,8 @@
  */
 
 import {
-  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
-} from "./private-deployment-internal-platform-e2e-catalog.ts";
+  SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "./single-node-internal-platform-e2e-catalog.ts";
 import {
   PLATFORM_ACCEPTANCE_REPORT_PATH
 } from "./platform-acceptance-report-catalog.ts";
@@ -88,17 +88,17 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
     resourceLocks: ["container-runtime", "foundation-public-gate"]
   }),
   command("controlled-execution-convergence-final", "Controlled Execution Convergence final reduction", "platform-capability", npmRun("verify:controlled-execution-convergence"), "build/reports/controlled-execution-convergence-final.json", ["platform-capability", "execution-sandbox", "exact-release-candidate"], { dependsOn: ["controlled-execution-sandbox"] }),
-  command("enterprise-governance-coverage", "Enterprise authorization governance coverage", "platform-capability", npmRun("verify:authorization-governance"), "build/reports/enterprise-governance-coverage.json", ["platform-capability", "authorization", "governance"]),
+  command("authorization-governance", "Authorization governance coverage", "platform-capability", npmRun("verify:authorization-governance"), "build/reports/authorization-governance-coverage.json", ["platform-capability", "authorization", "governance"]),
   command("operation-permission-protocol-consistency", "Operation Permission protocol consistency", "platform-capability", npmRun("verify:operation-permission-protocol-consistency"), "build/reports/operation-permission-protocol-consistency.json", ["platform-capability", "operation-permission"]),
   command("operation-permission-tag-governed-e2e", "Operation Permission tag-governed capability E2E", "platform-capability", npmRun("verify:operation-permission-tag-governed-e2e"), "build/reports/operation-permission-tag-governed-e2e.json", ["platform-capability", "operation-permission", "tag-policy"], { dependsOn: ["controlled-execution-convergence-final"], resourceLocks: ["container-runtime"] }),
   command("operation-permission-domain-model", "Operation Permission domain model", "platform-capability", npmRun("verify:operation-permission-domain-model"), "build/reports/operation-permission-domain-model.json", ["platform-capability", "operation-permission", "domain-model"]),
   command("approval-governance", "Approval governance terminal outcomes", "platform-capability", npmRun("verify:approval-governance"), "build/reports/approval-governance.json", ["platform-capability", "authorization", "approval"]),
-  command("audit-retention-redaction", "Enterprise audit retention and redaction", "platform-capability", npmRun("verify:enterprise-audit-retention-redaction"), "build/reports/enterprise-audit-retention-redaction.json", ["platform-capability", "audit", "redaction"]),
+  command("audit-retention-redaction", "Audit retention and redaction", "platform-capability", npmRun("verify:audit-retention-redaction"), "build/reports/audit-retention-redaction.json", ["platform-capability", "audit", "redaction"]),
   command("observability-semantics", "Observability semantic release gate", "platform-capability", nodeCommand(["tools/server-scripts/verify-observability-semantics.ts", "--gate", "release"]), "build/reports/observability-semantics.json", ["platform-capability", "observability"]),
   command("observability-runtime", "Executive report retention system inspection and production health runtime", "platform-capability", nodeCommand(["tools/server-scripts/verify-observability-runtime-acceptance.ts"]), "build/reports/observability-runtime-acceptance.json", ["platform-capability", "observability", "executive-report", "system-inspection", "production-health"]),
   command("production-health-console", "Production health console verification", "platform-capability", nodeCommand(["tools/server-scripts/verify-production-health-console.ts"]), "", ["platform-capability", "observability", "console"]),
-  command("authorization-enforcement", "Enterprise authorization enforcement", "platform-capability", npmRun("verify:enterprise-authorization-enforcement"), "build/reports/enterprise-authorization-enforcement.json", ["platform-capability", "authorization"], { dependsOn: ["enterprise-governance-coverage", "operation-permission-protocol-consistency", "operation-permission-tag-governed-e2e"] }),
-  command("observability-coverage", "Enterprise observability coverage", "platform-capability", npmRun("verify:enterprise-observability-coverage"), "build/reports/enterprise-observability-coverage.json", ["platform-capability", "observability"], { dependsOn: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "operation-permission-tag-governed-e2e"] }),
+  command("authorization-enforcement", "Authorization enforcement", "platform-capability", npmRun("verify:authorization-enforcement"), "build/reports/authorization-enforcement.json", ["platform-capability", "authorization"], { dependsOn: ["authorization-governance", "operation-permission-protocol-consistency", "operation-permission-tag-governed-e2e"] }),
+  command("observability-coverage", "Observability coverage", "platform-capability", npmRun("verify:observability-coverage"), "build/reports/observability-coverage.json", ["platform-capability", "observability"], { dependsOn: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "operation-permission-tag-governed-e2e"] }),
   command("storage-restore", "Storage production restore drill", "platform-capability", nodeCommand(["tools/server-scripts/verify-storage-production-restore-drill.ts"]), "build/reports/storage-production-restore-drill/latest.json", ["platform-capability", "storage", "backup-restore"], { resourceLocks: ["storage-restore"] }),
   command("deployment-container-flow", "Fresh container deployment flow", "platform-capability", nodeCommand(["tools/server-scripts/verify-deployment-container-flow.ts"]), "build/reports/deployment-container-flow.json", ["platform-capability", "deployment", "container"], { resourceLocks: ["container-runtime"] }),
   command("job-work-queue", "Job work queue verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-job-work-queue.ts"]), "build/reports/job-work-queue.json", ["platform-capability", "jobs"], { resourceLocks: ["work-queue"] }),
@@ -119,7 +119,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("gateway-platform-profile", "Gateway platform performance profile", "profile", nodeCommand(["tools/server-scripts/stress-gateway-platform-profile.ts"]), "build/reports/gateway-platform-profile.json", ["profile", "downstream-gateway", "upstream-gateway"], { dependsOn: ["production-readiness-gates", "mcp-gateway-load", "upstream-fixture-transit", "path-abstraction-audit"], resourceLocks: ["gateway-platform-profile"] })
 ]);
 
-export const PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS: readonly any[] = Object.freeze([
+export const SINGLE_NODE_EVIDENCE_COMMAND_IDS: readonly any[] = Object.freeze([
   "surface-convergence",
   "production-readiness-gates",
   "deployment-container-flow",
@@ -130,7 +130,7 @@ export const PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS: readonly any[] = Object.fr
   "upstream-service-publishing",
   "operation-permission-protocol-consistency",
   "operation-permission-tag-governed-e2e",
-  "enterprise-governance-coverage",
+  "authorization-governance",
   "authorization-enforcement",
   "audit-retention-redaction",
   "observability-semantics",
@@ -149,34 +149,34 @@ export const PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS: readonly any[] = Object.fr
 const evidenceCommandById: any = new Map<any, any>(
   PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS.map((entry?: any) : any => [entry.id, entry])
 );
-const unknownPrivateDeploymentCommandIds: any = PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS
+const unknownSingleNodeCommandIds: any = SINGLE_NODE_EVIDENCE_COMMAND_IDS
   .filter((commandId?: any) : any => !evidenceCommandById.has(commandId));
-if (unknownPrivateDeploymentCommandIds.length > 0) {
+if (unknownSingleNodeCommandIds.length > 0) {
   throw new Error(
-    `Private deployment references unknown platform acceptance commands: ${unknownPrivateDeploymentCommandIds.join(",")}`
+    `Single-node acceptance references unknown platform acceptance commands: ${unknownSingleNodeCommandIds.join(",")}`
   );
 }
 
-export const PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS: any = Object.freeze(
-  PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS.map((commandId?: any) : any => evidenceCommandById.get(commandId))
+export const SINGLE_NODE_EVIDENCE_COMMANDS: any = Object.freeze(
+  SINGLE_NODE_EVIDENCE_COMMAND_IDS.map((commandId?: any) : any => evidenceCommandById.get(commandId))
 );
-export const PRIVATE_DEPLOYMENT_REQUIRED_REPORTS: readonly any[] = Object.freeze([
-  ...new Set<any>(PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS.flatMap((entry?: any) : any => entry.ownedReports || []))
+export const SINGLE_NODE_REQUIRED_REPORTS: readonly any[] = Object.freeze([
+  ...new Set<any>(SINGLE_NODE_EVIDENCE_COMMANDS.flatMap((entry?: any) : any => entry.ownedReports || []))
 ]);
 
-const PRIVATE_DEPLOYMENT_EVIDENCE_REDUCTION: any = command(
-  "private-deployment-internal-platform-e2e",
-  "Private deployment internal platform evidence reduction",
+const SINGLE_NODE_EVIDENCE_REDUCTION: any = command(
+  "single-node-internal-platform-e2e",
+  "Single-node internal platform evidence reduction",
   "final-regression",
   nodeCommand([
-    "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+    "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
     "--reduce-existing"
   ]),
-  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH,
-  ["final-regression", "private-deployment", "internal-platform"],
+  SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH,
+  ["final-regression", "single-node", "internal-platform"],
   {
     blockedExitCodes: [2],
-    dependsOn: PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS,
+    dependsOn: SINGLE_NODE_EVIDENCE_COMMAND_IDS,
     exclusive: true,
     resourceLocks: ["release-final-regression", "report-tree:build/reports"]
   }
@@ -184,7 +184,7 @@ const PRIVATE_DEPLOYMENT_EVIDENCE_REDUCTION: any = command(
 
 export const PLATFORM_ACCEPTANCE_COMMANDS: readonly any[] = Object.freeze([
   ...PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS,
-  PRIVATE_DEPLOYMENT_EVIDENCE_REDUCTION
+  SINGLE_NODE_EVIDENCE_REDUCTION
 ]);
 
 const CORE_CLIENT_ADOPTION_MARKERS: readonly any[] = Object.freeze([

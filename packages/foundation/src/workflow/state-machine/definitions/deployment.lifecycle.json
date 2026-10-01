@@ -1,8 +1,8 @@
 {
   "machineId": "deployment.lifecycle",
-  "entityType": "private_deployment",
+  "entityType": "deployment",
   "version": "v0.0.1:state-machine:deployment-lifecycle-1",
-  "description": "Private deployment assembly, configuration, health, degradation, resume, rollback, and failure lifecycle.",
+  "description": "Deployment assembly, configuration, health, degradation, resume, rollback, and failure lifecycle.",
   "initialState": "assembled",
   "states": [
     {

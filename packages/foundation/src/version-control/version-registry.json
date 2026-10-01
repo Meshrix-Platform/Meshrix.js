@@ -552,14 +552,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.authorization.enterprise-enforcement-report",
+      "artifactId": "meshrix.authorization.authorization-enforcement-report",
       "kind": "policy",
-      "description": "Governed version registry entry for meshrix.authorization.enterprise-enforcement-report.",
-      "activeVersion": "v0.0.1:authorization:enterprise-enforcement-report-1",
+      "description": "Governed version registry entry for meshrix.authorization.authorization-enforcement-report.",
+      "activeVersion": "v0.0.1:authorization:authorization-enforcement-report-1",
       "versions": [
         {
-          "version": "v0.0.1:authorization:enterprise-enforcement-report-1",
-          "ref": "meshrix.authorization.enterprise-enforcement-report@v0.0.1:authorization:enterprise-enforcement-report-1",
+          "version": "v0.0.1:authorization:authorization-enforcement-report-1",
+          "ref": "meshrix.authorization.authorization-enforcement-report@v0.0.1:authorization:authorization-enforcement-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -569,28 +569,28 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-enforcement-report-1-source-1",
+              "evidenceId": "v0-0-1-authorization-authorization-enforcement-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-enforcement-report-1-source-2",
+              "evidenceId": "v0-0-1-authorization-authorization-enforcement-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-authorization-enforcement.ts"
+              "uri": "tools/server-scripts/verify-authorization-enforcement.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.authorization.enterprise-governance-coverage-report",
+      "artifactId": "meshrix.authorization.authorization-governance-coverage-report",
       "kind": "policy",
-      "description": "Governed version registry entry for meshrix.authorization.enterprise-governance-coverage-report.",
-      "activeVersion": "v0.0.1:authorization:enterprise-governance-coverage-report-1",
+      "description": "Governed version registry entry for meshrix.authorization.authorization-governance-coverage-report.",
+      "activeVersion": "v0.0.1:authorization:authorization-governance-coverage-report-1",
       "versions": [
         {
-          "version": "v0.0.1:authorization:enterprise-governance-coverage-report-1",
-          "ref": "meshrix.authorization.enterprise-governance-coverage-report@v0.0.1:authorization:enterprise-governance-coverage-report-1",
+          "version": "v0.0.1:authorization:authorization-governance-coverage-report-1",
+          "ref": "meshrix.authorization.authorization-governance-coverage-report@v0.0.1:authorization:authorization-governance-coverage-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -600,14 +600,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-governance-coverage-report-1-source-1",
+              "evidenceId": "v0-0-1-authorization-authorization-governance-coverage-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-governance-coverage-report-1-source-2",
+              "evidenceId": "v0-0-1-authorization-authorization-governance-coverage-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-governance-coverage.ts"
+              "uri": "tools/server-scripts/verify-authorization-governance.ts"
             }
           ]
         }
@@ -1243,14 +1243,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.deployment.private-internal-platform-e2e-report",
+      "artifactId": "meshrix.deployment.single-node-internal-platform-e2e-report",
       "kind": "platform",
-      "description": "Governed version registry entry for meshrix.deployment.private-internal-platform-e2e-report.",
-      "activeVersion": "v0.0.1:deployment:private-internal-platform-e2e-report-1",
+      "description": "Governed version registry entry for meshrix.deployment.single-node-internal-platform-e2e-report.",
+      "activeVersion": "v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
       "versions": [
         {
-          "version": "v0.0.1:deployment:private-internal-platform-e2e-report-1",
-          "ref": "meshrix.deployment.private-internal-platform-e2e-report@v0.0.1:deployment:private-internal-platform-e2e-report-1",
+          "version": "v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
+          "ref": "meshrix.deployment.single-node-internal-platform-e2e-report@v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1260,14 +1260,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-deployment-private-internal-platform-e2e-report-1-source-1",
+              "evidenceId": "v0-0-1-deployment-single-node-internal-platform-e2e-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-deployment-private-internal-platform-e2e-report-1-source-2",
+              "evidenceId": "v0-0-1-deployment-single-node-internal-platform-e2e-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+              "uri": "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
             }
           ]
         }
@@ -1331,14 +1331,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.enterprise-single-node.ubuntu-evidence",
+      "artifactId": "meshrix.single-node.ubuntu-evidence",
       "kind": "report",
-      "description": "Governed report emitted by the network-isolated Ubuntu enterprise single-node acceptance worker.",
-      "activeVersion": "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
+      "description": "Governed report emitted by the network-isolated Ubuntu single-node acceptance worker.",
+      "activeVersion": "v0.0.1:meshrix:single-node-ubuntu-evidence-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
-          "ref": "meshrix.enterprise-single-node.ubuntu-evidence@v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
+          "version": "v0.0.1:meshrix:single-node-ubuntu-evidence-1",
+          "ref": "meshrix.single-node.ubuntu-evidence@v0.0.1:meshrix:single-node-ubuntu-evidence-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1348,35 +1348,35 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "enterprise-single-node-ubuntu-evidence-source",
+              "evidenceId": "single-node-ubuntu-evidence-source",
               "kind": "other",
-              "uri": "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
+              "uri": "tools/server-scripts/verify-single-node-ubuntu-container.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.enterprise-upgrade.rollback-journal",
+      "artifactId": "meshrix.single-node-upgrade.rollback-journal",
       "kind": "runtime_capability",
-      "description": "Governed rollback journal schema for enterprise upgrade orchestration.",
-      "activeVersion": "v0.0.1:enterprise-upgrade:rollback-journal-1",
+      "description": "Governed rollback journal schema for single-node upgrade orchestration.",
+      "activeVersion": "v0.0.1:single-node-upgrade:rollback-journal-1",
       "versions": [
         {
-          "version": "v0.0.1:enterprise-upgrade:rollback-journal-1",
-          "ref": "meshrix.enterprise-upgrade.rollback-journal@v0.0.1:enterprise-upgrade:rollback-journal-1",
+          "version": "v0.0.1:single-node-upgrade:rollback-journal-1",
+          "ref": "meshrix.single-node-upgrade.rollback-journal@v0.0.1:single-node-upgrade:rollback-journal-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current enterprise upgrade rollback journal contract."
+            "notes": "Current single-node upgrade rollback journal contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "enterprise-upgrade-rollback-journal-source",
+              "evidenceId": "single-node-upgrade-rollback-journal-source",
               "kind": "other",
-              "uri": "tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts"
+              "uri": "tools/server-scripts/upgrade/single-node-upgrade-rollback.ts"
             }
           ]
         }
@@ -2828,14 +2828,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.meshrix.enterprise-single-node-offline-bundle",
+      "artifactId": "meshrix.meshrix.single-node-offline-bundle",
       "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.meshrix.enterprise-single-node-offline-bundle.",
-      "activeVersion": "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
+      "description": "Governed version registry entry for meshrix.meshrix.single-node-offline-bundle.",
+      "activeVersion": "v0.0.1:meshrix:single-node-offline-bundle-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
-          "ref": "meshrix.meshrix.enterprise-single-node-offline-bundle@v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
+          "version": "v0.0.1:meshrix:single-node-offline-bundle-1",
+          "ref": "meshrix.meshrix.single-node-offline-bundle@v0.0.1:meshrix:single-node-offline-bundle-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -2845,9 +2845,9 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-enterprise-single-node-offline-bundle-1-source",
+              "evidenceId": "v0-0-1-meshrix-single-node-offline-bundle-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/enterprise-single-node-offline-bundle.ts"
+              "uri": "tools/server-scripts/single-node-offline-bundle.ts"
             }
           ]
         }
@@ -3133,7 +3133,7 @@
             {
               "evidenceId": "v0-0-1-meshrix-ubuntu-acceptance-runner-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
+              "uri": "tools/server-scripts/verify-single-node-ubuntu-container.ts"
             }
           ]
         }
@@ -3164,21 +3164,21 @@
             {
               "evidenceId": "v0-0-1-observability-audit-retention-redaction-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts"
+              "uri": "tools/server-scripts/verify-audit-retention-redaction.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.observability.enterprise-coverage-report",
+      "artifactId": "meshrix.observability.observability-coverage-report",
       "kind": "platform",
-      "description": "Governed version registry entry for meshrix.observability.enterprise-coverage-report.",
-      "activeVersion": "v0.0.1:observability:enterprise-coverage-report-1",
+      "description": "Governed version registry entry for meshrix.observability.observability-coverage-report.",
+      "activeVersion": "v0.0.1:observability:observability-coverage-report-1",
       "versions": [
         {
-          "version": "v0.0.1:observability:enterprise-coverage-report-1",
-          "ref": "meshrix.observability.enterprise-coverage-report@v0.0.1:observability:enterprise-coverage-report-1",
+          "version": "v0.0.1:observability:observability-coverage-report-1",
+          "ref": "meshrix.observability.observability-coverage-report@v0.0.1:observability:observability-coverage-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -3188,14 +3188,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-observability-enterprise-coverage-report-1-source-1",
+              "evidenceId": "v0-0-1-observability-observability-coverage-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-observability-enterprise-coverage-report-1-source-2",
+              "evidenceId": "v0-0-1-observability-observability-coverage-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-observability-coverage.ts"
+              "uri": "tools/server-scripts/verify-observability-coverage.ts"
             }
           ]
         }
@@ -11012,31 +11012,31 @@
       ]
     },
     {
-      "artifactId": "meshrix.enterprise-operations-closure-report",
+      "artifactId": "meshrix.single-node-operations-closure-report",
       "kind": "other",
-      "description": "Versioned enterprise operations closure report.",
-      "activeVersion": "v0.0.1:meshrix:enterprise-operations-closure-report-1",
+      "description": "Versioned single-node operations closure report.",
+      "activeVersion": "v0.0.1:meshrix:single-node-operations-closure-report-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:enterprise-operations-closure-report-1",
-          "ref": "meshrix.enterprise-operations-closure-report@v0.0.1:meshrix:enterprise-operations-closure-report-1",
+          "version": "v0.0.1:meshrix:single-node-operations-closure-report-1",
+          "ref": "meshrix.single-node-operations-closure-report@v0.0.1:meshrix:single-node-operations-closure-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current enterprise operations closure report."
+            "notes": "Current single-node operations closure report."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-enterprise-operations-closure-report-1-source",
+              "evidenceId": "v0-0-1-meshrix-single-node-operations-closure-report-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/enterprise-operations-closure.ts"
+              "uri": "tools/server-scripts/single-node-operations-closure.ts"
             },
             {
-              "evidenceId": "v0-0-1-meshrix-enterprise-operations-closure-report-1-test",
+              "evidenceId": "v0-0-1-meshrix-single-node-operations-closure-report-1-test",
               "kind": "other",
-              "uri": "tests/vitest/server/enterprise-operations-closure.test.ts"
+              "uri": "tests/vitest/server/single-node-operations-closure.test.ts"
             }
           ]
         }

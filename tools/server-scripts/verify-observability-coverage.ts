@@ -14,13 +14,13 @@ import {
 } from "./lib/sensitive-report-scan.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const REPORT_PATH: any = "build/reports/enterprise-observability-coverage.json";
+const REPORT_PATH: any = "build/reports/observability-coverage.json";
 const TAG_GOVERNED_E2E_REPORT: any = "build/reports/operation-permission-tag-governed-e2e.json";
-const AUDIT_REDACTION_REPORT: any = "build/reports/enterprise-audit-retention-redaction.json";
+const AUDIT_REDACTION_REPORT: any = "build/reports/audit-retention-redaction.json";
 const OBSERVABILITY_SEMANTICS_REPORT: any = "build/reports/observability-semantics.json";
-const VERIFIER: any = "tools/server-scripts/verify-enterprise-observability-coverage.ts";
-const COMMAND_ID: any = "enterprise-observability-coverage";
-const REPORT_SCHEMA_VERSION: any = "v0.0.1:observability:enterprise-coverage-report-1";
+const VERIFIER: any = "tools/server-scripts/verify-observability-coverage.ts";
+const COMMAND_ID: any = "observability-coverage";
+const REPORT_SCHEMA_VERSION: any = "v0.0.1:observability:observability-coverage-report-1";
 const REQUIREMENTS: readonly any[] = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES: readonly any[] = Object.freeze([
   "packages/capabilities/src/operation-permission-core/catalog.ts",
@@ -138,7 +138,7 @@ async function main() : Promise<any> {
     releaseEvidenceReady(AUDIT_REDACTION_REPORT, auditRedaction);
 
   const report: Record<string, any> = {
-    schemaVersion: "v0.0.1:observability:enterprise-coverage-report-1",
+    schemaVersion: "v0.0.1:observability:observability-coverage-report-1",
     generatedAt: new Date().toISOString(),
     verifier: VERIFIER,
     sourceOfTruth: {
@@ -188,11 +188,11 @@ async function main() : Promise<any> {
     checkpointDigest: revision,
     requirements: REQUIREMENTS
   });
-  assertNoSensitiveReportLeak(finalizedReport, "enterprise observability coverage report");
+  assertNoSensitiveReportLeak(finalizedReport, "observability coverage report");
   assertReportProvenance(finalizedReport, provenance);
 
   if (!readyForReleaseReduction) {
-    console.error(`[enterprise-observability-coverage] report=${REPORT_PATH}`);
+    console.error(`[observability-coverage] report=${REPORT_PATH}`);
     for (const item of [
       ...missingEndpointCoverage.map((value?: any) : any => `missing_endpoint:${value}`),
       ...missingDimensionCoverage.map((value?: any) : any => `missing_dimension:${value}`),
@@ -204,8 +204,8 @@ async function main() : Promise<any> {
     process.exit(1);
   }
 
-  console.log(`[enterprise-observability-coverage] report=${REPORT_PATH}`);
-  console.log("[enterprise-observability-coverage] readyForReleaseReduction=true");
+  console.log(`[observability-coverage] report=${REPORT_PATH}`);
+  console.log("[observability-coverage] readyForReleaseReduction=true");
 }
 
 await main();

@@ -6,11 +6,11 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
-  PRIVATE_DEPLOYMENT_REQUIRED_REPORTS
+  SINGLE_NODE_REQUIRED_REPORTS
 } from "./lib/platform-acceptance-command-catalog.ts";
 import {
-  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
-} from "./lib/private-deployment-internal-platform-e2e-catalog.ts";
+  SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "./lib/single-node-internal-platform-e2e-catalog.ts";
 import {
   createReleaseEvidenceReadiness
 } from "./lib/release-evidence-readiness.ts";
@@ -25,7 +25,7 @@ import {
 } from "./lib/sensitive-report-scan.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const REPORT_PATH: any = PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH;
+const REPORT_PATH: any = SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH;
 const dynamicRedactionNeedles: any = new Set<any>([repoRoot, os.homedir()].filter(Boolean));
 
 function redactText(value: any = "") : any {
@@ -48,7 +48,7 @@ function reportNativeLeakScan(report: Record<string, any> = {}) : any {
 async function loadRequiredReports(root?: any, minimumTimestampMs?: any) : Promise<any> {
   const reports: Record<string, any> = {};
   const freshnessByPath: Record<string, any> = {};
-  for (const reportPath of PRIVATE_DEPLOYMENT_REQUIRED_REPORTS) {
+  for (const reportPath of SINGLE_NODE_REQUIRED_REPORTS) {
     const { report, stats } = await readJsonReportWithStats(root, reportPath);
     assertNoLeak(report, reportPath);
     reports[reportPath] = report;
@@ -93,14 +93,14 @@ export async function reduceExistingReports({
 
   const finishedAt: any = new Date();
   const releaseReady: any = missingEvidence.length === 0 &&
-    Object.keys(reports).length === PRIVATE_DEPLOYMENT_REQUIRED_REPORTS.length;
-  const reportLeakScan: any = Object.keys(reports).length === PRIVATE_DEPLOYMENT_REQUIRED_REPORTS.length;
+    Object.keys(reports).length === SINGLE_NODE_REQUIRED_REPORTS.length;
+  const reportLeakScan: any = Object.keys(reports).length === SINGLE_NODE_REQUIRED_REPORTS.length;
   const report: Record<string, any> = {
-    schemaVersion: "v0.0.1:deployment:private-internal-platform-e2e-report-1",
+    schemaVersion: "v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
     generatedAt: finishedAt.toISOString(),
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
-    verifier: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+    verifier: "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
     status: releaseReady ? "accepted" : "blocked",
     algorithm: {
       commandExecutionMode: "platform-acceptance-existing-evidence-reduction",
@@ -125,7 +125,7 @@ export async function reduceExistingReports({
       missingEvidenceCount: missingEvidence.length,
       deploymentMissingEvidenceCount: missingEvidence.length,
       missingEvidence,
-      requiredReportCount: PRIVATE_DEPLOYMENT_REQUIRED_REPORTS.length,
+      requiredReportCount: SINGLE_NODE_REQUIRED_REPORTS.length,
       deploymentE2eReady: releaseReady,
       deploymentCoverageReady: releaseReady,
       coverageReady: releaseReady,
@@ -133,13 +133,13 @@ export async function reduceExistingReports({
       reportLeakScan
     }
   };
-  assertNoLeak(report, "private deployment evidence reduction report");
+  assertNoLeak(report, "single-node evidence reduction report");
   const outputPath: any = path.join(root, ...REPORT_PATH.split("/"));
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   if (log) {
     console.log(
-      `[private-internal-platform-e2e] reduction releaseReady=${releaseReady} missingEvidence=${missingEvidence.length} report=${REPORT_PATH}`
+      `[single-node-internal-platform-e2e] reduction releaseReady=${releaseReady} missingEvidence=${missingEvidence.length} report=${REPORT_PATH}`
     );
   }
   if (setExitCode) {
@@ -157,7 +157,7 @@ async function main() : Promise<any> {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error?: any) : any => {
-    console.error(`[private-internal-platform-e2e] failed: ${redactText(error?.message || error)}`);
+    console.error(`[single-node-internal-platform-e2e] failed: ${redactText(error?.message || error)}`);
     process.exitCode = 1;
   });
 }
