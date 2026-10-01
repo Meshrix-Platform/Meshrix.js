@@ -5,10 +5,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  assertReleaseVersion,
   parseReleaseArguments,
   prepareRelease
 } from "../../../tools/server-scripts/prepare-release.ts";
+import { assertReleaseVersion } from "../../../tools/server-scripts/lib/release-metadata.ts";
 
 const INITIAL_VERSION: any = "0.0.1";
 const WORKSPACES: readonly any[] = Object.freeze(["packages/contracts", "apps/server"]);

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { resolveReleaseWorkspaceDirectories } from "../../../../tools/server-scripts/publish-release-set.ts";
+import { resolveReleaseWorkspaceDirectories } from "../../../../tools/server-scripts/lib/release-metadata.ts";
 import { createServerSourcePackage } from "../../../../tools/server-scripts/package-server-source.ts";
 import { parseNpmPackJson } from "../../../../tools/server-scripts/lib/npm-cli-invocation.ts";
 

@@ -4,8 +4,12 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadReleaseDefinition } from "./verify-release-definition.ts";
-import { resolveReleaseWorkspaceDirectories } from "./publish-release-set.ts";
+import {
+  assertReleaseVersion,
+  loadReleaseDefinition,
+  releaseVersionFromTag,
+  resolveReleaseWorkspaceDirectories
+} from "./lib/release-metadata.ts";
 
 const GATEWAY_INSTALLER_MANIFEST: any =
   "packages/protocols/mcp/adapter/gateway-installer/package.json";
@@ -15,9 +19,6 @@ const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
   "optionalDependencies",
   "peerDependencies"
 ]);
-const RELEASE_SEMVER_PATTERN: any =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$/u;
-
 export class ReleasePreparationError extends Error {
   code: any;
   findings: any;
@@ -32,29 +33,6 @@ export class ReleasePreparationError extends Error {
 
 function releaseError(code?: any, message?: any, findings: any = []) : any {
   return new ReleasePreparationError(code, message, findings);
-}
-
-export function assertReleaseVersion(version?: any) : any {
-  const normalized: any = String(version || "").trim();
-  if (!RELEASE_SEMVER_PATTERN.test(normalized)) {
-    throw releaseError(
-      "release_version_invalid",
-      "Release version must be valid SemVer without build metadata."
-    );
-  }
-  return normalized;
-}
-
-export function releaseVersionFromTag(tag?: any) : any {
-  const normalized: any = String(tag || "").trim();
-  if (!normalized.startsWith("v")) {
-    throw releaseError("release_tag_invalid", "Release tag must use the v<semver> form.");
-  }
-  const version: any = assertReleaseVersion(normalized.slice(1));
-  if (normalized !== `v${version}`) {
-    throw releaseError("release_tag_invalid", "Release tag must use the v<semver> form.");
-  }
-  return version;
 }
 
 function assertReleaseDate(value?: any) : any {
