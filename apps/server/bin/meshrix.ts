@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { DEFAULT_SERVER_PORT } from "../../../packages/foundation/src/config/server-env.ts";
+import { DEFAULT_SERVER_PORT } from "@meshrix/foundation/config/server-env";
 import { runNamedRpc, runRpc, runServerRpcCall, runToolsCommand } from "./lib/meshrix-cli-rpc-tools.ts";
 import { runSecretCommand } from "./lib/meshrix-cli-secrets.ts";
 import { runSecurityCommand } from "./lib/meshrix-cli-security.ts";

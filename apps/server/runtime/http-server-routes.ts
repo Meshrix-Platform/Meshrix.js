@@ -37,7 +37,7 @@ import {
   summarizeError
 } from "#meshrix/runtime-logger";
 import { UPLOAD_SESSION_MAX_CHUNK_BYTES } from "#meshrix/server-runtime/state/upload-session-admission";
-import { apiKeyUploadAuthSession } from "../../../packages/protocols/http/controllers/jobs-controller-access.ts";
+import { apiKeyUploadAuthSession } from "@meshrix/protocols/http/controllers/jobs-controller";
 import {
   handleUpstreamPayloadTransitRequest,
   isUpstreamPayloadTransitRoute
