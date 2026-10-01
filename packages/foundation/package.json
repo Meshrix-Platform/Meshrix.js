@@ -478,6 +478,11 @@
       "types": "./dist/storage/register.d.ts",
       "default": "./dist/storage/register.js"
     },
+    "./storage/restore-offline": {
+      "source": "./src/storage/restore-offline.ts",
+      "types": "./dist/storage/restore-offline.d.ts",
+      "default": "./dist/storage/restore-offline.js"
+    },
     "./storage/sqlite-database": {
       "source": "./src/storage/sqlite-database.ts",
       "types": "./dist/storage/sqlite-database.d.ts",

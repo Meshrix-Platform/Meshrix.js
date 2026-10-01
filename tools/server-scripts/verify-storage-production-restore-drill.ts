@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,7 @@ import { assertNoSensitiveReportLeak } from "../../packages/foundation/src/obser
 import { BACKUP_RESTORE_PROTOCOL_VERSION } from "../../packages/foundation/src/storage/backup-contract.ts";
 import { createStorageKernel } from "../../packages/foundation/src/storage/storage-kernel.ts";
 import { createStorageProvider, STORAGE_PROTOCOL_VERSION } from "../../packages/foundation/src/storage/storage-provider.ts";
+import { acquireStorageRuntimeLease } from "../../packages/foundation/src/storage/storage-lifecycle-lock.ts";
 import { createSystemControllerRuntimeHandlers } from "../../packages/protocols/http/controllers/system-controller-runtime-handlers.ts";
 import { dispatchOperation } from "../../packages/server-runtime/src/composition/dispatch-operation.ts";
 import { executeConsoleDomainOperation } from "../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
@@ -20,22 +22,18 @@ const latestReportPath: any = path.join(reportRoot, "latest.json");
 const workRoot: any = path.join(repoRoot, "build", "tmp", "storage-production-restore-drill");
 const REPORT_SCHEMA_VERSION: any = "v0.0.1:storage:production-restore-drill-report-1";
 const VERIFIER: any = "tools/server-scripts/verify-storage-production-restore-drill.ts";
-const RUNBOOK_PATH: any = "docs/RUNBOOK.md";
+const RUNBOOK_PATH: any = "docs/storage-recovery.md";
 const REQUIRED_RUNBOOK_TOKENS: readonly any[] = Object.freeze([
-  "Storage Backup Restore Production Drill",
-  "storage.backups.create",
-  "storage.backups.retention",
-  "storage.backups.restore_preview",
-  "storage.backups.restore",
-  "confirm",
-  "tools/server-scripts/verify-storage-production-restore-drill.ts",
-  "build/reports/storage-production-restore-drill/latest.json",
+  "Offline storage recovery",
+  "meshrix storage restore",
+  "--data-dir",
+  "--backup-id",
+  "--apply --confirm",
+  "MESHRIX_BACKUP_ROOT",
   "storage_restore_runtime_active",
-  "SQLite online backup",
   "size and SHA-256",
-  "staging and rollback",
-  "parent evidence reducer",
-  "tools/server-scripts/lib/release-evidence-readiness.ts"
+  "separate operator custody",
+  "uncertain external effect"
 ]);
 const REQUIRED_STORAGE_OPERATIONS: readonly any[] = Object.freeze([
   "storage.backups.list",
@@ -72,6 +70,65 @@ async function writeFixture(rootPath?: any, relativePath?: any, value?: any) : P
   const content: any = typeof value === "string" ? value : `${JSON.stringify(value, null, 2)}\n`;
   await fs.writeFile(targetPath, content, "utf8");
   return targetPath;
+}
+
+async function runOfflineRestoreCli({
+  userDataPath,
+  backupId,
+  apply = false
+}: Record<string, any> = {}) : Promise<any> {
+  const entryPath = path.join(repoRoot, "apps/server/bin/meshrix.ts");
+  const args = [
+    "--conditions=source",
+    entryPath,
+    "storage",
+    "restore",
+    "--data-dir",
+    userDataPath,
+    "--backup-id",
+    backupId,
+    ...(apply ? ["--apply", "--confirm"] : [])
+  ];
+  return new Promise((resolve?: any, reject?: any) : any => {
+    const child: any = spawn(process.execPath, args, {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const stdout: any[] = [];
+    const stderr: any[] = [];
+    let outputBytes = 0;
+    child.stdout.on("data", (chunk?: any) : any => {
+      outputBytes += chunk.length;
+      if (outputBytes > 8192) {
+        child.kill("SIGKILL");
+        reject(new Error("offline restore CLI output exceeded its bound"));
+        return;
+      }
+      stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk?: any) : any => {
+      outputBytes += chunk.length;
+      if (outputBytes > 8192) {
+        child.kill("SIGKILL");
+        reject(new Error("offline restore CLI output exceeded its bound"));
+        return;
+      }
+      stderr.push(chunk);
+    });
+    child.once("error", reject);
+    child.once("close", (status?: any) : any => {
+      const stdoutText: any = Buffer.concat(stdout).toString("utf8");
+      const stderrText: any = Buffer.concat(stderr).toString("utf8");
+      let payload: any = {};
+      try {
+        payload = JSON.parse(stdoutText || "{}");
+      } catch {
+        payload = {};
+      }
+      resolve({ status, payload, outputBytes, stderrEmpty: stderrText.length === 0 });
+    });
+  });
 }
 
 function storageOperationMap() : any {
@@ -253,6 +310,8 @@ async function main() : Promise<any> {
   const runDir: any = path.join(workRoot, runId);
   const reportPath: any = path.join(runDir, "report.json");
   const userDataPath: any = path.join(workRoot, runId, "user-data");
+  const independentBackupRoot: any = path.join(runDir, "independent-backups");
+  const offlineDataPath: any = path.join(runDir, "offline-data");
   const selectedRestorePaths: any[] = ["metadata", "objects", "settings.json", "jobs", "upload-sessions"];
   const dispatchEvidence: Record<string, any> = {
     operationSequence: [],
@@ -263,10 +322,17 @@ async function main() : Promise<any> {
   };
 
   await fs.mkdir(userDataPath, { recursive: true });
+  await fs.mkdir(independentBackupRoot, { recursive: true });
+
+  const originalBackupRoot: any = process.env.MESHRIX_BACKUP_ROOT;
+  const originalRequireIndependentBackupRoot: any = process.env.MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT;
+  process.env.MESHRIX_BACKUP_ROOT = independentBackupRoot;
+  process.env.MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT = "1";
 
   let baselineKernel: any = null;
   let driftKernel: any = null;
   let restoredKernel: any = null;
+  let offlineKernel: any = null;
   let operationHarness: any = null;
 
   try {
@@ -277,8 +343,8 @@ async function main() : Promise<any> {
     assert.equal(baselineProvider.protocolVersion, STORAGE_PROTOCOL_VERSION);
 
     const settingsBefore: Record<string, any> = {
-      deployment: "private",
-      backend: "sqlite-first",
+      deployment: "single-node",
+      backend: "sqlite",
       restoreDrill: { version: 1, mode: "baseline" }
     };
     const uploadSessionBefore: Record<string, any> = {
@@ -293,6 +359,8 @@ async function main() : Promise<any> {
     };
 
     await writeFixture(userDataPath, "settings.json", settingsBefore);
+    await writeFixture(userDataPath, "auth/grants.json", { grants: ["restore-drill-read"] });
+    await writeFixture(userDataPath, "auth/revocations.json", { revoked: ["restore-drill-revoked"] });
     await writeFixture(userDataPath, "jobs/restore-drill-job/meta.json", jobMetaBefore);
     await writeFixture(userDataPath, "upload-sessions/restore-drill-session/manifest.json", uploadSessionBefore);
     await writeFixture(userDataPath, "secrets/values/restore-drill.json", { fixture: "separate-custody" });
@@ -359,7 +427,7 @@ async function main() : Promise<any> {
     const { payload: listedBackups } = await operationHarness.execute({ operationId: "storage.backups.list" });
     assert.equal(listedBackups.backups.some((entry?: any) : any => entry.backupId === backup.backupId), true);
 
-    const backupManifestPath: any = path.join(userDataPath, "backups", backup.backupId, "backup-manifest.json");
+    const backupManifestPath: any = path.join(independentBackupRoot, backup.backupId, "backup-manifest.json");
     const backupManifest: any = await readJson(backupManifestPath);
     assert.equal(backupManifest.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
     assert.equal(backupManifest.consistency?.sqlite, "copy-on-write-baseline-with-sqlite-online-page-backup");
@@ -390,8 +458,8 @@ async function main() : Promise<any> {
     driftKernel = null;
 
     await writeFixture(userDataPath, "settings.json", {
-      deployment: "private",
-      backend: "sqlite-first",
+      deployment: "single-node",
+      backend: "sqlite",
       restoreDrill: { version: 2, mode: "drifted" }
     });
     await writeFixture(userDataPath, "jobs/restore-drill-job/meta.json", {
@@ -447,7 +515,7 @@ async function main() : Promise<any> {
     assert.equal(restoreApplied.dryRun, false);
     assert.equal(restoreApplied.integrity?.verified, true);
     assert.equal(Object.prototype.hasOwnProperty.call(restoreApplied, "reportPath"), false, "public restore output must not expose a local report path");
-    const restoreReportRoot: any = path.join(userDataPath, "backups", backup.backupId, "restore-reports");
+    const restoreReportRoot: any = path.join(independentBackupRoot, backup.backupId, "restore-reports");
     const restoreReportNames: any = (await fs.readdir(restoreReportRoot)).filter((name?: any) : any => name.endsWith(".json"));
     assert.equal(restoreReportNames.length, 1, "confirmed restore must persist exactly one receipt");
     const restoreReceipt: any = await readJson(path.join(restoreReportRoot, restoreReportNames[0]));
@@ -479,6 +547,70 @@ async function main() : Promise<any> {
     });
     assert.equal(onlineRestoreResponse.payload?.reasonCode, "storage_restore_runtime_active");
 
+    await fs.mkdir(offlineDataPath, { recursive: true });
+    await writeFixture(offlineDataPath, "secrets/values/restore-drill.json", "target-secret-custody");
+    await writeFixture(offlineDataPath, "security/execution-sandbox-custody/master-key", "target-custody-key");
+    const offlineCliPreview: any = await runOfflineRestoreCli({
+      userDataPath: offlineDataPath,
+      backupId: backup.backupId
+    });
+    assert.equal(offlineCliPreview.status, 0);
+    assert.equal(offlineCliPreview.stderrEmpty, true);
+    assert.equal(offlineCliPreview.outputBytes <= 2048, true);
+    assert.equal(offlineCliPreview.payload.ok, true);
+    assert.equal(offlineCliPreview.payload.result.mode, "preview");
+    assert.equal(offlineCliPreview.payload.result.applied, false);
+    assert.equal(offlineCliPreview.payload.result.integrity.verified, true);
+    assert.equal(offlineCliPreview.payload.result.summary.blocked, 0);
+    assert.equal(await fs.readFile(path.join(offlineDataPath, "secrets/values/restore-drill.json"), "utf8"), "target-secret-custody");
+
+    const offlineCliApply: any = await runOfflineRestoreCli({
+      userDataPath: offlineDataPath,
+      backupId: backup.backupId,
+      apply: true
+    });
+    assert.equal(offlineCliApply.status, 0);
+    assert.equal(offlineCliApply.stderrEmpty, true);
+    assert.equal(offlineCliApply.outputBytes <= 2048, true);
+    assert.equal(offlineCliApply.payload.ok, true);
+    assert.equal(offlineCliApply.payload.result.mode, "apply");
+    assert.equal(offlineCliApply.payload.result.applied, true);
+    assert.equal(offlineCliApply.payload.result.integrity.verified, true);
+
+    offlineKernel = createStorageKernel({ userDataPath: offlineDataPath });
+    const offlineProvider: any = createStorageProvider({ userDataPath: offlineDataPath, storageKernel: offlineKernel });
+    const offlineSummary: any = offlineProvider.getStorageSummary();
+    const offlineSettings: any = await readJson(path.join(offlineDataPath, "settings.json"));
+    const offlineGrants: any = await readJson(path.join(offlineDataPath, "auth/grants.json"));
+    const offlineRevocations: any = await readJson(path.join(offlineDataPath, "auth/revocations.json"));
+    const offlineJobMeta: any = await readJson(path.join(offlineDataPath, "jobs/restore-drill-job/meta.json"));
+    const offlineObject: any = await offlineProvider.readObject({ storageRelativePath: storedObject.storageRelativePath });
+    assert.deepEqual(offlineSettings, settingsBefore);
+    assert.deepEqual(offlineGrants, { grants: ["restore-drill-read"] });
+    assert.deepEqual(offlineRevocations, { revoked: ["restore-drill-revoked"] });
+    assert.deepEqual(offlineJobMeta, jobMetaBefore);
+    assert.match(offlineObject.toString("utf8"), /baseline payload/);
+    assert.equal(offlineSummary.objectCount, baselineSummary.objectCount);
+    assert.equal(await fs.readFile(path.join(offlineDataPath, "secrets/values/restore-drill.json"), "utf8"), "target-secret-custody");
+    assert.equal(await fs.readFile(path.join(offlineDataPath, "security/execution-sandbox-custody/master-key"), "utf8"), "target-custody-key");
+    offlineKernel.close();
+    offlineKernel = null;
+
+    const offlineRuntimeLease: any = acquireStorageRuntimeLease(offlineDataPath);
+    let offlineActiveOwnerRestore: any;
+    try {
+      offlineActiveOwnerRestore = await runOfflineRestoreCli({
+        userDataPath: offlineDataPath,
+        backupId: backup.backupId,
+        apply: true
+      });
+    } finally {
+      offlineRuntimeLease.release();
+    }
+    assert.equal(offlineActiveOwnerRestore.status, 1);
+    assert.equal(offlineActiveOwnerRestore.payload.error?.code, "storage_restore_runtime_active");
+    assert.deepEqual(await readJson(path.join(offlineDataPath, "settings.json")), settingsBefore);
+
     assert.deepEqual(restoredSettings, settingsBefore);
     assert.deepEqual(restoredJobMeta, jobMetaBefore);
     assert.deepEqual(restoredUploadSession, uploadSessionBefore);
@@ -499,6 +631,11 @@ async function main() : Promise<any> {
       restoreReceipt.applied === true &&
       restoreReceipt.summary.blocked === 0 &&
       restoreReceipt.integrity?.verified === true &&
+      offlineCliPreview.payload.result?.mode === "preview" &&
+      offlineCliPreview.payload.result?.integrity?.verified === true &&
+      offlineCliApply.payload.result?.mode === "apply" &&
+      offlineCliApply.payload.result?.integrity?.verified === true &&
+      offlineActiveOwnerRestore.payload.error?.code === "storage_restore_runtime_active" &&
       onlineRestoreResponse.payload?.reasonCode === "storage_restore_runtime_active" &&
       restoredSummary.objectCount === baselineSummary.objectCount &&
       listAfterDeniedCreate.backups.length === listBefore.backups.length &&
@@ -525,6 +662,8 @@ async function main() : Promise<any> {
         restoredUploadSessionMatchBaseline: true,
         restoredObjectMatchBaseline: true,
         storageKernelReopenedAfterRestore: true,
+        offlineCliRestoreVerified: true,
+        offlineCliActiveOwnerRefusalVerified: true,
         unrelatedDriftOutsideRestoreScopePreserved: true,
         authorizationDeniedWithoutSideEffects: listAfterDeniedCreate.backups.length === listBefore.backups.length,
         registeredDispatcherVerified: dispatchEvidence.operationSequence.length > 0,
@@ -533,8 +672,8 @@ async function main() : Promise<any> {
         secretCustodyExcluded
       },
       selectedBackend: {
-        deploymentMode: "private-deployment",
-        backendKind: "sqlite-first-private-deployment",
+        deploymentMode: "single-node",
+        backendKind: "sqlite",
         providerBoundary: "storage-provider",
         protocolVersion: STORAGE_PROTOCOL_VERSION,
         backupProtocolVersion: BACKUP_RESTORE_PROTOCOL_VERSION,
@@ -561,6 +700,26 @@ async function main() : Promise<any> {
         onlineRestoreGuard: {
           status: onlineRestoreResponse.status,
           reasonCode: onlineRestoreResponse.payload?.reasonCode || ""
+        },
+        offlineCli: {
+          command: "meshrix storage restore",
+          preview: {
+            status: offlineCliPreview.status,
+            applied: offlineCliPreview.payload.result?.applied === true,
+            integrityVerified: offlineCliPreview.payload.result?.integrity?.verified === true,
+            outputBytes: offlineCliPreview.outputBytes
+          },
+          apply: {
+            status: offlineCliApply.status,
+            applied: offlineCliApply.payload.result?.applied === true,
+            integrityVerified: offlineCliApply.payload.result?.integrity?.verified === true,
+            outputBytes: offlineCliApply.outputBytes
+          },
+          activeOwnerRefusal: {
+            status: offlineActiveOwnerRestore.status,
+            errorCode: offlineActiveOwnerRestore.payload.error?.code || "",
+            dataPreserved: true
+          }
         }
       },
       operatorEvidence: {
@@ -583,6 +742,17 @@ async function main() : Promise<any> {
           dryRun: restoreApplied.dryRun,
           applied: restoreApplied.applied,
           blocked: restoreApplied.summary.blocked
+        },
+        offlineCli: {
+          previewSucceeded: offlineCliPreview.status === 0 && offlineCliPreview.payload.ok === true,
+          previewWasReadOnly: offlineCliPreview.payload.result?.applied === false,
+          previewIntegrityVerified: offlineCliPreview.payload.result?.integrity?.verified === true,
+          applySucceeded: offlineCliApply.status === 0 && offlineCliApply.payload.ok === true,
+          applyWasApplied: offlineCliApply.payload.result?.applied === true,
+          applyIntegrityVerified: offlineCliApply.payload.result?.integrity?.verified === true,
+          activeOwnerErrorCode: offlineActiveOwnerRestore.payload.error?.code || "",
+          activeOwnerDataPreserved: true,
+          maxOutputBytes: Math.max(offlineCliPreview.outputBytes, offlineCliApply.outputBytes)
         }
       },
       evidence: {
@@ -595,6 +765,10 @@ async function main() : Promise<any> {
         restoredUploadSessionMatchBaseline: true,
         restoredObjectMatchBaseline: true,
         storageKernelReopenedAfterRestore: true,
+        offlineCliRestoreVerified: true,
+        offlineCliActiveOwnerRefusalVerified: true,
+        offlineCliPreservedGovernedState: true,
+        offlineCliPreservedIndependentKeys: true,
         backupManifestIntegrityVerified: backupManifest.consistency?.manifestIntegrity === "size-and-sha256-per-file",
         secretCustodyExcluded,
         restoreIntegrityVerified: restoreReceipt.integrity?.verified === true,
@@ -615,9 +789,14 @@ async function main() : Promise<any> {
     }, null, 2));
   } finally {
     operationHarness?.close();
+    offlineKernel?.close();
     restoredKernel?.close();
     driftKernel?.close();
     baselineKernel?.close();
+    if (originalBackupRoot === undefined) delete process.env.MESHRIX_BACKUP_ROOT;
+    else process.env.MESHRIX_BACKUP_ROOT = originalBackupRoot;
+    if (originalRequireIndependentBackupRoot === undefined) delete process.env.MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT;
+    else process.env.MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT = originalRequireIndependentBackupRoot;
   }
 }
 

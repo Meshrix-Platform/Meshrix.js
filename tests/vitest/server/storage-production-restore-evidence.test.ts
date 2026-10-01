@@ -40,7 +40,9 @@ function reportFixture() : any {
       secretCustodyExcluded: true,
       restoreIntegrityVerified: true,
       onlineRestoreRejected: true,
-      storageKernelReopenedAfterRestore: true
+      storageKernelReopenedAfterRestore: true,
+      offlineCliRestoreVerified: true,
+      offlineCliActiveOwnerRefusalVerified: true
     },
     selectedBackend: {
       protocolVersion: "v0.0.1:storage:core-2",
@@ -63,7 +65,18 @@ function reportFixture() : any {
         "storage.backups.restore": { risk: "repair_write", requiresConfirmation: true }
       },
       guardedRestoreWithoutConfirm: { statusCode: 428, confirmationRequired: true },
-      confirmedRestore: { dryRun: false, applied: true, blocked: 0 }
+      confirmedRestore: { dryRun: false, applied: true, blocked: 0 },
+      offlineCli: {
+        previewSucceeded: true,
+        previewWasReadOnly: true,
+        previewIntegrityVerified: true,
+        applySucceeded: true,
+        applyWasApplied: true,
+        applyIntegrityVerified: true,
+        activeOwnerErrorCode: "storage_restore_runtime_active",
+        activeOwnerDataPreserved: true,
+        maxOutputBytes: 512
+      }
     },
     evidence: {
       restoredSettingsMatchBaseline: true,
@@ -74,7 +87,11 @@ function reportFixture() : any {
       backupManifestIntegrityVerified: true,
       secretCustodyExcluded: true,
       restoreIntegrityVerified: true,
-      onlineRestoreRejected: true
+      onlineRestoreRejected: true,
+      offlineCliRestoreVerified: true,
+      offlineCliActiveOwnerRefusalVerified: true,
+      offlineCliPreservedGovernedState: true,
+      offlineCliPreservedIndependentKeys: true
     }
   };
 }
@@ -100,5 +117,14 @@ describe("storage production restore parent reduction", () : any => {
       "storage-production-restore-child-readiness-self-proof-present",
       "storage-production-restore-child-summary-self-proof-present"
     ]));
+  });
+
+  it("does not accept the dispatcher drill without direct offline CLI evidence", () : any => {
+    const incomplete: any = reportFixture();
+    delete incomplete.operatorEvidence.offlineCli;
+    incomplete.summary.offlineCliRestoreVerified = false;
+    const readiness: any = createStorageProductionRestoreReadiness(incomplete);
+    expect(readiness.releaseReady).toBe(false);
+    expect(readiness.reasons).toContain("storage-production-restore-offline-cli-preview-not-verified");
   });
 });
