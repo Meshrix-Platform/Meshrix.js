@@ -85,19 +85,18 @@ export function createUploadWorkspaceMaterializationTransactionStore({
   const databasePath: string = ensurePrivateSqliteLocation(
     path.join(jobsRoot, "upload-workspace-materialization.sqlite")
   );
-  let db: any = null;
+  const db = openSqliteDatabase(databasePath);
   try {
-    db = openSqliteDatabase(databasePath);
     ensureCurrentSchema(db, now);
-  } catch (error: any) {
+  } catch (error) {
     try {
-      db?.close?.();
+      db.close();
     } catch {
       // Preserve the schema initialization failure.
     }
     throw error;
   }
-  const read: any = db.prepare(`
+  const read = db.prepare<[string], Record<string, unknown>>(`
     SELECT *
     FROM materialization_requests
     WHERE request_ref = ?
@@ -150,8 +149,8 @@ export function createUploadWorkspaceMaterializationTransactionStore({
   const assertLiveFence = (
     requestRef: string,
     ownerFence?: string
-  ): Record<string, any> => {
-    const row: any = read.get(requestRef);
+  ): Record<string, unknown> => {
+    const row = read.get(requestRef);
     if (
       !row ||
       row.status !== "running" ||
@@ -197,9 +196,9 @@ export function createUploadWorkspaceMaterializationTransactionStore({
 
   return Object.freeze({
     async create(value: unknown): Promise<MaterializationStoreCreateResult> {
-      const request: any = normalizeRequestRecord(value);
-      const requestJson: any = canonicalJson(request);
-      const result: any = db.prepare(`
+      const request = normalizeRequestRecord(value);
+      const requestJson = canonicalJson(request);
+      const result = db.prepare(`
         INSERT OR IGNORE INTO materialization_requests (
           request_ref,
           status,
@@ -222,12 +221,12 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       return hydrate(read.get(requestRef));
     },
     async begin(requestRef: string, { ownerFence }: MaterializationFenceInput): Promise<MaterializationRunningState | MaterializationCompletedState> {
-      const current: any = Number(now());
-      const normalizedOwnerFence: any = boundedId(
+      const current = Number(now());
+      const normalizedOwnerFence = boundedId(
         ownerFence,
         "Materialization owner fence"
       );
-      const existing: any = hydrate(read.get(requestRef));
+      const existing = hydrate(read.get(requestRef));
       if (!existing) {
         throw failure(
           "materialization_request_missing",
@@ -265,7 +264,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       return requireRunningOrCompleted(hydrate(read.get(requestRef)));
     },
     async renew(requestRef: string, { ownerFence }: MaterializationFenceInput): Promise<void> {
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET lease_until = ?, updated_at = ?
@@ -296,24 +295,24 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         stateEventAnchor = null
       }: MaterializationRecordPreimageInput
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       if (
         row.stage !== "admitted" ||
         row.publication_json
       ) {
         throw walMismatch();
       }
-      const request: any = normalizeRequestRecord(
+      const request = normalizeRequestRecord(
         parseStoredJson(
           row.request_json,
           "Materialization request record"
         )
       );
-      const normalizedPreimage: any = normalizePreimage(
+      const normalizedPreimage = normalizePreimage(
         preimage,
         request
       );
-      const normalizedAnchor: any = normalizeStateEventAnchor(
+      const normalizedAnchor = normalizeStateEventAnchor(
         normalizedPreimage.stateEventAnchor
       );
       if (
@@ -325,20 +324,20 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const normalizedTargetStateDigest: any = sha256Digest(
+      const normalizedTargetStateDigest = sha256Digest(
         targetStateDigest,
         "Materialization target-state digest"
       );
-      const normalizedParentFingerprint: any = sha256Digest(
+      const normalizedParentFingerprint = sha256Digest(
         parentFingerprint,
         "Materialization parent fingerprint"
       );
-      const normalizedParentIdentity: any = normalizeFsIdentity(
+      const normalizedParentIdentity = normalizeFsIdentity(
         parentIdentity,
         "Materialization parent identity"
       );
-      const preimageJson: any = canonicalJson(normalizedPreimage);
-      const parentIdentityJson: any = canonicalJson(
+      const preimageJson = canonicalJson(normalizedPreimage);
+      const parentIdentityJson = canonicalJson(
         normalizedParentIdentity
       );
       if (row.preimage_json) {
@@ -356,7 +355,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         }
         return requireStoredState(hydrate(row));
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET preimage_json = ?,
@@ -391,18 +390,18 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       requestRef: string,
       { ownerFence, publication }: MaterializationRecordPublicationInput<PublicationIntent>
     ): Promise<MaterializationPublicationIntentState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
-      const request: any = normalizeRequestRecord(
+      const row = assertLiveFence(requestRef, ownerFence);
+      const request = normalizeRequestRecord(
         parseStoredJson(
           row.request_json,
           "Materialization request record"
         )
       );
-      const normalized: any = normalizePublicationIntent(
+      const normalized = normalizePublicationIntent(
         publication,
         factsFromRow(row, request)
       );
-      const publicationJson: any = canonicalJson(normalized);
+      const publicationJson = canonicalJson(normalized);
       if (row.stage === "publication_intent") {
         if (row.publication_json !== publicationJson) {
           throw walMismatch();
@@ -416,7 +415,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'publication_intent',
@@ -446,19 +445,19 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       requestRef: string,
       { ownerFence, publication }: MaterializationFenceInput & { publication: unknown }
     ): Promise<MaterializationTempReservedState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
-      const request: any = normalizeRequestRecord(
+      const row = assertLiveFence(requestRef, ownerFence);
+      const request = normalizeRequestRecord(
         parseStoredJson(
           row.request_json,
           "Materialization request record"
         )
       );
-      const facts: any = factsFromRow(row, request);
-      const normalized: any = normalizePublicationReserved(
+      const facts = factsFromRow(row, request);
+      const normalized = normalizePublicationReserved(
         publication,
         facts
       );
-      const publicationJson: any = canonicalJson(normalized);
+      const publicationJson = canonicalJson(normalized);
       if (row.stage === "temp_reserved") {
         if (row.publication_json !== publicationJson) {
           throw walMismatch();
@@ -471,7 +470,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const existing: any = normalizePublicationIntent(
+      const existing = normalizePublicationIntent(
         parseStoredJson(
           row.publication_json,
           "Materialization publication intent"
@@ -486,7 +485,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'temp_reserved',
@@ -514,19 +513,19 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       requestRef: string,
       { ownerFence, publication }: MaterializationFenceInput & { publication: unknown }
     ): Promise<MaterializationPublicationPreparedState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
-      const request: any = normalizeRequestRecord(
+      const row = assertLiveFence(requestRef, ownerFence);
+      const request = normalizeRequestRecord(
         parseStoredJson(
           row.request_json,
           "Materialization request record"
         )
       );
-      const facts: any = factsFromRow(row, request);
-      const normalized: any = normalizePublicationPrepared(
+      const facts = factsFromRow(row, request);
+      const normalized = normalizePublicationPrepared(
         publication,
         facts
       );
-      const publicationJson: any = canonicalJson(normalized);
+      const publicationJson = canonicalJson(normalized);
       if (row.stage === "publication_prepared") {
         if (row.publication_json !== publicationJson) {
           throw walMismatch();
@@ -539,7 +538,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const existing: any = normalizePublicationReserved(
+      const existing = normalizePublicationReserved(
         parseStoredJson(
           row.publication_json,
           "Materialization reservation"
@@ -556,7 +555,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'publication_prepared',
@@ -593,16 +592,16 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         stateOperationId
       }: MaterializationRecordPublishedInput
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       if (!row.publication_json) throw walMismatch();
-      const request: any = normalizeRequestRecord(
+      const request = normalizeRequestRecord(
         parseStoredJson(
           row.request_json,
           "Materialization request record"
         )
       );
-      const facts: any = factsFromRow(row, request);
-      const storedPublication: any = parseStoredJson(
+      const facts = factsFromRow(row, request);
+      const storedPublication = parseStoredJson(
         row.publication_json,
         "Materialization publication"
       );
@@ -613,11 +612,11 @@ export function createUploadWorkspaceMaterializationTransactionStore({
           "evidence_pending",
           "audit_finalized",
           "proof_finalized"
-        ].includes(row.stage)
+        ].includes(text(row.stage))
       ) {
         throw walMismatch();
       }
-      const publication: any = normalizePublicationPrepared(
+      const publication = normalizePublicationPrepared(
         storedPublication,
         facts
       );
@@ -629,7 +628,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const effect: any = normalizePublishedEffect(
+      const effect = normalizePublishedEffect(
         {
           byteCount: request.descriptor.byteCount,
           checkpointRef,
@@ -643,8 +642,8 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         request,
         publication
       );
-      const effectJson: any = canonicalJson(effect);
-      const resultJson: any = canonicalJson({
+      const effectJson = canonicalJson(effect);
+      const resultJson = canonicalJson({
         checkpointRef: effect.checkpointRef
       });
       if (
@@ -653,7 +652,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
           "evidence_pending",
           "audit_finalized",
           "proof_finalized"
-        ].includes(row.stage)
+        ].includes(text(row.stage))
       ) {
         if (
           row.published_revision !== effect.publishedRevision ||
@@ -664,7 +663,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         }
         return requireStoredState(hydrate(row));
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'published',
@@ -707,20 +706,25 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         reservationDigest: string;
       }
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       if (
         ![
           "publication_intent",
           "temp_reserved",
           "publication_prepared",
-        ].includes(row.stage) ||
+        ].includes(text(row.stage)) ||
         !row.publication_json
       ) {
         throw walMismatch();
       }
       const currentRecord = requireStoredState(hydrate(row));
-      const publication: any = currentRecord.publication;
-      const normalizedReservationDigest: any =
+      if (
+        currentRecord.stage !== "publication_intent" &&
+        currentRecord.stage !== "temp_reserved" &&
+        currentRecord.stage !== "publication_prepared"
+      ) throw walMismatch();
+      const publication = currentRecord.publication;
+      const normalizedReservationDigest =
         publication.reservationDigest
           ? sha256Digest(
               reservationDigest,
@@ -737,7 +741,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'admitted',
@@ -778,13 +782,13 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       requestRef: string,
       { ownerFence }: MaterializationFenceInput
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       if (
         [
           "evidence_pending",
           "audit_finalized",
           "proof_finalized"
-        ].includes(row.stage)
+        ].includes(text(row.stage))
       ) {
         return requireStoredState(hydrate(row));
       }
@@ -798,13 +802,13 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       }
       const currentRecord = requireStoredState(hydrate(row));
       if (currentRecord.stage !== "published") throw walMismatch();
-      const evidence: any = settlementEvidence({
+      const evidence = settlementEvidence({
         request: currentRecord,
         publication: currentRecord.publication,
         effect: currentRecord.effect,
         auditCreatedAt: timestamp()
       });
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'evidence_pending',
@@ -838,10 +842,10 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         settlementDigest: string;
       }
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       const currentRecord = requireStoredState(hydrate(row));
-      const evidence: any = currentRecord.evidence;
-      const normalizedAuditRef: any = boundedId(
+      const evidence = currentRecord.evidence;
+      const normalizedAuditRef = boundedId(
         auditRef,
         "Materialization audit reference"
       );
@@ -854,7 +858,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       }
       if (
         ["audit_finalized", "proof_finalized"].includes(
-          row.stage
+          text(row.stage)
         )
       ) {
         if (evidence.auditRef !== normalizedAuditRef) {
@@ -865,11 +869,11 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       if (row.stage !== "evidence_pending") {
         throw walMismatch();
       }
-      const finalized: Readonly<Record<string, any>> = Object.freeze({
+      const finalized = Object.freeze({
         ...evidence,
         auditRef: normalizedAuditRef
       });
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'audit_finalized',
@@ -904,10 +908,10 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         settlementDigest: string;
       }
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       const currentRecord = requireStoredState(hydrate(row));
-      const evidence: any = currentRecord.evidence;
-      const normalizedProofRef: any = boundedId(
+      const evidence = currentRecord.evidence;
+      const normalizedProofRef = boundedId(
         proofRef,
         "Materialization proof reference"
       );
@@ -929,11 +933,11 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const finalized: Readonly<Record<string, any>> = Object.freeze({
+      const finalized = Object.freeze({
         ...evidence,
         proofRef: normalizedProofRef
       });
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET stage = 'proof_finalized',
@@ -968,10 +972,10 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         settlementDigest: string;
       }
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       const currentRecord = requireStoredState(hydrate(row));
       if (currentRecord.stage !== "proof_finalized") throw walMismatch();
-      const evidence: any = currentRecord.evidence;
+      const evidence = currentRecord.evidence;
       if (
         row.stage !== "proof_finalized" ||
         !evidence ||
@@ -979,7 +983,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ) {
         throw walMismatch();
       }
-      const normalizedResult: any = normalizeCompletedResult(
+      const normalizedResult = normalizeCompletedResult(
         result,
         {
           request: currentRecord,
@@ -987,7 +991,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
           evidence
         }
       );
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET status = 'completed',
@@ -1020,7 +1024,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         recoverable: boolean;
       }
     ): Promise<MaterializationDurableState> {
-      const row: any = assertLiveFence(requestRef, ownerFence);
+      const row = assertLiveFence(requestRef, ownerFence);
       if (
         row.stage !== "admitted" ||
         row.publication_json ||
@@ -1033,7 +1037,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
           "Materialization recovery must settle before failure."
         );
       }
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET status = ?,
@@ -1074,7 +1078,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         error: { code: string };
       }
     ): Promise<void> {
-      const current: any = Number(now());
+      const current = Number(now());
       requireChange(db.prepare(`
         UPDATE materialization_requests
         SET status = 'failed',
@@ -1111,7 +1115,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       ));
     },
     async cancelQueued(requestRef: string): Promise<MaterializationStoreCancelResult> {
-      const result: any = db.prepare(`
+      const result = db.prepare(`
         UPDATE materialization_requests
         SET status = 'cancelled',
             stage = 'admitted',
@@ -1132,7 +1136,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       });
     },
     async terminalFail(requestRef: string, error: unknown): Promise<MaterializationStoreTerminalState> {
-      const before: any = read.get(requestRef);
+      const before = read.get(requestRef);
       if (!before) {
         return Object.freeze({
           transitioned: false,
@@ -1154,7 +1158,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
           stage: currentRecord.stage
         });
       }
-      const changed: any = db.prepare(`
+      const changed = db.prepare(`
         UPDATE materialization_requests
         SET status = 'failed',
             stage = 'admitted',
@@ -1181,7 +1185,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         timestamp(),
         requestRef
       );
-      const after: any = read.get(requestRef);
+      const after = read.get(requestRef);
       const afterRecord = after ? requireStoredState(hydrate(after)) : null;
       return Object.freeze({
         transitioned:
@@ -1200,7 +1204,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       afterRequestRef = "",
       limit = MAX_RECONCILE_BATCH
     }: MaterializationStoreReconcileInput = {}): Promise<MaterializationDurableState[]> {
-      const boundedLimit: any = Math.max(
+      const boundedLimit = Math.max(
         1,
         Math.min(
           MAX_RECONCILE_BATCH,
@@ -1221,7 +1225,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
       );
     },
     async retryAfterLease(requestRef: string): Promise<MaterializationStoreLeaseState> {
-      const row: any = read.get(requestRef);
+      const row = read.get(requestRef);
       if (!row) {
         return Object.freeze({
           delayMs: 1,
@@ -1231,7 +1235,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
         });
       }
       const currentRecord = requireStoredState(hydrate(row));
-      const terminal: any = [
+      const terminal = [
         "cancelled",
         "completed",
         "failed"
@@ -1253,10 +1257,10 @@ export function createUploadWorkspaceMaterializationTransactionStore({
     count(): number {
       return Number(
         db
-          .prepare(
+          .prepare<[], { count: number }>(
             "SELECT COUNT(*) AS count FROM materialization_requests"
           )
-          .get().count
+          .get()!.count
       );
     },
     close(): void {
