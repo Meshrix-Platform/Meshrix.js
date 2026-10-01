@@ -5,14 +5,14 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  buildEnterpriseOfflineBundleInventory,
-  validateEnterpriseOfflineBundleInventory,
-  assembleEnterpriseOfflineBundle,
-  verifyEnterpriseOfflineBundle,
-  runEnterpriseOfflineBundleFixture,
-  ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
-  ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS,
-} from "../../../tools/server-scripts/enterprise-single-node-offline-bundle.ts";
+  buildSingleNodeOfflineBundleInventory,
+  validateSingleNodeOfflineBundleInventory,
+  assembleSingleNodeOfflineBundle,
+  verifySingleNodeOfflineBundle,
+  runSingleNodeOfflineBundleFixture,
+  SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
+  SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS,
+} from "../../../tools/server-scripts/single-node-offline-bundle.ts";
 import {
   buildReleaseCandidateIdentity,
 } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
@@ -59,7 +59,7 @@ async function makeReleaseCandidate() : Promise<any> {
         manifest_sha256: "4".repeat(64)
       }
     ],
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: `sha256:${"5".repeat(64)}`
   });
 }
@@ -191,8 +191,8 @@ async function writeTree(root?: any) : Promise<any> {
     return { digest: digestValue, size: Buffer.byteLength(content) };
   }
 
-  for (let index: any = 0; index < ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length; index++) {
-    const platform: any = ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS[index];
+  for (let index: any = 0; index < SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length; index++) {
+    const platform: any = SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS[index];
     const architecture: any = platform.split("/")[1];
     const osName: any = platform.split("/")[0];
     const config: Record<string, any> = {
@@ -308,7 +308,7 @@ async function writeTree(root?: any) : Promise<any> {
   await writeBlob(indexPath, indexText);
   await writeBlob("oci-layout", stableJson({ imageLayoutVersion: "1.0.0" }));
 
-  const platformEvidence: any = ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => {
+  const platformEvidence: any = SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => {
     const subject: any = descriptorEntries.find((entry?: any) : any => entry.platform === platform);
     const attestation: any = attestationEntries.find((entry?: any) : any => entry.platform === platform);
     return {
@@ -332,12 +332,12 @@ async function writeTree(root?: any) : Promise<any> {
     manifestDescriptorText: JSON.stringify({ digest: indexDigest, mediaType: OCI_IMAGE_INDEX_MEDIA_TYPE }),
     manifestText: indexText,
     provenanceText: JSON.stringify({
-      ...(provenance(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS[0], sourceCommit)),
-      ...(provenance(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS[1], sourceCommit))
+      ...(provenance(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS[0], sourceCommit)),
+      ...(provenance(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS[1], sourceCommit))
     }),
     sbomText: JSON.stringify({
-      ...(sbom(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS[0])),
-      ...(sbom(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS[1]))
+      ...(sbom(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS[0])),
+      ...(sbom(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS[1]))
     }),
     platformEvidence
   };
@@ -362,14 +362,14 @@ async function writeTree(root?: any) : Promise<any> {
     rootDigest: indexDigest,
     descriptors: descriptorEntries,
     inventorySeed: {
-      schema_version: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+      schema_version: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
       candidate_digest: sourceCandidate.candidate_digest,
       image_digest: indexDigest,
       compose: {
         image: `${image}:candidate-${sourceCommit}`,
         pull_policy: "never"
       },
-      platforms: [...ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS],
+      platforms: [...SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS],
       files: inventoryEntries,
     },
     authorityText,
@@ -445,7 +445,7 @@ function createSigner(seed?: any) : any {
 async function assembleFixtureToDisk(fixture?: any, seed?: any) : Promise<any> {
   const signer: any = createSigner(seed);
   const outputRoot: any = await trackedTempRoot(`meshrix-offline-${seed}-`);
-  const bundle: any = await assembleEnterpriseOfflineBundle({
+  const bundle: any = await assembleSingleNodeOfflineBundle({
     sourceCandidate: fixture.sourceCandidate,
     releaseImageAuthority: fixture.releaseImageAuthority,
     releaseImageEvidence: fixture.releaseImageEvidence,
@@ -466,19 +466,19 @@ afterEach(async () : Promise<any> => {
   await Promise.all(TMP_ROOTS.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
 });
 
-describe("enterprise single-node offline bundle frozen acceptance", () : any => {
+describe("single-node offline bundle frozen acceptance", () : any => {
   it("builds deterministic exact-key inventory and exact same digest for duplicate builds", async () : Promise<any> => {
     const outputA: any = await writeTree(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-a-")));
     const outputB: any = await writeTree(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-b-")));
 
     const [inventoryA, inventoryB] = await Promise.all([
-      buildEnterpriseOfflineBundleInventory({
+      buildSingleNodeOfflineBundleInventory({
         sourceCandidate: outputA.sourceCandidate,
         releaseImageAuthority: outputA.releaseImageAuthority,
         releaseImageEvidence: outputA.releaseImageEvidence,
         ociLayoutPath: outputA.root,
       }),
-      buildEnterpriseOfflineBundleInventory({
+      buildSingleNodeOfflineBundleInventory({
         sourceCandidate: reverseObjectEntries(outputB.sourceCandidate),
         releaseImageAuthority: reverseObjectEntries(outputB.releaseImageAuthority),
         releaseImageEvidence: reverseObjectEntries(outputB.releaseImageEvidence),
@@ -488,14 +488,14 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
 
     expect(inventoryA).toEqual(inventoryB);
     await Promise.all([
-      validateEnterpriseOfflineBundleInventory({
+      validateSingleNodeOfflineBundleInventory({
         inventory: inventoryA,
         ociLayoutPath: outputA.root,
         sourceCandidate: outputA.sourceCandidate,
         releaseImageAuthority: outputA.releaseImageAuthority,
         releaseImageEvidence: outputA.releaseImageEvidence,
       }),
-      validateEnterpriseOfflineBundleInventory({
+      validateSingleNodeOfflineBundleInventory({
         inventory: inventoryB,
         ociLayoutPath: outputB.root,
         sourceCandidate: reverseObjectEntries(outputB.sourceCandidate),
@@ -505,10 +505,10 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     ]);
     expect(inventoryA.inventory_digest).toMatch(SHA256);
     expect(inventoryA).toEqual(expect.objectContaining({
-      schema_version: ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
+      schema_version: SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
       image_digest: outputA.rootDigest,
       candidate_digest: outputA.sourceCandidate.candidate_digest,
-      platforms: ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS,
+      platforms: SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS,
       compose: expect.any(Object),
       files: expect.any(Array),
       inventory_digest: expect.stringMatching(SHA256),
@@ -529,10 +529,10 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     expect(fixture.releaseImageAuthority.schemaVersion).toBe(RELEASE_IMAGE_AUTHORITY_SCHEMA);
     expect(fixture.releaseImageAuthority.candidateDigest).toMatch(SHA256);
     expect(fixture.releaseImageAuthority.sourceCommit).toBe(fixture.sourceCandidate.source_revision);
-    expect(fixture.releaseImageAuthority.platforms).toEqual(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS);
-    expect(fixture.releaseImageAuthority.platformEvidence).toHaveLength(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length);
+    expect(fixture.releaseImageAuthority.platforms).toEqual(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS);
+    expect(fixture.releaseImageAuthority.platformEvidence).toHaveLength(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length);
 
-    const inventory: any = await buildEnterpriseOfflineBundleInventory({
+    const inventory: any = await buildSingleNodeOfflineBundleInventory({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -544,7 +544,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
 
   it("builds descriptor closure with exact platform digests/sizes/media for amd64 and arm64", async () : Promise<any> => {
     const fixture: any = await writeTree(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-")));
-    const inventory: any = await buildEnterpriseOfflineBundleInventory({
+    const inventory: any = await buildSingleNodeOfflineBundleInventory({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -553,7 +553,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
 
     expect(inventory.compose).toMatchObject({
       descriptor_closure: expect.arrayContaining(
-        ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => {
+        SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.map((platform?: any) : any => {
           const closure: any = fixture.descriptors.find((entry?: any) : any => entry.platform === platform);
           return {
             platform,
@@ -564,50 +564,50 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         })
       )
     });
-    expect(inventory.compose.descriptor_closure).toHaveLength(ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS.length);
+    expect(inventory.compose.descriptor_closure).toHaveLength(SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS.length);
   });
 
   it("validates deterministic file inventory and rejects path traversal", async () : Promise<any> => {
     const fixture: any = await writeTree(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-")));
     const base: Record<string, any> = {
-      schema_version: "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
+      schema_version: "v0.0.1:meshrix:single-node-offline-bundle-1",
       candidate_digest: fixture.sourceCandidate.candidate_digest,
       image_digest: fixture.rootDigest,
       compose: {
         descriptor_closure: [],
         pull_policy: "never",
       },
-      platforms: [...ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS],
+      platforms: [...SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS],
       files: [{ path: "../../etc/passwd", digest: `sha256:${"f".repeat(64)}`, size: 1 }],
     };
-    await expect(validateEnterpriseOfflineBundleInventory({
+    await expect(validateSingleNodeOfflineBundleInventory({
       inventory: base,
       ociLayoutPath: fixture.root,
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
-    })).rejects.toMatchObject({ code: "enterprise_offline_bundle_inventory_traversal_path" });
+    })).rejects.toMatchObject({ code: "single_node_offline_bundle_inventory_traversal_path" });
   });
 
   it("rejects extra file, symlink traversal, case collision, and executable files", async () : Promise<any> => {
     const fixture: any = await writeTree(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-")));
     const base: Record<string, any> = {
-      schema_version: "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
+      schema_version: "v0.0.1:meshrix:single-node-offline-bundle-1",
       candidate_digest: fixture.sourceCandidate.candidate_digest,
       image_digest: fixture.rootDigest,
       compose: { descriptor_closure: [], pull_policy: "never" },
-      platforms: [...ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS],
+      platforms: [...SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS],
       files: [],
     };
 
     await fs.writeFile(path.join(fixture.root, "unexpected.txt"), "x", "utf8");
-    await expect(validateEnterpriseOfflineBundleInventory({
+    await expect(validateSingleNodeOfflineBundleInventory({
       inventory: base,
       ociLayoutPath: fixture.root,
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
-    })).rejects.toMatchObject({ code: "enterprise_offline_bundle_unexpected_file" });
+    })).rejects.toMatchObject({ code: "single_node_offline_bundle_unexpected_file" });
 
     const symlinkFixture: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-symlink-"));
     const linkTarget: any = path.join(symlinkFixture, "real.txt");
@@ -617,13 +617,13 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       ...base,
       files: [{ path: "linked.txt", digest: `sha256:${sha256("ok")}`, size: 2, symlink: true }],
     };
-    await expect(validateEnterpriseOfflineBundleInventory({
+    await expect(validateSingleNodeOfflineBundleInventory({
       inventory: symlinkInventory,
       ociLayoutPath: symlinkFixture,
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
-    })).rejects.toMatchObject({ code: "enterprise_offline_bundle_symlink_denied" });
+    })).rejects.toMatchObject({ code: "single_node_offline_bundle_symlink_denied" });
 
     const collisionInventory: Record<string, any> = {
       ...base,
@@ -632,25 +632,25 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         { path: "config.json", digest: `sha256:${"2".repeat(64)}`, size: 1 },
       ],
     };
-    await expect(validateEnterpriseOfflineBundleInventory({
+    await expect(validateSingleNodeOfflineBundleInventory({
       inventory: collisionInventory,
       ociLayoutPath: fixture.root,
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
-    })).rejects.toMatchObject({ code: "enterprise_offline_bundle_case_collision" });
+    })).rejects.toMatchObject({ code: "single_node_offline_bundle_case_collision" });
 
     const executableInventory: Record<string, any> = {
       ...base,
       files: [{ path: "scripts/run.sh", digest: `sha256:${"3".repeat(64)}`, size: 1, mode: 0o755 }],
     };
-    await expect(validateEnterpriseOfflineBundleInventory({
+    await expect(validateSingleNodeOfflineBundleInventory({
       inventory: executableInventory,
       ociLayoutPath: fixture.root,
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
-    })).rejects.toMatchObject({ code: "enterprise_offline_bundle_executable_file" });
+    })).rejects.toMatchObject({ code: "single_node_offline_bundle_executable_file" });
   });
 
   it("assembles compose for immutable offline pull never and no build with optional service disabled", async () : Promise<any> => {
@@ -658,7 +658,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     const signer: any = createSigner("assemble");
     const outputRoot: any = await trackedTempRoot("meshrix-offline-compose-");
 
-    const result: any = await assembleEnterpriseOfflineBundle({
+    const result: any = await assembleSingleNodeOfflineBundle({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -700,7 +700,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     expect(composeText).not.toMatch(/^\s*build\s*:/mu);
     expect(composeText).not.toMatch(/^\s*profiles\s*:/mu);
 
-    await expect(assembleEnterpriseOfflineBundle({
+    await expect(assembleSingleNodeOfflineBundle({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -710,7 +710,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       optionalServiceEnabled: true,
       outputRoot: await trackedTempRoot("meshrix-offline-optional-service-"),
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_optional_service_denied",
+      code: "single_node_offline_bundle_optional_service_denied",
     });
   });
 
@@ -721,7 +721,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       [signer.keyId]: signer.publicKeyJwk
     };
 
-    const assembled: any = await assembleEnterpriseOfflineBundle({
+    const assembled: any = await assembleSingleNodeOfflineBundle({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -739,7 +739,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     expect(assembled.signature.publicKeyJwk).toBeUndefined();
     expect(assembled.signature.privateKeyJwk).toBeUndefined();
 
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: assembled,
       trustedPublicKeys
     })).resolves.toMatchObject({
@@ -750,8 +750,8 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     const wrongTrust: Record<string, any> = {
       [`${signer.keyId}-wrong`]: createSigner("wrong").publicKey.export({ format: "jwk" })
     };
-    await expect(verifyEnterpriseOfflineBundle({ bundle: assembled, trustedPublicKeys: wrongTrust }))
-      .rejects.toMatchObject({ code: "enterprise_offline_bundle_unknown_key" });
+    await expect(verifySingleNodeOfflineBundle({ bundle: assembled, trustedPublicKeys: wrongTrust }))
+      .rejects.toMatchObject({ code: "single_node_offline_bundle_unknown_key" });
   });
 
   it("rejects wrong purpose, replay, and signature mismatch", async () : Promise<any> => {
@@ -760,7 +760,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     const trusted: Record<string, any> = {
       [signer.keyId]: signer.publicKeyJwk
     };
-    const assembled: any = await assembleEnterpriseOfflineBundle({
+    const assembled: any = await assembleSingleNodeOfflineBundle({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -777,8 +777,8 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         purpose: "other-purpose"
       }
     };
-    await expect(verifyEnterpriseOfflineBundle({ bundle: wrongPurpose, trustedPublicKeys: trusted }))
-      .rejects.toMatchObject({ code: "enterprise_offline_bundle_signature_purpose_invalid" });
+    await expect(verifySingleNodeOfflineBundle({ bundle: wrongPurpose, trustedPublicKeys: trusted }))
+      .rejects.toMatchObject({ code: "single_node_offline_bundle_signature_purpose_invalid" });
 
     const badSignature: Record<string, any> = {
       ...assembled,
@@ -787,8 +787,8 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         signature: `bad-${assembled.signature.signature}`
       }
     };
-    await expect(verifyEnterpriseOfflineBundle({ bundle: badSignature, trustedPublicKeys: trusted }))
-      .rejects.toMatchObject({ code: "enterprise_offline_bundle_signature_invalid" });
+    await expect(verifySingleNodeOfflineBundle({ bundle: badSignature, trustedPublicKeys: trusted }))
+      .rejects.toMatchObject({ code: "single_node_offline_bundle_signature_invalid" });
 
     const replayGuard: Record<string, any> = {
       history: new Set<any>(),
@@ -798,23 +798,23 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         return true;
       }
     };
-    const first: any = await verifyEnterpriseOfflineBundle({
+    const first: any = await verifySingleNodeOfflineBundle({
       bundle: assembled,
       trustedPublicKeys: trusted,
       replayGuard
     });
     expect(first.ok).toBe(true);
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: assembled,
       trustedPublicKeys: trusted,
       replayGuard
-    })).rejects.toMatchObject({ code: "enterprise_offline_bundle_signature_replay" });
+    })).rejects.toMatchObject({ code: "single_node_offline_bundle_signature_replay" });
   });
 
   it("returns only fixed receipt keys that are digest-bound into the signature", async () : Promise<any> => {
     const fixture: any = await writeTree(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-")));
     const signer: any = createSigner("receipt");
-    const assembled: any = await assembleEnterpriseOfflineBundle({
+    const assembled: any = await assembleSingleNodeOfflineBundle({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -824,7 +824,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       outputRoot: await trackedTempRoot("meshrix-offline-assembled-"),
     });
 
-    const verified: any = await verifyEnterpriseOfflineBundle({
+    const verified: any = await verifySingleNodeOfflineBundle({
       bundle: assembled,
       trustedPublicKeys: { [signer.keyId]: signer.publicKeyJwk }
     });
@@ -832,7 +832,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       receiptId: expect.any(String),
       payloadDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
       keyId: signer.keyId,
-      purpose: "enterprise-offline-bundle",
+      purpose: "single-node-offline-bundle",
       signedAt: expect.any(String),
     });
     expect(Object.keys(verified.receipt).sort()).toEqual([
@@ -857,11 +857,11 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         },
       },
     };
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: changedReceipt,
       trustedPublicKeys: { [signer.keyId]: signer.publicKeyJwk },
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_signature_invalid",
+      code: "single_node_offline_bundle_signature_invalid",
     });
   });
 
@@ -879,7 +879,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       consume: vi.fn(async () : Promise<any> => true),
     };
 
-    const runResult: any = await runEnterpriseOfflineBundleFixture({
+    const runResult: any = await runSingleNodeOfflineBundleFixture({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -891,7 +891,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       processRunner,
       replayGuard,
     });
-    const secondRunResult: any = await runEnterpriseOfflineBundleFixture({
+    const secondRunResult: any = await runSingleNodeOfflineBundleFixture({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: fixture.releaseImageEvidence,
@@ -953,7 +953,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       2,
     );
 
-    await expect(buildEnterpriseOfflineBundleInventory({
+    await expect(buildSingleNodeOfflineBundleInventory({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: {
@@ -962,10 +962,10 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       },
       ociLayoutPath: fixture.root,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_release_authority_evidence",
+      code: "single_node_offline_bundle_release_authority_evidence",
     });
 
-    await expect(buildEnterpriseOfflineBundleInventory({
+    await expect(buildSingleNodeOfflineBundleInventory({
       sourceCandidate: fixture.sourceCandidate,
       releaseImageAuthority: fixture.releaseImageAuthority,
       releaseImageEvidence: {
@@ -974,7 +974,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       },
       ociLayoutPath: fixture.root,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_release_evidence_invalid",
+      code: "single_node_offline_bundle_release_evidence_invalid",
     });
   });
 
@@ -1002,13 +1002,13 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     expect(replacedLayer.length).toBe(originalLayer.length);
     await fs.writeFile(layerPath, replacedLayer);
 
-    await expect(buildEnterpriseOfflineBundleInventory({
+    await expect(buildSingleNodeOfflineBundleInventory({
       sourceCandidate: digestFixture.sourceCandidate,
       releaseImageAuthority: digestFixture.releaseImageAuthority,
       releaseImageEvidence: digestFixture.releaseImageEvidence,
       ociLayoutPath: digestFixture.root,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_oci_layer_digest",
+      code: "single_node_offline_bundle_oci_layer_digest",
     });
 
     const unreferencedFixture: any = await writeTree(
@@ -1023,13 +1023,13 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     );
     await fs.writeFile(unreferencedPath, unreferencedBytes, { mode: 0o600 });
 
-    await expect(buildEnterpriseOfflineBundleInventory({
+    await expect(buildSingleNodeOfflineBundleInventory({
       sourceCandidate: unreferencedFixture.sourceCandidate,
       releaseImageAuthority: unreferencedFixture.releaseImageAuthority,
       releaseImageEvidence: unreferencedFixture.releaseImageEvidence,
       ociLayoutPath: unreferencedFixture.root,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_unexpected_file",
+      code: "single_node_offline_bundle_unexpected_file",
     });
 
     const duplicateFixture: any = await writeTree(
@@ -1050,7 +1050,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     });
     await fs.writeFile(indexPath, duplicateIndexText);
 
-    await expect(buildEnterpriseOfflineBundleInventory({
+    await expect(buildSingleNodeOfflineBundleInventory({
       sourceCandidate: duplicateFixture.sourceCandidate,
       releaseImageAuthority: {
         ...duplicateFixture.releaseImageAuthority,
@@ -1065,7 +1065,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       },
       ociLayoutPath: duplicateFixture.root,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_release_evidence_invalid",
+      code: "single_node_offline_bundle_release_evidence_invalid",
     });
   });
 
@@ -1076,13 +1076,13 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
     const assembled: any = await assembleFixtureToDisk(fixture, "private-jwk");
     const privateKeyJwk: any = assembled.signer.privateKey.export({ format: "jwk" });
 
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: assembled.bundle,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_unknown_key",
+      code: "single_node_offline_bundle_unknown_key",
     });
 
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: {
         ...assembled.bundle,
         signature: {
@@ -1092,16 +1092,16 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       },
       trustedPublicKeys: {},
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_signature_invalid",
+      code: "single_node_offline_bundle_signature_invalid",
     });
 
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: assembled.bundle,
       trustedPublicKeys: {
         [assembled.signer.keyId]: privateKeyJwk,
       },
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_unknown_key",
+      code: "single_node_offline_bundle_unknown_key",
     });
   });
 
@@ -1126,12 +1126,12 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       consume: vi.fn(async () : Promise<any> => true),
     };
 
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: invalidBundle,
       trustedPublicKeys: assembled.trustedPublicKeys,
       replayGuard,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_signature_invalid",
+      code: "single_node_offline_bundle_signature_invalid",
     });
     expect(replayGuard.consume).not.toHaveBeenCalled();
   });
@@ -1143,11 +1143,11 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
 
     const deleted: any = await assembleFixtureToDisk(fixture, "disk-delete");
     await fs.rm(path.join(deleted.outputRoot, "evidence", "sbom.json"));
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundleRoot: deleted.outputRoot,
       trustedPublicKeys: deleted.trustedPublicKeys,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_file_unavailable",
+      code: "single_node_offline_bundle_file_unavailable",
     });
 
     const modified: any = await assembleFixtureToDisk(fixture, "disk-modify");
@@ -1156,11 +1156,11 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       "{}\n",
       "utf8",
     );
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundleRoot: modified.outputRoot,
       trustedPublicKeys: modified.trustedPublicKeys,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_output_metadata_mismatch",
+      code: "single_node_offline_bundle_output_metadata_mismatch",
     });
 
     const appended: any = await assembleFixtureToDisk(fixture, "disk-append");
@@ -1169,11 +1169,11 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
       "unexpected",
       { mode: 0o600 },
     );
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundleRoot: appended.outputRoot,
       trustedPublicKeys: appended.trustedPublicKeys,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_unexpected_file",
+      code: "single_node_offline_bundle_unexpected_file",
     });
   });
 
@@ -1234,7 +1234,7 @@ describe("enterprise single-node offline bundle frozen acceptance", () : any => 
         "utf8",
       ),
     ).toBe(fixture.releaseImageEvidence.sbomText);
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundle: assembled.bundle,
       bundleRoot: assembled.outputRoot,
       trustedPublicKeys: assembled.trustedPublicKeys,

@@ -57,8 +57,8 @@ const { validateFactSourceAuthorityFindings } = await import(pathToFileURL(
 ).href);
 const {
   ACCEPTANCE_REQUIRED_REPORTS,
-  PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
-  PRIVATE_DEPLOYMENT_REQUIRED_REPORTS,
+  SINGLE_NODE_EVIDENCE_COMMANDS,
+  SINGLE_NODE_REQUIRED_REPORTS,
   PLATFORM_ACCEPTANCE_COMMANDS
 } = await import(pathToFileURL(
   path.join(repoRoot, "tools/server-scripts/verify-platform-acceptance.ts")
@@ -228,8 +228,8 @@ const PLATFORM_ACCEPTANCE_SOURCE: any =
   "tools/server-scripts/verify-platform-acceptance.ts";
 const PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE: any =
   "tools/server-scripts/lib/platform-acceptance-command-catalog.ts";
-const PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_CATALOG_SOURCE: any =
-  "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
+const SINGLE_NODE_INTERNAL_PLATFORM_E2E_CATALOG_SOURCE: any =
+  "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts";
 const FACT_SOURCE_AUTHORITY_REGISTRY: any = "tools/registry/fact-source-authority.registry.json";
 const REQUIRED_FACT_AUTHORITY_PATHS: readonly any[] = Object.freeze([
   "packages/contracts/src/operations/operation-registry.ts",
@@ -251,7 +251,7 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
   "process-identity.runtime-contract": "packages/foundation/src/security/process-identity/index.ts",
   "release.readiness-reduction": "tools/server-scripts/lib/release-evidence-readiness.ts",
   "platform.acceptance-workflow": "tools/server-scripts/verify-platform-acceptance.ts",
-  "private-deployment.internal-platform-e2e-catalog": PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
+  "single-node.internal-platform-e2e-catalog": PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
   "upstream-fixture.transit-evidence": "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts",
   "upstream-mcp.gateway-evidence": "tools/server-scripts/lib/upstream-mcp-gateway-evidence.ts",
   "downstream-agent.tool-loop-evidence": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
@@ -1019,8 +1019,8 @@ validateReleaseDagCatalogConsistency({
 });
 validateCommandReportCatalogConsistency({
   source: PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
-  commands: PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
-  requiredReports: PRIVATE_DEPLOYMENT_REQUIRED_REPORTS
+  commands: SINGLE_NODE_EVIDENCE_COMMANDS,
+  requiredReports: SINGLE_NODE_REQUIRED_REPORTS
 });
 if (!RELEASE_EVIDENCE_READINESS_REDUCER_PATTERN.test(releaseAggregatorSource)) {
   releaseSourceOfTruthFindings.push({
@@ -1094,7 +1094,7 @@ if (scriptRegistryWithFactSourceAuthorityFinding.releaseReady === true) {
     detail: "the shared release evidence reducer must reject script-registry reports that found fact-source authority violations"
   });
 }
-const governanceCoverageWithUnmappedOperation: any = createReleaseEvidenceReadiness("build/reports/enterprise-governance-coverage.json", registeredReleaseReportFixture("build/reports/enterprise-governance-coverage.json", {
+const governanceCoverageWithUnmappedOperation: any = createReleaseEvidenceReadiness("build/reports/authorization-governance-coverage.json", registeredReleaseReportFixture("build/reports/authorization-governance-coverage.json", {
   summary: {
     releaseReady: true,
     reportLeakScan: true,
@@ -1149,7 +1149,7 @@ if (!/createReportFreshnessEvidence/u.test(releaseEvidenceFreshnessHelperSource)
   });
 }
 for (const relativePath of [
-  "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+  "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
 ]) {
   const source: any = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
   if (!RELEASE_EVIDENCE_FRESHNESS_PATTERN.test(source)) {
@@ -1230,21 +1230,21 @@ if (!PRODUCTION_GATE_PROJECTION_ONLY_PATTERN.test(productionReadinessGateSource)
   });
 }
 const privateDeploymentSource: any = await fs.readFile(
-  path.join(repoRoot, "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"),
+  path.join(repoRoot, "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"),
   "utf8"
 );
 if (!PRIVATE_REDUCER_ONLY_PATTERN.test(privateDeploymentSource)) {
   releaseSourceOfTruthFindings.push({
-    source: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
-    kind: "private-deployment-not-reducer-only",
-    detail: "private deployment must reduce evidence already produced by canonical platform acceptance command owners"
+    source: "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
+    kind: "single-node-not-reducer-only",
+    detail: "single-node closure must reduce evidence already produced by canonical platform acceptance command owners"
   });
 }
 if (RELEASE_COMMAND_DAG_RUNNER_IMPORT_PATTERN.test(privateDeploymentSource)) {
   releaseSourceOfTruthFindings.push({
-    source: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
-    kind: "private-deployment-shadow-dag",
-    detail: "private deployment must not execute a second release command DAG"
+    source: "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
+    kind: "single-node-shadow-dag",
+    detail: "single-node closure must not execute a second release command DAG"
   });
 }
 if (releaseSourceOfTruthFindings.length > 0) {
@@ -1260,7 +1260,7 @@ if (releaseSourceOfTruthFindings.length > 0) {
 console.log("10. Checking self-contained gateway scenario source of truth...");
 for (const relativePath of [
   PLATFORM_ACCEPTANCE_SOURCE,
-  "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+  "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
   ...RELEASE_PROFILE_SOURCES
 ]) {
   const source: any = await fs.readFile(path.join(repoRoot, relativePath), "utf8");

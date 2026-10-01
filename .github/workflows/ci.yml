@@ -352,8 +352,8 @@ jobs:
           retention-days: 30
           overwrite: true
 
-  enterprise-delivery:
-    name: Enterprise delivery checkpoint
+  single-node-delivery:
+    name: Single-node delivery checkpoint
     needs: [stable-candidate, audit-reduction]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
@@ -375,14 +375,14 @@ jobs:
         with:
           name: stable-source-candidate-${{ github.sha }}
           path: build/release/control
-      - name: Produce enterprise single-node delivery receipt in Ubuntu
+      - name: Produce single-node delivery receipt in Ubuntu
         run: >-
-          npm run verify:enterprise-single-node:ubuntu-container --
+          npm run verify:single-node:ubuntu-container --
           --source-candidate build/release/control/SOURCE_CANDIDATE.json
 
   functional-acceptance:
     name: Functional acceptance checkpoint
-    needs: [audit-reduction, enterprise-delivery, supply-chain]
+    needs: [audit-reduction, single-node-delivery, supply-chain]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 395
@@ -417,7 +417,7 @@ jobs:
 
   functional-completeness:
     name: Stable functional completeness release gate
-    needs: [stable-candidate, repository-checkpoint, audit-reduction, enterprise-delivery, functional-acceptance, supply-chain]
+    needs: [stable-candidate, repository-checkpoint, audit-reduction, single-node-delivery, functional-acceptance, supply-chain]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20

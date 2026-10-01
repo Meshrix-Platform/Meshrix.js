@@ -25,7 +25,7 @@ const execFileAsync: any = promisify(execFile);
 const DEFAULT_REPO_ROOT: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const RELEASE_DEFINITION_PATH: any = "tools/registry/release-definition.registry.json";
 const PACKAGE_LOCK_PATH: any = "package-lock.json";
-const SUPPORTED_PROFILE: any = "enterprise-single-node";
+const SUPPORTED_PROFILE: any = "single-node";
 const SOURCE_REVISION_PATTERN: any = /^[a-f0-9]{40}$/u;
 const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
 const PREFIXED_SHA256_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
@@ -196,7 +196,7 @@ function normalizeSupportedProfiles(value?: any) : any {
   ) {
     fail(
       "release_candidate_supported_profiles_invalid",
-      "The release candidate supports exactly enterprise-single-node.",
+      "The release candidate supports exactly single-node.",
     );
   }
   return Object.freeze([SUPPORTED_PROFILE]);
@@ -501,7 +501,7 @@ function canonicalReportInventoryDigest() : any {
   ) {
     fail(
       "release_candidate_supported_profiles_invalid",
-      "Platform acceptance must register exactly enterprise-single-node.",
+      "Platform acceptance must register exactly single-node.",
     );
   }
   const inventory: any = createReleaseEvidenceInventory({

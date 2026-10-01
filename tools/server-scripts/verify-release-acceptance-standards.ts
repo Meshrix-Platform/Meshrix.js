@@ -188,7 +188,7 @@ export async function verifyReleaseAcceptanceStandards({
     "\n  audit-console-evidence-checkpoint:\n",
     "\n  audit-console-checkpoint:\n",
     "\n  audit-reduction:\n",
-    "\n  enterprise-delivery:\n",
+    "\n  single-node-delivery:\n",
     "\n  functional-acceptance:\n",
     "fail-fast: false",
     "npm run test:audit:stage",
@@ -205,7 +205,7 @@ export async function verifyReleaseAcceptanceStandards({
     !stableGateSection.includes("stable-authority-${{ github.sha }}") ||
     !stableGateSection.includes("repository-checkpoint") ||
     !stableGateSection.includes("audit-reduction") ||
-    !stableGateSection.includes("enterprise-delivery") ||
+    !stableGateSection.includes("single-node-delivery") ||
     !stableGateSection.includes("functional-acceptance")
   ) {
     fail("ci_workflow_stable_gate_contract_invalid");

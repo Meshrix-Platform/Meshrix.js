@@ -2,9 +2,9 @@
 import { spawnSync } from "node:child_process";
 
 import {
-  ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS,
-  ENTERPRISE_OFFLINE_BUNDLE_SCHEMA,
-} from "./enterprise-single-node-offline-bundle.ts";
+  SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS,
+  SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA,
+} from "./single-node-offline-bundle.ts";
 
 export const OFFLINE_DELIVERY_CLOSURE_VERIFIER: any =
   "tools/server-scripts/offline-delivery-closure.ts";
@@ -23,9 +23,9 @@ export const OFFLINE_DELIVERY_FOCUSED_SUITE: any =
 export const OFFLINE_DELIVERY_INSTRUCTIONS_RELATIVE_PATH: any =
   "docker/offline-delivery-instructions.md";
 export const OFFLINE_DELIVERY_CLOSURE_REPORT_SCHEMA: any =
-  ENTERPRISE_OFFLINE_BUNDLE_SCHEMA;
-export const OFFLINE_DELIVERY_BUNDLE_SCHEMA: any = ENTERPRISE_OFFLINE_BUNDLE_SCHEMA;
-export const OFFLINE_DELIVERY_PLATFORMS: readonly any[] = ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS;
+  SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA;
+export const OFFLINE_DELIVERY_BUNDLE_SCHEMA: any = SINGLE_NODE_OFFLINE_BUNDLE_SCHEMA;
+export const OFFLINE_DELIVERY_PLATFORMS: readonly any[] = SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS;
 export const OFFLINE_DELIVERY_FIRST_GOVERNED_CALL: Readonly<Record<string, any>> = Object.freeze({
   protocol: "mcp",
   method: "tools/call",

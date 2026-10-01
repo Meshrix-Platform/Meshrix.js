@@ -55,11 +55,11 @@ describe("stable audit checkpoint reducer", () => {
     expect(stages["audit-stable-console-evidence"]).toEqual([
       "governance.operation-permission-protocol-consistency",
       "governance.operation-permission-tag-governed-e2e",
-      "governance.authorization-coverage",
-      "governance.enterprise-audit-retention-redaction",
+      "authorization.governance-coverage",
+      "audit.retention-redaction",
       "observability.semantic-baseline",
-      "governance.enterprise-authorization-enforcement",
-      "governance.enterprise-observability-coverage",
+      "authorization.enforcement",
+      "observability.coverage",
       "upstream-gateway.e2e",
     ]);
     expect(new Set(staged).size).toBe(staged.length);

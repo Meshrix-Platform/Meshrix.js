@@ -13,8 +13,8 @@
 # For production, place this behind a TLS-terminating reverse proxy and apply
 # network isolation. See README.md for full guidance.
 #
-# This file is the development/source compose definition and is not the offline
-# release artifact for enterprise single-node.
+# This file is the development/source compose definition; offline deployments
+# use docker-compose.single-node.yml.
 # ==============================================================================
 services:
   meshrix-server:

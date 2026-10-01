@@ -31,7 +31,7 @@ function candidate() : any {
       version: "0.0.1",
       manifest_sha256: "3".repeat(64)
     }],
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: `sha256:${"f".repeat(64)}`,
   });
 }

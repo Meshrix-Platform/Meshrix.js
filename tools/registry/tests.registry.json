@@ -167,7 +167,7 @@
         "security.authorization-hardening",
         "security.http-resource-admission",
         "governance.operation-permission-protocol-consistency",
-        "governance.authorization-coverage",
+        "authorization.governance-coverage",
         "downstream-mcp.installer-convergence"
       ],
       "timeoutMs": 1800000
@@ -186,11 +186,11 @@
         "governance.operation-permission-universal-tag-policy",
         "governance.operation-permission-protocol-consistency",
         "governance.operation-permission-tag-governed-e2e",
-        "governance.authorization-coverage",
-        "governance.enterprise-authorization-enforcement",
-        "governance.enterprise-audit-retention-redaction",
+        "authorization.governance-coverage",
+        "authorization.enforcement",
+        "audit.retention-redaction",
         "observability.semantic-baseline",
-        "governance.enterprise-observability-coverage",
+        "observability.coverage",
         "approval-governance",
         "architecture.facts",
         "governance.organization-model",
@@ -400,11 +400,11 @@
       "suites": [
         "governance.operation-permission-protocol-consistency",
         "governance.operation-permission-tag-governed-e2e",
-        "governance.authorization-coverage",
-        "governance.enterprise-audit-retention-redaction",
+        "authorization.governance-coverage",
+        "audit.retention-redaction",
         "observability.semantic-baseline",
-        "governance.enterprise-authorization-enforcement",
-        "governance.enterprise-observability-coverage",
+        "authorization.enforcement",
+        "observability.coverage",
         "upstream-gateway.e2e"
       ],
       "timeoutMs": 1800000
@@ -457,7 +457,7 @@
       "suites": [
         "release.npm-package-installability",
         "jobs.work-queue-postgres-container",
-        "internal-platform.private-deployment-e2e"
+        "internal-platform.single-node-e2e"
       ],
       "timeoutMs": 7200000
     },
@@ -1094,7 +1094,7 @@
         "tests/vitest/server/merkle-state-substrate.test.ts",
         "tests/vitest/server/storage-backup-restore.test.ts",
         "tests/vitest/server/storage-independent-backup-root.test.ts",
-        "tests/vitest/server/enterprise-upgrade-rollback.test.ts",
+        "tests/vitest/server/single-node-upgrade-rollback.test.ts",
         "tests/vitest/server/storage-retention-and-maintenance.test.ts",
         "tests/vitest/server/storage-service-manifest.test.ts",
         "tests/vitest/server/storage-production-restore-evidence.test.ts",
@@ -1756,14 +1756,14 @@
       ]
     },
     {
-      "id": "internal-platform.private-deployment-e2e",
-      "label": "Private deployment internal platform aggregate E2E verifier",
+      "id": "internal-platform.single-node-e2e",
+      "label": "Single-node internal platform aggregate E2E verifier",
       "owner": "platform",
       "package": "repo",
       "level": "e2e",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1773,7 +1773,7 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/private-deployment-internal-platform-e2e.json"
+        "build/reports/single-node-internal-platform-e2e.json"
       ]
     },
     {
@@ -2668,8 +2668,8 @@
       ]
     },
     {
-      "id": "governance.authorization-coverage",
-      "label": "Enterprise authorization governance coverage verifier",
+      "id": "authorization.governance-coverage",
+      "label": "Authorization governance coverage verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
@@ -2683,18 +2683,18 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-governance-coverage.json"
+        "build/reports/authorization-governance-coverage.json"
       ]
     },
     {
-      "id": "governance.enterprise-authorization-enforcement",
-      "label": "Enterprise authorization approval and grant enforcement verifier",
+      "id": "authorization.enforcement",
+      "label": "Authorization approval and grant enforcement verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-authorization-enforcement.ts"
+        "tools/server-scripts/verify-authorization-enforcement.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2702,18 +2702,18 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-authorization-enforcement.json"
+        "build/reports/authorization-enforcement.json"
       ]
     },
     {
-      "id": "governance.enterprise-audit-retention-redaction",
-      "label": "Enterprise audit retention export prune and redaction verifier",
+      "id": "audit.retention-redaction",
+      "label": "Audit retention export prune and redaction verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts"
+        "tools/server-scripts/verify-audit-retention-redaction.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -2721,18 +2721,18 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-audit-retention-redaction.json"
+        "build/reports/audit-retention-redaction.json"
       ]
     },
     {
-      "id": "governance.enterprise-observability-coverage",
-      "label": "Enterprise metrics health trace observability verifier",
+      "id": "observability.coverage",
+      "label": "Metrics health trace observability verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-observability-coverage.ts"
+        "tools/server-scripts/verify-observability-coverage.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2740,7 +2740,7 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-observability-coverage.json"
+        "build/reports/observability-coverage.json"
       ]
     },
     {

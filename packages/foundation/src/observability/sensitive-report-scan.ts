@@ -28,6 +28,9 @@ export const SENSITIVE_REPORT_PATTERNS: readonly any[] = Object.freeze([
   ["raw_payload", /raw prompt body|private file content/u]
 ]);
 
+const SENSITIVE_REPORT_KEY_SUFFIX: any = /(?:authorization(?:header|value)?|token|secret|password|cookie|credential)$/u;
+const SENSITIVE_REPORT_KEY_MATERIAL: any = /(?:api|private|signing|session|root|chain|message)key/u;
+
 function serialized(value?: any) : any {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
@@ -106,7 +109,9 @@ function sanitizeValue(value: any, { depth, itemCounter, signal }: Record<string
   }
   const output: Record<string, any> = {};
   for (const key of Object.keys(value).sort()) {
-    const sensitiveKey: any = /token|secret|password|authorization|cookie|api[-_]?key|private[-_]?key|credential/i.test(key);
+    const normalizedKey: any = key.replace(/[^A-Za-z0-9]/gu, "").toLowerCase();
+    const sensitiveKey: any = SENSITIVE_REPORT_KEY_SUFFIX.test(normalizedKey) ||
+      SENSITIVE_REPORT_KEY_MATERIAL.test(normalizedKey);
     output[key] = sensitiveKey
       ? "[redacted]"
       : sanitizeValue(value[key], { depth: depth + 1, itemCounter, signal });

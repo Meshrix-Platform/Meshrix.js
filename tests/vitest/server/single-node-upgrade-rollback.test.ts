@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  executeEnterpriseUpgradeRollback
-} from "../../../tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts";
+  executeSingleNodeUpgradeRollback
+} from "../../../tools/server-scripts/upgrade/single-node-upgrade-rollback.ts";
 
 const CANDIDATE: any =
   "registry.example/meshrix-js/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -59,10 +59,10 @@ function harness({ candidateHealthy = true, restoreSucceeds = true }: Record<str
   };
 }
 
-describe("enterprise N-1 upgrade rollback", () : any => {
+describe("single-node N-1 upgrade rollback", () : any => {
   it("admits, backs up, activates, and validates one immutable candidate", async () : Promise<any> => {
     const fixture: any = harness();
-    await expect(executeEnterpriseUpgradeRollback({
+    await expect(executeSingleNodeUpgradeRollback({
       candidateImage: CANDIDATE,
       previousImage: PREVIOUS,
       ...fixture.ports
@@ -81,14 +81,14 @@ describe("enterprise N-1 upgrade rollback", () : any => {
 
   it("reactivates the prior digest and restores state after candidate validation fails", async () : Promise<any> => {
     const fixture: any = harness({ candidateHealthy: false });
-    await expect(executeEnterpriseUpgradeRollback({
+    await expect(executeSingleNodeUpgradeRollback({
       candidateImage: CANDIDATE,
       previousImage: PREVIOUS,
       ...fixture.ports
     })).resolves.toMatchObject({
       ok: false,
       outcome: "rolled-back",
-      failureCode: "enterprise_upgrade_candidate_validation_failed"
+      failureCode: "single_node_upgrade_candidate_validation_failed"
     });
     expect(fixture.calls).toEqual([
       ["admit", CANDIDATE],
@@ -104,30 +104,30 @@ describe("enterprise N-1 upgrade rollback", () : any => {
 
   it("records in_doubt and fences blind retry when rollback cannot restore state", async () : Promise<any> => {
     const fixture: any = harness({ candidateHealthy: false, restoreSucceeds: false });
-    await expect(executeEnterpriseUpgradeRollback({
+    await expect(executeSingleNodeUpgradeRollback({
       candidateImage: CANDIDATE,
       previousImage: PREVIOUS,
       ...fixture.ports
-    })).rejects.toMatchObject({ code: "enterprise_upgrade_rollback_in_doubt" });
+    })).rejects.toMatchObject({ code: "single_node_upgrade_rollback_in_doubt" });
     expect(fixture.journals.at(-1)).toMatchObject({
       phase: "in-doubt",
       outcome: "in_doubt",
-      rollbackFailureCode: "enterprise_upgrade_restore_failed"
+      rollbackFailureCode: "single_node_upgrade_restore_failed"
     });
   });
 
   it("rejects floating or identical images before side effects", async () : Promise<any> => {
     const fixture: any = harness();
-    await expect(executeEnterpriseUpgradeRollback({
+    await expect(executeSingleNodeUpgradeRollback({
       candidateImage: "registry.example/meshrix-js/runtime:latest",
       previousImage: PREVIOUS,
       ...fixture.ports
-    })).rejects.toMatchObject({ code: "enterprise_upgrade_candidate_digest_required" });
-    await expect(executeEnterpriseUpgradeRollback({
+    })).rejects.toMatchObject({ code: "single_node_upgrade_candidate_digest_required" });
+    await expect(executeSingleNodeUpgradeRollback({
       candidateImage: CANDIDATE,
       previousImage: CANDIDATE,
       ...fixture.ports
-    })).rejects.toMatchObject({ code: "enterprise_upgrade_candidate_must_differ" });
+    })).rejects.toMatchObject({ code: "single_node_upgrade_candidate_must_differ" });
     expect(fixture.calls).toEqual([]);
   });
 });

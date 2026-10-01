@@ -1,12 +1,12 @@
 /**
- * Constants used by the private-deployment evidence reducer.
+ * Constants used by the single-node evidence reducer.
  *
  * Command execution, scheduling, report ownership, and evidence membership are
  * owned exclusively by platform-acceptance-command-catalog.ts.
  */
 
-export const PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH: any =
-  "build/reports/private-deployment-internal-platform-e2e.json";
+export const SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH: any =
+  "build/reports/single-node-internal-platform-e2e.json";
 
 export const LOCAL_FIXTURE_SOURCE_FILES: readonly any[] = Object.freeze([
   "tools/server-scripts/verify-upstream-gateway-e2e.ts",

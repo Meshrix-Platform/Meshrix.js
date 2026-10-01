@@ -391,7 +391,7 @@ MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source" \
 MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE="$proof_signer_source" \
 MESHRIX_PUBLIC_BASE_URL="$public_base_url" \
 MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
-  docker compose -f docker-compose.yml -f docker-compose.enterprise.yml \
+  docker compose -f docker-compose.yml -f docker-compose.single-node.yml \
   up -d --no-build --pull never --wait meshrix-server
 ```
 
@@ -402,7 +402,7 @@ MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source" \
 MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE="$proof_signer_source" \
 MESHRIX_PUBLIC_BASE_URL="$public_base_url" \
 MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
-  node tools/server-scripts/enterprise-single-node-cloud-deployment.ts \
+  node tools/server-scripts/single-node-cloud-deployment.ts \
   plan --candidate "$candidate" --offline
 ```
 
@@ -418,7 +418,7 @@ Offline activation itself has no registry dependency after the exact image is
 loaded and addressable by digest. Candidate-bound Linux amd64 and arm64 OCI
 layouts, inventory, SBOM, provenance, signatures, and activation instructions
 are assembled by composing
-`tools/server-scripts/enterprise-single-node-offline-bundle.ts`. Prove exact
+`tools/server-scripts/single-node-offline-bundle.ts`. Prove exact
 byte transfer and the disconnected lifecycle contract with:
 
 ```bash
@@ -448,18 +448,18 @@ retain its successful receipt; backups are written to the independent
 `--previous` to inspect the rollback activation plus the governed
 `storage.backups.restore_preview` and `storage.backups.restore` recovery
 entries. The durable orchestration state machine is implemented at
-`tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts`; verify its
+`tools/server-scripts/upgrade/single-node-upgrade-rollback.ts`; verify its
 successful, rolled-back, and `in_doubt` paths with
-`npm run vitest -- tests/vitest/server/enterprise-upgrade-rollback.test.ts`. The candidate-bound
-enterprise operations closure is:
+`npm run vitest -- tests/vitest/server/single-node-upgrade-rollback.test.ts`. The candidate-bound
+single-node operations closure is:
 
 ```bash
-node tools/server-scripts/enterprise-operations-closure.ts
+node tools/server-scripts/single-node-operations-closure.ts
 ```
 
 It composes governed MCP, denial and uncertainty, diagnostics, emergency
 administration, key lifecycle, clean-root restore, and N-1 upgrade / failed
-rollback producers into `build/reports/enterprise-operations-closure.json`.
+rollback producers into `build/reports/single-node-operations-closure.json`.
 Missing container, key, or restore environments fail closed with a finite
 blocker. Capacity, production-readiness, and environment qualification remain remaining
 required work after this closure. Digest-pinned images may be supplied as
@@ -1198,7 +1198,7 @@ that profile owns the public-boundary, secret-hygiene, local-info, registry,
 root-hygiene, and script-registry child reports. The remaining functional
 layers refresh plugin-package admission and runtime evidence, protocol-only
 upstream fixture transit, neutral downstream peer conformance, gateway
-profiling, surface convergence, private-deployment aggregate E2E, and gap
+profiling, surface convergence, single-node deployment aggregate E2E, and gap
 audit. External product adoption and real-machine receipts remain outside this
 DAG and cannot block or promote it.
 
@@ -1255,7 +1255,7 @@ rather than a document-only statement. The drill exercises the registered
 `storage.backups.list`, `storage.backups.create`,
 `storage.backups.retention`, `storage.backups.restore_preview`, and
 `storage.backups.restore` operation path against the selected
-private-deployment storage backend. It verifies authorization denial with zero
+configured storage backend. It verifies authorization denial with zero
 storage side effects, confirmation denial before restore execution, retention
 approval, the confirmed restore, proof and audit lifecycle completion, and
 storage-kernel reopen. The functional verifier writes only a redacted fact

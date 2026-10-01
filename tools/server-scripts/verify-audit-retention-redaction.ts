@@ -14,10 +14,10 @@ import {
   sanitizeSensitiveError
 } from "./lib/sensitive-report-scan.ts";
 
-const REPORT_PATH: any = "build/reports/enterprise-audit-retention-redaction.json";
+const REPORT_PATH: any = "build/reports/audit-retention-redaction.json";
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const VERIFIER: any = "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts";
-const COMMAND_ID: any = "enterprise-audit-retention-redaction";
+const VERIFIER: any = "tools/server-scripts/verify-audit-retention-redaction.ts";
+const COMMAND_ID: any = "audit-retention-redaction";
 const REPORT_SCHEMA_VERSION: any = "v0.0.1:observability:audit-retention-redaction-report-1";
 const REQUIREMENTS: readonly any[] = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES: readonly any[] = Object.freeze([
@@ -43,7 +43,7 @@ function oldIso(daysAgo?: any) : any {
 }
 
 async function main() : Promise<any> {
-  const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-enterprise-audit-"));
+  const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-audit-retention-"));
   const store: any = createOperationAuditStore({ userDataPath });
   const bearerFixture: any = ["Bearer", "raw", "token", "123"].join("-").replace("Bearer-", "Bearer ");
   const secretFixture: any = ["sk", "test", "secret"].join("-");
@@ -69,7 +69,7 @@ async function main() : Promise<any> {
   }
 
   try {
-    const traceId: any = "trace_enterprise_audit_static";
+    const traceId: any = "trace_audit_retention_static";
     for (const [capability, operationId] of CAPABILITY_OPERATIONS) {
       await store.append({
         traceId,
@@ -200,7 +200,7 @@ async function main() : Promise<any> {
     });
   } catch (error: any) {
     exitCode = 1;
-    record(report.destructiveTests, "enterprise audit retention redaction verifier failed", "failed", {
+    record(report.destructiveTests, "audit retention and redaction verifier failed", "failed", {
       errorName: error instanceof Error ? error.name : typeof error,
       message: sanitizeSensitiveError(error).replace(userDataPath, "[redacted]")
     });
@@ -227,18 +227,18 @@ async function main() : Promise<any> {
       checkpointDigest: revision,
       requirements: REQUIREMENTS
     });
-    assertNoSensitiveReportLeak(finalizedReport, "enterprise audit report");
+    assertNoSensitiveReportLeak(finalizedReport, "audit retention report");
     assertReportProvenance(finalizedReport, provenance);
     await store.close();
     await fs.rm(userDataPath, { recursive: true, force: true });
   }
 
   if (exitCode !== 0) {
-    console.error(`[enterprise-audit-retention-redaction] report=${REPORT_PATH}`);
+    console.error(`[audit-retention-redaction] report=${REPORT_PATH}`);
     process.exit(exitCode);
   }
-  console.log(`[enterprise-audit-retention-redaction] report=${REPORT_PATH}`);
-  console.log("[enterprise-audit-retention-redaction] readyForReleaseReduction=true");
+  console.log(`[audit-retention-redaction] report=${REPORT_PATH}`);
+  console.log("[audit-retention-redaction] readyForReleaseReduction=true");
 }
 
 await main();

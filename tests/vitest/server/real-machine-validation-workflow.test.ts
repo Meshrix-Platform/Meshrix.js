@@ -28,7 +28,7 @@ async function fixture() : Promise<any> {
     status: "accepted",
     releaseReady: true,
     generationId: "real-machine-test-generation",
-    selectedProfile: "enterprise-single-node",
+    selectedProfile: "single-node",
     sourceRevision: SOURCE_REVISION,
     candidateDigest: CANDIDATE.slice("sha256:".length),
   })}\n`, { mode: 0o600 });

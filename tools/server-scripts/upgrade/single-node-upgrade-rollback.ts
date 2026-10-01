@@ -3,7 +3,7 @@ import path from "node:path";
 
 const IMAGE_PATTERN: any =
   /^(?=.{1,512}$)[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+@sha256:[a-f0-9]{64}$/u;
-const JOURNAL_SCHEMA: any = "v0.0.1:enterprise-upgrade:rollback-journal-1";
+const JOURNAL_SCHEMA: any = "v0.0.1:single-node-upgrade:rollback-journal-1";
 
 function upgradeError(code?: any, message?: any, cause: any = null) : any {
   return Object.assign(new Error(message, cause ? { cause } : undefined), { code });
@@ -17,14 +17,14 @@ function imageReference(value?: any, code?: any) : any {
 
 function requirePort(owner?: any, method?: any) : any {
   if (typeof owner?.[method] !== "function") {
-    throw upgradeError("enterprise_upgrade_port_missing", `Missing upgrade port: ${method}`);
+    throw upgradeError("single_node_upgrade_port_missing", `Missing upgrade port: ${method}`);
   }
 }
 
 export function createFileUpgradeJournal({ journalFile = "" }: Record<string, any> = {}) : any {
   const selected: any = path.resolve(String(journalFile || ""));
   if (!journalFile || !path.isAbsolute(journalFile)) {
-    throw upgradeError("enterprise_upgrade_journal_path_invalid", "Upgrade journal path must be absolute.");
+    throw upgradeError("single_node_upgrade_journal_path_invalid", "Upgrade journal path must be absolute.");
   }
   return Object.freeze({
     async write(record?: any) : Promise<any> {
@@ -58,7 +58,7 @@ function acceptedValidation(value?: any) : any {
   return value?.healthy === true && value?.governedOperationOk === true;
 }
 
-export async function executeEnterpriseUpgradeRollback({
+export async function executeSingleNodeUpgradeRollback({
   candidateImage,
   previousImage,
   candidate,
@@ -70,15 +70,15 @@ export async function executeEnterpriseUpgradeRollback({
 }: Record<string, any> = {}) : Promise<any> {
   const candidateRef: any = imageReference(
     candidateImage,
-    "enterprise_upgrade_candidate_digest_required"
+    "single_node_upgrade_candidate_digest_required"
   );
   const previousRef: any = imageReference(
     previousImage,
-    "enterprise_upgrade_previous_digest_required"
+    "single_node_upgrade_previous_digest_required"
   );
   if (candidateRef === previousRef) {
     throw upgradeError(
-      "enterprise_upgrade_candidate_must_differ",
+      "single_node_upgrade_candidate_must_differ",
       "Upgrade candidate must differ from the previous image."
     );
   }
@@ -112,7 +112,7 @@ export async function executeEnterpriseUpgradeRollback({
   const backupReceipt: any = await backup.create();
   if (!acceptedBackupReceipt(backupReceipt)) {
     throw upgradeError(
-      "enterprise_upgrade_backup_receipt_invalid",
+      "single_node_upgrade_backup_receipt_invalid",
       "Upgrade backup did not produce an accepted receipt."
     );
   }
@@ -127,7 +127,7 @@ export async function executeEnterpriseUpgradeRollback({
     const candidateValidation: any = await validation.check(candidateRef);
     if (!acceptedValidation(candidateValidation)) {
       throw upgradeError(
-        "enterprise_upgrade_candidate_validation_failed",
+        "single_node_upgrade_candidate_validation_failed",
         "Upgrade candidate failed bounded health or governed-operation validation."
       );
     }
@@ -143,21 +143,21 @@ export async function executeEnterpriseUpgradeRollback({
     try {
       await publish("rollback-started", {
         outcome: "rollback-pending",
-        failureCode: String(upgradeFailure?.code || "enterprise_upgrade_candidate_failed")
+        failureCode: String(upgradeFailure?.code || "single_node_upgrade_candidate_failed")
       });
       await activation.activate(previousRef);
       await publish("previous-image-reactivated");
       const preview: any = await restore.preview(backupReceipt.backupId);
       if (preview?.ok !== true || preview?.integrityVerified !== true) {
         throw upgradeError(
-          "enterprise_upgrade_restore_preview_failed",
+          "single_node_upgrade_restore_preview_failed",
           "Upgrade rollback restore preview failed."
         );
       }
       const restored: any = await restore.apply(backupReceipt.backupId);
       if (restored?.ok !== true || restored?.applied !== true) {
         throw upgradeError(
-          "enterprise_upgrade_restore_failed",
+          "single_node_upgrade_restore_failed",
           "Upgrade rollback restore failed."
         );
       }
@@ -165,7 +165,7 @@ export async function executeEnterpriseUpgradeRollback({
       const previousValidation: any = await validation.check(previousRef);
       if (!acceptedValidation(previousValidation)) {
         throw upgradeError(
-          "enterprise_upgrade_rollback_validation_failed",
+          "single_node_upgrade_rollback_validation_failed",
           "The prior version failed validation after rollback."
         );
       }
@@ -176,17 +176,17 @@ export async function executeEnterpriseUpgradeRollback({
         candidateImage: candidateRef,
         previousImage: previousRef,
         backupId: backupReceipt.backupId,
-        failureCode: String(upgradeFailure?.code || "enterprise_upgrade_candidate_failed")
+        failureCode: String(upgradeFailure?.code || "single_node_upgrade_candidate_failed")
       });
     } catch (rollbackFailure: any) {
       await publish("in-doubt", {
         outcome: "in_doubt",
         rollbackFailureCode: String(
-          rollbackFailure?.code || "enterprise_upgrade_rollback_failed"
+          rollbackFailure?.code || "single_node_upgrade_rollback_failed"
         )
       }).catch(() : any => {});
       throw upgradeError(
-        "enterprise_upgrade_rollback_in_doubt",
+        "single_node_upgrade_rollback_in_doubt",
         "Upgrade rollback is in doubt and must not be retried blindly.",
         rollbackFailure
       );

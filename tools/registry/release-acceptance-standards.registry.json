@@ -28,14 +28,14 @@
         "system": "linux-x64",
         "environment": "native-host",
         "mode": "optional",
-        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+        "simulationCommand": "npm run verify:single-node:ubuntu-container"
       },
       {
         "id": "native-linux-arm64",
         "system": "linux-arm64",
         "environment": "native-host",
         "mode": "optional",
-        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+        "simulationCommand": "npm run verify:single-node:ubuntu-container"
       },
       {
         "id": "native-macos-arm64",
@@ -56,7 +56,7 @@
         "system": "declared-linux",
         "environment": "public-cloud",
         "mode": "optional",
-        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+        "simulationCommand": "npm run verify:single-node:ubuntu-container"
       },
       {
         "id": "clean-host-recovery",

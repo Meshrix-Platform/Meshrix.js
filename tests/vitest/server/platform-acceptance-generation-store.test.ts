@@ -55,7 +55,7 @@ function candidateIdentity(workspace?: any) : any {
       version: "0.0.1",
       manifest_sha256: "4".repeat(64)
     }],
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY })
   });
 }
@@ -152,7 +152,7 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
       acceptanceStandard: "functional-completeness",
       claim: "functional-complete",
       verifier: "tools/server-scripts/verify-platform-acceptance.ts",
-      selectedProfile: "enterprise-single-node",
+      selectedProfile: "single-node",
       sourceRevision: identity.source_revision,
       generatedAt: "2026-01-01T00:00:00.000Z",
       status: accepted ? "accepted" : "failed",
@@ -205,7 +205,7 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
         evidenceContext: {
           schemaVersion: "v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
           sourceRevision: identity.source_revision,
-          selectedProfile: "enterprise-single-node",
+          selectedProfile: "single-node",
           ownedReportsInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
           candidateDigest: identity.candidate_digest,
           privacySafe: true
@@ -341,12 +341,12 @@ describe("platform acceptance generation store", () : any => {
       status: "accepted",
       releaseReady: true,
       generationId: "accepted-generation",
-      selectedProfile: "enterprise-single-node"
+      selectedProfile: "single-node"
     });
     const current: any = await resolveFixture(repoRoot);
     expect(current.pointer.generationId).toBe("accepted-generation");
     expect(current.receipt.generationId).toBe("accepted-generation");
-    expect(current.receipt.selectedProfile).toBe("enterprise-single-node");
+    expect(current.receipt.selectedProfile).toBe("single-node");
     expect(current.pointer.receiptSha256).toMatch(/^[a-f0-9]{64}$/u);
     await expect(fs.readFile(path.join(repoRoot, "build", "reports", "child.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -676,7 +676,7 @@ describe("platform acceptance generation store", () : any => {
     const current: any = await resolveFixture(repoRoot);
     expect(validateAcceptedCandidateReceipt(current.receipt, {
       candidateDigest: current.receipt.candidateDigest,
-      selectedProfile: "enterprise-single-node",
+      selectedProfile: "single-node",
       sourceRevision: current.receipt.sourceRevision
     })).toEqual(current.receipt);
     expect(() : any => validateAcceptedCandidateReceipt({

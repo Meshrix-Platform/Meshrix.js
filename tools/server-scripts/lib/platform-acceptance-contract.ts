@@ -1,7 +1,7 @@
 export const PLATFORM_ACCEPTANCE_PARALLELISM: any = 4;
 export const PLATFORM_ACCEPTANCE_REPORT_SCHEMA: any = "v0.0.1:acceptance:platform-report-4";
 export const PLATFORM_ACCEPTANCE_PROFILES: Readonly<Record<string, any>> = Object.freeze({
-  "enterprise-single-node": Object.freeze({ id: "enterprise-single-node" }),
+  "single-node": Object.freeze({ id: "single-node" }),
 });
 
 export function requirePlatformAcceptanceProfile(value?: any) : any {

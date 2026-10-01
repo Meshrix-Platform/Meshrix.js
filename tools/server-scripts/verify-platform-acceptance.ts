@@ -26,15 +26,15 @@ export {
 } from "./lib/platform-acceptance-contract.ts";
 import {
   ACCEPTANCE_REQUIRED_REPORTS,
-  PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
-  PRIVATE_DEPLOYMENT_REQUIRED_REPORTS,
+  SINGLE_NODE_EVIDENCE_COMMANDS,
+  SINGLE_NODE_REQUIRED_REPORTS,
   PLATFORM_ACCEPTANCE_COMMANDS,
   REQUIRED_REPORT_SPEC_COVERAGE
 } from "./lib/platform-acceptance-command-catalog.ts";
 export {
   ACCEPTANCE_REQUIRED_REPORTS,
-  PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
-  PRIVATE_DEPLOYMENT_REQUIRED_REPORTS,
+  SINGLE_NODE_EVIDENCE_COMMANDS,
+  SINGLE_NODE_REQUIRED_REPORTS,
   PLATFORM_ACCEPTANCE_COMMANDS
 } from "./lib/platform-acceptance-command-catalog.ts";
 import {
@@ -501,7 +501,7 @@ async function runAcceptanceWorker() : Promise<any> {
       commandExecutionMode: "dag-parallel-full-aggregation",
       commandExecution: "Run Meshrix.js acceptance commands through a DAG with parallel downstream-gateway, upstream-gateway, and platform-capability layers, respecting dependencies and resource locks.",
       evidenceReduction: "Validate every Core acceptance-required report against the exact required-report schema, verifier, timestamp, leak-scan, ready-field, and reducer registry, then bind every checked Core capability criterion to a command that passed in this same DAG run. Client implementations, cryptographic evidence, platform adoption, and product receipts are not inputs; verifier-health failures and Core-actionable gaps remain release failures.",
-      finalRegression: "Run private deployment internal platform E2E only after the required upstream/downstream/platform acceptance dependencies pass."
+      finalRegression: "Run single-node internal platform E2E only after the required upstream/downstream/platform acceptance dependencies pass."
     },
     stateMachine: {
       ...PLATFORM_ACCEPTANCE_STATE_MACHINE,

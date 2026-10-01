@@ -194,8 +194,8 @@ gateway health report is not that receipt.
 ```bash
 npm run server:verify:resource-discipline
 npm test
-npm run verify:enterprise-observability-coverage
-npm run verify:enterprise-audit-retention-redaction
+npm run verify:observability-coverage
+npm run verify:audit-retention-redaction
 node tools/server-scripts/verify-observability-runtime-acceptance.ts
 npm test -- --suite domains.manifest
 npm run server:doctor

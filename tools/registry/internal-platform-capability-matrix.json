@@ -131,9 +131,9 @@
       ]
     },
     {
-      "id": "enterprise-governance",
+      "id": "governance-observability",
       "capabilityClass": "core",
-      "title": "Enterprise Governance And Observability",
+      "title": "Governance And Observability",
       "docs": [
         "docs/functionality/SECURITY-AUTHORIZATION.md",
         "docs/functionality/OPERATIONS-OBSERVABILITY.md"
@@ -142,7 +142,7 @@
         "Operation Permission Requirements",
         "Tag Policy Requirements",
         "Observability Requirements",
-        "Enterprise Governance Observability"
+        "Governance And Observability"
       ],
       "requiredRuntimePrefixes": [
         "authorization.",

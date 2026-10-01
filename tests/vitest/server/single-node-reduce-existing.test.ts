@@ -5,19 +5,19 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
-} from "../../../tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
+  SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "../../../tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts";
 import {
-  PRIVATE_DEPLOYMENT_REQUIRED_REPORTS
+  SINGLE_NODE_REQUIRED_REPORTS
 } from "../../../tools/server-scripts/lib/platform-acceptance-command-catalog.ts";
 import {
   reduceExistingReports
-} from "../../../tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts";
+} from "../../../tools/server-scripts/verify-single-node-internal-platform-e2e.ts";
 
-describe("private deployment existing-evidence reduction", () : any => {
+describe("single-node existing-evidence reduction", () : any => {
   it("does not remove or execute child evidence while producing a fail-closed aggregate", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-reduce-existing-"));
-    const childPath: any = path.join(root, ...PRIVATE_DEPLOYMENT_REQUIRED_REPORTS[0].split("/"));
+    const childPath: any = path.join(root, ...SINGLE_NODE_REQUIRED_REPORTS[0].split("/"));
     const sentinel: any = "{\"sentinel\":true}\n";
     await fs.mkdir(path.dirname(childPath), { recursive: true });
     await fs.writeFile(childPath, sentinel, "utf8");
@@ -35,7 +35,7 @@ describe("private deployment existing-evidence reduction", () : any => {
       });
       expect(await fs.readFile(childPath, "utf8")).toBe(sentinel);
       await expect(fs.readFile(
-        path.join(root, ...PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH.split("/")),
+        path.join(root, ...SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH.split("/")),
         "utf8"
       )).resolves.toContain("platform-acceptance-existing-evidence-reduction");
     } finally {

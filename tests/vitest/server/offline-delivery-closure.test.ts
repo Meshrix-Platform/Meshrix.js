@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { containsSensitiveReportData } from "../../../packages/foundation/src/observability/sensitive-report-scan.ts";
-import { verifyEnterpriseOfflineBundle } from "../../../tools/server-scripts/enterprise-single-node-offline-bundle.ts";
+import { verifySingleNodeOfflineBundle } from "../../../tools/server-scripts/single-node-offline-bundle.ts";
 import {
   buildOfflineDeliveryClosureReport,
   runOfflineDeliveryClosure,
@@ -95,11 +95,11 @@ describe("offline delivery closure", () : any => {
     expect(transferred.platforms).toEqual([...OFFLINE_DELIVERY_PLATFORMS]);
 
     await fs.appendFile(path.join(targetRoot, "compose", "compose.yaml"), "\n# mutated\n");
-    await expect(verifyEnterpriseOfflineBundle({
+    await expect(verifySingleNodeOfflineBundle({
       bundleRoot: targetRoot,
       trustedPublicKeys: produced.trustedPublicKeys,
     })).rejects.toMatchObject({
-      code: "enterprise_offline_bundle_output_metadata_mismatch",
+      code: "single_node_offline_bundle_output_metadata_mismatch",
     });
   });
 

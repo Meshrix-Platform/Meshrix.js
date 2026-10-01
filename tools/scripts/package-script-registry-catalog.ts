@@ -277,7 +277,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/platform-acceptance-reducer.ts",
       "tools/server-scripts/lib/platform-acceptance-contract.ts",
       "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
-      "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts"
+      "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts"
     ], outputs: [],
   },
   "verify:acceptance:standards": {
@@ -309,7 +309,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/cleanup-real-machine-secrets.ts",
       ".github/workflows/real-machine-validation.yml",
       "docker-compose.yml",
-      "docker-compose.enterprise.yml"
+      "docker-compose.single-node.yml"
     ], outputs: ["build/real-machine-validation/**"],
   },
   "verify:cross-system-offline-transfer": {
@@ -321,9 +321,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/release-definition.registry.json"
     ], outputs: ["build/reports/cross-system-offline-transfer.json"],
   },
-  "verify:enterprise-single-node:ubuntu-container": {
-    scriptName: "verify:enterprise-single-node:ubuntu-container",
-    command: "npm run verify:enterprise-single-node:ubuntu-container",
+  "verify:single-node:ubuntu-container": {
+    scriptName: "verify:single-node:ubuntu-container",
+    command: "npm run verify:single-node:ubuntu-container",
     category: "verifier",
     subsystem: "platform-acceptance",
     owner: "platform",
@@ -334,13 +334,13 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     expectedDurationClass: "extended",
     inputs: [
       "package-lock.json",
-      "tools/containers/enterprise-single-node-acceptance.Dockerfile",
+      "tools/containers/single-node-acceptance.Dockerfile",
       "tools/server-scripts/verify-cross-system-offline-transfer-evidence.ts",
-      "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
+      "tools/server-scripts/verify-single-node-ubuntu-container.ts"
     ],
     outputs: [
       "build/plan-proof-ledger/**",
-      "build/reports/enterprise-single-node-ubuntu/**",
+      "build/reports/single-node-ubuntu/**",
       "build/reports/cross-system-offline-transfer.json"
     ],
   },
@@ -485,7 +485,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "apps/server/bin/**",
       "packages/**",
       "tools/server-scripts/verify-npm-package-installability.ts",
-      "tools/server-scripts/lib/lock-backed-npm-registry.ts"
+      "tools/server-scripts/lib/lock-backed-npm-registry.ts",
+      "tools/server-scripts/npm-package-consumer.ts",
+      "tools/server-scripts/npm-registry-server.ts"
     ], outputs: ["build/reports/npm-package-installability.json"],
   },
   "verify:composition-source-package": {
@@ -915,10 +917,10 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
 	      "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
 	      "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
 	      "tools/server-scripts/lib/platform-acceptance-reducer.ts",
-	      "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts",
+	      "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts",
 	      "tools/server-scripts/verify-platform-acceptance.ts",
       "tools/server-scripts/production-readiness-gate.ts",
-      "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+      "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
       "tools/server-scripts/verify-upstream-fixture-transit.ts",
       "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
       "tools/server-scripts/stress-gateway-platform-profile.ts",

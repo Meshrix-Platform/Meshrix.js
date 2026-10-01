@@ -2,13 +2,13 @@ import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
-  ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND,
+  SINGLE_NODE_OPERATION_COMMAND,
   createUbuntuContainerRequest,
-  reduceEnterpriseSingleNodeFailure,
-  validateEnterpriseSingleNodeWorkerSummary,
-} from "../../../tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts";
+  reduceSingleNodeFailure,
+  validateSingleNodeWorkerSummary,
+} from "../../../tools/server-scripts/verify-single-node-ubuntu-container.ts";
 
-describe("enterprise single-node Ubuntu container", () : any => {
+describe("single-node Ubuntu container", () : any => {
   it("executes the read-only source candidate through source import conditions", () : any => {
     const request: any = createUbuntuContainerRequest({
       image: `sha256:${"a".repeat(64)}`,
@@ -35,25 +35,25 @@ describe("enterprise single-node Ubuntu container", () : any => {
   });
 
   it("keeps source delivery independent from released-image rollback evidence", () : any => {
-    expect(ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND)
+    expect(SINGLE_NODE_OPERATION_COMMAND)
       .toBe("node tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts");
-    expect(ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND)
-      .not.toContain("enterprise-operations-closure");
+    expect(SINGLE_NODE_OPERATION_COMMAND)
+      .not.toContain("single-node-operations-closure");
   });
 
   it("reports only privacy-safe internal failure codes", () : any => {
-    expect(reduceEnterpriseSingleNodeFailure({
+    expect(reduceSingleNodeFailure({
       phase: "ubuntu-delivery",
       cause: "ubuntu_delivery_worker_execution_failed",
     })).toMatchObject({ cause: "ubuntu_delivery_worker_execution_failed" });
-    expect(reduceEnterpriseSingleNodeFailure({
+    expect(reduceSingleNodeFailure({
       phase: "ubuntu-delivery",
       cause: "failed at /private/path",
-    })).toMatchObject({ cause: "enterprise_single_node_internal_failure" });
+    })).toMatchObject({ cause: "single_node_internal_failure" });
   });
 
   it("records only the Ubuntu operation proof without embedding repository audits", () : any => {
-    const command: any = ENTERPRISE_SINGLE_NODE_OPERATION_COMMAND;
+    const command: any = SINGLE_NODE_OPERATION_COMMAND;
     const implementationNodes: any = [{
       id: "core-operations",
       acceptance_criteria: [{ statement: "Core operations pass." }],
@@ -68,7 +68,7 @@ describe("enterprise single-node Ubuntu container", () : any => {
       stderr_bytes: 0,
     };
     const summary: any = {
-      schema_version: "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
+      schema_version: "v0.0.1:meshrix:single-node-ubuntu-evidence-1",
       status: "passed",
       candidate: { candidate_digest: "c".repeat(64) },
       implementation_nodes: [{ node_id: "core-operations", commands: [observation] }],
@@ -76,9 +76,9 @@ describe("enterprise single-node Ubuntu container", () : any => {
       privacy_safe: true,
     };
 
-    expect(validateEnterpriseSingleNodeWorkerSummary({ summary, implementationNodes }))
+    expect(validateSingleNodeWorkerSummary({ summary, implementationNodes }))
       .toMatchObject({ recordedAt: summary.recorded_at });
-    expect(() => validateEnterpriseSingleNodeWorkerSummary({
+    expect(() => validateSingleNodeWorkerSummary({
       summary: { ...summary, full_regression: [] },
       implementationNodes,
     })).toThrow("ubuntu_delivery_summary_invalid");

@@ -614,14 +614,14 @@ describe("release workflow supply-chain boundary", () : any => {
     const acceptanceCatalog: any = read(
       "tools/server-scripts/lib/platform-acceptance-command-catalog.ts"
     );
-    const enterpriseDelivery: any = jobSource(workflow, "enterprise-delivery");
+    const singleNodeDelivery: any = jobSource(workflow, "single-node-delivery");
     const ciAcceptance: any = jobSource(workflow, "functional-acceptance");
     const portabilityStart: any = workflow.indexOf("  npm-package-portability:\n");
     const nextJob: any = workflow.indexOf("\n  supply-chain:\n", portabilityStart);
     expect(portabilityStart).toBeGreaterThan(0);
     expect(nextJob).toBeGreaterThan(portabilityStart);
-    expect(enterpriseDelivery).toContain("timeout-minutes: 120");
-    expect(enterpriseDelivery).toContain("verify:enterprise-single-node:ubuntu-container");
+    expect(singleNodeDelivery).toContain("timeout-minutes: 120");
+    expect(singleNodeDelivery).toContain("verify:single-node:ubuntu-container");
     const portability: any = workflow.slice(portabilityStart, nextJob);
     expect(portability).toContain("runs-on: ubuntu-latest");
     expect(portability).toContain("timeout-minutes: 60");
@@ -637,15 +637,15 @@ describe("release workflow supply-chain boundary", () : any => {
     const canonicalJobMinutes: any = Number(
       portability.match(/timeout-minutes: (\d+)/u)?.[1]
     );
-    const enterpriseDeliveryMinutes: any = Number(
-      enterpriseDelivery.match(/timeout-minutes: (\d+)/u)?.[1]
+    const singleNodeDeliveryMinutes: any = Number(
+      singleNodeDelivery.match(/timeout-minutes: (\d+)/u)?.[1]
     );
     const releaseVerify: any = jobSource(releaseWorkflow, "verify");
     const assembly: any = jobSource(releaseWorkflow, "assemble-release-assets");
     const ciAcceptanceMinutes: any = Number(ciAcceptance.match(/timeout-minutes: (\d+)/u)?.[1]);
 
     expect(canonicalJobMinutes).toBe(60);
-    expect(enterpriseDeliveryMinutes).toBe(120);
+    expect(singleNodeDeliveryMinutes).toBe(120);
     expect(releaseVerify).toContain("timeout-minutes: 120");
     expect(releaseVerify).not.toContain("npm run verify:acceptance");
     expect(PLATFORM_ACCEPTANCE_PARALLELISM).toBe(4);

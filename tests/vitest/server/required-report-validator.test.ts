@@ -17,14 +17,14 @@ import {
 } from "../../../tools/server-scripts/lib/release-evidence-readiness.ts";
 import {
   ACCEPTANCE_REQUIRED_REPORTS,
-  PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS as PRIVATE_DEPLOYMENT_COMMANDS,
+  SINGLE_NODE_EVIDENCE_COMMANDS as SINGLE_NODE_COMMANDS,
   PLATFORM_ACCEPTANCE_COMMANDS,
   aggregateChildReportLeakScan,
   createPlatformAcceptancePlan
 } from "../../../tools/server-scripts/verify-platform-acceptance.ts";
 import {
-  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
-} from "../../../tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
+  SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "../../../tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts";
 import { reportPayloadDigest } from "../../../tools/server-scripts/lib/sensitive-report-scan.ts";
 import {
   createReleaseEvidenceInventory,
@@ -168,7 +168,7 @@ describe("required report validator", () : any => {
   });
 
   it("projects one complete release provenance owner for every required report", () : any => {
-    const plan: any = createPlatformAcceptancePlan(undefined, { selectedProfile: "enterprise-single-node" });
+    const plan: any = createPlatformAcceptancePlan(undefined, { selectedProfile: "single-node" });
     expect(plan.releaseEvidenceInventory).toHaveLength(ACCEPTANCE_REQUIRED_REPORTS.length);
     expect(plan.releaseEvidenceInventory.every((entry?: any) : any =>
       entry.provenanceSchemaVersion === RELEASE_REPORT_PROVENANCE_SCHEMA &&
@@ -318,8 +318,8 @@ describe("required report validator", () : any => {
 
   it("rejects missing provenance and payload tampering for observability reports", () : any => {
     const observabilityReportPaths: any[] = [
-      "build/reports/enterprise-audit-retention-redaction.json",
-      "build/reports/enterprise-observability-coverage.json",
+      "build/reports/audit-retention-redaction.json",
+      "build/reports/observability-coverage.json",
       "build/reports/observability-runtime-acceptance.json",
       "build/reports/observability-semantics.json",
       "build/reports/security-alert-lifecycle.json"
@@ -408,7 +408,7 @@ describe("required report validator", () : any => {
   });
 
   it("assigns nested producers for reports absent during plan-only execution", () : any => {
-    expect(PRIVATE_DEPLOYMENT_COMMANDS).toEqual(expect.arrayContaining([
+    expect(SINGLE_NODE_COMMANDS).toEqual(expect.arrayContaining([
       expect.objectContaining({
         report: "build/reports/deployment-container-flow.json"
       })
@@ -421,7 +421,7 @@ describe("required report validator", () : any => {
         report: "build/reports/production-readiness-gates.json"
       }),
       expect.objectContaining({
-        report: PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
+        report: SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH
       })
     ]));
   });
@@ -765,7 +765,7 @@ describe("platform acceptance foundation ownership", () : any => {
   });
 
   it("creates a sanitized plan with canonical rather than host-derived parallelism", () : any => {
-    const plan: any = createPlatformAcceptancePlan(undefined, { selectedProfile: "enterprise-single-node" });
+    const plan: any = createPlatformAcceptancePlan(undefined, { selectedProfile: "single-node" });
     const serialized: any = JSON.stringify(plan);
 
     expect(plan.status).toBe("planned");

@@ -15,8 +15,8 @@
         "why": "Authoritative Meshrix.js server container build and runtime command."
       },
       {
-        "id": "enterprise-compose-overlay",
-        "path": "docker-compose.enterprise.yml",
+        "id": "single-node-compose-overlay",
+        "path": "docker-compose.single-node.yml",
         "why": "Production-only secure public URL plus independently custodied local-secret encryption and operation-proof signing mounts."
       },
       {
@@ -45,7 +45,7 @@
     "npmRegistry": "https://registry.npmjs.org/",
     "mainService": {
       "dockerfile": "Dockerfile",
-      "enterpriseComposeOverlay": "docker-compose.enterprise.yml",
+      "singleNodeComposeOverlay": "docker-compose.single-node.yml",
       "imageName": "meshrix-server",
       "buildTarget": "runtime",
       "buildArgs": {
@@ -112,7 +112,7 @@
         "requiredReferenceShape": "<registry>/<repository>@sha256:<64 lowercase hex>",
         "composeImageEnvironment": "MESHRIX_IMAGE_NAME",
         "composePullPolicyEnvironment": "MESHRIX_PULL_POLICY",
-        "startCommand": "docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d --no-build --pull never --wait meshrix-server",
+        "startCommand": "docker compose -f docker-compose.yml -f docker-compose.single-node.yml up -d --no-build --pull never --wait meshrix-server",
         "offlineStartRequiresPreloadedImage": true
       },
       "secretEncryption": {
@@ -156,11 +156,11 @@
     }
   },
   "offlineBundles": {
-    "enterpriseSingleNode": {
-      "id": "meshrix-offline-bundle-enterprise-single-node",
-      "builder": "tools/server-scripts/enterprise-single-node-offline-bundle.ts",
-      "verifier": "tools/server-scripts/enterprise-single-node-offline-bundle.ts",
-      "targetProfile": "enterprise-single-node",
+    "singleNode": {
+      "id": "meshrix-offline-bundle-single-node",
+      "builder": "tools/server-scripts/single-node-offline-bundle.ts",
+      "verifier": "tools/server-scripts/single-node-offline-bundle.ts",
+      "targetProfile": "single-node",
       "payload": "oci-layout",
       "platforms": [
         "linux/amd64",

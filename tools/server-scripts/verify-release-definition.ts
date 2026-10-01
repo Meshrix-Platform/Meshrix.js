@@ -98,7 +98,7 @@ export async function verifyReleaseDefinition({
     fail("release_definition_platforms_invalid", "The release requires amd64 and arm64 image artifacts.");
   }
   if (
-    definition?.acceptance?.profile !== "enterprise-single-node" ||
+    definition?.acceptance?.profile !== "single-node" ||
     definition?.acceptance?.commandId !== "platform-acceptance" ||
     definition?.acceptance?.stableRequiredClaim !== "functional-complete" ||
     definition?.acceptance?.releaseRequiredClaim !== "release-deployment-verified" ||
@@ -107,7 +107,7 @@ export async function verifyReleaseDefinition({
   ) {
     fail(
       "release_definition_acceptance_standard_invalid",
-      "The release definition must bind enterprise-single-node to the canonical platform-acceptance functional-complete claim.",
+      "The release definition must bind single-node to the canonical platform-acceptance functional-complete claim.",
     );
   }
   if (
