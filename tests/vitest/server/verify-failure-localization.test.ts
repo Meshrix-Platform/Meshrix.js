@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -150,5 +151,61 @@ describe("pull-request verification feedback", () => {
     expect(workflow).toContain("check-runs?per_page=100");
     expect(workflow).toContain('--match-head-commit "$head_sha"');
     expect(workflow).not.toContain("--admin");
+  });
+});
+
+
+describe("executed Dependabot admission", () => {
+  it("requires current write-authorized approval and rejects stale, revoked or failing evidence", async () => {
+    const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/dependabot-security-automerge.yml"), "utf8");
+    const source = workflow.slice(workflow.indexOf("      - name: Merge the exact admitted Dependabot revision"));
+    const script = source.slice(source.indexOf("        run: |\n") + "        run: |\n".length).split("\n").map((line) => line.startsWith("          ") ? line.slice(10) : line).join("\n");
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-dependency-admission-"));
+    const eventPath = path.join(directory, "event.json");
+    const fixturePath = path.join(directory, "fixture.json");
+    const receiptPath = path.join(directory, "merge.json");
+    const head = "candidate-head";
+    const review = (id: number, state: string, commit = head, login = "maintainer") => ({ id, state, commit_id: commit, user: { login, type: "User" }, author_association: "MEMBER" });
+    const checks = ["Pull request verification", "Dependency review"].map((name, index) => ({ id: index + 1, name, conclusion: "success", app: { slug: "github-actions" } }));
+    const cases = [
+      { name: "approved", reviews: [review(1, "APPROVED")], merge: true },
+      { name: "comment preserves operative approval", reviews: [review(1, "APPROVED"), review(2, "COMMENTED")], merge: true },
+      { name: "read-only organization member", reviews: [review(1, "APPROVED")], permission: "read", merge: false },
+      { name: "stale approval", reviews: [review(1, "APPROVED", "old-head")], merge: false },
+      { name: "dismissed", reviews: [review(1, "APPROVED"), review(2, "DISMISSED")], merge: false },
+      { name: "changes requested by another maintainer", reviews: [review(1, "APPROVED"), review(2, "CHANGES_REQUESTED", head, "second")], merge: false },
+      { name: "prior unresolved change request", reviews: [review(1, "CHANGES_REQUESTED", "old-head", "second"), review(2, "APPROVED")], merge: false },
+      { name: "paginated approval", reviews: [review(1, "COMMENTED"), review(2, "APPROVED")], paginate: true, merge: true },
+      { name: "failed check", reviews: [review(1, "APPROVED")], failed: true, merge: false },
+      { name: "latest rerun supersedes older run", reviews: [review(1, "APPROVED")], rerun: true, merge: true },
+      { name: "changed head", reviews: [review(1, "APPROVED")], changed: true, merge: false },
+    ];
+    try {
+      await fs.writeFile(eventPath, JSON.stringify({ pull_request: { number: 7, head: { sha: head } } }));
+      await fs.writeFile(path.join(directory, "gh"), `#!/usr/bin/env node
+const fs = require("node:fs");
+const f = JSON.parse(fs.readFileSync(process.env.FIXTURE, "utf8"));
+const args = process.argv.slice(2);
+if (args[0] === "pr" && args[1] === "merge") { fs.writeFileSync(process.env.RECEIPT, JSON.stringify(args)); process.exit(0); }
+const endpoint = args.find((x) => x.startsWith("repos/"));
+let result;
+if (endpoint.endsWith("/permission")) { process.stdout.write(f.permission || "write"); process.exit(0); }
+if (endpoint.includes("/reviews?")) result = f.paginate ? [f.reviews.slice(0, 1), f.reviews.slice(1)] : [f.reviews];
+else if (endpoint.includes("/check-runs?")) result = [{ check_runs: f.checks }];
+else result = { user: { login: "dependabot[bot]" }, base: { ref: "nightly" }, head: { sha: f.changed ? "changed-head" : "candidate-head" }, state: "open", labels: [{ name: "dependabot-automerge" }] };
+process.stdout.write(JSON.stringify(result));
+`);
+      await fs.chmod(path.join(directory, "gh"), 0o700);
+      for (const entry of cases) {
+        const currentChecks = entry.failed ? checks.map((check) => ({ ...check, conclusion: "failure" })) : entry.rerun ? [...checks.map((check) => ({ ...check, conclusion: "failure" })), ...checks.map((check) => ({ ...check, id: check.id + 10 }))] : checks;
+        await fs.writeFile(fixturePath, JSON.stringify({ ...entry, checks: currentChecks }));
+        await fs.rm(receiptPath, { force: true });
+        const result = spawnSync("bash", ["-euo", "pipefail", "-c", script], { encoding: "utf8", env: { PATH: `${directory}:${path.dirname(process.execPath)}:${process.env.PATH}`, EVENT_NAME: "pull_request_review", AUTOMERGE_LABEL: "dependabot-automerge", GITHUB_REPOSITORY: "example/project", GITHUB_EVENT_PATH: eventPath, FIXTURE: fixturePath, RECEIPT: receiptPath } });
+        expect(result.status, `${entry.name}: ${result.stderr}`).toBe(0);
+        const receipt = await fs.readFile(receiptPath, "utf8").catch(() => "");
+        expect(Boolean(receipt), entry.name).toBe(entry.merge);
+        if (receipt) expect(JSON.parse(receipt).slice(-2)).toEqual(["--match-head-commit", head]);
+      }
+    } finally { await fs.rm(directory, { recursive: true, force: true }); }
   });
 });

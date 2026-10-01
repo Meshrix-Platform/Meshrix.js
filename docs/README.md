@@ -57,8 +57,11 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
-Temporary planning workspaces are execution aids, not durable product
-authorities. Delete them after their outcome is implemented and verified.
+The shared Better Plan workspace retains delivery state, requirements and
+retrievable history across outcomes; it is not a product authority or execution
+authorization. Record reviewed delivery results using the current skill. Retire
+obsolete temporary plans only after archiving useful context and evidence;
+preserve user data and the active long-term workspace.
 Current product state belongs in [Status](STATUS.md); executable acceptance,
 deployment, production-closure, and publication facts belong to their owning
 commands and candidate-bound reports.

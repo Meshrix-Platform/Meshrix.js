@@ -180,11 +180,14 @@ commercial or governance risk:
 Semver patch/minor Dependabot updates on `nightly` are eligible for the
 existing automation, but a clean scan and a semver label are not admission.
 The auto-merge job requires a current non-dismissed approving review from an
-authorized maintainer on the exact proposed head, plus the named pull-request
-verification and dependency-review checks completed successfully for that same
-head. Review and CI may arrive in either order; eligibility is re-evaluated on
-both the review event and completed CI, and a later changes-requested or
-dismissed review revokes the conclusion. The merge request binds the verified
+maintainer with current repository write authority on the exact proposed head,
+plus the latest named GitHub Actions pull-request verification and dependency-review
+checks completed successfully for that same head. Organization membership alone
+does not establish authority. Review and CI may arrive in either order;
+eligibility is re-evaluated on both the review event and completed CI. Comments
+preserve the reviewer's operative decision; dismissal revokes that approval, and
+an unresolved authorized change request prevents automatic merge. Paginated
+review and check history is evaluated in full. The merge request binds the verified
 head with an expected-head match and never bypasses branch protections or uses
 an administrative override, and no separate approval ledger is maintained.
 
