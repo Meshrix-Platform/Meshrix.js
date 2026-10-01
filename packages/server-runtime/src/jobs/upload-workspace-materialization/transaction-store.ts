@@ -444,7 +444,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
     },
     async recordTempReserved(
       requestRef: string,
-      { ownerFence, publication }: MaterializationRecordPublicationInput<PublicationReservation>
+      { ownerFence, publication }: MaterializationFenceInput & { publication: unknown }
     ): Promise<MaterializationTempReservedState> {
       const row: any = assertLiveFence(requestRef, ownerFence);
       const request: any = normalizeRequestRecord(
@@ -512,7 +512,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
     },
     async recordPublicationPrepared(
       requestRef: string,
-      { ownerFence, publication }: MaterializationRecordPublicationInput<PublicationPrepared>
+      { ownerFence, publication }: MaterializationFenceInput & { publication: unknown }
     ): Promise<MaterializationPublicationPreparedState> {
       const row: any = assertLiveFence(requestRef, ownerFence);
       const request: any = normalizeRequestRecord(

@@ -1,3 +1,4 @@
+import type { CreateMaterializationRuntimeOptions } from "../jobs/upload-workspace-materialization/runtime.ts";
 import path from "node:path";
 import {
   applyPluginDeploymentFeatures,
@@ -598,8 +599,8 @@ export async function createServerCompositionRoot({
   }
 
   async function createBoundUploadWorkspaceMaterializationProvider(
-    input: Record<string, any> = {}
-  ) : Promise<any> {
+    input: Omit<CreateMaterializationRuntimeOptions, "privateWorkspaceMaterializationPort">
+  ) {
     if (runtimeProviderCompositionState !== "created") {
       throw new TypeError(
         "Server runtime providers must be composed before upload materialization."

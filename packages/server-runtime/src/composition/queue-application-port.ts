@@ -168,6 +168,8 @@ export async function createQueueApplicationPort({
   const globalCredit: any = resolveQueueMaxInFlight(maxGlobalInFlight, { fallback: 8192 });
   let timer: any = null;
   let stopped: any = false;
+  let stopPromise: Promise<unknown> | undefined;
+  let closePromise: Promise<void> | undefined;
   let dispatchCursor: any = 0;
   let globalReserved: any = 0;
 
@@ -439,21 +441,27 @@ export async function createQueueApplicationPort({
           }
         };
       },
-      async close({ timeoutMs = 30_000 }: Record<string, any> = {}) : Promise<any> {
-        if (registration.closed) return { closed: true, idempotent: true };
+      close({ timeoutMs }: { timeoutMs?: number } = {}) {
+        if (registration.closePromise) return registration.closePromise;
         registration.closed = true;
-        registrations.delete(definition.queueDefinitionId);
-        while (registration.dispatchPromise) {
-          await registration.dispatchPromise;
-        }
-        if (dispatcher) {
-          const drained: any = await dispatcher.drain({ timeoutMs });
-          if (drained?.drained !== true) {
-            throw new Error(`Queue dispatcher did not drain: ${definition.queueDefinitionId}`);
+        // Retain the registration until all work settles so owner stop/close
+        // can still drain it, including after an explicitly bounded attempt.
+        registration.closePromise = (async () => {
+          while (registration.dispatchPromise) await registration.dispatchPromise;
+          if (dispatcher) {
+            const drained = await dispatcher.drain({ timeoutMs });
+            if (drained?.drained !== true) {
+              throw new Error(`Queue dispatcher did not drain: ${definition.queueDefinitionId}`);
+            }
+            workerRuntime.unregisterHandler?.(definition.queueDefinitionId);
           }
-          workerRuntime.unregisterHandler?.(definition.queueDefinitionId);
-        }
-        return { closed: true, idempotent: false };
+          registrations.delete(definition.queueDefinitionId);
+          return { closed: true };
+        })().catch((error: unknown) => {
+          registration.closePromise = null;
+          throw error;
+        });
+        return registration.closePromise;
       }
     });
     return facet;
@@ -467,25 +475,23 @@ export async function createQueueApplicationPort({
     return { started: true };
   }
 
-  async function stop() : Promise<any> {
-    if (stopped) return { stopped: true, idempotent: true };
-    stopped = true;
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-    for (const registration of registrations.values()) {
-      while (registration.dispatchPromise) {
-        await registration.dispatchPromise;
-      }
-      if (registration.dispatcher) {
-        const drained: any = await registration.dispatcher.drain({ timeoutMs: 30_000 });
-        if (drained?.drained !== true) {
-          throw new Error(`Queue dispatcher did not drain: ${registration.definition.queueDefinitionId}`);
+  function stop(): Promise<unknown> {
+    if (!stopPromise) {
+      stopped = true;
+      if (timer) { clearInterval(timer); timer = null; }
+      stopPromise = (async () => {
+        for (const registration of registrations.values()) {
+          while (registration.dispatchPromise) await registration.dispatchPromise;
+          if (registration.closePromise) await registration.closePromise;
+          else if (registration.dispatcher) await registration.dispatcher.drain();
         }
-      }
+        return { stopped: true };
+      })().catch((error: unknown) => {
+        stopPromise = undefined;
+        throw error;
+      });
     }
-    return { stopped: true, idempotent: false };
+    return stopPromise;
   }
 
   return Object.freeze({
@@ -513,9 +519,15 @@ export async function createQueueApplicationPort({
         }))
       };
     },
-    async close() : Promise<any> {
-      await stop();
-      if (ownsStore) await queueStore.close?.();
+    close(): Promise<void> {
+      closePromise ??= (async () => {
+        await stop();
+        if (ownsStore) await queueStore.close?.();
+      })().catch((error: unknown) => {
+        closePromise = undefined;
+        throw error;
+      });
+      return closePromise;
     }
   });
 }

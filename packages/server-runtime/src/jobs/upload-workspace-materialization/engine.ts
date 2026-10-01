@@ -444,15 +444,16 @@ function publicationFaultPayload(
 
 function validatePublishedReceipt(
   execution: MaterializationDurableState,
-  receipt: MaterializationPublishedReceipt
-): MaterializationPublishedReceipt {
+  receipt: unknown
+): asserts receipt is MaterializationPublishedReceipt {
   const publication = execution.publication;
   const descriptor = execution.descriptor;
   if (
-    receipt?.contentDigest !== descriptor.contentDigest ||
-    Number(receipt?.byteCount) !== descriptor.byteCount ||
-    !receipt?.workspaceRevision ||
-    !receipt?.checkpointRef ||
+    !isUnknownRecord(receipt) ||
+    receipt.contentDigest !== descriptor.contentDigest ||
+    receipt.byteCount !== descriptor.byteCount ||
+    typeof receipt.workspaceRevision !== "string" || !receipt.workspaceRevision ||
+    typeof receipt.checkpointRef !== "string" || !receipt.checkpointRef ||
     !receipt?.publishedIdentity ||
     receipt.beforeRevision !== execution.expectedWorkspaceRevision ||
     receipt.publishedRevision !== receipt.workspaceRevision ||
@@ -468,7 +469,6 @@ function validatePublishedReceipt(
       "Workspace publication receipt is incomplete."
     );
   }
-  return receipt;
 }
 
 export function materializationFailureDisposition(error?: unknown) {
@@ -728,7 +728,7 @@ export function createUploadWorkspaceMaterialization({
 
       const recordPublishedReceipt = async (
         record: MaterializationDurableState,
-        receipt: MaterializationPublishedReceipt
+        receipt: unknown
       ): Promise<MaterializationDurableState> => {
         validatePublishedReceipt(record, receipt);
         await transactionStore.recordPublished(requestRef, {
@@ -1354,7 +1354,7 @@ export function createUploadWorkspaceMaterialization({
             })();
           },
           recordTempReserved: async (
-            candidate: PublicationReservation
+            candidate: unknown
           ): Promise<PublicationReservation> => {
             const recorded =
               await transactionStore.recordTempReserved(
@@ -1369,7 +1369,7 @@ export function createUploadWorkspaceMaterialization({
             return recorded.publication;
           },
           recordPublicationPrepared: async (
-            candidate: PublicationPrepared
+            candidate: unknown
           ): Promise<PublicationPrepared> => {
             const recorded =
               await transactionStore.recordPublicationPrepared(
@@ -1494,7 +1494,6 @@ export function createUploadWorkspaceMaterialization({
           await transactionStore.get(requestRef),
           "Materialization state"
         );
-        validatePublishedReceipt(execution, published);
         execution = await recordPublishedReceipt(
           execution,
           published

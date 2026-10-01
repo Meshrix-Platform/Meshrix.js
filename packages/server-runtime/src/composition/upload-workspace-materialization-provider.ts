@@ -1,3 +1,5 @@
+import type { CreateMaterializationRuntimeOptions } from "../jobs/upload-workspace-materialization/runtime.ts";
+
 import {
   assertAgentWorkspaceMaterializationPort
 } from "#meshrix/agents/agent-workspace/agent-workspace-materialization-port";
@@ -25,8 +27,8 @@ export async function createUploadWorkspaceMaterializationProvider({
   operationProofSubstrate,
   transactionStore = null,
   faultInjector = null
-}: Record<string, any> = {}) : Promise<any> {
-  const privateWorkspaceMaterializationPort: any =
+}: Omit<CreateMaterializationRuntimeOptions, "privateWorkspaceMaterializationPort"> & { workspaceMaterializationPort: unknown }) {
+  const privateWorkspaceMaterializationPort =
     assertAgentWorkspaceMaterializationPort(
       workspaceMaterializationPort
     );

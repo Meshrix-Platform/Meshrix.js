@@ -1,3 +1,11 @@
+import type { CreateUploadWorkspaceMaterializationOptions } from "./engine.ts";
+import type {
+  MaterializationAuthorityPort, MaterializationClosedAdmissionInput, MaterializationDurableState,
+  MaterializationFaultObserver, MaterializationOwner, MaterializationRequestRecord,
+  MaterializationResolvedOperation, MaterializationResourcePort, MaterializationStoreCreateResult,
+  MaterializationTransactionStore, MaterializationWorkspacePort, MaterializationWorkspaceSession
+} from "./model.ts";
+
 import {
   createUploadWorkspaceMaterialization,
   materializationFailureDisposition
@@ -33,7 +41,89 @@ import {
  * here, and returns the resulting runtime.
  */
 
-const RUNTIME_FAULT_SCHEMAS: Readonly<Record<string, any>> = Object.freeze({
+export interface MaterializationQueueFacet {
+  enqueue(input: {
+    dedupeKey: string;
+    maxAttempts: number;
+    ownerRef: { capability: string; subjectRef: string };
+    payloadKind: string;
+    payloadRef: { requestRef: string };
+    schedulingScope: { workspaceId: string };
+    workItemId: string;
+  }): Promise<unknown>;
+  cancel(input: {
+    actor: { system: string };
+    operationId: string;
+    reason: string;
+    workItemId: string;
+  }): Promise<unknown>;
+  requestDispatch(): Promise<unknown>;
+  close(): Promise<unknown>;
+}
+
+interface MaterializationQueueRegistration {
+  batchSize: number;
+  label: string;
+  maxInFlight: number;
+  ownerCapability: string;
+  queueDefinitionId: string;
+  queueDefinitionVersion: number;
+  scope: { tenantId: string; workspaceId: string };
+  workerId: string;
+  handler(input: {
+    workItem: {
+      workItemId: string;
+      payloadRef: { requestRef: string };
+      attempt: number;
+      maxAttempts: number;
+    };
+  }, context: {
+    lease: { leaseSeq: number };
+    signal: AbortSignal;
+    renewLease(input: { reason: string }): Promise<unknown>;
+  }): Promise<{ action: "retry" | "completed"; reason: string; delayMs?: number }>;
+}
+
+export interface MaterializationSubmitInput {
+  request: unknown;
+  authSession: unknown;
+  operation: MaterializationResolvedOperation;
+  input: unknown;
+}
+
+export interface CreateMaterializationRuntimeOptions {
+  userDataPath: string;
+  queueApplicationPort: {
+    registerQueue(input: MaterializationQueueRegistration): Promise<MaterializationQueueFacet>;
+  };
+  privateWorkspaceMaterializationPort: {
+    withRequest<T>(
+      binding: Readonly<Pick<MaterializationRequestRecord,
+        "bindingDigest" | "expectedWorkspaceRevision" | "logicalTarget" | "requestRef" | "workspaceId"
+      > & { byteCount: number; contentDigest: string; operationId: string }>,
+      task: (workspace: MaterializationWorkspaceSession) => T | Promise<T>
+    ): Promise<T>;
+  };
+  uploadSessionStore: {
+    resolveUploadSessionFiles(id: string, input: { owner: MaterializationOwner }): Promise<unknown>;
+  };
+  uploadCustodyReadPort: CreateUploadWorkspaceMaterializationOptions["custodyReadPort"];
+  deferredProtectedSinkAuthorityPort: MaterializationAuthorityPort & {
+    capture(input: Omit<MaterializationSubmitInput, "input"> & {
+      input: MaterializationClosedAdmissionInput;
+    }): Promise<Pick<MaterializationRequestRecord,
+      "approvalIntentDigest" | "authorityBindingDigest" | "authorityRef" | "requestDigest"
+    >>;
+    revoke(input: { authorityRef: string; reason: string }): Promise<unknown>;
+  };
+  resolveOperation: CreateUploadWorkspaceMaterializationOptions["resolveOperation"];
+  operationAuditStore: CreateUploadWorkspaceMaterializationOptions["auditPort"];
+  operationProofSubstrate: CreateUploadWorkspaceMaterializationOptions["proofPort"];
+  transactionStore?: MaterializationTransactionStore | null;
+  faultInjector?: MaterializationFaultObserver | null;
+}
+
+const RUNTIME_FAULT_SCHEMAS: Readonly<Record<string, Readonly<Record<string, "integer" | "id" | "digest">>>> = Object.freeze({
   afterQueueClaim: Object.freeze({
     leaseSequence: "integer",
     requestRef: "id"
@@ -48,9 +138,9 @@ const RUNTIME_FAULT_SCHEMAS: Readonly<Record<string, any>> = Object.freeze({
   })
 });
 
-function validRuntimeFaultValue(value?: any, kind?: any) : any {
+function validRuntimeFaultValue(value: unknown, kind: string): boolean {
   if (kind === "integer") {
-    return Number.isSafeInteger(value) && value >= 0;
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
   }
   return (
     typeof value === "string" &&
@@ -61,13 +151,13 @@ function validRuntimeFaultValue(value?: any, kind?: any) : any {
   );
 }
 
-async function invokeRuntimeFault(observer?: any, callbackName?: any, input?: any) : Promise<any> {
-  const schema: any = RUNTIME_FAULT_SCHEMAS[callbackName];
+async function invokeRuntimeFault(observer: MaterializationFaultObserver | null, callbackName: string, input: Record<string, string | number>): Promise<Readonly<Record<string, string | number>>> {
+  const schema = RUNTIME_FAULT_SCHEMAS[callbackName];
   if (
     !schema ||
     !exactKeys(input, Object.keys(schema)) ||
-    (Object.entries(schema) as [string, any][]).some(
-      ([key, kind]: any[]) : any => !validRuntimeFaultValue(input[key], kind)
+    Object.entries(schema).some(
+      ([key, kind]) => !validRuntimeFaultValue(input[key], kind)
     )
   ) {
     throw failure(
@@ -76,7 +166,7 @@ async function invokeRuntimeFault(observer?: any, callbackName?: any, input?: an
       "Materialization runtime fault payload is invalid."
     );
   }
-  const bounded: Readonly<Record<string, any>> = Object.freeze({ ...input });
+  const bounded: Readonly<Record<string, string | number>> = Object.freeze({ ...input });
   await observer?.[callbackName]?.(bounded);
   return bounded;
 }
@@ -93,8 +183,8 @@ export async function createUploadWorkspaceMaterializationRuntime({
   operationProofSubstrate,
   transactionStore = null,
   faultInjector = null
-}: Record<string, any> = {}) : Promise<any> {
-  for (const [value, methods, label] of [
+}: CreateMaterializationRuntimeOptions) {
+  const requiredPorts: Array<readonly [object, readonly string[], string]> = [
     [
       privateWorkspaceMaterializationPort,
       ["withRequest"],
@@ -116,9 +206,10 @@ export async function createUploadWorkspaceMaterializationRuntime({
       ["capture", "revalidate", "revoke"],
       "deferredProtectedSinkAuthorityPort"
     ]
-  ]) {
+  ];
+  for (const [value, methods, label] of requiredPorts) {
     for (const method of methods) {
-      if (typeof value?.[method] !== "function") {
+      if (!value || typeof Reflect.get(value, method) !== "function") {
         throw new TypeError(`${label}.${method} is required.`);
       }
     }
@@ -134,12 +225,12 @@ export async function createUploadWorkspaceMaterializationRuntime({
       "Materialization authority and evidence dependencies are required."
     );
   }
-  const store: any =
+  const store: MaterializationTransactionStore =
     transactionStore ||
     createUploadWorkspaceMaterializationTransactionStore({
       userDataPath
     });
-  const ownsStore: any = !transactionStore;
+  const ownsStore = !transactionStore;
   for (const method of [
     "assertFence",
     "begin",
@@ -163,20 +254,37 @@ export async function createUploadWorkspaceMaterializationRuntime({
     "retryAfterLease",
     "terminalFail"
   ]) {
-    if (typeof store?.[method] !== "function") {
+    if (typeof Reflect.get(store, method) !== "function") {
       if (ownsStore) store.close();
       throw new TypeError(`transactionStore.${method} is required.`);
     }
   }
-  let closing: any = false;
+  let closing = false;
+  let closePromise: Promise<void> | undefined;
+  const activeOperations = new Set<Promise<unknown>>();
 
-  async function resolveCurrentDescriptor({ record, owner }: Record<string, any>) : Promise<any> {
-    const files: any =
+  function runOperation<T>(task: () => T | Promise<T>): Promise<T> {
+    if (closing) {
+      return Promise.reject(failure(
+        "materialization_provider_closing", 503, "Materialization provider is closing."
+      ));
+    }
+    const operation = Promise.resolve().then(task);
+    activeOperations.add(operation);
+    void operation.then(
+      () => activeOperations.delete(operation),
+      () => activeOperations.delete(operation)
+    );
+    return operation;
+  }
+
+  async function resolveCurrentDescriptor({ record, owner }: Parameters<MaterializationResourcePort["resolveCurrentDescriptor"]>[0]) {
+    const files =
       await uploadSessionStore.resolveUploadSessionFiles(
         record.uploadSessionId,
         { owner }
       );
-    const descriptor: any = exactDescriptor(
+    const descriptor = exactDescriptor(
       files,
       record.uploadSessionId
     );
@@ -193,14 +301,14 @@ export async function createUploadWorkspaceMaterializationRuntime({
     });
   }
 
-  const workspacePort = Object.freeze({
-    withRequest(record?: any, task?: any) : any {
+  const workspacePort: MaterializationWorkspacePort = {
+    async withRequest(record, task) {
       if (typeof task !== "function") {
         throw new TypeError(
           "Workspace materialization request task is required."
         );
       }
-      const descriptor: any = exactDescriptor(
+      const descriptor = exactDescriptor(
         [{
           byteSize: record?.descriptor?.byteCount,
           contentDigest: record?.descriptor?.contentDigest,
@@ -210,7 +318,7 @@ export async function createUploadWorkspaceMaterializationRuntime({
         }],
         record?.uploadSessionId
       );
-      const binding: Readonly<Record<string, any>> = Object.freeze({
+      const binding = Object.freeze({
         bindingDigest: sha256Digest(
           record?.bindingDigest,
           "Materialization binding digest"
@@ -239,12 +347,12 @@ export async function createUploadWorkspaceMaterializationRuntime({
       });
       return privateWorkspaceMaterializationPort.withRequest(
         binding,
-        (bound?: any) : any => task(bound)
+        (bound) => task(bound)
       );
     }
-  });
+  };
 
-  let engine: any;
+  let engine: ReturnType<typeof createUploadWorkspaceMaterialization>;
   try {
     engine = createUploadWorkspaceMaterialization({
       authorityPort: deferredProtectedSinkAuthorityPort,
@@ -259,112 +367,111 @@ export async function createUploadWorkspaceMaterializationRuntime({
       proofPort: operationProofSubstrate,
       faultObserver: faultInjector
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (ownsStore) store.close();
     throw error;
   }
 
-  let queue: any;
+  let queue: MaterializationQueueFacet | undefined;
   try {
     queue = await queueApplicationPort.registerQueue({
-    batchSize: 4,
-    handler: async ({ workItem }: Record<string, any>, context?: any) : Promise<any> => {
-      if (closing) {
-        return {
-          action: "retry",
-          reason: "materialization_provider_closing"
-        };
-      }
-      const requestRef: any = text(workItem?.payloadRef?.requestRef);
-      try {
-        await invokeRuntimeFault(faultInjector, "afterQueueClaim", {
-          leaseSequence: Number(context?.lease?.leaseSeq || 0),
-          requestRef
-        });
-        await engine.execute({
-          ownerFence:
-            `${workItem.workItemId}:${context.lease.leaseSeq}`,
-          renewLease: () : any =>
-            context.renewLease({
-              reason: "materialization_lease_heartbeat"
-            }),
-          requestRef,
-          signal: context.signal
-        });
-        await invokeRuntimeFault(
-          faultInjector,
-          "afterTransactionCompletedBeforeQueueAck",
-          {
-            leaseSequence: Number(context?.lease?.leaseSeq || 0),
-            requestRef
-          }
-        );
-        const settled: any = await store.retryAfterLease(requestRef);
-        if (!settled.terminal) {
+      batchSize: 4,
+      handler: async ({ workItem }, context) => {
+        if (closing) {
           return {
             action: "retry",
-            delayMs: settled.delayMs,
-            reason: "materialization_transaction_pending"
+            reason: "materialization_provider_closing"
           };
         }
-        return {
-          action: "completed",
-          reason: `materialization_${settled.status}`
-        };
-      } catch (error: any) {
-        const disposition: any =
-          materializationFailureDisposition(error);
-        let settled: any = await store.retryAfterLease(requestRef);
-        if (settled.terminal) {
+        const requestRef = text(workItem?.payloadRef?.requestRef);
+        try {
+          await invokeRuntimeFault(faultInjector, "afterQueueClaim", {
+            leaseSequence: Number(context?.lease?.leaseSeq || 0),
+            requestRef
+          });
+          await engine.execute({
+            ownerFence:
+              `${workItem.workItemId}:${context.lease.leaseSeq}`,
+            renewLease: async () => {
+              await context.renewLease({ reason: "materialization_lease_heartbeat" });
+            },
+            requestRef,
+            signal: context.signal
+          });
+          await invokeRuntimeFault(
+            faultInjector,
+            "afterTransactionCompletedBeforeQueueAck",
+            {
+              leaseSequence: Number(context?.lease?.leaseSeq || 0),
+              requestRef
+            }
+          );
+          const settled = await store.retryAfterLease(requestRef);
+          if (!settled.terminal) {
+            return {
+              action: "retry",
+              delayMs: settled.delayMs,
+              reason: "materialization_transaction_pending"
+            };
+          }
           return {
             action: "completed",
             reason: `materialization_${settled.status}`
           };
-        }
-        if (error?.abrupt === true) {
-          return {
-            action: "retry",
-            delayMs: settled.delayMs,
-            reason: disposition.code
-          };
-        }
-        const exhausted: any =
-          Number(workItem?.attempt || 0) >=
-          Number(workItem?.maxAttempts || 1);
-        if (!disposition.retryable || exhausted) {
-          const terminal: any = await store.terminalFail(requestRef, {
-            code: disposition.code
-          });
-          settled = await store.retryAfterLease(requestRef);
-          if (terminal.terminal && settled.terminal) {
-            return {
-              action: "completed",
-              reason: disposition.code
-            };
-          }
+        } catch (error: unknown) {
+          const disposition =
+            materializationFailureDisposition(error);
+          let settled = await store.retryAfterLease(requestRef);
           if (settled.terminal) {
             return {
               action: "completed",
               reason: `materialization_${settled.status}`
             };
           }
+          if (error !== null && typeof error === "object" && "abrupt" in error && error.abrupt === true) {
+            return {
+              action: "retry",
+              delayMs: settled.delayMs,
+              reason: disposition.code
+            };
+          }
+          const exhausted =
+            Number(workItem?.attempt || 0) >=
+            Number(workItem?.maxAttempts || 1);
+          if (!disposition.retryable || exhausted) {
+            const terminal = await store.terminalFail(requestRef, {
+              code: disposition.code
+            });
+            settled = await store.retryAfterLease(requestRef);
+            if (terminal.terminal && settled.terminal) {
+              return {
+                action: "completed",
+                reason: disposition.code
+              };
+            }
+            if (settled.terminal) {
+              return {
+                action: "completed",
+                reason: `materialization_${settled.status}`
+              };
+            }
+          }
+          return {
+            action: "retry",
+            delayMs: settled.delayMs,
+            reason: disposition.code
+          };
         }
-        return {
-          action: "retry",
-          delayMs: settled.delayMs,
-          reason: disposition.code
-        };
-      }
-    },
-    label: "meshrix.jobs.upload-workspace-materialization",
-    maxInFlight: 4,
-    ownerCapability: "platform.job-workflow",
-    queueDefinitionId: DEFINITION_ID,
-    queueDefinitionVersion: DEFINITION_VERSION,
-    scope: {
-      tenantId: "platform",
-      workspaceId: "governed"
-    },
+      },
+      label: "meshrix.jobs.upload-workspace-materialization",
+      maxInFlight: 4,
+      ownerCapability: "platform.job-workflow",
+      queueDefinitionId: DEFINITION_ID,
+      queueDefinitionVersion: DEFINITION_VERSION,
+      scope: {
+        tenantId: "platform",
+        workspaceId: "governed"
+      },
       workerId: "upload-workspace-materialization-worker"
     });
     for (const method of [
@@ -373,35 +480,33 @@ export async function createUploadWorkspaceMaterializationRuntime({
       "enqueue",
       "requestDispatch"
     ]) {
-      if (typeof queue?.[method] !== "function") {
+      if (typeof (queue && Reflect.get(queue, method)) !== "function") {
         throw new TypeError(`queue.${method} is required.`);
       }
     }
-  } catch (error: any) {
-    await Promise.resolve()
-      .then(() : any => queue?.close?.({ timeoutMs: 0 }))
-      .catch(() : any => null);
+  } catch (error: unknown) {
+    await queue?.close();
     if (ownsStore) store.close();
     throw error;
   }
 
   async function enqueue(
-    record?: any,
-    { requestDispatch = true }: Record<string, any> = {}
-  ) : Promise<any> {
-    const requestRef: any = boundedId(
+    record: MaterializationRequestRecord,
+    { requestDispatch = true }: { requestDispatch?: boolean } = {}
+  ): Promise<void> {
+    const requestRef = boundedId(
       record?.requestRef,
       "Materialization request reference"
     );
-    const bindingDigest: any = sha256Digest(
+    const bindingDigest = sha256Digest(
       record?.bindingDigest,
       "Materialization binding digest"
     );
-    const workspaceId: any = boundedId(
+    const workspaceId = boundedId(
       record?.workspaceId,
       "Workspace identity"
     );
-    await queue.enqueue({
+    await queue!.enqueue({
       dedupeKey: requestRef,
       maxAttempts: MATERIALIZATION_MAX_ATTEMPTS,
       ownerRef: {
@@ -419,16 +524,16 @@ export async function createUploadWorkspaceMaterializationRuntime({
     });
     if (requestDispatch) {
       void Promise.resolve()
-        .then(() : any => queue.requestDispatch())
-        .catch(() : any => null);
+        .then(() => queue!.requestDispatch())
+        .catch(() => null);
     }
   }
 
-  async function reconcilePendingRequests() : Promise<any> {
-    let afterRequestRef: any = "";
-    let reconciled: any = false;
+  async function reconcilePendingRequests(): Promise<void> {
+    let afterRequestRef = "";
+    let reconciled = false;
     for (;;) {
-      const records: any = await store.listReconcileCandidates({
+      const records = await store.listReconcileCandidates({
         afterRequestRef,
         limit: MAX_RECONCILE_BATCH
       });
@@ -443,7 +548,7 @@ export async function createUploadWorkspaceMaterializationRuntime({
         );
       }
       for (const record of records) {
-        const requestRef: any = boundedId(
+        const requestRef = boundedId(
           record?.requestRef,
           "Materialization request reference"
         );
@@ -460,28 +565,26 @@ export async function createUploadWorkspaceMaterializationRuntime({
     }
     if (reconciled) {
       void Promise.resolve()
-        .then(() : any => queue.requestDispatch())
-        .catch(() : any => null);
+        .then(() => queue!.requestDispatch())
+        .catch(() => null);
     }
   }
 
   try {
     await reconcilePendingRequests();
-  } catch (error: any) {
+  } catch (error: unknown) {
     closing = true;
-    await Promise.resolve()
-      .then(() : any => queue.close({ timeoutMs: 0 }))
-      .catch(() : any => null);
+    await queue!.close();
     if (ownsStore) store.close();
     throw error;
   }
 
-  function publicAdmission(record?: any, { deduped = false }: Record<string, any> = {}) : any {
+  function publicAdmission(record: MaterializationRequestRecord | MaterializationDurableState, { deduped = false } = {}) {
     return Object.freeze({
       accepted: true,
       deduped,
       requestRef: record.requestRef,
-      ...(record.status === "completed"
+      ...("status" in record && record.status === "completed"
         ? {
             result: Object.freeze({
               ...record.result,
@@ -493,20 +596,13 @@ export async function createUploadWorkspaceMaterializationRuntime({
     });
   }
 
-  return Object.freeze({
+  const operations = {
     async submit({
       request,
       authSession,
       operation,
       input
-    }: Record<string, any> = {}) : Promise<any> {
-      if (closing) {
-        throw failure(
-          "materialization_provider_closing",
-          503,
-          "Materialization provider is closing."
-        );
-      }
+    }: MaterializationSubmitInput) {
       if (
         operation?.id !==
         "jobs.upload_workspace_materialize"
@@ -517,10 +613,10 @@ export async function createUploadWorkspaceMaterializationRuntime({
           "Materialization operation is invalid."
         );
       }
-      const closedInput: any = closedAdmissionInput(input);
-      const owner: any = normalizedOwner(authSession);
-      const requestRef: any = requestReference(closedInput, owner);
-      const existing: any = await store.get(requestRef);
+      const closedInput = closedAdmissionInput(input);
+      const owner = normalizedOwner(authSession);
+      const requestRef = requestReference(closedInput, owner);
+      const existing = await store.get(requestRef);
       if (existing?.status === "completed") {
         return publicAdmission(existing, { deduped: true });
       }
@@ -542,37 +638,37 @@ export async function createUploadWorkspaceMaterializationRuntime({
         await enqueue(existing);
         return publicAdmission(existing, { deduped: true });
       }
-      const files: any =
+      const files =
         await uploadSessionStore.resolveUploadSessionFiles(
           closedInput.uploadSessionId,
           { owner }
         );
-      const descriptor: any = exactDescriptor(
+      const descriptor = exactDescriptor(
         files,
         closedInput.uploadSessionId
       );
-      const captured: any =
+      const captured =
         await deferredProtectedSinkAuthorityPort.capture({
           authSession,
           input: closedInput,
           operation,
           request
         });
-      const resourceRevision: any = digest(descriptor);
-      const bindingDigest: any = digest({
+      const resourceRevision = digest(descriptor);
+      const bindingDigest = digest({
         authorityBindingDigest:
           captured.authorityBindingDigest,
         descriptor,
         expectedWorkspaceRevision:
           closedInput.expectedWorkspaceRevision,
         logicalTarget: closedInput.logicalTarget,
-        operationId: operation.id,
+        operationId: "jobs.upload_workspace_materialize",
         requestDigest: captured.requestDigest,
         requestRef,
         uploadSessionId: closedInput.uploadSessionId,
         workspaceId: closedInput.workspaceId
       });
-      const record: Readonly<Record<string, any>> = Object.freeze({
+      const record: MaterializationRequestRecord = Object.freeze({
         approvalIntentDigest:
           captured.approvalIntentDigest,
         authorityBindingDigest:
@@ -583,25 +679,25 @@ export async function createUploadWorkspaceMaterializationRuntime({
         expectedWorkspaceRevision:
           closedInput.expectedWorkspaceRevision,
         logicalTarget: closedInput.logicalTarget,
-        operationId: operation.id,
+        operationId: "jobs.upload_workspace_materialize",
         requestDigest: captured.requestDigest,
         requestRef,
         resourceRevision,
         uploadSessionId: closedInput.uploadSessionId,
         workspaceId: closedInput.workspaceId
       });
-      let created: any;
+      let created: MaterializationStoreCreateResult;
       try {
         created = await store.create(record);
-      } catch (error: any) {
+      } catch (error: unknown) {
         await Promise.resolve()
-          .then(() : any =>
+          .then(() =>
             deferredProtectedSinkAuthorityPort.revoke({
               authorityRef: captured.authorityRef,
               reason: "materialization_admission_failed"
             })
           )
-          .catch(() : any => null);
+          .catch(() => null);
         throw error;
       }
       if (created.inserted !== true) {
@@ -609,7 +705,7 @@ export async function createUploadWorkspaceMaterializationRuntime({
           authorityRef: captured.authorityRef,
           reason: "materialization_admission_race"
         });
-        const raced: any = await store.get(requestRef);
+        const raced = await store.get(requestRef);
         if (!raced) {
           throw failure(
             "materialization_admission_failed",
@@ -647,13 +743,13 @@ export async function createUploadWorkspaceMaterializationRuntime({
       await enqueue(record);
       return publicAdmission(record);
     },
-    get(requestRef?: any) : any {
+    get(requestRef: string) {
       return engine.get(requestRef);
     },
-    async cancel(requestRef?: any, { subject }: Record<string, any> = {}) : Promise<any> {
-      const record: any = await store.get(requestRef);
+    async cancel(requestRef: string, { subject }: { subject?: unknown } = {}) {
+      const record = await store.get(requestRef);
       if (!record) return null;
-      let expectedRef: any;
+      let expectedRef: string;
       try {
         expectedRef = requestReference(
           {
@@ -680,7 +776,7 @@ export async function createUploadWorkspaceMaterializationRuntime({
           status: record.status
         });
       }
-      await queue.cancel({
+      await queue!.cancel({
         actor: {
           system: "platform-job-workflow"
         },
@@ -691,21 +787,38 @@ export async function createUploadWorkspaceMaterializationRuntime({
           `materialization-work:${record.bindingDigest}`
       });
       await store.cancelQueued(requestRef);
-      const cancelled: any = await store.get(requestRef);
-      return Object.freeze({
+      const cancelled = await store.get(requestRef);
+      return cancelled ? Object.freeze({
         requestRef,
         stage: cancelled.stage,
         status: cancelled.status
-      });
+      }) : null;
+    }
+  };
+
+  return Object.freeze({
+    submit(input: MaterializationSubmitInput) {
+      return runOperation(() => operations.submit(input));
     },
-    async close() : Promise<any> {
-      if (closing) return;
-      closing = true;
-      try {
-        await queue.close({ timeoutMs: 30_000 });
-      } finally {
-        if (ownsStore) store.close();
+    get(requestRef: string) {
+      return runOperation(() => operations.get(requestRef));
+    },
+    cancel(requestRef: string, input?: { subject?: unknown }) {
+      return runOperation(() => operations.cancel(requestRef, input));
+    },
+    close(): Promise<void> {
+      if (!closePromise) {
+        closing = true;
+        closePromise = (async () => {
+          await Promise.allSettled([...activeOperations]);
+          await queue!.close();
+          if (ownsStore) store.close();
+        })().catch((error: unknown) => {
+          closePromise = undefined;
+          throw error;
+        });
       }
+      return closePromise;
     }
   });
 }

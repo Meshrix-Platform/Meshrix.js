@@ -1,5 +1,7 @@
+import type { AgentWorkspaceMaterializationSession } from "./agent-workspace-materialization.ts";
+
 export interface AgentWorkspaceMaterializationPort {
-  withRequest(input?: unknown, task?: unknown): unknown;
+  withRequest<T>(input: unknown, task: (workspace: AgentWorkspaceMaterializationSession) => T | Promise<T>): Promise<T>;
 }
 
 export type AgentWorkspaceMaterializationRootAuthority = object;
