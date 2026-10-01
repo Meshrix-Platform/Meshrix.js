@@ -26,16 +26,6 @@ const DEPENDENCY_FIELDS: any[] = [
   "optionalDependencies",
   "peerDependencies"
 ];
-const AGENT_PLUGIN_PACKAGE_NAMES: readonly any[] = Object.freeze([
-  "@meshrix/agent-antigravity-adapter",
-  "@meshrix/agent-claude-code-adapter",
-  "@meshrix/agent-codex-adapter",
-  "@meshrix/agent-kimi-adapter",
-  "@meshrix/agent-openclaw-adapter",
-  "@meshrix/agent-opencode-adapter",
-  "@meshrix/agent-pi-adapter",
-  "@meshrix/client-adapter-kit"
-]);
 const ARTIFACT_DIRECTORIES: string[] = [];
 
 afterEach(async () : Promise<any> => {
@@ -105,6 +95,39 @@ async function prepareFixtures(injected?: any) : Promise<any> {
 
 async function packageCount() : Promise<any> {
   return (await discoverReleaseSet({ rootDir: ROOT })).packages.length;
+}
+
+async function newReleaseDiscoveryFixture(options: Record<string, any> = {}) : Promise<any> {
+  const {
+    rootDependencies = { "@meshrix/gateway": "1.2.3" },
+    rootBundleDependencies = [],
+    packages = []
+  } = options;
+  const rootDir: any = await newArtifactDirectory();
+  const workspacePackages: any[] = [
+    {
+      directory: "packages/gateway",
+      manifest: { name: "@meshrix/gateway", version: "1.2.3", dependencies: {} }
+    },
+    {
+      directory: "packages/contracts",
+      manifest: { name: "@meshrix/contracts", version: "1.2.3", private: true }
+    },
+    ...packages
+  ];
+  await fs.writeFile(path.join(rootDir, "package.json"), JSON.stringify({
+    name: "meshrix.js",
+    version: "1.2.3",
+    workspaces: workspacePackages.map(({ directory }: Record<string, any>) : any => directory),
+    dependencies: rootDependencies,
+    bundleDependencies: rootBundleDependencies
+  }));
+  for (const { directory, manifest } of workspacePackages) {
+    const packageDirectory: any = path.join(rootDir, directory);
+    await fs.mkdir(packageDirectory, { recursive: true });
+    await fs.writeFile(path.join(packageDirectory, "package.json"), JSON.stringify(manifest));
+  }
+  return rootDir;
 }
 
 function createInjectedNpmRunner({
@@ -198,22 +221,105 @@ describe("npm release-set publication", () : any => {
     const positions: any = new Map<any, any>(names.map((name?: any, index?: any) : any => [name, index]));
 
     expect(new Set(names).size).toBe(names.length);
-    expect(names).not.toContain("meshrix-mcp-connector");
-    expect(names).toContain("@meshrix/gateway");
-    for (const packageName of AGENT_PLUGIN_PACKAGE_NAMES) expect(names).toContain(packageName);
-    expect(names).not.toContain("@meshrix/server");
-    expect(names).not.toContain("@meshrix/console");
+    expect(names).toEqual(["@meshrix/gateway", "meshrix.js"]);
     expect(names.at(-1)).toBe("meshrix.js");
 
     for (const packageRecord of releaseSet.packages) {
       for (const field of DEPENDENCY_FIELDS) {
         for (const dependencyName of Object.keys(packageRecord.manifest[field] || {})) {
           if (!dependencyName.startsWith("@meshrix/")) continue;
-          expect(positions.get(dependencyName), `${packageRecord.name} -> ${dependencyName}`)
-            .toBeLessThan(positions.get(packageRecord.name));
+          if (positions.has(dependencyName)) {
+            expect(positions.get(dependencyName), `${packageRecord.name} -> ${dependencyName}`)
+              .toBeLessThan(positions.get(packageRecord.name));
+          } else {
+            const bundleNames = packageRecord.manifest.bundleDependencies || packageRecord.manifest.bundledDependencies || [];
+            expect(bundleNames, `${packageRecord.name} bundles ${dependencyName}`).toContain(dependencyName);
+          }
         }
       }
     }
+  });
+
+  it("prepares only the two public tarballs while validating explicitly bundled private modules", async () : Promise<any> => {
+    const rootDir: any = await newReleaseDiscoveryFixture({
+      rootDependencies: {
+        "@meshrix/gateway": "1.2.3",
+        "@meshrix/foundation": "1.2.3"
+      },
+      rootBundleDependencies: ["@meshrix/foundation"],
+      packages: [
+        {
+          directory: "packages/foundation",
+          manifest: { name: "@meshrix/foundation", version: "1.2.3", private: true }
+        }
+      ]
+    });
+    await fs.writeFile(path.join(rootDir, "packages/gateway/package.json"), JSON.stringify({
+      name: "@meshrix/gateway",
+      version: "1.2.3",
+      dependencies: { "@meshrix/contracts": "1.2.3" },
+      bundleDependencies: ["@meshrix/contracts"]
+    }));
+
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    const prepared: any = await prepareReleaseSet({
+      rootDir,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    const releaseManifest: any = JSON.parse(await fs.readFile(
+      path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME),
+      "utf8"
+    ));
+    const packedNames: any[] = await Promise.all(
+      injected.calls
+        .filter(({ args }: Record<string, any>) : any => args[0] === "pack")
+        .map(async ({ args }: Record<string, any>) : Promise<any> => (
+          JSON.parse(await fs.readFile(path.join(args.at(-1), "package.json"), "utf8")).name
+        ))
+    );
+
+    expect(prepared.packageCount).toBe(2);
+    expect(prepared.packages.map(({ name }: Record<string, any>) : any => name))
+      .toEqual(["@meshrix/gateway", "meshrix.js"]);
+    expect(releaseManifest.packages.map(({ name }: Record<string, any>) : any => name))
+      .toEqual(["@meshrix/gateway", "meshrix.js"]);
+    expect(packedNames).toEqual(["@meshrix/gateway", "meshrix.js"]);
+  });
+
+  it.each([
+    {
+      label: "an undeclared and unresolved internal dependency",
+      rootDependencies: { "@meshrix/gateway": "1.2.3", "@meshrix/missing": "1.2.3" },
+      rootBundleDependencies: [],
+      packages: [],
+      expectedCode: "release_set_internal_dependency_missing"
+    },
+    {
+      label: "an existing private dependency without an explicit bundle declaration",
+      rootDependencies: { "@meshrix/gateway": "1.2.3", "@meshrix/foundation": "1.2.3" },
+      rootBundleDependencies: [],
+      packages: [{
+        directory: "packages/foundation",
+        manifest: { name: "@meshrix/foundation", version: "1.2.3", private: true }
+      }],
+      expectedCode: "release_set_internal_dependency_missing"
+    },
+    {
+      label: "a private bundle whose workspace version differs from the release",
+      rootDependencies: { "@meshrix/gateway": "1.2.3", "@meshrix/foundation": "1.2.3" },
+      rootBundleDependencies: ["@meshrix/foundation"],
+      packages: [{
+        directory: "packages/foundation",
+        manifest: { name: "@meshrix/foundation", version: "1.2.2", private: true }
+      }],
+      expectedCode: "release_set_internal_dependency_invalid"
+    }
+  ])("rejects $label", async ({ rootDependencies, rootBundleDependencies, packages, expectedCode }: Record<string, any>) : Promise<any> => {
+    const rootDir: any = await newReleaseDiscoveryFixture({ rootDependencies, rootBundleDependencies, packages });
+    await expect(discoverReleaseSet({ rootDir })).rejects.toMatchObject({ code: expectedCode });
   });
 
   it("expands only the governed agent-plugin workspace boundary", async () : Promise<any> => {

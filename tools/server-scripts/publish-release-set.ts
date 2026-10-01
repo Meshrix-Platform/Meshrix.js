@@ -124,12 +124,62 @@ function internalDependencyNames(manifest?: any) : any {
   return [...names].sort((left?: any, right?: any) : any => left.localeCompare(right));
 }
 
+function bundleDependencyNames(manifest?: any) : any {
+  const current: any = manifest?.bundleDependencies;
+  const legacy: any = manifest?.bundledDependencies;
+  const declarations: any[] = [current, legacy].filter((value?: any) : any => value !== undefined);
+  if (declarations.length === 0) return new Set<any>();
+  if (declarations.some((value?: any) : any => !Array.isArray(value))) {
+    throw publicationError(
+      "release_set_bundle_dependencies_invalid",
+      "Private first-party bundles must be declared as an explicit package-name array."
+    );
+  }
+
+  const normalized: any[][] = declarations.map((value?: any) : any => value.map((name?: any) : any => {
+    const packageName: any = normalizePackageName(name);
+    if (!packageName.startsWith("@meshrix/")) {
+      throw publicationError(
+        "release_set_bundle_dependency_invalid",
+        "Release products may bundle only declared private first-party packages."
+      );
+    }
+    return packageName;
+  }));
+  const unique: any[] = [...new Set<any>(normalized[0])];
+  if (
+    unique.length !== normalized[0].length ||
+    normalized.some((value: any[]) : any => (
+      value.length !== unique.length || [...value].sort().join("\n") !== [...unique].sort().join("\n")
+    ))
+  ) {
+    throw publicationError(
+      "release_set_bundle_dependencies_invalid",
+      "A release product must declare each private first-party bundle exactly once."
+    );
+  }
+  return new Set<any>(unique);
+}
+
+function dependencyVersions(manifest?: any, dependencyName?: any) : any[] {
+  return DEPENDENCY_FIELDS.flatMap((field?: any) : any[] => {
+    const dependencies: any = manifest?.[field];
+    return dependencies && typeof dependencies === "object" && !Array.isArray(dependencies) &&
+      Object.hasOwn(dependencies, dependencyName)
+      ? [{ field, version: dependencies[dependencyName] }]
+      : [];
+  });
+}
+
 function compareReadyPackages(left?: any, right?: any) : any {
   if (left.root !== right.root) return left.root ? 1 : -1;
   return left.name.localeCompare(right.name);
 }
 
-export function topologicallyOrderReleaseSet(packages?: any) : any {
+export function topologicallyOrderReleaseSet(packages?: any, {
+  privatePackages = [],
+  version
+}: Record<string, any> = {}) : any {
   const byName: any = new Map<any, any>();
   for (const packageRecord of packages) {
     if (byName.has(packageRecord.name)) {
@@ -141,17 +191,86 @@ export function topologicallyOrderReleaseSet(packages?: any) : any {
     byName.set(packageRecord.name, packageRecord);
   }
 
+  const privateByName: any = new Map<any, any>();
+  for (const packageRecord of privatePackages) {
+    if (privateByName.has(packageRecord.name) || byName.has(packageRecord.name)) {
+      throw publicationError(
+        "release_set_package_name_duplicate",
+        "Workspace package names must be unique across public and private packages."
+      );
+    }
+    privateByName.set(packageRecord.name, packageRecord);
+  }
+
+  const rootPackage: any = packages.find(({ root }: Record<string, any>) : any => root);
+  const releaseVersion: any = version || rootPackage?.version;
+  const bundleNamesByPackage: any = new Map<any, any>();
+  for (const packageRecord of packages) {
+    const bundleNames: any = bundleDependencyNames(packageRecord.manifest);
+    bundleNamesByPackage.set(packageRecord.name, bundleNames);
+
+    const runtimeDependencies: any = new Set<any>([
+      ...Object.keys(packageRecord.manifest?.dependencies || {}),
+      ...Object.keys(packageRecord.manifest?.optionalDependencies || {})
+    ]);
+    for (const dependencyName of bundleNames) {
+      const privatePackage: any = privateByName.get(dependencyName);
+      if (!privatePackage || privatePackage.manifest?.private !== true) {
+        throw publicationError(
+          "release_set_bundle_dependency_missing",
+          "Every declared first-party bundle must resolve to a private workspace package."
+        );
+      }
+      if (!runtimeDependencies.has(dependencyName)) {
+        throw publicationError(
+          "release_set_bundle_dependency_invalid",
+          "A private bundle must also be a direct runtime or optional dependency of its product."
+        );
+      }
+      const privateVersion: any = normalizeReleaseVersion(privatePackage.manifest.version);
+      if (releaseVersion && privateVersion !== releaseVersion) {
+        throw publicationError(
+          "release_set_internal_dependency_invalid",
+          "Every bundled private first-party package must match the release version."
+        );
+      }
+    }
+  }
+
   const dependents: any = new Map<any, any>([...byName.keys()].map((name?: any) : any => [name, new Set<any>()]));
   const indegree: any = new Map<any, any>([...byName.keys()].map((name?: any) : any => [name, 0]));
   for (const packageRecord of packages) {
     for (const dependencyName of internalDependencyNames(packageRecord.manifest)) {
-      if (!byName.has(dependencyName)) {
+      const privatePackage: any = privateByName.get(dependencyName);
+      const bundleNames: any = bundleNamesByPackage.get(packageRecord.name);
+      const versions: any[] = dependencyVersions(packageRecord.manifest, dependencyName);
+      if (releaseVersion && versions.some(({ version: dependencyVersion }: Record<string, any>) : any => (
+        dependencyVersion !== releaseVersion
+      ))) {
         throw publicationError(
-          "release_set_internal_dependency_missing",
-          "Every internal @meshrix dependency must be part of the public release set."
+          "release_set_internal_dependency_invalid",
+          "Internal @meshrix dependencies must be locked to the release version."
         );
       }
-      if (!dependents.get(dependencyName).has(packageRecord.name)) {
+      if (!byName.has(dependencyName) && !bundleNames.has(dependencyName)) {
+        throw publicationError(
+          "release_set_internal_dependency_missing",
+          "Every private first-party runtime dependency must be explicitly bundled by its public product."
+        );
+      }
+      if (!byName.has(dependencyName) && !privatePackage) {
+        throw publicationError(
+          "release_set_internal_dependency_missing",
+          "Every bundled first-party dependency must resolve to a private workspace package."
+        );
+      }
+      if (!byName.has(dependencyName) && privatePackage.manifest?.private !== true) {
+        throw publicationError(
+          "release_set_internal_dependency_invalid",
+          "A first-party bundle may not replace an independently public workspace package."
+        );
+      }
+      if (byName.has(dependencyName) && !dependents.get(dependencyName).has(packageRecord.name)) {
         dependents.get(dependencyName).add(packageRecord.name);
         indegree.set(packageRecord.name, indegree.get(packageRecord.name) + 1);
       }
@@ -199,9 +318,13 @@ export async function discoverReleaseSet({ rootDir = process.cwd() }: Record<str
     workspaces: rootPackage.manifest.workspaces
   });
   const candidates: any[] = [];
+  const privatePackages: any[] = [];
   for (const directory of workspaceDirectories) {
     const packageRecord: any = await readManifest(repositoryRoot, directory);
-    if (packageRecord.manifest.private === true) continue;
+    if (packageRecord.manifest.private === true) {
+      privatePackages.push(packageRecord);
+      continue;
+    }
     const packageVersion: any = normalizeReleaseVersion(packageRecord.manifest.version);
     if (packageVersion !== version) {
       throw publicationError(
@@ -220,25 +343,7 @@ export async function discoverReleaseSet({ rootDir = process.cwd() }: Record<str
   }
   candidates.push({ ...rootPackage, version });
 
-  const ordered: any = topologicallyOrderReleaseSet(candidates);
-  const releaseNames: any = new Set<any>(ordered.map(({ name }: Record<string, any>) : any => name));
-  for (const packageRecord of ordered) {
-    for (const field of DEPENDENCY_FIELDS) {
-      const dependencies: any = packageRecord.manifest?.[field];
-      if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) {
-        continue;
-      }
-      for (const [dependencyName, dependencyVersion] of (Object.entries(dependencies) as [string, any][])) {
-        if (!dependencyName.startsWith("@meshrix/")) continue;
-        if (!releaseNames.has(dependencyName) || dependencyVersion !== version) {
-          throw publicationError(
-            "release_set_internal_dependency_invalid",
-            "Internal @meshrix dependencies must be present and locked to the release version."
-          );
-        }
-      }
-    }
-  }
+  const ordered: any = topologicallyOrderReleaseSet(candidates, { privatePackages, version });
 
   return { repositoryRoot, version, packages: ordered };
 }
