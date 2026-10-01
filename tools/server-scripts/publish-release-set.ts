@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -17,8 +19,8 @@ import { assertReleaseVersion, resolveReleaseWorkspaceDirectories } from "./lib/
 
 const execFileAsync: any = promisify(execFile);
 const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
-const GATEWAY_INSTALLER_DIRECTORY: any =
-  "packages/protocols/mcp/adapter/gateway-installer";
+export const PREPARED_RELEASE_SET_FILENAME: any = "meshrix-release-set.json";
+const PREPARED_RELEASE_SET_SCHEMA: any = "meshrix.npm-release-set/v1";
 const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
   "dependencies",
   "devDependencies",
@@ -29,7 +31,17 @@ const RAW_NPM_TOKEN_ENVIRONMENT_NAMES: readonly any[] = Object.freeze([
   "NODE_AUTH_TOKEN",
   "NPM_TOKEN",
   "NPM_CONFIG__AUTHTOKEN",
-  "npm_config__authToken"
+  "npm_config__authToken",
+  "NPM_CONFIG__AUTH",
+  "npm_config__auth",
+  "NPM_CONFIG_AUTH",
+  "npm_config_auth"
+]);
+const NPM_CONFIG_PATH_ENVIRONMENT_NAMES: readonly any[] = Object.freeze([
+  "NPM_CONFIG_USERCONFIG",
+  "npm_config_userconfig",
+  "NPM_CONFIG_GLOBALCONFIG",
+  "npm_config_globalconfig"
 ]);
 const PACKAGE_NAME_PATTERN: any =
   /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
@@ -186,23 +198,15 @@ export async function discoverReleaseSet({ rootDir = process.cwd() }: Record<str
     rootDir: repositoryRoot,
     workspaces: rootPackage.manifest.workspaces
   });
-  const candidateDirectories: any[] = [...workspaceDirectories, GATEWAY_INSTALLER_DIRECTORY];
-  if (new Set<any>(candidateDirectories).size !== candidateDirectories.length) {
-    throw publicationError(
-      "release_set_workspace_duplicate",
-      "Release-set package directories must be unique."
-    );
-  }
-
   const candidates: any[] = [];
-  for (const directory of candidateDirectories) {
+  for (const directory of workspaceDirectories) {
     const packageRecord: any = await readManifest(repositoryRoot, directory);
     if (packageRecord.manifest.private === true) continue;
     const packageVersion: any = normalizeReleaseVersion(packageRecord.manifest.version);
     if (packageVersion !== version) {
       throw publicationError(
         "release_set_version_mismatch",
-        "Every public workspace and connector package must match the root release version."
+        "Every public workspace package must match the root release version."
       );
     }
     candidates.push({ ...packageRecord, version: packageVersion });
@@ -324,25 +328,101 @@ function normalizeRequestedTag(version?: any, requestedTag?: any) : any {
 }
 
 function assertNoRawNpmToken(environment?: any) : any {
-  if (RAW_NPM_TOKEN_ENVIRONMENT_NAMES.some((name?: any) : any => environment?.[name])) {
+  if (Object.entries(environment || {}).some(([name, value]) => (
+    isSensitiveNpmEnvironmentName(name) && Boolean(value)
+  ))) {
     throw publicationError(
       "release_set_raw_npm_token_forbidden",
-      "npm publication must use GitHub OIDC trusted publishing without a raw npm token."
+      "OIDC publication does not accept raw npm token credentials."
     );
   }
 }
 
-export function createNpmRunner({ environment = process.env }: Record<string, any> = {}) : any {
+function selectPublicationAuth({
+  authMode = "oidc",
+  bootstrapCandidate,
+  version,
+  environment = process.env
+}: Record<string, any> = {}) : any {
+  if (authMode === "oidc") {
+    if (bootstrapCandidate !== undefined) {
+      throw publicationError(
+        "release_set_bootstrap_candidate_invalid",
+        "A bootstrap candidate is valid only with explicit bootstrap authentication."
+      );
+    }
+    assertNoRawNpmToken(environment);
+    return { authMode, authToken: undefined };
+  }
+  if (authMode !== "bootstrap") {
+    throw publicationError(
+      "release_set_auth_mode_invalid",
+      "Publication authentication must be OIDC or an explicit bootstrap candidate."
+    );
+  }
+  if (bootstrapCandidate !== version) {
+    throw publicationError(
+      "release_set_bootstrap_candidate_invalid",
+      "Bootstrap authentication must explicitly name the prepared release version."
+    );
+  }
+  const tokenNames: any[] = Object.keys(environment || {}).filter((name?: any) : any => (
+    isSensitiveNpmEnvironmentName(name) && Boolean(environment[name])
+  ));
+  if (tokenNames.length !== 1 || tokenNames[0] !== "NODE_AUTH_TOKEN") {
+    throw publicationError(
+      "release_set_bootstrap_credential_missing",
+      "Explicit bootstrap publication requires only NODE_AUTH_TOKEN."
+    );
+  }
+  return { authMode, authToken: environment.NODE_AUTH_TOKEN };
+}
+
+function isSensitiveNpmEnvironmentName(name?: any) : any {
+  const normalized: any = String(name).toLowerCase();
+  return RAW_NPM_TOKEN_ENVIRONMENT_NAMES.some((candidate?: any) : any => (
+    candidate.toLowerCase() === normalized
+  ));
+}
+
+function isolatedNpmEnvironment(environment?: any) : any {
+  const result: any = {};
+  for (const [name, value] of Object.entries(environment || {})) {
+    if (isSensitiveNpmEnvironmentName(name)) continue;
+    if (NPM_CONFIG_PATH_ENVIRONMENT_NAMES.some((candidate?: any) : any => (
+      candidate.toLowerCase() === name.toLowerCase()
+    ))) continue;
+    result[name] = value;
+  }
+  result.npm_config_userconfig = os.devNull;
+  result.npm_config_globalconfig = os.devNull;
+  return result;
+}
+
+export function createNpmRunner({
+  environment = process.env,
+  exec = execFileAsync
+}: Record<string, any> = {}) : any {
   const invocation: any = resolveNpmCliInvocation({ env: environment });
-  return async (args: any, { cwd }: Record<string, any>) : Promise<any> => {
+  const safeEnvironment: any = isolatedNpmEnvironment(environment);
+  return async (args: any, { cwd, authToken }: Record<string, any>) : Promise<any> => {
+    const mutating: any = args[0] === "publish" || args[0] === "dist-tag";
+    if (authToken && !mutating) {
+      throw publicationError(
+        "release_set_auth_scope_invalid",
+        "A bootstrap credential may only be used by an npm publication mutation."
+      );
+    }
     try {
-      const result: any = await execFileAsync(
+      const childEnvironment: any = { ...safeEnvironment };
+      if (authToken && mutating) childEnvironment.NODE_AUTH_TOKEN = authToken;
+      const result: any = await exec(
         invocation.command,
         npmCliArgs(invocation, args),
         {
           cwd,
           encoding: "utf8",
-          env: environment,
+          env: childEnvironment,
           maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
           windowsHide: true
         }
@@ -398,19 +478,33 @@ function parsePackArtifact(stdout?: any, packageRecord?: any) : any {
   return { filename, integrity };
 }
 
-async function packReleaseSet(packages?: any, packDirectory?: any, runner?: any) : Promise<any> {
+async function packReleaseSet(
+  packages?: any,
+  packDirectory?: any,
+  commandDirectory?: any,
+  runner?: any,
+  createdTarballs: any[] = []
+) : Promise<any> {
   const packed: any[] = [];
   for (const packageRecord of packages) {
     const result: any = assertSuccessfulResult(
       await runner(
-        ["pack", "--json", "--ignore-scripts", "--pack-destination", packDirectory],
-        { cwd: packageRecord.absoluteDirectory }
+        [
+          "pack",
+          "--json",
+          "--ignore-scripts",
+          "--pack-destination",
+          packDirectory,
+          packageRecord.absoluteDirectory
+        ],
+        { cwd: commandDirectory }
       ),
       "release_set_pack_failed",
       "A release-set package could not be packed."
     );
     const artifact: any = parsePackArtifact(result.stdout, packageRecord);
     const tarballPath: any = path.join(packDirectory, artifact.filename);
+    createdTarballs.push(tarballPath);
     let tarballStat: any;
     try {
       tarballStat = await fs.lstat(tarballPath);
@@ -429,6 +523,292 @@ async function packReleaseSet(packages?: any, packDirectory?: any, runner?: any)
     packed.push({ ...packageRecord, ...artifact, tarballPath });
   }
   return packed;
+}
+
+async function ensureArtifactDirectory(artifactDirectory?: any, { requireEmpty = false }: Record<string, any> = {}) : Promise<any> {
+  if (!artifactDirectory) {
+    throw publicationError(
+      "release_set_artifact_directory_missing",
+      "An explicit prepared-artifact directory is required."
+    );
+  }
+  const resolved: any = path.resolve(artifactDirectory);
+  try {
+    await fs.mkdir(resolved, { recursive: true });
+  } catch {
+    throw publicationError(
+      "release_set_artifact_directory_invalid",
+      "The prepared-artifact directory could not be opened."
+    );
+  }
+  let stat: any;
+  try {
+    stat = await fs.lstat(resolved);
+  } catch {
+    throw publicationError(
+      "release_set_artifact_directory_invalid",
+      "The prepared-artifact directory could not be opened."
+    );
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw publicationError(
+      "release_set_artifact_directory_invalid",
+      "The prepared-artifact path must be a directory."
+    );
+  }
+  if (requireEmpty) {
+    let entries: any[] = [];
+    try {
+      entries = await fs.readdir(resolved);
+    } catch {
+      throw publicationError(
+        "release_set_artifact_directory_invalid",
+        "The prepared-artifact directory could not be read."
+      );
+    }
+    if (entries.length > 0) {
+      throw publicationError(
+        "release_set_artifact_directory_not_empty",
+        "Preparing a release set requires an empty artifact directory."
+      );
+    }
+  }
+  return resolved;
+}
+
+async function sha512IntegrityForFile(filePath?: any) : Promise<any> {
+  const hash: any = createHash("sha512");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return `sha512-${hash.digest("base64")}`;
+}
+
+function hasExactObjectKeys(value?: any, expected: any[] = []) : any {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const actual: any[] = Object.keys(value).sort();
+  const required: any[] = [...expected].sort();
+  return actual.length === expected.length && actual.every((key?: any, index?: any) : any => (
+    key === required[index]
+  ));
+}
+
+function validatePreparedArtifactRow(row?: any, packageRecord?: any) : any {
+  if (!hasExactObjectKeys(row, ["name", "version", "filename", "integrity"])) {
+    throw publicationError(
+      "release_set_prepared_manifest_invalid",
+      "The prepared release manifest contains an invalid package record."
+    );
+  }
+  if (
+    row.name !== packageRecord.name ||
+    row.version !== packageRecord.version ||
+    !PACKAGE_NAME_PATTERN.test(String(row.name || "")) ||
+    !INTEGRITY_PATTERN.test(String(row.integrity || ""))
+  ) {
+    throw publicationError(
+      "release_set_prepared_manifest_mismatch",
+      "The prepared release manifest does not match the canonical release set."
+    );
+  }
+  const filename: any = String(row.filename || "");
+  if (
+    !filename ||
+    filename === "." ||
+    filename === ".." ||
+    path.isAbsolute(filename) ||
+    filename.includes("/") ||
+    filename.includes("\\") ||
+    !filename.endsWith(".tgz")
+  ) {
+    throw publicationError(
+      "release_set_prepared_archive_invalid",
+      "Prepared release archives must use relative tarball filenames."
+    );
+  }
+  return { filename, integrity: row.integrity };
+}
+
+async function assertPreparedArchiveIntegrity(packageRecord?: any) : Promise<any> {
+  let archiveStat: any;
+  try {
+    archiveStat = await fs.lstat(packageRecord.tarballPath);
+  } catch {
+    throw publicationError(
+      "release_set_tarball_missing",
+      "A prepared release archive is missing."
+    );
+  }
+  if (!archiveStat.isFile() || archiveStat.isSymbolicLink()) {
+    throw publicationError(
+      "release_set_prepared_archive_invalid",
+      "Prepared release archives must be regular files."
+    );
+  }
+  let actualIntegrity: any;
+  try {
+    actualIntegrity = await sha512IntegrityForFile(packageRecord.tarballPath);
+  } catch {
+    throw publicationError(
+      "release_set_prepared_archive_invalid",
+      "A prepared release archive could not be read."
+    );
+  }
+  if (actualIntegrity !== packageRecord.integrity) {
+    throw publicationError(
+      "release_set_prepared_archive_integrity_mismatch",
+      "A prepared release archive does not match npm's recorded integrity."
+    );
+  }
+}
+
+export interface PreparedReleaseArtifact {
+  name: string;
+  version: string;
+  filename: string;
+  integrity: string;
+  tarballPath: string;
+  [key: string]: any;
+}
+
+export interface PreparedReleaseSet {
+  repositoryRoot: string;
+  artifactDirectory: string;
+  version: string;
+  tag: string;
+  packages: PreparedReleaseArtifact[];
+}
+
+export async function prepareReleaseSet({
+  rootDir = process.cwd(),
+  artifactDirectory,
+  tag: requestedTag,
+  runner,
+  environment = process.env
+}: Record<string, any> = {}) : Promise<any> {
+  const releaseSet: any = await discoverReleaseSet({ rootDir });
+  const tag: any = normalizeRequestedTag(releaseSet.version, requestedTag);
+  const destination: any = await ensureArtifactDirectory(artifactDirectory, { requireEmpty: true });
+  const commandRunner: any = runner || createNpmRunner({ environment });
+  const commandDirectory: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-prepare-"));
+  const manifestPath: any = path.join(destination, PREPARED_RELEASE_SET_FILENAME);
+  const createdTarballs: any[] = [];
+  let manifestWritten: any = false;
+  try {
+    const packed: any = await packReleaseSet(
+      releaseSet.packages,
+      destination,
+      commandDirectory,
+      commandRunner,
+      createdTarballs
+    );
+    for (const packageRecord of packed) {
+      if (await sha512IntegrityForFile(packageRecord.tarballPath) !== packageRecord.integrity) {
+        throw publicationError(
+          "release_set_pack_integrity_mismatch",
+          "An npm pack archive does not match its reported integrity."
+        );
+      }
+    }
+    const manifest: any = {
+      schemaVersion: PREPARED_RELEASE_SET_SCHEMA,
+      version: releaseSet.version,
+      tag,
+      packages: packed.map(({ name, version, filename, integrity }: Record<string, any>) : any => ({
+        name,
+        version,
+        filename,
+        integrity
+      }))
+    };
+    await fs.writeFile(
+      manifestPath,
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o600 }
+    );
+    manifestWritten = true;
+    return {
+      ok: true,
+      prepared: true,
+      version: releaseSet.version,
+      tag,
+      packageCount: packed.length,
+      packages: manifest.packages
+    };
+  } catch (error) {
+    await Promise.all([
+      ...createdTarballs.map((tarballPath?: any) : Promise<any> => fs.rm(tarballPath, { force: true })),
+      ...(manifestWritten ? [fs.rm(manifestPath, { force: true })] : [])
+    ].map((cleanup: Promise<any>) : Promise<any> => cleanup.catch(() : any => undefined)));
+    if (error instanceof ReleaseSetPublicationError) throw error;
+    throw publicationError(
+      "release_set_preparation_failed",
+      "The release-set artifacts could not be prepared."
+    );
+  } finally {
+    await fs.rm(commandDirectory, { recursive: true, force: true });
+  }
+}
+
+export async function loadPreparedReleaseSet({
+  rootDir = process.cwd(),
+  artifactDirectory
+}: Record<string, any> = {}) : Promise<PreparedReleaseSet> {
+  const releaseSet: any = await discoverReleaseSet({ rootDir });
+  const directory: any = await ensureArtifactDirectory(artifactDirectory);
+  const manifestPath: any = path.join(directory, PREPARED_RELEASE_SET_FILENAME);
+  let manifest: any;
+  try {
+    const manifestStat: any = await fs.lstat(manifestPath);
+    if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) throw new Error("manifest_not_regular");
+    manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  } catch {
+    throw publicationError(
+      "release_set_prepared_manifest_missing",
+      "A valid prepared release-set manifest is required."
+    );
+  }
+  if (
+    !hasExactObjectKeys(manifest, ["schemaVersion", "version", "tag", "packages"]) ||
+    manifest.schemaVersion !== PREPARED_RELEASE_SET_SCHEMA ||
+    manifest.version !== releaseSet.version ||
+    normalizeRequestedTag(releaseSet.version, manifest.tag) !== manifest.tag ||
+    !Array.isArray(manifest.packages) ||
+    manifest.packages.length !== releaseSet.packages.length
+  ) {
+    throw publicationError(
+      "release_set_prepared_manifest_mismatch",
+      "The prepared release manifest does not match the canonical release set."
+    );
+  }
+
+  const filenames: any = new Set<any>();
+  const packages: PreparedReleaseArtifact[] = [];
+  for (let index = 0; index < releaseSet.packages.length; index += 1) {
+    const packageRecord: any = releaseSet.packages[index];
+    const artifact: any = validatePreparedArtifactRow(manifest.packages[index], packageRecord);
+    if (filenames.has(artifact.filename)) {
+      throw publicationError(
+        "release_set_prepared_archive_duplicate",
+        "Prepared release archives must have unique filenames."
+      );
+    }
+    filenames.add(artifact.filename);
+    const tarballPath: any = path.join(directory, artifact.filename);
+    const preparedPackage: any = {
+      ...packageRecord,
+      ...artifact,
+      tarballPath
+    };
+    await assertPreparedArchiveIntegrity(preparedPackage);
+    packages.push(preparedPackage);
+  }
+
+  return {
+    repositoryRoot: releaseSet.repositoryRoot,
+    artifactDirectory: directory,
+    version: releaseSet.version,
+    tag: manifest.tag,
+    packages
+  };
 }
 
 function registryVersionMissing(result?: any) : any {
@@ -516,7 +896,7 @@ function validatePublishedDistribution(distribution?: any, packageRecord?: any) 
   return { integrity };
 }
 
-async function queryPublishedDistribution(packageRecord?: any, runner?: any) : Promise<any> {
+async function queryPublishedDistribution(packageRecord?: any, runner?: any, commandDirectory?: any) : Promise<any> {
   const result: any = await runner(
     [
       "view",
@@ -526,7 +906,7 @@ async function queryPublishedDistribution(packageRecord?: any, runner?: any) : P
       "--registry",
       OFFICIAL_NPM_REGISTRY
     ],
-    { cwd: packageRecord.absoluteDirectory }
+    { cwd: commandDirectory }
   );
   if (result?.exitCode !== 0) {
     if (registryVersionMissing(result)) return null;
@@ -545,7 +925,7 @@ async function queryPublishedDistribution(packageRecord?: any, runner?: any) : P
   );
 }
 
-async function queryPublishedTag(packageRecord?: any, tag?: any, runner?: any) : Promise<any> {
+async function queryPublishedTag(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
   const result: any = await runner(
     [
       "view",
@@ -555,7 +935,7 @@ async function queryPublishedTag(packageRecord?: any, tag?: any, runner?: any) :
       "--registry",
       OFFICIAL_NPM_REGISTRY
     ],
-    { cwd: packageRecord.absoluteDirectory }
+    { cwd: commandDirectory }
   );
   if (result?.exitCode !== 0) {
     if (registryVersionMissing(result)) return null;
@@ -587,10 +967,10 @@ async function queryPublishedTag(packageRecord?: any, tag?: any, runner?: any) :
   }
 }
 
-async function queryRegistryState(packageRecord?: any, tag?: any, runner?: any) : Promise<any> {
+async function queryRegistryState(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
   const [distribution, taggedVersion] = await Promise.all([
-    queryPublishedDistribution(packageRecord, runner),
-    queryPublishedTag(packageRecord, tag, runner)
+    queryPublishedDistribution(packageRecord, runner, commandDirectory),
+    queryPublishedTag(packageRecord, tag, runner, commandDirectory)
   ]);
   return { distribution, taggedVersion };
 }
@@ -608,10 +988,10 @@ function preflightPackagePublication(packageRecord?: any, registryState?: any) :
     : compareReleaseVersions(taggedVersion, packageRecord.version);
   if (distribution !== null) {
     if (tagComparison === null || tagComparison < 0) {
-      throw publicationError(
-        "release_set_registry_tag_repair_required",
-        "An existing release-set version requires a dist-tag repair that OIDC publication cannot perform."
-      );
+      return {
+        action: "repair-tag",
+        expectedTaggedVersion: packageRecord.version
+      };
     }
     return {
       action: "skipped",
@@ -647,15 +1027,19 @@ function verifyPostPublicationState(packageRecord?: any, plan?: any, state?: any
       "An immutable npm package version already exists with different content."
     );
   }
-  if (state.taggedVersion !== plan.expectedTaggedVersion) {
+  if (
+    state.taggedVersion === null ||
+    compareReleaseVersions(state.taggedVersion, packageRecord.version) < 0 ||
+    compareReleaseVersions(state.taggedVersion, plan.expectedTaggedVersion) < 0
+  ) {
     throw publicationError(
       "release_set_registry_tag_postcondition_failed",
-      "The npm dist-tag does not match the verified monotonic publication plan."
+      "The npm dist-tag is missing or below the verified monotonic publication plan."
     );
   }
 }
 
-async function publishTarball(packageRecord?: any, tag?: any, runner?: any) : Promise<any> {
+async function publishTarball(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any, authToken?: any) : Promise<any> {
   assertSuccessfulResult(
     await runner(
       [
@@ -670,10 +1054,28 @@ async function publishTarball(packageRecord?: any, tag?: any, runner?: any) : Pr
         "--registry",
         OFFICIAL_NPM_REGISTRY
       ],
-      { cwd: packageRecord.absoluteDirectory }
+      { cwd: commandDirectory, authToken }
     ),
     "release_set_publish_failed",
     "A release-set tarball could not be published."
+  );
+}
+
+async function repairPublishedTag(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any, authToken?: any) : Promise<any> {
+  assertSuccessfulResult(
+    await runner(
+      [
+        "dist-tag",
+        "add",
+        `${packageRecord.name}@${packageRecord.version}`,
+        tag,
+        "--registry",
+        OFFICIAL_NPM_REGISTRY
+      ],
+      { cwd: commandDirectory, authToken }
+    ),
+    "release_set_tag_repair_failed",
+    "The existing verified release could not receive its intended npm dist-tag."
   );
 }
 
@@ -727,92 +1129,112 @@ async function verifyPublishedPackageSignatures(packages?: any, temporaryRoot?: 
   );
 }
 
-export async function publishReleaseSet({
+function preparedSetTag(prepared?: any, requestedTag?: any) : any {
+  const tag: any = normalizeRequestedTag(prepared.version, requestedTag);
+  if (tag !== prepared.tag) {
+    throw publicationError(
+      "release_set_prepared_tag_mismatch",
+      "The requested dist-tag does not match the prepared release set."
+    );
+  }
+  return tag;
+}
+
+async function inspectPreparedReleaseSet(prepared?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
+  const states: any = await Promise.all(
+    prepared.packages.map((packageRecord?: any) : any => queryRegistryState(packageRecord, tag, runner, commandDirectory))
+  );
+  const plans: any[] = prepared.packages.map((packageRecord?: any, index?: any) : any => (
+    preflightPackagePublication(packageRecord, states[index])
+  ));
+  return {
+    ok: true,
+    preflight: true,
+    version: prepared.version,
+    tag,
+    packageCount: prepared.packages.length,
+    packages: prepared.packages.map((packageRecord?: any, index?: any) : any => ({
+      name: packageRecord.name,
+      version: packageRecord.version,
+      integrity: packageRecord.integrity,
+      action: plans[index].action
+    }))
+  };
+}
+
+export async function preflightReleaseSet({
   rootDir = process.cwd(),
-  dryRun = false,
-  preflight = false,
+  artifactDirectory,
   tag: requestedTag,
   runner,
   environment = process.env
 }: Record<string, any> = {}) : Promise<any> {
-  if (dryRun && preflight) {
-    throw publicationError(
-      "release_set_argument_conflict",
-      "--dry-run and --preflight cannot be used together."
-    );
-  }
-  const releaseSet: any = await discoverReleaseSet({ rootDir });
-  const tag: any = normalizeRequestedTag(releaseSet.version, requestedTag);
-  if (!dryRun && !preflight) assertNoRawNpmToken(environment);
+  const prepared: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
+  const tag: any = preparedSetTag(prepared, requestedTag);
   const commandRunner: any = runner || createNpmRunner({ environment });
+  const commandDirectory: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-preflight-"));
+  try {
+    return await inspectPreparedReleaseSet(prepared, tag, commandRunner, commandDirectory);
+  } finally {
+    await fs.rm(commandDirectory, { recursive: true, force: true });
+  }
+}
+
+export async function publishReleaseSet({
+  rootDir = process.cwd(),
+  artifactDirectory,
+  tag: requestedTag,
+  authMode = "oidc",
+  bootstrapCandidate,
+  runner,
+  environment = process.env
+}: Record<string, any> = {}) : Promise<any> {
+  const prepared: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
+  const tag: any = preparedSetTag(prepared, requestedTag);
+  const auth: any = selectPublicationAuth({ authMode, bootstrapCandidate, version: prepared.version, environment });
+  const commandRunner: any = runner || createNpmRunner({ environment });
+  const outcomes: any[] = [];
   const temporaryRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-release-set-"));
-  const packDirectory: any = path.join(temporaryRoot, "tarballs");
-  await fs.mkdir(packDirectory);
 
   try {
-    const packed: any = await packReleaseSet(releaseSet.packages, packDirectory, commandRunner);
-    if (dryRun) {
-      return {
-        ok: true,
-        dryRun: true,
-        version: releaseSet.version,
-        tag,
-        packageCount: packed.length,
-        packages: packed.map(({ name, version, integrity }: Record<string, any>) : any => ({
-          name,
-          version,
-          integrity,
-          action: "planned"
-        }))
-      };
+    await inspectPreparedReleaseSet(prepared, tag, commandRunner, temporaryRoot);
+    for (const packageRecord of prepared.packages) {
+      await assertPreparedArchiveIntegrity(packageRecord);
     }
 
-    const preflightStates: any = await Promise.all(
-      packed.map((packageRecord?: any) : any => queryRegistryState(packageRecord, tag, commandRunner))
-    );
-    const plans: any = packed.map((packageRecord?: any, index?: any) : any => (
-      preflightPackagePublication(packageRecord, preflightStates[index])
-    ));
-    if (preflight) {
-      return {
-        ok: true,
-        dryRun: false,
-        preflight: true,
-        version: releaseSet.version,
-        tag,
-        packageCount: packed.length,
-        packages: packed.map((packageRecord?: any, index?: any) : any => ({
-          name: packageRecord.name,
-          version: packageRecord.version,
-          integrity: packageRecord.integrity,
-          action: plans[index].action
-        }))
-      };
-    }
-
-    for (let index: any = 0; index < packed.length; index += 1) {
-      if (plans[index].action === "publish") {
-        await publishTarball(packed[index], tag, commandRunner);
+    for (const packageRecord of prepared.packages) {
+      const stateBefore: any = await queryRegistryState(packageRecord, tag, commandRunner, temporaryRoot);
+      const plan: any = preflightPackagePublication(packageRecord, stateBefore);
+      let action: any = "skipped";
+      if (plan.action === "publish") {
+        await publishTarball(packageRecord, tag, commandRunner, temporaryRoot, auth.authToken);
+        action = "published";
+      } else if (plan.action === "repair-tag") {
+        await repairPublishedTag(packageRecord, tag, commandRunner, temporaryRoot, auth.authToken);
+        action = "tag-repaired";
       }
+      const stateAfter: any = await queryRegistryState(packageRecord, tag, commandRunner, temporaryRoot);
+      verifyPostPublicationState(packageRecord, plan, stateAfter);
+      outcomes.push({ plan, action });
     }
 
-    const verifiedStates: any = await Promise.all(
-      packed.map((packageRecord?: any) : any => queryRegistryState(packageRecord, tag, commandRunner))
+    const finalStates: any = await Promise.all(
+      prepared.packages.map((packageRecord?: any) : any => queryRegistryState(packageRecord, tag, commandRunner, temporaryRoot))
     );
-    const packages: any = packed.map((packageRecord?: any, index?: any) : any => {
-      verifyPostPublicationState(packageRecord, plans[index], verifiedStates[index]);
+    const packages: any = prepared.packages.map((packageRecord?: any, index?: any) : any => {
+      verifyPostPublicationState(packageRecord, outcomes[index].plan, finalStates[index]);
       return {
         name: packageRecord.name,
         version: packageRecord.version,
         integrity: packageRecord.integrity,
-        action: plans[index].action === "publish" ? "published" : "skipped"
+        action: outcomes[index].action
       };
     });
-    await verifyPublishedPackageSignatures(packed, temporaryRoot, commandRunner);
+    await verifyPublishedPackageSignatures(prepared.packages, temporaryRoot, commandRunner);
     return {
       ok: true,
-      dryRun: false,
-      version: releaseSet.version,
+      authMode: auth.authMode,
+      version: prepared.version,
       tag,
       packageCount: packages.length,
       packages
@@ -831,18 +1253,36 @@ function optionValue(args?: any, index?: any, option?: any) : any {
 }
 
 export function parsePublishArguments(argv?: any) : any {
-  let dryRun: any = false;
+  let prepare: any = false;
   let preflight: any = false;
+  let artifactDirectory: any;
+  let authMode: any = "oidc";
+  let bootstrapCandidate: any;
   let tag: any;
   let help: any = false;
   for (let index: any = 0; index < argv.length; index += 1) {
     const argument: any = argv[index];
-    if (argument === "--dry-run") {
-      dryRun = true;
+    if (argument === "--prepare") {
+      prepare = true;
     } else if (argument === "--preflight") {
       preflight = true;
     } else if (argument === "--help" || argument === "-h") {
       help = true;
+    } else if (argument === "--artifact-dir") {
+      artifactDirectory = optionValue(argv, index, "--artifact-dir");
+      index += 1;
+    } else if (argument.startsWith("--artifact-dir=")) {
+      artifactDirectory = argument.slice("--artifact-dir=".length);
+    } else if (argument === "--auth") {
+      authMode = optionValue(argv, index, "--auth");
+      index += 1;
+    } else if (argument.startsWith("--auth=")) {
+      authMode = argument.slice("--auth=".length);
+    } else if (argument === "--bootstrap-candidate") {
+      bootstrapCandidate = optionValue(argv, index, "--bootstrap-candidate");
+      index += 1;
+    } else if (argument.startsWith("--bootstrap-candidate=")) {
+      bootstrapCandidate = argument.slice("--bootstrap-candidate=".length);
     } else if (argument === "--tag") {
       tag = optionValue(argv, index, "--tag");
       index += 1;
@@ -851,28 +1291,52 @@ export function parsePublishArguments(argv?: any) : any {
     } else {
       throw publicationError(
         "release_set_argument_unknown",
-        "Only --dry-run, --preflight, and --tag latest|next are supported."
+        "Only prepared-artifact, authentication, and release-tag options are supported."
       );
     }
   }
-  if (dryRun && preflight) {
+  if (prepare && preflight) {
     throw publicationError(
       "release_set_argument_conflict",
-      "--dry-run and --preflight cannot be used together."
+      "--prepare and --preflight cannot be used together."
     );
   }
-  return { dryRun, preflight, tag, help };
+  if (!help && !artifactDirectory) {
+    throw publicationError("release_set_argument_missing", "--artifact-dir is required.");
+  }
+  if (!new Set<any>(["oidc", "bootstrap"]).has(authMode)) {
+    throw publicationError("release_set_auth_mode_invalid", "--auth must be oidc or bootstrap.");
+  }
+  if (bootstrapCandidate !== undefined && authMode !== "bootstrap") {
+    throw publicationError(
+      "release_set_bootstrap_candidate_invalid",
+      "--bootstrap-candidate requires --auth bootstrap."
+    );
+  }
+  if ((prepare || preflight) && authMode !== "oidc") {
+    throw publicationError(
+      "release_set_argument_conflict",
+      "Prepared-artifact creation and registry preflight do not accept bootstrap credentials."
+    );
+  }
+  if (authMode === "bootstrap" && !bootstrapCandidate && !help) {
+    throw publicationError(
+      "release_set_argument_missing",
+      "--bootstrap-candidate is required for bootstrap publication."
+    );
+  }
+  return { prepare, preflight, artifactDirectory, authMode, bootstrapCandidate, tag, help };
 }
 
 function usage() : any {
   return [
     "Usage:",
-    "  npm run release:publish-npm",
-    "  npm run release:publish-npm -- --dry-run",
-    "  npm run release:publish-npm -- --preflight",
-    "  npm run release:publish-npm -- --tag latest|next",
+    "  npm run release:publish-npm -- --prepare --artifact-dir DIR",
+    "  npm run release:publish-npm -- --preflight --artifact-dir DIR",
+    "  npm run release:publish-npm -- --artifact-dir DIR [--auth oidc]",
+    "  npm run release:publish-npm -- --artifact-dir DIR --auth bootstrap --bootstrap-candidate VERSION",
     "",
-    "Stable versions use latest; prereleases use next. --dry-run packs locally without registry access. --preflight reads the registry without publishing."
+    "Preparation writes one credential-free meshrix-release-set.json and the exact npm tarballs. Preflight reads the registry without publishing. OIDC is the default; bootstrap is explicit, candidate-bound, and reads NODE_AUTH_TOKEN only for npm mutations."
   ].join("\n");
 }
 
@@ -882,7 +1346,11 @@ async function main() : Promise<any> {
     process.stdout.write(`${usage()}\n`);
     return;
   }
-  const result: any = await publishReleaseSet(options);
+  const result: any = options.prepare
+    ? await prepareReleaseSet(options)
+    : options.preflight
+      ? await preflightReleaseSet(options)
+      : await publishReleaseSet(options);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
