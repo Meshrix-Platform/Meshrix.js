@@ -1244,6 +1244,7 @@
         "tests/vitest/server/architecture-acceptance-boundaries.test.ts",
         "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.ts",
         "tests/vitest/server/deployment-lifecycle-state-machine.test.ts",
+        "tests/vitest/server/generate-provenance.test.ts",
         "tests/vitest/server/mcp-release-manifest.test.ts",
         "tests/vitest/server/plugin-runtime.test.ts",
         "tests/vitest/server/prepare-release.test.ts",
