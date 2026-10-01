@@ -604,6 +604,14 @@ export function isMaterializationCompletedState(
   return state !== null && state.stage === "completed";
 }
 
+export function isMaterializationRunningState(
+  state: MaterializationDurableState
+): state is MaterializationRunningState {
+  return state.stage === "admitted"
+    ? state.status === "running"
+    : isMaterializationRecoveryState(state);
+}
+
 function isClosedRecord(
   value: unknown,
   keys: readonly string[]
@@ -2611,6 +2619,7 @@ export interface MaterializationRecordPreimageInput
   readonly parentFingerprint: unknown;
   readonly parentIdentity: unknown;
   readonly preimage: unknown;
+  readonly stateEventAnchor?: unknown;
   readonly targetStateDigest: unknown;
 }
 
@@ -2715,6 +2724,55 @@ export interface MaterializationTransactionPort {
   ): MaterializationTempReservedState |
     Promise<MaterializationTempReservedState>;
   renew(requestRef: string, input: MaterializationFenceInput): unknown;
+}
+
+/* Transaction store contract. */
+
+export interface MaterializationStoreCreateResult {
+  readonly inserted: boolean;
+}
+
+export interface MaterializationStoreCancelResult {
+  readonly cancelled: boolean;
+}
+
+export interface MaterializationStoreTerminalState {
+  readonly transitioned: boolean;
+  readonly terminal: boolean;
+  readonly status: MaterializationStatus | "missing";
+  readonly stage: MaterializationStage | "";
+}
+
+export interface MaterializationStoreLeaseState {
+  readonly delayMs: number;
+  readonly terminal: boolean;
+  readonly status: MaterializationStatus | "missing";
+  readonly stage: MaterializationStage | "";
+}
+
+export interface MaterializationStoreReconcileInput {
+  readonly afterRequestRef?: string;
+  readonly limit?: number;
+}
+
+export interface MaterializationTransactionStore
+  extends MaterializationTransactionPort {
+  create(request: unknown): Promise<MaterializationStoreCreateResult>;
+  cancelQueued(
+    requestRef: string
+  ): Promise<MaterializationStoreCancelResult>;
+  terminalFail(
+    requestRef: string,
+    error: unknown
+  ): Promise<MaterializationStoreTerminalState>;
+  listReconcileCandidates(
+    input?: MaterializationStoreReconcileInput
+  ): Promise<MaterializationDurableState[]>;
+  retryAfterLease(
+    requestRef: string
+  ): Promise<MaterializationStoreLeaseState>;
+  count(): number;
+  close(): void;
 }
 
 export interface MaterializationAuthorityRevalidationInput {
