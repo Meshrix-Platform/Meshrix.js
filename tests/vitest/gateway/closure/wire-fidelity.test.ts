@@ -79,4 +79,19 @@ describe("PR82 externally validated MCP wire", () => {
       expect((await send(2)).body).toMatchObject({ error: { data: { code: "schema_validation_failed" } } });
     } finally { await gateway.close(); }
   });
+
+  it("does not trust a frozen failure-shaped exception from a port", async () => {
+    const privateMarker = "synthetic_private_diagnostic";
+    const upstream = new QueueUpstream([], async () => {
+      throw Object.freeze({ kind: "failure", code: privateMarker, message: privateMarker, status: 500, details: { receiptId: privateMarker } });
+    });
+    const gateway = createTestGateway({ descriptors: [descriptor({ route: route({ effectClass: "read" }) })], upstream });
+    await gateway.start();
+    try {
+      const adapter = createModernDownstreamAdapter({ gateway, authenticate: () => context });
+      const result = await adapter.handle(modernHttpRequest("tools/call", 1, { name: "demo", arguments: {} }));
+      expect(result.body).toMatchObject({ error: { data: { code: "transport_failed" } } });
+      expect(JSON.stringify(result.body)).not.toContain(privateMarker);
+    } finally { await gateway.close(); }
+  });
 });
