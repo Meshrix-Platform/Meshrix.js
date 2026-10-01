@@ -3,6 +3,8 @@ name: Dependabot security auto-merge
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
+  pull_request_review:
+    types: [submitted, dismissed]
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -49,10 +51,17 @@ jobs:
         run: gh pr edit "$PR_URL" --add-label "$AUTOMERGE_LABEL"
 
   merge:
-    name: Merge eligible security update
+    name: Merge admitted security update
     if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'pull_request'
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request'
+      ) ||
+      (
+        github.event_name == 'pull_request_review' &&
+        github.event.pull_request.user.login == 'dependabot[bot]' &&
+        github.event.pull_request.base.ref == 'nightly'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -60,17 +69,23 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Merge the exact CI-verified Dependabot revision
+      - name: Merge the exact admitted Dependabot revision
         env:
           AUTOMERGE_LABEL: dependabot-automerge
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          VERIFIED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          pr_number=$(jq -r \
-            '.workflow_run.pull_requests | if length == 1 then .[0].number else empty end' \
-            "$GITHUB_EVENT_PATH")
-          if [ -z "$pr_number" ]; then
+          if [ "$EVENT_NAME" = 'workflow_run' ]; then
+            pr_number=$(jq -r \
+              '.workflow_run.pull_requests | if length == 1 then .[0].number else empty end' \
+              "$GITHUB_EVENT_PATH")
+            verified_head_sha="$WORKFLOW_HEAD_SHA"
+          else
+            pr_number=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
+            verified_head_sha=$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")
+          fi
+          if [ -z "$pr_number" ] || [ -z "$verified_head_sha" ]; then
             exit 0
           fi
 
@@ -87,17 +102,38 @@ jobs:
              [ "$base" != 'nightly' ] || \
              [ "$state" != 'open' ] || \
              [ "$eligible" != 'true' ] || \
-             [ "$head_sha" != "$VERIFIED_HEAD_SHA" ]; then
+             [ "$head_sha" != "$verified_head_sha" ]; then
             exit 0
           fi
 
-          jobs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
+          # A label and a clean scan are not admission. The exact proposed
+          # revision needs a current non-dismissed approving review from an
+          # authorized maintainer; a later changes-requested or dismissed
+          # review revokes the conclusion.
+          reviews=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/reviews?per_page=100")
+          approved=$(printf '%s' "$reviews" | jq -r --arg head "$head_sha" '
+            [ .[]
+              | select(.user.login != "dependabot[bot]")
+              | select(.author_association == "MEMBER" or .author_association == "OWNER" or .author_association == "COLLABORATOR")
+              | select(.commit_id == $head) ]
+            | sort_by(.user.login)
+            | group_by(.user.login)
+            | map(last)
+            | any(.state == "APPROVED")')
+          if [ "$approved" != 'true' ]; then
+            exit 0
+          fi
+
+          # Elapsed checks are read for the same head, so an admission review
+          # that arrives after CI does not require a redundant CI run, and the
+          # head cannot change between the check and the merge request.
+          checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${head_sha}/check-runs?per_page=100")
           for required_job in \
             'Pull request verification' \
             'Dependency review'; do
-            conclusion=$(printf '%s' "$jobs" | jq -r \
+            conclusion=$(printf '%s' "$checks" | jq -r \
               --arg name "$required_job" \
-              '[.jobs[] | select(.name == $name)] | if length == 1 then .[0].conclusion else "missing" end')
+              '[.check_runs[] | select(.name == $name)] | if length == 1 then .[0].conclusion else "missing" end')
             if [ "$conclusion" != 'success' ]; then
               exit 0
             fi
@@ -105,4 +141,5 @@ jobs:
 
           gh pr merge "https://github.com/${GITHUB_REPOSITORY}/pull/${pr_number}" \
             --squash \
-            --delete-branch
+            --delete-branch \
+            --match-head-commit "$head_sha"
