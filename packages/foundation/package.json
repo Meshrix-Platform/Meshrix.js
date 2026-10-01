@@ -78,6 +78,11 @@
       "types": "./dist/config/server-config.d.ts",
       "default": "./dist/config/server-config.js"
     },
+    "./config/server-env": {
+      "source": "./src/config/server-env.ts",
+      "types": "./dist/config/server-env.d.ts",
+      "default": "./dist/config/server-env.js"
+    },
     "./environment-compatibility/host-services": {
       "source": "./src/environment-compatibility/host-services.ts",
       "types": "./dist/environment-compatibility/host-services.d.ts",

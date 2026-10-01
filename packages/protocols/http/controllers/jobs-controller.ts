@@ -10,6 +10,8 @@ import { createUploadSessionHandlers } from "./jobs-controller-upload-handlers.t
 import { defaultArchiveBatchResolver } from "./jobs-controller-job-admission.ts";
 import { createWorkQueueHandlers } from "./jobs-controller-work-queue-handlers.ts";
 
+export { apiKeyUploadAuthSession } from "./jobs-controller-access.ts";
+
 export function createJobsController({
   userDataPath,
   jobWorkflowProvider = null,

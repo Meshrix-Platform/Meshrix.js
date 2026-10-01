@@ -3,11 +3,11 @@ import path from "node:path";
 import {
   capabilityKernelStatePath,
   createOpaqueCapabilityKeyProvider
-} from "../../../../packages/foundation/src/security/authorization/opaque-capability-key.ts";
+} from "@meshrix/foundation/security/authorization/opaque-capability-key";
 import {
   capabilityBindingGuardStatePath,
   createCapabilityBindingGuard
-} from "../../../../packages/foundation/src/security/authorization/capability-binding-guard.ts";
+} from "@meshrix/foundation/security/authorization/capability-binding-guard";
 import { readJsonInput, readStdinText, trimOneTrailingNewline, writeResponse } from "./meshrix-cli-common.ts";
 
 const DEFAULT_CAPABILITY_KERNEL_ALIAS: any = "meshrix-tool-grants";
