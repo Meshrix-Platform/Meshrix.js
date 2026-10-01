@@ -5,9 +5,11 @@
 > [Governed Execution And Minimum Evidence](GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-Meshrix.js is an internally maintained, private-deployable gateway platform
-for agent access and governed service forwarding. Its Vue.js frontend and
-Node.js backend are separate workspaces connected through versioned HTTP APIs.
+Meshrix.js is an open-source TypeScript and Node.js framework for governed
+HTTP and MCP services. Its server runtime composes protocol, authorization,
+storage, and optional capability modules behind explicit package and API
+boundaries; the Vue.js Console is a separate workspace connected through
+versioned HTTP APIs.
 
 ## Target Module Map
 

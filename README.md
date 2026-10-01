@@ -2,7 +2,7 @@
 
 <img src="docs/banner.svg" alt="Meshrix.js" width="100%" />
 
-**Publicly available source for a private-deployable MCP platform that governs service and agent access.**
+**An open-source TypeScript and Node.js framework for governed HTTP and MCP services.**
 
 [![Source license: MIT](https://img.shields.io/badge/source%20license-MIT-c9a96e?style=flat-square)](LICENSE)
 [![Node.js >=22.19.0 <23 || >=24.3.0 <25](https://img.shields.io/badge/node-%3E%3D22.19.0%20%3C23%20%7C%7C%20%3E%3D24.3.0%20%3C25-4fc3f7?style=flat-square)](package.json)
@@ -18,11 +18,6 @@ English is the normative language of this repository's documentation; [简体中
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
-
-> **Previous accepted scope:** The 0.0.1 Core single-node production-use
-> closure applies only to the candidate named by its evidence. It does not
-> establish acceptance of the current gateway-convergence candidate or the
-> planned public release; see [Status](docs/STATUS.md).
 
 ---
 
@@ -42,19 +37,11 @@ grants, audit records, and checkpoints are stored under the server data
 directory. External middleware and service adapters are optional extensions
 for deployment-specific integrations.
 
-> **Current state: pre-release.** The source is public. The current gateway
-> candidate and planned 0.0.1 public release still require candidate-specific
-> implementation, functional verification, and publication. Environment
-> qualification and hosted operation remain separate evidence tracks. See
-> [Status](docs/STATUS.md).
-
-Meshrix.js separates mandatory functional acceptance from remaining environment
-qualification. `npm run verify:acceptance` is the Functional Release Gate and
-must pass before publication. An accepted immutable candidate may then be
-exercised by `npm run verify:real-machine -- ...`; that independently
-repeatable workflow is the remaining work that qualifies one exact system or
-deployment. Real-machine availability or results never block or alter
-functional acceptance. See the [release contract](docs/RUNBOOK.md#release-definition-and-publication).
+> **Release state: pre-release.** The first npm version has not been published.
+> Every public package must be installed from its unmodified release tarball
+> and checked against the exact candidate before publication. Source-checkout
+> commands below do not qualify npm artifacts or deployment environments. See
+> [Status](docs/STATUS.md) and the [release contract](docs/RUNBOOK.md#release-definition-and-publication).
 
 This English document is the normative project overview. See the
 [Simplified Chinese localization](README.zh-CN.md).
@@ -79,9 +66,9 @@ This English document is the normative project overview. See the
   <img src="docs/architecture-overview.svg" alt="Meshrix.js architecture overview" width="680" />
 </div>
 
-Meshrix.js's product boundary is the server-side governance layer of a private
-deployment: it owns configuration, operation exposure, permission decisions,
-execution dispatch, audit, metrics, and evidence generation. See
+The server runtime composes configuration, operation exposure, permission
+decisions, execution dispatch, audit, metrics, and bounded evidence. The
+Console, HTTP API, and MCP entry points share one public origin. See
 [Architecture](docs/architecture/ARCHITECTURE.md) for package layering, core
 flow, and deployment boundaries.
 
@@ -89,20 +76,37 @@ flow, and deployment boundaries.
 
 Requires Node.js `>=22.19.0 <23 || >=24.3.0 <25`.
 
-**Local runtime**
+**Run from a source checkout**
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-The server listens on `http://127.0.0.1:7228` by default.
+The development server listens on `http://127.0.0.1:7228` by default.
 
-**Service mode**
+**Install the first npm release**
 
 ```bash
-npm run server:start
+npm install --global meshrix.js
+meshrix-server --help
+meshrix --help
 ```
+
+The npm commands describe the consumer path after publication. The package is
+not yet available from the public registry; installation and startup are
+qualified from the exact tarballs before the first release.
+
+To run the packaged Console and server from one origin after publication:
+
+```bash
+meshrix-server --with-ui --data-dir <server-data-dir>
+```
+
+The default listener is `http://127.0.0.1:7228`; the Console is served at `/`,
+the API at `/api/`, and MCP clients use the same origin. Exposing an instance
+outside loopback requires a TLS-terminating proxy and the exact trusted-proxy
+configuration described in the [runbook](docs/RUNBOOK.md#container-startup).
 
 **Container**
 
@@ -110,18 +114,12 @@ npm run server:start
 docker compose up -d
 ```
 
-The checked-in compose file starts the API server on loopback and stores
-runtime data in a container volume. The compose path is API-only by default;
-serving the console UI requires a built console bundle and the server
-`--with-ui` path.
-
-Cloud production uses `docker-compose.enterprise.yml` together with the base
-file. It requires a digest-pinned image, an HTTPS public base URL, and a
-separately custodied 32-byte local-secret master key plus a distinct 32-byte
-operation-proof signer secret. It also requires the exact reverse-proxy source
-IP list and an independent backup mount. See the
-[production container runbook](docs/RUNBOOK.md#container-startup); the
-production overlay fails closed when any required security input is absent.
+The checked-in Compose file starts the API on loopback and stores runtime data
+in a container volume. It is API-only by default; serving the Console requires
+a built Console bundle and the server `--with-ui` option. For deployments
+behind a public origin, configure HTTPS forwarding and trusted proxy addresses.
+Keep the Secret Store master key and operation-proof signing key in separately
+controlled files outside the Meshrix.js data and backup locations.
 
 ## Operate
 
@@ -144,12 +142,9 @@ npm run mcp:doctor
 
 ## Downstream Agent Clients
 
-Agent clients connect through MCP discovery and governed gateway calls;
-operation visibility is grant-controlled. The repository-local downstream
-adapter implementations cover OpenClaw, Codex, Claude Code, Antigravity,
-OpenCode, Kimi, and Pi. Adapters are enabled explicitly by an operator and are
-never discovered from another source repository. See
-[Compatibility](docs/COMPATIBILITY.md) and
+Clients connect through the standard MCP protocol and operation grants. Optional
+client adapters are packaged separately and enabled explicitly; their product
+names are not part of Core MCP authorization. See [Compatibility](docs/COMPATIBILITY.md) and
 [Protocols](docs/protocols/PROTOCOLS.md) for the exact scope and status.
 
 ## Repository Layout
@@ -168,7 +163,7 @@ never discovered from another source repository. See
 
 | Topic | Document |
 | --- | --- |
-| Product goal and boundary | [PRODUCT.md](PRODUCT.md) |
+| Framework scope and architecture goals | [PRODUCT.md](PRODUCT.md) |
 | Domain language | [CONTEXT.md](CONTEXT.md) |
 | Current status | [docs/STATUS.md](docs/STATUS.md) |
 | Documentation index | [docs/README.md](docs/README.md) |
@@ -196,9 +191,12 @@ npm run typecheck
 npm run build
 npm test
 npm run verify:core-platform-surface-convergence
-npm run verify:private-deployment-internal-platform-e2e
 npm run verify:acceptance
 ```
+
+The release workflow also verifies each intended npm package from its exact,
+unmodified tarball in a disposable consumer. Passing source checks alone does
+not qualify a package or platform claim.
 
 ## Project
 
@@ -213,20 +211,18 @@ npm run verify:acceptance
 ## Source license
 
 Meshrix.js project-owned source is licensed under MIT; see [LICENSE](LICENSE).
-Third-party dependencies retain their own terms as stated in their package
-metadata and [third-party notices](THIRD_PARTY_NOTICES.md). The repository
-license does not by itself state the terms for an integrated platform
-distribution.
+Third-party dependencies retain their own terms as stated in package metadata
+and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 <div align="center">
-  <sub>Meshrix.js — self-contained by default, built for private deployment.</sub>
+  <sub>Meshrix.js — one governed runtime, explicit extension boundaries.</sub>
 </div>
 
 ## Embeddable Gateway kernel
 
 `@meshrix/gateway` is a standalone programmable MCP gateway. It does not require the Console,
-agents, plugins or SkillHub to start, and a standard MCP client attaches without a Meshrix
-product name or a dedicated connector. Modern MCP uses `2026-07-28`; older protocol rules live
-in an isolated compatibility adapter. Implementation and samples: [Gateway
+agents, plugins or SkillHub to start. Any conforming MCP client can connect through the declared
+protocol and authorization capabilities without a product-specific identity allowlist. Modern MCP
+uses `2026-07-28`; older protocol rules live in an isolated compatibility adapter. Implementation and samples: [Gateway
 architecture](docs/architecture/gateway.md), [protocol boundary](docs/protocols/gateway.md) and
 the [Gateway samples](docs/examples/gateway/README.md).

@@ -5,9 +5,9 @@ implementation, verification, release, support, or hosted operation.
 
 | Term | Meaning |
 | --- | --- |
-| **Meshrix.js** | The full private-deployable governance platform for connecting operators, agent clients, services, plugins, workspaces, and governed effects. |
-| **Meshrix.js repository** | The public-source repository that develops Meshrix.js for deployments whose operators control configuration, credentials, data custody, runtime boundaries, and operating decisions. |
-| **Private deployment** | A Meshrix.js installation whose operator owns its configuration, credentials, data custody, runtime boundary, and operating decisions. |
+| **Meshrix.js** | An open-source TypeScript and Node.js framework for composing governed HTTP and MCP services, a server runtime, a Console, and optional extensions. |
+| **Single-node deployment** | One Meshrix.js server runtime, its Console/API/MCP surfaces, and its configured state operating as one deployment unit. |
+| **Operator-controlled state** | Configuration, credentials, and persistent data managed by the operator of a Meshrix.js instance. |
 | **Principal** | An authenticated subject whose current identity and authority are evaluated for an operation. |
 | **Operation** | A named, bounded action exposed through a Meshrix.js-owned governance boundary. |
 | **Operation catalog** | The authoritative set of operations and their governance-relevant definitions. |

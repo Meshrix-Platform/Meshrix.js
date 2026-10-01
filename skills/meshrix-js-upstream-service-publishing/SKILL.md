@@ -53,32 +53,39 @@ The Core terminal success is `server_published` after the gateway, Operation Per
 - Bind delivery cohorts to opaque server-side grant digests, negotiated protocol sessions, audience partitions, and revision chains; do not model or inspect a consumer cache.
 - Accept only exact acknowledgements for the pending revision and affected partition set. Disconnect on grant retirement, fence timed-out sessions, and reject same-session reconnect after a timeout until a fresh protocol session is established.
 
-## Preferred flow: declarative configuration file
+## Declarative configuration file
 
-Registering an upstream service should be a **declarative configuration file
-that the server hot-loads**, not a sequence of hand-built API calls. This is
-the standing target for upstream onboarding; the API steps below are the
-manual/advanced fallback.
+The server polls `<userDataPath>/upstream-config/services.json` every two
+seconds by default and applies declared services through the same publishing
+application used by the control plane. Use this file for operator-managed
+configuration. Direct API calls remain available for clients managing a
+publication transaction themselves.
 
 ```jsonc
 {
   "services": [
     {
-      "name": "requirement-cognition",
+      "name": "example-catalog",
       "type": "mcp",                          // http | json-rpc | mcp
       "url": "http://<host>:8871/mcp",        // remote MCP endpoint
-      "auth": { "type": "bearer", "token": "..." },   // upstream credential
-      "headers": { "x-valorius-project": "dev" }      // non-sensitive request context
+      "auth": { "type": "bearer", "token": "..." }, // upstream credential
+      "headers": { "x-project-id": "dev" }           // MCP request context
     }
   ]
 }
 ```
 
-The server reads the file and completes the internal steps itself: create or
-replace the service publication, store the credential as a typed secret,
-bind the credential reference, and make the MCP service immediately
-available. Internal identifiers (`capabilityId`, `secretBindingId`,
-`issuer-scopes`) are derived server-side and are **not** part of the file.
+The server creates or replaces each service publication and derives internal
+identifiers (`capabilityId`, `secretBindingId`, and issuer scopes); they are
+not part of this file. When `auth.token` is set, the server stores a typed
+secret and binds its reference. Configure
+`MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE` to an external 32-byte key file outside
+the governed data directory before adding a token. The JSON configuration
+itself contains that token in plaintext, so protect the file as credential
+material and keep it out of source control, logs, and shared support reports.
+The file's `headers` field supplies MCP request context; it is not a general
+HTTP/JSON-RPC header map. Verify an authenticated service with its health
+endpoint after the configuration is applied.
 
 Scope boundaries:
 
@@ -90,9 +97,8 @@ Scope boundaries:
   `$meshrix-js-organization-governance`; never mix client authorization into
   service registration.
 
-While the configuration-file entry point is being implemented, use the
-manual API flow below; it is the same publication contract, expressed step by
-step.
+Use the manual API flow below when an integration manages publication through
+the HTTP control plane instead of the operator-managed configuration file.
 
 ## Publish to a running instance (manual API flow)
 
@@ -146,14 +152,14 @@ MCP services derive tools/call from the remote catalog and must not carry an
 ```jsonc
 {
   "serviceProtocol": "mcp",
-  "label": "Requirement Cognition",
+  "label": "Example Catalog",
   "allowLocalNetwork": true,
   "mcp": {
     "transport": "http",                  // remote HTTP only; stdio is rejected
     "url": "http://<service-host>:<port>/mcp",  // must pass the remote-URL validation
     "protocolVersion": "2026-07-28",     // modern HTTP discovery, without initialize/session
     "headers": {                          // optional declarative request headers
-      "x-valorius-project": "<project>"   // supported per ADR-0001; values are
+      "x-project-id": "<project>"          // supported per ADR-0001; values are
     }                                     // plain strings, injection syntax rejected
   }
 }
@@ -188,7 +194,7 @@ actual addresses, tokens, and scopes for the instance at hand.
    HTTP transport. Do not add an unsupported version for one peer without
    updating the owning transport contract and its verification.
 3. **Non-sensitive request context goes in `mcp.headers`** (for example
-   `x-valorius-project`). Sensitive material (Authorization, API keys) must
+   `x-project-id`). Sensitive material (Authorization, API keys) must
    never go there: the publishing contract rejects it with
    `storage_manifest_sensitive_material`. Use a typed secret reference instead.
 4. **Store credentials as a local secret.** Write a `secret://` entry into the

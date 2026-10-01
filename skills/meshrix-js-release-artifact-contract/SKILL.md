@@ -22,7 +22,7 @@ fields. Verify with the repository-owned release-definition command.
 
 The published container target is `runtime-ui`. Platforms are `linux/amd64`
 and `linux/arm64`. API-only `runtime` is a source-checkout verification image,
-not the published artifact. Offline delivery and the enterprise single-node
+not the published artifact. Offline delivery and the single-node deployment
 bundle must use `runtime-ui` with the server serving the Web Console.
 
 ## Public address contract

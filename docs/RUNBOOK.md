@@ -5,15 +5,13 @@
 > [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-This runbook covers local startup, container startup, verification, and operational checks for the internal platform repository.
+This runbook covers local startup, container startup, verification, and
+operational checks for the Meshrix.js source repository.
 
-Select commands for the accepted task outcome and its evidence claim.
-References to remaining work belong to the named capability or environment;
-they do not add every platform gap to the current task. Reuse explicit
-authorization for the same target, operation, and side-effect scope, and obtain
-a new decision for new targets or materially different effects. A command flag
-does not grant authority by itself. Prepare concrete actions and continue
-independent authorized work while any required decision is pending.
+Select commands for the requested outcome and the evidence they produce.
+Treat each result as evidence for its stated scope only. Follow
+[CONTRIBUTING.md](../CONTRIBUTING.md) for the common engineering workflow and
+[AGENTS.md](../AGENTS.md) for execution and publication authority.
 
 ## Required Runtime
 
@@ -23,14 +21,12 @@ independent authorized work while any required decision is pending.
 
 The default runtime is self-contained. Optional middleware integrations are enabled explicitly for deployment-specific extensions.
 
-## Private-Deployment Dependency Admission
+## Dependency Admission
 
-Meshrix.js is delivered to enterprises for private deployment. Dependency
-admission therefore protects an operator's continuing right to install,
-redistribute, operate, maintain, back up, restore, modify, and upgrade the
-delivered system without an unexpected third-party commercial condition.
-Source availability, popularity, or current zero-cost use is not sufficient
-evidence of acceptability.
+Dependency admission protects the project's ability to build, test, distribute,
+and maintain a reproducible open-source system under clear licensing,
+provenance, security, and support conditions. Source availability, popularity,
+or current zero-cost use is not sufficient evidence of acceptability.
 
 This gate applies to:
 
@@ -39,7 +35,7 @@ This gate applies to:
 - Operators, charts, deployment templates, installers, and release assets;
 - default, optional, example, development, test, and observability components
   that enter a source or release candidate; and
-- a new version, edition, module, plugin, or distribution of an already
+- a new version, package, module, plugin, or distribution of an already
   admitted project.
 
 A generic protocol adapter is not an adoption of every compatible product only
@@ -49,7 +45,7 @@ licensing claim for the operator-supplied service.
 ### Authority and maturity baseline
 
 License compliance is necessary but does not establish technical authority.
-Default enterprise profiles must use established projects with durable public
+Default configurations must use established projects with durable public
 governance, current security maintenance, broad production evidence, and an
 operational ecosystem appropriate to the workload. Repository popularity,
 vendor marketing, a single large deployment, protocol compatibility, or an
@@ -69,7 +65,7 @@ A baseline dependency must satisfy every applicable condition:
 4. its standard protocol and data format permit replacement without moving
    Meshrix.js governance or business authority into the dependency; and
 5. the exact artifact passes Meshrix.js conformance, failure injection,
-   migration, resource-bound, and private-deployment tests.
+   migration, resource-bound, and operational-path verification.
 
 In addition, a default dependency needs at least one authority anchor:
 
@@ -113,13 +109,11 @@ An allowlisted license is necessary but not sufficient. Reject a candidate
 when any of the following is true:
 
 - source-available, proprietary, custom, trial, or delayed-conversion terms
-  restrict production use, field of use, revenue, organization size, cluster
-  size, user count, geography, resale, hosting, managed service, competition,
-  or redistribution;
+  restrict modification, integration, production use, or redistribution;
 - production operation, security maintenance, or a required capability needs
   a license key, account registration, mandatory telemetry, paid entitlement,
-  recurring renewal, or commercial edition;
-- dual, mixed, or edition-specific licensing leaves the rights of the exact
+  or recurring renewal;
+- dual, mixed, or variant-specific licensing leaves the rights of the exact
   source, binary, container, chart, Operator, plugin, or management component
   unclear;
 - a material licensing, copyright, trademark, project-control, or governance
@@ -130,13 +124,13 @@ when any of the following is true:
   to a separately licensed product;
 - the release artifact, its source, its license and notice files, and its SBOM
   cannot be bound to the same immutable version and digest; or
-- approval would require an enterprise customer to obtain a separate license,
-  accept new third-party terms, disclose unrelated source, or assume an
+- approval would require downstream users to obtain an undisclosed separate
+  license, accept unreviewed terms, disclose unrelated source, or assume an
   unresolved interpretation.
 
 Unknown, conflicting, or incomplete evidence is a rejection. Maintainers must
-not use a disclaimer, an optional-install label, a customer-supplied image, or
-an instruction to contact the vendor as a substitute for admission.
+not use a disclaimer, an optional-install label, or an instruction to contact
+the vendor as a substitute for admission.
 Existing presence is not approval or grandfathering: an artifact that has not
 passed this gate must be removed, replaced, or admitted before it can enter the
 next release candidate.
@@ -146,23 +140,23 @@ next release candidate.
 Before a dependency enters a change or release candidate, record and review:
 
 1. the exact upstream owner, repository, version, source revision, artifact,
-   image digest, and selected edition;
+   image digest, and selected variant;
 2. the authoritative license text, SPDX expression, notices, bundled
    third-party inventory, and release-candidate SBOM;
 3. production, redistribution, hosting, trademark, support, security-update,
    registration, telemetry, and renewal terms;
 4. current maintenance and governance status, including public relicensing or
    ownership disputes; and
-5. an offline private-deployment path that does not require vendor approval or
-   a vendor control plane.
+5. an installation and maintenance path that does not require a vendor account
+   or vendor-controlled service.
 
 Review a fixed artifact, never a floating tag. Every upgrade or distribution
 change is a new admission decision. A scanner may collect evidence but cannot
-resolve ambiguous legal or commercial terms; ambiguity remains denied until a
+resolve ambiguous legal terms; ambiguity remains denied until a
 competent review records a safe conclusion.
 
 If an admitted upstream later changes its terms or develops a material
-commercial or governance risk:
+license or governance risk:
 
 1. stop upgrades and prevent the affected artifact from entering a new release
    candidate;
@@ -172,8 +166,8 @@ commercial or governance risk:
    port or protocol boundary;
 4. migrate once, remove the affected implementation and product-specific
    defaults, and verify that no release surface still installs it; and
-5. do not require existing private-deployment users to purchase a license or
-   accept the upstream's new terms as the migration path.
+5. do not carry the affected implementation into another release until its
+   license terms and a tested replacement path are established.
 
 ### Routine version maintenance and automated merge admission
 
@@ -216,7 +210,7 @@ One-click start, stop, and restart:
 These commands reuse a healthy instance of the same mode, refuse an occupied default port or a different stack on the `meshrix-server` container name, and do not wipe volumes on stop. Restart of the same mode stops then starts that stack; a different running mode fails closed. A published, offline, or `--with-ui` instance has one public origin: the Web Console at `/` and the Server API at `/api/`. External services and agents connect to that same origin; source development may add a Vite console port, and that port is not the published integration address. The developer handbook owns that address contract; the user handbook owns how operators and external systems use it. `npm run pack:offline` writes the signed Server + Web Console dual-arch bundle to `build/offline-delivery-bundle` and does not start, stop, or clean up a running instance. `node tools/server-scripts/offline-delivery-closure.ts` remains the offline acceptance oracle and is not a start or pack command.
 
 ```bash
-npm install
+npm ci
 npm run start:dev
 ```
 
