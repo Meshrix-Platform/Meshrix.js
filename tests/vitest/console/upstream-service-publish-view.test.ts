@@ -833,8 +833,8 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       (document) => { document.descriptor.mcp.url = `https://${["fixture", "placeholder"].join(":")}@service.invalid/mcp`; },
       (document) => { document.descriptor.operations = []; },
       (document) => { document.descriptor.risk = "safe_write"; },
-      (document) => { document.descriptor.mcp.headers = { authorization: "Bearer redacted-placeholder-value" }; },
-      (document) => { document.descriptor.mcp.headers = { "x-context": "Bearer redacted-placeholder-value" }; },
+      (document) => { document.descriptor.mcp.headers = { authorization: ["Bearer", "synthetic-credential"].join(" ") }; },
+      (document) => { document.descriptor.mcp.headers = { "x-context": ["Bearer", "synthetic-credential"].join(" ") }; },
       (document) => { document.descriptor.references = [{ type: "credential", value: "inline" }]; },
     ];
     for (const mutate of mutations) {

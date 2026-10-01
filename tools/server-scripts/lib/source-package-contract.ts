@@ -54,3 +54,10 @@ export const INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS: readonly string[] = Object.
   "docs/plans",
   "docs/reports"
 ]);
+
+/** Repository-only source is deliberately absent from every public source package. */
+export function isInternalSourcePackagePath(relativePath: string): boolean {
+  return INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS.some((excludedPath) =>
+    relativePath === excludedPath || relativePath.startsWith(`${excludedPath}/`)
+  );
+}
