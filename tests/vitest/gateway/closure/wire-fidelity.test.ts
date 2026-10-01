@@ -35,9 +35,9 @@ describe("PR82 externally validated MCP wire", () => {
     expect(validator.validate({ count: 0 })).toBe(false);
   });
 
-  it("[GC-028] preserves safe peer error code/data while tool isError remains a successful tool result", async () => {
+  it("[GC-028] retains the peer numeric code while peer text and data stay private, and tool isError remains a successful tool result", async () => {
     const upstream = new QueueUpstream([
-      response({ jsonrpc: "2.0", id: 1, error: { code: -32042, message: "Synthetic peer refusal", data: { field: "value", credential: "synthetic-private", stack: "synthetic-stack" } } }),
+      response({ jsonrpc: "2.0", id: 1, error: { code: -32042, message: "Synthetic peer refusal <private-diagnostic>", data: { field: "value", credential: "synthetic-private", stack: "synthetic-stack" } } }),
       response({ jsonrpc: "2.0", id: 2, result: { resultType: "complete", isError: true, content: [{ type: "text", text: "business failure" }] } })
     ]);
     const gateway = createTestGateway({ descriptors: [descriptor({ route: route({ effectClass: "read" }) })], upstream });
@@ -46,9 +46,21 @@ describe("PR82 externally validated MCP wire", () => {
       const adapter = createModernDownstreamAdapter({ gateway, authenticate: () => context });
       const send = async (id: number) => adapter.handle(modernHttpRequest("tools/call", id, { name: "demo", arguments: {} }));
       const rejected = await send(1);
-      expect(rejected).toMatchObject({ status: 200, body: { error: { code: -32042, message: "Synthetic peer refusal", data: { field: "value", code: "upstream_jsonrpc_error" } } } });
-      expect(JSON.stringify(rejected.body)).not.toMatch(/synthetic-private|synthetic-stack/u);
+      expect(rejected).toMatchObject({ status: 200, body: { error: { code: -32042, message: "Upstream returned a JSON-RPC error.", data: { code: "upstream_jsonrpc_error", effectOutcome: "failed" } } } });
+      expect(JSON.stringify(rejected.body)).not.toMatch(/private-diagnostic|synthetic-private|synthetic-stack|"field"/u);
       expect(await send(2)).toMatchObject({ status: 200, body: { result: { resultType: "complete", isError: true, content: [{ text: "business failure" }] } } });
+    } finally { await gateway.close(); }
+  });
+
+  it("[GC-028] projects arbitrary internal exceptions to a closed public failure without retaining their diagnostics", async () => {
+    const privateMarker = "<private-diagnostic>";
+    const upstream = new QueueUpstream([], async () => { throw Object.assign(new Error(privateMarker), { code: privateMarker, status: 500, cause: new Error(privateMarker) }); });
+    const gateway = createTestGateway({ descriptors: [descriptor({ route: route({ effectClass: "read" }) })], upstream });
+    await gateway.start();
+    try {
+      const outcome = await gateway.invoke(context, { routeRef: "route.demo", method: "tools/call", params: { name: "demo", arguments: {} } });
+      expect(outcome).toMatchObject({ kind: "failure", code: "transport_failed", message: "The upstream request failed.", status: 502, effectOutcome: "failed" });
+      expect(JSON.stringify(outcome)).not.toContain(privateMarker);
     } finally { await gateway.close(); }
   });
 

@@ -67,7 +67,7 @@ describe("modern MCP downstream adapter", () => {
   });
 
   it("requires request metadata on stdio without requiring HTTP mirror headers", async () => {
-    const upstream = new QueueUpstream();
+    const upstream = new QueueUpstream([response({ resultType: "complete", content: [{ type: "text", text: "ok" }] })]);
     const gateway = createGateway({ upstream, descriptors: [descriptor()] });
     await gateway.start();
     try {
@@ -191,6 +191,31 @@ describe("modern MCP downstream adapter", () => {
       expect(undeclared.status).toBe(400);
       const unadvertisedMethod = await adapter.handle({ ...modernHttpRequest("resources/subscribe", "res-sub", { uri: "demo://resource" }), context });
       expect(unadvertisedMethod).toMatchObject({ status: 404, body: { error: { code: -32601 } } });
+    } finally {
+      await gateway.close();
+    }
+  });
+
+  it("[GC-028] projects authentication diagnostics to a closed public refusal", async () => {
+    const privateMarker = "<authentication-private-diagnostic>";
+    const upstream = new QueueUpstream();
+    const gateway = createGateway({ upstream, descriptors: [descriptor()] });
+    await gateway.start();
+    try {
+      const adapter = createModernDownstreamAdapter({
+        gateway,
+        authenticate: () => { throw Object.assign(new Error(privateMarker), { code: privateMarker, status: 401, cause: new Error(privateMarker) }); }
+      });
+      const denied = await adapter.handle(modernHttpRequest("tools/call", "auth-denied", { name: "demo", arguments: {} }));
+      expect(denied).toMatchObject({ status: 401, body: { error: { code: -32001, message: "Authentication failed." } } });
+      expect(JSON.stringify(denied.body)).not.toContain(privateMarker);
+      expect(upstream.requests).toHaveLength(0);
+      const platformDenied = createModernDownstreamAdapter({
+        gateway,
+        authenticate: () => { throw Object.assign(new Error("provider detail"), { code: "api_key_inactive", status: 401 }); }
+      });
+      const refusal = await platformDenied.handle(modernHttpRequest("tools/call", "auth-platform", { name: "demo", arguments: {} }));
+      expect(refusal).toMatchObject({ status: 401, body: { error: { message: "Authentication failed.", data: { code: "api_key_inactive" } } } });
     } finally {
       await gateway.close();
     }

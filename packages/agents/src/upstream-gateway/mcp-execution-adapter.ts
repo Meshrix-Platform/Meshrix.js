@@ -126,9 +126,12 @@ export function normalizeMcpResultForDownstream(result: Record<string, any>, ups
   return source;
 }
 
+const BOUNDED_INTERNAL_REASON = /^(?:upstream_mcp|upstream_final_effect)_[a-z0-9_]{1,48}$/u;
+
 function safeFailure(error?: any, abortContext: any = null) : any {
   const authorityCode: any = text(error?.code);
-  const internalReasonCode: any = text(error?.reasonCode) || (/^upstream_final_effect_[a-z0-9_]+$/u.test(authorityCode) ? authorityCode : "");
+  const candidateReason: any = text(error?.reasonCode) || authorityCode;
+  const internalReasonCode: any = BOUNDED_INTERNAL_REASON.test(candidateReason) ? candidateReason : "";
   const callerAborted: any = abortContext?.callerAborted?.() === true ||
     internalReasonCode === "upstream_mcp_cancelled";
   const timedOut: any = !callerAborted && (
@@ -137,8 +140,10 @@ function safeFailure(error?: any, abortContext: any = null) : any {
     error?.name === "AbortError" ||
     /timed out/iu.test(String(error?.message || ""))
   );
+  const rawStatus: any = Number(error?.status || error?.statusCode || 502);
+  const status: any = callerAborted ? 499 : timedOut ? 504 : Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 502;
   return {
-    status: callerAborted ? 499 : timedOut ? 504 : Number(error?.status || error?.statusCode || 502),
+    status,
     reasonCode: internalReasonCode || (
       callerAborted
         ? "upstream_mcp_cancelled"

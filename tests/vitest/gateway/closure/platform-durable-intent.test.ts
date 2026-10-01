@@ -212,7 +212,10 @@ describe("platform discovered-tool durable dispatch intent", () => {
     const failing = await startCandidate(path.join(root, "failing-candidate"), peer.url, "fail-intent");
     failing.process.send({ type: "call", arguments: { label: "must-not-send" } });
     const failedResponse = await failing.process.waitFor("response");
-    expect(failedResponse).toMatchObject({ status: 200, errorCode: "synthetic_proof_persistence_failure" });
+    // The injected proof-owner diagnostic is projected to the bounded public failure;
+    // the synthetic internal code never crosses the protocol boundary.
+    expect(failedResponse).toMatchObject({ status: 200, errorCode: "transport_failed" });
+    expect(JSON.stringify(failedResponse)).not.toContain("synthetic_proof_persistence_failure");
     expect(await peer.count()).toBe(0);
     await failing.process.stop();
 
