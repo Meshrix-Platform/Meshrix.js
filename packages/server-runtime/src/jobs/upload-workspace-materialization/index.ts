@@ -3,6 +3,9 @@ export {
   materializationFailureDisposition
 } from "./engine.ts";
 export {
+  createUploadWorkspaceMaterializationRuntime
+} from "./runtime.ts";
+export {
   createUploadWorkspaceMaterializationTransactionStore
 } from "./transaction-store.ts";
 export {
