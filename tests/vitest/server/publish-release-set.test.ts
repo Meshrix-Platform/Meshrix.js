@@ -9,9 +9,9 @@ import {
   discoverReleaseSet,
   parsePublishArguments,
   publishReleaseSet,
-  releaseTagForVersion,
-  resolveReleaseWorkspaceDirectories
+  releaseTagForVersion
 } from "../../../tools/server-scripts/publish-release-set.ts";
+import { resolveReleaseWorkspaceDirectories } from "../../../tools/server-scripts/lib/release-metadata.ts";
 
 const ROOT: any = path.resolve(import.meta.dirname, "../../..");
 const DEPENDENCY_FIELDS: any[] = [

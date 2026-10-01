@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 import {
   verifyReleaseAcceptanceStandards,
 } from "./verify-release-acceptance-standards.ts";
-import { resolveReleaseWorkspaceDirectories } from "./publish-release-set.ts";
+import {
+  loadReleaseDefinition,
+  resolveReleaseWorkspaceDirectories
+} from "./lib/release-metadata.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const definitionPath: any = "tools/registry/release-definition.registry.json";
 const semverPattern: any =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const upstreamCandidateArtifacts: readonly any[] = Object.freeze([
@@ -30,11 +32,6 @@ const upstreamCandidateArtifacts: readonly any[] = Object.freeze([
   "build/reports/upstream-service-publishing/screenshots/console-operation-approval-completed.png",
   "build/reports/upstream-service-publishing/screenshots/console-downstream-mcp-call.png"
 ]);
-
-export async function loadReleaseDefinition(rootDir: any = repoRoot) : Promise<any> {
-  const text: any = await fs.readFile(path.join(rootDir, definitionPath), "utf8");
-  return JSON.parse(text);
-}
 
 function fail(code?: any, detail?: any) : any {
   const error: Error & Record<string, any> = new Error(detail);

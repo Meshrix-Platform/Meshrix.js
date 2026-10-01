@@ -389,7 +389,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "apps/*/package.json",
       "packages/*/package.json",
       "packages/protocols/mcp/adapter/gateway-installer/package.json",
-      "tools/server-scripts/prepare-release.ts"
+      "tools/server-scripts/prepare-release.ts",
+      "tools/server-scripts/lib/release-metadata.ts"
     ], outputs: [
       "package.json",
       "package-lock.json",
@@ -445,7 +446,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/*/package.json",
       "packages/protocols/mcp/adapter/gateway-installer/package.json",
       "tools/server-scripts/publish-release-set.ts",
-      "tools/server-scripts/prepare-release.ts",
+      "tools/server-scripts/lib/release-metadata.ts",
       "tools/server-scripts/lib/npm-cli-invocation.ts"
     ], outputs: [],
   },
@@ -525,6 +526,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/release-definition.registry.json",
       "tools/registry/schema/release-definition.schema.json",
       "tools/server-scripts/verify-release-definition.ts",
+      "tools/server-scripts/lib/release-metadata.ts",
       "package.json",
       "package-lock.json"
     ],
