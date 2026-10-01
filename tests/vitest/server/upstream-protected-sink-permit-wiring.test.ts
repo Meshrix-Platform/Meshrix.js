@@ -57,6 +57,7 @@ import {
 import {
   structuredUpstreamServiceFixture
 } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const SECRET_REF: any = "secret://upstream-final-effect/fixture";
 const SERVICE_ID: any = "final-effect-fixture";
@@ -411,7 +412,7 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawSer
     describe: () : any => baseKeyProvider.describe()
   });
   cleanupTasks.push(() : any => secretKeyProvider.close());
-  const registry: any = createUpstreamGatewayRegistry({
+  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
     secretKeyProvider,
     userDataPath
   });

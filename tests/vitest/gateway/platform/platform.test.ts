@@ -4,6 +4,7 @@ import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-
 import { createGatewayProtocolAdapter } from "@meshrix/protocols/mcp/adapter/gateway";
 import { createPlatformGateway, createPlatformMcpGateway, executeThroughPlatformGateway } from "@meshrix/server-runtime/composition/gateway-composition";
 import { context, descriptor, modernHttpRequest, QueueUpstream, response } from "../support";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("platform composition single invoke path", () => {
   it("[CASE-A06] routes protocol, agent, and platform composition through one gateway port", async () => {
@@ -22,11 +23,11 @@ describe("platform composition single invoke path", () => {
 
   it("[CASE-G01] uses operator risk for upstream routes and rebuilds the catalog without cross-subject residue", async () => {
     const service = (serviceId: string, risk: string) => ({ serviceId, mcp: { toolNamePrefix: "collision" }, operations: [{ operationKey: "tools/call", risk }] });
-    const destructiveTool = publicUpstreamMcpTool({
+    const destructiveTool = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
       service: service("service-a", "destructive"),
       tool: { name: "same", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } }
     });
-    const safeWriteTool = publicUpstreamMcpTool({
+    const safeWriteTool = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
       service: service("service-b", "safe_write"),
       tool: { name: "same", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } }
     });
@@ -75,7 +76,7 @@ describe("platform composition single invoke path", () => {
   });
 
   it("[GC-034] a malformed upstream schema cannot evict a healthy neighbor", async () => {
-    const healthy = publicUpstreamMcpTool({ service: { serviceId: "healthy", operations: [{ operationKey: "tools/call", risk: "read_only" }] }, tool: { name: "read", inputSchema: { type: "object" } } });
+    const healthy = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(), service: { serviceId: "healthy", operations: [{ operationKey: "tools/call", risk: "read_only" }] }, tool: { name: "read", inputSchema: { type: "object" } } });
     const malformed = { ...healthy, name: "bad", inputSchema: { $ref: "https://external.invalid/schema" }, _meta: { ...healthy._meta, serviceId: "malformed" } };
     const platform = createPlatformMcpGateway({
       toolSkillManagementProvider: { authorizeMcpClientRequest: async () => ({ ok: true, grant: { revision: "grant-1", subjectId: "synthetic" } }), listVisibleTools: () => [] },

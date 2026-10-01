@@ -4,6 +4,7 @@ import { buildModernRequest } from "@meshrix/protocols/mcp/modern-upstream";
 import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-gateway/tool-projection.ts";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
 import { context, createTestGateway, descriptor, modernHttpRequest, QueueUpstream, response, route } from "../support";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("PR82 externally validated MCP wire", () => {
   it("[GC-023 GC-024 GC-029] preserves the complete envelope and rejects unknown and private discriminants", () => {
@@ -27,7 +28,7 @@ describe("PR82 externally validated MCP wire", () => {
 
   it("[GC-031 partial] retains valid external JSON Schema 2020-12 keywords and validates the business object", () => {
     const schema = { type: "object", properties: { count: { type: "number", exclusiveMinimum: 0 }, node: { $ref: "#/$defs/node" } }, required: ["count"], $defs: { node: { type: "object", properties: { next: { $ref: "#/$defs/node" } } } } };
-    const projected = publicUpstreamMcpTool({ service: { serviceId: "synthetic", operations: [{ operationKey: "tools/call", risk: "read_only" }] }, tool: { name: "recursive", inputSchema: schema, annotations: { readOnlyHint: true, arbitraryHint: "informational" } } });
+    const projected = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(), service: { serviceId: "synthetic", operations: [{ operationKey: "tools/call", risk: "read_only" }] }, tool: { name: "recursive", inputSchema: schema, annotations: { readOnlyHint: true, arbitraryHint: "informational" } } });
     expect(projected.inputSchema).toEqual(schema);
     expect(projected.annotations.arbitraryHint).toBe("informational");
     const validator = compileExternalSchema(projected.inputSchema);

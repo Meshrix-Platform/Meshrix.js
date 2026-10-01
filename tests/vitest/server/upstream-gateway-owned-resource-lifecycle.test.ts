@@ -12,6 +12,7 @@ vi.mock("../../../packages/agents/src/upstream-gateway/registry-runtime.ts", () 
 }));
 
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function gatewayRuntimeFixture() : any {
   return {
@@ -40,7 +41,7 @@ describe("upstream gateway owned-resource lifecycle", () : any => {
       close: vi.fn(async () : Promise<any> => {})
     };
     securityAlertStoreFactory.mockReturnValue(securityAlertStore);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: "<user-data>",
       mcpSessionManager
     });
@@ -68,7 +69,7 @@ describe("upstream gateway owned-resource lifecycle", () : any => {
 
     let failure: any = null;
     try {
-      createUpstreamGatewayRegistry({ userDataPath: "<user-data>" });
+      createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath: "<user-data>" });
     } catch (error: any) {
       failure = error;
     }
@@ -86,7 +87,7 @@ describe("upstream gateway owned-resource lifecycle", () : any => {
         .mockImplementationOnce(() : any => {})
     };
     securityAlertStoreFactory.mockReturnValue(securityAlertStore);
-    const registry: any = createUpstreamGatewayRegistry({ userDataPath: "<user-data>" });
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath: "<user-data>" });
 
     await expect(registry.close()).rejects.toThrow("Upstream gateway registry did not close cleanly.");
     expect(registry.isClosed()).toBe(false);
@@ -105,7 +106,7 @@ describe("upstream gateway owned-resource lifecycle", () : any => {
         .mockResolvedValueOnce(undefined)
     };
     securityAlertStoreFactory.mockReturnValue(securityAlertStore);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: "<user-data>",
       mcpSessionManager
     });

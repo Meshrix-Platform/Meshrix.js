@@ -12,6 +12,7 @@ import { modernHttpRequest } from "../gateway/support.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("MCP tool JSON Schema adapter", () : any => {
   it("preserves $ref target and sibling constraints", () : any => {
@@ -116,9 +117,9 @@ describe("MCP tool JSON Schema adapter", () : any => {
     });
     expect(output.validate(["a", "b"])).toBe(true);
     expect(output.validate({ value: "a" })).toBe(false);
-    expect(() => publicUpstreamMcpTool({ service: { serviceId: "schema-service" }, tool: { name: "invalid-root", inputSchema: { type: "array", items: { type: "string" } } } })).toThrow(/input schema is invalid/u);
+    expect(() => publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(), service: { serviceId: "schema-service" }, tool: { name: "invalid-root", inputSchema: { type: "array", items: { type: "string" } } } })).toThrow(/input schema is invalid/u);
 
-    const projected: any = publicUpstreamMcpTool({
+    const projected: any = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
       service: { serviceId: "schema-service", label: "Schema" },
       tool: {
         name: "list",
@@ -130,7 +131,7 @@ describe("MCP tool JSON Schema adapter", () : any => {
       type: "array",
       items: { type: "string" }
     });
-    const booleanOutput: any = publicUpstreamMcpTool({
+    const booleanOutput: any = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
       service: { serviceId: "schema-service" },
       tool: {
         name: "list",
@@ -230,7 +231,7 @@ describe("MCP tool JSON Schema adapter", () : any => {
         structuredContent: request.arguments
       } };
     };
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: {
         listTools: async () : Promise<any> => ({

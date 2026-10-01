@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanup: any[] = [];
 
@@ -30,7 +31,7 @@ function opaqueTransport(maxBytes: any = 1024 * 1024) : any {
 }
 
 function registryFor(baseUrl?: any, maxBytes: any = 1024 * 1024) : any {
-  const registry: any = createUpstreamGatewayRegistry();
+  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
   installUpstreamRuntimeServices(registry, [{
     serviceId: "binary-fixture",
     serviceProtocol: "http",

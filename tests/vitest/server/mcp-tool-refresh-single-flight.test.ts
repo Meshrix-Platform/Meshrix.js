@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function delay(ms?: any) : any {
   return new Promise((resolve?: any) : any => setTimeout(resolve, ms));
@@ -50,7 +51,7 @@ describe("MCP tool refresh single-flight", () : any => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Synthetic modern MCP peer did not bind.");
-    const registry: any = createUpstreamGatewayRegistry({ userDataPath: root });
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath: root });
 
     try {
       await installUpstreamRuntimeServices(registry, [{
@@ -112,7 +113,7 @@ describe("MCP tool refresh single-flight", () : any => {
         tools: [{ name: "records.list", inputSchema: { type: "object" } }]
       };
     };
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: {
         listTools,

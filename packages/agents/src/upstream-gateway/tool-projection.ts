@@ -1,4 +1,3 @@
-import { assertExternalSchemaBudget } from "@meshrix/gateway/schema";
 import {
   asArray,
   normalizeRisk,
@@ -30,14 +29,15 @@ function invalidToolSchemaError(kind: any = "input") : any {
 }
 
 function projectedMcpSchema(
-  schema?: any,
+  schema: any,
+  schemaPort: any,
   label?: any,
   { requireTopLevelObject = true, kind = "input" }: Record<string, any> = {}
 ) : any {
   if (schema === undefined) return { type: "object" };
   try {
     if (requireTopLevelObject && (typeof schema !== "object" || schema === null || Array.isArray(schema) || "type" in schema && schema.type !== "object")) throw invalidToolSchemaError(kind);
-    assertExternalSchemaBudget(schema);
+    schemaPort.assertSchemaBudget(schema);
     return structuredClone(schema);
   } catch {
     throw invalidToolSchemaError(kind);
@@ -67,7 +67,10 @@ function operatorMcpRisk(service: Record<string, any> = {}) : any {
   return normalizeRisk(operatorMcpOperation(service).risk);
 }
 
-export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string, any> = {}) : any {
+export function publicUpstreamMcpTool({ service = {}, tool = {}, schemaPort = null }: Record<string, any> = {}) : any {
+  if (!schemaPort || typeof schemaPort.assertSchemaBudget !== "function") {
+    throw new TypeError("Upstream MCP tool projection requires the injected schema port.");
+  }
   const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
   const upstreamToolName: any = text(tool.name);
   const configuredOperation: any = operatorMcpOperation(service);
@@ -84,14 +87,14 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
     name: `upstream.${prefix}.${upstreamToolName}`,
     title: `${service.label || service.serviceId}: ${tool.title || upstreamToolName}`,
     description: tool.description || `Upstream MCP tool ${upstreamToolName} from ${service.label || service.serviceId}.`,
-    inputSchema: projectedMcpSchema(tool.inputSchema, "Upstream MCP tool input schema", {
+    inputSchema: projectedMcpSchema(tool.inputSchema, schemaPort, "Upstream MCP tool input schema", {
       requireTopLevelObject: true,
       kind: "input"
     }),
     ...(tool.outputSchema === undefined
       ? {}
       : {
-          outputSchema: projectedMcpSchema(tool.outputSchema, "Upstream MCP tool output schema", {
+          outputSchema: projectedMcpSchema(tool.outputSchema, schemaPort, "Upstream MCP tool output schema", {
             requireTopLevelObject: false,
             kind: "output"
           })

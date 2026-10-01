@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { createUpstreamConfigFileLoader } from "./upstream-config-file.ts";
+import { createGatewaySchemaPort } from "./gateway-schema-port.ts";
 import {
   createUpstreamGatewayRegistry,
   createUpstreamManifestObserver,
@@ -148,6 +149,7 @@ export function createServerUpstreamGatewayRegistry({
     artifactTransitPort,
     tagStore,
     secretKeyProvider,
+    schemaPort: createGatewaySchemaPort(),
     publishSkillHubUpdate(event?: any) : any {
       return broadcastConfiguredMcpNotification({
         jsonrpc: "2.0",

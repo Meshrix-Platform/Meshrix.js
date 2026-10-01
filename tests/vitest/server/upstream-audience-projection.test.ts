@@ -11,6 +11,7 @@ import {
 import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
 import { apiKeyAuthorizationEvaluationInput } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
 import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function serviceEntry({
   serviceId = "svc_audience_a",
@@ -179,7 +180,7 @@ describe("upstream audience projection", () : any => {
   });
 
   it("keeps exact discovered MCP capability grants identical for discovery and execution", async () : Promise<any> => {
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       mcpSessionManager: {
         listTools: async () => ({ tools: [{ name: "read_selected" }, { name: "read_sibling" }] }),
         retireScope: async () => ({ retired: 0 }),

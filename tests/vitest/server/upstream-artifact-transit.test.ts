@@ -17,6 +17,7 @@ import {
   createWorkspaceArtifactFileStore
 } from "../../../packages/server-runtime/src/composition/artifact-transit-provider.ts";
 import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function deferred() : any {
   let resolve: any;
@@ -59,7 +60,7 @@ describe("owner-bound upstream artifact transit", () : any => {
       getListenUrl: () : any => "http://gateway.invalid"
     });
     cleanup.push(() : any => artifactPort.close());
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       artifactTransitPort: artifactPort,
       claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ test: true })
     });
@@ -149,7 +150,7 @@ describe("owner-bound upstream artifact transit", () : any => {
       getListenUrl: () : any => "http://gateway.invalid"
     });
     cleanup.push(() : any => artifactPort.close());
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       artifactTransitPort: artifactPort,
       claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ test: true })
     });
@@ -301,7 +302,7 @@ describe("owner-bound workspace artifact transit", () : any => {
   async function setupWorkspaceGateway() : Promise<any> {
     const fixture: any = await setupWorkspaceTransit();
     const { observed, peer } = await setupMultipartPeer();
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       artifactTransitPort: fixture.artifactPort,
       claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ test: true })
     });

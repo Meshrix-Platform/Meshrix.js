@@ -25,6 +25,7 @@ import {
   installUpstreamRuntimeServices,
   structuredJsonPayloadTransport
 } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -337,7 +338,7 @@ function apiKeyGovernancePermissions() {
 }
 
 function registryWithTestSink(manager: any = null) {
-  const registry = createUpstreamGatewayRegistry({
+  const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
     ...(manager ? { mcpSessionManager: manager } : {})
   });
   cleanups.push(async () => registry.close());
