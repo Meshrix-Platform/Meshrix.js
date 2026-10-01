@@ -4,11 +4,12 @@ import { createUpstreamGatewayRegistry } from "../../../../packages/agents/src/u
 import { upstreamProjectedOperationId } from "../../../../packages/agents/src/upstream-gateway/operation-projection.ts";
 import { createUpstreamGatewayOperationExecutor } from "../../../../packages/server-runtime/src/composition/console-domain/operation-executors/upstream-gateway-executor.ts";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("Console MCP final-effect transport", () => {
   it("[NODE011] defaults to denying a registered MCP write without a final protected-sink permit", async () => {
     let effects = 0;
-    const registry = createUpstreamGatewayRegistry({ mcpSessionManager: { listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object" } }] }),
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), mcpSessionManager: { listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object" } }] }),
       invokeGateway: async () => { effects += 1; return { result: { content: [] } }; }, retireScope: async () => ({ retired: 0 }), close: async () => {} } });
     installUpstreamRuntimeServices(registry, [{ serviceId: "console", serviceProtocol: "mcp", label: "console", allowLocalNetwork: true,
       operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] }],
@@ -39,7 +40,7 @@ describe("Console MCP final-effect transport", () => {
     if (!address || typeof address === "string") throw new Error("Synthetic Console peer is unavailable.");
     const events: string[] = [];
     const consumed = new Set<string>();
-    const registry = createUpstreamGatewayRegistry({ mcpSessionManager: { listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object", properties: { value: { type: "string" } } } }] }),
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), mcpSessionManager: { listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object", properties: { value: { type: "string" } } } }] }),
       invokeGateway: async () => { throw new Error("Modern Console path must not use legacy session transport."); }, retireScope: async () => ({ retired: 0 }), close: async () => {} },
       claimProtectedSinkAttempt: async ({ attempt, resourceRevision, resolveCurrentResource }: Record<string, any>) => {
         events.push("claim");

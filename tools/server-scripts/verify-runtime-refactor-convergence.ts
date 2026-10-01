@@ -17,6 +17,7 @@ import { createAuthorizationEngine } from "../../packages/foundation/src/securit
 import { createMemoryLocalSecretKeyProvider } from "../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import { initializeLocalSecret } from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
 import { createSystemControllerFoundationHandlers } from "../../packages/protocols/http/controllers/system-controller-foundation-handlers.ts";
+import { createGatewaySchemaPort } from "../../packages/server-runtime/src/composition/gateway-schema-port.ts";
 import { dispatchRegisteredHttpOperation } from "../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
 import { executeConsoleDomainOperation } from "../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
 import {
@@ -461,6 +462,7 @@ async function gatewayCleanRun() : Promise<any> {
     });
     registry = createUpstreamGatewayRegistry({
       secretKeyProvider,
+      schemaPort: createGatewaySchemaPort(),
       userDataPath
     });
     installService(registry, sinkBaseUrl, 1);

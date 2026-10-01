@@ -14,7 +14,7 @@ import {
   normalizeOptionalTimeoutMs,
   text
 } from "./support.ts";
-import { createIsolatedSchemaValidator, GatewaySchemaError } from "@meshrix/gateway/schema";
+
 import { createForwardAbortContext } from "./registry-lifecycle.ts";
 
 function parseJsonText(value: any = "") : any {
@@ -167,10 +167,14 @@ export function createMcpExecutionAdapter({
   persist,
   publicEndpoint,
   recordEndpointOutcome,
-  recordMetric
+  recordMetric,
+  schemaPort
 }: Record<string, any>) : any {
   if (typeof invokeTypedMcp !== "function" || typeof claimMcpProtectedSink !== "function") {
     throw new TypeError("Upstream MCP adapter requires the configured typed transport.");
+  }
+  if (!schemaPort || typeof schemaPort.validate !== "function") {
+    throw new TypeError("Upstream MCP adapter requires the injected schema port.");
   }
   return async function recordMcpExecution(service?: any, operation?: any, input: Record<string, any> = {}, endpoint: any = null, options: Record<string, any> = {}) : Promise<any> {
     const startedAt: any = Date.now();
@@ -194,12 +198,13 @@ export function createMcpExecutionAdapter({
         {}
     );
     if (operation.inputSchema !== undefined) {
-      const validator = createIsolatedSchemaValidator();
-      try { await validator.compile(operation.inputSchema).assertValid(toolArguments, options.signal); }
-      catch (error) {
-        if (!(error instanceof GatewaySchemaError) || error.code !== "schema_validation_failed") throw error;
-        throw Object.assign(new Error("Upstream MCP tool arguments do not match the advertised input schema."), { status: 400, reasonCode: "upstream_mcp_arguments_invalid" });
-      } finally { await validator.close(); }
+      const validation: any = await schemaPort.validate({ schema: operation.inputSchema, value: toolArguments, signal: options.signal });
+      if (!validation.ok) {
+        if (validation.code === "schema_validation_failed") {
+          throw Object.assign(new Error("Upstream MCP tool arguments do not match the advertised input schema."), { status: 400, reasonCode: "upstream_mcp_arguments_invalid" });
+        }
+        throw Object.assign(new Error(validation.message), { status: 400 });
+      }
     }
     const requestBodyMetadata: any = bodyMetadata(toolArguments, operation.sensitiveBodyFields, {
       byteLength: Buffer.byteLength(stableJson(toolArguments)),

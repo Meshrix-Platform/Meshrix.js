@@ -28,6 +28,7 @@ import { createUpstreamGatewayOperationExecutor } from "../../../packages/server
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../gateway/support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function fixtureTools() : any {
   return ["state.increment", "state.probe", "work.slow", "work.peer"].map((name?: any) : any => ({
@@ -60,7 +61,7 @@ async function registryFixture(mcpSessionManager?: any, overrides: Record<string
       },
       ...overrides
     }];
-  const registry: any = createUpstreamGatewayRegistry({
+  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
     userDataPath,
     mcpSessionManager
   });
@@ -467,7 +468,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       const cancelled: any = await slowObserved;
       expect(cancelled.status).toBe("fulfilled");
       expect(cancelled.value.status).toBe(200);
-      expect(cancelled.value.body.error?.data).toMatchObject({ code: "ABORT_ERR", effectOutcome: "unknown" });
+      expect(cancelled.value.body.error?.data).toMatchObject({ code: "operation_cancelled", effectOutcome: "unknown" });
       expect(registry.previewPolicy({
         serviceId: "session-fixture",
         operationKey: "tools/call"

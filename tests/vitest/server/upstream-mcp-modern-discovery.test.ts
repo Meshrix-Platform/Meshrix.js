@@ -8,6 +8,7 @@ import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upst
 import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import { initializeLocalSecret, rotateLocalSecret } from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 type PeerRequest = {
   method: string;
@@ -131,7 +132,7 @@ async function controlledPeer() {
 }
 
 async function registryFor(url: string, options: Record<string, any> = {}, credentialRefs: string[] = []) {
-  const registry = createUpstreamGatewayRegistry(options);
+  const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), ...options });
   registries.push(registry);
   await installUpstreamRuntimeServices(registry, [{
     serviceId: "modern-peer",

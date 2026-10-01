@@ -24,6 +24,7 @@ import {
   createFinalProtectedSinkAttempt,
   digestFinalProtectedSinkInput
 } from "#meshrix/foundation/security/final-protected-sink-permit";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const SECRET_REF: any = "secret://upstream-gateway/security-test";
 const RESOLVED_SECRET_TOKEN: any = "resolved-upstream-secret-token-must-not-leak";
@@ -123,7 +124,7 @@ async function createRegistryWithDataDir(services?: any, options: Record<string,
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-gateway-ssrf-"));
   cleanupTasks.push(() : any => fs.rm(userDataPath, { recursive: true, force: true }));
   const secretKeyProvider: any = options.secretKeyProvider || createMemoryLocalSecretKeyProvider();
-  const rawRegistry: any = createUpstreamGatewayRegistry({ userDataPath, ...options, secretKeyProvider });
+  const rawRegistry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath, ...options, secretKeyProvider });
   let registry: any;
   registry = new Proxy(rawRegistry, {
     get(target: any, property: any) : any {
@@ -340,36 +341,23 @@ describe("upstream gateway SSRF boundary", () : any => {
   });
 
   it("cancels an oversized streaming response before reading the remaining body", async () : Promise<any> => {
-    let readCount: any = 0;
-    let cancelled: any = false;
-    let released: any = false;
-    vi.stubGlobal("fetch", vi.fn(async () : Promise<any> => ({
-      ok: true,
-      status: 200,
-      headers: new Headers({ "content-type": "application/octet-stream" }),
-      body: {
-        getReader() : any {
-          return {
-            async read() : Promise<any> {
-              readCount += 1;
-              if (readCount <= 2) {
-                return { done: false, value: new Uint8Array(80) };
-              }
-              return { done: false, value: new Uint8Array(80) };
-            },
-            async cancel() : Promise<any> {
-              cancelled = true;
-            },
-            releaseLock() : any {
-              released = true;
-            }
-          };
-        }
-      }
-    })));
+    let closedResolve: () => void = () => {};
+    const closed: Promise<boolean> = new Promise((resolve?: any) : any => { closedResolve = () => resolve(true); });
+    let writes: any = 0;
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      const timer: any = setInterval(() : any => {
+        writes += 1;
+        if (!response.write(Buffer.alloc(80))) clearInterval(timer);
+      }, 1);
+      response.on("close", () : any => { clearInterval(timer); closedResolve(); });
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+    const address: any = server.address();
     const registry: any = await createRegistry([{
       serviceId: "stream-bounded",
-      baseUrl: "http://192.0.2.1:8080",
+      baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
         operationKey: "read",
         method: "GET",
@@ -387,25 +375,28 @@ describe("upstream gateway SSRF boundary", () : any => {
       status: 502,
       reasonCode: "upstream_response_too_large"
     });
-    expect(readCount).toBe(2);
-    expect(cancelled).toBe(true);
-    expect(released).toBe(true);
+    await expect(Promise.race([closed, new Promise<boolean>((resolve?: any) : any => setTimeout(() => resolve(false), 5_000))])).resolves.toBe(true);
+    expect(writes).toBeLessThan(64_000);
   });
 
   it("rejects non-JSON and malformed JSON before configured response filtering can fail open", async () : Promise<any> => {
-    const fetchMock: any = vi.fn()
-      .mockResolvedValueOnce(new Response("opaque upstream text", {
-        status: 200,
-        headers: { "content-type": "text/plain" }
-      }))
-      .mockResolvedValueOnce(new Response("{malformed", {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      }));
-    vi.stubGlobal("fetch", fetchMock);
+    const hits: any[] = [];
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      hits.push(request.url);
+      if (request.url === "/plain") {
+        response.writeHead(200, { "content-type": "text/plain" });
+        response.end("opaque upstream text");
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end("{malformed");
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+    const address: any = server.address();
     const registry: any = await createRegistry([{
       serviceId: "response-filter-closed",
-      baseUrl: "http://192.0.2.1:8080",
+      baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
         operationKey: "sensitive-only",
         method: "GET",
@@ -437,21 +428,24 @@ describe("upstream gateway SSRF boundary", () : any => {
       status: 502,
       reasonCode: "response_projection_unavailable"
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(hits).toEqual(["/plain", "/malformed"]);
   });
 
   it("passes default structured HTTP response fields through without implicit redaction", async () : Promise<any> => {
-    vi.stubGlobal("fetch", vi.fn(async () : Promise<any> => new Response(JSON.stringify({
-      token: "upstream-token-marker",
-      credential: "upstream-credential-marker",
-      nested: { secret: "upstream-secret-marker" }
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    })));
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        token: "upstream-token-marker",
+        credential: "upstream-credential-marker",
+        nested: { secret: "upstream-secret-marker" }
+      }));
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+    const address: any = server.address();
     const registry: any = await createRegistry([{
       serviceId: "default-transparent-response",
-      baseUrl: "http://192.0.2.1:8080",
+      baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
         operationKey: "read",
         method: "GET",

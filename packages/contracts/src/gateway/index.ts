@@ -193,6 +193,7 @@ export const GATEWAY_PUBLIC_FAILURES = Object.freeze({
   api_key_rate_limited: { message: "API Key rate limit reached.", status: 429 },
   api_key_use_limit_reached: { message: "API Key use limit reached.", status: 429 },
   api_key_inactive: { message: "API Key is inactive.", status: 410 },
+  UPSTREAM_MCP_SESSION_CAPACITY: { message: "Upstream MCP session capacity is currently exhausted.", status: 503 },
   api_key_policy_denied: { message: "API Key policy denied the operation.", status: 403 },
   workspace_binding_invalid: { message: "The workspace binding is invalid.", status: 403 },
   context_unknown: { message: "The business context is unknown or expired.", status: 410 },

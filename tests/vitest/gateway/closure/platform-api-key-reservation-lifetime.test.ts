@@ -19,6 +19,7 @@ import { dispatchOperation } from "../../../../packages/server-runtime/src/compo
 import { createPlatformMcpGateway } from "../../../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 type RouteKind = "platform-operation" | "discovered-mcp";
 type Deferred = { promise: Promise<void>; resolve(): void };
@@ -298,7 +299,7 @@ async function createFixture() {
   if (!address || typeof address === "string") throw new Error("Controlled API-key peer did not bind.");
 
   tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-api-key-reservation-"));
-  registry = createUpstreamGatewayRegistry();
+  registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
   const peerUrl = `http://127.0.0.1:${address.port}`;
   installUpstreamRuntimeServices(registry, [
     structuredUpstreamServiceFixture({

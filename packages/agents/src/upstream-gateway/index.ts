@@ -92,6 +92,12 @@ export {
   opaqueAudiencePartitionKey
 } from "./audience-projection.ts";
 export { createUpstreamManifestSnapshotCommitter } from "./manifest-snapshot-commit.ts";
+export { UpstreamSchemaPortError } from "./schema-port.ts";
+export type {
+  UpstreamSchemaPort,
+  UpstreamSchemaValidationInput,
+  UpstreamSchemaValidationOutcome
+} from "./schema-port.ts";
 export function createUpstreamGatewayRegistry({
   userDataPath = "",
   tagStore = null,
@@ -100,8 +106,12 @@ export function createUpstreamGatewayRegistry({
   artifactTransitPort = null,
   secretKeyProvider = null,
   publishSkillHubUpdate = null,
+  schemaPort = null,
   claimProtectedSinkAttempt = claimFinalProtectedSinkAttempt
 }: Record<string, any> = {}) : any {
+  if (!schemaPort || typeof schemaPort.validate !== "function" || typeof schemaPort.assertSchemaBudget !== "function") {
+    throw new TypeError("Upstream gateway registry requires the injected schema port.");
+  }
   const persistenceEnabled: any = Boolean(userDataPath);
   const filePath: any = persistenceEnabled ? runtimePath(userDataPath) : "";
   let services: any = new Map<any, any>();
@@ -397,6 +407,7 @@ export function createUpstreamGatewayRegistry({
       claimMcpProtectedSink,
       persist,
       publicEndpoint,
+      schemaPort,
       recordEndpointOutcome,
       recordMetric
     })
@@ -1511,7 +1522,7 @@ export function createUpstreamGatewayRegistry({
           }
           const tools: any = asArray(listed.tools)
             .filter((tool?: any) : any => text(tool.name))
-            .map((tool?: any) : any => publicUpstreamMcpTool({ service, tool }));
+            .map((tool?: any) : any => publicUpstreamMcpTool({ service, tool, schemaPort }));
           const entry: any = cacheEntryFromTools(tools);
           if (controller.signal.aborted) throw discoveryCancelledError(controller.signal.reason);
           mcpToolCache.set(service.serviceId, { cacheKey, entry });

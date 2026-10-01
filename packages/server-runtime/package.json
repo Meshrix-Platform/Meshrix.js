@@ -162,6 +162,11 @@
       "types": "./dist/composition/gateway-composition.d.ts",
       "default": "./dist/composition/gateway-composition.js"
     },
+    "./composition/gateway-schema-port": {
+      "source": "./src/composition/gateway-schema-port.ts",
+      "types": "./dist/composition/gateway-schema-port.d.ts",
+      "default": "./dist/composition/gateway-schema-port.js"
+    },
     "./composition/composition-root": {
       "source": "./src/composition/composition-root.ts",
       "types": "./dist/composition/composition-root.d.ts",

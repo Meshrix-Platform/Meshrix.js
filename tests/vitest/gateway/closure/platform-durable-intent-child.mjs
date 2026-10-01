@@ -12,6 +12,7 @@ let authorityAllowed = true;
 const proof = createOperationProofSubstrate({ dataDir: path.join(dataRoot, "proof") });
 const stdioPeerScript = String.raw`
 import fs from "node:fs/promises";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 const counterPath = process.argv[1];
 let buffer = "";
 function send(payload) { process.stdout.write(JSON.stringify(payload) + "\n"); }
@@ -66,7 +67,7 @@ const proofPort = {
     return entry;
   }
 };
-const registry = createUpstreamGatewayRegistry();
+const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
 await installUpstreamRuntimeServices(registry, [{
   serviceId: "durable-fixture",
   serviceProtocol: "mcp",

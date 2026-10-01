@@ -13,6 +13,7 @@ import {
 import { createOperationPermissionPlatform } from "../../../packages/capabilities/src/operation-permission-core/index.ts";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const roots: any[] = [];
 
@@ -33,7 +34,7 @@ describe("upstream manifest observer composition", () : any => {
     const userDataPath: any = await temporaryRoot();
     const store: any = createServiceManifestStore({ storageRoot });
     const audits: any[] = [];
-    const registry: any = createUpstreamGatewayRegistry({ userDataPath });
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath });
     const candidateReaderPort: Readonly<Record<string, any>> = Object.freeze({ getSnapshot: store.getCandidateSnapshot });
     const observer: any = createUpstreamManifestObserver({
       readerPort: candidateReaderPort,
@@ -95,7 +96,7 @@ describe("upstream manifest observer composition", () : any => {
     const storageRoot: any = await temporaryRoot();
     const store: any = createServiceManifestStore({ storageRoot });
     const candidateReaderPort: Readonly<Record<string, any>> = Object.freeze({ getSnapshot: store.getCandidateSnapshot });
-    const firstRegistry: any = createUpstreamGatewayRegistry({});
+    const firstRegistry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const firstObserver: any = createUpstreamManifestObserver({
       readerPort: candidateReaderPort,
       async onSnapshot(snapshot?: any) : Promise<any> {
@@ -145,7 +146,7 @@ describe("upstream manifest observer composition", () : any => {
       requestDigest: createHash("sha256").update("invalid-restart-candidate").digest("hex")
     });
 
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const platformRoot: any = await temporaryRoot();
     const platform: any = await createOperationPermissionPlatform({
       userDataPath: platformRoot,

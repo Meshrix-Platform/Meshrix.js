@@ -18,6 +18,7 @@ import {
   getRouteIndexRefactorInstrumentation
 } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanupTasks: any[] = [];
 
@@ -185,7 +186,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
         }
       }
     }));
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath,
       mcpSessionManager: {
         listTools,

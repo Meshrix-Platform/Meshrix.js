@@ -12,6 +12,7 @@ import { createUpstreamGatewayRegistry, compileUpstreamOperationProjection } fro
 import { createPlatformMcpGateway } from "../../../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { structuredUpstreamServiceFixture, installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanup: Array<() => Promise<unknown>> = [];
 
@@ -82,7 +83,7 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
     const address = peer.address();
     if (!address || typeof address === "string") throw new Error("configured-operation peer did not bind");
 
-    const registry = createUpstreamGatewayRegistry();
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [structuredUpstreamServiceFixture({
       serviceId,

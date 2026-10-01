@@ -19,6 +19,7 @@ import { readAuthorizedMcpToolSelection } from "../../../../packages/server-runt
 import { compileUpstreamOperationProjection, createUpstreamGatewayRegistry } from "../../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanup: Array<() => Promise<unknown>> = [];
 
@@ -132,7 +133,7 @@ describe("platform MCP key selection closure", () => {
 
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-key-selection-"));
     cleanup.push(() => fs.rm(tempRoot, { recursive: true, force: true }));
-    const registry = createUpstreamGatewayRegistry();
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     const portableWriteDescriptor = {
       serviceProtocol: "mcp",

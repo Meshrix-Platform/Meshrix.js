@@ -22,6 +22,7 @@ import {
   resolveMcpServiceConfigWithCredentials
 } from "../../../packages/agents/src/upstream-gateway/credential-material.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("upstream publishing sensitive-reference custody", () : any => {
   it("does not reflect duplicate caller-controlled keys in parser errors", () : any => {
@@ -42,7 +43,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       callTool: vi.fn(async () : Promise<any> => ({ result: {} })),
       close: vi.fn(async () : Promise<any> => {})
     };
-    const registry: any = createUpstreamGatewayRegistry({ mcpSessionManager: sessionManager });
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), mcpSessionManager: sessionManager });
     installUpstreamRuntimeServices(registry, [{
       serviceId: "sensitive-reference-fixture",
       serviceProtocol: "mcp",

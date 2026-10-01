@@ -4,6 +4,7 @@ import { createUpstreamGatewayRegistry } from "../../../../packages/agents/src/u
 import { createPlatformMcpGateway } from "@meshrix/server-runtime/composition/gateway-composition";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { while (cleanup.length) await cleanup.pop()!(); });
@@ -33,7 +34,7 @@ describe("configured default platform upstream transport", () => {
     if (!address || typeof address === "string") throw new Error("peer has no TCP address");
     const legacyForward = vi.fn(() => { throw new Error("old forwarder must not run"); });
     const recursiveSchema = { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", $defs: { payload: { type: "object", properties: { value: { type: "string", minLength: 1 }, next: { $ref: "#/$defs/payload" } }, required: ["value"] } }, properties: { payload: { $ref: "#/$defs/payload" } }, required: ["payload"] };
-    const registry = createUpstreamGatewayRegistry();
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [{ serviceId: "synthetic", serviceProtocol: "mcp", label: "synthetic", allowLocalNetwork: true,
       operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
@@ -98,7 +99,7 @@ describe("configured default platform upstream transport", () => {
     cleanup.push(() => new Promise<void>((resolve) => peer.close(() => resolve())));
     const address = peer.address();
     if (!address || typeof address === "string") throw new Error("legacy peer is unavailable");
-    const registry = createUpstreamGatewayRegistry();
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [{ serviceId: "legacy", serviceProtocol: "mcp", label: "legacy", allowLocalNetwork: true,
       operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],

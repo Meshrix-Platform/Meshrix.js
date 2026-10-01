@@ -13,6 +13,7 @@ import { fingerprint } from "../../../packages/agents/src/upstream-gateway/manif
 import { normalizeService } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
 import { modernHttpRequest } from "../gateway/support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const managers: any = new Set<any>();
 const servers: any = new Set<any>();
@@ -231,7 +232,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-exec-lifecycle-"));
     const manager: any = createUpstreamMcpSessionManager();
     managers.add(manager);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: manager
     });
@@ -413,7 +414,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-exec-capacity-"));
     const manager: any = createUpstreamMcpSessionManager({ maxSessions: 2 });
     managers.add(manager);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: manager
     });
@@ -577,7 +578,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-exec-grant-"));
     const manager: any = createUpstreamMcpSessionManager();
     managers.add(manager);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: manager
     });

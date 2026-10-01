@@ -26,6 +26,7 @@ import { createOperationPermissionPlatform } from "../../packages/capabilities/s
 import { SERVER_API_OPERATIONS } from "../../packages/contracts/src/operations/operation-registry.ts";
 import { resolveLocalSecretPayload } from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
 import { createOperationProofSubstrate } from "../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createGatewaySchemaPort } from "../../packages/server-runtime/src/composition/gateway-schema-port.ts";
 import { createUpstreamMcpSessionManager } from "../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
@@ -472,6 +473,7 @@ try {
 
   registry = createUpstreamGatewayRegistry({
     userDataPath,
+    schemaPort: createGatewaySchemaPort(),
     claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ verifier: true })
   });
   const manifestLoad: any = await loadVerifierPublishedServices({ userDataPath, registry });
