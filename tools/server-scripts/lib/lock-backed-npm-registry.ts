@@ -4,6 +4,7 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 
 function packageNameFromLockPath(packagePath?: any) : any {
   const marker: any = "node_modules/";
@@ -45,6 +46,9 @@ async function verifyCachedArtifact(filePath?: any, expectedDigest?: any) : Prom
 }
 
 function registryVersionMetadata(name?: any, meta?: any, artifact?: any) : any {
+  const scripts: any = meta.scripts && typeof meta.scripts === "object" ? meta.scripts : {};
+  const hasInstallScript: any = meta.hasInstallScript === true
+    || ["preinstall", "install", "postinstall"].some((name?: any) : any => typeof scripts[name] === "string");
   return Object.fromEntries((Object.entries({
     name,
     version: meta.version,
@@ -56,12 +60,64 @@ function registryVersionMetadata(name?: any, meta?: any, artifact?: any) : any {
     cpu: meta.cpu,
     os: meta.os,
     bin: meta.bin,
+    ...(hasInstallScript ? { hasInstallScript: true } : {}),
     dist: {
       integrity: meta.integrity,
       shasum: artifact.sha1,
       tarballKey: artifact.key
     }
   }) as [string, any][]).filter(([, value]: any[]) : any => value !== undefined));
+}
+
+function readTarNumber(header?: any, start?: any, length?: any) : any {
+  const text: any = Buffer.from(header).subarray(start, start + length).toString("ascii").replace(/\0.*$/u, "").trim();
+  return text ? Number.parseInt(text, 8) : 0;
+}
+
+function parsePaxPath(buffer?: any) : any {
+  let offset: any = 0;
+  while (offset < buffer.length) {
+    const separator: any = buffer.indexOf(0x20, offset);
+    if (separator < 0) return "";
+    const recordLength: any = Number.parseInt(buffer.subarray(offset, separator).toString("ascii"), 10);
+    if (!Number.isInteger(recordLength) || recordLength <= 0 || offset + recordLength > buffer.length) return "";
+    const record: any = buffer.subarray(separator + 1, offset + recordLength - 1).toString("utf8");
+    if (record.startsWith("path=")) return record.slice("path=".length);
+    offset += recordLength;
+  }
+  return "";
+}
+
+export function packageManifestFromTarball(bytes?: any) : any {
+  const archive: any = gunzipSync(bytes);
+  let offset: any = 0;
+  let paxPath: any = "";
+  while (offset + 512 <= archive.length) {
+    const header: any = archive.subarray(offset, offset + 512);
+    if (header.every((byte?: any) : any => byte === 0)) break;
+    const name: any = header.subarray(0, 100).toString("utf8").replace(/\0.*$/u, "");
+    const prefix: any = header.subarray(345, 500).toString("utf8").replace(/\0.*$/u, "");
+    const headerPath: any = paxPath || (prefix ? `${prefix}/${name}` : name);
+    const size: any = readTarNumber(header, 124, 12);
+    const contentStart: any = offset + 512;
+    const contentEnd: any = contentStart + size;
+    assert.ok(contentEnd <= archive.length, "npm_package_tarball_invalid");
+    const type: any = String.fromCharCode(header[156] || 0);
+    const content: any = archive.subarray(contentStart, contentEnd);
+    if (type === "x" || type === "g") {
+      paxPath = parsePaxPath(content);
+    } else {
+      if (headerPath === "package/package.json") {
+        assert.ok(type === "0" || type === "\0", "npm_package_tarball_manifest_invalid");
+        const manifest: any = JSON.parse(content.toString("utf8"));
+        assert.ok(manifest && typeof manifest === "object" && !Array.isArray(manifest), "npm_package_tarball_manifest_invalid");
+        return manifest;
+      }
+      paxPath = "";
+    }
+    offset = contentStart + Math.ceil(size / 512) * 512;
+  }
+  throw new Error("npm_package_tarball_manifest_missing");
 }
 
 function parseRegistryPackageRequest(pathname?: any) : any {
@@ -121,18 +177,23 @@ async function extraTarballMetadata(tarballPath?: any) : Promise<any> {
     stream.once("end", resolve);
   });
   const digest: any = sha512.digest();
+  const bytes: any = await fs.readFile(tarballPath);
   return {
     size,
     sha1: sha1.digest("hex"),
     key: digest.toString("hex"),
-    integrity: `sha512-${digest.toString("base64")}`
+    integrity: `sha512-${digest.toString("base64")}`,
+    manifest: packageManifestFromTarball(bytes)
   };
 }
 
 export async function createLockBackedNpmRegistry({
   lockPath,
   cacheRoot,
-  extraTarballs = []
+  extraTarballs = [],
+  host = "127.0.0.1",
+  port = 0,
+  advertisedOrigin = ""
 }: Record<string, any>) : Promise<any> {
   const lock: any = JSON.parse(await fs.readFile(lockPath, "utf8"));
   const packages: any = new Map<any, any>();
@@ -163,32 +224,26 @@ export async function createLockBackedNpmRegistry({
     };
     registerLockPackage(packages, tarballs, name, version, meta, artifact);
   }
-  assert.ok(packages.size > 0 && tarballs.size > 0, "npm_package_lock_registry_empty");
   for (const extra of Array.isArray(extraTarballs) ? extraTarballs : []) {
     const name: any = String(extra?.name || "");
     const version: any = String(extra?.version || "");
     const tarballPath: any = String(extra?.tarballPath || "");
     assert.ok(name && version && tarballPath, "npm_package_extra_tarball_incomplete");
     const hashed: any = await extraTarballMetadata(tarballPath);
+    assert.equal(hashed.manifest.name, name, "npm_package_extra_tarball_name_mismatch");
+    assert.equal(hashed.manifest.version, version, "npm_package_extra_tarball_version_mismatch");
     const artifact: Record<string, any> = {
       key: hashed.key,
       path: tarballPath,
       size: hashed.size,
       sha1: hashed.sha1
     };
-    tarballs.set(artifact.key, artifact);
-    const versions: any = packages.get(name) || new Map<any, any>();
-    versions.set(version, {
-      name,
-      version,
-      dist: {
-        integrity: hashed.integrity,
-        shasum: hashed.sha1,
-        tarballKey: artifact.key
-      }
-    });
-    packages.set(name, versions);
+    registerLockPackage(packages, tarballs, name, version, {
+      ...hashed.manifest,
+      integrity: hashed.integrity
+    }, artifact);
   }
+  assert.ok(packages.size > 0 && tarballs.size > 0, "npm_package_lock_registry_empty");
 
   const server: any = createServer((request?: any, response?: any) : any => {
     const requestUrl: any = new URL(request.url || "/", "http://127.0.0.1");
@@ -228,7 +283,7 @@ export async function createLockBackedNpmRegistry({
       return;
     }
     const address: any = server.address();
-    const origin: any = `http://127.0.0.1:${address.port}`;
+    const origin: any = advertisedOrigin || `http://127.0.0.1:${address.port}`;
     const renderVersion: any = (version?: any, metadata?: any) : any => ({
       ...metadata,
       dist: {
@@ -275,11 +330,12 @@ export async function createLockBackedNpmRegistry({
   });
   await new Promise((resolve?: any, reject?: any) : any => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
+    server.listen(port, host, resolve);
   });
   const address: any = server.address();
+  const origin: any = advertisedOrigin || `http://127.0.0.1:${address.port}`;
   return {
-    registry: `http://127.0.0.1:${address.port}/`,
+    registry: `${origin.replace(/\/$/u, "")}/`,
     packageCount: packages.size,
     artifactCount: tarballs.size,
     close: () : any => new Promise((resolve?: any, reject?: any) : any =>
