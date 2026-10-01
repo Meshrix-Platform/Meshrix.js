@@ -40,9 +40,26 @@ The console can load a portable service document with kind
 `serviceKey` and the complete service `descriptor`. File selection and validation
 are local operations. Import loads the validated document into the editable
 draft. The ordinary **Publish** action is the only submission path: it submits
-the existing authenticated publishing command, waits for `server_published`,
-and then runs the service health check. Import never starts a service, installs
-a plugin, or embeds credential material.
+the existing authenticated publishing command and then observes the accepted
+publication until `server_published`, after which it runs the service health
+check. Import never starts a service, installs a plugin, or embeds credential
+material.
+
+The Console observes an accepted publication with one view-owned, cancellable
+observer per retained service id and accepted service revision. The observer
+owns its status-query request and interval timer and has no attempt or business
+deadline: a slow publication keeps observing until the retained revision
+publishes. Unmount, navigation, selection change, explicit stop, or replacement
+disposes the owned request and timer without cancelling the accepted server
+publication, which keeps running. A status-query failure only interrupts the
+observation and leaves the accepted state visible with an explicit resume
+action; resuming queries the retained revision again and a stale observer
+result never advances a newer selection. Only authoritative server facts settle
+the projection: the retained revision reaching `server_published` advances to
+the runtime health check, while the revision being superseded or removed is the
+separate authoritative failure. An observation interruption, an authoritative
+publication failure, and the independent runtime-health result are three
+distinct projections.
 
 Every HTTP or JSON-RPC operation now publishes an explicit `payloadTransport`
 contract. The request representation is explicit; an HTTP operation may omit

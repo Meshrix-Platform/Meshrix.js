@@ -30,7 +30,7 @@ const publishClient: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn(),
 }));
 const pageRefreshHandler: any = vi.hoisted(() : any => vi.fn());
@@ -157,7 +157,7 @@ beforeEach(() : any => {
     manifestDigest: "a".repeat(64), receiptRef: "urn:meshrix:receipt:fixture",
     publication: publication(1), replayed: false,
   });
-  publishClient.waitForUpstreamServicePublication.mockResolvedValue({
+  publishClient.observeUpstreamServicePublication.mockResolvedValue({
     ok: true, setRevision: 1,
     service: {
       serviceId: "svc_fixture", state: "server_published", serviceRevision: 1,
@@ -184,7 +184,11 @@ describe("publish success forward links", () : any => {
         references: [],
       },
     });
-    publishClient.republishUpstreamService.mockResolvedValue({ ok: true });
+    publishClient.republishUpstreamService.mockResolvedValue({
+      ok: true, serviceId: "svc_fixture", state: "publishing", serviceRevision: 2, setRevision: 2,
+      manifestDigest: "b".repeat(64), receiptRef: "urn:meshrix:receipt:republish",
+      publication: publication(2), replayed: false,
+    });
     const router = createRouter({ history: createWebHashHistory(), routes: [{ path: "/", component: { render: () => null } }] });
     await router.push("/?serviceId=svc_fixture"); await router.isReady();
     const wrapper: any = mount(UpstreamServicePublishView, { attachTo: document.body, global: { plugins: [router] } });
@@ -197,7 +201,10 @@ describe("publish success forward links", () : any => {
     (document.activeElement as HTMLElement)?.blur();
     await flushPromises(); await flushPromises();
     expect(publishClient.republishUpstreamService).toHaveBeenCalledTimes(1);
-    expect(publishClient.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
+    expect(publishClient.observeUpstreamServicePublication).toHaveBeenCalledWith(
+      { serviceId: "svc_fixture", serviceRevision: 2 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(publishClient.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
     expect(wrapper.find('[data-testid="publish-success-links"] a').attributes("href")).toBe("#/admin/api-key-distribution");
     expect(document.activeElement).toBe(button.element);
