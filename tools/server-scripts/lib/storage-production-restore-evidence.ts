@@ -56,6 +56,7 @@ export function createStorageProductionRestoreReadiness(report: Record<string, a
     : [];
   const evidence: any = asRecord(record.evidence);
   const runbookPromotion: any = asRecord(operatorEvidence.runbookPromotion);
+  const offlineCli: any = asRecord(operatorEvidence.offlineCli);
   const reasons: any[] = [];
 
   addIfFalse(reasons, record.schemaVersion === STORAGE_PRODUCTION_RESTORE_REPORT_SCHEMA_VERSION, "storage-production-restore-schema-mismatch");
@@ -107,6 +108,14 @@ export function createStorageProductionRestoreReadiness(report: Record<string, a
   addIfFalse(reasons, evidence.secretCustodyExcluded === true && summary.secretCustodyExcluded === true, "storage-production-restore-secret-custody-not-excluded");
   addIfFalse(reasons, evidence.restoreIntegrityVerified === true && summary.restoreIntegrityVerified === true, "storage-production-restore-file-integrity-not-verified");
   addIfFalse(reasons, evidence.onlineRestoreRejected === true && summary.onlineRestoreRejected === true, "storage-production-restore-online-restore-not-rejected");
+  addIfFalse(reasons, summary.offlineCliRestoreVerified === true && evidence.offlineCliRestoreVerified === true, "storage-production-restore-offline-cli-not-verified");
+  addIfFalse(reasons, summary.offlineCliActiveOwnerRefusalVerified === true && evidence.offlineCliActiveOwnerRefusalVerified === true, "storage-production-restore-offline-cli-active-owner-not-rejected");
+  addIfFalse(reasons, evidence.offlineCliPreservedGovernedState === true, "storage-production-restore-offline-cli-state-not-preserved");
+  addIfFalse(reasons, evidence.offlineCliPreservedIndependentKeys === true, "storage-production-restore-offline-cli-key-custody-not-preserved");
+  addIfFalse(reasons, offlineCli.previewSucceeded === true && offlineCli.previewWasReadOnly === true && offlineCli.previewIntegrityVerified === true, "storage-production-restore-offline-cli-preview-not-verified");
+  addIfFalse(reasons, offlineCli.applySucceeded === true && offlineCli.applyWasApplied === true && offlineCli.applyIntegrityVerified === true, "storage-production-restore-offline-cli-apply-not-verified");
+  addIfFalse(reasons, offlineCli.activeOwnerErrorCode === "storage_restore_runtime_active" && offlineCli.activeOwnerDataPreserved === true, "storage-production-restore-offline-cli-active-owner-data-not-preserved");
+  addIfFalse(reasons, Number(offlineCli.maxOutputBytes || 0) > 0 && Number(offlineCli.maxOutputBytes) <= 2048, "storage-production-restore-offline-cli-output-not-bounded");
   addIfFalse(reasons, selectedBackend.protocolVersion === "v0.0.1:storage:core-2", "storage-production-restore-storage-protocol-mismatch");
   addIfFalse(reasons, selectedBackend.backupProtocolVersion === "v0.0.1:storage:backup-restore-1", "storage-production-restore-backup-protocol-mismatch");
 

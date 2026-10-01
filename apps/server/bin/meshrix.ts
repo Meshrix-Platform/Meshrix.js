@@ -5,6 +5,7 @@ import { runSecretCommand } from "./lib/meshrix-cli-secrets.ts";
 import { runSecurityCommand } from "./lib/meshrix-cli-security.ts";
 import { runUpload } from "./lib/meshrix-cli-upload.ts";
 import { runGatewayCommand } from "./lib/meshrix-cli-gateway.ts";
+import { runStorageCommand } from "./lib/meshrix-cli-storage.ts";
 
 function parseArgs(argv?: any) : any {
   const args: Record<string, any> = {
@@ -74,6 +75,7 @@ function usage() : any {
     "  meshrix security binding-guard status [--binding-backend local-file] [--binding-alias meshrix-tool-bindings]",
     "  meshrix security recovery export --output recovery.json --passphrase-stdin",
     "  meshrix security recovery import --input recovery.json --passphrase-stdin",
+    "  meshrix storage restore --data-dir PATH --backup-id ID [--apply --confirm]",
     "  meshrix tools catalog|toolsets|toolsets resolve|execute|dry-run|audit|metrics ...",
     "  meshrix tools metrics [--tool-id ID] [--grant-id ID] [--profile-id ID] [--route PATH] [--transport mcp|http|operation-permission] [--bucket-seconds N]",
     "  meshrix tools metrics export [--kind all|tool|request] [--grant-id ID] [--profile-id ID] [--output metrics.json]",
@@ -134,6 +136,10 @@ async function main() : Promise<any> {
   }
 
   if (await runGatewayCommand(args)) {
+    return;
+  }
+
+  if (await runStorageCommand(args)) {
     return;
   }
 
