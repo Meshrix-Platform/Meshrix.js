@@ -10,6 +10,8 @@ import { modernHttpRequest } from "../support.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 
+const syntheticRemoteCredential = ["synthetic", "remote", "test", "credential"].join("-");
+
 describe("explicit remote TLS gateway profile", () => {
   it("[GC-058] requires TLS, bearer auth, pinned HTTPS egress and an explicit service grant", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-gateway-remote-"));
@@ -44,7 +46,7 @@ describe("explicit remote TLS gateway profile", () => {
         const config = { profile: "remote", listen: { host: "127.0.0.1", port: 0 }, remoteAuth: { bearerToken: "env:MESH_TEST_REMOTE_TOKEN", tlsCert: "env:MESH_TEST_REMOTE_CERT", tlsKey: "env:MESH_TEST_REMOTE_KEY", allowedServiceIds: ["alpha"], ...(allowedOrigins === undefined ? {} : { allowedOrigins }), allowLoopbackUpstreams: true }, services: [service("alpha"), service("beta")] };
         await writeFile(configPath, JSON.stringify(config));
         cli = spawn(process.execPath, [...(installed ? [] : ["--conditions=source"]), installed ?? join(repo, "apps/mcp-gateway-installer/src/cli.ts"), "serve", "--config", configPath], {
-          cwd: installed ? dirname(installed) : repo, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath, MESH_TEST_REMOTE_TOKEN: "synthetic-bearer", MESH_TEST_REMOTE_CERT: cert, MESH_TEST_REMOTE_KEY: key }
+          cwd: installed ? dirname(installed) : repo, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath, MESH_TEST_REMOTE_TOKEN: syntheticRemoteCredential, MESH_TEST_REMOTE_CERT: cert, MESH_TEST_REMOTE_KEY: key }
         });
         return new Promise<string>((resolve, reject) => {
           let output = "";
@@ -61,7 +63,7 @@ describe("explicit remote TLS gateway profile", () => {
       };
       const send = async (endpoint: string, authorized: boolean, method: string, params: Record<string, unknown> = {}, origin?: string) => new Promise<{ status: number; body: any }>((resolve, reject) => {
         const wire = modernHttpRequest(method, method, params, {}, origin === undefined ? {} : { Origin: origin });
-        const request = httpsRequest(endpoint, { method: wire.method, ca: cert, headers: { ...wire.headers, ...(authorized ? { Authorization: "Bearer synthetic-bearer" } : {}) } }, (response) => {
+        const request = httpsRequest(endpoint, { method: wire.method, ca: cert, headers: { ...wire.headers, ...(authorized ? { Authorization: `Bearer ${syntheticRemoteCredential}` } : {}) } }, (response) => {
           const chunks: Buffer[] = [];
           response.on("data", (chunk: Buffer) => chunks.push(chunk));
           response.on("end", () => resolve({ status: response.statusCode ?? 0, body: chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null }));

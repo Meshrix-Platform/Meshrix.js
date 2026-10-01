@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { isInternalSourcePackagePath } from "../../../tools/server-scripts/lib/source-package-contract.ts";
 
 import { describe, expect, it } from "vitest";
 
@@ -16,6 +17,11 @@ const packageScripts: any = Object.keys(
 );
 
 describe("package script registry declarations", () : any => {
+  it("distinguishes explicit repository-only source from required product tooling", () => {
+    expect(isInternalSourcePackagePath("tools/server-scripts/benchmark-gateway.ts")).toBe(true);
+    expect(isInternalSourcePackagePath("tools/server-scripts/start-server.ts")).toBe(false);
+    expect(isInternalSourcePackagePath("tools/server-scripts/benchmark-gateway.ts.bak")).toBe(false);
+  });
   it("does not classify an undeclared name merely because it has a known prefix", () : any => {
     expect(isClassified("verify:undeclared-fixture")).toBe(false);
     expect(isClassified("server:verify:undeclared-fixture")).toBe(false);

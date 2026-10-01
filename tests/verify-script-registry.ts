@@ -25,6 +25,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { isInternalSourcePackagePath } from "../tools/server-scripts/lib/source-package-contract.ts";
 import { scanPublicArtifactFiles } from "../tools/server-scripts/lib/public-artifact-boundary.ts";
 import { packageIncludedMismatches } from "../tools/scripts/package-layout-verification.ts";
 import {
@@ -855,11 +856,11 @@ function assertNoInternalPackFiles(packRecords: any = [], source: any = "npm pac
   for (const record of packRecords) {
     for (const file of record.files || []) {
       const packedPath: any = normalizePackPath(file.path);
-      if (FORBIDDEN_PACKAGED_INTERNAL_PATH_PATTERN.test(packedPath)) {
+      if (FORBIDDEN_PACKAGED_INTERNAL_PATH_PATTERN.test(packedPath) || isInternalSourcePackagePath(packedPath)) {
         packagePackFindings.push({
           source: `${record.name || source}:${packedPath}`,
           kind: "internal-file-packaged",
-          detail: "published tarballs must not include docs/plans or docs/reports"
+          detail: "published tarballs must exclude canonical repository-only source"
         });
       }
     }
@@ -910,7 +911,9 @@ if (packResult.status !== 0) {
     }
   }
   for (const requiredPath of [...requiredPackSources].sort()) {
-    if (!packedFiles.has(requiredPath)) {
+    // Repository-only helpers follow the canonical exclusion policy. Every
+    // other referenced source remains required in the public package.
+    if (!isInternalSourcePackagePath(requiredPath) && !packedFiles.has(requiredPath)) {
       packagePackFindings.push({
         source: requiredPath,
         kind: "package-script-source-missing-from-tarball",
