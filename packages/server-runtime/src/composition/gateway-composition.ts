@@ -1011,7 +1011,10 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
       method: request.method
     });
     if (authorization?.ok !== true) {
-      throw Object.assign(new Error(text(authorization?.error || "MCP authorization failed.")), {
+      // The refusal carries the platform's stable reason code; provider diagnostic
+      // text stays out of the thrown error and the public response.
+      logger?.warn?.("gateway.authentication.denied", { code: text(authorization?.reasonCode || "mcp_authorization_denied") });
+      throw Object.assign(new Error("MCP authorization failed."), {
         status: Number(authorization?.status || 401),
         code: text(authorization?.reasonCode || "mcp_authorization_denied")
       });

@@ -119,8 +119,7 @@ function failureResponse(id: unknown, outcome: GatewayOutcome, method?: string):
   const status = outcome.status === 401 || outcome.status === 403 || outcome.status === 404 || outcome.status === 429 ? outcome.status : 200;
   const peerCode = outcome.origin === "peer" && outcome.code === "upstream_jsonrpc_error" && typeof outcome.details?.errorCode === "number" && Number.isSafeInteger(outcome.details.errorCode)
     ? outcome.details.errorCode : code;
-  const peerData = outcome.origin === "peer" && outcome.code === "upstream_jsonrpc_error" && isPlainRecord(outcome.details?.errorData) ? outcome.details.errorData : {};
-  return json(status, rpcError(id, peerCode, outcome.message, { ...peerData, code: outcome.code, effectOutcome: outcome.effectOutcome,
+  return json(status, rpcError(id, peerCode, outcome.message, { code: outcome.code, effectOutcome: outcome.effectOutcome,
     ...(typeof outcome.details?.receiptId === "string" ? { receiptId: outcome.details.receiptId } : {}) }));
 }
 
@@ -471,11 +470,18 @@ export class ModernDownstreamAdapter {
     } catch (error) {
       const status = Number((error as { status?: unknown; statusCode?: unknown })?.status ?? (error as { statusCode?: unknown })?.statusCode ?? 401);
       const safeStatus = Number.isInteger(status) && status >= 400 && status <= 599 ? status : 401;
-      const message = error instanceof Error ? error.message : "MCP authentication failed.";
-      // The platform's reason code travels with the refusal, exactly as it does on a
-      // denied invocation, so a peer reads why the credential was rejected instead of
-      // inferring it from the transport status.
-      const code = String((error as { code?: unknown })?.code ?? "").trim();
+      // Authentication failures use a closed public message by status class. The
+      // platform's stable reason code may travel with the refusal so a peer reads
+      // why the credential was rejected; arbitrary exception text never does.
+      const message = safeStatus === 403
+        ? "Access denied."
+        : safeStatus === 429
+          ? "Too many requests."
+          : safeStatus === 503
+            ? "Authentication is unavailable."
+            : "Authentication failed.";
+      const reasonCode = String((error as { code?: unknown })?.code ?? "").trim();
+      const code = /^[a-z][a-z0-9_]{0,63}$/u.test(reasonCode) ? reasonCode : undefined;
       return json(safeStatus, rpcError(id, safeStatus === 403 ? -32003 : -32001, message, code ? { code } : undefined));
     }
     if (!context) return json(401, rpcError(id, -32001, "Authenticated context is required."));

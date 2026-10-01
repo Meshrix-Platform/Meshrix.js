@@ -13,6 +13,7 @@ import type {
   GatewayFailure,
   GatewayOutcome,
   GatewayPolicyPort,
+  GatewayPublicFailureCode,
   GatewayStats,
   Invocation,
   PermitAuthorityPort,
@@ -25,6 +26,7 @@ import type {
   UpstreamPort,
   UpstreamResponse
 } from "@meshrix/contracts/gateway";
+import { GATEWAY_PUBLIC_FAILURES } from "@meshrix/contracts/gateway";
 import { CatalogStore } from "./catalog/index.ts";
 import { createContinuationCodec, continuationParamsDigest, EncryptedContinuationCodec } from "./continuations/index.ts";
 import { UpstreamAdmissionController, createUpstreamAdmission } from "./admission/index.ts";
@@ -103,11 +105,42 @@ function contextFailure(): GatewayFailure {
   return failure({ origin: "policy", code: "authenticated_context_required", message: "A trusted authenticated context is required.", status: 401, effectOutcome: "not_started" });
 }
 
+/**
+ * Stable public fallback per failure origin. Used when a thrown error is not a
+ * declared kernel failure, so arbitrary exception text, codes, statuses and
+ * causes never cross the public boundary.
+ */
+const ORIGIN_FAILURE_FALLBACK = Object.freeze({
+  transport: { code: "transport_failed", message: "The upstream request failed.", status: 502 },
+  protocol: { code: "protocol_failed", message: "The gateway could not complete the protocol request.", status: 502 },
+  peer: { code: "upstream_peer_failed", message: "The upstream peer request failed.", status: 502 },
+  policy: { code: "policy_evaluation_failed", message: "Authorization could not be evaluated.", status: 503 },
+  schema: { code: "schema_processing_failed", message: "The payload could not be validated against its schema.", status: 502 },
+  admission: { code: "admission_failed", message: "The request could not be admitted for execution.", status: 503 },
+  continuation: { code: "continuation_failed", message: "Continuation state could not be used.", status: 409 },
+  configuration: { code: "configuration_unavailable", message: "A required gateway dependency is unavailable.", status: 503 },
+  lifecycle: { code: "gateway_unavailable", message: "The gateway is not available.", status: 503 }
+} as const satisfies Readonly<Record<GatewayFailure["origin"], { readonly code: string; readonly message: string; readonly status: number }>>);
+
+function declaredPublicFailureCode(error: unknown): GatewayPublicFailureCode | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && Object.hasOwn(GATEWAY_PUBLIC_FAILURES, code) ? code as GatewayPublicFailureCode : undefined;
+}
+
 function failureFromError(error: unknown, origin: GatewayFailure["origin"], effectOutcome: GatewayFailure["effectOutcome"]): GatewayFailure {
-  const candidate = error as { code?: unknown; status?: unknown; statusCode?: unknown; message?: unknown };
-  const code = typeof candidate?.code === "string" && candidate.code ? candidate.code : "gateway_operation_failed";
-  const statusValue = Number(candidate?.status ?? candidate?.statusCode ?? 500);
-  return failure({ origin, code, message: typeof candidate?.message === "string" ? candidate.message : "Gateway operation failed.", status: Number.isSafeInteger(statusValue) && statusValue >= 400 ? statusValue : 500, effectOutcome });
+  if (isGatewayFailure(error) && Object.isFrozen(error)) return failure({ ...error, origin, effectOutcome });
+  if (error instanceof Error && error.name === "AbortError") {
+    const cancelled = GATEWAY_PUBLIC_FAILURES.operation_cancelled;
+    return failure({ origin, code: "operation_cancelled", message: cancelled.message, status: cancelled.status, effectOutcome });
+  }
+  const declared = declaredPublicFailureCode(error);
+  if (declared) {
+    const entry = GATEWAY_PUBLIC_FAILURES[declared];
+    return failure({ origin, code: declared, message: entry.message, status: entry.status, effectOutcome });
+  }
+  const fallback = ORIGIN_FAILURE_FALLBACK[origin];
+  return failure({ origin, code: fallback.code, message: fallback.message, status: fallback.status, effectOutcome });
 }
 
 function normalizePortResult(value: unknown): UpstreamResult | GatewayFailure {
@@ -124,15 +157,18 @@ function currentCredentialGeneration(context: AuthenticatedContext): string {
   return String(facts.credentialGeneration ?? facts.metadata?.credentialGeneration ?? context.grant.credentialGeneration ?? context.authGeneration);
 }
 
+const SCHEMA_FAILURE_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
+
 function schemaFailure(error: unknown, phase: "input" | "output", effectOutcome: GatewayFailure["effectOutcome"]): GatewayFailure {
   if (error instanceof GatewaySchemaError) {
+    const code = SCHEMA_FAILURE_CODE.test(error.code) ? error.code : "schema_validation_failed";
     return failure({
       origin: "schema",
-      code: error.code,
+      code,
       message: error.message,
       status: phase === "input" ? 400 : 502,
       effectOutcome,
-      details: Object.freeze({ phase, ...error.details })
+      details: Object.freeze({ phase })
     });
   }
   return failureFromError(error, "schema", effectOutcome);
@@ -212,18 +248,6 @@ function isFatalUpstreamStatus(status: number | undefined): boolean {
   return status === 404 || (status !== undefined && status >= 500);
 }
 
-function safePeerData(value: unknown, depth = 0): unknown {
-  if (depth > 4) return undefined;
-  if (typeof value === "string") return value.length <= 1024 && !/(bearer\s+|-----BEGIN|\/Users\/|[A-Za-z]:\\Users\\)/iu.test(value) ? value : undefined;
-  if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
-  if (Array.isArray(value)) return value.length <= 32 ? value.map((item) => safePeerData(item, depth + 1)) : undefined;
-  if (!isPlainRecord(value) || Object.keys(value).length > 32) return undefined;
-  return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !/(password|secret|token|credential|authorization|cookie|stack|ciphertext)/iu.test(key))
-    .map(([key, entry]) => [key, safePeerData(entry, depth + 1)])
-    .filter(([, entry]) => entry !== undefined));
-}
-
 function withReceipt(outcome: GatewayFailure, permit: ExecutionPermit): GatewayFailure {
   return failure({ ...outcome, details: { ...outcome.details, receiptId: permit.id } });
 }
@@ -231,10 +255,10 @@ function withReceipt(outcome: GatewayFailure, permit: ExecutionPermit): GatewayF
 function responseBody(response: UpstreamResponse): unknown {
   if (isPlainRecord(response.body) && Object.hasOwn(response.body, "error")) {
     const error = response.body.error;
-    const peerCode = isPlainRecord(error) && Number.isSafeInteger(error.code) && Number(error.code) >= -2_147_483_648 && Number(error.code) <= 2_147_483_647 ? error.code : undefined;
-    const data = isPlainRecord(error) ? safePeerData(error.data) : undefined;
-    const message = isPlainRecord(error) ? safePeerData(error.message) : undefined;
-    return failure({ origin: "peer", code: "upstream_jsonrpc_error", message: typeof message === "string" ? message : "Upstream returned a JSON-RPC error.", status: response.status >= 400 ? response.status : 502, effectOutcome: "failed", details: { ...(peerCode === undefined ? {} : { errorCode: peerCode }), ...(data === undefined ? {} : { errorData: data }) } });
+    // The numeric JSON-RPC code is the peer's declared protocol fact. Peer text,
+    // message and arbitrary data are not public authority and are never forwarded.
+    const peerCode = isPlainRecord(error) && Number.isSafeInteger(error.code) && Number(error.code) >= -2_147_483_648 && Number(error.code) <= 2_147_483_647 ? Number(error.code) : undefined;
+    return failure({ origin: "peer", code: "upstream_jsonrpc_error", message: "Upstream returned a JSON-RPC error.", status: response.status >= 400 ? response.status : 502, effectOutcome: "failed", ...(peerCode === undefined ? {} : { details: { errorCode: peerCode } }) });
   }
   if (isPlainRecord(response.body) && Object.hasOwn(response.body, "result")) return response.body.result;
   return response.body;

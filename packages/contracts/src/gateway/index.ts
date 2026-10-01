@@ -166,6 +166,53 @@ export interface NegotiatedExtensionResult {
 
 export type UpstreamResult = CompleteResult | InputRequiredResult | NegotiatedExtensionResult;
 
+/**
+ * Closed public failure vocabulary.
+ *
+ * A failure projected from a thrown error may use only these codes, and its
+ * public message and status come from this table. Internal exception text,
+ * arbitrary codes, peer text and peer data are never forwarded across the
+ * protocol boundary.
+ */
+export const GATEWAY_PUBLIC_FAILURES = Object.freeze({
+  operation_cancelled: { message: "The operation was cancelled.", status: 499 },
+  gateway_closing: { message: "The gateway is not accepting requests.", status: 503 },
+  admission_queue_full: { message: "The upstream admission queue is full.", status: 429 },
+  admission_queue_deadline: { message: "The request expired while waiting for upstream capacity.", status: 429 },
+  admission_queue_deadline_invalid: { message: "The request queue deadline is invalid.", status: 400 },
+  admission_upstream_capacity: { message: "Upstream admission capacity is exhausted.", status: 429 },
+  continuation_invalid: { message: "Continuation state is invalid.", status: 409 },
+  continuation_expired: { message: "Continuation has expired.", status: 410 },
+  continuation_in_progress: { message: "Continuation is already in progress.", status: 409 },
+  continuation_replayed: { message: "Continuation has already been used.", status: 409 },
+  continuation_outcome_unknown: { message: "The continuation outcome is unknown and cannot be replayed.", status: 409 },
+  continuation_capacity: { message: "The continuation replay ledger is full.", status: 503 },
+  final_protected_sink_permit_revoked: { message: "Final protected sink authority was revoked.", status: 403 },
+  governed_execution_permit_unknown_or_replayed: { message: "The execution permit is unknown or already consumed.", status: 409 },
+  api_key_concurrency_limit_reached: { message: "API Key concurrency limit reached.", status: 429 },
+  api_key_rate_limited: { message: "API Key rate limit reached.", status: 429 },
+  api_key_use_limit_reached: { message: "API Key use limit reached.", status: 429 },
+  api_key_inactive: { message: "API Key is inactive.", status: 410 },
+  api_key_policy_denied: { message: "API Key policy denied the operation.", status: 403 },
+  workspace_binding_invalid: { message: "The workspace binding is invalid.", status: 403 },
+  context_unknown: { message: "The business context is unknown or expired.", status: 410 },
+  context_lost: { message: "The business context is no longer recoverable.", status: 410 },
+  context_expired: { message: "The business context is no longer recoverable.", status: 410 },
+  context_closed: { message: "The business context is no longer recoverable.", status: 410 },
+  context_capacity_exceeded: { message: "Business context capacity is exhausted.", status: 429 },
+  permit_port_missing: { message: "An authoritative execution permit is unavailable.", status: 503 }
+} as const);
+
+export type GatewayPublicFailureCode = keyof typeof GATEWAY_PUBLIC_FAILURES;
+
+/** The closed set of facts a public failure may carry in `details`. */
+export interface GatewayFailureDetails {
+  readonly receiptId?: string;
+  /** Bounded numeric JSON-RPC error code declared by the upstream peer. */
+  readonly errorCode?: number;
+  readonly phase?: "input" | "output";
+}
+
 export interface GatewayFailure {
   readonly kind: "failure";
   readonly origin:
@@ -182,8 +229,7 @@ export interface GatewayFailure {
   readonly message: string;
   readonly status: number;
   readonly effectOutcome: EffectOutcome;
-  readonly details?: Readonly<Record<string, unknown>>;
-  readonly cause?: unknown;
+  readonly details?: GatewayFailureDetails;
 }
 
 export type GatewayOutcome = UpstreamResult | GatewayFailure;
