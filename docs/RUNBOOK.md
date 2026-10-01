@@ -175,6 +175,28 @@ commercial or governance risk:
 5. do not require existing private-deployment users to purchase a license or
    accept the upstream's new terms as the migration path.
 
+### Routine version maintenance and automated merge admission
+
+Semver patch/minor Dependabot updates on `nightly` are eligible for the
+existing automation, but a clean scan and a semver label are not admission.
+The auto-merge job requires a current non-dismissed approving review from an
+authorized maintainer on the exact proposed head, plus the named pull-request
+verification and dependency-review checks completed successfully for that same
+head. Review and CI may arrive in either order; eligibility is re-evaluated on
+both the review event and completed CI, and a later changes-requested or
+dismissed review revokes the conclusion. The merge request binds the verified
+head with an expected-head match and never bypasses branch protections or uses
+an administrative override, and no separate approval ledger is maintained.
+
+Evidence ownership follows the common workflow in
+[CONTRIBUTING.md](../CONTRIBUTING.md): the dependency maintainer reviews the
+exact license, governance and advisory changes; the module owner covers
+reachable behavior; the normal reviewer integrates; the schema owner handles
+published-support and data-preserving migration and recovery; and the release
+owner maintains support, security and candidate validity. Operational and
+recovery procedures remain in their owning sections above rather than being
+copied here.
+
 ## Local Startup
 
 One-click start, stop, and restart:

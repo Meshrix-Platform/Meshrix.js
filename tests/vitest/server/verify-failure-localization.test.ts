@@ -134,7 +134,7 @@ describe("pull-request verification feedback", () => {
     expect(packageJson.scripts["test:audit"]).toContain("--report build/test-reports/audit-public.json");
   });
 
-  it("lets Dependabot wait only for checks that actually execute on pull requests", async () => {
+  it("binds Dependabot auto-merge to the exact reviewed revision and executed checks", async () => {
     const workflow = await fs.readFile(
       path.join(repoRoot, ".github/workflows/dependabot-security-automerge.yml"),
       "utf8",
@@ -143,5 +143,12 @@ describe("pull-request verification feedback", () => {
     expect(workflow).toContain("'Dependency review'");
     expect(workflow).not.toContain("'Public platform gate'");
     expect(workflow).not.toContain("'Supply-chain evidence'");
+    expect(workflow).toContain("pull_request_review:");
+    expect(workflow).toContain("dismissed");
+    expect(workflow).toContain("reviews?per_page=100");
+    expect(workflow).toContain('"APPROVED"');
+    expect(workflow).toContain("check-runs?per_page=100");
+    expect(workflow).toContain('--match-head-commit "$head_sha"');
+    expect(workflow).not.toContain("--admin");
   });
 });
