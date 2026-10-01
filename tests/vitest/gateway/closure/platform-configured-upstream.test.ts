@@ -83,7 +83,7 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
     const address = peer.address();
     if (!address || typeof address === "string") throw new Error("configured-operation peer did not bind");
 
-    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), schemaPort: createGatewaySchemaPort() });
+    const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [structuredUpstreamServiceFixture({
       serviceId,

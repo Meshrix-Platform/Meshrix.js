@@ -10,7 +10,7 @@ describe("Console MCP final-effect transport", () => {
   it("[NODE011] defaults to denying a registered MCP write without a final protected-sink permit", async () => {
     let effects = 0;
     const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), mcpSessionManager: { listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object" } }] }),
-      invokeGateway: async () => { effects += 1; return { result: { content: [] } }; }, retireScope: async () => ({ retired: 0 }), close: async () => {} } });
+      invokeGateway: async (_config, _input, options) => { await options?.beforeSend?.(); effects += 1; return { result: { content: [] } }; }, retireScope: async () => ({ retired: 0 }), close: async () => {} } });
     installUpstreamRuntimeServices(registry, [{ serviceId: "console", serviceProtocol: "mcp", label: "console", allowLocalNetwork: true,
       operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] }],
       mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
@@ -31,6 +31,7 @@ describe("Console MCP final-effect transport", () => {
       const wire = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       peerMethods.push(wire.method);
       const result = wire.method === "server/discover" ? { resultType: "complete", supportedVersions: ["2026-07-28"] }
+        : wire.method === "tools/list" ? { resultType: "complete", tools: [{ name: "echo", inputSchema: { type: "object", properties: { value: { type: "string" } } } }] }
         : { resultType: "complete", structuredContent: { value: ++effects }, content: [{ type: "text", text: "peer" }] };
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ jsonrpc: "2.0", id: wire.id, result }));
@@ -76,7 +77,7 @@ describe("Console MCP final-effect transport", () => {
       const structured = await invoke("gateway.forward", { id: "permit-3" }, "http");
       expect(structured).toMatchObject({ status: 200, body: { response: { structuredContent: { value: 3 }, content: [{ text: "peer" }] } } });
       expect(events).toEqual(["claim", "claim", "claim"]);
-      expect(peerMethods).toEqual(["server/discover", "tools/call", "server/discover", "tools/call", "server/discover", "tools/call"]);
+      expect(peerMethods).toEqual(["server/discover", "tools/list", "server/discover", "tools/call", "server/discover", "tools/call", "server/discover", "tools/call"]);
       expect((await invoke("gateway.forward")).status).toBe(403);
       expect((await invoke("gateway.forward", { id: "permit-1" })).status).toBe(403);
       expect((await invoke("gateway.forward", { id: "revoked", revoked: true })).status).toBe(403);

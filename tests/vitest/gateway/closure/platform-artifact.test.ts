@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createUpstreamGatewayRegistry } from "../../../../packages/agents/src/upstream-gateway/index.ts";
+import { createUpstreamGatewayRegistry, compileUpstreamOperationProjection } from "../../../../packages/agents/src/upstream-gateway/index.ts";
 import { createPlatformMcpGateway } from "@meshrix/server-runtime/composition/gateway-composition";
 import { createArtifactTransitProvider } from "../../../../packages/server-runtime/src/composition/artifact-transit-provider.ts";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
@@ -39,8 +39,16 @@ describe("default platform binary/artifact boundary", () => {
       installUpstreamRuntimeServices(registry, [{ serviceId: "format", serviceProtocol: "http", baseUrl: `http://127.0.0.1:${address.port}`, allowLocalNetwork: true, headers: { "x-context-scope": "synthetic" },
         operations: [{ operationKey: "convert", method: "POST", path: "/convert", risk: "safe_write", requiredScopes: ["gateway:write"], requestSchema: { type: "object", properties: { file: { type: "string" }, targetFormat: { type: "string" } }, required: ["file", "targetFormat"], additionalProperties: false }, payloadTransport: { request: { mode: "artifact_multipart", maxBytes: 1024 * 1024, mediaTypes: ["multipart/form-data"], multipart: { maxParts: 2, artifactParts: [{ argument: "file", partName: "file", required: true }], scalarFields: [{ argument: "targetFormat", partName: "target_format", required: true }] } }, response: { mode: "artifact", maxBytes: 1024 * 1024, mediaTypes: ["application/pdf"], allowRanges: true } } }]
       }]);
+      const projection = compileUpstreamOperationProjection(registry.captureManifestSnapshotState());
+      const subject = { type: "tool-grant", subjectId: "owner", grantId: "grant", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] };
       platform = createPlatformMcpGateway({ upstreamGatewayRegistry: registry,
-        toolSkillManagementProvider: { authorizeMcpClientRequest: async () => ({ ok: true, grant: { id: "grant", revision: "grant", subjectId: "owner", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] }, subject: { type: "tool-grant", subjectId: "owner", grantId: "grant", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] } }), listVisibleTools: async () => [] }
+        toolSkillManagementProvider: { authorizeMcpClientRequest: async () => ({ ok: true, grant: { id: "grant", revision: "grant", subjectId: "owner", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] }, subject: { type: "tool-grant", subjectId: "owner", grantId: "grant", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] } }), listVisibleTools: () => projection.operations.map((operation) => ({ ...operation, ...operation._meta, id: operation.toolId })),
+        async executeTool({ toolId, input, signal }) {
+          const operation = projection.operations.find((entry) => entry.toolId === toolId);
+          if (!operation) throw new Error("Fixture operation is absent.");
+          const result = await registry!.forwardProjectedOperation(operation.id, input, subject, { signal });
+          return { ok: true, status: 200, payload: result.response };
+        } }
       });
       await platform.gateway.start();
       const send = async (method: string, params: Record<string, unknown> = {}) => platform!.adapter.handle(modernHttpRequest(method, method, params));
@@ -48,8 +56,8 @@ describe("default platform binary/artifact boundary", () => {
       const tool = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string } }> } }).result.tools.find((entry) => entry._meta?.serviceId === "format");
       expect(tool, JSON.stringify(listed.body)).toBeDefined();
       const result = await send("tools/call", { name: tool!.name, arguments: { file: "upload:synthetic:0", targetFormat: "pdf" } });
-      const artifactRef = (result.body as { result?: { structuredContent?: { artifact?: { reference?: string } } } }).result?.structuredContent?.artifact?.reference;
-      expect(result.body).toMatchObject({ result: { structuredContent: { artifact: { reference: expect.stringMatching(/^artifact:/u) } } } });
+      const artifactRef = (result.body as { result?: { structuredContent?: { value?: { payload?: { artifact?: { reference?: string } } } } } }).result?.structuredContent?.value?.payload?.artifact?.reference;
+      expect(result.body).toMatchObject({ result: { structuredContent: { value: { upstreamConfiguredOperation: true, payload: { artifact: { reference: expect.stringMatching(/^artifact:/u) } } } } } });
       const multipart = Buffer.concat(received).toString("utf8");
       expect(multipart).toContain('name="target_format"');
       expect(multipart).toContain("pdf");
