@@ -179,6 +179,12 @@ compatibility.
 - Do not accept private keys, bearer values, passwords, or certificate bodies in publishing commands, logs, audit, reports, process arguments, or environment variables.
 - Keep rotation and revocation in the secret authority; a changed reference revision invalidates the affected gateway session generation.
 
+#### Declarative configuration credentials
+
+The server composition may load services from `<userDataPath>/upstream-config/services.json`. This file is protected local configuration input and must be managed separately from the encrypted secret store. An entry without authentication remains unauthenticated; an entry using bearer authentication requires the configured external local-secret key provider. The loader obtains each service identity and authoritative reference set from the publishing application, prepares the complete credential in the local secret store, then submits one ordinary revision-checked create or replace containing the descriptor and typed reference. Credential values and raw configuration are never copied into a publishing command, manifest, audit event, log, or public diagnostic. Non-sensitive MCP request-context headers remain supported; credential-bearing custom header names are rejected.
+
+An unchanged credential reuses its active typed reference. A changed credential is stored under the next service-revision reference, so the existing candidate and published service continue to use the old value until the replacement is accepted. Failed preparation or publication does not invalidate the existing binding, and an unchanged file is retried. Cleanup consults both candidate and published references and revokes only unused entries with their current secret revision; an uncommitted next-revision preparation remains reusable for an idempotent retry. Services are applied one entry at a time; the file does not imply a cross-service transaction.
+
 ### File-system isolation
 
 - Use separate configuration and runtime-state roots.
@@ -303,7 +309,7 @@ The Core JSON report emits only minimum evidence:
 
 Never emit absolute paths, usernames, host identity, service URLs, raw manifests, operation payloads, tag values, grants, tokens, keys, certificates, cookies, ciphertext, or backend rows.
 
-The capability report is evidence input only. Register its command and report with the core acceptance command catalog, required-report validator, readiness reducer, private-deployment aggregate, capability acceptance checkpoint, test registry, package script registry, and repository-local maintenance workflow catalog. Only the platform acceptance reducer may produce the release-ready claim.
+The capability report is evidence input only. Register its command and report with the core acceptance command catalog, required-report validator, readiness reducer, single-node operations closure, capability acceptance checkpoint, test registry, package script registry, and repository-local maintenance workflow catalog. Only the platform acceptance reducer may produce the release-ready claim.
 
 The mandatory pre-release HTML is a separate human-readable projection. Its
 tracked blank template is the public structural contract, not evidence. Change

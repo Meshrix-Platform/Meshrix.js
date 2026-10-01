@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:3942bdd617681187
+ * Hash: sha256:07282d7447a9f418
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:3942bdd617681187";
+export const GENERATED_OPERATIONS_HASH = "sha256:07282d7447a9f418";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -17536,7 +17536,7 @@ export const SERVER_API_OPERATIONS: any = [
       "cost": 2
     },
     "execution": {
-      "timeoutMs": 180000
+      "timeoutMs": null
     },
     "safety": {
       "risk": "safe_write",
@@ -17756,7 +17756,7 @@ export const SERVER_API_OPERATIONS: any = [
       "cost": 2
     },
     "execution": {
-      "timeoutMs": 300000
+      "timeoutMs": null
     },
     "safety": {
       "risk": "safe_write",

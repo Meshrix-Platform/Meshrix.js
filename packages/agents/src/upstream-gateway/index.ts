@@ -128,6 +128,7 @@ export {
   UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
 } from "./publishing-application.ts";
 export type {
+  UpstreamConfigServicePreparation,
   UpstreamPublishingApplication,
   UpstreamPublishingExecuteOptions,
   UpstreamPublishingRequestOptions,
