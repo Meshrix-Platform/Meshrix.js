@@ -365,7 +365,7 @@ async function main() : Promise<any> {
       sourceRevision: await computeVerifierSourceRevision(repoRoot, [
         "packages/agents/src/agent-workspace/agent-workspace-materialization.ts",
         "packages/server-runtime/src/composition/composition-root.ts",
-        "packages/server-runtime/src/jobs/upload-workspace-materialization.ts",
+        "packages/server-runtime/src/jobs/upload-workspace-materialization/engine.ts",
         "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts",
         verifier
       ])

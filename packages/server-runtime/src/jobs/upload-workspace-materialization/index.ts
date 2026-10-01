@@ -1,0 +1,15 @@
+export {
+  createUploadWorkspaceMaterialization,
+  materializationFailureDisposition
+} from "./engine.ts";
+export {
+  DEFINITION_ID,
+  DEFINITION_VERSION,
+  DEFAULT_LEASE_MS,
+  MATERIALIZATION_MAX_ATTEMPTS,
+  MAX_RECONCILE_BATCH,
+  RECONCILE_INDEX,
+  SCHEMA_VERSION,
+  UPLOAD_WORKSPACE_MATERIALIZATION_OPERATION_ID,
+  UPLOAD_WORKSPACE_MATERIALIZATION_SCHEMA_VERSION
+} from "./model.ts";

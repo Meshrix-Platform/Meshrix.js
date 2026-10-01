@@ -4,104 +4,75 @@ import {
   claimFinalProtectedSinkAttempt,
   createFinalProtectedSinkAttempt
 } from "#meshrix/foundation/security/final-protected-sink-permit";
-import { errorProperty } from "./jobs/contracts.ts";
+import { errorProperty } from "../jobs/contracts.ts";
+import {
+  UPLOAD_WORKSPACE_MATERIALIZATION_SCHEMA_VERSION,
+  digest,
+  failure,
+  isMaterializationCommittedState,
+  isMaterializationCompletedState,
+  isMaterializationPrecommitState,
+  isMaterializationRecoveryState,
+  publicationIntentDigest,
+  text,
+  type MaterializationAuthorityDecision,
+  type MaterializationAuthorityPort,
+  type MaterializationAuditPort,
+  type MaterializationClosedAdmissionInput,
+  type MaterializationCommittedState,
+  type MaterializationCustodyReadPort,
+  type MaterializationDurableState,
+  type MaterializationExecutionResult,
+  type MaterializationFaultObserver,
+  type MaterializationFaultPayload,
+  type MaterializationOperationResult,
+  type MaterializationOwner,
+  type MaterializationPreimage,
+  type MaterializationProofEntry,
+  type MaterializationProofPort,
+  type MaterializationProofReceipt,
+  type MaterializationPublication,
+  type MaterializationPublishedReceipt,
+  type MaterializationRecoveryResult,
+  type MaterializationRequestRecord,
+  type MaterializationResolvedOperation,
+  type MaterializationResourcePort,
+  type MaterializationTargetInspection,
+  type MaterializationTransactionPort,
+  type MaterializationWorkspacePort,
+  type MaterializationWorkspaceSession,
+  type PublicationIntent,
+  type PublicationIntentFacts,
+  type PublicationPrepared,
+  type PublicationReservation
+} from "./model.ts";
 
-interface MaterializationRecord {
-  [key: string]: unknown;
-  requestRef?: string; operationId?: string; stage?: string; status?: string; reasonCode?: string;
-  uploadSessionId?: string; workspaceId?: string; expectedWorkspaceRevision?: string;
-  workspaceRevision?: string; checkpointRef?: string; auditRef?: string; proofRef?: string;
-  contentDigest?: string; byteCount?: number; bindingDigest?: string; settlementDigest?: string;
-  logicalTarget?: MaterializationRecord; target?: MaterializationRecord; descriptor?: MaterializationRecord;
-  publication?: MaterializationRecord; preimage?: MaterializationRecord; snapshot?: MaterializationRecord;
-  stateEventAnchor?: MaterializationRecord; subject?: MaterializationRecord;
-  result?: MaterializationRecord; evidence?: MaterializationRecord; receipt?: MaterializationRecord;
-  parentIdentity?: unknown; parentFingerprint?: string; targetStateDigest?: string; anchor?: MaterializationRecord;
-  eventHash?: string; offset?: number; preparedIdentity?: unknown; proofDigest?: string;
-  intentDigest?: string; publicationId?: string; stateOperationId?: string; reservationDigest?: string;
-  tempLeafRef?: string; priorRevision?: string; publishedRevision?: string; beforeRevision?: string;
-  publishedIdentity?: unknown; execution?: MaterializationRecord;
-  authorityBindingDigest?: string; authorityRef?: string; requestDigest?: string; resourceRevision?: string;
-  custodyRef?: string; envelopeDigest?: string; resourceRef?: string; custodyAuthorizationReceipt?: MaterializationRecord;
-  code?: string; ok?: boolean; disposition?: string; abrupt?: boolean;
-  auditId?: string; auditCreatedAt?: string; proofOutcomeKey?: string;
-  proof?: MaterializationRecord;
-  ledgerEventId?: string; createdAt?: string; id?: string; stream?: AsyncIterable<Buffer>;
-}
 type FaultKind = "digest" | "optional-digest" | "id" | "integer";
-type FaultPayload = Record<string, string | number>;
-type FaultObserver = Record<string, ((input: FaultPayload) => Promise<void> | void) | undefined>;
-type RecordOutcome = MaterializationRecord | Promise<MaterializationRecord>;
-interface AuthorityPort { revalidate(input: MaterializationRecord): RecordOutcome }
-interface CustodyReadPort { open(input: MaterializationRecord): RecordOutcome }
-interface ResourcePort { resolveCurrentDescriptor(input: MaterializationRecord): RecordOutcome }
-interface WorkspaceSession {
-  getRevision(): string | Promise<string>;
-  inspectTarget(input: MaterializationRecord): RecordOutcome;
-  capturePreimage(input: MaterializationRecord): RecordOutcome;
-  recover(input: MaterializationRecord): RecordOutcome;
-  materialize(input: MaterializationRecord): RecordOutcome;
-}
-interface WorkspacePort {
-  withRequest<T>(record: MaterializationRecord, callback: (workspace: WorkspaceSession) => Promise<T>): Promise<T>;
-}
-interface TransactionStore {
-  assertFence(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  begin(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  complete(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  fail(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  get(requestRef: string): RecordOutcome;
-  markRollbackIncomplete(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordAuditFinalized(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordEvidencePending(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordPrecommitCleaned(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordPreimage(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordProofFinalized(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordPublicationIntent(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordPublicationPrepared(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordPublished(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  recordTempReserved(requestRef: string, input: MaterializationRecord): RecordOutcome;
-  renew(requestRef: string, input: MaterializationRecord): RecordOutcome;
-}
-interface AuditPort { appendIdempotent(input: MaterializationRecord): RecordOutcome; getById(id: string): RecordOutcome }
-interface ProofPort { beginLifecycle(input: MaterializationRecord): RecordOutcome; finishLifecycle(input: MaterializationRecord): RecordOutcome }
 
-function requireRecord(record: MaterializationRecord | undefined, label: string): MaterializationRecord {
-  if (!record) {
-    throw failure("materialization_state_incomplete", 500, `${label} is unavailable.`);
+function isUnknownRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
+
+function requirePresent<T>(
+  value: T | null | undefined,
+  label: string
+): T {
+  if (value === null || value === undefined) {
+    throw failure(
+      "materialization_state_incomplete",
+      500,
+      `${label} is unavailable.`
+    );
   }
-  return record;
+  return value;
 }
 
-function recordStageIs(stages: ReadonlySet<string>, record: MaterializationRecord): boolean {
-  return typeof record.stage === "string" && stages.has(record.stage);
-}
-
-export const UPLOAD_WORKSPACE_MATERIALIZATION_SCHEMA_VERSION =
-  "v0.0.1:jobs:upload-workspace-materialization-3";
-export const UPLOAD_WORKSPACE_MATERIALIZATION_OPERATION_ID =
-  "jobs.upload_workspace_materialize";
-
-const RECOVERY_STAGES = new Set<string>([
-  "publication_intent",
-  "temp_reserved",
-  "publication_prepared",
-  "published",
-  "evidence_pending",
-  "audit_finalized",
-  "proof_finalized"
-]);
-const PRECOMMIT_RECOVERY_STAGES = new Set<string>([
-  "publication_intent",
-  "temp_reserved",
-  "publication_prepared"
-]);
-const COMMITTED_STAGES = new Set<string>([
-  "published",
-  "evidence_pending",
-  "audit_finalized",
-  "proof_finalized"
-]);
 const LINEAGE_AMBIGUITY_CODES = new Set<string>([
   "materialization_parent_identity_mismatch",
   "materialization_path_invalid",
@@ -138,29 +109,23 @@ const TERMINAL_FAILURE_CODES = new Set<string>([
   "upload_custody_read_denied"
 ]);
 
-function digest(value: unknown) {
-  return crypto
-    .createHash("sha256")
-    .update(canonicalJson(value))
-    .digest("hex");
-}
-
-function text(value: unknown) {
-  return String(value || "").trim();
-}
-
-function failure(code: string, statusCode: number, message: string) {
-  return Object.assign(new Error(message), { code, statusCode });
-}
-
-function requireMethod(port: object | null | undefined, method: string, label: string) {
-  const candidate = port && method in port ? (port as Record<string, unknown>)[method] : undefined;
+function requireMethod(
+  port: object | null | undefined,
+  method: string,
+  label: string
+): void {
+  const candidate =
+    port && method in port
+      ? (port as Record<string, unknown>)[method]
+      : undefined;
   if (typeof candidate !== "function") {
     throw new TypeError(`${label}.${method} is required.`);
   }
 }
 
-function closedInput(record: MaterializationRecord) {
+function closedInput(
+  record: MaterializationRequestRecord
+): MaterializationClosedAdmissionInput {
   return Object.freeze({
     expectedWorkspaceRevision: record.expectedWorkspaceRevision,
     logicalTarget: record.logicalTarget,
@@ -170,7 +135,9 @@ function closedInput(record: MaterializationRecord) {
   });
 }
 
-function ownerFromAuthority(authority?: MaterializationRecord) {
+function ownerFromAuthority(
+  authority?: MaterializationAuthorityDecision
+): MaterializationOwner {
   const subjectId = text(authority?.subject?.subjectId);
   const tenantId = text(authority?.subject?.tenantId);
   if (!subjectId || !tenantId) {
@@ -187,7 +154,18 @@ function ownerFromAuthority(authority?: MaterializationRecord) {
   });
 }
 
-function publicResult(value: MaterializationRecord = {}, replayed = false) {
+function publicResult(
+  value: {
+    requestRef: string;
+    contentDigest: string;
+    byteCount: number;
+    workspaceRevision: string;
+    checkpointRef: string;
+    auditRef?: string;
+    proofRef?: string;
+  },
+  replayed = false
+): MaterializationOperationResult {
   return Object.freeze({
     schemaVersion: UPLOAD_WORKSPACE_MATERIALIZATION_SCHEMA_VERSION,
     status: "completed",
@@ -300,7 +278,7 @@ const FAULT_SCHEMAS = Object.freeze({
   })
 });
 
-function boundedFaultValue(value: unknown, kind: FaultKind) {
+function boundedFaultValue(value: unknown, kind: FaultKind): boolean {
   if (kind === "integer") {
     return Number.isSafeInteger(value) && Number(value) >= 0;
   }
@@ -321,10 +299,10 @@ function boundedFaultValue(value: unknown, kind: FaultKind) {
 }
 
 export async function invokeMaterializationFault(
-  faultObserver: Record<string, ((input: FaultPayload) => Promise<void> | void) | undefined> | null,
+  faultObserver: MaterializationFaultObserver | null,
   callbackName: keyof typeof FAULT_SCHEMAS,
   input: unknown
-) {
+): Promise<MaterializationFaultPayload> {
   const schema = FAULT_SCHEMAS[callbackName];
   const invalid = () => failure(
     "materialization_fault_payload_invalid",
@@ -340,37 +318,54 @@ export async function invokeMaterializationFault(
   ) {
     throw invalid();
   }
+  const candidate = input as Record<string, unknown>;
   const expectedKeys = Object.keys(schema).sort();
-  const actualKeys = Object.keys(input).sort();
+  const actualKeys = Object.keys(candidate).sort();
   if (
     expectedKeys.join("\0") !== actualKeys.join("\0") ||
     expectedKeys.some(
       (key) => !boundedFaultValue(
-        (input as Record<string, unknown>)[key],
+        candidate[key],
         (schema as Record<string, FaultKind>)[key]
       )
     )
   ) {
     throw invalid();
   }
-  const bounded = Object.freeze({ ...(input as FaultPayload) });
+  const bounded = Object.freeze({ ...candidate }) as MaterializationFaultPayload;
   await faultObserver?.[callbackName]?.(bounded);
   return bounded;
 }
 
-function createPublicationIntent(execution: MaterializationRecord) {
-  const target = execution.target || {};
-  const descriptor = requireRecord(execution.descriptor, "Materialization descriptor");
-  const stateEventAnchor =
-    execution.preimage?.stateEventAnchor ||
-    execution.preimage?.snapshot?.stateEventAnchor ||
+function nestedSnapshotAnchor(
+  preimage: MaterializationPreimage | null
+): unknown {
+  const snapshot: unknown = preimage?.snapshot;
+  return isUnknownRecord(snapshot)
+    ? snapshot.stateEventAnchor
+    : undefined;
+}
+
+function createPublicationIntent(
+  execution: MaterializationRequestRecord & {
+    readonly preimage: MaterializationPreimage | null;
+  },
+  target: MaterializationTargetInspection
+): PublicationIntent {
+  const descriptor = execution.descriptor;
+  const stateEventAnchor: unknown =
+    execution.preimage?.stateEventAnchor ??
+    nestedSnapshotAnchor(execution.preimage) ??
     target.anchor;
-  const eventHash = text(stateEventAnchor?.eventHash)
+  const anchor = isUnknownRecord(stateEventAnchor)
+    ? stateEventAnchor
+    : null;
+  const eventHash = text(anchor?.eventHash)
     .replace(/^sha256:/u, "");
   if (
-    !stateEventAnchor ||
+    !anchor ||
     !/^[a-f0-9]{64}$/u.test(eventHash) ||
-    !Number.isSafeInteger(Number(stateEventAnchor?.offset)) ||
+    !Number.isSafeInteger(Number(anchor.offset)) ||
     !target.parentIdentity ||
     !target.parentFingerprint ||
     !target.targetStateDigest
@@ -381,7 +376,7 @@ function createPublicationIntent(execution: MaterializationRecord) {
       "Workspace publication preimage is incomplete."
     );
   }
-  const base = Object.freeze({
+  const base: PublicationIntentFacts = {
     byteCount: descriptor.byteCount,
     contentDigest: descriptor.contentDigest,
     logicalTargetDigest: digest(execution.logicalTarget),
@@ -394,7 +389,7 @@ function createPublicationIntent(execution: MaterializationRecord) {
       `materialization-publication:${crypto.randomUUID()}`,
     reservationDigest: "",
     stateEventAnchor: Object.freeze({
-      offset: Number(stateEventAnchor.offset),
+      offset: Number(anchor.offset),
       eventHash
     }),
     stateOperationId:
@@ -402,30 +397,29 @@ function createPublicationIntent(execution: MaterializationRecord) {
     targetStateDigest: target.targetStateDigest,
     tempLeafRef:
       `.meshrix-materialization-${crypto.randomUUID()}`
+  };
+  const intentDigest = publicationIntentDigest(base);
+  return Object.freeze({
+    ...base,
+    intentDigest,
+    preparedIdentity: null,
+    reservationDigest: "",
+    proofDigest: ""
   });
-  const intentDigest = digest({
-    version:
-      "v0.0.1:agent-workspace:materialization-publication-intent-2",
-    publicationId: base.publicationId,
-    tempLeafRef: base.tempLeafRef,
-    stateOperationId: base.stateOperationId,
-    priorRevision: base.priorRevision,
-    stateEventAnchor: base.stateEventAnchor,
-    logicalTargetDigest: base.logicalTargetDigest,
-    parentFingerprint: base.parentFingerprint,
-    parentIdentity: base.parentIdentity,
-    targetStateDigest: base.targetStateDigest,
-    contentDigest: base.contentDigest,
-    byteCount: base.byteCount
-  });
-  return Object.freeze({ ...base, intentDigest });
 }
 
 function publicationFaultPayload(
   callbackName: string,
   requestRef: string,
-  publication: MaterializationRecord
-) {
+  publication: MaterializationPublication
+): {
+  intentDigest?: string;
+  proofDigest?: string;
+  publicationId: string;
+  requestRef: string;
+  reservationDigest?: string;
+  stateOperationId: string;
+} {
   if (callbackName === "afterTempReservedBeforeFirstWrite") {
     return {
       publicationId: publication.publicationId,
@@ -434,11 +428,12 @@ function publicationFaultPayload(
       stateOperationId: publication.stateOperationId
     };
   }
-  const digestKey = callbackName.includes("Intent") ||
+  const digestKey: "intentDigest" | "proofDigest" =
+    callbackName.includes("Intent") ||
     callbackName.includes("DirectoryWorker") ||
     callbackName.includes("TempInode")
-    ? "intentDigest"
-    : "proofDigest";
+      ? "intentDigest"
+      : "proofDigest";
   return {
     [digestKey]: publication[digestKey],
     publicationId: publication.publicationId,
@@ -447,9 +442,12 @@ function publicationFaultPayload(
   };
 }
 
-function validatePublishedReceipt(execution: MaterializationRecord, receipt: MaterializationRecord) {
+function validatePublishedReceipt(
+  execution: MaterializationDurableState,
+  receipt: MaterializationPublishedReceipt
+): MaterializationPublishedReceipt {
   const publication = execution.publication;
-  const descriptor = requireRecord(execution.descriptor, "Materialization descriptor");
+  const descriptor = execution.descriptor;
   if (
     receipt?.contentDigest !== descriptor.contentDigest ||
     Number(receipt?.byteCount) !== descriptor.byteCount ||
@@ -474,11 +472,27 @@ function validatePublishedReceipt(execution: MaterializationRecord, receipt: Mat
 }
 
 export function materializationFailureDisposition(error?: unknown) {
-  const code = text(errorProperty(error, "code")) || "materialization_failed";
+  const code =
+    text(errorProperty(error, "code")) || "materialization_failed";
   return Object.freeze({
     code,
     retryable: !TERMINAL_FAILURE_CODES.has(code)
   });
+}
+
+export interface CreateUploadWorkspaceMaterializationOptions {
+  authorityPort: MaterializationAuthorityPort;
+  custodyReadPort: MaterializationCustodyReadPort;
+  resourcePort: MaterializationResourcePort;
+  workspacePort: MaterializationWorkspacePort;
+  transactionStore: MaterializationTransactionPort;
+  resolveOperation(
+    operationId: string
+  ): MaterializationResolvedOperation | null | undefined;
+  auditPort: MaterializationAuditPort;
+  proofPort: MaterializationProofPort;
+  faultObserver?: MaterializationFaultObserver | null;
+  leaseHeartbeatMs?: number;
 }
 
 export function createUploadWorkspaceMaterialization({
@@ -492,14 +506,7 @@ export function createUploadWorkspaceMaterialization({
   proofPort,
   faultObserver = null,
   leaseHeartbeatMs = 10_000
-}: {
-  authorityPort: AuthorityPort; custodyReadPort: CustodyReadPort;
-  resourcePort: ResourcePort; workspacePort: WorkspacePort;
-  transactionStore: TransactionStore;
-  resolveOperation(operationId: string): MaterializationRecord;
-  auditPort: AuditPort; proofPort: ProofPort;
-  faultObserver?: FaultObserver | null; leaseHeartbeatMs?: number;
-}) {
+}: CreateUploadWorkspaceMaterializationOptions) {
   const portRequirements: Array<readonly [object, readonly string[], string]> = [
     [authorityPort, ["revalidate"], "authorityPort"],
     [custodyReadPort, ["open"], "custodyReadPort"],
@@ -543,9 +550,11 @@ export function createUploadWorkspaceMaterialization({
     signal = null,
     renewLease = null
   }: {
-    requestRef: string; ownerFence?: string; signal?: AbortSignal | null;
+    requestRef: string;
+    ownerFence?: string;
+    signal?: AbortSignal | null;
     renewLease?: (() => Promise<void>) | null;
-  }) {
+  }): Promise<MaterializationExecutionResult> {
     const stored = await transactionStore.get(requestRef);
     if (!stored) {
       throw failure(
@@ -554,22 +563,23 @@ export function createUploadWorkspaceMaterialization({
         "Materialization request is missing."
       );
     }
-    if (stored.status === "completed") {
+    if (isMaterializationCompletedState(stored)) {
       return publicResult(stored.result, true);
     }
-    return workspacePort.withRequest(stored, async (workspace: WorkspaceSession) => {
-      let execution = await transactionStore.begin(
-        requestRef,
-        { ownerFence }
-      );
-      if (execution.status === "completed") {
+    return workspacePort.withRequest(stored, async (workspace: MaterializationWorkspaceSession) => {
+      let execution: MaterializationDurableState =
+        await transactionStore.begin(
+          requestRef,
+          { ownerFence }
+        );
+      if (isMaterializationCompletedState(execution)) {
         return publicResult(execution.result, true);
       }
       let heartbeatFailure: unknown = null;
       let heartbeatInFlight = Promise.resolve();
-      let proofEntry: MaterializationRecord | null = null;
+      let proofEntry: MaterializationProofEntry | null = null;
       let proofLifecycleExpected =
-        recordStageIs(RECOVERY_STAGES, execution);
+        isMaterializationRecoveryState(execution);
 
       const heartbeat = async () => {
         heartbeatInFlight = heartbeatInFlight.then(async () => {
@@ -609,7 +619,9 @@ export function createUploadWorkspaceMaterialization({
       );
       timer.unref?.();
 
-      const beginProof = async (record: MaterializationRecord) => {
+      const beginProof = async (
+        record: MaterializationRequestRecord
+      ): Promise<MaterializationProofEntry> => {
         proofLifecycleExpected = true;
         const entry = await proofPort.beginLifecycle({
           idempotencyKey: record.bindingDigest,
@@ -625,9 +637,12 @@ export function createUploadWorkspaceMaterialization({
       };
 
       const finishProofDisposition = async (
-        record: MaterializationRecord,
-        { status, reasonCode }: { status: "failed" | "in_doubt"; reasonCode: string }
-      ) => {
+        record: MaterializationRequestRecord,
+        { status, reasonCode }: {
+          status: "failed" | "in_doubt";
+          reasonCode: string;
+        }
+      ): Promise<MaterializationProofReceipt> => {
         if (!["failed", "in_doubt"].includes(status)) {
           throw new TypeError(
             "Materialization proof disposition is invalid."
@@ -678,7 +693,10 @@ export function createUploadWorkspaceMaterialization({
         return proof;
       };
 
-      const markRollbackInDoubt = async (record: MaterializationRecord, reasonCode: string) => {
+      const markRollbackInDoubt = async (
+        record: MaterializationDurableState,
+        reasonCode: string
+      ): Promise<void> => {
         let terminalConflict = false;
         try {
           await finishProofDisposition(record, {
@@ -708,7 +726,10 @@ export function createUploadWorkspaceMaterialization({
         });
       };
 
-      const recordPublishedReceipt = async (record: MaterializationRecord, receipt: MaterializationRecord) => {
+      const recordPublishedReceipt = async (
+        record: MaterializationDurableState,
+        receipt: MaterializationPublishedReceipt
+      ): Promise<MaterializationDurableState> => {
         validatePublishedReceipt(record, receipt);
         await transactionStore.recordPublished(requestRef, {
           ownerFence,
@@ -720,17 +741,23 @@ export function createUploadWorkspaceMaterialization({
           priorRevision: record.expectedWorkspaceRevision,
           stateOperationId: receipt.stateOperationId
         });
-        return transactionStore.get(requestRef);
+        return requirePresent(
+          await transactionStore.get(requestRef),
+          "Materialization state"
+        );
       };
 
-      const recoverPublication = async (record: MaterializationRecord) => {
-        if (!recordStageIs(RECOVERY_STAGES, record)) return record;
-        const recovered = await workspace.recover({
-          leaseGuard: () => fence({ renew: true }),
-          preimage: record.preimage,
-          publication: record.publication,
-          signal
-        });
+      const recoverPublication = async (
+        record: MaterializationDurableState
+      ): Promise<MaterializationDurableState> => {
+        if (!isMaterializationRecoveryState(record)) return record;
+        const recovered: MaterializationRecoveryResult =
+          await workspace.recover({
+            leaseGuard: () => fence({ renew: true }),
+            preimage: record.preimage,
+            publication: record.publication,
+            signal
+          });
         if (recovered?.ok !== true) {
           const reasonCode =
             recovered?.code ||
@@ -743,7 +770,7 @@ export function createUploadWorkspaceMaterialization({
           );
         }
         if (recovered.disposition === "retry") {
-          if (!recordStageIs(PRECOMMIT_RECOVERY_STAGES, record)) {
+          if (!isMaterializationPrecommitState(record)) {
             await markRollbackInDoubt(
               record,
               "materialization_rollback_incomplete"
@@ -754,10 +781,7 @@ export function createUploadWorkspaceMaterialization({
               "Committed publication cannot transition back to retry."
             );
           }
-          const publication = requireRecord(
-            record.publication,
-            "Materialization publication"
-          );
+          const publication = record.publication;
           await invokeMaterializationFault(
             faultObserver,
             "afterPrecommitCleanupBeforeRecord",
@@ -774,7 +798,10 @@ export function createUploadWorkspaceMaterialization({
             reservationDigest:
               publication.reservationDigest || ""
           });
-          return transactionStore.get(requestRef);
+          return requirePresent(
+            await transactionStore.get(requestRef),
+            "Materialization state"
+          );
         }
         if (recovered.disposition !== "committed" || !recovered.receipt) {
           await markRollbackInDoubt(
@@ -787,15 +814,16 @@ export function createUploadWorkspaceMaterialization({
             "Workspace publication recovery disposition is invalid."
           );
         }
-        if (recordStageIs(PRECOMMIT_RECOVERY_STAGES, record)) {
-          return recordPublishedReceipt(record, recovered.receipt);
+        const receipt = recovered.receipt;
+        if (isMaterializationPrecommitState(record)) {
+          return recordPublishedReceipt(record, receipt);
         }
-        validatePublishedReceipt(record, recovered.receipt);
+        validatePublishedReceipt(record, receipt);
         if (
           record.publishedRevision !==
-            recovered.receipt.workspaceRevision ||
+            receipt.workspaceRevision ||
           record.result?.checkpointRef !==
-            recovered.receipt.checkpointRef
+            receipt.checkpointRef
         ) {
           await markRollbackInDoubt(
             record,
@@ -810,23 +838,21 @@ export function createUploadWorkspaceMaterialization({
         return record;
       };
 
-      const settleCommitted = async (record: MaterializationRecord) => {
-        let current = record;
-        if (!recordStageIs(COMMITTED_STAGES, current)) {
-          throw failure(
-            "materialization_publication_wal_mismatch",
-            409,
-            "Materialization settlement requires a committed effect."
-          );
-        }
+      const settleCommitted = async (
+        record: MaterializationCommittedState
+      ): Promise<MaterializationOperationResult> => {
+        let current: MaterializationDurableState = record;
         await fence({ renew: true });
         const entry = proofEntry || await beginProof(current);
         if (current.stage === "published") {
           await transactionStore.recordEvidencePending(requestRef, {
             ownerFence
           });
-          current = await transactionStore.get(requestRef);
-          const pendingEvidence = requireRecord(
+          current = requirePresent(
+            await transactionStore.get(requestRef),
+            "Materialization state"
+          );
+          const pendingEvidence = requirePresent(
             current.evidence,
             "Materialization evidence"
           );
@@ -839,7 +865,7 @@ export function createUploadWorkspaceMaterialization({
             }
           );
         }
-        const evidence = requireRecord(
+        const evidence = requirePresent(
           current.evidence,
           "Materialization evidence"
         );
@@ -855,18 +881,15 @@ export function createUploadWorkspaceMaterialization({
             "Materialization evidence journal is incomplete."
           );
         }
-        const publication = requireRecord(
+        const publication = requirePresent(
           current.publication,
           "Materialization publication"
         );
-        const currentResult = requireRecord(
+        const currentResult = requirePresent(
           current.result,
           "Materialization result"
         );
-        const descriptor = requireRecord(
-          current.descriptor,
-          "Materialization descriptor"
-        );
+        const descriptor = current.descriptor;
         await fence({ renew: true });
         const audit = await auditPort.appendIdempotent({
           action: "materialize",
@@ -913,10 +936,15 @@ export function createUploadWorkspaceMaterialization({
               settlementDigest: evidence.settlementDigest
             }
           );
-          current = await transactionStore.get(requestRef);
+          current = requirePresent(
+            await transactionStore.get(requestRef),
+            "Materialization state"
+          );
         } else if (
-          requireRecord(current.evidence, "Materialization evidence").auditRef !==
-            `audit:${audit.auditId}`
+          requirePresent(
+            current.evidence,
+            "Materialization evidence"
+          ).auditRef !== `audit:${audit.auditId}`
         ) {
           throw failure(
             "materialization_evidence_wal_mismatch",
@@ -973,10 +1001,15 @@ export function createUploadWorkspaceMaterialization({
               settlementDigest: evidence.settlementDigest
             }
           );
-          current = await transactionStore.get(requestRef);
+          current = requirePresent(
+            await transactionStore.get(requestRef),
+            "Materialization state"
+          );
         } else if (
-          requireRecord(current.evidence, "Materialization evidence").proofRef !==
-            `proof:${proofLedgerEventId}`
+          requirePresent(
+            current.evidence,
+            "Materialization evidence"
+          ).proofRef !== `proof:${proofLedgerEventId}`
         ) {
           throw failure(
             "materialization_evidence_wal_mismatch",
@@ -985,7 +1018,7 @@ export function createUploadWorkspaceMaterialization({
           );
         }
         await fence({ renew: true });
-        const finalEvidence = requireRecord(
+        const finalEvidence = requirePresent(
           current.evidence,
           "Materialization evidence"
         );
@@ -1006,10 +1039,23 @@ export function createUploadWorkspaceMaterialization({
         return result;
       };
 
+      function requireCommitted(
+        state: MaterializationDurableState
+      ) {
+        if (!isMaterializationCommittedState(state)) {
+          throw failure(
+            "materialization_publication_wal_mismatch",
+            409,
+            "Materialization settlement requires a committed effect."
+          );
+        }
+        return state;
+      }
+
       try {
         await fence({ renew: true });
         execution = await recoverPublication(execution);
-        if (recordStageIs(COMMITTED_STAGES, execution)) {
+        if (isMaterializationCommittedState(execution)) {
           return await settleCommitted(execution);
         }
 
@@ -1061,17 +1107,21 @@ export function createUploadWorkspaceMaterialization({
           preimage: preimage.preimage,
           targetStateDigest: target.targetStateDigest
         });
-        execution = await transactionStore.get(requestRef);
+        execution = requirePresent(
+          await transactionStore.get(requestRef),
+          "Materialization state"
+        );
 
         proofEntry = await beginProof(execution);
-        let publication: MaterializationRecord = createPublicationIntent({
-          ...execution,
+        const publicationIntent = createPublicationIntent(
+          execution,
           target
-        });
+        );
+        let publication: MaterializationPublication = publicationIntent;
         await fence({ renew: true });
         let claimedPublicationResourceRevision = "";
         const published = await workspace.materialize({
-          publication,
+          publication: publicationIntent,
           leaseGuard: () => fence({ renew: true }),
           signal,
           claimPublicationAuthority: async () => {
@@ -1248,10 +1298,10 @@ export function createUploadWorkspaceMaterialization({
                 requestRef,
                 {
                   ownerFence,
-                  publication
+                  publication: publicationIntent
                 }
               );
-            publication = requireRecord(
+            publication = requirePresent(
               execution.publication,
               "Materialization publication"
             );
@@ -1275,10 +1325,7 @@ export function createUploadWorkspaceMaterialization({
               )
             );
             return (async function* authorizedCustodyStream() : AsyncGenerator<Buffer, void, void> {
-              const descriptor = requireRecord(
-                execution.descriptor,
-                "Materialization descriptor"
-              );
+              const descriptor = execution.descriptor;
               const opened = await custodyReadPort.open({
                 authorizationReceipt:
                   custodyAuthorizationReceipt,
@@ -1306,22 +1353,24 @@ export function createUploadWorkspaceMaterialization({
               }
             })();
           },
-          recordTempReserved: async (candidate: MaterializationRecord) => {
-            const recorded = await transactionStore.recordTempReserved(
-              requestRef,
-              {
-                ownerFence,
-                publication: candidate
-              }
-            );
+          recordTempReserved: async (
+            candidate: PublicationReservation
+          ): Promise<PublicationReservation> => {
+            const recorded =
+              await transactionStore.recordTempReserved(
+                requestRef,
+                {
+                  ownerFence,
+                  publication: candidate
+                }
+              );
             execution = recorded;
-            publication = requireRecord(
-              recorded.publication,
-              "Materialization publication"
-            );
-            return publication;
+            publication = recorded.publication;
+            return recorded.publication;
           },
-          recordPublicationPrepared: async (candidate: MaterializationRecord) => {
+          recordPublicationPrepared: async (
+            candidate: PublicationPrepared
+          ): Promise<PublicationPrepared> => {
             const recorded =
               await transactionStore.recordPublicationPrepared(
                 requestRef,
@@ -1331,13 +1380,14 @@ export function createUploadWorkspaceMaterialization({
                 }
               );
             execution = recorded;
-            publication = requireRecord(
-              recorded.publication,
-              "Materialization publication"
-            );
-            return publication;
+            publication = recorded.publication;
+            return recorded.publication;
           },
-          afterDirectoryWorkerBoundBeforeReserve: (candidate: MaterializationRecord) =>
+          afterDirectoryWorkerBoundBeforeReserve: (candidate: {
+            intentDigest: string;
+            publicationId: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterDirectoryWorkerBoundBeforeReserve",
@@ -1346,7 +1396,11 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterTempInodeReservedBeforeWal: (candidate: MaterializationRecord) =>
+          afterTempInodeReservedBeforeWal: (candidate: {
+            intentDigest: string;
+            publicationId: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterTempInodeReservedBeforeWal",
@@ -1355,7 +1409,11 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterTempReservedBeforeFirstWrite: (candidate: MaterializationRecord) =>
+          afterTempReservedBeforeFirstWrite: (candidate: {
+            publicationId: string;
+            reservationDigest: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterTempReservedBeforeFirstWrite",
@@ -1364,7 +1422,11 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterFirstChunkWrittenBeforeContinue: (candidate: MaterializationRecord) =>
+          afterFirstChunkWrittenBeforeContinue: (candidate: {
+            copiedBytes: number;
+            publicationId: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterFirstChunkWrittenBeforeContinue",
@@ -1373,7 +1435,11 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterPublicationPreparedBeforeLink: (candidate: MaterializationRecord) =>
+          afterPublicationPreparedBeforeLink: (candidate: {
+            proofDigest: string;
+            publicationId: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterPublicationPreparedBeforeLink",
@@ -1382,7 +1448,11 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterPublicationLinkedBeforeTempUnlink: (candidate: MaterializationRecord) =>
+          afterPublicationLinkedBeforeTempUnlink: (candidate: {
+            proofDigest: string;
+            publicationId: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterPublicationLinkedBeforeTempUnlink",
@@ -1391,7 +1461,11 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterPublishedFileDurableBeforeStateCommit: (candidate: MaterializationRecord) =>
+          afterPublishedFileDurableBeforeStateCommit: (candidate: {
+            proofDigest: string;
+            publicationId: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterPublishedFileDurableBeforeStateCommit",
@@ -1400,7 +1474,13 @@ export function createUploadWorkspaceMaterialization({
                 requestRef
               }
             ),
-          afterStateAndCheckpointDurableBeforeReceipt: (candidate: MaterializationRecord) =>
+          afterStateAndCheckpointDurableBeforeReceipt: (candidate: {
+            checkpointRef: string;
+            proofDigest: string;
+            publicationId: string;
+            publishedRevision: string;
+            stateOperationId: string;
+          }) =>
             invokeMaterializationFault(
               faultObserver,
               "afterStateAndCheckpointDurableBeforeReceipt",
@@ -1410,7 +1490,10 @@ export function createUploadWorkspaceMaterialization({
               }
             )
         });
-        execution = await transactionStore.get(requestRef);
+        execution = requirePresent(
+          await transactionStore.get(requestRef),
+          "Materialization state"
+        );
         validatePublishedReceipt(execution, published);
         execution = await recordPublishedReceipt(
           execution,
@@ -1425,7 +1508,7 @@ export function createUploadWorkspaceMaterialization({
             requestRef
           }
         );
-        return await settleCommitted(execution);
+        return await settleCommitted(requireCommitted(execution));
       } catch (error) {
         if (errorProperty(error, "abrupt") === true) throw error;
         let ownsFence = false;
@@ -1439,12 +1522,14 @@ export function createUploadWorkspaceMaterialization({
           ownsFence = false;
         }
         if (ownsFence) {
-          let current = await transactionStore.get(requestRef);
-          if (recordStageIs(RECOVERY_STAGES, current)) {
+          let current: MaterializationDurableState | null =
+            await transactionStore.get(requestRef);
+          if (current && isMaterializationRecoveryState(current)) {
             try {
-              current = await recoverPublication(current);
-              if (recordStageIs(COMMITTED_STAGES, current)) {
-                return await settleCommitted(current);
+              const recovered = await recoverPublication(current);
+              current = recovered;
+              if (isMaterializationCommittedState(recovered)) {
+                return await settleCommitted(recovered);
               }
             } catch (recoveryError) {
               if (
@@ -1455,7 +1540,7 @@ export function createUploadWorkspaceMaterialization({
               }
             }
           }
-          if (!recordStageIs(RECOVERY_STAGES, current)) {
+          if (!current || !isMaterializationRecoveryState(current)) {
             const disposition =
               materializationFailureDisposition(error);
             if (
@@ -1464,10 +1549,10 @@ export function createUploadWorkspaceMaterialization({
             ) {
               await markRollbackInDoubt(current, disposition.code);
             } else if (
-              execution?.preimage &&
+              execution.preimage &&
               LINEAGE_AMBIGUITY_CODES.has(disposition.code)
             ) {
-              await finishProofDisposition(current, {
+              await finishProofDisposition(current || execution, {
                 status: "in_doubt",
                 reasonCode: disposition.code
               });
@@ -1482,7 +1567,7 @@ export function createUploadWorkspaceMaterialization({
               disposition.retryable !== true &&
               proofLifecycleExpected
             ) {
-              await finishProofDisposition(current, {
+              await finishProofDisposition(current || execution, {
                 status: "failed",
                 reasonCode: disposition.code
               });
