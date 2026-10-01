@@ -117,56 +117,34 @@ function exportDeclarationIsTypeOnly(node?: any) : any {
   return false;
 }
 
-function analyzeImportOccurrences(source?: any) : any {
-  const sourceFile: any = ts.createSourceFile(
-    "module.ts",
-    String(source ?? ""),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS
-  );
-  const occurrences: any = new Map<any, any>();
-
-  function mark(specifier?: any, runtime?: any) : any {
-    if (typeof specifier !== "string" || specifier.length === 0) return;
-    const current: any = occurrences.get(specifier) || { typeOnly: false, runtime: false };
-    if (runtime) {
-      current.runtime = true;
-    } else {
-      current.typeOnly = true;
-    }
-    occurrences.set(specifier, current);
+function analyzeImportOccurrences(source: string) {
+  const sourceFile = ts.createSourceFile("module.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const entries: { specifier: string; dynamic: boolean; classification: string }[] = [];
+  const seen = new Set<string>();
+  function mark(literal: any, classification: string, dynamic = false): void {
+    if (!literal || !ts.isStringLiteralLike(literal)) return;
+    const specifier: string = literal.text;
+    const key = `${specifier}\0${classification}\0${dynamic}`;
+    if (!specifier || seen.has(key)) return;
+    seen.add(key);
+    entries.push({ specifier, dynamic, classification });
   }
-
-  function visit(node?: any) : any {
-    if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      mark(node.moduleSpecifier.text, !importDeclarationIsTypeOnly(node.importClause));
-    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      mark(node.moduleSpecifier.text, !exportDeclarationIsTypeOnly(node));
-    } else if (ts.isImportTypeNode(node)) {
-      const argument: any = node.argument;
-      const literal: any = argument && ts.isLiteralTypeNode(argument) ? argument.literal : null;
-      if (literal && ts.isStringLiteral(literal)) {
-        mark(literal.text, false);
-      }
-    } else if (ts.isCallExpression(node) && node.expression && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      const argument: any = node.arguments[0];
-      if (argument && ts.isStringLiteral(argument)) {
-        mark(argument.text, true);
-      }
-    } else if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference) &&
-      node.moduleReference.expression &&
-      ts.isStringLiteral(node.moduleReference.expression)
-    ) {
-      mark(node.moduleReference.expression.text, true);
+  function visit(node: any): void {
+    if (ts.isImportDeclaration(node)) {
+      mark(node.moduleSpecifier, importDeclarationIsTypeOnly(node.importClause) ? "type-only" : "runtime");
+    } else if (ts.isExportDeclaration(node)) {
+      mark(node.moduleSpecifier, exportDeclarationIsTypeOnly(node) ? "type-only" : "runtime");
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      mark(node.argument.literal, "type-only", true);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      mark(node.arguments[0], "dynamic", true);
+    } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      mark(node.moduleReference.expression, node.isTypeOnly ? "type-only" : "runtime");
     }
     ts.forEachChild(node, visit);
   }
-
   visit(sourceFile);
-  return occurrences;
+  return entries;
 }
 
 export function extractImportSpecifiers(source?: any, absoluteFile: any = "") : any {
@@ -183,47 +161,10 @@ export function extractImportEntries(source?: any, absoluteFile: any = "") : any
     }));
 }
 
-export function classifyImportEntries(source?: any, absoluteFile: any = "") : any {
-  const moduleSource: any = moduleSourceForFile(source, absoluteFile);
-  const [imports] = parse(moduleSource);
-  const occurrences: any = analyzeImportOccurrences(moduleSource);
-  const entries: any[] = [];
-  const seen: any = new Set<any>();
-  const lexerSpecifiers: any = new Set<any>();
-  const typeOnlySpecifiers: any = new Set<any>();
-
-  function push({ specifier, dynamic, classification }: Record<string, any>) : any {
-    const key: any = `${specifier}\0${dynamic ? 1 : 0}\0${classification}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    entries.push({ specifier, dynamic, classification });
-  }
-
-  for (const entry of imports) {
-    if (typeof entry.n !== "string" || entry.n.length === 0) continue;
-    lexerSpecifiers.add(entry.n);
-    const dynamic: any = entry.d > -1;
-    const occurrence: any = occurrences.get(entry.n);
-    let classification: any = dynamic ? "dynamic" : "runtime";
-    if (occurrence && !occurrence.runtime && occurrence.typeOnly) {
-      classification = "type-only";
-      typeOnlySpecifiers.add(entry.n);
-    }
-    push({ specifier: entry.n, dynamic, classification });
-  }
-
-  for (const [specifier, occurrence] of occurrences) {
-    if (occurrence.runtime) {
-      if (!lexerSpecifiers.has(specifier)) {
-        push({ specifier, dynamic: false, classification: "runtime" });
-      }
-      continue;
-    }
-    if (!typeOnlySpecifiers.has(specifier)) {
-      push({ specifier, dynamic: false, classification: "type-only" });
-    }
-  }
-  return entries;
+export function classifyImportEntries(source: string, absoluteFile = "") {
+  // Classify syntax occurrences independently: a type import and a lazy import
+  // of the same module must never manufacture a static runtime dependency.
+  return analyzeImportOccurrences(moduleSourceForFile(source, absoluteFile));
 }
 
 async function resolveRelativeImport(fromFile?: any, specifier?: any) : Promise<any> {

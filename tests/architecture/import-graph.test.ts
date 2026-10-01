@@ -85,16 +85,32 @@ async function test() : Promise<any> {
       { specifier: "mixed-import", dynamic: false, classification: "runtime" },
       { specifier: "default-type-mixed", dynamic: false, classification: "runtime" },
       { specifier: "type-reexport", dynamic: false, classification: "type-only" },
+      { specifier: "declared-type-reexport", dynamic: false, classification: "type-only" },
       { specifier: "mixed-reexport", dynamic: false, classification: "runtime" },
       { specifier: "star-reexport", dynamic: false, classification: "runtime" },
       { specifier: "named-reexport", dynamic: false, classification: "runtime" },
       { specifier: "type-query", dynamic: true, classification: "type-only" },
       { specifier: "import-type", dynamic: true, classification: "type-only" },
       { specifier: "lazy-dynamic", dynamic: true, classification: "dynamic" },
-      { specifier: "side-effect", dynamic: false, classification: "runtime" },
-      { specifier: "declared-type-reexport", dynamic: false, classification: "type-only" }
+      { specifier: "side-effect", dynamic: false, classification: "runtime" }
     ],
     "edge classification must separate static runtime, type-only (including named type specifiers and type queries), and dynamic imports"
+  );
+
+  assert.deepEqual(
+    classifyImportEntries(`
+      import type { Shape } from "same-module";
+      const lazy = () => import("same-module");
+      type Query = import("same-module").Shape;
+      import type Alias = require("equals-type");
+    `),
+    [
+      { specifier: "same-module", dynamic: false, classification: "type-only" },
+      { specifier: "same-module", dynamic: true, classification: "dynamic" },
+      { specifier: "same-module", dynamic: true, classification: "type-only" },
+      { specifier: "equals-type", dynamic: false, classification: "type-only" }
+    ],
+    "individual type and lazy occurrences of one module must not fabricate a static cycle"
   );
 
   assert.deepEqual(
