@@ -15,6 +15,18 @@ current subject, grant revision, route revision, and endpoint before an
 upstream request is admitted. Unknown external effects remain unknown and are
 never retried automatically.
 
+## Admission cancellation semantics
+
+Bounded admission rejects an already-aborted caller signal before bucket
+creation, the idle fast path, queue admission and wake-up execution, so a
+cancelled invocation never calls its task. Queued waiters settle exactly once
+on cancel, deadline, close or task rejection; each path releases its timer and
+abort listener and removes the waiter from the queue, so active and queued
+counts never go negative or leak. A caller that does not cancel completes
+normally, and an explicitly configured queue deadline keeps its existing
+behavior. The kernel adds no unconditional business timeout as a cancellation
+substitute.
+
 ## Downstream subscription and notification surface
 
 The modern `/mcp` downstream adapter advertises exactly the capabilities it

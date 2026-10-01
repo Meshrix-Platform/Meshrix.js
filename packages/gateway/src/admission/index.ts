@@ -52,13 +52,13 @@ export class UpstreamAdmissionController {
 
   async run<T>(key: string, task: () => Promise<T>, options: { readonly signal?: AbortSignal; readonly deadline?: number } = {}): Promise<T> {
     if (this.#closed) throw admissionError("gateway_closing", "Gateway admission is closed.", 503);
+    if (options.signal?.aborted) throw abortError();
     const bucket = this.#bucket(key);
     if (bucket.active < this.#maxInFlight && bucket.queue.length === 0) return this.#execute(bucket, task);
     if (bucket.queue.length >= this.#queueSize) {
       bucket.rejected += 1;
       throw admissionError("admission_queue_full", "The upstream admission queue is full.");
     }
-    if (options.signal?.aborted) throw abortError();
     const deadline = options.deadline ?? (this.#defaultQueueDeadlineMs === undefined ? undefined : Date.now() + this.#defaultQueueDeadlineMs);
     if (deadline !== undefined && !Number.isSafeInteger(deadline)) {
       bucket.rejected += 1;
@@ -145,6 +145,11 @@ export class UpstreamAdmissionController {
       waiter.settled = true;
       if (waiter.timer !== undefined) clearTimeout(waiter.timer);
       if (waiter.abortListener) waiter.signal?.removeEventListener("abort", waiter.abortListener);
+      if (waiter.signal?.aborted) {
+        bucket.rejected += 1;
+        waiter.reject(abortError());
+        continue;
+      }
       if (waiter.deadline !== undefined && waiter.deadline <= Date.now()) {
         bucket.rejected += 1;
         waiter.reject(admissionError("admission_queue_deadline", "The request expired while waiting for upstream capacity."));

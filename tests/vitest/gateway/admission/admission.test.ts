@@ -36,6 +36,43 @@ describe("per-upstream bounded admission", () => {
     admission.close();
   });
 
+  it("[CASE-R04] rejects an already cancelled signal before the idle fast path executes", async () => {
+    const admission = createUpstreamAdmission({ maxInFlight: 1, queueSize: 1 });
+    const controller = new AbortController();
+    controller.abort();
+    let invocations = 0;
+    try {
+      await expect(admission.run("same", async () => { invocations += 1; }, { signal: controller.signal })).rejects.toMatchObject({ code: "gateway_cancelled" });
+      expect(invocations).toBe(0);
+      expect(admission.stats()).toMatchObject({ active: 0, queued: 0, timers: 0 });
+    } finally {
+      admission.close();
+    }
+  });
+
+  it("[CASE-R04] rejects an already cancelled signal before enqueue on a saturated bucket", async () => {
+    const admission = createUpstreamAdmission({ maxInFlight: 1, queueSize: 1 });
+    const hold = deferred<void>();
+    const first = admission.run("same", async () => hold.promise);
+    const controller = new AbortController();
+    controller.abort();
+    let invocations = 0;
+    try {
+      await expect(admission.run("same", async () => { invocations += 1; }, { signal: controller.signal })).rejects.toMatchObject({ code: "gateway_cancelled" });
+      expect(invocations).toBe(0);
+      expect(admission.stats()).toMatchObject({ active: 1, queued: 0, timers: 0 });
+      const live = admission.run("same", async () => "live");
+      hold.resolve();
+      await expect(first).resolves.toBeUndefined();
+      await expect(live).resolves.toBe("live");
+      expect(invocations).toBe(0);
+      expect(admission.stats()).toMatchObject({ active: 0, queued: 0, timers: 0 });
+    } finally {
+      hold.resolve();
+      admission.close();
+    }
+  });
+
   it("[CASE-B03] keeps unbounded-deadline work in FIFO after the former default cutoff", async () => {
     vi.useFakeTimers();
     const admission = createUpstreamAdmission({ maxInFlight: 1, queueSize: 2 });
