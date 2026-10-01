@@ -88,6 +88,7 @@ export function createOperationPermissionWorkerOwner({
   let securityHelperClient: any = null;
   let resolvedCapabilityKeyProvider: any = null;
   let resolvedCapabilityBindingGuard: any = null;
+  const ownedSecurityResources: Array<{ close?: () => void }> = [];
   try {
     db = openSqliteDatabase(getOperationPermissionDatabasePath(userDataPath));
     ensureSchema(db, { recoverStaleApiKeyEffectReservations });
@@ -107,6 +108,7 @@ export function createOperationPermissionWorkerOwner({
           bindingAlias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
         })
       : null;
+    if (securityHelperClient) ownedSecurityResources.push(securityHelperClient);
     resolvedCapabilityKeyProvider =
       capabilityKeyProvider ||
       securityHelperClient ||
@@ -117,6 +119,9 @@ export function createOperationPermissionWorkerOwner({
           "auto",
         alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants"
       });
+    if (!capabilityKeyProvider && !securityHelperClient) {
+      ownedSecurityResources.push(resolvedCapabilityKeyProvider);
+    }
     resolvedCapabilityBindingGuard = capabilityBindingGuard === false
       ? null
       : capabilityBindingGuard ||
@@ -128,8 +133,12 @@ export function createOperationPermissionWorkerOwner({
             "auto",
           alias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
         });
+    if (capabilityBindingGuard !== false && !capabilityBindingGuard && !securityHelperClient) {
+      ownedSecurityResources.push(resolvedCapabilityBindingGuard);
+    }
     return createOperationPermissionStoreFromResources({
       db,
+      ownedSecurityResources,
       rootPath,
       userDataPath,
       registry,
@@ -144,9 +153,7 @@ export function createOperationPermissionWorkerOwner({
     });
   } catch (error: any) {
     closeDistinctResources([
-      resolvedCapabilityBindingGuard,
-      resolvedCapabilityKeyProvider,
-      securityHelperClient,
+      ...ownedSecurityResources.slice().reverse(),
       db
     ]);
     throw error;
@@ -155,6 +162,7 @@ export function createOperationPermissionWorkerOwner({
 
 function createOperationPermissionStoreFromResources({
   db,
+  ownedSecurityResources,
   rootPath,
   userDataPath,
   registry,
@@ -312,8 +320,7 @@ function createOperationPermissionStoreFromResources({
       }
       const failures: any = closeDistinctResources([
         securityAlertStore,
-        resolvedCapabilityBindingGuard,
-        resolvedCapabilityKeyProvider,
+        ...ownedSecurityResources.slice().reverse(),
         db
       ]);
       if (failures.length > 0) {
