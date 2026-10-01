@@ -41,10 +41,78 @@ export type {
 /** Runtime health payload returned by the gateway health route. */
 export type UpstreamServiceRuntimeHealth = { ok: boolean; [key: string]: unknown };
 
-export interface UpstreamServicePublicationWaitOptions {
-  maxAttempts?: number;
+export const UPSTREAM_SERVICE_OBSERVATION_INTERVAL_MS = 500;
+
+/** The accepted server publication an observer tracks; the server keeps it. */
+export interface UpstreamServicePublicationObservationTarget {
+  serviceId: string;
+  serviceRevision: number;
+}
+
+export interface UpstreamServicePublicationObservationOptions {
+  signal?: AbortSignal | null;
   intervalMs?: number;
-  delay?: (milliseconds: number) => Promise<void>;
+  delay?: (milliseconds: number, signal: AbortSignal | null) => Promise<void>;
+}
+
+export type UpstreamPublicationObservationFailureReason = "interrupted" | "superseded";
+
+export interface UpstreamPublicationObservationFailureContext {
+  serviceId: string;
+  observedRevision: number;
+  currentRevision?: number;
+  message: string;
+  cause?: unknown;
+}
+
+/**
+ * Observation outcome for the accepted revision. `interrupted` is a temporary
+ * client-side interruption (network or status-query failure); `superseded` is
+ * the authoritative server fact that the observed revision is no longer the
+ * candidate (replaced, disabled or removed).
+ */
+export class UpstreamPublicationObservationError extends Error {
+  readonly reason: UpstreamPublicationObservationFailureReason;
+  readonly serviceId: string;
+  readonly observedRevision: number;
+  readonly currentRevision: number | null;
+
+  constructor(reason: UpstreamPublicationObservationFailureReason, context: UpstreamPublicationObservationFailureContext) {
+    super(context.message, context.cause === undefined ? undefined : { cause: context.cause });
+    this.name = "UpstreamPublicationObservationError";
+    this.reason = reason;
+    this.serviceId = context.serviceId;
+    this.observedRevision = context.observedRevision;
+    this.currentRevision = context.currentRevision ?? null;
+  }
+}
+
+function observationAbortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("The publication observation was stopped.", "AbortError");
+}
+
+export function isUpstreamPublicationObservationAbort(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "AbortError";
+}
+
+function observationIntervalDelay(milliseconds: number, signal: AbortSignal | null): Promise<void> {
+  if (!signal) {
+    return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+  }
+  if (signal.aborted) {
+    return Promise.reject(observationAbortReason(signal));
+  }
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(observationAbortReason(signal));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function idempotencyKey(action: UpstreamPublishingAction): string {
@@ -149,8 +217,14 @@ export function listPublishedServices(): Promise<UpstreamServiceListResponse> {
   return getJson<UpstreamServiceListResponse>("/api/gateway/v1/services");
 }
 
-export function getPublishedService(serviceId: string): Promise<UpstreamServiceDetailResponse> {
-  return getJson<UpstreamServiceDetailResponse>(`/api/gateway/v1/services/${encodeURIComponent(serviceId)}`);
+export function getPublishedService(
+  serviceId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<UpstreamServiceDetailResponse> {
+  return getJson<UpstreamServiceDetailResponse>(
+    `/api/gateway/v1/services/${encodeURIComponent(serviceId)}`,
+    options,
+  );
 }
 
 export function checkUpstreamServiceRuntimeHealth(serviceId: string): Promise<UpstreamServiceRuntimeHealth> {
@@ -159,23 +233,58 @@ export function checkUpstreamServiceRuntimeHealth(serviceId: string): Promise<Up
   );
 }
 
-export async function waitForUpstreamServicePublication(
-  serviceId: string,
-  options: UpstreamServicePublicationWaitOptions = {},
+/**
+ * Observes one retained accepted publication until an authoritative fact
+ * settles it. There is no attempt or business deadline: a slow publication
+ * keeps observing until it publishes, the caller aborts the owned request
+ * (stop, selection change, navigation, unmount), the observed revision is
+ * superseded by a newer server revision, or a status query fails. A failed
+ * status query ends only the observation and never asserts a server failure.
+ */
+export async function observeUpstreamServicePublication(
+  target: UpstreamServicePublicationObservationTarget,
+  options: UpstreamServicePublicationObservationOptions = {},
 ): Promise<UpstreamServiceDetailResponse> {
-  const maxAttempts: number = options.maxAttempts ?? 20;
-  const intervalMs: number = options.intervalMs ?? 500;
-  const delay: (milliseconds: number) => Promise<void> = options.delay ??
-    ((milliseconds: number): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
-  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new Error("maxAttempts must be a positive integer.");
-
-  let latest: UpstreamServiceDetailResponse | undefined;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    latest = await getPublishedService(serviceId);
-    if (latest.service.publication.status === "server_published") {
-      return latest;
-    }
-    if (attempt + 1 < maxAttempts) await delay(intervalMs);
+  const serviceId: string = String(target?.serviceId || "").trim();
+  const observedRevision: number = target?.serviceRevision;
+  if (!serviceId) throw new Error("Publication observation requires the accepted service id.");
+  if (!Number.isSafeInteger(observedRevision) || observedRevision < 1) {
+    throw new Error("Publication observation requires the accepted service revision.");
   }
-  throw new Error(`Timed out waiting for service publication after ${maxAttempts} attempts.`);
+  const signal: AbortSignal | null = options.signal ?? null;
+  const intervalMs: number = options.intervalMs ?? UPSTREAM_SERVICE_OBSERVATION_INTERVAL_MS;
+  const delay: (milliseconds: number, signal: AbortSignal | null) => Promise<void> =
+    options.delay ?? observationIntervalDelay;
+  if (!Number.isSafeInteger(intervalMs) || intervalMs < 0) {
+    throw new Error("Publication observation interval must be a non-negative integer.");
+  }
+
+  for (;;) {
+    if (signal?.aborted) throw observationAbortReason(signal);
+    let detail: UpstreamServiceDetailResponse;
+    try {
+      detail = await getPublishedService(serviceId, signal ? { signal } : {});
+    } catch (error: unknown) {
+      if (signal?.aborted || isUpstreamPublicationObservationAbort(error)) throw error;
+      throw new UpstreamPublicationObservationError("interrupted", {
+        serviceId,
+        observedRevision,
+        message: `Publication observation was interrupted before revision ${observedRevision} published.`,
+        cause: error,
+      });
+    }
+    if (signal?.aborted) throw observationAbortReason(signal);
+    if (detail.service.state === "removed" || detail.service.serviceRevision !== observedRevision) {
+      throw new UpstreamPublicationObservationError("superseded", {
+        serviceId,
+        observedRevision,
+        currentRevision: detail.service.serviceRevision,
+        message: `Accepted publication revision ${observedRevision} was superseded by revision ${detail.service.serviceRevision}.`,
+      });
+    }
+    if (detail.service.publication.status === "server_published") {
+      return detail;
+    }
+    await delay(intervalMs, signal);
+  }
 }

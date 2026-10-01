@@ -12,7 +12,7 @@ const client: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn()
 }));
 const pageRefreshHandler: any = vi.hoisted(() : any => vi.fn());

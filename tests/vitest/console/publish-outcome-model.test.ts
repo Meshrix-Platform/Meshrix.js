@@ -20,7 +20,7 @@ const client: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn(),
 }));
 const pageRefreshHandler: any = vi.hoisted(() : any => vi.fn());
@@ -77,7 +77,7 @@ beforeEach(() : any => {
     publication: publication(1),
     replayed: false,
   });
-  client.waitForUpstreamServicePublication.mockResolvedValue({
+  client.observeUpstreamServicePublication.mockResolvedValue({
     ok: true,
     setRevision: 1,
     service: {
@@ -152,6 +152,72 @@ describe("createPublishOutcomeModel stage transitions", () : any => {
     const model: any = createPublishOutcomeModel({ serviceId: () : string => "" });
     model.begin("not-a-stage");
     expect(model.stages.value.map((stage: any) : string => stage.state)).toEqual(["pending", "pending", "pending"]);
+  });
+});
+
+describe("createPublishOutcomeModel publication observation projection", () : any => {
+  it("retains the accepted publication across observer interruption and stop", () : any => {
+    const model: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    model.begin("publish-request");
+    model.advance();
+    model.acceptPublication({ serviceId: "svc_fixture", serviceRevision: 4, setRevision: 6 });
+
+    expect(model.acceptedPublication.value).toEqual({ serviceId: "svc_fixture", serviceRevision: 4, setRevision: 6 });
+    expect(model.observation.value).toBe("observing");
+
+    model.interruptObservation();
+    expect(model.observation.value).toBe("interrupted");
+    expect(model.acceptedPublication.value).toEqual({ serviceId: "svc_fixture", serviceRevision: 4, setRevision: 6 });
+    // An interruption is not a stage failure: the publication stage stays active.
+    expect(model.stages.value.map((stage: any) : string => stage.state)).toEqual(["done", "active", "pending"]);
+
+    model.beginObservation();
+    expect(model.observation.value).toBe("observing");
+
+    model.stopObservation();
+    expect(model.observation.value).toBe("stopped");
+    expect(model.acceptedPublication.value).not.toBe(null);
+
+    model.clearPublication();
+    expect(model.observation.value).toBe("idle");
+    expect(model.acceptedPublication.value).toBe(null);
+  });
+
+  it("clears a retained acceptance when a new run begins or the run resets", () : any => {
+    const model: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    model.begin("publish-request");
+    model.advance();
+    model.acceptPublication({ serviceId: "svc_fixture", serviceRevision: 1, setRevision: 1 });
+    model.interruptObservation();
+
+    model.begin("publish-request");
+    expect(model.acceptedPublication.value).toBe(null);
+    expect(model.observation.value).toBe("idle");
+
+    model.acceptPublication({ serviceId: "svc_fixture", serviceRevision: 2, setRevision: 2 });
+    model.resetRun();
+    expect(model.acceptedPublication.value).toBe(null);
+    expect(model.observation.value).toBe("idle");
+    expect(model.stages.value.map((stage: any) : string => stage.state)).toEqual(["pending", "pending", "pending"]);
+  });
+
+  it("projects an authoritative publication failure separately from a runtime-health failure", () : any => {
+    const failed: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    failed.begin("publish-request");
+    failed.advance();
+    failed.fail("gateway-publication");
+    expect(failed.stages.value.map((stage: any) : string => stage.state)).toEqual(["done", "failed", "pending"]);
+    expect(failed.health.value).toBe(null);
+
+    const unhealthy: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    unhealthy.begin("publish-request");
+    unhealthy.advance();
+    unhealthy.advance();
+    unhealthy.complete("runtime-health", { ok: false, endpoints: [{ endpoint: "x", ok: false, status: 0 }] });
+    // The publication stage is done; only the interpreted health carries the failure.
+    expect(unhealthy.stages.value.map((stage: any) : string => stage.state)).toEqual(["done", "done", "done"]);
+    expect(unhealthy.health.value.ok).toBe(false);
+    expect(unhealthy.health.value.checks[0].status).toBe("fail");
   });
 });
 
@@ -260,7 +326,20 @@ describe("interpretUpstreamHealth payload mapping", () : any => {
     );
     for (const locale of ["zh-CN", "en"] as const) {
       const group: any = consoleMessages[locale].publishOutcome;
-      for (const stage of ["stagePublishRequest", "stageGatewayPublication", "stageRuntimeHealth"]) {
+      for (const stage of [
+        "stagePublishRequest",
+        "stageGatewayPublication",
+        "stageRuntimeHealth",
+        "observationWaiting",
+        "observationInterrupted",
+        "observationStopped",
+        "observationStop",
+        "observationResume",
+        "observationPublished",
+        "publicationSuperseded",
+        "healthPassed",
+        "healthNotPassed",
+      ]) {
         expect(group[stage]).toBeTruthy();
       }
       for (const check of interpreted.checks) {

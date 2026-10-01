@@ -10,7 +10,7 @@ const client: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn()
 }));
 const route: any = vi.hoisted(() : any => ({ query: {} }));
@@ -42,6 +42,7 @@ vi.mock("@meshrix/ui-console/page-refresh", async (importOriginal?: any) : Promi
 
 import UpstreamServicePublishView from "../../../apps/console/views/admin/UpstreamServicePublishView.vue";
 import { parsePortableUpstreamServiceImport } from "@meshrix/contracts/upstream-service-publishing";
+import { UpstreamPublicationObservationError } from "../../../apps/console/lib/upstream-service-publish-client";
 import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
 import {
   registerConsoleConfirmHost,
@@ -56,6 +57,34 @@ function publication(revision: number, digest: any = "a".repeat(64)) : any {
     candidateRevision: revision,
     candidateDigest: digest
   };
+}
+
+function publishedDetail(serviceId: string, serviceRevision: number) : any {
+  return {
+    ok: true,
+    setRevision: serviceRevision + 1,
+    service: {
+      serviceId,
+      state: "server_published",
+      serviceRevision,
+      manifestDigest: "a".repeat(64),
+      publication: { ...publication(serviceRevision + 1), status: "server_published" },
+    },
+  };
+}
+
+function deferred<T>() : { promise: Promise<T>; resolve: (value: T) => void; reject: (reason?: unknown) => void } {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise: Promise<T> = new Promise<T>((res, rej) : void => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+async function publishInventory(wrapper: any) : Promise<any> {
+  await wrapper.find('#upstream-service-key').setValue("inventory");
+  await wrapper.find('#upstream-service-protocol').setValue("http");
+  await wrapper.find(".form-actions .primary").trigger("click");
+  await flushPromises();
 }
 
 function portableMcpDocument(): Record<string, any> {
@@ -91,7 +120,7 @@ beforeEach(() : any => {
     publication: publication(1),
     replayed: false
   });
-  client.waitForUpstreamServicePublication.mockResolvedValue({
+  client.observeUpstreamServicePublication.mockResolvedValue({
     ok: true,
     setRevision: 1,
     service: {
@@ -197,7 +226,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     const descriptor: any = client.createUpstreamService.mock.calls[0][1];
     expect(descriptor).not.toHaveProperty("visibility");
     expect(descriptor).not.toHaveProperty("trafficPolicy");
-    expect(client.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
+    expect(client.observeUpstreamServicePublication).toHaveBeenCalledWith(
+      { serviceId: "svc_fixture", serviceRevision: 1 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
     expect(window.localStorage.length).toBe(0);
     expect(wrapper.text()).toContain('"status": "healthy"');
@@ -224,7 +256,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
         protocolVersion: "2026-07-28",
       },
     }, 0);
-    expect(client.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
+    expect(client.observeUpstreamServicePublication).toHaveBeenCalledWith(
+      { serviceId: "svc_fixture", serviceRevision: 1 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
     wrapper.unmount();
   });
@@ -626,7 +661,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       }],
       references: []
     }, 0);
-    expect(client.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
+    expect(client.observeUpstreamServicePublication).toHaveBeenCalledWith(
+      { serviceId: "svc_fixture", serviceRevision: 1 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
   });
 
@@ -816,7 +854,9 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     await wrapper.find(".form-actions .primary").trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("server-published, but runtime health did not pass");
+    expect(wrapper.text()).toContain(
+      consoleMessages[currentConsoleLocale.value].publishOutcome.healthNotPassed,
+    );
     expect(wrapper.find(".tone-danger").exists()).toBe(true);
     expect(wrapper.text()).toContain('"status": "unhealthy"');
   });
@@ -922,10 +962,18 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       }
     });
     client.disableUpstreamService.mockResolvedValue({ ok: true });
-    client.republishUpstreamService.mockResolvedValue({ ok: true });
-    client.waitForUpstreamServicePublication.mockResolvedValue({
-      ok: true, setRevision: 8,
-      service: { serviceId: "svc_fixture", serviceRevision: 5, state: "server_published", publication: publication(8) },
+    client.republishUpstreamService.mockResolvedValue({
+      ok: true, serviceId: "svc_fixture", state: "publishing", serviceRevision: 6, setRevision: 9,
+      manifestDigest: "b".repeat(64), receiptRef: "urn:meshrix:receipt:republish",
+      publication: publication(9, "b".repeat(64)), replayed: false,
+    });
+    client.observeUpstreamServicePublication.mockResolvedValue({
+      ok: true, setRevision: 9,
+      service: {
+        serviceId: "svc_fixture", serviceRevision: 6, state: "server_published",
+        manifestDigest: "b".repeat(64),
+        publication: { ...publication(9, "b".repeat(64)), status: "server_published" },
+      },
     });
     client.removeUpstreamService.mockResolvedValue({ ok: true });
     registerConsoleConfirmHost();
@@ -950,9 +998,205 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       await flushPromises();
       expect(client.disableUpstreamService).toHaveBeenCalledWith("svc_fixture", 5, 8);
       expect(client.republishUpstreamService).toHaveBeenCalledWith("svc_fixture", 5, 8);
-      expect(client.removeUpstreamService).toHaveBeenCalledWith("svc_fixture", 5, 8);
+      // The accepted republish advances the retained service revision before
+      // the observation settles; the list refresh supplies the set revision.
+      expect(client.removeUpstreamService).toHaveBeenCalledWith("svc_fixture", 6, 8);
     } finally {
       unregisterConsoleConfirmHost();
     }
+  });
+});
+
+describe("UpstreamServicePublishView accepted-publication observation", () : any => {
+  it("keeps a slow accepted publication in progress without a failed stage or duplicate mutation", async () : Promise<any> => {
+    const pending: any = deferred<any>();
+    client.observeUpstreamServicePublication.mockReturnValue(pending.promise);
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    await publishInventory(wrapper);
+
+    expect(client.createUpstreamService).toHaveBeenCalledTimes(1);
+    const [target, options]: any[] = client.observeUpstreamServicePublication.mock.calls[0];
+    expect(target).toEqual({ serviceId: "svc_fixture", serviceRevision: 1 });
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(options.signal.aborted).toBe(false);
+
+    // The observation may last arbitrarily long: the gateway-publication stage
+    // stays active and no failure is fabricated.
+    expect(wrapper.findAll(".publish-stage").map((stage: any) : string[] => stage.classes())).toEqual([
+      ["publish-stage", "publish-stage--done"],
+      ["publish-stage", "publish-stage--active"],
+      ["publish-stage", "publish-stage--pending"],
+    ]);
+    expect(wrapper.find(".publish-stage--failed").exists()).toBe(false);
+    expect(wrapper.find(".upstream-publish-layout > .console-inline-alert.tone-danger").exists()).toBe(false);
+    const messages: any = consoleMessages[currentConsoleLocale.value].publishOutcome;
+    expect(wrapper.find('[data-testid="publication-observer"]').text()).toContain(messages.observationWaiting);
+    expect((wrapper.find(".form-actions .primary").element as HTMLButtonElement).disabled).toBe(true);
+
+    pending.resolve(publishedDetail("svc_fixture", 1));
+    await flushPromises();
+    expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
+    expect(client.createUpstreamService).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="publication-observer"]').exists()).toBe(false);
+    expect(wrapper.findAll(".publish-stage").map((stage: any) : string[] => stage.classes())).toEqual([
+      ["publish-stage", "publish-stage--done"],
+      ["publish-stage", "publish-stage--done"],
+      ["publish-stage", "publish-stage--done"],
+    ]);
+    wrapper.unmount();
+  });
+
+  it("interrupts observation on a status failure and resumes against the retained acceptance", async () : Promise<any> => {
+    client.observeUpstreamServicePublication
+      .mockRejectedValueOnce(new UpstreamPublicationObservationError("interrupted", {
+        serviceId: "svc_fixture", observedRevision: 1, message: "network unavailable",
+      }))
+      .mockResolvedValueOnce(publishedDetail("svc_fixture", 1));
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    await publishInventory(wrapper);
+
+    const messages: any = consoleMessages[currentConsoleLocale.value].publishOutcome;
+    const observer: any = wrapper.find('[data-testid="publication-observer"]');
+    expect(observer.text()).toContain(messages.observationInterrupted);
+    expect(observer.find('[data-testid="publication-observer-resume"]').exists()).toBe(true);
+    expect(wrapper.find(".publish-stage--failed").exists()).toBe(false);
+    expect(wrapper.findAll(".publish-stage")[1].classes()).toContain("publish-stage--active");
+    expect(client.createUpstreamService).toHaveBeenCalledTimes(1);
+
+    await observer.find('[data-testid="publication-observer-resume"]').trigger("click");
+    await flushPromises();
+    expect(client.observeUpstreamServicePublication).toHaveBeenCalledTimes(2);
+    expect(client.observeUpstreamServicePublication.mock.calls[1][0]).toEqual({
+      serviceId: "svc_fixture", serviceRevision: 1,
+    });
+    expect(client.createUpstreamService).toHaveBeenCalledTimes(1);
+    expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
+    expect(wrapper.find('[data-testid="publication-observer"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("stops observation explicitly, disposes the request, and resumes from the retained acceptance", async () : Promise<any> => {
+    const observations: any[] = [];
+    client.observeUpstreamServicePublication.mockImplementation((_target: any, options: any) : Promise<any> => {
+      const entry: any = { signal: options.signal, deferred: deferred<any>() };
+      observations.push(entry);
+      options.signal.addEventListener("abort", () : any => entry.deferred.reject(options.signal.reason), { once: true });
+      return entry.deferred.promise;
+    });
+    const wrapper: any = mount(UpstreamServicePublishView, { attachTo: document.body });
+    await flushPromises();
+    await publishInventory(wrapper);
+
+    const stop: any = wrapper.find('[data-testid="publication-observer-stop"]');
+    expect(stop.exists()).toBe(true);
+    stop.element.focus();
+    await stop.trigger("click");
+    await flushPromises();
+
+    expect(observations[0].signal.aborted).toBe(true);
+    const messages: any = consoleMessages[currentConsoleLocale.value].publishOutcome;
+    expect(wrapper.find('[data-testid="publication-observer"]').text()).toContain(messages.observationStopped);
+    const resume: any = wrapper.find('[data-testid="publication-observer-resume"]');
+    expect(resume.exists()).toBe(true);
+    expect(document.activeElement).toBe(resume.element);
+    expect(client.createUpstreamService).toHaveBeenCalledTimes(1);
+
+    await resume.trigger("click");
+    await flushPromises();
+    expect(observations).toHaveLength(2);
+    expect(observations[1].signal.aborted).toBe(false);
+    expect(client.createUpstreamService).toHaveBeenCalledTimes(1);
+    observations[1].deferred.resolve(publishedDetail("svc_fixture", 1));
+    await flushPromises();
+    expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
+    wrapper.unmount();
+  });
+
+  it("disposes the observed publication on selection change and ignores its stale completion", async () : Promise<any> => {
+    client.listPublishedServices.mockResolvedValue({
+      ok: true,
+      setRevision: 8,
+      services: [
+        {
+          serviceId: "svc_fixture", state: "publishing", serviceRevision: 1,
+          manifestDigest: "a".repeat(64), publication: publication(1),
+        },
+        {
+          serviceId: "svc_other", state: "server_published", serviceRevision: 2,
+          manifestDigest: "a".repeat(64), publication: { ...publication(2), status: "server_published" },
+        },
+      ],
+    });
+    client.getPublishedService.mockResolvedValue({
+      ok: true,
+      setRevision: 8,
+      service: {
+        serviceId: "svc_other", state: "server_published", serviceRevision: 2,
+        manifestDigest: "a".repeat(64),
+        publication: { ...publication(2), status: "server_published" },
+        descriptor: { serviceProtocol: "http", baseUrl: "https://service.invalid" },
+        references: [],
+      },
+    });
+    const pending: any = deferred<any>();
+    client.observeUpstreamServicePublication.mockReturnValue(pending.promise);
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    await publishInventory(wrapper);
+
+    const staleSignal: AbortSignal = client.observeUpstreamServicePublication.mock.calls[0][1].signal;
+    expect(staleSignal.aborted).toBe(false);
+
+    const rows: any[] = wrapper.findAll(".published-service-select");
+    expect(rows).toHaveLength(2);
+    await rows[1].trigger("click");
+    await flushPromises();
+
+    expect(staleSignal.aborted).toBe(true);
+    expect(wrapper.find('[data-testid="publication-observer"]').exists()).toBe(false);
+    expect(wrapper.findAll(".publish-stage")).toHaveLength(0);
+
+    pending.resolve(publishedDetail("svc_fixture", 1));
+    await flushPromises();
+    expect(client.checkUpstreamServiceRuntimeHealth).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("disposes the owned observer on unmount without asserting a server outcome", async () : Promise<any> => {
+    const pending: any = deferred<any>();
+    client.observeUpstreamServicePublication.mockReturnValue(pending.promise);
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    await publishInventory(wrapper);
+    const signal: AbortSignal = client.observeUpstreamServicePublication.mock.calls[0][1].signal;
+
+    wrapper.unmount();
+    expect(signal.aborted).toBe(true);
+
+    pending.resolve(publishedDetail("svc_fixture", 1));
+    await flushPromises();
+    expect(client.checkUpstreamServiceRuntimeHealth).not.toHaveBeenCalled();
+  });
+
+  it("projects an authoritative superseded revision as a failed publication stage, distinct from interruption", async () : Promise<any> => {
+    client.observeUpstreamServicePublication.mockRejectedValue(new UpstreamPublicationObservationError("superseded", {
+      serviceId: "svc_fixture", observedRevision: 1, currentRevision: 2, message: "superseded",
+    }));
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    await publishInventory(wrapper);
+
+    const messages: any = consoleMessages[currentConsoleLocale.value].publishOutcome;
+    expect(wrapper.find('[data-testid="publication-observer"]').exists()).toBe(false);
+    expect(wrapper.findAll(".publish-stage").map((stage: any) : string[] => stage.classes())).toEqual([
+      ["publish-stage", "publish-stage--done"],
+      ["publish-stage", "publish-stage--failed"],
+      ["publish-stage", "publish-stage--pending"],
+    ]);
+    expect(wrapper.text()).toContain(messages.publicationSuperseded);
+    expect(client.checkUpstreamServiceRuntimeHealth).not.toHaveBeenCalled();
+    wrapper.unmount();
   });
 });
