@@ -32,10 +32,10 @@ ships.
 ## Decision
 
 1. **Edge kinds.** Every resolvable import gets one classification: static
-   `runtime`, `type-only`, or `dynamic`. One `es-module-lexer` parse supplies
-   specifier positions and dynamic flags; one TypeScript parse per file
-   classifies `import type`, named type specifiers, `export type` declarations,
-   mixed type/value re-exports, and type-position `import()` queries.
+   `runtime`, `type-only`, or `dynamic`. One TypeScript parse per file classifies each syntax occurrence, including
+   different kinds of import referring to the same specifier. It classifies `import type`, named type specifiers, `export type` declarations,
+   mixed type/value re-exports, `import type ... = require(...)`, and type-position
+   `import()` queries.
    Type-only edges are removed only from the runtime cycle computation; all
    classified edges remain subject to layer, constraint, and public-facade
    rules. Dynamic edges are classified separately and never become static
@@ -82,9 +82,9 @@ ships.
 
 - `npm run server:verify:architecture-graph` now reports static runtime,
   type-only, and dynamic edge counts together with runtime cycles, facade
-  violations, declared entry roots, and the entry closure. The current
-  repository reports 1485 nodes, 3595 resolved edges (3308 static runtime, 261
-  type-only, 26 dynamic), 0 runtime cycles, and 0 facade violations.
+  violations, declared entry roots, and the entry closure. Counts belong to the
+  generated candidate report, so ordinary source growth does not stale this ADR.
+  Acceptance requires 0 runtime cycles and 0 facade violations.
 - A new cross-package source-relative import, an alias resolving outside the
   declared public surface, or a static runtime cycle fails the existing
   `architecture.import-graph` suite and the verifier command.
@@ -97,6 +97,6 @@ ships.
   it drives the classification, cycle, closure, and facade fixtures together
   with the live repository scan.
 - `npm run server:verify:architecture-graph` exits with 0 violations and
-  reports the classification and SCC statistics above.
+  records candidate-specific classification and SCC statistics.
 - `npm test -- --suite domains.manifest --continue-on-failure`,
   `npm run typecheck:node`, and `npm run verify:docs` pass for this change.
