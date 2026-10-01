@@ -2,7 +2,7 @@
 
 <img src="docs/banner.svg" alt="Meshrix.js" width="100%" />
 
-**公开源码、面向私有化部署的 MCP 平台 —— 为服务与智能体接入提供治理边界。**
+**用于构建受治理 HTTP 与 MCP 服务的开源 TypeScript 和 Node.js 框架。**
 
 [![源码许可证：MIT](https://img.shields.io/badge/%E6%BA%90%E7%A0%81%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-c9a96e?style=flat-square)](LICENSE)
 [![Node.js >=22.19.0 <23 || >=24.3.0 <25](https://img.shields.io/badge/node-%3E%3D22.19.0%20%3C23%20%7C%7C%20%3E%3D24.3.0%20%3C25-4fc3f7?style=flat-square)](package.json)
@@ -19,10 +19,6 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > 统一定义。
 
-> **此前已验收范围：** Meshrix.js 0.0.1 Core 企业单节点生产使用闭环仅适用于其证据
-> 所指向的候选版本。该证据不代表当前 gateway convergence 候选或后续公开发布已通过验收；
-> 详见 [Status](docs/STATUS.md)。
-
 ---
 
 ## 概览
@@ -34,18 +30,10 @@ Meshrix.js 使用 Vue.js Web Console 与 Node.js 服务端。前后端分别维�
 
 默认运行时自包含。元数据、raw objects、任务、设置、grant、审计记录和 checkpoint 存放在服务端数据目录。外部中间件和服务适配器作为面向特定部署集成的可选增强。
 
-> **当前状态：pre-release。** 源码已公开。当前 gateway 候选和计划中的 0.0.1 公开发布仍需
-> 完成面向确切候选的实现与功能验证，并通过发布流程。环境资格与托管运营属于独立证据轨道；
-> 规范状态见 [Status](docs/STATUS.md)。
-
-Meshrix.js 将强制的功能验收与仍待完成的环境资格分开。
-`npm run verify:acceptance` 是 Functional Release Gate（功能完整有效发布门禁），
-必须在发布前通过。通过门禁的不可变候选版本可以继续运行
-`npm run verify:real-machine -- ...`；这一可重复执行的 Real-Machine
-Verification Workflow（真机验证工作流）是为一个确切系统或部署完成环境资格的
-剩余工作。真机是否可用、是否执行或执行失败，都不会阻断或改变功能验收结果。
-完整契约见
-[发布定义](docs/RUNBOOK.md#release-definition-and-publication)。
+> **发布状态：pre-release。** 首个 npm 版本尚未发布。公开包必须从未修改的
+> release tarball 安装，并针对确切候选验证后才能发布。下文源码检出命令
+> 不代表 npm 包或部署环境已经通过验证。详见 [Status](docs/STATUS.md) 和
+> [发布契约](docs/RUNBOOK.md#release-definition-and-publication)。
 
 本文是规范性[英文项目概览](README.md)的简体中文本地化版本。
 
@@ -69,26 +57,41 @@ Verification Workflow（真机验证工作流）是为一个确切系统或部�
   <img src="docs/architecture-overview.svg" alt="Meshrix.js architecture overview" width="680" />
 </div>
 
-Meshrix.js 的产品边界是私有化部署中的服务端治理层：它拥有配置、operation 暴露、权限决策、执行调度、审计、指标与证据生成。包分层、核心流程与部署边界详见[架构文档](docs/architecture/ARCHITECTURE.md)。
+服务端运行时组合配置、operation 暴露、权限决策、执行调度、审计、指标与有界证据。控制台、HTTP API 与 MCP 入口共用一个公开 origin。包分层、核心流程与部署边界详见[架构文档](docs/architecture/ARCHITECTURE.md)。
 
 ## 快速开始
 
 要求 Node.js `>=22.19.0 <23 || >=24.3.0 <25`。
 
-**本地运行**
+**从源码检出运行**
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-服务默认监听 `http://127.0.0.1:7228`。
+开发服务器默认监听 `http://127.0.0.1:7228`。
 
-**服务模式**
+**安装首个 npm 版本**
 
 ```bash
-npm run server:start
+npm install --global meshrix.js
+meshrix-server --help
+meshrix --help
 ```
+
+这些 npm 命令描述发布后的使用路径。目前包尚未发布到公共 registry；首发前，
+会从确切 release tarball 验证安装和启动。
+
+首发后，可从同一个 origin 启动打包的 Console 与服务端：
+
+```bash
+meshrix-server --with-ui --data-dir <server-data-dir>
+```
+
+默认监听地址为 `http://127.0.0.1:7228`；Console 位于 `/`，API 位于 `/api/`，
+MCP 客户端使用同一 origin。要从 loopback 以外访问，必须配置 TLS 终止代理和
+精确的 trusted-proxy 地址，详见[运行手册](docs/RUNBOOK.md#container-startup)。
 
 **容器启动**
 
@@ -96,9 +99,11 @@ npm run server:start
 docker compose up -d
 ```
 
-仓库内的 compose 文件默认在 loopback 上启动 API 服务，并把运行数据写入容器卷。该路径默认只提供 API；如需由服务端提供控制台页面，需要先构建控制台产物并使用 server `--with-ui` 路径。
-
-云上生产部署需要把 `docker-compose.enterprise.yml` 与基础文件叠加使用，并提供摘要固定的镜像、HTTPS 公网基准 URL、反向代理的精确来源 IP、独立备份挂载、独立托管的 32 字节本地 Secret Store 主密钥，以及另一份不同的 32 字节操作证据签名密钥。具体命令见[生产容器运行手册](docs/RUNBOOK.md#container-startup)；缺少任一安全输入时生产叠加层会失效关闭。
+仓库内的 Compose 文件默认在 loopback 上启动 API，并将运行数据保存在容器卷中。
+默认配置只提供 API；要提供 Console，必须使用构建好的 Console bundle 和
+`--with-ui` 参数。公开访问时应配置 HTTPS 转发与 trusted-proxy 地址。Secret
+Store 主密钥和 operation 证明签名密钥应分别保存在 Meshrix.js 数据目录与备份之外，
+由部署环境单独管理。
 
 ## 运维
 
@@ -121,10 +126,8 @@ npm run mcp:doctor
 
 ## 下游智能体客户端
 
-智能体客户端通过 MCP discovery 与受治理的 gateway 调用接入；operation 可见性
-由 grant 控制。仓库内已实现 OpenClaw、Codex、Claude Code、Antigravity、
-OpenCode、Kimi 和 Pi 适配器；适配器必须由运维方显式启用，运行时不会从其它源码
-仓库发现或加载实现。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与
+客户端通过标准 MCP 协议和 operation grant 接入。可选客户端适配器独立打包并显式启用；
+Core MCP 授权不依赖客户端产品名称。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与
 [协议](docs/protocols/PROTOCOLS.md)文档。
 
 ## 仓库结构
@@ -143,7 +146,7 @@ OpenCode、Kimi 和 Pi 适配器；适配器必须由运维方显式启用，运
 
 | 主题 | 文档 |
 | --- | --- |
-| 产品目标与边界 | [PRODUCT.md](PRODUCT.md) |
+| 框架范围与架构目标 | [PRODUCT.md](PRODUCT.md) |
 | 领域词汇 | [CONTEXT.md](CONTEXT.md) |
 | 当前状态 | [docs/STATUS.md](docs/STATUS.md) |
 | 文档索引 | [docs/README.md](docs/README.md) |
@@ -171,9 +174,11 @@ npm run typecheck
 npm run build
 npm test
 npm run verify:core-platform-surface-convergence
-npm run verify:private-deployment-internal-platform-e2e
 npm run verify:acceptance
 ```
+
+发布流程还会在隔离消费者中安装每个目标 npm 包的确切、未修改 tarball。
+源码检查通过本身不代表 npm 包或平台运行环境已通过验收。
 
 ## 项目
 
@@ -188,17 +193,16 @@ npm run verify:acceptance
 ## 源码许可证
 
 Meshrix.js 项目拥有的源码采用 MIT 许可证，详见 [LICENSE](LICENSE)。第三方依赖保留其 package
-metadata 与[第三方声明](THIRD_PARTY_NOTICES.md)中列出的各自条款。仓库许可证本身不代表集成平台
-发行物的完整条款。
+metadata 与[第三方声明](THIRD_PARTY_NOTICES.md)中列出的各自条款。
 
 <div align="center">
-  <sub>Meshrix.js —— 默认自包含，为私有化部署而生。</sub>
+  <sub>Meshrix.js —— 一个受治理的运行时，明确的扩展边界。</sub>
 </div>
 
 ## 可嵌入 Gateway 内核
 
 `@meshrix/gateway` 是独立的 programmable MCP gateway。它不要求 Console、
-Agent、插件或 SkillHub 才能启动；标准 MCP 客户端不需要 Meshrix 产品名或
-专用 connector 才能接入。现代 MCP 使用 `2026-07-28`，旧版本规则由隔离
+Agent、插件或 SkillHub 才能启动。符合协议的 MCP 客户端可以根据声明的协议
+和授权能力连接，无需基于产品名称的身份 allowlist。现代 MCP 使用 `2026-07-28`，旧版本规则由隔离
 适配器单独负责。实现与样例见 [Gateway 架构](docs/architecture/gateway.md)、
 [协议边界](docs/protocols/gateway.md) 和 [Gateway 样例](docs/examples/gateway/README.md)。

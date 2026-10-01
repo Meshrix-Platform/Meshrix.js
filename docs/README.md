@@ -5,74 +5,39 @@
 > [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-This directory contains the formal technical documentation for installing,
-running, operating, integrating, and verifying Meshrix.js as a
-private-deployable internal platform.
+This directory contains technical references for Meshrix.js architecture,
+protocols, capabilities, installation, operation, and verification. Documents
+describe behavior implemented by the current source and distinguish it from
+support established for an exact release artifact or environment.
 
-Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, executable verification commands, and gaps with an explicit owner and scope. A gap blocks the current task only when its accepted outcome requires that capability. Other gaps belong to their owning roadmap or workflow; neither an unverified capability nor a permanent refusal may be invented from a current limitation. Explicit product exclusions remain exclusions until a new decision changes them.
+## Technical and maintenance boundaries
 
-## Maintenance Invariants
+- [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+  defines the common authorization, protected-sink, and bounded-evidence model.
+- [Architecture](architecture/ARCHITECTURE.md) owns package layers, module
+  ownership, composition, state, and public boundaries.
+- [Contributing](../CONTRIBUTING.md) owns the common engineering workflow;
+  [AGENTS.md](../AGENTS.md) owns execution authority, privacy, and release
+  boundaries.
+- [Runbook](RUNBOOK.md) owns executable repository commands and runtime
+  procedures. Dependency license, security, and maintenance review is described
+  in [Dependency Admission](RUNBOOK.md#dependency-admission).
+- [Status](STATUS.md) records candidate-bound implementation and verification
+  facts. [Compatibility](COMPATIBILITY.md) describes protocol, runtime, and
+  environment targets without extending a support claim beyond its evidence.
 
-The canonical policy is [Governed Execution And Minimum
-Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md). It applies
-transitively to every maintainer-facing document, plan, workflow contract, and
-generated documentation projection under `docs/`, whether or not a child page
-repeats it. More specific documents may strengthen the policy but cannot
-weaken it. Generated projections inherit the rule from their canonical source
-and must not be hand-edited merely to duplicate this notice.
-
-A protected-resource or side-effect path is acceptable only when the canonical
-governance authority admits the exact principal, operation, resource, policy,
-approval, audience, and effect, and the protected sink consumes that bound
-permit. A transport, controller preflight, internal caller, or approval record
-is not independent authority. A path that has not converged on this boundary
-fails the Functional Release Gate.
-
-The [Runbook release contract](RUNBOOK.md#release-definition-and-publication)
-separates the mandatory Functional Release Gate and mandatory Release
-Deployment Verification from remaining Real-Machine Verification Workflows and
-their Environment Support Claims. Functional acceptance is a prerequisite for
-the exact-candidate runtime-ui deployment on `ubuntu-24.04` and for every
-real-machine workflow. A real-machine receipt never blocks, promotes, or
-changes functional acceptance. Offline delivery may run on Linux inside a
-virtual machine; Ubuntu is preferred and Debian is accepted. That evidence does
-not establish native Linux, Ubuntu, or Debian qualification, which remains
-owned by the named Real-Machine Verification Workflow.
-
-Governance evidence and ordinary telemetry have different value. Protected
-access and side effects require the minimum bounded lifecycle proof. Routine
-success, ordinary denials, logs, metrics, and traces are aggregated, sampled,
-or shed under fixed budgets and never retain payload copies. The canonical
-architecture, security, Operation Permission, gateway, observability, runtime,
-protocol, and runbook documents below own the detailed maintenance rules.
-
-Dependency admission for private deployment is governed by
-[Private-Deployment Dependency Admission](RUNBOOK.md#private-deployment-dependency-admission).
-It is fail-closed: a direct, transitive, bundled, optional, example, image, or
-deployment dependency is rejected whenever its licensing, redistribution,
-production-use, maintenance-continuity, or project-governance risk cannot be
-resolved from primary evidence. A customer must never be required to absorb a
-third-party commercial risk in order to deploy or operate Meshrix.js privately.
-License compliance alone is not admission: a production dependency must also
-pass the Runbook's authority, maturity, multi-organization adoption, security
-maintenance, operational evidence, and workload-conformance gates.
-
-The shared Better Plan workspace retains delivery state, requirements and
-retrievable history across outcomes; it is not a product authority or execution
-authorization. Record reviewed delivery results using the current skill. Retire
-obsolete temporary plans only after archiving useful context and evidence;
-preserve user data and the active long-term workspace.
-Current product state belongs in [Status](STATUS.md); executable acceptance,
-deployment, production-closure, and publication facts belong to their owning
-commands and candidate-bound reports.
+Protected access and side effects require the canonical authority to admit the
+exact principal, operation, resource, policy, audience, and effect; the
+protected sink consumes the bound permit. Routine telemetry is aggregated,
+sampled, or shed under fixed budgets and does not retain payload copies. The
+owning security, operation, gateway, observability, runtime, and protocol
+documents specify the detailed behavior.
 
 ## Project Documents
 
 | Topic | Document |
 | --- | --- |
-| Product definition | [../PRODUCT.md](../PRODUCT.md) |
-| Current interactive regression snapshot | [verification/regression.html](verification/regression.html) |
-| Architecture foundation acceptance and remaining release evidence | [verification/architecture-foundation-review.md](verification/architecture-foundation-review.md) |
+| Framework scope | [../PRODUCT.md](../PRODUCT.md) |
 | Domain language | [../CONTEXT.md](../CONTEXT.md) |
 | Current five-dimension status | [STATUS.md](STATUS.md) |
 | Contribution process | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
@@ -114,20 +79,6 @@ projection manually. The architecture HTML diagrams are projections of
 `packages/contracts/src/modules/manifest.ts`; update their digest markers with
 `node tools/generators/generate-architecture-diagram-digests.ts`.
 
-## Maintenance Sources
-
-Repository-local source, registries, documentation, and verification commands
-are the complete maintenance authority for Meshrix.js:
-
-- [Contributing](../CONTRIBUTING.md) owns the common engineering workflow;
-  specialist skills and handbooks route to it instead of restating it.
-- [Architecture](architecture/ARCHITECTURE.md) owns current package, layer,
-  composition, state, and protocol boundaries.
-- [Runbook](RUNBOOK.md) owns current repository commands and runtime
-  verification facts.
-- Capability and protocol documents own only their implemented public
-  behavior and objective limits.
-
 ## Capability Documents
 
 | Capability | Document |
@@ -158,8 +109,6 @@ git diff --check
 
 Add `npm run verify:core-platform-surface-convergence` only when the affected
 Core surface contract requires it. Skill changes use `npm run verify:skills`.
-Source behavior changes follow the regression planner; do not run the entire
-Core test profile merely to select checks for a documentation edit. Complete
-all changes, source review, repairs, and focused checks before the single final
-regression selected for the task. Final-regression failures require the
-developer's repair and rerun decision.
+Source behavior changes follow the regression planner; documentation-only
+edits do not require the Core runtime test profile. Follow
+[Contributing](../CONTRIBUTING.md) for review and repair of any findings.

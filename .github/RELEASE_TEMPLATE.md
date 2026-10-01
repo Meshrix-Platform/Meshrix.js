@@ -3,8 +3,9 @@
 This release was assembled by the canonical tag workflow after the Functional
 Release Gate, the required Node.js 22 clean install/start probe, and actionable
 high-severity scans of both container artifacts completed successfully.
-Real-machine qualification remains remaining required work after this release;
-absence or failure does not block this release.
+Runtime support is limited to exact artifact and environment pairs with a
+matching verification receipt. This release makes no support claim for an
+unqualified environment.
 
 ## Changes
 
@@ -28,13 +29,9 @@ docker run -d \
 
 ### npm (Framework Integration)
 
-The canonical tag workflow performs a credential-free preflight of the complete
-npm release set before any remote container mutation, repeats that preflight
-before the first npm mutation, then publishes or reverifies integrity, registry
-signatures, provenance, and monotonic release tags. It installs the published
-set without lifecycle scripts and completes `npm audit signatures` before the
-GitHub Release is exposed. Install the framework package at the exact release
-version:
+The release workflow publishes the package set named by the release
+definition to the public npm registry and records the resulting verification
+evidence. Install the framework package at this exact release version:
 
 ```bash
 npm install --save-exact meshrix.js@<VERSION>
@@ -85,11 +82,11 @@ cd "${asset%.tar.gz}"
 
 | Surface | Target | Release status |
 | --- | --- | --- |
-| npm packages | Internal `@meshrix/*` workspaces, `meshrix-mcp-connector`, and `meshrix.js` | Published only to the configured private registry. |
+| npm packages | Packages named by the release definition | Published to the public npm registry for this version. |
 | Server and Web Console container | Linux amd64 and arm64 | Published as the signed multi-platform container after pinned Trivy scans and per-platform provenance/SBOM validation. Native runtime support is claimed only by a matching optional real-machine receipt. |
 | MCP Connector | macOS arm64 | Published as a functionally accepted artifact. Native runtime support is claimed only after the exact final archive passes the macOS arm64 Real-Machine Verification Workflow. |
 | MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Build support may remain in source; each runtime support claim requires its own optional real-machine receipt. |
-| Pactium substrate | `pactium@0.5.0`, `pactium.v0.2`, `pactium.v0.2.schema.latest` | Exact runtime dependency for this release. |
+| Pactium substrate | `pactium@0.8.1` | Runtime dependency pinned by the release package manifests and lockfile. |
 
 ## Uninstall
 

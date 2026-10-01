@@ -27,17 +27,15 @@ tests, and documentation in the same change.
 
 Use `$meshrix-js-regression-planner` to select focused checks and one final
 integration scope. Complete source review and in-scope repairs before final
-regression. A functional-completeness release still requires
+regression. Repair in-scope failures found during final verification and rerun
+the affected checks. A functional-completeness release still requires
 `npm run verify:acceptance` and its current required evidence; ordinary source
 or documentation work does not acquire that release claim automatically.
-Follow `docs/RUNBOOK.md` for the separate release deployment and publication
-requirements. Final-regression failures return to the developer for the repair
-and rerun decision rather than starting an automatic loop.
+Follow `docs/RUNBOOK.md` for release deployment and publication requirements.
 
-A protected resource, runtime-data probe, publication, or external effect
-requires explicit authorization and exact scope. Reuse existing authorization
-for the same target, operation, and effects; do not ask again for an unchanged
-authorized step.
+Follow `AGENTS.md` for execution authority. Local build, install, data
+migration, live acceptance, publication, push, and deployment are distinct
+actions with separate evidence and authorization boundaries.
 
 Offline delivery may run on Linux inside a virtual machine. Prefer Ubuntu;
 accept Debian. Do not treat that path as native Linux support or as `npm run

@@ -1,8 +1,11 @@
 # Contributing To Meshrix.js
 
-Meshrix.js is an open, private-deployable gateway platform for agent access, upstream service forwarding, governed operations, and auditable collaboration.
+Meshrix.js is an open-source TypeScript and Node.js framework for governed HTTP/MCP services, pluggable capabilities, and auditable execution.
 
-Contributions must keep the repository serious, calm, pragmatic, and accurate. Changes should improve current runtime behavior, documentation accuracy, tests, or deployability. Do not add private product capabilities, secrets, local machine details, or speculative product claims. Document current gaps as remaining required work the project keeps closing, not as permanent non-goals.
+Changes should improve runtime behavior, architecture, documentation accuracy,
+tests, or supported installation and operation. Do not add claims that are not
+backed by the implementation or candidate evidence. Never include secrets,
+personal data, machine identifiers, or runtime payloads in source or reports.
 
 Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
@@ -11,7 +14,7 @@ Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 Requirements are declared in `package.json`. Use the current Node.js range from `engines.node`.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 

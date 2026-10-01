@@ -17,7 +17,7 @@ The production composition binds the control-plane application service, canonica
 
 The self-contained Node.js listener is the implemented embedded profile. It
 can accept HTTP directly for local, development, desktop-adjacent, and bounded
-private deployments without requiring an external reverse proxy.
+single-node deployments without requiring an external reverse proxy.
 
 For production deployments, an operator may place an independently admitted
 Nginx, Caddy, Envoy, or equivalent edge in front of Meshrix.js. The edge may own

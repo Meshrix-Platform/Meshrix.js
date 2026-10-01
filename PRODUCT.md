@@ -1,26 +1,19 @@
-# Meshrix.js Product
+# Meshrix.js Framework Scope
 
-This document owns Meshrix.js's durable product goal and boundary. It does not
-record current implementation, verification, release, support, or hosted
-operation. Those facts belong to [Status](docs/STATUS.md),
-[Compatibility](docs/COMPATIBILITY.md), and the owning technical documents.
+This document defines Meshrix.js's technical purpose and architecture
+boundaries. Current implementation, verification, release, and support facts
+belong to [Status](docs/STATUS.md), [Compatibility](docs/COMPATIBILITY.md),
+and the owning technical documents.
 
 ## Purpose
 
-Meshrix.js is the full private-deployable governance platform for organizations
-that need to connect agent clients, upstream services, plugins, workspaces, and
-operator actions without distributing unchecked credentials or bypassing a
-single execution authority.
+Meshrix.js is an open-source TypeScript and Node.js framework for composing
+governed HTTP and MCP services, optional plugins, workspace capabilities, and
+operator workflows behind a single execution authority.
 
-The product lets an operator keep configuration, credentials, data custody,
-runtime policy, and operational decisions inside the operator's deployment
-while exposing useful capabilities through governed protocol and console
-surfaces.
-
-A current gap is remaining required work. Meshrix.js records what is true
-today and keeps closing that gap; it does not freeze “we do not do this” or
-“we cannot do this” as a durable product refusal. Fail-closed security
-invariants stay required until a stronger replacement lands.
+The runtime keeps configuration, credentials, persistent state, and policy
+under the instance operator's control while exposing capabilities through
+versioned protocol and Console surfaces.
 
 ## Durable outcome
 
@@ -85,10 +78,9 @@ This governance controls the transition from a proposal to an authoritative
 effect. Semantic correctness of model output is outside this governance
 boundary. Compensation never reverses an already external unowned effect.
 
-## Product boundary
+## Runtime boundary
 
-Meshrix.js owns the complete server-side governance platform for a private
-deployment:
+The Meshrix.js server runtime owns:
 
 - server configuration and runtime composition;
 - authenticated protocol and console entry points;
@@ -106,12 +98,11 @@ telemetry services, notification services, and upstream business systems are
 optional operator-selected integrations. Their absence must not silently
 become a configured default or a false capability claim.
 
-## Product direction
+## Architecture goals
 
-Meshrix.js is intended to provide:
+The maintained architecture targets:
 
-- a dependable single-node private deployment before broader deployment
-  shapes;
+- a dependable single-node topology before adding broader deployment shapes;
 - one canonical governed-execution path for every protected resource or
   effect;
 - self-contained local operation and recovery, with optional integrations
@@ -119,39 +110,21 @@ Meshrix.js is intended to provide:
 - protocol-neutral verification with synthetic peers instead of dependencies
   on client repositories;
 - complete migrations without permanent legacy paths; and
-- precise separation of functional acceptance, publication channels,
-  environment support, and hosted operation.
+- precise, candidate-bound verification of package and environment support.
 
-## Product identity and remaining required work
+## Scope boundaries
 
-Meshrix.js is currently a private-deployable governance platform. Gaps below
-remain remaining required work after the current candidate; they are not
-permanent refusals.
+The server provides a governed runtime, protocol boundaries, and a Console.
+It does not infer external support from source presence, a configured endpoint,
+or a passing unit test. The exact candidate and environment determine each
+published support claim; see [Status](docs/STATUS.md) and
+[Compatibility](docs/COMPATIBILITY.md).
 
-- The default product is operator-owned private deployment. Hosted operation,
-  multi-node availability, forwarding, and federation remain FutureGoals after
-  this candidate.
-- The current gateway admits operator-configured model providers. Native model
-  hosting remains remaining work if a deployment requires it.
-- The current product governs operations rather than a human messaging or
-  federation network. Those surfaces remain remaining work if they are admitted
-  later.
-- Client keys, end-to-end encryption, plaintext, and endpoint trust currently
-  remain with the client or operator. Cryptographic inability of the server to
-  recover plaintext remains remaining work for deployments that require it.
-- Client transport and messaging protocol authority currently remain with the
-  owning client product. Meshrix.js still has to complete and qualify its
-  connector boundary.
-
-These terms stay required and are not remaining work to weaken:
-
-- Plugins, agents, controllers, queues, or internal services must not mint
-  execution authority.
-- An optional third-party integration remains remaining qualification work
-  until its named receipt exists; absence is not silent support.
-- A Meshrix.js functional pass does not substitute for a product-specific
-  client, plugin, service, or hosted-operation receipt; those receipts remain
-  remaining required evidence.
+Plugins, agents, queues, protocol adapters, and internal services do not mint
+execution authority. Optional integrations remain outside the default runtime
+unless explicitly selected and admitted through their owning contract. A
+standard MCP client is authorized by protocol capabilities and grants, not by a
+hard-coded client catalogue.
 
 ## Documentation authorities
 
