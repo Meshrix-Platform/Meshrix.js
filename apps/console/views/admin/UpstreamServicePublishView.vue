@@ -33,7 +33,7 @@ import {
   getPublishedService,
   waitForUpstreamServicePublication,
   checkUpstreamServiceRuntimeHealth,
-  type PublishedServiceSummary,
+  type PublishedUpstreamServiceSummary,
   type UpstreamServiceDescriptor,
   type UpstreamServiceRuntimeHealth,
 } from "../../lib/upstream-service-publish-client";
@@ -61,7 +61,7 @@ const selectedServiceId = useConsoleUrlState("serviceId", "");
 const selectedServiceRevision = ref(0);
 const publishedServiceProtocol = ref("");
 const healthResult = ref<UpstreamServiceRuntimeHealth | null>(null);
-const publishedServices = ref<PublishedServiceSummary[]>([]);
+const publishedServices = ref<PublishedUpstreamServiceSummary[]>([]);
 const publishListMessages = computed(() => consoleMessages[currentConsoleLocale.value].publishList);
 // REQ-017 outcome model: staged progress + interpreted health; the done state
 // and selected serviceId are the frozen handoff to N17's success next steps.
@@ -226,7 +226,7 @@ async function refreshServices() {
   try {
     const result = await listPublishedServices();
     setRevision.value = result.setRevision;
-    publishedServices.value = result.services;
+    publishedServices.value = [...result.services];
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to list services.";
   } finally {

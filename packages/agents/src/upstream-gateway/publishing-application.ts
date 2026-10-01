@@ -13,6 +13,13 @@ import {
   UPSTREAM_SERVICE_ENDPOINT_FIELDS,
   UPSTREAM_SERVICE_OPERATION_FIELDS
 } from "@meshrix/contracts/upstream-service-publishing";
+import type {
+  UpstreamPublishingAction,
+  UpstreamServiceDetailResponse,
+  UpstreamServiceListResponse,
+  UpstreamServicePublication,
+  UpstreamServicePublishingResult
+} from "@meshrix/contracts/upstream-service-publishing";
 import {
   canonicalizeTypedReferenceManifest,
   SERVICE_MANIFEST_SCHEMA_VERSION
@@ -521,13 +528,51 @@ function mapStorageError(error?: any) : any {
   return error;
 }
 
+/**
+ * Producer interface for the authenticated publishing application. Domain
+ * authority stays here: raw command parsing, closed-field checks, ownership,
+ * expected revisions, idempotency and typed-reference safety are applied
+ * before any durable effect, and this interface only exposes the accepted
+ * result, the published list, and the owner-scoped detail.
+ */
+export interface UpstreamPublishingSubject {
+  subjectId?: string;
+  scopes?: string[];
+}
+
+export interface UpstreamPublishingRequestOptions {
+  signal?: AbortSignal | null;
+}
+
+export interface UpstreamPublishingExecuteOptions extends UpstreamPublishingRequestOptions {
+  expectedAction?: UpstreamPublishingAction | "";
+  expectedServiceId?: string;
+}
+
+export interface UpstreamPublishingApplication {
+  list(
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingRequestOptions
+  ): Promise<UpstreamServiceListResponse>;
+  get(
+    serviceId: string,
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingRequestOptions
+  ): Promise<UpstreamServiceDetailResponse>;
+  execute(
+    rawCommand?: unknown,
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingExecuteOptions
+  ): Promise<UpstreamServicePublishingResult>;
+}
+
 export function createUpstreamPublishingApplication({
   writerPort,
   readerPort,
   publishedReaderPort = null,
   getPublicationFacts = () : any => null,
   auditPort
-}: Record<string, any>) : any {
+}: Record<string, any>) : UpstreamPublishingApplication {
   if (typeof writerPort?.commitManifestSet !== "function" || typeof readerPort?.getSnapshot !== "function") {
     throw new TypeError("Upstream publishing application requires durable writer and snapshot reader ports.");
   }
@@ -548,7 +593,7 @@ export function createUpstreamPublishingApplication({
     return authenticated.scopes.has("gateway:admin") || record.manifest?.metadata?.ownerRef === authenticated.ownerRef;
   }
 
-  function publicationFor(record?: any, candidateSnapshot?: any, publishedSnapshot?: any) : any {
+  function publicationFor(record?: any, candidateSnapshot?: any, publishedSnapshot?: any) : UpstreamServicePublication {
     const publicationRef: any = `urn:meshrix:upstream-publication:${digest(
       "upstream-publication",
       record.serviceId,
@@ -564,12 +609,12 @@ export function createUpstreamPublishingApplication({
       facts.sourceRevision === publishedSnapshot.setRevision &&
       facts.sourceDigest === publishedSnapshot.setDigest
     );
-    return Object.freeze({
-      publicationRef,
-      status: serverPublished ? "server_published" : "publishing",
-      candidateRevision: candidateSnapshot.setRevision,
-      candidateDigest: candidateSnapshot.setDigest,
-      ...(serverPublished ? {
+    if (serverPublished) {
+      return Object.freeze({
+        publicationRef,
+        status: "server_published",
+        candidateRevision: candidateSnapshot.setRevision,
+        candidateDigest: candidateSnapshot.setDigest,
         terminal: Object.freeze({
           sourceRevision: facts.sourceRevision,
           sourceDigest: facts.sourceDigest,
@@ -577,12 +622,18 @@ export function createUpstreamPublishingApplication({
           audienceRevision: facts.audienceRevision,
           protocolRevision: facts.protocolRevision
         })
-      } : {})
+      });
+    }
+    return Object.freeze({
+      publicationRef,
+      status: "publishing",
+      candidateRevision: candidateSnapshot.setRevision,
+      candidateDigest: candidateSnapshot.setDigest
     });
   }
 
   return Object.freeze({
-    async list(subject?: any, { signal }: Record<string, any> = {}) : Promise<any> {
+    async list(subject?: UpstreamPublishingSubject | null, { signal }: UpstreamPublishingRequestOptions = {}) : Promise<UpstreamServiceListResponse> {
       const authenticated: any = readSubject(subject);
       const snapshot: any = await readerPort.getSnapshot({ signal });
       const publishedSnapshot: any = typeof publishedReaderPort?.getSnapshot === "function"
@@ -599,7 +650,7 @@ export function createUpstreamPublishingApplication({
         }));
       return Object.freeze({ ok: true, setRevision: snapshot.setRevision, services: Object.freeze(services) });
     },
-    async get(serviceId?: any, subject?: any, { signal }: Record<string, any> = {}) : Promise<any> {
+    async get(serviceId?: string, subject?: UpstreamPublishingSubject | null, { signal }: UpstreamPublishingRequestOptions = {}) : Promise<UpstreamServiceDetailResponse> {
       const authenticated: any = readSubject(subject);
       const snapshot: any = await readerPort.getSnapshot({ signal });
       const publishedSnapshot: any = typeof publishedReaderPort?.getSnapshot === "function"
@@ -626,7 +677,7 @@ export function createUpstreamPublishingApplication({
         })
       });
     },
-    async execute(rawCommand?: any, subject?: any, { signal, expectedAction = "", expectedServiceId = "" }: Record<string, any> = {}) : Promise<any> {
+    async execute(rawCommand?: unknown, subject?: UpstreamPublishingSubject | null, { signal, expectedAction = "", expectedServiceId = "" }: UpstreamPublishingExecuteOptions = {}) : Promise<UpstreamServicePublishingResult> {
       const authenticated: any = authenticate(subject);
       const command: any = parseCommand(rawCommand);
       if (expectedAction && command.action !== expectedAction) {

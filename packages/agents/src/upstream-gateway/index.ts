@@ -127,6 +127,12 @@ export {
   createUpstreamPublishingApplication,
   UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
 } from "./publishing-application.ts";
+export type {
+  UpstreamPublishingApplication,
+  UpstreamPublishingExecuteOptions,
+  UpstreamPublishingRequestOptions,
+  UpstreamPublishingSubject
+} from "./publishing-application.ts";
 export {
   compileUpstreamOperationProjection,
   projectedOperationForwardInput,

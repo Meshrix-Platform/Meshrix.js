@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startHttpServer } from "../../../apps/server/runtime/http-server.ts";
 import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
-import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "../../../packages/agents/src/upstream-gateway/publishing-application.ts";
+import {
+  UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+  type UpstreamServiceCreateCommand,
+  type UpstreamServiceReplaceCommand,
+} from "@meshrix/contracts/upstream-service-publishing";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 
 const roots: any[] = [];
@@ -38,7 +42,7 @@ async function login(baseUrl?: any, username?: any, password?: any) : Promise<an
   };
 }
 
-function createCommand() : any {
+function createCommand() : UpstreamServiceCreateCommand {
   return {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action: "create",
@@ -155,7 +159,7 @@ describe("production upstream publishing HTTP composition", () : any => {
     });
     expect(crossOwner.status).toBe(403);
 
-    const replaceCommand: any = (label?: any, idempotencyKey?: any) : any => ({
+    const replaceCommand: (label: string, idempotencyKey: string) => UpstreamServiceReplaceCommand = (label, idempotencyKey) => ({
       schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
       action: "replace",
       serviceId: first.serviceId,

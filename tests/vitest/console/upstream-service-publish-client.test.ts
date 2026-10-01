@@ -13,6 +13,11 @@ import {
   waitForUpstreamServicePublication,
   UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
 } from "../../../apps/console/lib/upstream-service-publish-client";
+import type {
+  UpstreamServiceCreateCommand,
+  UpstreamServiceRemoveCommand,
+  UpstreamServiceReplaceCommand,
+} from "@meshrix/contracts/upstream-service-publishing";
 
 beforeEach(() : any => {
   vi.clearAllMocks();
@@ -39,7 +44,9 @@ describe("upstream service publishing client contract", () : any => {
         descriptor: { serviceProtocol: "http", references: [], operations: [] }
       })
     );
-    const payload: any = bridge.sendJson.mock.calls[0][2];
+    const payload = bridge.sendJson.mock.calls[0][2] as UpstreamServiceCreateCommand;
+    expect(payload.action).toBe("create");
+    expect(payload.serviceKey).toBe("inventory");
     expect(payload).not.toHaveProperty("ownerSubjectId");
     expect(payload.descriptor).not.toHaveProperty("visibility");
     expect(payload.descriptor).not.toHaveProperty("trafficPolicy");
@@ -75,7 +82,8 @@ describe("upstream service publishing client contract", () : any => {
       "/api/gateway/v1/services/svc_fixture",
       "PUT"
     ]);
-    expect(bridge.sendJson.mock.calls[0][2]).toMatchObject({
+    const replacePayload = bridge.sendJson.mock.calls[0][2] as UpstreamServiceReplaceCommand;
+    expect(replacePayload).toMatchObject({
       action: "replace",
       serviceId: "svc_fixture",
       expectedServiceRevision: 2,
@@ -83,6 +91,11 @@ describe("upstream service publishing client contract", () : any => {
     });
 
     await removeUpstreamService("svc_fixture", 3, 8);
+    const removePayload = bridge.sendJson.mock.calls[1][2] as UpstreamServiceRemoveCommand;
+    expect(removePayload).toMatchObject({
+      action: "remove",
+      serviceId: "svc_fixture"
+    });
     expect(bridge.sendJson.mock.calls[1]).toEqual([
       "/api/gateway/v1/services/svc_fixture",
       "DELETE",

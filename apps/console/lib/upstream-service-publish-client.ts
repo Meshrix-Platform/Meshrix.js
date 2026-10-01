@@ -1,82 +1,61 @@
 import { getJson, sendJson } from "@meshrix/ui-console/bridge-http";
 import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "@meshrix/contracts/upstream-service-publishing";
 import type {
+  PublishedUpstreamServiceDetail,
+  PublishedUpstreamServiceSummary,
   TypedServiceReference,
+  UpstreamMcpDescriptor,
   UpstreamPayloadTransport,
+  UpstreamPublishingAction,
   UpstreamRequestRepresentationMode,
   UpstreamResponseRepresentationMode,
-  UpstreamMcpDescriptor,
+  UpstreamServiceCreateCommand,
   UpstreamServiceDescriptor,
+  UpstreamServiceDetailResponse,
+  UpstreamServiceDisableCommand,
+  UpstreamServiceListResponse,
+  UpstreamServicePublication,
+  UpstreamServicePublishingCommandBase,
+  UpstreamServicePublishingResult,
+  UpstreamServiceRemoveCommand,
+  UpstreamServiceRepublishCommand,
+  UpstreamServiceReplaceCommand,
 } from "@meshrix/contracts/upstream-service-publishing";
 
 export { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION };
 export type {
+  PublishedUpstreamServiceDetail,
+  PublishedUpstreamServiceSummary,
   TypedServiceReference,
+  UpstreamMcpDescriptor,
   UpstreamPayloadTransport,
   UpstreamRequestRepresentationMode,
   UpstreamResponseRepresentationMode,
-  UpstreamMcpDescriptor,
   UpstreamServiceDescriptor,
+  UpstreamServiceDetailResponse,
+  UpstreamServiceListResponse,
+  UpstreamServicePublication,
+  UpstreamServicePublishingResult,
 };
 
-export interface PublishingResult {
-  ok: boolean;
-  serviceId: string;
-  state: "rejected" | "accepted" | "publishing" | "disabled" | "removed" | "server_published";
-  serviceRevision: number;
-  setRevision: number;
-  manifestDigest: string;
-  receiptRef: string;
-  publication: UpstreamServicePublication;
-  replayed: boolean;
-}
-
-export interface UpstreamServicePublication {
-  publicationRef: string;
-  status: "publishing" | "server_published";
-  candidateRevision: number;
-  candidateDigest: string;
-  terminal?: {
-    sourceRevision: number;
-    sourceDigest: string;
-    catalogRevision: string;
-    audienceRevision: number;
-    protocolRevision: number;
-  };
-}
-
-export interface PublishedServiceSummary {
-  serviceId: string;
-  state: PublishingResult["state"];
-  serviceRevision: number;
-  manifestDigest: string;
-  publication: UpstreamServicePublication;
-}
-
-export interface PublishedServiceDetail extends PublishedServiceSummary {
-  descriptor: UpstreamServiceDescriptor | null;
-  references: TypedServiceReference[];
-}
-
-export interface ServiceListResponse {
-  ok: boolean;
-  setRevision: number;
-  services: PublishedServiceSummary[];
-}
-
-export interface ServiceDetailResponse {
-  ok: boolean;
-  setRevision: number;
-  service: PublishedServiceDetail;
-}
-
+/** Runtime health payload returned by the gateway health route. */
 export type UpstreamServiceRuntimeHealth = { ok: boolean; [key: string]: unknown };
 
-function idempotencyKey(action: string) : any {
+export interface UpstreamServicePublicationWaitOptions {
+  maxAttempts?: number;
+  intervalMs?: number;
+  delay?: (milliseconds: number) => Promise<void>;
+}
+
+function idempotencyKey(action: UpstreamPublishingAction): string {
   return `${action}:${crypto.randomUUID()}`;
 }
 
-function commandBase(action: string, expectedServiceRevision: number, expectedSetRevision: number) : any {
+function commandBase<Action extends UpstreamPublishingAction>(
+  action: Action,
+  expectedServiceRevision: number,
+  expectedSetRevision: number,
+): UpstreamServicePublishingCommandBase & { action: Action } {
   return {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action,
@@ -86,12 +65,17 @@ function commandBase(action: string, expectedServiceRevision: number, expectedSe
   };
 }
 
-export function createUpstreamService(serviceKey: string, descriptor: UpstreamServiceDescriptor, expectedSetRevision: number) : any {
-  return sendJson<PublishingResult>("/api/gateway/v1/services", "POST", {
+export function createUpstreamService(
+  serviceKey: string,
+  descriptor: UpstreamServiceDescriptor,
+  expectedSetRevision: number,
+): Promise<UpstreamServicePublishingResult> {
+  const command: UpstreamServiceCreateCommand = {
     ...commandBase("create", 0, expectedSetRevision),
     serviceKey,
     descriptor,
-  });
+  };
+  return sendJson<UpstreamServicePublishingResult>("/api/gateway/v1/services", "POST", command);
 }
 
 export function replaceUpstreamService(
@@ -99,55 +83,77 @@ export function replaceUpstreamService(
   descriptor: UpstreamServiceDescriptor,
   expectedServiceRevision: number,
   expectedSetRevision: number,
-) : any {
-  return sendJson<PublishingResult>(`/api/gateway/v1/services/${encodeURIComponent(serviceId)}`, "PUT", {
+): Promise<UpstreamServicePublishingResult> {
+  const command: UpstreamServiceReplaceCommand = {
     ...commandBase("replace", expectedServiceRevision, expectedSetRevision),
     serviceId,
     descriptor,
-  });
+  };
+  return sendJson<UpstreamServicePublishingResult>(
+    `/api/gateway/v1/services/${encodeURIComponent(serviceId)}`,
+    "PUT",
+    command,
+  );
 }
 
-function stateCommand(action: "disable" | "remove" | "republish", serviceId: string, serviceRevision: number, setRevision: number) : any {
-  return {
-    ...commandBase(action, serviceRevision, setRevision),
+export function disableUpstreamService(
+  serviceId: string,
+  serviceRevision: number,
+  setRevision: number,
+): Promise<UpstreamServicePublishingResult> {
+  const command: UpstreamServiceDisableCommand = {
+    ...commandBase("disable", serviceRevision, setRevision),
     serviceId,
   };
-}
-
-export function disableUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) : any {
-  return sendJson<PublishingResult>(
+  return sendJson<UpstreamServicePublishingResult>(
     `/api/gateway/v1/services/${encodeURIComponent(serviceId)}/disable`,
     "POST",
-    stateCommand("disable", serviceId, serviceRevision, setRevision),
+    command,
   );
 }
 
-export function republishUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) : any {
-  return sendJson<PublishingResult>(
+export function republishUpstreamService(
+  serviceId: string,
+  serviceRevision: number,
+  setRevision: number,
+): Promise<UpstreamServicePublishingResult> {
+  const command: UpstreamServiceRepublishCommand = {
+    ...commandBase("republish", serviceRevision, setRevision),
+    serviceId,
+  };
+  return sendJson<UpstreamServicePublishingResult>(
     `/api/gateway/v1/services/${encodeURIComponent(serviceId)}/republish`,
     "POST",
-    stateCommand("republish", serviceId, serviceRevision, setRevision),
+    command,
   );
 }
 
-export function removeUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) : any {
-  return sendJson<PublishingResult>(
+export function removeUpstreamService(
+  serviceId: string,
+  serviceRevision: number,
+  setRevision: number,
+): Promise<UpstreamServicePublishingResult> {
+  const command: UpstreamServiceRemoveCommand = {
+    ...commandBase("remove", serviceRevision, setRevision),
+    serviceId,
+  };
+  return sendJson<UpstreamServicePublishingResult>(
     `/api/gateway/v1/services/${encodeURIComponent(serviceId)}`,
     "DELETE",
-    stateCommand("remove", serviceId, serviceRevision, setRevision),
+    command,
     { safetyConfirm: true },
   );
 }
 
-export function listPublishedServices() : any {
-  return getJson<ServiceListResponse>("/api/gateway/v1/services");
+export function listPublishedServices(): Promise<UpstreamServiceListResponse> {
+  return getJson<UpstreamServiceListResponse>("/api/gateway/v1/services");
 }
 
-export function getPublishedService(serviceId: string) : any {
-  return getJson<ServiceDetailResponse>(`/api/gateway/v1/services/${encodeURIComponent(serviceId)}`);
+export function getPublishedService(serviceId: string): Promise<UpstreamServiceDetailResponse> {
+  return getJson<UpstreamServiceDetailResponse>(`/api/gateway/v1/services/${encodeURIComponent(serviceId)}`);
 }
 
-export function checkUpstreamServiceRuntimeHealth(serviceId: string) : any {
+export function checkUpstreamServiceRuntimeHealth(serviceId: string): Promise<UpstreamServiceRuntimeHealth> {
   return getJson<UpstreamServiceRuntimeHealth>(
     `/api/gateway/v1/external-services/${encodeURIComponent(serviceId)}/health`,
   );
@@ -155,17 +161,18 @@ export function checkUpstreamServiceRuntimeHealth(serviceId: string) : any {
 
 export async function waitForUpstreamServicePublication(
   serviceId: string,
-  options: { maxAttempts?: number; intervalMs?: number; delay?: (milliseconds: number) => Promise<void> } = {},
-) : Promise<any> {
-  const maxAttempts: any = options.maxAttempts ?? 20;
-  const intervalMs: any = options.intervalMs ?? 500;
-  const delay: any = options.delay ?? ((milliseconds: number) : any => new Promise<void>((resolve?: any) : any => setTimeout(resolve, milliseconds)));
+  options: UpstreamServicePublicationWaitOptions = {},
+): Promise<UpstreamServiceDetailResponse> {
+  const maxAttempts: number = options.maxAttempts ?? 20;
+  const intervalMs: number = options.intervalMs ?? 500;
+  const delay: (milliseconds: number) => Promise<void> = options.delay ??
+    ((milliseconds: number): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new Error("maxAttempts must be a positive integer.");
 
-  let latest: ServiceDetailResponse | undefined;
-  for (let attempt: any = 0; attempt < maxAttempts; attempt += 1) {
+  let latest: UpstreamServiceDetailResponse | undefined;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     latest = await getPublishedService(serviceId);
-    if (latest?.service.publication.status === "server_published" || latest?.service.state === "server_published") {
+    if (latest.service.publication.status === "server_published") {
       return latest;
     }
     if (attempt + 1 < maxAttempts) await delay(intervalMs);

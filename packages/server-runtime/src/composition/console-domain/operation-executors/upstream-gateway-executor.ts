@@ -1,3 +1,10 @@
+import type { UpstreamPublishingApplication } from "#meshrix/agents/upstream-gateway/index";
+import type {
+  UpstreamServiceDetailResponse,
+  UpstreamServiceListResponse,
+  UpstreamServicePublishingResult
+} from "@meshrix/contracts/upstream-service-publishing";
+
 function requiredFunction(name?: any, value?: any) : any {
   if (typeof value !== "function") {
     throw new Error(`Upstream gateway executor requires ${name}.`);
@@ -64,22 +71,27 @@ export function createUpstreamGatewayOperationExecutor(dependencies: Record<stri
 
     try {
       if (id === "external_services.publications.list") {
-        return result(200, protocolPayload(await context.upstreamPublishingApplication.list(subject, {
+        const publishingApplication: UpstreamPublishingApplication = context.upstreamPublishingApplication;
+        const listed: UpstreamServiceListResponse = await publishingApplication.list(subject, {
           signal: context.signal || null
-        })));
+        });
+        return result(200, protocolPayload(listed));
       }
       if (id === "external_services.publications.get") {
-        return result(200, protocolPayload(await context.upstreamPublishingApplication.get(
+        const publishingApplication: UpstreamPublishingApplication = context.upstreamPublishingApplication;
+        const detail: UpstreamServiceDetailResponse = await publishingApplication.get(
           upstreamGatewayServiceId(input, context),
           subject,
           { signal: context.signal || null }
-        )));
+        );
+        return result(200, protocolPayload(detail));
       }
       if (CONFIG_MUTATION_OPERATION_IDS.has(id)) {
-        if (!context.upstreamPublishingApplication?.execute || !context.rawRequestBody) {
+        const publishingApplication: UpstreamPublishingApplication | null = context.upstreamPublishingApplication || null;
+        if (!publishingApplication?.execute || !context.rawRequestBody) {
           return result(503, errorPayload(new Error("Upstream publishing application is unavailable."), "Upstream publishing failed."));
         }
-        const published: any = await context.upstreamPublishingApplication.execute(context.rawRequestBody, subject, {
+        const published: UpstreamServicePublishingResult = await publishingApplication.execute(context.rawRequestBody, subject, {
           signal: context.signal || null,
           expectedAction: CONFIG_MUTATION_ACTIONS[id],
           expectedServiceId: upstreamGatewayServiceId(input, context)
