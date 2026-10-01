@@ -1,18 +1,12 @@
 <script setup lang="ts">
-const props = withDefaults(defineProps<{
-  modelValue: boolean;
-  label: string;
-  disabled?: boolean;
-  readonly?: boolean;
-}>(), {
+import type { BinaryCheckboxEmits, BinaryCheckboxProps } from "./binary-checkbox-types";
+
+const props = withDefaults(defineProps<BinaryCheckboxProps>(), {
   disabled: false,
   readonly: false,
 });
 
-const emit = defineEmits<{
-  "update:modelValue": [value: boolean];
-  change: [value: boolean];
-}>();
+const emit = defineEmits<BinaryCheckboxEmits>();
 
 function toggle() {
   if (props.disabled || props.readonly) {
