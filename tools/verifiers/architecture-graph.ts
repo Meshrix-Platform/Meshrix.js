@@ -1095,7 +1095,7 @@ export async function runArchitectureGraph({
   }
 
   const graph: Record<string, any> = {
-    schemaVersion: "v0.0.1:architecture:graph-report-4",
+    schemaVersion: "v0.0.1:architecture:graph-report-3",
     registryDriven: true,
     nodes: files.map((file?: any) : any => {
       const nodePath: any = relativePath(file);

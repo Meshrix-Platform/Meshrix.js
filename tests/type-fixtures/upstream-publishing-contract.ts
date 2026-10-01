@@ -215,7 +215,7 @@ export function malformedPublicCommands(): void {
   // @ts-expect-error the command action is a closed union
   const unknownAction: UpstreamServicePublishingCommand = { ...createCommand, action: "archive" };
   // @ts-expect-error the schema version is exact
-  const wrongSchema: UpstreamServiceCreateCommand = { ...createCommand, schemaVersion: "v0.0.1:upstream-service-publishing:command-1" };
+  const wrongSchema: UpstreamServiceCreateCommand = { ...createCommand, schemaVersion: "unsupported-command-schema" };
   // @ts-expect-error the application contract exposes only list/get/execute
   application.replaceFromManifestSnapshot();
   // @ts-expect-error expectedAction names a supported publishing action

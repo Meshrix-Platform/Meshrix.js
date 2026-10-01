@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-09-02",
+  "updatedAt": "2026-10-01",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -9403,6 +9403,37 @@
               "evidenceId": "v0-0-1-upstream-gateway-mcp-e2e-report-1-source-2",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.upstream-gateway.mcp-final-effect-target",
+      "kind": "runtime_capability",
+      "description": "Exact discovered MCP operation binding used by the final protected effect permit.",
+      "activeVersion": "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+      "versions": [
+        {
+          "version": "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+          "ref": "meshrix.upstream-gateway.mcp-final-effect-target@v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current canonical MCP final effect target binding."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "mcp-final-effect-target-source",
+              "kind": "other",
+              "uri": "packages/agents/src/upstream-gateway/index.ts"
+            },
+            {
+              "evidenceId": "mcp-final-effect-target-test",
+              "kind": "test",
+              "uri": "tests/vitest/gateway/closure/platform-api-key-reservation-lifetime.test.ts"
             }
           ]
         }
