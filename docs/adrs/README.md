@@ -17,3 +17,4 @@ planning, audit, and progress material remains in the ignored `docs/plans/` or
 ## Index
 
 - [ADR-0001: Upstream services may declare optional custom fields](0001-upstream-service-custom-fields.md) — `Implemented`
+- [ADR-0002: Maintainable module boundaries — runtime edge kinds, Contracts independence, and public package facades](0002-maintainable-module-boundaries.md) — `Implemented`

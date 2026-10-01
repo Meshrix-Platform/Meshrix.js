@@ -1,15 +1,14 @@
 {
   "$schema": "./schema/dependency-rule.schema.json",
-  "version": "v0.2.0",
+  "version": "v0.3.0",
   "layers": [
     {
       "id": "contracts",
       "name": "Contracts",
       "directory": "packages/contracts",
-      "allowedDependsOn": [
-        "foundation"
-      ],
+      "allowedDependsOn": [],
       "forbiddenDependsOn": [
+        "foundation",
         "gateway",
         "agents",
         "capabilities",
