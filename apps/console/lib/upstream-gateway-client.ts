@@ -2,6 +2,7 @@ import { getJson } from "@meshrix/ui-console/bridge-http";
 
 export type UpstreamGatewayService = {
   serviceId: string;
+  serviceProtocol?: "http" | "json-rpc" | "mcp";
   label: string;
   baseUrl: string;
   healthPath: string;

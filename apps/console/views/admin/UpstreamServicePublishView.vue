@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, resolveComponent, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, resolveComponent, watch } from "vue";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import ConsoleEmptyState from "../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
@@ -59,6 +59,7 @@ const setRevision = ref(0);
 // the same load path as list clicks, and defaults stay out of the URL.
 const selectedServiceId = useConsoleUrlState("serviceId", "");
 const selectedServiceRevision = ref(0);
+const publishedServiceProtocol = ref("");
 const healthResult = ref<UpstreamServiceRuntimeHealth | null>(null);
 const publishedServices = ref<PublishedServiceSummary[]>([]);
 const publishListMessages = computed(() => consoleMessages[currentConsoleLocale.value].publishList);
@@ -238,6 +239,7 @@ function resetForm() {
   Object.assign(form, emptyForm());
   selectedServiceId.value = "";
   selectedServiceRevision.value = 0;
+  publishedServiceProtocol.value = "";
   healthResult.value = null;
   error.value = "";
   status.value = "";
@@ -266,6 +268,7 @@ async function selectService(serviceId: string) {
     selectedServiceRevision.value = result.service.serviceRevision;
     setRevision.value = result.setRevision;
     Object.assign(form, result.service.descriptor || {});
+    publishedServiceProtocol.value = result.service.descriptor?.serviceProtocol || "";
     loadMcpEditorFields(result.service.descriptor || {});
     form.references = [...result.service.references];
     form.savedCredentialOptions = [...form.references];
@@ -330,7 +333,32 @@ function descriptorPayload(): UpstreamServiceDescriptor {
   return descriptor as unknown as UpstreamServiceDescriptor;
 }
 
+async function completePublication(serviceId: string, protocol: string) {
+  status.value = "Service accepted; waiting for server publication.";
+  outcome.advance();
+  const published = await waitForUpstreamServicePublication(serviceId);
+  publishedServiceProtocol.value = protocol;
+  selectedServiceRevision.value = published.service.serviceRevision;
+  setRevision.value = published.setRevision;
+  status.value = "Service is server-published; checking runtime health.";
+  outcome.advance();
+  healthResult.value = await checkUpstreamServiceRuntimeHealth(serviceId);
+  outcome.complete("runtime-health", healthResult.value);
+  status.value = healthResult.value?.ok === true
+    ? "Service is server-published and runtime health passed."
+    : "Service is server-published, but runtime health did not pass.";
+  await refreshServices();
+}
+
+async function restorePublicationFocus(invoker: HTMLElement | null) {
+  await nextTick();
+  if (invoker?.isConnected && invoker !== document.body && document.activeElement === document.body) {
+    invoker.focus({ preventScroll: true });
+  }
+}
+
 async function publishService() {
+  const invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   // Client-side validation failures land in the form: activate the first
   // invalid tab and focus its first invalid field before any page-level alert.
   if (await publishFormRef.value?.focusFirstInvalid?.()) {
@@ -353,16 +381,17 @@ async function publishService() {
   status.value = "";
   outcome.begin("publish-request");
   try {
+    const descriptor = descriptorPayload();
     let result;
     if (selectedServiceId.value) {
       result = await replaceUpstreamService(
         selectedServiceId.value,
-        descriptorPayload(),
+        descriptor,
         selectedServiceRevision.value,
         setRevision.value
       );
     } else {
-      result = await createUpstreamService(form.serviceKey.trim(), descriptorPayload(), setRevision.value);
+      result = await createUpstreamService(form.serviceKey.trim(), descriptor, setRevision.value);
     }
     // Clear the pre-publish draft slot (the "new:" slot or the replaced
     // service's slot) — the published descriptor supersedes it.
@@ -372,19 +401,7 @@ async function publishService() {
     setRevision.value = result.setRevision;
     removePublishDraft(prePublishDraftKey);
     markDraftClean();
-    status.value = "Service accepted; waiting for server publication.";
-    outcome.advance();
-    const published = await waitForUpstreamServicePublication(result.serviceId);
-    selectedServiceRevision.value = published.service.serviceRevision;
-    setRevision.value = published.setRevision;
-    status.value = "Service is server-published; checking runtime health.";
-    outcome.advance();
-    healthResult.value = await checkUpstreamServiceRuntimeHealth(result.serviceId);
-    outcome.complete("runtime-health", healthResult.value);
-    status.value = healthResult.value?.ok === true
-      ? "Service is server-published and runtime health passed."
-      : "Service is server-published, but runtime health did not pass.";
-    await refreshServices();
+    await completePublication(result.serviceId, descriptor.serviceProtocol);
   } catch (e: unknown) {
     // The failing stage is the active one at throw time; the health stage can
     // carry the failed payload so its checks still render with remediation.
@@ -393,6 +410,7 @@ async function publishService() {
     error.value = e instanceof Error ? e.message : "Publishing failed.";
   } finally {
     loading.value = false;
+    await restorePublicationFocus(invoker);
   }
 }
 
@@ -414,17 +432,24 @@ async function disableSelected() {
 
 async function republishSelected() {
   if (!selectedServiceId.value) return;
+  const invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   if (!(await requestDestructiveConfirm("publish.service.republish", { resource: selectedServiceId.value }))) return;
+  const serviceId = selectedServiceId.value;
+  const protocol = publishedServiceProtocol.value;
   loading.value = true;
   error.value = "";
+  status.value = "";
+  outcome.begin("publish-request");
   try {
-    await republishUpstreamService(selectedServiceId.value, selectedServiceRevision.value, setRevision.value);
-    status.value = "Service accepted for republishing.";
-    await refreshServices();
+    await republishUpstreamService(serviceId, selectedServiceRevision.value, setRevision.value);
+    await completePublication(serviceId, protocol);
   } catch (e: unknown) {
+    const activeStage = outcome.stages.value.find((stage) => stage.state === "active");
+    outcome.fail(activeStage?.id || "publish-request");
     error.value = e instanceof Error ? e.message : "Republish failed.";
   } finally {
     loading.value = false;
+    await restorePublicationFocus(invoker);
   }
 }
 
@@ -494,8 +519,8 @@ usePageRefreshHandler(
       class="publish-success-links"
       data-testid="publish-success-links"
     >
-      <RouterLink to="/admin/operation-permission" class="journey-next-link">
-        {{ journeyMessages.grantToolAccess }}
+      <RouterLink :to="publishedServiceProtocol === 'mcp' ? '/admin/api-key-distribution' : '/admin/operation-permission'" class="journey-next-link">
+        {{ publishedServiceProtocol === 'mcp' ? journeyMessages.issueClientKey : journeyMessages.grantToolAccess }}
       </RouterLink>
       <RouterLink
         :to="{ path: '/admin/upstream-services', query: { serviceId: selectedServiceId } }"
@@ -578,7 +603,7 @@ usePageRefreshHandler(
       </ConsoleEmptyState>
     </section>
 
-    <main id="upstream-publish-form" class="publish-grid">
+    <div id="upstream-publish-form" class="publish-grid">
       <PublishServiceForm
         ref="publishFormRef"
         :form="form"
@@ -590,7 +615,7 @@ usePageRefreshHandler(
         @republish="republishSelected"
         @remove="removeSelected"
       />
-    </main>
+    </div>
   </section>
 </template>
 
@@ -754,6 +779,7 @@ usePageRefreshHandler(
 }
 .published-service-select {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
@@ -775,10 +801,16 @@ usePageRefreshHandler(
   background-color: var(--border-strong);
 }
 .published-service-id {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
 }
 .published-service-summary {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 0.8rem;
   color: var(--text-muted);
 }

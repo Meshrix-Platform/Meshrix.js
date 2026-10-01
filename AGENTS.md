@@ -4,6 +4,40 @@ This file is the repository-wide instruction authority for development agents.
 It applies to every task and directory in this repository. A more specific
 child `AGENTS.md` may strengthen these rules but must not weaken them.
 
+## Short-Term And Long-Term Planning
+
+Use the current Better Plan skill for all repository delivery planning, from a
+small scoped change to the long-term product programme. Use the existing local
+planning workspace; do not create a competing roadmap or copy private execution
+state into public source. When that workspace is unavailable, report the missing
+context before creating a replacement.
+
+- `Programme.json` owns delivery identities, milestone outlines and dependencies.
+  Future milestones remain outlines until investigation establishes executable work.
+- `Requirements.json` owns cross-delivery requirements. Trees and Tasks reference
+  those identities instead of maintaining duplicate requirement lists.
+- Each active delivery uses the current split layout: `Tree.json`,
+  `tasks/<id>.json` and `nodes/<id>.json`. A Task has an integration owner and maps
+  to one independently deliverable Draft PR; a Node owns one coherent change and
+  its commit. Record absent commit or PR references honestly.
+- Keep shared requirements at Tree or Task scope. Record real checks and evidence
+  at their owning scope. User-journey observations and final review are delivery
+  lifecycle work; create source Nodes only for concrete implementation,
+  documentation or configuration changes, not empty audit commits.
+- Use the current skill's tool for plan operations and exports. Archive supplied
+  conversation context and superseded plans through its history commands before
+  replacement. Preserve prior outcomes and evidence without relabeling them as
+  current verification. Do not maintain an older tool dialect as the active path.
+- Markdown reports are navigation or generated views of Better Plan state, never
+  a second editable plan. Product status remains in `docs/STATUS.md`; it describes
+  verified product facts rather than dispatch instructions.
+
+Plan status never grants execution authority. Preserve the user's selected model,
+live-acceptance ownership, deployment and publication boundaries. A blocker pauses
+only dependent work. Ordinary authorized scoped repairs continue without another
+general approval request. Record Task and Tree delivery conclusions separately
+from Node progress; completed Nodes alone do not establish accepted delivery.
+
 ## Functional Availability Before Benchmarking And Optimization
 
 Meshrix development must first establish that the actual service is usable.

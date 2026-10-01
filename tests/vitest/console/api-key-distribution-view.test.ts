@@ -471,7 +471,7 @@ describe("API key distribution console", () => {
     expect(view).toContain('data-testid="agent-setup-access-step"');
     expect(view).toContain('data-testid="agent-setup-review-step"');
     expect(view).toContain("高级设置");
-    expect(view).toContain("允许访问全部资源");
+    expect(view).toContain("不附加资源筛选");
     expect(view).not.toContain("连接器包 ID");
     expect(view).not.toContain("进程身份与使用限制");
     expect(view).not.toContain("最多使用次数");

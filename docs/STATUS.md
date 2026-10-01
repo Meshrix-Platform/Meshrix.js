@@ -43,8 +43,9 @@ multi-node operation retain their separate evidence boundaries.
 The repository contains the focused `@meshrix/gateway` candidate and its
 modern/legacy MCP adapters. The gateway work in
 [PR #82](https://github.com/Meshrix-Platform/Meshrix.js/pull/82) is a development
-candidate, not an accepted release. A source revision must be frozen after the
-scoped repairs before acceptance or performance results can bind to it.
+candidate, not an accepted release. The current bounded functional evidence binds
+candidate `df7dd9b9e49b2ec98dc32810c777e5ffb14f302b`. Later changes require
+new affected evidence; they do not inherit this candidate's result.
 
 Focused deterministic gateway tests cover protocol, authorization, cancellation,
 durable effect boundaries, crash recovery, and lifecycle behavior. The prior MIT
@@ -53,13 +54,21 @@ all 18 unmodified public packages, including packaged Core startup, native
 storage, and health/bootstrap/RPC contracts. The first live diagnostic exposed
 Console onboarding and gateway dispatch defects. Their corrections also address
 discovery, scoped MCP tool selection, and unchosen request deadlines across the
-platform and optional connector. Changed source and artifacts require their own
-verification; earlier results do not certify them. A passing engineering check
-does not establish external-client adoption, publication, full-repository
-acceptance, or benchmark readiness.
-Benchmark work requires the same candidate's actual backend, Console, standard
-MCP-to-upstream, and orderly shutdown evidence as defined in
+platform and optional connector. The corrected candidate completed a bounded Linux
+Core/Console/standard-MCP route: service publication, exact tool selection and
+catalogs, an authorized upstream read, omitted-operation refusal, UI revocation,
+revoked-client refusal, and normal shutdown and cleanup. These are recorded
+observations for that candidate and configuration, not a new run or proof of
+an autonomous Agent development task.
+
+Changed source and artifacts require their own affected verification. The current
+priority is actual first-use effectiveness and removal of avoidable user friction;
+engineering checks and real user-task evidence remain separate. Benchmark work
+requires the same candidate's actual backend, Console, standard MCP-to-upstream,
+and orderly shutdown evidence as defined in
 [the repository rules](../AGENTS.md#functional-availability-before-benchmarking-and-optimization).
+Those prerequisites are recorded for the named Linux candidate; full-repository
+acceptance, final distribution qualification and publication remain separate.
 
 ## Public-release acceptance
 
@@ -74,8 +83,8 @@ availability are not claims of this release.
 | Authorization and lifecycle | Reject untrusted supplied browser origins before CLI dispatch, preserve native clients without Origin, propagate cancellation, and close active streams and owned upstream resources normally. Standalone request lifetime follows caller and service cancellation rather than a separate fixed operation deadline. | Focused checks pass for Origin rejection, cancellation, HTTP stream shutdown, stdio output backpressure and owned-child cleanup. Protected upstream dispatch rechecks authority after discovery, session initialization, DNS resolution, or queued writes; controlled revocation checks observe zero effect calls. |
 | Recovery | Authorized non-read remote effects require durable pre-effect intent, a durable dispatch boundary, and conservative uncertain outcomes that never authorize blind replay. Preserve the documented offline storage-restore boundary. Optional public gateway receipt lookup and continuation-key restoration are separate capabilities. | Standalone serving uses its owned SQLite intent ledger; discovered platform MCP effects use the existing operation-proof lifecycle and durable dispatch receipt. Deterministic process tests pass for completion, storage failure, crash/reopen uncertainty, no automatic resend, and read calls without effect records. Terminal outcomes follow result validation. Offline restore has an implementation and focused tests; the current candidate's operator restore procedure and live drill remain unverified. |
 | Distribution | Ship the release registry's package set and `runtime-ui` target for `linux/amd64` and `linux/arm64`; test the unmodified artifacts intended for publication in clean consumers. | Release-definition and preparation checks pass. The runtime dependency resolves the publicly verified `pactium@0.8.1` MIT package. That dependency candidate passed its Node build and a fresh-container consumer of all 18 unmodified public packages, including packaged CLI, Core startup, health/bootstrap/RPC, and native storage. Subsequent platform and connector repairs change the intended artifacts, so exact final-artifact consumer evidence remains required; prior receipts apply only to their original bytes. The independent source archive retains `pactium@0.8.0` under its original GPL-3.0-or-later identity. These package facts do not qualify the complete Meshrix.js distribution. Both target architectures still require their release-deployment evidence. |
-| Functional acceptance | Complete source review and deterministic engineering verification, then obtain candidate-bound evidence for the actual backend, Console action, standard MCP upstream operation, and normal cleanup. | The designated acceptance Agent completed a first isolated Core/Console/MCP diagnostic using synthetic data and normal cleanup. It found adoption-blocking Console and gateway defects; this was not a passing acceptance. The repaired candidate must complete the continuous route with the same designated Agent. Historical acceptance cannot certify changed source. |
-| Performance and public claims | Publish reproducible measurements tied to immutable candidate and comparison versions, equivalent capabilities and security settings, synthetic workloads, resource limits, and observed failures. | No current candidate-bound comparison establishes industry-leading throughput, latency, or reliability. Benchmark validation and optimization wait for functional availability. |
+| Functional acceptance | Complete source review and deterministic engineering verification, then obtain candidate-bound evidence for the actual backend, Console action, standard MCP upstream operation, and normal cleanup. | The initial isolated diagnostic found adoption-blocking defects and remains a failed attempt. The repaired `df7dd9b` candidate subsequently passed the bounded actual Linux Core/Console/standard-MCP route, selected-tool and denial checks, UI revocation and normal cleanup. This is functional-availability evidence for that scenario, not the complete product-level acceptance gate or autonomous Agent task evidence. New user-journey improvements require affected engineering checks and actual revalidation. |
+| Performance and public claims | Publish reproducible measurements tied to immutable candidate and comparison versions, equivalent capabilities and security settings, synthetic workloads, resource limits, and observed failures. | No current candidate-bound comparison establishes industry-leading throughput, latency, or reliability. One contained comparison completed its direct reference, but Meshrix.js admission errors left fixed-load legs incomplete and the comparator did not satisfy the selected discovery contract. No comparative ranking follows. Functional prerequisites are recorded for the named candidate; further work must diagnose the actual limitation and retain all failed results. Comparative performance does not replace user-journey effectiveness. |
 | Public entry points | Provide accurate source setup, security reporting, release status, license information, and canonical documentation through `meshrix.io`; verify the selected HTTPS host. | Website source explains service connection, scoped client access, Core/Console and the standalone gateway, with source setup, documentation, security, and release-status links. Static checks and a local desktop/mobile browser observation passed. Local preview is not deployment evidence; hosted HTTPS availability and public release artifacts remain unverified. |
 
 These are finite release acceptance conditions. Task ownership and execution

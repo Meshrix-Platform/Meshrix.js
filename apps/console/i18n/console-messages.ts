@@ -213,6 +213,10 @@ export const consoleMessages: any = {
     },
     publishForm: {
       credentialSaveLink: "在 Meshrix.js 中保存凭据",
+      localNetworkLabel: "允许访问本机或私有网络",
+      publishedServiceIdentifier: "已发布服务标识",
+      publishedServiceIdentifierHelp: "Meshrix.js 分配的固定服务标识，用于重新打开和编辑此已发布服务。它不是创建时输入的服务名称或标识，不能修改。",
+      localNetworkHelp: "默认关闭：本机与私有网络地址不会被调用或发现工具。仅在此服务确实位于该网络且你允许访问时开启；发布后生效。云元数据、链路本地及其他禁止地址仍不可访问。",
     },
     publishList: {
       title: "已发布服务",
@@ -480,6 +484,10 @@ export const consoleMessages: any = {
     },
     publishForm: {
       credentialSaveLink: "Save a credential in Meshrix.js",
+      localNetworkLabel: "Allow loopback or private-network access",
+      publishedServiceIdentifier: "Published service identifier",
+      publishedServiceIdentifierHelp: "The immutable identifier assigned by Meshrix.js to reopen and edit this published service. It is not the name or identifier entered at creation and cannot be changed.",
+      localNetworkHelp: "Off by default: loopback and private-network addresses cannot be called or have their tools discovered. Enable only when this service is intentionally on that network and you permit access; publish to apply. Cloud metadata, link-local and other denied addresses remain blocked.",
     },
     publishList: {
       title: "Published Services",

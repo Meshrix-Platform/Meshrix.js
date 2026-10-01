@@ -4,6 +4,7 @@ import { computed, defineComponent, nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MeshrixTabs from "../../../apps/console/components/MeshrixTabs.vue";
 import ConsoleDrawer from "../../../apps/console/components/shell/ConsoleDrawer.vue";
+import ConsoleSideNavFooter from "../../../apps/console/components/shell/side-nav/ConsoleSideNavFooter.vue";
 import { createConsoleOverlayController } from "../../../apps/console/composables/console-overlay-controller";
 import {
   consoleMessages,
@@ -12,6 +13,10 @@ import {
 } from "../../../apps/console/i18n/console";
 
 const drawerShell: any = vi.hoisted(() : any => ({ current: null as any }));
+
+vi.mock("../../../apps/console/composables/consoleSideNavContext", () => ({
+  useConsoleSideNavContext: () => drawerShell.current,
+}));
 
 vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
   const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
@@ -312,7 +317,17 @@ describe("ConsoleDrawer overlay contract", () : any => {
       msg: computed(() : any => consoleMessages[currentConsoleLocale.value]),
       openDrawer: vi.fn((tab: string) : void => {
         drawerShell.current.drawerTab.value = tab;
+        drawerShell.current.drawerOpen.value = true;
       }),
+      sideNavOpen: ref(false),
+      appearanceCycleScheme: ref("light"),
+      appearanceCycleSchemeLabel: ref("Appearance cycle"),
+      appearancePresetLabel: ref("Default"),
+      languageMode: ref("zh-CN"),
+      cycleAppearancePreset: vi.fn(),
+      toggleAppearanceCycleScheme: vi.fn(),
+      toggleLanguage: vi.fn(),
+      tt: (text: string) => text,
     };
   });
 
@@ -363,10 +378,32 @@ describe("ConsoleDrawer overlay contract", () : any => {
     await nextTick();
     expect(aside.attributes("inert")).toBe("true");
     expect(aside.attributes("aria-modal")).toBe("false");
+    expect(aside.attributes("aria-hidden")).toBe("true");
 
     drawerShell.current.drawerOpen.value = true;
     await nextTick();
     expect(aside.attributes("inert")).toBe("false");
+    expect(aside.attributes("aria-hidden")).toBe("false");
+  });
+
+  it.each([true, false])("restores settings dismissal focus to a reachable invoker when overlay navigation was open=%s", async (overlayNavigationOpen) => {
+    drawerShell.current.drawerOpen.value = false;
+    drawerShell.current.sideNavOpen.value = overlayNavigationOpen;
+    const navigationToggle = document.createElement("button");
+    navigationToggle.className = "topbar-sidebar-toggle";
+    document.body.append(navigationToggle);
+    const footer: any = mount(ConsoleSideNavFooter, { attachTo: document.body });
+    mountedDrawers.push(footer);
+    const drawer = mountDrawer();
+    await flushPromises();
+    const settings = footer.find('.side-cta');
+    settings.element.focus();
+    await settings.trigger("click"); await flushPromises();
+    expect(drawerShell.current.sideNavOpen.value).toBe(false);
+    expect(document.activeElement).toBe(drawer.find('[data-overlay-cancel-safe]').element);
+    await drawer.find('[data-overlay-cancel-safe]').trigger("click"); await flushPromises();
+    expect(document.activeElement).toBe(overlayNavigationOpen ? navigationToggle : settings.element);
+    expect(drawer.find('aside').attributes('aria-hidden')).toBe("true");
   });
 
   it("closes on Escape through the document-level handler", async () : Promise<any> => {
