@@ -209,6 +209,27 @@
       ]
     },
     {
+      "id": "gateway-installer-app",
+      "name": "Standalone Gateway Application",
+      "directory": "apps/mcp-gateway-installer",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "capabilities",
+        "protocols",
+        "gateway"
+      ],
+      "forbiddenDependsOn": [
+        "agents",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
       "id": "plugin-console",
       "name": "Plugin Console Adapters",
       "directory": "plugins/**/console",
@@ -324,7 +345,8 @@
         "plugin-verifiers",
         "plugin-tests",
         "model-gateway-contracts",
-        "skill-tools"
+        "skill-tools",
+        "gateway-installer-app"
       ],
       "forbiddenDependsOn": []
     }

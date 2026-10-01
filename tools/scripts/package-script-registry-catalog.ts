@@ -186,7 +186,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "gateway:migrate", command: "npm run gateway:migrate", category: "maintenance", subsystem: "gateway",
     owner: "platform", tier: "integration", sideEffects: "source-write",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/migrate-gateway-config.ts", "docs/migrations/gateway-convergence.md"], outputs: ["<operator-selected-config-backup>"],
+    inputs: ["apps/mcp-gateway-installer/src/config-migration.ts", "tools/server-scripts/migrate-gateway-config.ts", "docs/migrations/gateway-convergence.md"], outputs: ["<operator-selected-config-backup>"],
   },
   "gateway:benchmark": {
     scriptName: "gateway:benchmark", command: "npm run gateway:benchmark", category: "verifier", subsystem: "gateway",

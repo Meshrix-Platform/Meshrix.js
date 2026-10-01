@@ -11765,7 +11765,7 @@
             {
               "evidenceId": "v0-0-1-meshrix-gateway-migration-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/migrate-gateway-config.ts"
+              "uri": "apps/mcp-gateway-installer/src/config-migration.ts"
             }
           ]
         }
@@ -11791,7 +11791,7 @@
             {
               "evidenceId": "v0-0-1-meshrix-gateway-config-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/migrate-gateway-config.ts"
+              "uri": "apps/mcp-gateway-installer/src/config-migration.ts"
             }
           ]
         }

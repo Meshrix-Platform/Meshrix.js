@@ -17,6 +17,7 @@ import { createSqliteGatewayContinuationLedger } from "@meshrix/foundation/secur
 import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import { createLegacyMcpAdapter } from "@meshrix/protocols/mcp/legacy";
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
+import { applyGatewayMigration, previewGatewayMigration, restoreGatewayMigration } from "./config-migration.ts";
 import { createModernUpstreamAdapter } from "@meshrix/protocols/mcp/modern-upstream";
 import { fetchRpc, MAX_UPSTREAM_MESSAGE_BYTES as MAX_REQUEST_BYTES, StdioPeerTransport } from "./upstream-transport.ts";
 
@@ -508,18 +509,14 @@ export async function serveStdioGateway(configPath?: string): Promise<void> {
   await serveStdioGatewayUntilStop(configPath);
 }
 
-/** The installed and source CLIs invoke the same authoritative migration owner. */
+/** The installed and source CLIs invoke the same application-owned migration module. */
 export async function migrateGateway(command: "preview" | "apply" | "restore", inputPath: string, options: { readonly expectedRevision?: string; readonly backupRevision?: string; readonly backupPath?: string } = {}): Promise<unknown> {
   if (!inputPath) throw configError("gateway_migration_input_required", "Migration requires --input.");
-  const owner = import.meta.url.endsWith(".ts")
-    ? new URL("../../../tools/server-scripts/migrate-gateway-config.ts", import.meta.url)
-    : new URL("./migration/migrate-gateway-config.js", import.meta.url);
-  const migration = await import(owner.href) as typeof import("../../../tools/server-scripts/migrate-gateway-config.ts");
-  if (command === "preview") return migration.previewGatewayMigration(inputPath, { expectedRevision: options.expectedRevision });
+  if (command === "preview") return previewGatewayMigration(inputPath, { expectedRevision: options.expectedRevision });
   if (!options.expectedRevision) throw configError("gateway_migration_preview_required", "Apply or restore requires --expected-revision from preview.");
-  if (command === "apply") return migration.applyGatewayMigration(inputPath, { expectedRevision: options.expectedRevision, backupPath: options.backupPath });
+  if (command === "apply") return applyGatewayMigration(inputPath, { expectedRevision: options.expectedRevision, backupPath: options.backupPath });
   if (!options.backupRevision) throw configError("gateway_migration_backup_required", "Restore requires --backup-revision.");
-  return migration.restoreGatewayMigration(inputPath, { expectedRevision: options.expectedRevision, backupRevision: options.backupRevision, backupPath: options.backupPath });
+  return restoreGatewayMigration(inputPath, { expectedRevision: options.expectedRevision, backupRevision: options.backupRevision, backupPath: options.backupPath });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
