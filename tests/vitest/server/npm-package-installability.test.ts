@@ -41,7 +41,7 @@ function npmEnvironment(root?: any, registry?: any) : any {
     npm_config_userconfig: path.join(root, "npmrc"),
     npm_config_audit: "false",
     npm_config_fund: "false",
-    npm_config_ignore_scripts: "true",
+    npm_config_ignore_scripts: "false",
     ...(registry ? { npm_config_registry: registry } : {})
   };
 }
@@ -55,18 +55,20 @@ async function runNpm(args?: any[], cwd?: any, env?: any) : Promise<any> {
   }
 }
 
-async function createSyntheticPactiumArtifact(root?: any) : Promise<any> {
-  const packageDirectory: any = path.join(root, "synthetic-pactium");
-  const packDirectory: any = path.join(root, "synthetic-pactium-pack");
+async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.1' };\n", scripts = {} }: Record<string, any> = {}) : Promise<any> {
+  const packageDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}`);
+  const packDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}-pack`);
   await fs.mkdir(packageDirectory, { recursive: true });
   await fs.mkdir(packDirectory, { recursive: true });
   await fs.writeFile(path.join(packageDirectory, "package.json"), `${JSON.stringify({
-    name: "pactium",
-    version: PACTIUM_VERSION,
-    main: "index.js",
-    license: "MIT"
+    name,
+    version,
+    main,
+    license: "MIT",
+    dependencies,
+    scripts
   }, null, 2)}\n`);
-  await fs.writeFile(path.join(packageDirectory, "index.js"), "module.exports = { version: '0.8.1' };\n");
+  await fs.writeFile(path.join(packageDirectory, main), index);
   await fs.writeFile(path.join(packageDirectory, "LICENSE"), "MIT synthetic fixture\n");
   const environment: any = npmEnvironment(root);
   await fs.mkdir(environment.HOME, { recursive: true });
@@ -86,35 +88,13 @@ async function createSyntheticPactiumArtifact(root?: any) : Promise<any> {
     tarballPath,
     bytes,
     lockEntry: {
-      name: "pactium",
-      version: PACTIUM_VERSION,
+      name,
+      version,
       resolved: PACTIUM_RESOLVED,
       integrity,
       license: "MIT"
     }
   };
-}
-
-async function prepareRegistryFixture(root?: any, artifact?: any) : Promise<any> {
-  const digest: any = Buffer.from(artifact.lockEntry.integrity.slice("sha512-".length), "base64");
-  expect(digest.byteLength).toBe(64);
-  const cacheRoot: any = path.join(root, "registry-cache");
-  const cachePath: any = path.join(
-    cacheRoot,
-    "_cacache",
-    "content-v2",
-    "sha512",
-    digest.toString("hex").slice(0, 2),
-    digest.toString("hex").slice(2, 4),
-    digest.toString("hex").slice(4)
-  );
-  await fs.mkdir(path.dirname(cachePath), { recursive: true });
-  await fs.writeFile(cachePath, artifact.bytes);
-  const lockPath: any = path.join(root, "fixture-lock.json");
-  await fs.writeFile(lockPath, `${JSON.stringify({
-    packages: { "node_modules/pactium": artifact.lockEntry }
-  })}\n`);
-  return createLockBackedNpmRegistry({ lockPath, cacheRoot, extraTarballs: [] });
 }
 
 describe("npm artifact installability source", () : any => {
@@ -138,99 +118,123 @@ describe("npm artifact installability source", () : any => {
     expect(PACTIUM_LOCK.integrity).toMatch(/^sha512-[A-Za-z0-9+/]+=*$/u);
   });
 
-  it("rejects the unshipped file dependency and installs the synthetic registry fixture", async () : Promise<void> => {
+  it("detects undeclared internal dependencies while installing one unchanged artifact from the registry", async () : Promise<void> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-package-artifact-fixture-"));
     let registry: any = null;
     try {
-      const pactiumArtifact: any = await createSyntheticPactiumArtifact(root);
-      registry = await prepareRegistryFixture(root, pactiumArtifact);
+      const internalArtifact: any = await createSyntheticArtifact(root, {
+        name: "@meshrix/contracts",
+        version: "0.0.1",
+        index: "module.exports = { contractVersion: '0.0.1' };\n"
+      });
+      const undeclaredRootArtifact: any = await createSyntheticArtifact(root, {
+        name: "meshrix.js",
+        version: "0.0.1",
+        index: "module.exports = require('@meshrix/contracts');\n"
+      });
+      const declaredRootArtifact: any = await createSyntheticArtifact(root, {
+        name: "meshrix.js",
+        version: "0.0.2",
+        dependencies: { "@meshrix/contracts": "0.0.1" },
+        index: "module.exports = require('@meshrix/contracts');\n",
+        scripts: {
+          postinstall: "node -e \"require('@meshrix/contracts'); require('node:fs').writeFileSync('postinstall-ran','yes')\""
+        }
+      });
+      const registryCache: any = path.join(root, "registry-cache");
+      const fixtureLockPath: any = path.join(root, "fixture-lock.json");
+      const digest: any = Buffer.from(declaredRootArtifact.lockEntry.integrity.slice("sha512-".length), "base64");
+      const digestHex: any = digest.toString("hex");
+      const cachedArtifactPath: any = path.join(
+        registryCache,
+        "_cacache",
+        "content-v2",
+        "sha512",
+        digestHex.slice(0, 2),
+        digestHex.slice(2, 4),
+        digestHex.slice(4)
+      );
+      await fs.mkdir(path.dirname(cachedArtifactPath), { recursive: true });
+      await fs.writeFile(cachedArtifactPath, declaredRootArtifact.bytes);
+      await fs.writeFile(fixtureLockPath, `${JSON.stringify({
+        packages: {
+          "node_modules/meshrix.js": {
+            ...declaredRootArtifact.lockEntry,
+            resolved: "https://registry.npmjs.org/meshrix.js/-/meshrix.js-0.0.2.tgz",
+            hasInstallScript: true,
+            dependencies: { "@meshrix/contracts": "0.0.1" }
+          }
+        }
+      })}\n`);
+      registry = await createLockBackedNpmRegistry({
+        lockPath: fixtureLockPath,
+        cacheRoot: registryCache,
+        extraTarballs: [
+          ...[internalArtifact, undeclaredRootArtifact, declaredRootArtifact].map((artifact?: any) : any => ({
+            name: artifact.lockEntry.name,
+            version: artifact.lockEntry.version,
+            tarballPath: artifact.tarballPath
+          }))
+        ]
+      });
       const environment: any = npmEnvironment(root, registry.registry);
       await fs.mkdir(environment.HOME, { recursive: true });
       await fs.mkdir(environment.npm_config_cache, { recursive: true });
       await fs.writeFile(environment.npm_config_userconfig, "", "utf8");
 
-      const packageDirectory: any = path.join(root, "candidate");
-      const vendorDirectory: any = path.join(packageDirectory, "vendor");
-      await fs.mkdir(packageDirectory, { recursive: true });
-      await fs.mkdir(vendorDirectory, { recursive: true });
-      await fs.copyFile(pactiumArtifact.tarballPath, path.join(vendorDirectory, `pactium-${PACTIUM_VERSION}.tgz`));
-      const candidateManifest: any = {
-        name: "meshrix.js",
+      const internalPackageVersion: any = await fetch(new URL("@meshrix%2Fcontracts/0.0.1", registry.registry));
+      expect(internalPackageVersion.status).toBe(200);
+      const registryMetadata: any = await internalPackageVersion.json();
+      expect(registryMetadata).toMatchObject({
+        name: "@meshrix/contracts",
         version: "0.0.1",
-        main: "index.js",
-        files: ["index.js"],
-        dependencies: { pactium: `file:vendor/pactium-${PACTIUM_VERSION}.tgz` }
-      };
-      await fs.writeFile(path.join(packageDirectory, "package.json"), `${JSON.stringify(candidateManifest, null, 2)}\n`);
-      await fs.writeFile(path.join(packageDirectory, "index.js"), "module.exports = require('pactium');\n");
-
-      async function packCandidate(packDirectory?: any) : Promise<any> {
-        await fs.mkdir(packDirectory, { recursive: true });
-        const artifacts: any[] = await packInstallabilityArtifacts({
-          packageRecords: [{
-            name: "meshrix.js",
-            version: "0.0.1",
-            absoluteDirectory: packageDirectory
-          }],
-          packDirectory,
-          runPack: (_record?: any, destination?: any) : any => runNpm(
-            ["pack", "--json", "--ignore-scripts", "--pack-destination", destination],
-            packageDirectory,
-            environment
-          )
-        });
-        return artifacts[0];
-      }
-
-      const localArtifact: any = await packCandidate(path.join(root, "packed-local"));
-      const localBytes: any = await fs.readFile(localArtifact.tarballPath);
-      expect(localArtifact.files.some((file?: any) : any => String(file.path).startsWith("vendor/"))).toBe(false);
-      const localConsumer: any = path.join(root, "consumer-local");
-      await prepareInstallabilityConsumer({
-        consumerDirectory: localConsumer,
-        packedArtifacts: [localArtifact]
+        dist: { integrity: internalArtifact.lockEntry.integrity }
       });
-      await expect(runNpm(
-        ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--registry", registry.registry],
-        localConsumer,
-        environment
-      )).rejects.toThrow("synthetic_npm_command_failed_");
-      expect(await fs.readFile(localArtifact.tarballPath)).toEqual(localBytes);
-
-      candidateManifest.dependencies.pactium = PACTIUM_VERSION;
-      await fs.writeFile(path.join(packageDirectory, "package.json"), `${JSON.stringify(candidateManifest, null, 2)}\n`);
-      const registryArtifact: any = await packCandidate(path.join(root, "packed-registry"));
-      const registryBytes: any = await fs.readFile(registryArtifact.tarballPath);
-      const packageJsonOutput: any = await execFileAsync(
-        "tar",
-        ["-xOf", registryArtifact.tarballPath, "package/package.json"],
-        { encoding: "utf8" }
-      );
-      const packedManifest: any = JSON.parse(packageJsonOutput.stdout);
-      expect(packedManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
-      expect(registryArtifact.files.some((file?: any) : any => String(file.path).startsWith("vendor/"))).toBe(false);
-
-      const registryConsumer: any = path.join(root, "consumer-registry");
+      const installableRootMetadata: any = await fetch(new URL("meshrix.js/0.0.2", registry.registry));
+      expect(await installableRootMetadata.json()).toMatchObject({ hasInstallScript: true });
+      const undeclaredConsumer: any = path.join(root, "consumer-undeclared");
       await prepareInstallabilityConsumer({
-        consumerDirectory: registryConsumer,
-        packedArtifacts: [registryArtifact]
+        consumerDirectory: undeclaredConsumer,
+        packageRecord: { name: "meshrix.js", version: "0.0.1" }
       });
       await runNpm(
-        ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--registry", registry.registry],
-        registryConsumer,
+        ["install", "--no-audit", "--no-fund", "--registry", registry.registry],
+        undeclaredConsumer,
         environment
       );
+      await expect(runNpm(
+        ["exec", "--offline", "--", "node", "-e", "require('meshrix.js')"],
+        undeclaredConsumer,
+        environment
+      )).rejects.toThrow("synthetic_npm_command_failed_");
+      await expect(fs.access(path.join(undeclaredConsumer, "node_modules", "@meshrix", "contracts")))
+        .rejects.toMatchObject({ code: "ENOENT" });
 
-      const installedCandidate: any = JSON.parse(await fs.readFile(
-        path.join(registryConsumer, "node_modules/meshrix.js/package.json"), "utf8"
-      ));
+      const declaredConsumer: any = path.join(root, "consumer-declared");
+      await prepareInstallabilityConsumer({
+        consumerDirectory: declaredConsumer,
+        packageRecord: { name: "meshrix.js", version: "0.0.2" }
+      });
+      await runNpm(
+        ["install", "--no-audit", "--no-fund", "--registry", registry.registry],
+        declaredConsumer,
+        environment
+      );
       const installedPactium: any = JSON.parse(await fs.readFile(
-        path.join(registryConsumer, "node_modules/pactium/package.json"), "utf8"
+        path.join(declaredConsumer, "node_modules/@meshrix/contracts/package.json"), "utf8"
       ));
-      expect(installedCandidate.dependencies.pactium).toBe(PACTIUM_VERSION);
-      expect(installedPactium.version).toBe(PACTIUM_VERSION);
-      expect(installedPactium.license).toBe("MIT");
-      expect(await fs.readFile(registryArtifact.tarballPath)).toEqual(registryBytes);
+      expect(installedPactium.version).toBe("0.0.1");
+      expect(await runNpm(
+        ["exec", "--offline", "--", "node", "-e", "process.stdout.write(require('meshrix.js').contractVersion)"],
+        declaredConsumer,
+        environment
+      )).toMatchObject({ stdout: "0.0.1" });
+      expect(await fs.readFile(
+        path.join(declaredConsumer, "node_modules/meshrix.js/postinstall-ran"),
+        "utf8"
+      )).toBe("yes");
+      expect(JSON.parse(await fs.readFile(path.join(declaredConsumer, "node_modules/meshrix.js/package.json"), "utf8")))
+        .toMatchObject({ name: "meshrix.js", version: "0.0.2", dependencies: { "@meshrix/contracts": "0.0.1" } });
     } finally {
       await registry?.close();
       await fs.rm(root, { recursive: true, force: true });
