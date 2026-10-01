@@ -8,6 +8,7 @@ import {
   createUpstreamPublishingApplication,
   createUpstreamManifestSnapshotCommitter
 } from "#meshrix/agents/upstream-gateway/index";
+import type { UpstreamGatewayManifestObserverReaderPort } from "#meshrix/agents/upstream-gateway/index";
 import { createWorkspaceGovernanceRegistry } from "#meshrix/agents/workspace-governance/index";
 import {
   CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION,
@@ -293,7 +294,7 @@ export async function createServerConsoleOperationProviders({
     const manifestCandidateReaderPort: Readonly<Record<string, any>> = Object.freeze({
       getSnapshot: manifestCandidateAuthorityPort.getCandidateSnapshot
     });
-    const manifestRuntimeReaderPort: Readonly<Record<string, any>> = Object.freeze({
+    const manifestRuntimeReaderPort: UpstreamGatewayManifestObserverReaderPort = Object.freeze({
       async getSnapshot(input: Record<string, any> = {}) : Promise<any> {
         if (!bootstrapReadPending) {
           return manifestCandidateAuthorityPort.getCandidateSnapshot(input);

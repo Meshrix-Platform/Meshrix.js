@@ -1,11 +1,23 @@
 import { createHash } from "node:crypto";
 import { resolveLocalSecretPayload } from "@meshrix/foundation/security/secrets/local-secret-store";
+import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
 import {
   asArray,
   mcpServiceConfig,
   object,
   text
 } from "./support.ts";
+import type {
+  UpstreamGatewayNormalizedService,
+  UpstreamGatewayOperationSelection,
+  UpstreamGatewayResolvedCredentialMaterial,
+  UpstreamGatewayResolvedMcpServiceConfig,
+  UpstreamGatewayServiceRecord
+} from "./registry-types.ts";
+
+type UpstreamGatewayCredentialService =
+  | UpstreamGatewayServiceRecord
+  | UpstreamGatewayNormalizedService;
 
 const HEADER_NAME_PATTERN: any = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u;
 const ENV_NAME_PATTERN: any = /^[A-Za-z_][A-Za-z0-9_]*$/u;
@@ -204,7 +216,13 @@ export async function resolveCredentialMaterial({
   operation = {},
   targetUrl = null,
   secretKeyProvider = null
-}: Record<string, any> = {}) : Promise<any> {
+}: {
+  userDataPath?: string;
+  service: UpstreamGatewayCredentialService;
+  operation?: UpstreamGatewayOperationSelection;
+  targetUrl?: URL | null;
+  secretKeyProvider?: LocalSecretKeyProvider | null;
+}) : Promise<UpstreamGatewayResolvedCredentialMaterial> {
   const target: any = targetUrl || parseOptionalUrl(service.baseUrl || service.mcp?.url || "");
   const declaredBindings: any = asArray(service.credentialReferences)
     .filter((entry?: any) : any => entry && typeof entry === "object" && !Array.isArray(entry));
@@ -221,7 +239,7 @@ export async function resolveCredentialMaterial({
       credentialRevisions: []
     };
   }
-  const material: Record<string, any> = {
+  const material: UpstreamGatewayResolvedCredentialMaterial = {
     headers: {},
     env: {},
     credentialRefCount: bindings.length,
@@ -293,7 +311,14 @@ export async function resolveMcpServiceConfigWithCredentials({
   secretKeyProvider = null,
   purpose = "discovery",
   subject = null
-}: Record<string, any> = {}) : Promise<any> {
+}: {
+  userDataPath?: string;
+  service: UpstreamGatewayCredentialService;
+  operation?: UpstreamGatewayOperationSelection;
+  secretKeyProvider?: LocalSecretKeyProvider | null;
+  purpose?: string;
+  subject?: Readonly<Record<string, unknown>> | null;
+}) : Promise<UpstreamGatewayResolvedMcpServiceConfig> {
   const config: Record<string, any> = {
     ...mcpServiceConfig(service),
     gatewayServiceId: text(service.serviceId),
@@ -315,6 +340,8 @@ export async function resolveMcpServiceConfigWithCredentials({
   const serviceId: any = text(service.serviceId);
   return {
     ...config,
+    gatewayServiceId: config.gatewayServiceId,
+    allowLocalNetwork: config.allowLocalNetwork,
     sessionKey: mcpSessionKey({
       service,
       config,

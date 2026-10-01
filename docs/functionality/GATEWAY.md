@@ -130,6 +130,18 @@ imports Gateway internals or kernel error types. Each validation owns and
 closes its isolated worker work, caller cancellation propagates into the port,
 and an injected implementation retains its own lifetime.
 
+The registry factory and its public methods are typed by
+`packages/agents/src/upstream-gateway/registry-types.ts`: options are explicit
+per port, and the mutable runtime state is single-owned and modeled — the
+service map, the public tool-prefix index, the projected-operation route
+targets, MCP tool cache records, refresh flights with their waiter sets,
+config-preparation controllers, skill-hub subscriptions, endpoint traffic
+buckets, cursors and circuits. Manifest snapshot commits narrow the incoming
+snapshot before replacing those maps and return a typed diff; the durable
+runtime WAL is a discriminated `seed`/`delta` record with a typed audit/metric
+state. Unknown caller or provider input stays `unknown` until the existing
+normalization accepts it.
+
 This session manager is a server-side gateway transport, not a Meshrix MCP
 client product or an unmanaged connection API. Streamable HTTP sessions require
 the gateway to inject its managed egress transport; there is no native `fetch`
