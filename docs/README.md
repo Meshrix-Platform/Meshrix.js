@@ -72,6 +72,7 @@ commands and candidate-bound reports.
 | --- | --- |
 | Product definition | [../PRODUCT.md](../PRODUCT.md) |
 | Current interactive regression snapshot | [verification/regression.html](verification/regression.html) |
+| Architecture foundation acceptance and remaining release evidence | [verification/architecture-foundation-review.md](verification/architecture-foundation-review.md) |
 | Domain language | [../CONTEXT.md](../CONTEXT.md) |
 | Current five-dimension status | [STATUS.md](STATUS.md) |
 | Contribution process | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
