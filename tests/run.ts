@@ -269,7 +269,7 @@ function printFeatureConsistencyGate() : any {
       "- Documentation gate: keep docs tied to current runtime behavior and update the owning document instead of creating parallel notes.",
       "- No version-named boundaries: name features, modules, and docs by functional boundary or change summary, not v2/version/release numbers.",
       "- Repo local-info hygiene: npm run repo:local-info-hygiene scans source, docs, fixtures, tests, and tools; high-risk privacy, identity, production, and deployment metadata fails the process.",
-      "- Core repository gate: run npm test for documentation, registry, or boundary changes.",
+      "- Core repository gate: run the owning narrow checks for documentation, registry, or boundary changes, and the selected integration profile for the accepted task outcome (see CONTRIBUTING.md).",
       "- Commit-ready: before commit, confirm upstream/downstream adaptation passed the smallest relevant verifier or document an objective blocker with follow-up command.",
       "- Guide: docs/RUNBOOK.md."
     ].join("\n")

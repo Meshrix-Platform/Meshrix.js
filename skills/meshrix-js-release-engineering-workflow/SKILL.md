@@ -20,9 +20,10 @@ to `$meshrix-js-user-handbook`.
 
 ## Implement and verify
 
-Update the canonical source first, migrate every owned consumer, regenerate
-derived facts, and remove superseded names, paths, compatibility layers,
-fixtures, tests, and documentation in the same change.
+Apply the common engineering workflow owned by `CONTRIBUTING.md`. Update the
+canonical source first, migrate every owned consumer, regenerate derived
+facts, and remove superseded names, paths, compatibility layers, fixtures,
+tests, and documentation in the same change.
 
 Use `$meshrix-js-regression-planner` to select focused checks and one final
 integration scope. Complete source review and in-scope repairs before final

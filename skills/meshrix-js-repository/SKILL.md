@@ -29,9 +29,11 @@ Apply these rules to every task inside the Meshrix.js product repository.
 
 Existing explicit authorization remains valid for the same target, operation,
 and side-effect scope. Report findings promptly, continue authorized local
-work, and ask only for unresolved decisions or additional authority. Preserve
-the applicable AGENTS.md requirements for script repairs and final-regression
-failures; skill routing and successful checks do not grant that authority.
+work, and ask only for unresolved decisions or additional authority. Apply the
+common engineering workflow owned by `CONTRIBUTING.md`; `AGENTS.md` owns Agent
+execution authority and the report-and-repair rule for repository scripts.
+Ordinary scoped repairs continue without renewed permission; escalate only
+actual scope, published-support, authority, or risk changes.
 
 ## Document Maintenance Gate
 

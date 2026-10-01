@@ -115,6 +115,8 @@ projection manually. The architecture HTML diagrams are projections of
 Repository-local source, registries, documentation, and verification commands
 are the complete maintenance authority for Meshrix.js:
 
+- [Contributing](../CONTRIBUTING.md) owns the common engineering workflow;
+  specialist skills and handbooks route to it instead of restating it.
 - [Architecture](architecture/ARCHITECTURE.md) owns current package, layer,
   composition, state, and protocol boundaries.
 - [Runbook](RUNBOOK.md) owns current repository commands and runtime

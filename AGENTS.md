@@ -73,8 +73,9 @@ require fresh affected functional evidence before performance resumes.
 
 Use existing functional checks and evidence records; this is not a requirement
 to rerun the whole regression at every step, create a second gate framework,
-deploy to production, or weaken the deployment boundary below. Keep original
-script defects and reserved repair actions under Report Before Replace.
+deploy to production, or weaken the deployment boundary below. Repair original
+script defects in the original owner under Report And Repair Repository Scripts
+below; a wrapper or a second gate is never the repair vehicle.
 
 ## Upstream Service Custom Fields
 
@@ -125,17 +126,28 @@ Optional plugins, independent services, external providers, Agent or client
 products, and optional integration scenarios must remain separately invoked
 and must not block, promote, or alter a Core deployment result.
 
-## Report Before Replace
+## Common Engineering Workflow
+
+`CONTRIBUTING.md` owns the common engineering workflow: identify the module and
+integration owner, decide only consequential architecture or published-support
+changes, migrate producers/consumers/tests/documents together, run targeted
+evidence, integrate once, and maintain version, deprecation, and release facts.
+This file owns Agent execution authority, privacy, live/performance ordering,
+and Better Plan lifecycle. Specialist skills and handbooks route to
+`CONTRIBUTING.md` and the owning architecture or runbook source instead of
+restating that workflow.
+
+## Report And Repair Repository Scripts
 
 When an agent finds a defect or limitation in the repository's own scripts or
-automation, the agent must report the original script's exact problem and the
-proposed repair to the maintainer. The agent must not silently work around the
-defect by substituting a separate script, wrapper, or one-off replacement that
-leaves the original script unfixed. A temporary diagnostic script may be used
-to gather evidence, but it must not become the vehicle for applying the
-intended fix; the fix belongs in the original repository script. Report the
-root cause, the affected module boundary, and the proposed change, and obtain
-maintainer direction before applying it.
+automation, the agent reports the root cause, the affected module boundary, and
+the repair, and fixes the defect in the original script. Do not silently bypass
+it with a separate script, wrapper, or one-off replacement that leaves the
+original script unfixed. A temporary diagnostic script may gather evidence but
+is never the repair vehicle. Ordinary authorized scoped repairs continue
+without renewed permission; obtain maintainer direction only when the repair
+changes actual scope, published support, authority, or risk, or requires an
+irreversible action.
 
 ## Discover All Failures Before Repair
 

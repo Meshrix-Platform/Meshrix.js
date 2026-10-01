@@ -11,7 +11,7 @@ Name the old authority, the new canonical source, every consumer, generated arti
 
 Update the new source first, migrate all consumers, regenerate derived artifacts, and then delete the old implementation, names, routes, aliases, shims, fixtures, and documentation.
 
-Persistent user state owned by a retired product name is a deliberate exception to ordinary state migration: reset it directly. The current product must initialize fresh current-name state and must not probe, import, rename, copy, translate, or prompt for a retired-name data root or preference namespace. Do not retain legacy-state fixtures or compatibility gates for this boundary.
+Persistent user state is never removed merely because a product name retired. Preserve existing user data; correct unpublished implementations directly and use an explicit authorized data transition only when an actual published obligation requires it. Do not keep runtime compatibility paths that probe, import, rename, copy, translate, or prompt for a retired data root or preference namespace. A one-time authorized transition is a deliberate operator step, not a residency path. Do not retain legacy-state fixtures or compatibility gates for this boundary.
 
 ## Close the migration
 

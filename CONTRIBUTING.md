@@ -17,6 +17,27 @@ npm run dev
 
 The default local server URL is `http://127.0.0.1:7228`.
 
+## Change Workflow
+
+CONTRIBUTING owns the common engineering workflow for features, architecture
+drift, vulnerabilities, dependency updates, and data or schema repairs. Other
+canonical sources link here instead of restating it. The same finite process
+applies to every change:
+
+1. Identify the module owner and one integration owner for the change, and
+   record the affected boundaries.
+2. Decide only consequential architecture, published-support, authority, or
+   risk changes before editing. Ordinary scoped repairs proceed after the
+   problem and repair are reported.
+3. Update the canonical source first, then migrate every owned producer,
+   consumer, test, registry, generated projection, and document in the same
+   change; remove the superseded path instead of adding compatibility.
+4. Run the narrowest owning checks and collect failures across the selected
+   scope before repairing. Keep the final complete regression for the selected
+   integration scope after all changes and repairs are complete.
+5. Integrate once through the integration owner, and maintain version,
+   deprecation, and release facts in the canonical release source.
+
 ## Change Rules
 
 - Keep each change scoped to one capability, protocol boundary, verifier, or documentation area.
@@ -31,9 +52,9 @@ The default local server URL is `http://127.0.0.1:7228`.
 
 ### Console UX Copy (i18n)
 
-Every user-facing string added by the console UX closure plan — retry labels, field errors, empty-state CTAs, remediation copy, journey links, and confirmation bodies — MUST use the keyed dictionary `consoleMessages` in `apps/console/i18n/console-messages.ts`. Add each new leaf entry under BOTH the `zh-CN` and the `en` locale block, and consume it in views as `consoleMessages[currentConsoleLocale.value].<group>.<key>`, with `currentConsoleLocale` imported from `apps/console/i18n/console-locale-state.ts` (both symbols are re-exported from `apps/console/i18n/console.ts`; reuse the view's existing `msg`/`locale` composition when present). Converting existing views to the keyed dictionary is out of scope.
+Every new user-facing console string — retry labels, field errors, empty-state CTAs, remediation copy, journey links, and confirmation bodies — MUST use the keyed dictionary `consoleMessages` in `apps/console/i18n/console-messages.ts`. Add each new leaf entry under BOTH the `zh-CN` and the `en` locale block, and consume it in views as `consoleMessages[currentConsoleLocale.value].<group>.<key>`, with `currentConsoleLocale` imported from `apps/console/i18n/console-locale-state.ts` (both symbols are re-exported from `apps/console/i18n/console.ts`; reuse the view's existing `msg`/`locale` composition when present). Converting existing views to the keyed dictionary is out of scope.
 
-Forbidden for plan-added copy — reviewers reject these on sight:
+Forbidden for new copy — reviewers reject these on sight:
 
 - Extending the runtime DOM localizer `apps/console/i18n/console-dom-localizer.ts`.
 - New Chinese-literal `tt(zh, en)` pairs.
@@ -76,7 +97,7 @@ The dictionary is one shared file: each copy-bearing feature owns one top-level 
 
 ## Validation
 
-Run the narrowest verifier that covers the change, then run broader checks when the change crosses public boundaries.
+Run the narrowest verifier that covers the change, then run broader checks when the change crosses public boundaries. These commands are alternatives selected by the changed behavior, not a mandatory sequence for every task; `npm test` runs the `core-public` integration profile.
 
 ```bash
 npm run typecheck
@@ -84,13 +105,15 @@ npm test -- --suite domains.manifest
 npm test
 ```
 
-For documentation-only changes, run at least:
+For documentation-only changes, validate the changed facts, referenced paths, and commands with the owning documentation checks instead of the Core test profile:
 
 ```bash
-npm test
+npm run verify:docs
 git diff --check
 ```
 
+Skill changes use `npm run verify:skills`; operator helper changes use `npm run verify:skill-tools`. Do not run the full regression merely to select checks for a documentation edit.
+
 ## Pull Requests
 
-A pull request should state the changed capability, the runtime or documentation surface affected, the validation commands run, and any objective blocker. A code-organization refactor should also state the new responsibility and owner, dependency and public API effects, and why the result can be changed and tested independently. Security issues must not be reported through public issues; use the security reporting path in `SECURITY.md`.
+One pull request maps to one independently deliverable task with one integration owner; keep unrelated work out. A pull request should state the changed capability, the affected owner and boundaries, the behavior and evidence, the validation commands run, and any objective blocker. State support or data impact when the change affects them. A code-organization refactor should also state the new responsibility and owner, dependency and public API effects, and why the result can be changed and tested independently. Security issues must not be reported through public issues; use the security reporting path in `SECURITY.md`.
