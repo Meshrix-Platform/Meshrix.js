@@ -1,3 +1,4 @@
+import type { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   RECONCILE_INDEX,
@@ -21,7 +22,12 @@ import {
  * `ensureCurrentSchema` during initialization.
  */
 
-const LEGACY_WORKTREE_REQUEST_COLUMNS: readonly any[] = Object.freeze([
+type MaterializationDatabase = ReturnType<typeof openSqliteDatabase>;
+type NamedRow = { name: string };
+type IndexRow = NamedRow & { origin: string; unique: number; partial: number };
+type IndexedField = { key: number; desc: number; coll: string };
+
+const LEGACY_WORKTREE_REQUEST_COLUMNS: readonly string[] = Object.freeze([
   "error_json",
   "lease_until",
   "owner_fence",
@@ -38,12 +44,12 @@ const LEGACY_WORKTREE_REQUEST_COLUMNS: readonly any[] = Object.freeze([
   "target_state_digest",
   "updated_at"
 ]);
-const LEGACY_AUXILIARY_TABLES: readonly any[] = Object.freeze([
+const LEGACY_AUXILIARY_TABLES: readonly string[] = Object.freeze([
   "materialization_capacity",
   "materialization_inputs",
   "materialization_scope_capacity"
 ]);
-const LEGACY_AUXILIARY_COLUMNS: Readonly<Record<string, any>> = Object.freeze({
+const LEGACY_AUXILIARY_COLUMNS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   materialization_capacity: Object.freeze([
     "input_bytes",
     "request_count",
@@ -62,7 +68,7 @@ const LEGACY_AUXILIARY_COLUMNS: Readonly<Record<string, any>> = Object.freeze({
   ])
 });
 
-function tableExists(db?: any, tableName?: any) : any {
+function tableExists(db: MaterializationDatabase, tableName: string) {
   return Boolean(db.prepare(`
     SELECT 1
     FROM sqlite_master
@@ -70,103 +76,103 @@ function tableExists(db?: any, tableName?: any) : any {
   `).get(tableName));
 }
 
-function tableColumns(db?: any, tableName?: any) : any {
+function tableColumns(db: MaterializationDatabase, tableName: string) {
   return db
-    .prepare(`PRAGMA table_info(${tableName})`)
+    .prepare<[], NamedRow>(`PRAGMA table_info(${tableName})`)
     .all()
-    .map((row?: any) : any => row.name)
+    .map((row) => row.name)
     .sort();
 }
 
-function tableCount(db?: any, tableName?: any) : any {
+function tableCount(db: MaterializationDatabase, tableName: string) {
   return Number(
-    db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`)
-      .get().count
+    db.prepare<[], { count: number }>(`SELECT COUNT(*) AS count FROM ${tableName}`)
+      .get()?.count
   );
 }
 
-function userTables(db?: any) : any {
-  return db.prepare(`
+function userTables(db: MaterializationDatabase) {
+  return db.prepare<[], NamedRow>(`
     SELECT name
     FROM sqlite_master
     WHERE type = 'table'
       AND name NOT LIKE 'sqlite_%'
     ORDER BY name
-  `).all().map((row?: any) : any => row.name);
+  `).all().map((row) => row.name);
 }
 
-function userViews(db?: any) : any {
-  return db.prepare(`
+function userViews(db: MaterializationDatabase) {
+  return db.prepare<[], NamedRow>(`
     SELECT name
     FROM sqlite_master
     WHERE type = 'view'
       AND name NOT LIKE 'sqlite_%'
     ORDER BY name
-  `).all().map((row?: any) : any => row.name);
+  `).all().map((row) => row.name);
 }
 
-function tableTriggers(db?: any, tableName?: any) : any {
-  return db.prepare(`
+function tableTriggers(db: MaterializationDatabase, tableName: string) {
+  return db.prepare<[string], NamedRow>(`
     SELECT name
     FROM sqlite_master
     WHERE type = 'trigger' AND tbl_name = ?
     ORDER BY name
-  `).all(tableName).map((row?: any) : any => row.name);
+  `).all(tableName).map((row) => row.name);
 }
 
-function userTriggers(db?: any) : any {
-  return db.prepare(`
+function userTriggers(db: MaterializationDatabase) {
+  return db.prepare<[], NamedRow>(`
     SELECT name
     FROM sqlite_master
     WHERE type = 'trigger'
       AND name NOT LIKE 'sqlite_%'
     ORDER BY name
-  `).all().map((row?: any) : any => row.name);
+  `).all().map((row) => row.name);
 }
 
-function unexpectedRequestIndexes(db?: any) : any {
+function unexpectedRequestIndexes(db: MaterializationDatabase) {
   return db
-    .prepare("PRAGMA index_list(materialization_requests)")
+    .prepare<[], IndexRow>("PRAGMA index_list(materialization_requests)")
     .all()
     .filter(
-      (row?: any) : any =>
+      (row) =>
         row.origin !== "pk" &&
         row.name !== RECONCILE_INDEX
     );
 }
 
-function userDefinedIndexes(db?: any) : any {
-  return db.prepare(`
+function userDefinedIndexes(db: MaterializationDatabase) {
+  return db.prepare<[], NamedRow>(`
     SELECT name
     FROM sqlite_master
     WHERE type = 'index' AND sql IS NOT NULL
     ORDER BY name
-  `).all().map((row?: any) : any => row.name);
+  `).all().map((row) => row.name);
 }
 
-function indexColumns(db?: any, indexName?: any) : any {
+function indexColumns(db: MaterializationDatabase, indexName: string) {
   return db
-    .prepare(`PRAGMA index_info(${indexName})`)
+    .prepare<[], NamedRow>(`PRAGMA index_info(${indexName})`)
     .all()
-    .map((row?: any) : any => row.name);
+    .map((row) => row.name);
 }
 
-function assertCanonicalReconcileIndex(db?: any, { required }: Record<string, any> = {}) : any {
-  const index: any = db
-    .prepare("PRAGMA index_list(materialization_requests)")
+function assertCanonicalReconcileIndex(db: MaterializationDatabase, { required = false }: { required?: boolean } = {}) {
+  const index = db
+    .prepare<[], IndexRow>("PRAGMA index_list(materialization_requests)")
     .all()
-    .find((row?: any) : any => row.name === RECONCILE_INDEX);
-  const exists: any = Boolean(index);
-  const indexedFields: any = exists
+    .find((row) => row.name === RECONCILE_INDEX);
+  const exists = index !== undefined;
+  const indexedFields = exists
     ? db
-        .prepare(`PRAGMA index_xinfo(${RECONCILE_INDEX})`)
+        .prepare<[], IndexedField>(`PRAGMA index_xinfo(${RECONCILE_INDEX})`)
         .all()
-        .filter((row?: any) : any => Number(row.key) === 1)
+        .filter((row) => Number(row.key) === 1)
     : [];
   if (
     (required && !exists) ||
     (
-      exists &&
+      index &&
       (
         Number(index.unique) !== 0 ||
         Number(index.partial) !== 0 ||
@@ -180,7 +186,7 @@ function assertCanonicalReconcileIndex(db?: any, { required }: Record<string, an
             "request_ref"
           ].join("\0") ||
         indexedFields.some(
-          (field?: any) : any =>
+          (field) =>
             Number(field.desc) !== 0 ||
             field.coll !== "BINARY"
         )
@@ -194,12 +200,12 @@ function assertCanonicalReconcileIndex(db?: any, { required }: Record<string, an
   }
 }
 
-function sameColumns(actual?: any, expected?: any) : any {
+function sameColumns(actual: readonly string[], expected: readonly string[]): boolean {
   return [...actual].sort().join("\0") ===
     [...expected].sort().join("\0");
 }
 
-function createRequestTable(db?: any, tableName?: any) : any {
+function createRequestTable(db: MaterializationDatabase, tableName: string) {
   db.exec(`
     CREATE TABLE ${tableName} (
       request_ref TEXT PRIMARY KEY,
@@ -382,7 +388,7 @@ function createRequestTable(db?: any, tableName?: any) : any {
   `);
 }
 
-function createCurrentIndexes(db?: any) : any {
+function createCurrentIndexes(db: MaterializationDatabase) {
   db.exec(`
     CREATE INDEX IF NOT EXISTS ${RECONCILE_INDEX}
       ON materialization_requests(
@@ -395,7 +401,7 @@ function createCurrentIndexes(db?: any) : any {
   `);
 }
 
-function writeSchemaMetadata(db?: any) : any {
+function writeSchemaMetadata(db: MaterializationDatabase) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS materialization_schema_meta (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -416,7 +422,7 @@ function writeSchemaMetadata(db?: any) : any {
   db.pragma(`user_version = ${SCHEMA_VERSION}`);
 }
 
-function assertAuxiliaryTablesAreEmpty(db?: any) : any {
+function assertAuxiliaryTablesAreEmpty(db: MaterializationDatabase) {
   for (const tableName of LEGACY_AUXILIARY_TABLES) {
     if (!tableExists(db, tableName)) continue;
     if (
@@ -439,7 +445,7 @@ function assertAuxiliaryTablesAreEmpty(db?: any) : any {
   }
 }
 
-function dropEmptyAuxiliaryTables(db?: any) : any {
+function dropEmptyAuxiliaryTables(db: MaterializationDatabase) {
   for (const tableName of LEGACY_AUXILIARY_TABLES) {
     if (tableExists(db, tableName)) {
       if (tableCount(db, tableName) > 0) {
@@ -453,8 +459,8 @@ function dropEmptyAuxiliaryTables(db?: any) : any {
   }
 }
 
-function normalizeLegacyWorktreeRow(row?: any) : any {
-  const request: any = normalizeRequestRecord(
+function normalizeLegacyWorktreeRow(row: Record<string, unknown>) {
+  const request = normalizeRequestRecord(
     parseStoredJson(
       row.request_json,
       "Materialization request record"
@@ -466,14 +472,14 @@ function normalizeLegacyWorktreeRow(row?: any) : any {
       "Materialization request identity is inconsistent."
     );
   }
-  const effectFree: any =
+  const effectFree =
     row.publication_json === null &&
     row.result_json === null &&
     row.published_revision === "";
   if (
     effectFree &&
     row.status === "queued" &&
-    ["admitted", "preimage_ready"].includes(row.stage)
+    (row.stage === "admitted" || row.stage === "preimage_ready")
   ) {
     return {
       request,
@@ -493,7 +499,7 @@ function normalizeLegacyWorktreeRow(row?: any) : any {
   if (
     effectFree &&
     row.status === "running" &&
-    ["admitted", "preimage_ready"].includes(row.stage)
+    (row.stage === "admitted" || row.stage === "preimage_ready")
   ) {
     return {
       request,
@@ -513,7 +519,7 @@ function normalizeLegacyWorktreeRow(row?: any) : any {
   if (
     effectFree &&
     row.status === "failed" &&
-    ["failed", "retry_exhausted"].includes(row.stage)
+    (row.stage === "failed" || row.stage === "retry_exhausted")
   ) {
     return {
       request,
@@ -551,15 +557,15 @@ function normalizeLegacyWorktreeRow(row?: any) : any {
   );
 }
 
-function migrateLegacyWorktreeSchema(db?: any) : any {
-  const rows: any = db.prepare(`
+function migrateLegacyWorktreeSchema(db: MaterializationDatabase) {
+  const rows = db.prepare<[], Record<string, unknown>>(`
     SELECT *
     FROM materialization_requests
     ORDER BY request_ref
   `).all();
-  const converted: any = rows.map(normalizeLegacyWorktreeRow);
+  const converted = rows.map(normalizeLegacyWorktreeRow);
   createRequestTable(db, "materialization_requests_next");
-  const insert: any = db.prepare(`
+  const insert = db.prepare(`
     INSERT INTO materialization_requests_next (
       request_ref,
       status,
@@ -571,7 +577,7 @@ function migrateLegacyWorktreeSchema(db?: any) : any {
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   for (const row of converted) {
-    const requestJson: any = canonicalJson(row.request);
+    const requestJson = canonicalJson(row.request);
     insert.run(
       row.request.requestRef,
       row.status,
@@ -582,7 +588,7 @@ function migrateLegacyWorktreeSchema(db?: any) : any {
       new Date().toISOString()
     );
   }
-  const copied: any = tableCount(
+  const copied = tableCount(
     db,
     "materialization_requests_next"
   );
@@ -606,7 +612,7 @@ function migrateLegacyWorktreeSchema(db?: any) : any {
   `);
 }
 
-function assertCurrentSchema(db?: any) : any {
+function assertCurrentSchema(db: MaterializationDatabase) {
   if (
     userViews(db).length > 0 ||
     userTriggers(db).length > 0 ||
@@ -635,7 +641,7 @@ function assertCurrentSchema(db?: any) : any {
     );
   }
   if (
-    LEGACY_AUXILIARY_TABLES.some((tableName?: any) : any =>
+    LEGACY_AUXILIARY_TABLES.some((tableName) =>
       tableExists(db, tableName)
     )
   ) {
@@ -644,7 +650,7 @@ function assertCurrentSchema(db?: any) : any {
       "Legacy materialization tables remain in the current schema."
     );
   }
-  const hasMetadata: any = tableExists(
+  const hasMetadata = tableExists(
     db,
     "materialization_schema_meta"
   );
@@ -661,8 +667,8 @@ function assertCurrentSchema(db?: any) : any {
       "Materialization schema metadata is not recognized."
     );
   }
-  const meta: any = hasMetadata
-    ? db.prepare(`
+  const meta = hasMetadata
+    ? db.prepare<[], { schemaVersion: number; schemaFingerprint: string }>(`
         SELECT schema_version AS schemaVersion,
                schema_fingerprint AS schemaFingerprint
         FROM materialization_schema_meta
@@ -688,15 +694,16 @@ function assertCurrentSchema(db?: any) : any {
   }
 }
 
-function verifyDatabaseIntegrity(db?: any) : any {
-  const integrity: any = db.pragma("quick_check", { simple: true });
+function verifyDatabaseIntegrity(db: MaterializationDatabase) {
+  const integrity = db.pragma("quick_check", { simple: true });
   if (integrity !== "ok") {
     throw schemaFailure(
       "materialization_schema_integrity_failed",
       "Materialization database integrity verification failed."
     );
   }
-  if (db.pragma("foreign_key_check").length > 0) {
+  const foreignKeyViolations = db.pragma("foreign_key_check");
+  if (!Array.isArray(foreignKeyViolations) || foreignKeyViolations.length > 0) {
     throw schemaFailure(
       "materialization_schema_foreign_key_failed",
       "Materialization database foreign-key verification failed."
@@ -704,10 +711,10 @@ function verifyDatabaseIntegrity(db?: any) : any {
   }
 }
 
-export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
+export function ensureCurrentSchema(db: MaterializationDatabase, now: () => number = Date.now) {
   db.exec("PRAGMA busy_timeout = 5000;");
   db.pragma("foreign_keys = ON");
-  const userVersion: any = Number(
+  const userVersion = Number(
     db.pragma("user_version", { simple: true }) || 0
   );
   if (userVersion < 0 || userVersion > SCHEMA_VERSION) {
@@ -724,8 +731,8 @@ export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
     return;
   }
 
-  const migrate: any = db.transaction(() : any => {
-    const tables: any = userTables(db);
+  const migrate = db.transaction(() => {
+    const tables = userTables(db);
     if (
       userViews(db).length > 0 ||
       userTriggers(db).length > 0
@@ -741,9 +748,6 @@ export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
         "Unversioned materialization metadata is not recognized."
       );
     }
-    const auxiliaryTables: any = LEGACY_AUXILIARY_TABLES.filter(
-      (tableName?: any) : any => tableExists(db, tableName)
-    );
     assertAuxiliaryTablesAreEmpty(db);
     if (!tableExists(db, "materialization_requests")) {
       if (tables.length > 0) {
@@ -754,7 +758,7 @@ export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
       }
       createRequestTable(db, "materialization_requests");
     } else {
-      const columns: any = tableColumns(
+      const columns = tableColumns(
         db,
         "materialization_requests"
       );
@@ -764,7 +768,7 @@ export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
           tableTriggers(db, "materialization_requests").length > 0 ||
           unexpectedRequestIndexes(db).length > 0 ||
           userDefinedIndexes(db).some(
-            (name?: any) : any => name !== RECONCILE_INDEX
+            (name) => name !== RECONCILE_INDEX
           )
         ) {
           throw schemaFailure(
@@ -773,13 +777,13 @@ export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
           );
         }
         assertCanonicalReconcileIndex(db);
-        const rows: any = db.prepare(`
+        const rows = db.prepare(`
           SELECT *
           FROM materialization_requests
           ORDER BY request_ref
         `).all();
         for (const row of rows) hydrateStoredRequestRow(row);
-        const current: any = Number(now());
+        const current = Number(now());
         if (!Number.isFinite(current)) {
           throw schemaFailure(
             "materialization_schema_data_invalid",
@@ -799,9 +803,9 @@ export function ensureCurrentSchema(db?: any, now: any = Date.now) : any {
       } else if (
         sameColumns(columns, LEGACY_WORKTREE_REQUEST_COLUMNS)
       ) {
-        const allowedLegacyTables: any[] = [
+        const allowedLegacyTables = [
           "materialization_requests",
-          ...LEGACY_AUXILIARY_TABLES.filter((tableName?: any) : any =>
+          ...LEGACY_AUXILIARY_TABLES.filter((tableName) =>
             tableExists(db, tableName)
           )
         ];
