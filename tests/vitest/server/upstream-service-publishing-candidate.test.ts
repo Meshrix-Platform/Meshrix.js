@@ -33,7 +33,7 @@ function candidateFixture() : any {
     product: "Meshrix.js",
     release: { version: "0.0.1", tag: RELEASE_TAG, channel: "stable" },
     acceptance: {
-      profile: "enterprise-single-node",
+      profile: "single-node",
       commandId: "platform-acceptance",
       stableRequiredClaim: "functional-complete",
       releaseRequiredClaim: "release-deployment-verified"
