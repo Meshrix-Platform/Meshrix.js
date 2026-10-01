@@ -35,7 +35,7 @@
     "pactium": "0.8.1",
     "pg": "^8.22.0",
     "smol-toml": "^1.7.1",
-    "undici": "^8.8.0"
+    "undici": "^8.11.2"
   },
   "exports": {
     "./checkpoint/tree/checkpoint-tree-projection": {

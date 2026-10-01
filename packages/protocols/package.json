@@ -10,7 +10,7 @@
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
-    "undici": "^8.8.0"
+    "undici": "^8.11.2"
   },
   "imports": {
     "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",

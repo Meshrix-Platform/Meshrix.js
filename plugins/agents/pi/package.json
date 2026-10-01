@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@meshrix/client-adapter-kit": "0.0.1",
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "typebox": "1.3.6"
   },
   "engines": {
