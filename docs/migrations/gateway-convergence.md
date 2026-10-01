@@ -1,7 +1,10 @@
 # Gateway convergence migration
 
 This migration documents the compatibility boundary and the configuration
-migrations required for gateway convergence.
+migrations required for gateway convergence. The private production owner is
+`apps/mcp-gateway-installer/src/config-migration.ts`; the installed CLI and the
+maintained `gateway:migrate` repository command both call that owner, and the
+repository command adds no separate implementation or copied dist asset.
 
 The gateway convergence migration changes only the service configuration shape
 owned by the gateway. It preserves grants, workspaces, assets, audit records,
