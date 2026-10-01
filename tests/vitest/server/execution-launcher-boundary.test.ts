@@ -50,6 +50,9 @@ describe("execution launcher boundary", () : any => {
   test("classifies only canonical governed launchers", async () : Promise<any> => {
     const report: any = await runExecutionLauncherBoundary();
     expect(report.launchers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "apps/mcp-gateway-installer/src/upstream-transport.ts", approved: true, classification: "standalone_gateway_stdio_session_launcher" }),
+      expect.objectContaining({ path: "packages/gateway/src/schema/index.ts", approved: true, classification: "isolated_schema_worker_owner" }),
+      expect.objectContaining({ path: "packages/gateway/src/schema/isolated-worker.ts", approved: true, classification: "bounded_internal_worker_endpoint" }),
       expect.objectContaining({
         path: "packages/server-runtime/src/execution-sandbox/oci-backend.ts",
         approved: true,
