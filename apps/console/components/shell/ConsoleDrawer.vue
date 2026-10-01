@@ -107,6 +107,7 @@ const {
     :style="drawerResizeStyle"
     role="dialog"
     :aria-modal="drawerOpen"
+    :aria-hidden="!drawerOpen"
     :aria-label="msg.overlay.drawerTitle"
     :inert="!drawerOpen"
     tabindex="-1"

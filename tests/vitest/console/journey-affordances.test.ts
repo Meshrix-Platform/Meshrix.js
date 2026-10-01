@@ -175,6 +175,55 @@ afterEach(() : any => {
 });
 
 describe("publish success forward links", () : any => {
+  it("finishes republishing through publication and health checks, shows the MCP handoff, and restores lost action focus", async () => {
+    publishClient.getPublishedService.mockResolvedValue({
+      ok: true, setRevision: 1,
+      service: {
+        serviceId: "svc_fixture", serviceRevision: 1,
+        descriptor: { serviceProtocol: "mcp", mcp: { transport: "http", url: "https://service.invalid/mcp", protocolVersion: "2026-07-28" } },
+        references: [],
+      },
+    });
+    publishClient.republishUpstreamService.mockResolvedValue({ ok: true });
+    const router = createRouter({ history: createWebHashHistory(), routes: [{ path: "/", component: { render: () => null } }] });
+    await router.push("/?serviceId=svc_fixture"); await router.isReady();
+    const wrapper: any = mount(UpstreamServicePublishView, { attachTo: document.body, global: { plugins: [router] } });
+    await flushPromises();
+    const button: any = wrapper.findAll('.form-actions button').find((entry: any) => entry.text() === "Republish")!;
+    button.element.focus();
+    registerConsoleConfirmHost();
+    await button.trigger("click"); await flushPromises();
+    settleConsoleConfirm(true);
+    (document.activeElement as HTMLElement)?.blur();
+    await flushPromises(); await flushPromises();
+    expect(publishClient.republishUpstreamService).toHaveBeenCalledTimes(1);
+    expect(publishClient.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
+    expect(publishClient.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
+    expect(wrapper.find('[data-testid="publish-success-links"] a').attributes("href")).toBe("#/admin/api-key-distribution");
+    expect(document.activeElement).toBe(button.element);
+    expect(publishClient.createUpstreamService).not.toHaveBeenCalled();
+    expect(publishClient.replaceUpstreamService).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+  it("routes a published MCP service directly to client-key authorization and ignores unpublished protocol edits", async () : Promise<any> => {
+    const router: any = createRouter({ history: createWebHashHistory(), routes: [{ path: "/", component: { render: () => null } }] });
+    await router.push("/"); await router.isReady();
+    const wrapper: any = mount(UpstreamServicePublishView, { attachTo: document.body, global: { plugins: [router] } });
+    await flushPromises();
+    await wrapper.find("#upstream-service-key").setValue("inventory");
+    await wrapper.find("#upstream-service-protocol").setValue("mcp");
+    await wrapper.find("#upstream-mcp-transport").setValue("http");
+    await wrapper.find("#upstream-mcp-url").setValue("https://service.invalid/mcp");
+    await wrapper.find("#upstream-mcp-protocol-version").setValue("2026-07-28");
+    await wrapper.find(".form-actions .primary").trigger("click");
+    await flushPromises(); await flushPromises();
+    const link = () => wrapper.find('[data-testid="publish-success-links"] a');
+    expect(link().attributes("href")).toBe("#/admin/api-key-distribution");
+    expect(link().text()).toBe(journeyMessages().issueClientKey);
+    await wrapper.find("#upstream-service-protocol").setValue("http");
+    expect(link().attributes("href")).toBe("#/admin/api-key-distribution");
+    wrapper.unmount();
+  });
   it("renders grant-tool-access and view-in-gateway links with the serviceId query after completion", async () : Promise<any> => {
     const router: any = createRouter({
       history: createWebHashHistory(),
@@ -203,6 +252,35 @@ describe("publish success forward links", () : any => {
     expect(links[0].text()).toBe(journeyMessages().grantToolAccess);
     expect(links[1].attributes("href")).toBe("#/admin/upstream-services?serviceId=svc_fixture");
     expect(links[1].text()).toBe(journeyMessages().viewInGateway);
+    wrapper.unmount();
+  });
+});
+
+describe("permanent key revocation focus", () => {
+  it.each([false, true])("focuses the retained revoked record without stealing deliberate focus elsewhere=%s", async (moveFocusElsewhere) => {
+    const api: any = apiKeyClient();
+    api.list.mockResolvedValue({ records: [apiKeyRecord()], nextCursor: null });
+    let settle: (value: any) => void = () => {};
+    api.revoke.mockImplementation(() => new Promise((resolve) => { settle = resolve; }));
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { render: () => null } }] });
+    await router.push("/"); await router.isReady();
+    const wrapper: any = mount(ApiKeyDistributionView, { attachTo: document.body, global: { plugins: [router] } });
+    await flushPromises();
+    const article = wrapper.find('.api-key-record').element;
+    const button = wrapper.find('.api-key-danger-action');
+    button.element.focus();
+    registerConsoleConfirmHost();
+    await button.trigger("click"); await flushPromises();
+    settleConsoleConfirm(true); await flushPromises();
+    const elsewhere = document.createElement("button"); document.body.append(elsewhere);
+    if (moveFocusElsewhere) elsewhere.focus(); else (document.activeElement as HTMLElement)?.blur();
+    settle(apiKeyRecord({ status: "revoked", lifecycleRevision: 2 }));
+    await flushPromises(); await flushPromises();
+    expect(wrapper.findAll('.api-key-record')).toHaveLength(1);
+    expect(wrapper.find('.api-key-record').attributes('data-status')).toBe("revoked");
+    expect(wrapper.find('.api-key-danger-action').exists()).toBe(false);
+    expect(wrapper.find('.api-key-record').attributes('aria-label')).toContain("Build worker");
+    expect(document.activeElement).toBe(moveFocusElsewhere ? elsewhere : article);
     wrapper.unmount();
   });
 });

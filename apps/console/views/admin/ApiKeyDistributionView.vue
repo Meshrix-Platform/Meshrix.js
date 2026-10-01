@@ -142,8 +142,8 @@ function organizationName(record: ApiKeyRecord): string {
 function policySummary(record: ApiKeyRecord): string {
   const policy = record.policy;
   return t(
-    `${policy.allowedTools.length} 个工具 · 风险上限 ${policy.maximumRisk} · ${policy.resources.mode === "unrestricted" ? "全部资源" : "限定资源"}`,
-    `${policy.allowedTools.length} tools · ${policy.maximumRisk} risk ceiling · ${policy.resources.mode === "unrestricted" ? "all resources" : "restricted resources"}`,
+    `${policy.allowedTools.length} 个工具 · 风险上限 ${policy.maximumRisk} · ${policy.resources.mode === "unrestricted" ? "无额外资源筛选" : "限定资源"}`,
+    `${policy.allowedTools.length} tools · ${policy.maximumRisk} risk ceiling · ${policy.resources.mode === "unrestricted" ? "no extra resource filter" : "restricted resources"}`,
   );
 }
 
@@ -174,6 +174,17 @@ async function runRevealAction(event: MouseEvent, action: () => Promise<void>): 
   revealReturnFocus = origin;
   await nextTick();
   revealCopyButton.value?.focus();
+}
+
+async function revokeAndFocusRecord(event: MouseEvent, record: ApiKeyRecord): Promise<void> {
+  const invoker = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  const retainedRecord = invoker?.closest<HTMLElement>(".api-key-record") || null;
+  await revoke(record);
+  await nextTick();
+  const current = records.value.find((entry) => entry.keyId === record.keyId);
+  if (current?.status === "revoked" && retainedRecord?.isConnected && document.activeElement === document.body) {
+    retainedRecord.focus();
+  }
 }
 
 async function createAndFocusReveal(event: MouseEvent): Promise<void> {
@@ -386,7 +397,7 @@ usePageRefreshHandler(
         <section v-show="setupStep === 2" class="api-key-step-panel" data-testid="agent-setup-access-step">
           <div class="api-key-step-intro">
             <span>02</span>
-            <div><h4>{{ t("这个 Agent 可以做什么？", "What can this Agent do?") }}</h4><p>{{ t("选择工具集即可，具体工具、服务与权限范围会自动推导。", "Choose toolsets; tools, services, and scopes are derived automatically.") }}</p></div>
+            <div><h4>{{ t("这个 Agent 可以做什么？", "What can this Agent do?") }}</h4><p>{{ t("选择具体 MCP 工具或普通目录工具集，服务与权限范围会自动推导。选择具体 MCP 工具时，不需要额外选择工具集。", "Choose individual MCP tools or ordinary catalog toolsets; services and scopes are derived automatically. Individual MCP tools do not require an additional toolset.") }}</p></div>
           </div>
           <div class="api-key-profile-picker">
             <span>{{ t("从权限档案开始（可选）", "Start from a permission profile (optional)") }}</span>
@@ -402,7 +413,7 @@ usePageRefreshHandler(
             v-model="draft.selectedToolsetIds"
             :options="toolsetOptions"
             :title="t('可用能力', 'Available access')"
-            :summary="t('至少选择一个工具集。', 'Select at least one toolset.')"
+            :summary="t('普通目录工具可通过工具集选择；具体 MCP 工具可在下方单独选择。', 'Select toolsets for ordinary catalog tools, or choose individual MCP tools below.')"
             :select-all-label="t('允许使用所有工具', 'Allow all tools')"
             :disabled="busy"
             layout="list"
@@ -412,7 +423,7 @@ usePageRefreshHandler(
             <h4>{{ t("当前发现的上游 MCP 工具", "Currently discovered upstream MCP tools") }}</h4>
             <p>{{ t("只勾选当前发现的具体工具；以后新增的工具不会自动加入密钥授权。", "Select each currently discovered tool explicitly. Tools added later will not be added to this key automatically.") }}</p>
             <p v-if="mcpToolSelection.status === 'unavailable'" data-discovery="unavailable">
-              {{ t("暂时无法读取 MCP 工具发现状态。请稍后刷新；普通目录工具仍可单独选择。", "MCP tool discovery is temporarily unavailable. Refresh later; ordinary catalog tools can still be selected.") }}
+              {{ t("MCP 工具发现未完成。检查已发布服务的端点、凭据和本机/私有网络权限，再刷新。无法确认的工具不会获得授权。", "MCP tool discovery did not complete. Check the published service endpoint, credentials and loopback/private-network permission, then refresh. Unconfirmed tools receive no access.") }}
             </p>
             <p v-else-if="mcpToolSelection.status === 'partial'" data-discovery="partial">
               {{ t("部分 MCP 服务暂时无法读取。可选择下方当前已确认的工具；未确认的服务不会获得授权。", "Some MCP services could not be read. You may select the confirmed tools below; unavailable services receive no access.") }}
@@ -424,6 +435,13 @@ usePageRefreshHandler(
               <li v-for="service in mcpToolSelection.services" :key="service.serviceId" :data-service-status="service.status">
                 <strong>{{ service.label }}</strong>
                 <span>{{ service.status === 'available' ? t("可用", "Available") : service.status === 'partial' ? t("部分可用", "Partially available") : t("暂不可用", "Unavailable") }}</span>
+                <RouterLink
+                  v-if="service.status !== 'available'"
+                  :to="{ path: '/admin/publish-upstream-service', query: { serviceId: service.serviceId } }"
+                  target="_blank"
+                  rel="noopener"
+                  class="table-action"
+                >{{ t("检查服务（新标签页）", "Review service (new tab)") }}</RouterLink>
               </li>
             </ul>
             <div v-if="mcpToolOptions.length" class="api-key-mcp-tool-options">
@@ -439,6 +457,9 @@ usePageRefreshHandler(
                 <span><strong>{{ tool.label }}</strong><small>{{ tool.publicName }} · {{ tool.serviceId }}</small></span>
               </label>
             </div>
+            <p v-if="selectedMcpToolFacts.length">
+              {{ t("MCP 风险和技术权限范围来自服务端配置的服务策略，不由上游只读提示决定。因此读工具也可能需要中等风险和 gateway:write；密钥仍只允许选中的工具。", "MCP risk and technical scopes follow the configured service policy, not upstream read-only hints. A read tool may therefore require medium risk and gateway:write; this key still permits only the selected tools.") }}
+            </p>
             <div v-if="unavailableSelectedMcpTools.length" class="api-key-mcp-stale-selection" role="status">
               <p>{{ t("部分已选工具不在当前发现结果中。移除这些旧选择，或刷新后重新选择当前工具。", "Some selected tools are absent from current discovery. Remove these old selections or refresh and choose a current tool.") }}</p>
               <ul>
@@ -464,10 +485,11 @@ usePageRefreshHandler(
               <FeatureToggle
                 v-model="draft.resourcesUnrestricted"
                 :disabled="busy"
-                :label="t('允许访问全部资源', 'Allow all resources')"
-                :on-label="t('全部资源', 'All resources')"
-                :off-label="t('限定资源', 'Restricted')"
+                :label="t('不附加资源筛选', 'No extra resource filter')"
+                :on-label="t('无额外资源筛选', 'No extra resource filter')"
+                :off-label="t('限定资源', 'Restricted resources')"
               />
+              <p>{{ t("资源筛选只会在所选工具权限内进一步限制资源，不会授权其他工具。启用筛选时，需要已有的工作空间 ID 或数据分类。", "Resource filters further restrict resources within the selected tools; they do not grant other tools. Filtering requires existing workspace IDs or data classifications.") }}</p>
               <div v-if="!draft.resourcesUnrestricted" class="api-key-resource-limits">
                 <MultiChoiceCardGroup
                   v-model="draft.selectedDataClassifications"
@@ -536,7 +558,7 @@ usePageRefreshHandler(
             <div><span>{{ t("客户端连接指引", "Client connection guide") }}</span><strong>{{ selectedClientGuideLabels.join(t("、", ", ")) || t("标准 MCP 客户端", "Standard MCP client") }}</strong></div>
             <div><span>{{ t("授权受众限制", "Authorization audience restriction") }}</span><strong>{{ selectedTargetLabels.join(t("、", ", ")) || t("未按客户端品牌限制", "No brand-based client restriction") }}</strong></div>
             <div><span>{{ t("能力", "Access") }}</span><strong>{{ selectedAccessLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
-            <div><span>{{ t("资源", "Resources") }}</span><strong>{{ draft.resourcesUnrestricted ? t("全部资源", "All resources") : t("限定资源", "Restricted resources") }}</strong></div>
+            <div><span>{{ t("资源", "Resources") }}</span><strong>{{ draft.resourcesUnrestricted ? t("无额外资源筛选", "No extra resource filter") : t("限定资源", "Restricted resources") }}</strong></div>
           </div>
           <div class="api-key-trust-summary">
             <strong>{{ usesGenericClientGuide ? t("客户端配置与保护", "Client setup and protection") : t("接下来由系统处理", "Handled for you") }}</strong>
@@ -569,7 +591,7 @@ usePageRefreshHandler(
       <section class="surface-card api-key-list-card">
         <div class="section-header"><div><h3>{{ t("连接管理", "Connection management") }}</h3><p>{{ t("这里管理已生成的 Agent 接入凭据，只显示经过遮盖的记录。不存在再次查看、导出、恢复或归档操作。", "Manage generated Agent access credentials here. Only redacted records appear; there is no reveal-again, export, restore, or archive action.") }}</p></div></div>
         <div v-if="!records.length" class="api-key-empty">{{ t("当前范围内还没有密钥。", "There are no keys in the current scope.") }}</div>
-        <article v-for="record in records" :key="record.keyId" class="api-key-record" :data-status="record.status">
+        <article v-for="record in records" :key="record.keyId" class="api-key-record" :data-status="record.status" tabindex="-1" :aria-label="`${record.workloadDisplayName}: ${localizeStatusPillLabel(apiKeyStatusText(record.status))}`">
           <div class="api-key-record-heading">
             <div><h4>{{ record.workloadDisplayName }}</h4><p>{{ organizationName(record) }}</p></div>
             <StatusPill :label="localizeStatusPillLabel(apiKeyStatusText(record.status))" :tone="record.status === 'active' ? 'success' : record.status === 'revoked' ? 'danger' : 'warning'" />
@@ -586,7 +608,7 @@ usePageRefreshHandler(
           </dl>
           <div v-if="record.status === 'active'" class="horizontal-action-group api-key-record-actions">
             <button class="table-action" type="button" :disabled="busy" @click="rotateAndFocusReveal($event, record)">{{ mutatingKeyId === record.keyId ? t("处理中…", "Working…") : t("轮换密钥", "Rotate Key") }}</button>
-            <button class="table-action api-key-danger-action" type="button" :disabled="busy" @click="revoke(record)">{{ t("永久撤销", "Revoke Permanently") }}</button>
+            <button class="table-action api-key-danger-action" type="button" :disabled="busy" @click="revokeAndFocusRecord($event, record)">{{ t("永久撤销", "Revoke Permanently") }}</button>
           </div>
         </article>
       </section>

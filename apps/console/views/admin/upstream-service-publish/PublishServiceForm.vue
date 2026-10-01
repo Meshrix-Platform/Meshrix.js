@@ -4,6 +4,7 @@ import JsonConfigFileEditor from "../../../components/JsonConfigFileEditor.vue";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../components/ConsoleInlineAlert.vue";
 import HelpTooltip from "../../../components/HelpTooltip.vue";
+import FeatureToggle from "../../../components/FeatureToggle.vue";
 import MeshrixTabs, { type MeshrixTab } from "../../../components/MeshrixTabs.vue";
 import { useConsoleUrlState } from "../../../composables/use-console-url-state";
 import { pushConsoleToast } from "../../../composables/console-toast-controller";
@@ -445,16 +446,30 @@ defineExpose({ focusFirstInvalid });
           <span v-if="validation.fieldError('mcpProtocolVersion')" id="console-field-mcpProtocolVersion-error" class="console-form-field-error" role="alert">{{ validation.fieldError('mcpProtocolVersion') }}</span>
         </label>
       </div>
+      <div class="form-field network-access-setting">
+        <div class="network-access-copy">
+          <span id="upstream-local-network-label">{{ publishFormMessages.localNetworkLabel }}</span>
+          <p id="upstream-local-network-help" class="form-help">{{ publishFormMessages.localNetworkHelp }}</p>
+        </div>
+        <FeatureToggle
+          :model-value="form.allowLocalNetwork === true"
+          :aria-label="publishFormMessages.localNetworkLabel"
+          aria-describedby="upstream-local-network-help"
+          :disabled="loading"
+          @update:model-value="form.allowLocalNetwork = $event"
+        />
+      </div>
       <div class="form-field">
         <div class="field-label-row">
-          <label for="upstream-service-key">Service identifier *</label>
+          <label for="upstream-service-key">{{ selectedServiceId ? publishFormMessages.publishedServiceIdentifier : "Service identifier *" }}</label>
           <HelpTooltip
             aria-label="Service identifier help"
-            text="A unique, stable identifier used by Meshrix.js to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication."
+            :text="selectedServiceId ? publishFormMessages.publishedServiceIdentifierHelp : 'A unique, stable identifier used by Meshrix.js to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication.'"
             :max-width="420"
           />
         </div>
-        <input id="upstream-service-key" v-model="form.serviceKey" type="text" placeholder="my-service" :disabled="!!selectedServiceId" />
+        <input v-if="selectedServiceId" id="upstream-service-key" :value="selectedServiceId" type="text" disabled />
+        <input v-else id="upstream-service-key" v-model="form.serviceKey" type="text" placeholder="my-service" />
       </div>
       <div class="form-field">
         <div class="field-label-row">
@@ -795,6 +810,20 @@ defineExpose({ focusFirstInvalid });
   align-items: center;
   gap: var(--space-1-5);
   width: fit-content;
+}
+.network-access-setting {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.network-access-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.network-access-setting :deep(.feature-toggle) {
+  flex-shrink: 0;
 }
 /* REQ-007 field contract rendered in this file's own field markup: the
    required marker and the per-field error region follow ConsoleFormField's

@@ -515,7 +515,7 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     if (!draft.value.resourcesUnrestricted
       && !draft.value.selectedDataClassifications.length
       && !stringList(draft.value.workspaceIds).length) {
-      hints.push(apiKeyDistributionText("资源范围", "Resource scope"));
+      hints.push(apiKeyDistributionText("资源筛选所需的工作空间 ID 或数据分类", "Workspace IDs or data classifications for resource filtering"));
     }
     if (!limitUnset(draft.value.requestsPerMinute) && !positiveInteger(draft.value.requestsPerMinute)) {
       hints.push(apiKeyDistributionText("每分钟调用次数", "Calls per minute"));

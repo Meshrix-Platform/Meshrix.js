@@ -262,6 +262,56 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     wrapper.unmount();
   });
 
+  it("requires explicit local-network consent and retains it through browser draft restore", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    await wrapper.find('#upstream-service-key').setValue("private-inventory");
+    await wrapper.find('#upstream-service-protocol').setValue("mcp");
+    await wrapper.find('#upstream-mcp-transport').setValue("http");
+    await wrapper.find('#upstream-mcp-url').setValue("http://127.0.0.1:8080/mcp");
+    await wrapper.find('#upstream-mcp-protocol-version').setValue("2026-07-28");
+    const permission = wrapper.find('[role="switch"]');
+    expect(permission.attributes('aria-checked')).toBe("false");
+    expect(permission.attributes('aria-describedby')).toBe("upstream-local-network-help");
+    await permission.trigger("click");
+    const save = wrapper.findAll('.form-actions button').find((button: any) => button.text() === "Save");
+    await save.trigger("click");
+    wrapper.unmount();
+
+    const restored: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    expect(restored.find('[role="switch"]').attributes('aria-checked')).toBe("true");
+    await restored.find('.form-actions .primary').trigger("click");
+    await flushPromises();
+    expect(client.createUpstreamService.mock.calls[0][1]).toMatchObject({
+      allowLocalNetwork: true,
+      mcp: { url: "http://127.0.0.1:8080/mcp", protocolVersion: "2026-07-28" },
+    });
+    restored.unmount();
+  });
+
+  it("loads an existing local-network permission and can explicitly revoke it on replacement", async () : Promise<any> => {
+    route.query = { serviceId: "svc_fixture" };
+    client.getPublishedService.mockResolvedValue({
+      ok: true, setRevision: 3,
+      service: {
+        serviceId: "svc_fixture", state: "server_published", serviceRevision: 2,
+        descriptor: { ...portableMcpDocument().descriptor, allowLocalNetwork: true }, references: [],
+      },
+    });
+    client.replaceUpstreamService.mockResolvedValue({
+      ok: true, serviceId: "svc_fixture", serviceRevision: 3, setRevision: 4, publication: publication(4),
+    });
+    const wrapper: any = mount(UpstreamServicePublishView);
+    await flushPromises();
+    expect(wrapper.find('[role="switch"]').attributes('aria-checked')).toBe("true");
+    await wrapper.find('[role="switch"]').trigger("click");
+    await wrapper.find('.form-actions .primary').trigger("click");
+    await flushPromises();
+    expect(client.replaceUpstreamService).toHaveBeenCalledWith("svc_fixture", expect.objectContaining({ allowLocalNetwork: false }), 2, 3);
+    wrapper.unmount();
+  });
+
   it("registers the title-bar page refresh handler without rendering duplicate toolbar actions", async () : Promise<any> => {
     const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
@@ -295,6 +345,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect(fieldLabels).toEqual([
       "Protocol",
       "Service URL *",
+      consoleMessages[currentConsoleLocale.value].publishForm.localNetworkLabel,
       "Service identifier *",
       "Service name",
       "Service description",
@@ -872,6 +923,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     });
     client.disableUpstreamService.mockResolvedValue({ ok: true });
     client.republishUpstreamService.mockResolvedValue({ ok: true });
+    client.waitForUpstreamServicePublication.mockResolvedValue({
+      ok: true, setRevision: 8,
+      service: { serviceId: "svc_fixture", serviceRevision: 5, state: "server_published", publication: publication(8) },
+    });
     client.removeUpstreamService.mockResolvedValue({ ok: true });
     registerConsoleConfirmHost();
     try {

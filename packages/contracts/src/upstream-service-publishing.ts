@@ -213,6 +213,7 @@ export interface UpstreamServiceDescriptor {
   description?: string;
   baseUrl?: string;
   endpoints?: Array<Record<string, unknown>>;
+  allowLocalNetwork?: boolean;
   visibility?: string;
   dataClass?: string;
   tags?: string[];

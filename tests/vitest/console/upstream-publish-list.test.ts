@@ -144,6 +144,8 @@ describe("UpstreamServicePublishView published service list", () : any => {
       "Label of svc_inventory",
     );
     expect((clicked.wrapper.vm as any).selectedServiceId).toBe("svc_inventory");
+    expect((clicked.wrapper.find("#upstream-service-key").element as HTMLInputElement).value).toBe("svc_inventory");
+    expect(clicked.wrapper.find("#upstream-service-key").attributes("disabled")).toBeDefined();
     expect((clicked.wrapper.vm as any).selectedServiceRevision).toBe(2);
     clicked.wrapper.unmount();
   });

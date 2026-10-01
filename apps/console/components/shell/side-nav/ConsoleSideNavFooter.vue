@@ -34,7 +34,13 @@ const appearanceCycleSchemeTitle = computed(() =>
 );
 
 function openPreferences() {
+  const closingOverlayNavigation = sideNavOpen.value;
   sideNavOpen.value = false;
+  // The overlay sidebar's settings button moves offscreen as it closes. Let
+  // the drawer capture the visible navigation toggle as its return target.
+  if (closingOverlayNavigation) {
+    document.querySelector<HTMLButtonElement>(".topbar-sidebar-toggle:not(:disabled)")?.focus({ preventScroll: true });
+  }
   openDrawer("preferences");
 }
 
