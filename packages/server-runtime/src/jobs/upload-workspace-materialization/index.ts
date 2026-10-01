@@ -3,6 +3,9 @@ export {
   materializationFailureDisposition
 } from "./engine.ts";
 export {
+  createUploadWorkspaceMaterializationTransactionStore
+} from "./transaction-store.ts";
+export {
   DEFINITION_ID,
   DEFINITION_VERSION,
   DEFAULT_LEASE_MS,

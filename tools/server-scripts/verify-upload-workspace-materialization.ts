@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import {
   createUploadWorkspaceMaterializationTransactionStore
-} from "../../packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts";
+} from "../../packages/server-runtime/src/jobs/upload-workspace-materialization/index.ts";
 import {
   assertNoSensitiveReportLeak,
   assertReportProvenance,
@@ -366,6 +366,7 @@ async function main() : Promise<any> {
         "packages/agents/src/agent-workspace/agent-workspace-materialization.ts",
         "packages/server-runtime/src/composition/composition-root.ts",
         "packages/server-runtime/src/jobs/upload-workspace-materialization/engine.ts",
+        "packages/server-runtime/src/jobs/upload-workspace-materialization/transaction-store.ts",
         "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts",
         verifier
       ])

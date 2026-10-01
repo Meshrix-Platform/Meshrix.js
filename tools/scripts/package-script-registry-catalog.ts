@@ -858,6 +858,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "package.json",
       "packages/server-runtime/src/jobs/upload-workspace-materialization/engine.ts",
+      "packages/server-runtime/src/jobs/upload-workspace-materialization/transaction-store.ts",
       "packages/server-runtime/src/state/upload-session-store.ts",
       "packages/agents/src/agent-workspace/agent-workspace-file-write-api.ts",
       "tools/server-scripts/verify-upload-workspace-materialization.ts"

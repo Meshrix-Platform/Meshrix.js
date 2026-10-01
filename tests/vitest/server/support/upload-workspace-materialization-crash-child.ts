@@ -4,7 +4,7 @@ import { SERVER_API_OPERATIONS } from "../../../../packages/contracts/src/operat
 import { createSqliteWorkQueueStore } from "../../../../packages/foundation/src/work-queue/sqlite-store.ts";
 import { createServerCompositionRoot } from "../../../../packages/server-runtime/src/composition/composition-root.ts";
 import { createQueueApplicationPort } from "../../../../packages/server-runtime/src/composition/queue-application-port.ts";
-import { createUploadWorkspaceMaterializationTransactionStore } from "../../../../packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts";
+import { createUploadWorkspaceMaterializationTransactionStore } from "../../../../packages/server-runtime/src/jobs/upload-workspace-materialization/index.ts";
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
 const LEASE_MS: any = 1_000;

@@ -27,9 +27,11 @@ import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtim
 import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { createServerCompositionRoot } from "../../../packages/server-runtime/src/composition/composition-root.ts";
 import {
-  createUploadWorkspaceMaterializationProvider,
-  createUploadWorkspaceMaterializationTransactionStore
+  createUploadWorkspaceMaterializationProvider
 } from "../../../packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts";
+import {
+  createUploadWorkspaceMaterializationTransactionStore
+} from "../../../packages/server-runtime/src/jobs/upload-workspace-materialization/index.ts";
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
 const CRASH_ADMISSION_USERNAME: any =

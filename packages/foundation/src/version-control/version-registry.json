@@ -7310,7 +7310,7 @@
             {
               "evidenceId": "v0-0-1-server-runtime-upload-workspace-materialization-schema-1-source",
               "kind": "other",
-              "uri": "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts"
+              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization/model.ts"
             }
           ]
         }
@@ -7336,7 +7336,7 @@
             {
               "evidenceId": "v0-0-1-server-runtime-upload-workspace-materialization-settlement-1-source",
               "kind": "other",
-              "uri": "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts"
+              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization/model.ts"
             }
           ]
         }
