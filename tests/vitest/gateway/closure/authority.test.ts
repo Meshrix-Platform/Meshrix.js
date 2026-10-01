@@ -81,7 +81,7 @@ describe("PR82 explicit grant and verified approval", () => {
       await until(() => reads === 1);
       gateway.catalogStore.publish([{ ...original, route: { ...original.route, revision: "r2", endpointIdentity: "different" } }]);
       release();
-      expect(await pending).toMatchObject({ kind: "failure", code: "authority_changed", effectOutcome: "not_started" });
+      expect(await pending).toMatchObject({ kind: "failure", code: "route_changed", effectOutcome: "not_started" });
       expect(sends).toBe(0);
       gateway.catalogStore.publish([original, descriptor({ route: route({ logicalRoute: "unrelated" }), publicName: "unrelated" })]);
       expect((await gateway.invoke(context, { routeRef: "bound", method: "tools/call", params: {} })).kind).toBe("complete");
