@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { assertNoLeak } from "../../../tools/server-scripts/lib/report-evidence-safety.ts";
 
-import { scanPublicArtifactFiles } from "../../../tools/server-scripts/lib/public-artifact-boundary.ts";
+import { scanPublicArtifact, scanPublicArtifactFiles } from "../../../tools/server-scripts/lib/public-artifact-boundary.ts";
 
 import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 import {
@@ -113,6 +113,22 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("walks admitted generated directories and scans contents without admitting neighboring outputs", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-generated-directory-"));
+    try {
+      await fs.mkdir(path.join(root, "build/dist"), { recursive: true });
+      await fs.mkdir(path.join(root, "build/reports"), { recursive: true });
+      const credential = ["Bearer", "synthetic".repeat(3)].join(" ");
+      await fs.writeFile(path.join(root, "build/dist/index.html"), credential);
+      await fs.writeFile(path.join(root, "build/reports/runtime.json"), "{}");
+      const scan = await scanPublicArtifact(root, { allowedGeneratedOutputPrefixes: ["build/dist"] });
+      expect(scan.summary.scannedTextFileCount).toBe(1);
+      expect(scan.findings.map(({ relativePath, ruleId }: { relativePath: string; ruleId: string }) => ({ relativePath, ruleId })))
+        .toEqual([{ relativePath: "build/dist/index.html", ruleId: "bearer_credential" }, { relativePath: "build/reports", ruleId: "generated_or_local_output" }]);
+      expect(JSON.stringify(scan)).not.toContain(credential);
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+
   it.each([".map", ".mts", ".cts", ".ps1", ".cmd", ".bat"])("scans credential material in delivered %s text", async (extension) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-delivered-text-"));
     try {

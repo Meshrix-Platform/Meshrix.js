@@ -342,7 +342,10 @@ async function collectArtifactFiles(rootPath?: any, options: Record<string, any>
       }
       if (entry.isDirectory()) {
         const forbidden: any = pathFinding(relativePath, options);
-        if (forbidden && !allowedBundledDependencyAncestorPath(relativePath, options)) {
+        const generatedAncestor = forbidden?.ruleId === "generated_or_local_output" &&
+          (options.allowedGeneratedOutputPrefixes || []).some((prefix: string) =>
+            normalizeRelativePath(prefix).startsWith(`${relativePath}/`));
+        if (forbidden && !generatedAncestor && !allowedBundledDependencyAncestorPath(relativePath, options)) {
           findings.push(forbidden);
           continue;
         }
