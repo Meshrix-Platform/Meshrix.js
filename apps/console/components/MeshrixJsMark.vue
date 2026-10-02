@@ -17,8 +17,8 @@
         maskUnits="userSpaceOnUse"
         class="meshrix-js-mark__mask"
       >
-        <rect x="190" y="25" width="240" height="270" fill="var(--text-primary)" />
-        <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="var(--bg-inset)" />
+        <rect x="190" y="25" width="240" height="270" fill="white" />
+        <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="black" />
       </mask>
     </defs>
 

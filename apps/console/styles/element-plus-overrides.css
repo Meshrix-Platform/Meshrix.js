@@ -63,6 +63,14 @@
   font-weight: 600;
 }
 
+/* Light-mode contrast: an untyped .el-button otherwise fills with
+   --el-fill-color-blank (white --bg-surface) and disappears on white cards
+   and near-white pages. Typed buttons keep their own fills. */
+html[data-appearance-color-scheme="light"]
+  .el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):not(.is-text):not(.is-link) {
+  --el-button-bg-color: var(--bg-subtle);
+}
+
 .path-action-button.el-button {
   height: 40px;
   margin-left: 0;
