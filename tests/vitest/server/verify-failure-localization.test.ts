@@ -7,12 +7,40 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatLocalizedFailures,
-  parseFailureLog
+  parseFailureLog,
+  sanitizeVerificationLog,
+  writeVerificationArtifacts
 } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("pull-request verification feedback", () => {
+  it("retains every diagnostic stage while removing private paths, credentials, key material and runtime output", async () => {
+    const secret = ["npm", "syntheticCredentialOnly123456"].join("_");
+    const localRoot = ["", "home", "fixture-user", "project"].join("/");
+    const log = ["Stage: first", ...Array.from({ length: 120 }, (_, index) => `diagnostic ${index}`),
+      `${localRoot}/src/module.ts:4:2 error TS2322: Type mismatch`, `credential=${secret}`,
+      ["-----BEGIN", "PRIVATE KEY-----"].join(" "), "syntheticKeyBody", ["-----END", "PRIVATE KEY-----"].join(" "),
+      'payload: {"content":"synthetic private request"}', 'ciphertext="synthetic encrypted value"',
+      "payload: {", '  "message": "synthetic private continuation"', "}",
+      "stdout | runtime fixture", "synthetic private output", "", "synthetic continuation",
+      "FAIL tests/vitest/server/example.test.ts", "AssertionError: expected 1 to equal 2", "Stage: final"].join("\n");
+    const safe = sanitizeVerificationLog(log, localRoot);
+    expect(safe.split("\n")).toHaveLength(log.split("\n").length);
+    for (const item of ["Stage: first", "diagnostic 0", "diagnostic 60", "diagnostic 119", "src/module.ts:4:2", "expected 1 to equal 2", "Stage: final"]) expect(safe).toContain(item);
+    for (const item of [localRoot, secret, "syntheticKeyBody", "synthetic private", "synthetic encrypted", "synthetic continuation"]) expect(safe).not.toContain(item);
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-ci-diagnostics-"));
+    try {
+      const report = path.join(directory, "input.json");
+      await fs.writeFile(report, JSON.stringify({ suites: [{ id: "example", status: "failed" }], token: secret }));
+      await writeVerificationArtifacts(log, path.join(directory, "public"), report);
+      expect(await fs.readFile(path.join(directory, "public", "verification.log"), "utf8")).toContain("diagnostic 60");
+      const published = JSON.parse(await fs.readFile(path.join(directory, "public", "regression.json"), "utf8"));
+      expect(published.suites).toEqual([{ id: "example", status: "failed" }]);
+      expect(published.token).toBe("[redacted]");
+    } finally { await fs.rm(directory, { recursive: true, force: true }); }
+  });
+
   it("names assertion, file, and command on vitest failures", () => {
     const log = [
       "RUN  v4.1.10",
@@ -106,6 +134,9 @@ describe("pull-request verification feedback", () => {
     expect(prSection).toContain('run_check "npm test"');
     expect(prSection).toContain('--command "$command_label"');
     expect(prSection).toContain("localize-verify-failure.ts");
+    expect(prSection).toContain("--artifact-dir build/ci-diagnostics --report build/test-reports/latest.json");
+    expect(prSection).toContain("path: build/ci-diagnostics/");
+    expect(prSection).not.toContain('tail -n 60 "$log_file"');
     expect(prSection).not.toContain("npm run verify");
     expect(prSection).not.toContain("verify:acceptance");
     expect(prSection).not.toContain("--shard");

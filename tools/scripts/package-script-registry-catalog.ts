@@ -220,11 +220,11 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
     inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "tests/vitest/gateway/performance/**", "tests/vitest/server/package-script-registry.test.ts", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/**"], outputs: ["build/reports/gateway-benchmark-tests.json"],
   },
-  "test:gateway-benchmark:distribution": {
-    scriptName: "test:gateway-benchmark:distribution", command: "npm run test:gateway-benchmark:distribution", category: "test", subsystem: "gateway",
+  "test:product-distribution": {
+    scriptName: "test:product-distribution", command: "npm run test:product-distribution", category: "test", subsystem: "release",
     owner: "platform", tier: "integration", sideEffects: "docker",
-    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "extended",
-    inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tests/vitest/gateway/performance/distribution-*.test.ts"], outputs: ["build/reports/gateway-benchmark-distribution.json", "build/packages/**", "dist/**"],
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
+    inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tools/server-scripts/publish-release-set.ts", "tests/vitest/server/distribution-*.test.ts"], outputs: ["build/reports/product-distribution.json", "build/packages/**", "dist/**"],
   },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",

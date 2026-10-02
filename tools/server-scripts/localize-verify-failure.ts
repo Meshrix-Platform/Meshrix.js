@@ -2,6 +2,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
+import { redactReportText, sensitiveReportFindings, sanitizeSensitiveReport } from "./lib/sensitive-report-scan.ts";
+import { scanText } from "../config-scanner.ts";
 
 export interface LocalizedFailure {
   assertion: string;
@@ -94,6 +97,59 @@ export function formatLocalizedFailures(failures: LocalizedFailure[]): string {
     .join("\n\n");
 }
 
+/** Preserve stage diagnostics and line order; runtime output is never a public CI artifact. */
+export function sanitizeVerificationLog(value: string, root = repoRoot): string {
+  let runtimeOutput = false;
+  let pem = false;
+  let structuredDepth = 0;
+  return stripVTControlCharacters(value).split(/\r?\n/u).map((raw) => {
+    let line = raw.split(`${root}/`).join("");
+    if (/-----BEGIN [A-Z ]*KEY-----/u.test(line)) pem = true;
+    if (pem) {
+      if (/-----END [A-Z ]*KEY-----/u.test(line)) pem = false;
+      return "[redacted-key-material]";
+    }
+    if (/^(?:stdout|stderr) \|/u.test(line)) runtimeOutput = true;
+    else if (/^(?:\s*[✓×❯] |\s*(?:FAIL |FAILED |PASS |Test Files |Tests |Duration |RUN |Suite: |Stage: )|> )/u.test(line)) runtimeOutput = false;
+    if (runtimeOutput) return "[redacted-runtime-output]";
+    const sensitiveValue = /\b(?:payload|requestBody|responseBody|prompt|ciphertext|encryptedData|privateKey(?:Jwk)?|authorization|accessToken|apiKey|sessionKey|token|secret|password|cookie|credential)\s*["']?\s*[:=]/iu.test(line);
+    if (structuredDepth > 0 || /^\s*(?:\{|\[(?:\s*$|["'{0-9]))/u.test(line) || (sensitiveValue && /[\[{]\s*$/u.test(line))) {
+      // Count JSON containers outside quoted strings, keeping every removed line visible.
+      const containers = line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/gu, "");
+      for (const character of containers) {
+        if (character === "{" || character === "[") structuredDepth += 1;
+        else if (character === "}" || character === "]") structuredDepth = Math.max(0, structuredDepth - 1);
+      }
+      return "[redacted-structured-runtime-output]";
+    }
+    // Arbitrary request/response data and assertion string diffs may contain user data.
+    if (sensitiveValue || /^\s*[+-]\s+[^0-9\s]|(?:Expected|Received):\s*["']/iu.test(line)) {
+      return "[redacted-runtime-or-credential-value]";
+    }
+    line = line.replace(/\b(?:npm_|mxak_|mxbk_)[A-Za-z0-9_-]{8,}\b|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[redacted-credential]");
+    line = redactReportText(line);
+    const findings = [...sensitiveReportFindings(line), ...scanText("ci-verification.log", line).map((finding: { rule: string }) => finding.rule)];
+    return findings.length ? "[redacted-sensitive-line]" : line;
+  }).join("\n");
+}
+
+export async function writeVerificationArtifacts(logText: string, artifactDirectory: string, reportPath?: string): Promise<void> {
+  const directory = path.resolve(artifactDirectory);
+  await fs.mkdir(directory, { recursive: true });
+  // Only sanitized data reaches the artifact directory, including partial failure output.
+  await fs.writeFile(path.join(directory, "verification.log"), sanitizeVerificationLog(logText), { mode: 0o600 });
+  if (reportPath) {
+    const text = await fs.readFile(path.resolve(reportPath), "utf8").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (text !== null) {
+      const report = sanitizeSensitiveReport(JSON.parse(text));
+      await fs.writeFile(path.join(directory, "regression.json"), `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+    }
+  }
+}
+
 async function readLogInput(argument: string | undefined): Promise<string> {
   if (argument) return fs.readFile(path.resolve(argument), "utf8");
   return new Promise<string>((resolve) => {
@@ -110,6 +166,8 @@ async function readLogInput(argument: string | undefined): Promise<string> {
 interface CliArguments {
   command: string;
   logPath?: string;
+  artifactDirectory?: string;
+  reportPath?: string;
   selfTest: boolean;
   help: boolean;
 }
@@ -117,11 +175,18 @@ interface CliArguments {
 function parseArguments(argv: string[]): CliArguments {
   let command = COMMAND_LABEL;
   let logPath: string | undefined;
+  let artifactDirectory: string | undefined;
+  let reportPath: string | undefined;
   let selfTest = false;
   let help = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === "--command") {
+    if (argument === "--artifact-dir" || argument === "--report") {
+      const value = argv[++index];
+      if (!value || value.startsWith("--")) throw new Error("artifact option requires a value");
+      if (argument === "--artifact-dir") artifactDirectory = value;
+      else reportPath = value;
+    } else if (argument === "--command") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error("--command requires a value");
       command = value;
@@ -136,14 +201,14 @@ function parseArguments(argv: string[]): CliArguments {
       logPath = argument;
     }
   }
-  return { command, logPath, selfTest, help };
+  return { command, logPath, artifactDirectory, reportPath, selfTest, help };
 }
 
 async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const arguments_ = parseArguments(argv);
   if (arguments_.help) {
     process.stdout.write(
-      "localize-verify-failure: reads a verification log from a file argument or stdin; --command records the exact failed command.\n"
+      "localize-verify-failure: reads a verification log from a file argument or stdin; --command records the exact failed command; --artifact-dir writes a full sanitized log and optional --report JSON before localization.\n"
     );
     return;
   }
@@ -161,7 +226,11 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
     return;
   }
   const logText = await readLogInput(arguments_.logPath);
-  const failures = parseFailureLog(logText, arguments_.command);
+  if (arguments_.artifactDirectory) {
+    await writeVerificationArtifacts(logText, arguments_.artifactDirectory, arguments_.reportPath);
+    return;
+  }
+  const failures = parseFailureLog(sanitizeVerificationLog(logText), sanitizeVerificationLog(arguments_.command));
   if (failures.length > 0) {
     process.stderr.write(`${formatLocalizedFailures(failures)}\n`);
     process.exitCode = 1;
@@ -174,7 +243,7 @@ const isDirectRun =
   process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isDirectRun) {
   main().catch((error: unknown) => {
-    process.stderr.write(`[localize-verify-failure] ${String((error as Error)?.message || error)}\n`);
+    process.stderr.write("[localize-verify-failure] diagnostic processing failed\n");
     process.exitCode = 1;
   });
 }

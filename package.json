@@ -582,7 +582,7 @@
     "gateway:migrate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/migrate-gateway-config.ts",
     "gateway:benchmark": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/benchmark-gateway.ts",
     "test:gateway-benchmark": "node tests/run.ts --profile gateway-benchmark --continue-on-failure --report build/reports/gateway-benchmark-tests.json",
-    "test:gateway-benchmark:distribution": "node tests/run.ts --profile gateway-benchmark-distribution --continue-on-failure --report build/reports/gateway-benchmark-distribution.json",
+    "test:product-distribution": "node tests/run.ts --profile product-distribution --continue-on-failure --report build/reports/product-distribution.json",
     "server:mcp:register": "sh packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh register",
     "setup": "npm install",
     "vitest": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",

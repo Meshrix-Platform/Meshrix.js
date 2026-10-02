@@ -77,9 +77,11 @@ a pass/fail SLO, or a ten-percent comparison against historical work. Candidate
 and source CLI observations do not close independent PR acceptance findings.
 
 `npm run test:gateway-benchmark` covers installed tool tests and tiny real CLI
-fixtures. `npm run test:gateway-benchmark:distribution` checks actual fresh
+fixtures. `npm run test:product-distribution` checks actual fresh
 build and product npm/source artifacts; the Docker final/runtime and runtime-ui
 images require a committed candidate and usable local engine, separately
 inspected for actual filesystem **and retained layer** absence. Source flags,
 private npm metadata, `.dockerignore`, or a Dockerfile line alone never prove
 artifact absence. No archive or image is published by these commands.
+
+Product archive and image checks run separately from Benchmark execution; they do not require the independent Benchmark tool or its functional qualification.

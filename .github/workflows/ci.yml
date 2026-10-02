@@ -44,20 +44,22 @@ jobs:
             local command_label="$1"
             local log_file="$2"
             shift 2
-            if ! "$@" > "$log_file" 2>&1; then
-              node tools/server-scripts/localize-verify-failure.ts "$log_file" --command "$command_label" || true
-              node -e "for (const line of require('node:fs').readFileSync(process.argv[1], 'utf8').split(/\r?\n/)) if (line.startsWith('FAILED ')) console.log(line)" "$log_file"
-              tail -n 60 "$log_file"
-              return 1
+            local result=0
+            "$@" > "$log_file" 2>&1 || result=$?
+            node tools/server-scripts/localize-verify-failure.ts "$log_file" --artifact-dir build/ci-diagnostics --report build/test-reports/latest.json
+            if [ "$result" -ne 0 ]; then
+              node tools/server-scripts/localize-verify-failure.ts build/ci-diagnostics/verification.log --command "$command_label" || true
+              tail -n 60 build/ci-diagnostics/verification.log
             fi
+            return "$result"
           }
           run_check "npm test" /tmp/pr-regression.log npm test
-      - name: Retain privacy-checked regression results
+      - name: Retain full sanitized verification log and regression report
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pull-request-regression-${{ github.sha }}
-          path: build/test-reports/latest.json
+          path: build/ci-diagnostics/
           if-no-files-found: warn
           retention-days: 14
 

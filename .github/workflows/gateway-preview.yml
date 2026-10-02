@@ -9,6 +9,10 @@ on:
       - "packages/protocols/mcp/modern-*/**"
       - "packages/protocols/mcp/legacy/**"
       - "tests/vitest/gateway/**"
+      - "tests/vitest/server/distribution-*.test.ts"
+      - "tools/server-scripts/publish-release-set.ts"
+      - "tools/server-scripts/localize-verify-failure.ts"
+      - "Dockerfile"
       - "apps/mcp-gateway-installer/**"
       - "package.json"
       - "package-lock.json"
@@ -32,6 +36,41 @@ jobs:
       - run: npm ci
       - run: npm run typecheck:node
       - run: npm run build:node
-      # Benchmark qualification owns its tool, artifact and functional prerequisites.
+      # Benchmark tooling remains a separate post-functional workflow.
       - run: npm run vitest -- tests/vitest/gateway --maxWorkers=2
       - run: npm pack --workspace @meshrix/gateway --dry-run --json
+
+  product-distribution:
+    name: Product distribution artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      - name: Verify actual product archives and runtime image contents
+        shell: bash
+        env:
+          NODE_OPTIONS: --conditions=source
+        run: |
+          result=0
+          npm run test:product-distribution > /tmp/product-distribution.log 2>&1 || result=$?
+          node tools/server-scripts/localize-verify-failure.ts /tmp/product-distribution.log --artifact-dir build/ci-distribution-diagnostics --report build/reports/product-distribution.json
+          if [ "$result" -ne 0 ]; then
+            node tools/server-scripts/localize-verify-failure.ts build/ci-distribution-diagnostics/verification.log --command "npm run test:product-distribution" || true
+            tail -n 60 build/ci-distribution-diagnostics/verification.log
+          fi
+          exit "$result"
+      - name: Retain full sanitized distribution log and report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: product-distribution-${{ github.sha }}
+          path: build/ci-distribution-diagnostics/
+          if-no-files-found: warn
+          retention-days: 14

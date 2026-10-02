@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS } from "../../../../tools/server-scripts/lib/source-package-contract.ts";
+import { INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS } from "../../../tools/server-scripts/lib/source-package-contract.ts";
 
-const root = resolve(import.meta.dirname, "../../../..");
+const root = resolve(import.meta.dirname, "../../..");
 describe("benchmark product boundary policy (not artifact evidence)", () => {
   it("excludes only the development entry and retains production build inputs", async () => {
     const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
