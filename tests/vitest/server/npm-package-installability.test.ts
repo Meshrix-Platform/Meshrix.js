@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { assertNoLeak } from "../../../tools/server-scripts/lib/report-evidence-safety.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../../../tools/server-scripts/lib/npm-cli-invocation.ts";
 
 import { scanPublicArtifact, scanPublicArtifactFiles } from "../../../tools/server-scripts/lib/public-artifact-boundary.ts";
 
@@ -30,6 +31,7 @@ import {
 } from "../../../tools/server-scripts/npm-package-consumer.ts";
 
 const execFileAsync: any = promisify(execFile);
+const npmCli: any = resolveNpmCliInvocation();
 const REPO_ROOT: any = path.resolve(import.meta.dirname, "../../..");
 const ROOT_LOCK: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package-lock.json"), "utf8"));
 const PACTIUM_LOCK: any = ROOT_LOCK.packages["node_modules/pactium"];
@@ -64,7 +66,7 @@ function npmEnvironment(root?: any, registry?: any) : any {
 
 async function runNpm(args?: any[], cwd?: any, env?: any) : Promise<any> {
   try {
-    const result = await execFileAsync("npm", args, { cwd, env, encoding: "utf8" });
+    const result = await execFileAsync(npmCli.command, npmCliArgs(npmCli, args), { cwd, env, encoding: "utf8" });
     return result;
   } catch (error: any) {
     const code: any = String(error?.code || "unknown").replace(/[^A-Za-z0-9_]+/gu, "_");
