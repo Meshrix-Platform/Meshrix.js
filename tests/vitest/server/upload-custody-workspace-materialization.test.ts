@@ -32,6 +32,9 @@ import {
 import {
   createUploadWorkspaceMaterializationTransactionStore
 } from "../../../packages/server-runtime/src/jobs/upload-workspace-materialization/index.ts";
+import {
+  terminateOwnedCrashChild
+} from "./support/upload-workspace-materialization-crash-lifecycle.ts";
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
 const CRASH_ADMISSION_USERNAME: any =
@@ -1570,10 +1573,11 @@ async function spawnCrashChild(
   ]);
   expect(Buffer.byteLength(JSON.stringify(marker), "utf8"))
     .toBeLessThanOrEqual(512);
-  child.disconnect();
-  await once(child, "disconnect");
-  terminateCrashUnit();
-  const [, signal] = await childExited;
+  const [, signal] = await terminateOwnedCrashChild(
+    child,
+    terminateCrashUnit,
+    childExited
+  );
   const [stdout, stderr] = await Promise.all([
     fs.readFile(stdoutPath),
     fs.readFile(stderrPath)

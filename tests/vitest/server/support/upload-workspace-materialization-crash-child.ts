@@ -5,6 +5,9 @@ import { createSqliteWorkQueueStore } from "../../../../packages/foundation/src/
 import { createServerCompositionRoot } from "../../../../packages/server-runtime/src/composition/composition-root.ts";
 import { createQueueApplicationPort } from "../../../../packages/server-runtime/src/composition/queue-application-port.ts";
 import { createUploadWorkspaceMaterializationTransactionStore } from "../../../../packages/server-runtime/src/jobs/upload-workspace-materialization/index.ts";
+import {
+  exitCrashChildWhenOwnerDisconnects
+} from "./upload-workspace-materialization-crash-lifecycle.ts";
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
 const LEASE_MS: any = 1_000;
@@ -34,6 +37,8 @@ const SAFE_CODE: any = /^[a-z0-9][a-z0-9._:-]{0,79}$/u;
 
 let started: any = false;
 let keepAlive: any = null;
+
+exitCrashChildWhenOwnerDisconnects(process, () => process.exit(1));
 
 function boundedCount(value?: any) : any {
   const number: any = Number(value);
