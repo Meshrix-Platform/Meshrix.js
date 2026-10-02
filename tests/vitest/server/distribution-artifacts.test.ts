@@ -16,6 +16,8 @@ const npm = (args: string[], cwd = root) => {
   // npm run propagates CLI-only configuration; an independent consumer has its own configuration.
   delete env.npm_config_allow_scripts;
   delete env.NPM_CONFIG_ALLOW_SCRIPTS;
+  delete env.npm_config_offline;
+  delete env.NPM_CONFIG_OFFLINE;
   const result = spawnSync("npm", args, { cwd, env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 180000 });
   if (result.status !== 0) throw Error(`npm_artifact_failure_${result.status}\n${sanitizeVerificationLog(`${result.stdout ?? ''}\n${result.stderr ?? ''}`, root)}`);
   return result.stdout;
@@ -108,7 +110,7 @@ describe("materialized product distribution", () => {
             .map(item => [item.name, `file:${item.tarballPath}`])
         ) }));
       // This check owns dependency contents; native startup is exercised by the package matrix.
-      npm(["install", "--omit=dev", "--ignore-scripts=true", "--no-audit", "--no-fund"], consumer);
+      npm(["install", "--omit=dev", "--ignore-scripts=true", "--no-audit", "--no-fund", "--cache", join(scratch, "consumer-npm-cache")], consumer);
       const graph = JSON.parse(npm(["ls", "--json", "--omit=dev", "--all"], consumer));
       function walk(item: { dependencies?: Record<string, unknown> }) {
         for (const [name, value] of Object.entries(item.dependencies ?? {})) {
