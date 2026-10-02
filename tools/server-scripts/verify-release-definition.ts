@@ -114,15 +114,17 @@ export async function verifyReleaseDefinition({
   } catch {
     fail("release_definition_plan_changelog_missing", "Release plan changelog is missing.");
   }
-  const platforms: any = definition?.container?.platforms;
-  if (JSON.stringify(platforms) !== JSON.stringify(["linux/amd64", "linux/arm64"])) {
-    fail("release_definition_platforms_invalid", "The release requires amd64 and arm64 image artifacts.");
+  if (
+    definition?.container?.target !== "runtime-ui" ||
+    definition?.container?.requiredForRelease !== false
+  ) {
+    fail("release_definition_container_scope_invalid", "Container deployment remains an optional release scope.");
   }
   if (
     definition?.acceptance?.profile !== "single-node" ||
     definition?.acceptance?.commandId !== "platform-acceptance" ||
     definition?.acceptance?.stableRequiredClaim !== "functional-complete" ||
-    definition?.acceptance?.releaseRequiredClaim !== "release-deployment-verified" ||
+    definition?.acceptance?.releaseRequiredClaim !== "npm-package-installability-passed" ||
     definition?.acceptance?.standardsRegistry !==
       "tools/registry/release-acceptance-standards.registry.json"
   ) {
@@ -131,24 +133,9 @@ export async function verifyReleaseDefinition({
       "The release definition must bind single-node to the canonical platform-acceptance functional-complete claim.",
     );
   }
-  if (
-    definition?.acceptance?.deployment?.claim !== "release-deployment-verified" ||
-    definition?.acceptance?.deployment?.requiredForRelease !== true ||
-    definition?.acceptance?.deployment?.requiresClaim !== "functional-complete" ||
-    definition?.acceptance?.deployment?.command !==
-      "npm run server:verify:release-deployment" ||
-    definition?.acceptance?.deployment?.controller !==
-      "tools/server-scripts/verify-release-deployment.ts" ||
-    definition?.acceptance?.deployment?.workflow !==
-      ".github/workflows/release-branch.yml" ||
-    definition?.acceptance?.deployment?.runner !== "ubuntu-24.04" ||
-    definition?.acceptance?.deployment?.receipt !==
-      "build/reports/release-deployment.json"
-  ) {
-    fail(
-      "release_definition_deployment_standard_invalid",
-      "The release definition must bind the mandatory external runtime-ui release-deployment claim.",
-    );
+  if (definition?.localVerification?.engine !== "automatic-local" ||
+    definition?.localVerification?.evidenceAuthority !== "local-only") {
+    fail("release_definition_local_verification_invalid", "Local release verification must use the automatic project entry.");
   }
   if (
     definition?.prepublication?.requiredClaim !==
@@ -207,7 +194,7 @@ async function main() : Promise<any> {
       version: definition.release.version,
       tag: definition.release.tag,
       channel: definition.release.channel,
-      platformCount: definition.container.platforms.length,
+      containerTarget: definition.container.target,
       prepublicationClaim: definition.prepublication.requiredClaim,
       stableClaim: definition.acceptance.stableRequiredClaim,
       releaseClaim: definition.acceptance.releaseRequiredClaim,

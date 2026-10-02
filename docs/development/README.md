@@ -91,9 +91,9 @@ A protected-resource or side-effect path is acceptable only when the canonical g
 
 ### Release and environment qualification
 
-The [Runbook release contract](../RUNBOOK.md#release-definition-and-publication) separates the mandatory Functional Release Gate and mandatory Release Deployment Verification from remaining Real-Machine Verification Workflows and their Environment Support Claims. `npm run verify:acceptance` is the Functional Release Gate and must pass before publication. An accepted immutable candidate may then be exercised by `npm run verify:real-machine -- ...` for one exact system or deployment.
+The [Runbook release contract](../RUNBOOK.md#release-definition-and-publication) separates the mandatory Functional Release Gate and candidate-bound npm consumer qualification from optional container-deployment and Real-Machine Verification claims. `npm run verify:acceptance` is the canonical release controller; its selected profile qualifies the exact npm archives on the observed native platform and any usable local Docker target. One complete platform is sufficient for npm eligibility, and every selected target must pass. An accepted immutable candidate may then be exercised by `npm run verify:real-machine -- ...` for one exact system or deployment.
 
-Functional acceptance is a prerequisite for the exact-candidate runtime-ui deployment on `ubuntu-24.04` and for every real-machine workflow. A real-machine receipt never blocks, promotes, or changes functional acceptance. Offline delivery may run on Linux inside a virtual machine; Ubuntu is preferred and Debian is accepted. That evidence does not establish native Linux, Ubuntu, or Debian qualification, which remains owned by the named Real-Machine Verification Workflow.
+The runtime-ui deployment receipt is required only when that optional claim is selected. A real-machine receipt never blocks, promotes, or changes functional acceptance. Offline delivery may run on Linux inside a virtual machine; its evidence remains scoped to that Linux deployment and does not establish native Linux, Ubuntu, or Debian qualification.
 
 ### Evidence and telemetry
 

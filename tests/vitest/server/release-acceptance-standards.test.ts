@@ -11,6 +11,8 @@ function rootPackage() : any {
   return {
     scripts: {
       "verify:acceptance": "node tools/server-scripts/verify-platform-acceptance.ts",
+      "verify:npm-package-installability":
+        "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-npm-package-installability.ts",
       "verify:single-node:ubuntu-container":
         "node tools/server-scripts/verify-single-node-ubuntu-container.ts",
       "verify:mcp-release-portable-assembly":
@@ -24,11 +26,12 @@ function rootPackage() : any {
 }
 
 describe("release acceptance standards", () : any => {
-  it("makes functional completeness and release deployment mandatory and real-machine verification optional", () : any => {
+  it("requires functional and npm installability claims while leaving deployment and real-machine claims optional", () : any => {
     const result: any = validateReleaseAcceptanceStandards(standards, rootPackage());
     expect(result).toMatchObject({
       valid: true,
       functionalClaim: "functional-complete",
+      npmInstallabilityClaim: "npm-package-installability-passed",
       releaseDeploymentClaim: "release-deployment-verified",
       realMachineClaim: "real-machine-verified",
       targetCount: 6,
@@ -38,12 +41,16 @@ describe("release acceptance standards", () : any => {
 
   it("rejects reverse blocking and missing development simulation coverage", () : any => {
     const invalid: any = structuredClone(standards);
+    invalid.npmPackageInstallability.requiredForRelease = false;
+    invalid.releaseDeploymentVerification.requiredForRelease = true;
     invalid.realMachineVerification.requiredForRelease = true;
     invalid.realMachineVerification.targets[0].simulationCommand =
       "npm run verify:missing-simulation";
     const result: any = validateReleaseAcceptanceStandards(invalid, rootPackage());
     expect(result.valid).toBe(false);
     expect(result.reasons).toContain("real_machine_release_standard_invalid");
+    expect(result.reasons).toContain("npm_package_installability_release_standard_invalid");
+    expect(result.reasons).toContain("release_deployment_release_standard_invalid");
     expect(result.reasons).toContain(
       "real_machine_simulation_command_missing:native-linux-x64",
     );

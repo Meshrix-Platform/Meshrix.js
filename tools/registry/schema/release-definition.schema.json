@@ -8,8 +8,8 @@
     "version",
     "product",
     "release",
-    "packages",
-    "container",
+        "packages",
+        "container",
     "acceptance",
     "prepublication",
     "github",
@@ -73,22 +73,14 @@
       "type": "object",
       "required": [
         "target",
-        "platforms"
+        "requiredForRelease"
       ],
       "properties": {
         "target": {
           "const": "runtime-ui"
         },
-        "platforms": {
-          "type": "array",
-          "minItems": 2,
-          "uniqueItems": true,
-          "items": {
-            "enum": [
-              "linux/amd64",
-              "linux/arm64"
-            ]
-          }
+        "requiredForRelease": {
+          "const": false
         }
       },
       "additionalProperties": false
@@ -100,8 +92,7 @@
         "commandId",
         "stableRequiredClaim",
         "releaseRequiredClaim",
-        "standardsRegistry",
-        "deployment"
+        "standardsRegistry"
       ],
       "properties": {
         "profile": {
@@ -114,50 +105,10 @@
           "const": "functional-complete"
         },
         "releaseRequiredClaim": {
-          "const": "release-deployment-verified"
+          "const": "npm-package-installability-passed"
         },
         "standardsRegistry": {
           "const": "tools/registry/release-acceptance-standards.registry.json"
-        },
-        "deployment": {
-          "type": "object",
-          "required": [
-            "claim",
-            "requiredForRelease",
-            "requiresClaim",
-            "command",
-            "controller",
-            "workflow",
-            "runner",
-            "receipt"
-          ],
-          "properties": {
-            "claim": {
-              "const": "release-deployment-verified"
-            },
-            "requiredForRelease": {
-              "const": true
-            },
-            "requiresClaim": {
-              "const": "functional-complete"
-            },
-            "command": {
-              "const": "npm run server:verify:release-deployment"
-            },
-            "controller": {
-              "const": "tools/server-scripts/verify-release-deployment.ts"
-            },
-            "workflow": {
-              "const": ".github/workflows/release-branch.yml"
-            },
-            "runner": {
-              "const": "ubuntu-24.04"
-            },
-            "receipt": {
-              "const": "build/reports/release-deployment.json"
-            }
-          },
-          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -219,7 +170,7 @@
       ],
       "properties": {
         "engine": {
-          "const": "podman"
+          "const": "automatic-local"
         },
         "evidenceAuthority": {
           "const": "local-only"

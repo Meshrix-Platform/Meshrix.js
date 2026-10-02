@@ -48,6 +48,77 @@ const DOCUMENTATION_PATH_URL: any = [
 ].join("/");
 const DOCUMENTATION_QUERY_URL: any = `https://docs.example.test/guide?path=${SYNTHETIC_LINUX_HOME_PATH}`;
 
+function npmPackageInstallabilityReport({ dockerAvailable = false }: Record<string, any> = {}) : any {
+  const nativePlatform = "darwin/arm64";
+  const dockerPlatform = "linux/arm64";
+  const target = (kind: any, status: any = "passed") : any => ({
+    kind,
+    ...(kind === "native" || dockerAvailable ? { platform: kind === "native" ? nativePlatform : dockerPlatform } : {}),
+    status,
+    ...(kind === "local_docker" && !dockerAvailable ? { reasonCode: "docker_unavailable" } : {}),
+    ...(status === "passed" ? {
+      evidence: kind === "native" ? {
+        lockBackedRegistryMirror: true,
+        mirroredPackageCount: 1,
+        mirroredArtifactCount: 1,
+        publicServerCliHelp: true,
+        publicServerBin: true
+      } : {
+        lockBackedRegistryMirror: true,
+        mirroredPackageCount: 1,
+        mirroredArtifactCount: 1,
+        publicServerCliHelp: true,
+        publicServerBin: true
+      }
+    } : {})
+  });
+  const consumerTest = (name?: any) : any => ({
+    name,
+    status: "passed",
+    evidence: {
+      targets: [target("native"), target("local_docker", dockerAvailable ? "passed" : "not_run")]
+    }
+  });
+  const report: Record<string, any> = {
+    schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
+    verifier: "tools/server-scripts/verify-npm-package-installability.ts",
+    generatedAt: GENERATED_AT,
+    finishedAt: GENERATED_AT,
+    candidate: {
+      version: "0.0.1",
+      artifacts: [{
+        name: "meshrix.js",
+        version: "0.0.1",
+        filename: "meshrix.js-0.0.1.tgz",
+        integrity: "sha512-aGVsbG8="
+      }]
+    },
+    environment: {
+      native: { os: "darwin", architecture: "arm64", platform: nativePlatform, nodeVersion: "24.18.1" },
+      docker: dockerAvailable
+        ? { status: "available", platform: dockerPlatform }
+        : { status: "unavailable", reasonCode: "docker_unavailable" }
+    },
+    tests: [
+      { name: "root package declares the complete version-locked workspace release set", status: "passed" },
+      { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed" },
+      consumerTest("clean consumer install runs the packaged CLI"),
+      consumerTest("installed framework starts and serves its default health contracts")
+    ],
+    summary: {
+      testCount: 4,
+      failedCount: 0,
+      releaseReady: true,
+      reportLeakScan: true,
+      qualifiedPlatforms: [
+        { kind: "native", platform: nativePlatform },
+        ...(dockerAvailable ? [{ kind: "local_docker", platform: dockerPlatform }] : [])
+      ]
+    }
+  };
+  return report;
+}
+
 function validReport(overrides: Record<string, any> = {}) : any {
   const spec: any = requiredReportSpec(REPORT_PATH);
   return {
@@ -407,8 +478,13 @@ describe("required report validator", () : any => {
     }
   });
 
-  it("assigns nested producers for reports absent during plan-only execution", () : any => {
+  it("assigns npm qualification and nested producers without making deployment universal", () : any => {
     expect(SINGLE_NODE_COMMANDS).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        report: "build/reports/npm-package-installability.json"
+      })
+    ]));
+    expect(SINGLE_NODE_COMMANDS).not.toEqual(expect.arrayContaining([
       expect.objectContaining({
         report: "build/reports/deployment-container-flow.json"
       })
@@ -792,229 +868,113 @@ describe("platform acceptance foundation ownership", () : any => {
     });
   });
 
-  it("requires a clean-installable host-neutral npm release set", () : any => {
+  it("requires the selected-platform npm consumer report in functional acceptance", () : any => {
     expect(PLATFORM_ACCEPTANCE_COMMANDS.map((command?: any) : any => command.id))
-      .not.toContain("npm-package-installability");
+      .toContain("npm-package-installability");
     expect(ACCEPTANCE_REQUIRED_REPORTS)
-      .not.toContain("build/reports/npm-package-installability.json");
+      .toContain("build/reports/npm-package-installability.json");
     expect(requiredReportSpec("build/reports/npm-package-installability.json")).toMatchObject({
       schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
       verifier: "tools/server-scripts/verify-npm-package-installability.ts",
       reducer: REQUIRED_REPORT_REDUCERS.NPM_PACKAGE_INSTALLABILITY
     });
 
-    const packageReport: Record<string, any> = {
-      schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
-      verifier: "tools/server-scripts/verify-npm-package-installability.ts",
-      generatedAt: GENERATED_AT,
-      finishedAt: GENERATED_AT,
-      tests: [
-        { name: "root package declares the complete version-locked workspace release set", status: "passed", evidence: {} },
-        { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed", evidence: {} },
-        {
-          name: "clean consumer install runs the packaged CLI",
-          status: "passed",
-          evidence: {
-            lockBackedRegistryMirror: true,
-            mirroredPackageCount: 1,
-            mirroredArtifactCount: 1,
-            publicServerCliHelp: true
-          }
-        },
-        {
-          name: "installed framework starts and serves its default health contracts",
-          status: "passed",
-          evidence: { publicServerBin: true }
-        }
-      ],
-      summary: {
-        testCount: 4,
-        failedCount: 0,
-        releaseReady: true,
-        reportLeakScan: true,
-        freshContainer: true,
-        supplementaryHostProbe: false
-      }
-    };
     const options: Record<string, any> = { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS };
+    for (const dockerAvailable of [false, true]) {
+      const report = npmPackageInstallabilityReport({ dockerAvailable });
+      expect(createReleaseEvidenceReadiness(
+        "build/reports/npm-package-installability.json",
+        report,
+        options
+      )).toMatchObject({ releaseReady: true, reasons: [] });
+    }
+  });
+
+  it("accepts an unavailable optional Docker target but rejects any selected target failure", () : any => {
+    const options: Record<string, any> = { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS };
+    const unavailable = npmPackageInstallabilityReport();
+    for (const test of unavailable.tests.slice(2)) {
+      expect(test.evidence.targets[1]).toMatchObject({
+        kind: "local_docker",
+        status: "not_run",
+        reasonCode: "docker_unavailable"
+      });
+    }
     expect(createReleaseEvidenceReadiness(
       "build/reports/npm-package-installability.json",
-      packageReport,
+      unavailable,
       options
     ).releaseReady).toBe(true);
+
+    const selectedFailure = npmPackageInstallabilityReport({ dockerAvailable: true });
+    for (const test of selectedFailure.tests.slice(2)) test.evidence.targets[1].status = "failed";
+    selectedFailure.tests[2].status = "failed";
+    selectedFailure.tests[3].status = "failed";
+    selectedFailure.summary.failedCount = 2;
+    selectedFailure.summary.releaseReady = false;
     expect(createReleaseEvidenceReadiness(
       "build/reports/npm-package-installability.json",
-      {
-        ...packageReport,
-        summary: {
-          ...packageReport.summary,
-          freshContainer: false,
-          supplementaryHostProbe: true
-        }
-      },
+      selectedFailure,
       options
     )).toMatchObject({
       releaseReady: false,
-      reasons: expect.arrayContaining(["npm-package-fresh-container-authority-missing"])
+      reasons: expect.arrayContaining(["npm-package-release-ready-not-true"])
     });
   });
 
-  it("rejects npm installability summaries with invalid or inconsistent counters", () : any => {
-    const packageReport: Record<string, any> = {
-      schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
-      verifier: "tools/server-scripts/verify-npm-package-installability.ts",
-      generatedAt: GENERATED_AT,
-      finishedAt: GENERATED_AT,
-      tests: [
-        { name: "root package declares the complete version-locked workspace release set", status: "passed" },
-        { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed" },
-        {
-          name: "clean consumer install runs the packaged CLI",
-          status: "passed",
-          evidence: {
-            lockBackedRegistryMirror: true,
-            mirroredPackageCount: 1,
-            mirroredArtifactCount: 1,
-            publicServerCliHelp: true
-          }
-        },
-        {
-          name: "installed framework starts and serves its default health contracts",
-          status: "passed",
-          evidence: { publicServerBin: true }
-        }
-      ],
-      summary: {
-        testCount: 4,
-        failedCount: 0,
-        releaseReady: true,
-        reportLeakScan: true,
-        freshContainer: true,
-        supplementaryHostProbe: false
-      }
-    };
+  it("rejects empty platform qualification, fake targets and invalid npm counters", () : any => {
     const options: Record<string, any> = { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS };
     const readiness: any = (report?: any) : any => createReleaseEvidenceReadiness(
       "build/reports/npm-package-installability.json",
       report,
       options
     );
-
+    const base = npmPackageInstallabilityReport();
     expect(readiness({
-      ...packageReport,
-      summary: { ...packageReport.summary, testCount: "4", failedCount: 0.5 }
+      ...base,
+      summary: { ...base.summary, testCount: "4", failedCount: 0.5 }
     }).reasons).toEqual(expect.arrayContaining([
       "npm-package-test-count-invalid",
       "npm-package-failed-count-invalid"
     ]));
     expect(readiness({
-      ...packageReport,
-      summary: { ...packageReport.summary, testCount: 3 }
-    }).reasons).toContain("npm-package-test-count-mismatch:3:4");
+      ...base,
+      environment: {
+        ...base.environment,
+        native: { ...base.environment.native, platform: "linux/amd64" }
+      }
+    }).reasons).toContain("npm-package-native-target-mismatch:clean consumer install runs the packaged CLI");
     expect(readiness({
-      ...packageReport,
-      tests: packageReport.tests.map((test?: any, index?: any) : any => index === 0
-        ? { ...test, status: "failed" }
-        : test)
-    }).reasons).toEqual(expect.arrayContaining([
-      "npm-package-failed-count-mismatch:0:1",
-      "npm-package-test-status-not-passed:1"
-    ]));
+      ...base,
+      summary: { ...base.summary, qualifiedPlatforms: [] }
+    }).reasons).toContain("npm-package-qualified-platforms-mismatch");
+    const missingUnavailableTarget = structuredClone(base);
+    for (const test of missingUnavailableTarget.tests.slice(2)) test.evidence.targets.pop();
+    expect(readiness(missingUnavailableTarget).reasons)
+      .toContain("npm-package-target-count-invalid:clean consumer install runs the packaged CLI");
   });
 
-  it("requires exactly the four unique npm installability tests", () : any => {
-    const packageReport: Record<string, any> = {
-      schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
-      verifier: "tools/server-scripts/verify-npm-package-installability.ts",
-      generatedAt: GENERATED_AT,
-      finishedAt: GENERATED_AT,
-      tests: [
-        { name: "root package declares the complete version-locked workspace release set", status: "passed" },
-        { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed" },
-        {
-          name: "clean consumer install runs the packaged CLI",
-          status: "passed",
-          evidence: {
-            lockBackedRegistryMirror: true,
-            mirroredPackageCount: 1,
-            mirroredArtifactCount: 1,
-            publicServerCliHelp: true
-          }
-        },
-        {
-          name: "installed framework starts and serves its default health contracts",
-          status: "passed",
-          evidence: { publicServerBin: true }
-        }
-      ],
-      summary: {
-        testCount: 4,
-        failedCount: 0,
-        releaseReady: true,
-        reportLeakScan: true,
-        freshContainer: true,
-        supplementaryHostProbe: false
-      }
-    };
+  it("requires exact consumer test names and per-platform public server entry evidence", () : any => {
     const options: Record<string, any> = { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS };
-    const readiness: any = (tests?: any) : any => createReleaseEvidenceReadiness(
+    const report = npmPackageInstallabilityReport();
+    const duplicateTests = report.tests.map((test?: any, index?: any) : any => index === 3
+      ? { ...report.tests[2] }
+      : test);
+    expect(createReleaseEvidenceReadiness(
       "build/reports/npm-package-installability.json",
-      { ...packageReport, tests },
+      { ...report, tests: duplicateTests },
       options
-    );
-    const duplicateTests: any = packageReport.tests.map((test?: any, index?: any) : any => index === 3
-      ? { ...packageReport.tests[2] }
-      : test);
-    const renamedTests: any = packageReport.tests.map((test?: any, index?: any) : any => index === 0
-      ? { ...test, name: `${test.name} (supplemental)` }
-      : test);
-
-    expect(readiness(duplicateTests).reasons).toEqual(expect.arrayContaining([
+    ).reasons).toEqual(expect.arrayContaining([
       "npm-package-test-name-duplicate",
       "npm-package-test-name-set-mismatch"
     ]));
-    expect(readiness(renamedTests).reasons).toContain("npm-package-test-name-set-mismatch");
-  });
 
-  it("requires npm installability evidence from the public server entrypoints", () : any => {
-    const packageReport: Record<string, any> = {
-      schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
-      verifier: "tools/server-scripts/verify-npm-package-installability.ts",
-      generatedAt: GENERATED_AT,
-      finishedAt: GENERATED_AT,
-      tests: [
-        { name: "root package declares the complete version-locked workspace release set", status: "passed" },
-        { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed" },
-        {
-          name: "clean consumer install runs the packaged CLI",
-          status: "passed",
-          evidence: {
-            lockBackedRegistryMirror: true,
-            mirroredPackageCount: 1,
-            mirroredArtifactCount: 1,
-            publicServerCliHelp: false
-          }
-        },
-        {
-          name: "installed framework starts and serves its default health contracts",
-          status: "passed",
-          evidence: { publicServerBin: false }
-        }
-      ],
-      summary: {
-        testCount: 4,
-        failedCount: 0,
-        releaseReady: true,
-        reportLeakScan: true,
-        freshContainer: true,
-        supplementaryHostProbe: false
-      }
-    };
-
+    const missingEntry = structuredClone(report);
+    missingEntry.tests[2].evidence.targets[0].evidence.publicServerCliHelp = false;
     expect(createReleaseEvidenceReadiness(
       "build/reports/npm-package-installability.json",
-      packageReport,
-      { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS }
+      missingEntry,
+      options
     ).reasons).toContain("npm-package-public-server-entry-missing");
   });
 });

@@ -9,6 +9,7 @@ import {
   FIRST_NPM_BOOTSTRAP_VERSION,
   RELEASE_AUTHORITY_MANIFEST_SCHEMA,
   RELEASE_DEPLOYMENT_CLAIM,
+  NPM_PACKAGE_INSTALLABILITY_CLAIM,
   STABLE_AUTHORITY_MANIFEST_SCHEMA,
   validateReleaseExecutionEnvironment,
 } from "./contract.ts";
@@ -43,6 +44,8 @@ const STABLE_MANIFEST_KEYS = Object.freeze([
   "event",
   "functionalClaim",
   "functionalReceiptDigest",
+  "npmQualificationClaim",
+  "npmQualificationReceiptDigest",
   "runAttempt",
   "runId",
   "schemaVersion",
@@ -61,6 +64,8 @@ const RELEASE_MANIFEST_KEYS = Object.freeze([
   "event",
   "functionalClaim",
   "functionalReceiptDigest",
+  "npmQualificationClaim",
+  "npmQualificationReceiptDigest",
   "runAttempt",
   "runId",
   "schemaVersion",
@@ -614,8 +619,18 @@ export function validateStableAuthorityManifest(manifest: any): any {
   if (manifest.schemaVersion !== STABLE_AUTHORITY_MANIFEST_SCHEMA) {
     fail("stable_authority_manifest_schema_invalid");
   }
+  if (manifest.npmQualificationClaim !== NPM_PACKAGE_INSTALLABILITY_CLAIM) {
+    fail("stable_authority_npm_qualification_claim_invalid");
+  }
+  const npmQualificationReceiptDigest = requireText(
+    manifest.npmQualificationReceiptDigest,
+    SHA256,
+    "stable_authority_npm_qualification_receipt_digest_invalid",
+  );
   return Object.freeze({
     ...normalizedCommonManifest(manifest, "stable"),
+    npmQualificationClaim: NPM_PACKAGE_INSTALLABILITY_CLAIM,
+    npmQualificationReceiptDigest,
     schemaVersion: STABLE_AUTHORITY_MANIFEST_SCHEMA,
   });
 }
@@ -629,6 +644,7 @@ export function createStableAuthorityManifest(input: any): any {
     event: "push",
     workflowPath: ".github/workflows/ci.yml",
     functionalClaim: FUNCTIONAL_CLAIM,
+    npmQualificationClaim: NPM_PACKAGE_INSTALLABILITY_CLAIM,
   });
 }
 
@@ -637,14 +653,27 @@ export function validateReleaseAuthorityManifest(manifest: any): any {
   if (manifest.schemaVersion !== RELEASE_AUTHORITY_MANIFEST_SCHEMA) {
     fail("release_authority_manifest_schema_invalid");
   }
-  if (manifest.deploymentClaim !== RELEASE_DEPLOYMENT_CLAIM) {
+  if (manifest.npmQualificationClaim !== NPM_PACKAGE_INSTALLABILITY_CLAIM) {
+    fail("release_authority_npm_qualification_claim_invalid");
+  }
+  const npmQualificationReceiptDigest = requireText(
+    manifest.npmQualificationReceiptDigest,
+    SHA256,
+    "release_authority_npm_qualification_receipt_digest_invalid",
+  );
+  const deploymentSelected = manifest.deploymentClaim === RELEASE_DEPLOYMENT_CLAIM;
+  if (!deploymentSelected && manifest.deploymentClaim !== null) {
     fail("release_authority_deployment_claim_invalid");
   }
-  const deploymentReceiptDigest = requireText(
-    manifest.deploymentReceiptDigest,
-    SHA256,
-    "release_authority_deployment_receipt_digest_invalid",
-  );
+  const deploymentReceiptDigest = deploymentSelected
+    ? requireText(
+      manifest.deploymentReceiptDigest,
+      SHA256,
+      "release_authority_deployment_receipt_digest_invalid",
+    )
+    : manifest.deploymentReceiptDigest === null
+      ? null
+      : fail("release_authority_deployment_receipt_digest_invalid");
   const stableManifestDigest = requireText(
     manifest.stableManifestDigest,
     SHA256,
@@ -652,8 +681,10 @@ export function validateReleaseAuthorityManifest(manifest: any): any {
   );
   return Object.freeze({
     ...normalizedCommonManifest(manifest, "release"),
-    deploymentClaim: RELEASE_DEPLOYMENT_CLAIM,
+    deploymentClaim: deploymentSelected ? RELEASE_DEPLOYMENT_CLAIM : null,
     deploymentReceiptDigest,
+    npmQualificationClaim: NPM_PACKAGE_INSTALLABILITY_CLAIM,
+    npmQualificationReceiptDigest,
     schemaVersion: RELEASE_AUTHORITY_MANIFEST_SCHEMA,
     stableManifestDigest,
   });
@@ -668,7 +699,9 @@ export function createReleaseAuthorityManifest(input: any): any {
     event: input.event || "push",
     workflowPath: ".github/workflows/release-branch.yml",
     functionalClaim: FUNCTIONAL_CLAIM,
-    deploymentClaim: RELEASE_DEPLOYMENT_CLAIM,
+    npmQualificationClaim: NPM_PACKAGE_INSTALLABILITY_CLAIM,
+    deploymentClaim: input.deploymentClaim ?? null,
+    deploymentReceiptDigest: input.deploymentReceiptDigest ?? null,
   });
 }
 

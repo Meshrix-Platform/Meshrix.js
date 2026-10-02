@@ -8,6 +8,7 @@ import { loadRegistry } from "../registry/index.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const EXPECTED_FUNCTIONAL_CLAIM: any = "functional-complete";
+const EXPECTED_NPM_INSTALLABILITY_CLAIM: any = "npm-package-installability-passed";
 const EXPECTED_RELEASE_DEPLOYMENT_CLAIM: any = "release-deployment-verified";
 const EXPECTED_REAL_MACHINE_CLAIM: any = "real-machine-verified";
 const EXPECTED_REAL_MACHINE_SCRIPT: any =
@@ -23,6 +24,8 @@ const EXPECTED_REAL_MACHINE_TARGETS: readonly any[] = Object.freeze([
 
 const EXPECTED_RELEASE_DEPLOYMENT_SCRIPT: any =
   "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-deployment.ts";
+const EXPECTED_NPM_INSTALLABILITY_SCRIPT: any =
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-npm-package-installability.ts";
 const EXPECTED_RELEASE_DEPLOYMENT_SCENARIOS: readonly any[] = Object.freeze([
   "success",
   "concurrency",
@@ -52,6 +55,7 @@ function simulationCommandExists(command?: any, rootPackage?: any) : any {
 export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?: any) : any {
   const reasons: any[] = [];
   const functional: any = standards?.functionalCompleteness;
+  const npmInstallability: any = standards?.npmPackageInstallability;
   const deployment: any = standards?.releaseDeploymentVerification;
   const realMachine: any = standards?.realMachineVerification;
 
@@ -73,13 +77,25 @@ export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?
     reasons.push("functional_release_coverage_invalid");
   }
   if (
+    npmInstallability?.claim !== EXPECTED_NPM_INSTALLABILITY_CLAIM ||
+    npmInstallability?.requiredForRelease !== true ||
+    npmInstallability?.requiresClaim !== EXPECTED_FUNCTIONAL_CLAIM ||
+    npmInstallability?.command !== "npm run verify:npm-package-installability" ||
+    npmInstallability?.controller !== "tools/server-scripts/verify-npm-package-installability.ts" ||
+    npmInstallability?.receipt !== "build/reports/npm-package-installability.json" ||
+    npmInstallability?.schemaVersion !== "v0.0.1:release:npm-package-installability-report-1"
+  ) {
+    reasons.push("npm_package_installability_release_standard_invalid");
+  }
+  if (rootPackage?.scripts?.["verify:npm-package-installability"] !== EXPECTED_NPM_INSTALLABILITY_SCRIPT) {
+    reasons.push("npm_package_installability_command_missing_or_mismatched");
+  }
+  if (
     deployment?.claim !== EXPECTED_RELEASE_DEPLOYMENT_CLAIM ||
-    deployment?.requiredForRelease !== true ||
+    deployment?.requiredForRelease !== false ||
     deployment?.requiresClaim !== EXPECTED_FUNCTIONAL_CLAIM ||
     deployment?.command !== "npm run server:verify:release-deployment" ||
     deployment?.controller !== "tools/server-scripts/verify-release-deployment.ts" ||
-    deployment?.workflow !== ".github/workflows/release-branch.yml" ||
-    deployment?.runner !== "ubuntu-24.04" ||
     deployment?.receipt !== "build/reports/release-deployment.json" ||
     JSON.stringify(deployment?.scenarios || []) !==
       JSON.stringify(EXPECTED_RELEASE_DEPLOYMENT_SCENARIOS)
@@ -124,6 +140,7 @@ export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?
   return {
     valid: reasons.length === 0,
     functionalClaim: String(functional?.claim || ""),
+    npmInstallabilityClaim: String(npmInstallability?.claim || ""),
     releaseDeploymentClaim: String(deployment?.claim || ""),
     realMachineClaim: String(realMachine?.claim || ""),
     targetCount: targets.length,
@@ -143,7 +160,7 @@ export async function verifyReleaseAcceptanceStandards({
   const result: any = validateReleaseAcceptanceStandards(registry, packageDefinition);
   if (!result.valid) fail(result.reasons[0]);
 
-  const [realMachineWorkflow, releaseWorkflow, ciWorkflow, releaseBranchWorkflow] =
+  const [realMachineWorkflow, releaseWorkflow, ciWorkflow, releaseBranchWorkflow, releaseWorkflowAutomation] =
     await Promise.all([
       fs.readFile(path.join(rootDir, registry.realMachineVerification.workflow), "utf8")
         .catch(() : any => fail("real_machine_workflow_missing")),
@@ -153,19 +170,25 @@ export async function verifyReleaseAcceptanceStandards({
         .catch(() : any => fail("ci_workflow_missing")),
       fs.readFile(path.join(rootDir, ".github/workflows/release-branch.yml"), "utf8")
         .catch(() : any => fail("release_branch_workflow_missing")),
+      fs.readFile(path.join(rootDir, "tools/server-scripts/release-workflow-automation.ts"), "utf8")
+        .catch(() : any => fail("release_workflow_automation_missing")),
     ]);
-  const deploymentRequiredMarkers: any[] = [
-    "runs-on: ubuntu-24.04",
-    "npm run server:verify:release-deployment",
-    "SOURCE_CANDIDATE.json",
-    "accepted-candidate.json",
-    "release-deployment.json",
+  const releaseBranchMarkers: any[] = [
+    "node tools/server-scripts/release-workflow-automation.ts prepare-branch-authority",
+    "node tools/server-scripts/release-workflow-automation.ts ensure-release-tag",
+    "node tools/server-scripts/release-workflow-automation.ts dispatch-release",
+    "BOOTSTRAP_CANDIDATE",
     "release-authority-${{ github.sha }}",
   ];
   if (
-    deploymentRequiredMarkers.some((marker?: any) : any => !releaseBranchWorkflow.includes(marker)) ||
+    releaseBranchMarkers.some((marker?: any) : any => !releaseBranchWorkflow.includes(marker)) ||
     releaseBranchWorkflow.includes("verify-platform-acceptance.ts") ||
-    releaseBranchWorkflow.includes("functional-completeness")
+    releaseBranchWorkflow.includes("functional-completeness") ||
+    releaseBranchWorkflow.includes("release-deployment") ||
+    !releaseWorkflowAutomation.includes("STABLE_AUTHORITY_FILES") ||
+    !releaseWorkflowAutomation.includes('"npm-package-installability.json"') ||
+    !releaseWorkflowAutomation.includes('"create-release-bundle"') ||
+    !releaseWorkflowAutomation.includes('"verify-release-bundle"')
   ) {
     fail("release_branch_workflow_contract_invalid");
   }
@@ -175,41 +198,41 @@ export async function verifyReleaseAcceptanceStandards({
   ) {
     fail("release_workflow_functional_rerun_forbidden");
   }
-  const stableGateStart: any = ciWorkflow.indexOf("\n  functional-completeness:\n");
+  const stableGateStart: any = ciWorkflow.indexOf("\n  stable-functional-completeness:\n");
   const stableGateSection: any = stableGateStart < 0
     ? ""
     : ciWorkflow.slice(stableGateStart);
-  const stableCheckpointMarkers: any[] = [
-    "\n  stable-candidate:\n",
-    "\n  repository-checkpoint:\n",
-    "\n  audit-checkpoint:\n",
-    "\n  audit-resource-checkpoint:\n",
-    "\n  audit-sandbox-checkpoint:\n",
-    "\n  audit-console-evidence-checkpoint:\n",
-    "\n  audit-console-checkpoint:\n",
-    "\n  audit-reduction:\n",
-    "\n  single-node-delivery:\n",
-    "\n  functional-acceptance:\n",
-    "fail-fast: false",
-    "npm run test:audit:stage",
-    "npm run test:audit:reduce",
-    "stable-audit-${{ github.sha }}",
-    "stable-console-build-${{ github.sha }}",
-    "stable-console-evidence-${{ github.sha }}",
+  const nextStableJob: any = stableGateSection.slice("\n  stable-functional-completeness:\n".length)
+    .search(/\n  [a-z][a-z0-9-]*:\n/u);
+  const stableGate: any = stableGateStart < 0
+    ? ""
+    : ciWorkflow.slice(
+      stableGateStart,
+      nextStableJob < 0 ? ciWorkflow.length : stableGateStart + "\n  stable-functional-completeness:\n".length + nextStableJob,
+    );
+  const stableGateMarkers: any[] = [
+    "github.event_name == 'push' && github.ref_name == 'stable'",
+    "npm run ci:local -- --scope release",
+    "create-stable-bundle",
+    "--candidate build/release/control/SOURCE_CANDIDATE.json",
+    "--functional build/reports/accepted-candidate.json",
+    "--npm-report build/reports/npm-package-installability.json",
+    "--run-id ${{ github.run_id }}",
+    "--run-attempt ${{ github.run_attempt }}",
+    "--bundle build/release/control/stable-authority",
+    "name: stable-authority-${{ github.sha }}",
+    "path: build/release/control/stable-authority/",
   ];
   if (
-    stableCheckpointMarkers.some((marker?: any) : any => !ciWorkflow.includes(marker)) ||
-    stableGateSection === "" ||
-    !stableGateSection.includes("github.ref_name == 'stable'") ||
-    stableGateSection.includes("github.ref_name == 'release'") ||
-    !stableGateSection.includes("stable-authority-${{ github.sha }}") ||
-    !stableGateSection.includes("repository-checkpoint") ||
-    !stableGateSection.includes("audit-reduction") ||
-    !stableGateSection.includes("single-node-delivery") ||
-    !stableGateSection.includes("functional-acceptance")
+    stableGateMarkers.some((marker?: any) : any => !stableGate.includes(marker)) ||
+    stableGate === "" ||
+    stableGate.includes("github.ref_name == 'release'") ||
+    stableGate.includes("verify-release-deployment")
   ) {
     fail("ci_workflow_stable_gate_contract_invalid");
   }
+  await fs.access(path.join(rootDir, registry.npmPackageInstallability.controller))
+    .catch(() : any => fail("npm_package_installability_verifier_missing"));
   await fs.access(path.join(rootDir, registry.releaseDeploymentVerification.controller))
     .catch(() : any => fail("release_deployment_verifier_missing"));
   const realMachineRequiredMarkers: any[] = [

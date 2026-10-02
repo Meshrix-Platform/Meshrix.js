@@ -10,6 +10,7 @@ export const RELEASE_AUTHORITY_MANIFEST_SCHEMA =
   "v0.0.1:meshrix:release-authority-manifest-1";
 export const RELEASE_DEPLOYMENT_CLAIM = "release-deployment-verified";
 export const FUNCTIONAL_CLAIM = "functional-complete";
+export const NPM_PACKAGE_INSTALLABILITY_CLAIM = "npm-package-installability-passed";
 export const FIRST_NPM_BOOTSTRAP_VERSION = "0.0.1";
 export const RUNTIME_UI_TARGET = "runtime-ui";
 export const UBUNTU_RUNNER = "ubuntu-24.04";
