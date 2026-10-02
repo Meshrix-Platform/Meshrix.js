@@ -12,6 +12,7 @@ import {
   buildReleaseWorkflowDispatchPayload,
   createReleaseAuthorityManifest,
   createStableAuthorityManifest,
+  decideReleaseBranchDispatch,
   releaseTagCreationAction,
   requireCurrentReleaseDeploymentEnvironment,
   selectExactPromotionArtifact,
@@ -409,6 +410,16 @@ export async function runAuthorityCommand(argv: string[]): Promise<any> {
       releaseVersion: requireOption(options, "release-version"),
     });
     return { command, ...dispatch };
+  }
+  if (command === "decide-release-branch-dispatch") {
+    const decision = decideReleaseBranchDispatch({
+      event: requireOption(options, "event"),
+      refType: requireOption(options, "ref-type"),
+      refName: requireOption(options, "ref-name"),
+      releaseVersion: requireOption(options, "release-version"),
+      bootstrapCandidate: options["bootstrap-candidate"] || "",
+    });
+    return { command, ...decision };
   }
   if (command === "ensure-release-tag") {
     const result = await ensureImmutableReleaseTag({
