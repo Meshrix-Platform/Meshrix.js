@@ -19,6 +19,7 @@ import { assertReleaseVersion, resolveReleaseWorkspaceDirectories } from "./lib/
 
 const execFileAsync: any = promisify(execFile);
 const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
+const BOOTSTRAP_USER_CONFIG: any = "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n";
 export const PREPARED_RELEASE_SET_FILENAME: any = "meshrix-release-set.json";
 const PREPARED_RELEASE_SET_SCHEMA: any = "meshrix.npm-release-set/v1";
 const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
@@ -513,8 +514,12 @@ export function createNpmRunner({
       configDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-config-"));
       const userConfigPath: any = path.join(configDirectory, "user.npmrc");
       const globalConfigPath: any = path.join(configDirectory, "global.npmrc");
+      const bootstrapMutation: any = Boolean(authToken && mutating);
       await Promise.all([
-        fs.writeFile(userConfigPath, "", { encoding: "utf8", mode: 0o600 }),
+        fs.writeFile(userConfigPath, bootstrapMutation ? BOOTSTRAP_USER_CONFIG : "", {
+          encoding: "utf8",
+          mode: 0o600
+        }),
         fs.writeFile(globalConfigPath, "", { encoding: "utf8", mode: 0o600 })
       ]);
       const childEnvironment: any = {
@@ -522,7 +527,7 @@ export function createNpmRunner({
         npm_config_userconfig: userConfigPath,
         npm_config_globalconfig: globalConfigPath
       };
-      if (authToken && mutating) childEnvironment.NODE_AUTH_TOKEN = authToken;
+      if (bootstrapMutation) childEnvironment.NODE_AUTH_TOKEN = authToken;
       const result: any = await exec(
         invocation.command,
         npmCliArgs(invocation, args),
