@@ -929,49 +929,27 @@ Before the first release run, verify these hosted protections in GitHub:
    the existing release job also verifies that the release is immutable and
    that its asset set and body match the candidate.
 
-Before that authority, a read-only `upstream-service-publishing` job runs the
-self-contained Core verifier. It checks out no detachable service or plugin
-repository and performs no registry or release mutation. Every later
-publication job inherits Core prepublication, functional acceptance, and the
-exact-artifact npm qualification. OCI assembly, scanning, signing, SBOM, and
-provenance checks apply when a container artifact is selected; they are not
-prerequisites for npm publication. Native host qualification remains a
-separate claim for the exact environment tested.
+The release workflow consumes the accepted Core functional and npm consumer
+evidence from the exact successful stable run. It publishes `meshrix.js` and
+`@meshrix/gateway`; container images and portable archives are separate delivery
+choices with their own applicable verification. Additional operating systems
+remain unmeasured until their actual qualification is recorded.
 
-When a container artifact is selected, the workflow stages its declared OCI
-platforms and compares the intended manifest digest with the GHCR version tag
-before and after creating that tag. An existing equal digest is idempotent; an
-existing different digest fails without replacing the version tag. The npm
-artifact path separately checks its exact prepared archives in clean consumers
-on observed available platforms. Assembly remains credential-free. Additional
-native macOS, Linux, or Windows qualification is bound to each environment
-that actually runs it.
+The npm release set manifest binds both tarballs through their SHA-512
+integrity values. The supply-chain manifest binds the generated CycloneDX SBOM
+and third-party notices. The workflow signs both manifests with Sigstore and
+verifies the exact workflow identity and GitHub Actions issuer before
+publication. Release consumers verify those signatures and the manifest
+entries before using the associated assets. An existing published release must
+match the candidate and its actual asset set; a conflicting immutable release
+cannot be replaced.
 
-For a selected OCI image, the commit-pinned Trivy action scans the declared
-platform operating-system and library packages and rejects actionable `HIGH`
-or `CRITICAL` findings before the image authority is signed. The image
-authority requires exact platform manifest and attestation-subject digest
-bindings, SLSA provenance schema and build semantics, exact repository/ref/
-commit build arguments, and a non-empty SPDX document for each selected
-platform. The signing job refetches registry evidence and accepts it only when
-all validated evidence hashes remain identical. GitHub Release assets are
-covered by
-`RELEASE_SHA256SUMS`; its entries use the final flattened asset basenames. The
-workflow signs that checksum file with Sigstore and verifies the exact workflow
-identity and GitHub Actions issuer before publication. Release consumers must
-verify `RELEASE_SHA256SUMS.sigstore.json` before using the checksum file.
-On a complete workflow rerun, finalized remote Sigstore assets are reused only
-when the release metadata, exact asset set, GitHub digests, and every
-deterministic source asset match the current tagged inputs. A mismatch on an
-already published release fails closed; an incomplete unpublished draft may be
-regenerated and replaced before publication.
-
-The credential-free `assemble-release-assets` job builds the package files and
+The credential-free assembly job builds the package files and
 prepares the public npm archives once. It transfers those exact tarballs with
 the other immutable release inputs. The read-only npm preflight and the later
 publisher download and use the same prepared archive directory; neither repacks
 the workspaces. The preflight checks every immutable version and dist-tag before
-remote container mutation. The publisher repeats the complete registry
+publication. The publisher repeats the complete registry
 preflight immediately before its first npm mutation. Checks cover immutable
 SHA-512 integrity, npm registry signatures, SLSA provenance attestations, and
 monotonic `latest` or `next` state. A newer dist-tag is preserved; a missing or
@@ -1008,26 +986,18 @@ versions and never silently falls back to a token.
 
 After both packages exist, configure one GitHub Actions trusted publisher for
 each package with the deployed repository, workflow file `release.yml`, and
-environment `release-candidate`. The following bulk setup uses one npm login
-and makes both direct-publish configurations with npm 11.21.0:
+environment `release-candidate`. After one npm login, the following commands
+configure direct publication for both packages with npm 11.21.0:
 
-```bash
-for package in '@meshrix/gateway' 'meshrix.js'; do
-  npm trust github "$package" \
-    --file release.yml \
-    --repository Meshrix-Platform/Meshrix.js \
-    --environment release-candidate \
-    --allow-publish \
-    --yes
-  sleep 2
-done
+```text
+npm trust github @meshrix/gateway --file release.yml --repository Meshrix-Platform/Meshrix.js --environment release-candidate --allow-publish --yes
+npm trust github meshrix.js --file release.yml --repository Meshrix-Platform/Meshrix.js --environment release-candidate --allow-publish --yes
 ```
 
 npm requires account-level 2FA and an authenticated npm login for trusted-publisher
 management. A granular token with bypass 2FA, including the bootstrap publishing
 token, cannot authorize `npm trust` operations. During the
-first command, select the documented five-minute 2FA reuse option; the two
-second delay limits bulk-request rate. If automatic repair of a missing or
+first command, select the documented five-minute 2FA reuse option. If automatic repair of a missing or
 older `latest`/`next` tag is required, grant `manage dist-tags` separately on
 each package. npm treats that as a separate permission, and the pinned `npm
 trust` v11 CLI does not expose a flag for it. Configure the complete permission
