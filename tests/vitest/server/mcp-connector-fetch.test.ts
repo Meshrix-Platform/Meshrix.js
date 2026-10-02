@@ -20,7 +20,7 @@ import { runWithOwnedProcessSignals } from "../../../packages/protocols/mcp/adap
 
 const API_KEY: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
 const TOKEN_ENV: any = "MESHRIX_MCP_CONNECTOR_LIFETIME_TEST_TOKEN";
-const CLI_ENTRY: any = fileURLToPath(new URL("../../../packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", import.meta.url));
+const CLI_ENTRY: any = fileURLToPath(new URL("../../../apps/server/bin/meshrix-mcp.ts", import.meta.url));
 let rootDir: any = "";
 let server: any = null;
 let baseUrl: any = "";

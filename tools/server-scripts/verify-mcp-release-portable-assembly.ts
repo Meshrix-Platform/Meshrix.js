@@ -258,7 +258,7 @@ try {
   await test("root package metadata identifies the published MCP runtime", async () : Promise<any> => {
     assert.equal(packageJson.name, MCP_NPM_PACKAGE_NAME);
     assert.equal(packageJson.version, MCP_NPM_PACKAGE_VERSION);
-    assert.equal(packageJson.bin?.["meshrix-mcp"], "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js");
+    assert.equal(packageJson.bin?.["meshrix-mcp"], "dist/apps/server/bin/meshrix-mcp.js");
     assert.equal(packageJson.dependencies?.[contractsPackage.name], contractsPackage.version);
     for (const targetEntry of MCP_CLIENT_TARGETS) {
       assert.equal(packageJson.dependencies?.[targetEntry.adapter.packageName], packageJson.version);

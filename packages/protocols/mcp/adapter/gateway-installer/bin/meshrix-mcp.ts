@@ -67,18 +67,17 @@ export async function runWithOwnedProcessSignals(handler?: any, options: Record<
   }
 }
 
-function isDirectCliEntry() : any {
+export function isDirectCliEntry(moduleUrl: string = import.meta.url) : boolean {
   if (!process.argv[1]) return false;
   try {
-    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(moduleUrl));
   } catch {
     return false;
   }
 }
 
-if (isDirectCliEntry()) {
-  main().catch((error?: any) : any => {
-    const argv: any = process.argv.slice(2);
+export async function runCli(argv: string[] = process.argv.slice(2)): Promise<void> {
+  await main(argv).catch((error?: any) : any => {
     const requestedCommand: any = String(argv[0] || "");
     const command: any = Object.hasOwn(MESHRIX_MCP_COMMAND_REGISTRY, requestedCommand) || ["help", "version"].includes(requestedCommand)
       ? requestedCommand
@@ -89,4 +88,8 @@ if (isDirectCliEntry()) {
     };
     emitCommandError(error, options, command);
   });
+}
+
+if (isDirectCliEntry()) {
+  await runCli();
 }
