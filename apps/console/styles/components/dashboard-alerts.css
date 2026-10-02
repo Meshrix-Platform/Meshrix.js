@@ -547,6 +547,10 @@
   font-weight: 700;
 }
 
+html[data-appearance-color-scheme="light"] .configuration-alert-action {
+  background: var(--bg-subtle);
+}
+
 .configuration-alert-action:hover,
 .configuration-alert-action:focus-visible {
   border-color: var(--brand);

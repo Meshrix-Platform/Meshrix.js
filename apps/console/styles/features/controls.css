@@ -94,6 +94,19 @@
   color: var(--text-primary);
 }
 
+/* Light presets pair near-white --bg-base pages with white --bg-surface
+   cards, so a surface-filled secondary button is invisible in both places.
+   Give ghost/table actions a --bg-subtle fill under the light scheme; the
+   dark scheme keeps the surface fill. */
+html[data-appearance-color-scheme="light"] .tool-button-ghost:not(.active):not(.tool-button-icon),
+html[data-appearance-color-scheme="light"] .table-action {
+  background: var(--bg-subtle);
+}
+html[data-appearance-color-scheme="light"] .tool-button-ghost:not(.active):not(.tool-button-icon):hover,
+html[data-appearance-color-scheme="light"] .table-action:hover {
+  background: var(--bg-inset);
+}
+
 /* Compact variant */
 .compact-action {
   height: 28px;
