@@ -1033,20 +1033,22 @@ The built-in project release runbook prepares and validates a candidate only.
 It does not commit, tag, push, upload assets, publish packages, or create a
 parallel release path.
 
-Run the mandatory Functional Release Gate:
+The Agent runs the maintained npm release preparation entry:
 
 ```bash
-npm run verify:acceptance
+npm run ci:local -- --scope release
 ```
 
-The command accepts a release candidate only when every required functional
-report is fresh, command-owned, schema-valid, privacy-safe, and successful.
-Development-host simulations, isolated containers, neutral protocol peers,
-fault injection, bounded-load checks, clean temporary roots, offline artifact
-inspection, startup and shutdown, rollback rehearsal, and recovery rehearsal
-belong in this gate whenever they can be executed without a particular real
-machine or external deployment. Exit code `0` means `passed`; every non-zero
-exit means `failed`.
+It invokes the existing acceptance controller for Core engineering regression,
+preparation of the two npm archives, installed consumers on the available native
+and matching local Docker platforms, real Console and standard MCP operations,
+publishing authorization/revocation, and recovery. Each required report must be
+fresh, command-owned, schema-valid, privacy-safe, and successful. The engineering
+regression includes deterministic architecture, security and failure-path tests.
+Optional portable runtimes, container delivery, independent Model/Agent services
+and performance experiments keep their separate workflows and do not expand this
+npm claim. Performance work requires its own current functional prerequisite.
+Exit code `0` means the selected scope passed; non-zero means it is incomplete.
 
 The acceptance orchestrator materializes the explicit Git commit in a detached
 private worktree. It never copies a dirty caller workspace, and a failed run
@@ -1055,7 +1057,10 @@ accepted-generation pointer. A successful run publishes one digest-bound
 accepted-candidate receipt. The same generation owns the npm installability
 report, which records the exact archives and each selected native or local
 Docker consumer result. Stable and release authority bundles revalidate that
-report alongside the receipt; an unavailable optional Docker target remains
+report alongside the receipt. The successful controller exports that report and
+the same verified archives to `build/reports/npm-package-installability.json` and
+`build/release/npm-set/` before removing its temporary source workspace. An
+unavailable optional Docker target remains
 `not_run`, while a selected target failure rejects qualification.
 Acceptance commands run until they exit or the operator cancels the run; the
 orchestrator does not convert elapsed wall-clock time into a failure. The CI

@@ -31,14 +31,14 @@ function currentInputs() : any {
 }
 
 describe("platform acceptance requirement evidence", () : any => {
-  it("closes the exact 30 Core and 13 publishing requirement labels", () : any => {
-    expect(PLATFORM_ACCEPTANCE_REQUIREMENTS).toHaveLength(43);
-    expect(new Set<any>(PLATFORM_ACCEPTANCE_REQUIREMENTS).size).toBe(43);
-    expect(PLATFORM_ACCEPTANCE_REQUIREMENTS[0]).toBe("REQ-REL-001");
-    expect(PLATFORM_ACCEPTANCE_REQUIREMENTS.at(-1)).toBe("REQ-USP-013");
+  it("binds the supported npm product acceptance requirements", () : any => {
+    expect(PLATFORM_ACCEPTANCE_REQUIREMENTS).toHaveLength(7);
+    expect(new Set<any>(PLATFORM_ACCEPTANCE_REQUIREMENTS).size).toBe(7);
+    expect(PLATFORM_ACCEPTANCE_REQUIREMENTS[0]).toBe("core-engineering");
+    expect(PLATFORM_ACCEPTANCE_REQUIREMENTS.at(-1)).toBe("candidate-evidence");
     expect(validatePlatformAcceptanceRequirementEvidence({
       commands: PLATFORM_ACCEPTANCE_COMMANDS
-    })).toMatchObject({ valid: true, requirementCount: 43, reasons: [] });
+    })).toMatchObject({ valid: true, requirementCount: 7, reasons: [] });
   });
 
   it("reduces every label from passed command-owned reports and aggregate facts", () : any => {
@@ -58,15 +58,15 @@ describe("platform acceptance requirement evidence", () : any => {
       }
     });
     expect(reduction).toMatchObject({
-      requirementCount: 43,
-      readyCount: 43,
+      requirementCount: 7,
+      readyCount: 7,
       ready: true
     });
   });
 
   it("fails the exact affected labels when a report or aggregate proof is missing", () : any => {
     const { results, reportEvidence, runId, candidateDigest } = currentInputs();
-    reportEvidence["build/reports/strategy-management.json"].factsReady = false;
+    reportEvidence["build/reports/npm-package-installability.json"].factsReady = false;
     const reduction: any = reducePlatformAcceptanceRequirementEvidence({
       commands: PLATFORM_ACCEPTANCE_COMMANDS,
       results,
@@ -82,8 +82,8 @@ describe("platform acceptance requirement evidence", () : any => {
       }
     });
     expect(reduction.ready).toBe(false);
-    expect(reduction.nodes.find((node?: any) : any => node.requirement === "REQ-REL-007")?.ready).toBe(false);
-    expect(reduction.nodes.find((node?: any) : any => node.requirement === "REQ-REL-021")?.ready).toBe(false);
+    expect(reduction.nodes.find((node?: any) : any => node.requirement === "candidate-evidence")?.ready).toBe(false);
+    expect(reduction.nodes.find((node?: any) : any => node.requirement === "npm-artifacts")?.ready).toBe(false);
   });
 
   it("[GC-060 GC-061 partial] rejects mismatched candidate fields, forged ready flags and skipped owners", () : any => {
@@ -94,21 +94,21 @@ describe("platform acceptance requirement evidence", () : any => {
       aggregateFacts: { ledgerAnchorReady: true, candidateIdentityReady: true, commandDagReady: true, inventoryReady: true, privacyReady: true }
     });
     expect(base().ready).toBe(true);
-    const target: string = "build/reports/strategy-management.json";
+    const target: string = "build/reports/npm-package-installability.json";
     const strategy: any = PLATFORM_ACCEPTANCE_COMMANDS.find((command?: any) : any => command.ownedReports?.includes(target));
     const report: any = baseline.reportEvidence[target];
     report.runId = "stale-run";
-    expect(base().nodes.find((node?: any) : any => node.requirement === "REQ-REL-021").ready).toBe(false);
+    expect(base().nodes.find((node?: any) : any => node.requirement === "npm-artifacts").ready).toBe(false);
     report.runId = baseline.runId;
     report.candidateDigest = "sha256:unrelated";
-    expect(base().nodes.find((node?: any) : any => node.requirement === "REQ-REL-021").ready).toBe(false);
+    expect(base().nodes.find((node?: any) : any => node.requirement === "npm-artifacts").ready).toBe(false);
     report.candidateDigest = baseline.candidateDigest;
     report.factsReady = false;
     report.releaseReady = true;
-    expect(base().nodes.find((node?: any) : any => node.requirement === "REQ-REL-021").ready).toBe(false);
+    expect(base().nodes.find((node?: any) : any => node.requirement === "npm-artifacts").ready).toBe(false);
     report.factsReady = true;
     baseline.results.find((result?: any) : any => result.id === strategy.id).status = "skipped";
-    expect(base().nodes.find((node?: any) : any => node.requirement === "REQ-REL-021").ready).toBe(false);
+    expect(base().nodes.find((node?: any) : any => node.requirement === "npm-artifacts").ready).toBe(false);
     baseline.results.find((result?: any) : any => result.id === strategy.id).status = "passed";
     expect(reducePlatformAcceptanceRequirementEvidence({ commands: PLATFORM_ACCEPTANCE_COMMANDS, results: baseline.results, reportEvidence: baseline.reportEvidence, aggregateFacts: { ledgerAnchorReady: true } }).ready).toBe(false);
   });

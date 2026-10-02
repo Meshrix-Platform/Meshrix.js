@@ -95,6 +95,7 @@ import {
   releaseEvidenceInventoryDigest,
   stampReleaseReportProvenance
 } from "./lib/release-report-provenance.ts";
+import { loadPreparedReleaseSet } from "./publish-release-set.ts";
 import { currentSourceTreeDigest } from "./lib/source-tree-digest.ts";
 import { createReleaseCandidateIdentity } from "./verify-release-candidate-identity.ts";
 import {
@@ -345,15 +346,13 @@ async function runAcceptanceWorker() : Promise<any> {
     ...blockedResultValidation.invalidBlockedCommandIds,
     ...(reportWriteAudit.consistent ? [] : ["unregistered-report-write"])
   ])];
-  const capabilityReportText: any = await readReportText("build/reports/capability-acceptance-machines.json");
-  let capabilityEvidenceBindings: any[] = [];
-  if (capabilityReportText !== null) {
-    try {
-      capabilityEvidenceBindings = JSON.parse(capabilityReportText).evidenceBindings || [];
-    } catch {
-      capabilityEvidenceBindings = [];
-    }
-  }
+  // Validate only the current product claim's command-owned evidence. Optional
+  // capability plans cannot expand the publication scope through a stale report.
+  const capabilityEvidenceBindings = PLATFORM_ACCEPTANCE_COMMANDS.flatMap((command) =>
+    command.ownedReports.length
+      ? command.ownedReports.map((report: string) => ({ acceptanceCommandId: command.id, report }))
+      : [{ acceptanceCommandId: command.id, report: "" }]
+  );
   const capabilityEvidenceExecution: any = reduceCapabilityEvidenceExecution({
     bindings: capabilityEvidenceBindings,
     validBlockedCommandIds: blockedResultValidation.validBlockedCommandIds,
@@ -498,9 +497,9 @@ async function runAcceptanceWorker() : Promise<any> {
     verifier: "tools/server-scripts/verify-platform-acceptance.ts",
     algorithm: {
       commandExecutionMode: "dag-parallel-full-aggregation",
-      commandExecution: "Run Meshrix.js acceptance commands through a DAG with parallel downstream-gateway, upstream-gateway, and platform-capability layers, respecting dependencies and resource locks.",
-      evidenceReduction: "Validate every Core acceptance-required report against the exact required-report schema, verifier, timestamp, leak-scan, ready-field, and reducer registry, then bind every checked Core capability criterion to a command that passed in this same DAG run. Client implementations, cryptographic evidence, platform adoption, and product receipts are not inputs; verifier-health failures and Core-actionable gaps remain release failures.",
-      finalRegression: "Run single-node internal platform E2E only after the required upstream/downstream/platform acceptance dependencies pass."
+      commandExecution: "Run Core engineering, exact npm consumers, browser/MCP publishing and recovery through the maintained command DAG, respecting dependencies and resource locks.",
+      evidenceReduction: "Validate every Core acceptance-required report against the exact required-report schema, verifier, timestamp, leak-scan, ready-field, and reducer registry, then bind the declared npm product requirements to commands that passed in this run. Optional deployments, independent services and performance claims remain outside this scope; required functional and security failures remain release failures.",
+      finalRegression: "Reduce the actual required npm, browser/MCP, publishing and recovery reports after their owners pass."
     },
     stateMachine: {
       ...PLATFORM_ACCEPTANCE_STATE_MACHINE,
@@ -622,6 +621,7 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
         aggregateReportPath: REPORT_PATH,
         releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY
       });
+      await exportQualifiedNpmArtifacts(paths.workspace, repoRoot);
       await exportAcceptedCandidateReceipt(repoRoot, publication.receipt);
       console.log(
         `[platform-acceptance] generation=${paths.id} published=${ACCEPTANCE_GENERATION_POINTER} receipt=${PLATFORM_ACCEPTANCE_RECEIPT_PATH}`
@@ -630,6 +630,28 @@ async function runAcceptanceOrchestrator(selectedProfile?: any) : Promise<any> {
       await removeAcceptanceGenerationWorkspace(paths, { repoRoot });
     }
   });
+}
+
+/** Keep the exact qualified package bytes after the isolated source workspace closes. */
+async function exportQualifiedNpmArtifacts(workspace: string, destinationRoot: string): Promise<void> {
+  const relativeDirectory = "build/release/npm-set";
+  const sourceDirectory = path.join(workspace, relativeDirectory);
+  const prepared = await loadPreparedReleaseSet({ rootDir: workspace, artifactDirectory: sourceDirectory });
+  const reportPath = "build/reports/npm-package-installability.json";
+  const reportText = await fs.readFile(path.join(workspace, reportPath), "utf8");
+  const report = JSON.parse(reportText);
+  const artifacts = prepared.packages.map(({ name, version, filename, integrity }) => ({ name, version, filename, integrity }));
+  if (JSON.stringify(report.candidate?.artifacts) !== JSON.stringify(artifacts)) {
+    throw new Error("accepted_npm_artifact_set_mismatch");
+  }
+  const destination = path.join(destinationRoot, relativeDirectory);
+  await fs.mkdir(destination, { recursive: true, mode: 0o700 });
+  for (const artifact of prepared.packages) {
+    await fs.copyFile(artifact.tarballPath, path.join(destination, artifact.filename));
+  }
+  const manifest = await fs.readFile(path.join(sourceDirectory, "meshrix-release-set.json"), "utf8");
+  await writePrivateFileAtomic(path.join(destination, "meshrix-release-set.json"), manifest);
+  await writePrivateFileAtomic(path.join(destinationRoot, reportPath), reportText);
 }
 
 async function main() : Promise<any> {

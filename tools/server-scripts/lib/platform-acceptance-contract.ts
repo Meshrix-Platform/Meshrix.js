@@ -37,10 +37,8 @@ export const PLATFORM_ACCEPTANCE_STATE_MACHINE: Readonly<Record<string, any>> = 
   ],
   parallelRegions: [
     "foundation",
-    "downstream-gateway",
     "upstream-gateway",
     "platform-capability",
-    "profile",
     "final-regression"
   ]
 });

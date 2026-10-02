@@ -891,15 +891,12 @@ describe("branch promotion workflow", () : any => {
     expect(branchWorkflow).toContain("release-authority-${{ github.sha }}");
     expect(branchWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
 
-    expect(releaseWorkflow).toContain('test "$tag_commit" = "$release_commit"');
     expect(releaseWorkflow).toContain("workflow_dispatch:");
-    expect(releaseWorkflow).toContain("verify-originating-run");
-    expect(releaseWorkflow).toContain("while :");
-    expect(releaseWorkflow).not.toContain("git merge-base --is-ancestor");
+    expect(releaseWorkflow).toContain("release-workflow-automation.ts resolve-release-authority");
     expect(releaseWorkflow).toContain("name: release-authority-${{ github.sha }}");
     expect(releaseWorkflow).not.toContain("\n  functional-completeness:\n");
-    expect(releaseWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
-    expect(releaseWorkflow.indexOf("- name: Install dependencies"))
-      .toBeLessThan(releaseWorkflow.indexOf("- name: Validate the canonical release definition"));
+    expect(releaseWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(2);
+    expect(releaseWorkflow.indexOf("- name: Install release verification dependencies"))
+      .toBeLessThan(releaseWorkflow.indexOf("- name: Verify the canonical tag and package state"));
   });
 });
