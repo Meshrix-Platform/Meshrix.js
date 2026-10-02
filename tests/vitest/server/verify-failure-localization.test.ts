@@ -134,53 +134,44 @@ describe("pull-request verification feedback", () => {
     }
   });
 
-  it("runs pull requests and stable through the ordered regression and resumable audit checkpoints", async () => {
+  it("routes each CI event through one maintained profile and retains its diagnostics", async () => {
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
-    const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const pullRequestJob = workflow.indexOf("  pull-request-verify:\n");
-    const stableCandidate = workflow.indexOf("  stable-candidate:\n");
-    const functionalCompleteness = workflow.indexOf("\n  functional-completeness:\n", stableCandidate);
-    const stableEnd = workflow.indexOf("\n  node-22-compatibility:\n", functionalCompleteness);
+    const engineeringJob = workflow.indexOf("  engineering:\n");
+    const stableJob = workflow.indexOf("  stable-functional-completeness:\n");
+    const dependencyReview = workflow.indexOf("  dependency-review:\n");
     expect(pullRequestJob).toBeGreaterThan(0);
-    expect(stableCandidate).toBeGreaterThan(pullRequestJob);
-    expect(functionalCompleteness).toBeGreaterThan(stableCandidate);
-    expect(stableEnd).toBeGreaterThan(functionalCompleteness);
+    expect(engineeringJob).toBeGreaterThan(pullRequestJob);
+    expect(stableJob).toBeGreaterThan(engineeringJob);
+    expect(dependencyReview).toBeGreaterThan(stableJob);
 
-    const prSection = workflow.slice(pullRequestJob, stableCandidate);
+    const prSection = workflow.slice(pullRequestJob, engineeringJob);
     expect(prSection).toContain("if: ${{ github.event_name == 'pull_request' }}");
-    expect(prSection).toContain('run_check "npm test"');
-    expect(prSection).toContain('--command "$command_label"');
-    expect(prSection).toContain("localize-verify-failure.ts");
-    expect(prSection).toContain("--artifact-dir build/ci-diagnostics --report build/test-reports/latest.json");
-    expect(prSection).toContain("path: build/ci-diagnostics/");
-    expect(prSection).not.toContain('tail -n 60 "$log_file"');
-    expect(prSection).not.toContain("npm run verify");
-    expect(prSection).not.toContain("verify:acceptance");
-    expect(prSection).not.toContain("--shard");
+    expect(prSection).toContain("npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json");
+    expect(prSection).toContain("name: Retain sanitized logs and structured results");
+    expect(prSection).toContain("if: ${{ always() }}");
+    expect(prSection).toContain("build/ci-diagnostics/local-ci/results.json");
+    expect(prSection).toContain("build/local-ci/");
 
-    const gateSection = workflow.slice(stableCandidate, stableEnd);
-    expect(gateSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
-    expect(gateSection).not.toContain("run: npm run verify");
-    expect(gateSection).toContain("Ordered repository regression checkpoint");
-    expect(gateSection).toContain("Run the canonical four-stage regression");
-    expect(gateSection).toContain("Audit checkpoint / ${{ matrix.stage }}");
-    expect(gateSection).toContain("Audit checkpoint / resource");
-    expect(gateSection).toContain("Audit checkpoint / sandbox");
-    expect(gateSection).toContain("Audit checkpoint / console evidence");
-    expect(gateSection).toContain("Audit checkpoint / console");
-    expect(gateSection).toContain("needs: [repository-checkpoint, audit-console-evidence-checkpoint]");
-    expect(gateSection).toContain("stable-console-build-${{ github.sha }}");
-    expect(gateSection).toMatch(/- name: Export compiled console assets\n\s+if: \$\{\{ always\(\) \}\}/u);
-    expect(gateSection).toContain("stable-console-evidence-${{ github.sha }}");
-    expect(gateSection).toContain("--profile audit-stable-resource");
-    expect(gateSection).toContain("--profile audit-stable-sandbox");
-    expect(gateSection).toContain("--profile audit-stable-console-evidence");
-    expect(gateSection).toContain("npm run test:audit:stage");
-    expect(gateSection).toContain("npm run test:audit:reduce");
-    expect(gateSection).toContain("fail-fast: false");
-    expect(gateSection).toContain("timeout-minutes: 120");
-    expect(packageJson.scripts["test:audit"]).toContain("--continue-on-failure");
-    expect(packageJson.scripts["test:audit"]).toContain("--report build/test-reports/audit-public.json");
+    const engineeringSection = workflow.slice(engineeringJob, stableJob);
+    expect(engineeringSection).toContain("if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && github.ref_name == 'stable') }}");
+    expect(engineeringSection).toContain("npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json");
+    expect(engineeringSection).toContain("build/local-ci/");
+
+    const stableSection = workflow.slice(stableJob, dependencyReview);
+    expect(stableSection).toContain("name: Stable functional completeness release gate");
+    expect(stableSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
+    expect(stableSection).toContain("npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json");
+    expect(stableSection).toContain("resolve-branch-promotion-authority.ts");
+    expect(stableSection).toContain("create-stable-bundle");
+    expect(stableSection).toContain("npm-package-installability.json");
+    expect(stableSection).toContain("stable-authority-${{ github.sha }}");
+    expect(stableSection).toContain("if: ${{ always() }}");
+    expect(stableSection).toContain("build/local-ci/");
+
+    const reviewSection = workflow.slice(dependencyReview);
+    expect(reviewSection).toContain("name: Dependency review");
+    expect(reviewSection).toContain("actions/dependency-review-action@");
   });
 
   it("binds Dependabot auto-merge to the exact reviewed revision and executed checks", async () => {
