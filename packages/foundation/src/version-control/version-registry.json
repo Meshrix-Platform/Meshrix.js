@@ -3781,7 +3781,7 @@
             {
               "evidenceId": "v0-0-1-performance-gateway-observation-report-1-test",
               "kind": "test",
-              "uri": "tests/vitest/server/gateway-performance-observation.test.ts"
+              "uri": "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
             }
           ]
         }
@@ -3812,7 +3812,7 @@
             {
               "evidenceId": "v0-0-1-performance-runtime-observation-1-test",
               "kind": "test",
-              "uri": "tests/vitest/server/gateway-performance-observation.test.ts"
+              "uri": "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
             }
           ]
         }

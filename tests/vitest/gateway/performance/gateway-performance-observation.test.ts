@@ -7,12 +7,12 @@ import { describe, it } from "vitest";
 import {
   isRuntimePerformanceObservation,
   reduceGatewayPerformanceObservation
-} from "../../../tools/server-scripts/lib/gateway-performance-observation.ts";
+} from "../../../../tools/server-scripts/lib/gateway-performance-observation.ts";
 import {
   RUNTIME_PERFORMANCE_OBSERVATION_SCHEMA_VERSION
-} from "../../../tools/server-scripts/lib/runtime-performance-observation-contract.ts";
+} from "../../../../tools/server-scripts/lib/runtime-performance-observation-contract.ts";
 
-const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const repoRoot: any = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const preloadPath: any = path.join(
   repoRoot,
   "tools",

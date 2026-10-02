@@ -574,7 +574,7 @@
         "tests/vitest/server/runtime-refactor-authorization-compiler.test.ts",
         "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts",
         "tests/vitest/server/runtime-refactor-governed-evidence.test.ts",
-        "tests/vitest/server/gateway-performance-observation.test.ts"
+        "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
       ],
       "verification": [
         "npm run verify:runtime-refactor-convergence"
