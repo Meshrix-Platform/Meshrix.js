@@ -240,7 +240,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
+    owner: "platform", tier: "integration", sideEffects: "temp-files",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
     inputs: [
       "package.json",
@@ -251,7 +251,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/**",
       "tests/vitest/server/resource-discipline-policy.test.ts",
       "tests/vitest/server/job-pipeline-upload-session-persistence.test.ts",
-      "tests/vitest/server/upload-custody-workspace-materialization.test.ts",
       "tools/server-scripts/verify-resource-discipline.ts",
       "tools/server-scripts/verify-runtime-memory-leaks.ts",
       "tools/server-scripts/lib/resource-discipline-analysis.ts",
@@ -259,12 +258,12 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/runtime-memory-profiler-preload.ts",
       "tools/server-scripts/lib/resource-high-risk-workload-child.ts",
       "tools/registry/tests.registry.json"
-    ], outputs: ["build/reports/runtime-resource-discipline.json"],
+    ], outputs: [],
   },
   "server:verify:memory-leaks": {
     scriptName: "server:verify:memory-leaks", command: "npm run server:verify:memory-leaks", category: "verifier", subsystem: "resource-discipline",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
-    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
     inputs: [
       "package.json",
       "package-lock.json",

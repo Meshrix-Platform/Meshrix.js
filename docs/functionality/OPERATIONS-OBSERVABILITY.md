@@ -152,7 +152,8 @@ logical-byte, or database-page capacity fails closed with
 are bounded maintenance work used after deletion so pages are reclaimed or
 reused without a full blocking vacuum.
 
-The resource-discipline gate executes synthetic data only and invokes the real
+After real Core, Console, MCP and normal shutdown verification,
+`server:verify:memory-leaks` executes synthetic data only and invokes the real
 owner paths for a 32 MiB object stream, eight-file upload materialization,
 100,000 protocol events, 10,000 indexed jobs, 64 fully rejected upstream
 endpoints, 10,000 audit appends, 1,000 service-manifest commits, and two
@@ -163,7 +164,12 @@ or convergence outcomes, and backup allocation facts. Setting
 `MESHRIX_RESOURCE_LOAD_PROFILE=release` raises protocol events to 1,000,000,
 jobs and audit appends to 100,000, and service-manifest commits to 8,000.
 Controller regressions for authorization-before-open and single-file-at-a-time
-materialization are mandatory tests in the same gate.
+materialization remain mandatory in the independent
+`jobs.upload-custody-workspace-materialization-acceptance` suite. The default
+`server:verify:resource-discipline` entry runs static resource policy and
+deterministic upload-session persistence checks; it does not start profiling or
+repeat that complete security matrix. Platform acceptance owns the later memory
+report and schedules profiling only after its functional producer commands pass.
 
 Required observability reports use the shared finalization and publication
 pipeline. The pipeline validates schema and verifier ownership, enforces report

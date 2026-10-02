@@ -12,6 +12,7 @@ import {
   theilSenSlope
 } from "./lib/resource-discipline-analysis.ts";
 import { RESOURCE_DISCIPLINE_POLICY } from "./lib/resource-discipline-policy.ts";
+import { assertNoLeak } from "./lib/report-evidence-safety.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const startServerPath: any = path.join(repoRoot, "tools", "server-scripts", "start-server.ts");
@@ -701,10 +702,12 @@ try {
     },
     summary: {
       releaseReady: violations.length === 0,
+      reportLeakScan: true,
       violations
     }
   };
 
+  assertNoLeak(report, "runtime resource discipline report");
   await writeJsonAtomically(reportPath, report);
   output.clear();
   console.log(

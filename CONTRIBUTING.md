@@ -86,8 +86,8 @@ repair there before the next submission. Maintain this process with the product;
 do not leave a one-off troubleshooting script as its implementation.
 
 Use a non-root macOS or Linux shell with a local Docker Unix socket. Install
-[act](https://nektosact.com/installation/index.html), commit the candidate locally,
-then run:
+[act](https://nektosact.com/installation/index.html) and the checkout's locked
+development dependencies with `npm ci`, commit the candidate locally, then run:
 
 ```bash
 npm run ci:local -- --list

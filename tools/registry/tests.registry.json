@@ -750,7 +750,7 @@
     },
     {
       "id": "runtime.resource-discipline",
-      "label": "Priority-zero real-service and high-risk owner-path resource gate",
+      "label": "Resource ownership policy and deterministic persistence checks",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -759,16 +759,11 @@
         "run",
         "server:verify:resource-discipline"
       ],
-      "sideEffects": "build-output",
+      "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": [
-        "build/reports/runtime-resource-discipline.json"
-      ],
-      "artifactSemantics": {
-        "build/reports/runtime-resource-discipline.json": "Compact synthetic owner-path resource verdict; raw heap profiles, payloads, paths, and load data are never retained by the gate."
-      }
+      "artifacts": []
     },
     {
       "id": "repo.public-boundary",

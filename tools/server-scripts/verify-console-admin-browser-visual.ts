@@ -146,6 +146,14 @@ async function main() : Promise<any> {
     await mobileContext.close();
     mobileContext = null;
     const emptySelection: any = await verifyEmptyPluginSelection({ browser, distPath, repoRoot });
+    // Successful functional evidence includes normal shutdown. Cleanup failures
+    // must fail this command before dependent profiling work can be scheduled.
+    await browser.close();
+    browser = null;
+    await server.close();
+    server = null;
+    await pluginArtifactFixture.close();
+    pluginArtifactFixture = null;
 
     const failedRoutes: any = routeResults.filter((result?: any) : any =>
       result.consoleErrors.length || result.pageErrors.length || result.apiFailures.length
@@ -164,6 +172,7 @@ async function main() : Promise<any> {
       server: {
         distPath: "build/dist",
         dataRoot: "temporary-redacted",
+        normalShutdown: true,
         auth: {
           method: "owner-login-api-cookie",
           cookieCount: auth.cookieCount,
