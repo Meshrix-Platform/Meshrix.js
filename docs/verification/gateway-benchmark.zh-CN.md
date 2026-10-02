@@ -55,6 +55,8 @@ HTTP 请求到完整接收响应，随后校验通过才纳入统计；校验耗
 报告仅保留非识别性的硬件可用量与汇总统计；实际频率、物理核、独占配额
 未知，不记录地址、端口、凭据、原始载荷、子进程日志或私有路径。错误及强制
 清理、观察缺口均应保持限定。`test:gateway-benchmark` 检查独立包和短真实
-网关流程；`test:gateway-benchmark:distribution` 检查实际构建、npm/source
+网关流程；`test:product-distribution` 检查实际构建、npm/source
 工件。最终镜像与 runtime-ui 的文件和保留层必须从已提交候选实际检查，
 不能仅凭文件规则或 Dockerfile 作证。以上结论不替代独立 PR 验收审查。
+
+产品归档与镜像检查是独立的工程分发验收，不依赖 Benchmark 工具或其功能验收前提。

@@ -40,7 +40,9 @@ const excludedTestPatterns = [
 const scopedExcludedTestPatterns = [
   ...(isBackendFunctionalScope() ? backendFunctionalExcludedTestPatterns : []),
   ...(process.env.MESHRIX_VITEST_SCOPE === "gateway-performance"
-    ? [] : ["tests/vitest/gateway/performance/**"])
+    ? [] : ["tests/vitest/gateway/performance/**"]),
+  ...(process.env.MESHRIX_VITEST_SCOPE === "product-distribution"
+    ? [] : ["tests/vitest/server/distribution-artifacts.test.ts"])
 ];
 
 

@@ -8,9 +8,9 @@
       "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "repo.script-registry"],
       "timeoutMs": 180000
     },
-    "gateway-benchmark-distribution": {
-      "description": "Actual optional benchmark exclusion from product distributions",
-      "suites": ["gateway.benchmark-distribution"],
+    "product-distribution": {
+      "description": "Canonical two-product archives, installed dependency boundary and runtime image contents",
+      "suites": ["repo.product-distribution"],
       "timeoutMs": 1800000
     },
     "core-baseline": {
@@ -476,9 +476,9 @@
       "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
     },
     {
-      "id": "gateway.benchmark-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
+      "id": "repo.product-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
       "owner": "platform", "package": "repo", "level": "integration",
-      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance", "vitest", "run", "tests/vitest/gateway/performance/distribution-policy.test.ts", "tests/vitest/gateway/performance/distribution-artifacts.test.ts", "--maxWorkers=1"],
+      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=product-distribution", "vitest", "run", "tests/vitest/server/distribution-policy.test.ts", "tests/vitest/server/distribution-artifacts.test.ts", "--maxWorkers=1"],
       "sideEffects": "container", "timeoutClass": "slow", "requiredServices": [],
       "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
     },
@@ -486,7 +486,7 @@
       "id": "gateway.benchmark-correctness",
       "label": "Network benchmark harness and failure-accounting correctness",
       "owner": "platform", "package": "repo", "level": "integration",
-      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance", "vitest", "run", "tests/vitest/gateway/performance/benchmark.test.ts", "tests/vitest/gateway/performance/benchmark-boundary.test.ts", "tests/vitest/server/package-script-registry.test.ts", "--maxWorkers=2"],
+      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance", "vitest", "run", "tests/vitest/gateway/performance/benchmark.test.ts", "tests/vitest/gateway/performance/benchmark-boundary.test.ts", "tests/vitest/gateway/performance/benchmark-package.test.ts", "tests/vitest/server/package-script-registry.test.ts", "--maxWorkers=2"],
       "sideEffects": "network-service", "timeoutClass": "standard", "requiredServices": [],
       "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
     },
