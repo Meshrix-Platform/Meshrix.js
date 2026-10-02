@@ -85,8 +85,9 @@ check, fix the shared workflow, reproduce the failure locally, and verify the
 repair there before the next submission. Maintain this process with the product;
 do not leave a one-off troubleshooting script as its implementation.
 
-Install Docker and [act](https://nektosact.com/installation/index.html), commit the
-candidate locally, then run:
+Use a non-root macOS or Linux shell with a local Docker Unix socket. Install
+[act](https://nektosact.com/installation/index.html), commit the candidate locally,
+then run:
 
 ```bash
 npm run ci:local -- --list
@@ -99,6 +100,9 @@ distribution, package portability, and controlled sandbox in fresh Ubuntu 24.04
 containers with the hosted runner's amd64 architecture (emulated on other host
 architectures). Each job installs its
 own dependencies without the user's npm configuration or a restored npm cache.
+The runner image adds an ordinary user matching the checkout owner; checks run
+without root identity, as they do on GitHub. Its small image layer is built from
+`tools/ci/Dockerfile` and reused by Docker when unchanged.
 No publishing workflow or repository credential is supplied. To diagnose a
 specific check, select its name, for example `npm run ci:local -- gateway`.
 The branch check uses the actual source branch and origin repository. Its default

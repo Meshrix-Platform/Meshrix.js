@@ -95,8 +95,8 @@ jobs:
           head_sha=$(printf '%s' "$pr" | jq -r '.head.sha')
           state=$(printf '%s' "$pr" | jq -r '.state')
           eligible=$(printf '%s' "$pr" | jq -r \
-            --arg label "$AUTOMERGE_LABEL" \
-            '[.labels[].name] | index($label) != null')
+            --arg admission_label "$AUTOMERGE_LABEL" \
+            '[.labels[].name] | index($admission_label) != null')
 
           if [ "$author" != 'dependabot[bot]' ] || \
              [ "$base" != 'nightly' ] || \
