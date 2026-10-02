@@ -23,6 +23,7 @@ import {
   consumerFailureSummary,
   verifyInstalledModuleIdentity,
   browserForServer,
+  packageTypeSpecifiers,
   NPM_PACKAGE_CONSUMER_FAILURE_CODES,
   NPM_PACKAGE_CONSUMER_FAILURE_STAGES
 } from "../../../tools/server-scripts/npm-package-consumer.ts";
@@ -120,6 +121,15 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("checks declaration exports without treating a stylesheet as a TypeScript namespace", async () => {
+    const manifest = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "packages/ui-console/package.json"), "utf8"));
+    const specifiers = packageTypeSpecifiers(manifest);
+    expect(specifiers).toHaveLength(15);
+    expect(specifiers).toContain("@meshrix/ui-console/binary-checkbox");
+    expect(specifiers).not.toContain("@meshrix/ui-console/styles.css");
+    expect(packageTypeSpecifiers({ name: "fixture", exports: { "./style": { types: "./style.d.ts", default: "./style.css" } } }))
+      .toEqual(["fixture/style"]);
+  });
   it("installs registry products with private bundled dependencies without fetching them separately", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-bundle-registry-"));
     let registry: any;
@@ -259,6 +269,9 @@ describe("npm artifact installability source", () : any => {
     }))).toEqual({
       success: false,
       errorCode: "npm_package_dependency_resolution_failed"
+    });
+    expect(consumerFailureSummary({ stderr: "npm error code E404" })).toEqual({
+      success: false, errorCode: "npm_package_registry_package_missing"
     });
     expect(NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has("ui_browser")).toBe(true);
     expect(NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has("private_diagnostic_test_only")).toBe(false);

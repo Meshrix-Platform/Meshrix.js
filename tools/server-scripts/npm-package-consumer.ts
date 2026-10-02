@@ -52,6 +52,7 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_native_dependency_build_failed",
   "npm_package_offline_cache_incomplete",
   "npm_package_registry_unreachable",
+  "npm_package_registry_package_missing",
   "npm_package_server_bootstrap_failed",
   "npm_package_server_cli_help_failed",
   "npm_package_server_exited",
@@ -93,6 +94,7 @@ export function consumerFailureSummary(error?: any) : Record<string, any> {
     [/node-gyp|gyp ERR|Could not locate the bindings file/iu, "npm_package_native_dependency_build_failed"],
     [/EACCES|permission denied/iu, "npm_package_install_permission_denied"],
     [/ERESOLVE/iu, "npm_package_dependency_resolution_failed"],
+    [/npm (?:error|ERR!) code E404/iu, "npm_package_registry_package_missing"],
     [/ETIMEDOUT|ENETUNREACH|EAI_AGAIN/iu, "npm_package_registry_unreachable"]
   ];
   const classified: any = classifiers.find(([pattern]: any[]) : any => pattern.test(output))?.[1];
@@ -105,6 +107,7 @@ const report: Record<string, any> = {
   platform,
   runtime: { platform: process.platform, architecture: runtimeArchitecture, processArchitecture: process.arch },
   consumers: [],
+  failures: [],
   cli: {},
   server: {},
   sqlite: {},
@@ -126,7 +129,7 @@ function exportEntries(manifest?: any) : any[] {
 }
 
 function conditionalTarget(target?: any, types = false) : any {
-  if (typeof target === "string") return target;
+  if (typeof target === "string") return types && /\.css$/iu.test(target) ? "" : target;
   if (Array.isArray(target)) return target.map((item?: any) : any => conditionalTarget(item, types)).find(Boolean) || "";
   if (!target || typeof target !== "object") return "";
   const conditions: any[] = types ? ["types"] : ["import", "node", "default"];
@@ -152,7 +155,7 @@ function publicEntries(manifest?: any) : any[] {
   });
 }
 
-function packageTypeSpecifiers(manifest?: any) : string[] {
+export function packageTypeSpecifiers(manifest?: any) : string[] {
   const entries: any[] = publicEntries(manifest).filter((entry?: any) : any => Boolean(entry.typeTarget));
   if (!manifest?.exports && entries.length === 0 && (manifest?.types || manifest?.typings)) return [manifest.name];
   if (!manifest?.exports && entries.length === 0) return [];
@@ -200,7 +203,7 @@ function npmEnv(overrides: Record<string, any> = {}) : any {
 
 async function launchBrowser(toolsDirectory: string) : Promise<any> {
   const toolRequire = createRequire(path.join(toolsDirectory, "package.json"));
-  const { chromium } = await import(pathToFileURL(toolRequire.resolve("@playwright/test")).href);
+  const { chromium } = toolRequire("@playwright/test");
   return chromium.launch({
     executablePath: "/usr/bin/chromium",
     env: { ...process.env, HOME: process.env.HOME || "/tmp/home", XDG_RUNTIME_DIR: process.env.TMPDIR || "/tmp" },
@@ -852,20 +855,28 @@ async function execute() : Promise<void> {
       ...record,
       hasTypes: packageTypeSpecifiers(record.manifest).length > 0
     };
-    const result: any = await installConsumer({
-      record: consumer,
-      base,
-      typeTools,
-      vueTools,
-      onStage: (stage?: any) : any => {
-        if (NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(stage)) activeFailureStage = stage;
-      }
-    });
-    report.consumers.push(result);
-    if (result.browser) report.browser.bundledUi = result.browser;
+    try {
+      const result: any = await installConsumer({
+        record: consumer,
+        base,
+        typeTools,
+        vueTools,
+        onStage: (stage?: any) : any => {
+          if (NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(stage)) activeFailureStage = stage;
+        }
+      });
+      report.consumers.push(result);
+      if (result.browser) report.browser.bundledUi = result.browser;
+    } catch (error: unknown) {
+      report.failures.push({
+        ...consumerFailureSummary(error),
+        failureStage: activeFailureStage,
+        failurePackageIndex: packageIndex
+      });
+    }
   }
   report.summary = {
-    success: true,
+    success: report.failures.length === 0,
     packageCount: report.consumers.length,
     normalInstallLifecycles: report.consumers.every((consumer?: any) : any => consumer.installLifecycleCompleted),
     allConsumersPackageOnly: report.consumers.every((consumer?: any) : any => consumer.directDependencyOnly),
@@ -874,6 +885,7 @@ async function execute() : Promise<void> {
     emulation: process.env.MESHRIX_NPM_EMULATED === "true",
     engineArchitecture: process.env.MESHRIX_NPM_ENGINE_ARCH || "unknown"
   };
+  if (report.failures.length > 0) process.exitCode = 1;
   activeFailureStage = "plan_loading";
   activeFailurePackageIndex = -1;
 }
@@ -883,7 +895,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     await execute();
   } catch (error: any) {
     const platformValue: any = ["linux/amd64", "linux/arm64"].includes(platform) ? platform : "unknown";
-    report.summary = {
+    const failure = {
       ...consumerFailureSummary(error),
       failureStage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(activeFailureStage) ? activeFailureStage : "plan_loading",
       failurePackageIndex: Number.isInteger(activeFailurePackageIndex) && activeFailurePackageIndex >= 0
@@ -892,6 +904,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       platform: platformValue,
       architecture: ["amd64", "arm64"].includes(runtimeArchitecture) ? runtimeArchitecture : "unknown"
     };
+    report.failures.push(failure);
+    report.summary = { success: false };
     process.exitCode = 1;
   } finally {
     await fs.mkdir(path.dirname(reportPath), { recursive: true });

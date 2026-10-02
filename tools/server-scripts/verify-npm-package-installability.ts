@@ -1134,7 +1134,7 @@ async function runContainerAuthority() : Promise<any> {
         "--env", "MESHRIX_NPM_REGISTRY=http://meshrix-registry:4873/", "--env", "MESHRIX_NPM_PLAN=/input/consumer-plan.json",
         "--env", `MESHRIX_NPM_REPORT=/evidence/${target.architecture}.json`, "--env", `MESHRIX_NPM_PLATFORM=${platform}`,
         "--env", `MESHRIX_NPM_EMULATED=${String(emulated)}`, "--env", `MESHRIX_NPM_ENGINE_ARCH=${engineArchitecture}`,
-        "--mount", `type=bind,src=${consumerPlanPath},dst=/input/consumer-plan.json,readonly`,
+        "--mount", `type=bind,src=${inputDirectory},dst=/input,readonly`,
         "--mount", `type=bind,src=${evidenceDirectory},dst=/evidence`,
         target.tag, "node", "/opt/meshrix/npm-package-consumer.js"
       ];
@@ -1148,30 +1148,34 @@ async function runContainerAuthority() : Promise<any> {
           .catch(() : any => null);
       }
       if (observed?.summary?.success !== true) {
-        const summary: any = observed?.summary || {};
-        const packageIndex: any = Number.isInteger(summary.failurePackageIndex) &&
-          summary.failurePackageIndex >= 0 &&
-          summary.failurePackageIndex < releaseSet.packages.length
-          ? summary.failurePackageIndex
-          : null;
-        const completedConsumerCount: any = Number.isInteger(observed?.consumers?.length) &&
-          observed.consumers.length >= 0 &&
-          observed.consumers.length <= releaseSet.packages.length
-          ? observed.consumers.length
-          : 0;
-        platformFailures.push({
-          platform,
-          architecture: target.architecture,
-          stage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(summary.failureStage)
-            ? summary.failureStage
-            : "container_runtime",
-          errorCode: NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(summary.errorCode)
-            ? summary.errorCode
-            : "npm_package_consumer_runtime_failed",
-          packageIndex,
-          ...(packageIndex === null ? {} : { packageName: releaseSet.packages[packageIndex].name }),
-          completedConsumerCount
-        });
+        const failures = Array.isArray(observed?.failures) && observed.failures.length > 0
+          ? observed.failures
+          : [{}];
+        for (const summary of failures) {
+          const packageIndex: any = Number.isInteger(summary.failurePackageIndex) &&
+            summary.failurePackageIndex >= 0 &&
+            summary.failurePackageIndex < releaseSet.packages.length
+            ? summary.failurePackageIndex
+            : null;
+          const completedConsumerCount: any = Number.isInteger(observed?.consumers?.length) &&
+            observed.consumers.length >= 0 &&
+            observed.consumers.length <= releaseSet.packages.length
+            ? observed.consumers.length
+            : 0;
+          platformFailures.push({
+            platform,
+            architecture: target.architecture,
+            stage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(summary.failureStage)
+              ? summary.failureStage
+              : "container_runtime",
+            errorCode: NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(summary.errorCode)
+              ? summary.errorCode
+              : "npm_package_consumer_runtime_failed",
+            packageIndex,
+            ...(packageIndex === null ? {} : { packageName: releaseSet.packages[packageIndex].name }),
+            completedConsumerCount
+          });
+        }
         continue;
       }
       try {
