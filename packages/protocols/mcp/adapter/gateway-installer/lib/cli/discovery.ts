@@ -8,6 +8,9 @@ import {
   mcpModernRequestHeaders
 } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
 import {
+  MCP_PROTOCOL_VERSION
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
+import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,
   MESHRIX_MCP_DISCOVERY_FILE_ENV,
@@ -310,8 +313,18 @@ export async function ensureService(baseUrl?: any) : Promise<any> {
     headers: mcpModernRequestHeaders(outgoing),
     body: JSON.stringify(outgoing)
   });
-  const serverInfo: any = discover.payload?.result?._meta?.[MCP_META_SERVER_INFO] || {};
-  if (!discover.ok || serverInfo.name !== "Meshrix.js") {
+  const result: any = discover.payload?.result || {};
+  const metadata: any = result._meta || {};
+  const serverInfo: any = metadata[MCP_META_SERVER_INFO] || {};
+  const supportedVersions: any = Array.isArray(result.supportedVersions) ? result.supportedVersions : [];
+  if (
+    !discover.ok
+    || !String(serverInfo.name || "").trim()
+    || !String(serverInfo.version || "").trim()
+    || !supportedVersions.includes(MCP_PROTOCOL_VERSION)
+    || metadata.interfaceVersion !== MCP_INTERFACE_VERSION
+    || metadata.stableToolName !== MCP_STABLE_TOOL_NAME
+  ) {
     throw new Error(`Meshrix.js MCP is not available at ${baseUrl}/mcp.`);
   }
   return discover;
