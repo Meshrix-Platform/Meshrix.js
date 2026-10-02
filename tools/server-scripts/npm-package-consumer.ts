@@ -18,6 +18,8 @@ const runtimeArchitecture: any = process.arch === "x64" ? "amd64" : process.arch
 export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_module_identity_mismatch",
   "npm_package_module_resolution_failed",
+  "npm_package_operator_script_failed",
+  "npm_package_mcp_doctor_failed",
   "npm_package_gateway_embed_failed",
   "npm_package_adapter_cli_describe_failed",
   "npm_package_adapter_cli_identity_invalid",
@@ -78,6 +80,7 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_STAGES: ReadonlySet<string> = new Set(
   "schema_worker",
   "ui_browser",
   "module_identity",
+  "operator_scripts",
   "gateway_embed",
   "package_types",
   "plan_loading"
@@ -294,7 +297,7 @@ async function installConsumer({ record, base, typeTools, vueTools, onStage = ()
     await fs.mkdir(uiDirectory, { recursive: true });
     result.browser = await runVueBrowserConsumer({ manifest: uiManifest, cwd: uiDirectory, toolsDirectory: consumerDirectory });
     onStage("installed_runtime");
-    await runRootRuntimeConsumer({ cwd: consumerDirectory, rootManifest: installedManifest });
+    await runRootRuntimeConsumer({ cwd: consumerDirectory, rootManifest: installedManifest, onStage });
   }
   if (record.name === "@meshrix/gateway") {
     onStage("schema_worker");
@@ -356,7 +359,7 @@ process.stdout.write(JSON.stringify({ count: MCP_SUPPORTED_TARGETS.length }));
   report.cli.adapterDescribeCount = result.count;
 }
 
-async function runRootRuntimeConsumer({ cwd, rootManifest }: Record<string, any>) : Promise<void> {
+async function runRootRuntimeConsumer({ cwd, rootManifest, onStage = () => {} }: Record<string, any>) : Promise<void> {
   const runInstalled: any = async (name?: any, args: any[] = []) : Promise<any> => npm(["exec", "--offline", "--", name, ...args], cwd);
   const help: any = await runInstalled("meshrix", ["--help"]);
   assert.match(help.stdout, /Usage:/u, "npm_package_cli_help_failed");
@@ -377,6 +380,47 @@ async function runRootRuntimeConsumer({ cwd, rootManifest }: Record<string, any>
   assert.equal(mcpPayload.packageVersion, rootManifest.version, "npm_package_mcp_version_invalid");
   const mcpHelp: any = await runInstalled("meshrix-mcp", ["help"]);
   assert.match(mcpHelp.stdout, /Usage:/u, "npm_package_cli_help_failed");
+  onStage("operator_scripts");
+  const installedRoot = path.join(cwd, "node_modules", rootManifest.name);
+  const runOperatorScript: any = async (name?: any, args: any[] = [], environment: Record<string, any> = {}) : Promise<any> => {
+    try {
+      return await npm(["run", "--silent", name, "--", ...args], installedRoot, npmEnv(environment));
+    } catch {
+      throw new Error("npm_package_operator_script_failed");
+    }
+  };
+  const serverStartHelp: any = await runOperatorScript("server:start", ["--help"]);
+  assert.match(serverStartHelp.stdout, /--with-ui/u, "npm_package_operator_script_failed");
+  assert.match(serverStartHelp.stdout, /--edition/u, "npm_package_operator_script_failed");
+  const authHelp: any = await runOperatorScript("server:auth", ["--help"]);
+  assert.match(authHelp.stdout, /Console Auth/u, "npm_package_operator_script_failed");
+  const rotateHelp: any = await runOperatorScript("server:auth:rotate", ["--help"]);
+  assert.match(rotateHelp.stdout, /Console Auth/u, "npm_package_operator_script_failed");
+  const installerVersion = JSON.parse((await runOperatorScript("mcp:install", ["version", "--json"])).stdout);
+  assert.equal(installerVersion.packageName, rootManifest.name, "npm_package_operator_script_failed");
+  assert.equal(installerVersion.packageVersion, rootManifest.version, "npm_package_operator_script_failed");
+
+  const operatorData = path.join(cwd, ".verification-operator-data");
+  await fs.mkdir(operatorData, { recursive: true });
+  const doctorOutput: any = await runOperatorScript("server:doctor", ["--data-dir", operatorData]);
+  const doctorReport: any = JSON.parse(doctorOutput.stdout);
+  assert.equal(typeof doctorReport.databasePresent, "boolean", "npm_package_operator_script_failed");
+  const locateOutput: any = await runOperatorScript("server:locate", ["--data-dir", operatorData, "--object-id", "unpublished-probe"]);
+  const locateReport: any = JSON.parse(locateOutput.stdout);
+  assert.equal(locateReport.query.objectId, "unpublished-probe", "npm_package_operator_script_failed");
+  const reconcileOutput: any = await runOperatorScript("server:reconcile", ["--data-dir", operatorData]);
+  const reconcileReport: any = JSON.parse(reconcileOutput.stdout);
+  assert.equal(reconcileReport.apply, false, "npm_package_operator_script_failed");
+  report.cli.operatorScripts = {
+    packagedServerStart: true,
+    consoleAuthHelp: true,
+    consoleAuthRotateHelp: true,
+    mcpInstallerPackagedVersion: true,
+    storageDoctor: true,
+    storageLocate: true,
+    storageReconcileDryRun: true
+  };
+  onStage("installed_runtime");
   report.cli = {
     ...report.cli,
     help: true,
@@ -404,7 +448,7 @@ async function runRootRuntimeConsumer({ cwd, rootManifest }: Record<string, any>
 
   await runInstalledOfflineRestore({ cwd, testData, installedRoot: path.join(cwd, "node_modules", rootManifest.name) });
 
-  await runPackagedServerUi({ cwd, rootManifest });
+  await runPackagedServerUi({ cwd, rootManifest, onStage });
 }
 
 export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) : Promise<Record<string, any>> {
@@ -732,7 +776,7 @@ export async function browserForServer(browser?: any, serverUrl?: any) : Promise
   return { sameOrigin: true, requestOriginCount: origins.size, pageErrors: 0 };
 }
 
-async function runPackagedServerUi({ cwd }: Record<string, any>) : Promise<void> {
+async function runPackagedServerUi({ cwd, rootManifest, onStage = () => {} }: Record<string, any>) : Promise<void> {
   const readyFile: any = path.join(process.env.TMPDIR || "/tmp", `meshrix-ready-${process.pid}.json`);
   const serverData: any = path.join(process.env.MESHRIX_USER_DATA_DIR || "/tmp/meshrix-data", "server-ui");
   await fs.mkdir(serverData, { recursive: true });
@@ -770,6 +814,35 @@ async function runPackagedServerUi({ cwd }: Record<string, any>) : Promise<void>
       assert.equal(assetResponse.status, 200, "npm_package_console_asset_failed");
       assert.ok((await assetResponse.arrayBuffer()).byteLength > 0, "npm_package_console_asset_empty");
     }
+    const installedRoot = path.join(cwd, "node_modules", rootManifest.name);
+    const doctorHome = path.join(cwd, ".verification-mcp-doctor-home");
+    const discoveryFile = path.join(doctorHome, "mcp", "servers.json");
+    await fs.mkdir(path.dirname(discoveryFile), { recursive: true });
+    await fs.writeFile(discoveryFile, `${JSON.stringify({
+      servers: {
+        meshrix: {
+          httpUrl: `${serverUrl.replace(/\/+$/u, "")}/mcp`,
+          targets: {}
+        }
+      }
+    })}\n`, { encoding: "utf8", mode: 0o600 });
+    try {
+      onStage("operator_scripts");
+      const mcpDoctor = await npm(["run", "--silent", "mcp:doctor", "--", "--url", serverUrl], installedRoot, npmEnv({
+        HOME: doctorHome,
+        USERPROFILE: doctorHome,
+        MESHRIX_MCP_DISCOVERY_FILE: discoveryFile,
+        MESHRIX_MCP_BASE_URL: serverUrl
+      }));
+      const doctorSummary = JSON.parse(mcpDoctor.stdout);
+      assert.equal(doctorSummary.ok, true, "npm_package_mcp_doctor_failed");
+      assert.equal(doctorSummary.checks?.discovery?.ok, true, "npm_package_mcp_doctor_failed");
+      assert.equal(doctorSummary.checks?.discover?.ok, true, "npm_package_mcp_doctor_failed");
+      report.cli.mcpDoctor = true;
+    } catch {
+      throw new Error("npm_package_mcp_doctor_failed");
+    }
+    onStage("ui_browser");
     browser = await launchBrowser(cwd);
     browserEvidence = await browserForServer(browser, serverUrl);
     report.server = { packagedServerStarted: true, health: true, bootstrap: true, consoleHtml: true, consoleAssets: assets.length, sameOrigin: true, browser: browserEvidence };

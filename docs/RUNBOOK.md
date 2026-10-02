@@ -275,11 +275,15 @@ Non-development server startup:
 npm run server:start
 ```
 
+This command starts the Core edition with the Web Console on the same origin.
+It uses the default runtime profile; `--profile` selects `default` or `minimal`
+and is separate from `--edition`.
+
 Automation that requests a dynamic port must use the private readiness file
 instead of parsing stdout:
 
 ```bash
-node tools/server-scripts/start-server.ts --port 0 --ready-file <private-ready-file>
+meshrix-server --port 0 --ready-file <private-ready-file>
 ```
 
 The file is atomically created with mode `0600`, contains the selected local

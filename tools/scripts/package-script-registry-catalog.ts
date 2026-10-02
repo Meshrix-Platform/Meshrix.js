@@ -48,7 +48,12 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "server:start", command: "npm run server:start", category: "startup", subsystem: "server",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: [], outputs: [],
+    inputs: [
+      "package.json",
+      "tsconfig.node.json",
+      "tools/server-scripts/start-server.ts",
+      "apps/server/runtime/http-server.ts"
+    ], outputs: [],
   },
   "server:restart": {
     scriptName: "server:restart", command: "npm run server:restart", category: "startup", subsystem: "server",
@@ -819,19 +824,89 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "server:doctor", command: "npm run server:doctor", category: "maintenance", subsystem: "server",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/doctor.ts"], outputs: [],
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "tools/server-scripts/doctor.ts",
+      "packages/foundation/src/storage/ops-tools.ts",
+      "packages/foundation/src/security/authorization/capability-kernel-status.ts"
+    ], outputs: [],
+  },
+  "server:auth": {
+    scriptName: "server:auth", command: "npm run server:auth", category: "maintenance", subsystem: "server-auth",
+    owner: "platform-security", tier: "integration", sideEffects: "runtime-data",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "packages/server-runtime/package.json",
+      "tools/server-scripts/console-auth.ts"
+    ], outputs: [],
+  },
+  "server:auth:rotate": {
+    scriptName: "server:auth:rotate", command: "npm run server:auth:rotate", category: "maintenance", subsystem: "server-auth",
+    owner: "platform-security", tier: "integration", sideEffects: "runtime-data",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "packages/server-runtime/package.json",
+      "tools/server-scripts/console-auth.ts"
+    ], outputs: [],
   },
   "server:locate": {
     scriptName: "server:locate", command: "npm run server:locate", category: "maintenance", subsystem: "storage",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/locate-storage.ts"], outputs: [],
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "tools/server-scripts/locate-storage.ts",
+      "packages/foundation/src/storage/ops-tools.ts"
+    ], outputs: [],
   },
   "server:reconcile": {
     scriptName: "server:reconcile", command: "npm run server:reconcile", category: "maintenance", subsystem: "storage",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/reconcile-storage.ts"], outputs: [],
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "tools/server-scripts/reconcile-storage.ts",
+      "packages/foundation/src/storage/ops-tools.ts"
+    ], outputs: [],
+  },
+  "mcp:install": {
+    scriptName: "mcp:install", command: "npm run mcp:install", category: "mcp-installer", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: true, ciProfile: "external", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "apps/server/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh"
+    ], outputs: [],
+  },
+  "server:mcp:register": {
+    scriptName: "server:mcp:register", command: "npm run server:mcp:register", category: "mcp-installer", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: true, ciProfile: "external", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "apps/server/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh"
+    ], outputs: [],
+  },
+  "mcp:doctor": {
+    scriptName: "mcp:doctor", command: "npm run mcp:doctor", category: "mcp-installer", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "packages/protocols/package.json",
+      "apps/server/bin/meshrix-mcp.ts",
+      "tools/server-scripts/mcp-doctor.ts",
+      "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh"
+    ], outputs: [],
   },
   // ── Runtime downloads ──────────────────────────────────────────────────────
 

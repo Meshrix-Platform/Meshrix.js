@@ -38,6 +38,16 @@ authority. Never pipe a remote response to a shell.
 
 ## POSIX
 
+From an installed `meshrix.js` package, use the package command so it launches
+the bundled connector:
+
+```bash
+npm run mcp:install -- help
+npm run mcp:install -- version --json
+```
+
+For a verified portable release bundle, run its adjacent launcher:
+
 ```bash
 packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh
 packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target auto --json

@@ -300,6 +300,11 @@
       "types": "./dist/security/authorization/authorization-engine.d.ts",
       "default": "./dist/security/authorization/authorization-engine.js"
     },
+    "./security/authorization/capability-kernel-status": {
+      "source": "./src/security/authorization/capability-kernel-status.ts",
+      "types": "./dist/security/authorization/capability-kernel-status.d.ts",
+      "default": "./dist/security/authorization/capability-kernel-status.js"
+    },
     "./security/authorization/capability-binding-guard": {
       "source": "./src/security/authorization/capability-binding-guard.ts",
       "types": "./dist/security/authorization/capability-binding-guard.d.ts",
@@ -454,6 +459,11 @@
       "source": "./src/storage/object-store.ts",
       "types": "./dist/storage/object-store.d.ts",
       "default": "./dist/storage/object-store.js"
+    },
+    "./storage/ops-tools": {
+      "source": "./src/storage/ops-tools.ts",
+      "types": "./dist/storage/ops-tools.d.ts",
+      "default": "./dist/storage/ops-tools.js"
     },
     "./storage/private-file-atomic": {
       "source": "./src/storage/private-file-atomic.ts",

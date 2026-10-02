@@ -13,7 +13,7 @@ This starts the source API server. To build and serve the Web Console from the s
 
 ```bash
 npm run build
-npm run server:start -- --with-ui --strict-port
+npm run dev -- --with-ui --strict-port
 ```
 
 The default local origin is `http://127.0.0.1:7228`. See [local startup](../RUNBOOK.md#local-startup) for instance reuse, start/stop commands, and separate development-console ports. Deployment configuration, environment variables, secret custody, proxy configuration, backup mounts, and diagnostics belong to the [runbook](../RUNBOOK.md), not the repository landing page.
