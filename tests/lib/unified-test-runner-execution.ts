@@ -1,14 +1,111 @@
 import { spawn as nodeSpawn } from "node:child_process";
+import path from "node:path";
+
+export function sourceNodeEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const childEnv = { ...env };
+  const current = String(childEnv.NODE_OPTIONS || "").trim();
+  if (!/(?:^|\s)--conditions(?:=|\s+)source(?:\s|$)/u.test(current)) {
+    childEnv.NODE_OPTIONS = `${current} --conditions=source`.trim();
+  }
+  return childEnv;
+}
 
 export interface TestSuiteEntry {
   id: string;
   label?: string;
   command: string;
   args: string[];
+  platforms?: string[];
   sideEffects?: string;
   flakePolicy?: string;
   requiredServices?: string[];
   childSuiteIds?: string[];
+}
+
+export interface ServiceCapability {
+  status: "available" | "unavailable" | "failed";
+  reasonCode?: string;
+}
+
+export type SuiteApplicability =
+  | { status: "available" }
+  | { status: "not_run"; requiredService: string; reasonCode: string }
+  | { status: "failed"; requiredService: string; reasonCode: string };
+
+export function resolveRequiredServiceApplicability(
+  requiredServices: readonly string[] = [],
+  capabilities: Readonly<Record<string, ServiceCapability>> = {}
+): SuiteApplicability {
+  let unavailable: SuiteApplicability | null = null;
+  for (const requiredService of requiredServices) {
+    const capability = capabilities[requiredService];
+    if (!capability) {
+      return { status: "failed", requiredService, reasonCode: "service_capability_unknown" };
+    }
+    if (capability.status === "failed") {
+      return {
+        status: "failed",
+        requiredService,
+        reasonCode: capability.reasonCode || "service_probe_failed"
+      };
+    }
+    if (capability.status === "unavailable" && !unavailable) {
+      unavailable = {
+        status: "not_run",
+        requiredService,
+        reasonCode: capability.reasonCode || "capability_missing"
+      };
+    }
+  }
+  return unavailable ?? { status: "available" };
+}
+
+export async function isCachedTestResultReusable(
+  entry: TestSuiteEntry,
+  result: { status?: string } | null | undefined,
+  {
+    rootDir,
+    validatePreparedReleaseSet
+  }: {
+    rootDir: string;
+    validatePreparedReleaseSet?: (options: { rootDir: string; artifactDirectory: string }) => Promise<unknown>;
+  }
+): Promise<boolean> {
+  if (result?.status !== "passed") return false;
+  const isReleaseSetPreparation = entry.command === "npm"
+    && entry.args.includes("release:publish-npm")
+    && entry.args.includes("--prepare");
+  if (!isReleaseSetPreparation) return true;
+  if (typeof validatePreparedReleaseSet !== "function") return false;
+
+  const artifactFlag = entry.args.indexOf("--artifact-dir");
+  const artifactDirectory = artifactFlag >= 0 ? entry.args[artifactFlag + 1] : undefined;
+  if (!artifactDirectory || artifactDirectory.startsWith("--")) return false;
+  try {
+    await validatePreparedReleaseSet({
+      rootDir,
+      artifactDirectory: path.resolve(rootDir, artifactDirectory)
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function mergeInheritedProfileExecution(
+  parentExecution: Readonly<Record<string, any>> = {},
+  profileExecution: Readonly<Record<string, any>> = {}
+): Record<string, any> {
+  const merged = { ...parentExecution, ...profileExecution };
+  if (Array.isArray(profileExecution.phases)) {
+    merged.phases = [
+      ...(Array.isArray(parentExecution.phases) ? parentExecution.phases : []),
+      ...profileExecution.phases
+    ];
+  } else {
+    delete merged.phases;
+  }
+  return merged;
 }
 
 export interface TestExecutionContext {
@@ -353,7 +450,10 @@ export function runSuiteProcess(entry?: any, {
   env = process.env,
   signal,
   terminationGraceMs = TEST_PROCESS_TERMINATION_GRACE_MS,
-  spawnImpl = nodeSpawn
+  spawnImpl = nodeSpawn,
+  stdio = "inherit",
+  executionCommand = entry?.command,
+  executionArgs = entry?.args
 }: Record<string, any> = {}) : any {
   if (!Number.isSafeInteger(terminationGraceMs) || terminationGraceMs <= 0) {
     throw new Error("terminationGraceMs must be a positive integer.");
@@ -395,10 +495,10 @@ export function runSuiteProcess(entry?: any, {
     };
 
     try {
-      child = spawnImpl(entry.command, entry.args, {
+      child = spawnImpl(executionCommand, executionArgs, {
         cwd,
         env,
-        stdio: "inherit",
+        stdio,
         windowsHide: true,
         detached: process.platform !== "win32"
       });

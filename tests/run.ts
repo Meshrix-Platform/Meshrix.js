@@ -13,14 +13,28 @@ import {
   TRACKED_REGRESSION_REPORT_PATH
 } from "./lib/regression-html-report.ts";
 import {
+  isCachedTestResultReusable,
+  mergeInheritedProfileExecution,
   parseTestShard,
   notRunSuiteResult,
   planTestExecutionPhases,
   profileInherits,
+  resolveRequiredServiceApplicability,
   runTestPhaseLanes,
   runSuiteProcess,
+  sourceNodeEnvironment,
   summarizeTestResults
 } from "./lib/unified-test-runner-execution.ts";
+import {
+  discoverLocalExecutionEnvironment,
+  type LocalExecutionEnvironment
+} from "../tools/server-scripts/lib/local-execution-environment.ts";
+import {
+  discoverOciConformanceImageAvailability
+} from "../tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
+import { resolveCommandCandidate } from "../packages/foundation/src/environment-compatibility/host-runtime.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../tools/server-scripts/lib/npm-cli-invocation.ts";
+import { loadPreparedReleaseSet } from "../tools/server-scripts/publish-release-set.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const defaultReportDir: any = path.join(repoRoot, "build", "test-reports");
@@ -62,7 +76,7 @@ async function loadRegistry() : Promise<any> {
   const profileMap: Record<string, any> = {};
   const profileConfigs: Record<string, any> = {};
   for (const name of Object.keys(rawProfiles)) {
-    profileConfigs[name] = Object.freeze({ ...rawProfiles[name] });
+    profileConfigs[name] = Object.freeze(resolveInheritedProfileConfig(name, rawProfiles));
     // Skip dynamic profiles (e.g. "changed"); the runner handles them natively
     if (rawProfiles[name].dynamic) continue;
     const resolved: any = resolveProfileExtends(name, rawProfiles);
@@ -74,6 +88,23 @@ async function loadRegistry() : Promise<any> {
 
   _registry = { suites, profileSuites: profileMap, profileConfigs, suiteById };
   return _registry;
+}
+
+function resolveInheritedProfileConfig(name: string, profiles: Record<string, any>, visited = new Set<string>()): any {
+  if (visited.has(name)) throw new Error(`Circular profile extends: ${name}`);
+  const profile = profiles[name];
+  if (!profile) return {};
+  visited.add(name);
+  const parent = profile.extends ? resolveInheritedProfileConfig(profile.extends, profiles, visited) : {};
+  visited.delete(name);
+  const execution = Array.isArray(profile.execution?.phases)
+    ? mergeInheritedProfileExecution(parent.execution, profile.execution)
+    : profile.execution;
+  return {
+    ...profile,
+    execution,
+    trackedArtifacts: [...new Set([...(parent.trackedArtifacts || []), ...(profile.trackedArtifacts || [])])]
+  };
 }
 
 function resolveProfiles(profiles?: any) : any {
@@ -394,6 +425,65 @@ function isPlatformCompatible(entry?: any) : any {
   return !entry.platforms || entry.platforms.includes(process.platform);
 }
 
+async function discoverRequiredServiceCapabilities(requiredServices: readonly string[]): Promise<{
+  environment?: LocalExecutionEnvironment;
+  capabilities: Record<string, { status: "available" | "unavailable" | "failed"; reasonCode?: string }>;
+}> {
+  const capabilities: Record<string, { status: "available" | "unavailable" | "failed"; reasonCode?: string }> = {};
+  const required = new Set(requiredServices);
+  let environment: LocalExecutionEnvironment | undefined;
+
+  if (required.has("docker") || required.has("oci-conformance-native-image")) {
+    try {
+      environment = await discoverLocalExecutionEnvironment();
+      capabilities.docker = environment.docker.status === "available"
+        ? { status: "available" }
+        : { status: "unavailable", reasonCode: environment.docker.reasonCode };
+    } catch {
+      capabilities.docker = { status: "failed", reasonCode: "service_probe_failed" };
+    }
+  }
+
+  for (const service of required) {
+    if (service === "oci-conformance-native-image") {
+      if (!environment) {
+        capabilities[service] = { status: "failed", reasonCode: "service_probe_failed" };
+        continue;
+      }
+      try {
+        const availability = await discoverOciConformanceImageAvailability({ environment });
+        capabilities[service] = availability.status === "available"
+          ? { status: "available" }
+          : { status: availability.status, reasonCode: availability.reasonCode };
+      } catch {
+        capabilities[service] = { status: "failed", reasonCode: "oci_image_inspect_failed" };
+      }
+      continue;
+    }
+    if (service === "podman") {
+      let available = false;
+      try {
+        available = Boolean(resolveCommandCandidate("podman", { includeDefaultLocalBin: false }).path);
+      } catch { /* A missing executable is an unavailable optional service. */ }
+      capabilities[service] = available
+        ? { status: "available" }
+        : { status: "unavailable", reasonCode: "podman_cli_missing" };
+      continue;
+    }
+    if (service === "external-https-endpoint") {
+      capabilities[service] = process.env.MESHRIX_UPSTREAM_EXTERNAL_COMPAT === "1"
+        ? { status: "available" }
+        : { status: "unavailable", reasonCode: "external_endpoint_not_opted_in" };
+      continue;
+    }
+    if (service !== "docker") {
+      capabilities[service] = { status: "failed", reasonCode: "service_capability_unknown" };
+    }
+  }
+
+  return { environment, capabilities };
+}
+
 async function writeJsonAtomic(filePath?: any, data?: any) : Promise<any> {
   await writeTextAtomic(filePath, `${JSON.stringify(data, null, 2)}\n`);
 }
@@ -426,6 +516,9 @@ async function main() : Promise<any> {
   const shardEnvironment: string = String(profileExecution.shardEnvironment || "").trim();
   const shard = parseTestShard(options.shard || (shardEnvironment ? process.env[shardEnvironment] : null));
   const selectedEntries: any[] = selectedIds.map((id: string) => suiteById.get(id));
+  const requiredServices = [...new Set(selectedEntries
+    .filter((entry: any) => isPlatformCompatible(entry))
+    .flatMap((entry: any) => entry.requiredServices || []))];
   const selectedByProfile: any = options.suites.length === 0 && options.tags.length === 0;
   const refreshTrackedReport = shouldRefreshTrackedRegressionReport({
     profile: options.profile,
@@ -476,9 +569,13 @@ async function main() : Promise<any> {
   const onSigterm = (): void => requestCancellation("SIGTERM");
   process.on("SIGINT", onSigint);
   process.on("SIGTERM", onSigterm);
+  let serviceDiscovery: Awaited<ReturnType<typeof discoverRequiredServiceCapabilities>> = {
+    environment: undefined,
+    capabilities: {}
+  };
 
   const markNotRun = (entry: any, reason: string, blockedBy: string[] = []): any => {
-    const result: any = notRunSuiteResult(entry, { reason, blockedBy });
+    const result: any = { ...notRunSuiteResult(entry, { reason, blockedBy }), reasonCode: reason };
     console.log(`NOT_RUN ${entry.id} (${reason})`);
     return result;
   };
@@ -503,6 +600,7 @@ async function main() : Promise<any> {
         command: commandLine(entry),
         childSuiteIds: entry.childSuiteIds || [entry.id],
         status,
+        reasonCode: "platform_unavailable",
         reason: `Suite supports ${entry.platforms.join(", ")} but current platform is ${process.platform}`,
         ...(options.strictPlatform ? { notRunReason: "platform_incompatible_strict" } : {})
       };
@@ -522,10 +620,26 @@ async function main() : Promise<any> {
       return result;
     }
 
+    const applicability = resolveRequiredServiceApplicability(entry.requiredServices || [], serviceDiscovery.capabilities);
+    if (applicability.status !== "available") {
+      const result: Record<string, any> = {
+        ...notRunSuiteResult(entry, { reason: applicability.status === "failed" ? "required_service_probe_failed" : "required_service_unavailable" }),
+        status: applicability.status,
+        reasonCode: applicability.reasonCode,
+        requiredService: applicability.requiredService,
+        ...(applicability.status === "not_run" ? { notRunReason: applicability.reasonCode } : {})
+      };
+      console.log(`${applicability.status.toUpperCase()} ${entry.id} (${applicability.requiredService}: ${applicability.reasonCode})`);
+      return result;
+    }
+
     console.log(`\nRUN ${entry.id}: ${entry.label || entry.id}`);
     console.log(commandLine(entry));
     const cached = resultCache.get(commandLine(entry));
-    if (cached) {
+    if (await isCachedTestResultReusable(entry, cached, {
+      rootDir: repoRoot,
+      validatePreparedReleaseSet: loadPreparedReleaseSet
+    })) {
       const result: any = {
         ...cached,
         id: entry.id,
@@ -537,10 +651,30 @@ async function main() : Promise<any> {
       return result;
     }
 
-    const result: any = await runSuiteProcess(entry, {
-      cwd: repoRoot,
-      signal: cancellation.signal
-    });
+    const childEnv = sourceNodeEnvironment();
+    let result: any;
+    try {
+      const npmInvocation = entry.command === "npm" ? resolveNpmCliInvocation({ env: childEnv }) : null;
+      result = await runSuiteProcess(entry, {
+        cwd: repoRoot,
+        env: childEnv,
+        signal: cancellation.signal,
+        ...(npmInvocation ? {
+          executionCommand: npmInvocation.command,
+          executionArgs: npmCliArgs(npmInvocation, entry.args)
+        } : {})
+      });
+    } catch {
+      result = {
+        id: entry.id,
+        label: entry.label || entry.id,
+        command: commandLine(entry),
+        childSuiteIds: entry.childSuiteIds || [entry.id],
+        status: "failed",
+        reasonCode: "command_invocation_failed",
+        exitCode: null
+      };
+    }
     result.cached = false;
     if (result.status === "not_run") {
       console.log(`NOT_RUN ${entry.id} (${result.reason})`);
@@ -551,6 +685,7 @@ async function main() : Promise<any> {
   };
 
   try {
+    if (!options.dryRun) serviceDiscovery = await discoverRequiredServiceCapabilities(requiredServices);
     let stopReason: { reason: string; blockedBy: string[] } | null = null;
     for (const phase of executionPhases) {
       console.log("");
@@ -652,7 +787,12 @@ async function main() : Promise<any> {
     environment: {
       platform: process.platform,
       arch: process.arch,
-      node: process.version
+      node: process.version,
+      ...(serviceDiscovery.environment ? { localExecution: serviceDiscovery.environment } : {}),
+      serviceCapabilities: Object.fromEntries(Object.entries(serviceDiscovery.capabilities).map(([name, capability]) => [
+        name,
+        { status: capability.status, ...(capability.reasonCode ? { reasonCode: capability.reasonCode } : {}) }
+      ]))
     },
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
