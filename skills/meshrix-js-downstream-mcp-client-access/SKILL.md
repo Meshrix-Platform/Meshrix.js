@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-downstream-mcp-client-access
 description: Connect standard MCP clients with Console-issued scoped API Keys, or install an optional signed connector; preserve current tool authorization and credential custody.
+audience: usage
 ---
 
 # Meshrix.js Downstream MCP Client Access

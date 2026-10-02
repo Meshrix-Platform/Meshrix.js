@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-target-claude-code
 description: Locate Claude Code configuration facts and the current Meshrix.js MCP integration owner. Use for client setup or compatibility questions about this target.
+audience: usage
 ---
 
 # Agent target: Claude Code
@@ -11,7 +12,7 @@ description: Locate Claude Code configuration facts and the current Meshrix.js M
 - Settings-file documentation does not establish a transcript database, resume-picker behavior, or a Meshrix.js streaming-conversation implementation.
 
 Source: [vendor reference](https://code.claude.com/docs/en/settings). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

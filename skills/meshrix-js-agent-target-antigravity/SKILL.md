@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-target-antigravity
 description: Locate Antigravity configuration facts and the current Meshrix.js MCP integration owner. Use for client setup or compatibility questions about this target.
+audience: usage
 ---
 
 # Agent target: Antigravity
@@ -11,7 +12,7 @@ description: Locate Antigravity configuration facts and the current Meshrix.js M
 - IDE and CLI MCP configuration are vendor capabilities; they do not establish a Meshrix.js Hook conversation bridge or a history-store schema.
 
 Source: [vendor reference](https://antigravity.google/docs/mcp). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

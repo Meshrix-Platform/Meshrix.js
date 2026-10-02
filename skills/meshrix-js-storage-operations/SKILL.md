@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-storage-operations
 description: Inspect, repair, or change Meshrix.js core storage, upload sessions, checkpoints, raw objects, metadata, job artifacts, exports, and reconciliation behavior. Use for storage integrity, resume semantics, or controlled repair work.
+audience: development
 ---
 
 # Meshrix.js Storage Operations

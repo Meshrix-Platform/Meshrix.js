@@ -891,7 +891,7 @@ if (packResult.status !== 0) {
   const artifactBoundary: any = await scanPublicArtifactFiles(repoRoot, [...packedFiles], {
     localNeedles: [repoRoot],
     allowedGeneratedOutputSegments: ["dist"],
-    allowedGeneratedOutputPrefixes: ["build/dist"],
+    allowedGeneratedOutputPrefixes: ["build/dist", "build/usage-skills"],
     allowedBundledDependencyPaths: (packageJson.bundleDependencies || packageJson.bundledDependencies || [])
       .map((name?: any) : any => `node_modules/${name}`)
   });

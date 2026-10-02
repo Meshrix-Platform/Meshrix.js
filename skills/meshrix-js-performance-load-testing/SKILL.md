@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-performance-load-testing
 description: Plan, implement, run, and interpret bounded observable Meshrix.js performance tests, including load or stress smoke, capacity and saturation profiles, throughput and P95/P99 regression, event-loop and ELU observation, CPU and memory pressure, noisy-neighbor fairness, failure recovery, and performance-result reduction. Use whenever a task mentions pressure testing, load testing, performance regression, capacity, throughput, latency percentiles, resource saturation, benchmark tooling, or comparison before and after an optimization.
+audience: development
 ---
 
 # Meshrix.js Performance Load Testing

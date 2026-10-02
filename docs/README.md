@@ -1,9 +1,6 @@
 # Meshrix.js Documentation
 
-> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
-> non-amplifying authority, content integrity, and end-to-end traceability.
-> [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
-> owns their normative meaning.
+## Use Meshrix.js
 
 This directory contains technical references for Meshrix.js architecture,
 protocols, capabilities, installation, operation, and verification. Documents
@@ -33,6 +30,15 @@ sampled, or shed under fixed budgets and does not retain payload copies. The
 owning security, operation, gateway, observability, runtime, and protocol
 documents specify the detailed behavior.
 
+## Start here
+
+| Goal | Reference |
+| --- | --- |
+| Start the server and Console | [Local setup](RUNBOOK.md#local-startup) |
+| Connect services and clients | [Gateway](functionality/GATEWAY.md), [client configuration](COMPATIBILITY.md) |
+| Set permissions and approvals | [Access control](functionality/OPERATION-PERMISSION.md) |
+| Contribute or use source startup | [Developer guide](development/README.md), [source startup](development/SOURCE-START.md) |
+
 ## Project Documents
 
 | Topic | Document |
@@ -47,7 +53,7 @@ documents specify the detailed behavior.
 | Governed release status | [releases/README.md](releases/README.md) |
 | License | [../LICENSE](../LICENSE) |
 
-## Meshrix.js Technical Documents
+## Integrate and extend
 
 | Topic | Document |
 | --- | --- |
@@ -72,12 +78,7 @@ documents specify the detailed behavior.
 | Examples | [examples/README.md](examples/README.md) |
 | Implemented decisions | [adrs/README.md](adrs/README.md) |
 
-The state-machine document is generated from
-`tools/registry/state-machines/state-machine-integrity.registry.json` by
-`node tools/generators/generate-state-machine-docs.ts`. Do not edit the
-projection manually. The architecture HTML diagrams are projections of
-`packages/contracts/src/modules/manifest.ts`; update their digest markers with
-`node tools/generators/generate-architecture-diagram-digests.ts`.
+## Develop Meshrix.js
 
 ## Capability Documents
 

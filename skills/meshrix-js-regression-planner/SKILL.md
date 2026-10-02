@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-regression-planner
 description: Select the smallest repository-owned Meshrix.js regression closure for changed files or a named capability.
+audience: development
 ---
 
 # Meshrix.js Regression Planner
