@@ -22,6 +22,10 @@ import {
 } from "./platform-acceptance-requirement-evidence.ts";
 
 const REPORT_PATH: any = PLATFORM_ACCEPTANCE_REPORT_PATH;
+const FUNCTIONAL_PROFILE_PREREQUISITES = Object.freeze([
+  "console-admin-browser-visual",
+  "upstream-mcp-gateway"
+]);
 
 const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("typecheck", "TypeScript project typecheck", "foundation", npmRun("typecheck"), "", ["types"]),
@@ -115,7 +119,8 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("surface-convergence", "Core platform surface convergence", "platform-capability", npmRun("verify:core-platform-surface-convergence"), "build/reports/core-platform-surface-convergence.json", ["platform-capability", "operation-surface"]),
   command("gap-audit", "Core platform gap audit", "platform-capability", npmRun("verify:platform-audit"), "build/reports/core-platform-gap-audit.json", ["platform-capability", "gap-audit"]),
 
-  command("mcp-gateway-load", "MCP gateway load and resource cutoff profile", "profile", npmRun("server:stress:mcp-gateway"), "build/reports/mcp-gateway-load.json", ["profile", "downstream-gateway", "upstream-forwarding", "resource-cutoff"], { dependsOn: ["console-gateway-mcp"], resourceLocks: ["gateway-platform-profile", "container-runtime", "foundation-public-gate"] }),
+  command("runtime-memory-profile", "Runtime memory and resource profile after functional acceptance", "profile", npmRun("server:verify:memory-leaks"), "build/reports/runtime-resource-discipline.json", ["profile", "memory", "resource-discipline"], { dependsOn: FUNCTIONAL_PROFILE_PREREQUISITES, exclusive: true, resourceLocks: ["gateway-platform-profile", "container-runtime", "foundation-public-gate"] }),
+  command("mcp-gateway-load", "MCP gateway load and resource cutoff profile", "profile", npmRun("server:stress:mcp-gateway"), "build/reports/mcp-gateway-load.json", ["profile", "downstream-gateway", "upstream-forwarding", "resource-cutoff"], { dependsOn: [...FUNCTIONAL_PROFILE_PREREQUISITES, "console-gateway-mcp"], resourceLocks: ["gateway-platform-profile", "container-runtime", "foundation-public-gate"] }),
   command("gateway-platform-profile", "Gateway platform performance profile", "profile", nodeCommand(["tools/server-scripts/stress-gateway-platform-profile.ts"]), "build/reports/gateway-platform-profile.json", ["profile", "downstream-gateway", "upstream-gateway"], { dependsOn: ["production-readiness-gates", "mcp-gateway-load", "upstream-fixture-transit", "path-abstraction-audit"], resourceLocks: ["gateway-platform-profile"] })
 ]);
 

@@ -658,9 +658,23 @@ listener, persistence routine, or scheduler:
 npm run server:verify:resource-discipline
 ```
 
-The command first rejects new unbounded append paths and missing retention
-contracts. It then starts the complete default service in an isolated temporary
-data directory, warms it, applies repeated concurrent requests, and performs
+This engineering command rejects new unbounded append paths and missing
+retention contracts, then runs deterministic resource-policy and upload-session
+persistence checks. The complete upload workspace security matrix runs once
+through its registered `jobs.upload-custody-workspace-materialization-acceptance`
+suite.
+
+After the same candidate has passed real Core, Console, MCP and normal shutdown
+verification, run the separate resource profile:
+
+```bash
+npm run server:verify:memory-leaks
+```
+
+Platform acceptance schedules this profile only after its real Console browser
+and upstream MCP producers succeed. The profile starts the complete default
+service in an isolated temporary data directory, warms it, applies repeated
+concurrent requests, and performs
 forced garbage collection between measurement rounds. Retained heap growth is
 evaluated with a robust multi-round slope instead of a single RSS comparison,
 while `@datadog/pprof` independently samples live V8 allocations in standard
@@ -675,8 +689,9 @@ Only a compact, redacted, atomically replaced result is written under
 `build/reports/`. Raw heap profiles, readiness state, service data, and load
 responses remain private temporary data and are removed when the command ends.
 Any policy, persistence-growth, log-growth, heap-growth, allocation-growth, or
-request-integrity violation returns a non-zero exit code and blocks the Core
-gate.
+request-integrity violation returns a non-zero exit code and fails release
+acceptance. The profile owns `build/reports/runtime-resource-discipline.json`;
+the earlier static engineering command does not claim that result.
 
 ### Governed evidence capacity review
 
@@ -1006,7 +1021,9 @@ for package in '@meshrix/gateway' 'meshrix.js'; do
 done
 ```
 
-npm requires account-level 2FA for trusted-publisher management. During the
+npm requires account-level 2FA and an authenticated npm login for trusted-publisher
+management. A granular token with bypass 2FA, including the bootstrap publishing
+token, cannot authorize `npm trust` operations. During the
 first command, select the documented five-minute 2FA reuse option; the two
 second delay limits bulk-request rate. If automatic repair of a missing or
 older `latest`/`next` tag is required, grant `manage dist-tags` separately on

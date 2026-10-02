@@ -14,7 +14,6 @@ function portableAssemblyPlatformReportPath() : any {
 
 export const PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST: readonly any[] = Object.freeze([
   "build/reports/architecture-graph.json",
-  "build/reports/runtime-resource-discipline.json",
   "build/reports/version-naming/latest.json",
   "build/reports/version-registry/latest.json",
   "build/reports/plugin-bundle-protocol.json",

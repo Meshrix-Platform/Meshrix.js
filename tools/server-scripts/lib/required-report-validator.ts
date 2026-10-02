@@ -58,6 +58,7 @@ function defineSpec({
 }
 
 const SPEC_LIST: any[] = [
+  defineSpec({ path: "build/reports/runtime-resource-discipline.json", schemaVersion: "runtime-resource-discipline-report", verifier: "tools/server-scripts/verify-runtime-memory-leaks.ts" }),
   defineSpec({ path: "build/reports/approval-governance.json", schemaVersion: "v0.0.1:authorization:approval-governance-report-1", verifier: "tools/server-scripts/verify-approval-governance.ts", timestampField: "finishedAt" }),
   defineSpec({ path: "build/reports/capability-acceptance-machines.json", schemaVersion: "v0.0.1:acceptance:capability-machines-report-7", verifier: "tools/server-scripts/verify-capability-acceptance-machines.ts", readyFields: ["readyForReleaseReduction", "summary.readyForReleaseReduction"], reducer: REQUIRED_REPORT_REDUCERS.CAPABILITY_ACCEPTANCE }),
   defineSpec({ path: "build/reports/composition-source-package.json", schemaVersion: "v0.0.1:release:composition-source-package-report-1", verifier: "tools/server-scripts/verify-composition-source-package.ts", readyFields: ["summary.compositionSourcePackageAcceptanceReady"] }),

@@ -557,7 +557,7 @@
     "server:reconcile": "node dist/tools/server-scripts/reconcile-storage.js",
     "server:verify:public-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-public-boundary.ts",
     "server:verify:script-registry": "cross-env NODE_OPTIONS=--conditions=source node tests/verify-script-registry.ts",
-    "server:verify:resource-discipline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-resource-discipline.ts && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts tests/vitest/server/upload-custody-workspace-materialization.test.ts && cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-memory-leaks.ts",
+    "server:verify:resource-discipline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-resource-discipline.ts && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts",
     "server:verify:memory-leaks": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-memory-leaks.ts",
     "server:verify:strategy-management": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-strategy-management.ts",
     "server:verify:strategy-management-browser": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-strategy-management-browser.ts",
