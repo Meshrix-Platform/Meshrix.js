@@ -46,11 +46,20 @@ jobs:
             shift 2
             if ! "$@" > "$log_file" 2>&1; then
               node tools/server-scripts/localize-verify-failure.ts "$log_file" --command "$command_label" || true
+              node -e "for (const line of require('node:fs').readFileSync(process.argv[1], 'utf8').split(/\r?\n/)) if (line.startsWith('FAILED ')) console.log(line)" "$log_file"
               tail -n 60 "$log_file"
               return 1
             fi
           }
           run_check "npm test" /tmp/pr-regression.log npm test
+      - name: Retain privacy-checked regression results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pull-request-regression-${{ github.sha }}
+          path: build/test-reports/latest.json
+          if-no-files-found: warn
+          retention-days: 14
 
   stable-candidate:
     name: Stable candidate checkpoint

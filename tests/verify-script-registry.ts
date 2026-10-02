@@ -605,9 +605,10 @@ for (const suite of suiteRegistry.suites || []) {
     continue;
   }
   if (suite.command.endsWith("npm") || suite.command.endsWith("npm.cmd")) {
-    const runIdx: any = suite.args.indexOf("run");
-    if (runIdx >= 0 && runIdx + 1 < suite.args.length) {
-      suiteScriptRefs.add(suite.args[runIdx + 1]);
+    // Only npm's own run subcommand names a package script. An npm exec
+    // payload may contain another tool's "run" argument followed by a file.
+    if (suite.args[0] === "run" && suite.args[1]) {
+      suiteScriptRefs.add(suite.args[1]);
     }
   }
 }

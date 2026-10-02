@@ -3,6 +3,7 @@ name: Gateway preview candidate
 on:
   pull_request:
     paths:
+      - ".github/workflows/gateway-preview.yml"
       - "packages/gateway/**"
       - "packages/contracts/src/gateway/**"
       - "packages/protocols/mcp/modern-*/**"
@@ -28,8 +29,9 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-      - run: npm ci --ignore-scripts
+      - run: npm ci
       - run: npm run typecheck:node
-      - run: npm run vitest -- tests/vitest/gateway --maxWorkers=2
       - run: npm run build:node
+      # Benchmark qualification owns its tool, artifact and functional prerequisites.
+      - run: npm run vitest -- tests/vitest/gateway --maxWorkers=2
       - run: npm pack --workspace @meshrix/gateway --dry-run --json
