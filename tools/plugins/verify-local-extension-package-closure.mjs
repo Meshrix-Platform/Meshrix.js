@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 
 import { repoRoot, readJson, sanitizeError } from "./lib/repository.mjs";
 import { assertMigratedExtensionClosure } from "./lib/migrated-extension-closure.mjs";
+import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -61,7 +62,8 @@ async function main() {
   for (const marker of ["Apache-2.0", "pactium@0.8.1", "MIT", "GPL-3.0-or-later", "tools/plugins/", "tests/plugins/"]) {
     if (!notice.includes(marker)) throw new Error(`mixed license notice omits ${marker}`);
   }
-  const pack = await run(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--dry-run", "--json", "--ignore-scripts"]);
+  const npmInvocation = resolveNpmCliInvocation();
+  const pack = await run(npmInvocation.command, npmCliArgs(npmInvocation, ["pack", "--dry-run", "--json", "--ignore-scripts"]));
   const parsedPack = JSON.parse(pack.stdout.trim());
   const reports = Array.isArray(parsedPack) ? parsedPack : Object.values(parsedPack || {});
   if (reports.length !== 1) throw new Error("npm pack returned an unexpected artifact count");

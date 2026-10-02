@@ -25,6 +25,9 @@ import {
   REQUIRED_SANDBOX_PROVIDER_RESTRICTIONS
 } from "@meshrix/server-runtime/execution-sandbox/trusted-provider-resolver";
 import { createSourceEvidenceContext } from "./lib/source-tree-digest.ts";
+import { resolveCommandCandidate } from "../../packages/foundation/src/environment-compatibility/host-runtime.ts";
+import { discoverLocalExecutionEnvironment } from "./lib/local-execution-environment.ts";
+import type { LocalExecutionEnvironment } from "./lib/local-execution-environment.ts";
 
 const REPORT_SCHEMA: any = "v0.0.1:execution-sandbox:oci-conformance-report-1";
 const REPORT_PATH: any = "build/reports/execution-sandbox-oci-conformance.json";
@@ -251,6 +254,58 @@ export function ensureOciPinnedImage(binary?: any, image: any = PINNED_IMAGE) : 
   return Object.freeze({ present: true, pulled: true });
 }
 
+export type OciConformanceImageAvailability =
+  | { status: "available"; platform: "linux/amd64" | "linux/arm64" }
+  | { status: "unavailable"; reasonCode: "docker_unavailable" | "oci_image_platform_mismatch" }
+  | { status: "failed"; reasonCode: "oci_image_prepare_failed" | "oci_image_inspect_failed" };
+
+interface OciConformanceImageOptions {
+  environment?: LocalExecutionEnvironment;
+  binary?: string;
+  image?: string;
+  commandRunner?: typeof runOciEngineCommand;
+  ensureImage?: typeof ensureOciPinnedImage;
+}
+
+/** Inspect the pinned workload without starting a container or enabling emulation. */
+export async function discoverOciConformanceImageAvailability({
+  environment,
+  binary,
+  image = PINNED_IMAGE,
+  commandRunner = runOciEngineCommand,
+  ensureImage = ensureOciPinnedImage
+}: OciConformanceImageOptions = {}): Promise<OciConformanceImageAvailability> {
+  const observed = environment ?? await discoverLocalExecutionEnvironment();
+  if (observed.docker.status !== "available") {
+    return { status: "unavailable", reasonCode: "docker_unavailable" };
+  }
+  const executable = binary ?? resolveCommandCandidate("docker", { includeDefaultLocalBin: false }).path;
+  try {
+    if (!executable) throw new Error("docker_cli_missing");
+    await ensureImage(executable, image);
+  } catch {
+    return { status: "failed", reasonCode: "oci_image_prepare_failed" };
+  }
+  try {
+    const result = commandRunner(executable, ["image", "inspect", "--format", "{{json .}}", image], {
+      allowFailure: true,
+      timeoutMs: 30_000
+    });
+    if (result.status !== 0) throw new Error("image_inspect_failed");
+    const inspected: unknown = JSON.parse(String(result.stdout || ""));
+    if (!inspected || typeof inspected !== "object" || Array.isArray(inspected)) throw new Error("image_metadata_invalid");
+    const metadata = inspected as { Os?: unknown; Architecture?: unknown };
+    if (typeof metadata.Os !== "string" || typeof metadata.Architecture !== "string") throw new Error("image_metadata_invalid");
+    const imagePlatform = `${metadata.Os}/${metadata.Architecture}`;
+    if (imagePlatform !== observed.docker.platform) {
+      return { status: "unavailable", reasonCode: "oci_image_platform_mismatch" };
+    }
+    return { status: "available", platform: observed.docker.platform };
+  } catch {
+    return { status: "failed", reasonCode: "oci_image_inspect_failed" };
+  }
+}
+
 export async function waitForOciEngineReady(binary?: any, {
   timeoutMs = OCI_ENGINE_READY_TIMEOUT_MS,
   intervalMs = OCI_ENGINE_READY_INTERVAL_MS,
@@ -275,7 +330,8 @@ export async function waitForOciEngineReady(binary?: any, {
 export async function runOciConformancePreflight(target?: any, {
   image = PINNED_IMAGE,
   waitForEngine = waitForOciEngineReady,
-  ensureImage = ensureOciPinnedImage
+  ensureImage = ensureOciPinnedImage,
+  inspectImageAvailability = discoverOciConformanceImageAvailability
 }: Record<string, any> = {}) : Promise<any> {
   const binary: any = String(target?.binary || "").trim();
   if (!binary) {
@@ -284,7 +340,16 @@ export async function runOciConformancePreflight(target?: any, {
     throw error;
   }
   await waitForEngine(binary);
-  return ensureImage(binary, image);
+  const prepared = await ensureImage(binary, image);
+  if (target.engine === "docker") {
+    const availability = await inspectImageAvailability({ binary, image, ensureImage: () => prepared });
+    if (availability.status !== "available") {
+      const error: Error & Record<string, any> = new Error("The OCI conformance workload requires a matching native platform.");
+      error.code = availability.reasonCode;
+      throw error;
+    }
+  }
+  return prepared;
 }
 
 export function parseExecutionSandboxOciConformanceArguments(argv: any = []) : any {

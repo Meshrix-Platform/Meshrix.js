@@ -9,6 +9,7 @@ import {
   writeTrustedSandboxProviderReceipts
 } from "../../../packages/server-runtime/src/execution-sandbox/trusted-provider-receipt-store.ts";
 import {
+  discoverOciConformanceImageAvailability,
   failedOciConformanceCheckIds,
   parseExecutionSandboxOciConformanceArguments,
   runExecutionSandboxOciConformance,
@@ -527,6 +528,80 @@ describe("trusted sandbox provider receipt store", () : any => {
       args: ["info", "--format", "{{json .}}"],
       options: { allowFailure: true, timeoutMs: 8_000 }
     }]);
+  });
+
+  it("does not prepare or launch an OCI workload when local Docker is absent", async () => {
+    const ensureImage = vi.fn();
+    const commandRunner = vi.fn();
+    await expect(discoverOciConformanceImageAvailability({
+      environment: {
+        native: { os: "darwin", architecture: "arm64", platform: "darwin/arm64", nodeVersion: "v24.3.0" },
+        docker: { status: "unavailable", reasonCode: "docker_cli_missing" }
+      },
+      ensureImage,
+      commandRunner
+    })).resolves.toEqual({ status: "unavailable", reasonCode: "docker_unavailable" });
+    expect(ensureImage).not.toHaveBeenCalled();
+    expect(commandRunner).not.toHaveBeenCalled();
+  });
+
+  it.each(["amd64", "arm64"] as const)("qualifies an inspected native %s image without starting a workload", async (architecture) => {
+    const commandRunner = vi.fn((_binary: string, _args: string[]) => ({ status: 0, stdout: JSON.stringify({ Os: "linux", Architecture: architecture }) }));
+    const ensureImage = vi.fn(() => ({ present: true, pulled: false }));
+    await expect(discoverOciConformanceImageAvailability({
+      environment: {
+        native: { os: "linux", architecture, platform: `linux/${architecture}`, nodeVersion: "v24.3.0" },
+        docker: { status: "available", platform: `linux/${architecture}` }
+      },
+      binary: "docker",
+      ensureImage,
+      commandRunner
+    })).resolves.toEqual({ status: "available", platform: `linux/${architecture}` });
+    expect(commandRunner.mock.calls[0]?.[1]).toEqual(["image", "inspect", "--format", "{{json .}}", expect.stringContaining("@sha256:")]);
+    expect(commandRunner).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not use emulation for a pinned image whose architecture differs from the daemon", async () => {
+    await expect(discoverOciConformanceImageAvailability({
+      environment: {
+        native: { os: "darwin", architecture: "arm64", platform: "darwin/arm64", nodeVersion: "v24.3.0" },
+        docker: { status: "available", platform: "linux/arm64" }
+      },
+      binary: "docker",
+      ensureImage: () => ({ present: true, pulled: false }),
+      commandRunner: () => ({ status: 0, stdout: '{"Os":"linux","Architecture":"amd64"}' })
+    })).resolves.toEqual({ status: "unavailable", reasonCode: "oci_image_platform_mismatch" });
+  });
+
+  it("retains a selected image preparation failure as failed", async () => {
+    await expect(discoverOciConformanceImageAvailability({
+      environment: {
+        native: { os: "linux", architecture: "amd64", platform: "linux/amd64", nodeVersion: "v24.3.0" },
+        docker: { status: "available", platform: "linux/amd64" }
+      },
+      binary: "docker",
+      ensureImage: () => { throw new Error("fixture preparation failure"); }
+    })).resolves.toEqual({ status: "failed", reasonCode: "oci_image_prepare_failed" });
+  });
+
+  it("rejects unusable image metadata instead of treating it as an absent environment", async () => {
+    await expect(discoverOciConformanceImageAvailability({
+      environment: {
+        native: { os: "linux", architecture: "amd64", platform: "linux/amd64", nodeVersion: "v24.3.0" },
+        docker: { status: "available", platform: "linux/amd64" }
+      },
+      binary: "docker",
+      ensureImage: () => ({ present: true, pulled: false }),
+      commandRunner: () => ({ status: 0, stdout: "{}" })
+    })).resolves.toEqual({ status: "failed", reasonCode: "oci_image_inspect_failed" });
+  });
+
+  it("stops Docker conformance preflight before running a mismatched workload", async () => {
+    await expect(runOciConformancePreflight({ binary: "docker", engine: "docker" }, {
+      waitForEngine: async () => ({ ready: true }),
+      ensureImage: () => ({ present: true, pulled: false }),
+      inspectImageAvailability: async () => ({ status: "unavailable", reasonCode: "oci_image_platform_mismatch" })
+    })).rejects.toMatchObject({ code: "oci_image_platform_mismatch" });
   });
 
   it("accepts a fresh receipt and rejects stale, revoked, and removed-provider state", async () : Promise<any> => {

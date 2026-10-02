@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 
 import {
   assertConformanceNeverCertifies,
@@ -948,10 +949,11 @@ async function stageCap13(stage?: any) : Promise<any> {
     : "tests/vitest/server/runtime-sqlite-execution-lane-conformance.test.ts";
   // Keep Vitest one process below this synchronous verifier for the audit
   // suite; its thread pool owns nested SQLite workers.
+  const npmInvocation = resolveNpmCliInvocation();
   const result: any = stage === "cap-13-evidence"
-    ? runCommand(process.platform === "win32" ? "npm.cmd" : "npm", [
+    ? runCommand(npmInvocation.command, npmCliArgs(npmInvocation, [
         "run", "vitest", "--", suitePath
-      ])
+      ]))
     : runCommand(process.execPath, [
         "--conditions=source", VITEST_RUNNER, "run", "--config", "vitest.config.ts",
         suitePath
