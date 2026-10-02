@@ -2,16 +2,11 @@
   "name": "@meshrix/capabilities",
   "version": "0.0.1",
   "description": "Meshrix.js operation permission and runtime capabilities",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1"
-  },
   "exports": {
     "./operation-permission-core/index": {
       "source": "./src/operation-permission-core/index.ts",
@@ -49,5 +44,20 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/capabilities"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
+  }
 }

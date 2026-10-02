@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "Meshrix.js Node server executable — HTTP runtime bootstrap, process lifecycle",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

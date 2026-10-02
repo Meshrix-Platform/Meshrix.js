@@ -2,16 +2,11 @@
   "name": "@meshrix/protocols",
   "version": "0.0.1",
   "description": "Meshrix.js MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "undici": "^8.11.2"
-  },
   "imports": {
     "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
     "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
@@ -181,5 +176,20 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/protocols"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "undici": "^8.11.2"
+  }
 }

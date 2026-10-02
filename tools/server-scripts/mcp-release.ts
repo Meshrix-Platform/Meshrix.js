@@ -2,19 +2,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
-  MCP_CONNECTOR_PACKAGE_NAME,
-  MCP_CONNECTOR_VERSION
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import {
-  connectorRoot,
   normalizeReleaseChannel,
   prepareMcpReleaseOutputDirectory,
   projectRoot,
   readJson,
-  run,
   sha256,
   writeReleaseChecksumIndex
 } from "./lib/mcp-release-common.ts";
+import { loadPreparedReleaseSet } from "./publish-release-set.ts";
 import {
   createBootstrapInstaller,
   releaseGeneratedAtFromSourceDateEpoch,
@@ -22,7 +21,6 @@ import {
 } from "./lib/mcp-release-manifest.ts";
 import { createPortableBundle, resolveBundledNodeVersion } from "./lib/mcp-release-portable.ts";
 import { normalizeMcpPortableTargets } from "./lib/mcp-release-platforms.ts";
-import { parseNpmPackJson } from "./lib/npm-cli-invocation.ts";
 
 function parseArgs(argv?: any) : any {
   const valueArguments: any = new Set<any>([
@@ -31,7 +29,8 @@ function parseArgs(argv?: any) : any {
     "node-version",
     "output-dir",
     "platforms",
-    "source-date-epoch"
+    "source-date-epoch",
+    "artifact-dir"
   ]);
   const args: Record<string, any> = {
     "output-dir": path.join(projectRoot, "build", "release", "mcp"),
@@ -76,6 +75,9 @@ async function main() : Promise<any> {
   if (args["node-version"] || args["lts-version"]) {
     throw new Error("node_runtime_version_override_not_supported");
   }
+  if (!args["artifact-dir"]) {
+    throw new Error("mcp_prepared_artifact_directory_required");
+  }
   const channel: any = normalizeReleaseChannel(args.channel);
   const generatedAt: any = releaseGeneratedAtFromSourceDateEpoch(
     args["source-date-epoch"] || process.env.SOURCE_DATE_EPOCH
@@ -83,111 +85,116 @@ async function main() : Promise<any> {
   let outputDir: any = null;
   try {
     outputDir = await prepareMcpReleaseOutputDirectory(args["output-dir"]);
-    const packageJson: any = await readJson(path.join(connectorRoot, "package.json"));
-  assert.equal(packageJson.name, MCP_CONNECTOR_PACKAGE_NAME);
-  assert.equal(packageJson.version, MCP_CONNECTOR_VERSION);
-
-  const pack: any = await run("npm", ["pack", "--json", "--pack-destination", outputDir], {
-    cwd: connectorRoot
-  });
-  const packedArtifacts: any[] = parseNpmPackJson(pack.stdout);
-  const packResult: any = packedArtifacts.length === 1 ? packedArtifacts[0] : null;
-  if (!packResult?.filename) {
-    throw new Error("npm pack did not return a tarball filename.");
-  }
-  const tarballPath: any = path.join(outputDir, packResult.filename);
-  const stat: any = await fs.stat(tarballPath);
-  const checksum: any = await sha256(tarballPath);
-  const portables: any[] = [];
-  const targets: any = normalizeMcpPortableTargets(args.platforms);
-  const bundledVersion: any = await resolveBundledNodeVersion();
-  for (const target of targets) {
-    const portable: any = await createPortableBundle({
+    const packageJson: any = await readJson(path.join(projectRoot, "package.json"));
+    assert.equal(packageJson.name, MCP_NPM_PACKAGE_NAME);
+    assert.equal(packageJson.version, MCP_NPM_PACKAGE_VERSION);
+    const preparedReleaseSet: any = await loadPreparedReleaseSet({
+      rootDir: projectRoot,
+      artifactDirectory: path.resolve(args["artifact-dir"])
+    });
+    const rootArtifact: any = preparedReleaseSet.packages.find(
+      ({ name }: Record<string, any>) : any => name === packageJson.name
+    );
+    assert.ok(rootArtifact, "mcp_prepared_root_artifact_missing");
+    assert.equal(rootArtifact.version, packageJson.version, "mcp_prepared_root_version_mismatch");
+    assert.match(rootArtifact.integrity, /^sha512-[A-Za-z0-9+/]+={0,2}$/u, "mcp_prepared_root_integrity_invalid");
+    const tarballPath: any = path.join(outputDir, rootArtifact.filename);
+    await fs.copyFile(rootArtifact.tarballPath, tarballPath);
+    const packResult: any = { filename: rootArtifact.filename };
+    const stat: any = await fs.stat(tarballPath);
+    const checksum: any = await sha256(tarballPath);
+    const portables: any[] = [];
+    const targets: any = normalizeMcpPortableTargets(args.platforms);
+    const bundledVersion: any = await resolveBundledNodeVersion();
+    for (const target of targets) {
+      const portable: any = await createPortableBundle({
+        outputDir,
+        packageJson,
+        target,
+        bundledVersion
+      });
+      portables.push(portable);
+      await Promise.all([
+        fs.rm(path.join(outputDir, portable.rootName), { recursive: true, force: true }),
+        fs.rm(path.join(outputDir, `extracted-${target}`), { recursive: true, force: true })
+      ]);
+    }
+    const bootstrap: any = await createBootstrapInstaller({
       outputDir,
       packageJson,
-      target,
-      bundledVersion
+      tarballName: packResult.filename,
+      tarballSha256: checksum,
+      portables
     });
-    portables.push(portable);
-    await Promise.all([
-      fs.rm(path.join(outputDir, portable.rootName), { recursive: true, force: true }),
-      fs.rm(path.join(outputDir, `extracted-${target}`), { recursive: true, force: true })
-    ]);
-  }
-  const bootstrap: any = await createBootstrapInstaller({
-    outputDir,
-    packageJson,
-    tarballName: packResult.filename,
-    tarballSha256: checksum,
-    portables
-  });
-  const manifest: any = releaseManifest({
-    channel,
-    packageJson,
-    tarballName: packResult.filename,
-    tarballPath,
-    checksum,
-    sizeBytes: stat.size,
-    portables,
-    bootstrap,
-    generatedAt
-  });
-  const manifestPath: any = path.join(outputDir, "meshrix-mcp-release.json");
-  const latestPath: any = path.join(outputDir, "latest.json");
-  await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  await fs.writeFile(latestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  const outputEntries: any = await fs.readdir(outputDir, { withFileTypes: true });
-  if (outputEntries.some((entry?: any) : any => !entry.isFile())) {
-    throw new Error("release_output_contains_non_file_entry");
-  }
-  const checksumIndex: any = await writeReleaseChecksumIndex(outputDir);
-  const publicReleasePath: any = (value?: any) : any => path.relative(projectRoot, value).split(path.sep).join("/");
+    const manifest: any = releaseManifest({
+      channel,
+      packageJson,
+      tarballName: packResult.filename,
+      tarballPath,
+      npmIntegrity: rootArtifact.integrity,
+      checksum,
+      sizeBytes: stat.size,
+      portables,
+      bootstrap,
+      generatedAt
+    });
+    const manifestPath: any = path.join(outputDir, "meshrix-mcp-release.json");
+    const latestPath: any = path.join(outputDir, "latest.json");
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await fs.writeFile(latestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const outputEntries: any = await fs.readdir(outputDir, { withFileTypes: true });
+    if (outputEntries.some((entry?: any) : any => !entry.isFile())) {
+      throw new Error("release_output_contains_non_file_entry");
+    }
+    const checksumIndex: any = await writeReleaseChecksumIndex(outputDir);
+    const publicReleasePath: any = (value?: any) : any => path.relative(projectRoot, value).split(path.sep).join("/");
 
-  const result: Record<string, any> = {
-    ok: true,
-    outputDir: publicReleasePath(outputDir),
-    manifestPath: publicReleasePath(manifestPath),
-    latestPath: publicReleasePath(latestPath),
-    checksumFilePath: publicReleasePath(checksumIndex.checksumFilePath),
-    checksumFileSha256: checksumIndex.checksumFileSha256,
-    bootstrapInstallerPath: publicReleasePath(bootstrap.scriptPath),
-    tarballPath: publicReleasePath(tarballPath),
-    portableTarballs: portables.map((p?: any) : any => publicReleasePath(p.archivePath)),
-    portableZips: portables.map((p?: any) : any => p.zipArchivePath).filter(Boolean).map(publicReleasePath),
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
-    sha256: checksum,
-    portableSha256: portables.map((p?: any) : any => p.sha256),
-    portableZipSha256: portables.map((p?: any) : any => p.zipSha256).filter(Boolean),
-    bootstrapInstallerSha256: bootstrap.sha256,
-    bootstrapUninstallerPath: publicReleasePath(bootstrap.uninstallScriptPath),
-    bootstrapUninstallerSha256: bootstrap.uninstallSha256,
-    bootstrapInstallerZhCNPath: publicReleasePath(bootstrap.localized.zhCN.scriptPath),
-    bootstrapInstallerZhCNSha256: bootstrap.localized.zhCN.sha256,
-    bootstrapUninstallerZhCNPath: publicReleasePath(bootstrap.localized.zhCN.uninstallScriptPath),
-    bootstrapUninstallerZhCNSha256: bootstrap.localized.zhCN.uninstallSha256,
-    githubOneLineCommand: bootstrap.oneLineCommand,
-    githubOneLineClientInstallJsonCommand: bootstrap.oneLineClientInstallJsonCommand,
-    githubOneLineUninstallCommand: bootstrap.oneLineUninstallCommand,
-    githubOneLineAutoInstallCommand: bootstrap.oneLineAutoInstallCommand,
-    githubOneLinePriorityInstallCommand: bootstrap.oneLinePriorityInstallCommand,
-    githubOneLineCommandZhCN: bootstrap.localized.zhCN.oneLineCommand,
-    githubOneLineClientInstallJsonCommandZhCN: bootstrap.localized.zhCN.oneLineClientInstallJsonCommand,
-    githubOneLineAutoInstallCommandZhCN: bootstrap.localized.zhCN.oneLineAutoInstallCommand,
-    githubOneLinePriorityInstallCommandZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
-    githubOneLineUninstallCommandZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
-    oneCommandInstall: bootstrap.oneLineCommand,
-    oneCommandInstallZhCN: bootstrap.localized.zhCN.oneLineCommand,
-    oneCommandClientInstallJson: bootstrap.oneLineClientInstallJsonCommand,
-    oneCommandClientInstallJsonZhCN: bootstrap.localized.zhCN.oneLineClientInstallJsonCommand,
-    oneCommandAutoInstall: bootstrap.oneLineAutoInstallCommand,
-    oneCommandAutoInstallZhCN: bootstrap.localized.zhCN.oneLineAutoInstallCommand,
-    oneCommandPriorityInstall: bootstrap.oneLinePriorityInstallCommand,
-    oneCommandPriorityInstallZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
-    oneCommandUninstall: bootstrap.oneLineUninstallCommand,
-    oneCommandUninstallZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
-    installCommand: manifest.install.registryCommand
-  };
+    const result: Record<string, any> = {
+      ok: true,
+      outputDir: publicReleasePath(outputDir),
+      manifestPath: publicReleasePath(manifestPath),
+      latestPath: publicReleasePath(latestPath),
+      checksumFilePath: publicReleasePath(checksumIndex.checksumFilePath),
+      checksumFileSha256: checksumIndex.checksumFileSha256,
+      bootstrapInstallerPath: publicReleasePath(bootstrap.scriptPath),
+      tarballPath: publicReleasePath(tarballPath),
+      portableTarballs: portables.map((p?: any) : any => publicReleasePath(p.archivePath)),
+      portableZips: portables.map((p?: any) : any => p.zipArchivePath).filter(Boolean).map(publicReleasePath),
+      packageName: packageJson.name,
+      packageVersion: packageJson.version,
+      npmIntegrity: rootArtifact.integrity,
+      sha256: checksum,
+      portableSha256: portables.map((p?: any) : any => p.sha256),
+      portableZipSha256: portables.map((p?: any) : any => p.zipSha256).filter(Boolean),
+      bootstrapInstallerSha256: bootstrap.sha256,
+      bootstrapUninstallerPath: publicReleasePath(bootstrap.uninstallScriptPath),
+      bootstrapUninstallerSha256: bootstrap.uninstallSha256,
+      bootstrapInstallerZhCNPath: publicReleasePath(bootstrap.localized.zhCN.scriptPath),
+      bootstrapInstallerZhCNSha256: bootstrap.localized.zhCN.sha256,
+      bootstrapUninstallerZhCNPath: publicReleasePath(bootstrap.localized.zhCN.uninstallScriptPath),
+      bootstrapUninstallerZhCNSha256: bootstrap.localized.zhCN.uninstallSha256,
+      githubOneLineCommand: bootstrap.oneLineCommand,
+      githubOneLineClientInstallJsonCommand: bootstrap.oneLineClientInstallJsonCommand,
+      githubOneLineUninstallCommand: bootstrap.oneLineUninstallCommand,
+      githubOneLineAutoInstallCommand: bootstrap.oneLineAutoInstallCommand,
+      githubOneLinePriorityInstallCommand: bootstrap.oneLinePriorityInstallCommand,
+      githubOneLineCommandZhCN: bootstrap.localized.zhCN.oneLineCommand,
+      githubOneLineClientInstallJsonCommandZhCN: bootstrap.localized.zhCN.oneLineClientInstallJsonCommand,
+      githubOneLineAutoInstallCommandZhCN: bootstrap.localized.zhCN.oneLineAutoInstallCommand,
+      githubOneLinePriorityInstallCommandZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
+      githubOneLineUninstallCommandZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
+      oneCommandInstall: bootstrap.oneLineCommand,
+      oneCommandInstallZhCN: bootstrap.localized.zhCN.oneLineCommand,
+      oneCommandClientInstallJson: bootstrap.oneLineClientInstallJsonCommand,
+      oneCommandClientInstallJsonZhCN: bootstrap.localized.zhCN.oneLineClientInstallJsonCommand,
+      oneCommandAutoInstall: bootstrap.oneLineAutoInstallCommand,
+      oneCommandAutoInstallZhCN: bootstrap.localized.zhCN.oneLineAutoInstallCommand,
+      oneCommandPriorityInstall: bootstrap.oneLinePriorityInstallCommand,
+      oneCommandPriorityInstallZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
+      oneCommandUninstall: bootstrap.oneLineUninstallCommand,
+      oneCommandUninstallZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
+      installCommand: manifest.install.registryCommand
+    };
     console.log(args.json ? JSON.stringify(result) : JSON.stringify(result, null, 2));
   } catch (error: any) {
     if (outputDir) {

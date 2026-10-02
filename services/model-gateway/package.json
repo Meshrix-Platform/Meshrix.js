@@ -11,5 +11,6 @@
     "start": "node src/main.mjs",
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs"
-  }
+  },
+  "license": "Apache-2.0"
 }

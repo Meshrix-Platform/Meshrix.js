@@ -3,9 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "description": "Gateway-only command-line profile for embedded Meshrix MCP gateway deployments.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
-  "engines": { "node": ">=22.18.0 <23 || >=24.3.0" },
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
     "@meshrix/gateway": "0.0.1",
@@ -13,7 +15,9 @@
     "@meshrix/foundation": "0.0.1",
     "@meshrix/protocols": "0.0.1"
   },
-  "bin": { "meshrix-gateway": "./dist/cli.js" },
+  "bin": {
+    "meshrix-gateway": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "source": "./src/cli.ts",
@@ -21,5 +25,9 @@
       "default": "./dist/cli.js"
     }
   },
-  "files": ["dist/**/*", "README.md", "package.json"]
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "package.json"
+  ]
 }

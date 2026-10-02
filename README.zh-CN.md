@@ -4,7 +4,7 @@
 
 **用于构建受治理 HTTP 与 MCP 服务的开源 TypeScript 和 Node.js 框架。**
 
-[![源码许可证：MIT](https://img.shields.io/badge/%E6%BA%90%E7%A0%81%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-c9a96e?style=flat-square)](LICENSE)
+[![源码许可证：Apache-2.0](https://img.shields.io/badge/%E6%BA%90%E7%A0%81%E8%AE%B8%E5%8F%AF%E8%AF%81-Apache--2.0-c9a96e?style=flat-square)](LICENSE)
 [![Node.js >=22.19.0 <23 || >=24.3.0 <25](https://img.shields.io/badge/node-%3E%3D22.19.0%20%3C23%20%7C%7C%20%3E%3D24.3.0%20%3C25-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
@@ -81,7 +81,9 @@ meshrix --help
 ```
 
 这些 npm 命令描述发布后的使用路径。目前包尚未发布到公共 registry；首发前，
-会从确切 release tarball 验证安装和启动。
+会从确切 release tarball 验证安装和启动。支持的 npm 产品只有 `meshrix.js` 与
+`@meshrix/gateway`；控制台、连接器和第一方客户端适配器随 `meshrix.js` 提供，
+其它工作区是内部实现边界，不单独发布为 npm 产品。
 
 首发后，可从同一个 origin 启动打包的 Console 与服务端：
 
@@ -192,7 +194,7 @@ npm run verify:acceptance
 
 ## 源码许可证
 
-Meshrix.js 项目拥有的源码采用 MIT 许可证，详见 [LICENSE](LICENSE)。第三方依赖保留其 package
+Meshrix.js 项目拥有的源码采用 Apache-2.0 许可证，详见 [LICENSE](LICENSE)。第三方依赖保留其 package
 metadata 与[第三方声明](THIRD_PARTY_NOTICES.md)中列出的各自条款。
 
 <div align="center">

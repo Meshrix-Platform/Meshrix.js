@@ -12,7 +12,6 @@ import { assertReleaseVersion } from "../../../tools/server-scripts/lib/release-
 
 const INITIAL_VERSION: any = "0.0.1";
 const WORKSPACES: readonly any[] = Object.freeze(["packages/contracts", "apps/server"]);
-const GATEWAY_MANIFEST: any = "packages/protocols/mcp/adapter/gateway-installer/package.json";
 
 async function writeJson(rootDir?: any, relativePath?: any, value?: any) : Promise<any> {
   const filePath: any = path.join(rootDir, relativePath);
@@ -43,11 +42,6 @@ async function createFixture({ lockDependencyVersion = INITIAL_VERSION }: Record
     dependencies: {
       "@meshrix/contracts": INITIAL_VERSION
     }
-  });
-  await writeJson(rootDir, GATEWAY_MANIFEST, {
-    name: "meshrix-mcp-connector",
-    version: INITIAL_VERSION,
-    type: "module"
   });
   await writeJson(rootDir, "package-lock.json", {
     name: "meshrix",
@@ -85,9 +79,16 @@ async function createFixture({ lockDependencyVersion = INITIAL_VERSION }: Record
       }
     }
   });
+  await writeJson(rootDir, "plugins/registry/plugins.json", { plugins: [] });
   await fs.writeFile(
     path.join(rootDir, "CHANGELOG.md"),
     "# Changelog\n\n## Unreleased\n\n- Added the release fixture.\n",
+    "utf8"
+  );
+  await fs.mkdir(path.join(rootDir, "packages/protocols/mcp/adapter"), { recursive: true });
+  await fs.writeFile(
+    path.join(rootDir, "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts"),
+    `export const MCP_NPM_PACKAGE_VERSION: any = "${INITIAL_VERSION}";\n`,
     "utf8"
   );
   return rootDir;
@@ -116,7 +117,7 @@ describe("release package version preparation", () : any => {
         ok: true,
         mode: "write",
         version,
-        manifestCount: 4,
+        manifestCount: 3,
         workspaceCount: 2
       });
       const rootPackage: any = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
@@ -126,9 +127,12 @@ describe("release package version preparation", () : any => {
       const server: any = JSON.parse(
         await fs.readFile(path.join(rootDir, "apps/server/package.json"), "utf8")
       );
-      const gateway: any = JSON.parse(await fs.readFile(path.join(rootDir, GATEWAY_MANIFEST), "utf8"));
       const lock: any = JSON.parse(await fs.readFile(path.join(rootDir, "package-lock.json"), "utf8"));
       const changelog: any = await fs.readFile(path.join(rootDir, "CHANGELOG.md"), "utf8");
+      const mcpReleaseIdentity: any = await fs.readFile(
+        path.join(rootDir, "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts"),
+        "utf8"
+      );
 
       expect(rootPackage.version).toBe(version);
       expect(rootPackage.dependencies).toEqual({
@@ -143,7 +147,6 @@ describe("release package version preparation", () : any => {
         version,
         dependencies: { "@meshrix/contracts": version }
       });
-      expect(gateway.version).toBe(version);
       expect(lock.version).toBe(version);
       expect(lock.packages[""].version).toBe(version);
       expect(lock.packages["packages/contracts"].version).toBe(version);
@@ -157,6 +160,7 @@ describe("release package version preparation", () : any => {
       });
       expect(changelog).toContain("## [1.2.3-beta.1] - 2026-07-11");
       expect(changelog).toContain("- Added the release fixture.");
+      expect(mcpReleaseIdentity).toContain(`MCP_NPM_PACKAGE_VERSION: any = "${version}"`);
       await expect(prepareRelease({ rootDir, version, check: true })).resolves.toMatchObject({
         ok: true,
         mode: "check",
@@ -174,19 +178,43 @@ describe("release package version preparation", () : any => {
       lock.packages[""].workspaces = workspaces;
       for (const [directory, name, isPrivate] of [
         ["plugins/agents/published", "@meshrix/agent-published", false],
-        ["plugins/agents/internal", "@meshrix/agent-internal", true]
+        ["plugins/agents/internal", "@meshrix/agent-internal", true],
+        ["plugins/agents/codex", "@meshrix/agent-codex-adapter", true]
       ] as const) {
         const manifest = { name, version: INITIAL_VERSION, private: isPrivate, dependencies: { "@meshrix/contracts": INITIAL_VERSION } };
         await writeJson(rootDir, `${directory}/package.json`, manifest);
         lock.packages[directory] = manifest;
         lock.packages[`node_modules/${name}`] = { resolved: directory, link: true };
       }
+      const adapterProtocol = "v0.0.1:meshrix:client-adapter-json-stdio-1";
+      const adapterEntry = {
+        id: "agent-codex",
+        path: "plugins/agents/codex",
+        runtime: false,
+        adapter: true,
+        release: false,
+        version: INITIAL_VERSION,
+        adapterContract: {
+          target: "codex",
+          packageName: "@meshrix/agent-codex-adapter",
+          entrypoint: "adapter.mjs",
+          protocol: adapterProtocol
+        }
+      };
+      await writeJson(rootDir, "plugins/registry/plugins.json", { plugins: [adapterEntry] });
+      await writeJson(rootDir, "plugins/agents/codex/adapter.json", {
+        target: "codex",
+        packageName: "@meshrix/agent-codex-adapter",
+        entrypoint: "adapter.mjs",
+        protocol: adapterProtocol,
+        version: INITIAL_VERSION
+      });
       await writeJson(rootDir, "package.json", rootPackage);
       await writeJson(rootDir, "package-lock.json", lock);
 
       const version = "1.2.3";
       await expect(prepareRelease({ rootDir, version, date: "2026-07-11" })).resolves.toMatchObject({
-        ok: true, manifestCount: 6, workspaceCount: 4
+        ok: true, manifestCount: 6, workspaceCount: 5
       });
       const preparedRoot = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
       const preparedLock = JSON.parse(await fs.readFile(path.join(rootDir, "package-lock.json"), "utf8"));
@@ -198,6 +226,10 @@ describe("release package version preparation", () : any => {
         });
         expect(preparedLock.packages[directory].version).toBe(version);
       }
+      expect(JSON.parse(await fs.readFile(path.join(rootDir, "plugins/registry/plugins.json"), "utf8")))
+        .toMatchObject({ plugins: [{ version }] });
+      expect(JSON.parse(await fs.readFile(path.join(rootDir, "plugins/agents/codex/adapter.json"), "utf8")))
+        .toMatchObject({ version });
       await expect(prepareRelease({ rootDir, version, check: true })).resolves.toMatchObject({ ok: true, changedFiles: [] });
     });
   });

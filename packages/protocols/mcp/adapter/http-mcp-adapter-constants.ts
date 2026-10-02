@@ -1,15 +1,3 @@
-import {
-  MCP_CLIENT_TARGETS,
-  MCP_PRIORITY_INSTALL_TARGET,
-  MCP_PRIORITY_INSTALL_TARGETS
-} from "./mcp-release-targets.ts";
-
-export {
-  MCP_CLIENT_TARGETS,
-  MCP_PRIORITY_INSTALL_TARGET,
-  MCP_PRIORITY_INSTALL_TARGETS
-};
-
 export const MCP_PROTOCOL_VERSION: any = "2026-07-28";
 export const DEFAULT_TIMEOUT_MS: any = 300_000;
 export const MCP_INTERFACE_VERSION: any = "v0.0.1:mcp:interface-1";
@@ -24,9 +12,9 @@ export const CATEGORIZED_TOOL_NAMES: any = new Set<any>([
 ]);
 
 export const MCP_SERVER_NAME: any = "meshrix-mcp-server";
-export const MCP_SERVER_VERSION: any = "0.0.1";
-export const MCP_CONNECTOR_PACKAGE_NAME: any = "meshrix-mcp-connector";
-export const MCP_CONNECTOR_VERSION: any = "0.0.1";
+export const MCP_NPM_PACKAGE_NAME: any = "meshrix.js";
+export const MCP_NPM_PACKAGE_VERSION: any = "0.0.1";
+export const MCP_SERVER_VERSION: any = MCP_NPM_PACKAGE_VERSION;
 export const MCP_CONNECTOR_GITHUB_REPO: any = String(process.env.GITHUB_REPOSITORY || "");
 export const MESHRIX_MCP_URL_ENV: any = "MESHRIX_MCP_URL";
 export const MESHRIX_MCP_DISCOVERY_URL_ENV: any = "MESHRIX_MCP_DISCOVERY_URL";

@@ -11,6 +11,21 @@ storage, and optional capability modules behind explicit package and API
 boundaries; the Vue.js Console is a separate workspace connected through
 versioned HTTP APIs.
 
+## npm Products And Private Modules
+
+Meshrix.js supports two npm products: `meshrix.js` installs the complete
+framework runtime, Console assets, MCP connector, and its private first-party
+runtime components; `@meshrix/gateway` provides the independently embeddable
+Gateway API and types. Other workspaces and first-party client adapters remain
+private source modules. Their workspace package boundaries support internal
+ownership and builds but do not create separate npm products or external deep
+import contracts. The root package declares the private runtime bundles it
+owns, while third-party and native dependencies remain normal target-machine
+installations. Client adapters resolve through standard Node package resolution
+from either the installed root package or the declared portable runtime closure,
+and run only after an explicit target action. Separately governed Plugin and
+Service assets keep their own artifact, trust, and activation boundaries.
+
 ## Target Module Map
 
 The table below is the required ownership, direction, and public-boundary map

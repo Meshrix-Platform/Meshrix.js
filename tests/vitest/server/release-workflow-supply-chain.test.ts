@@ -599,11 +599,16 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(dockerfile).not.toContain(["", "root", ".npm"].join("/"));
   });
 
-  it("executes the connector from the canonical npm release set", () : any => {
+  it("declares the MCP connector under the root npm release contract", () : any => {
     const verifier: any = read("tools/server-scripts/verify-npm-package-installability.ts");
-    expect(verifier).toContain('import { discoverReleaseSet } from "./publish-release-set.ts";');
-    expect(verifier).toContain('name === "meshrix-mcp-connector"');
-    expect(verifier).toContain('connectorFiles.includes("dist/lib/mcp-proxy-session.js")');
+    const rootPackage: any = JSON.parse(read("package.json"));
+    expect(verifier).toContain('import { discoverReleaseSet, loadPreparedReleaseSet } from "./publish-release-set.ts";');
+    expect(rootPackage.bin?.["meshrix-mcp"]).toBe(
+      "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js"
+    );
+    expect(verifier).toContain("assertPreparedProductBundleClosure");
+    expect(verifier).toContain("bundledPackageNamesInArtifact(artifact.files)");
+    expect(verifier).toContain("name === rootPackage.name");
     expect(verifier).toContain('"meshrix-mcp", "version", "--json"');
   });
 
@@ -856,14 +861,14 @@ describe("release workflow supply-chain boundary", () : any => {
     }
     const pactiumVersion: any = "0.8.1";
     const pactiumResolved: any = `https://registry.npmjs.org/pactium/-/pactium-${pactiumVersion}.tgz`;
-    for (const manifestPath of [
-      "package.json",
-      "packages/foundation/package.json",
-      "packages/server-runtime/package.json"
-    ]) {
-      const manifest: any = JSON.parse(read(manifestPath));
-      expect(manifest.dependencies.pactium).toBe(pactiumVersion);
-    }
+    const rootManifest: any = JSON.parse(read("package.json"));
+    const foundationManifest: any = JSON.parse(read("packages/foundation/package.json"));
+    const runtimeManifest: any = JSON.parse(read("packages/server-runtime/package.json"));
+    expect(rootManifest.dependencies.pactium).toBe(pactiumVersion);
+    expect(foundationManifest.peerDependencies.pactium).toBe(pactiumVersion);
+    expect(runtimeManifest.peerDependencies.pactium).toBe(pactiumVersion);
+    expect(foundationManifest.dependencies?.pactium).toBeUndefined();
+    expect(runtimeManifest.dependencies?.pactium).toBeUndefined();
     expect(lockfile.packages[""].dependencies.pactium).toBe(pactiumVersion);
     expect(lockfile.packages["node_modules/pactium"]).toMatchObject({
       version: pactiumVersion,

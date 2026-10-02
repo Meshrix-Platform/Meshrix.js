@@ -17,7 +17,7 @@ ordinary use.
 | **Implementation** | Core includes the Server, Web Console, security, storage, jobs, governed operation dispatch, plugin contract, and standard MCP ingress. Optional plugins, independent services, external providers, model services, Agent products, and named-client scenarios retain separate opt-in lifecycles. |
 | **Verification** | `npm test` is the core public regression. `npm run verify:acceptance` is the single product-level functional gate. Focused checks are used only to repair concrete failures before that final gate. |
 | **Operation** | Existing production evidence describes an earlier accepted Core candidate. It does not establish the current gateway candidate's deployment or present service health. A supported deployment uses one `runtime-ui` process with one public origin: Console at `<server-url>/`, API at `<server-url>/api/`, and health at `<server-url>/api/healthz`. |
-| **Publication** | The source repository is public. The root source license is MIT; dependency licenses apply separately. The current release definition is a candidate, and no public release is recorded in [release history](releases/README.md). |
+| **Publication** | The source repository is public. Project-owned source is licensed under Apache-2.0; dependency licenses apply separately. The current release definition is a candidate, and no public release is recorded in [release history](releases/README.md). |
 
 ## Production-use evidence
 

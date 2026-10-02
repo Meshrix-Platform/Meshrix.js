@@ -5,8 +5,21 @@
   "type": "module",
   "license": "Apache-2.0",
   "exports": "./index.mjs",
-  "files": ["index.mjs"],
+  "files": [
+    "index.mjs",
+    "LICENSE"
+  ],
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "plugins/agents/client-adapter-kit"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true
 }

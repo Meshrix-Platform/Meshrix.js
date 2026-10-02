@@ -1,86 +1,70 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-const packageName = "@meshrix/agent-codex-adapter";
-const version = "0.0.1";
-const runnerMocks: any = vi.hoisted(() => ({
-  runInstallCommand: vi.fn(),
-  trustedIntegrity: "sha512-trusted-adapter-integrity",
-  viewOutput: ""
-}));
+import {
+  describeClientAdapter,
+  resolveInstalledClientAdapter
+} from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
+import { MCP_SUPPORTED_TARGETS, mcpClientAdapterForTarget } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts";
 
-vi.mock("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.ts", async (importOriginal?: any) : Promise<any> => ({
-  ...(await importOriginal()),
-  runInstallCommand: runnerMocks.runInstallCommand
-}));
-vi.mock("../../../packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts", async (importOriginal?: any) : Promise<any> => {
-  const original: any = await importOriginal();
-  return {
-    ...original,
-    mcpClientAdapterForTarget(target?: any) : any {
-      const adapter: any = original.mcpClientAdapterForTarget(target);
-      return adapter ? { ...adapter, integrity: runnerMocks.trustedIntegrity } : adapter;
-    }
-  };
-});
-
-import { acquireClientAdapter } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
-
-let cacheRoot = "";
-
-beforeEach(async () : Promise<void> => {
-  cacheRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-client-adapter-runner-"));
-  runnerMocks.viewOutput = "";
-  runnerMocks.runInstallCommand.mockReset().mockImplementation(async (_command?: any, args?: any[]) : Promise<any> => {
-    if (args?.[0] === "view") return { stdout: runnerMocks.viewOutput, stderr: "" };
-    if (args?.[0] === "install") {
-      const prefix: any = args[args.indexOf("--prefix") + 1];
-      const installedPackage: any = path.join(prefix, "node_modules", "@meshrix", "agent-codex-adapter");
-      await fs.mkdir(installedPackage, { recursive: true });
-      await fs.writeFile(path.join(installedPackage, "package.json"), `${JSON.stringify({ name: packageName, version })}\n`);
-      await fs.writeFile(path.join(installedPackage, "adapter.mjs"), "export {};\n");
-      return { stdout: "", stderr: "" };
-    }
-    throw new Error("unexpected_client_adapter_command");
-  });
-});
+let fixtureRoot = "";
 
 afterEach(async () : Promise<void> => {
-  await fs.rm(cacheRoot, { recursive: true, force: true });
+  if (fixtureRoot) await fs.rm(fixtureRoot, { recursive: true, force: true });
+  fixtureRoot = "";
 });
 
-describe("published client-adapter runner npm integrity lookup", () : any => {
-  it.each([
-    ["legacy scalar", JSON.stringify(runnerMocks.trustedIntegrity)],
-    ["npm 12 single-result array", JSON.stringify([runnerMocks.trustedIntegrity])]
-  ])("installs after accepting %s output", async (_label?: any, output?: any) : Promise<void> => {
-    runnerMocks.viewOutput = output;
+describe("installed first-party client adapter resolution", () : any => {
+  it("resolves and validates each adapter shipped with the root product", async () : Promise<void> => {
+    for (const target of MCP_SUPPORTED_TARGETS) {
+      const resolved: any = await resolveInstalledClientAdapter({ target });
+      const trusted: any = mcpClientAdapterForTarget(target);
+      expect(resolved.adapter).toMatchObject({
+        packageName: trusted.packageName,
+        version: trusted.version,
+        source: "meshrix-root-bundle"
+      });
+      expect(path.relative(resolved.packageRoot, resolved.entrypoint)).toBe(trusted.entrypoint);
 
-    const result: any = await acquireClientAdapter({ target: "codex", cacheRoot });
-
-    expect(result.adapter.integrity).toBe(runnerMocks.trustedIntegrity);
-    expect(runnerMocks.runInstallCommand.mock.calls.map(([command, args]: any[]) : any => args[0]))
-      .toEqual(["view", "install"]);
-    expect(runnerMocks.runInstallCommand.mock.calls[0][1].slice(0, 4)).toEqual([
-      "view",
-      `${packageName}@${version}`,
-      "dist.integrity",
-      "--json"
-    ]);
+      const described: any = await describeClientAdapter({ target });
+      expect(described.result).toMatchObject({
+        target,
+        packageName: trusted.packageName,
+        version: trusted.version,
+        protocol: trusted.protocol
+      });
+    }
   });
 
-  it.each([
-    ["a different exact-coordinate value", JSON.stringify("sha512-other-integrity")],
-    ["multiple exact-coordinate results", JSON.stringify([runnerMocks.trustedIntegrity, runnerMocks.trustedIntegrity])]
-  ])("rejects %s before installation", async (_label?: any, output?: any) : Promise<void> => {
-    runnerMocks.viewOutput = output;
+  it("fails closed when the target or installed component is unavailable", async () : Promise<void> => {
+    await expect(resolveInstalledClientAdapter({ target: "untrusted" }))
+      .rejects.toMatchObject({ code: "CLIENT_ADAPTER_TARGET_UNSUPPORTED" });
+    await expect(resolveInstalledClientAdapter({ target: "codex", resolveModule: () => { throw new Error("missing"); } }))
+      .rejects.toMatchObject({ code: "CLIENT_ADAPTER_PACKAGE_MISSING" });
+  });
 
-    await expect(acquireClientAdapter({ target: "codex", cacheRoot }))
-      .rejects.toMatchObject({ code: "CLIENT_ADAPTER_INTEGRITY_MISMATCH" });
-    expect(runnerMocks.runInstallCommand.mock.calls.map(([command, args]: any[]) : any => args[0]))
-      .toEqual(["view"]);
+  it("rejects an installed package whose identity or synchronized release version differs", async () : Promise<void> => {
+    fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-client-component-"));
+    const packageRoot: any = path.join(fixtureRoot, "node_modules", "@meshrix", "agent-codex-adapter");
+    await fs.mkdir(packageRoot, { recursive: true });
+    await fs.writeFile(path.join(packageRoot, "package.json"), JSON.stringify({
+      name: "@meshrix/agent-codex-adapter",
+      version: "9.9.9"
+    }));
+    await fs.writeFile(path.join(packageRoot, "adapter.mjs"), "export {};\n");
+    const resolveModule: any = () => pathToFileURL(path.join(packageRoot, "adapter.mjs")).href;
+
+    await expect(resolveInstalledClientAdapter({ target: "codex", resolveModule }))
+      .rejects.toMatchObject({ code: "CLIENT_ADAPTER_PACKAGE_MISMATCH" });
+    await fs.writeFile(path.join(packageRoot, "package.json"), JSON.stringify({
+      name: "@meshrix/wrong-adapter",
+      version: "0.0.1"
+    }));
+    await expect(resolveInstalledClientAdapter({ target: "codex", resolveModule }))
+      .rejects.toMatchObject({ code: "CLIENT_ADAPTER_PACKAGE_MISMATCH" });
   });
 });

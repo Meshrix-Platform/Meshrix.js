@@ -41,7 +41,7 @@ async function discoverPluginManifests() {
       summary: String(manifest.description || manifest.summary || ""),
       runtime,
       adapter: Boolean(clientAdapter),
-      release: runtime || Boolean(clientAdapter),
+      release: runtime,
       ...(clientAdapter ? {
         adapterContract: {
           target: clientAdapter.target,

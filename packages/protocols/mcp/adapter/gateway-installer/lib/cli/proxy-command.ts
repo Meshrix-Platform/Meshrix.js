@@ -14,7 +14,10 @@ import {
   mcpModernJsonRpcMessage,
   mcpModernRequestHeaders
 } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
-import { MCP_CONNECTOR_VERSION } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 
 export const MCP_STDIO_FRAMING_JSONL: any = "jsonl";
 export const MCP_STDIO_FRAMING_CONTENT_LENGTH: any = "content-length";
@@ -37,8 +40,8 @@ const MCP_UPDATE_NOTIFICATION_FILTER: any = Object.freeze({
 function modernizeOutgoingMcpMessage(message?: any) : any {
   return mcpModernJsonRpcMessage(message, {
     "io.modelcontextprotocol/clientInfo": {
-      name: "meshrix-mcp-connector",
-      version: MCP_CONNECTOR_VERSION
+      name: MCP_NPM_PACKAGE_NAME,
+      version: MCP_NPM_PACKAGE_VERSION
     }
   });
 }

@@ -94,10 +94,10 @@ test("configuration and Pi adapters preserve unrelated state", async (t) => {
   assert.equal(antigravityRemaining.theme, "retained");
   assert.equal("mcpServers" in antigravityRemaining, false);
 
-  const piRequest = { ...base, client: { command: executable, configPath: path.join(root, "pi.json") } };
+  const piRequest = { ...base, client: { command: executable, configPath: path.join(root, "pi.json"), packageSource: "https://registry.invalid/agent-pi-adapter" } };
   assert.equal((await invokeAdapter(pi, "install", piRequest)).installed, true);
   const piState = JSON.parse(await fs.readFile(process.env.MESHRIX_FAKE_CLIENT_STATE, "utf8"));
-  assert.equal(path.basename(piState.lastInstallSource), "pi");
+  assert.equal(piState.lastInstallSource, path.resolve("plugins/agents/pi"));
   assert.equal((await invokeAdapter(pi, "verify", piRequest)).installed, true);
   assert.equal((await invokeAdapter(pi, "uninstall", piRequest)).installed, false);
 });

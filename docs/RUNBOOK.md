@@ -859,13 +859,15 @@ the remaining Real-Machine Verification Workflows and cannot block publication.
 
 Meshrix.js `0.0.1` declares the exact public registry dependency
 `pactium@0.8.1`; `package-lock.json` pins its canonical registry tarball and
-SHA-512 integrity, and the published package metadata declares MIT. The server
-source archive independently retains `vendor/pactium-0.8.0.tgz`, whose original
+SHA-512 integrity, and the resolved Pactium package metadata declares MIT.
+Meshrix.js and its first-party source declare Apache-2.0. The server source
+archive independently retains `vendor/pactium-0.8.0.tgz`, whose original
 GPL-3.0-or-later identity remains governed by the source-package contract. The
 Dockerfile copies that vendor directory, while npm installation resolves the
 runtime dependency from the registry rather than from the archive. These are
-distinct artifacts: the runtime package's MIT metadata does not relabel the
-retained archive or certify the terms of the complete Meshrix.js distribution.
+distinct artifacts: the Pactium runtime dependency's MIT metadata does not
+relabel the retained archive or certify the terms of the complete Meshrix.js
+distribution.
 Publication of integrated Meshrix.js artifacts remains subject to full-package
 license review and the required release authority.
 

@@ -9,6 +9,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import { MCP_PORTABLE_ASSET_PREFIX } from "./lib/mcp-release-common.ts";
+
 const execFileAsync: any = promisify(execFile);
 const DEFAULT_INPUT_DIR: any = "build/release/mcp";
 const DEFAULT_REPORT_PATH: any = "build/reports/mcp-final-release-asset.json";
@@ -155,12 +161,12 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
     || portable?.requiresInstalledNode !== false
     || portable?.executable !== "meshrix-mcp"
     || !/^v\d+\.\d+\.\d+$/u.test(String(portable?.bundledNodeVersion || ""))
-    || typeof connector?.packageName !== "string"
-    || typeof connector?.packageVersion !== "string"
+    || connector?.packageName !== MCP_NPM_PACKAGE_NAME
+    || connector?.packageVersion !== MCP_NPM_PACKAGE_VERSION
   ) {
     throw new Error("mcp_final_release_asset_manifest_semantics_invalid");
   }
-  const archiveName: any = `${connector.packageName}-${connector.packageVersion}-${RELEASE_PLATFORM}.tar.gz`;
+  const archiveName: any = `${MCP_PORTABLE_ASSET_PREFIX}-${connector.packageVersion}-${RELEASE_PLATFORM}.tar.gz`;
   if (
     portable.tarball !== archiveName
     || portable.installArchive !== archiveName

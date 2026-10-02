@@ -9,9 +9,17 @@ import { describe, expect, it } from "vitest";
 
 import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 import {
-  packInstallabilityArtifacts,
+  assertPreparedProductBundleClosure,
+  bundledPackageNamesInArtifact,
+  failureCode,
+  listInstallabilityTarballFiles,
   prepareInstallabilityConsumer
 } from "../../../tools/server-scripts/verify-npm-package-installability.ts";
+import {
+  consumerFailureSummary,
+  NPM_PACKAGE_CONSUMER_FAILURE_CODES,
+  NPM_PACKAGE_CONSUMER_FAILURE_STAGES
+} from "../../../tools/server-scripts/npm-package-consumer.ts";
 
 const execFileAsync: any = promisify(execFile);
 const REPO_ROOT: any = path.resolve(import.meta.dirname, "../../..");
@@ -48,14 +56,15 @@ function npmEnvironment(root?: any, registry?: any) : any {
 
 async function runNpm(args?: any[], cwd?: any, env?: any) : Promise<any> {
   try {
-    return await execFileAsync("npm", args, { cwd, env, encoding: "utf8" });
+    const result = await execFileAsync("npm", args, { cwd, env, encoding: "utf8" });
+    return result;
   } catch (error: any) {
     const code: any = String(error?.code || "unknown").replace(/[^A-Za-z0-9_]+/gu, "_");
     throw new Error(`synthetic_npm_command_failed_${code}`);
   }
 }
 
-async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.1' };\n", scripts = {} }: Record<string, any> = {}) : Promise<any> {
+async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.1' };\n", scripts = {}, license = name === "pactium" ? "MIT" : "Apache-2.0" }: Record<string, any> = {}) : Promise<any> {
   const packageDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}`);
   const packDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}-pack`);
   await fs.mkdir(packageDirectory, { recursive: true });
@@ -64,12 +73,12 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
     name,
     version,
     main,
-    license: "MIT",
+    license,
     dependencies,
     scripts
   }, null, 2)}\n`);
   await fs.writeFile(path.join(packageDirectory, main), index);
-  await fs.writeFile(path.join(packageDirectory, "LICENSE"), "MIT synthetic fixture\n");
+  await fs.writeFile(path.join(packageDirectory, "LICENSE"), `${license} synthetic fixture\n`);
   const environment: any = npmEnvironment(root);
   await fs.mkdir(environment.HOME, { recursive: true });
   await fs.mkdir(environment.npm_config_cache, { recursive: true });
@@ -92,13 +101,111 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
       version,
       resolved: PACTIUM_RESOLVED,
       integrity,
-      license: "MIT"
+      license
     }
   };
 }
 
 describe("npm artifact installability source", () : any => {
-  it("pins the exact public Pactium artifact in each runtime manifest and the root lock", async () : Promise<void> => {
+  it("bounds consumer and controller failure diagnostics to published codes and stages", () : void => {
+    expect(consumerFailureSummary(new Error("npm_package_unapproved_diagnostic_test_only"))).toEqual({
+      success: false,
+      errorCode: "npm_package_consumer_failed"
+    });
+    expect(consumerFailureSummary(new Error("npm_package_console_asset_failed"))).toEqual({
+      success: false,
+      errorCode: "npm_package_console_asset_failed"
+    });
+    expect(consumerFailureSummary(Object.assign(new Error("npm install failed"), {
+      stderr: "npm ERR! code ERESOLVE"
+    }))).toEqual({
+      success: false,
+      errorCode: "npm_package_dependency_resolution_failed"
+    });
+    expect(NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has("ui_browser")).toBe(true);
+    expect(NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has("private_diagnostic_test_only")).toBe(false);
+    expect(failureCode(new Error("npm_package_unapproved_diagnostic_test_only")))
+      .toBe("npm_package_installability_failed");
+    expect(failureCode(new Error("npm_package_consumer_runtime_failed")))
+      .toBe("npm_package_consumer_runtime_failed");
+    expect(NPM_PACKAGE_CONSUMER_FAILURE_CODES.has("npm_package_consumer_runtime_failed")).toBe(false);
+    expect(NPM_PACKAGE_CONSUMER_FAILURE_CODES.has("npm_package_mcp_proxy_failed")).toBe(true);
+  });
+
+  it("accepts exactly the private packages explicitly bundled by the two public products", async () : Promise<void> => {
+    const rootPackage: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package.json"), "utf8"));
+    const gatewayManifest: any = JSON.parse(await fs.readFile(
+      path.join(REPO_ROOT, "packages/gateway/package.json"), "utf8"
+    ));
+    const releaseSet: any = {
+      version: rootPackage.version,
+      packages: [
+        { name: "@meshrix/gateway", version: gatewayManifest.version, directory: "packages/gateway", root: false },
+        { name: rootPackage.name, version: rootPackage.version, directory: ".", root: true }
+      ]
+    };
+    const bundleFiles = (manifest?: any) : string[] => [
+      "package.json",
+      "LICENSE",
+      ...manifest.bundleDependencies.flatMap((name?: any) : string[] => [
+        `node_modules/${name}/package.json`,
+        `node_modules/${name}/LICENSE`
+      ]),
+      ...(manifest.name === rootPackage.name ? ["THIRD_PARTY_NOTICES.md"] : [])
+    ];
+    const artifacts: any[] = [
+      {
+        name: gatewayManifest.name,
+        version: gatewayManifest.version,
+        manifest: gatewayManifest,
+        files: bundleFiles(gatewayManifest)
+      },
+      {
+        name: rootPackage.name,
+        version: rootPackage.version,
+        manifest: rootPackage,
+        files: bundleFiles(rootPackage)
+      }
+    ];
+
+    await expect(assertPreparedProductBundleClosure({
+      rootDir: REPO_ROOT,
+      rootPackage,
+      releaseSet,
+      packedArtifacts: artifacts
+    })).resolves.toMatchObject({
+      publicPackageCount: 2,
+      privateWorkspaceCount: rootPackage.bundleDependencies.length,
+      bundledPackageCountByProduct: {
+        "@meshrix/gateway": gatewayManifest.bundleDependencies.length,
+        "meshrix.js": rootPackage.bundleDependencies.length
+      }
+    });
+    expect(bundledPackageNamesInArtifact([
+      "node_modules/@meshrix/contracts/package.json",
+      "node_modules/@meshrix/contracts/LICENSE"
+    ])).toEqual(["@meshrix/contracts"]);
+    expect(bundledPackageNamesInArtifact([
+      "node_modules/@meshrix/contracts/package.json",
+      "node_modules/@meshrix/unlisted/package.json"
+    ])).toEqual(["@meshrix/contracts", "@meshrix/unlisted"]);
+    expect(() => bundledPackageNamesInArtifact([
+      "node_modules/@meshrix/contracts/node_modules/hidden/package.json"
+    ])).toThrow("npm_package_bundled_package_path_invalid");
+
+    const undeclaredBundle: any = {
+      ...artifacts[1],
+      files: [...artifacts[1].files, "node_modules/@meshrix/unlisted/package.json"]
+    };
+    await expect(assertPreparedProductBundleClosure({
+      rootDir: REPO_ROOT,
+      rootPackage,
+      releaseSet,
+      packedArtifacts: [artifacts[0], undeclaredBundle]
+    })).rejects.toThrow("npm_package_bundled_packages_mismatch");
+  });
+
+  it("pins the root-owned Pactium artifact and declares it as a peer for each private runtime module", async () : Promise<void> => {
     const rootManifest: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package.json"), "utf8"));
     const foundationManifest: any = JSON.parse(await fs.readFile(
       path.join(REPO_ROOT, "packages/foundation/package.json"), "utf8"
@@ -107,8 +214,8 @@ describe("npm artifact installability source", () : any => {
       path.join(REPO_ROOT, "packages/server-runtime/package.json"), "utf8"
     ));
     expect(rootManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
-    expect(foundationManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
-    expect(runtimeManifest.dependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(foundationManifest.peerDependencies.pactium).toBe(PACTIUM_VERSION);
+    expect(runtimeManifest.peerDependencies.pactium).toBe(PACTIUM_VERSION);
     expect(ROOT_LOCK.packages[""].dependencies.pactium).toBe(PACTIUM_VERSION);
     expect(PACTIUM_LOCK).toMatchObject({
       version: PACTIUM_VERSION,
@@ -127,6 +234,9 @@ describe("npm artifact installability source", () : any => {
         version: "0.0.1",
         index: "module.exports = { contractVersion: '0.0.1' };\n"
       });
+      expect(await listInstallabilityTarballFiles(internalArtifact.tarballPath)).toEqual(
+        expect.arrayContaining(["package.json", "index.js", "LICENSE"])
+      );
       const undeclaredRootArtifact: any = await createSyntheticArtifact(root, {
         name: "meshrix.js",
         version: "0.0.1",

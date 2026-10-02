@@ -1,4 +1,4 @@
-import { MCP_PROTOCOL_VERSION, MCP_SERVER_VERSION } from "./http-mcp-adapter-constants.ts";
+import { MCP_NPM_PACKAGE_NAME, MCP_PROTOCOL_VERSION, MCP_SERVER_VERSION } from "./http-mcp-adapter-constants.ts";
 
 export { MCP_PROTOCOL_VERSION, MCP_SERVER_VERSION };
 
@@ -57,7 +57,7 @@ export function mcpRequestMetadata(extra: Record<string, any> = {}) : any {
     [MCP_META_CLIENT_INFO]: isPlainObject(extra[MCP_META_CLIENT_INFO])
       ? extra[MCP_META_CLIENT_INFO]
       : {
-          name: "meshrix-mcp-connector",
+          name: MCP_NPM_PACKAGE_NAME,
           version: MCP_SERVER_VERSION
         },
     ...extra

@@ -4,7 +4,7 @@
 
 **An open-source TypeScript and Node.js framework for governed HTTP and MCP services.**
 
-[![Source license: MIT](https://img.shields.io/badge/source%20license-MIT-c9a96e?style=flat-square)](LICENSE)
+[![Source license: Apache-2.0](https://img.shields.io/badge/source%20license-Apache--2.0-c9a96e?style=flat-square)](LICENSE)
 [![Node.js >=22.19.0 <23 || >=24.3.0 <25](https://img.shields.io/badge/node-%3E%3D22.19.0%20%3C23%20%7C%7C%20%3E%3D24.3.0%20%3C25-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
@@ -91,11 +91,20 @@ The development server listens on `http://127.0.0.1:7228` by default.
 npm install --global meshrix.js
 meshrix-server --help
 meshrix --help
+meshrix-mcp help
 ```
 
 The npm commands describe the consumer path after publication. The package is
 not yet available from the public registry; installation and startup are
-qualified from the exact tarballs before the first release.
+qualified from the exact tarballs before the first release. The `meshrix-mcp`
+command ships in this same root package; no separate connector npm package is
+needed. Generated `npx` commands select `meshrix.js@<version>` and
+`meshrix-mcp` explicitly.
+
+The other supported npm product is `@meshrix/gateway`, for applications that
+embed the Gateway API without installing the full platform. All other
+workspaces, including UI Console and first-party client-adapter modules, are
+private implementation components rather than separate npm products.
 
 To run the packaged Console and server from one origin after publication:
 
@@ -143,8 +152,10 @@ npm run mcp:doctor
 ## Downstream Agent Clients
 
 Clients connect through the standard MCP protocol and operation grants. Optional
-client adapters are packaged separately and enabled explicitly; their product
-names are not part of Core MCP authorization. See [Compatibility](docs/COMPATIBILITY.md) and
+first-party client-adapter components are bundled with `meshrix.js` and invoked
+only for an explicit target action. The adapter modules are private runtime
+components, not separate npm products; client applications remain independent
+external products. See [Compatibility](docs/COMPATIBILITY.md) and
 [Protocols](docs/protocols/PROTOCOLS.md) for the exact scope and status.
 
 ## Repository Layout
@@ -210,7 +221,7 @@ not qualify a package or platform claim.
 
 ## Source license
 
-Meshrix.js project-owned source is licensed under MIT; see [LICENSE](LICENSE).
+Meshrix.js project-owned source is licensed under Apache-2.0; see [LICENSE](LICENSE).
 Third-party dependencies retain their own terms as stated in package metadata
 and [third-party notices](THIRD_PARTY_NOTICES.md).
 

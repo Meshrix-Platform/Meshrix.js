@@ -16,7 +16,13 @@ uninstall. A pre-issued strict `mxak1` API Key must be supplied through protecte
 standard input or the configured environment variable. Shell and PowerShell
 remain narrow launchers for that connector-owned workflow.
 
-Supported targets are backed by pinned operator-supplied external client-adapter packages. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
+The supported target catalog is backed by optional first-party client-adapter
+components bundled with `meshrix.js`. The connector resolves them from its
+installed root and invokes one only after an explicit target action. It does
+not fetch adapters from npm or install them into a separate cache. Each
+component owns target-specific command probing and configuration behavior;
+the connector owns credential custody, the bounded JSON-stdio boundary, and
+the install/uninstall transaction.
 
 This release currently installs local connector-managed clients. OrbStack and
 remote-Linux direct HTTP client modes remain remaining qualification work and

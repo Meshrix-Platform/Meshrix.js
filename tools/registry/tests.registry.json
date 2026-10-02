@@ -678,12 +678,12 @@
       "level": "integration",
       "command": "npm",
       "args": ["run", "verify:local-client-adapters"],
-      "sideEffects": "build-output",
+      "sideEffects": "temp-files",
       "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": ["build/adapters/index.json"]
+      "artifacts": []
     },
     {
       "id": "runtime.capacity-catalog-conformance",

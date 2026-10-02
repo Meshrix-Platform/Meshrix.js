@@ -62,8 +62,14 @@ async function createFixture(): Promise<string> {
   git(["checkout", "--quiet", "-b", "private-branch-marker"]);
   git(["add", "."]);
   git(["commit", "--quiet", "-m", "fixture"]);
-  git(["remote", "add", "origin", "https://fixture-user:HTTP-CREDENTIAL-MARKER@http-private.invalid/team/repo.git"]);
-  git(["remote", "add", "upstream", "ssh://fixture-user:SSH-CREDENTIAL-MARKER@ssh-private.invalid/team/repo.git"]);
+  const httpRemote: any = new URL("https://http-private.invalid/team/repo.git");
+  httpRemote.username = "fixture-user";
+  httpRemote.password = "HTTP-CREDENTIAL-MARKER";
+  const sshRemote: any = new URL("ssh://ssh-private.invalid/team/repo.git");
+  sshRemote.username = "fixture-user";
+  sshRemote.password = "SSH-CREDENTIAL-MARKER";
+  git(["remote", "add", "origin", httpRemote.href]);
+  git(["remote", "add", "upstream", sshRemote.href]);
   return root;
 }
 
@@ -176,7 +182,10 @@ describe("local build-input report generator", () => {
     const root = await createFixture();
     const packagePath = path.join(root, "package.json");
     const metadata = JSON.parse(await fs.readFile(packagePath, "utf8"));
-    metadata.repository.url = "https://fixture-user:METADATA-CREDENTIAL-MARKER@github.com/example/private.git";
+    const repositoryUrl: any = new URL("https://github.com/example/private.git");
+    repositoryUrl.username = "fixture-user";
+    repositoryUrl.password = "METADATA-CREDENTIAL-MARKER";
+    metadata.repository.url = repositoryUrl.href;
     await fs.writeFile(packagePath, `${JSON.stringify(metadata, null, 2)}\n`);
 
     const outputPath = path.join(root, "safe-output.json");

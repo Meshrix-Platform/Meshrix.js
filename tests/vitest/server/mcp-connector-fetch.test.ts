@@ -49,10 +49,11 @@ function runNode(args?: any[]) : Promise<any> {
     const child: any = spawn(process.execPath, args || [], {
       cwd: rootDir,
       env: {
-        HOME: rootDir,
-        USERPROFILE: rootDir,
-        PATH: process.env.PATH || ""
-      },
+      HOME: rootDir,
+      USERPROFILE: rootDir,
+      PATH: process.env.PATH || "",
+      NODE_OPTIONS: "--conditions=source"
+    },
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout: any = "";
@@ -198,7 +199,7 @@ describe("Meshrix connector caller-owned request lifetime", () : any => {
     expect(version.code).toBe(0);
     expect(version.stderr).toBe("");
     expect(JSON.parse(version.stdout)).toMatchObject({
-      packageName: "meshrix-mcp-connector",
+      packageName: "meshrix.js",
       packageVersion: "0.0.1"
     });
 

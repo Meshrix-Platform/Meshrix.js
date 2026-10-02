@@ -1,8 +1,8 @@
 {
   "name": "@meshrix/gateway",
   "version": "0.0.1",
-  "description": "A programmable, policy-aware MCP gateway kernel for private deployments and embedded applications.",
-  "license": "MIT",
+  "description": "Policy-aware MCP gateway for routing and executing service capabilities.",
+  "license": "Apache-2.0",
   "type": "module",
   "engines": {
     "node": ">=22.18.0 <23 || >=24.3.0"
@@ -83,5 +83,20 @@
     "README.md",
     "LICENSE",
     "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/gateway"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bundleDependencies": [
+    "@meshrix/contracts"
   ]
 }

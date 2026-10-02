@@ -6,7 +6,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import { containsMxak1Credential, normalizeBaseUrl, option } from "./basic-utils.ts";
-import { packageJson } from "./constants.ts";
+import { packageInfo } from "./constants.ts";
 import { authHeaders, optionsWithDiscoveredBaseUrl } from "./discovery.ts";
 import { CALLER_OWNED_HTTP_LIFETIME, fetchResponse } from "./http-json-client.ts";
 import { resolveProxyCredentials } from "./proxy-command.ts";
@@ -208,8 +208,8 @@ export async function fetchCommand(options: Record<string, any> = {}) : Promise<
       completed = true;
       return {
         ok: true,
-        packageName: packageJson.name,
-        packageVersion: packageJson.version,
+        packageName: packageInfo.name,
+        packageVersion: packageInfo.version,
         target,
         artifactId,
         outputPath: redactOutputPath(outputPath),
