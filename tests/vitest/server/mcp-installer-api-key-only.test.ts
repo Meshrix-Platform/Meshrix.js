@@ -35,10 +35,15 @@ vi.mock("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/devic
 }));
 
 import { parseArgs } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/basic-utils.ts";
-import { authHeaders, resolveApiKey } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts";
+import { authHeaders, ensureService, resolveApiKey } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts";
 import { installCommand, installTargets } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/install-command.ts";
 import { proxyCommand, resolveProxyCredentials, subscribeToMcpUpdates } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
 import { uninstallTargets } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/uninstall-command.ts";
+import {
+  MCP_INTERFACE_VERSION,
+  MCP_PROTOCOL_VERSION,
+  MCP_STABLE_TOOL_NAME
+} from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 
 const originalToken: any = process.env.MESHRIX_MCP_TOKEN;
 const originalCredentialDir: any = process.env.MESHRIX_MCP_CREDENTIAL_DIR;
@@ -104,6 +109,53 @@ describe("MCP installer API Key-only input", () : any => {
     expect(stdinMocks.readStdin).toHaveBeenCalledTimes(1);
   });
 
+  it("recognizes Meshrix interface markers independently of the standard serverInfo display name", async () : Promise<any> => {
+    const fetchMock: any = vi.fn(async () : Promise<any> => new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        resultType: "complete",
+        supportedVersions: [MCP_PROTOCOL_VERSION],
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": { name: "meshrix-platform", version: "0.1.0-alpha.1" },
+          interfaceVersion: MCP_INTERFACE_VERSION,
+          stableToolName: MCP_STABLE_TOOL_NAME
+        }
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(ensureService("https://meshrix.invalid")).resolves.toMatchObject({ ok: true, status: 200 });
+    const request: any = fetchMock.mock.calls[0][1];
+    const message: any = JSON.parse(request.body);
+    expect(message.method).toBe("server/discover");
+    expect(message.params._meta["io.modelcontextprotocol/protocolVersion"]).toBe(MCP_PROTOCOL_VERSION);
+  });
+
+  it.each([
+    ["unsupported protocol version", { supportedVersions: ["2025-11-25"] }],
+    ["wrong Meshrix interface", { _meta: { interfaceVersion: "other", stableToolName: MCP_STABLE_TOOL_NAME } }],
+    ["wrong stable outlet", { _meta: { interfaceVersion: MCP_INTERFACE_VERSION, stableToolName: "other" } }]
+  ])("rejects an MCP endpoint outside the signed interface contract (%s)", async (_?: any, override: Record<string, any> = {}) : Promise<any> => {
+    const standardMeta: any = {
+      "io.modelcontextprotocol/serverInfo": { name: "meshrix-platform", version: "0.1.0-alpha.1" },
+      interfaceVersion: MCP_INTERFACE_VERSION,
+      stableToolName: MCP_STABLE_TOOL_NAME
+    };
+    const fetchMock: any = vi.fn(async () : Promise<any> => new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        resultType: "complete",
+        supportedVersions: override.supportedVersions || [MCP_PROTOCOL_VERSION],
+        _meta: { ...standardMeta, ...(override._meta || {}) }
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(ensureService("https://meshrix.invalid")).rejects.toThrow(/MCP is not available/u);
+  });
+
   it("persists an installed target credential for proxy startup and deletes it on uninstall", async () : Promise<any> => {
     const discoveryFile: any = path.join(credentialDir, "discovery.json");
     vi.stubGlobal("fetch", vi.fn(async () : Promise<any> => new Response(JSON.stringify({
@@ -111,9 +163,11 @@ describe("MCP installer API Key-only input", () : any => {
       id: 1,
       result: {
         resultType: "complete",
-        supportedVersions: ["2026-07-28"],
+        supportedVersions: [MCP_PROTOCOL_VERSION],
         _meta: {
-          "io.modelcontextprotocol/serverInfo": { name: "Meshrix.js", version: "0.0.1" }
+          "io.modelcontextprotocol/serverInfo": { name: "meshrix-platform", version: "0.1.0-alpha.1" },
+          interfaceVersion: MCP_INTERFACE_VERSION,
+          stableToolName: MCP_STABLE_TOOL_NAME
         }
       }
     }), { status: 200, headers: { "Content-Type": "application/json" } })));
