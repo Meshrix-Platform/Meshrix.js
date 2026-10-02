@@ -19,7 +19,6 @@
             "type": "array",
             "items": { "type": "string" }
           },
-          "timeoutMs": { "type": "integer", "minimum": 1000 },
           "coverage": { "type": "boolean" },
           "dynamic": { "type": "boolean" },
           "trackedArtifacts": {
@@ -99,10 +98,6 @@
             "description": "Primary runtime side effect outside the explicitly listed artifacts. Report files and other exact outputs belong in artifacts, not sideEffects.",
             "type": "string",
             "enum": ["none", "build-output", "temp-files", "network-service", "local-agent-state", "container"]
-          },
-          "timeoutClass": {
-            "type": "string",
-            "enum": ["fast", "standard", "slow"]
           },
           "requiredServices": {
             "type": "array",

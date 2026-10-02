@@ -52,7 +52,7 @@ export function isTransientGithubFailure(stderr?: any) : any {
 export function extractSafeFailureSignals(logText?: any) : any {
   const signals: any = new Set<any>();
   for (const line of String(logText || "").split(/\r?\n/u)) {
-    const suite: any = /\bFAILED ([a-z0-9][a-z0-9._-]{0,127}) \((?:\d+ms|profile timeout)\)/u.exec(line)?.[1];
+    const suite: any = /\bFAILED ([a-z0-9][a-z0-9._-]{0,127}) \(\d+ms\)/u.exec(line)?.[1];
     if (suite) signals.add(`suite:${suite}`);
     const checks: any = /\b(?:productionBackendFailedChecks|failedChecks)=([A-Za-z0-9,]{1,4096})(?:\s|$)/u.exec(line)?.[1];
     if (checks) {
