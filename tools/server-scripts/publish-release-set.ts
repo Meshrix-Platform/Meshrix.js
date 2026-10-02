@@ -24,6 +24,8 @@ const NPM_OIDC_AUDIENCE: any = "npm:registry.npmjs.org";
 const BOOTSTRAP_USER_CONFIG: any = "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n";
 export const PREPARED_RELEASE_SET_FILENAME: any = "meshrix-release-set.json";
 const PREPARED_RELEASE_SET_SCHEMA: any = "meshrix.npm-release-set/v1";
+const PREPARATION_OWNERSHIP_FILENAME: any = ".meshrix-release-set-preparation.json";
+const PREPARATION_OWNERSHIP_SCHEMA: any = "meshrix.npm-release-set-preparation/v1";
 const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
   "dependencies",
   "devDependencies",
@@ -787,7 +789,7 @@ async function packReleaseSet(
   return packed;
 }
 
-async function ensureArtifactDirectory(artifactDirectory?: any, { requireEmpty = false }: Record<string, any> = {}) : Promise<any> {
+async function ensureArtifactDirectory(artifactDirectory?: any) : Promise<any> {
   if (!artifactDirectory) {
     throw publicationError(
       "release_set_artifact_directory_missing",
@@ -818,23 +820,6 @@ async function ensureArtifactDirectory(artifactDirectory?: any, { requireEmpty =
       "The prepared-artifact path must be a directory."
     );
   }
-  if (requireEmpty) {
-    let entries: any[] = [];
-    try {
-      entries = await fs.readdir(resolved);
-    } catch {
-      throw publicationError(
-        "release_set_artifact_directory_invalid",
-        "The prepared-artifact directory could not be read."
-      );
-    }
-    if (entries.length > 0) {
-      throw publicationError(
-        "release_set_artifact_directory_not_empty",
-        "Preparing a release set requires an empty artifact directory."
-      );
-    }
-  }
   return resolved;
 }
 
@@ -851,6 +836,197 @@ function hasExactObjectKeys(value?: any, expected: any[] = []) : any {
   return actual.length === expected.length && actual.every((key?: any, index?: any) : any => (
     key === required[index]
   ));
+}
+
+function preparedArchiveFilename(name?: any, version?: any) : any {
+  return `${String(name).replace(/^@/u, "").replace(/\//gu, "-")}-${version}.tgz`;
+}
+
+function expectedPreparedRows(releaseSet?: any, version: any = releaseSet?.version) : any[] {
+  return releaseSet.packages.map(({ name }: Record<string, any>) : any => ({
+    name,
+    version,
+    filename: preparedArchiveFilename(name, version)
+  }));
+}
+
+function validOwnedArtifactRows(value?: any, releaseSet?: any, version?: any, { integrity = false } = {}) : any {
+  const expected: any[] = expectedPreparedRows(releaseSet, version);
+  if (!Array.isArray(value) || value.length !== expected.length) return false;
+  return value.every((row: any, index: number) : any => {
+    const keys: string[] = integrity
+      ? ["name", "version", "filename", "integrity"]
+      : ["name", "version", "filename"];
+    return hasExactObjectKeys(row, keys) &&
+      row.name === expected[index].name &&
+      row.version === expected[index].version &&
+      row.filename === expected[index].filename &&
+      (!integrity || INTEGRITY_PATTERN.test(String(row.integrity || "")));
+  });
+}
+
+function isOwnedVersion(value?: any) : any {
+  try {
+    return assertReleaseVersion(value) === value;
+  } catch {
+    return false;
+  }
+}
+
+function isCanonicalReleaseTag(version?: any, tag?: any) : any {
+  try {
+    return normalizeRequestedTag(version, tag) === tag;
+  } catch {
+    return false;
+  }
+}
+
+function validPreparationMarker(marker?: any, releaseSet?: any) : any {
+  if (
+    !hasExactObjectKeys(marker, ["schemaVersion", "version", "tag", "processId", "packages"]) ||
+    marker.schemaVersion !== PREPARATION_OWNERSHIP_SCHEMA ||
+    !isOwnedVersion(marker.version) ||
+    !Number.isSafeInteger(marker.processId) ||
+    marker.processId < 1 ||
+    !isCanonicalReleaseTag(marker.version, marker.tag)
+  ) {
+    return false;
+  }
+  return validOwnedArtifactRows(marker.packages, releaseSet, marker.version);
+}
+
+function validPreparedOwnershipManifest(manifest?: any, releaseSet?: any) : any {
+  if (
+    !hasExactObjectKeys(manifest, ["schemaVersion", "version", "tag", "packages"]) ||
+    manifest.schemaVersion !== PREPARED_RELEASE_SET_SCHEMA ||
+    !isOwnedVersion(manifest.version) ||
+    !isCanonicalReleaseTag(manifest.version, manifest.tag)
+  ) {
+    return false;
+  }
+  return validOwnedArtifactRows(manifest.packages, releaseSet, manifest.version, { integrity: true });
+}
+
+async function readRegularJsonFile(directory?: any, filename?: any) : Promise<any> {
+  const filePath: any = path.join(directory, filename);
+  let stat: any;
+  try {
+    stat = await fs.lstat(filePath);
+  } catch {
+    return { exists: false, value: null };
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) return { exists: true, value: null };
+  try {
+    return { exists: true, value: JSON.parse(await fs.readFile(filePath, "utf8")) };
+  } catch {
+    return { exists: true, value: null };
+  }
+}
+
+async function removeOwnedPreparationFiles(directory?: any, releaseSet?: any) : Promise<any> {
+  const entries: string[] = await fs.readdir(directory);
+  if (entries.length === 0) return;
+
+  const markerFile: any = await readRegularJsonFile(directory, PREPARATION_OWNERSHIP_FILENAME);
+  const manifestFile: any = await readRegularJsonFile(directory, PREPARED_RELEASE_SET_FILENAME);
+  const marker: any = markerFile.value;
+  const manifest: any = manifestFile.value;
+  const markerOwned: any = markerFile.exists && validPreparationMarker(marker, releaseSet);
+  const manifestOwned: any = manifestFile.exists && validPreparedOwnershipManifest(manifest, releaseSet);
+  if (markerOwned && isProcessRunning(marker.processId)) {
+    throw publicationError(
+      "release_set_preparation_in_progress",
+      "Another release-set preparation still owns this artifact directory."
+    );
+  }
+  if (!markerOwned && !manifestOwned) {
+    throw publicationError(
+      "release_set_artifact_directory_not_empty",
+      "A non-empty artifact directory can be rebuilt only when its release-set output is identifiable."
+    );
+  }
+  if (markerOwned && manifestOwned && (
+    marker.version !== manifest.version ||
+    marker.tag !== manifest.tag ||
+    marker.packages.some((row: any, index: number) : any => (
+      row.name !== manifest.packages[index]?.name ||
+      row.version !== manifest.packages[index]?.version ||
+      row.filename !== manifest.packages[index]?.filename
+    ))
+  )) {
+    throw publicationError(
+      "release_set_artifact_directory_not_empty",
+      "A non-empty artifact directory contains conflicting release-set ownership records."
+    );
+  }
+
+  const ownedRows: any[] = markerOwned ? marker.packages : manifest.packages;
+  const ownedNames: any = new Set<any>([
+    PREPARED_RELEASE_SET_FILENAME,
+    ...(markerOwned ? [PREPARATION_OWNERSHIP_FILENAME] : []),
+    ...ownedRows.map(({ filename }: Record<string, any>) : any => filename)
+  ]);
+  if (entries.some((entry?: any) : any => !ownedNames.has(entry))) {
+    throw publicationError(
+      "release_set_artifact_directory_not_empty",
+      "A non-empty artifact directory contains files outside the prepared release set."
+    );
+  }
+  for (const entry of entries) {
+    const filePath: any = path.join(directory, entry);
+    const stat: any = await fs.lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw publicationError(
+        "release_set_artifact_directory_not_empty",
+        "A release-set output path is not a regular file and cannot be safely rebuilt."
+      );
+    }
+  }
+
+  await Promise.all(entries.map((entry?: any) : Promise<any> => fs.rm(path.join(directory, entry))));
+}
+
+async function removeOwnedRegularFile(directory?: any, filename?: any) : Promise<any> {
+  const filePath: any = path.join(directory, filename);
+  try {
+    const stat: any = await fs.lstat(filePath);
+    if (stat.isFile() && !stat.isSymbolicLink()) await fs.rm(filePath);
+  } catch {
+    return;
+  }
+}
+
+function isProcessRunning(processId?: any) : any {
+  try {
+    process.kill(processId, 0);
+    return true;
+  } catch (error: any) {
+    return error?.code !== "ESRCH";
+  }
+}
+
+async function writePreparationMarker(directory?: any, releaseSet?: any, tag?: any) : Promise<any> {
+  const markerPath: any = path.join(directory, PREPARATION_OWNERSHIP_FILENAME);
+  const marker: any = {
+    schemaVersion: PREPARATION_OWNERSHIP_SCHEMA,
+    version: releaseSet.version,
+    tag,
+    processId: process.pid,
+    packages: expectedPreparedRows(releaseSet)
+  };
+  const handle: any = await fs.open(markerPath, "wx", 0o600);
+  let writeError: any = null;
+  try {
+    await handle.writeFile(`${JSON.stringify(marker, null, 2)}\n`, "utf8");
+  } catch (error) {
+    writeError = error;
+  } finally {
+    await handle.close();
+  }
+  if (writeError) {
+    await removeOwnedRegularFile(directory, PREPARATION_OWNERSHIP_FILENAME);
+    throw writeError;
+  }
 }
 
 function validatePreparedArtifactRow(row?: any, packageRecord?: any) : any {
@@ -948,21 +1124,66 @@ export async function prepareReleaseSet({
 }: Record<string, any> = {}) : Promise<any> {
   const releaseSet: any = await discoverReleaseSet({ rootDir });
   const tag: any = normalizeRequestedTag(releaseSet.version, requestedTag);
-  const destination: any = await ensureArtifactDirectory(artifactDirectory, { requireEmpty: true });
-  const commandRunner: any = runner || createNpmRunner({ environment });
-  const commandDirectory: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-prepare-"));
-  const manifestPath: any = path.join(destination, PREPARED_RELEASE_SET_FILENAME);
-  const createdTarballs: any[] = [];
-  let manifestWritten: any = false;
+  const destination: any = await ensureArtifactDirectory(artifactDirectory);
   try {
+    const existing: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory: destination });
+    if (existing.tag === tag) {
+      await removeOwnedRegularFile(destination, PREPARATION_OWNERSHIP_FILENAME);
+      return {
+        ok: true,
+        prepared: true,
+        reused: true,
+        version: existing.version,
+        tag: existing.tag,
+        packageCount: existing.packages.length,
+        packages: existing.packages.map(({ name, version, filename, integrity }: Record<string, any>) : any => ({
+          name,
+          version,
+          filename,
+          integrity
+        }))
+      };
+    }
+  } catch {
+    // Incomplete or stale output is repaired below only when its ownership is identifiable.
+  }
+  const manifestPath: any = path.join(destination, PREPARED_RELEASE_SET_FILENAME);
+  let commandDirectory: any = null;
+  let preparationMarkerWritten: any = false;
+  try {
+    await removeOwnedPreparationFiles(destination, releaseSet);
+    await writePreparationMarker(destination, releaseSet, tag);
+    preparationMarkerWritten = true;
+    const commandRunner: any = runner || createNpmRunner({ environment });
+    commandDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-prepare-"));
     const packed: any = await packReleaseSet(
       releaseSet.packages,
       destination,
       commandDirectory,
       commandRunner,
-      createdTarballs,
+      [],
       releaseSet.privatePackages
     );
+    const expectedRows: any[] = expectedPreparedRows(releaseSet);
+    if (packed.some((packageRecord: any, index: number) : any => (
+      packageRecord.filename !== expectedRows[index]?.filename
+    ))) {
+      throw publicationError(
+        "release_set_pack_artifact_invalid",
+        "npm pack returned a filename outside the owned release-set output."
+      );
+    }
+    const outputEntries: string[] = await fs.readdir(destination);
+    const expectedEntries: any = new Set<any>([
+      PREPARATION_OWNERSHIP_FILENAME,
+      ...expectedRows.map(({ filename }: Record<string, any>) : any => filename)
+    ]);
+    if (outputEntries.some((entry?: any) : any => !expectedEntries.has(entry))) {
+      throw publicationError(
+        "release_set_artifact_directory_not_empty",
+        "npm pack wrote files outside the owned release-set output."
+      );
+    }
     for (const packageRecord of packed) {
       if (await sha512IntegrityForFile(packageRecord.tarballPath) !== packageRecord.integrity) {
         throw publicationError(
@@ -987,27 +1208,39 @@ export async function prepareReleaseSet({
       `${JSON.stringify(manifest, null, 2)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 }
     );
-    manifestWritten = true;
+    const prepared: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory: destination });
+    await removeOwnedRegularFile(destination, PREPARATION_OWNERSHIP_FILENAME);
     return {
       ok: true,
       prepared: true,
+      reused: false,
       version: releaseSet.version,
       tag,
-      packageCount: packed.length,
-      packages: manifest.packages
+      packageCount: prepared.packages.length,
+      packages: prepared.packages.map(({ name, version, filename, integrity }: Record<string, any>) : any => ({
+        name,
+        version,
+        filename,
+        integrity
+      }))
     };
   } catch (error) {
-    await Promise.all([
-      ...createdTarballs.map((tarballPath?: any) : Promise<any> => fs.rm(tarballPath, { force: true })),
-      ...(manifestWritten ? [fs.rm(manifestPath, { force: true })] : [])
-    ].map((cleanup: Promise<any>) : Promise<any> => cleanup.catch(() : any => undefined)));
+    if (preparationMarkerWritten) {
+      await Promise.all([
+        ...expectedPreparedRows(releaseSet).map(({ filename }: Record<string, any>) : Promise<any> => (
+          removeOwnedRegularFile(destination, filename)
+        )),
+        removeOwnedRegularFile(destination, PREPARED_RELEASE_SET_FILENAME),
+        removeOwnedRegularFile(destination, PREPARATION_OWNERSHIP_FILENAME)
+      ].map((cleanup: Promise<any>) : Promise<any> => cleanup.catch(() : any => undefined)));
+    }
     if (error instanceof ReleaseSetPublicationError) throw error;
     throw publicationError(
       "release_set_preparation_failed",
       "The release-set artifacts could not be prepared."
     );
   } finally {
-    await fs.rm(commandDirectory, { recursive: true, force: true });
+    if (commandDirectory) await fs.rm(commandDirectory, { recursive: true, force: true });
   }
 }
 

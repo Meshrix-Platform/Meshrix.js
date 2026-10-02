@@ -555,6 +555,100 @@ describe("npm release-set publication", () : any => {
     expect(injected.archivePackCalls).toHaveLength(await packageCount());
   });
 
+  it("reuses only a complete prepared set validated by the canonical loader", async () : Promise<any> => {
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    const first: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    const second: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+
+    expect(first.reused).toBe(false);
+    expect(second).toMatchObject({ ok: true, prepared: true, reused: true, packageCount: await packageCount() });
+    expect(injected.archivePackCalls).toHaveLength(await packageCount());
+    await expect(loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory })).resolves.toMatchObject({
+      version: first.version,
+      tag: first.tag,
+      packages: expect.arrayContaining([expect.objectContaining({ name: "meshrix.js" })])
+    });
+  });
+
+  it("rebuilds an incomplete owned set and can retry after npm pack fails after writing an archive", async () : Promise<any> => {
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    const first: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    const manifest: any = JSON.parse(await fs.readFile(
+      path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME),
+      "utf8"
+    ));
+    await fs.rm(path.join(artifactDirectory, manifest.packages[0].filename));
+
+    const rebuilt: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    expect(rebuilt).toMatchObject({ ok: true, prepared: true, reused: false, version: first.version });
+    await expect(loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory })).resolves.toMatchObject({
+      version: first.version,
+      packages: expect.arrayContaining([expect.objectContaining({ name: "@meshrix/gateway" })])
+    });
+
+    const failedDirectory: any = await newArtifactDirectory();
+    let failFirstPack: any = true;
+    const failAfterWrite: any = async (args?: any, context?: any) : Promise<any> => {
+      const result: any = await injected.runner(args, context);
+      if (args[0] === "pack" && args.includes("--pack-destination") && failFirstPack) {
+        failFirstPack = false;
+        return { ...result, exitCode: 1 };
+      }
+      return result;
+    };
+    await expect(prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory: failedDirectory,
+      runner: failAfterWrite,
+      environment: {}
+    })).rejects.toMatchObject({ code: "release_set_pack_failed" });
+    expect(await fs.readdir(failedDirectory)).toEqual([]);
+    await expect(prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory: failedDirectory,
+      runner: injected.runner,
+      environment: {}
+    })).resolves.toMatchObject({ ok: true, prepared: true, reused: false });
+  });
+
+  it("preserves unrelated directory contents when an incomplete artifact cannot be safely owned", async () : Promise<any> => {
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    await prepareReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
+    const manifestPath: any = path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME);
+    const manifestBefore: string = await fs.readFile(manifestPath, "utf8");
+    await fs.rm(path.join(artifactDirectory, JSON.parse(manifestBefore).packages[0].filename));
+    const userFile: any = path.join(artifactDirectory, "operator-note.txt");
+    await fs.writeFile(userFile, "preserve this user-owned file\n");
+
+    await expect(prepareReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} }))
+      .rejects.toMatchObject({ code: "release_set_artifact_directory_not_empty" });
+    expect(await fs.readFile(userFile, "utf8")).toBe("preserve this user-owned file\n");
+    expect(await fs.readFile(manifestPath, "utf8")).toBe(manifestBefore);
+  });
+
   it.each([
     { label: "legacy", packFormat: "legacy", viewFormat: "legacy" },
     { label: "npm 12", packFormat: "npm12", viewFormat: "npm12" }
