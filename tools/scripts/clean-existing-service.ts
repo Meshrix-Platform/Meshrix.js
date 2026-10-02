@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { stopManagedProcesses } from "./lib/process-lifecycle.ts";
 import { isKnownMeshrixServiceCommand, isMeshrixServiceProcessOwned } from "./lib/service-process-ownership.ts";
 import {
@@ -174,12 +174,8 @@ function portListenerPids(port?: any) : any {
   return listPlatformPortListeners(Number(port));
 }
 
-function terminatePid(pid?: any, force: any = false) : any {
-  return terminatePlatformProcessTree(Number(pid), force ? "SIGKILL" : "SIGTERM");
-}
-
-async function stopPids(pids?: any, options?: any) : Promise<any> {
-  const result: any = await stopManagedProcesses(pids, { signalTree: terminatePid });
+export async function stopPids(pids: Iterable<number>, options: { quiet?: boolean } = {}) : Promise<void> {
+  const result = await stopManagedProcesses(pids, { signalTree: terminatePlatformProcessTree });
   if (result.gracefulFailed.length > 0) log(options, "[clean] graceful process-tree shutdown did not complete; force cleanup was requested");
   if (result.forceSignalled.length > 0) log(options, "[clean] force-stopped remaining owned service process(es)");
   if (result.permissionDenied.length > 0) {
@@ -268,9 +264,11 @@ async function main() : Promise<any> {
   log(options, "[clean] existing Meshrix.js service cleanup complete");
 }
 
-try {
-  await main();
-} catch (error: any) {
-  console.error(error instanceof Error ? error.message : "service_cleanup_failed");
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  try {
+    await main();
+  } catch (error: any) {
+    console.error(error instanceof Error ? error.message : "service_cleanup_failed");
+    process.exitCode = 1;
+  }
 }
