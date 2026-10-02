@@ -1,239 +1,534 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { writeVerificationArtifacts } from "../server-scripts/localize-verify-failure.ts";
+
+import { assertNoLeak } from "../server-scripts/lib/report-evidence-safety.ts";
+import { sanitizeVerificationLog } from "../server-scripts/localize-verify-failure.ts";
+import { loadReleaseDefinition } from "../server-scripts/lib/release-metadata.ts";
+import { sanitizeSensitiveReport } from "../server-scripts/lib/sensitive-report-scan.ts";
+import {
+  runSuiteProcess,
+  sourceNodeEnvironment,
+  type TestSuiteEntry
+} from "../../tests/lib/unified-test-runner-execution.ts";
+export { sourceNodeEnvironment } from "../../tests/lib/unified-test-runner-execution.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-// Job identifiers select the real workflows; engineering commands live only there
-// and in the existing test registry. Never copy their command sequences here.
-export const LOCAL_CI_JOBS = {
-  branch: { workflow: "branch-flow.yml", job: "branch-flow", event: "pull_request" },
-  regression: { workflow: "ci.yml", job: "pull-request-verify", event: "pull_request" },
-  node22: { workflow: "ci.yml", job: "node-22-compatibility", event: "workflow_dispatch" },
-  gateway: { workflow: "gateway-preview.yml", job: "focused-candidate", event: "pull_request" },
-  distribution: { workflow: "gateway-preview.yml", job: "product-distribution", event: "pull_request" },
-  portability: { workflow: "ci.yml", job: "npm-package-portability", event: "workflow_dispatch" },
-  sandbox: { workflow: "nightly-controlled-sandbox.yml", job: "controlled-sandbox", event: "workflow_dispatch" },
-} as const;
-type JobName = keyof typeof LOCAL_CI_JOBS;
-type JobResult = { job: JobName; status: "incomplete" | "passed" | "failed"; exitCode: number | null; reason?: string };
+const DEFAULT_ENGINEERING_PROFILE = "engineering-public";
+const NODE_SOURCE_CONDITION = "--conditions=source";
 
-export function parseLocalCiArguments(argv: string[]): { jobs: JobName[]; list: boolean; baseRef: string } {
-  const jobs: JobName[] = [];
-  let list = false;
-  let baseRef = "nightly";
-  for (let index = 0; index < argv.length; index++) {
+export interface LocalCiOptions {
+  scope: "engineering" | "release";
+  reportPath: string | null;
+  help: boolean;
+}
+
+function repositoryRelativePath(value: string): string {
+  const normalized = value.replaceAll("\\", "/");
+  const resolved = path.resolve(repoRoot, normalized);
+  const relative = path.relative(repoRoot, resolved);
+  if (
+    !value.trim() ||
+    path.isAbsolute(value) ||
+    /^[A-Za-z]:\//u.test(normalized) ||
+    relative === ".." || relative.startsWith(`..${path.sep}`) ||
+    path.posix.normalize(normalized) === "."
+  ) {
+    throw new Error("local_ci_report_path_invalid");
+  }
+  return relative.split(path.sep).join("/");
+}
+
+export function parseLocalCiArguments(argv: readonly string[]): LocalCiOptions {
+  let scope: LocalCiOptions["scope"] = "engineering";
+  let reportPath: string | null = null;
+  let help = false;
+  const seen = new Set<string>();
+
+  for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === "--list") list = true;
-    else if (argument === "--base") {
-      baseRef = argv[++index];
-      if (!["nightly", "stable", "release"].includes(baseRef)) throw new Error("local_ci_invalid_base");
+    if (argument === "--help" || argument === "-h") {
+      help = true;
+      continue;
     }
-    else if (Object.hasOwn(LOCAL_CI_JOBS, argument)) jobs.push(argument as JobName);
-    else throw new Error("local_ci_unknown_job");
-  }
-  return { jobs: jobs.length ? [...new Set(jobs)] : Object.keys(LOCAL_CI_JOBS) as JobName[], list, baseRef };
-}
-
-function readCommand(command: string, args: string[], cwd = repoRoot): string {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  if (result.error || result.status !== 0) throw new Error(`local_ci_${command}_failed`);
-  return result.stdout.trim();
-}
-
-export function decodeActLog(raw: string): string {
-  return raw.split(/\r?\n/u).map((line) => {
-    try {
-      const record: unknown = JSON.parse(line);
-      if (typeof record === "object" && record !== null && "msg" in record && typeof record.msg === "string") {
-        return record.msg;
+    if (argument === "--scope" || argument === "--report") {
+      if (seen.has(argument)) throw new Error("local_ci_duplicate_option");
+      seen.add(argument);
+      const value = argv[++index];
+      if (!value || value.startsWith("--")) throw new Error("local_ci_option_value_missing");
+      if (argument === "--scope") {
+        if (value !== "engineering" && value !== "release") throw new Error("local_ci_scope_invalid");
+        scope = value;
+      } else {
+        reportPath = repositoryRelativePath(value);
       }
-    } catch { /* act startup diagnostics may precede JSON logging. */ }
-    return line;
-  }).join("\n");
-}
-
-export function hasSuccessfulActJob(raw: string, jobId: string): boolean {
-  let result: unknown;
-  for (const line of raw.split(/\r?\n/u)) {
-    try {
-      const record = JSON.parse(line);
-      if (record?.jobID === jobId && typeof record.jobResult === "string") {
-        result = record.dryrun === true ? "dryrun" : record.jobResult;
+      continue;
+    }
+    if (argument.startsWith("--scope=") || argument.startsWith("--report=")) {
+      const separator = argument.indexOf("=");
+      const flag = argument.slice(0, separator);
+      const value = argument.slice(separator + 1);
+      if (seen.has(flag)) throw new Error("local_ci_duplicate_option");
+      seen.add(flag);
+      if (!value) throw new Error("local_ci_option_value_missing");
+      if (flag === "--scope") {
+        if (value !== "engineering" && value !== "release") throw new Error("local_ci_scope_invalid");
+        scope = value;
+      } else {
+        reportPath = repositoryRelativePath(value);
       }
-    } catch { /* Non-JSON startup output cannot establish job completion. */ }
+      continue;
+    }
+    throw new Error("local_ci_argument_unknown");
   }
-  return result === "success";
+
+  return { scope, reportPath, help };
 }
 
-async function runLoggedCommand(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, log: string): Promise<number> {
-  const file = await fs.open(log, "w", 0o600);
+interface SuiteResult {
+  id: string;
+  profile?: string;
+  childSuiteIds?: string[];
+  status: string;
+  reasonCode?: string;
+  requiredService?: string;
+  notRunReason?: string;
+  blockedBy?: string[];
+  phaseId?: string;
+  laneId?: string;
+  cached?: boolean;
+  durationMs?: number;
+  exitCode?: number | null;
+  evidence?: string[];
+}
+
+const OPTIONAL_CAPABILITY_REASONS = new Set([
+  "docker_cli_missing",
+  "docker_context_unavailable",
+  "docker_context_not_local",
+  "docker_daemon_unavailable",
+  "docker_daemon_not_linux",
+  "docker_architecture_unsupported",
+  "docker_architecture_mismatch",
+  "docker_unavailable",
+  "oci_image_platform_mismatch",
+  "podman_cli_missing",
+  "external_endpoint_not_opted_in",
+  "platform_unavailable"
+]);
+
+function hasOptionalCapabilityGap(result: SuiteResult): boolean {
+  return result.status === "not_run"
+    && OPTIONAL_CAPABILITY_REASONS.has(String(result.reasonCode || ""))
+    && (Boolean(result.requiredService) || result.reasonCode === "platform_unavailable");
+}
+
+function laneKey(phaseId: string | undefined, laneId: string | undefined): string {
+  return `${phaseId || ""}/${laneId || ""}`;
+}
+
+export function evaluateEngineeringOutcomes(results: readonly SuiteResult[], runnerExitCode: number | null): {
+  status: "passed" | "failed" | "cancelled";
+  reasonCode?: string;
+  passed: number;
+  failed: number;
+  notRun: number;
+  cancelled: number;
+  optionalNotRun: number;
+} {
+  const byLane = new Map<string, SuiteResult[]>();
+  for (const result of results) {
+    const key = laneKey(result.phaseId, result.laneId);
+    const list = byLane.get(key) ?? [];
+    list.push(result);
+    byLane.set(key, list);
+  }
+
+  const optionalLanes = new Set<string>();
+  for (let pass = 0; pass < byLane.size; pass += 1) {
+    let changed = false;
+    for (const [key, laneResults] of byLane) {
+      if (optionalLanes.has(key)) continue;
+      const onlyOptionalIncomplete = laneResults.every((result) => {
+        if (result.status === "passed") return true;
+        if (hasOptionalCapabilityGap(result)) return true;
+        return result.status === "not_run"
+          && result.reasonCode === "prerequisite_lane_incomplete"
+          && (result.blockedBy || []).length > 0
+          && (result.blockedBy || []).every((blockedLane) => optionalLanes.has(laneKey(result.phaseId, blockedLane)));
+      });
+      if (onlyOptionalIncomplete) {
+        optionalLanes.add(key);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  const passed = results.filter((result) => result.status === "passed").length;
+  const failed = results.filter((result) => result.status === "failed").length;
+  const notRunResults = results.filter((result) => result.status === "not_run");
+  const cancelled = results.filter((result) => result.status === "cancelled").length;
+  const optionalNotRun = notRunResults.filter((result) => hasOptionalCapabilityGap(result)
+    || (result.reasonCode === "prerequisite_lane_incomplete"
+      && (result.blockedBy || []).length > 0
+      && (result.blockedBy || []).every((blockedLane) => optionalLanes.has(laneKey(result.phaseId, blockedLane))))).length;
+  const otherIncomplete = results.length - passed - failed - notRunResults.length - cancelled;
+
+  if (cancelled > 0) return { status: "cancelled", reasonCode: "runner_cancelled", passed, failed, notRun: notRunResults.length, cancelled, optionalNotRun };
+  if (failed > 0 || otherIncomplete > 0 || notRunResults.length !== optionalNotRun || (runnerExitCode !== 0 && notRunResults.length === 0) || passed === 0) {
+    return { status: "failed", reasonCode: failed > 0 ? "selected_flow_failed" : "applicable_flow_incomplete", passed, failed, notRun: notRunResults.length, cancelled, optionalNotRun };
+  }
+  return { status: "passed", passed, failed, notRun: notRunResults.length, cancelled, optionalNotRun };
+}
+
+interface ChildExecution {
+  exitCode: number | null;
+  signal: string | null;
+  cancelled: boolean;
+  durationMs?: number;
+  reasonCode?: string;
+}
+
+async function executeNodeFlow(args: string[], logPath: string, signal: AbortSignal): Promise<ChildExecution> {
+  const file = await fs.open(logPath, "w", 0o600);
+  const entry: TestSuiteEntry = {
+    id: "local-ci.flow",
+    command: process.execPath,
+    args: [NODE_SOURCE_CONDITION, ...args]
+  };
   try {
-    return await new Promise<number>((resolve, reject) => {
-      const child = spawn(binary, args, { cwd, env, stdio: ["ignore", file.fd, file.fd] });
-      let interrupted = false;
-      const interrupt = () => { interrupted = true; child.kill("SIGINT"); };
-      process.once("SIGINT", interrupt);
-      child.once("error", (error) => { process.off("SIGINT", interrupt); reject(error); });
-      child.once("close", (code) => { process.off("SIGINT", interrupt); resolve(interrupted ? 130 : code ?? 1); });
+    const outcome = await runSuiteProcess(entry, {
+      cwd: repoRoot,
+      env: sourceNodeEnvironment(),
+      signal,
+      stdio: ["ignore", file.fd, file.fd]
     });
+    return {
+      exitCode: outcome.exitCode,
+      signal: outcome.signal,
+      cancelled: signal.aborted || outcome.status === "cancelled",
+      ...(Number.isFinite(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
+      ...(outcome.error ? { reasonCode: "node_process_start_failed" } : {})
+    };
   } finally {
     await file.close();
   }
 }
 
-async function main(argv: string[]): Promise<void> {
+async function readJson(filePath: string): Promise<any | null> {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function gitOutput(args: string[]): string | null {
+  const result = spawnSync("git", args, { cwd: repoRoot, encoding: "utf8", windowsHide: true });
+  if (result.error || result.status !== 0) return null;
+  return String(result.stdout || "").trim();
+}
+
+function candidateFacts(): Record<string, string | boolean | null> {
+  const revision = gitOutput(["rev-parse", "--verify", "HEAD"]);
+  const status = spawnSync("git", ["status", "--porcelain", "--untracked-files=normal"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    windowsHide: true
+  });
+  return {
+    revision: revision && /^[a-f0-9]{40,64}$/u.test(revision) ? revision : null,
+    workingTree: status.error || status.status !== 0 ? "unknown" : status.stdout.trim() ? "modified" : "clean"
+  };
+}
+
+function runIdentifier(): string {
+  return `${new Date().toISOString().replace(/[:.]/gu, "-")}-${process.pid}`;
+}
+
+function displayPath(filePath: string): string {
+  return path.relative(repoRoot, filePath).split(path.sep).join("/");
+}
+
+async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  const tempPath = `${filePath}.${process.pid}.tmp`;
+  await fs.writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  await fs.rename(tempPath, filePath);
+}
+
+async function saveSanitizedLog(rawLogPath: string, destination: string): Promise<void> {
+  const raw = await fs.readFile(rawLogPath, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  });
+  await fs.writeFile(destination, sanitizeVerificationLog(raw, repoRoot), { mode: 0o600 });
+  await fs.rm(rawLogPath, { force: true });
+}
+
+function suiteFlowResults(runnerReport: any, reportPath: string): SuiteResult[] {
+  if (!runnerReport || runnerReport.reportLeakScan !== true || !Array.isArray(runnerReport.suites)
+    || !Array.isArray(runnerReport.executionProcesses)
+    || runnerReport.suites.length !== runnerReport.executionProcesses.length) {
+    throw new Error("local_ci_runner_report_invalid");
+  }
+  return runnerReport.suites.map((result: any) => {
+    const status = String(result.status || "unknown");
+    const reasonCode = typeof result.reasonCode === "string" ? result.reasonCode
+      : status === "failed" ? "command_failed"
+        : status === "cancelled" ? "command_cancelled"
+          : status === "not_run" ? "not_run_reason_unclassified"
+            : status === "passed" ? undefined : "result_unclassified";
+    return {
+      id: String(result.id || "unknown-suite"),
+      childSuiteIds: Array.isArray(result.childSuiteIds) ? result.childSuiteIds.map(String) : [String(result.id || "unknown-suite")],
+      status,
+      ...(reasonCode ? { reasonCode } : {}),
+      ...(typeof result.requiredService === "string" ? { requiredService: result.requiredService } : {}),
+      ...(typeof result.notRunReason === "string" ? { notRunReason: result.notRunReason } : {}),
+      ...(Array.isArray(result.blockedBy) ? { blockedBy: result.blockedBy.map(String) } : {}),
+      ...(typeof result.phaseId === "string" ? { phaseId: result.phaseId } : {}),
+      ...(typeof result.laneId === "string" ? { laneId: result.laneId } : {}),
+      ...(typeof result.cached === "boolean" ? { cached: result.cached } : {}),
+      ...(Number.isFinite(result.durationMs) ? { durationMs: result.durationMs } : {}),
+      ...(Number.isInteger(result.exitCode) || result.exitCode === null ? { exitCode: result.exitCode } : {}),
+      evidence: [reportPath]
+    };
+  });
+}
+
+async function runTestProfile(profile: string, rawReportPath: string, rawLogPath: string, signal: AbortSignal): Promise<{
+  execution: ChildExecution;
+  flows: SuiteResult[];
+  summary: ReturnType<typeof evaluateEngineeringOutcomes> | null;
+  runnerReport?: any;
+}> {
+  const reportArgument = displayPath(rawReportPath);
+  const args = ["tests/run.ts", "--profile", profile, "--continue-on-failure", "--strict-platform", "--report", reportArgument];
+  const execution = await executeNodeFlow(args, rawLogPath, signal);
+  const runnerReport = await readJson(rawReportPath);
+  if (!runnerReport) {
+    return { execution, flows: [], summary: null };
+  }
+  const runnerReportArtifact = path.join(path.dirname(rawLogPath), "test-runner-report.json");
+  await writeJsonAtomic(runnerReportArtifact, sanitizeSensitiveReport(runnerReport));
+  const flows = suiteFlowResults(runnerReport, displayPath(runnerReportArtifact));
+  const summary = evaluateEngineeringOutcomes(flows, execution.exitCode);
+  await fs.rm(rawReportPath, { force: true });
+  return { execution, flows, summary, runnerReport };
+}
+
+async function runReleaseAcceptance(rawLogPath: string, signal: AbortSignal): Promise<{
+  execution: ChildExecution;
+  flow: SuiteResult;
+  profile: string;
+}> {
+  const definition = await loadReleaseDefinition(repoRoot);
+  const profile = String(definition?.acceptance?.profile || "").trim();
+  if (!profile) throw new Error("local_ci_release_profile_missing");
+  const acceptanceScript = path.join(repoRoot, "tools/server-scripts/verify-platform-acceptance.ts");
+  const execution = await executeNodeFlow([
+    acceptanceScript,
+    "--profile",
+    profile
+  ], rawLogPath, signal);
+  const receiptPath = path.join(repoRoot, "build/reports/accepted-candidate.json");
+  const acceptedCandidate = await readJson(receiptPath);
+  const passed = execution.exitCode === 0 && !execution.cancelled && acceptedCandidate !== null;
+  const flow: SuiteResult = {
+    id: "platform-acceptance",
+    profile,
+    status: execution.cancelled ? "cancelled" : passed ? "passed" : "failed",
+    ...(!passed && !execution.cancelled ? { reasonCode: "platform_acceptance_failed" } : {}),
+    ...(execution.durationMs !== undefined ? { durationMs: execution.durationMs } : {}),
+    ...(passed ? { evidence: ["build/reports/accepted-candidate.json"] } : {})
+  };
+  return { execution, flow, profile };
+}
+
+function currentNativeEnvironment(): Record<string, string> {
+  const osName = process.platform === "win32" ? "windows" : process.platform;
+  const architecture = process.arch === "x64" ? "amd64" : process.arch;
+  return {
+    os: osName,
+    architecture,
+    platform: `${osName}/${architecture}`,
+    nodeVersion: process.version
+  };
+}
+
+function helpText(): string {
+  return [
+    "Meshrix.js local verification",
+    "",
+    "Usage:",
+    "  npm run ci:local",
+    "  npm run ci:local -- --scope release",
+    "",
+    "Options:",
+    "  --scope engineering|release  Select ordinary verification or release acceptance preparation.",
+    "  --report <repo-relative-path>  Write the structured result to a deterministic path."
+  ].join("\n");
+}
+
+async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
   const options = parseLocalCiArguments(argv);
-  if (options.list) {
-    for (const name of options.jobs) console.log(`${name}: .github/workflows/${LOCAL_CI_JOBS[name].workflow} / ${LOCAL_CI_JOBS[name].job}`);
+  if (options.help) {
+    process.stdout.write(`${helpText()}\n`);
     return;
   }
-  const binary = process.env.MESHRIX_CI_ACT_BINARY || "act";
-  const uid = process.getuid?.();
-  const gid = process.getgid?.();
-  if (!uid || gid === undefined) throw new Error("local_ci_requires_non_root_posix_operator");
-  const actVersion = readCommand(binary, ["--version"]);
-  const candidate = readCommand("git", ["rev-parse", "HEAD"]);
-  const headRef = readCommand("git", ["symbolic-ref", "--short", "HEAD"]);
-  const origin = readCommand("git", ["remote", "get-url", "origin"]);
-  const headRepository = origin.match(/(?:github\.com[:/])([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?$/u)?.[1];
-  if (!headRepository) throw new Error("local_ci_requires_github_origin");
-  if (readCommand("git", ["diff", "HEAD", "--name-only"])) throw new Error("local_ci_commit_changes_before_snapshot");
-  const dockerHost = process.env.DOCKER_HOST || readCommand("docker", ["context", "inspect", "--format", "{{.Endpoints.docker.Host}}"]);
-  if (!dockerHost.startsWith("unix://")) throw new Error("local_ci_requires_local_docker_socket");
-  const socketGroup = (await fs.stat(dockerHost.slice("unix://".length))).gid;
-  // Desktop daemons map the socket to group 0; Linux preserves its host group.
-  const socketGroups = [...new Set([0, socketGroup])].map((group) => `--group-add ${group}`).join(" ");
-  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-ci-"));
-  await fs.chmod(scratch, 0o700);
-  const home = path.join(scratch, "home");
-  const temporary = path.join(scratch, "tmp");
-  const checkout = path.join(scratch, "source");
-  const diagnostics = path.join(repoRoot, "build/local-ci", new Date().toISOString().replaceAll(":", "-"));
-  await Promise.all([home, temporary, diagnostics].map((directory) => fs.mkdir(directory, { recursive: true, mode: 0o700 })));
-  const userConfig = path.join(home, "user.npmrc");
-  const globalConfig = path.join(home, "global.npmrc");
-  await Promise.all([userConfig, globalConfig].map((file) => fs.writeFile(file, "", { mode: 0o600 })));
-  const results: JobResult[] = [];
+
+  const runId = runIdentifier();
+  const runDirectory = path.join(repoRoot, "build/local-ci", runId);
+  const logDirectory = path.join(runDirectory, "logs");
+  const reportRelative = options.reportPath || `build/local-ci/${runId}/results.json`;
+  const reportPath = path.resolve(repoRoot, reportRelative);
+  const rawLogPath = path.join(runDirectory, ".local-ci-output.raw");
+  const rawRunnerReportPath = path.join(runDirectory, ".runner-results.raw.json");
+  const sanitizedLogPath = path.join(logDirectory, "verification.log");
+  const startedAt = new Date();
+  const cancellation = new AbortController();
+  let receivedSignal: "SIGINT" | "SIGTERM" | null = null;
+  const interrupt = (signal: "SIGINT" | "SIGTERM"): void => {
+    receivedSignal = signal;
+    cancellation.abort(signal);
+  };
+  const onSigint = (): void => interrupt("SIGINT");
+  const onSigterm = (): void => interrupt("SIGTERM");
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+
+  await fs.mkdir(logDirectory, { recursive: true, mode: 0o700 });
+  const candidate = candidateFacts();
+  let flows: SuiteResult[] = [];
+  let execution: ChildExecution | null = null;
+  let outcome: ReturnType<typeof evaluateEngineeringOutcomes> | null = null;
+  let environmentFacts: any = null;
+  let selectedProfile: string | null = options.scope === "engineering" ? DEFAULT_ENGINEERING_PROFILE : null;
+  let setupReasonCode: string | null = null;
+  const scope = options.scope;
+  const startedScope = options.scope;
+
   try {
-    readCommand("git", ["clone", "--quiet", "--no-hardlinks", "--no-checkout", repoRoot, checkout]);
-    readCommand("git", ["checkout", "--quiet", "--detach", candidate], checkout);
-    // The snapshot contains tracked source only, including real Git identity;
-    // no local build, ignored cache, untracked private evidence, or npmrc is copied.
-    readCommand("git", ["remote", "set-url", "origin", `https://github.com/${headRepository}.git`], checkout);
-    const event = path.join(scratch, "event.json");
-    await fs.writeFile(event, JSON.stringify({
-      act: true,
-      pull_request: { head: { ref: headRef, sha: candidate, repo: { full_name: headRepository } }, base: { ref: options.baseRef } },
-      repository: { default_branch: "nightly", full_name: "Meshrix-Platform/Meshrix.js" },
-    }), { mode: 0o600 });
-    const env: NodeJS.ProcessEnv = {
-      PATH: process.env.PATH, HOME: home, XDG_CONFIG_HOME: home,
-      TMPDIR: temporary, DOCKER_HOST: dockerHost,
-    };
-    const imageIdFile = path.join(scratch, "runner-image-id");
-    const imageLog = path.join(scratch, "runner-image.log");
-    const imageExit = await runLoggedCommand("docker", ["build", "--platform", "linux/amd64",
-      "--build-arg", `CI_UID=${uid}`, "--build-arg", `CI_GID=${gid}`,
-      "--iidfile", imageIdFile, "tools/ci"], checkout, env, imageLog);
-    await writeVerificationArtifacts(await fs.readFile(imageLog, "utf8"), path.join(diagnostics, "runner-image"));
-    if (imageExit !== 0) throw new Error("local_ci_runner_image_failed");
-    const runnerImage = (await fs.readFile(imageIdFile, "utf8")).trim();
-    if (!/^sha256:[a-f0-9]{64}$/u.test(runnerImage)) throw new Error("local_ci_runner_image_invalid");
-    for (const name of options.jobs) {
-      const job = LOCAL_CI_JOBS[name];
-      const result: JobResult = { job: name, status: "incomplete", exitCode: null };
-      results.push(result);
-      try {
-        // Each job receives a new checkout and empty dependency/cache volumes.
-        readCommand("git", ["reset", "--hard", candidate], checkout);
-        readCommand("git", ["clean", "-ffdx"], checkout);
-        const log = path.join(scratch, `${name}.log`);
-        const directory = path.join(diagnostics, name);
-        console.log(`[local-ci] ${name}: started (${candidate.slice(0, 12)})`);
-        const exitCode = await runLoggedCommand(binary, [job.event,
-          "--workflows", `.github/workflows/${job.workflow}`, "--job", job.job,
-          "--eventpath", event, "--actor", "local-ci", "--defaultbranch", "nightly",
-          "--platform", `ubuntu-latest=${runnerImage}`,
-          "--platform", `ubuntu-24.04=${runnerImage}`,
-          "--container-architecture", "linux/amd64",
-          "--container-daemon-socket", dockerHost,
-          "--container-options", `--volume ${scratch}:${scratch} ${socketGroups}`,
-          "--env", `TMPDIR=${temporary}`, "--env", `HOME=${home}`, "--env", "CI=true",
-          "--env", `npm_config_cache=${temporary}/${name}-npm-cache`,
-          "--env", `npm_config_userconfig=${userConfig}`, "--env", `npm_config_globalconfig=${globalConfig}`,
-          "--env-file", "/dev/null", "--secret-file", "/dev/null", "--var-file", "/dev/null", "--input-file", "/dev/null",
-          "--action-cache-path", path.join(scratch, "actions"), "--action-offline-mode",
-          "--no-cache-server", "--pull=false", "--bind", "--rm", "--json",
-        ], checkout, env, log);
-        result.exitCode = exitCode;
-        const raw = await fs.readFile(log, "utf8");
-        await writeVerificationArtifacts(decodeActLog(raw), path.join(directory, "runner"));
-        const requiredDiagnostics: string[] = [];
-        const innerDiagnostics = name === "regression" ? "build/ci-diagnostics"
-          : name === "distribution" ? "build/ci-distribution-diagnostics" : undefined;
-        // Redirected workflow output is complete only in its own diagnostics owner;
-        // the act console contains at most its tail. Preserve both before cleanup.
-        if (innerDiagnostics) {
-          requiredDiagnostics.push("verification.log", "regression.json");
-          const source = path.join(checkout, innerDiagnostics);
-          if (await fs.stat(source).then(() => true, () => false)) {
-            await fs.cp(source, directory, { recursive: true });
-          }
-          // The command may have been interrupted before its workflow export.
-          // Raw output stays in the private snapshot; only its sanitized copy survives.
-          const rawLog = path.join(checkout, name === "regression"
-            ? "build/ci-private/pr-regression.log" : "build/ci-private/product-distribution.log");
-          const report = path.join(checkout, name === "regression"
-            ? "build/test-reports/latest.json" : "build/reports/product-distribution.json");
-          const partial = await fs.readFile(rawLog, "utf8").catch((error: NodeJS.ErrnoException) => {
-            if (error.code === "ENOENT") return null;
-            throw error;
-          });
-          if (partial !== null) await writeVerificationArtifacts(partial, directory, report);
-        }
-        const reports = name === "sandbox"
-          ? ["controlled-execution-sandbox", "execution-sandbox-oci-conformance", "opaque-sandbox-custody", "execution-launcher-boundary"]
-          : name === "portability" ? ["npm-package-installability"] : [];
-        if (reports.length) {
-          await fs.mkdir(directory, { recursive: true });
-          for (const report of reports) {
-            requiredDiagnostics.push(`${report}.json`);
-            const source = path.join(checkout, `build/reports/${report}.json`);
-            if (await fs.stat(source).then(() => true, () => false)) await fs.copyFile(source, path.join(directory, `${report}.json`));
-          }
-        }
-        const completeDiagnostics = (await Promise.all(requiredDiagnostics.map((file) =>
-          fs.stat(path.join(directory, file)).then((stat) => stat.isFile() && stat.size > 0, () => false)))).every(Boolean);
-        result.reason = exitCode !== 0 ? "executor_failed"
-          : !hasSuccessfulActJob(raw, job.job) ? "successful_job_terminal_missing"
-          : !completeDiagnostics ? "required_diagnostics_missing" : undefined;
-        result.status = result.reason ? "failed" : "passed";
-      } catch {
-        result.status = "failed";
-        result.reason = "job_setup_or_diagnostics_failed";
+    if (scope === "release") {
+      const result = await runReleaseAcceptance(rawLogPath, cancellation.signal);
+      execution = result.execution;
+      flows = [result.flow];
+      selectedProfile = result.profile;
+      outcome = {
+        status: result.flow.status === "cancelled" ? "cancelled" : result.flow.status === "passed" ? "passed" : "failed",
+        ...(result.flow.reasonCode ? { reasonCode: result.flow.reasonCode } : {}),
+        passed: result.flow.status === "passed" ? 1 : 0,
+        failed: result.flow.status === "failed" ? 1 : 0,
+        notRun: 0,
+        cancelled: result.flow.status === "cancelled" ? 1 : 0,
+        optionalNotRun: 0
+      };
+    } else {
+      const profile = DEFAULT_ENGINEERING_PROFILE;
+      const result = await runTestProfile(profile, rawRunnerReportPath, rawLogPath, cancellation.signal);
+      execution = result.execution;
+      flows = result.flows;
+      selectedProfile = profile;
+      outcome = result.summary;
+      if (!result.runnerReport) setupReasonCode = "runner_report_missing";
+      if (result.runnerReport?.environment) {
+        const observed = result.runnerReport.environment.localExecution;
+        environmentFacts = observed ? {
+          native: observed.native,
+          docker: observed.docker,
+          serviceCapabilities: result.runnerReport.environment.serviceCapabilities || {}
+        } : { native: currentNativeEnvironment() };
       }
-      console.log(`[local-ci] ${name}: ${result.status}${result.reason ? ` (${result.reason})` : ""}; ${path.relative(repoRoot, path.join(diagnostics, name))}`);
-      if (result.exitCode === 130) break;
+      if (!outcome && execution.cancelled) {
+        outcome = { status: "cancelled", reasonCode: "runner_cancelled", passed: 0, failed: 0, notRun: 0, cancelled: 1, optionalNotRun: 0 };
+      }
+      if (!outcome && !execution.cancelled) {
+        outcome = { status: "failed", reasonCode: "runner_report_invalid", passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0 };
+      }
+    }
+  } catch {
+    setupReasonCode = "local_ci_setup_failed";
+    if (cancellation.signal.aborted) {
+      outcome = { status: "cancelled", reasonCode: "runner_cancelled", passed: 0, failed: 0, notRun: 0, cancelled: 1, optionalNotRun: 0 };
+    } else {
+      outcome = { status: "failed", reasonCode: setupReasonCode, passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0 };
     }
   } finally {
-    await fs.writeFile(path.join(diagnostics, "results.json"), JSON.stringify({ candidate, executor: actVersion,
-      environment: "local Ubuntu 24.04 linux/amd64 containers (emulated on non-amd64 hosts)", selectedJobs: options.jobs,
-      unexecutedJobs: options.jobs.filter((name) => !results.some((result) => result.job === name)),
-      results }, null, 2) + "\n", { mode: 0o600 });
-    await fs.rm(scratch, { recursive: true, force: true });
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+    try {
+      await fs.rm(rawRunnerReportPath, { force: true });
+    } catch {
+      setupReasonCode = "raw_report_cleanup_failed";
+      outcome = { status: "failed", reasonCode: setupReasonCode, passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0 };
+    }
+    try {
+      await saveSanitizedLog(rawLogPath, sanitizedLogPath);
+    } catch {
+      setupReasonCode = "log_sanitization_failed";
+      outcome = { status: "failed", reasonCode: setupReasonCode, passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0 };
+      await fs.rm(rawLogPath, { force: true });
+    }
   }
-  process.exitCode = results.length !== options.jobs.length || results.some((result) => result.status !== "passed") ? 1 : 0;
+
+  const finishedAt = new Date();
+  const finalSummary = outcome || {
+    status: "failed" as const,
+    reasonCode: "result_summary_missing",
+    passed: 0,
+    failed: 1,
+    notRun: 0,
+    cancelled: 0,
+    optionalNotRun: 0
+  };
+  const report = {
+    schemaVersion: "meshrix:local-ci-result:1",
+    verifier: "tools/scripts/local-ci.ts",
+    runId,
+    scope: startedScope,
+    profile: selectedProfile,
+    candidate,
+    executor: { runtime: "node", version: process.version },
+    environment: environmentFacts || { native: currentNativeEnvironment() },
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationMs: finishedAt.getTime() - startedAt.getTime(),
+    runner: execution ? {
+      exitCode: execution.exitCode,
+      signal: execution.signal,
+      cancelled: execution.cancelled,
+      ...(execution.reasonCode ? { reasonCode: execution.reasonCode } : {}),
+      ...(receivedSignal ? { receivedSignal } : {})
+    } : null,
+    summary: {
+      ...finalSummary,
+      applicableScopeReady: finalSummary.status === "passed",
+      coverageReady: finalSummary.status === "passed" && finalSummary.notRun === 0
+    },
+    flows: flows.map((flow) => ({
+      ...flow,
+      ...(flow.evidence ? { evidence: flow.evidence } : { evidence: [displayPath(sanitizedLogPath)] })
+    })),
+    logs: [displayPath(sanitizedLogPath)],
+    ...(setupReasonCode ? { setupReasonCode } : {})
+  };
+  assertNoLeak(report, "local ci report");
+  await writeJsonAtomic(reportPath, report);
+  process.stdout.write(`[local-ci] ${finalSummary.status}; ${displayPath(reportPath)}\n`);
+  process.exitCode = finalSummary.status === "passed" ? 0
+    : finalSummary.status === "cancelled" ? receivedSignal === "SIGTERM" ? 143 : 130
+      : 1;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main(process.argv.slice(2)).catch((error: unknown) => {
-    const code = error instanceof Error && /^local_ci_[a-z_]+$/u.test(error.message)
-      ? error.message : "local_ci_setup_or_diagnostics_failed";
-    console.error(`[local-ci] ${code}; check act, Docker, and a committed local candidate`);
+  main().catch(() => {
+    process.stderr.write("[local-ci] local_ci_setup_failed\n");
     process.exitCode = 1;
   });
 }

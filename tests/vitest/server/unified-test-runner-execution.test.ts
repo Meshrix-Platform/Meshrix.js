@@ -1,11 +1,15 @@
 import { EventEmitter } from "node:events";
+import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   planTestExecutionPhases,
   profileInherits,
+  isCachedTestResultReusable,
+  mergeInheritedProfileExecution,
   notRunSuiteResult,
+  resolveRequiredServiceApplicability,
   runTestPhaseLanes,
   runSuiteProcess,
   summarizeTestResults,
@@ -36,6 +40,71 @@ describe("unified test runner execution lifecycle", () : any => {
     expect(profileInherits(profiles, "release", "core")).toBe(true);
     expect(profileInherits(profiles, "core", "audit")).toBe(false);
     expect(profileInherits(profiles, "cyclicA", "core")).toBe(false);
+  });
+
+  it("inherits the parent phases only when an extending profile declares appended phases", () => {
+    const parent = {
+      mergeVitestProcesses: true,
+      cachePassedResults: true,
+      phases: [{ id: "core", lanes: [{ id: "functional", suites: ["core-suite"] }] }]
+    };
+    const extension = {
+      phases: [{ id: "extension", lanes: [{ id: "delivery", suites: ["extension-suite"] }] }]
+    };
+    expect(mergeInheritedProfileExecution(parent, extension)).toEqual({
+      mergeVitestProcesses: true,
+      cachePassedResults: true,
+      phases: [...parent.phases, ...extension.phases]
+    });
+    expect(mergeInheritedProfileExecution(parent, { cachePassedResults: false })).toEqual({
+      mergeVitestProcesses: true,
+      cachePassedResults: false
+    });
+  });
+
+  it("distinguishes missing required capability from a selected service probe failure", () => {
+    expect(resolveRequiredServiceApplicability(["docker"], {
+      docker: { status: "unavailable", reasonCode: "docker_daemon_unavailable" }
+    })).toEqual({
+      status: "not_run",
+      requiredService: "docker",
+      reasonCode: "docker_daemon_unavailable"
+    });
+    expect(resolveRequiredServiceApplicability(["oci-conformance-native-image"], {
+      "oci-conformance-native-image": { status: "failed", reasonCode: "oci_image_inspect_failed" }
+    })).toEqual({
+      status: "failed",
+      requiredService: "oci-conformance-native-image",
+      reasonCode: "oci_image_inspect_failed"
+    });
+  });
+
+  it("reuses same-candidate side-effect results while validating prepared release archives", async () => {
+    const cached = { status: "passed" };
+    const temporarySuite = { ...suite("fixture.temp-files"), sideEffects: "temp-files" };
+    const rootDir = path.resolve("test-root");
+    expect(await isCachedTestResultReusable(temporarySuite, cached, { rootDir })).toBe(true);
+
+    const prepareSuite: TestSuiteEntry = {
+      id: "release.npm-package-prepare",
+      command: "npm",
+      args: ["run", "release:publish-npm", "--", "--prepare", "--artifact-dir", "build/release/npm-set"],
+      sideEffects: "build-output"
+    };
+    const validatePreparedReleaseSet = vi.fn(async () => ({ packages: [] }));
+    expect(await isCachedTestResultReusable(prepareSuite, cached, {
+      rootDir,
+      validatePreparedReleaseSet
+    })).toBe(true);
+    expect(validatePreparedReleaseSet).toHaveBeenCalledWith({
+      rootDir,
+      artifactDirectory: path.resolve(rootDir, "build/release/npm-set")
+    });
+
+    expect(await isCachedTestResultReusable(prepareSuite, cached, {
+      rootDir,
+      validatePreparedReleaseSet: async () => { throw new Error("prepared output missing"); }
+    })).toBe(false);
   });
 
   it("records unstarted commands without fabricated execution timestamps", () : any => {
@@ -178,6 +247,38 @@ describe("unified test runner execution lifecycle", () : any => {
 
     expect(result).toMatchObject({ status: "failed", error: "spawn denied", exitCode: null });
     expect(result.startedAt).toBeTruthy();
+  });
+
+  it("keeps the registry command identity while executing a portable Node CLI argv", async () => {
+    const entry = { id: "fixture.npm", command: "npm", args: ["run", "build"] };
+    const child: any = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.pid = null;
+    child.kill = vi.fn(() => true);
+    let actualCommand = "";
+    let actualArgs: string[] = [];
+    const resultPromise = runSuiteProcess(entry, {
+      cwd: process.cwd(),
+      executionCommand: process.execPath,
+      executionArgs: ["/runtime/npm-cli.js", ...entry.args],
+      stdio: ["ignore", 1, 2],
+      spawnImpl: (command: string, args: string[]) => {
+        actualCommand = command;
+        actualArgs = args;
+        queueMicrotask(() => {
+          child.exitCode = 0;
+          child.emit("close", 0, null);
+        });
+        return child;
+      }
+    });
+
+    const result = await resultPromise;
+    expect(actualCommand).toBe(process.execPath);
+    expect(actualArgs).toEqual(["/runtime/npm-cli.js", "run", "build"]);
+    expect(result.command).toBe("npm run build");
+    expect(result.status).toBe("passed");
   });
 });
 

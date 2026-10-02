@@ -1,50 +1,97 @@
 import { describe, expect, it } from "vitest";
-import { decodeActLog, hasSuccessfulActJob, parseLocalCiArguments } from "../../../tools/scripts/local-ci.ts";
+import {
+  evaluateEngineeringOutcomes,
+  parseLocalCiArguments,
+  sourceNodeEnvironment
+} from "../../../tools/scripts/local-ci.ts";
 import { sanitizeVerificationLog } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
-describe("local workflow execution boundary", () => {
-  it("rejects publishing jobs and credential forwarding before executing act", () => {
-    for (const argument of ["release", "publish", "--secret", "--env-file", "--workflows"]) {
-      expect(() => parseLocalCiArguments([argument])).toThrow("local_ci_unknown_job");
-    }
+describe("automatic local verification entry", () => {
+  it("defaults to the registered engineering scope and accepts a repository-relative report", () => {
+    expect(parseLocalCiArguments([])).toMatchObject({
+      scope: "engineering",
+      reportPath: null,
+      help: false
+    });
+    expect(parseLocalCiArguments([
+      "--report",
+      "build/ci-diagnostics/local-ci/results.json"
+    ])).toMatchObject({
+      scope: "engineering",
+      reportPath: "build/ci-diagnostics/local-ci/results.json"
+    });
+    expect(parseLocalCiArguments(["--scope=release", "--report=build/ci-diagnostics/release.json"]))
+      .toMatchObject({ scope: "release", reportPath: "build/ci-diagnostics/release.json" });
   });
 
-  it("requires the selected job's real successful terminal record", () => {
-    const log = (record: object) => JSON.stringify(record);
-    expect(hasSuccessfulActJob(log({ jobID: "check", jobResult: "success" }), "check")).toBe(true);
-    for (const record of [
-      { jobID: "other", jobResult: "success" },
-      { job: "check", jobResult: "success" },
-      { jobID: "check", jobResult: "skipped" },
-      { jobID: "check", jobResult: "failure" },
-      { jobID: "check", jobResult: "success", dryrun: true },
-      { jobID: "check", msg: "success" },
-    ]) expect(hasSuccessfulActJob(log(record), "check")).toBe(false);
-    expect(hasSuccessfulActJob("", "check")).toBe(false);
-    expect(hasSuccessfulActJob([
-      log({ jobID: "check", jobResult: "success" }),
-      log({ jobID: "check", jobResult: "failure" }),
-    ].join("\n"), "check")).toBe(false);
+  it("rejects platform selection, stage recursion, and report escape", () => {
+    for (const args of [
+      ["--platform", "linux"],
+      ["--arch", "amd64"],
+      ["--worker", "core-public"],
+      ["--report", "../../outside.json"],
+      ["--report", ""],
+      ["--scope", "engineering", "--scope", "release"]
+    ]) expect(() => parseLocalCiArguments(args)).toThrow();
   });
 
-  it("selects the real promotion target without accepting arbitrary event overrides", () => {
-    expect(parseLocalCiArguments(["branch", "--base", "stable"]).baseRef).toBe("stable");
-    for (const args of [["--base"], ["--base", "untrusted"], ["--eventpath", "event.json"]]) {
-      expect(() => parseLocalCiArguments(args)).toThrow();
-    }
+  it("passes the source export condition to every child without duplicating it", () => {
+    expect(sourceNodeEnvironment({ NODE_OPTIONS: "--max-old-space-size=4096" }).NODE_OPTIONS)
+      .toBe("--max-old-space-size=4096 --conditions=source");
+    expect(sourceNodeEnvironment({ NODE_OPTIONS: "--conditions=source" }).NODE_OPTIONS)
+      .toBe("--conditions=source");
   });
 
-  it("keeps runtime output redacted after decoding act's JSON transport", () => {
-    const value = decodeActLog([
-      JSON.stringify({ msg: "stdout | tests/vitest/server/example.test.ts" }),
-      JSON.stringify({ msg: "synthetic runtime payload" }),
-      JSON.stringify({ msg: " FAIL tests/vitest/server/example.test.ts:12" }),
-      JSON.stringify({ msg: "AssertionError: expected 1 to equal 2" }),
+  it("keeps optional capability gaps visible while qualifying complete applicable native work", () => {
+    const outcome = evaluateEngineeringOutcomes([
+      { id: "core", status: "passed", phaseId: "core", laneId: "backend" },
+      {
+        id: "sandbox-runtime",
+        status: "not_run",
+        reasonCode: "docker_daemon_unavailable",
+        requiredService: "docker",
+        phaseId: "engineering",
+        laneId: "sandbox-runtime"
+      },
+      {
+        id: "sandbox-convergence",
+        status: "not_run",
+        reasonCode: "prerequisite_lane_incomplete",
+        blockedBy: ["sandbox-runtime"],
+        phaseId: "engineering",
+        laneId: "sandbox-convergence"
+      }
+    ], 1);
+    expect(outcome).toMatchObject({
+      status: "passed",
+      passed: 1,
+      failed: 0,
+      notRun: 2,
+      optionalNotRun: 2
+    });
+  });
+
+  it("does not excuse a selected failure, unknown not-run reason, or cancellation", () => {
+    expect(evaluateEngineeringOutcomes([
+      { id: "selected", status: "failed", phaseId: "p", laneId: "l" }
+    ], 1)).toMatchObject({ status: "failed", failed: 1 });
+    expect(evaluateEngineeringOutcomes([
+      { id: "unknown", status: "not_run", reasonCode: "unexpected_reason", phaseId: "p", laneId: "l" }
+    ], 1)).toMatchObject({ status: "failed", notRun: 1 });
+    expect(evaluateEngineeringOutcomes([
+      { id: "cancelled", status: "cancelled", phaseId: "p", laneId: "l" }
+    ], 130)).toMatchObject({ status: "cancelled", cancelled: 1 });
+  });
+
+  it("retains useful sanitized failure diagnostics without retaining runtime payloads", () => {
+    const safe = sanitizeVerificationLog([
+      "stdout | tools/server-scripts/example.ts",
+      "synthetic runtime payload",
+      " FAIL tests/vitest/server/example.test.ts:12",
+      "AssertionError: expected 1 to equal 2"
     ].join("\n"));
-    const safe = sanitizeVerificationLog(value);
     expect(safe).not.toContain("synthetic runtime payload");
     expect(safe).toContain("example.test.ts:12");
     expect(safe).toContain("expected 1 to equal 2");
-    expect(safe.split("\n")).toHaveLength(4);
   });
 });
