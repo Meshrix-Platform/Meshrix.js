@@ -6,7 +6,8 @@ import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 
 const execFileAsync: any = promisify(execFile);
 const registry: any = process.env.MESHRIX_NPM_REGISTRY || "";
@@ -15,6 +16,8 @@ const planPath: any = process.env.MESHRIX_NPM_PLAN || "/input/consumer-plan.json
 const platform: any = process.env.MESHRIX_NPM_PLATFORM || `${process.platform}/${process.arch}`;
 const runtimeArchitecture: any = process.arch === "x64" ? "amd64" : process.arch;
 export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
+  "npm_package_module_identity_mismatch",
+  "npm_package_gateway_embed_failed",
   "npm_package_adapter_cli_describe_failed",
   "npm_package_adapter_cli_identity_invalid",
   "npm_package_adapter_cli_missing",
@@ -72,7 +75,8 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_STAGES: ReadonlySet<string> = new Set(
   "runtime_exports",
   "schema_worker",
   "ui_browser",
-  "ui_types",
+  "module_identity",
+  "gateway_embed",
   "package_types",
   "plan_loading"
 ]);
@@ -165,16 +169,6 @@ function packageRuntimeSpecifiers(manifest?: any) : string[] {
     .map(({ specifier }: Record<string, any>) : any => specifier);
 }
 
-function isVueBrowserConsumer(manifest?: any) : boolean {
-  return Object.hasOwn(manifest?.peerDependencies || {}, "vue")
-    || publicEntries(manifest).some(({ runtimeTarget }: Record<string, any>) : any => /\.(?:vue|css)$/iu.test(runtimeTarget));
-}
-
-function commandEntries(binField?: any) : any[] {
-  if (typeof binField === "string") return [{ name: "meshrix", path: binField }];
-  if (!binField || typeof binField !== "object" || Array.isArray(binField)) return [];
-  return Object.entries(binField).map(([name, filePath]: any[]) : any => ({ name, path: filePath }));
-}
 
 function npmCommand() : any {
   return process.platform === "win32" ? "npm.cmd" : "npm";
@@ -204,8 +198,9 @@ function npmEnv(overrides: Record<string, any> = {}) : any {
   };
 }
 
-async function launchBrowser() : Promise<any> {
-  const { chromium } = await import("@playwright/test");
+async function launchBrowser(toolsDirectory: string) : Promise<any> {
+  const toolRequire = createRequire(path.join(toolsDirectory, "package.json"));
+  const { chromium } = await import(pathToFileURL(toolRequire.resolve("@playwright/test")).href);
   return chromium.launch({
     executablePath: "/usr/bin/chromium",
     env: { ...process.env, HOME: process.env.HOME || "/tmp/home", XDG_RUNTIME_DIR: process.env.TMPDIR || "/tmp" },
@@ -230,10 +225,10 @@ async function npm(args?: any[], cwd?: any, environment?: any, input?: string) :
 
 async function installConsumer({ record, base, typeTools, vueTools, onStage = () => {} }: Record<string, any>) : Promise<any> {
   const consumerDirectory: any = path.join(base, record.root ? "meshrix-root-consumer" : `leaf-${safeName(record.name)}`);
-  const devDependencies: Record<string, any> = record.ui
+  const devDependencies: Record<string, any> = record.root
     ? vueTools
     : typeTools && record.hasTypes
-      ? { typescript: typeTools.typescript }
+      ? { typescript: typeTools.typescript, "@types/node": typeTools.node }
       : {};
   onStage("npm_install");
   await fs.mkdir(consumerDirectory, { recursive: true });
@@ -256,7 +251,7 @@ async function installConsumer({ record, base, typeTools, vueTools, onStage = ()
 
   const runtimeSpecifiers: string[] = packageRuntimeSpecifiers(installedManifest);
   const runtimeProbePath: any = path.join(consumerDirectory, "meshrix-runtime-exports.mjs");
-  if (!record.ui) {
+  {
     onStage("runtime_exports");
     await fs.writeFile(runtimeProbePath, `for (const specifier of ${JSON.stringify(runtimeSpecifiers)}) await import(specifier);\n`, "utf8");
     if (runtimeSpecifiers.length > 0) await run(process.execPath, [runtimeProbePath], consumerDirectory, npmEnv());
@@ -264,7 +259,7 @@ async function installConsumer({ record, base, typeTools, vueTools, onStage = ()
 
   const typeSpecifiers: string[] = packageTypeSpecifiers(installedManifest);
   if (typeSpecifiers.length > 0) {
-    onStage(record.ui ? "ui_types" : "package_types");
+    onStage("package_types");
     const imports: any = typeSpecifiers.map((specifier?: any, index?: any) : any => `import type * as PublicEntry${index} from ${JSON.stringify(specifier)};`).join("\n");
     const publicTypeProbe: any = path.join(consumerDirectory, "meshrix-public-entries.ts");
     await fs.writeFile(publicTypeProbe, `${imports}\nexport type PublicEntries = [${typeSpecifiers.map((_specifier?: any, index?: any) : any => `typeof PublicEntry${index}`).join(", ")}];\n`, "utf8");
@@ -277,27 +272,30 @@ async function installConsumer({ record, base, typeTools, vueTools, onStage = ()
     name: record.name,
     version: record.version,
     directDependencyOnly: true,
-    consumerKind: record.ui ? "vue-browser" : "node",
-    runtimeExportCount: record.ui ? 0 : runtimeSpecifiers.length,
+    consumerKind: record.root ? "platform" : "gateway",
+    runtimeExportCount: runtimeSpecifiers.length,
     typeExportCount: typeSpecifiers.length,
-    installLifecycleCompleted: true,
-    ui: record.ui === true
+    installLifecycleCompleted: true
   };
-  if (record.ui) {
-    onStage("ui_browser");
-    result.browser = await runVueBrowserConsumer({ manifest: installedManifest, cwd: consumerDirectory });
-  }
   if (record.root) {
+    const installedRoot = path.dirname(packageManifestPath);
+    onStage("module_identity");
+    result.moduleIdentity = await verifyInstalledModuleIdentity(installedRoot);
+    onStage("adapter_cli");
+    await runInstalledAdapterDescriptions({ cwd: consumerDirectory, installedRoot, rootManifest: installedManifest });
+    onStage("ui_browser");
+    const uiManifest = JSON.parse(await fs.readFile(path.join(installedRoot, "node_modules/@meshrix/ui-console/package.json"), "utf8"));
+    const uiDirectory = path.join(installedRoot, ".verification-ui");
+    await fs.mkdir(uiDirectory, { recursive: true });
+    result.browser = await runVueBrowserConsumer({ manifest: uiManifest, cwd: uiDirectory, toolsDirectory: consumerDirectory });
     onStage("installed_runtime");
     await runRootRuntimeConsumer({ cwd: consumerDirectory, rootManifest: installedManifest });
   }
   if (record.name === "@meshrix/gateway") {
     onStage("schema_worker");
     await runSchemaWorkerProbe({ cwd: consumerDirectory });
-  }
-  if (record.name.startsWith("@meshrix/agent-") && installedManifest.bin) {
-    onStage("adapter_cli");
-    result.adapterCliCount = await runAdapterDescribeCommands({ cwd: consumerDirectory, manifest: installedManifest });
+    onStage("gateway_embed");
+    result.embeddedExamples = await runGatewayExamples(consumerDirectory);
   }
   return result;
 }
@@ -306,18 +304,50 @@ function safeName(value?: any) : any {
   return String(value || "package").replace(/^@/u, "").replace(/[^a-z0-9]+/giu, "-").replace(/^-+|-+$/gu, "").toLowerCase();
 }
 
-async function runAdapterDescribeCommands({ cwd, manifest }: Record<string, any>) : Promise<number> {
-  const bins = commandEntries(manifest.bin);
-  assert.ok(bins.length > 0, "npm_package_adapter_cli_missing");
-  for (const entry of bins) {
-    const result: any = await npm(["exec", "--offline", "--", entry.name, "describe"], cwd, undefined, "");
-    const payload: any = JSON.parse(result.stdout);
-    assert.equal(payload.ok, true, "npm_package_adapter_cli_describe_failed");
-    assert.equal(payload.result.packageName, manifest.name, "npm_package_adapter_cli_identity_invalid");
-    assert.equal(payload.result.version, manifest.version, "npm_package_adapter_cli_version_invalid");
+/** Check actual Node resolution without a custom loader or rewritten package metadata. */
+export async function verifyInstalledModuleIdentity(installedRoot: string): Promise<{ aliasCount: number; componentCount: number; sharedRegistry: boolean }> {
+  const rootManifest = JSON.parse(await fs.readFile(path.join(installedRoot, "package.json"), "utf8"));
+  const rootRequire = createRequire(path.join(installedRoot, "package.json"));
+  let aliasCount = 0;
+  const components: string[] = rootManifest.bundleDependencies || [];
+  for (const directory of [installedRoot, ...components.map((name) => path.join(installedRoot, "node_modules", name))]) {
+    const manifestPath = path.join(directory, "package.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    const ownerRequire = createRequire(manifestPath);
+    for (const [alias, target] of Object.entries(manifest.imports || {}) as [string, any][]) {
+      const rootTarget = rootManifest.imports?.[alias];
+      const rootDefault = typeof rootTarget === "string" ? rootTarget : rootTarget?.default;
+      const canonical = typeof rootDefault === "string" && rootDefault.startsWith("@meshrix/")
+        ? rootDefault
+        : typeof target === "string" ? target : target?.default;
+      if (typeof canonical !== "string" || !canonical.startsWith("@meshrix/")) continue;
+      assert.equal(ownerRequire.resolve(alias), rootRequire.resolve(canonical), "npm_package_module_identity_mismatch");
+      aliasCount += 1;
+    }
   }
-  report.cli.adapterDescribeCount = Number(report.cli.adapterDescribeCount || 0) + bins.length;
-  return bins.length;
+  const registry = "@meshrix/foundation/security/authorization/tag-store-provider-registry";
+  const viaRoot = await import(pathToFileURL(rootRequire.resolve(registry)).href);
+  const runtimeRequire = createRequire(path.join(installedRoot, "node_modules/@meshrix/server-runtime/package.json"));
+  const viaRuntime = await import(pathToFileURL(runtimeRequire.resolve("#meshrix/foundation/security/authorization/tag-store-provider-registry")).href);
+  assert.equal(viaRoot, viaRuntime, "npm_package_module_identity_mismatch");
+  return { aliasCount, componentCount: components.length, sharedRegistry: true };
+}
+
+async function runInstalledAdapterDescriptions({ cwd, installedRoot, rootManifest }: Record<string, any>): Promise<void> {
+  const connectorRoot = path.dirname(path.dirname(path.join(installedRoot, rootManifest.bin["meshrix-mcp"])));
+  const probe = path.join(cwd, "meshrix-adapter-probe.mjs");
+  await fs.writeFile(probe, `import assert from "node:assert/strict";
+import { describeClientAdapter } from ${JSON.stringify(pathToFileURL(path.join(connectorRoot, "lib/cli/client-adapter-runner.js")).href)};
+import { MCP_SUPPORTED_TARGETS } from ${JSON.stringify(pathToFileURL(path.join(connectorRoot, "mcp-release-targets.js")).href)};
+for (const target of MCP_SUPPORTED_TARGETS) {
+  const described = await describeClientAdapter({ target });
+  assert.equal(described.result.target, target);
+}
+process.stdout.write(JSON.stringify({ count: MCP_SUPPORTED_TARGETS.length }));
+`, "utf8");
+  const result = JSON.parse((await run(process.execPath, [probe], cwd, npmEnv())).stdout);
+  assert.equal(result.count, 7, "npm_package_adapter_cli_describe_failed");
+  report.cli.adapterDescribeCount = result.count;
 }
 
 async function runRootRuntimeConsumer({ cwd, rootManifest }: Record<string, any>) : Promise<void> {
@@ -361,12 +391,12 @@ async function runRootRuntimeConsumer({ cwd, rootManifest }: Record<string, any>
   await run(process.execPath, [sqliteProbe], cwd, npmEnv());
   report.sqlite = { installedNativeBindingLoaded: true, insertSelectRoundTrip: true };
 
-  const migrationProbe: any = path.join(cwd, "meshrix-migration-probe.mjs");
+  const migrationProbe: any = path.join(cwd, "node_modules", rootManifest.name, ".verification-migration.mjs");
   await fs.writeFile(migrationProbe, `import assert from "node:assert/strict";\nimport { createRequire } from "node:module";\nimport { pathToFileURL } from "node:url";\nimport { runMigrations } from "@meshrix/foundation/storage/sqlite-migrations";\nconst require = createRequire(pathToFileURL(${JSON.stringify(path.join(cwd, "package.json"))}));\nconst Database = require("better-sqlite3");\nconst db = new Database(${JSON.stringify(path.join(testData, "migration.sqlite"))});\nrunMigrations(db, [{ version: 1, up: (database) => database.exec("CREATE TABLE migration_probe (value TEXT NOT NULL)") }, { version: 2, up: (database) => database.prepare("INSERT INTO migration_probe (value) VALUES (?)").run("packaged-migration") }]);\nassert.equal(db.pragma("user_version", { simple: true }), 2);\nassert.equal(db.prepare("SELECT value FROM migration_probe").get().value, "packaged-migration");\nrunMigrations(db, [{ version: 1, up: () => { throw new Error("applied migration reran"); } }, { version: 2, up: () => { throw new Error("applied migration reran"); } }]);\nassert.equal(db.pragma("user_version", { simple: true }), 2);\ndb.close();\n`, "utf8");
   await run(process.execPath, [migrationProbe], cwd, npmEnv());
   report.migrations = { packagedRunner: true, orderedTransactions: true, schemaVersionPersisted: true, appliedVersionsAreIdempotent: true };
 
-  await runInstalledOfflineRestore({ cwd, testData });
+  await runInstalledOfflineRestore({ cwd, testData, installedRoot: path.join(cwd, "node_modules", rootManifest.name) });
 
   await runPackagedServerUi({ cwd, rootManifest });
 }
@@ -557,7 +587,7 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
   }
 }
 
-async function runInstalledOfflineRestore({ cwd, testData }: Record<string, any>) : Promise<void> {
+async function runInstalledOfflineRestore({ cwd, testData, installedRoot }: Record<string, any>) : Promise<void> {
   const sourceRoot: any = path.join(testData, "restore-source");
   const backupRoot: any = path.join(testData, "restore-backups");
   const targetRoot: any = path.join(testData, "restore-target");
@@ -565,7 +595,7 @@ async function runInstalledOfflineRestore({ cwd, testData }: Record<string, any>
   await fs.mkdir(path.dirname(targetCustodyFile), { recursive: true });
   await fs.writeFile(targetCustodyFile, "{\"custody\":\"preserve\"}\n", "utf8");
 
-  const setupPath: any = path.join(cwd, "meshrix-installed-restore-setup.mjs");
+  const setupPath: any = path.join(installedRoot, ".verification-restore-setup.mjs");
   await fs.writeFile(setupPath, `import assert from "node:assert/strict";\nimport { createStorageKernel } from "@meshrix/foundation/storage/storage-kernel";\nimport { createStorageProvider } from "@meshrix/foundation/storage/storage-provider";\nconst sourceRoot = ${JSON.stringify(sourceRoot)};\nconst kernel = createStorageKernel({ userDataPath: sourceRoot });\nkernel.close();\nconst provider = createStorageProvider({ userDataPath: sourceRoot });\nconst backup = await provider.createBackup({ label: "npm-candidate-installed-restore" });\nassert.match(backup.backupId, /^backup_[A-Za-z0-9_.-]+$/u);\nprocess.stdout.write(JSON.stringify({ backupId: backup.backupId }));\n`, "utf8");
   const restoreEnv: any = npmEnv({
     MESHRIX_BACKUP_ROOT: backupRoot,
@@ -590,6 +620,27 @@ async function runInstalledOfflineRestore({ cwd, testData }: Record<string, any>
   assert.equal(appliedResult.result.integrity.verified, true, "npm_package_installed_restore_apply_integrity_failed");
   assert.equal(await fs.readFile(targetCustodyFile, "utf8"), "{\"custody\":\"preserve\"}\n");
   report.offlineRestore = { installedCli: true, previewReadOnly: true, applyVerified: true, integrityVerified: true, excludedCustodyPreserved: true };
+}
+
+async function runGatewayExamples(cwd: string): Promise<{ typed: boolean; executed: number; platformDependenciesAbsent: boolean }> {
+  const examples = path.join(cwd, "gateway-examples");
+  await fs.cp(path.join(path.dirname(planPath), "gateway-examples"), examples, { recursive: true });
+  const sources = (await fs.readdir(examples)).filter((file) => file.endsWith(".ts")).map((file) => path.join(examples, file));
+  await run(process.execPath, [path.join(cwd, "node_modules/typescript/bin/tsc"), "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2022", "--strict", "--skipLibCheck", "--rewriteRelativeImportExtensions", "--outDir", "gateway-example-dist", ...sources], cwd, npmEnv());
+  const expectations: [string, RegExp][] = [
+    ["faithful-tool-proxy.js", /kind: 'complete'[\s\S]*value: 'kept'/u],
+    ["mrtr-input.js", /kind: 'complete'[\s\S]*accepted/u],
+    ["shared-artifact.js", /shared bytes/u]
+  ];
+  for (const [file, expected] of expectations) {
+    const result = await run(process.execPath, [path.join(cwd, "gateway-example-dist", file)], cwd, npmEnv());
+    assert.match(result.stdout, expected, "npm_package_gateway_embed_failed");
+  }
+  const consumerRequire = createRequire(path.join(cwd, "package.json"));
+  for (const name of ["@meshrix/foundation", "better-sqlite3", "@meshrix/ui-console"]) {
+    assert.throws(() => consumerRequire.resolve(`${name}/package.json`), { code: "MODULE_NOT_FOUND" });
+  }
+  return { typed: true, executed: expectations.length, platformDependenciesAbsent: true };
 }
 
 async function runSchemaWorkerProbe({ cwd }: Record<string, any>) : Promise<void> {
@@ -635,7 +686,7 @@ async function request(serverUrl?: any, requestPath?: any) : Promise<any> {
   return { response, body };
 }
 
-async function browserForServer(browser?: any, serverUrl?: any) : Promise<any> {
+export async function browserForServer(browser?: any, serverUrl?: any) : Promise<any> {
   const page: any = await browser.newPage();
   const origins: any = new Set();
   page.on("request", (requestValue?: any) : any => origins.add(new URL(requestValue.url()).origin));
@@ -643,10 +694,11 @@ async function browserForServer(browser?: any, serverUrl?: any) : Promise<any> {
   page.on("pageerror", (error?: any) : any => pageErrors.push(error.message));
   await page.goto(serverUrl, { waitUntil: "load" });
   const documentOrigin: any = await page.evaluate(() : any => window.location.origin);
+  assert.equal(documentOrigin, new URL(serverUrl).origin, "npm_package_console_cross_origin_asset");
   assert.deepEqual([...origins], [new URL(serverUrl).origin], "npm_package_console_cross_origin_asset");
   assert.deepEqual(pageErrors, [], "npm_package_console_browser_error");
   await page.close();
-  return { documentOrigin, requestOrigins: [...origins], pageErrors: 0 };
+  return { sameOrigin: true, requestOriginCount: origins.size, pageErrors: 0 };
 }
 
 async function runPackagedServerUi({ cwd }: Record<string, any>) : Promise<void> {
@@ -661,9 +713,8 @@ async function runPackagedServerUi({ cwd }: Record<string, any>) : Promise<void>
     env: serverEnv,
     stdio: ["ignore", "pipe", "pipe"]
   });
-  const output: any[] = [];
-  child.stdout.on("data", (chunk?: any) : any => output.push(Buffer.from(chunk)));
-  child.stderr.on("data", (chunk?: any) : any => output.push(Buffer.from(chunk)));
+  child.stdout.resume();
+  child.stderr.resume();
   let browser: any = null;
   let browserEvidence: any = null;
   try {
@@ -688,7 +739,7 @@ async function runPackagedServerUi({ cwd }: Record<string, any>) : Promise<void>
       assert.equal(assetResponse.status, 200, "npm_package_console_asset_failed");
       assert.ok((await assetResponse.arrayBuffer()).byteLength > 0, "npm_package_console_asset_empty");
     }
-    browser = await launchBrowser();
+    browser = await launchBrowser(cwd);
     browserEvidence = await browserForServer(browser, serverUrl);
     report.server = { packagedServerStarted: true, health: true, bootstrap: true, consoleHtml: true, consoleAssets: assets.length, sameOrigin: true, browser: browserEvidence };
   } finally {
@@ -711,7 +762,7 @@ function cssSpecifierEntries(manifest?: any) : string[] {
   return containsCssImportTarget(manifest).map(({ specifier }: Record<string, any>) : any => specifier);
 }
 
-async function runVueBrowserConsumer({ manifest, cwd }: Record<string, any>) : Promise<any> {
+async function runVueBrowserConsumer({ manifest, cwd, toolsDirectory }: Record<string, any>) : Promise<any> {
   const entries: any[] = publicEntries(manifest).filter(({ runtimeTarget }: Record<string, any>) : any => Boolean(runtimeTarget));
   const cssEntries: string[] = cssSpecifierEntries(manifest);
   const moduleEntries: any[] = entries.filter(({ runtimeTarget }: Record<string, any>) : any => !/\.(?:css|d\.ts)$/iu.test(runtimeTarget));
@@ -728,15 +779,13 @@ async function runVueBrowserConsumer({ manifest, cwd }: Record<string, any>) : P
   await fs.writeFile(path.join(cwd, "src", "main.ts"), `import { createApp, h, ref } from "vue";\nimport Component from ${JSON.stringify(component.specifier)};\n${imports}\n${cssImports}\ncreateApp({ setup() { const checked = ref(false); return () => h("main", [h(Component, { modelValue: checked.value, label: "Published component", "onUpdate:modelValue": (value: boolean) => { checked.value = value; } }), h("output", { id: "checked-value" }, String(checked.value))]); } }).mount("#app");\n`, "utf8");
   await fs.writeFile(path.join(cwd, "ui-public-entries.ts"), `${typeImports}\nexport type PublicEntries = [${typedEntries.map((_specifier?: any, index?: any) : any => `typeof PublicEntry${index}`).join(", ")}];\n`, "utf8");
   await fs.writeFile(path.join(cwd, "tsconfig.json"), `${JSON.stringify({ compilerOptions: { target: "ES2022", module: "ESNext", moduleResolution: "Bundler", strict: true, noEmit: true, skipLibCheck: true }, include: ["ui-public-entries.ts"] }, null, 2)}\n`, "utf8");
-  await npm(["exec", "--offline", "--", "vite", "build", "--config", "vite.config.mjs"], cwd);
-  await npm(["exec", "--offline", "--", "vue-tsc", "--noEmit", "-p", "tsconfig.json"], cwd);
+  await run(process.execPath, [path.join(toolsDirectory, "node_modules/vite/bin/vite.js"), "build", "--config", "vite.config.mjs"], cwd, npmEnv());
+  await run(process.execPath, [path.join(toolsDirectory, "node_modules/vue-tsc/bin/vue-tsc.js"), "--noEmit", "-p", "tsconfig.json"], cwd, npmEnv());
   const html: any = await fs.readFile(path.join(cwd, "consumer-dist", "index.html"), "utf8");
   assert.match(html, /\.js/u, "npm_package_ui_build_javascript_missing");
   assert.match(html, /\.css/u, "npm_package_ui_build_stylesheet_missing");
-  const preview: any = spawn(path.join(cwd, "node_modules", ".bin", "vite"), ["preview", "--host", "0.0.0.0", "--port", "4173", "--strictPort", "--config", "vite.config.mjs"], { cwd, env: npmEnv(), stdio: ["ignore", "pipe", "pipe"] });
-  const previewOutput: any[] = [];
-  preview.stdout.on("data", (chunk?: any) : any => previewOutput.push(Buffer.from(chunk)));
-  preview.stderr.on("data", (chunk?: any) : any => previewOutput.push(Buffer.from(chunk)));
+  const preview: any = spawn(path.join(toolsDirectory, "node_modules", ".bin", "vite"), ["preview", "--host", "0.0.0.0", "--port", "4173", "--strictPort", "--config", "vite.config.mjs"], { cwd, env: npmEnv(), stdio: ["ignore", "pipe", "pipe"] });
+  preview.stderr.resume();
   let browser: any = null;
   try {
     await new Promise((resolve?: any, reject?: any) : any => {
@@ -750,7 +799,7 @@ async function runVueBrowserConsumer({ manifest, cwd }: Record<string, any>) : P
       preview.stdout.on("data", outputHandler);
       preview.once("exit", () : any => reject(new Error("npm_package_ui_preview_exited")));
     });
-    browser = await launchBrowser();
+    browser = await launchBrowser(toolsDirectory);
     const page: any = await browser.newPage();
     const origins: any = new Set();
     page.on("request", (requestValue?: any) : any => origins.add(new URL(requestValue.url()).origin));
@@ -768,7 +817,7 @@ async function runVueBrowserConsumer({ manifest, cwd }: Record<string, any>) : P
     assert.equal(await checkbox.evaluate((element?: any) : any => getComputedStyle(element).display), "inline-flex");
     assert.deepEqual([...origins], ["http://127.0.0.1:4173"], "npm_package_ui_cross_origin_asset");
     assert.deepEqual(pageErrors, [], "npm_package_ui_browser_error");
-    return { runtimeExportCount: moduleEntries.length + cssEntries.length, typeExportCount: typedEntries.length, interaction: true, stylesLoaded: true, sameOrigin: true, browserVersion: browser.version(), requestOrigins: [...origins], pageErrors: 0 };
+    return { runtimeExportCount: moduleEntries.length + cssEntries.length, typeExportCount: typedEntries.length, interaction: true, stylesLoaded: true, sameOrigin: true, browserVersion: browser.version(), requestOriginCount: origins.size, pageErrors: 0 };
   } finally {
     await browser?.close();
     preview.kill("SIGTERM");
@@ -786,8 +835,8 @@ async function execute() : Promise<void> {
   await Promise.all([home, temporary, data, cache].map((directory?: any) : any => fs.mkdir(directory, { recursive: true })));
   await fs.writeFile(process.env.npm_config_userconfig || path.join(home, ".npmrc"), "", "utf8");
   const packages: any[] = plan.packages;
-  const typeTools: any = { typescript: plan.verifierTools?.typescript };
-  const vueTools: any = Object.fromEntries(["vite", "@vitejs/plugin-vue", "vue-tsc", "typescript", "@playwright/test"]
+  const typeTools: any = { typescript: plan.verifierTools?.typescript, node: plan.verifierTools?.["@types/node"] };
+  const vueTools: any = Object.fromEntries(["vite", "@vitejs/plugin-vue", "vue-tsc", "typescript", "@types/node", "@playwright/test"]
     .map((name?: any) : any => {
       const version: any = plan.verifierTools?.[name];
       assert.ok(version, `npm_package_ui_verifier_tool_missing_${safeName(name)}`);
@@ -801,7 +850,6 @@ async function execute() : Promise<void> {
     activeFailureStage = "npm_install";
     const consumer: any = {
       ...record,
-      ui: isVueBrowserConsumer(record.manifest),
       hasTypes: packageTypeSpecifiers(record.manifest).length > 0
     };
     const result: any = await installConsumer({
@@ -814,7 +862,7 @@ async function execute() : Promise<void> {
       }
     });
     report.consumers.push(result);
-    if (result.browser) report.browser.uiPackage = result.browser;
+    if (result.browser) report.browser.bundledUi = result.browser;
   }
   report.summary = {
     success: true,

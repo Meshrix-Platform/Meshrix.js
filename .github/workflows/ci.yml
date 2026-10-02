@@ -502,8 +502,17 @@ jobs:
           cache: "npm"
       - name: Install verifier workspace dependencies
         run: npm ci --ignore-scripts
+      - name: Enable the alternate Linux architecture for the consumer matrix
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+          image: tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+      - name: Build and prepare the npm candidate once
+        run: |
+          npm run build
+          npm run release:publish-npm -- --prepare --artifact-dir build/release/npm-set
       - name: Run the fresh-container package authority
-        run: npm run verify:npm-package-installability
+        run: npm run verify:npm-package-installability -- --artifact-dir build/release/npm-set
 
   supply-chain:
     name: Supply-chain evidence
@@ -522,8 +531,17 @@ jobs:
           cache: "npm"
       - name: Install dependency graph without lifecycle scripts
         run: npm ci --ignore-scripts
+      - name: Enable the alternate Linux architecture for the consumer matrix
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+          image: tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+      - name: Build and prepare the npm candidate once
+        run: |
+          npm run build
+          npm run release:publish-npm -- --prepare --artifact-dir build/release/npm-set
       - name: Verify the fresh-container npm release set
-        run: npm run verify:npm-package-installability
+        run: npm run verify:npm-package-installability -- --artifact-dir build/release/npm-set
       - name: Audit dependencies
         run: npm audit --audit-level=high
       - name: Verify pinned Node runtime checksum signature

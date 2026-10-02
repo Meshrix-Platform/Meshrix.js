@@ -466,9 +466,7 @@ jobs:
           name: release-inputs-${{ github.sha }}
           path: build/release
       - name: Read and validate all npm package versions and dist-tags without publication
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: npm run release:publish-npm -- --preflight --artifact-dir build/release/npm-set --tag "$RELEASE_TAG"
+        run: npm run release:publish-npm -- --preflight --artifact-dir build/release/npm-set
 
   build-release-image:
     name: Build or resolve the unsigned release image authority

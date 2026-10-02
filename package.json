@@ -370,6 +370,8 @@
     "tsconfig.node.json",
     "tools/server-scripts/verify-public-boundary.ts",
     "!**/node_modules",
+    "!packages/*/dist/",
+    "!apps/server/dist/",
     "build/usage-skills/",
     "build/dist/**/*",
     "dist/**/*"
