@@ -231,6 +231,26 @@ function createInjectedNpmRunner({
 }
 
 describe("npm release-set publication", () : any => {
+  it("prepares artifacts through the actual hosted assembly command", async () => {
+    const workflow = await fs.readFile(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
+    const step = workflow.split("- name: Prepare the public npm archives once")[1]?.split("- name:")[0];
+    const command = step?.split("\n").find((line) => line.trimStart().startsWith("run:"))?.trim().slice(4).trim();
+    expect(command).toBeDefined();
+    const words = command!.split(/\s+/u);
+    expect(words.slice(0, 4)).toEqual(["npm", "run", "release:publish-npm", "--"]);
+    const options = parsePublishArguments(words.slice(4));
+    expect(options.prepare).toBe(true);
+    const artifactDirectory = await newArtifactDirectory();
+    const injected = createInjectedNpmRunner();
+    const prepared = await prepareReleaseSet({
+      ...options, rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {}
+    });
+    expect(prepared).toMatchObject({
+      ok: true, prepared: true, tag: releaseTagForVersion(prepared.version), packageCount: 2
+    });
+    expect(injected.publishCalls).toHaveLength(0);
+  });
+
   it("discovers only public workspaces and orders dependencies before the root", async () : Promise<any> => {
     const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
     const names: any = releaseSet.packages.map(({ name }: Record<string, any>) : any => name);

@@ -310,9 +310,7 @@ jobs:
         run: npm run build
       - name: Prepare the public npm archives once
         shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: npm run release:publish-npm -- --prepare --artifact-dir build/release/npm-set --tag "$RELEASE_TAG"
+        run: npm run release:publish-npm -- --prepare --artifact-dir build/release/npm-set
       - name: Assemble verified portable connector assets
         shell: bash
         run: |
