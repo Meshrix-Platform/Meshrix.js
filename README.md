@@ -33,6 +33,8 @@ npm install --global meshrix.js
 meshrix-server --with-ui --data-dir <server-data-dir>
 ```
 
+For npm 12, explicitly allow the native dependency: `npm install --global --allow-scripts=better-sqlite3 meshrix.js`. See [npm installation](docs/RUNBOOK.md#npm-installation) for project-scoped installs.
+
 The package includes the Console, `meshrix`, `meshrix-server`, `meshrix-mcp`, and optional first-party client-adapter components. No separate connector package is required. Services and clients use the same origin; external access requires the TLS and trusted-proxy configuration in the [runbook](docs/RUNBOOK.md#container-startup).
 
 To try the current source before publication:

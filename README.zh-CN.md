@@ -33,6 +33,8 @@ npm install --global meshrix.js
 meshrix-server --with-ui --data-dir <server-data-dir>
 ```
 
+使用 npm 12 时，需显式允许原生依赖的安装脚本：`npm install --global --allow-scripts=better-sqlite3 meshrix.js`。项目内安装方式见 [npm 安装说明](docs/RUNBOOK.md#npm-installation)。
+
 主包包含控制台、`meshrix`、`meshrix-server`、`meshrix-mcp` 命令和可选的第一方客户端适配器，无需单独安装连接器包。服务与客户端共用同一个 origin；对外访问需要按照[运行手册](docs/RUNBOOK.md#container-startup)配置 TLS 和 trusted proxy。
 
 首发前，可以试用当前源码：

@@ -353,7 +353,8 @@ describe("npm artifact installability source", () : any => {
       const declaredConsumer: any = path.join(root, "consumer-declared");
       await prepareInstallabilityConsumer({
         consumerDirectory: declaredConsumer,
-        packageRecord: { name: "meshrix.js", version: "0.0.2" }
+        packageRecord: { name: "meshrix.js", version: "0.0.2" },
+        allowScripts: { "meshrix.js": true }
       });
       await runNpm(
         ["install", "--no-audit", "--no-fund", "--registry", registry.registry],

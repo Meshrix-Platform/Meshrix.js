@@ -243,6 +243,7 @@ async function installConsumer({ record, base, typeTools, vueTools, onStage = ()
     private: true,
     type: "module",
     dependencies: { [record.name]: record.version },
+    allowScripts: record.root ? { "better-sqlite3": true } : {},
     ...(Object.keys(devDependencies).length > 0 ? { devDependencies } : {})
   }, null, 2)}\n`, "utf8");
   await npm(["install", "--no-audit", "--no-fund", "--registry", registry], consumerDirectory);

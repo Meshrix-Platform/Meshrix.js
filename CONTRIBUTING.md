@@ -38,7 +38,9 @@ applies to every change:
 4. Run the narrowest owning checks and collect failures across the selected
    scope before repairing. Keep the final complete regression for the selected
    integration scope after all changes and repairs are complete.
-5. Integrate once through the integration owner, and maintain version,
+5. Keep the root `allowScripts` install policy aligned with admitted dependencies;
+   enable only required package lifecycle scripts, never a blanket bypass.
+6. Integrate once through the integration owner, and maintain version,
    deprecation, and release facts in the canonical release source.
 
 ## Public npm Products
