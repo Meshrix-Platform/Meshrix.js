@@ -4,10 +4,12 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
+import { managedProcessIsAlive, stopManagedProcesses } from "./lib/process-lifecycle.ts";
+import { openPlatformBrowser, terminatePlatformProcessTree } from "./lib/startup-platform-adapter.ts";
 
 const scriptDir: any = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot: any = path.resolve(scriptDir, "..", "..");
-const npmCommand: any = process.platform === "win32" ? "npm.cmd" : "npm";
 const serverScript: any = path.join(projectRoot, "tools", "server-scripts", "start-server.ts");
 
 function usage() : any {
@@ -90,7 +92,7 @@ function resolveDataDir(dataDir?: any) : any {
   if (dataDir) args.push("--data-dir", dataDir);
   const result: any = runSync(process.execPath, args);
   if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || "failed to resolve data dir");
+    throw new Error("server_data_directory_resolution_failed");
   }
   const resolved: any = result.stdout.trim();
   mkdirSync(resolved, { recursive: true });
@@ -106,36 +108,8 @@ function spawnProcess(command?: any, args?: any, options: Record<string, any> = 
   });
 }
 
-function terminateProcessTree(pid?: any, force: any = false) : any {
-  if (!pid) return;
-  if (process.platform === "win32") {
-    const args: any[] = ["/PID", String(pid), "/T"];
-    if (force) args.push("/F");
-    runSync("taskkill.exe", args);
-  } else {
-    runSync("kill", [force ? "-KILL" : "-TERM", String(pid)]);
-  }
-}
-
-function processAlive(pid?: any) : any {
-  if (!pid) return false;
-  if (process.platform === "win32") {
-    const result: any = runSync("tasklist.exe", ["/FI", `PID eq ${pid}`]);
-    return result.status === 0 && result.stdout.includes(String(pid));
-  }
-  return runSync("kill", ["-0", String(pid)]).status === 0;
-}
-
 async function sleep(ms?: any) : Promise<any> {
   await new Promise((resolve?: any) : any => setTimeout(resolve, ms));
-}
-
-async function waitForExit(children?: any) : Promise<any> {
-  for (let attempt: any = 0; attempt < 25; attempt += 1) {
-    if (children.every((child?: any) : any => !child?.pid || !processAlive(child.pid))) return true;
-    await sleep(200);
-  }
-  return false;
 }
 
 async function probeUrl(url?: any) : Promise<any> {
@@ -167,7 +141,7 @@ async function waitForServer(port?: any, serverChild?: any) : Promise<any> {
         // keep waiting
       }
     }
-    if (serverChild?.exitCode !== null || (serverChild?.pid && !processAlive(serverChild.pid))) {
+    if (serverChild?.exitCode !== null || serverChild?.signalCode || !managedProcessIsAlive(serverChild?.pid)) {
       return false;
     }
     await sleep(1000);
@@ -175,40 +149,36 @@ async function waitForServer(port?: any, serverChild?: any) : Promise<any> {
   return false;
 }
 
-function openUrl(url?: any) : any {
-  let opener: any;
-  if (process.platform === "darwin") {
-    opener = spawnProcess("open", [url], { stdio: "ignore" });
-  } else if (process.platform === "win32") {
-    opener = spawnProcess("cmd.exe", ["/c", "start", "", url], { stdio: "ignore" });
-  } else {
-    opener = spawnProcess("xdg-open", [url], { stdio: "ignore" });
-  }
-  opener.once("error", (error?: any) : any => {
-    console.warn(`[start-all] Could not open browser automatically: ${error.message}`);
-  });
-  opener.unref();
-}
-
 async function cleanup(children?: any) : Promise<any> {
   const alive: any = children.filter(Boolean);
   if (alive.length === 0) return;
   console.log("");
   console.log("[exit] stopping processes...");
-  for (const child of alive.toReversed()) terminateProcessTree(child.pid, false);
-  if (!(await waitForExit(alive))) {
+  const result: any = await stopManagedProcesses(
+    alive.map((child?: any) : any => child.pid),
+    { signalTree: (pid, signal) => terminatePlatformProcessTree(pid, signal) }
+  );
+  if (result.gracefulFailed.length > 0) console.warn("[exit] graceful process-tree shutdown did not complete; force cleanup was requested");
+  if (result.forceSignalled.length > 0) {
     console.log("[exit] forcing remaining processes to stop...");
-    for (const child of alive.toReversed()) terminateProcessTree(child.pid, true);
+  }
+  if (result.permissionDenied.length > 0) console.warn("[exit] permission denied while stopping an owned process");
+  if (result.invalid.length > 0 || result.self.length > 0) {
+    throw new Error("owned_process_cleanup_target_refused");
+  }
+  if (result.permissionDenied.length > 0) {
+    throw new Error("owned_process_cleanup_permission_denied");
   }
 }
 
 async function main() : Promise<any> {
   const options: any = parseArgs(process.argv.slice(2));
+  const npmInvocation = resolveNpmCliInvocation();
   const dataDir: any = resolveDataDir(options.dataDir);
 
   if (!existsSync(path.join(projectRoot, "node_modules"))) {
     console.log("[bootstrap] node_modules is missing; running npm ci");
-    const install: any = runSync(npmCommand, ["ci"], { inherit: true });
+    const install: any = runSync(npmInvocation.command, npmCliArgs(npmInvocation, ["ci"]), { inherit: true });
     if (install.status !== 0) throw new Error("npm ci failed");
   }
 
@@ -224,7 +194,7 @@ async function main() : Promise<any> {
     } else {
       console.log(`[info] console http://127.0.0.1:${options.port}`);
     }
-    console.log("[info] run tools/scripts/restart-all.sh to stop and restart all services");
+    console.log("[info] run node tools/scripts/restart-all.ts to stop and restart all services");
     return;
   }
 
@@ -233,8 +203,13 @@ async function main() : Promise<any> {
   const cleanupOnce: any = async (exitCode?: any) : Promise<any> => {
     if (cleanupStarted) return;
     cleanupStarted = true;
-    await cleanup(children);
-    process.exit(exitCode);
+    try {
+      await cleanup(children);
+      process.exit(exitCode);
+    } catch {
+      console.error("owned_process_cleanup_failed");
+      process.exit(1);
+    }
   };
   process.once("SIGINT", () : any => void cleanupOnce(130));
   process.once("SIGTERM", () : any => void cleanupOnce(143));
@@ -260,7 +235,7 @@ async function main() : Promise<any> {
     }
     children.push(serverChild);
     if (!(await waitForServer(options.port, serverChild))) {
-      throw new Error(`backend was not ready on port ${options.port}; if a stale service occupies the port, run tools/scripts/restart-all.sh to restart all services`);
+      throw new Error(`backend was not ready on port ${options.port}; if a stale service occupies the port, run node tools/scripts/restart-all.ts to restart all services`);
     }
     console.log(`[ok] backend is ready: http://127.0.0.1:${options.port}`);
   }
@@ -271,7 +246,7 @@ async function main() : Promise<any> {
       console.log(`[ok] frontend is already running: http://127.0.0.1:${options.vitePort}`);
     } else {
       console.log("[web] starting Vite dev server: npm run server:dev:web");
-      viteChild = spawnProcess(npmCommand, ["run", "server:dev:web"], {
+      viteChild = spawnProcess(npmInvocation.command, npmCliArgs(npmInvocation, ["run", "server:dev:web"]), {
         env: {
           VITE_API_ORIGIN: `http://127.0.0.1:${options.port}`,
           VITE_API_PORT: options.port
@@ -283,12 +258,12 @@ async function main() : Promise<any> {
 
   if (serverChild && options.registerMcp) {
     console.log("[mcp] registering local MCP Hub: server:mcp:register");
-    const result: any = runSync(npmCommand, ["run", "server:mcp:register", "--", "--url", `http://127.0.0.1:${options.port}`], { inherit: true });
+    const result: any = runSync(npmInvocation.command, npmCliArgs(npmInvocation, ["run", "server:mcp:register", "--", "--url", `http://127.0.0.1:${options.port}`]), { inherit: true });
     console.log(result.status === 0 ? "[ok] MCP Hub registration complete" : "[warn] MCP Hub registration failed; server remains running");
   }
 
   if (options.openBrowser) {
-    openUrl(options.mode === "dev" ? `http://127.0.0.1:${options.vitePort}` : `http://127.0.0.1:${options.port}`);
+    openPlatformBrowser(options.mode === "dev" ? `http://127.0.0.1:${options.vitePort}` : `http://127.0.0.1:${options.port}`);
   }
 
   if (options.mode === "console") {
