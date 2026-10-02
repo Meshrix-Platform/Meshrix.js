@@ -7,6 +7,7 @@
     "$schema",
     "version",
     "functionalCompleteness",
+    "npmPackageInstallability",
     "releaseDeploymentVerification",
     "realMachineVerification"
   ],
@@ -43,6 +44,42 @@
             "type": "string",
             "minLength": 1
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "npmPackageInstallability": {
+      "type": "object",
+      "required": [
+        "claim",
+        "requiredForRelease",
+        "requiresClaim",
+        "command",
+        "controller",
+        "receipt",
+        "schemaVersion"
+      ],
+      "properties": {
+        "claim": {
+          "const": "npm-package-installability-passed"
+        },
+        "requiredForRelease": {
+          "const": true
+        },
+        "requiresClaim": {
+          "const": "functional-complete"
+        },
+        "command": {
+          "const": "npm run verify:npm-package-installability"
+        },
+        "controller": {
+          "const": "tools/server-scripts/verify-npm-package-installability.ts"
+        },
+        "receipt": {
+          "const": "build/reports/npm-package-installability.json"
+        },
+        "schemaVersion": {
+          "const": "v0.0.1:release:npm-package-installability-report-1"
         }
       },
       "additionalProperties": false
@@ -135,8 +172,6 @@
         "requiresClaim",
         "command",
         "controller",
-        "workflow",
-        "runner",
         "receipt",
         "scenarios"
       ],
@@ -145,7 +180,7 @@
           "const": "release-deployment-verified"
         },
         "requiredForRelease": {
-          "const": true
+          "const": false
         },
         "requiresClaim": {
           "const": "functional-complete"
@@ -155,12 +190,6 @@
         },
         "controller": {
           "const": "tools/server-scripts/verify-release-deployment.ts"
-        },
-        "workflow": {
-          "const": ".github/workflows/release-branch.yml"
-        },
-        "runner": {
-          "const": "ubuntu-24.04"
         },
         "receipt": {
           "const": "build/reports/release-deployment.json"

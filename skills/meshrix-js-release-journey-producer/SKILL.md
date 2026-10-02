@@ -26,8 +26,8 @@ and evidence meanings:
 
 The optional integration is neither a Core functional-acceptance input nor a
 publication dependency. Its absence or failure cannot change a Core result.
-The mandatory Release Deployment Verification remains governed by the Runbook;
-an optional journey does not replace it.
+Release Deployment Verification is an independent optional runtime-ui claim
+governed by the Runbook; an external-service journey does not replace it.
 
 ## Prepare, execute, and bind
 

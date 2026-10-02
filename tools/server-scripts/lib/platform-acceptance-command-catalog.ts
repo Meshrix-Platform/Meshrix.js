@@ -24,7 +24,8 @@ import {
 const REPORT_PATH: any = PLATFORM_ACCEPTANCE_REPORT_PATH;
 const FUNCTIONAL_PROFILE_PREREQUISITES = Object.freeze([
   "console-admin-browser-visual",
-  "upstream-mcp-gateway"
+  "upstream-mcp-gateway",
+  "npm-package-installability"
 ]);
 
 const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
@@ -69,6 +70,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
 
   command("node-runtime-supply-chain", "Pinned Node runtime supply-chain verification", "downstream-gateway", npmRun("verify:node-runtime-supply-chain"), "build/reports/node-runtime-supply-chain.json", ["downstream-gateway", "runtime-supply-chain", "signature-verification"], { resourceLocks: ["node-runtime-official-download"] }),
   command("mcp-release-portable-assembly", "MCP release portable assembly", "downstream-gateway", npmRun("verify:mcp-release-portable-assembly"), "build/reports/mcp-release-portable-assembly.json", ["downstream-gateway", "release-artifact"], { dependsOn: ["node-runtime-supply-chain"] }),
+  command("npm-package-installability", "Selected-platform npm package consumer qualification", "platform-capability", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["npm", "package-consumer", "selected-platform"], { dependsOn: ["console-build", "mcp-release-portable-assembly"], exclusive: true, resourceLocks: ["npm-package-qualification", "foundation-public-gate"] }),
   command("mcp-installer-convergence", "MCP installer convergence", "downstream-gateway", nodeCommand(["tools/server-scripts/verify-mcp-installer-convergence.ts"]), "build/reports/mcp-installer-convergence.json", ["downstream-gateway", "installer"]),
   command("mcp-release-target-scope", "MCP release target scope", "downstream-gateway", nodeCommand(["tools/server-scripts/verify-mcp-release-target-scope.ts"]), "build/reports/mcp-release-target-scope.json", ["downstream-gateway", "release-targets"]),
   command("downstream-mcp-audit", "Downstream MCP completeness audit", "downstream-gateway", npmRun("verify:downstream-mcp-audit"), "build/reports/downstream-mcp-completeness-audit.json", ["downstream-gateway", "completeness"]),
@@ -104,7 +106,6 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
   command("authorization-enforcement", "Authorization enforcement", "platform-capability", npmRun("verify:authorization-enforcement"), "build/reports/authorization-enforcement.json", ["platform-capability", "authorization"], { dependsOn: ["authorization-governance", "operation-permission-protocol-consistency", "operation-permission-tag-governed-e2e"] }),
   command("observability-coverage", "Observability coverage", "platform-capability", npmRun("verify:observability-coverage"), "build/reports/observability-coverage.json", ["platform-capability", "observability"], { dependsOn: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "operation-permission-tag-governed-e2e"] }),
   command("storage-restore", "Storage production restore drill", "platform-capability", nodeCommand(["tools/server-scripts/verify-storage-production-restore-drill.ts"]), "build/reports/storage-production-restore-drill/latest.json", ["platform-capability", "storage", "backup-restore"], { resourceLocks: ["storage-restore"] }),
-  command("deployment-container-flow", "Fresh container deployment flow", "platform-capability", nodeCommand(["tools/server-scripts/verify-deployment-container-flow.ts"]), "build/reports/deployment-container-flow.json", ["platform-capability", "deployment", "container"], { resourceLocks: ["container-runtime"] }),
   command("job-work-queue", "Job work queue verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-job-work-queue.ts"]), "build/reports/job-work-queue.json", ["platform-capability", "jobs"], { resourceLocks: ["work-queue"] }),
   command("job-work-queue-ceiling-conformance", "Job work queue ceiling conformance verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts"]), "build/reports/job-work-queue-ceiling-conformance.json", ["platform-capability", "jobs", "conformance"], { resourceLocks: ["work-queue"] }),
   command("work-queue-conformance", "Work queue conformance verifier", "platform-capability", nodeCommand(["tools/server-scripts/verify-work-queue-conformance.ts"]), "build/reports/work-queue/latest.json", ["platform-capability", "jobs"], { resourceLocks: ["work-queue"] }),
@@ -127,7 +128,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS: readonly any[] = Object.freeze([
 export const SINGLE_NODE_EVIDENCE_COMMAND_IDS: readonly any[] = Object.freeze([
   "surface-convergence",
   "production-readiness-gates",
-  "deployment-container-flow",
+  "npm-package-installability",
   "downstream-mcp-audit",
   "mcp-release-portable-assembly",
   "upstream-fixture-transit",

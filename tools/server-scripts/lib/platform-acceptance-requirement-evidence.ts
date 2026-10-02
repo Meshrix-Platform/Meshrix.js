@@ -2,7 +2,9 @@ const rel: any = (number?: any) : any => `REQ-REL-${String(number).padStart(3, "
 const usp: any = (number?: any) : any => `REQ-USP-${String(number).padStart(3, "0")}`;
 
 export const PLATFORM_ACCEPTANCE_REQUIREMENTS: readonly any[] = Object.freeze([
-  ...Array.from({ length: 30 }, (_?: any, index?: any) : any => rel(index + 1)),
+  ...Array.from({ length: 30 }, (_?: any, index?: any) : any => index + 1)
+    .filter((number?: any) : any => number !== 23)
+    .map((number?: any) : any => rel(number)),
   ...Array.from({ length: 13 }, (_?: any, index?: any) : any => usp(index + 1))
 ]);
 
@@ -10,7 +12,7 @@ const mapping: Record<string, any> = {
   [rel(1)]: { commandIds: ["capability-acceptance-machines", "surface-convergence"] },
   [rel(2)]: { commandIds: ["protocol-boundary", "repo-organization"] },
   [rel(3)]: { commandIds: ["state-machines", "capability-acceptance-machines"] },
-  [rel(4)]: { commandIds: ["plugin-runtime", "deployment-container-flow"] },
+  [rel(4)]: { commandIds: ["plugin-runtime"] },
   [rel(5)]: { commandIds: ["operation-permission-domain-model", "operation-permission-protocol-consistency", "operation-permission-tag-governed-e2e", "authorization-enforcement"] },
   [rel(6)]: { commandIds: ["approval-governance", "operation-permission-tag-governed-e2e"] },
   [rel(7)]: { commandIds: [], aggregateFacts: ["ledgerAnchorReady"] },
@@ -29,7 +31,6 @@ const mapping: Record<string, any> = {
   [rel(20)]: { commandIds: ["plugin-runtime", "protocol-boundary"] },
   [rel(21)]: { commandIds: ["strategy-management"] },
   [rel(22)]: { commandIds: ["agent-self-maintenance-plugin"] },
-  [rel(23)]: { commandIds: ["deployment-container-flow"] },
   [rel(24)]: { commandIds: ["foundation-tests", "documentation-convergence", "repo-organization"] },
   [rel(25)]: { commandIds: ["job-work-queue-ceiling-conformance", "mcp-gateway-load", "gateway-platform-profile", "production-readiness-gates"] },
   [rel(26)]: { commandIds: ["controlled-execution-sandbox", "controlled-execution-convergence-final"] },

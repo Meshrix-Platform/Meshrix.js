@@ -465,9 +465,10 @@ Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when
 that Linux VM is reachable. When a Linux VM target or a dual-architecture
 builder is unavailable, the oracle fails closed with `blocked_by_environment`
 and a finite reason. Contract-fixture bytes do not satisfy acceptance. Native
-Linux, Ubuntu, Debian, capacity, and publication qualification remain remaining
-required work after the named workflows. To write the signed Server + Web Console dual-arch bundle without
-starting or stopping an instance, run `npm run pack:offline`. To import and
+Linux, Ubuntu, Debian, and capacity qualification remain separate environment
+claims; none is a prerequisite for npm publication. To write the signed Server
+and Web Console dual-architecture bundle without starting or stopping an instance, run
+`npm run pack:offline`. To import and
 start that bundle without the closure's stop and cleanup steps, run
 `npm run start:offline`. Stop it with `npm run stop:offline`. Restart the same
 offline stack with `npm run restart:offline`.
@@ -729,7 +730,8 @@ non-converged rather than compensating with additional logs.
 
 ## Release Definition and Publication
 
-Meshrix.js has three deliberately separate acceptance standards:
+Meshrix.js keeps functional completeness, npm artifact qualification, and
+optional environment-specific claims distinct:
 
 1. The **Functional Release Gate** is the mandatory project release closure.
    It proves that the implementation and code organization are complete,
@@ -737,50 +739,47 @@ Meshrix.js has three deliberately separate acceptance standards:
    by every simulation, container, failure-injection, recovery, packaging, and
    protocol check that the development environment can execute. A missing,
    skipped, stale, or failing required functional check fails this gate.
-2. **Release Deployment Verification** is the mandatory runtime-ui deployment
-   closure for the exact stable candidate. On a GitHub-hosted `ubuntu-24.04`
-   runner it deploys the runtime-ui surface and a process-isolated fixture in
-   separate containers on one disposable private network, then drives bounded
-   external deterministic synthetic requests with no real model dependency
-   and verifies termination and cleanup of every deployment resource. Its
-   fixed-size privacy-safe receipt is the named **Release Deployment Claim**.
-3. A **Real-Machine Verification Workflow** is remaining required work that
-   independently repeats the exact accepted candidate on one declared
-   operating system, architecture, device, host, or network environment. Its
-   successful receipt is the named **Environment Support Claim** for that
-   exact environment.
+2. **NPM Package Installability** qualifies the exact release archives through
+   clean consumers on the observed native platform and any actually usable
+   local Docker platform. The report binds package name, version, tarball
+   filename, and integrity. One complete qualified platform is sufficient for
+   npm eligibility; a genuinely unavailable optional Docker target is recorded
+   as `not_run` and does not block publication. Every selected target must
+   pass, and no successful target means the npm claim is absent.
+3. **Release Deployment Verification** and **Real-Machine Verification** are
+   optional, separate claims. Deployment verification exercises the selected
+   `runtime-ui` container claim; a real-machine run binds evidence to the
+   exact system or device tested. Neither adds an unavailable environment to
+   npm eligibility requirements.
 
 The dependency is one-way:
 
 ```text
 Functional Release Gate receipt
+  + NPM Package Installability report with at least one qualified platform
+  -> npm release eligibility
+Optional selected runtime-ui claim
   -> Release Deployment Verification receipt
-  -> Release Deployment Claim
-Functional Release Gate receipt
-  -> Real-Machine Verification Workflow receipt
-  -> Environment Support Claim
+Optional selected system or device claim
+  -> Real-Machine Verification receipt
 ```
 
-A release-deployment workflow must refuse an unaccepted or mismatched
-candidate, and its absence or failure blocks tag publication for that commit.
-A real-machine workflow must refuse an unaccepted or mismatched candidate, but
-its absence, unavailability, failure, or expired receipt never changes the
-Functional Release Gate result and never blocks project publication. It only
-leaves that environment qualification as remaining required work. Project-level
-functional results are `passed` or `failed`; `blocked` is not a project release
-result. Real-machine workflow results are `not_run`, `ineligible`, `passed`, or
-`failed`.
+A selected deployment or real-machine workflow must refuse an unaccepted or
+mismatched candidate. If neither claim is selected, its report is not part of
+the npm bundle. Project-level functional results are `passed` or `failed`;
+`blocked` is not a project release result. Real-machine workflow results are
+`not_run`, `ineligible`, `passed`, or `failed`.
 
 Avoid the ambiguous standalone terms `production-ready`, `final readiness`,
 and `platform acceptance`. State the exact remaining-work or completed evidence
-instead: `functional release accepted`, `real-machine verified on
-<environment>`, `release deployment verified on ubuntu-24.04`, or
-`environment qualification remains remaining required work`.
+instead: `functional release accepted`, `npm artifacts qualified on
+<platform>`, `release deployment verified for runtime-ui`, or
+`real-machine verified on <environment>`.
 
 `tools/registry/release-definition.registry.json` is the sole source for the
-product version, Git tag, release channel, package manifest set, container
-platforms, functional acceptance profile, local container engine, and the exact
-fourteen-file upstream publishing candidate bundle, and the Node.js and npm
+product version, Git tag, release channel, package manifest set, optional
+container target, functional acceptance profile, local verification policy,
+and the exact upstream publishing candidate bundle, plus the Node.js and npm
 CLI versions used by release workflows. Package manifests, the lockfile,
 workflow expressions, tags, reports, and this runbook are projections of that
 definition.
@@ -890,11 +889,12 @@ tag, and serializes release runs globally. `.github/workflows/release-branch.yml
 runs on `release` pushes and supports a manual run on the same branch for the
 explicit first-publication bootstrap. It requires the release commit to equal
 the current stable tip, resolves the successful stable complete-gate run for
-that exact commit, downloads its stable authority bundle, and runs the external
-runtime-ui deployment verification on `ubuntu-24.04`. The receipt must record
-the actual `github-hosted` runner environment. After uploading the
-`release-authority` bundle, the source workflow creates the canonical tag only
-when it is absent, or verifies that an existing tag resolves to the same
+that exact commit, and downloads its stable authority bundle containing the
+accepted candidate, functional receipt, npm installability report, and stable
+authority manifest. The normal npm release path does not run container
+deployment verification. After uploading the `release-authority` bundle, the
+source workflow creates the canonical tag only when it is absent, or verifies
+that an existing tag resolves to the same
 commit. A conflicting tag fails. It then calls GitHub's workflow-dispatch API
 for `release.yml` at the tag and sends the exact source run id, attempt, event,
 and commit. The dispatch returns before the source run completes; the target
@@ -902,8 +902,9 @@ workflow waits for that exact release-branch run to finish successfully before
 consuming its authority artifact. This closes the source-run completion race.
 
 The release workflow revalidates candidate identity, functional receipt, and
-deployment receipt before publication. Its release-authority and npm publisher
-jobs both name the `release-candidate` environment. A workflow reference alone
+npm installability report before publication. A deployment receipt is included
+only when an optional deployment claim is selected. Its release-authority and
+npm publisher jobs both name the `release-candidate` environment. A workflow reference alone
 does not create the required protection: configure this environment with a
 tag deployment rule for `v*` before enabling the first release. The existing
 `release-portfolio` environment is restricted to the nightly branch and is not
@@ -931,30 +932,30 @@ Before the first release run, verify these hosted protections in GitHub:
 Before that authority, a read-only `upstream-service-publishing` job runs the
 self-contained Core verifier. It checks out no detachable service or plugin
 repository and performs no registry or release mutation. Every later
-publication job inherits the Core prepublication and release deployment
-prerequisites.
-Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
-functional artifact requirements. Native host execution is performed only by
-the remaining Real-Machine Verification Workflows and cannot block publication.
+publication job inherits Core prepublication, functional acceptance, and the
+exact-artifact npm qualification. OCI assembly, scanning, signing, SBOM, and
+provenance checks apply when a container artifact is selected; they are not
+prerequisites for npm publication. Native host qualification remains a
+separate claim for the exact environment tested.
 
-The workflow stages a multi-platform container and compares the intended OCI
-manifest digest with the GHCR version tag before and after creating that tag.
-An existing equal digest is idempotent; an existing different digest fails
-without replacing the version tag. Before any candidate image is pushed, the
-workflow requires a clean packed-package install and headless start on Node.js
-22 and performs a read-only registry preflight for every npm release-set
-package. The assembly jobs remain credential-free. Execution of the final MCP
-archive on a native macOS, Linux, or Windows runner belongs to a separate
-Real-Machine Verification Workflow.
+When a container artifact is selected, the workflow stages its declared OCI
+platforms and compares the intended manifest digest with the GHCR version tag
+before and after creating that tag. An existing equal digest is idempotent; an
+existing different digest fails without replacing the version tag. The npm
+artifact path separately checks its exact prepared archives in clean consumers
+on observed available platforms. Assembly remains credential-free. Additional
+native macOS, Linux, or Windows qualification is bound to each environment
+that actually runs it.
 
-The commit-pinned Trivy action uses the pinned Trivy `v0.69.3` binary to scan
-both `linux/amd64` and `linux/arm64` operating-system and library packages. It
-rejects actionable `HIGH` or `CRITICAL` findings before the image authority is
-signed. The image authority also requires exact platform manifest and
-attestation-subject digest bindings, SLSA provenance schema and build semantics,
-exact repository/ref/commit build arguments, and a non-empty SPDX document for
-each platform. The signing job refetches the registry evidence and accepts it
-only when all validated evidence hashes remain identical. GitHub Release assets are covered by
+For a selected OCI image, the commit-pinned Trivy action scans the declared
+platform operating-system and library packages and rejects actionable `HIGH`
+or `CRITICAL` findings before the image authority is signed. The image
+authority requires exact platform manifest and attestation-subject digest
+bindings, SLSA provenance schema and build semantics, exact repository/ref/
+commit build arguments, and a non-empty SPDX document for each selected
+platform. The signing job refetches registry evidence and accepts it only when
+all validated evidence hashes remain identical. GitHub Release assets are
+covered by
 `RELEASE_SHA256SUMS`; its entries use the final flattened asset basenames. The
 workflow signs that checksum file with Sigstore and verifies the exact workflow
 identity and GitHub Actions issuer before publication. Release consumers must
@@ -987,20 +988,21 @@ npm closure succeeds.
 The first canonical npm version uses an explicit bootstrap because the two npm
 packages do not have Trusted Publisher settings until after they exist. When
 the first `0.0.1` candidate reaches the `release` branch, the automatic
-release-branch run validates its deployment and creates or verifies the
+release-branch run validates the accepted candidate and creates or verifies the
 canonical tag, then skips the ordinary OIDC release dispatch. After that run
-succeeds, manually dispatch `Release branch deployment` on the `release` branch
-with `bootstrap_candidate=0.0.1`. This second run reuses the exact tag and
-deploys the exact candidate before dispatching `release.yml` with the explicit
-bootstrap input. Do not manually push the first tag or dispatch the release
-workflow without the bootstrap input; either would attempt ordinary OIDC before
-the package trust exists.
+succeeds, dispatch `.github/workflows/release-branch.yml` on the `release`
+branch with `bootstrap_candidate=0.0.1`. This run revalidates the same tag,
+candidate, and originating stable authority before dispatching `release.yml`
+with the explicit bootstrap input. It does not require or create a deployment
+receipt. Do not manually push the first tag or dispatch `release.yml` without
+the bootstrap input; either would attempt ordinary OIDC before the package
+trust exists.
 
 Use `0.0.1` only if the final public registry recheck confirms that canonical
 version remains unused. Store `NPM_BOOTSTRAP_TOKEN` temporarily as a
 `release-candidate` environment secret; the release workflow exposes it only to
 the one bootstrap publication mutation step. It is not used by preparation,
-preflight, deployment, or authority verification. Remove this secret as soon as
+preflight, or authority verification. Remove this secret as soon as
 the first publication succeeds. The publisher rejects bootstrap for later
 versions and never silently falls back to a token.
 
@@ -1086,20 +1088,19 @@ The acceptance orchestrator materializes the explicit Git commit in a detached
 private worktree. It never copies a dirty caller workspace, and a failed run
 retains one candidate-bound fixed-field failure envelope without moving the
 accepted-generation pointer. A successful run publishes one digest-bound
-accepted-candidate receipt. Detailed reports remain diagnostic evidence owned
-by acceptance; bootstrap, deployment, branch promotion, and production closure
-consume only the receipt and never revalidate the report inventory.
-The fresh-container npm release-set authority is a separate supply-chain
-checkpoint. Stable promotion requires both that checkpoint and functional
-acceptance, so package installation is proven once in a clean job without
-coupling browser preparation or functional scheduling to package verification.
+accepted-candidate receipt. The same generation owns the npm installability
+report, which records the exact archives and each selected native or local
+Docker consumer result. Stable and release authority bundles revalidate that
+report alongside the receipt; an unavailable optional Docker target remains
+`not_run`, while a selected target failure rejects qualification.
 Acceptance commands run until they exit or the operator cancels the run; the
 orchestrator does not convert elapsed wall-clock time into a failure. The CI
 job retains one infrastructure-level cap solely to contain abandoned runner
 cost, and that cap is not part of the acceptance result.
 
-For the first installation on a clean supported Ubuntu or Debian x64/arm64
-Orb target, create an owner-only (`0600`) non-symlink login input containing
+The following bootstrap procedure is specific to a Linux Orb deployment and
+does not constrain npm eligibility. For its documented Ubuntu or Debian
+x64/arm64 target, create an owner-only (`0600`) non-symlink login input containing
 exact UTF-8 JSON with only `username` and `password`; the normalized username
 must be `owner`. Keep this file under operator-private custody and run:
 
@@ -1143,15 +1144,16 @@ be proven. A successful health probe is emitted only after runtime composition,
 including startup-owned storage schema initialization, has completed. Retained
 evidence contains only bounded booleans and public candidate identities.
 
-After both local acceptance and existing-target verification, branch promotion
-uses the explicit accepted commit. Nightly feedback is bounded and
+When this Orb deployment workflow is selected, branch promotion follows local
+acceptance and existing-target verification for the explicit accepted commit.
+Nightly feedback is bounded and
 non-gating; stable and release require their own exact successful authorities.
 No completed failed workflow is automatically retried, and this procedure
 does not publish tags or assets or modify branch policy.
 
-After branch promotion, reduce the accepted generation, existing-target
-deployment, live Core state, active service, and branch authority for that
-exact candidate:
+For an Orb deployment, after branch promotion reduce the accepted generation,
+existing-target deployment, live Core state, active service, and branch
+authority for that exact candidate:
 
 ```bash
 npm run verify:production-closure
@@ -1167,8 +1169,9 @@ Inspect the sanitized functional DAG without executing it:
 npm run verify:acceptance:plan
 ```
 
-Run the mandatory Release Deployment Verification against an exact stable
-candidate and its functional receipt:
+Release Deployment Verification is an optional runtime-ui claim. Run it against
+the exact accepted candidate when that deployment claim is selected; npm
+publication does not require it:
 
 ```bash
 npm run server:verify:release-deployment -- \
@@ -1182,10 +1185,10 @@ The controller deploys the runtime-ui surface and fixture in separate
 containers on one disposable private network for the exact candidate, drives
 the bounded external deterministic synthetic request scenarios with unique MCP
 request IDs, verifies termination and exact-resource cleanup, and writes one
-fixed-size privacy-safe deployment receipt with `capacityCertified: false`. Exit
-code `0` means the Release
-Deployment Claim is present; every non-zero exit means the claim is absent
-and tag publication for that commit is blocked. If the controller is
+fixed-size privacy-safe deployment receipt with `capacityCertified: false`.
+Exit code `0` means the optional Release Deployment Claim is present; a
+non-zero exit means only that selected claim is absent. It blocks publication
+only when the release explicitly selects deployment verification. If the controller is
 interrupted, invoke the same exact-resource cleanup through
 `--cleanup-only --cleanup-state <private-cleanup-state>`; never substitute a
 broad container, volume, process, or directory cleanup.

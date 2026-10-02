@@ -29,10 +29,12 @@ tests, and documentation in the same change.
 Use `$meshrix-js-regression-planner` to select focused checks and one final
 integration scope. Complete source review and in-scope repairs before final
 regression. Repair in-scope failures found during final verification and rerun
-the affected checks. A functional-completeness release still requires
-`npm run verify:acceptance` and its current required evidence; ordinary source
-or documentation work does not acquire that release claim automatically.
-Follow `docs/RUNBOOK.md` for release deployment and publication requirements.
+the affected checks. Release acceptance uses `npm run verify:acceptance`; its
+existing profile runs exact-artifact npm consumer qualification on discovered
+available targets. At least one complete platform must qualify, and every
+selected target must pass. Ordinary source or documentation work does not
+acquire release claims automatically. Follow `docs/RUNBOOK.md` for optional
+deployment and publication requirements.
 
 Follow `AGENTS.md` for execution authority. Local build, install, data
 migration, live acceptance, publication, push, and deployment are distinct
@@ -45,11 +47,13 @@ verify:acceptance`.
 ## Release boundary
 
 `.github/workflows/release-branch.yml` validates the exact stable authority,
-performs the release deployment, creates or verifies the canonical tag at that
-commit, and dispatches `.github/workflows/release.yml` at the tag. The release
-workflow validates the exact originating run and waits for it to complete
-before consuming its authority artifact. Direct tag pushes and API dispatches
-share this one publication workflow; do not add a reusable caller or a second
+including its functional receipt and npm installability report, then creates
+or verifies the canonical tag at that commit and dispatches
+`.github/workflows/release.yml` at the tag. A runtime-ui deployment receipt is
+present only when that optional claim is selected. The release workflow
+validates the exact originating run and waits for it to complete before
+consuming its authority artifact. Direct tag pushes and API dispatches share
+this one publication workflow; do not add a reusable caller or a second
 publisher identity.
 
 The release definition owns the version and Node/npm toolchain pins. Build and
