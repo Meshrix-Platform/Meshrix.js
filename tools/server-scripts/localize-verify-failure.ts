@@ -110,7 +110,12 @@ export function sanitizeVerificationLog(value: string, root = repoRoot): string 
       return "[redacted-key-material]";
     }
     if (/^(?:stdout|stderr) \|/u.test(line)) runtimeOutput = true;
-    else if (/^(?:\s*[✓×❯] |\s*(?:FAIL |FAILED |PASS |Test Files |Tests |Duration |RUN |Suite: |Stage: )|> )/u.test(line)) runtimeOutput = false;
+    else if (/^(?:\s*[✓×❯] |\s*(?:FAIL |FAILED |PASS |Test Files |Tests |Duration |RUN |Suite: |Stage: )|> )/u.test(line)) {
+      runtimeOutput = false;
+      // Truncated assertion diffs can leave unmatched containers. A new runner
+      // diagnostic starts a new record, independent of the previous payload.
+      structuredDepth = 0;
+    }
     if (runtimeOutput) return "[redacted-runtime-output]";
     const sensitiveValue = /\b(?:payload|requestBody|responseBody|prompt|ciphertext|encryptedData|privateKey(?:Jwk)?|authorization|accessToken|apiKey|sessionKey|token|secret|password|cookie|credential)\s*["']?\s*[:=]/iu.test(line);
     if (structuredDepth > 0 || /^\s*(?:\{|\[(?:\s*$|["'{0-9]))/u.test(line) || (sensitiveValue && /[\[{]\s*$/u.test(line))) {

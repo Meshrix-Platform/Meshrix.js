@@ -15,6 +15,20 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("pull-request verification feedback", () => {
+  it("retains later failures after a truncated structured assertion diff", () => {
+    const safe = sanitizeVerificationLog([
+      "{", '  "payload": "synthetic private value",',
+      " FAIL tests/vitest/server/next.test.ts > next case",
+      "AssertionError: expected 1 to equal 2",
+      'credential="synthetic private credential"',
+      " Test Files  2 failed (2)",
+    ].join("\n"));
+    expect(safe).not.toContain("synthetic private");
+    expect(safe).toContain("FAIL tests/vitest/server/next.test.ts");
+    expect(safe).toContain("AssertionError: expected 1 to equal 2");
+    expect(safe).toContain("Test Files  2 failed (2)");
+  });
+
   it("retains every diagnostic stage while removing private paths, credentials, key material and runtime output", async () => {
     const secret = ["npm", "syntheticCredentialOnly12345678901234"].join("_");
     const localRoot = ["", "home", "fixture-user", "project"].join("/");
