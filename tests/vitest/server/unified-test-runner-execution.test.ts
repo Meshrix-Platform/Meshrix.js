@@ -15,7 +15,7 @@ import {
   summarizeTestResults,
   type TestExecutionPhase,
   type TestSuiteEntry
-} from "../../lib/unified-test-runner-execution.ts";
+} from "../../../tools/scripts/lib/unified-test-runner-execution.ts";
 
 function suite(id: string): TestSuiteEntry {
   return {

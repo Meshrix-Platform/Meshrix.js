@@ -36,6 +36,12 @@ export const SCRIPT_CATEGORIES: Readonly<Record<string, any>> = Object.freeze({
 
 /** @type {Readonly<Record<string, ScriptEntry>>} */
 const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
+  "test:startup-process-tree": {
+    scriptName: "test:startup-process-tree", command: "npm run test:startup-process-tree", category: "test", subsystem: "startup",
+    owner: "platform", tier: "integration", sideEffects: "temp-files",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: ["tools/scripts/process-tree-smoke.ts", "tools/scripts/lib/process-lifecycle.ts", "tools/scripts/lib/startup-platform-adapter.ts"], outputs: [],
+  },
   "ci:local": {
     scriptName: "ci:local", command: "npm run ci:local", category: "test", subsystem: "release",
     owner: "platform", tier: "integration", sideEffects: "build-output",
@@ -43,7 +49,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "tools/scripts/local-ci.ts",
       "tests/run.ts",
-      "tests/lib/unified-test-runner-execution.ts",
+      "tools/scripts/lib/unified-test-runner-execution.ts",
       "tools/registry/tests.registry.json",
       "tools/registry/schema/test-suite.schema.json",
       "tools/server-scripts/lib/local-execution-environment.ts",
@@ -308,11 +314,13 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
       "tools/server-scripts/verify-release-candidate-identity.ts",
       "tools/server-scripts/lib/platform-acceptance-reducer.ts",
-      "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts"
+      "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts",
+      "tools/server-scripts/publish-release-set.ts"
     ],
     outputs: [
       "build/acceptance-evidence/**",
       "build/acceptance-proof-ledger/**",
+      "build/release/npm-set/**",
       "build/reports/**"
     ],
   },
@@ -775,7 +783,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:controlled-execution-convergence", command: "npm run verify:controlled-execution-convergence", category: "verifier", subsystem: "execution-sandbox",
     owner: "platform-security", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "security", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.ts", "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts", "tools/server-scripts/verify-release-candidate-identity.ts", "packages/foundation/src/observability/sensitive-report-scan.ts", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
+    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.ts", "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts", "tools/server-scripts/lib/source-tree-digest.ts", "packages/foundation/src/observability/sensitive-report-scan.ts", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
   },
   "verify:security-alert-lifecycle": {
     scriptName: "verify:security-alert-lifecycle", command: "npm run verify:security-alert-lifecycle", category: "verifier", subsystem: "security",
@@ -830,6 +838,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/tests.registry.json",
       "tools/registry/architecture-layout-facade.ts",
       "tools/server-scripts/verify-repo-organization.ts",
+      "tsconfig.node.json",
       "tools/server-scripts/lib/repo-organization-ast-advisory.ts",
       "apps/**",
       "packages/**",

@@ -2,11 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateEngineeringOutcomes,
   parseLocalCiArguments,
-  sourceNodeEnvironment
+  sourceNodeEnvironment,
+  suiteFlowResults
 } from "../../../tools/scripts/local-ci.ts";
 import { sanitizeVerificationLog } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
 describe("automatic local verification entry", () => {
+  it("reads the maintained runner summary and preserves every failed or unexecuted suite", () => {
+    const report = {
+      summary: { reportLeakScan: true },
+      suites: [{ id: "core", status: "failed" }, { id: "dependent", status: "not_run", reasonCode: "prerequisite_lane_incomplete" }],
+      executionProcesses: [{ id: "core" }, { id: "dependent" }],
+    };
+    expect(suiteFlowResults(report, "build/reports/runner.json")).toMatchObject([
+      { id: "core", status: "failed", reasonCode: "command_failed" },
+      { id: "dependent", status: "not_run", reasonCode: "prerequisite_lane_incomplete" },
+    ]);
+    expect(() => suiteFlowResults({ ...report, summary: { reportLeakScan: false } }, "report.json")).toThrow("local_ci_runner_report_invalid");
+  });
+
   it("defaults to the registered engineering scope and accepts a repository-relative report", () => {
     expect(parseLocalCiArguments([])).toMatchObject({
       scope: "engineering",

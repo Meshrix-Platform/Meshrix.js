@@ -24,7 +24,7 @@ import {
   runSuiteProcess,
   sourceNodeEnvironment,
   summarizeTestResults
-} from "./lib/unified-test-runner-execution.ts";
+} from "../tools/scripts/lib/unified-test-runner-execution.ts";
 import {
   discoverLocalExecutionEnvironment,
   type LocalExecutionEnvironment

@@ -497,7 +497,7 @@
     {
       "id": "controlled-execution-convergence-reducer",
       "factKey": "controlled-execution.convergence-readiness",
-      "domain": "Current Controlled Execution Convergence readiness reduction over the exact canonical release candidate, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
+      "domain": "Current Controlled Execution Convergence readiness reduction over the exact source provenance and sandbox leaf reports, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
       "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts",
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [
@@ -505,11 +505,10 @@
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-controlled-execution-convergence.ts",
-        "tools/server-scripts/lib/platform-acceptance-command-catalog.ts"
+        "tools/registry/tests.registry.json"
       ],
       "verification": [
-        "npm run verify:controlled-execution-convergence",
-        "npm run verify:acceptance:plan"
+        "npm run verify:controlled-execution-convergence"
       ],
       "nonAuthorityBoundaries": [
         "Sandbox leaf reports are reducer inputs and cannot independently claim current convergence readiness."

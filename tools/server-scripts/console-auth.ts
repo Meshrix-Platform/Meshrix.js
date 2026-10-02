@@ -172,14 +172,14 @@ async function main() : Promise<any> {
   const userDataPath: any = path.resolve(
     String(args["data-dir"] || process.env.MESHRIX_SERVER_DATA_DIR || ServerConfig.getDataDir())
   );
-  const tagManagementStore: any = createTagStoreAdapter({ userDataPath });
-  const auth: any = createConsoleAuth({
-    userDataPath,
-    consoleRoles: CONSOLE_ROLES,
-    tagManagementStore
-  });
-
+  const tagManagementStore = await createTagStoreAdapter({ userDataPath });
+  let auth: ReturnType<typeof createConsoleAuth> | undefined;
   try {
+    auth = createConsoleAuth({
+      userDataPath,
+      consoleRoles: CONSOLE_ROLES,
+      tagManagementStore
+    });
     if (command === "init-owner") {
       const allowedKeys: any = new Set(["_", "credential-stdin", "data-dir"]);
       if (args["credential-stdin"] !== true || Object.keys(args).some((key?: any) : any => !allowedKeys.has(key))) {
@@ -203,6 +203,7 @@ async function main() : Promise<any> {
 
     if (command === "list-users") {
       for (const user of auth.listUsers()) {
+        if (!user) continue;
         console.log(
           [
             user.userId,
@@ -292,8 +293,11 @@ async function main() : Promise<any> {
 
     throw new Error(`未知命令：${command}`);
   } finally {
-    auth.close();
-    tagManagementStore.close();
+    try {
+      await auth?.close();
+    } finally {
+      await tagManagementStore.close();
+    }
   }
 }
 

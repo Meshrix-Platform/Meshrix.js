@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { createOperationProofSubstrate } from "../../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { sanitizeVerificationLog } from "../../../../tools/server-scripts/localize-verify-failure.ts";
 
 type FixtureEvent = Record<string, any> & { kind: string };
 
@@ -23,6 +24,14 @@ function candidate(dataRoot: string, peerUrl: string, mode: string, risk = "safe
     stdio: ["pipe", "pipe", "pipe"]
   });
   const events: FixtureEvent[] = [];
+  let diagnostic = "";
+  let terminal: string | null = null;
+  child.stderr!.on("data", (chunk) => {
+    diagnostic = `${diagnostic}${String(chunk)}`.slice(-16 * 1024);
+  });
+  const failure = (kind: string): Error => new Error(
+    `Synthetic platform candidate exited before ${kind} (${terminal}).\n${sanitizeVerificationLog(diagnostic)}`
+  );
   const waiters: Array<{ kind: string; resolve: (event: FixtureEvent) => void; reject: (error: Error) => void }> = [];
   const stdout = createInterface({ input: child.stdout!, crlfDelay: Infinity });
   stdout.on("line", (line) => {
@@ -33,13 +42,20 @@ function candidate(dataRoot: string, peerUrl: string, mode: string, risk = "safe
     else events.push(event);
   });
   child.once("exit", (code, signal) => {
+    terminal = `code=${String(code)}, signal=${String(signal)}`;
+  });
+  child.once("error", (error: NodeJS.ErrnoException) => {
+    terminal = `spawn=${error.code || "failed"}`;
+  });
+  child.once("close", () => {
     for (const waiter of waiters.splice(0)) {
-      waiter.reject(new Error(`Synthetic platform candidate exited before ${waiter.kind} (code=${String(code)}, signal=${String(signal)}).`));
+      waiter.reject(failure(waiter.kind));
     }
   });
   const waitFor = (kind: string): Promise<FixtureEvent> => {
     const index = events.findIndex((event) => event.kind === kind);
     if (index >= 0) return Promise.resolve(events.splice(index, 1)[0]);
+    if (terminal) return Promise.reject(failure(kind));
     return new Promise((resolve, reject) => waiters.push({ kind, resolve, reject }));
   };
   const send = (message: Record<string, unknown>) => child.stdin!.write(`${JSON.stringify(message)}\n`);
