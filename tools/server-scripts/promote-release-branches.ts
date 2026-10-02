@@ -14,7 +14,7 @@ const BRANCHES: readonly any[] = Object.freeze(["nightly", "stable", "release"])
 const POLL_INTERVAL_MS: any = 10_000;
 const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml"]),
+  nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
   release: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/release-branch.yml"]),
 });

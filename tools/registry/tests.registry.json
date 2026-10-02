@@ -443,6 +443,36 @@
         "internal-platform.single-node-e2e"
       ]
     },
+    "engineering-public": {
+      "description": "Applicable local and hosted engineering, package consumption, and sandbox verification",
+      "extends": "core-public",
+      "suites": [
+        "gateway.task-001",
+        "repo.product-distribution",
+        "release.npm-package-prepare",
+        "release.npm-package-installability",
+        "execution-sandbox.provider-resolution",
+        "execution-sandbox.controlled-runtime",
+        "execution-sandbox.convergence-final"
+      ],
+      "execution": {
+        "phases": [
+          {
+            "id": "engineering-delivery",
+            "label": "Package consumption and applicable sandbox verification",
+            "lanes": [
+              { "id": "gateway-focused", "suites": ["gateway.task-001"] },
+              { "id": "product-distribution", "dependsOn": ["gateway-focused"], "suites": ["repo.product-distribution"] },
+              { "id": "npm-prepare", "dependsOn": ["product-distribution"], "suites": ["release.npm-package-prepare"] },
+              { "id": "npm-consumer", "dependsOn": ["npm-prepare"], "suites": ["release.npm-package-installability"] },
+              { "id": "sandbox-provider", "suites": ["execution-sandbox.provider-resolution"] },
+              { "id": "sandbox-runtime", "dependsOn": ["sandbox-provider"], "suites": ["execution-sandbox.controlled-runtime"] },
+              { "id": "sandbox-convergence", "dependsOn": ["sandbox-runtime"], "suites": ["execution-sandbox.convergence-final"] }
+            ]
+          }
+        ]
+      }
+    },
     "changed": {
       "description": "Tests affected by current changes",
       "dynamic": true
@@ -460,7 +490,7 @@
       "id": "repo.product-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
       "owner": "platform", "package": "repo", "level": "integration",
       "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=product-distribution", "vitest", "run", "tests/vitest/server/distribution-policy.test.ts", "tests/vitest/server/distribution-artifacts.test.ts", "--maxWorkers=1"],
-      "sideEffects": "container", "requiredServices": [],
+      "sideEffects": "network-service", "requiredServices": [],
       "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
     },
     {
@@ -1180,7 +1210,11 @@
         "tests/vitest/server/architecture-acceptance-boundaries.test.ts",
         "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.ts",
         "tests/vitest/server/deployment-lifecycle-state-machine.test.ts",
+        "tests/vitest/server/environment-compatibility-command-resolution.test.ts",
         "tests/vitest/server/generate-provenance.test.ts",
+        "tests/vitest/server/local-execution-environment.test.ts",
+        "tests/vitest/server/mcp-installer-portability.test.ts",
+        "tests/vitest/server/mcp-public-installer-command.test.ts",
         "tests/vitest/server/mcp-release-manifest.test.ts",
         "tests/vitest/server/plugin-runtime.test.ts",
         "tests/vitest/server/prepare-release.test.ts",
@@ -1757,8 +1791,10 @@
         "tools/server-scripts/verify-controlled-execution-sandbox.ts"
       ],
       "sideEffects": "container",
+      "platforms": ["darwin", "linux"],
       "requiredServices": [
-        "docker"
+        "docker",
+        "oci-conformance-native-image"
       ],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2146,6 +2182,20 @@
       "artifacts": []
     },
     {
+      "id": "release.npm-package-prepare",
+      "label": "Prepare the canonical npm release set for isolated consumers",
+      "owner": "platform",
+      "package": "root",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "release:publish-npm", "--", "--prepare", "--artifact-dir", "build/release/npm-set"],
+      "sideEffects": "build-output",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": ["build/release/npm-set/meshrix-release-set.json"]
+    },
+    {
       "id": "release.npm-package-installability",
       "label": "npm release-set clean-install, CLI, and headless runtime verifier",
       "owner": "platform",
@@ -2153,13 +2203,12 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-npm-package-installability.ts"
+        "tools/server-scripts/verify-npm-package-installability.ts",
+        "--artifact-dir",
+        "build/release/npm-set"
       ],
-      "sideEffects": "container",
-      "requiredServices": [
-        "docker",
-        "npm-registry"
-      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [

@@ -13,7 +13,7 @@ import {
 import {
   PLATFORM_ACCEPTANCE_REPORT_SCHEMA,
   PLATFORM_ACCEPTANCE_STATE_MACHINE,
-  commandExecutable,
+  resolveAcceptanceCommandInvocation,
   commandLine,
   normalizedParallelism,
   parsePlatformAcceptanceArgs as parseArgs,
@@ -299,8 +299,7 @@ async function runAcceptanceWorker() : Promise<any> {
     redactTail: redactedTail,
     repoRoot,
     resolveCommand: (item?: any) : any => ({
-      executable: commandExecutable(item.command),
-      args: item.args,
+      ...resolveAcceptanceCommandInvocation(item.command, item.args),
       displayCommand: commandLine(item)
     }),
     beforeStart: async (item?: any) : Promise<any> => {

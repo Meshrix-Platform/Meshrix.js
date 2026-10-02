@@ -95,6 +95,10 @@
       "source": "./packages/foundation/src/concurrency/lock-manager.ts",
       "default": "@meshrix/foundation/concurrency/lock-manager"
     },
+    "#meshrix/foundation/environment-compatibility/index": {
+      "source": "./packages/foundation/src/environment-compatibility/index.ts",
+      "default": "@meshrix/foundation/environment-compatibility/index"
+    },
     "#meshrix/foundation/module-system/github-release-plugin-package-source": {
       "source": "./packages/foundation/src/module-system/github-release-plugin-package-source.ts",
       "default": "@meshrix/foundation/module-system/github-release-plugin-package-source"
@@ -333,9 +337,6 @@
     "tools/server-scripts/start-server.ts",
     "!tools/server-scripts/benchmark-gateway.ts",
     "!dist/tools/server-scripts/benchmark-gateway.*",
-    "tools/scripts/start-all.sh",
-    "tools/scripts/restart-all.sh",
-    "tools/scripts/restart-dev.sh",
     "docs/README.md",
     "docs/architecture/ARCHITECTURE.md",
     "docs/architecture/EXECUTION-SANDBOX.md",
@@ -576,7 +577,7 @@
     "server:verify:upload-workspace-materialization": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upload-workspace-materialization.ts",
     "console:verify": "npm run build --workspace @meshrix/ui-console && npm run build --workspace @meshrix/console && npm run typecheck --workspace @meshrix/console",
     "mcp:doctor": "node dist/tools/server-scripts/mcp-doctor.js",
-    "mcp:install": "sh packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh",
+    "mcp:install": "node dist/tools/server-scripts/mcp-install.js",
     "server:stress:mcp-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/stress-mcp-gateway.ts",
     "server:stress:mcp-gateway-observed": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/observe-mcp-gateway-load.ts",
     "server:stress:gateway-platform": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/stress-gateway-platform-profile.ts",
@@ -584,7 +585,7 @@
     "gateway:benchmark": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/benchmark-gateway.ts",
     "test:gateway-benchmark": "node tests/run.ts --profile gateway-benchmark --continue-on-failure --report build/reports/gateway-benchmark-tests.json",
     "test:product-distribution": "node tests/run.ts --profile product-distribution --continue-on-failure --report build/reports/product-distribution.json",
-    "server:mcp:register": "sh packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh register",
+    "server:mcp:register": "node dist/apps/server/bin/meshrix-mcp.js register",
     "setup": "npm install",
     "vitest": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",
     "vitest:coverage": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts --coverage",
@@ -635,12 +636,14 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.0.10",
     "@types/pg": "^8.21.0",
+    "@types/semver": "7.8.0",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vitest/coverage-v8": "^4.1.11",
     "@vue/test-utils": "2.4.11",
     "cross-env": "^10.1.0",
     "jsdom": "^30.0.0",
     "openpgp": "^6.3.1",
+    "semver": "7.8.1",
     "typescript": "^5.8.3",
     "vite": "^8.1.4",
     "vitest": "^4.1.11",

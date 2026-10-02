@@ -57,7 +57,7 @@ describe("package script registry declarations", () : any => {
     expect(getDeclaredEntry("verify:acceptance")).toMatchObject({
       tier: "release",
       sideEffects: "destructive",
-      requiresFreshContainer: true,
+      requiresFreshContainer: false,
       ciProfile: "release",
       expectedDurationClass: "extended",
       outputs: [
@@ -69,17 +69,19 @@ describe("package script registry declarations", () : any => {
   });
   it("keeps supported installed operator commands on packaged Node entries", () => {
     expect(packageManifest.scripts["server:start"]).toBe("meshrix-server --with-ui --edition core");
-    for (const name of ["server:auth", "server:doctor", "server:locate", "server:reconcile", "mcp:doctor"]) {
+    for (const name of ["server:auth", "server:doctor", "server:locate", "server:reconcile", "mcp:doctor", "mcp:install"]) {
       expect(packageManifest.scripts[name]).toMatch(/^node dist\/tools\/server-scripts\/[a-z-]+\.js$/u);
     }
     expect(packageManifest.scripts["server:auth:rotate"]).toMatch(/^node dist\/tools\/server-scripts\/[a-z-]+\.js /u);
     expect(packageManifest.scripts["server:start"]).not.toMatch(/--profile core/u);
-    expect(getDeclaredEntry("mcp:install").inputs).toContain("packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh");
+    expect(packageManifest.scripts["server:mcp:register"]).toBe("node dist/apps/server/bin/meshrix-mcp.js register");
+    expect(getDeclaredEntry("mcp:install").inputs).toContain("tools/server-scripts/mcp-install.ts");
+    expect(getDeclaredEntry("mcp:install").inputs).toContain("apps/server/bin/meshrix-mcp.ts");
     expect(getDeclaredEntry("mcp:doctor").inputs).toContain("apps/server/bin/meshrix-mcp.ts");
   });
   it("registers benchmark execution and correctness as distinct explicit contracts", () => {
     expect(getDeclaredEntry("gateway:benchmark")).toMatchObject({ tier: "integration", sideEffects: "network-service", ciProfile: "performance" });
     expect(getDeclaredEntry("test:gateway-benchmark")).toMatchObject({ tier: "integration", sideEffects: "network-service" });
-    expect(getDeclaredEntry("test:product-distribution")).toMatchObject({ tier: "integration", sideEffects: "docker" });
+    expect(getDeclaredEntry("test:product-distribution")).toMatchObject({ tier: "integration", sideEffects: "network-service", requiresFreshContainer: false });
   });
 });

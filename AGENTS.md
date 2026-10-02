@@ -128,6 +128,44 @@ and must not block, promote, or alter a Core deployment result.
 
 ## Common Engineering Workflow
 
+Meshrix.js is a cross-platform Node.js framework. Verification is one automated
+toolchain with one normal entry point, `npm run ci:local`. The development agent
+starts it automatically as part of the authorized task; do not ask the user to
+launch it, select environments or assemble commands. That entry owns
+environment discovery, test selection, execution, cleanup and result reporting;
+the user must not have to manually chain these tools or choose targets after reading
+a discovery report. The internal discovery tool observes the current device's
+operating system, CPU architecture, runtime and available local tools; never
+hard-code an operator's machine inventory or substitute manual probing.
+The entry automatically runs each applicable native-host and local Docker
+workflow, either concurrently or sequentially. Discovery must not connect to
+Tailscale peers or other remote devices. With an available local Docker engine,
+use its observed capabilities for compatible Linux container checks. Without
+Docker, verify the native host without requiring virtualization or installing
+another hypervisor. Any genuinely necessary manual step must identify the exact
+operator action, why it cannot be automated and the input needed to continue.
+Implement portable tool and runtime logic in Node.js. When Node.js can perform
+an operation across supported systems, do not implement it in OS-specific sh,
+Bash or PowerShell scripts, inline workflow shell programs, or hard-coded host
+branches. Use Node APIs for files, process lifecycle and orchestration, and
+argument-based invocation for necessary external tools. Isolate unavoidable
+operating-system integration behind a narrow adapter; it must not become the
+basic execution model of the product or verification toolchain. Migrate callers,
+tests and documentation with each replacement and remove the superseded path.
+Run a check only in an environment that satisfies its actual prerequisites.
+When those prerequisites are absent, record the check as not run and continue
+the applicable work; do not repeatedly execute it under an unsuitable emulator
+or change safety limits to accommodate that environment.
+
+An npm release may be qualified on one or two available platforms. Do not make
+exhaustive operating-system or architecture coverage, native Ubuntu, a virtual
+machine, Docker, or container-image qualification a universal npm publication
+prerequisite. Select representative checks for the actual change and preserve
+required functional and security verification on the selected platforms. Keep
+unmeasured platforms explicit without claiming they passed or treating their
+absence as a failure of the qualified npm candidate. Optional container and
+deployment artifacts retain their own applicable validation requirements.
+
 `CONTRIBUTING.md` owns the common engineering workflow: identify the module and
 integration owner, decide only consequential architecture or published-support
 changes, migrate producers/consumers/tests/documents together, run targeted
@@ -142,8 +180,10 @@ checks locally using the same maintained entry points, test selection, build
 order, dependency installation policy, and supported runtime versions as hosted
 CI. Follow [Local And Hosted CI](CONTRIBUTING.md#local-and-hosted-ci).
 Do not use repeated pushes to discover ordinary build, test, installation, or
-packaging failures. Repair a missing local check or environment in its canonical
-workflow before continuing; a hosted pass does not repair a local coverage gap.
+packaging failures. Repair missing local orchestration for an applicable check
+in its canonical workflow before continuing. An unavailable platform is recorded
+as not run; a hosted pass does not repair a missing local implementation of an
+applicable check.
 Keep real registry publication and hosted identity checks in their explicitly
 authorized release stage, and never describe them as locally verified.
 

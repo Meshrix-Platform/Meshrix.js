@@ -46,75 +46,76 @@ applies to every change:
 
 ## Local And Hosted CI
 
-Local verification is the engineering acceptance environment. Hosted CI verifies
-the submitted candidate and operates authorized release integrations. Ordinary
-build, test, dependency, and package failures must be found and repaired locally
-before submission.
+For agent-led development and release work, the agent automatically invokes
+`npm run ci:local` within the authorized task. The user is not responsible for
+starting the toolchain, choosing environments or assembling commands.
+This single entry coordinates environment discovery, selects and starts the
+applicable workflows, cleans up owned resources and reports their results. Its
+internal discovery tool observes the current device's operating system, CPU
+architecture, Node.js runtime and available local tools. Operators do not run
+discovery separately, manually select its results or assemble a sequence of
+verification commands. Do not hard-code a maintainer's device inventory, replace
+scripted discovery with manual probing, or connect to remote machines during
+local discovery.
 
-- Maintain one executable definition for each engineering check. Local commands
-  and GitHub jobs must call the same entry points with the same test selection,
-  build prerequisites, dependency policy, and declared Node.js versions. Workflow
-  YAML is executed locally by `act`; do not copy its commands into a second local
-  checklist or bypass a failing workflow step. Artifact upload is a hosted-only
-  transfer; the local runner retains the corresponding diagnostics locally.
-- Qualify installation, packaging, build, and CI changes in a clean Linux checkout
-  with freshly installed locked dependencies and an empty npm cache. Exercise the
-  supported Node.js lines selected by CI. Existing build output, workspace links,
-  user npm configuration, credentials, and a warm cache must not satisfy a clean
-  installation check. Incremental checks remain useful during development but do
-  not establish this clean-environment result.
-- Complete one failure-discovery pass over the applicable scope. Retain every
-  failure, group repairs by cause, run focused checks while repairing, and execute
-  the complete selected scope after the fixes are integrated. Do not push each
-  individual fix merely to find the next failure in hosted CI.
-- Keep full sanitized command logs and structured regression results for both
-  local and hosted execution, including failed stages. Preserve the actual exit
-  status. Record candidate, environment, command, result, and any unexecuted scope;
-  do not substitute a log tail or an earlier candidate's result.
-- Reuse valid evidence when the exercised implementation, configuration, and
-  artifact are unchanged. A changed workflow needs its affected checks refreshed;
-  it does not invalidate unrelated runtime evidence. Keep test selection explicit
-  so ordinary engineering CI cannot start the separately authorized performance
-  workflow before functional acceptance.
-- Verify real hosted identity, package publication, provenance, and external
-  deployment permissions in their release stage. Local engineering checks must
-  precede those operations; local simulations cannot prove those external facts.
+Implement this toolchain in cross-platform Node.js. Use Node APIs for file
+operations, process ownership, orchestration and reporting instead of sh, Bash,
+PowerShell or inline workflow shell logic whenever Node.js can provide the
+behavior. Invoke necessary external tools with argument arrays. Keep genuinely
+OS-specific integration in a narrow adapter, update all callers and tests, and
+remove the replaced implementation. Hosted YAML calls the same maintained tools;
+it must not contain a separate implementation of the workflow.
 
-When local and hosted behavior differs, identify the missing environment input or
-check, fix the shared workflow, reproduce the failure locally, and verify the
-repair there before the next submission. Maintain this process with the product;
-do not leave a one-off troubleshooting script as its implementation.
+The entry automatically runs the native-host workflow and, when a local Docker
+engine is available, the compatible Linux container workflow selected from its
+observed operating system and architecture. It may schedule independent workflows
+concurrently or sequentially. Without Docker, it runs the applicable native-host
+checks; do not require a virtual
+machine, install a hypervisor or run an incompatible architecture under emulation
+to satisfy a fixed matrix. A missing prerequisite is recorded as `not_run` with
+a finite reason. A check that starts and fails remains a failure requiring
+investigation; lack of another platform does not turn it into a pass.
 
-Use a non-root macOS or Linux shell with a local Docker Unix socket. Install
-[act](https://nektosact.com/installation/index.html) and the checkout's locked
-development dependencies with `npm ci`, commit the candidate locally, then run:
+Meshrix.js is a cross-platform Node.js framework. An npm release may be qualified
+on one or two available platforms. Complete the selected platforms' actual
+installation, functional and security verification, and report which environments
+were exercised. Do not require every operating system, CPU architecture, native
+Ubuntu host, container image or deployment target before npm publication.
+Unmeasured platforms remain explicitly unmeasured without blocking the qualified
+npm candidate. Container images and deployments have separate validation for
+those artifacts when they are included in the delivery.
 
-```bash
-npm run ci:local -- --list
-npm run ci:local
-```
+- Local and hosted checks use the same maintained engineering entry points,
+  applicable test selection, dependency policy and supported runtime versions.
+  Shared checks must not acquire different pass criteria solely because they
+  run locally or in GitHub. Keep hosted identity and publication operations in
+  their authorized release stage.
+- Verify changed installation and packaging behavior in an isolated consumer
+  on a discovered, available platform with freshly installed locked inputs and
+  an empty npm cache. Existing build output, workspace links, user npm
+  configuration or credentials must not substitute for the actual package.
+- Complete one diagnostic pass over the selected executable scope, collect
+  all failures, repair their causes with focused checks, then perform the final
+  integrated regression. Do not use repeated pushes to discover ordinary build,
+  test, dependency or package defects.
+- Retain full sanitized command logs and structured results, including failures
+  and interrupted execution. Record the candidate, observed environment,
+  selection, actual exit status and unexecuted scope. Missing or skipped checks
+  cannot be presented as successful executions.
+- Reuse valid evidence while its exercised implementation, configuration and
+  artifact remain unchanged. Do not repeat unrelated platform checks for each
+  focused repair. Performance verification follows successful relevant
+  functional verification as required by `AGENTS.md`.
+- GitHub dependency review, hosted run identity, package publication,
+  provenance and deployment permissions require their real external checks.
+  Local environment discovery and engineering results do not establish those
+  external facts.
 
-The runner checks the committed candidate in a disposable source checkout. It
-executes the actual GitHub jobs for branch policy, regression, Node 22, Gateway,
-distribution, package portability, and controlled sandbox in fresh Ubuntu 24.04
-containers with the hosted runner's amd64 architecture (emulated on other host
-architectures). Each job installs its
-own dependencies without the user's npm configuration or a restored npm cache.
-The runner image adds an ordinary user matching the checkout owner; checks run
-without root identity, as they do on GitHub. Its small image layer is built from
-`tools/ci/Dockerfile` and reused by Docker when unchanged.
-No publishing workflow or repository credential is supplied. To diagnose a
-specific check, select its name, for example `npm run ci:local -- gateway`.
-The branch check uses the actual source branch and origin repository. Its default
-target is `nightly`; use `--base stable` or `--base release` for a promotion PR.
-The complete failure inventory and sanitized logs are in `build/local-ci/`.
-An untracked file is not part of the candidate; stage and commit intended source
-before verification. Private untracked evidence remains outside the snapshot.
-
-Stable audit, functional, security, and deployment engineering checks retain
-their existing local commands and execution order. Run them locally before
-promoting the candidate that hosted release jobs will consume. `act` does not
-prove hosted identity, registry writes, or production deployment permissions.
+Keep this orchestration and its tools in the canonical implementation and update
+their existing consumers together. Any genuinely necessary manual step must
+state what the operator must do, why automation cannot do it and what input lets
+the workflow continue. Do not retain undocumented manual handoffs, a one-off
+script or a second local command list as a substitute for the automated workflow.
 
 ## Public npm Products
 

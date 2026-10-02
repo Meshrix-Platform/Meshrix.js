@@ -38,9 +38,19 @@ export const SCRIPT_CATEGORIES: Readonly<Record<string, any>> = Object.freeze({
 const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   "ci:local": {
     scriptName: "ci:local", command: "npm run ci:local", category: "test", subsystem: "release",
-    owner: "platform", tier: "integration", sideEffects: "docker",
-    requiresFreshContainer: true, ciProfile: "local", expectedDurationClass: "extended",
-    inputs: ["tools/scripts/local-ci.ts", "tools/ci/Dockerfile", ".github/workflows/ci.yml", ".github/workflows/gateway-preview.yml", ".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml", "tools/registry/tests.registry.json"],
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "local", expectedDurationClass: "extended",
+    inputs: [
+      "tools/scripts/local-ci.ts",
+      "tests/run.ts",
+      "tests/lib/unified-test-runner-execution.ts",
+      "tools/registry/tests.registry.json",
+      "tools/registry/schema/test-suite.schema.json",
+      "tools/server-scripts/lib/local-execution-environment.ts",
+      "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts",
+      "tools/server-scripts/verify-platform-acceptance.ts",
+      "tools/registry/release-definition.registry.json"
+    ],
     outputs: ["build/local-ci/**"],
   },
   // ── Startup / runtime ──────────────────────────────────────────────────────
@@ -59,7 +69,15 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "server:restart", command: "npm run server:restart", category: "startup", subsystem: "server",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: ["tools/scripts/restart-dev.ts", "tools/scripts/start-all.ts", "tools/scripts/clean-existing-service.ts"], outputs: [],
+    inputs: [
+      "tools/scripts/restart-dev.ts",
+      "tools/scripts/restart-all.ts",
+      "tools/scripts/start-all.ts",
+      "tools/scripts/clean-existing-service.ts",
+      "tools/scripts/lib/process-lifecycle.ts",
+      "tools/scripts/lib/startup-platform-adapter.ts",
+      "tools/scripts/lib/service-process-ownership.ts"
+    ], outputs: [],
   },
   "start:compose": {
     scriptName: "start:compose", command: "npm run start:compose", category: "startup", subsystem: "server",
@@ -234,9 +252,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "test:product-distribution": {
     scriptName: "test:product-distribution", command: "npm run test:product-distribution", category: "test", subsystem: "release",
-    owner: "platform", tier: "integration", sideEffects: "docker",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
-    inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tools/server-scripts/publish-release-set.ts", "tests/vitest/server/distribution-*.test.ts"], outputs: ["build/reports/product-distribution.json", "build/packages/**", "dist/**"],
+    inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tools/server-scripts/lib/local-execution-environment.ts", "tools/server-scripts/publish-release-set.ts", "tests/vitest/server/distribution-*.test.ts"], outputs: ["build/reports/product-distribution.json", "build/packages/**", "dist/**"],
   },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",
@@ -282,7 +300,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   "verify:acceptance": {
     scriptName: "verify:acceptance", command: "npm run verify:acceptance", category: "verifier", subsystem: "platform-acceptance",
     owner: "platform", tier: "release", sideEffects: "destructive",
-    requiresFreshContainer: true, ciProfile: "release", expectedDurationClass: "extended",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
     inputs: [
       "tools/server-scripts/verify-platform-acceptance.ts",
       "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
@@ -440,7 +458,11 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       ".github/workflows/branch-flow.yml",
       ".github/workflows/ci.yml",
       ".github/workflows/release-branch.yml",
+      ".github/workflows/release.yml",
       "tools/server-scripts/promote-release-branches.ts",
+      "tools/server-scripts/release-workflow-automation.ts",
+      "tools/server-scripts/resolve-branch-promotion-authority.ts",
+      "tools/registry/release-definition.registry.json",
       "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
       "build/acceptance-evidence/current.json",
       "tools/scripts/verify-git-publication.ts"
@@ -506,8 +528,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "verify:npm-package-installability": {
     scriptName: "verify:npm-package-installability", command: "npm run verify:npm-package-installability", category: "packaging", subsystem: "npm-release-set",
-    owner: "platform", tier: "release", sideEffects: "docker",
-    requiresFreshContainer: true, ciProfile: "release", expectedDurationClass: "extended",
+    owner: "platform", tier: "release", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
     inputs: [
       "package.json",
       "package-lock.json",
@@ -519,6 +541,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "docs/examples/gateway/**",
       "build/release/npm-set/**",
       "tools/server-scripts/verify-npm-package-installability.ts",
+      "tools/server-scripts/lib/local-execution-environment.ts",
       "tools/server-scripts/publish-release-set.ts",
       "tools/server-scripts/lib/npm-cli-invocation.ts",
       "tools/server-scripts/lib/lock-backed-npm-registry.ts",
@@ -878,21 +901,25 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   "mcp:install": {
     scriptName: "mcp:install", command: "npm run mcp:install", category: "mcp-installer", subsystem: "gateway",
     owner: "platform", tier: "integration", sideEffects: "network-service",
-    requiresFreshContainer: true, ciProfile: "external", expectedDurationClass: "standard",
+    requiresFreshContainer: false, ciProfile: "external", expectedDurationClass: "standard",
     inputs: [
       "package.json",
       "apps/server/bin/meshrix-mcp.ts",
-      "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh"
+      "tools/server-scripts/mcp-install.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts"
     ], outputs: [],
   },
   "server:mcp:register": {
     scriptName: "server:mcp:register", command: "npm run server:mcp:register", category: "mcp-installer", subsystem: "gateway",
     owner: "platform", tier: "integration", sideEffects: "network-service",
-    requiresFreshContainer: true, ciProfile: "external", expectedDurationClass: "standard",
+    requiresFreshContainer: false, ciProfile: "external", expectedDurationClass: "standard",
     inputs: [
       "package.json",
       "apps/server/bin/meshrix-mcp.ts",
-      "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh"
+      "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/device-environment.ts"
     ], outputs: [],
   },
   "mcp:doctor": {
@@ -904,7 +931,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/protocols/package.json",
       "apps/server/bin/meshrix-mcp.ts",
       "tools/server-scripts/mcp-doctor.ts",
-      "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh"
+      "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts"
     ], outputs: [],
   },
   // ── Runtime downloads ──────────────────────────────────────────────────────
