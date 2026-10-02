@@ -70,7 +70,7 @@ async function runNpm(args?: any[], cwd?: any, env?: any) : Promise<any> {
   }
 }
 
-async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.1' };\n", scripts = {}, license = name === "pactium" ? "MIT" : "Apache-2.0" }: Record<string, any> = {}) : Promise<any> {
+async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.1' };\n", scripts = {}, bundledPackages = {}, license = name === "pactium" ? "MIT" : "Apache-2.0" }: Record<string, any> = {}) : Promise<any> {
   const packageDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}`);
   const packDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}-pack`);
   await fs.mkdir(packageDirectory, { recursive: true });
@@ -81,9 +81,16 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
     main,
     license,
     dependencies,
+    ...(Object.keys(bundledPackages).length ? { bundleDependencies: Object.keys(bundledPackages) } : {}),
     scripts
   }, null, 2)}\n`);
   await fs.writeFile(path.join(packageDirectory, main), index);
+  for (const [bundledName, version] of Object.entries(bundledPackages)) {
+    const bundledDirectory = path.join(packageDirectory, "node_modules", bundledName);
+    await fs.mkdir(bundledDirectory, { recursive: true });
+    await fs.writeFile(path.join(bundledDirectory, "package.json"), JSON.stringify({ name: bundledName, version, main: "index.js" }));
+    await fs.writeFile(path.join(bundledDirectory, "index.js"), "module.exports = { bundled: true };\n");
+  }
   await fs.writeFile(path.join(packageDirectory, "LICENSE"), `${license} synthetic fixture\n`);
   const environment: any = npmEnvironment(root);
   await fs.mkdir(environment.HOME, { recursive: true });
@@ -113,6 +120,31 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("installs registry products with private bundled dependencies without fetching them separately", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-bundle-registry-"));
+    let registry: any;
+    try {
+      const artifact = await createSyntheticArtifact(root, {
+        name: "meshrix.js", version: "0.0.1",
+        dependencies: { "@meshrix/contracts": "0.0.1" },
+        bundledPackages: { "@meshrix/contracts": "0.0.1" },
+        index: "module.exports = require('@meshrix/contracts');\n"
+      });
+      const lockPath = path.join(root, "lock.json");
+      await fs.writeFile(lockPath, JSON.stringify({ packages: {} }));
+      registry = await createLockBackedNpmRegistry({ lockPath, cacheRoot: path.join(root, "cache"), extraTarballs: [
+        { name: "meshrix.js", version: "0.0.1", tarballPath: artifact.tarballPath }
+      ] });
+      expect((await fetch(new URL("@meshrix%2Fcontracts", registry.registry))).status).toBe(404);
+      const consumer = path.join(root, "consumer");
+      await prepareInstallabilityConsumer({ consumerDirectory: consumer, packageRecord: { name: "meshrix.js", version: "0.0.1" } });
+      const env = npmEnvironment(root, registry.registry);
+      await runNpm(["install", "--no-audit", "--no-fund", "--registry", registry.registry], consumer, env);
+      const result = await execFileAsync(process.execPath, ["-e", "process.stdout.write(String(require('meshrix.js').bundled))"], { cwd: consumer, env });
+      expect(result.stdout).toBe("true");
+    } finally { await registry?.close(); await fs.rm(root, { recursive: true, force: true }); }
+  }, 30000);
+
   it("walks admitted generated directories and scans contents without admitting neighboring outputs", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-generated-directory-"));
     try {

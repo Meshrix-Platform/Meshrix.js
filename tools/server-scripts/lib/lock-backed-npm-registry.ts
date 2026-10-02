@@ -53,6 +53,7 @@ function registryVersionMetadata(name?: any, meta?: any, artifact?: any) : any {
     name,
     version: meta.version,
     dependencies: meta.dependencies,
+    bundleDependencies: meta.bundleDependencies ?? meta.bundledDependencies,
     optionalDependencies: meta.optionalDependencies,
     peerDependencies: meta.peerDependencies,
     peerDependenciesMeta: meta.peerDependenciesMeta,
