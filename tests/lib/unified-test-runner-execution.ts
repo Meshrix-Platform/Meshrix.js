@@ -5,11 +5,14 @@ export interface TestSuiteEntry {
   label?: string;
   command: string;
   args: string[];
-  timeoutClass: string;
   sideEffects?: string;
   flakePolicy?: string;
   requiredServices?: string[];
   childSuiteIds?: string[];
+}
+
+export interface TestExecutionContext {
+  blockedBy: readonly string[];
 }
 
 export interface TestShard {
@@ -75,7 +78,6 @@ function isVitestEntry(entry: TestSuiteEntry): boolean {
 function mergeCompatibilityKey(entry: TestSuiteEntry): string | null {
   if (!isVitestEntry(entry)) return null;
   return JSON.stringify([
-    entry.timeoutClass,
     entry.sideEffects ?? "none",
     entry.flakePolicy ?? "fail",
     [...(entry.requiredServices ?? [])].sort()
@@ -232,7 +234,7 @@ export function planTestExecutionPhases(
 
 export async function runTestPhaseLanes<Result>(
   phase: TestExecutionPhase,
-  executeEntry: (entry: TestSuiteEntry) => Promise<Result>
+  executeEntry: (entry: TestSuiteEntry, context?: TestExecutionContext) => Promise<Result>
 ): Promise<TestExecutionLaneResult<Result>[]> {
   const laneById = new Map(phase.lanes.map((lane) => [lane.id, lane]));
   const executions = new Map<string, Promise<TestExecutionLaneResult<Result>>>();
@@ -240,12 +242,18 @@ export async function runTestPhaseLanes<Result>(
     const existing = executions.get(lane.id);
     if (existing) return existing;
     const execution = Promise.resolve().then(async () => {
-      await Promise.all((lane.dependsOn ?? []).map((dependencyId) =>
+      const dependencyOutcomes = await Promise.all((lane.dependsOn ?? []).map((dependencyId) =>
         executeLane(laneById.get(dependencyId)!)
       ));
+      const blockedBy = dependencyOutcomes
+        .filter((outcome) => outcome.results.some((result: any) => {
+          const status = result && typeof result === "object" ? result.status : undefined;
+          return status !== undefined && status !== "passed" && status !== "dry-run";
+        }))
+        .map((outcome) => outcome.id);
       const results: Result[] = [];
       for (const entry of lane.entries) {
-        results.push(await executeEntry(entry));
+        results.push(await executeEntry(entry, { blockedBy }));
       }
       return {
         id: lane.id,
@@ -260,42 +268,61 @@ export async function runTestPhaseLanes<Result>(
   return Promise.all(phase.lanes.map(executeLane));
 }
 
-export const TEST_SUITE_TIMEOUT_MS: Readonly<Record<string, any>> = Object.freeze({
-  fast: 2 * 60 * 1000,
-  standard: 15 * 60 * 1000,
-  slow: 60 * 60 * 1000
-});
+export const TEST_PROCESS_TERMINATION_GRACE_MS = 1000;
 
-export const TEST_SUITE_TERMINATION_GRACE_MS: any = 1000;
-
-function positiveInteger(value?: any, label?: any) : any {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${label} must be a positive integer.`);
-  }
-  return value;
+function commandResultIdentity(entry: TestSuiteEntry): Record<string, any> {
+  return {
+    id: entry.id,
+    label: entry.label || entry.id,
+    command: [entry.command, ...entry.args].join(" "),
+    childSuiteIds: entry.childSuiteIds ?? [entry.id]
+  };
 }
 
-export function timeoutMsForSuite(entry: Record<string, any> = {}) : any {
-  const timeoutClass: any = String(entry.timeoutClass || "").trim();
-  const timeoutMs: any = TEST_SUITE_TIMEOUT_MS[timeoutClass];
-  if (!timeoutMs) {
-    throw new Error(`Suite "${entry.id || "<unknown>"}" has unsupported timeoutClass "${timeoutClass || "<missing>"}".`);
-  }
-  return timeoutMs;
+export function notRunSuiteResult(
+  entry: TestSuiteEntry,
+  { reason, blockedBy = [] }: { reason: string; blockedBy?: readonly string[] }
+): Record<string, any> {
+  return {
+    ...commandResultIdentity(entry),
+    status: "not_run",
+    reason,
+    ...(blockedBy.length > 0 ? { blockedBy: [...blockedBy] } : {})
+  };
 }
 
-export function resolveExecutionTimeout({ suiteTimeoutMs, profileRemainingMs = null }: Record<string, any> = {}) : any {
-  const declaredSuiteTimeoutMs: any = positiveInteger(suiteTimeoutMs, "suiteTimeoutMs");
-  if (profileRemainingMs === null || profileRemainingMs === undefined) {
-    return {
-      timeoutMs: declaredSuiteTimeoutMs,
-      timeoutScope: "suite"
-    };
+export function summarizeTestResults(
+  results: readonly { status: string }[],
+  expectedProcessCount: number
+): Record<string, any> {
+  const summary: Record<string, any> = {
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    dryRun: 0,
+    cancelled: 0,
+    notRun: 0
+  };
+  for (const result of results) {
+    if (result.status === "passed") summary.passed += 1;
+    else if (result.status === "failed") summary.failed += 1;
+    else if (result.status === "skipped") summary.skipped += 1;
+    else if (result.status === "dry-run") summary.dryRun += 1;
+    else if (result.status === "cancelled") summary.cancelled += 1;
+    else if (result.status === "not_run") summary.notRun += 1;
   }
-  const remainingMs: any = positiveInteger(profileRemainingMs, "profileRemainingMs");
-  return remainingMs <= declaredSuiteTimeoutMs
-    ? { timeoutMs: remainingMs, timeoutScope: "profile" }
-    : { timeoutMs: declaredSuiteTimeoutMs, timeoutScope: "suite" };
+  const classifiedResultCount = summary.passed + summary.failed + summary.skipped
+    + summary.dryRun + summary.cancelled + summary.notRun;
+  summary.coverageReady = results.length === expectedProcessCount
+    && classifiedResultCount === results.length
+    && summary.passed > 0
+    && summary.failed === 0
+    && summary.skipped === 0
+    && summary.cancelled === 0
+    && summary.notRun === 0
+    && summary.dryRun === 0;
+  summary.releaseReady = summary.coverageReady;
+  return summary;
 }
 
 function sendProcessTreeSignal(child?: any, signal?: any) : any {
@@ -324,46 +351,42 @@ function sendProcessTreeSignal(child?: any, signal?: any) : any {
 export function runSuiteProcess(entry?: any, {
   cwd,
   env = process.env,
-  timeoutMs,
-  timeoutScope = "suite",
-  terminationGraceMs = TEST_SUITE_TERMINATION_GRACE_MS,
+  signal,
+  terminationGraceMs = TEST_PROCESS_TERMINATION_GRACE_MS,
   spawnImpl = nodeSpawn
 }: Record<string, any> = {}) : any {
-  const effectiveTimeoutMs: any = positiveInteger(timeoutMs, "timeoutMs");
-  const effectiveTerminationGraceMs: any = positiveInteger(terminationGraceMs, "terminationGraceMs");
+  if (!Number.isSafeInteger(terminationGraceMs) || terminationGraceMs <= 0) {
+    throw new Error("terminationGraceMs must be a positive integer.");
+  }
+  if (signal?.aborted) {
+    return Promise.resolve(notRunSuiteResult(entry, { reason: "runner_interrupted_before_start" }));
+  }
 
   return new Promise((resolve?: any) : any => {
     const startedAt: any = new Date();
     const terminationSignals: any[] = [];
     let settled: any = false;
-    let timedOut: any = false;
-    let timeoutTimer: any = null;
+    let cancelled = false;
     let forceKillTimer: any = null;
-    const child: any = spawnImpl(entry.command, entry.args, {
-      cwd,
-      env,
-      stdio: "inherit",
-      windowsHide: true,
-      detached: process.platform !== "win32"
-    });
+    let child: any;
+    let cancel: () => void = () => undefined;
+
+    const cleanup = () : any => {
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      signal?.removeEventListener("abort", cancel);
+    };
 
     const finish: any = ({ exitCode = null, signal = null, error = null }: Record<string, any> = {}) : any => {
       if (settled) return;
       settled = true;
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
+      cleanup();
       const finishedAt: any = new Date();
       resolve({
-        id: entry.id,
-        label: entry.label || entry.id,
-        command: [entry.command, ...entry.args].join(" "),
-        status: !timedOut && exitCode === 0 ? "passed" : "failed",
+        ...commandResultIdentity(entry),
+        status: cancelled ? "cancelled" : !error && exitCode === 0 ? "passed" : "failed",
         exitCode,
         signal,
         ...(error ? { error: String(error.message || error) } : {}),
-        timedOut,
-        timeoutMs: effectiveTimeoutMs,
-        timeoutScope: timedOut ? timeoutScope : null,
         terminationSignals,
         startedAt: startedAt.toISOString(),
         finishedAt: finishedAt.toISOString(),
@@ -371,19 +394,36 @@ export function runSuiteProcess(entry?: any, {
       });
     };
 
+    try {
+      child = spawnImpl(entry.command, entry.args, {
+        cwd,
+        env,
+        stdio: "inherit",
+        windowsHide: true,
+        detached: process.platform !== "win32"
+      });
+    } catch (error: any) {
+      finish({ error });
+      return;
+    }
+
     child.once("close", (exitCode?: any, signal?: any) : any => finish({ exitCode, signal }));
     child.once("error", (error?: any) : any => finish({ error }));
 
-    timeoutTimer = setTimeout(() : any => {
-      if (settled) return;
-      timedOut = true;
+    cancel = () : any => {
+      if (settled || cancelled) return;
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      cancelled = true;
       terminationSignals.push("SIGTERM");
       sendProcessTreeSignal(child, "SIGTERM");
       forceKillTimer = setTimeout(() : any => {
         if (settled) return;
         terminationSignals.push("SIGKILL");
         sendProcessTreeSignal(child, "SIGKILL");
-      }, effectiveTerminationGraceMs);
-    }, effectiveTimeoutMs);
+      }, terminationGraceMs);
+    };
+
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) cancel();
   });
 }

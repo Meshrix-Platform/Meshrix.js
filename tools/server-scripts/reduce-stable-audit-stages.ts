@@ -67,10 +67,24 @@ function requirePassingStageReport(report: any, profile: string, suites: readonl
   if (JSON.stringify(report.selectedSuites) !== JSON.stringify(suites)) {
     fail("stable_audit_stage_suite_mismatch");
   }
+  const suiteResults: any[] = Array.isArray(report.suites) ? report.suites : [];
+  const observedSuiteIds = suiteResults.flatMap((result: any) =>
+    Array.isArray(result?.childSuiteIds) && result.childSuiteIds.length > 0
+      ? result.childSuiteIds.map(String)
+      : [String(result?.id || "")]
+  ).sort();
+  if (JSON.stringify(observedSuiteIds) !== JSON.stringify([...suites].sort())) {
+    fail("stable_audit_stage_suite_mismatch");
+  }
+  if (suiteResults.some((result: any) => result?.status !== "passed")) {
+    fail("stable_audit_stage_not_ready");
+  }
   if (
     report?.summary?.failed !== 0 ||
+    report?.summary?.skipped !== 0 ||
     report?.summary?.dryRun !== 0 ||
-    report?.summary?.timedOut !== 0 ||
+    report?.summary?.cancelled !== 0 ||
+    report?.summary?.notRun !== 0 ||
     report?.summary?.coverageReady !== true ||
     report?.summary?.releaseReady !== true ||
     report?.summary?.reportLeakScan !== true
@@ -132,7 +146,8 @@ export function reduceStableAuditReports({ registry, reports }: { registry: any;
       failed: 0,
       skipped: total("skipped"),
       dryRun: 0,
-      timedOut: 0,
+      cancelled: 0,
+      notRun: 0,
       coverageReady: true,
       releaseReady: true,
       reportLeakScan: true,

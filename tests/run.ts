@@ -14,12 +14,12 @@ import {
 } from "./lib/regression-html-report.ts";
 import {
   parseTestShard,
+  notRunSuiteResult,
   planTestExecutionPhases,
   profileInherits,
-  resolveExecutionTimeout,
   runTestPhaseLanes,
   runSuiteProcess,
-  timeoutMsForSuite
+  summarizeTestResults
 } from "./lib/unified-test-runner-execution.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -56,10 +56,6 @@ async function loadRegistry() : Promise<any> {
       `Registry suites without executable command: ${missingCommands.map((s?: any) : any => s.id).join(", ")}`
     );
   }
-  for (const suite of suites) {
-    timeoutMsForSuite(suite);
-  }
-
   // Resolve profile extends and build profile→suiteId map
   const rawProfiles: any = resolveProfiles(reg.profiles);
   const suiteById: any = new Map<any, any>(suites.map((s?: any) : any => [s.id, s]));
@@ -87,7 +83,6 @@ function resolveProfiles(profiles?: any) : any {
       suites: def.suites ? [...def.suites] : [],
       extends: def.extends || null,
       dynamic: def.dynamic || false,
-      timeoutMs: def.timeoutMs,
       trackedArtifacts: def.trackedArtifacts ? [...def.trackedArtifacts] : [],
       execution: def.execution || {},
     };
@@ -452,15 +447,6 @@ async function main() : Promise<any> {
   );
   const startedAt: any = new Date();
   const results: any[] = [];
-  const profileTimeoutMs: any = selectedByProfile
-    ? profileConfigs[options.profile]?.timeoutMs
-    : null;
-  if (selectedByProfile && (!Number.isInteger(profileTimeoutMs) || profileTimeoutMs <= 0)) {
-    throw new Error(`Profile "${options.profile}" must declare a positive timeoutMs.`);
-  }
-  const profileDeadlineMs: any = profileTimeoutMs
-    ? startedAt.getTime() + profileTimeoutMs
-    : null;
   const sourceRevision = profileExecution.cachePassedResults === true ? cleanSourceRevision() : null;
   const resultCache = passedResultCache(options.profile, sourceRevision);
   const executionLaneCount = executionPhases.reduce(
@@ -479,22 +465,48 @@ async function main() : Promise<any> {
     throw new Error(`Profile "${options.profile}" selected zero suites.`);
   }
 
-  const executeEntry = async (entry: any): Promise<any> => {
+  const cancellation = new AbortController();
+  let receivedSignal: string | null = null;
+  const requestCancellation = (signal: string): void => {
+    if (cancellation.signal.aborted) return;
+    receivedSignal = signal;
+    cancellation.abort(signal);
+  };
+  const onSigint = (): void => requestCancellation("SIGINT");
+  const onSigterm = (): void => requestCancellation("SIGTERM");
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
+
+  const markNotRun = (entry: any, reason: string, blockedBy: string[] = []): any => {
+    const result: any = notRunSuiteResult(entry, { reason, blockedBy });
+    console.log(`NOT_RUN ${entry.id} (${reason})`);
+    return result;
+  };
+
+  const executeEntry = async (
+    entry: any,
+    context: { blockedBy: readonly string[] } = { blockedBy: [] }
+  ): Promise<any> => {
+    if (cancellation.signal.aborted) {
+      return markNotRun(entry, "runner_interrupted_before_start", [...context.blockedBy]);
+    }
+    if (context.blockedBy.length > 0) {
+      return markNotRun(entry, "prerequisite_lane_incomplete", [...context.blockedBy]);
+    }
+
     const compatible: any = isPlatformCompatible(entry);
     if (!compatible) {
-      const status: any = options.strictPlatform ? "failed" : "skipped";
+      const status: any = options.strictPlatform ? "not_run" : "skipped";
       const result: Record<string, any> = {
         id: entry.id,
         label: entry.label || entry.id,
         command: commandLine(entry),
+        childSuiteIds: entry.childSuiteIds || [entry.id],
         status,
-        timedOut: false,
         reason: `Suite supports ${entry.platforms.join(", ")} but current platform is ${process.platform}`,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        durationMs: 0
+        ...(options.strictPlatform ? { notRunReason: "platform_incompatible_strict" } : {})
       };
-      console.log(`${status.toUpperCase()} ${entry.id} - ${result.reason}`);
+      console.log(`${status.toUpperCase()} ${entry.id} (${result.reason})`);
       return result;
     }
 
@@ -503,11 +515,8 @@ async function main() : Promise<any> {
         id: entry.id,
         label: entry.label || entry.id,
         command: commandLine(entry),
-        status: "dry-run",
-        timedOut: false,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        durationMs: 0
+        childSuiteIds: entry.childSuiteIds || [entry.id],
+        status: "dry-run"
       };
       console.log(`DRY-RUN ${entry.id}: ${result.command}`);
       return result;
@@ -517,91 +526,83 @@ async function main() : Promise<any> {
     console.log(commandLine(entry));
     const cached = resultCache.get(commandLine(entry));
     if (cached) {
-      const now = new Date().toISOString();
       const result: any = {
         ...cached,
         id: entry.id,
         label: entry.label || entry.id,
-        childSuiteIds: entry.childSuiteIds,
-        cached: true,
-        startedAt: now,
-        finishedAt: now,
-        durationMs: 0
+        childSuiteIds: entry.childSuiteIds || [entry.id],
+        cached: true
       };
       console.log(`PASSED ${entry.id} (cached)`);
       return result;
     }
-    const declaredSuiteTimeoutMs: any = timeoutMsForSuite(entry);
-    const profileRemainingMs: any = profileDeadlineMs === null
-      ? null
-      : profileDeadlineMs - Date.now();
-    if (profileRemainingMs !== null && profileRemainingMs <= 0) {
-      const now: any = new Date();
-      const result: any = {
-        id: entry.id,
-        label: entry.label || entry.id,
-        command: commandLine(entry),
-        status: "failed",
-        reason: "Profile timeout budget was exhausted before this suite could start.",
-        timedOut: true,
-        timeoutMs: profileTimeoutMs,
-        timeoutScope: "profile",
-        terminationSignals: [],
-        startedAt: now.toISOString(),
-        finishedAt: now.toISOString(),
-        durationMs: 0
-      };
-      console.log(`FAILED ${entry.id} (profile timeout)`);
-      return result;
-    }
-    const timeout: any = resolveExecutionTimeout({
-      suiteTimeoutMs: declaredSuiteTimeoutMs,
-      profileRemainingMs
-    });
+
     const result: any = await runSuiteProcess(entry, {
       cwd: repoRoot,
-      timeoutMs: timeout.timeoutMs,
-      timeoutScope: timeout.timeoutScope
+      signal: cancellation.signal
     });
-    result.timeoutClass = entry.timeoutClass;
-    result.declaredSuiteTimeoutMs = declaredSuiteTimeoutMs;
-    result.childSuiteIds = entry.childSuiteIds;
     result.cached = false;
-    console.log(`${result.status.toUpperCase()} ${entry.id} (${result.durationMs}ms)`);
+    if (result.status === "not_run") {
+      console.log(`NOT_RUN ${entry.id} (${result.reason})`);
+    } else {
+      console.log(`${result.status.toUpperCase()} ${entry.id} (${result.durationMs}ms)`);
+    }
     return result;
   };
 
-  for (const phase of executionPhases) {
-    console.log("");
-    console.log(`PHASE ${phase.id}: ${phase.label || phase.id}`);
-    console.log(`LANES ${phase.lanes.map((lane: any) => lane.id).join(", ")}`);
-    const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry);
-    const phaseResults: any[] = laneOutcomes.flatMap((lane: any) =>
-      lane.results.map((result: any) => ({
-        ...result,
-        phaseId: phase.id,
-        laneId: lane.id
-      }))
-    );
-    results.push(...phaseResults);
-    if (phaseResults.some((result: any) => result.status === "failed") && !options.continueOnFailure) {
-      console.log(`STOP after phase ${phase.id}: later phases were not started.`);
-      break;
+  try {
+    let stopReason: { reason: string; blockedBy: string[] } | null = null;
+    for (const phase of executionPhases) {
+      console.log("");
+      console.log(`PHASE ${phase.id}: ${phase.label || phase.id}`);
+      console.log(`LANES ${phase.lanes.map((lane: any) => lane.id).join(", ")}`);
+      let phaseResults: any[];
+      if (stopReason) {
+        phaseResults = phase.lanes.flatMap((lane: any) => lane.entries.map((entry: any) => ({
+          ...markNotRun(entry, stopReason!.reason, stopReason!.blockedBy),
+          phaseId: phase.id,
+          laneId: lane.id
+        })));
+      } else {
+        const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry);
+        phaseResults = laneOutcomes.flatMap((lane: any) =>
+          lane.results.map((result: any) => ({
+            ...result,
+            phaseId: phase.id,
+            laneId: lane.id
+          }))
+        );
+      }
+      results.push(...phaseResults);
+
+      if (receivedSignal) {
+        stopReason = { reason: "runner_interrupted_before_start", blockedBy: [] };
+      } else if (!stopReason && phaseResults.some((result: any) => ["failed", "cancelled", "not_run"].includes(result.status)) && !options.continueOnFailure) {
+        const hasFailedCommand = phaseResults.some((result: any) => result.status === "failed");
+        const failedSuites = phaseResults.filter((result: any) => ["failed", "cancelled", "not_run"].includes(result.status))
+          .flatMap((result: any) => result.childSuiteIds || [result.id]);
+        console.log(`STOP after phase ${phase.id}: later phases were not started.`);
+        stopReason = {
+          reason: hasFailedCommand ? "previous_phase_failed" : "previous_phase_incomplete",
+          blockedBy: failedSuites
+        };
+      }
     }
+  } finally {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
   }
 
   const finishedAt: any = new Date();
-  const summary: any = summarize(results);
-  summary.coverageReady = summary.passed > 0 && summary.failed === 0 && summary.dryRun === 0;
-  summary.releaseReady = summary.coverageReady;
+  const summary: any = summarizeTestResults(results, executionEntries.length);
   summary.reportLeakScan = true;
 
   console.log("");
-  console.log(`Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.dryRun} dry-run, ${summary.timedOut} timed out`);
+  console.log(`Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.cancelled} cancelled, ${summary.notRun} not run, ${summary.dryRun} dry-run`);
   if (options.dryRun) {
     console.log("Report: not written (dry-run)");
-    if (summary.failed > 0) {
-      process.exitCode = 1;
+    if (summary.failed > 0 || summary.notRun > 0 || summary.cancelled > 0) {
+      process.exitCode = receivedSignal === "SIGINT" ? 130 : receivedSignal === "SIGTERM" ? 143 : 1;
     }
     return;
   }
@@ -645,9 +646,9 @@ async function main() : Promise<any> {
       cachePassedResults: profileExecution.cachePassedResults === true,
       phasedExecution: Array.isArray(phaseDefinitions),
       phaseCount: executionPhases.length,
-      laneCount: executionLaneCount,
-      profileTimeoutMs
+      laneCount: executionLaneCount
     },
+    ...(receivedSignal ? { interruption: { receivedSignal } } : {}),
     environment: {
       platform: process.platform,
       arch: process.arch,
@@ -677,34 +678,9 @@ async function main() : Promise<any> {
 
   console.log(`Report: ${displayReportPath(reportPath)}`);
 
-  if (summary.failed > 0) {
-    process.exitCode = 1;
+  if (summary.failed > 0 || summary.notRun > 0 || summary.cancelled > 0) {
+    process.exitCode = receivedSignal === "SIGINT" ? 130 : receivedSignal === "SIGTERM" ? 143 : 1;
   }
-}
-
-function summarize(results?: any) : any {
-  const summary: Record<string, any> = {
-    passed: 0,
-    failed: 0,
-    skipped: 0,
-    dryRun: 0,
-    timedOut: 0
-  };
-  for (const result of results) {
-    if (result.status === "passed") {
-      summary.passed += 1;
-    } else if (result.status === "failed") {
-      summary.failed += 1;
-    } else if (result.status === "skipped") {
-      summary.skipped += 1;
-    } else if (result.status === "dry-run") {
-      summary.dryRun += 1;
-    }
-    if (result.timedOut === true) {
-      summary.timedOut += 1;
-    }
-  }
-  return summary;
 }
 
 main().catch((error?: any) : any => {

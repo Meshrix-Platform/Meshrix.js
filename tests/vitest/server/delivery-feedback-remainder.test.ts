@@ -18,7 +18,6 @@ function suite(id: string, file: string, sideEffects = "none"): TestSuiteEntry {
     id,
     command: "npm",
     args: ["run", "vitest", "--", file],
-    timeoutClass: "fast",
     sideEffects,
     flakePolicy: "fail",
     requiredServices: []

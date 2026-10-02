@@ -1,28 +1,29 @@
 import { EventEmitter } from "node:events";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   planTestExecutionPhases,
   profileInherits,
-  resolveExecutionTimeout,
+  notRunSuiteResult,
   runTestPhaseLanes,
   runSuiteProcess,
+  summarizeTestResults,
   type TestExecutionPhase,
-  type TestSuiteEntry,
-  timeoutMsForSuite
+  type TestSuiteEntry
 } from "../../lib/unified-test-runner-execution.ts";
 
 function suite(id: string): TestSuiteEntry {
   return {
     id,
     command: "node",
-    args: [`${id}.ts`],
-    timeoutClass: "fast"
+    args: [`${id}.ts`]
   };
 }
 
-describe("unified test runner execution budgets", () : any => {
+afterEach(() => vi.useRealTimers());
+
+describe("unified test runner execution lifecycle", () : any => {
   it("reuses exact-command results only from the same or an inherited profile", () : any => {
     const profiles: any = {
       core: { extends: null },
@@ -37,48 +38,146 @@ describe("unified test runner execution budgets", () : any => {
     expect(profileInherits(profiles, "cyclicA", "core")).toBe(false);
   });
 
-  it("resolves suite timeout classes and caps them to the remaining profile budget", () : any => {
-    const suiteTimeoutMs: any = timeoutMsForSuite({ id: "fixture.fast", timeoutClass: "fast" });
-    expect(resolveExecutionTimeout({ suiteTimeoutMs })).toEqual({
-      timeoutMs: suiteTimeoutMs,
-      timeoutScope: "suite"
+  it("records unstarted commands without fabricated execution timestamps", () : any => {
+    const result: any = notRunSuiteResult(suite("not-launched"), {
+      reason: "runner_interrupted_before_start"
     });
-    expect(resolveExecutionTimeout({ suiteTimeoutMs, profileRemainingMs: 25 })).toEqual({
-      timeoutMs: 25,
-      timeoutScope: "profile"
-    });
+
+    expect(result).toMatchObject({ id: "not-launched", status: "not_run", reason: "runner_interrupted_before_start" });
+    expect(result).not.toHaveProperty("startedAt");
+    expect(result).not.toHaveProperty("finishedAt");
+    expect(result).not.toHaveProperty("durationMs");
   });
 
-  it("terminates an over-budget process with TERM followed by KILL and reports the timeout", async () : Promise<any> => {
+  it("keeps coverage unready for skipped, incomplete, cancelled, dry-run or unclassified results", () : any => {
+    expect(summarizeTestResults([
+      { status: "passed" }
+    ], 2)).toMatchObject({ passed: 1, coverageReady: false, releaseReady: false });
+    expect(summarizeTestResults([
+      { status: "passed" },
+      { status: "skipped" }
+    ], 2)).toMatchObject({ passed: 1, skipped: 1, coverageReady: false, releaseReady: false });
+    expect(summarizeTestResults([
+      { status: "passed" },
+      { status: "not_run" }
+    ], 2)).toMatchObject({ notRun: 1, coverageReady: false, releaseReady: false });
+    expect(summarizeTestResults([
+      { status: "cancelled" }
+    ], 1)).toMatchObject({ cancelled: 1, coverageReady: false, releaseReady: false });
+    expect(summarizeTestResults([
+      { status: "passed" },
+      { status: "dry-run" }
+    ], 2)).toMatchObject({ dryRun: 1, coverageReady: false, releaseReady: false });
+    expect(summarizeTestResults([
+      { status: "passed" },
+      { status: "unknown" }
+    ], 2)).toMatchObject({ passed: 1, coverageReady: false, releaseReady: false });
+  });
+
+  it("lets a command complete naturally after the former slow-suite budget", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const child: any = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.pid = null;
+    child.kill = vi.fn(() : any => true);
+    const resultPromise: Promise<any> = runSuiteProcess({
+      id: "fixture.timeout",
+      label: "long running fixture",
+      command: "fixture-command",
+      args: []
+    }, {
+      cwd: process.cwd(),
+      spawnImpl: () : any => child
+    });
+    const settled = vi.fn();
+    void resultPromise.then(settled);
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000 + 1);
+    expect(settled).not.toHaveBeenCalled();
+    expect(child.kill).not.toHaveBeenCalled();
+
+    child.exitCode = 0;
+    child.emit("close", 0, null);
+    const result: any = await resultPromise;
+    expect(result.status).toBe("passed");
+    expect(result.exitCode).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it("cancels an owned process, waits for close, then force-kills after cleanup grace", async () : Promise<any> => {
+    vi.useFakeTimers();
     const child: any = new EventEmitter();
     child.exitCode = null;
     child.signalCode = null;
     child.pid = null;
     child.kill = vi.fn((signal?: any) : any => {
-      if (signal === "SIGKILL") {
-        child.signalCode = signal;
-        queueMicrotask(() : any => child.emit("close", null, signal));
-      }
+      if (signal === "SIGKILL") child.signalCode = signal;
       return true;
     });
-    const result: any = await runSuiteProcess({
-      id: "fixture.timeout",
-      label: "timeout fixture",
+    const controller = new AbortController();
+    const resultPromise: Promise<any> = runSuiteProcess({
+      id: "fixture.cancelled",
       command: "fixture-command",
       args: []
     }, {
       cwd: process.cwd(),
-      timeoutMs: 10,
-      timeoutScope: "suite",
+      signal: controller.signal,
       terminationGraceMs: 10,
       spawnImpl: () : any => child
     });
 
-    expect(result.status).toBe("failed");
-    expect(result.timedOut).toBe(true);
-    expect(result.timeoutScope).toBe("suite");
-    expect(result.terminationSignals).toEqual(["SIGTERM", "SIGKILL"]);
+    controller.abort("SIGINT");
+    expect(child.kill.mock.calls.map(([signal]: any[]) : any => signal)).toEqual(["SIGTERM"]);
+    await vi.advanceTimersByTimeAsync(10);
     expect(child.kill.mock.calls.map(([signal]: any[]) : any => signal)).toEqual(["SIGTERM", "SIGKILL"]);
+    child.emit("close", null, "SIGKILL");
+
+    const result: any = await resultPromise;
+    expect(result.status).toBe("cancelled");
+    expect(result.terminationSignals).toEqual(["SIGTERM", "SIGKILL"]);
+    expect(result.startedAt).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("preserves a command that already exited when cancellation races its close event", async () => {
+    const child: any = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.pid = null;
+    child.kill = vi.fn(() => true);
+    const controller = new AbortController();
+    const resultPromise = runSuiteProcess({
+      id: "fixture.completed-before-cancel",
+      command: "fixture-command",
+      args: []
+    }, {
+      cwd: process.cwd(),
+      signal: controller.signal,
+      spawnImpl: () => child
+    });
+
+    child.exitCode = 0;
+    controller.abort("SIGINT");
+    child.emit("close", 0, null);
+
+    expect(await resultPromise).toMatchObject({ status: "passed", exitCode: 0 });
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it("records a command that could not start as a failure with its actual spawn error", async () : Promise<any> => {
+    const error: any = Object.assign(new Error("spawn denied"), { code: "EACCES" });
+    const result: any = await runSuiteProcess({
+      id: "fixture.spawn-error",
+      command: "fixture-command",
+      args: []
+    }, {
+      cwd: process.cwd(),
+      spawnImpl: () : never => { throw error; }
+    });
+
+    expect(result).toMatchObject({ status: "failed", error: "spawn denied", exitCode: null });
+    expect(result.startedAt).toBeTruthy();
   });
 });
 
@@ -160,7 +259,7 @@ describe("unified test runner phase execution", () => {
       if (entry.id.endsWith("-1")) {
         await firstEntriesReleased;
       }
-      return entry.id;
+      return { id: entry.id, status: "passed" };
     });
 
     await bothFirstEntriesObserved;
@@ -169,8 +268,14 @@ describe("unified test runner phase execution", () => {
     const outcomes = await execution;
 
     expect(outcomes.map((lane) => lane.results)).toEqual([
-      ["frontend-1", "frontend-2"],
-      ["backend-1", "backend-2"]
+      [
+        { id: "frontend-1", status: "passed" },
+        { id: "frontend-2", status: "passed" }
+      ],
+      [
+        { id: "backend-1", status: "passed" },
+        { id: "backend-2", status: "passed" }
+      ]
     ]);
     expect(started.indexOf("frontend-2")).toBeGreaterThan(started.indexOf("frontend-1"));
     expect(started.indexOf("backend-2")).toBeGreaterThan(started.indexOf("backend-1"));
@@ -204,7 +309,7 @@ describe("unified test runner phase execution", () => {
         observeBuild();
         await buildReleased;
       }
-      return entry.id;
+      return { id: entry.id, status: "passed" };
     });
 
     await buildObserved;
@@ -214,5 +319,32 @@ describe("unified test runner phase execution", () => {
     await execution;
     expect(started[0]).toBe("build");
     expect(new Set(started.slice(1))).toEqual(new Set(["server-a", "server-b"]));
+  });
+
+  it("marks dependent lane entries not_run when a prerequisite fails", async () => {
+    const phase = planTestExecutionPhases(
+      [suite("build"), suite("server-a"), suite("server-b")],
+      [{
+        id: "functional",
+        lanes: [
+          { id: "build", suites: ["build"] },
+          { id: "servers", suites: ["server-a", "server-b"], dependsOn: ["build"] }
+        ]
+      }]
+    )[0];
+    const executed: string[] = [];
+    const outcomes = await runTestPhaseLanes(phase, async (entry, context) => {
+      if (context?.blockedBy.length) {
+        return { id: entry.id, status: "not_run", blockedBy: context.blockedBy };
+      }
+      executed.push(entry.id);
+      return { id: entry.id, status: entry.id === "build" ? "failed" : "passed" };
+    });
+
+    expect(executed).toEqual(["build"]);
+    expect(outcomes[1].results).toEqual([
+      { id: "server-a", status: "not_run", blockedBy: ["build"] },
+      { id: "server-b", status: "not_run", blockedBy: ["build"] }
+    ]);
   });
 });
