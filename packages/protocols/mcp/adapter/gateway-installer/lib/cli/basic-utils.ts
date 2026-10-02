@@ -43,7 +43,7 @@ export function usage() : any {
     "  --no-verify                   Skip post-install MCP HTTP verification.",
     "  --json                        Emit JSON.",
     "  --pretty                      Pretty-print JSON output.",
-    "  --no-env                      Do not publish launchctl environment variables during register.",
+    "  --no-env                      Do not persist discovery environment variables during register.",
     "  --discovery-file PATH         Registry file used by register/discover-local. Default: ~/.meshrix/mcp/servers.json.",
     "  --auto-update                 Enable automatic push updates when installing (non-interactive mode).",
     "  --client-command COMMAND      Explicit local client command or path for one selected target.",

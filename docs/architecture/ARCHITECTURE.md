@@ -365,11 +365,14 @@ Release Gate.
 
 The service provider keeps the MCP route target, protocol versions, and module path aligned with `downstream-client-aspect` and `packages/protocols/mcp/modern-downstream/index.ts`. Optional protocol capabilities enter the runtime only through verified package contributions; the Core communication-service provider does not import or register product implementations.
 
-## MCP Native Installer
+## MCP Installer and Portable Runtime
 
-MCP user-device installation uses platform-native launchers. macOS and Linux use `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh`; Windows uses `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1`. Windows `.cmd` entrypoints are not part of the release surface.
-
-The launchers validate security-sensitive arguments and delegate to the connector shipped in a verified portable release. The connector is the single implementation of signed hub discovery, local agent search, grants, batch and interactive install, device hub registration, client configuration, and uninstall. Shell and PowerShell must not duplicate those protocols.
+The `meshrix-mcp` Node.js CLI shipped by the `meshrix.js` package owns MCP
+installation, registration, discovery, client configuration, and uninstall.
+The verified portable archive includes that same CLI and a pinned Node runtime.
+Its POSIX or PowerShell launcher only starts the sibling runtime and forwards
+arguments and process outcomes; platform-specific installer policy remains in
+the Node implementation.
 
 See [MCP-NATIVE-INSTALLER.md](MCP-NATIVE-INSTALLER.md).
 

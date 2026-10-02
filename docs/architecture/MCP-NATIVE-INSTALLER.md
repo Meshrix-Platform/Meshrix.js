@@ -1,7 +1,9 @@
-# MCP Native Installer
+# MCP Node Installer and Portable Launcher
 
-Meshrix.js ships a signed portable connector and native launchers for the supported downstream MCP
-target matrix. The installer verifies signed discovery and release metadata, detects supported
+Meshrix.js ships one Node installer through the root package's `meshrix-mcp` bin
+and a verified portable archive that includes its own Node runtime. The archive's
+small platform launchers only start that verified runtime and forward arguments
+and standard input. The installer verifies signed discovery, detects supported
 targets, invokes the target adapter, and writes only connector-managed configuration.
 Target-specific client-adapter behavior is owned by optional first-party components
 bundled with `meshrix.js` and included in the portable connector's declared runtime
@@ -9,6 +11,10 @@ closure. Both consumers use Node's normal package resolution and invoke a compon
 only after an explicit target action. No separate adapter package fetch or cache is
 used. Client applications remain external products; adapter modules own only their
 narrow configuration and lifecycle integration behavior.
+
+The npm entry is `npx --yes --package meshrix.js@<VERSION> meshrix-mcp <command>`.
+Portable archives use `meshrix-mcp` on POSIX systems and `meshrix-mcp.ps1` on
+Windows. Standalone shell and PowerShell installer assets are not distributed.
 
 ## API Key access and local custody
 

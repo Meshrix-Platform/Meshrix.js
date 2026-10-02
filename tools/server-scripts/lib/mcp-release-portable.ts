@@ -746,7 +746,6 @@ export async function createPortableBundle({
   }
   const platform: any = releaseBundlePlatform(target);
   const windowsBundle: any = platform.startsWith("windows");
-  const macosBundle: any = platform.startsWith("macos");
   const rootName: any = `${MCP_PORTABLE_ASSET_PREFIX}-${packageJson.version}-${platform}`;
   const stagingRoot: any = path.join(outputDir, rootName);
   const appRoot: any = path.join(stagingRoot, "app");
@@ -785,6 +784,7 @@ export async function createPortableBundle({
       ...adapterClosure.dependencies
     }).sort(([left], [right]) : any => String(left).localeCompare(String(right)))),
     imports: {
+      "#meshrix/foundation/environment-compatibility/index": "./vendor/foundation/environment-compatibility/index.ts",
       "#meshrix/contracts/*": "./vendor/contracts/*.ts",
       "#meshrix/protocols/*": "./vendor/protocols/*.ts"
     }
@@ -846,6 +846,11 @@ export async function createPortableBundle({
     path.join(appRoot, "bin", "meshrix-mcp.ts")
   );
   await fs.cp(path.join(connectorRoot, "lib"), path.join(appRoot, "lib"), { recursive: true });
+  await fs.cp(
+    path.join(projectRoot, "packages", "foundation", "src", "environment-compatibility"),
+    path.join(appRoot, "vendor", "foundation", "environment-compatibility"),
+    { recursive: true }
+  );
   const portableContractsRoot: any = path.join(appRoot, "vendor", "contracts");
   await fs.mkdir(portableContractsRoot, { recursive: true });
   await fs.copyFile(
@@ -890,17 +895,6 @@ export async function createPortableBundle({
     path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "gateway-installer", "mcp-release-targets.ts"),
     path.join(portableProtocolsRoot, "mcp", "adapter", "gateway-installer", "mcp-release-targets.ts")
   );
-  const nativeInstallerRoot: any = path.join(connectorRoot, "..", "native-installer");
-  const nativeInstallerFiles: any = windowsBundle
-    ? ["meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]
-    : ["meshrix-mcp-install.sh", "meshrix-mcp-uninstall.sh"];
-  for (const filename of nativeInstallerFiles) {
-    const destination: any = path.join(stagingRoot, filename);
-    await fs.copyFile(path.join(nativeInstallerRoot, filename), destination);
-    if (filename.endsWith(".sh") && process.platform !== "win32") {
-      await fs.chmod(destination, 0o755);
-    }
-  }
   const nodeLegalRoot: any = path.join(stagingRoot, "licenses", "node");
   await fs.mkdir(nodeLegalRoot, { recursive: true });
   for (const legalFile of resolvedNodeRuntime.legalFiles) {
@@ -944,70 +938,44 @@ export async function createPortableBundle({
       ""
     ].join("\n"));
   }
-  if (macosBundle) {
-    await writeExecutable(path.join(stagingRoot, "install.command"), [
-      "#!/usr/bin/env sh",
-      "set -e",
-      "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/meshrix-mcp-install.sh\" install",
-      "printf '\\nDone. Press Enter to close.'",
-      "IFS= read -r _",
-      ""
-    ].join("\n"));
-    await writeExecutable(path.join(stagingRoot, "uninstall.command"), [
-      "#!/usr/bin/env sh",
-      "set -e",
-      "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/meshrix-mcp-uninstall.sh\"",
-      "printf '\\nDone. Press Enter to close.'",
-      "IFS= read -r _",
-      ""
-    ].join("\n"));
-    await writeExecutable(path.join(stagingRoot, "doctor.command"), [
-      "#!/usr/bin/env sh",
-      "set -e",
-      "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/meshrix-mcp-install.sh\" doctor",
-      "printf '\\nDone. Press Enter to close.'",
-      "IFS= read -r _",
-      ""
-    ].join("\n"));
-  }
   const usageLines: any = windowsBundle
     ? [
-        "Windows PowerShell install:",
-        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp-install.ps1 -Command install -Target auto -Json",
+        "Register the local shared hub:",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp.ps1 register",
         "",
-        "Windows PowerShell uninstall:",
-        `  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp-uninstall.ps1 -Target ${PRIORITY_INSTALL_TARGET} -Json`
+        "Connect detected clients:",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp.ps1 install --target auto --json",
+        "",
+        "Uninstall a client:",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp.ps1 uninstall --target codex --json"
       ]
     : [
         "Command-line hub registration:",
-        "  ./meshrix-mcp-install.sh register",
+        "  ./meshrix-mcp register",
         "",
         "Discover the local shared hub:",
-        "  ./meshrix-mcp-install.sh discover-local --json",
+        "  ./meshrix-mcp discover-local --json",
         "",
         "Connect clients interactively:",
-        "  ./meshrix-mcp-install.sh install",
+        "  ./meshrix-mcp install",
         "",
         "Connect every detected client from a script:",
-        "  ./meshrix-mcp-install.sh install --target auto --json",
+        "  ./meshrix-mcp install --target auto --json",
         "",
         "Connect a known client from a script:",
-        "  ./meshrix-mcp-install.sh install --target <client> --json",
+        "  ./meshrix-mcp install --target codex --json",
         "",
         "Connect the priority agent clients from a script:",
-        `  ./meshrix-mcp-install.sh install --target ${PRIORITY_INSTALL_TARGET} --json`,
+        `  ./meshrix-mcp install --target ${PRIORITY_INSTALL_TARGET} --json`,
         "",
         "Use --token-stdin only when installing with a pre-issued custom grant token:",
-        "  printf '%s\\n' '<issued-token>' | ./meshrix-mcp-install.sh install --target auto --token-stdin --json",
+        "  printf '%s\\n' '<issued-token>' | ./meshrix-mcp install --target auto --token-stdin --json",
         "",
         "Uninstall:",
-        "  ./meshrix-mcp-uninstall.sh",
+        "  ./meshrix-mcp uninstall --target codex --json",
         "",
         "Uninstall priority clients from a script:",
-        `  ./meshrix-mcp-uninstall.sh --target ${PRIORITY_INSTALL_TARGET}`
+        `  ./meshrix-mcp uninstall --target ${PRIORITY_INSTALL_TARGET} --json`
       ];
   await fs.writeFile(path.join(stagingRoot, "README.txt"), [
     "Meshrix.js MCP Connector Portable Package",
@@ -1023,11 +991,6 @@ export async function createPortableBundle({
     ...usageLines,
     "",
     "The connector scans local Meshrix.js candidates and verifies the MCP identity signature before using a URL.",
-    ...(macosBundle ? [
-      "",
-      "macOS double-click flow:",
-      "  Open install.command, choose one or more clients. The connector requests a local Meshrix.js grant automatically."
-    ] : []),
     "",
     `Platform: ${platform}`,
     `Connector: ${packageJson.name}@${packageJson.version}`,

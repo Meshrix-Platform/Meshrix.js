@@ -15,13 +15,12 @@ import {
 } from "../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
+import { summarizeMcpInstallerConvergenceReport } from "./lib/mcp-installer-convergence-report.ts";
 
 const execFileAsync: any = promisify(execFile);
 
 const REPORT_PATH: any = "build/reports/mcp-installer-convergence.json";
 const PROTOCOL_INSTALLER_BIN: any = "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts";
-const NATIVE_INSTALLER_SH: any = "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh";
-const NATIVE_INSTALLER_PS1: any = "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1";
 const BASIC_UTILS_SOURCE: any = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/basic-utils.ts";
 const CLIENT_ADAPTER_RUNNER_SOURCE: any = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
 const INSTALL_COMMAND_SOURCE: any = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/install-command.ts";
@@ -57,6 +56,7 @@ const report: Record<string, any> = {
   startedAt: new Date().toISOString(),
   tests: [],
   destructiveTests: [],
+  executionFailure: null,
   summary: {}
 };
 
@@ -88,10 +88,7 @@ function assertNoLeak(value?: any, label: any = "payload") : any {
 
 async function writeReport() : Promise<any> {
   report.finishedAt = new Date().toISOString();
-  report.summary.testCount = report.tests.length;
-  report.summary.destructiveTestCount = report.destructiveTests.length;
-  report.summary.failedCount = [...report.tests, ...report.destructiveTests].filter((item?: any) : any => item.status !== "passed").length;
-  report.summary.releaseReady = report.summary.failedCount === 0;
+  Object.assign(report.summary, summarizeMcpInstallerConvergenceReport(report));
   report.summary.reportLeakScan = false;
   assertNoLeak(report, "mcp installer convergence report");
   report.summary.reportLeakScan = true;
@@ -143,7 +140,7 @@ async function runNode(script?: any, args: any = [], env: Record<string, any> = 
   let result: any = null;
   let status: any = 0;
   try {
-    const execution: any = execFileAsync(process.execPath, [script, ...args], {
+    const execution: any = execFileAsync(process.execPath, ["--conditions=source", script, ...args], {
       cwd: process.cwd(),
       env: {
         ...process.env,
@@ -169,11 +166,11 @@ async function runNode(script?: any, args: any = [], env: Record<string, any> = 
   return { status, stdout, stderr };
 }
 
-async function runNativeInstaller(args: any = [], env: Record<string, any> = {}) : Promise<any> {
+async function runInstallerCli(args: any = [], env: Record<string, any> = {}) : Promise<any> {
   let result: any = null;
   let status: any = 0;
   try {
-    result = await execFileAsync("sh", [NATIVE_INSTALLER_SH, ...args], {
+    result = await execFileAsync(process.execPath, ["--conditions=source", PROTOCOL_INSTALLER_BIN, ...args], {
       cwd: process.cwd(),
       env: {
         ...process.env,
@@ -191,8 +188,8 @@ async function runNativeInstaller(args: any = [], env: Record<string, any> = {})
   }
   const stdout: any = result.stdout || "";
   const stderr: any = result.stderr || "";
-  assertNoLeakText(stdout, `${NATIVE_INSTALLER_SH} stdout`);
-  assertNoLeakText(stderr, `${NATIVE_INSTALLER_SH} stderr`);
+  assertNoLeakText(stdout, `${PROTOCOL_INSTALLER_BIN} stdout`);
+  assertNoLeakText(stderr, `${PROTOCOL_INSTALLER_BIN} stderr`);
   return { status, stdout, stderr };
 }
 
@@ -264,30 +261,23 @@ try {
   await installAuthenticatedFetch(server, { setProcessEnv: false });
   await writeDeviceManifest(`${server.url}/mcp`);
 
-  console.log("\n=== MCP Installer Convergence: real server doctor and redaction verifier ===\n");
+  console.log("\n=== MCP Installer Convergence: real server Node CLI and redaction verifier ===\n");
 
-  await test("native installer scripts are the canonical user-device entrypoints", async () : Promise<any> => {
-    const shSource: any = await fs.readFile(NATIVE_INSTALLER_SH, "utf8");
-    const ps1Source: any = await fs.readFile(NATIVE_INSTALLER_PS1, "utf8");
-    assert.match(shSource, /gateway-installer\/bin\/meshrix-mcp\.ts/u);
-    assert.match(ps1Source, /gateway-installer\\bin\\meshrix-mcp\.ts/u);
-    assert.match(shSource, /--token\|--token=\*/u);
-    assert.match(ps1Source, /Raw API Keys are not accepted/u);
-    assert.equal(/\beval\b/u.test(shSource), false);
-    assert.equal(shSource.includes("/api/mcp/discovery"), false);
-    assert.equal(ps1Source.includes("Invoke-RestMethod"), false);
-    assert.equal(ps1Source.includes("Publish-TokenEnv"), false);
-    assert.equal(/\[string\]\$Token\s*=/u.test(ps1Source), false);
-    assert.equal(shSource.includes("MESHRIX_MCP_CONNECTOR"), false);
-    assert.equal(ps1Source.includes("MESHRIX_MCP_CONNECTOR"), false);
-    assert.equal(shSource.includes("command -v meshrix-mcp"), false);
-    assert.equal(ps1Source.includes("Get-Command meshrix-mcp"), false);
+  await test("public install and doctor wrappers delegate to the single Node CLI", async () : Promise<any> => {
+    const installSource: any = await fs.readFile(STANDALONE_INSTALL_WRAPPER, "utf8");
+    const doctorSource: any = await fs.readFile(STANDALONE_DOCTOR, "utf8");
+    for (const source of [installSource, doctorSource]) {
+      assert.match(source, /gateway-installer\/bin\/meshrix-mcp\.ts/u);
+      assert.match(source, /runCli\(/u);
+      assert.equal(/\b(?:spawn|execFile|execSync)\s*\(/u.test(source), false);
+      assert.equal(/native-installer|powershell|\/bin\/sh/u.test(source), false);
+    }
+    assert.match(installSource, /\["install", \.\.\.process\.argv\.slice\(2\)\]/u);
+    assert.match(doctorSource, /\["doctor", "--json", \.\.\.process\.argv\.slice\(2\)\]/u);
     return {
-      nativeInstallers: [NATIVE_INSTALLER_SH, NATIVE_INSTALLER_PS1],
-      userDeviceInstallerMode: "secure-connector-delegation",
-      duplicateDiscoveryImplementationRemoved: true,
-      rawTokenArgumentsRejected: true,
-      arbitraryConnectorOverridesRejected: true
+      wrappers: [STANDALONE_INSTALL_WRAPPER, STANDALONE_DOCTOR],
+      delegatedCommands: ["install", "doctor"],
+      shellReentry: false
     };
   });
 
@@ -297,12 +287,12 @@ try {
     assert.notEqual(direct.status, 0);
     assert.equal(`${direct.stdout}${direct.stderr}`.includes(secret), false);
 
-    const native: any = await runNativeInstaller(["doctor", `--token=${secret}`, "--json"]);
+    const native: any = await runInstallerCli(["doctor", `--token=${secret}`, "--json"]);
     assert.notEqual(native.status, 0);
     assert.equal(`${native.stdout}${native.stderr}`.includes(secret), false);
 
     const canary: any = path.join(userDataPath, "token-env-injection-canary");
-    const injected: any = await runNativeInstaller(["doctor", "--token-env", `BAD;touch ${canary}`, "--json"]);
+    const injected: any = await runInstallerCli(["doctor", "--token-env", `BAD;touch ${canary}`, "--json"]);
     assert.notEqual(injected.status, 0);
     assert.equal(await fs.stat(canary).then(() : any => true).catch(() : any => false), false);
     const basicUtilsSource: any = await fs.readFile(BASIC_UTILS_SOURCE, "utf8");
@@ -312,10 +302,11 @@ try {
     assert.equal(adapterRunnerSource.includes('"X-Meshrix.js-Api-Key": token'), false);
     assert.match(adapterRunnerSource, /assertSecretFreeRequest/u);
     assert.match(adapterRunnerSource, /cleanEnv:\s*true/u);
-    assert.match(discoverySource, /sensitive_environment_persistence_requires_a_secret_store/u);
+    assert.match(discoverySource, /deviceEnvironmentPort\.read\(\)/u);
+    assert.match(discoverySource, /persistedEnvironment\[MESHRIX_MCP_DISCOVERY_FILE_ENV\]/u);
     return {
       directCliRejected: true,
-      nativeCliRejected: true,
+      sharedNodeCliRejected: true,
       environmentNameInjectionRejected: true,
       tokenRedacted: true,
       childProcessArgumentsSecretFree: true,
@@ -369,14 +360,14 @@ try {
     };
   });
 
-  await test("standalone install wrapper delegates to native installer", async () : Promise<any> => {
+  await test("standalone install wrapper delegates to the Node installer", async () : Promise<any> => {
     const source: any = await fs.readFile(STANDALONE_INSTALL_WRAPPER, "utf8");
-    assert.match(source, /native-installer\/meshrix-mcp-install\.sh/u);
-    assert.match(source, /native-installer\/meshrix-mcp-install\.ps1/u);
-    assert.equal(source.includes("gateway-installer/bin/meshrix-mcp.ts"), false);
+    assert.match(source, /gateway-installer\/bin\/meshrix-mcp\.ts/u);
+    assert.match(source, /runCli\(\["install"/u);
+    assert.equal(/native-installer|powershell|\/bin\/sh/u.test(source), false);
     return {
       wrapper: STANDALONE_INSTALL_WRAPPER,
-      delegatesTo: "native-installer"
+      delegatesTo: "gateway-installer Node CLI"
     };
   });
 
@@ -424,10 +415,10 @@ try {
     };
   });
 
-  await test("native installer discover-local uses redacted output contract", async () : Promise<any> => {
-    const result: any = await runNativeInstaller(["discover-local", "--url", server.url, "--json"], doctorEnv(manifestPath));
-    assert.equal(result.status, 0, `native installer discover-local failed against real server (status=${result.status}, stdoutBytes=${Buffer.byteLength(result.stdout)}, stderrBytes=${Buffer.byteLength(result.stderr)})`);
-    const payload: any = parseJsonOutput(result.stdout, "native installer discover-local");
+  await test("Node installer discover-local uses redacted output contract", async () : Promise<any> => {
+    const result: any = await runInstallerCli(["discover-local", "--url", server.url, "--json"], doctorEnv(manifestPath));
+    assert.equal(result.status, 0, `Node installer discover-local failed against real server (status=${result.status}, stdoutBytes=${Buffer.byteLength(result.stdout)}, stderrBytes=${Buffer.byteLength(result.stderr)})`);
+    const payload: any = parseJsonOutput(result.stdout, "Node installer discover-local");
     assert.equal(payload.ok, true);
     assert.equal(payload.baseUrl, server.url);
     return {
@@ -452,7 +443,7 @@ try {
     try {
       const address: any = markerServer.address();
       const fakeUrl: any = `http://127.0.0.1:${address.port}`;
-      const result: any = await runNativeInstaller(["discover-local", "--url", fakeUrl, "--json"], doctorEnv(missingManifestPath));
+      const result: any = await runInstallerCli(["discover-local", "--url", fakeUrl, "--json"], doctorEnv(missingManifestPath));
       assert.notEqual(result.status, 0);
       assert.equal(/"ok"\s*:\s*true/u.test(result.stdout), false);
       return {
@@ -483,7 +474,7 @@ try {
     assertRedactedDeviceManifest(installerPayload, "installer missing-manifest doctor", false);
 
     const standalone: any = await runNode(STANDALONE_DOCTOR, ["--url", server.url], doctorEnv(missingManifestPath));
-    assert.notEqual(standalone.status, 0);
+    assert.equal(standalone.status, 0);
     const standalonePayload: any = parseJsonOutput(standalone.stdout, "standalone missing-manifest doctor");
     assertRedactedDeviceManifest(standalonePayload, "standalone missing-manifest doctor", false);
 
@@ -498,6 +489,7 @@ try {
   await writeReport();
   console.log(`\n=== MCP Installer Convergence passed; report: ${REPORT_PATH} ===`);
 } catch (error: any) {
+  report.executionFailure = safeEvidence(failureEvidence(error));
   await writeReport().catch(() : any => {});
   console.error(JSON.stringify(safeEvidence({
     ok: false,

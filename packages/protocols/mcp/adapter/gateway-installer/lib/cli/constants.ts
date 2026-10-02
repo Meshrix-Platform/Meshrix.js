@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -27,28 +26,11 @@ export const MCP_OTEL_ATTRIBUTES: Readonly<Record<string, any>> = Object.freeze(
   "mcp.method.name": null,
 });
 
-export const isChinese: any = (() : any => {
-  const lang: any = String(process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES || "").toLowerCase();
-  if (lang.includes("zh")) {
-    return true;
-  }
-  try {
-    if (os.platform() === "darwin") {
-      const output: any = execSync("defaults read -g AppleLanguages 2>/dev/null", { encoding: "utf8" });
-      if (output && /zh-/i.test(output)) {
-        return true;
-      }
-    } else if (os.platform() === "win32") {
-      const output: any = execSync("powershell -NoProfile -Command \"[System.Globalization.CultureInfo]::CurrentCulture.Name\" 2>$null", { encoding: "utf8" });
-      if (output && /zh-/i.test(output)) {
-        return true;
-      }
-    }
-  } catch (error: any) {
-    // Silently ignore command failures and fall back
-  }
-  return false;
-})();
+export function isChineseLocale(locale: unknown): boolean {
+  return /^zh(?:-|$)/iu.test(String(locale || "").trim());
+}
+
+export const isChinese: boolean = isChineseLocale(Intl.DateTimeFormat().resolvedOptions().locale);
 
 export function msg(en?: any, zh?: any) : any {
   return isChinese ? zh : en;
@@ -58,8 +40,6 @@ export const DEFAULT_TOKEN_ENV: any = "MESHRIX_MCP_TOKEN";
 export const MCP_SERVER_NAME: any = "meshrix";
 export const MCP_STABLE_TOOL_NAME: any = "meshrix.discovery";
 export const MCP_INTERFACE_VERSION: any = "v0.0.1:mcp:interface-1";
-export const BOOTSTRAP_INSTALL_SCRIPT: any = "meshrix-mcp-install.sh";
-export const BOOTSTRAP_INSTALL_SCRIPT_ZH_CN: any = "meshrix-mcp-install.zh-CN.sh";
 export const SUPPORTED_TARGETS: any = MCP_SUPPORTED_TARGETS;
 export const PRIORITY_INSTALL_TARGETS: any = MCP_PRIORITY_INSTALL_TARGETS;
 export const PRIORITY_INSTALL_TARGET: any = MCP_PRIORITY_INSTALL_TARGET;

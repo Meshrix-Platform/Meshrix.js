@@ -25,14 +25,16 @@ const RELEASE_TARGETS: any = MCP_SUPPORTED_TARGETS;
 const RELEASE_LABELS: any = Object.freeze(RELEASE_TARGETS.map((target?: any) : any => MCP_TARGET_LABELS[target]));
 const PUBLIC_SCOPE_FILES: readonly any[] = Object.freeze([
   "packages/protocols/mcp/modern-downstream/index.ts",
+  "packages/protocols/mcp/modern-downstream/discovery.ts",
   "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
-  "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh",
-  "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1",
+  "packages/protocols/mcp/adapter/gateway-installer/lib/cli/device-config.ts",
+  "tools/server-scripts/lib/mcp-release-manifest.ts",
+  "tools/server-scripts/lib/mcp-release-portable.ts",
   "tools/server-scripts/mcp-install.ts",
   ".github/RELEASE_TEMPLATE.md",
   "package.json",
   "packages/protocols/mcp/adapter/gateway-installer/README.md",
-  "packages/protocols/mcp/adapter/native-installer/README.md"
+  "packages/protocols/mcp/adapter/gateway-installer/README.md"
 ]);
 const ADAPTER_BOUNDARY_DOCUMENT_FILES: readonly any[] = Object.freeze([
   "CHANGELOG.md",
@@ -42,7 +44,6 @@ const ADAPTER_BOUNDARY_DOCUMENT_FILES: readonly any[] = Object.freeze([
   "docs/architecture/MCP-NATIVE-INSTALLER.md",
   "docs/functionality/GATEWAY.md",
   "docs/functionality/AGENT-COLLABORATION.md",
-  "packages/protocols/mcp/adapter/native-installer/README.md",
   "packages/protocols/mcp/adapter/gateway-installer/README.md"
 ]);
 

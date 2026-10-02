@@ -72,8 +72,6 @@ export function appendInstallShortcutLines(lines?: any, result?: any) : any {
     }
     shortcuts.push([label, command]);
   };
-  pushShortcut("One-command priority install", result?.oneCommandPriorityInstall || result?.githubOneLinePriorityInstallCommand);
-  pushShortcut("One-command auto install", result?.oneCommandAutoInstall || result?.githubOneLineAutoInstallCommand);
   pushShortcut("Priority install", result?.priorityInstallCommand);
   pushShortcut("Auto install", result?.autoInstallCommand);
   if (shortcuts.length === 0 || (result?.ok !== false && !resultHasInstallRepair(result))) {

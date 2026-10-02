@@ -245,7 +245,7 @@ function assertArchiveContainsOnlyFilesAndDirectories(listing?: any) : any {
 
 async function findPortableEntry(root?: any, target?: any) : Promise<any> {
   const desired: any = target === "native-windows-x64"
-    ? ["meshrix-mcp-install.ps1"]
+    ? ["meshrix-mcp.ps1"]
     : ["meshrix-mcp"];
   const matches: any[] = [];
   async function visit(directory?: any) : Promise<any> {
@@ -266,7 +266,7 @@ async function findPortableEntry(root?: any, target?: any) : Promise<any> {
 function portableCandidateCommand(target?: any, entry?: any) : any {
   return target === "native-windows-x64"
     ? Object.freeze({
-        executable: "pwsh",
+        executable: "powershell.exe",
         args: [
           "-NoLogo",
           "-NoProfile",
@@ -274,9 +274,8 @@ function portableCandidateCommand(target?: any, entry?: any) : any {
           "Bypass",
           "-File",
           entry,
-          "-Command",
           "version",
-          "-Json",
+          "--json",
         ],
       })
     : Object.freeze({

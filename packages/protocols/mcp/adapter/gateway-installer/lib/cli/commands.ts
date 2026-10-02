@@ -72,6 +72,8 @@ export async function registerCommand(options?: any) : Promise<any> {
     },
     localFiles,
     env,
+    envPublished: profile.envPublished,
+    envPersistence: profile.envPersistence,
     ...guidance,
     clientInstall: guidance.clientInstallJsonCommand,
     autoInstall: guidance.autoInstallCommand,

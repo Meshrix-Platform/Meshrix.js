@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
+import { deviceEnvironmentPort } from "./device-environment.ts";
 import {
   MCP_DISCOVER_METHOD,
   MCP_META_SERVER_INFO,
@@ -26,16 +27,8 @@ import {
   discoveryRegistryPath,
   readJson
 } from "./device-discovery-registry.ts";
-import { assertSafeEnvName, readStdin, run, uniqueValues } from "./connector-process.ts";
+import { assertSafeEnvName, readStdin, uniqueValues } from "./connector-process.ts";
 import { fetchJson } from "./http-json-client.ts";
-
-export async function readLaunchctlEnv(name?: any) : Promise<any> {
-  if (process.platform !== "darwin") {
-    return "";
-  }
-  const result: any = await run("launchctl", ["getenv", name], { allowFailure: true });
-  return result.ok ? result.stdout.trim() : "";
-}
 
 export function explicitBaseUrl(options: Record<string, any> = {}) : any {
   const value: any = option(options, "url", process.env.MESHRIX_MCP_BASE_URL || "");
@@ -107,12 +100,13 @@ export async function candidateBaseUrls(options: Record<string, any> = {}) : Pro
   if (explicit) {
     return [explicit];
   }
-  const launchDiscoveryFile: any = await readLaunchctlEnv(MESHRIX_MCP_DISCOVERY_FILE_ENV);
-  const launchDiscoveryUrl: any = await readLaunchctlEnv(MESHRIX_MCP_DISCOVERY_URL_ENV);
-  const launchMcpUrl: any = await readLaunchctlEnv(MESHRIX_MCP_URL_ENV);
+  const persistedEnvironment: Record<string, string> = await deviceEnvironmentPort.read();
+  const persistedDiscoveryFile: any = persistedEnvironment[MESHRIX_MCP_DISCOVERY_FILE_ENV] || "";
+  const persistedDiscoveryUrl: any = persistedEnvironment[MESHRIX_MCP_DISCOVERY_URL_ENV] || "";
+  const persistedMcpUrl: any = persistedEnvironment[MESHRIX_MCP_URL_ENV] || "";
   const fileCandidates: any = uniqueValues([
     discoveryRegistryPath(options),
-    launchDiscoveryFile
+    persistedDiscoveryFile
   ]);
   const fromFiles: any[] = [];
   for (const filePath of fileCandidates) {
@@ -138,8 +132,8 @@ export async function candidateBaseUrls(options: Record<string, any> = {}) : Pro
   return uniqueValues([
     baseUrlFromEndpoint(process.env[MESHRIX_MCP_URL_ENV]),
     baseUrlFromEndpoint(process.env[MESHRIX_MCP_DISCOVERY_URL_ENV]),
-    baseUrlFromEndpoint(launchMcpUrl),
-    baseUrlFromEndpoint(launchDiscoveryUrl),
+    baseUrlFromEndpoint(persistedMcpUrl),
+    baseUrlFromEndpoint(persistedDiscoveryUrl),
     ...fromFiles,
     ...scanned
   ]).map(normalizeBaseUrl);
@@ -243,34 +237,6 @@ export async function optionsWithDiscoveredBaseUrl(options: Record<string, any> 
     "resolved-url": discovered.baseUrl,
     __meshrixDiscovery: discovered
   };
-}
-
-export async function publishLaunchctlEnv(env?: any) : Promise<any> {
-  for (const name of Object.keys(env || {})) {
-    if (/(?:token|secret|password|credential|api[_-]?key)/iu.test(name)) {
-      throw new Error("sensitive_environment_persistence_requires_a_secret_store");
-    }
-  }
-  if (process.platform === "darwin") {
-    for (const [name, value] of (Object.entries(env) as [string, any][])) {
-      await run("launchctl", ["setenv", name, value], { allowFailure: true });
-    }
-    return true;
-  }
-
-  if (process.platform === "win32") {
-    for (const [name, value] of (Object.entries(env) as [string, any][])) {
-      await run("setx", [name, value], { allowFailure: true });
-    }
-    return true;
-  }
-
-  process.stderr.write("\n[Notice] Please add the following to your ~/.bashrc or ~/.zshrc:\n");
-  for (const [name, value] of (Object.entries(env) as [string, any][])) {
-    process.stderr.write(`export ${name}="${value}"\n`);
-  }
-  process.stderr.write("\n");
-  return false;
 }
 
 export async function resolveApiKey(options: Record<string, any> = {}, { required = false }: Record<string, any> = {}) : Promise<any> {
