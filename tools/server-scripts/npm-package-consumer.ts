@@ -17,6 +17,7 @@ const platform: any = process.env.MESHRIX_NPM_PLATFORM || `${process.platform}/$
 const runtimeArchitecture: any = process.arch === "x64" ? "amd64" : process.arch;
 export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_module_identity_mismatch",
+  "npm_package_module_resolution_failed",
   "npm_package_gateway_embed_failed",
   "npm_package_adapter_cli_describe_failed",
   "npm_package_adapter_cli_identity_invalid",
@@ -90,10 +91,11 @@ export function consumerFailureSummary(error?: any) : Record<string, any> {
 
   const output: any = `${String(error?.stdout || "")}\n${String(error?.stderr || "")}`;
   const classifiers: any[] = [
+    [/ERR_PACKAGE_IMPORT_NOT_DEFINED|ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/iu, "npm_package_module_resolution_failed"],
     [/ENOTCACHED|cache mode is ['"]?only-if-cached/iu, "npm_package_offline_cache_incomplete"],
     [/node-gyp|gyp ERR|Could not locate the bindings file/iu, "npm_package_native_dependency_build_failed"],
     [/EACCES|permission denied/iu, "npm_package_install_permission_denied"],
-    [/ERESOLVE/iu, "npm_package_dependency_resolution_failed"],
+    [/npm (?:error|ERR!) code ERESOLVE/iu, "npm_package_dependency_resolution_failed"],
     [/npm (?:error|ERR!) code E404/iu, "npm_package_registry_package_missing"],
     [/ETIMEDOUT|ENETUNREACH|EAI_AGAIN/iu, "npm_package_registry_unreachable"]
   ];
@@ -337,7 +339,8 @@ export async function verifyInstalledModuleIdentity(installedRoot: string): Prom
 }
 
 async function runInstalledAdapterDescriptions({ cwd, installedRoot, rootManifest }: Record<string, any>): Promise<void> {
-  const connectorRoot = path.dirname(path.dirname(path.join(installedRoot, rootManifest.bin["meshrix-mcp"])));
+  const rootRequire = createRequire(path.join(installedRoot, "package.json"));
+  const connectorRoot = path.dirname(path.dirname(rootRequire.resolve("@meshrix/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp")));
   const probe = path.join(cwd, "meshrix-adapter-probe.mjs");
   await fs.writeFile(probe, `import assert from "node:assert/strict";
 import { describeClientAdapter } from ${JSON.stringify(pathToFileURL(path.join(connectorRoot, "lib/cli/client-adapter-runner.js")).href)};

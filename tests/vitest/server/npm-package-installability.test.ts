@@ -273,6 +273,9 @@ describe("npm artifact installability source", () : any => {
     expect(consumerFailureSummary({ stderr: "npm error code E404" })).toEqual({
       success: false, errorCode: "npm_package_registry_package_missing"
     });
+    expect(consumerFailureSummary({ stderr: "npm warn ERESOLVE overriding peer dependency\nERR_PACKAGE_IMPORT_NOT_DEFINED" })).toEqual({
+      success: false, errorCode: "npm_package_module_resolution_failed"
+    });
     expect(NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has("ui_browser")).toBe(true);
     expect(NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has("private_diagnostic_test_only")).toBe(false);
     expect(failureCode(new Error("npm_package_unapproved_diagnostic_test_only")))

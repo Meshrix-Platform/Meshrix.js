@@ -169,6 +169,11 @@
       "source": "./pubsub/event-bus.ts",
       "types": "./dist/pubsub/event-bus.d.ts",
       "default": "./dist/pubsub/event-bus.js"
+    },
+    "./mcp/adapter/gateway-installer/bin/meshrix-mcp": {
+      "source": "./mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "types": "./dist/mcp/adapter/gateway-installer/bin/meshrix-mcp.d.ts",
+      "default": "./dist/mcp/adapter/gateway-installer/bin/meshrix-mcp.js"
     }
   },
   "files": [

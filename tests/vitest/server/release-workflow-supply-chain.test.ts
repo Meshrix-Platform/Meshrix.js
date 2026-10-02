@@ -643,7 +643,7 @@ describe("release workflow supply-chain boundary", () : any => {
     const rootPackage: any = JSON.parse(read("package.json"));
     expect(verifier).toContain('import { discoverReleaseSet, loadPreparedReleaseSet } from "./publish-release-set.ts";');
     expect(rootPackage.bin?.["meshrix-mcp"]).toBe(
-      "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js"
+      "dist/apps/server/bin/meshrix-mcp.js"
     );
     expect(verifier).toContain("assertPreparedProductBundleClosure");
     expect(verifier).toContain("bundledPackageNamesInArtifact(artifact.files)");

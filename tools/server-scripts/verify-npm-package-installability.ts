@@ -654,7 +654,7 @@ try {
   });
   const expectedBin: any = "dist/apps/server/bin/meshrix.js";
   const expectedServerBin: any = "dist/tools/server-scripts/start-server.js";
-  const expectedMcpBin: any = "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js";
+  const expectedMcpBin: any = "dist/apps/server/bin/meshrix-mcp.js";
   assert.equal(rootPackage.bin?.meshrix, expectedBin, "npm_package_cli_bin_contract_invalid");
   assert.equal(
     rootPackage.bin?.["meshrix-server"],
@@ -704,15 +704,15 @@ try {
     "npm_package_server_bin_shebang_missing"
   );
   assert.ok(
-    rootFiles.includes("dist/packages/contracts/src/operations/operation-registry.js"),
+    rootFiles.includes("node_modules/@meshrix/contracts/dist/operations/operation-registry.js"),
     "npm_package_internal_runtime_source_missing"
   );
   assert.ok(
-    rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.js"),
+    rootFiles.includes("node_modules/@meshrix/protocols/dist/mcp/adapter/gateway-installer/lib/cli/proxy-command.js"),
     "npm_package_mcp_runtime_source_missing"
   );
   assert.ok(
-    rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/mcp-identity.js"),
+    rootFiles.includes("node_modules/@meshrix/protocols/dist/mcp/adapter/gateway-installer/mcp-identity.js"),
     "npm_package_mcp_runtime_source_missing"
   );
   record("release-set tarballs carry declared private bundles and exclude host artifacts", "passed", {
@@ -973,7 +973,7 @@ async function runContainerAuthority() : Promise<any> {
     });
     const expectedBin: any = "dist/apps/server/bin/meshrix.js";
     const expectedServerBin: any = "dist/tools/server-scripts/start-server.js";
-    const expectedMcpBin: any = "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js";
+    const expectedMcpBin: any = "dist/apps/server/bin/meshrix-mcp.js";
     assert.equal(rootPackage.bin?.meshrix, expectedBin, "npm_package_cli_bin_contract_invalid");
     assert.equal(rootPackage.bin?.["meshrix-server"], expectedServerBin, "npm_package_server_bin_contract_invalid");
     assert.equal(rootPackage.bin?.["meshrix-mcp"], expectedMcpBin, "npm_package_mcp_bin_missing");
@@ -1007,9 +1007,9 @@ async function runContainerAuthority() : Promise<any> {
     assert.ok(rootFiles.includes(expectedBin), "npm_package_cli_bin_missing");
     assert.ok(rootFiles.includes(expectedServerBin), "npm_package_server_bin_missing");
     assert.ok(rootFiles.includes(expectedMcpBin), "npm_package_mcp_bin_missing");
-    assert.ok(rootFiles.includes("dist/packages/contracts/src/operations/operation-registry.js"), "npm_package_internal_runtime_source_missing");
-    assert.ok(rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.js"), "npm_package_mcp_runtime_source_missing");
-    assert.ok(rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/mcp-identity.js"), "npm_package_mcp_runtime_source_missing");
+    assert.ok(rootFiles.includes("node_modules/@meshrix/contracts/dist/operations/operation-registry.js"), "npm_package_internal_runtime_source_missing");
+    assert.ok(rootFiles.includes("node_modules/@meshrix/protocols/dist/mcp/adapter/gateway-installer/lib/cli/proxy-command.js"), "npm_package_mcp_runtime_source_missing");
+    assert.ok(rootFiles.includes("node_modules/@meshrix/protocols/dist/mcp/adapter/gateway-installer/mcp-identity.js"), "npm_package_mcp_runtime_source_missing");
     assert.ok(rootFiles.includes("build/dist/index.html"), "npm_package_console_build_assets_missing");
 
     const packagePlan: any[] = [];
