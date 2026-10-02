@@ -4,12 +4,16 @@ import { mkdtemp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
+import { npmCliArgs, resolveNpmCliInvocation } from "../../../tools/server-scripts/lib/npm-cli-invocation.ts";
+import { resolveCommandCandidate } from "../../../packages/foundation/src/environment-compatibility/host-runtime.ts";
+import { discoverLocalExecutionEnvironment } from "../../../tools/server-scripts/lib/local-execution-environment.ts";
 import { loadPreparedReleaseSet, prepareReleaseSet, type PreparedReleaseSet } from "../../../tools/server-scripts/publish-release-set.ts";
 import { createServerSourcePackage } from "../../../tools/server-scripts/package-server-source.ts";
 
 import { sanitizeVerificationLog } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
+const npmCli = resolveNpmCliInvocation();
 const forbidden = /(?:^|\/)(?:meshrix-node-benchmark(?:-[^/]+\.tgz)?|node-benchmark|benchmark-gateway\.(?:ts|js|d\.ts|js\.map|d\.ts\.map))(?:\/|$)|(?:^|\/)(?:dist\/)?tools\/server-scripts\/lib\/gateway-benchmark(?:\/|$)|(?:^|\/)\.cache\/gateway-benchmark(?:\/|$)/u;
 const npm = (args: string[], cwd = root) => {
   const env = { ...process.env };
@@ -18,7 +22,7 @@ const npm = (args: string[], cwd = root) => {
   delete env.NPM_CONFIG_ALLOW_SCRIPTS;
   delete env.npm_config_offline;
   delete env.NPM_CONFIG_OFFLINE;
-  const result = spawnSync("npm", args, { cwd, env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 180000 });
+  const result = spawnSync(npmCli.command, npmCliArgs(npmCli, args), { cwd, env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 180000 });
   if (result.status !== 0) throw Error(`npm_artifact_failure_${result.status}\n${sanitizeVerificationLog(`${result.stdout ?? ''}\n${result.stderr ?? ''}`, root)}`);
   return result.stdout;
 };
@@ -29,7 +33,13 @@ const tar = (args: string[]) => {
 };
 const assertClean = (entries: string[]) => expect(entries.filter(entry => forbidden.test(entry))).toEqual([]);
 const docker = (args: string[], cwd = root, timeout = 600000) => {
-  const result = spawnSync("docker", args, { cwd, encoding: "utf8", timeout, maxBuffer: 4 * 1024 * 1024 });
+  const command = resolveCommandCandidate("docker", {
+    env: process.env, platform: process.platform, includeDefaultLocalBin: false
+  }).path;
+  if (!command) throw Error("local_docker_command_unavailable");
+  const env = { ...process.env };
+  delete env.DOCKER_DEFAULT_PLATFORM;
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer: 4 * 1024 * 1024 });
   if (result.status !== 0) throw Error(`original_docker_command_failed_${result.status}\n${sanitizeVerificationLog(`${result.stdout ?? ''}\n${result.stderr ?? ''}`, root)}`);
   return result.stdout;
 };
@@ -135,7 +145,13 @@ describe("materialized product distribution", () => {
     }
   }, 240000);
 
-  it("inspects both actual committed runtime images and every retained application layer", async () => {
+  it("inspects actual committed runtime images and every retained application layer on the available local Docker platform", async (testContext) => {
+    const environment = await discoverLocalExecutionEnvironment();
+    if (environment.docker.status !== "available") {
+      testContext.skip(`not_run:${environment.docker.reasonCode}`);
+      return;
+    }
+    const targetPlatform = environment.docker.platform;
     // A source-tree Docker build could include the unrelated local support inventory.
     // Git archive is only a transport of the ordinary committed HEAD, not another filter.
     const dirty = spawnSync("git", ["diff", "--quiet", "HEAD", "--"], { cwd: root, stdio: "ignore" });
@@ -151,9 +167,9 @@ describe("materialized product distribution", () => {
       const unpack = spawnSync("tar", ["-xf", archive, "-C", context], { stdio: "ignore", timeout: 60000 });
       if (unpack.status !== 0) throw Error("committed_source_unpack_failed");
       for (const [index, target] of ["final", "runtime-ui"].entries()) {
-        docker(["build", "--target", target, "--tag", tags[index]!, "--file", "Dockerfile", "."], context);
+        docker(["build", "--platform", targetPlatform, "--target", target, "--tag", tags[index]!, "--file", "Dockerfile", "."], context);
         const probe = `const fs=require('node:fs'),path=require('node:path');const base='/app';const misses=['tools/server-scripts/benchmark-gateway.ts','tools/server-scripts/lib/gateway-benchmark','dist/tools/server-scripts/lib/gateway-benchmark','dist/tools/server-scripts/benchmark-gateway.js','dist/tools/server-scripts/benchmark-gateway.d.ts','.cache/gateway-benchmark','node_modules/meshrix-node-benchmark'];for(const name of misses)if(fs.existsSync(path.join(base,name)))process.exitCode=1;for(const name of ['tools/server-scripts/start-server.ts','dist/tools/server-scripts/start-server.js','apps/server/package.json'${target === "runtime-ui" ? ",'build/dist/index.html'" : ""}])if(!fs.existsSync(path.join(base,name)))process.exitCode=2;`;
-        docker(["run", "--rm", "--entrypoint", "node", tags[index]!, "-e", probe]);
+        docker(["run", "--rm", "--platform", targetPlatform, "--entrypoint", "node", tags[index]!, "-e", probe]);
       }
       const saved = join(scratch, "runtime-images.tar");
       docker(["save", "--output", saved, ...tags]);
@@ -166,7 +182,10 @@ describe("materialized product distribution", () => {
         assertClean(paths.filter(path => path.startsWith("app/") || path.startsWith("./app/")));
       }
     } finally {
-      for (const tag of tags) spawnSync("docker", ["image", "rm", tag], { stdio: "ignore", timeout: 30000 });
+      const command = resolveCommandCandidate("docker", {
+        env: process.env, platform: process.platform, includeDefaultLocalBin: false
+      }).path;
+      if (command) for (const tag of tags) spawnSync(command, ["image", "rm", tag], { stdio: "ignore", timeout: 30000 });
       await rm(scratch, { recursive: true, force: true });
     }
   }, 1200000);

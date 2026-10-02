@@ -8,13 +8,32 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 
 const execFileAsync: any = promisify(execFile);
 const registry: any = process.env.MESHRIX_NPM_REGISTRY || "";
 const reportPath: any = process.env.MESHRIX_NPM_REPORT || "/evidence/consumer-report.json";
 const planPath: any = process.env.MESHRIX_NPM_PLAN || "/input/consumer-plan.json";
-const platform: any = process.env.MESHRIX_NPM_PLATFORM || `${process.platform}/${process.arch}`;
-const runtimeArchitecture: any = process.arch === "x64" ? "amd64" : process.arch;
+let npmCli: any = null;
+let npmCliUnavailable = false;
+function npmInvocation(): any {
+  if (npmCli) return npmCli;
+  if (npmCliUnavailable) throw new Error("npm_cli_entrypoint_not_found");
+  try {
+    npmCli = resolveNpmCliInvocation();
+  } catch {
+    npmCliUnavailable = true;
+    throw new Error("npm_cli_entrypoint_not_found");
+  }
+  return npmCli;
+}
+const runtimeArchitecture: any = process.arch === "x64" ? "amd64" : process.arch === "arm64" ? "arm64" : "other";
+const runtimeOs: any = ({ linux: "linux", darwin: "darwin", win32: "windows" } as Record<string, string>)[process.platform] || "other";
+const runtimePlatform: any = `${runtimeOs}/${runtimeArchitecture}`;
+const requestedPlatform: any = String(process.env.MESHRIX_NPM_PLATFORM || runtimePlatform);
+const platform: any = /^(?:linux|darwin|windows|other)\/(?:amd64|arm64|other)$/u.test(requestedPlatform)
+  ? requestedPlatform
+  : "unknown";
 export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_module_identity_mismatch",
   "npm_package_module_resolution_failed",
@@ -40,6 +59,7 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_consumer_failed",
   "npm_package_consumer_plan_empty",
   "npm_package_dependency_resolution_failed",
+  "npm_cli_entrypoint_not_found",
   "npm_package_install_oom_killed",
   "npm_package_install_permission_denied",
   "npm_package_installed_name_mismatch",
@@ -110,7 +130,7 @@ let activeFailureStage: any = "plan_loading";
 let activeFailurePackageIndex: any = -1;
 const report: Record<string, any> = {
   platform,
-  runtime: { platform: process.platform, architecture: runtimeArchitecture, processArchitecture: process.arch, nodeVersion: process.version },
+  runtime: { platform: runtimeOs, architecture: runtimeArchitecture, nodeVersion: process.version },
   consumers: [],
   failures: [],
   cli: {},
@@ -179,14 +199,19 @@ function packageRuntimeSpecifiers(manifest?: any) : string[] {
 
 
 function npmCommand() : any {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+  return npmInvocation().command;
 }
 
 function npmEnv(overrides: Record<string, any> = {}) : any {
   return {
-    PATH: process.env.PATH,
+    ...Object.fromEntries(["PATH", "Path", "PATHEXT", "SystemRoot", "SYSTEMROOT", "WINDIR", "ComSpec", "COMSPEC"]
+      .filter((name?: any) : any => process.env[name])
+      .map((name?: any) : any => [name, process.env[name]])),
     HOME: process.env.HOME || "/tmp/home",
+    USERPROFILE: process.env.USERPROFILE || process.env.HOME || "/tmp/home",
     TMPDIR: process.env.TMPDIR || "/tmp",
+    TEMP: process.env.TEMP || process.env.TMPDIR || "/tmp",
+    TMP: process.env.TMP || process.env.TMPDIR || "/tmp",
     MESHRIX_USER_DATA_DIR: process.env.MESHRIX_USER_DATA_DIR,
     CODEX_HOME: process.env.CODEX_HOME,
     npm_config_userconfig: process.env.npm_config_userconfig,
@@ -195,7 +220,7 @@ function npmEnv(overrides: Record<string, any> = {}) : any {
     npm_config_audit: "false",
     npm_config_fund: "false",
     npm_config_ignore_scripts: "false",
-    npm_config_nodedir: "/usr/local",
+    ...(process.env.npm_config_nodedir ? { npm_config_nodedir: process.env.npm_config_nodedir } : {}),
     npm_config_jobs: "1",
     MAKEFLAGS: "-j1",
     CFLAGS: "-O1 -g0",
@@ -210,7 +235,7 @@ async function launchBrowser(toolsDirectory: string) : Promise<any> {
   const toolRequire = createRequire(path.join(toolsDirectory, "package.json"));
   const { chromium } = toolRequire("@playwright/test");
   return chromium.launch({
-    executablePath: "/usr/bin/chromium",
+    executablePath: process.env.MESHRIX_CHROMIUM_EXECUTABLE || chromium.executablePath(),
     env: { ...process.env, HOME: process.env.HOME || "/tmp/home", XDG_RUNTIME_DIR: process.env.TMPDIR || "/tmp" },
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-crashpad", "--disable-crash-reporter"]
   });
@@ -228,7 +253,7 @@ async function run(command?: any, args?: any[], cwd?: any, environment?: any, in
 }
 
 async function npm(args?: any[], cwd?: any, environment?: any, input?: string) : Promise<any> {
-  return run(npmCommand(), args, cwd, environment || npmEnv(), input);
+  return run(npmCommand(), npmCliArgs(npmInvocation(), args), cwd, environment || npmEnv(), input);
 }
 
 async function installConsumer({ record, base, typeTools, vueTools, onStage = () => {} }: Record<string, any>) : Promise<any> {
@@ -367,10 +392,12 @@ async function runRootRuntimeConsumer({ cwd, rootManifest, onStage = () => {} }:
   assert.match(interfaces.stdout, /jobs\.list/u, "npm_package_cli_offline_interface_failed");
   const serverHelp: any = await runInstalled("meshrix-server", ["--help"]);
   assert.match(serverHelp.stdout, /--with-ui/u, "npm_package_server_cli_help_failed");
-  const explicitPackageBin: any = await run("npx", [
+  const explicitPackageBin: any = await npm([
+    "exec",
     "--yes",
     "--package",
     `${rootManifest.name}@${rootManifest.version}`,
+    "--",
     "meshrix-mcp",
     "version",
     "--json"
@@ -396,7 +423,7 @@ async function runRootRuntimeConsumer({ cwd, rootManifest, onStage = () => {} }:
   assert.match(authHelp.stdout, /Console Auth/u, "npm_package_operator_script_failed");
   const rotateHelp: any = await runOperatorScript("server:auth:rotate", ["--help"]);
   assert.match(rotateHelp.stdout, /Console Auth/u, "npm_package_operator_script_failed");
-  const installerVersion = JSON.parse((await runOperatorScript("mcp:install", ["version", "--json"])).stdout);
+  const installerVersion = JSON.parse((await runInstalled("meshrix-mcp", ["version", "--json"])).stdout);
   assert.equal(installerVersion.packageName, rootManifest.name, "npm_package_operator_script_failed");
   assert.equal(installerVersion.packageVersion, rootManifest.version, "npm_package_operator_script_failed");
 
@@ -415,7 +442,7 @@ async function runRootRuntimeConsumer({ cwd, rootManifest, onStage = () => {} }:
     packagedServerStart: true,
     consoleAuthHelp: true,
     consoleAuthRotateHelp: true,
-    mcpInstallerPackagedVersion: true,
+    mcpRootBinVersion: true,
     storageDoctor: true,
     storageLocate: true,
     storageReconcileDryRun: true
@@ -429,6 +456,7 @@ async function runRootRuntimeConsumer({ cwd, rootManifest, onStage = () => {} }:
     mcpHelp: true,
     mcpVersion: true,
     explicitRootPackageBin: true,
+    publicServerBin: true,
     standaloneConnectorPackage: false
   };
 
@@ -455,6 +483,7 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
   const token: any = `mxak1.${randomBytes(18).toString("base64url").slice(0, 22)}.${randomBytes(36).toString("base64url").slice(0, 43)}`;
   const observed: Record<string, any> = {
     discovery: false,
+    doctor: false,
     notification: false,
     signedDiscovery: false,
     toolsList: false,
@@ -467,7 +496,19 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   const jwk = publicKey.export({ format: "jwk" });
   const identity = { keyId: "synthetic-installed-peer", publicKeyJwk: { crv: jwk.crv, kty: jwk.kty, x: jwk.x } };
-  const serverInfo = { interfaceVersion: "v0.0.1:mcp:interface-1", name: "Meshrix.js", stableToolName: "meshrix.discovery" };
+  const serverInfo = {
+    interfaceVersion: "v0.0.1:mcp:interface-1",
+    name: "Meshrix.js",
+    serverId: "synthetic-mcp-peer",
+    serverVersion: "1.0.0",
+    stableToolName: "meshrix.discovery",
+    toolsetVersion: "v0.0.1:mcp:toolset-1"
+  };
+  const canonicalJson = (value: any): string => {
+    if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  };
   const respond = (response: any, payload: unknown) => {
     const body = JSON.stringify(payload);
     response.writeHead(200, { "content-type": "application/json", "content-length": String(Buffer.byteLength(body)) });
@@ -482,9 +523,42 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       const input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      // This independent peer builds each object in canonical sorted-key order.
-      const payload = { identity, nonce: input.nonce, schemaVersion: "v0.0.1:mcp:handshake-1", server: serverInfo };
-      respond(response, { ok: true, payload, signature: { algorithm: "Ed25519", value: sign(null, Buffer.from(JSON.stringify(payload)), privateKey).toString("base64url") } });
+      // The synthetic peer signs the protocol's canonical JSON, independent of the client.
+      const baseUrl = `http://127.0.0.1:${request.socket.localPort}`;
+      const payload = {
+        schemaVersion: "v0.0.1:mcp:handshake-1",
+        nonce: input.nonce,
+        identity: {
+          schemaVersion: "v0.0.1:mcp:identity-1",
+          algorithm: "Ed25519",
+          ...identity
+        },
+        server: {
+          name: "Meshrix.js",
+          serverId: serverInfo.serverId,
+          serverVersion: serverInfo.serverVersion,
+          interfaceVersion: serverInfo.interfaceVersion,
+          toolsetVersion: serverInfo.toolsetVersion,
+          stableToolName: serverInfo.stableToolName
+        },
+        endpoints: {
+          baseUrl,
+          mcpUrl: `${baseUrl}/mcp`,
+          discoveryUrl: `${baseUrl}/api/mcp/discovery`,
+          wellKnownUrl: `${baseUrl}/.well-known/meshrix/mcp.json`,
+          vmMcpUrl: `${baseUrl}/mcp`
+        },
+        sharedHub: null
+      };
+      respond(response, {
+        ok: true,
+        payload,
+        signature: {
+          algorithm: "Ed25519",
+          payloadEncoding: "v0.0.1:platform:stable-json-1",
+          value: sign(null, Buffer.from(canonicalJson(payload)), privateKey).toString("base64url")
+        }
+      });
       observed.signedDiscovery = true;
       return;
     }
@@ -512,7 +586,12 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
         && request.headers["mcp-protocol-version"] === "2026-07-28";
       result = {
         capabilities: { tools: { listChanged: true } },
-        _meta: { "io.modelcontextprotocol/serverInfo": { name: "synthetic-mcp-peer", version: "1.0.0" } }
+        supportedVersions: ["2026-07-28"],
+        _meta: {
+          "io.modelcontextprotocol/serverInfo": { name: serverInfo.name, version: serverInfo.serverVersion },
+          interfaceVersion: serverInfo.interfaceVersion,
+          stableToolName: serverInfo.stableToolName
+        }
       };
     } else if (message?.method === "notifications/roots/list_changed") {
       observed.notification = true;
@@ -544,11 +623,16 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
   const address: any = peer.address();
   assert.ok(address && typeof address === "object" && address.port > 0, "npm_package_mcp_proxy_failed");
   const baseUrl: any = `http://127.0.0.1:${address.port}`;
-  const executable: any = path.join(cwd, "node_modules", ".bin", "meshrix-mcp");
-  await fs.access(executable);
   const proxyHome = path.join(cwd, ".verification-mcp-home");
   await fs.mkdir(proxyHome, { recursive: true });
-  const child: any = spawn(executable, ["proxy", "--target", "opencode", "--url", baseUrl], {
+  const doctor: any = await npm([
+    "exec", "--offline", "--", "meshrix-mcp", "doctor", "--url", baseUrl, "--json"
+  ], cwd, npmEnv({ HOME: proxyHome, USERPROFILE: proxyHome, MESHRIX_USER_DATA_DIR: path.join(proxyHome, "data") }));
+  const doctorReport: any = JSON.parse(doctor.stdout);
+  assert.equal(doctorReport.ok, true, "npm_package_mcp_doctor_failed");
+  assert.equal(doctorReport.packageName, rootManifest.name, "npm_package_mcp_doctor_failed");
+  observed.doctor = true;
+  const child: any = spawn(npmCommand(), npmCliArgs(npmInvocation(), ["exec", "--offline", "--", "meshrix-mcp", "proxy", "--target", "opencode", "--url", baseUrl]), {
     cwd,
     env: npmEnv({
       HOME: proxyHome,
@@ -625,6 +709,7 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
     assert.deepEqual(observed.errors, [], "npm_package_mcp_proxy_failed");
     assert.deepEqual(observed, {
       discovery: true,
+      doctor: true,
       notification: true,
       signedDiscovery: true,
       toolsList: true,
@@ -641,6 +726,7 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
     assert.equal(closeResult.signal, null, "npm_package_mcp_proxy_failed");
     report.mcp = {
       installedRootBin: true,
+      doctor: true,
       standardDiscovery: true,
       currentProtocolMetadata: true,
       signedPeerVerified: true,
@@ -780,10 +866,8 @@ async function runPackagedServerUi({ cwd, rootManifest, onStage = () => {} }: Re
   const readyFile: any = path.join(process.env.TMPDIR || "/tmp", `meshrix-ready-${process.pid}.json`);
   const serverData: any = path.join(process.env.MESHRIX_USER_DATA_DIR || "/tmp/meshrix-data", "server-ui");
   await fs.mkdir(serverData, { recursive: true });
-  const executable: any = path.join(cwd, "node_modules", ".bin", "meshrix-server");
-  await fs.access(executable);
   const serverEnv: any = npmEnv({ MESHRIX_USER_DATA_DIR: serverData, CODEX_HOME: path.join(serverData, "codex-home") });
-  const child: any = spawn(executable, ["--with-ui", "--port", "0", "--ready-file", readyFile, "--profile", "default", "--data-dir", serverData], {
+  const child: any = spawn(npmCommand(), npmCliArgs(npmInvocation(), ["exec", "--offline", "--", "meshrix-server", "--with-ui", "--port", "0", "--ready-file", readyFile, "--profile", "default", "--data-dir", serverData]), {
     cwd,
     env: serverEnv,
     stdio: ["ignore", "pipe", "pipe"]
@@ -888,7 +972,7 @@ async function runVueBrowserConsumer({ manifest, cwd, toolsDirectory }: Record<s
   const html: any = await fs.readFile(path.join(cwd, "consumer-dist", "index.html"), "utf8");
   assert.match(html, /\.js/u, "npm_package_ui_build_javascript_missing");
   assert.match(html, /\.css/u, "npm_package_ui_build_stylesheet_missing");
-  const preview: any = spawn(path.join(toolsDirectory, "node_modules", ".bin", "vite"), ["preview", "--host", "0.0.0.0", "--port", "4173", "--strictPort", "--config", "vite.config.mjs"], { cwd, env: npmEnv(), stdio: ["ignore", "pipe", "pipe"] });
+  const preview: any = spawn(process.execPath, [path.join(toolsDirectory, "node_modules/vite/bin/vite.js"), "preview", "--host", "0.0.0.0", "--port", "4173", "--strictPort", "--config", "vite.config.mjs"], { cwd, env: npmEnv(), stdio: ["ignore", "pipe", "pipe"] });
   preview.stderr.resume();
   let browser: any = null;
   try {
@@ -930,6 +1014,7 @@ async function runVueBrowserConsumer({ manifest, cwd, toolsDirectory }: Record<s
 }
 
 async function execute() : Promise<void> {
+  assert.equal(platform, runtimePlatform, "npm_package_consumer_platform_mismatch");
   const plan: any = JSON.parse(await fs.readFile(planPath, "utf8"));
   assert.ok(Array.isArray(plan.packages) && plan.packages.length > 0, "npm_package_consumer_plan_empty");
   const home: any = process.env.HOME || "/tmp/home";
@@ -983,9 +1068,7 @@ async function execute() : Promise<void> {
     normalInstallLifecycles: report.consumers.every((consumer?: any) : any => consumer.installLifecycleCompleted),
     allConsumersPackageOnly: report.consumers.every((consumer?: any) : any => consumer.directDependencyOnly),
     allRuntimeExports: report.consumers.reduce((count?: any, consumer?: any) : any => count + consumer.runtimeExportCount, 0),
-    allTypeExports: report.consumers.reduce((count?: any, consumer?: any) : any => count + consumer.typeExportCount, 0),
-    emulation: process.env.MESHRIX_NPM_EMULATED === "true",
-    engineArchitecture: process.env.MESHRIX_NPM_ENGINE_ARCH || "unknown"
+    allTypeExports: report.consumers.reduce((count?: any, consumer?: any) : any => count + consumer.typeExportCount, 0)
   };
   if (report.failures.length > 0) process.exitCode = 1;
   activeFailureStage = "plan_loading";
@@ -996,7 +1079,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     await execute();
   } catch (error: any) {
-    const platformValue: any = ["linux/amd64", "linux/arm64"].includes(platform) ? platform : "unknown";
+    const platformValue: any = platform === runtimePlatform ? runtimePlatform : "unknown";
     const failure = {
       ...consumerFailureSummary(error),
       failureStage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(activeFailureStage) ? activeFailureStage : "plan_loading",
@@ -1004,7 +1087,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         ? activeFailurePackageIndex
         : null,
       platform: platformValue,
-      architecture: ["amd64", "arm64"].includes(runtimeArchitecture) ? runtimeArchitecture : "unknown"
+      architecture: runtimeArchitecture
     };
     report.failures.push(failure);
     report.summary = { success: false };
