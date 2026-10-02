@@ -7,6 +7,31 @@ env:
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      originating_run_id:
+        description: "Successful release-branch workflow run that deployed this candidate"
+        required: true
+        type: string
+      originating_run_attempt:
+        description: "Attempt number for the originating release-branch run"
+        required: true
+        type: string
+      originating_event:
+        description: "Event that started the originating release-branch run"
+        required: true
+        type: choice
+        options:
+          - push
+          - workflow_dispatch
+      source_revision:
+        description: "Exact source commit deployed by the originating run"
+        required: true
+        type: string
+      bootstrap_candidate:
+        description: "Exact canonical version for first publication only"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +56,13 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install dependencies
         run: npm ci
       - name: Validate the canonical release definition
@@ -41,6 +73,38 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
+      - name: Validate the exact release-workflow dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          ORIGINATING_RUN_ID: ${{ inputs.originating_run_id }}
+          ORIGINATING_RUN_ATTEMPT: ${{ inputs.originating_run_attempt }}
+          ORIGINATING_EVENT: ${{ inputs.originating_event }}
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          BOOTSTRAP_CANDIDATE: ${{ inputs.bootstrap_candidate || '' }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = tag
+          canonical_tag="$(node tools/server-scripts/verify-release-definition.ts --field release.tag)"
+          canonical_version="$(node tools/server-scripts/verify-release-definition.ts --field release.version)"
+          tag_revision="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          args=(
+            verify-release-dispatch
+            --tag "$RELEASE_TAG"
+            --canonical-tag "$canonical_tag"
+            --source-revision "$SOURCE_REVISION"
+            --tag-revision "$tag_revision"
+            --source-run-id "$ORIGINATING_RUN_ID"
+            --source-run-attempt "$ORIGINATING_RUN_ATTEMPT"
+            --source-event "$ORIGINATING_EVENT"
+            --repository "$GITHUB_REPOSITORY"
+            --release-version "$canonical_version"
+          )
+          if [[ -n "$BOOTSTRAP_CANDIDATE" ]]; then
+            args+=(--bootstrap-candidate "$BOOTSTRAP_CANDIDATE")
+          fi
+          node tools/server-scripts/resolve-branch-promotion-authority.ts "${args[@]}"
       - name: Require the tag commit to equal the canonical release tip
         shell: bash
         run: |
@@ -75,6 +139,13 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install Core dependencies
         run: npm ci
       - name: Verify the self-contained Core upstream publishing boundary
@@ -98,6 +169,13 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install dependencies
         run: npm ci
       - name: Independently materialize the tag checkout candidate
@@ -109,21 +187,49 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          ORIGINATING_RUN_ID: ${{ inputs.originating_run_id || '' }}
+          ORIGINATING_RUN_ATTEMPT: ${{ inputs.originating_run_attempt || '' }}
+          ORIGINATING_EVENT: ${{ inputs.originating_event || '' }}
+          SOURCE_REVISION: ${{ inputs.source_revision || '' }}
         run: |
           set -euo pipefail
           runs="$RUNNER_TEMP/release-runs.json"
           selected="$RUNNER_TEMP/release-run.json"
-          gh api --paginate \
-            "repos/${GITHUB_REPOSITORY}/actions/runs?event=push&branch=release&head_sha=${GITHUB_SHA}&per_page=100" \
-            --slurp | jq '{workflow_runs: [.[] | .workflow_runs[]]}' > "$runs"
-          node tools/server-scripts/resolve-branch-promotion-authority.ts select-run \
-            --input "$runs" \
-            --workflow-path .github/workflows/release-branch.yml \
-            --branch release \
-            --head-sha "$GITHUB_SHA" \
-            --output "$selected"
-          run_id="$(jq -r .runId "$selected")"
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            source_run="$RUNNER_TEMP/originating-release-run.json"
+            while :; do
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ORIGINATING_RUN_ID}" > "$source_run"
+              result="$(node tools/server-scripts/resolve-branch-promotion-authority.ts \
+                verify-originating-run \
+                --input "$source_run" \
+                --repository "$GITHUB_REPOSITORY" \
+                --run-id "$ORIGINATING_RUN_ID" \
+                --run-attempt "$ORIGINATING_RUN_ATTEMPT" \
+                --source-revision "$SOURCE_REVISION" \
+                --event "$ORIGINATING_EVENT" \
+                --output "$selected")"
+              if [[ "$(jq -r .pending <<< "$result")" == false ]]; then
+                break
+              fi
+              sleep 2
+            done
+            run_id="$ORIGINATING_RUN_ID"
+            source_revision="$SOURCE_REVISION"
+          else
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/runs?event=push&branch=release&head_sha=${GITHUB_SHA}&per_page=100" \
+              --slurp | jq '{workflow_runs: [.[] | .workflow_runs[]]}' > "$runs"
+            node tools/server-scripts/resolve-branch-promotion-authority.ts select-run \
+              --input "$runs" \
+              --workflow-path .github/workflows/release-branch.yml \
+              --branch release \
+              --head-sha "$GITHUB_SHA" \
+              --output "$selected"
+            run_id="$(jq -r .runId "$selected")"
+            source_revision="$GITHUB_SHA"
+          fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "source_revision=$source_revision" >> "$GITHUB_OUTPUT"
           echo "selection=$selected" >> "$GITHUB_OUTPUT"
       - name: Resolve exactly one release authority artifact
         id: release-artifact
@@ -191,8 +297,22 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install dependencies without publication credentials
-        run: npm ci --ignore-scripts
+        run: npm ci
+      - name: Build the source candidate for the public npm archives
+        run: npm run build
+      - name: Prepare the public npm archives once
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:publish-npm -- --prepare --artifact-dir build/release/npm-set --tag "$RELEASE_TAG"
       - name: Assemble verified portable connector assets
         shell: bash
         run: |
@@ -215,6 +335,7 @@ jobs:
           name: release-inputs-${{ github.sha }}
           path: |
             build/release/mcp/
+            build/release/npm-set/
             build/release/node-runtime-source/
             build/release/supply-chain/
           if-no-files-found: error
@@ -238,6 +359,13 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install verifier dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
       - name: Download the assembled release inputs
@@ -301,6 +429,7 @@ jobs:
           name: verified-release-inputs-${{ github.sha }}
           path: |
             build/release/mcp/
+            build/release/npm-set/
             build/release/node-runtime-source/
             build/release/supply-chain/
             build/release/RELEASE_NOTES.md
@@ -311,7 +440,7 @@ jobs:
 
   npm-registry-preflight:
     name: Preflight the complete npm release set before remote container mutation
-    needs: [verify, release-authority]
+    needs: [verify, release-authority, assemble-release-assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -324,10 +453,24 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install release tooling without lifecycle scripts or publication credentials
         run: npm ci --ignore-scripts
+      - name: Download the exact prepared public npm archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-inputs-${{ github.sha }}
+          path: build/release
       - name: Read and validate all npm package versions and dist-tags without publication
-        run: npm run release:publish-npm -- --preflight
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:publish-npm -- --preflight --artifact-dir build/release/npm-set --tag "$RELEASE_TAG"
 
   build-release-image:
     name: Build or resolve the unsigned release image authority
@@ -567,7 +710,8 @@ jobs:
               fs.readFileSync(process.env.FUNCTIONAL_AUTHORITY, "utf8")
             )
             || deploymentAuthority.runtimeUiTarget !== "runtime-ui"
-            || deploymentAuthority.runner !== "ubuntu-24.04"
+            || deploymentAuthority.executionEnvironment?.runner !== "ubuntu-24.04"
+            || deploymentAuthority.executionEnvironment?.runnerEnvironment !== "github-hosted"
             || deploymentAuthority.cleanup !== true
             || deploymentAuthority.capacityCertified !== false
             || authority.repository !== process.env.GITHUB_REPOSITORY
@@ -1226,6 +1370,7 @@ jobs:
     needs: [release-authority, sign-finalize-release, prepare-release-draft, publish-container-version]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    environment: release-candidate
     permissions:
       contents: read
       id-token: write
@@ -1238,14 +1383,40 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Validate the tag and atomic package release state
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
       - name: Install publication dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Publish missing tarballs or reverify immutable versions
-        run: npm run release:publish-npm
+      - name: Download the exact prepared public npm archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-inputs-${{ github.sha }}
+          path: build/release
+      - name: Verify package-scoped npm trusted publisher access
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.bootstrap_candidate == '' }}
+        run: npm run release:publish-npm -- --verify-oidc-trust --artifact-dir build/release/npm-set
+      - name: Publish or reverify the exact prepared archives through npm OIDC
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.bootstrap_candidate == '' }}
+        run: npm run release:publish-npm -- --artifact-dir build/release/npm-set
+      - name: Publish the exact prepared archives with the explicit first-release bootstrap
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_candidate != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          BOOTSTRAP_CANDIDATE: ${{ inputs.bootstrap_candidate }}
+        run: >-
+          npm run release:publish-npm --
+          --artifact-dir build/release/npm-set
+          --auth bootstrap
+          --bootstrap-candidate "$BOOTSTRAP_CANDIDATE"
 
   publish-github-release:
     name: Publish the verified immutable GitHub release

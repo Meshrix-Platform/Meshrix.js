@@ -51,6 +51,21 @@ export async function verifyReleaseDefinition({
   const version: any = String(definition?.release?.version || "");
   const tag: any = String(definition?.release?.tag || "");
   const channel: any = String(definition?.release?.channel || "");
+  const npmCliVersion: any = String(definition?.github?.npmCliVersion || "");
+  const npmCliMatch: any = /^(\d+)\.(\d+)\.(\d+)$/u.exec(npmCliVersion);
+  if (!npmCliMatch) {
+    fail("release_definition_npm_cli_version_invalid", "The release workflow requires an exact npm CLI version.");
+  }
+  const npmCliCoordinates: number[] = npmCliMatch.slice(1).map(Number);
+  const npmCliMinimum = [11, 21, 0];
+  const npmCliSupported = npmCliCoordinates.some((part, index) => {
+    if (part === npmCliMinimum[index]) return false;
+    return part > npmCliMinimum[index] && npmCliCoordinates.slice(0, index)
+      .every((previous, previousIndex) => previous === npmCliMinimum[previousIndex]);
+  }) || npmCliCoordinates.every((part, index) => part === npmCliMinimum[index]);
+  if (!npmCliSupported) {
+    fail("release_definition_npm_cli_version_unsupported", "The release workflow requires npm 11.21.0 or newer.");
+  }
   if (!semverPattern.test(version) || tag !== `v${version}`) {
     fail("release_definition_coordinates_invalid", "Release version and tag do not agree.");
   }
@@ -195,7 +210,8 @@ async function main() : Promise<any> {
       platformCount: definition.container.platforms.length,
       prepublicationClaim: definition.prepublication.requiredClaim,
       stableClaim: definition.acceptance.stableRequiredClaim,
-      releaseClaim: definition.acceptance.releaseRequiredClaim
+      releaseClaim: definition.acceptance.releaseRequiredClaim,
+      npmCliVersion: definition.github.npmCliVersion
     })}\n`);
   }
 }

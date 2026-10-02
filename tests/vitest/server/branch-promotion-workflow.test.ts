@@ -10,13 +10,21 @@ import {
   verifyProtectedPushTopology
 } from "../../../tools/scripts/verify-branch-flow.ts";
 import {
+  buildReleaseWorkflowDispatchPayload,
   createStableAuthorityManifest,
+  releaseTagCreationAction,
   selectExactPromotionArtifact,
   selectSuccessfulPromotionRun,
+  validateOriginatingReleaseRun,
+  validateReleaseDispatchContext,
   validateStableAuthorityManifest,
 } from "../../../tools/server-scripts/lib/release-deployment/authority.ts";
 import { sha256 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
-import { runAuthorityCommand } from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
+import {
+  dispatchReleaseWorkflow,
+  ensureImmutableReleaseTag,
+  runAuthorityCommand,
+} from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
 import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
 import {
   githubProcessEnvironment,
@@ -51,6 +59,177 @@ function sameRepositoryPayload(base?: any, head?: any) : any {
 }
 
 describe("branch promotion workflow", () : any => {
+  it("waits for the exact successful deployment run before accepting its release authority", () : any => {
+    const sourceRevision = "a".repeat(40);
+    const context = {
+      repository: "Meshrix-Platform/Meshrix.js",
+      runId: "90210",
+      runAttempt: 2,
+      sourceRevision,
+      event: "workflow_dispatch",
+    };
+    const run = {
+      id: 90210,
+      run_attempt: 2,
+      path: ".github/workflows/release-branch.yml",
+      head_branch: "release",
+      head_sha: sourceRevision,
+      event: "workflow_dispatch",
+      repository: { full_name: context.repository },
+      status: "in_progress",
+      conclusion: null,
+    };
+    expect(validateOriginatingReleaseRun(run, context)).toEqual({ pending: true });
+    expect(validateOriginatingReleaseRun({ ...run, status: "completed", conclusion: "success" }, context))
+      .toMatchObject({
+        pending: false,
+        selection: {
+          branch: "release",
+          event: "workflow_dispatch",
+          headSha: sourceRevision,
+          runAttempt: 2,
+          runId: "90210",
+          workflowPath: ".github/workflows/release-branch.yml",
+        },
+      });
+    for (const altered of [
+      { ...run, path: ".github/workflows/release.yml" },
+      { ...run, event: "push" },
+      { ...run, head_sha: "b".repeat(40) },
+      { ...run, run_attempt: 1 },
+      { ...run, repository: { full_name: "other/repository" } },
+    ]) {
+      expect(() => validateOriginatingReleaseRun(altered, context))
+        .toThrowError(expect.objectContaining({ code: "promotion_authority_originating_run_mismatch" }));
+    }
+    expect(() => validateOriginatingReleaseRun({ ...run, status: "completed", conclusion: "failure" }, context))
+      .toThrowError(expect.objectContaining({ code: "promotion_authority_originating_run_unsuccessful" }));
+  });
+
+  it("binds release dispatch to the immutable canonical tag and permits only an exact manual bootstrap candidate", () : any => {
+    const sourceRevision = "a".repeat(40);
+    const context = {
+      tag: "v0.0.1",
+      canonicalTag: "v0.0.1",
+      sourceRevision,
+      tagRevision: sourceRevision,
+      sourceRunId: "90210",
+      sourceRunAttempt: 2,
+      sourceEvent: "workflow_dispatch",
+      repository: "Meshrix-Platform/Meshrix.js",
+      releaseVersion: "0.0.1",
+      bootstrapCandidate: "0.0.1",
+    };
+    expect(validateReleaseDispatchContext(context)).toMatchObject({
+      tag: "v0.0.1",
+      sourceRevision,
+      runId: "90210",
+      runAttempt: 2,
+      bootstrapCandidate: "0.0.1",
+    });
+    expect(buildReleaseWorkflowDispatchPayload(context)).toEqual({
+      ref: "v0.0.1",
+      inputs: {
+        originating_event: "workflow_dispatch",
+        originating_run_attempt: "2",
+        originating_run_id: "90210",
+        source_revision: sourceRevision,
+        bootstrap_candidate: "0.0.1",
+      },
+    });
+    expect(() => validateReleaseDispatchContext({ ...context, tagRevision: "b".repeat(40) }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_tag_revision_mismatch" }));
+    expect(() => validateReleaseDispatchContext({ ...context, canonicalTag: "v0.0.2" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_tag_mismatch" }));
+    expect(() => validateReleaseDispatchContext({ ...context, bootstrapCandidate: "0.0.2" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+    expect(() => validateReleaseDispatchContext({ ...context, sourceEvent: "push" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+    expect(releaseTagCreationAction(null, sourceRevision)).toBe("create");
+    expect(releaseTagCreationAction(sourceRevision, sourceRevision)).toBe("verify");
+    expect(() => releaseTagCreationAction("b".repeat(40), sourceRevision))
+      .toThrowError(expect.objectContaining({ code: "release_tag_target_conflict" }));
+  });
+
+  it("creates or verifies a release tag through GitHub without replacing a conflicting ref", async () : Promise<any> => {
+    const revision = "a".repeat(40);
+    const calls: any[] = [];
+    const fetchImplementation = async (url: any, init: any = {}) : Promise<any> => {
+      calls.push({ url: String(url), method: init.method || "GET", body: init.body });
+      if (String(url).endsWith("/git/ref/tags/v0.0.1")) {
+        return new Response(JSON.stringify({ object: { type: "commit", sha: revision } }), { status: 200 });
+      }
+      throw new Error("unexpected GitHub request");
+    };
+    await expect(ensureImmutableReleaseTag({
+      repository: "Meshrix-Platform/Meshrix.js",
+      tag: "v0.0.1",
+      sourceRevision: revision,
+      token: "synthetic-github-token",
+      fetchImplementation,
+    })).resolves.toMatchObject({ action: "verify", tag: "v0.0.1", sourceRevision: revision });
+    expect(calls.map(({ method }: Record<string, any>) : any => method)).toEqual(["GET"]);
+    expect(JSON.stringify(calls)).not.toContain("synthetic-github-token");
+
+    const createCalls: any[] = [];
+    let lookupCount = 0;
+    const createFetch = async (url: any, init: any = {}) : Promise<any> => {
+      createCalls.push({ url: String(url), method: init.method || "GET", body: init.body });
+      if (String(url).endsWith("/git/ref/tags/v0.0.1")) {
+        lookupCount += 1;
+        return lookupCount === 1
+          ? new Response(null, { status: 404 })
+          : new Response(JSON.stringify({ object: { type: "commit", sha: revision } }), { status: 200 });
+      }
+      if (String(url).endsWith("/git/refs")) return new Response("{}", { status: 201 });
+      throw new Error("unexpected GitHub request");
+    };
+    await expect(ensureImmutableReleaseTag({
+      repository: "Meshrix-Platform/Meshrix.js",
+      tag: "v0.0.1",
+      sourceRevision: revision,
+      token: "synthetic-github-token",
+      fetchImplementation: createFetch,
+    })).resolves.toMatchObject({ action: "verify" });
+    expect(createCalls.map(({ method }: Record<string, any>) : any => method)).toEqual(["GET", "POST", "GET"]);
+    expect(JSON.parse(createCalls[1].body)).toEqual({ ref: "refs/tags/v0.0.1", sha: revision });
+  });
+
+  it("dispatches only the release workflow with source-run facts and the canonical tag ref", async () : Promise<any> => {
+    const revision = "a".repeat(40);
+    let request: any;
+    const result = await dispatchReleaseWorkflow({
+      repository: "Meshrix-Platform/Meshrix.js",
+      tag: "v0.0.1",
+      sourceRevision: revision,
+      runId: "90210",
+      runAttempt: 2,
+      sourceEvent: "push",
+      releaseVersion: "0.0.1",
+      token: "synthetic-github-token",
+      fetchImplementation: async (url: any, init: any = {}) : Promise<any> => {
+        request = { url: String(url), method: init.method, body: JSON.parse(init.body) };
+        return new Response(null, { status: 204 });
+      },
+    });
+    expect(request).toMatchObject({
+      url: "https://api.github.com/repos/Meshrix-Platform/Meshrix.js/actions/workflows/release.yml/dispatches",
+      method: "POST",
+      body: {
+        ref: "v0.0.1",
+        inputs: {
+          originating_event: "push",
+          originating_run_attempt: "2",
+          originating_run_id: "90210",
+          source_revision: revision,
+          bootstrap_candidate: "",
+        },
+      },
+    });
+    expect(result).toMatchObject({ sourceRunId: "90210", sourceRunAttempt: 2 });
+    expect(JSON.stringify({ request, result })).not.toContain("synthetic-github-token");
+  });
+
   it("keeps nightly direct-write feedback without a promotion gate", () : any => {
     expect(LONG_LIVED_BRANCHES).toEqual(["nightly", "stable", "release"]);
 
@@ -470,12 +649,19 @@ describe("branch promotion workflow", () : any => {
 
     expect(branchWorkflow).toContain("runs-on: ubuntu-24.04");
     expect(branchWorkflow).toContain('branches: ["release"]');
+    expect(branchWorkflow).toContain("workflow_dispatch:");
+    expect(branchWorkflow).toContain("bootstrap_candidate:");
+    expect(branchWorkflow).toContain("ensure-release-tag");
+    expect(branchWorkflow).toContain("dispatch-release");
     expect(branchWorkflow).toContain("stable-authority-${GITHUB_SHA}");
     expect(branchWorkflow).toContain("npm run server:verify:release-deployment");
     expect(branchWorkflow).toContain("release-authority-${{ github.sha }}");
-    expect(branchWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
+    expect(branchWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(5);
 
     expect(releaseWorkflow).toContain('test "$tag_commit" = "$release_commit"');
+    expect(releaseWorkflow).toContain("workflow_dispatch:");
+    expect(releaseWorkflow).toContain("verify-originating-run");
+    expect(releaseWorkflow).toContain("while :");
     expect(releaseWorkflow).not.toContain("git merge-base --is-ancestor");
     expect(releaseWorkflow).toContain("name: release-authority-${{ github.sha }}");
     expect(releaseWorkflow).not.toContain("\n  functional-completeness:\n");

@@ -16,6 +16,7 @@ import {
   preflightReleaseSet,
   prepareReleaseSet,
   publishReleaseSet,
+  verifyNpmTrustedPublisherAccess,
   releaseTagForVersion
 } from "../../../tools/server-scripts/publish-release-set.ts";
 import { resolveReleaseWorkspaceDirectories } from "../../../tools/server-scripts/lib/release-metadata.ts";
@@ -897,17 +898,120 @@ describe("npm release-set publication", () : any => {
     expect(calls[3].env.NODE_AUTH_TOKEN).toBe("mutation-synthetic");
   });
 
+  it("proves npm OIDC trust separately for every prepared public package without retaining exchanged tokens", async () : Promise<any> => {
+    const injected = createInjectedNpmRunner();
+    const artifactDirectory = await prepareFixtures(injected);
+    const npmCallsBeforeProof = injected.calls.length;
+    const identityRequests: any[] = [];
+    const exchangeRequests: any[] = [];
+    let discardedBodies = 0;
+    const environment = {
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://pipelines.actions.githubusercontent.com/oidc?fixture=1",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "synthetic-actions-request-token",
+    };
+    const authorizationFor = (credential: string) : string => `${["Be", "arer"].join("")} ${credential}`;
+    const expectedActionsAuthorization = authorizationFor(environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
+    const fetchImplementation = async (input: any, init: any = {}) : Promise<any> => {
+      const url = new URL(input);
+      if (url.hostname === "pipelines.actions.githubusercontent.com") {
+        identityRequests.push({ url: url.toString(), authorization: init.headers?.Authorization });
+        return new Response(JSON.stringify({ value: `synthetic-identity-${identityRequests.length}` }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      exchangeRequests.push({ url: url.toString(), method: init.method, authorization: init.headers?.Authorization });
+      return {
+        status: 201,
+        body: { cancel: async () : Promise<void> => { discardedBodies += 1; } },
+      };
+    };
+    const result = await verifyNpmTrustedPublisherAccess({
+      rootDir: ROOT,
+      artifactDirectory,
+      environment,
+      fetchImplementation,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      oidcTrustVerified: true,
+      version: "0.0.1",
+      packageCount: 2,
+      packages: [
+        { name: "@meshrix/gateway", accepted: true },
+        { name: "meshrix.js", accepted: true },
+      ],
+    });
+    expect(identityRequests).toHaveLength(2);
+    expect(identityRequests.every(({ url, authorization }: Record<string, any>) : any => (
+      new URL(url).searchParams.get("audience") === "npm:registry.npmjs.org" &&
+      authorization === expectedActionsAuthorization
+    ))).toBe(true);
+    expect(exchangeRequests.map(({ url, method }: Record<string, any>) : any => [url, method])).toEqual([
+      ["https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/%40meshrix%2Fgateway", "POST"],
+      ["https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/meshrix.js", "POST"],
+    ]);
+    expect(exchangeRequests.map(({ authorization }: Record<string, any>) : any => authorization)).toEqual([
+      authorizationFor("synthetic-identity-1"),
+      authorizationFor("synthetic-identity-2"),
+    ]);
+    expect(discardedBodies).toBe(2);
+    expect(JSON.stringify(result)).not.toContain("synthetic-identity");
+    expect(JSON.stringify(result)).not.toContain("synthetic-actions-request-token");
+    expect(JSON.stringify(result)).not.toContain(artifactDirectory);
+    expect(injected.calls).toHaveLength(npmCallsBeforeProof);
+  });
+
+  it("fails closed on a rejected package identity and on any raw npm token", async () : Promise<any> => {
+    const injected = createInjectedNpmRunner();
+    const artifactDirectory = await prepareFixtures(injected);
+    const calls: string[] = [];
+    const environment = {
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://pipelines.actions.githubusercontent.com/oidc",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "synthetic-actions-request-token",
+    };
+    await expect(verifyNpmTrustedPublisherAccess({
+      rootDir: ROOT,
+      artifactDirectory,
+      environment,
+      fetchImplementation: async (input: any) : Promise<any> => {
+        const url = new URL(input);
+        calls.push(url.toString());
+        if (url.hostname === "pipelines.actions.githubusercontent.com") {
+          return new Response(JSON.stringify({ value: "synthetic-identity" }), { status: 200 });
+        }
+        return { status: 401, body: { cancel: async () : Promise<void> => undefined } };
+      },
+    })).rejects.toMatchObject({ code: "release_set_oidc_trust_mismatch" });
+    expect(calls).toHaveLength(2);
+
+    await expect(verifyNpmTrustedPublisherAccess({
+      rootDir: ROOT,
+      artifactDirectory,
+      environment: { ...environment, NODE_AUTH_TOKEN: "synthetic-raw-npm-token" },
+      fetchImplementation: async () : Promise<any> => {
+        throw new Error("raw npm token must be rejected before any request");
+      },
+    })).rejects.toMatchObject({ code: "release_set_raw_npm_token_forbidden" });
+  });
+
   it("accepts only the exact prepared-artifact and explicit bootstrap CLI forms", () : any => {
     expect(parsePublishArguments(["--prepare", "--artifact-dir", "/fixture/artifacts"]))
       .toEqual({
         prepare: true,
         preflight: false,
+        verifyOidcTrust: false,
         artifactDirectory: "/fixture/artifacts",
         authMode: "oidc",
         bootstrapCandidate: undefined,
         tag: undefined,
         help: false
       });
+    expect(parsePublishArguments([
+      "--verify-oidc-trust",
+      "--artifact-dir=/fixture/artifacts"
+    ])).toMatchObject({ verifyOidcTrust: true, authMode: "oidc" });
     expect(parsePublishArguments([
       "--artifact-dir=/fixture/artifacts",
       "--auth", "bootstrap",
@@ -921,5 +1025,11 @@ describe("npm release-set publication", () : any => {
       .toThrowError(expect.objectContaining({ code: "release_set_argument_missing" }));
     expect(() : any => parsePublishArguments(["--prepare", "--preflight", "--artifact-dir", "/fixture/artifacts"]))
       .toThrowError(expect.objectContaining({ code: "release_set_argument_conflict" }));
+    expect(() : any => parsePublishArguments([
+      "--verify-oidc-trust",
+      "--artifact-dir", "/fixture/artifacts",
+      "--auth", "bootstrap",
+      "--bootstrap-candidate", "0.0.1"
+    ])).toThrowError(expect.objectContaining({ code: "release_set_argument_conflict" }));
   });
 });

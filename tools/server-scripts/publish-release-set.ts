@@ -16,9 +16,11 @@ import {
   resolveNpmCliInvocation
 } from "./lib/npm-cli-invocation.ts";
 import { assertReleaseVersion, resolveReleaseWorkspaceDirectories } from "./lib/release-metadata.ts";
+import { FIRST_NPM_BOOTSTRAP_VERSION } from "./lib/release-deployment/contract.ts";
 
 const execFileAsync: any = promisify(execFile);
 const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
+const NPM_OIDC_AUDIENCE: any = "npm:registry.npmjs.org";
 const BOOTSTRAP_USER_CONFIG: any = "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n";
 export const PREPARED_RELEASE_SET_FILENAME: any = "meshrix-release-set.json";
 const PREPARED_RELEASE_SET_SCHEMA: any = "meshrix.npm-release-set/v1";
@@ -460,7 +462,7 @@ function selectPublicationAuth({
       "Publication authentication must be OIDC or an explicit bootstrap candidate."
     );
   }
-  if (bootstrapCandidate !== version) {
+  if (bootstrapCandidate !== version || version !== FIRST_NPM_BOOTSTRAP_VERSION) {
     throw publicationError(
       "release_set_bootstrap_candidate_invalid",
       "Bootstrap authentication must explicitly name the prepared release version."
@@ -1441,6 +1443,95 @@ export async function preflightReleaseSet({
   }
 }
 
+async function requestGithubNpmIdentityToken(
+  fetchImplementation: typeof fetch,
+  environment: Record<string, any>,
+): Promise<string> {
+  const requestUrlValue = String(environment.ACTIONS_ID_TOKEN_REQUEST_URL || "");
+  const requestToken = String(environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN || "");
+  let requestUrl: URL;
+  try {
+    requestUrl = new URL(requestUrlValue);
+  } catch {
+    throw publicationError("release_set_oidc_unavailable", "GitHub Actions OIDC is not available for this release.");
+  }
+  if (
+    requestUrl.protocol !== "https:" ||
+    requestUrl.hostname !== "pipelines.actions.githubusercontent.com" ||
+    !requestToken
+  ) {
+    throw publicationError("release_set_oidc_unavailable", "GitHub Actions OIDC is not available for this release.");
+  }
+  requestUrl.searchParams.set("audience", NPM_OIDC_AUDIENCE);
+  let response: Response;
+  try {
+    response = await fetchImplementation(requestUrl, {
+      headers: { Authorization: `Bearer ${requestToken}` },
+      redirect: "error",
+      cache: "no-store",
+    });
+  } catch {
+    throw publicationError("release_set_oidc_request_failed", "GitHub Actions OIDC could not be requested.");
+  }
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (!response.ok || (contentLength > 0 && contentLength > 16_384)) {
+    await response.body?.cancel().catch(() => undefined);
+    throw publicationError("release_set_oidc_request_failed", "GitHub Actions OIDC could not be requested.");
+  }
+  let token: any;
+  try {
+    token = (await response.json())?.value;
+  } catch {
+    throw publicationError("release_set_oidc_response_invalid", "GitHub Actions OIDC returned an invalid response.");
+  }
+  if (typeof token !== "string" || token.length === 0 || token.length > 16_384) {
+    throw publicationError("release_set_oidc_response_invalid", "GitHub Actions OIDC returned an invalid response.");
+  }
+  return token;
+}
+
+export async function verifyNpmTrustedPublisherAccess({
+  rootDir = process.cwd(),
+  artifactDirectory,
+  environment = process.env,
+  fetchImplementation = fetch,
+}: Record<string, any> = {}): Promise<any> {
+  assertNoRawNpmToken(environment);
+  const prepared = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
+  const acceptedPackages: any[] = [];
+  for (const packageRecord of prepared.packages) {
+    const identityToken = await requestGithubNpmIdentityToken(fetchImplementation, environment);
+    let response: Response;
+    try {
+      const endpoint = new URL(
+        `-/npm/v1/oidc/token/exchange/package/${encodeURIComponent(packageRecord.name)}`,
+        OFFICIAL_NPM_REGISTRY,
+      );
+      response = await fetchImplementation(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${identityToken}`, Accept: "application/json" },
+        redirect: "error",
+        cache: "no-store",
+      });
+    } catch {
+      throw publicationError("release_set_oidc_trust_request_failed", "npm did not accept the hosted publisher identity.");
+    }
+    const accepted = response.status === 201;
+    await response.body?.cancel().catch(() => undefined);
+    if (!accepted) {
+      throw publicationError("release_set_oidc_trust_mismatch", "npm did not accept the hosted publisher identity.");
+    }
+    acceptedPackages.push({ name: packageRecord.name, accepted: true });
+  }
+  return {
+    ok: true,
+    oidcTrustVerified: true,
+    version: prepared.version,
+    packageCount: acceptedPackages.length,
+    packages: acceptedPackages,
+  };
+}
+
 export async function publishReleaseSet({
   rootDir = process.cwd(),
   artifactDirectory,
@@ -1516,6 +1607,7 @@ function optionValue(args?: any, index?: any, option?: any) : any {
 export function parsePublishArguments(argv?: any) : any {
   let prepare: any = false;
   let preflight: any = false;
+  let verifyOidcTrust: any = false;
   let artifactDirectory: any;
   let authMode: any = "oidc";
   let bootstrapCandidate: any;
@@ -1527,6 +1619,8 @@ export function parsePublishArguments(argv?: any) : any {
       prepare = true;
     } else if (argument === "--preflight") {
       preflight = true;
+    } else if (argument === "--verify-oidc-trust") {
+      verifyOidcTrust = true;
     } else if (argument === "--help" || argument === "-h") {
       help = true;
     } else if (argument === "--artifact-dir") {
@@ -1556,10 +1650,10 @@ export function parsePublishArguments(argv?: any) : any {
       );
     }
   }
-  if (prepare && preflight) {
+  if ([prepare, preflight, verifyOidcTrust].filter(Boolean).length > 1) {
     throw publicationError(
       "release_set_argument_conflict",
-      "--prepare and --preflight cannot be used together."
+      "Only one read, preparation, trust-check, or publish mode may be selected."
     );
   }
   if (!help && !artifactDirectory) {
@@ -1574,10 +1668,10 @@ export function parsePublishArguments(argv?: any) : any {
       "--bootstrap-candidate requires --auth bootstrap."
     );
   }
-  if ((prepare || preflight) && authMode !== "oidc") {
+  if ((prepare || preflight || verifyOidcTrust) && authMode !== "oidc") {
     throw publicationError(
       "release_set_argument_conflict",
-      "Prepared-artifact creation and registry preflight do not accept bootstrap credentials."
+      "Prepared-artifact creation, registry preflight, and OIDC verification do not accept bootstrap credentials."
     );
   }
   if (authMode === "bootstrap" && !bootstrapCandidate && !help) {
@@ -1586,7 +1680,7 @@ export function parsePublishArguments(argv?: any) : any {
       "--bootstrap-candidate is required for bootstrap publication."
     );
   }
-  return { prepare, preflight, artifactDirectory, authMode, bootstrapCandidate, tag, help };
+  return { prepare, preflight, verifyOidcTrust, artifactDirectory, authMode, bootstrapCandidate, tag, help };
 }
 
 function usage() : any {
@@ -1594,6 +1688,7 @@ function usage() : any {
     "Usage:",
     "  npm run release:publish-npm -- --prepare --artifact-dir DIR",
     "  npm run release:publish-npm -- --preflight --artifact-dir DIR",
+    "  npm run release:publish-npm -- --verify-oidc-trust --artifact-dir DIR",
     "  npm run release:publish-npm -- --artifact-dir DIR [--auth oidc]",
     "  npm run release:publish-npm -- --artifact-dir DIR --auth bootstrap --bootstrap-candidate VERSION",
     "",
@@ -1611,7 +1706,9 @@ async function main() : Promise<any> {
     ? await prepareReleaseSet(options)
     : options.preflight
       ? await preflightReleaseSet(options)
-      : await publishReleaseSet(options);
+      : options.verifyOidcTrust
+        ? await verifyNpmTrustedPublisherAccess(options)
+        : await publishReleaseSet(options);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

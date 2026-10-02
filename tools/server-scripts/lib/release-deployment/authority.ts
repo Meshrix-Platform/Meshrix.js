@@ -6,6 +6,7 @@ import process from "node:process";
 
 import {
   FUNCTIONAL_CLAIM,
+  FIRST_NPM_BOOTSTRAP_VERSION,
   RELEASE_AUTHORITY_MANIFEST_SCHEMA,
   RELEASE_DEPLOYMENT_CLAIM,
   STABLE_AUTHORITY_MANIFEST_SCHEMA,
@@ -301,7 +302,7 @@ function requireRunAttempt(value: any): number {
 
 export interface PromotionRunSelection {
   branch: "stable" | "release";
-  event: "push";
+  event: "push" | "workflow_dispatch";
   headSha: string;
   runAttempt: number;
   runId: string;
@@ -324,10 +325,11 @@ export function validatePromotionRunSelection(value: any): PromotionRunSelection
     ? ".github/workflows/ci.yml"
     : ".github/workflows/release-branch.yml";
   if (workflowPath !== expectedWorkflow) fail("promotion_authority_workflow_path_invalid");
-  if (value.event !== "push") fail("promotion_authority_event_invalid");
+  const event = requireText(value.event, /^(push|workflow_dispatch)$/u, "promotion_authority_event_invalid") as "push" | "workflow_dispatch";
+  if (branch === "stable" && event !== "push") fail("promotion_authority_event_invalid");
   return Object.freeze({
     branch,
-    event: "push",
+    event,
     headSha: requireText(value.headSha, SHA1, "promotion_authority_head_sha_invalid"),
     runAttempt: requireRunAttempt(value.runAttempt),
     runId: requireRunId(value.runId),
@@ -367,6 +369,118 @@ export function selectSuccessfulPromotionRun(
     runAttempt: highestAttempt,
     runId: requireRunId(selected[0].id),
     workflowPath,
+  });
+}
+
+export function validateOriginatingReleaseRun(
+  run: any,
+  {
+    repository,
+    runId,
+    runAttempt,
+    sourceRevision,
+    event,
+  }: Record<string, any> = {},
+): { pending: true } | { pending: false; selection: PromotionRunSelection } {
+  const expectedRepository = requireText(repository, /^[^/\s]+\/[^/\s]+$/u, "promotion_authority_repository_invalid");
+  const expectedRunId = requireRunId(runId);
+  const expectedAttempt = requireRunAttempt(runAttempt);
+  const expectedRevision = requireText(sourceRevision, SHA1, "promotion_authority_head_sha_invalid");
+  const expectedEvent = requireText(event, /^(push|workflow_dispatch)$/u, "promotion_authority_event_invalid");
+  if (
+    !isRecord(run) ||
+    String(run.id ?? "") !== expectedRunId ||
+    Number(run.run_attempt) !== expectedAttempt ||
+    run.path !== ".github/workflows/release-branch.yml" ||
+    run.head_branch !== "release" ||
+    run.head_sha !== expectedRevision ||
+    run.event !== expectedEvent ||
+    run.repository?.full_name !== expectedRepository
+  ) {
+    fail("promotion_authority_originating_run_mismatch");
+  }
+  if (run.status === "queued" || run.status === "in_progress" || run.status === "waiting" || run.status === "requested") {
+    return { pending: true };
+  }
+  if (run.status !== "completed" || run.conclusion !== "success") {
+    fail("promotion_authority_originating_run_unsuccessful");
+  }
+  return {
+    pending: false,
+    selection: validatePromotionRunSelection({
+      branch: "release",
+      event: expectedEvent,
+      headSha: expectedRevision,
+      runAttempt: expectedAttempt,
+      runId: expectedRunId,
+      workflowPath: ".github/workflows/release-branch.yml",
+    }),
+  };
+}
+
+export function validateReleaseDispatchContext({
+  tag,
+  canonicalTag,
+  sourceRevision,
+  tagRevision,
+  sourceRunId,
+  sourceRunAttempt,
+  sourceEvent,
+  repository,
+  bootstrapCandidate = "",
+  releaseVersion,
+}: Record<string, any> = {}): any {
+  const normalizedTag = requireText(tag, /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u, "release_dispatch_tag_invalid");
+  if (normalizedTag !== canonicalTag) fail("release_dispatch_tag_mismatch");
+  const revision = requireText(sourceRevision, SHA1, "release_dispatch_source_revision_invalid");
+  if (requireText(tagRevision, SHA1, "release_dispatch_tag_revision_invalid") !== revision) {
+    fail("release_dispatch_tag_revision_mismatch");
+  }
+  const runId = requireRunId(sourceRunId);
+  const runAttempt = requireRunAttempt(sourceRunAttempt);
+  const event = requireText(sourceEvent, /^(push|workflow_dispatch)$/u, "release_dispatch_source_event_invalid");
+  const repositoryName = requireText(repository, /^[^/\s]+\/[^/\s]+$/u, "release_dispatch_repository_invalid");
+  const version = requireText(releaseVersion, /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u, "release_dispatch_version_invalid");
+  const bootstrap = String(bootstrapCandidate || "");
+  if (bootstrap && (
+    bootstrap !== version ||
+    version !== FIRST_NPM_BOOTSTRAP_VERSION ||
+    normalizedTag !== `v${FIRST_NPM_BOOTSTRAP_VERSION}` ||
+    event !== "workflow_dispatch"
+  )) {
+    fail("release_dispatch_bootstrap_candidate_invalid");
+  }
+  return Object.freeze({
+    bootstrapCandidate: bootstrap,
+    event,
+    repository: repositoryName,
+    runAttempt,
+    runId,
+    sourceRevision: revision,
+    tag: normalizedTag,
+    version,
+  });
+}
+
+export function releaseTagCreationAction(existingRevision: string | null, sourceRevision: string): "create" | "verify" {
+  const expected = requireText(sourceRevision, SHA1, "release_tag_source_revision_invalid");
+  if (existingRevision === null) return "create";
+  const existing = requireText(existingRevision, SHA1, "release_tag_existing_revision_invalid");
+  if (existing !== expected) fail("release_tag_target_conflict");
+  return "verify";
+}
+
+export function buildReleaseWorkflowDispatchPayload(context: any): any {
+  const validated = validateReleaseDispatchContext(context);
+  return Object.freeze({
+    ref: validated.tag,
+    inputs: Object.freeze({
+      originating_event: validated.event,
+      originating_run_attempt: String(validated.runAttempt),
+      originating_run_id: validated.runId,
+      source_revision: validated.sourceRevision,
+      bootstrap_candidate: validated.bootstrapCandidate,
+    }),
   });
 }
 
@@ -428,7 +542,8 @@ function normalizedCommonManifest(input: any, stage: "stable" | "release"): Reco
   );
   if (input.stage !== stage) fail(`${stage}_authority_stage_invalid`);
   if (input.branch !== expectedBranch) fail(`${stage}_authority_branch_invalid`);
-  if (input.event !== "push") fail(`${stage}_authority_event_invalid`);
+  const event = requireText(input.event, /^(push|workflow_dispatch)$/u, `${stage}_authority_event_invalid`);
+  if (stage === "stable" && event !== "push") fail(`${stage}_authority_event_invalid`);
   if (input.workflowPath !== expectedWorkflow) fail(`${stage}_authority_workflow_path_invalid`);
   if (input.artifactName !== `${stage}-authority-${sourceRevision}`) {
     fail(`${stage}_authority_artifact_name_invalid`);
@@ -441,7 +556,7 @@ function normalizedCommonManifest(input: any, stage: "stable" | "release"): Reco
     branch: expectedBranch,
     candidateDigest,
     candidateFileDigest,
-    event: "push",
+    event,
     functionalClaim: FUNCTIONAL_CLAIM,
     functionalReceiptDigest,
     runAttempt: requireRunAttempt(input.runAttempt),
@@ -508,7 +623,7 @@ export function createReleaseAuthorityManifest(input: any): any {
     schemaVersion: RELEASE_AUTHORITY_MANIFEST_SCHEMA,
     stage: "release",
     branch: "release",
-    event: "push",
+    event: input.event || "push",
     workflowPath: ".github/workflows/release-branch.yml",
     functionalClaim: FUNCTIONAL_CLAIM,
     deploymentClaim: RELEASE_DEPLOYMENT_CLAIM,
