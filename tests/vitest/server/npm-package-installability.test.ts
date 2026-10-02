@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { scanPublicArtifactFiles } from "../../../tools/server-scripts/lib/public-artifact-boundary.ts";
+
 import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
 import {
   assertPreparedProductBundleClosure,
@@ -107,6 +109,34 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("scans admitted ESM and usage-skill content without admitting unrelated build output", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-artifact-content-"));
+    try {
+      const paths = ["adapter.mjs", "build/usage-skills/example/SKILL.md", "build/reports/runtime.json"];
+      for (const name of paths) {
+        await fs.mkdir(path.dirname(path.join(root, name)), { recursive: true });
+        await fs.writeFile(path.join(root, name), "synthetic public content\n");
+      }
+      const options = { allowedGeneratedOutputPrefixes: ["build/usage-skills"] };
+      expect(await scanPublicArtifactFiles(root, paths.slice(0, 2), options)).toMatchObject({
+        ok: true, summary: { scannedTextFileCount: 2 }
+      });
+      const credential = ["Bearer", "synthetic".repeat(3)].join(" ");
+      await fs.writeFile(path.join(root, paths[0]), `export const credential = ${JSON.stringify(credential)};\n`);
+      await fs.writeFile(path.join(root, paths[1]), credential);
+      const rejected = await scanPublicArtifactFiles(root, paths, options);
+      expect(rejected.ok).toBe(false);
+      expect(rejected.findings.map(({ relativePath, ruleId }: { relativePath: string; ruleId: string }) => ({ relativePath, ruleId }))).toEqual([
+        { relativePath: paths[0], ruleId: "bearer_credential" },
+        { relativePath: paths[2], ruleId: "generated_or_local_output" },
+        { relativePath: paths[1], ruleId: "bearer_credential" }
+      ]);
+      expect(JSON.stringify(rejected)).not.toContain(credential);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("bounds consumer and controller failure diagnostics to published codes and stages", () : void => {
     expect(consumerFailureSummary(new Error("npm_package_unapproved_diagnostic_test_only"))).toEqual({
       success: false,

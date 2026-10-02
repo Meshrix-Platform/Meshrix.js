@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it } from "vitest";
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const GENERATOR_SOURCE = path.join(REPO_ROOT, "tools/server-scripts/generate-provenance.ts");
 const temporaryRoots: string[] = [];
+// A realistic macOS-shaped input, unrelated to the machine running the test.
+const syntheticHome = path.posix.join("/", "Users", "synthetic-provenance-user");
 
 async function createFixture(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-provenance-fixture-"));
@@ -31,11 +33,11 @@ async function createFixture(): Promise<string> {
     packages: { "": { name: "fixture-provenance-package", version: "1.2.3" } }
   }, null, 2)}\n`);
   await fs.writeFile(path.join(root, "build/composition-presets.json"), JSON.stringify({
-    fixture: "/Users/fixture-owner/private-composition-marker"
+    fixture: `${syntheticHome}/private-composition-marker`
   }));
   await fs.writeFile(path.join(root, "build/reports/private-report-path-marker.json"), JSON.stringify({
     token: "REPORT-CREDENTIAL-MARKER",
-    localPath: "/Users/fixture-owner/private-report-marker"
+    localPath: `${syntheticHome}/private-report-marker`
   }));
   await fs.writeFile(path.join(root, "build/reports/ordinary-report.md"), "synthetic local report\n");
 
@@ -156,7 +158,7 @@ describe("local build-input report generator", () => {
       "private-branch-marker",
       "TOOL-OUTPUT-MARKER",
       "private-npm-marker",
-      "/Users/fixture-owner",
+      syntheticHome,
       "private-report-marker",
       "private-report-path-marker",
       "REPORT-CREDENTIAL-MARKER",
@@ -169,7 +171,7 @@ describe("local build-input report generator", () => {
 
   it("rejects arbitrary command claims without echoing the supplied value", async () => {
     const root = await createFixture();
-    const suppliedCommand = "npm test --token COMMAND-CREDENTIAL-MARKER /Users/fixture-owner/private-command-marker";
+    const suppliedCommand = `npm test --token COMMAND-CREDENTIAL-MARKER ${syntheticHome}/private-command-marker`;
     const result = runGenerator(root, ["--command", suppliedCommand]);
     expect(result.status).not.toBe(0);
     expect(result.stdout).toBe("");

@@ -10,6 +10,7 @@ const TEXT_EXTENSIONS: any = new Set<any>([
   ".css",
   ".html",
   ".js",
+  ".mjs",
   ".json",
   ".jsx",
   ".ts",
