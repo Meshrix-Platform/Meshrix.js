@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { assertNoLeak } from "../../../tools/server-scripts/lib/report-evidence-safety.ts";
+
 import { scanPublicArtifactFiles } from "../../../tools/server-scripts/lib/public-artifact-boundary.ts";
 
 import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
@@ -19,6 +21,8 @@ import {
 } from "../../../tools/server-scripts/verify-npm-package-installability.ts";
 import {
   consumerFailureSummary,
+  verifyInstalledModuleIdentity,
+  browserForServer,
   NPM_PACKAGE_CONSUMER_FAILURE_CODES,
   NPM_PACKAGE_CONSUMER_FAILURE_STAGES
 } from "../../../tools/server-scripts/npm-package-consumer.ts";
@@ -109,6 +113,49 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("retains browser same-origin evidence without recording private endpoints", async () => {
+    const origin = "http://127.0.0.1:4173";
+    const callbacks = new Map<string, (value: any) => void>();
+    const page = {
+      on(event: string, callback: (value: any) => void) { callbacks.set(event, callback); },
+      async goto() { callbacks.get("request")?.({ url: () => `${origin}/asset.js` }); },
+      async evaluate() { return origin; },
+      async close() {}
+    };
+    const evidence = await browserForServer({ async newPage() { return page; } }, origin);
+    expect(evidence).toEqual({ sameOrigin: true, requestOriginCount: 1, pageErrors: 0 });
+    expect(() => assertNoLeak(evidence, "browser evidence")).not.toThrow();
+    expect(JSON.stringify(evidence)).not.toContain(origin);
+    page.evaluate = async () => "https://example.com";
+    await expect(browserForServer({ async newPage() { return page; } }, origin)).rejects.toThrow("npm_package_console_cross_origin_asset");
+  });
+
+  it("checks installed root and private component module identity through normal Node resolution", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-module-identity-"));
+    const foundation = path.join(root, "node_modules/@meshrix/foundation");
+    const runtime = path.join(root, "node_modules/@meshrix/server-runtime");
+    const registry = "@meshrix/foundation/security/authorization/tag-store-provider-registry";
+    const alias = "#meshrix/foundation/security/authorization/tag-store-provider-registry";
+    try {
+      await fs.mkdir(foundation, { recursive: true });
+      await fs.mkdir(runtime, { recursive: true });
+      await fs.writeFile(path.join(root, "package.json"), JSON.stringify({
+        name: "meshrix.js", type: "module", bundleDependencies: ["@meshrix/foundation", "@meshrix/server-runtime"],
+        imports: { [alias]: { source: "./unused-source.ts", default: registry } }
+      }));
+      await fs.writeFile(path.join(foundation, "package.json"), JSON.stringify({
+        name: "@meshrix/foundation", type: "module", exports: { "./security/authorization/tag-store-provider-registry": "./registry.js" }
+      }));
+      await fs.writeFile(path.join(foundation, "registry.js"), "export const registry = new Map();\n");
+      await fs.writeFile(path.join(runtime, "package.json"), JSON.stringify({ name: "@meshrix/server-runtime", type: "module", imports: { [alias]: registry } }));
+      await expect(verifyInstalledModuleIdentity(root)).resolves.toEqual({ aliasCount: 2, componentCount: 2, sharedRegistry: true });
+      await fs.cp(foundation, path.join(runtime, "node_modules/@meshrix/foundation"), { recursive: true });
+      await expect(verifyInstalledModuleIdentity(root)).rejects.toThrow("npm_package_module_identity_mismatch");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("scans admitted ESM and usage-skill content without admitting unrelated build output", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-artifact-content-"));
     try {

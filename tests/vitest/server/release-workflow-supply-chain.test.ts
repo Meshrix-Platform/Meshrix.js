@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { resolveReleaseWorkspaceDirectories } from "../../../tools/server-scripts/lib/release-metadata.ts";
 
 import {
   SUPPLY_CHAIN_MANIFEST_SCHEMA_VERSION,
@@ -70,6 +71,14 @@ function jobTransitivelyNeeds(workflow?: any, jobId?: any, requiredJobId?: any, 
 }
 
 describe("release workflow supply-chain boundary", () : any => {
+  it("supplies the actual workspace manifests before a clean container dependency install", async () => {
+    const manifest = JSON.parse(read("package.json"));
+    const directories = await resolveReleaseWorkspaceDirectories({ rootDir: ROOT, workspaces: manifest.workspaces });
+    const dependencyStage = read("Dockerfile").split("FROM deps AS npm-package-verifier")[0];
+    const copied = [...dependencyStage.matchAll(/^COPY (.+) \.\/$|^COPY (\S+) \.\/\S+$/gmu)].flatMap((match) => (match[1] || match[2]).split(/\s+/u));
+    for (const directory of directories) expect(copied, directory).toContain(`${directory}/package.json`);
+  });
+
   it("requires the self-contained Core upstream gate before release deployment authority and publication", () : any => {
     const workflow: any = read(".github/workflows/release.yml");
     const upstreamJobId: any = "upstream-service-publishing";

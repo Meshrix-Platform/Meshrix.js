@@ -248,6 +248,12 @@ describe("npm release-set publication", () : any => {
     expect(prepared).toMatchObject({
       ok: true, prepared: true, tag: releaseTagForVersion(prepared.version), packageCount: 2
     });
+    const preflightStep = workflow.split("- name: Read and validate all npm package versions and dist-tags without publication")[1]?.split("\n\n")[0];
+    const preflightCommand = preflightStep?.split("\n").find((line) => line.trimStart().startsWith("run:"))?.trim().slice(4).trim();
+    const preflightOptions = parsePublishArguments(preflightCommand!.split(/\s+/u).slice(4));
+    expect(preflightOptions.preflight).toBe(true);
+    const preflight = await preflightReleaseSet({ ...preflightOptions, rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
+    expect(preflight.ok).toBe(true);
     expect(injected.publishCalls).toHaveLength(0);
   });
 

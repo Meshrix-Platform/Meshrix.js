@@ -7,7 +7,7 @@ FROM ${NODE_BASE_IMAGE} AS deps
 ARG ROOTFS=/
 WORKDIR app
 
-COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE ./
+COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE THIRD_PARTY_NOTICES.md ./
 COPY apps/server/package.json ./apps/server/package.json
 COPY apps/mcp-gateway-installer/package.json ./apps/mcp-gateway-installer/package.json
 COPY apps/console/package.json ./apps/console/package.json
@@ -19,6 +19,15 @@ COPY packages/gateway/package.json ./packages/gateway/package.json
 COPY packages/protocols/package.json ./packages/protocols/package.json
 COPY packages/server-runtime/package.json ./packages/server-runtime/package.json
 COPY packages/ui-console/package.json ./packages/ui-console/package.json
+COPY plugins/agents/antigravity/package.json ./plugins/agents/antigravity/package.json
+COPY plugins/agents/claude-code/package.json ./plugins/agents/claude-code/package.json
+COPY plugins/agents/client-adapter-kit/package.json ./plugins/agents/client-adapter-kit/package.json
+COPY plugins/agents/codex/package.json ./plugins/agents/codex/package.json
+COPY plugins/agents/kimi/package.json ./plugins/agents/kimi/package.json
+COPY plugins/agents/meshrix-self-maintenance/package.json ./plugins/agents/meshrix-self-maintenance/package.json
+COPY plugins/agents/openclaw/package.json ./plugins/agents/openclaw/package.json
+COPY plugins/agents/opencode/package.json ./plugins/agents/opencode/package.json
+COPY plugins/agents/pi/package.json ./plugins/agents/pi/package.json
 COPY vendor ./vendor
 RUN rm -f "${ROOTFS}etc/apt/apt.conf.d/docker-clean"
 
@@ -69,6 +78,7 @@ COPY apps/server ./apps/server
 COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
+COPY plugins/agents ./plugins/agents
 COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
@@ -79,10 +89,13 @@ RUN npm prune --omit=dev
 
 FROM deps AS build-ui
 
+COPY skills ./skills
+
 COPY apps/server ./apps/server
 COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
+COPY plugins/agents ./plugins/agents
 COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
@@ -113,12 +126,13 @@ RUN groupadd --system --gid 10001 meshrix \
 WORKDIR app
 
 COPY --chown=meshrix:meshrix --from=build app/package.json app/package-lock.json ./
-COPY --chown=meshrix:meshrix --from=build app/LICENSE ./LICENSE
+COPY --chown=meshrix:meshrix --from=build app/LICENSE app/THIRD_PARTY_NOTICES.md ./
 COPY --chown=meshrix:meshrix --from=build app/node_modules ./node_modules
 COPY --chown=meshrix:meshrix --from=build app/dist ./dist
 COPY --chown=meshrix:meshrix --from=build app/apps/server ./apps/server
 COPY --chown=meshrix:meshrix --from=build app/apps/console/package.json ./apps/console/package.json
 COPY --chown=meshrix:meshrix --from=build app/packages ./packages
+COPY --chown=meshrix:meshrix --from=build app/plugins/agents ./plugins/agents
 COPY --chown=meshrix:meshrix --from=build app/content ./content
 COPY --chown=meshrix:meshrix --from=build app/tools ./tools
 COPY --chown=meshrix:meshrix --from=build app/docs ./docs

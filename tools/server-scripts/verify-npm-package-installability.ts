@@ -756,7 +756,6 @@ try {
       npmCommand(),
       npmArgs([
         "install",
-        "--ignore-scripts=true",
         "--omit=dev",
         "--no-audit",
         "--no-fund",
@@ -772,16 +771,6 @@ try {
   } finally {
     await registryMirror?.close();
   }
-  await runProbeStage(
-    "npm_package_native_dependency_build_failed",
-    npmCommand(),
-    npmArgs(["rebuild", "better-sqlite3", "--build-from-source"]),
-    {
-      cwd: consumerDirectory,
-      classifyNpmInstall: true,
-      registry: installRegistry
-    }
-  );
 
   const help: any = await runProbeStage(
     "npm_package_cli_help_failed",
@@ -1058,11 +1047,13 @@ async function runContainerAuthority() : Promise<any> {
       assert.ok(version, `npm_package_locked_verifier_tool_missing_${consumerDirectoryName(name)}`);
       return version;
     };
+    await fs.cp(path.join(repoRoot, "docs/examples/gateway"), path.join(inputDirectory, "gateway-examples"), { recursive: true });
     const consumerPlanPath: any = path.join(inputDirectory, "consumer-plan.json");
     const containerPlan: any = {
       packages: packagePlan,
       verifierTools: Object.fromEntries([
         "typescript",
+        "@types/node",
         "vite",
         "@vitejs/plugin-vue",
         "vue-tsc",
@@ -1236,9 +1227,12 @@ async function runContainerAuthority() : Promise<any> {
       platforms: platformReports.map(({ platform, emulated, engineArchitecture }: Record<string, any>) : any => ({ platform, emulated, engineArchitecture })),
       consumerCountPerPlatform: releaseSet.packages.length,
       installedRuntimeAndTypes: true,
+      statefulModuleIdentity: platformReports.every(({ consumers }: Record<string, any>) => consumers.find((consumer: any) => consumer.consumerKind === "platform")?.moduleIdentity?.sharedRegistry === true),
+      gatewayExamples: platformReports.every(({ consumers }: Record<string, any>) => consumers.find((consumer: any) => consumer.consumerKind === "gateway")?.embeddedExamples?.executed === 3),
+      installedAdapterDescriptions: platformReports.every(({ cli }: Record<string, any>) => cli?.adapterDescribeCount === 7),
       installedCli: platformReports.every(({ cli }: Record<string, any>) : any => cli?.help && cli?.offlineInterfaceCatalog && cli?.serverHelp && cli?.mcpVersion && cli?.mcpHelp),
       installedMcpProxy: platformReports.every(({ mcp }: Record<string, any>) : any => mcp?.installedRootBin === true && mcp?.standardInitialize === true && mcp?.initializedNotificationForwarded === true && mcp?.toolsListed === true && mcp?.representativeProxyCall === true && mcp?.credentialForwardedFromEnvironment === true && mcp?.processClosedCleanly === true),
-      uiBrowserInteraction: platformReports.every(({ browser }: Record<string, any>) : any => browser?.uiPackage?.interaction === true),
+      uiBrowserInteraction: platformReports.every(({ browser }: Record<string, any>) : any => browser?.bundledUi?.interaction === true),
       normalInstallLifecycle: platformReports.every(({ consumers }: Record<string, any>) : any => consumers.every((consumer?: any) : any => consumer.installLifecycleCompleted))
     });
     record(names[3], "passed", {

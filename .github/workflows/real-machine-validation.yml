@@ -140,6 +140,14 @@ jobs:
           path: build/functional-evidence
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ inputs.functional_run_id }}
+      - name: Download the exact npm candidate for the Windows installation probe
+        if: ${{ inputs.target == 'native-windows-x64' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-inputs-${{ inputs.source_revision }}
+          path: build/release
+          run-id: ${{ inputs.functional_run_id }}
+          github-token: ${{ github.token }}
       - name: Download the native portable candidate
         if: ${{ inputs.target == 'native-macos-arm64' || inputs.target == 'native-windows-x64' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -200,6 +208,7 @@ jobs:
         env:
           MESHRIX_REAL_MACHINE_CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
           MESHRIX_REAL_MACHINE_CANDIDATE_ARTIFACT: ${{ github.workspace }}/build/candidate-artifact/${{ inputs.candidate_artifact_filename }}
+          MESHRIX_NPM_ARTIFACT_DIR: ${{ github.workspace }}/build/release/npm-set
           MESHRIX_REAL_MACHINE_PORTABLE_INPUT_DIR: ${{ github.workspace }}/build/candidate-artifact/${{ inputs.portable_input_subdirectory }}
           MESHRIX_REAL_MACHINE_BACKUP_INPUT: ${{ github.workspace }}/build/backup-input
           MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE: ${{ runner.temp }}/meshrix-real-machine-secrets/local-secret-master-key

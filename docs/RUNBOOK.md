@@ -1020,11 +1020,14 @@ preflight against that same directory:
 
 ```bash
 npm run build
-npm run release:publish-npm -- --prepare --artifact-dir <artifact-dir> --tag <release-tag>
-npm run release:publish-npm -- --preflight --artifact-dir <artifact-dir> --tag <release-tag>
+npm run release:publish-npm -- --prepare --artifact-dir <artifact-dir>
+npm run verify:npm-package-installability -- --artifact-dir <artifact-dir>
+npm run release:publish-npm -- --preflight --artifact-dir <artifact-dir>
 ```
 
-The preparation and preflight commands do not publish. Use the GitHub release
+The canonical version determines the npm dist-tag (`latest` for stable versions,
+`next` for prereleases); a Git `v*` tag is not an npm dist-tag. The preparation,
+installation verification and preflight commands do not publish. Use the GitHub release
 workflow for actual OIDC publication; direct local release commands are not
 hosted trusted-publisher evidence.
 
