@@ -40,6 +40,7 @@ jobs:
       - name: Ordered regression verification with localized failures
         shell: bash
         run: |
+          mkdir -p build/ci-private
           run_check() {
             local command_label="$1"
             local log_file="$2"
@@ -53,7 +54,7 @@ jobs:
             fi
             return "$result"
           }
-          run_check "npm test" /tmp/pr-regression.log npm test
+          run_check "npm test" build/ci-private/pr-regression.log npm test
       - name: Retain full sanitized verification log and regression report
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -168,10 +168,24 @@ async function main(argv: string[]): Promise<void> {
           if (await fs.stat(source).then(() => true, () => false)) {
             await fs.cp(source, directory, { recursive: true });
           }
+          // The command may have been interrupted before its workflow export.
+          // Raw output stays in the private snapshot; only its sanitized copy survives.
+          const rawLog = path.join(checkout, name === "regression"
+            ? "build/ci-private/pr-regression.log" : "build/ci-private/product-distribution.log");
+          const report = path.join(checkout, name === "regression"
+            ? "build/test-reports/latest.json" : "build/reports/product-distribution.json");
+          const partial = await fs.readFile(rawLog, "utf8").catch((error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") return null;
+            throw error;
+          });
+          if (partial !== null) await writeVerificationArtifacts(partial, directory, report);
         }
-        if (name === "sandbox") {
+        const reports = name === "sandbox"
+          ? ["controlled-execution-sandbox", "execution-sandbox-oci-conformance", "opaque-sandbox-custody", "execution-launcher-boundary"]
+          : name === "portability" ? ["npm-package-installability"] : [];
+        if (reports.length) {
           await fs.mkdir(directory, { recursive: true });
-          for (const report of ["controlled-execution-sandbox", "execution-sandbox-oci-conformance", "opaque-sandbox-custody", "execution-launcher-boundary"]) {
+          for (const report of reports) {
             requiredDiagnostics.push(`${report}.json`);
             const source = path.join(checkout, `build/reports/${report}.json`);
             if (await fs.stat(source).then(() => true, () => false)) await fs.copyFile(source, path.join(directory, `${report}.json`));

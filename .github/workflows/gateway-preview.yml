@@ -59,9 +59,10 @@ jobs:
         env:
           NODE_OPTIONS: --conditions=source
         run: |
+          mkdir -p build/ci-private
           result=0
-          npm run test:product-distribution > /tmp/product-distribution.log 2>&1 || result=$?
-          node tools/server-scripts/localize-verify-failure.ts /tmp/product-distribution.log --artifact-dir build/ci-distribution-diagnostics --report build/reports/product-distribution.json
+          npm run test:product-distribution > build/ci-private/product-distribution.log 2>&1 || result=$?
+          node tools/server-scripts/localize-verify-failure.ts build/ci-private/product-distribution.log --artifact-dir build/ci-distribution-diagnostics --report build/reports/product-distribution.json
           if [ "$result" -ne 0 ]; then
             node tools/server-scripts/localize-verify-failure.ts build/ci-distribution-diagnostics/verification.log --command "npm run test:product-distribution" || true
             tail -n 60 build/ci-distribution-diagnostics/verification.log
