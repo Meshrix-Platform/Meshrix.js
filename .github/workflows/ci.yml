@@ -493,6 +493,8 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Build Node worker and child-process inputs
+        run: npm run build:node
       - name: Vitest suite
         run: npm run vitest
 
