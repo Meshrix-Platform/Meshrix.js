@@ -95,9 +95,13 @@ those artifacts when they are included in the delivery.
   an empty npm cache. Existing build output, workspace links, user npm
   configuration or credentials must not substitute for the actual package.
 - Complete one diagnostic pass over the selected executable scope, collect
-  all failures, repair their causes with focused checks, then perform the final
-  integrated regression. Do not use repeated pushes to discover ordinary build,
-  test, dependency or package defects.
+  all failures, repair their causes with focused checks, then rerun the same
+  maintained local workflow. Continue that repair-and-rerun cycle until the
+  applicable scope passes, reusing still-valid results. Include deterministic
+  release-artifact review in this workflow; remove redundant or inapplicable
+  artifact restrictions while preserving required functional and security
+  verification. Do not use repeated pushes to discover ordinary build, test,
+  dependency or package defects.
 - Retain full sanitized command logs and structured results, including failures
   and interrupted execution. Record the candidate, observed environment,
   selection, actual exit status and unexecuted scope. Missing or skipped checks

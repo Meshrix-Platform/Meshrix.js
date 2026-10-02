@@ -187,6 +187,14 @@ applicable check.
 Keep real registry publication and hosted identity checks in their explicitly
 authorized release stage, and never describe them as locally verified.
 
+Iterate release preparation through the same local entry until its applicable
+scope passes: correct the workflow, rerun it, diagnose the retained results and
+repair the owning implementation. Reuse still-valid successful results. Move
+deterministic artifact review into that workflow and remove redundant or
+inapplicable artifact restrictions; do not add publication gates merely to
+preserve an earlier tooling assumption. Required functional and security checks
+and truthful evidence remain part of the selected release scope.
+
 ## Report And Repair Repository Scripts
 
 When an agent finds a defect or limitation in the repository's own scripts or
@@ -216,8 +224,10 @@ from an early-stop run.
 4. Do not rerun the complete profile or full regression between individual
    repairs.
 5. After every known failure is repaired and every focused verification passes,
-   run the complete regression exactly once. Promotion or release may proceed
-   only from that successful final run.
+   rerun the maintained workflow for the complete selected scope, reusing valid
+   results. If it exposes another scoped implementation or workflow defect,
+   repair that owner and continue the same local cycle until it passes.
+   Promotion or release requires that successful integrated result.
 
 If continuing after failure would create unsafe, destructive, or external side
 effects, stop before repair, report the undiscovered scope and the required

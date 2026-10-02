@@ -903,8 +903,8 @@ consuming its authority artifact. This closes the source-run completion race.
 
 The release workflow revalidates candidate identity, functional receipt, and
 npm installability report before publication. A deployment receipt is included
-only when an optional deployment claim is selected. Its release-authority and
-npm publisher jobs both name the `release-candidate` environment. A workflow reference alone
+only when an optional deployment claim is selected. The npm publisher job uses
+the `release-candidate` environment. A workflow reference alone
 does not create the required protection: configure this environment with a
 tag deployment rule for `v*` before enabling the first release. The existing
 `release-portfolio` environment is restricted to the nightly branch and is not
