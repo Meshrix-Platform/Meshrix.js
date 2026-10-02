@@ -506,6 +506,7 @@ export interface UpstreamGatewayRegistryOptions {
   artifactTransitPort?: UpstreamGatewayArtifactTransitPort | null;
   secretKeyProvider?: LocalSecretKeyProvider | null;
   publishSkillHubUpdate?: ((update: UpstreamSkillHubUpdate) => unknown) | null;
+  /** The registry owns this port for its lifetime and closes it after active work drains. */
   schemaPort?: UpstreamSchemaPort | null;
   claimProtectedSinkAttempt?: UpstreamProtectedSinkClaim;
 }
