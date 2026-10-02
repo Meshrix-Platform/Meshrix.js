@@ -7,9 +7,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyVitestShard,
   mergeCompatibleSuiteProcesses,
+  mergeInheritedProfileExecution,
   parseTestShard,
   type TestSuiteEntry
-} from "../../../tests/lib/unified-test-runner-execution.ts";
+} from "../../../tools/scripts/lib/unified-test-runner-execution.ts";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
@@ -51,16 +52,21 @@ describe("delivery feedback scale", () => {
     const publicProfiles = Object.entries(registry.profiles)
       .filter(([name]) => name.endsWith("-public"));
     expect(publicProfiles.length).toBeGreaterThan(0);
-    for (const [name, profile] of publicProfiles as Array<[string, { execution?: Record<string, unknown> }]>) {
-      expect(profile.execution).toMatchObject({
+    const executionFor = (name: string): Record<string, any> => {
+      const profile = registry.profiles[name];
+      return mergeInheritedProfileExecution(profile.extends ? executionFor(profile.extends) : {}, profile.execution || {});
+    };
+    for (const [name] of publicProfiles) {
+      const execution = executionFor(name);
+      expect(execution).toMatchObject({
         mergeVitestProcesses: true,
         cachePassedResults: true,
         shardEnvironment: "MESHRIX_TEST_SHARD"
       });
       if (name === "core-public") {
-        expect(profile.execution?.phases).toHaveLength(4);
-      } else {
-        expect(profile.execution).not.toHaveProperty("phases");
+        expect(execution.phases).toHaveLength(4);
+      } else if (name === "engineering-public") {
+        expect(execution.phases.map((phase: { id: string }) => phase.id)).toContain("engineering-delivery");
       }
     }
   });

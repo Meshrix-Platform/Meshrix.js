@@ -13,8 +13,8 @@ import {
   runSuiteProcess,
   sourceNodeEnvironment,
   type TestSuiteEntry
-} from "../../tests/lib/unified-test-runner-execution.ts";
-export { sourceNodeEnvironment } from "../../tests/lib/unified-test-runner-execution.ts";
+} from "./lib/unified-test-runner-execution.ts";
+export { sourceNodeEnvironment } from "./lib/unified-test-runner-execution.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_ENGINEERING_PROFILE = "engineering-public";
@@ -275,8 +275,8 @@ async function saveSanitizedLog(rawLogPath: string, destination: string): Promis
   await fs.rm(rawLogPath, { force: true });
 }
 
-function suiteFlowResults(runnerReport: any, reportPath: string): SuiteResult[] {
-  if (!runnerReport || runnerReport.reportLeakScan !== true || !Array.isArray(runnerReport.suites)
+export function suiteFlowResults(runnerReport: any, reportPath: string): SuiteResult[] {
+  if (!runnerReport || runnerReport.summary?.reportLeakScan !== true || !Array.isArray(runnerReport.suites)
     || !Array.isArray(runnerReport.executionProcesses)
     || runnerReport.suites.length !== runnerReport.executionProcesses.length) {
     throw new Error("local_ci_runner_report_invalid");

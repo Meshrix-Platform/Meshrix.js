@@ -502,7 +502,7 @@ export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string,
     serverId: "synthetic-mcp-peer",
     serverVersion: "1.0.0",
     stableToolName: "meshrix.discovery",
-    toolsetVersion: "v0.0.1:mcp:toolset-1"
+    toolsetVersion: "2026-05-25.1"
   };
   const canonicalJson = (value: any): string => {
     if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";

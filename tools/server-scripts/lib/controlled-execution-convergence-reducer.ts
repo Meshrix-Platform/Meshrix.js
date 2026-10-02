@@ -2,7 +2,6 @@ import {
   containsSensitiveReportData,
   reportPayloadDigest,
 } from "../../../packages/foundation/src/observability/sensitive-report-scan.ts";
-import { validateReleaseCandidateIdentity } from "../verify-release-candidate-identity.ts";
 
 export const CONTROLLED_EXECUTION_FINAL_SCHEMA: any =
   "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-2";
@@ -49,25 +48,15 @@ function valueAt(value?: any, path?: any) : any {
 export function reduceControlledExecutionConvergence({
   generatedAt,
   sourceContext,
-  candidate,
   leafReports
 }: Record<string, any> = {}) : any {
-  let currentCandidate: any;
-  try {
-    currentCandidate = validateReleaseCandidateIdentity(candidate);
-  } catch {
-    throw new Error("Controlled execution release candidate is invalid");
-  }
   requireCondition(
-    currentCandidate.source_revision === sourceContext?.sourceRevision,
-    "Controlled execution release candidate is not current",
+    /^[a-f0-9]{40,64}$/u.test(String(sourceContext?.sourceRevision || "")) &&
+    /^sha256:[a-f0-9]{64}$/u.test(String(sourceContext?.sourceTreeDigest || "")) &&
+    /^sha256:[a-f0-9]{64}$/u.test(String(sourceContext?.verifierDigest || "")) &&
+    sourceContext?.verifier === "tools/server-scripts/verify-controlled-execution-convergence.ts",
+    "Controlled execution source context is invalid",
   );
-  requireCondition(
-    currentCandidate.supported_profiles.length === 1 &&
-      currentCandidate.supported_profiles[0] === "single-node",
-    "Single-node release candidate profile is missing",
-  );
-  requireCondition(!containsSensitiveReportData(currentCandidate), "Controlled execution release candidate is privacy-unsafe");
   const leafEvidence: any[] = [];
   for (const spec of CONTROLLED_EXECUTION_LEAF_SPECS) {
     const report: any = leafReports?.[spec.key];
@@ -96,18 +85,9 @@ export function reduceControlledExecutionConvergence({
     verifier: "tools/server-scripts/verify-controlled-execution-convergence.ts",
     generatedAt: String(generatedAt || ""),
     sourceContext,
-    candidate: Object.freeze({
-      schemaVersion: currentCandidate.schema_version,
-      candidateDigest: currentCandidate.candidate_digest,
-      sourceRevision: currentCandidate.source_revision,
-      repositoryTreeDigest: currentCandidate.repository_tree_digest,
-      reportInventoryDigest: currentCandidate.report_inventory_digest,
-      supportedProfiles: Object.freeze([...currentCandidate.supported_profiles]),
-    }),
     leafEvidence,
     summary: {
       controlledExecutionConvergenceReady: true,
-      candidateProfileCount: currentCandidate.supported_profiles.length,
       leafReportCount: leafEvidence.length,
       reportLeakScan: true
     }

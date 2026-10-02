@@ -16,6 +16,14 @@ const requiredFiles: any = REPO_ORGANIZATION_AUDIT_POLICY.requiredFiles;
 const sourceFileOrganizationPolicy: any = REPO_ORGANIZATION_AUDIT_POLICY.sourceFileOrganization;
 const runnableEntrypointPolicy: any = REPO_ORGANIZATION_AUDIT_POLICY.runnableEntrypointOwnership;
 const currentResiduePolicy: any = REPO_ORGANIZATION_AUDIT_POLICY.currentResidue;
+const nodeBuild = (await readJson("tsconfig.node.json")).compilerOptions;
+
+function entrypointCommandPaths(file: string): string[] {
+  if (!file.endsWith(".ts")) return [file];
+  const relative = path.relative(path.resolve(repoRoot, nodeBuild.rootDir), path.resolve(repoRoot, file));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return [file];
+  return [file, toPosix(path.join(nodeBuild.outDir, relative.replace(/\.ts$/u, ".js")))];
+}
 
 function toPosix(filePath?: any) : any {
   return String(filePath || "").split(path.sep).join("/");
@@ -76,7 +84,7 @@ function packageScriptTargets(packageJson?: any, entrypoints?: any) : any {
   const targetsByScript: any = new Map<any, any>();
   for (const [scriptName, command] of (Object.entries(packageJson.scripts || {}) as [string, any][])) {
     const targets: any = entrypoints
-      .filter((entrypoint?: any) : any => String(command || "").includes(entrypoint.file))
+      .filter((entrypoint?: any) : any => entrypointCommandPaths(entrypoint.file).some((file) => String(command || "").includes(file)))
       .map((entrypoint?: any) : any => entrypoint.file);
     targetsByScript.set(scriptName, targets);
     for (const target of targets) {
@@ -84,7 +92,7 @@ function packageScriptTargets(packageJson?: any, entrypoints?: any) : any {
     }
   }
   for (const [binName, target] of (Object.entries(packageJson.bin || {}) as [string, any][])) {
-    entrypoints.find((entrypoint?: any) : any => entrypoint.file === toPosix(target))?.ownedBy.add(`bin:${binName}`);
+    entrypoints.find((entrypoint?: any) : any => entrypointCommandPaths(entrypoint.file).includes(toPosix(target)))?.ownedBy.add(`bin:${binName}`);
   }
   return targetsByScript;
 }
