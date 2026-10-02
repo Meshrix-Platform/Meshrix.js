@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
@@ -107,7 +107,7 @@ let activeFailureStage: any = "plan_loading";
 let activeFailurePackageIndex: any = -1;
 const report: Record<string, any> = {
   platform,
-  runtime: { platform: process.platform, architecture: runtimeArchitecture, processArchitecture: process.arch },
+  runtime: { platform: process.platform, architecture: runtimeArchitecture, processArchitecture: process.arch, nodeVersion: process.version },
   consumers: [],
   failures: [],
   cli: {},
@@ -407,11 +407,12 @@ async function runRootRuntimeConsumer({ cwd, rootManifest }: Record<string, any>
   await runPackagedServerUi({ cwd, rootManifest });
 }
 
-async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) : Promise<void> {
+export async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) : Promise<Record<string, any>> {
   const token: any = `mxak1.${randomBytes(18).toString("base64url").slice(0, 22)}.${randomBytes(36).toString("base64url").slice(0, 43)}`;
   const observed: Record<string, any> = {
-    initialize: false,
-    initializedNotification: false,
+    discovery: false,
+    notification: false,
+    signedDiscovery: false,
     toolsList: false,
     toolsCall: false,
     packageIdentity: false,
@@ -419,7 +420,30 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
     targetHeader: false,
     errors: []
   };
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const jwk = publicKey.export({ format: "jwk" });
+  const identity = { keyId: "synthetic-installed-peer", publicKeyJwk: { crv: jwk.crv, kty: jwk.kty, x: jwk.x } };
+  const serverInfo = { interfaceVersion: "v0.0.1:mcp:interface-1", name: "Meshrix.js", stableToolName: "meshrix.discovery" };
+  const respond = (response: any, payload: unknown) => {
+    const body = JSON.stringify(payload);
+    response.writeHead(200, { "content-type": "application/json", "content-length": String(Buffer.byteLength(body)) });
+    response.end(body);
+  };
   const peer: any = createServer(async (request?: any, response?: any) : Promise<void> => {
+    if (request.url === "/api/mcp/discovery" && request.method === "GET") {
+      respond(response, { ...serverInfo, identity: { algorithm: "Ed25519", ...identity }, handshake: { url: "/api/mcp/handshake" } });
+      return;
+    }
+    if (request.url === "/api/mcp/handshake" && request.method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      // This independent peer builds each object in canonical sorted-key order.
+      const payload = { identity, nonce: input.nonce, schemaVersion: "v0.0.1:mcp:handshake-1", server: serverInfo };
+      respond(response, { ok: true, payload, signature: { algorithm: "Ed25519", value: sign(null, Buffer.from(JSON.stringify(payload)), privateKey).toString("base64url") } });
+      observed.signedDiscovery = true;
+      return;
+    }
     if (request.url !== "/mcp" || request.method !== "POST") {
       response.writeHead(404).end();
       return;
@@ -439,17 +463,15 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
     const clientInfo: any = message?.params?._meta?.["io.modelcontextprotocol/clientInfo"];
     observed.packageIdentity ||= clientInfo?.name === rootManifest.name && clientInfo?.version === rootManifest.version;
     let result: any = {};
-    if (message?.method === "initialize") {
-      observed.initialize = message.params?.protocolVersion === "2025-06-18"
-        && message.params?.capabilities
-        && message.params?.clientInfo?.name === "meshrix-neutral-package-consumer";
+    if (message?.method === "server/discover") {
+      observed.discovery = message.params?._meta?.["io.modelcontextprotocol/protocolVersion"] === "2026-07-28"
+        && request.headers["mcp-protocol-version"] === "2026-07-28";
       result = {
-        protocolVersion: "2025-06-18",
         capabilities: { tools: { listChanged: true } },
-        serverInfo: { name: "synthetic-mcp-peer", version: "1.0.0" }
+        _meta: { "io.modelcontextprotocol/serverInfo": { name: "synthetic-mcp-peer", version: "1.0.0" } }
       };
-    } else if (message?.method === "notifications/initialized") {
-      observed.initializedNotification = true;
+    } else if (message?.method === "notifications/roots/list_changed") {
+      observed.notification = true;
       response.writeHead(202).end();
       return;
     } else if (message?.method === "tools/list") {
@@ -480,18 +502,24 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
   const baseUrl: any = `http://127.0.0.1:${address.port}`;
   const executable: any = path.join(cwd, "node_modules", ".bin", "meshrix-mcp");
   await fs.access(executable);
+  const proxyHome = path.join(cwd, ".verification-mcp-home");
+  await fs.mkdir(proxyHome, { recursive: true });
   const child: any = spawn(executable, ["proxy", "--target", "opencode", "--url", baseUrl], {
     cwd,
     env: npmEnv({
+      HOME: proxyHome,
+      USERPROFILE: proxyHome,
+      CODEX_HOME: path.join(proxyHome, "codex"),
       MESHRIX_MCP_TOKEN: token,
-      MESHRIX_USER_DATA_DIR: path.join(process.env.MESHRIX_USER_DATA_DIR || "/tmp/meshrix-data", "mcp-proxy")
+      MESHRIX_USER_DATA_DIR: path.join(proxyHome, "data")
     }),
     stdio: ["pipe", "pipe", "pipe"]
   });
+  child.stderr.resume();
   let output: any = Buffer.alloc(0);
   const pending = new Map<any, any>();
   const processClose: Promise<any> = new Promise((resolve?: any, reject?: any) : void => {
-    child.once("error", reject);
+    child.once("error", () => resolve({ code: null, signal: null, spawnFailed: true }));
     child.once("close", (code?: any, signal?: any) : any => resolve({ code, signal }));
   });
   child.stdout.on("data", (chunk?: any) : void => {
@@ -518,7 +546,7 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
     }
   });
   child.on("close", (code?: any) : void => {
-    if (code !== 0) {
+    if (pending.size > 0) {
       for (const waiter of pending.values()) waiter.reject(new Error("npm_package_mcp_proxy_failed"));
       pending.clear();
     }
@@ -535,19 +563,12 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
   });
   let closed = false;
   try {
-    const initialized: any = await request({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "meshrix-neutral-package-consumer", version: "1.0.0" }
-      }
+    const discovery: any = await request({
+      jsonrpc: "2.0", id: 1, method: "server/discover", params: {}
     });
-    assert.equal(initialized.error, undefined, "npm_package_mcp_proxy_failed");
-    assert.equal(initialized.result?.protocolVersion, "2025-06-18", "npm_package_mcp_proxy_failed");
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+    assert.equal(discovery.error, undefined, "npm_package_mcp_proxy_failed");
+    assert.equal(discovery.result?.capabilities?.tools?.listChanged, true, "npm_package_mcp_proxy_failed");
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/roots/list_changed" })}\n`);
     const listed: any = await request({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     assert.equal(listed.result?.tools?.[0]?.name, "meshrix.probe", "npm_package_mcp_proxy_failed");
     const called: any = await request({
@@ -559,8 +580,9 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
     assert.equal(called.result?.structuredContent?.value, "installed-root", "npm_package_mcp_proxy_failed");
     assert.deepEqual(observed.errors, [], "npm_package_mcp_proxy_failed");
     assert.deepEqual(observed, {
-      initialize: true,
-      initializedNotification: true,
+      discovery: true,
+      notification: true,
+      signedDiscovery: true,
       toolsList: true,
       toolsCall: true,
       packageIdentity: true,
@@ -575,14 +597,17 @@ async function runInstalledMcpProxy({ cwd, rootManifest }: Record<string, any>) 
     assert.equal(closeResult.signal, null, "npm_package_mcp_proxy_failed");
     report.mcp = {
       installedRootBin: true,
-      standardInitialize: true,
-      initializedNotificationForwarded: true,
+      standardDiscovery: true,
+      currentProtocolMetadata: true,
+      signedPeerVerified: true,
+      notificationForwarded: true,
       toolsListed: true,
       representativeProxyCall: true,
       rootPackageIdentityForwarded: true,
       credentialForwardedFromEnvironment: true,
       processClosedCleanly: true
     };
+    return report.mcp;
   } finally {
     if (!closed && child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
     await new Promise<void>((resolve?: any) : any => {
@@ -850,6 +875,7 @@ async function execute() : Promise<void> {
     }));
   const base: any = path.join(temporary, "npm-consumers");
   await fs.mkdir(base, { recursive: true });
+  report.runtime.npmVersion = (await npm(["--version"], base, npmEnv())).stdout.trim();
   for (let packageIndex = 0; packageIndex < packages.length; packageIndex += 1) {
     const record: any = packages[packageIndex];
     activeFailurePackageIndex = packageIndex;
