@@ -35,6 +35,7 @@ function passingAdversarialChecks() : any {
     cpuLimitEnforced: true,
     outputLimitEnforced: true,
     logLimitEnforced: true,
+    subprocessProbeCompleted: true,
     subprocessZeroEnforced: true,
     forbiddenNetworkDenied: true,
     forbiddenSecretDenied: true,
@@ -233,20 +234,69 @@ describe("trusted sandbox provider receipt store", () : any => {
     expect(report.productionBackendConformance).toBe(false);
     expect(report.checks.executionSucceeded).toBe(false);
     expect(report.probeFailures).toEqual([
-      {
-        code: "sandbox_runtime_failed",
-        failureStage: "oci_create_failed",
-        failureReason: "oci_runtime_busy",
-        exitCode: 125
-      },
-      {
-        code: "sandbox_runtime_failed",
-        failureStage: "oci_create_failed",
-        failureReason: "oci_runtime_busy",
-        exitCode: 125
-      }
+      { code: "sandbox_runtime_failed", failureStage: "oci_create_failed" },
+      { code: "sandbox_runtime_failed", failureStage: "oci_create_failed" }
     ]);
     expect(loadTrustedSandboxProviderReceipts({ userDataPath })).toEqual({});
+  });
+
+  it("records bounded failures from adversarial probes without raw error details", async () : Promise<any> => {
+    const target: Record<string, any> = {
+      id: "provider-one",
+      providerClass: "docker",
+      isolationClass: "hardened-oci",
+      serviceIdentityRef: "sandbox-provider-service:fixture",
+      executableIdentityDigest: "b".repeat(64),
+      binary: "/fixed/bin/docker",
+      backend: { close: async () : Promise<any> => {} }
+    };
+    const report: any = await runExecutionSandboxOciConformance({
+      writeReport: false,
+      targetFactory: async () : Promise<any> => target,
+      preflightRunner: noopPreflight,
+      probeRunner: async () : Promise<any> => {
+        throw Object.assign(new Error("fixture-private-marker"), {
+          code: "sandbox_runtime_failed",
+          failureStage: "oci_start_failed",
+          failureReason: "fixture-private-marker",
+          exitCode: 125
+        });
+      },
+      adversarialRunner: async () : Promise<any> => ({
+        ...passingAdversarialChecks(),
+        outputLimitEnforced: false,
+        logLimitEnforced: false,
+        subprocessProbeCompleted: false,
+        subprocessZeroEnforced: false,
+        probeFailures: [
+          {
+            code: "sandbox_timed_out",
+            failureStage: "oci_start_failed",
+            failureReason: "fixture-private-marker",
+            exitCode: 125,
+            message: "fixture-private-marker"
+          },
+          {
+            code: "fixture-private-marker",
+            failureStage: "fixture-private-marker",
+            message: "fixture-private-marker"
+          }
+        ]
+      }),
+      receiptLifecycleVerifier: async () : Promise<any> => passingReceiptLifecycleChecks()
+    });
+
+    expect(report.checks.outputLimitEnforced).toBe(false);
+    expect(report.checks.logLimitEnforced).toBe(false);
+    expect(report.checks.subprocessProbeCompleted).toBe(false);
+    expect(report.checks.subprocessZeroEnforced).toBe(false);
+    expect(report.probeFailures).toEqual([
+      { code: "sandbox_runtime_failed", failureStage: "oci_start_failed" },
+      { code: "sandbox_runtime_failed", failureStage: "oci_start_failed" },
+      { code: "sandbox_timed_out", failureStage: "oci_start_failed" },
+      { code: "sandbox_runtime_failed", failureStage: "sandbox_backend_failed" }
+    ]);
+    expect(JSON.stringify(report)).not.toContain("fixture-private-marker");
   });
 
   it("does not hide a preferred Podman conformance failure behind Docker", async () : Promise<any> => {
