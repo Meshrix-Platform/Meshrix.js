@@ -1228,6 +1228,7 @@
         "tests/vitest/server/release-command-dag-runner.test.ts",
         "tests/vitest/server/release-evidence-freshness.test.ts",
         "tests/vitest/server/real-machine-validation-workflow.test.ts",
+        "tests/vitest/server/release-workflow-automation.test.ts",
         "tests/vitest/server/release-workflow-supply-chain.test.ts",
         "tests/vitest/server/required-report-validator.test.ts",
         "tests/vitest/server/verify-failure-localization.test.ts"

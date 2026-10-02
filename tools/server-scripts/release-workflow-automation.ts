@@ -2,16 +2,17 @@
 
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { createReadStream, openAsBlob } from "node:fs";
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { unzipSync } from "fflate";
-
 import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
+import { loadReleaseDefinition } from "./lib/release-metadata.ts";
 import {
   decideReleaseBranchDispatch,
   selectExactPromotionArtifact,
@@ -20,14 +21,8 @@ import {
   validateReleaseDispatchContext,
   type PromotionRunSelection,
 } from "./lib/release-deployment/authority.ts";
-import {
-  dispatchReleaseWorkflow,
-  ensureImmutableReleaseTag,
-  runAuthorityCommand,
-} from "./resolve-branch-promotion-authority.ts";
-import { verifyReleaseDefinition } from "./verify-release-definition.ts";
-
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MAX_API_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_AUTHORITY_ARCHIVE_BYTES = 16 * 1024 * 1024;
@@ -45,6 +40,16 @@ const RELEASE_AUTHORITY_FILES = Object.freeze([
 ]);
 
 type WorkflowRunSelection = PromotionRunSelection;
+
+async function verifyReleaseDefinition(options: Record<string, unknown> = {}): Promise<any> {
+  const verifier = await import("./verify-release-definition.ts");
+  return verifier.verifyReleaseDefinition(options);
+}
+
+async function runAuthorityCommand(args: string[]): Promise<any> {
+  const authority = await import("./resolve-branch-promotion-authority.ts");
+  return authority.runAuthorityCommand(args);
+}
 
 function fail(code: string): never {
   throw Object.assign(new Error(code), { code });
@@ -207,6 +212,7 @@ export function extractAuthorityArchive(
   let totalUncompressed = 0;
   let decoded: Record<string, Uint8Array>;
   try {
+    const { unzipSync } = require("fflate") as typeof import("fflate");
     decoded = unzipSync(archive, {
       filter(file) {
         const name = file.name;
@@ -373,7 +379,7 @@ async function appendOutputs(values: Record<string, string | boolean>): Promise<
 }
 
 async function writeReleaseDefinitionOutputs(): Promise<void> {
-  const definition = await verifyReleaseDefinition();
+  const definition = await loadReleaseDefinition(repoRoot);
   await appendOutputs({
     npm_cli_version: definition.github.npmCliVersion,
     node_version: definition.github.nodeVersion,
@@ -383,7 +389,7 @@ async function writeReleaseDefinitionOutputs(): Promise<void> {
 }
 
 async function pinNpmCli(): Promise<void> {
-  const definition = await verifyReleaseDefinition();
+  const definition = await loadReleaseDefinition(repoRoot);
   const invocation = resolveNpmCliInvocation();
   const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-npm-cli-"));
   const userConfigPath = path.join(temporaryRoot, "user.npmrc");
@@ -553,6 +559,7 @@ async function resolveReleaseAuthority(): Promise<void> {
 }
 
 async function ensureReleaseTag(): Promise<void> {
+  const { ensureImmutableReleaseTag } = await import("./resolve-branch-promotion-authority.ts");
   const definition = await verifyReleaseDefinition();
   const revision = requireText(process.env.GITHUB_SHA, /^[a-f0-9]{40}$/u, "release_workflow_revision_invalid");
   const result = await ensureImmutableReleaseTag({
@@ -570,6 +577,7 @@ async function ensureReleaseTag(): Promise<void> {
 }
 
 async function dispatchRelease(): Promise<void> {
+  const { dispatchReleaseWorkflow } = await import("./resolve-branch-promotion-authority.ts");
   const definition = await verifyReleaseDefinition();
   const result = await dispatchReleaseWorkflow({
     repository: repositoryName(),
@@ -585,6 +593,171 @@ async function dispatchRelease(): Promise<void> {
   process.stdout.write(`${JSON.stringify({ ok: true, tag: result.tag, sourceRevision: result.sourceRevision })}\n`);
 }
 
+export function assertPreparedQualification(prepared: any, report: any): void {
+  const qualified = report?.candidate?.artifacts;
+  const packages = prepared?.packages;
+  const coordinates = (item: any): string => JSON.stringify([
+    item?.name, item?.version, item?.filename, item?.integrity,
+  ]);
+  if (!Array.isArray(packages) || packages.length === 0 || !Array.isArray(qualified)
+    || prepared.version !== report?.candidate?.version || qualified.length !== packages.length
+    || new Set(packages.map((item: any) => item?.name)).size !== packages.length
+    || new Set(qualified.map((item: any) => item?.name)).size !== qualified.length
+    || packages.some((item: any) => [item?.name, item?.version, item?.filename, item?.integrity]
+      .some((value) => typeof value !== "string" || !value))) {
+    fail("release_workflow_prepared_qualification_mismatch");
+  }
+  const expected = new Set(qualified.map(coordinates));
+  if (packages.some((item: any) => !expected.has(coordinates(item)))) {
+    fail("release_workflow_prepared_qualification_mismatch");
+  }
+}
+
+async function verifyPreparedQualification(): Promise<void> {
+  const { loadPreparedReleaseSet } = await import("./publish-release-set.ts");
+  const prepared = await loadPreparedReleaseSet({ rootDir: repoRoot,
+    artifactDirectory: path.join(repoRoot, "build/release/npm-set") });
+  const report = JSON.parse(await fs.readFile(path.join(repoRoot,
+    "build/release/control/release-authority/npm-package-installability.json"), "utf8"));
+  assertPreparedQualification(prepared, report);
+}
+
+export interface GithubReleaseAsset {
+  name: string;
+  filePath: string;
+  size: number;
+  digest: string;
+}
+
+function assetMatches(actual: any, expected: GithubReleaseAsset): boolean {
+  return actual?.name === expected.name && actual.state === "uploaded"
+    && actual.size === expected.size && actual.digest === expected.digest;
+}
+
+export function assertPublishedGithubRelease(release: any, tag: string, assets: readonly GithubReleaseAsset[]): void {
+  if (release?.tag_name !== tag || release.draft !== false || release.immutable !== true) {
+    fail("release_workflow_github_release_not_immutable");
+  }
+  const actual = Array.isArray(release.assets) ? release.assets : [];
+  const byName = new Map(actual.map((asset: any) => [asset.name, asset]));
+  if (actual.length !== assets.length || byName.size !== actual.length
+    || assets.some((asset) => !assetMatches(byName.get(asset.name), asset))) {
+    fail("release_workflow_github_asset_set_mismatch");
+  }
+}
+
+export async function publishGithubRelease({
+  repository, tag, revision, assets, body,
+  token = process.env.GH_TOKEN || "", fetchImplementation = fetch,
+}: {
+  repository: string; tag: string; revision: string; assets: readonly GithubReleaseAsset[]; body: string;
+  token?: string; fetchImplementation?: typeof fetch;
+}): Promise<{ action: "published" | "reverified"; tag: string; assetCount: number }> {
+  const repo = repositoryName(repository);
+  requireText(tag, /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/u, "release_workflow_tag_invalid");
+  requireText(revision, /^[a-f0-9]{40}$/u, "release_workflow_revision_invalid");
+  if (!assets.length || new Set(assets.map((asset) => asset.name)).size !== assets.length
+    || assets.some((asset) => !asset.name || /[/\\]/u.test(asset.name)
+      || !Number.isSafeInteger(asset.size) || asset.size < 0 || !/^sha256:[a-f0-9]{64}$/u.test(asset.digest))) {
+    fail("release_workflow_github_assets_invalid");
+  }
+  const base = `${repositoryApiPath(repo)}/releases`;
+  const request = async (url: URL, method = "GET", payload?: unknown, allowMissing = false): Promise<any> => {
+    const headers = githubHeaders(token);
+    if (payload !== undefined) headers.set("content-type", "application/json");
+    const response = await fetchImplementation(url, {
+      method, headers, redirect: "error", ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+    });
+    if (allowMissing && response.status === 404) { await response.body?.cancel(); return null; }
+    if (!response.ok) { await response.body?.cancel(); fail(`release_workflow_github_api_${response.status}`); }
+    if (response.status === 204) return null;
+    return JSON.parse(Buffer.from(await responseBytes(response, MAX_API_JSON_BYTES,
+      "release_workflow_github_response_too_large")).toString("utf8"));
+  };
+  let release = await request(new URL(`${base}/tags/${encodeURIComponent(tag)}`, apiRoot()), "GET", undefined, true);
+  if (!release) {
+    const releases = await githubPages<any>(new URL(`${base}?per_page=100`, apiRoot()), { token, fetchImplementation });
+    release = releases.find((entry) => entry.tag_name === tag);
+  }
+  if (release && release.draft === false) {
+    assertPublishedGithubRelease(release, tag, assets);
+    return { action: "reverified", tag, assetCount: assets.length };
+  }
+  if (release && (release.draft !== true || release.immutable === true)) {
+    fail("release_workflow_github_draft_invalid");
+  }
+  if (!release) {
+    release = await request(new URL(base, apiRoot()), "POST", {
+      tag_name: tag, target_commitish: revision, name: `Meshrix.js ${tag}`, body,
+      draft: true, prerelease: tag.includes("-"),
+    });
+  }
+  const id = requireText(release.id, /^\d+$/u, "release_workflow_github_release_id_invalid");
+  const expected = new Map(assets.map((asset) => [asset.name, asset]));
+  const remoteAssets: any[] = Array.isArray(release.assets) ? release.assets : [];
+  if (remoteAssets.some((asset) => !expected.has(asset.name))) fail("release_workflow_github_asset_set_mismatch");
+  const uploadUrl = new URL(String(release.upload_url || "").replace(/\{.*\}$/u, ""));
+  const uploadOrigin = apiRoot().origin === "https://api.github.com" ? "https://uploads.github.com" : apiRoot().origin;
+  if (uploadUrl.origin !== uploadOrigin || uploadUrl.username || uploadUrl.password) {
+    fail("release_workflow_github_upload_origin_invalid");
+  }
+  for (const asset of assets) {
+    const existing = remoteAssets.find((item) => item.name === asset.name);
+    if (assetMatches(existing, asset)) continue;
+    if (existing) {
+      const assetId = requireText(existing.id, /^\d+$/u, "release_workflow_github_asset_id_invalid");
+      await request(new URL(`${base}/assets/${assetId}`, apiRoot()), "DELETE");
+    }
+    const url = new URL(uploadUrl);
+    url.searchParams.set("name", asset.name);
+    const headers = githubHeaders(token);
+    headers.set("content-type", "application/octet-stream");
+    const response = await fetchImplementation(url, {
+      method: "POST", headers, redirect: "error", body: await openAsBlob(asset.filePath),
+    });
+    if (!response.ok) { await response.body?.cancel(); fail(`release_workflow_github_upload_${response.status}`); }
+    const uploaded = JSON.parse(Buffer.from(await responseBytes(response, MAX_API_JSON_BYTES,
+      "release_workflow_github_response_too_large")).toString("utf8"));
+    if (!assetMatches(uploaded, asset)) fail("release_workflow_github_uploaded_asset_mismatch");
+  }
+  await request(new URL(`${base}/${id}`, apiRoot()), "PATCH", {
+    name: `Meshrix.js ${tag}`, body, draft: false, prerelease: tag.includes("-"), make_latest: "legacy",
+  });
+  const published = await request(new URL(`${base}/${id}`, apiRoot()));
+  assertPublishedGithubRelease(published, tag, assets);
+  return { action: "published", tag, assetCount: assets.length };
+}
+
+async function publishGithubReleaseAssets(): Promise<void> {
+  const { loadPreparedReleaseSet, PREPARED_RELEASE_SET_FILENAME } = await import("./publish-release-set.ts");
+  const { SUPPLY_CHAIN_FILES } = await import("../generators/generate-supply-chain-artifacts.ts");
+  const definition = await verifyReleaseDefinition({ expectedTag: process.env.GITHUB_REF_NAME });
+  const revision = requireText(process.env.GITHUB_SHA, /^[a-f0-9]{40}$/u, "release_workflow_revision_invalid");
+  if (await gitRevision(definition.release.tag) !== revision) fail("release_workflow_git_revision_invalid");
+  const prepared = await loadPreparedReleaseSet({ rootDir: repoRoot,
+    artifactDirectory: path.join(repoRoot, "build/release/npm-set") });
+  const assetPaths = [
+    ...prepared.packages.map((item: any) => path.join(repoRoot, "build/release/npm-set", item.filename)),
+    path.join(repoRoot, "build/release/npm-set", PREPARED_RELEASE_SET_FILENAME),
+    ...Object.values(SUPPLY_CHAIN_FILES).map((name) => path.join(repoRoot, "build/release/supply-chain", String(name))),
+  ];
+  const assets: GithubReleaseAsset[] = [];
+  for (const filePath of assetPaths) {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) fail("release_workflow_github_assets_invalid");
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+    assets.push({ name: path.basename(filePath), filePath, size: stat.size, digest: `sha256:${hash.digest("hex")}` });
+  }
+  const body = [
+    `Meshrix.js ${definition.release.version}`, "", "Apache-2.0.", "", "npm packages:",
+    ...prepared.packages.map((item: any) => `- \`${item.name}@${item.version}\``), "",
+    "The attached archives match the npm release set. The release includes the production dependency SBOM and third-party notices.",
+  ].join("\n");
+  const result = await publishGithubRelease({ repository: repositoryName(), tag: definition.release.tag, revision, assets, body });
+  process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+}
+
 export async function runReleaseWorkflowAutomation(command: string): Promise<void> {
   if (command === "release-definition-outputs") return writeReleaseDefinitionOutputs();
   if (command === "pin-npm-cli") return pinNpmCli();
@@ -592,6 +765,8 @@ export async function runReleaseWorkflowAutomation(command: string): Promise<voi
   if (command === "resolve-release-authority") return resolveReleaseAuthority();
   if (command === "ensure-release-tag") return ensureReleaseTag();
   if (command === "dispatch-release") return dispatchRelease();
+  if (command === "verify-prepared-qualification") return verifyPreparedQualification();
+  if (command === "publish-github-release") return publishGithubReleaseAssets();
   fail("release_workflow_command_invalid");
 }
 

@@ -902,14 +902,11 @@ workflow waits for that exact release-branch run to finish successfully before
 consuming its authority artifact. This closes the source-run completion race.
 
 The release workflow revalidates candidate identity, functional receipt, and
-npm installability report before publication. A deployment receipt is included
-only when an optional deployment claim is selected. The npm publisher job uses
+npm installability report before publication. The npm publisher job uses
 the `release-candidate` environment. A workflow reference alone
 does not create the required protection: configure this environment with a
-tag deployment rule for `v*` before enabling the first release. The existing
-`release-portfolio` environment is restricted to the nightly branch and is not
-the publisher environment. Do not describe this deployment rule as an approval
-requirement.
+tag deployment rule for `v*` before enabling the first release. This deployment
+rule selects allowed refs and does not require manual approval.
 
 Before the first release run, verify these hosted protections in GitHub:
 
@@ -920,14 +917,10 @@ Before the first release run, verify these hosted protections in GitHub:
 2. The `release-candidate` environment exists with a selected-tag deployment
    policy for `v*`. The workflow's `environment:` field is a reference, not
    evidence that this protection has been configured.
-3. Repository immutable releases are enabled and enforced by the repository
-   owner. Verify the actual immutable-release setting with an authorized
-   management identity before setting the repository variable
-   `RELEASE_IMMUTABLE_ENABLED=true`. The workflow's variable check is only a
-   configuration declaration; the ordinary workflow token does not have the
-   Administration permission needed to read this setting. After publication,
-   the existing release job also verifies that the release is immutable and
-   that its asset set and body match the candidate.
+3. Repository immutable releases are enabled. Verify the actual setting with
+   an authorized management identity. After publication, the release job
+   verifies the returned release's actual immutability and matching asset set;
+   a repository variable is not evidence of this postcondition.
 
 The release workflow consumes the accepted Core functional and npm consumer
 evidence from the exact successful stable run. It publishes `meshrix.js` and
@@ -937,12 +930,13 @@ remain unmeasured until their actual qualification is recorded.
 
 The npm release set manifest binds both tarballs through their SHA-512
 integrity values. The supply-chain manifest binds the generated CycloneDX SBOM
-and third-party notices. The workflow signs both manifests with Sigstore and
-verifies the exact workflow identity and GitHub Actions issuer before
-publication. Release consumers verify those signatures and the manifest
-entries before using the associated assets. An existing published release must
-match the candidate and its actual asset set; a conflicting immutable release
-cannot be replaced.
+and third-party notices. npm publication supplies GitHub Actions provenance;
+registry signatures and provenance are verified after publication. The GitHub
+Release attaches the two tarballs, release-set manifest, SBOM, notices, and
+supply-chain manifest. It verifies GitHub's uploaded asset digests before
+publishing the draft and then checks actual release immutability. An existing
+published release must match that exact asset set; reruns reverify it without
+replacement. No additional detached signature bundle is required.
 
 The credential-free assembly job builds the package files and
 prepares the public npm archives once. It transfers those exact tarballs with

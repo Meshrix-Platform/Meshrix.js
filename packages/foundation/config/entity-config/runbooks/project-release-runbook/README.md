@@ -1,80 +1,65 @@
 # Meshrix.js Project Release Runbook
 
 This built-in runbook prepares a release candidate for the repository-owned
-tag workflow. It does not publish packages, containers, tags, or GitHub Release
-assets. It is not exposed to downstream agents (`allowDownstream: false`).
-
-## Authority
-
-- `npm run verify:acceptance` is the mandatory Functional Release Gate.
-- `npm run server:verify:release-deployment` is the mandatory Release
-  Deployment Verification for the exact stable candidate on `ubuntu-24.04`
-  with bounded external deterministic synthetic requests and no real model
-  dependency.
-- `npm run verify:real-machine -- ...` runs remaining candidate-bound
-  Real-Machine Verification Workflows. A passing receipt is the named
-  Environment Support Claim for that exact environment
-  and cannot block or promote project acceptance.
-- `.github/workflows/release-branch.yml` promotes `release` only after the
-  stable complete gate and external runtime-ui deployment verification.
-- `.github/workflows/release.yml` is the only release publication path and
-  accepts a version tag only when the tag commit equals the `release` branch
-  tip and the release deployment authority exists for that exact commit.
-- `.github/RELEASE_TEMPLATE.md` is the canonical release-notes template.
+publication workflow. It does not commit, tag, push, upload, or publish. It is
+not exposed to downstream agents (`allowDownstream: false`).
 
 ## Candidate Preparation
 
-1. Update the root and every workspace package manifest to the same semantic
-   version. Update protocol constants that deliberately mirror that package
-   version, then refresh `package-lock.json` from the official npm registry.
-2. Review the complete version diff. No package manifest or release protocol
-   constant may retain the previous release version.
-3. Run the local verification closure:
+1. Use `npm run release:prepare -- <version>` to update the canonical
+   release definition, package manifests, lockfile, and versioned consumers.
+   Review the version diff and run `npm run release:prepare -- --check`.
+2. The responsible Agent starts `npm run ci:local`. This single entry discovers
+   the current device's supported Node.js environment and usable local Docker,
+   selects applicable engineering checks, and retains their reports and logs.
+   Unavailable optional environments are recorded as `not_run`; they are not
+   simulated or replaced by a required remote or all-platform matrix.
+3. Complete source review and scoped repairs, then use the same entry with
+   `--scope release` for functional acceptance and qualification of the two
+   actual npm archives. Every selected check must pass. Repair the workflow or
+   product when a selected check fails, rerun affected checks, and reuse results
+   whose inputs remain unchanged. Artifact review belongs in this local flow.
+   Remove redundant or inapplicable restrictions without hiding a real failure.
+4. Submit the reviewed candidate through the governed `nightly` → `stable` →
+   `release` branch flow. The stable run binds the accepted candidate,
+   functional receipt, and npm installability report to the exact revision.
 
-   ```bash
-   npm ci
-   npm run verify
-   npm run test:audit
-   npm audit --audit-level=high
-   npm run verify:acceptance
-   ```
-
-4. Require every functional child report to pass. A missing implementation,
-   simulation, failure case, or reproducible workflow script is a functional
-   failure; project-level `blocked` is not a release result. Do not request or
-   aggregate real-machine receipts in this decision.
-5. Submit the reviewed version change through the governed branch flow from
-   `stable` to `release`. This runbook does not commit, tag, push, upload, or
-   call a package registry.
-
-After functional acceptance, an operator may run any desired real-machine
-workflow for the exact immutable candidate. Each workflow must preflight,
-start, probe, stop, clean up, and emit a redacted receipt without source edits.
-A `not_run`, `ineligible`, or `failed` workflow leaves only that environment's
-qualification as remaining required work.
+One successfully qualified available environment establishes the npm
+installation claim. Other platforms remain unmeasured until separately tested.
+Containers, portable archives, offline delivery, and real-machine deployment
+claims have their own applicable checks and are not prerequisites for npm
+publication. A real Agent conversation is not a substitute for deterministic
+engineering verification.
 
 ## Publication
 
-An authorized maintainer creates the semantic version tag only after the
-candidate commit is the exact `release` branch tip with a completed release
-deployment authority. The tag workflow revalidates package versions, the
-release deployment authority, and the exact tag-to-release-tip equality, then
-assembles portable MCP assets, emits and verifies the production SBOM, stages
-the multi-platform container, enforces immutable GHCR version-tag digests,
-signs the container and the outer checksum authority with Sigstore, renders
-the release-notes template, and creates the GitHub Release.
+`.github/workflows/release-branch.yml` validates the candidate and originating
+stable authority when a version reaches `release`, creates or verifies its
+canonical version tag, and dispatches `.github/workflows/release.yml`. The first
+version uses the explicitly authorized bootstrap-token procedure documented in
+`docs/RUNBOOK.md`; subsequent releases use npm trusted publishing through
+GitHub Actions OIDC. Temporary bootstrap credentials are removed after use.
 
-The workflow fails closed when the release already exists, the tag commit is
-not exactly the `release` branch tip, any required gate or the release
-deployment authority is missing, a GHCR version tag names a different manifest
-digest, release asset basenames collide, or checksum signing and verification
-do not complete.
+The release workflow validates the tag and authority, prepares `meshrix.js` and
+`@meshrix/gateway`, and compares the exact archives with the existing npm
+qualification report. Read-only registry preflight and publication use those
+same archives. Gateway is published before the root package. The publisher
+verifies registry integrity, signatures, provenance, and version tags, preserving
+a newer `latest` or `next` tag. MCP support is included in `meshrix.js`.
+
+After npm verification succeeds, the workflow uploads both archives, their
+release-set manifest, the production dependency SBOM, third-party notices, and
+the supply-chain manifest to a GitHub draft release. It verifies uploaded asset
+digests, publishes the release, and verifies actual immutability. A rerun may
+resume owned draft assets or reverify an identical published release. It must
+not replace a conflicting immutable release. No separate container publication
+or detached signature bundle is required for this npm release.
 
 ## Consumer Verification
 
-The published checksum authority is `RELEASE_SHA256SUMS`, accompanied by
-`RELEASE_SHA256SUMS.sigstore.json`. Consumers first verify the bundle against
-the exact `release.yml` workflow identity for the version tag and the GitHub
-Actions OIDC issuer. Only then may they use the basename-keyed checksum file to
-verify a downloaded asset. The MCP assembly-local `SHA256SUMS` is covered by
-the signed outer checksum and is not a separate release authority.
+Install the desired published package from npm and use `npm audit signatures`
+to verify registry signatures and provenance. Downloaded GitHub archives can
+be checked against the SHA-512 integrity values in `meshrix-release-set.json`;
+the supply-chain manifest identifies the associated SBOM and notices. The
+release uses Apache-2.0. `docs/RUNBOOK.md` owns the operational publication and
+trusted-publisher setup procedure.
