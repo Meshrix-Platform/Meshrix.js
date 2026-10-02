@@ -23,7 +23,7 @@ jobs:
   pull-request-verify:
     name: Pull request verification
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -55,7 +55,7 @@ jobs:
           }
           run_check "npm test" /tmp/pr-regression.log npm test
       - name: Retain full sanitized verification log and regression report
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pull-request-regression-${{ github.sha }}
@@ -66,7 +66,7 @@ jobs:
   stable-candidate:
     name: Stable candidate checkpoint
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -76,7 +76,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -97,7 +97,7 @@ jobs:
     name: Ordered repository regression checkpoint
     needs: [stable-candidate]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -107,7 +107,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -143,7 +143,7 @@ jobs:
             profile: audit-stable-data
           - stage: services
             profile: audit-stable-services
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -153,7 +153,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -242,7 +242,7 @@ jobs:
     name: Audit checkpoint / console evidence
     needs: [repository-checkpoint]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -252,7 +252,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -287,7 +287,7 @@ jobs:
     name: Audit checkpoint / console
     needs: [repository-checkpoint, audit-console-evidence-checkpoint]
     if: ${{ always() && github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -297,7 +297,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -332,7 +332,7 @@ jobs:
     name: Audit checkpoint reduction
     needs: [audit-checkpoint, audit-resource-checkpoint, audit-sandbox-checkpoint, audit-console-evidence-checkpoint, audit-console-checkpoint]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -342,7 +342,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install reducer dependencies
         run: npm ci --ignore-scripts
@@ -367,7 +367,7 @@ jobs:
     name: Single-node delivery checkpoint
     needs: [stable-candidate, audit-reduction]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
@@ -377,7 +377,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -395,7 +395,7 @@ jobs:
     name: Functional acceptance checkpoint
     needs: [audit-reduction, single-node-delivery, supply-chain]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 395
     permissions:
       contents: read
@@ -405,7 +405,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -430,7 +430,7 @@ jobs:
     name: Stable functional completeness release gate
     needs: [stable-candidate, repository-checkpoint, audit-reduction, single-node-delivery, functional-acceptance, supply-chain]
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -440,7 +440,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install reducer dependencies
         run: npm ci --ignore-scripts
@@ -477,7 +477,7 @@ jobs:
   node-22-compatibility:
     name: Supported Node 22 compatibility
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'nightly') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -487,7 +487,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22"
+          node-version: "22.23.3"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
@@ -501,7 +501,7 @@ jobs:
   npm-package-portability:
     name: Fresh-container npm package simulation
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'nightly') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -511,7 +511,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install verifier workspace dependencies
         run: npm ci --ignore-scripts
@@ -530,7 +530,7 @@ jobs:
   supply-chain:
     name: Supply-chain evidence
     if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -540,7 +540,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependency graph without lifecycle scripts
         run: npm ci --ignore-scripts
@@ -577,7 +577,7 @@ jobs:
   dependency-review:
     name: Dependency review
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

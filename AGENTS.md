@@ -137,6 +137,16 @@ and Better Plan lifecycle. Specialist skills and handbooks route to
 `CONTRIBUTING.md` and the owning architecture or runbook source instead of
 restating that workflow.
 
+Before pushing or promoting a candidate, complete the applicable engineering
+checks locally using the same maintained entry points, test selection, build
+order, dependency installation policy, and supported runtime versions as hosted
+CI. Follow [Local And Hosted CI](CONTRIBUTING.md#local-and-hosted-ci).
+Do not use repeated pushes to discover ordinary build, test, installation, or
+packaging failures. Repair a missing local check or environment in its canonical
+workflow before continuing; a hosted pass does not repair a local coverage gap.
+Keep real registry publication and hosted identity checks in their explicitly
+authorized release stage, and never describe them as locally verified.
+
 ## Report And Repair Repository Scripts
 
 When an agent finds a defect or limitation in the repository's own scripts or

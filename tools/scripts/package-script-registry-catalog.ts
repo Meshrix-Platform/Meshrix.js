@@ -36,6 +36,13 @@ export const SCRIPT_CATEGORIES: Readonly<Record<string, any>> = Object.freeze({
 
 /** @type {Readonly<Record<string, ScriptEntry>>} */
 const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
+  "ci:local": {
+    scriptName: "ci:local", command: "npm run ci:local", category: "test", subsystem: "release",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: true, ciProfile: "local", expectedDurationClass: "extended",
+    inputs: ["tools/scripts/local-ci.ts", ".github/workflows/ci.yml", ".github/workflows/gateway-preview.yml", ".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml", "tools/registry/tests.registry.json"],
+    outputs: ["build/local-ci/**"],
+  },
   // ── Startup / runtime ──────────────────────────────────────────────────────
   "server:start": {
     scriptName: "server:start", command: "npm run server:start", category: "startup", subsystem: "server",
