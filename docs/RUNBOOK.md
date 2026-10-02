@@ -1029,6 +1029,11 @@ installation verification and preflight commands do not publish. Use the GitHub 
 workflow for actual OIDC publication; direct local release commands are not
 hosted trusted-publisher evidence.
 
+An explicit `--prepare` rebuilds the owned archives from current build inputs,
+even at an unchanged unpublished version. After qualification, preflight and
+publication consume that fixed directory; qualify the archives again if another
+preparation changes their bytes.
+
 The built-in project release runbook prepares and validates a candidate only.
 It does not commit, tag, push, upload assets, publish packages, or create a
 parallel release path.
