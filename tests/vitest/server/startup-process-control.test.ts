@@ -16,6 +16,7 @@ import {
   type PlatformCommandResult,
 } from "../../../tools/scripts/lib/startup-platform-adapter.ts";
 import { isMeshrixServiceProcessOwned } from "../../../tools/scripts/lib/service-process-ownership.ts";
+import { stopPids } from "../../../tools/scripts/clean-existing-service.ts";
 
 const projectRootFixture = path.posix.join("/fixture", "meshrix", "project");
 const dataDirectoryFixture = path.posix.join("/fixture", "meshrix", "data");
@@ -30,6 +31,22 @@ function processError(code: string): NodeJS.ErrnoException {
 }
 
 describe("owned process lifecycle", () => {
+  it.skipIf(process.platform === "win32")("lets the cleanup entry finish an actual child's graceful shutdown", async () => {
+    const child = spawn(process.execPath, ["-e", "process.on('SIGTERM', () => process.exit(17)); process.send('ready'); setInterval(() => undefined, 1000)"], {
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      windowsHide: true,
+    });
+    const exited = once(child, "exit");
+    try {
+      await once(child, "message");
+      await stopPids([child.pid!], { quiet: true });
+      expect(await exited).toEqual([17, null]);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      await exited;
+    }
+  });
+
   it("probes only a positive safe PID and handles invalid and self targets without signaling", () => {
     const kill = vi.fn();
 
