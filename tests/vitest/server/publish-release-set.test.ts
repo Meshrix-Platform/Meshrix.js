@@ -824,6 +824,8 @@ describe("npm release-set publication", () : any => {
         NPM_CONFIG_GLOBALCONFIG: "/fixture/global.npmrc",
         npm_config_allow_scripts: "fixture-policy",
         NPM_CONFIG_REGISTRY: "https://registry.invalid/",
+        ACTIONS_ID_TOKEN_REQUEST_URL: "https://actions.invalid/oidc/request",
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-synthetic",
         GITHUB_ACTIONS: "true"
       },
       exec: async (command?: any, args?: any, options?: any) : Promise<any> => {
@@ -862,11 +864,19 @@ describe("npm release-set publication", () : any => {
       expect(call.env.npm_config_userconfig).not.toBe(call.env.npm_config_globalconfig);
       expect(call.env.npm_config_allow_scripts).toBeUndefined();
       expect(call.env.NPM_CONFIG_REGISTRY).toBeUndefined();
-      expect(call.configContents).toEqual(["", ""]);
       expect(call.configModes).toEqual([0o600, 0o600]);
       await expect(fs.access(call.env.npm_config_userconfig)).rejects.toMatchObject({ code: "ENOENT" });
       await expect(fs.access(call.env.npm_config_globalconfig)).rejects.toMatchObject({ code: "ENOENT" });
     }
+    const bootstrapConfig: any = "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n";
+    expect(calls.slice(0, 2).map(({ configContents }: Record<string, any>) : any => configContents))
+      .toEqual([["", ""], ["", ""]]);
+    expect(calls.slice(2).map(({ configContents }: Record<string, any>) : any => configContents))
+      .toEqual([[bootstrapConfig, ""], [bootstrapConfig, ""]]);
+    expect(JSON.stringify(calls.map(({ configContents }: Record<string, any>) : any => configContents)))
+      .not.toContain("mutation-synthetic");
+    expect(calls[0].env.ACTIONS_ID_TOKEN_REQUEST_URL).toBe("https://actions.invalid/oidc/request");
+    expect(calls[0].env.ACTIONS_ID_TOKEN_REQUEST_TOKEN).toBe("oidc-request-synthetic");
     let failedConfigPaths: any[] = [];
     const failedNpmRunner: any = createNpmRunner({
       environment: { npm_config_allow_scripts: "fixture-policy" },
