@@ -491,10 +491,10 @@ describe("required report validator", () : any => {
     ]));
     expect(PLATFORM_ACCEPTANCE_COMMANDS).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        report: "build/reports/observability-runtime-acceptance.json"
+        report: "build/reports/upstream-service-publishing.json"
       }),
       expect.objectContaining({
-        report: "build/reports/production-readiness-gates.json"
+        report: "build/reports/console-admin-browser-visual.json"
       }),
       expect.objectContaining({
         report: SINGLE_NODE_INTERNAL_PLATFORM_E2E_REPORT_PATH
@@ -850,22 +850,6 @@ describe("platform acceptance foundation ownership", () : any => {
     expect(plan).not.toHaveProperty("declaredWorstCaseEstimate");
     expect(plan).not.toHaveProperty("declaredJobBudgetMs");
     expect(plan.commands.every((command?: any) : any => !Object.hasOwn(command, "timeoutMs"))).toBe(true);
-  });
-
-  it("gates portable MCP assembly on pinned Node runtime supply-chain evidence", () : any => {
-    const supplyChain: any = PLATFORM_ACCEPTANCE_COMMANDS.find((command?: any) : any => command.id === "node-runtime-supply-chain");
-    const portableAssembly: any = PLATFORM_ACCEPTANCE_COMMANDS.find((command?: any) : any => command.id === "mcp-release-portable-assembly");
-
-    expect(supplyChain).toMatchObject({
-      acceptanceLayer: "downstream-gateway",
-      report: "build/reports/node-runtime-supply-chain.json"
-    });
-    expect(portableAssembly.dependsOn).toContain("node-runtime-supply-chain");
-    expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/node-runtime-supply-chain.json");
-    expect(requiredReportSpec("build/reports/node-runtime-supply-chain.json")).toMatchObject({
-      schemaVersion: "v0.0.1:mcp:node-runtime-supply-chain-report-2",
-      verifier: "tools/server-scripts/verify-node-runtime-supply-chain.ts"
-    });
   });
 
   it("requires the selected-platform npm consumer report in functional acceptance", () : any => {

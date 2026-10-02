@@ -130,7 +130,11 @@ function laneKey(phaseId: string | undefined, laneId: string | undefined): strin
   return `${phaseId || ""}/${laneId || ""}`;
 }
 
-export function evaluateEngineeringOutcomes(results: readonly SuiteResult[], runnerExitCode: number | null): {
+export function evaluateEngineeringOutcomes(
+  results: readonly SuiteResult[],
+  runnerExitCode: number | null,
+  { cancelled: executionCancelled = false }: { cancelled?: boolean } = {}
+): {
   status: "passed" | "failed" | "cancelled";
   reasonCode?: string;
   passed: number;
@@ -178,8 +182,8 @@ export function evaluateEngineeringOutcomes(results: readonly SuiteResult[], run
       && (result.blockedBy || []).every((blockedLane) => optionalLanes.has(laneKey(result.phaseId, blockedLane))))).length;
   const otherIncomplete = results.length - passed - failed - notRunResults.length - cancelled;
 
-  if (cancelled > 0) return { status: "cancelled", reasonCode: "runner_cancelled", passed, failed, notRun: notRunResults.length, cancelled, optionalNotRun };
-  if (failed > 0 || otherIncomplete > 0 || notRunResults.length !== optionalNotRun || (runnerExitCode !== 0 && notRunResults.length === 0) || passed === 0) {
+  if (executionCancelled || cancelled > 0) return { status: "cancelled", reasonCode: "runner_cancelled", passed, failed, notRun: notRunResults.length, cancelled: Math.max(1, cancelled), optionalNotRun };
+  if (failed > 0 || otherIncomplete > 0 || notRunResults.length !== optionalNotRun || (runnerExitCode !== 0 && (runnerExitCode !== 1 || notRunResults.length === 0)) || passed === 0) {
     return { status: "failed", reasonCode: failed > 0 ? "selected_flow_failed" : "applicable_flow_incomplete", passed, failed, notRun: notRunResults.length, cancelled, optionalNotRun };
   }
   return { status: "passed", passed, failed, notRun: notRunResults.length, cancelled, optionalNotRun };
@@ -318,7 +322,7 @@ async function runTestProfile(profile: string, rawReportPath: string, rawLogPath
   const runnerReportArtifact = path.join(path.dirname(rawLogPath), "test-runner-report.json");
   await writeJsonAtomic(runnerReportArtifact, sanitizeSensitiveReport(runnerReport));
   const flows = suiteFlowResults(runnerReport, displayPath(runnerReportArtifact));
-  const summary = evaluateEngineeringOutcomes(flows, execution.exitCode);
+  const summary = evaluateEngineeringOutcomes(flows, execution.exitCode, execution);
   await fs.rm(rawReportPath, { force: true });
   return { execution, flows, summary, runnerReport };
 }

@@ -7,6 +7,7 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { resolveCurrentAcceptedCandidate } from "./lib/platform-acceptance-generation-store.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REVISION: any = /^[a-f0-9]{40}$/u;
@@ -225,8 +226,9 @@ function verifyPublicationCandidate(candidate?: any) : any {
       });
       if (result.error || result.status !== 0) throw failure(code);
     };
-    runInCandidate("npm", ["run", "repo:local-info-hygiene"], "local_info_hygiene_failed");
-    runInCandidate("node", ["tools/scripts/verify-git-publication.ts", "--index"], "git_publication_check_failed");
+    const npmInvocation = resolveNpmCliInvocation();
+    runInCandidate(npmInvocation.command, npmCliArgs(npmInvocation, ["run", "repo:local-info-hygiene"]), "local_info_hygiene_failed");
+    runInCandidate(process.execPath, ["tools/scripts/verify-git-publication.ts", "--index"], "git_publication_check_failed");
     console.log("[release-promotion] publication preflight passed");
   } finally {
     spawnSync("git", ["worktree", "remove", "--force", workspace], { cwd: repoRoot, stdio: "ignore" });

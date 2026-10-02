@@ -740,10 +740,10 @@ for (const scriptName of ["mcp:install", "server:mcp:register"]) {
   const entry: any = scriptReg.getDeclaredEntry(scriptName);
   if (
     entry?.sideEffects !== "network-service" ||
-    entry?.requiresFreshContainer !== true ||
+    entry?.requiresFreshContainer !== false ||
     entry?.ciProfile !== "external"
   ) {
-    console.error(`  ${scriptName}: installer/register side effects are understated`);
+    console.error(`  ${scriptName}: installer/register must declare external host effects without a container prerequisite`);
     issues++;
   }
 }

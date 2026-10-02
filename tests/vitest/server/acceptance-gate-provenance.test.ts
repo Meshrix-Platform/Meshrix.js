@@ -39,8 +39,7 @@ describe("acceptance gate provenance substrate", () => {
     }
     const ids = new Set(PLATFORM_ACCEPTANCE_COMMANDS.map((command) => command.id));
     expect(ids).toContain("foundation-tests");
-    expect(ids).toContain("platform-acceptance-plan");
-    expect(ids).toContain("typecheck");
+    expect(ids).toContain("npm-package-prepare");
     expect(ids).toContain("npm-package-installability");
     expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/npm-package-installability.json");
     expect(ids).not.toContain("deployment-container-flow");

@@ -83,6 +83,17 @@ describe("automatic local verification entry", () => {
     ], 130)).toMatchObject({ status: "cancelled", cancelled: 1 });
   });
 
+  it("does not turn an abnormal runner exit into success when Docker is unavailable", () => {
+    const results = [
+      { id: "core", status: "passed" },
+      { id: "docker", status: "not_run", reasonCode: "docker_daemon_unavailable", requiredService: "docker" }
+    ];
+    for (const exitCode of [null, 2, 130, 137]) {
+      expect(evaluateEngineeringOutcomes(results, exitCode).status).toBe("failed");
+    }
+    expect(evaluateEngineeringOutcomes(results, 1, { cancelled: true }).status).toBe("cancelled");
+  });
+
   it("retains useful sanitized failure diagnostics without retaining runtime payloads", () => {
     const safe = sanitizeVerificationLog([
       "stdout | tools/server-scripts/example.ts",

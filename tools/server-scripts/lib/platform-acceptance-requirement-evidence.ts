@@ -1,56 +1,16 @@
-const rel: any = (number?: any) : any => `REQ-REL-${String(number).padStart(3, "0")}`;
-const usp: any = (number?: any) : any => `REQ-USP-${String(number).padStart(3, "0")}`;
-
-export const PLATFORM_ACCEPTANCE_REQUIREMENTS: readonly any[] = Object.freeze([
-  ...Array.from({ length: 30 }, (_?: any, index?: any) : any => index + 1)
-    .filter((number?: any) : any => number !== 23)
-    .map((number?: any) : any => rel(number)),
-  ...Array.from({ length: 13 }, (_?: any, index?: any) : any => usp(index + 1))
-]);
-
+// Requirements of the npm product acceptance claim. Optional deployments,
+// services and performance claims are owned by their separately invoked tools.
 const mapping: Record<string, any> = {
-  [rel(1)]: { commandIds: ["capability-acceptance-machines", "surface-convergence"] },
-  [rel(2)]: { commandIds: ["protocol-boundary", "repo-organization"] },
-  [rel(3)]: { commandIds: ["state-machines", "capability-acceptance-machines"] },
-  [rel(4)]: { commandIds: ["plugin-runtime"] },
-  [rel(5)]: { commandIds: ["operation-permission-domain-model", "operation-permission-protocol-consistency", "operation-permission-tag-governed-e2e", "authorization-enforcement"] },
-  [rel(6)]: { commandIds: ["approval-governance", "operation-permission-tag-governed-e2e"] },
-  [rel(7)]: { commandIds: [], aggregateFacts: ["ledgerAnchorReady"] },
-  [rel(8)]: { commandIds: ["storage-restore"] },
-  [rel(9)]: { commandIds: ["job-work-queue", "job-work-queue-ceiling-conformance", "work-queue-conformance", "work-queue-process-restart"] },
-  [rel(10)]: { commandIds: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "observability-coverage"] },
-  [rel(11)]: { commandIds: ["foundation-tests"], aggregateFacts: ["candidateIdentityReady", "commandDagReady", "inventoryReady", "privacyReady"] },
-  [rel(12)]: { commandIds: ["downstream-mcp-audit", "mcp-installer-convergence", "operation-permission-protocol-consistency"] },
-  [rel(13)]: { commandIds: ["mcp-installer-convergence", "mcp-release-target-scope", "operation-permission-protocol-consistency"] },
-  [rel(14)]: { commandIds: ["upstream-mcp-gateway", "upstream-gateway-e2e"] },
-  [rel(15)]: { commandIds: ["console-administration", "console-admin-browser-visual", "console-gateway-mcp"] },
-  [rel(16)]: { commandIds: ["plugin-runtime", "controlled-execution-sandbox"] },
-  [rel(17)]: { commandIds: ["workspace-asset-management", "upload-workspace-materialization"] },
-  [rel(18)]: { commandIds: ["plugin-runtime", "composition-source-package"] },
-  [rel(19)]: { commandIds: ["production-readiness-gates"] },
-  [rel(20)]: { commandIds: ["plugin-runtime", "protocol-boundary"] },
-  [rel(21)]: { commandIds: ["strategy-management"] },
-  [rel(22)]: { commandIds: ["agent-self-maintenance-plugin"] },
-  [rel(24)]: { commandIds: ["foundation-tests", "documentation-convergence", "repo-organization"] },
-  [rel(25)]: { commandIds: ["job-work-queue-ceiling-conformance", "mcp-gateway-load", "gateway-platform-profile", "production-readiness-gates"] },
-  [rel(26)]: { commandIds: ["controlled-execution-sandbox", "controlled-execution-convergence-final"] },
-  [rel(27)]: { commandIds: ["plugin-runtime", "composition-source-package"] },
-  [rel(28)]: { commandIds: ["model-gateway-service", "model-gateway-adapter", "external-gateway-plugin", "surface-convergence"] },
-  [rel(29)]: { commandIds: ["workspace-asset-management", "upload-workspace-materialization"] },
-  [rel(30)]: { commandIds: ["repo-organization", "documentation-convergence"] },
-  ...Object.fromEntries(Array.from({ length: 13 }, (_?: any, index?: any) : any => [
-    usp(index + 1),
-    {
-      commandIds: [
-        "upstream-service-publishing",
-        ...([8].includes(index + 1) ? ["downstream-mcp-audit"] : []),
-        ...([9, 10].includes(index + 1) ? ["upstream-fixture-transit", "upstream-gateway-e2e"] : []),
-        ...(index + 1 === 11 ? ["surface-convergence"] : []),
-        ...(index + 1 === 13 ? ["gateway-platform-profile", "observability-runtime"] : [])
-      ]
-    }
-  ]))
+  "core-engineering": { commandIds: ["foundation-tests"] },
+  "npm-artifacts": { commandIds: ["npm-package-prepare", "npm-package-installability"] },
+  "core-publishing-security": { commandIds: ["upstream-service-publishing"] },
+  "standard-mcp": { commandIds: ["upstream-mcp-gateway"] },
+  "console-operation": { commandIds: ["console-admin-browser-visual"] },
+  "storage-recovery": { commandIds: ["storage-restore"] },
+  "candidate-evidence": { commandIds: [], aggregateFacts: ["ledgerAnchorReady", "candidateIdentityReady", "commandDagReady", "inventoryReady", "privacyReady"] }
 };
+
+export const PLATFORM_ACCEPTANCE_REQUIREMENTS: readonly string[] = Object.freeze(Object.keys(mapping));
 
 export const PLATFORM_ACCEPTANCE_REQUIREMENT_EVIDENCE: any = Object.freeze(
   Object.fromEntries(PLATFORM_ACCEPTANCE_REQUIREMENTS.map((requirement?: any) : any => [
