@@ -1235,7 +1235,7 @@ async function runContainerAuthority() : Promise<any> {
       gatewayExamples: platformReports.every(({ consumers }: Record<string, any>) => consumers.find((consumer: any) => consumer.consumerKind === "gateway")?.embeddedExamples?.executed === 3),
       installedAdapterDescriptions: platformReports.every(({ cli }: Record<string, any>) => cli?.adapterDescribeCount === 7),
       installedCli: platformReports.every(({ cli }: Record<string, any>) : any => cli?.help && cli?.offlineInterfaceCatalog && cli?.serverHelp && cli?.mcpVersion && cli?.mcpHelp),
-      installedMcpProxy: platformReports.every(({ mcp }: Record<string, any>) : any => mcp?.installedRootBin === true && mcp?.standardInitialize === true && mcp?.initializedNotificationForwarded === true && mcp?.toolsListed === true && mcp?.representativeProxyCall === true && mcp?.credentialForwardedFromEnvironment === true && mcp?.processClosedCleanly === true),
+      installedMcpProxy: platformReports.every(({ mcp }: Record<string, any>) : any => mcp?.installedRootBin === true && mcp?.standardDiscovery === true && mcp?.currentProtocolMetadata === true && mcp?.signedPeerVerified === true && mcp?.notificationForwarded === true && mcp?.toolsListed === true && mcp?.representativeProxyCall === true && mcp?.credentialForwardedFromEnvironment === true && mcp?.processClosedCleanly === true),
       uiBrowserInteraction: platformReports.every(({ browser }: Record<string, any>) : any => browser?.bundledUi?.interaction === true),
       normalInstallLifecycle: platformReports.every(({ consumers }: Record<string, any>) : any => consumers.every((consumer?: any) : any => consumer.installLifecycleCompleted))
     });

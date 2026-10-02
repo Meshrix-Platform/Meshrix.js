@@ -24,6 +24,7 @@ import {
   verifyInstalledModuleIdentity,
   browserForServer,
   packageTypeSpecifiers,
+  runInstalledMcpProxy,
   NPM_PACKAGE_CONSUMER_FAILURE_CODES,
   NPM_PACKAGE_CONSUMER_FAILURE_STAGES
 } from "../../../tools/server-scripts/npm-package-consumer.ts";
@@ -121,6 +122,20 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("qualifies the actual connector through signed discovery and current stateless MCP messages", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-installed-proxy-fixture-"));
+    try {
+      await fs.mkdir(path.join(root, "node_modules/.bin"), { recursive: true });
+      await fs.symlink(path.join(REPO_ROOT, "apps/server/bin/meshrix-mcp.ts"), path.join(root, "node_modules/.bin/meshrix-mcp"));
+      const rootManifest = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package.json"), "utf8"));
+      await expect(runInstalledMcpProxy({ cwd: root, rootManifest })).resolves.toMatchObject({
+        installedRootBin: true, standardDiscovery: true, currentProtocolMetadata: true,
+        signedPeerVerified: true, notificationForwarded: true, representativeProxyCall: true,
+        credentialForwardedFromEnvironment: true, processClosedCleanly: true
+      });
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+
   it("checks declaration exports without treating a stylesheet as a TypeScript namespace", async () => {
     const manifest = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "packages/ui-console/package.json"), "utf8"));
     const specifiers = packageTypeSpecifiers(manifest);
