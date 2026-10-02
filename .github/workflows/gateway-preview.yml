@@ -12,6 +12,7 @@ on:
       - "tests/vitest/server/distribution-*.test.ts"
       - "tools/server-scripts/publish-release-set.ts"
       - "tools/server-scripts/localize-verify-failure.ts"
+      - "tools/scripts/local-ci.ts"
       - "Dockerfile"
       - "apps/mcp-gateway-installer/**"
       - "package.json"
@@ -23,7 +24,7 @@ permissions:
 
 jobs:
   focused-candidate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -31,7 +32,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - run: npm ci
       - run: npm run typecheck:node
@@ -42,7 +43,7 @@ jobs:
 
   product-distribution:
     name: Product distribution artifacts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -50,7 +51,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - run: npm ci
       - name: Verify actual product archives and runtime image contents
@@ -67,7 +68,7 @@ jobs:
           fi
           exit "$result"
       - name: Retain full sanitized distribution log and report
-        if: ${{ always() }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: product-distribution-${{ github.sha }}

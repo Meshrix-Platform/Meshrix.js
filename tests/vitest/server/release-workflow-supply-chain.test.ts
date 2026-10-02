@@ -667,9 +667,9 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(singleNodeDelivery).toContain("timeout-minutes: 120");
     expect(singleNodeDelivery).toContain("verify:single-node:ubuntu-container");
     const portability: any = workflow.slice(portabilityStart, nextJob);
-    expect(portability).toContain("runs-on: ubuntu-latest");
+    expect(portability).toContain("runs-on: ubuntu-24.04");
     expect(portability).toContain("timeout-minutes: 60");
-    expect(portability).toContain('node-version: "24"');
+    expect(portability).toContain('node-version: "24.21.0"');
     expect(portability).toContain("npm run verify:npm-package-installability");
     expect(portability).not.toContain("matrix.");
     expect(portability).not.toContain("--host-platform-probe");

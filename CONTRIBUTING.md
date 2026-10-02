@@ -40,8 +40,77 @@ applies to every change:
    integration scope after all changes and repairs are complete.
 5. Keep the root `allowScripts` install policy aligned with admitted dependencies;
    enable only required package lifecycle scripts, never a blanket bypass.
-6. Integrate once through the integration owner, and maintain version,
+6. Complete the applicable local CI checks below before pushing or promoting the
+   candidate. Integrate once through the integration owner, and maintain version,
    deprecation, and release facts in the canonical release source.
+
+## Local And Hosted CI
+
+Local verification is the engineering acceptance environment. Hosted CI verifies
+the submitted candidate and operates authorized release integrations. Ordinary
+build, test, dependency, and package failures must be found and repaired locally
+before submission.
+
+- Maintain one executable definition for each engineering check. Local commands
+  and GitHub jobs must call the same entry points with the same test selection,
+  build prerequisites, dependency policy, and declared Node.js versions. Workflow
+  YAML is executed locally by `act`; do not copy its commands into a second local
+  checklist or bypass a failing workflow step. Artifact upload is a hosted-only
+  transfer; the local runner retains the corresponding diagnostics locally.
+- Qualify installation, packaging, build, and CI changes in a clean Linux checkout
+  with freshly installed locked dependencies and an empty npm cache. Exercise the
+  supported Node.js lines selected by CI. Existing build output, workspace links,
+  user npm configuration, credentials, and a warm cache must not satisfy a clean
+  installation check. Incremental checks remain useful during development but do
+  not establish this clean-environment result.
+- Complete one failure-discovery pass over the applicable scope. Retain every
+  failure, group repairs by cause, run focused checks while repairing, and execute
+  the complete selected scope after the fixes are integrated. Do not push each
+  individual fix merely to find the next failure in hosted CI.
+- Keep full sanitized command logs and structured regression results for both
+  local and hosted execution, including failed stages. Preserve the actual exit
+  status. Record candidate, environment, command, result, and any unexecuted scope;
+  do not substitute a log tail or an earlier candidate's result.
+- Reuse valid evidence when the exercised implementation, configuration, and
+  artifact are unchanged. A changed workflow needs its affected checks refreshed;
+  it does not invalidate unrelated runtime evidence. Keep test selection explicit
+  so ordinary engineering CI cannot start the separately authorized performance
+  workflow before functional acceptance.
+- Verify real hosted identity, package publication, provenance, and external
+  deployment permissions in their release stage. Local engineering checks must
+  precede those operations; local simulations cannot prove those external facts.
+
+When local and hosted behavior differs, identify the missing environment input or
+check, fix the shared workflow, reproduce the failure locally, and verify the
+repair there before the next submission. Maintain this process with the product;
+do not leave a one-off troubleshooting script as its implementation.
+
+Install Docker and [act](https://nektosact.com/installation/index.html), commit the
+candidate locally, then run:
+
+```bash
+npm run ci:local -- --list
+npm run ci:local
+```
+
+The runner checks the committed candidate in a disposable source checkout. It
+executes the actual GitHub jobs for branch policy, regression, Node 22, Gateway,
+distribution, package portability, and controlled sandbox in fresh Ubuntu 24.04
+containers with the hosted runner's amd64 architecture (emulated on other host
+architectures). Each job installs its
+own dependencies without the user's npm configuration or a restored npm cache.
+No publishing workflow or repository credential is supplied. To diagnose a
+specific check, select its name, for example `npm run ci:local -- gateway`.
+The branch check uses the actual source branch and origin repository. Its default
+target is `nightly`; use `--base stable` or `--base release` for a promotion PR.
+The complete failure inventory and sanitized logs are in `build/local-ci/`.
+An untracked file is not part of the candidate; stage and commit intended source
+before verification. Private untracked evidence remains outside the snapshot.
+
+Stable audit, functional, security, and deployment engineering checks retain
+their existing local commands and execution order. Run them locally before
+promoting the candidate that hosted release jobs will consume. `act` does not
+prove hosted identity, registry writes, or production deployment permissions.
 
 ## Public npm Products
 
