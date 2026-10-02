@@ -194,6 +194,32 @@ owner maintains support, security and candidate validity. Operational and
 recovery procedures remain in their owning sections above rather than being
 copied here.
 
+## npm Installation
+
+The two npm products are `meshrix.js` (the complete platform and bundled MCP
+connector) and `@meshrix/gateway` (the standalone Gateway API). After publication:
+
+```bash
+npm install --global meshrix.js
+meshrix-server --with-ui --data-dir <server-data-dir>
+```
+
+[npm 12 requires an explicit install-script policy](https://docs.npmjs.com/cli/install/#allow-scripts). For its global installation,
+allow only the native SQLite dependency:
+
+```bash
+npm install --global --allow-scripts=better-sqlite3 meshrix.js
+```
+
+For a project-scoped npm 12 installation, put
+`"allowScripts": { "better-sqlite3": true }` in the consumer's `package.json`
+before installing `meshrix.js`. The Gateway package does not need native install
+scripts. Do not enable all dependency scripts as an installation workaround.
+The source checkout declares its required native runtime, profiler build and
+optional filesystem watcher scripts in the root `allowScripts` policy. Keep
+that policy aligned with dependency admission when changing those dependencies.
+The release workflow uses the separate exact npm CLI pin in the release definition.
+
 ## Local Startup
 
 One-click start, stop, and restart:

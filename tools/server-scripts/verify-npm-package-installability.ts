@@ -123,7 +123,8 @@ function npmArgs(args?: any) : any {
 export async function prepareInstallabilityConsumer({
   consumerDirectory,
   packageRecord,
-  devDependencies = {}
+  devDependencies = {},
+  allowScripts = packageRecord?.name === "meshrix.js" ? { "better-sqlite3": true } : {}
 }: Record<string, any>) : Promise<void> {
   const name: any = String(packageRecord?.name || "");
   const version: any = String(packageRecord?.version || "");
@@ -137,6 +138,7 @@ export async function prepareInstallabilityConsumer({
       version: "0.0.0",
       type: "module",
       dependencies: { [name]: version },
+      allowScripts,
       ...(Object.keys(devDependencies).length > 0 ? { devDependencies } : {})
     }, null, 2)}\n`,
     "utf8"
