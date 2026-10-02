@@ -56,18 +56,17 @@ if (transport === "http") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(jsonRpc(message, result));
   });
+  process.on("SIGTERM", () => server.close(() => process.exit(0)));
+  process.on("SIGINT", () => server.close(() => process.exit(0)));
   server.listen(0, "127.0.0.1", () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Synthetic peer listener has no TCP address.");
     publishFile(markerFile, JSON.stringify({ port: address.port }), { mode: 0o600 });
     publishFile(`${markerFile}.ready`, "ready", { mode: 0o600 });
   });
-  process.on("SIGTERM", () => server.close(() => process.exit(0)));
-  process.on("SIGINT", () => server.close(() => process.exit(0)));
 } else if (transport === "stdio") {
   let buffer = "";
   const inputClosed = new Promise((resolvePromise) => process.stdin.once("end", resolvePromise));
-  publishFile(`${markerFile}.pid`, String(process.pid), { mode: 0o600 });
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (chunk) => {
     buffer += chunk;
@@ -88,7 +87,6 @@ if (transport === "http") {
       if (message.id !== undefined) process.stdout.write(`${jsonRpc(message, result)}\n`);
     }
   });
-  process.stdin.once("end", () => { publishFile(`${markerFile}.closed`, "closed", { mode: 0o600 }); });
   process.on("SIGTERM", () => { publishFile(`${markerFile}.closed`, "closed", { mode: 0o600 }); process.exit(0); });
   process.on("SIGINT", () => { publishFile(`${markerFile}.closed`, "closed", { mode: 0o600 }); process.exit(0); });
 } else {

@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { modernHttpRequest, modernRequestMessage } from "../support.ts";
+import { assertPeerReady, readHttpPeerPort } from "./cli-fixture-readiness.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const cliEntry = join(repo, "apps/mcp-gateway-installer/src/cli.ts");
@@ -34,6 +35,15 @@ async function stopChild(child: ChildProcess): Promise<void> {
   }
 }
 
+async function stopStartedClis(...clis: Array<StartedCli | undefined>): Promise<void> {
+  const outcomes = await Promise.allSettled(clis.filter((cli): cli is StartedCli => cli !== undefined).map(async (cli) => {
+    try { await stopChild(cli.child); }
+    finally { cli.lines.close(); }
+  }));
+  const failures = outcomes.flatMap((outcome) => outcome.status === "rejected" ? [outcome.reason] : []);
+  if (failures.length > 0) throw new AggregateError(failures, "One or more isolated CLI children did not close cleanly.");
+}
+
 afterEach(async () => { await Promise.all(children.splice(0).map(stopChild)); });
 
 function withTestWatchdog<T>(promise: Promise<T>, message: string, timeoutMs = 8_000): Promise<T> {
@@ -44,11 +54,19 @@ function withTestWatchdog<T>(promise: Promise<T>, message: string, timeoutMs = 8
   ]).finally(() => { if (timer) clearTimeout(timer); });
 }
 
-async function waitForFile(path: string, message: string, timeoutMs = 8_000): Promise<string> {
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function waitForFile(path: string, message: string, timeoutMs = 8_000, owner?: ChildProcess): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try { return await readFile(path, "utf8"); }
-    catch { await new Promise((resolve) => setTimeout(resolve, 10)); }
+    catch (error) {
+      if (!isMissingFile(error)) throw error;
+      if (owner && (owner.exitCode !== null || owner.signalCode !== null)) throw new Error(`${message} The owning peer exited before publishing it.`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
   }
   throw new Error(message);
 }
@@ -58,8 +76,9 @@ async function startHttpPeer(directory: string, name: string) {
   const markerFile = join(directory, `${name}.peer`);
   const peer = spawn(process.execPath, [peerEntry, "http", effectFile, markerFile], { stdio: ["ignore", "ignore", "ignore"] });
   children.push(peer);
-  const ready = JSON.parse(await waitForFile(markerFile, "The isolated HTTP peer did not bind.")) as { port: number };
-  return { peer, effectFile, markerFile, endpoint: `http://127.0.0.1:${ready.port}/mcp` };
+  assertPeerReady(await waitForFile(`${markerFile}.ready`, "The isolated HTTP peer did not finish startup.", 8_000, peer));
+  const port = readHttpPeerPort(await waitForFile(markerFile, "The isolated HTTP peer did not bind.", 8_000, peer));
+  return { peer, effectFile, markerFile, endpoint: `http://127.0.0.1:${port}/mcp` };
 }
 
 async function writeConfig(directory: string, service: Record<string, unknown>, name = "gateway.json"): Promise<string> {
@@ -102,7 +121,18 @@ function spawnCli(config: string, dataRoot: string, transport: "http" | "stdio" 
 
 async function nextCliLine(cli: StartedCli): Promise<string> {
   if (cli.queuedLines.length > 0) return cli.queuedLines.shift()!;
-  return withTestWatchdog(new Promise<string>((resolve, reject) => cli.lineWaiters.push({ resolve, reject })), "The isolated CLI response did not arrive.");
+  let waiter: StartedCli["lineWaiters"][number] | undefined;
+  const pending = new Promise<string>((resolve, reject) => {
+    waiter = { resolve, reject };
+    cli.lineWaiters.push(waiter);
+  });
+  try { return await withTestWatchdog(pending, "The isolated CLI response did not arrive."); }
+  finally {
+    if (waiter) {
+      const index = cli.lineWaiters.indexOf(waiter);
+      if (index >= 0) cli.lineWaiters.splice(index, 1);
+    }
+  }
 }
 
 async function httpEndpoint(cli: StartedCli): Promise<string> {
@@ -119,8 +149,7 @@ async function httpEndpoint(cli: StartedCli): Promise<string> {
 }
 
 async function stdioReady(cli: StartedCli, marker: string): Promise<void> {
-  await waitForFile(`${marker}.ready`, "The isolated stdio peer did not finish MCP discovery.");
-  if (cli.child.exitCode !== null || cli.child.signalCode !== null) throw new Error("The isolated stdio CLI exited during startup.");
+  assertPeerReady(await waitForFile(`${marker}.ready`, "The isolated stdio peer did not finish MCP discovery.", 8_000, cli.child));
 }
 
 async function nextLine(cli: StartedCli): Promise<Record<string, unknown>> {
@@ -137,13 +166,6 @@ function intentRows(filePath: string): Array<{ intent_id: string; state: string 
   const db = new Database(filePath, { readonly: true, fileMustExist: true });
   try { return db.prepare("SELECT intent_id, state FROM gateway_execution_intents ORDER BY intent_id").all() as Array<{ intent_id: string; state: string }>; }
   finally { db.close(); }
-}
-
-async function killSyntheticPid(marker: string): Promise<void> {
-  try {
-    const pid = Number(await readFile(`${marker}.pid`, "utf8"));
-    if (Number.isSafeInteger(pid) && pid > 0) process.kill(pid, "SIGTERM");
-  } catch { /* the owned child may already have exited */ }
 }
 
 describe("standalone CLI durable non-read intent owner", () => {
@@ -172,8 +194,8 @@ describe("standalone CLI durable non-read intent owner", () => {
       expect(statSync(dirname(filePath)).mode & 0o077).toBe(0);
       expect(await readFile(peer.effectFile, "utf8")).toBe("2");
     } finally {
-      if (cli) { await stopChild(cli.child); cli.lines.close(); }
-      await rm(directory, { recursive: true, force: true });
+      try { await stopStartedClis(cli); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   }, 25_000);
 
@@ -200,9 +222,8 @@ describe("standalone CLI durable non-read intent owner", () => {
       expect(intentRows(join(dataRoot, "gateway", "execution.sqlite"))).toMatchObject([{ state: "dispatch_started" }]);
       expect(await readFile(peer.effectFile, "utf8")).toBe("1");
     } finally {
-      if (first) { await stopChild(first.child); first.lines.close(); }
-      if (restarted) { await stopChild(restarted.child); restarted.lines.close(); }
-      await rm(directory, { recursive: true, force: true });
+      try { await stopStartedClis(first, restarted); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   }, 25_000);
 
@@ -246,8 +267,8 @@ describe("standalone CLI durable non-read intent owner", () => {
       expect(retainedOwner).toMatchObject({ status: 200, body: { result: { resultType: "complete", structuredContent: { effectCount: 2 } } } });
       expect(await readFile(peerA.effectFile, "utf8")).toBe("2");
     } finally {
-      for (const cli of [unsafeCli, second, first]) if (cli) { await stopChild(cli.child); cli.lines.close(); }
-      await rm(directory, { recursive: true, force: true });
+      try { await stopStartedClis(unsafeCli, second, first); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   }, 30_000);
 
@@ -274,9 +295,8 @@ describe("standalone CLI durable non-read intent owner", () => {
       expect(await waitForFile(`${firstMarker}.effect`, "The stdio peer did not persist its held effect.")).toBe("2");
       first.child.kill("SIGKILL");
       await exitOf(first.child);
-      await withTestWatchdog(waitForFile(`${firstMarker}.closed`, "The owned stdio peer did not close after its parent exited."), "The controlled stdio peer did not close.");
+      expect(await waitForFile(`${firstMarker}.closed`, "The owned stdio peer did not close after its parent exited.")).toBe("closed");
       expect(await readFile(effectFile, "utf8")).toBe("2");
-      await killSyntheticPid(firstMarker);
 
       await writeFile(config, JSON.stringify({ profile: "local", services: [{ serviceId: "synthetic", transport: "stdio", command: process.execPath,
         args: [peerEntry, "stdio", effectFile, secondMarker], toolRisk: { synthetic: "safe_write" } }] }));
@@ -287,10 +307,8 @@ describe("standalone CLI durable non-read intent owner", () => {
       await nextLine(restarted);
       expect(await readFile(effectFile, "utf8")).toBe("2");
     } finally {
-      for (const cli of [first, restarted]) if (cli) { await stopChild(cli.child); cli.lines.close(); }
-      await killSyntheticPid(firstMarker);
-      await killSyntheticPid(secondMarker);
-      await rm(directory, { recursive: true, force: true });
+      try { await stopStartedClis(first, restarted); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   }, 30_000);
 });

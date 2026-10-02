@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchRpc, StdioPeerTransport } from "../../../../apps/mcp-gateway-installer/src/upstream-transport.ts";
+import { assertPeerReady, readHttpPeerPort } from "./cli-fixture-readiness.ts";
+
+const sleepForFilePoll = setTimeout;
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -10,10 +13,18 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-async function waitForFile(path: string): Promise<string> {
-  for (let turn = 0; turn < 10_000; turn += 1) {
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function waitForFile(path: string, timeoutMs = 5_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     try { return await readFile(path, "utf8"); }
-    catch { await new Promise<void>((resolve) => setImmediate(resolve)); }
+    catch (error) {
+      if (!isMissingFile(error)) throw error;
+      await new Promise((resolve) => sleepForFilePoll(resolve, 10));
+    }
   }
   throw new Error("The controlled stdio peer did not write its fixture marker.");
 }
@@ -26,12 +37,25 @@ function withTestWatchdog<T>(promise: Promise<T>, timeoutMs: number): Promise<T>
   ]).finally(() => { if (timer) clearTimeout(timer); });
 }
 
+async function assertTransportPeerReady(transport: StdioPeerTransport, marker: string, requestId: string): Promise<void> {
+  const readiness = await withTestWatchdog(transport.send({ request: { jsonrpc: "2.0", id: requestId, method: "fixture/ready" } }), 5_000);
+  expect(readiness.body).toMatchObject({ id: requestId, result: { ready: true } });
+  assertPeerReady(await waitForFile(`${marker}.ready`));
+}
+
 const controlledPeer = `
 const fs = require("node:fs");
 const marker = process.argv[1];
-fs.writeFileSync(marker + ".pid", String(process.pid));
+function publishFile(target, value) {
+  const pending = target + ".writing";
+  fs.writeFileSync(pending, value);
+  fs.renameSync(pending, target);
+}
+function reply(message, result) {
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }) + "\\n");
+}
 let buffered = "";
-let current;
+const held = new Map();
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => {
   buffered += chunk;
@@ -40,32 +64,32 @@ process.stdin.on("data", chunk => {
     const line = buffered.slice(0, boundary);
     buffered = buffered.slice(boundary + 1);
     if (!line) continue;
-    current = JSON.parse(line);
-    if (current.id !== undefined) fs.writeFileSync(marker + ".request", String(current.id));
-  }
-});
-process.on("SIGUSR1", () => {
-  if (!current || current.id === undefined) return;
-  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: current.id, result: { source: "controlled-peer" } }) + "\\n");
-  current = undefined;
-});
-process.on("SIGUSR2", () => process.exit(7));
-process.on("SIGTERM", () => process.exit(0));
-`;
-
-const signalTerminatedPeer = `
-const fs = require("node:fs");
-const marker = process.argv[1];
-fs.writeFileSync(marker + ".pid", String(process.pid));
-let buffered = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", chunk => {
-  buffered += chunk;
-  let boundary;
-  while ((boundary = buffered.indexOf("\\n")) >= 0) {
-    const line = buffered.slice(0, boundary);
-    buffered = buffered.slice(boundary + 1);
-    if (line) fs.writeFileSync(marker + ".request", JSON.parse(line).id);
+    const message = JSON.parse(line);
+    if (message.id === undefined) continue;
+    if (message.method === "fixture/ready") {
+      publishFile(marker + ".ready", "ready");
+      reply(message, { ready: true });
+      continue;
+    }
+    if (message.method === "fixture/release") {
+      const requestId = String(message.params?.requestId ?? "");
+      const pending = held.get(requestId);
+      if (pending) {
+        held.delete(requestId);
+        reply(pending, { source: "controlled-peer" });
+      }
+      reply(message, { released: Boolean(pending) });
+      continue;
+    }
+    if (message.method === "fixture/signal-exit") {
+      if (message.params?.signal !== "SIGUSR2" && message.params?.signal !== "SIGTERM") throw new Error("Unsupported fixture self-signal.");
+      process.kill(process.pid, message.params.signal);
+      continue;
+    }
+    held.set(String(message.id), message);
+    const pending = marker + ".request.writing";
+    fs.writeFileSync(pending, String(message.id));
+    fs.renameSync(pending, marker + ".request");
   }
 });
 `;
@@ -73,7 +97,11 @@ process.stdin.on("data", chunk => {
 const floodAfterInvalidPeer = `
 const fs = require("node:fs");
 const marker = process.argv[1];
-fs.writeFileSync(marker + ".pid", String(process.pid));
+function publishFile(target, value) {
+  const pending = target + ".writing";
+  fs.writeFileSync(pending, value);
+  fs.renameSync(pending, target);
+}
 let buffered = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => {
@@ -83,11 +111,20 @@ process.stdin.on("data", chunk => {
     const line = buffered.slice(0, boundary);
     buffered = buffered.slice(boundary + 1);
     if (!line) continue;
+    const message = JSON.parse(line);
+    if (message.method === "fixture/ready") {
+      publishFile(marker + ".ready", "ready");
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { ready: true } }) + "\\n");
+      continue;
+    }
+    const pending = marker + ".request.writing";
+    fs.writeFileSync(pending, String(message.id));
+    fs.renameSync(pending, marker + ".request");
     process.stdout.write("not-json\\n");
     setInterval(() => process.stdout.write("x".repeat(32 * 1024)), 10);
   }
 });
-process.on("SIGTERM", () => fs.writeFileSync(marker + ".term", "seen"));
+process.on("SIGTERM", () => publishFile(marker + ".term", "seen"));
 `;
 
 afterEach(() => {
@@ -97,6 +134,16 @@ afterEach(() => {
 });
 
 describe("standalone upstream transport lifetimes", () => {
+  it("accepts only complete fixture readiness records and valid HTTP listener ports", () => {
+    expect(() => assertPeerReady("ready")).not.toThrow();
+    for (const value of ["", "rea", "ready\n"]) expect(() => assertPeerReady(value)).toThrow();
+
+    expect(readHttpPeerPort('{"port":4123}')).toBe(4123);
+    for (const value of ["", "{", '{"port":0}', '{"port":65536}', '{"port":4123,"host":"127.0.0.1"}']) {
+      expect(() => readHttpPeerPort(value)).toThrow();
+    }
+  });
+
   it("keeps an HTTP call pending beyond the retired operation limit and completes it normally", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const response = deferred<Response>();
@@ -143,8 +190,11 @@ describe("standalone upstream transport lifetimes", () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-upstream-lifetime-"));
     const marker = join(directory, "peer");
     const transport = new StdioPeerTransport({ command: process.execPath, args: ["-e", controlledPeer, marker] });
+    let closePromise: Promise<void> | undefined;
+    const closeTransport = () => closePromise ??= transport.close();
     try {
-      const pid = Number(await waitForFile(`${marker}.pid`));
+      await assertTransportPeerReady(transport, marker, "fixture-ready");
+
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       let settled = false;
       const pending = transport.send({ request: { jsonrpc: "2.0", id: "long-stdio-call", method: "tools/call" } }).then((value) => {
@@ -155,18 +205,20 @@ describe("standalone upstream transport lifetimes", () => {
 
       await vi.advanceTimersByTimeAsync(30_001);
       expect(settled).toBe(false);
-      process.kill(pid, "SIGUSR1");
+      const release = transport.send({ request: { jsonrpc: "2.0", id: "release-long-call", method: "fixture/release", params: { requestId: "long-stdio-call" } } });
+      await expect(release).resolves.toMatchObject({ body: { id: "release-long-call", result: { released: true } } });
       await expect(pending).resolves.toMatchObject({ status: 200, body: { id: "long-stdio-call", result: { source: "controlled-peer" } } });
 
       await rm(`${marker}.request`, { force: true });
       const reusedId = transport.send({ request: { jsonrpc: "2.0", id: "long-stdio-call", method: "tools/call" } });
       await waitForFile(`${marker}.request`);
-      process.kill(pid, "SIGUSR1");
+      const releaseReused = transport.send({ request: { jsonrpc: "2.0", id: "release-reused-call", method: "fixture/release", params: { requestId: "long-stdio-call" } } });
+      await expect(releaseReused).resolves.toMatchObject({ body: { id: "release-reused-call", result: { released: true } } });
       await expect(reusedId).resolves.toMatchObject({ status: 200, body: { id: "long-stdio-call" } });
     } finally {
       vi.useRealTimers();
-      await transport.close();
-      await rm(directory, { recursive: true, force: true });
+      try { await closeTransport(); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   });
 
@@ -174,8 +226,11 @@ describe("standalone upstream transport lifetimes", () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-upstream-abort-"));
     const marker = join(directory, "peer");
     const transport = new StdioPeerTransport({ command: process.execPath, args: ["-e", controlledPeer, marker] });
+    let closePromise: Promise<void> | undefined;
+    const closeTransport = () => closePromise ??= transport.close();
     try {
-      const pid = Number(await waitForFile(`${marker}.pid`));
+      await assertTransportPeerReady(transport, marker, "fixture-ready");
+
       const controller = new AbortController();
       const addListener = vi.spyOn(controller.signal, "addEventListener");
       const removeListener = vi.spyOn(controller.signal, "removeEventListener");
@@ -197,52 +252,89 @@ describe("standalone upstream transport lifetimes", () => {
       await rm(`${marker}.request`, { force: true });
       const retry = transport.send({ request });
       await waitForFile(`${marker}.request`);
-      process.kill(pid, "SIGUSR1");
+      const release = transport.send({ request: { jsonrpc: "2.0", id: "release-retry", method: "fixture/release", params: { requestId: "reusable-id" } } });
+      await expect(release).resolves.toMatchObject({ body: { id: "release-retry", result: { released: true } } });
       await expect(retry).resolves.toMatchObject({ status: 200, body: { id: "reusable-id" } });
     } finally {
-      await transport.close();
-      await rm(directory, { recursive: true, force: true });
+      try { await closeTransport(); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   });
 
-  it("settles pending stdio requests and removes their listeners when the peer exits", async () => {
+  it("keeps a ready peer isolated when a concurrent peer exits before readiness", async () => {
+    const survivorDirectory = await mkdtemp(join(tmpdir(), "meshrix-upstream-survivor-"));
+    const failedDirectory = await mkdtemp(join(tmpdir(), "meshrix-upstream-early-exit-"));
+    const survivorMarker = join(survivorDirectory, "peer");
+    const failedMarker = join(failedDirectory, "peer");
+    const survivor = new StdioPeerTransport({ command: process.execPath, args: ["-e", controlledPeer, survivorMarker] });
+    const failed = new StdioPeerTransport({ command: process.execPath, args: ["-e", "process.exit(9)"] });
+    let closeSurvivorPromise: Promise<void> | undefined;
+    let closeFailedPromise: Promise<void> | undefined;
+    const closeSurvivor = () => closeSurvivorPromise ??= survivor.close();
+    const closeFailed = () => closeFailedPromise ??= failed.close();
+    try {
+      await assertTransportPeerReady(survivor, survivorMarker, "survivor-ready");
+      await expect(assertTransportPeerReady(failed, failedMarker, "early-exit-ready")).rejects.toMatchObject({ code: "gateway_stdio_lost" });
+
+      const survivorCall = survivor.send({ request: { jsonrpc: "2.0", id: "survivor-call", method: "tools/call" } });
+      await waitForFile(`${survivorMarker}.request`);
+      const release = survivor.send({ request: { jsonrpc: "2.0", id: "survivor-release", method: "fixture/release", params: { requestId: "survivor-call" } } });
+      await expect(release).resolves.toMatchObject({ body: { id: "survivor-release", result: { released: true } } });
+      await expect(survivorCall).resolves.toMatchObject({ body: { id: "survivor-call", result: { source: "controlled-peer" } } });
+    } finally {
+      try { await Promise.all([closeSurvivor(), closeFailed()]); }
+      finally { await Promise.all([rm(survivorDirectory, { recursive: true, force: true }), rm(failedDirectory, { recursive: true, force: true })]); }
+    }
+  });
+
+  it("settles pending stdio requests when the peer exits on its own signal", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-upstream-peer-failure-"));
     const marker = join(directory, "peer");
     const transport = new StdioPeerTransport({ command: process.execPath, args: ["-e", controlledPeer, marker] });
+    let closePromise: Promise<void> | undefined;
+    const closeTransport = () => closePromise ??= transport.close();
     try {
-      const pid = Number(await waitForFile(`${marker}.pid`));
+      await assertTransportPeerReady(transport, marker, "fixture-ready");
+
       const controller = new AbortController();
       const addListener = vi.spyOn(controller.signal, "addEventListener");
       const removeListener = vi.spyOn(controller.signal, "removeEventListener");
       const pending = transport.send({ request: { jsonrpc: "2.0", id: "peer-failure", method: "tools/call" }, signal: controller.signal });
+      const pendingError = expect(pending).rejects.toMatchObject({ code: "gateway_stdio_lost" });
       await waitForFile(`${marker}.request`);
-      process.kill(pid, "SIGUSR2");
+      const signalExit = transport.send({ request: { jsonrpc: "2.0", id: "signal-peer", method: "fixture/signal-exit", params: { signal: "SIGUSR2" } } });
+      const signalError = expect(signalExit).rejects.toMatchObject({ code: "gateway_stdio_lost" });
 
-      await expect(pending).rejects.toMatchObject({ code: "gateway_stdio_lost" });
+      await Promise.all([pendingError, signalError]);
       const attachedAbort = addListener.mock.calls[0]?.[1];
       expect(typeof attachedAbort).toBe("function");
       expect(removeListener).toHaveBeenCalledWith("abort", attachedAbort);
       await expect(transport.send({ request: { jsonrpc: "2.0", id: "after-peer-failure", method: "tools/call" } })).rejects.toMatchObject({ code: "gateway_stdio_lost" });
     } finally {
-      await transport.close();
-      await rm(directory, { recursive: true, force: true });
+      try { await closeTransport(); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   });
 
   it("treats signalCode as exit and does not wait for a second exit event", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-upstream-signal-exit-"));
     const marker = join(directory, "peer");
-    const transport = new StdioPeerTransport({ command: process.execPath, args: ["-e", signalTerminatedPeer, marker] });
+    const transport = new StdioPeerTransport({ command: process.execPath, args: ["-e", controlledPeer, marker] });
+    let closePromise: Promise<void> | undefined;
+    const closeTransport = () => closePromise ??= transport.close();
     try {
-      const pid = Number(await waitForFile(`${marker}.pid`));
+      await assertTransportPeerReady(transport, marker, "fixture-ready");
+
       const pending = transport.send({ request: { jsonrpc: "2.0", id: "signal-exit", method: "tools/call" } });
+      const pendingError = expect(pending).rejects.toMatchObject({ code: "gateway_stdio_lost" });
       await waitForFile(`${marker}.request`);
-      process.kill(pid, "SIGTERM");
-      await expect(pending).rejects.toMatchObject({ code: "gateway_stdio_lost" });
-      await expect(withTestWatchdog(transport.close(), 1_500)).resolves.toBeUndefined();
+      const signalExit = transport.send({ request: { jsonrpc: "2.0", id: "signal-peer", method: "fixture/signal-exit", params: { signal: "SIGTERM" } } });
+      const signalError = expect(signalExit).rejects.toMatchObject({ code: "gateway_stdio_lost" });
+      await Promise.all([pendingError, signalError]);
+      await expect(withTestWatchdog(closeTransport(), 1_500)).resolves.toBeUndefined();
     } finally {
-      await withTestWatchdog(transport.close(), 1_500).catch(() => undefined);
-      await rm(directory, { recursive: true, force: true });
+      try { await closeTransport(); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   });
 
@@ -250,15 +342,20 @@ describe("standalone upstream transport lifetimes", () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-upstream-invalid-output-"));
     const marker = join(directory, "peer");
     const transport = new StdioPeerTransport({ command: process.execPath, args: ["-e", floodAfterInvalidPeer, marker] });
+    let closePromise: Promise<void> | undefined;
+    const closeTransport = () => closePromise ??= transport.close();
     try {
+      await assertTransportPeerReady(transport, marker, "fixture-ready");
+
       const pending = transport.send({ request: { jsonrpc: "2.0", id: "invalid-output", method: "tools/call" } });
-      await waitForFile(`${marker}.pid`);
-      await expect(pending).rejects.toMatchObject({ code: "gateway_stdio_invalid" });
+      const pendingError = expect(pending).rejects.toMatchObject({ code: "gateway_stdio_invalid" });
+      await waitForFile(`${marker}.request`);
+      await pendingError;
       expect(await withTestWatchdog(waitForFile(`${marker}.term`), 1_000)).toBe("seen");
-      await expect(withTestWatchdog(transport.close(), 2_500)).resolves.toBeUndefined();
+      await expect(withTestWatchdog(closeTransport(), 2_500)).resolves.toBeUndefined();
     } finally {
-      await withTestWatchdog(transport.close(), 2_500).catch(() => undefined);
-      await rm(directory, { recursive: true, force: true });
+      try { await closeTransport(); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   });
 });
