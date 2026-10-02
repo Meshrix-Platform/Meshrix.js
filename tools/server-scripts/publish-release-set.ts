@@ -37,12 +37,6 @@ const RAW_NPM_TOKEN_ENVIRONMENT_NAMES: readonly any[] = Object.freeze([
   "NPM_CONFIG_AUTH",
   "npm_config_auth"
 ]);
-const NPM_CONFIG_PATH_ENVIRONMENT_NAMES: readonly any[] = Object.freeze([
-  "NPM_CONFIG_USERCONFIG",
-  "npm_config_userconfig",
-  "NPM_CONFIG_GLOBALCONFIG",
-  "npm_config_globalconfig"
-]);
 const PACKAGE_NAME_PATTERN: any =
   /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
 const INTEGRITY_PATTERN: any = /^sha512-[A-Za-z0-9+/]+={0,2}$/u;
@@ -322,7 +316,7 @@ export async function discoverReleaseSet({ rootDir = process.cwd() }: Record<str
   for (const directory of workspaceDirectories) {
     const packageRecord: any = await readManifest(repositoryRoot, directory);
     if (packageRecord.manifest.private === true) {
-      privatePackages.push(packageRecord);
+      privatePackages.push({ ...packageRecord, version: packageRecord.manifest.version });
       continue;
     }
     const packageVersion: any = normalizeReleaseVersion(packageRecord.manifest.version);
@@ -345,7 +339,7 @@ export async function discoverReleaseSet({ rootDir = process.cwd() }: Record<str
 
   const ordered: any = topologicallyOrderReleaseSet(candidates, { privatePackages, version });
 
-  return { repositoryRoot, version, packages: ordered };
+  return { repositoryRoot, version, packages: ordered, privatePackages };
 }
 
 export function releaseTagForVersion(version?: any) : any {
@@ -494,13 +488,9 @@ function isolatedNpmEnvironment(environment?: any) : any {
   const result: any = {};
   for (const [name, value] of Object.entries(environment || {})) {
     if (isSensitiveNpmEnvironmentName(name)) continue;
-    if (NPM_CONFIG_PATH_ENVIRONMENT_NAMES.some((candidate?: any) : any => (
-      candidate.toLowerCase() === name.toLowerCase()
-    ))) continue;
+    if (String(name).toLowerCase().startsWith("npm_config_")) continue;
     result[name] = value;
   }
-  result.npm_config_userconfig = os.devNull;
-  result.npm_config_globalconfig = os.devNull;
   return result;
 }
 
@@ -518,8 +508,20 @@ export function createNpmRunner({
         "A bootstrap credential may only be used by an npm publication mutation."
       );
     }
+    let configDirectory: any;
     try {
-      const childEnvironment: any = { ...safeEnvironment };
+      configDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-config-"));
+      const userConfigPath: any = path.join(configDirectory, "user.npmrc");
+      const globalConfigPath: any = path.join(configDirectory, "global.npmrc");
+      await Promise.all([
+        fs.writeFile(userConfigPath, "", { encoding: "utf8", mode: 0o600 }),
+        fs.writeFile(globalConfigPath, "", { encoding: "utf8", mode: 0o600 })
+      ]);
+      const childEnvironment: any = {
+        ...safeEnvironment,
+        npm_config_userconfig: userConfigPath,
+        npm_config_globalconfig: globalConfigPath
+      };
       if (authToken && mutating) childEnvironment.NODE_AUTH_TOKEN = authToken;
       const result: any = await exec(
         invocation.command,
@@ -539,6 +541,8 @@ export function createNpmRunner({
         stdout: String(error?.stdout || ""),
         stderr: String(error?.stderr || "")
       };
+    } finally {
+      if (configDirectory) await fs.rm(configDirectory, { recursive: true, force: true }).catch(() : any => undefined);
     }
   };
 }
@@ -548,7 +552,7 @@ function assertSuccessfulResult(result?: any, code?: any, message?: any) : any {
   return result;
 }
 
-function parsePackArtifact(stdout?: any, packageRecord?: any) : any {
+function parsePackArtifact(stdout?: any, packageRecord?: any, expectedBundles?: any[]) : any {
   let artifacts: any;
   try {
     artifacts = parseNpmPackJson(stdout);
@@ -580,7 +584,141 @@ function parsePackArtifact(stdout?: any, packageRecord?: any) : any {
       "npm pack returned package metadata that does not match the release set."
     );
   }
+  if (expectedBundles && expectedBundles.some((name?: any) : any => (
+    !Array.isArray(artifact.bundled) || !artifact.bundled.includes(name)
+  ))) {
+    throw publicationError(
+      "release_set_pack_bundle_missing",
+      "npm pack did not include every declared private first-party bundle."
+    );
+  }
   return { filename, integrity };
+}
+
+function parsePackFilePaths(stdout?: any, packageRecord?: any) : any[] {
+  let artifacts: any;
+  try {
+    artifacts = parseNpmPackJson(stdout);
+  } catch {
+    throw publicationError(
+      "release_set_bundle_file_list_invalid",
+      "npm pack did not return a valid package file list."
+    );
+  }
+  const artifact: any = artifacts?.[0];
+  if (
+    artifacts.length !== 1 ||
+    artifact?.name !== packageRecord.name ||
+    artifact?.version !== packageRecord.version ||
+    !Array.isArray(artifact.files)
+  ) {
+    throw publicationError(
+      "release_set_bundle_file_list_invalid",
+      "npm pack did not return a valid package file list."
+    );
+  }
+
+  const paths: any[] = [];
+  const seen: any = new Set<any>();
+  for (const file of artifact.files) {
+    const rawPath: any = String(file?.path || "").replace(/\\/gu, "/");
+    const relativePath: any = path.posix.normalize(rawPath);
+    if (
+      !rawPath ||
+      path.posix.isAbsolute(rawPath) ||
+      relativePath !== rawPath ||
+      relativePath === "." ||
+      relativePath === ".." ||
+      relativePath.startsWith("../") ||
+      relativePath.split("/").includes("node_modules") ||
+      seen.has(relativePath)
+    ) {
+      throw publicationError(
+        "release_set_bundle_file_list_invalid",
+        "npm pack returned an unsafe or duplicate package file path."
+      );
+    }
+    seen.add(relativePath);
+    paths.push(relativePath);
+  }
+  if (!seen.has("package.json")) {
+    throw publicationError(
+      "release_set_bundle_file_list_invalid",
+      "npm pack did not include the required package manifest."
+    );
+  }
+  return paths;
+}
+
+async function copyNpmPackageFiles(packageRecord?: any, destination?: any, commandDirectory?: any, runner?: any) : Promise<any> {
+  const sourceDirectory: any = path.resolve(packageRecord.absoluteDirectory);
+  const listing: any = assertSuccessfulResult(
+    await runner(
+      ["pack", "--dry-run", "--json", "--ignore-scripts", sourceDirectory],
+      { cwd: commandDirectory }
+    ),
+    "release_set_bundle_file_list_failed",
+    "A declared private bundle could not be inspected with npm pack."
+  );
+  const filePaths: any[] = parsePackFilePaths(listing.stdout, packageRecord);
+  await fs.mkdir(destination, { recursive: true });
+  for (const filePath of filePaths) {
+    const sourcePath: any = path.resolve(sourceDirectory, ...filePath.split("/"));
+    const relativeSource: any = path.relative(sourceDirectory, sourcePath);
+    if (
+      !relativeSource ||
+      relativeSource.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relativeSource)
+    ) {
+      throw publicationError(
+        "release_set_bundle_file_list_invalid",
+        "npm pack returned a file outside the declared package."
+      );
+    }
+    const targetPath: any = path.join(destination, ...filePath.split("/"));
+    let sourceStat: any;
+    try {
+      sourceStat = await fs.lstat(sourcePath);
+    } catch {
+      throw publicationError(
+        "release_set_bundle_source_file_missing",
+        "A file selected by npm pack is missing from the declared package."
+      );
+    }
+    if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
+      throw publicationError(
+        "release_set_bundle_source_file_invalid",
+        "npm pack selected a package entry that is not a regular file."
+      );
+    }
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.copyFile(sourcePath, targetPath);
+    await fs.chmod(targetPath, sourceStat.mode & 0o777);
+  }
+}
+
+async function prepareLeafPackageDirectory(
+  packageRecord?: any,
+  privatePackages: any[] = [],
+  commandDirectory?: any,
+  runner?: any
+) : Promise<any> {
+  const privateByName: any = new Map<any, any>(privatePackages.map((record?: any) : any => [record.name, record]));
+  const bundleNames: any[] = [...bundleDependencyNames(packageRecord.manifest)];
+  const stagingDirectory: any = path.join(commandDirectory, `leaf-${packageRecord.name.replace(/[^a-z0-9-]+/giu, "-")}`);
+  await copyNpmPackageFiles(packageRecord, stagingDirectory, commandDirectory, runner);
+  for (const bundleName of bundleNames) {
+    const bundleRecord: any = privateByName.get(bundleName);
+    if (!bundleRecord || bundleRecord.manifest?.private !== true) {
+      throw publicationError(
+        "release_set_bundle_dependency_missing",
+        "Every declared private bundle must resolve to its private workspace source."
+      );
+    }
+    const bundleDirectory: any = path.join(stagingDirectory, "node_modules", ...bundleName.split("/"));
+    await copyNpmPackageFiles(bundleRecord, bundleDirectory, commandDirectory, runner);
+  }
+  return { directory: stagingDirectory, bundleNames };
 }
 
 async function packReleaseSet(
@@ -588,26 +726,38 @@ async function packReleaseSet(
   packDirectory?: any,
   commandDirectory?: any,
   runner?: any,
-  createdTarballs: any[] = []
+  createdTarballs: any[] = [],
+  privatePackages: any[] = []
 ) : Promise<any> {
   const packed: any[] = [];
   for (const packageRecord of packages) {
+    const leafDirectory: any = !packageRecord.root && bundleDependencyNames(packageRecord.manifest).size > 0
+      ? await prepareLeafPackageDirectory(packageRecord, privatePackages, commandDirectory, runner)
+      : null;
     const result: any = assertSuccessfulResult(
       await runner(
-        [
-          "pack",
-          "--json",
-          "--ignore-scripts",
-          "--pack-destination",
-          packDirectory,
-          packageRecord.absoluteDirectory
-        ],
-        { cwd: commandDirectory }
+        leafDirectory
+          ? [
+            "pack",
+            "--json",
+            "--ignore-scripts",
+            "--pack-destination",
+            packDirectory
+          ]
+          : [
+            "pack",
+            "--json",
+            "--ignore-scripts",
+            "--pack-destination",
+            packDirectory,
+            packageRecord.absoluteDirectory
+          ],
+        { cwd: leafDirectory?.directory || commandDirectory }
       ),
       "release_set_pack_failed",
       "A release-set package could not be packed."
     );
-    const artifact: any = parsePackArtifact(result.stdout, packageRecord);
+    const artifact: any = parsePackArtifact(result.stdout, packageRecord, leafDirectory?.bundleNames);
     const tarballPath: any = path.join(packDirectory, artifact.filename);
     createdTarballs.push(tarballPath);
     let tarballStat: any;
@@ -803,7 +953,8 @@ export async function prepareReleaseSet({
       destination,
       commandDirectory,
       commandRunner,
-      createdTarballs
+      createdTarballs,
+      releaseSet.privatePackages
     );
     for (const packageRecord of packed) {
       if (await sha512IntegrityForFile(packageRecord.tarballPath) !== packageRecord.integrity) {
