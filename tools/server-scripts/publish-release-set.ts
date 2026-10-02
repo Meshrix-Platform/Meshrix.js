@@ -1125,28 +1125,8 @@ export async function prepareReleaseSet({
   const releaseSet: any = await discoverReleaseSet({ rootDir });
   const tag: any = normalizeRequestedTag(releaseSet.version, requestedTag);
   const destination: any = await ensureArtifactDirectory(artifactDirectory);
-  try {
-    const existing: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory: destination });
-    if (existing.tag === tag) {
-      await removeOwnedRegularFile(destination, PREPARATION_OWNERSHIP_FILENAME);
-      return {
-        ok: true,
-        prepared: true,
-        reused: true,
-        version: existing.version,
-        tag: existing.tag,
-        packageCount: existing.packages.length,
-        packages: existing.packages.map(({ name, version, filename, integrity }: Record<string, any>) : any => ({
-          name,
-          version,
-          filename,
-          integrity
-        }))
-      };
-    }
-  } catch {
-    // Incomplete or stale output is repaired below only when its ownership is identifiable.
-  }
+  // Explicit preparation always packs current source/build inputs. A valid archive
+  // proves its own bytes, not freshness against an unpublished source revision.
   const manifestPath: any = path.join(destination, PREPARED_RELEASE_SET_FILENAME);
   let commandDirectory: any = null;
   let preparationMarkerWritten: any = false;
@@ -1213,7 +1193,6 @@ export async function prepareReleaseSet({
     return {
       ok: true,
       prepared: true,
-      reused: false,
       version: releaseSet.version,
       tag,
       packageCount: prepared.packages.length,

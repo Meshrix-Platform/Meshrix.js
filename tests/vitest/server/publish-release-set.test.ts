@@ -384,6 +384,12 @@ describe("npm release-set publication", () : any => {
 
     const artifactDirectory: any = await newArtifactDirectory();
     const prepared: any = await prepareReleaseSet({ rootDir, artifactDirectory });
+    const firstRoot = prepared.packages.find(({ name }: { name: string }) => name === "meshrix.js");
+    await fs.writeFile(path.join(rootDir, "README.md"), "Changed isolated public release fixture.\n");
+    const refreshed = await prepareReleaseSet({ rootDir, artifactDirectory });
+    const refreshedRoot = refreshed.packages.find(({ name }: { name: string }) => name === "meshrix.js");
+    expect(refreshedRoot.version).toBe(firstRoot.version);
+    expect(refreshedRoot.integrity).not.toBe(firstRoot.integrity);
     const preparedSet: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
     const gatewayArtifact: any = preparedSet.packages.find(({ name }: Record<string, any>) : any => name === "@meshrix/gateway");
     const consumerDirectory: any = await newArtifactDirectory();
@@ -555,7 +561,7 @@ describe("npm release-set publication", () : any => {
     expect(injected.archivePackCalls).toHaveLength(await packageCount());
   });
 
-  it("reuses only a complete prepared set validated by the canonical loader", async () : Promise<any> => {
+  it("packs current inputs whenever explicit preparation is requested", async () : Promise<any> => {
     const injected: any = createInjectedNpmRunner();
     const artifactDirectory: any = await newArtifactDirectory();
     const first: any = await prepareReleaseSet({
@@ -571,9 +577,8 @@ describe("npm release-set publication", () : any => {
       environment: {}
     });
 
-    expect(first.reused).toBe(false);
-    expect(second).toMatchObject({ ok: true, prepared: true, reused: true, packageCount: await packageCount() });
-    expect(injected.archivePackCalls).toHaveLength(await packageCount());
+    expect(second).toMatchObject({ ok: true, prepared: true, packageCount: await packageCount() });
+    expect(injected.archivePackCalls).toHaveLength(2 * await packageCount());
     await expect(loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory })).resolves.toMatchObject({
       version: first.version,
       tag: first.tag,
@@ -602,7 +607,7 @@ describe("npm release-set publication", () : any => {
       runner: injected.runner,
       environment: {}
     });
-    expect(rebuilt).toMatchObject({ ok: true, prepared: true, reused: false, version: first.version });
+    expect(rebuilt).toMatchObject({ ok: true, prepared: true, version: first.version });
     await expect(loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory })).resolves.toMatchObject({
       version: first.version,
       packages: expect.arrayContaining([expect.objectContaining({ name: "@meshrix/gateway" })])
@@ -630,7 +635,7 @@ describe("npm release-set publication", () : any => {
       artifactDirectory: failedDirectory,
       runner: injected.runner,
       environment: {}
-    })).resolves.toMatchObject({ ok: true, prepared: true, reused: false });
+    })).resolves.toMatchObject({ ok: true, prepared: true });
   });
 
   it("preserves unrelated directory contents when an incomplete artifact cannot be safely owned", async () : Promise<any> => {
