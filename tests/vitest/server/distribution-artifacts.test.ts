@@ -7,6 +7,8 @@ import { createRequire } from "node:module";
 import { loadPreparedReleaseSet, prepareReleaseSet, type PreparedReleaseSet } from "../../../tools/server-scripts/publish-release-set.ts";
 import { createServerSourcePackage } from "../../../tools/server-scripts/package-server-source.ts";
 
+import { sanitizeVerificationLog } from "../../../tools/server-scripts/localize-verify-failure.ts";
+
 const root = resolve(import.meta.dirname, "../../..");
 const forbidden = /(?:^|\/)(?:meshrix-node-benchmark(?:-[^/]+\.tgz)?|node-benchmark|benchmark-gateway\.(?:ts|js|d\.ts|js\.map|d\.ts\.map))(?:\/|$)|(?:^|\/)(?:dist\/)?tools\/server-scripts\/lib\/gateway-benchmark(?:\/|$)|(?:^|\/)\.cache\/gateway-benchmark(?:\/|$)/u;
 const npm = (args: string[], cwd = root) => {
@@ -15,7 +17,7 @@ const npm = (args: string[], cwd = root) => {
   delete env.npm_config_allow_scripts;
   delete env.NPM_CONFIG_ALLOW_SCRIPTS;
   const result = spawnSync("npm", args, { cwd, env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 180000 });
-  if (result.status !== 0) throw Error(`npm_artifact_failure_${result.status}_${(result.stderr ?? '').match(/npm error code (E[A-Z]+)/u)?.[1] ?? 'unknown'}`);
+  if (result.status !== 0) throw Error(`npm_artifact_failure_${result.status}\n${sanitizeVerificationLog(`${result.stdout ?? ''}\n${result.stderr ?? ''}`, root)}`);
   return result.stdout;
 };
 const tar = (args: string[]) => {
@@ -26,7 +28,7 @@ const tar = (args: string[]) => {
 const assertClean = (entries: string[]) => expect(entries.filter(entry => forbidden.test(entry))).toEqual([]);
 const docker = (args: string[], cwd = root, timeout = 600000) => {
   const result = spawnSync("docker", args, { cwd, encoding: "utf8", timeout, maxBuffer: 4 * 1024 * 1024 });
-  if (result.status !== 0) throw Error(`original_docker_command_failed_${result.status}`);
+  if (result.status !== 0) throw Error(`original_docker_command_failed_${result.status}\n${sanitizeVerificationLog(`${result.stdout ?? ''}\n${result.stderr ?? ''}`, root)}`);
   return result.stdout;
 };
 function layerPaths(archive: string, layer: string): Promise<string[]> {
@@ -94,30 +96,40 @@ describe("materialized product distribution", () => {
     expect(skillPack.status, "source archive must retain canonical usage skill build inputs").toBe(0);
   }, 300000);
 
-  it("installs actual release-set tarballs without benchmark in an omit-dev consumer", async () => {
-    {
-      const packages = prepared.packages.map(item => ({ name: item.name, file: item.tarballPath }));
-      const consumer = join(scratch, "consumer");
+  it("installs Gateway independently and root with its declared public release dependency", async () => {
+    for (const [index, artifact] of prepared.packages.entries()) {
+      const consumer = join(scratch, `consumer-${index}`);
       await mkdir(consumer);
-      await writeFile(join(consumer, "package.json"), JSON.stringify({ name: "benchmark-exclusion-consumer", private: true,
-        version: "0.0.0", dependencies: Object.fromEntries(packages.map(item => [item.name, `file:${item.file}`])) }));
+      await writeFile(join(consumer, "package.json"), JSON.stringify({ name: "product-distribution-consumer", private: true,
+        version: "0.0.0", dependencies: Object.fromEntries(
+          // Gateway is an independent consumer. Root declares the public Gateway dependency;
+          // before first publication its matching archive supplies that registry prerequisite.
+          (artifact.name === "@meshrix/gateway" ? [artifact] : prepared.packages)
+            .map(item => [item.name, `file:${item.tarballPath}`])
+        ) }));
+      // This check owns dependency contents; native startup is exercised by the package matrix.
       npm(["install", "--omit=dev", "--ignore-scripts=true", "--no-audit", "--no-fund"], consumer);
       const graph = JSON.parse(npm(["ls", "--json", "--omit=dev", "--all"], consumer));
-      function walk(item: { dependencies?: Record<string, unknown> }, seen = new Set<object>()) {
-        if (seen.has(item)) return;
-        seen.add(item);
+      function walk(item: { dependencies?: Record<string, unknown> }) {
         for (const [name, value] of Object.entries(item.dependencies ?? {})) {
           expect(name).not.toBe("meshrix-node-benchmark");
-          walk(value as { dependencies?: Record<string, unknown> }, seen);
+          walk(value as { dependencies?: Record<string, unknown> });
         }
       }
       walk(graph);
       const require = createRequire(join(consumer, "probe.cjs"));
       expect(() => require.resolve("meshrix-node-benchmark")).toThrow();
-      expect(() => require.resolve("meshrix.js/package.json")).not.toThrow();
-      const installed = await readdir(join(consumer, "node_modules"));
-      expect(installed).not.toContain("meshrix-node-benchmark");
-      expect(installed).toContain("meshrix.js");
+      if (artifact.name === "@meshrix/gateway") {
+        expect(() => require.resolve("meshrix.js/package.json")).toThrow();
+        const env = { ...process.env };
+        delete env.NODE_OPTIONS;
+        const imported = spawnSync(process.execPath, ["--input-type=module", "-e",
+          "import { createGateway } from '@meshrix/gateway'; if (typeof createGateway !== 'function') process.exitCode = 1;"],
+          { cwd: consumer, env, encoding: "utf8" });
+        expect(imported.status, "Gateway must load from its own tarball without the root product").toBe(0);
+      } else {
+        expect(() => require.resolve("meshrix.js/package.json")).not.toThrow();
+      }
     }
   }, 240000);
 
