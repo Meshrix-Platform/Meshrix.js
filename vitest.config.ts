@@ -35,9 +35,13 @@ const excludedTestPatterns = [
   "tests/contract/foundation/**",
   "tests/unit/foundation/**",
 ];
-const scopedExcludedTestPatterns = isBackendFunctionalScope()
-  ? backendFunctionalExcludedTestPatterns
-  : [];
+// Performance tooling has separate installed inputs and functional prerequisites.
+// Scope exclusions belong to each project: a root CLI --exclude does not override them.
+const scopedExcludedTestPatterns = [
+  ...(isBackendFunctionalScope() ? backendFunctionalExcludedTestPatterns : []),
+  ...(process.env.MESHRIX_VITEST_SCOPE === "gateway-performance"
+    ? [] : ["tests/vitest/gateway/performance/**"])
+];
 
 
 const WORKSPACE_PACKAGE_DIRS: [string, string][] = [

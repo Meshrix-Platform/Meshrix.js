@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -21,7 +22,6 @@ import {
 } from "../../../tools/server-scripts/verify-npm-package-installability.ts";
 import {
   consumerFailureSummary,
-  verifyInstalledModuleIdentity,
   browserForServer,
   packageTypeSpecifiers,
   runInstalledMcpProxy,
@@ -220,6 +220,14 @@ describe("npm artifact installability source", () : any => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-module-identity-"));
     const foundation = path.join(root, "node_modules/@meshrix/foundation");
     const runtime = path.join(root, "node_modules/@meshrix/server-runtime");
+    // Installed consumers run with default Node conditions, independently of the source test runner.
+    const identityProbe = async () => {
+      const consumerModule = pathToFileURL(path.join(REPO_ROOT, "tools/server-scripts/npm-package-consumer.ts")).href;
+      const { stdout } = await execFileAsync(process.execPath, ["--input-type=module", "--eval",
+        `import { verifyInstalledModuleIdentity } from ${JSON.stringify(consumerModule)}; process.stdout.write(JSON.stringify(await verifyInstalledModuleIdentity(${JSON.stringify(root)})));`
+      ], { cwd: root, env: { ...process.env, NODE_OPTIONS: "" } });
+      return JSON.parse(stdout);
+    };
     const registry = "@meshrix/foundation/security/authorization/tag-store-provider-registry";
     const alias = "#meshrix/foundation/security/authorization/tag-store-provider-registry";
     try {
@@ -234,9 +242,9 @@ describe("npm artifact installability source", () : any => {
       }));
       await fs.writeFile(path.join(foundation, "registry.js"), "export const registry = new Map();\n");
       await fs.writeFile(path.join(runtime, "package.json"), JSON.stringify({ name: "@meshrix/server-runtime", type: "module", imports: { [alias]: registry } }));
-      await expect(verifyInstalledModuleIdentity(root)).resolves.toEqual({ aliasCount: 2, componentCount: 2, sharedRegistry: true });
+      await expect(identityProbe()).resolves.toEqual({ aliasCount: 2, componentCount: 2, sharedRegistry: true });
       await fs.cp(foundation, path.join(runtime, "node_modules/@meshrix/foundation"), { recursive: true });
-      await expect(verifyInstalledModuleIdentity(root)).rejects.toThrow("npm_package_module_identity_mismatch");
+      await expect(identityProbe()).rejects.toThrow("npm_package_module_identity_mismatch");
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
