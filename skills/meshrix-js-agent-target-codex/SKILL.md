@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-target-codex
 description: Locate Codex configuration facts and the current Meshrix.js MCP integration owner. Use for client setup or compatibility questions about this target.
+audience: usage
 ---
 
 # Agent target: Codex
@@ -11,7 +12,7 @@ description: Locate Codex configuration facts and the current Meshrix.js MCP int
 - The official [Linux app documentation](https://learn.chatgpt.com/docs/linux/linux-app) now describes a Linux preview. This vendor availability does not qualify Meshrix.js on that platform.
 
 Source: [vendor reference](https://developers.openai.com/codex/config-basic). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

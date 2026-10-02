@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-frontend-visual-direction
 description: Converge Meshrix.js frontend visual quality — reuse the approved product system, choose representative states for a new visual language or workflow reset, produce alternatives only when uncertainty is material, freeze shared typography/density/grid/colors/controls/motion/responsiveness/accessibility, and compare widths and states after implementation. Delivery closure decisions are owned by $meshrix-js-delivery-closure.
+audience: development
 ---
 
 # Meshrix.js Frontend Visual Direction

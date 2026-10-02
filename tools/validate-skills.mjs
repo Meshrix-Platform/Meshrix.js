@@ -1,5 +1,7 @@
 import { access, readdir, readFile } from "node:fs/promises";
 
+const AUDIENCES = new Set(["usage", "development"]);
+
 const root = new URL("../skills/", import.meta.url);
 const entries = (await readdir(root, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
@@ -8,7 +10,14 @@ const entries = (await readdir(root, { withFileTypes: true }))
 
 if (entries.length === 0) throw new Error("skills directory is empty");
 
+function frontmatterAudience(skill) {
+  const block = skill.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1];
+  if (!block) return null;
+  return block.match(/^audience:\s*([^\n]+)$/m)?.[1]?.trim() ?? null;
+}
+
 const known = new Set(entries);
+const audienceByName = new Map();
 for (const name of entries) {
   const skill = await readFile(new URL(`${name}/SKILL.md`, root), "utf8");
   const declared = skill.match(/^name:\s*([^\n]+)$/m)?.[1]?.trim();
@@ -17,6 +26,12 @@ for (const name of entries) {
   }
 
   if (!/^description:[ \t]*\S/m.test(skill)) throw new Error(`${name}: missing routing description`);
+
+  const audience = frontmatterAudience(skill);
+  if (!AUDIENCES.has(audience)) {
+    throw new Error(`${name}: audience must be exactly usage or development`);
+  }
+  audienceByName.set(name, audience);
 
   for (const [, reference] of skill.matchAll(/\$([a-z0-9][a-z0-9-]*)/g)) {
     if ((reference === "meshrix-js" || reference.startsWith("meshrix-js-")) && !known.has(reference)) {
@@ -57,4 +72,14 @@ async function checkReferences(directory) {
 }
 await checkReferences("");
 if (problems.length) throw new Error(problems.join("\n"));
-console.log(JSON.stringify({ ok: true, skillCount: entries.length, markdownCount, referenceCount }));
+
+const usageCount = [...audienceByName.values()].filter((value) => value === "usage").length;
+const developmentCount = [...audienceByName.values()].filter((value) => value === "development").length;
+console.log(JSON.stringify({
+  ok: true,
+  skillCount: entries.length,
+  usageCount,
+  developmentCount,
+  markdownCount,
+  referenceCount,
+}));

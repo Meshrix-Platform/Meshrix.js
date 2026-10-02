@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-security-authorization
 description: Maintain Meshrix.js end-to-end authorization invariants, workload and process identity, resource binding, capability provenance, execution-side revalidation, secret references, risk policy, audit redaction, and security release gates. Use for any security-sensitive Core or gateway change, especially internal operation dispatch, delegated execution, asynchronous resume, authorization caching, or resource-policy semantics.
+audience: development
 ---
 
 # Meshrix.js Security Authorization

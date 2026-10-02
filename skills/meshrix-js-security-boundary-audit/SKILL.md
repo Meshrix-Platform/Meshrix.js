@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-security-boundary-audit
 description: Audit Meshrix.js code, APIs, console flows, MCP and agent paths, plugins, uploads, storage, gateways, and runtime changes for exploitable trust-boundary failures, including runtime-data disclosure, authorization bypass or privilege escalation, injection or code execution, malicious files, SSRF, browser and protocol abuse, supply-chain compromise, prompt or tool poisoning, and resource exhaustion. Use when adding or reviewing an external interface, parser, upload, URL fetch, agent tool, protected operation, credential, side effect, or other security-sensitive change, and before accepting a suspected security fix.
+audience: development
 ---
 
 # Meshrix.js Security Boundary Audit

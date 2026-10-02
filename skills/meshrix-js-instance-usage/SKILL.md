@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-instance-usage
 description: User-handbook chapter for operating a published or offline Meshrix.js instance and connecting external services or agents through its single public origin. Use from $meshrix-js-user-handbook. Do not change the release artifact contract from this chapter.
+audience: usage
 ---
 
 # Meshrix.js Instance Usage

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-developer-handbook
 description: Meshrix.js developer handbook. Use when changing the product, release definition, packaging, published address contract, acceptance, or repository source. Do not use this package to operate a running instance or to connect external services.
+audience: development
 ---
 
 # Meshrix.js Developer Handbook

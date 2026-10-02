@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-skill-hub-lifecycle
 description: Guide the Meshrix.js Skill Hub contribution lifecycle from submission and isolated scanning through review, publication, governed adoption, permission grants, usage, deprecation, and revocation. Use for Skill Hub storage, review workflows, downloads, installs, permissions, or statistics.
+audience: usage
 ---
 
 # Meshrix.js Skill Hub Lifecycle

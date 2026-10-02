@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-api-key-issuance
 description: Issue an organization-scoped Meshrix.js API Key with an explicitly selected policy and private credential delivery. Use when a downstream MCP client needs a new key; diagnose existing access before issuing another.
+audience: usage
 ---
 
 # Meshrix.js API Key Issuance

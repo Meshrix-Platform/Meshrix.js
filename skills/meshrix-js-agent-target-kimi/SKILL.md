@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-agent-target-kimi
 description: Locate Kimi MCP adapter configuration facts and the current Meshrix.js MCP integration owner. Use for client setup or compatibility questions about this target.
+audience: usage
 ---
 
 # Agent target: Kimi MCP adapter
@@ -11,7 +12,7 @@ description: Locate Kimi MCP adapter configuration facts and the current Meshrix
 - Use `$meshrix-js-agent-target-kimi-code` for the vendor CLI configuration reference.
 
 Source: [vendor reference](https://moonshotai.github.io/kimi-code/en/configuration/config-files). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

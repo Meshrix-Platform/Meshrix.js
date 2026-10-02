@@ -47,6 +47,7 @@ describe("offline delivery operator pack", () : any => {
       hasSbom: true,
       hasProvenance: true,
       hasSignatures: true,
+      usageSkills: "build/usage-skills",
       imageDigest: "sha256:abc",
     });
     expect(JSON.stringify(receipt)).not.toMatch(ABSOLUTE_PATH_PATTERN);

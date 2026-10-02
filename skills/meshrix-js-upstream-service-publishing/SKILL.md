@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-upstream-service-publishing
 description: Publish an external service (HTTP, JSON-RPC, MCP, or host stdio command) into a Meshrix.js instance through the authenticated upstream publication path — descriptor, operation mapping, revision handling, health verification — and keep the governed publishing transaction intact. Use for upstream onboarding, gateway lifecycle, service registration, or runtime publication. The release verification lanes are owned by $meshrix-js-release-journey-producer, the HTML report by $meshrix-js-html-report-contract, and the client compatibility matrix by $meshrix-js-client-compatibility-matrix.
+audience: usage
 ---
 
 # Meshrix.js Upstream Service Publishing

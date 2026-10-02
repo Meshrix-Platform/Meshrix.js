@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-offline-pack
 description: Build a privacy-scanned, self-contained Meshrix.js runtime-ui archive for an authorized Linux release platform.
+audience: development
 ---
 
 # Meshrix.js Offline Pack

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-privacy-evidence
 description: Scan Meshrix.js source or evidence for secrets, machine identity, personal paths, and unsafe runtime disclosure, and produce minimum redacted receipts. Use before sharing logs, reports, workflow output, or repository artifacts.
+audience: development
 ---
 
 # Meshrix.js Privacy Evidence

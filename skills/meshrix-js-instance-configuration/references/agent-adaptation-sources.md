@@ -29,7 +29,7 @@ establish Meshrix.js qualification.
 
 - Vendor documentation owns vendor configuration and supported product forms.
 - Current `plugins/agents/<target>/adapter.mjs` files own packaged MCP lifecycle
-  behavior; the installer catalog owns the accepted package coordinates.
+  behavior; the installer catalog owns the installed first-party component identities.
 - `docs/COMPATIBILITY.md` owns named-client qualification requirements.
 - A missing implementation reference is not evidence that a vendor feature
   does not exist. Remove unsupported implementation claims or label the

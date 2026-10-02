@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-ingestion-job-processing
 description: Guide the Meshrix.js upload, ingestion, asynchronous job, queue, result, cancellation, and deletion-recovery capability flow. Use for upload sessions, canonical objects, job admission, worker leases, checkpoints, retries, results, or batch deletion.
+audience: development
 ---
 
 # Meshrix.js Ingestion Job Processing

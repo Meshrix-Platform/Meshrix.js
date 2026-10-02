@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-instance-configuration
 description: Configure and repair a Meshrix.js local or container instance through canonical runtime configuration, signed plugin installation and enablement, service reuse or restart, and health checks. This chapter belongs to $meshrix-js-user-handbook. Everyday use and external connection belong to $meshrix-js-instance-usage.
+audience: usage
 ---
 
 # Meshrix.js Instance Configuration

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-real-machine-verification
 description: Run the optional Meshrix.js real-machine verification workflow after a current candidate-bound functional-complete receipt — Linux VM closed-loop delivery checks, environment qualification, and the environment support claim. It must never block or replace functional acceptance. Functional acceptance is owned by $meshrix-js-platform-acceptance-workflow.
+audience: development
 ---
 
 # Meshrix.js Real-Machine Verification

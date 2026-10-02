@@ -1,6 +1,7 @@
 ---
 name: meshrix-js-html-report-contract
 description: Maintain the portable single-file HTML report for the Meshrix.js upstream service publishing journey — blank template, renderer, digest-bound screenshots, interface catalog, operation evidence, and privacy constraints. Use for report layout, template, renderer, screenshot, or content-contract changes. The verification lanes are owned by $meshrix-js-release-journey-producer; the client compatibility matrix by $meshrix-js-client-compatibility-matrix.
+audience: development
 ---
 
 # Meshrix.js HTML Report Contract

@@ -1,6 +1,7 @@
 ---
 name: meshrix-js
 description: Meshrix.js technical scope and specialist skill routing. Use the developer handbook for repository changes and the user handbook for operating an instance.
+audience: usage
 ---
 
 # Meshrix.js
@@ -15,10 +16,14 @@ release evidence for those claims. Never disclose credentials, personal or
 machine identity, private deployment details, or runtime payloads.
 
 Authoritative Meshrix.js skills live in this repository's `skills/` directory.
-Distribution and installed packages are generated from these sources. They
-are projections, not independent places to edit policy. Use the current
-repository's AGENTS.md, source, and command definitions when a distribution is
-stale; report the distribution defect and continue authorized work.
+Each skill declares `audience: usage` or `audience: development` in its
+YAML frontmatter. Usage skills ship with installs and offline projections
+(`npm run pack:usage-skills` → `build/usage-skills`); development skills stay
+in the repository checkout. Distribution and installed packages are generated
+from these sources. They are projections, not independent places to edit
+policy. Use the current repository's AGENTS.md, source, and command
+definitions when a distribution is stale; report the distribution defect and
+continue authorized work.
 
 Keep architecture and dependency ownership aligned with the registries and
 layer boundaries in `docs/architecture/ARCHITECTURE.md`. External libraries
