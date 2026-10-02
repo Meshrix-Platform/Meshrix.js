@@ -1,64 +1,29 @@
-# Meshrix.js MCP Native Installer
+# Meshrix.js MCP Installation
 
-This directory owns the user-device MCP installer entrypoints.
+The MCP installer is implemented once in the `meshrix.js` Node.js package. Its
+`meshrix-mcp` executable owns argument validation, credential handling,
+discovery, client configuration and registration, and uninstall. The former
+standalone shell and PowerShell installer copies are retired.
 
-After the release gate passes, the user entrypoints are platform-native:
+After the release gate passes, install or update through the public package
+entrypoint:
 
-- macOS and Linux use `meshrix-mcp-install.sh` and `meshrix-mcp-uninstall.sh`.
-- Windows uses `meshrix-mcp-install.ps1` and `meshrix-mcp-uninstall.ps1`.
-- Windows entrypoints use the PowerShell scripts exclusively.
-
-The scripts are narrow launchers. They reject API Keys in arguments, validate
-environment-variable names, and delegate to the connector from the same verified
-portable bundle. The connector exclusively owns signed hub discovery, local
-agent search, batch install, interactive selection, client config, and local
-uninstall. A pre-issued strict `mxak1` API Key must be supplied through protected
-standard input or the configured environment variable. Shell and PowerShell
-remain narrow launchers for that connector-owned workflow.
-
-The supported target catalog is backed by optional first-party client-adapter
-components bundled with `meshrix.js`. The connector resolves them from its
-installed root and invokes one only after an explicit target action. It does
-not fetch adapters from npm or install them into a separate cache. Each
-component owns target-specific command probing and configuration behavior;
-the connector owns credential custody, the bounded JSON-stdio boundary, and
-the install/uninstall transaction.
-
-This release currently installs local connector-managed clients. OrbStack and
-remote-Linux direct HTTP client modes remain remaining qualification work and
-currently fail before installation because they are outside the published
-target matrix.
-
-After GitHub Release publication, download a versioned portable archive,
-`RELEASE_SHA256SUMS`, and `RELEASE_SHA256SUMS.sigstore.json`. Verify the
-Sigstore bundle against the exact release workflow identity and GitHub Actions
-issuer, then use the signed checksum to verify the archive before running these
-local entrypoints. The MCP-local `SHA256SUMS` is not an independent release
-authority. Never pipe a remote response to a shell.
-
-## POSIX
-
-From an installed `meshrix.js` package, use the package command so it launches
-the bundled connector:
-
-```bash
-npm run mcp:install -- help
-npm run mcp:install -- version --json
+```sh
+npx --yes --package meshrix.js@<version> meshrix-mcp install
+npx --yes --package meshrix.js@<version> meshrix-mcp register
+npx --yes --package meshrix.js@<version> meshrix-mcp doctor --json
 ```
 
-For a verified portable release bundle, run its adjacent launcher:
+Use `--target` to select a supported client. Supply credentials through a
+protected environment variable or standard input; never place an API key in
+command arguments. Use `--no-env` when registration should not persist the
+non-secret discovery environment values.
 
-```bash
-packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh
-packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target auto --json
-packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target openclaw,codex,claude-code,antigravity,opencode,pi,kimi --json
-packages/protocols/mcp/adapter/native-installer/meshrix-mcp-uninstall.sh --target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
-```
-
-## Windows
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-install.ps1 -Command install
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-install.ps1 -Command install -Target auto -Json
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
-```
+After GitHub Release publication, a verified portable archive is also
+available for systems without a separately installed Node.js runtime. Verify
+the archive against the release workflow's Sigstore bundle and signed
+`RELEASE_SHA256SUMS` before extracting it. The archive contains a small
+platform launcher and the verified Node runtime; all installer behavior
+continues to execute through the same `meshrix-mcp` Node CLI. Run
+`./meshrix-mcp` on POSIX systems or `./meshrix-mcp.ps1` in PowerShell on
+Windows.

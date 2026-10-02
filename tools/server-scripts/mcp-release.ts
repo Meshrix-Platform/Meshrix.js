@@ -15,7 +15,6 @@ import {
 } from "./lib/mcp-release-common.ts";
 import { loadPreparedReleaseSet } from "./publish-release-set.ts";
 import {
-  createBootstrapInstaller,
   releaseGeneratedAtFromSourceDateEpoch,
   releaseManifest
 } from "./lib/mcp-release-manifest.ts";
@@ -119,23 +118,14 @@ async function main() : Promise<any> {
         fs.rm(path.join(outputDir, `extracted-${target}`), { recursive: true, force: true })
       ]);
     }
-    const bootstrap: any = await createBootstrapInstaller({
-      outputDir,
-      packageJson,
-      tarballName: packResult.filename,
-      tarballSha256: checksum,
-      portables
-    });
     const manifest: any = releaseManifest({
       channel,
       packageJson,
       tarballName: packResult.filename,
-      tarballPath,
       npmIntegrity: rootArtifact.integrity,
       checksum,
       sizeBytes: stat.size,
       portables,
-      bootstrap,
       generatedAt
     });
     const manifestPath: any = path.join(outputDir, "meshrix-mcp-release.json");
@@ -156,43 +146,15 @@ async function main() : Promise<any> {
       latestPath: publicReleasePath(latestPath),
       checksumFilePath: publicReleasePath(checksumIndex.checksumFilePath),
       checksumFileSha256: checksumIndex.checksumFileSha256,
-      bootstrapInstallerPath: publicReleasePath(bootstrap.scriptPath),
       tarballPath: publicReleasePath(tarballPath),
       portableTarballs: portables.map((p?: any) : any => publicReleasePath(p.archivePath)),
       portableZips: portables.map((p?: any) : any => p.zipArchivePath).filter(Boolean).map(publicReleasePath),
+      releaseFiles: manifest.publish.releaseFiles,
       packageName: packageJson.name,
       packageVersion: packageJson.version,
       npmIntegrity: rootArtifact.integrity,
       sha256: checksum,
       portableSha256: portables.map((p?: any) : any => p.sha256),
-      portableZipSha256: portables.map((p?: any) : any => p.zipSha256).filter(Boolean),
-      bootstrapInstallerSha256: bootstrap.sha256,
-      bootstrapUninstallerPath: publicReleasePath(bootstrap.uninstallScriptPath),
-      bootstrapUninstallerSha256: bootstrap.uninstallSha256,
-      bootstrapInstallerZhCNPath: publicReleasePath(bootstrap.localized.zhCN.scriptPath),
-      bootstrapInstallerZhCNSha256: bootstrap.localized.zhCN.sha256,
-      bootstrapUninstallerZhCNPath: publicReleasePath(bootstrap.localized.zhCN.uninstallScriptPath),
-      bootstrapUninstallerZhCNSha256: bootstrap.localized.zhCN.uninstallSha256,
-      githubOneLineCommand: bootstrap.oneLineCommand,
-      githubOneLineClientInstallJsonCommand: bootstrap.oneLineClientInstallJsonCommand,
-      githubOneLineUninstallCommand: bootstrap.oneLineUninstallCommand,
-      githubOneLineAutoInstallCommand: bootstrap.oneLineAutoInstallCommand,
-      githubOneLinePriorityInstallCommand: bootstrap.oneLinePriorityInstallCommand,
-      githubOneLineCommandZhCN: bootstrap.localized.zhCN.oneLineCommand,
-      githubOneLineClientInstallJsonCommandZhCN: bootstrap.localized.zhCN.oneLineClientInstallJsonCommand,
-      githubOneLineAutoInstallCommandZhCN: bootstrap.localized.zhCN.oneLineAutoInstallCommand,
-      githubOneLinePriorityInstallCommandZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
-      githubOneLineUninstallCommandZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
-      oneCommandInstall: bootstrap.oneLineCommand,
-      oneCommandInstallZhCN: bootstrap.localized.zhCN.oneLineCommand,
-      oneCommandClientInstallJson: bootstrap.oneLineClientInstallJsonCommand,
-      oneCommandClientInstallJsonZhCN: bootstrap.localized.zhCN.oneLineClientInstallJsonCommand,
-      oneCommandAutoInstall: bootstrap.oneLineAutoInstallCommand,
-      oneCommandAutoInstallZhCN: bootstrap.localized.zhCN.oneLineAutoInstallCommand,
-      oneCommandPriorityInstall: bootstrap.oneLinePriorityInstallCommand,
-      oneCommandPriorityInstallZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
-      oneCommandUninstall: bootstrap.oneLineUninstallCommand,
-      oneCommandUninstallZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
       installCommand: manifest.install.registryCommand
     };
     console.log(args.json ? JSON.stringify(result) : JSON.stringify(result, null, 2));

@@ -27,6 +27,20 @@ export interface CommandCandidate {
   path: string;
 }
 
+type PathApi = typeof path.posix;
+
+function pathApiFor(platform: string): PathApi {
+  return platform === "win32" ? path.win32 : path.posix;
+}
+
+function environmentValue(env: HostEnvironment, name: string): string {
+  const direct = env[name];
+  if (typeof direct === "string") return direct;
+  const normalizedName = name.toLowerCase();
+  const key = Object.keys(env).find((candidate) => candidate.toLowerCase() === normalizedName);
+  return key ? String(env[key] || "") : "";
+}
+
 export interface VersionInfo {
   major: number;
   minor: number;
@@ -119,11 +133,11 @@ export function pathExists(targetPath = ""): boolean {
   }
 }
 
-export function executableExists(targetPath = ""): boolean {
+export function executableExists(targetPath = "", platform = process.platform): boolean {
   if (!targetPath) return false;
   try {
-    fsSync.accessSync(targetPath, fsSync.constants.X_OK);
-    return true;
+    fsSync.accessSync(targetPath, platform === "win32" ? fsSync.constants.F_OK : fsSync.constants.X_OK);
+    return fsSync.statSync(targetPath).isFile();
   } catch {
     return false;
   }
@@ -133,9 +147,10 @@ export function shellQuote(value: unknown = ""): string {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
-export function pathEntries(env: HostEnvironment = process.env): string[] {
-  return text(env.PATH)
-    .split(path.delimiter)
+export function pathEntries(env: HostEnvironment = process.env, platform = process.platform): string[] {
+  const delimiter = platform === "win32" ? ";" : ":";
+  return text(environmentValue(env, "PATH"))
+    .split(delimiter)
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
@@ -143,33 +158,22 @@ export function pathEntries(env: HostEnvironment = process.env): string[] {
 export function defaultLocalBinEntries({
   cwd = process.cwd(),
   localBinDirs = [],
-  includeDefaultLocalBin = true
+  includeDefaultLocalBin = true,
+  platform = process.platform
 }: CommandOptions = {}): string[] {
+  const pathApi = pathApiFor(platform);
   const entries: string[] = [
     ...(Array.isArray(localBinDirs) ? localBinDirs : []),
-    ...(includeDefaultLocalBin === false ? [] : [path.join(text(cwd) || process.cwd(), "node_modules", ".bin")])
+    ...(includeDefaultLocalBin === false ? [] : [pathApi.join(text(cwd) || process.cwd(), "node_modules", ".bin")])
   ];
   return [...new Set(entries.map(text).filter(Boolean))];
 }
 
 export function commandPath(commandName: unknown = "", options: CommandOptions = {}): string {
-  const command = text(commandName);
-  if (!command) return "";
-  const platform = options.platform || process.platform;
-  const spawnSyncFn = options.spawnSync || spawnSync;
-  const result = platform === "win32"
-    ? spawnSyncFn("where", [command], {
-        encoding: "utf8",
-        timeout: options.timeoutMs || 3000
-      })
-    : spawnSyncFn("sh", ["-c", `command -v ${shellQuote(command)}`], {
-        encoding: "utf8",
-        timeout: options.timeoutMs || 3000
-      });
-  if (result.status !== 0) {
-    return "";
-  }
-  return text(result.stdout).split(/\r?\n/).map(text).find(Boolean) || "";
+  return resolveCommandCandidate(commandName, {
+    ...options,
+    includeDefaultLocalBin: false
+  }).path;
 }
 
 export function commandAvailable(commandName: unknown = "", options: CommandOptions = {}): boolean {
@@ -177,31 +181,60 @@ export function commandAvailable(commandName: unknown = "", options: CommandOpti
 }
 
 export function resolveCommandCandidate(commandNames: unknown = [], options: CommandOptions = {}): CommandCandidate {
+  return resolveCommandCandidates(commandNames, options)[0] || {
+    found: false,
+    command: [...new Set((Array.isArray(commandNames) ? commandNames : [commandNames]).map(text).filter(Boolean))][0] || "",
+    path: ""
+  };
+}
+
+/** Resolve every matching command path in PATH order, followed by explicit local-bin directories. */
+export function resolveCommandCandidates(commandNames: unknown = [], options: CommandOptions = {}): CommandCandidate[] {
   const names = [...new Set((Array.isArray(commandNames) ? commandNames : [commandNames]).map(text).filter(Boolean))];
-  const platform = options.platform || process.platform;
-  const executableExistsFn = options.executableExistsFn || executableExists;
+  const platform = (options.platform || process.platform) as NodeJS.Platform;
+  const pathApi = pathApiFor(platform);
+  const env = options.env || process.env;
+  const executableExistsFn = options.executableExistsFn || ((targetPath: string) => executableExists(targetPath, platform));
+  const searchDirs = [...new Set([
+    ...pathEntries(env, platform),
+    ...defaultLocalBinEntries({ ...options, platform })
+  ])];
+  const candidates: CommandCandidate[] = [];
+  const seen = new Set<string>();
   for (const name of names) {
-    if (path.isAbsolute(name) || name.includes(path.sep)) {
-      if (executableExistsFn(name)) {
-        return { found: true, command: name, path: name };
+    const isPath = pathApi.isAbsolute(name) || name.includes("/") || (platform === "win32" && name.includes("\\"));
+    if (isPath) {
+      const candidatePath = pathApi.isAbsolute(name) ? name : pathApi.resolve(options.cwd || process.cwd(), name);
+      if (executableExistsFn(candidatePath)) {
+        candidates.push({ found: true, command: name, path: candidatePath });
       }
       continue;
     }
-    const suffixes = platform === "win32" ? ["", ".cmd", ".exe", ".bat"] : [""];
-    const searchDirs = [...new Set([
-      ...pathEntries(options.env || process.env),
-      ...defaultLocalBinEntries(options)
-    ])];
+    const suffixes = commandSuffixes(name, env, platform);
     for (const dir of searchDirs) {
       for (const suffix of suffixes) {
-        const candidate = path.join(dir, `${name}${suffix}`);
-        if (executableExistsFn(candidate)) {
-          return { found: true, command: name, path: candidate };
+        const candidatePath = pathApi.join(dir, `${name}${suffix}`);
+        if (!executableExistsFn(candidatePath)) continue;
+        const key = platform === "win32" ? pathApi.normalize(candidatePath).toLowerCase() : pathApi.normalize(candidatePath);
+        if (!seen.has(key)) {
+          seen.add(key);
+          candidates.push({ found: true, command: name, path: candidatePath });
         }
       }
     }
   }
-  return { found: false, command: names[0] || "", path: "" };
+  return candidates;
+}
+
+function commandSuffixes(commandName: string, env: HostEnvironment, platform: string): string[] {
+  if (platform !== "win32") return [""];
+  if (path.win32.extname(commandName)) return [""];
+  const configured = environmentValue(env, "PATHEXT")
+    .split(";")
+    .map((suffix) => suffix.trim())
+    .filter((suffix) => /^\.[A-Za-z0-9]+$/u.test(suffix));
+  const suffixes = configured.length ? configured : [".COM", ".EXE", ".BAT", ".CMD"];
+  return ["", ...new Set(suffixes.map((suffix) => suffix.toLowerCase()))];
 }
 
 export function runCommand(command: string, args: string[] = [], options: CommandOptions = {}) {

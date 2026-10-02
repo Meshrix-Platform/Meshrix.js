@@ -378,12 +378,7 @@ try {
       assert.notEqual(stat.mode & 0o111, 0, "portable executable bit missing");
     }
     const files: any = await listFiles(extractedRoot);
-    const platformEntrypoints: any = target.startsWith("windows-")
-      ? ["meshrix-mcp.ps1", "meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]
-      : ["meshrix-mcp", "meshrix-mcp-install.sh", "meshrix-mcp-uninstall.sh"];
-    if (target.startsWith("macos-")) {
-      platformEntrypoints.push("install.command", "uninstall.command", "doctor.command");
-    }
+    const platformEntrypoints: any = [bundle.executable];
     for (const required of [
       bundle.executable,
       "mcp-identity.ts",
@@ -397,6 +392,8 @@ try {
       "app/vendor/contracts/mcp-catalog-delivery.ts",
       "app/vendor/contracts/serialization/canonical-json.ts",
       "app/vendor/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "app/vendor/foundation/environment-compatibility/index.ts",
+      "app/vendor/foundation/environment-compatibility/host-runtime.ts",
       "app/vendor/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts",
       "app/node_modules/undici/package.json",
       "app/node_modules/undici/index.js",
@@ -461,6 +458,10 @@ try {
     assert.equal(portableHttpClient, sourceHttpClient);
     assert.match(sourceHttpClient, /from "undici";/u);
     assert.equal(
+      portablePackageJson.imports?.["#meshrix/foundation/environment-compatibility/index"],
+      "./vendor/foundation/environment-compatibility/index.ts"
+    );
+    assert.equal(
       portablePackageJson.imports?.["#meshrix/contracts/*"],
       "./vendor/contracts/*.ts"
     );
@@ -496,40 +497,33 @@ try {
     };
   });
 
-  await test("portable native entrypoints delegate to the bundled verified connector", async () : Promise<any> => {
-    const windowsTarget: any = target.startsWith("windows-");
-    const installer: any = path.join(
-      extractedRoot,
-      windowsTarget ? "meshrix-mcp-install.ps1" : "meshrix-mcp-install.sh"
-    );
-    const installSource: any = await fs.readFile(installer, "utf8");
-    if (windowsTarget) {
-      assert.match(installSource, /meshrix-mcp\.ps1/u);
-      assert.equal(/Invoke-Expression|\biex\b/iu.test(installSource), false);
+  await test("portable platform launcher only starts its sibling verified Node runtime", async () : Promise<any> => {
+    const launcher = path.join(extractedRoot, bundle.executable);
+    const launcherSource: any = await fs.readFile(launcher, "utf8");
+    if (target.startsWith("windows-")) {
+      assert.match(launcherSource, /runtime\\node\.exe/u);
+      assert.match(launcherSource, /app\\bin\\meshrix-mcp\.ts/u);
+      assert.match(launcherSource, /@args/u);
+      assert.equal(/Invoke-Expression|\biex\b/u.test(launcherSource), false);
     } else {
-      assert.match(installSource, /SCRIPT_DIR\/meshrix-mcp/u);
-      assert.equal(installSource.includes("eval "), false);
-      if (target.startsWith("macos-")) {
-        const installCommand: any = await fs.readFile(path.join(extractedRoot, "install.command"), "utf8");
-        assert.match(installCommand, /meshrix-mcp-install\.sh/u);
-      }
+      assert.match(launcherSource, /runtime\/node/u);
+      assert.match(launcherSource, /app\/bin\/meshrix-mcp\.ts/u);
+      assert.match(launcherSource, /"\$@"/u);
+      assert.equal(/curl|fetch|Invoke-WebRequest|registry/iu.test(launcherSource), false);
     }
-    const { stdout, stderr } = await runPortable(
-      installer,
-      windowsTarget ? ["-Command", "version", "-Json"] : ["version", "--json"]
-    );
+    const { stdout, stderr } = await runPortable(launcher, ["version", "--json"]);
     assertNoLeakText(stdout, "portable native version stdout");
     assertNoLeakText(stderr, "portable native version stderr");
     const payload: any = JSON.parse(stdout);
     assert.equal(payload.packageName, MCP_NPM_PACKAGE_NAME);
     assert.equal(payload.packageVersion, MCP_NPM_PACKAGE_VERSION);
     return {
-      delegatedToBundledConnector: true,
+      delegatedToSiblingNodeEntry: true,
       rawEvalAbsent: true
     };
   });
 
-  await test("Windows portable archive exposes PowerShell-only native entrypoints", async () : Promise<any> => {
+  await test("Windows portable archive exposes one PowerShell Node launcher", async () : Promise<any> => {
     const windowsOutputDir: any = path.join(tempRoot, "out-windows-contract");
     const windowsExtractDir: any = path.join(tempRoot, "extract-windows-contract");
     await fs.mkdir(windowsOutputDir, { recursive: true });
@@ -543,26 +537,25 @@ try {
     await extractTarball(windowsBundle.archivePath, windowsExtractDir);
     const windowsRoot: any = path.join(windowsExtractDir, windowsBundle.rootName);
     const files: any = await listFiles(windowsRoot);
-    for (const required of ["meshrix-mcp.ps1", "meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]) {
+    for (const required of ["meshrix-mcp.ps1"]) {
       assert.equal(files.includes(required), true, `missing Windows PowerShell entrypoint: ${required}`);
     }
     for (const prohibited of [
       "meshrix-mcp",
       "meshrix-mcp-install.sh",
       "meshrix-mcp-uninstall.sh",
-      "install.command",
-      "uninstall.command",
-      "doctor.command"
+      "meshrix-mcp-install.ps1",
+      "meshrix-mcp-uninstall.ps1"
     ]) {
       assert.equal(files.includes(prohibited), false, `unexpected Windows entrypoint: ${prohibited}`);
     }
     const readme: any = await fs.readFile(path.join(windowsRoot, "README.txt"), "utf8");
-    assert.match(readme, /Windows PowerShell install:/u);
-    assert.equal(readme.includes("./meshrix-mcp-install.sh"), false);
+    assert.match(readme, /meshrix-mcp\.ps1 register/u);
+    assert.equal(readme.includes("meshrix-mcp-install"), false);
     return {
-      powershellEntrypoints: 3,
+      powershellEntrypoints: 1,
       posixEntrypointsAbsent: true,
-      batchAliasesAbsent: files.every((file?: any) : any => !file.endsWith(".cmd"))
+      standaloneInstallerAssetsAbsent: true
     };
   });
 

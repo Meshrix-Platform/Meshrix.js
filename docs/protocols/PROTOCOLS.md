@@ -164,11 +164,12 @@ the bounded JSON-stdio protocol only after an explicit target action. The
 client applications remain independent products; the connector owns credential
 custody and the install/uninstall transaction.
 
-MCP user-device installation begins at platform-native launchers: macOS and Linux
-use `meshrix-mcp-install.sh`, and Windows uses `meshrix-mcp-install.ps1` only. The
-launchers validate arguments and delegate to the bundled connector, which is
-the single implementation of signed discovery, grants, local client search,
-batch and interactive installation, configuration, and uninstall.
+MCP user-device installation uses the `meshrix-mcp` executable shipped by the
+`meshrix.js` Node.js package. That CLI is the single implementation of argument
+validation, credential handling, signed discovery, local client search, client
+configuration, registration, and uninstall. The verified portable archive
+contains the same CLI and Node runtime behind a small POSIX or PowerShell
+launcher; those launchers only start the sibling runtime and forward arguments.
 
 ## Governance
 

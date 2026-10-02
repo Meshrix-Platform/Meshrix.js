@@ -7,7 +7,8 @@ import {
   PACKAGE_SOURCE_KIND,
   SCAN_COMMAND_TIMEOUT_MS
 } from "./constants.ts";
-import { expandHomePath, run, shellQuote, uniqueValues } from "./connector-process.ts";
+import { resolveCommandCandidates } from "#meshrix/foundation/environment-compatibility/index";
+import { expandHomePath, run, uniqueValues } from "./connector-process.ts";
 
 export function systemPosixPath(...segments: any[]) : any {
   return path.posix.join(path.posix.sep, ...segments);
@@ -34,7 +35,8 @@ export function executableNamesForPlatform(command?: any, platform: any = detect
   if (!value) {
     return [];
   }
-  if (platform !== "win32" || path.extname(value)) {
+  const pathApi: any = platform === "win32" ? path.win32 : path.posix;
+  if (platform !== "win32" || pathApi.extname(value)) {
     return [value];
   }
   return [value, `${value}.exe`, `${value}.cmd`, `${value}.bat`, `${value}.ps1`];
@@ -99,33 +101,11 @@ export async function detectPathCommandPaths(command?: any, platform: any = dete
   if (!value) {
     return [];
   }
-  if (path.isAbsolute(value) || value.includes(path.sep)) {
-    return await pathExists(value) ? [value] : [];
-  }
-  if (platform === "win32") {
-    const names: any = executableNamesForPlatform(value, platform);
-    const paths: any[] = [];
-    const whereExecutable: any = path.join(
-      process.env.SystemRoot || path.win32.join(process.env.SystemDrive || "C:", "Windows"),
-      "System32",
-      "where.exe"
-    );
-    for (const executableName of names) {
-      const result: any = await run(whereExecutable, [executableName], { allowFailure: true, timeoutMs: SCAN_COMMAND_TIMEOUT_MS });
-      if (result.ok) {
-        paths.push(...result.stdout.split(/\r?\n/).map((line?: any) : any => line.trim()).filter(Boolean));
-      }
-    }
-    return uniqueResolvedLocalPaths(await filterProjectLocalPackageExecutables(paths, platform));
-  }
-  const result: any = await run("bash", [
-    "-c",
-    `type -a -p ${shellQuote(value)} 2>/dev/null | awk '!seen[$0]++'`
-  ], { allowFailure: true, timeoutMs: SCAN_COMMAND_TIMEOUT_MS });
-  if (!result.ok) {
-    return [];
-  }
-  const paths: any = result.stdout.split(/\r?\n/).map((line?: any) : any => line.trim()).filter(Boolean);
+  const candidates = resolveCommandCandidates(executableNamesForPlatform(value, platform), {
+    platform,
+    includeDefaultLocalBin: false
+  });
+  const paths = candidates.map(({ path: candidatePath }) => candidatePath);
   return uniqueResolvedLocalPaths(await filterProjectLocalPackageExecutables(paths, platform));
 }
 
@@ -446,19 +426,44 @@ export async function listMacApplicationPaths() : Promise<any> {
   const roots: any[] = ["/Applications", path.join(os.homedir(), "Applications")];
   const apps: any[] = [];
   for (const root of roots) {
-    if (!await directoryExists(root)) {
-      continue;
-    }
-    const found: any = await run("find", [root, "-maxdepth", "3", "-name", "*.app", "-type", "d"], {
-      allowFailure: true,
-      timeoutMs: 5000
-    });
-    if (found.ok) {
-      apps.push(...found.stdout.split(/\r?\n/).map((line?: any) : any => line.trim()).filter(Boolean));
-    }
+    apps.push(...await listFilesystemEntries(root, 3, (entry: any, childPath: string) =>
+      entry.isDirectory() && path.basename(childPath).endsWith(".app")
+    ));
   }
   macApplicationPathCache = uniqueValues(apps);
   return macApplicationPathCache;
+}
+
+export async function listFilesystemEntries(
+  root: string,
+  maximumDepth: number,
+  matches: (entry: any, entryPath: string) => boolean
+): Promise<string[]> {
+  const found: string[] = [];
+  const visit = async (directoryPath: string, depth: number): Promise<void> => {
+    let directory: any;
+    try {
+      directory = await fs.opendir(directoryPath);
+    } catch {
+      return;
+    }
+    try {
+      for await (const entry of directory) {
+        const entryPath = path.join(directoryPath, entry.name);
+        const entryDepth = depth + 1;
+        if (matches(entry, entryPath) && entryDepth <= maximumDepth) {
+          found.push(entryPath);
+        }
+        if (entry.isDirectory() && entryDepth < maximumDepth) {
+          await visit(entryPath, entryDepth);
+        }
+      }
+    } catch {
+      return;
+    }
+  };
+  await visit(root, 0);
+  return found;
 }
 
 export async function macAppExecutablePaths(command?: any) : Promise<any> {
@@ -503,11 +508,10 @@ export async function linuxDesktopExecutablePaths(command?: any) : Promise<any> 
   ];
   const paths: any[] = [];
   for (const root of roots) {
-    if (!await directoryExists(root)) {
-      continue;
-    }
-    const found: any = await run("find", [root, "-maxdepth", "2", "-name", "*.desktop", "-type", "f"], { allowFailure: true, timeoutMs: 5000 });
-    for (const filePath of found.stdout.split(/\r?\n/).map((line?: any) : any => line.trim()).filter(Boolean)) {
+    const desktopFiles = await listFilesystemEntries(root, 2, (entry: any, entryPath: string) =>
+      entry.isFile() && entryPath.endsWith(".desktop")
+    );
+    for (const filePath of desktopFiles) {
       const content: any = await fs.readFile(filePath, "utf8").catch(() : any => "");
       const nameLine: any = content.split(/\r?\n/).find((line?: any) : any => line.startsWith("Name="));
       const execLine: any = content.split(/\r?\n/).find((line?: any) : any => line.startsWith("Exec="));
@@ -536,7 +540,7 @@ export async function windowsAppExecutablePaths(command?: any) : Promise<any> {
   }
   const script: any = [
     "$ErrorActionPreference = 'SilentlyContinue'",
-    `$needle = ${JSON.stringify(String(command || "").toLowerCase())}`,
+    "$needle = [string]$env:MESHRIX_MCP_SCAN_NAME",
     "$paths = @()",
     "$appPathRoots = @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths')",
     "foreach ($root in $appPathRoots) {",
@@ -555,7 +559,11 @@ export async function windowsAppExecutablePaths(command?: any) : Promise<any> {
     "}",
     "$paths | Select-Object -Unique"
   ].join("\n");
-  const result: any = await run("powershell.exe", ["-NoProfile", "-Command", script], { allowFailure: true, timeoutMs: 5000 });
+  const result: any = await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    env: { MESHRIX_MCP_SCAN_NAME: String(command || "").toLowerCase() },
+    allowFailure: true,
+    timeoutMs: 5000
+  });
   if (!result.ok) {
     return [];
   }

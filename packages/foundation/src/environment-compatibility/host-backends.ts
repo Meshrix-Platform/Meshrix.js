@@ -1,7 +1,6 @@
-import fsSync from "node:fs";
-import path from "node:path";
 import {
-  commandAvailable
+  commandAvailable,
+  resolveCommandCandidate
 } from "./host-runtime.ts";
 
 type CommandAvailable = (command: string) => boolean;
@@ -95,23 +94,13 @@ export function windowsDpapiCommand({
   return "";
 }
 
-export function commandExistsInPath(command: unknown = "", { env = process.env }: { env?: HostEnvironment } = {}): boolean {
-  const executable = text(command);
-  if (!executable) {
-    return false;
-  }
-  const suffixes = process.platform === "win32" && !/\.(?:exe|cmd|bat)$/i.test(executable)
-    ? ["", ".exe", ".cmd", ".bat"]
-    : [""];
-  for (const dir of text(env.PATH).split(path.delimiter).map(text).filter(Boolean)) {
-    for (const suffix of suffixes) {
-      try {
-        fsSync.accessSync(path.join(dir, `${executable}${suffix}`), fsSync.constants.X_OK);
-        return true;
-      } catch {
-        // Keep scanning PATH.
-      }
-    }
-  }
-  return false;
+export function commandExistsInPath(
+  command: unknown = "",
+  { env = process.env, platform = process.platform }: { env?: HostEnvironment; platform?: NodeJS.Platform | string } = {}
+): boolean {
+  return resolveCommandCandidate(command, {
+    env: env as NodeJS.ProcessEnv,
+    platform,
+    includeDefaultLocalBin: false
+  }).found;
 }
