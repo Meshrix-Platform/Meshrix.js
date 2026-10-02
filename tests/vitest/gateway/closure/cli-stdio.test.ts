@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { modernRequestMessage } from "../support.ts";
+import { assertPeerReady } from "./cli-fixture-readiness.ts";
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const children: ChildProcess[] = [];
@@ -22,13 +23,32 @@ async function stopTestChild(child: ChildProcess): Promise<void> {
 }
 afterEach(async () => { await Promise.all(children.splice(0).map(stopTestChild)); });
 
-async function waitForFile(path: string, timeoutMs = 5_000): Promise<string> {
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function waitForFile(path: string, timeoutMs = 5_000, owner?: ChildProcess): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try { return await readFile(path, "utf8"); }
-    catch { await new Promise((resolve) => setTimeout(resolve, 10)); }
+    catch (error) {
+      if (!isMissingFile(error)) throw error;
+      if (owner && (owner.exitCode !== null || owner.signalCode !== null)) throw new Error("The owning CLI exited before its fixture marker was published.");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
   }
   throw new Error("The controlled stdio upstream did not write its marker.");
+}
+
+async function waitForChildExit(child: ChildProcess, timeoutMs: number, message: string): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); child.off("exit", onExit); };
+    const onExit = () => { cleanup(); resolve(); };
+    const timer = setTimeout(() => { cleanup(); reject(new Error(message)); }, timeoutMs);
+    child.once("exit", onExit);
+    if (child.exitCode !== null || child.signalCode !== null) onExit();
+  });
 }
 
 async function waitForStdoutBackpressure(child: ChildProcess, timeoutMs = 5_000): Promise<void> {
@@ -50,8 +70,13 @@ function withTestWatchdog<T>(promise: Promise<T>, timeoutMs: number): Promise<T>
   ]).finally(() => { if (timer) clearTimeout(timer); });
 }
 
-const controlledOwnedStdioPeer = `import { writeFileSync } from 'node:fs';
-writeFileSync(process.argv[2] + '.pid', String(process.pid));
+const controlledOwnedStdioPeer = `import { renameSync, writeFileSync } from 'node:fs';
+function publishFile(suffix, value) {
+  const target = process.argv[2] + suffix;
+  const pending = target + '.writing';
+  writeFileSync(pending, value);
+  renameSync(pending, target);
+}
 let buffered = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => {
@@ -63,15 +88,19 @@ process.stdin.on('data', chunk => {
     if (!line) continue;
     const wire = JSON.parse(line);
     if (wire.id === undefined) continue;
-    if (wire.method === 'tools/call') { writeFileSync(process.argv[2] + '.call', String(wire.id)); continue; }
+    if (wire.method === 'prompts/list') publishFile('.ready', 'ready');
+    if (wire.method === 'tools/call') {
+      publishFile('.call', String(wire.id));
+      if (wire.params?.arguments?.__exitSignal === 'SIGUSR2') process.kill(process.pid, 'SIGUSR2');
+      continue;
+    }
     const result = wire.method === 'server/discover' ? { resultType: 'complete', supportedVersions: ['2026-07-28'] }
       : wire.method === 'tools/list' ? { resultType: 'complete', tools: [{ name: 'synthetic', inputSchema: { type: 'object' } }] }
         : { resultType: 'complete', resources: [], resourceTemplates: [], prompts: [] };
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: wire.id, result }) + '\\n');
   }
 });
-process.on('SIGTERM', () => { writeFileSync(process.argv[2] + '.closed', 'closed'); process.exit(0); });
-process.on('SIGUSR2', () => process.exit(7));
+process.on('SIGTERM', () => { publishFile('.closed', 'closed'); process.exit(0); });
 `;
 
 describe("real local stdio gateway", () => {
@@ -89,33 +118,48 @@ describe("real local stdio gateway", () => {
     });
     await new Promise<void>((resolve) => peer.listen(0, "127.0.0.1", resolve));
     const directory = await mkdtemp(join(tmpdir(), "meshrix-stdio-cli-"));
+    let child: ChildProcess | undefined;
+    let output: ReturnType<typeof createInterface> | undefined;
     try {
       const address = peer.address();
       if (!address || typeof address === "string") throw new Error("synthetic peer is unavailable");
       const config = join(directory, "gateway.json");
       await writeFile(config, JSON.stringify({ profile: "local", services: [{ serviceId: "synthetic", baseUrl: "$MESHRIX_INTEROP_PEER_ENDPOINT", toolRisk: { synthetic: "read" } }] }));
       const installed = process.env.MESHRIX_TEST_INSTALLED_GATEWAY_ENTRY;
-      const child = spawn(process.execPath, [...(installed ? [] : ["--conditions=source"]), installed ?? join(repo, "apps/mcp-gateway-installer/src/cli.ts"), "serve", "--transport", "stdio", "--config", config], {
+      const cli = spawn(process.execPath, [...(installed ? [] : ["--conditions=source"]), installed ?? join(repo, "apps/mcp-gateway-installer/src/cli.ts"), "serve", "--transport", "stdio", "--config", config], {
         cwd: installed ? dirname(installed) : repo, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, MESHRIX_INTEROP_PEER_ENDPOINT: `http://127.0.0.1:${address.port}/mcp` }
       });
-      children.push(child);
-      const output = createInterface({ input: child.stdout!, crlfDelay: Infinity });
+      child = cli;
+      children.push(cli);
+      const lines = createInterface({ input: cli.stdout!, crlfDelay: Infinity });
+      output = lines;
       const request = async (method: string, params: Record<string, unknown> = {}) => {
         const reply = new Promise<Record<string, any>>((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error("stdio response timed out")), 10_000);
-          output.once("line", (line) => { clearTimeout(timer); resolve(JSON.parse(line)); });
-          child.once("exit", () => { clearTimeout(timer); reject(new Error("stdio gateway exited")); });
+          const cleanup = () => { clearTimeout(timer); lines.off("line", onLine); cli.off("exit", onExit); };
+          const onLine = (line: string) => { cleanup(); resolve(JSON.parse(line)); };
+          const onExit = () => { cleanup(); reject(new Error("stdio gateway exited")); };
+          const timer = setTimeout(() => { cleanup(); reject(new Error("stdio response timed out")); }, 10_000);
+          lines.once("line", onLine);
+          cli.once("exit", onExit);
+          if (cli.exitCode !== null || cli.signalCode !== null) onExit();
         });
-        child.stdin!.write(`${JSON.stringify(modernRequestMessage(method, method, params))}\n`);
+        if (cli.exitCode === null && cli.signalCode === null) cli.stdin!.write(`${JSON.stringify(modernRequestMessage(method, method, params))}\n`);
         return reply;
       };
       expect((await request("tools/list")).result.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: "synthetic" })]));
       expect((await request("tools/call", { name: "synthetic", arguments: {} })).result).toMatchObject({ resultType: "complete", content: [{ text: "stdio-peer" }] });
-      child.stdin!.end();
-      await new Promise<void>((resolve) => child.once("exit", resolve));
-      expect(child.exitCode).toBe(0);
-      output.close();
-    } finally { await new Promise<void>((resolve) => peer.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
+      cli.stdin!.end();
+      await waitForChildExit(cli, 5_000, "The stdio CLI did not exit after EOF.");
+      expect(cli.exitCode).toBe(0);
+    } finally {
+      try {
+        if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child);
+      } finally {
+        output?.close();
+        try { await new Promise<void>((resolve) => peer.close(() => resolve())); }
+        finally { await rm(directory, { recursive: true, force: true }); }
+      }
+    }
   }, 20_000);
 
   it("settles a held owned stdio peer on CLI SIGTERM and closes the peer", async () => {
@@ -134,6 +178,7 @@ describe("real local stdio gateway", () => {
       });
       children.push(child);
       output = createInterface({ input: child.stdout!, crlfDelay: Infinity });
+      assertPeerReady(await waitForFile(`${marker}.ready`, 5_000, child));
       const request = (method: string, id: string, params: Record<string, unknown> = {}) => withTestWatchdog(new Promise<Record<string, unknown>>((resolve, reject) => {
         const cleanup = () => { clearTimeout(timer); output!.off("line", onLine); child!.off("exit", onExit); };
         const onLine = (line: string) => { cleanup(); resolve(JSON.parse(line) as Record<string, unknown>); };
@@ -146,20 +191,18 @@ describe("real local stdio gateway", () => {
 
       expect(await request("tools/list", "list")).toMatchObject({ id: "list", result: { tools: [expect.objectContaining({ name: "synthetic" })] } });
       const heldCall = request("tools/call", "held-call", { name: "synthetic", arguments: {} });
-      await waitForFile(`${marker}.call`);
+      await waitForFile(`${marker}.call`, 5_000, child);
       child.kill("SIGTERM");
       expect(await heldCall).toMatchObject({ id: "held-call" });
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("CLI did not exit after upstream cancellation.")), 5_000);
-        if (child!.exitCode !== null || child!.signalCode !== null) { clearTimeout(timer); resolve(); return; }
-        child!.once("exit", () => { clearTimeout(timer); resolve(); });
-      });
+      await waitForChildExit(child, 5_000, "CLI did not exit after upstream cancellation.");
       expect(child.exitCode).toBe(0);
       expect(await waitForFile(`${marker}.closed`)).toBe("closed");
     } finally {
-      output?.close();
-      if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child);
-      await rm(directory, { recursive: true, force: true });
+      try { if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child); }
+      finally {
+        try { output?.close(); }
+        finally { await rm(directory, { recursive: true, force: true }); }
+      }
     }
   }, 15_000);
 
@@ -179,6 +222,7 @@ describe("real local stdio gateway", () => {
       });
       children.push(child);
       output = createInterface({ input: child.stdout!, crlfDelay: Infinity });
+      assertPeerReady(await waitForFile(`${marker}.ready`, 5_000, child));
       const request = (method: string, id: string, params: Record<string, unknown> = {}) => withTestWatchdog(new Promise<Record<string, unknown>>((resolve, reject) => {
         const cleanup = () => { clearTimeout(timer); output!.off("line", onLine); child!.off("exit", onExit); };
         const onLine = (line: string) => { cleanup(); resolve(JSON.parse(line) as Record<string, unknown>); };
@@ -190,22 +234,18 @@ describe("real local stdio gateway", () => {
       }), 6_000);
 
       expect(await request("tools/list", "list")).toMatchObject({ id: "list", result: { tools: [expect.objectContaining({ name: "synthetic" })] } });
-      const failedCall = request("tools/call", "peer-failure", { name: "synthetic", arguments: {} });
-      await waitForFile(`${marker}.call`);
-      const peerPid = Number(await waitForFile(`${marker}.pid`));
-      process.kill(peerPid, "SIGUSR2");
+      const failedCall = request("tools/call", "peer-failure", { name: "synthetic", arguments: { __exitSignal: "SIGUSR2" } });
+      await waitForFile(`${marker}.call`, 5_000, child);
       expect(await failedCall).toMatchObject({ id: "peer-failure", error: expect.any(Object) });
       child.stdin!.end();
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("CLI did not exit after the stdio peer failure.")), 5_000);
-        if (child!.exitCode !== null || child!.signalCode !== null) { clearTimeout(timer); resolve(); return; }
-        child!.once("exit", () => { clearTimeout(timer); resolve(); });
-      });
+      await waitForChildExit(child, 5_000, "CLI did not exit after the stdio peer failure.");
       expect(child.exitCode).toBe(0);
     } finally {
-      output?.close();
-      if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child);
-      await rm(directory, { recursive: true, force: true });
+      try { if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child); }
+      finally {
+        try { output?.close(); }
+        finally { await rm(directory, { recursive: true, force: true }); }
+      }
     }
   }, 15_000);
 
@@ -215,11 +255,14 @@ describe("real local stdio gateway", () => {
     const marker = join(directory, "peer");
     const config = join(directory, "gateway.json");
     let child: ChildProcess | undefined;
-    let peerPid: number | undefined;
-    let stderr = "";
     try {
-      await writeFile(script, `import { writeFileSync } from 'node:fs';
-writeFileSync(process.argv[2] + '.pid', String(process.pid));
+      await writeFile(script, `import { renameSync, writeFileSync } from 'node:fs';
+function publishFile(suffix, value) {
+  const target = process.argv[2] + suffix;
+  const pending = target + '.writing';
+  writeFileSync(pending, value);
+  renameSync(pending, target);
+}
 let buffered = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => {
@@ -231,8 +274,9 @@ process.stdin.on('data', chunk => {
     if (!line) continue;
     const wire = JSON.parse(line);
     if (wire.id === undefined) continue;
+    if (wire.method === 'prompts/list') publishFile('.ready', 'ready');
     if (wire.method === 'tools/call') {
-      writeFileSync(process.argv[2] + '.call', String(wire.id));
+      publishFile('.call', String(wire.id));
       const result = { resultType: 'complete', content: [{ type: 'text', text: 'x'.repeat(700 * 1024) }] };
       process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: wire.id, result }) + '\\n');
       continue;
@@ -243,7 +287,7 @@ process.stdin.on('data', chunk => {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: wire.id, result }) + '\\n');
   }
 });
-process.on('SIGTERM', () => { writeFileSync(process.argv[2] + '.closed', 'closed'); process.exit(0); });
+process.on('SIGTERM', () => { publishFile('.closed', 'closed'); process.exit(0); });
 `);
       await writeFile(config, JSON.stringify({ profile: "local", services: [{ serviceId: "large-stdio", transport: "stdio", command: process.execPath, args: [script, marker], toolRisk: { synthetic: "read" } }] }));
       const installed = process.env.MESHRIX_TEST_INSTALLED_GATEWAY_ENTRY;
@@ -251,27 +295,18 @@ process.on('SIGTERM', () => { writeFileSync(process.argv[2] + '.closed', 'closed
         cwd: installed ? dirname(installed) : repo, stdio: ["pipe", "pipe", "pipe"]
       });
       children.push(child);
-      child.stderr?.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
-      peerPid = Number(await waitForFile(`${marker}.pid`));
+      assertPeerReady(await waitForFile(`${marker}.ready`, 5_000, child));
       child.stdin!.write(`${JSON.stringify(modernRequestMessage("tools/call", "large-reply", { name: "synthetic", arguments: {} }))}\n`);
-      await waitForFile(`${marker}.call`);
+      await waitForFile(`${marker}.call`, 5_000, child);
       await waitForStdoutBackpressure(child);
 
       child.kill("SIGTERM");
       expect(await waitForFile(`${marker}.closed`, 1_500)).toBe("closed");
-      if (child.exitCode === null && child.signalCode === null) {
-        await withTestWatchdog(new Promise<void>((resolve) => child!.once("exit", () => resolve())), 1_500)
-          .catch(() => { throw new Error(`CLI did not exit after stdout cancellation (exitCode=${child!.exitCode}, signalCode=${child!.signalCode}): ${stderr.slice(-3000)}`); });
-      }
+      await waitForChildExit(child, 1_500, `CLI did not exit after stdout cancellation (exitCode=${child.exitCode}, signalCode=${child.signalCode}).`);
       expect(child.exitCode).toBe(0);
     } finally {
-      if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child);
-      if (peerPid !== undefined) {
-        try { process.kill(peerPid, "SIGTERM"); } catch {}
-        try { await waitForFile(`${marker}.closed`, 1_000); }
-        catch { try { process.kill(peerPid, "SIGKILL"); } catch {} }
-      }
-      await rm(directory, { recursive: true, force: true });
+      try { if (child && child.exitCode === null && child.signalCode === null) await stopTestChild(child); }
+      finally { await rm(directory, { recursive: true, force: true }); }
     }
   }, 12_000);
 });
