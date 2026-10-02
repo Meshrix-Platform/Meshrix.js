@@ -69,7 +69,7 @@ export function hasSuccessfulActJob(raw: string, jobId: string): boolean {
   return result === "success";
 }
 
-async function runAct(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, log: string): Promise<number> {
+async function runLoggedCommand(binary: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, log: string): Promise<number> {
   const file = await fs.open(log, "w", 0o600);
   try {
     return await new Promise<number>((resolve, reject) => {
@@ -92,6 +92,9 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   const binary = process.env.MESHRIX_CI_ACT_BINARY || "act";
+  const uid = process.getuid?.();
+  const gid = process.getgid?.();
+  if (!uid || gid === undefined) throw new Error("local_ci_requires_non_root_posix_operator");
   const actVersion = readCommand(binary, ["--version"]);
   const candidate = readCommand("git", ["rev-parse", "HEAD"]);
   const headRef = readCommand("git", ["symbolic-ref", "--short", "HEAD"]);
@@ -101,6 +104,9 @@ async function main(argv: string[]): Promise<void> {
   if (readCommand("git", ["diff", "HEAD", "--name-only"])) throw new Error("local_ci_commit_changes_before_snapshot");
   const dockerHost = process.env.DOCKER_HOST || readCommand("docker", ["context", "inspect", "--format", "{{.Endpoints.docker.Host}}"]);
   if (!dockerHost.startsWith("unix://")) throw new Error("local_ci_requires_local_docker_socket");
+  const socketGroup = (await fs.stat(dockerHost.slice("unix://".length))).gid;
+  // Desktop daemons map the socket to group 0; Linux preserves its host group.
+  const socketGroups = [...new Set([0, socketGroup])].map((group) => `--group-add ${group}`).join(" ");
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-ci-"));
   await fs.chmod(scratch, 0o700);
   const home = path.join(scratch, "home");
@@ -128,6 +134,15 @@ async function main(argv: string[]): Promise<void> {
       PATH: process.env.PATH, HOME: home, XDG_CONFIG_HOME: home,
       TMPDIR: temporary, DOCKER_HOST: dockerHost,
     };
+    const imageIdFile = path.join(scratch, "runner-image-id");
+    const imageLog = path.join(scratch, "runner-image.log");
+    const imageExit = await runLoggedCommand("docker", ["build", "--platform", "linux/amd64",
+      "--build-arg", `CI_UID=${uid}`, "--build-arg", `CI_GID=${gid}`,
+      "--iidfile", imageIdFile, "tools/ci"], checkout, env, imageLog);
+    await writeVerificationArtifacts(await fs.readFile(imageLog, "utf8"), path.join(diagnostics, "runner-image"));
+    if (imageExit !== 0) throw new Error("local_ci_runner_image_failed");
+    const runnerImage = (await fs.readFile(imageIdFile, "utf8")).trim();
+    if (!/^sha256:[a-f0-9]{64}$/u.test(runnerImage)) throw new Error("local_ci_runner_image_invalid");
     for (const name of options.jobs) {
       const job = LOCAL_CI_JOBS[name];
       const result: JobResult = { job: name, status: "incomplete", exitCode: null };
@@ -139,15 +154,15 @@ async function main(argv: string[]): Promise<void> {
         const log = path.join(scratch, `${name}.log`);
         const directory = path.join(diagnostics, name);
         console.log(`[local-ci] ${name}: started (${candidate.slice(0, 12)})`);
-        const exitCode = await runAct(binary, [job.event,
+        const exitCode = await runLoggedCommand(binary, [job.event,
           "--workflows", `.github/workflows/${job.workflow}`, "--job", job.job,
           "--eventpath", event, "--actor", "local-ci", "--defaultbranch", "nightly",
-          "--platform", "ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-24.04",
-          "--platform", "ubuntu-24.04=ghcr.io/catthehacker/ubuntu:act-24.04",
+          "--platform", `ubuntu-latest=${runnerImage}`,
+          "--platform", `ubuntu-24.04=${runnerImage}`,
           "--container-architecture", "linux/amd64",
           "--container-daemon-socket", dockerHost,
-          "--container-options", `--volume ${scratch}:${scratch}`,
-          "--env", `TMPDIR=${temporary}`, "--env", "CI=true",
+          "--container-options", `--volume ${scratch}:${scratch} ${socketGroups}`,
+          "--env", `TMPDIR=${temporary}`, "--env", `HOME=${home}`, "--env", "CI=true",
           "--env", `npm_config_cache=${temporary}/${name}-npm-cache`,
           "--env", `npm_config_userconfig=${userConfig}`, "--env", `npm_config_globalconfig=${globalConfig}`,
           "--env-file", "/dev/null", "--secret-file", "/dev/null", "--var-file", "/dev/null", "--input-file", "/dev/null",

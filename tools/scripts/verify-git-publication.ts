@@ -168,6 +168,66 @@ function stagedPaths() : any {
   ]).split("\0").filter(Boolean);
 }
 
+interface BlobEntry { oid: string; file: string; mode: string }
+
+/** Read Git's immutable objects in bounded batches, preserving bytes and per-path policy. */
+function* readBlobs<T extends BlobEntry>(entries: T[]): Generator<{ entry: T; bytes: Buffer | null }> {
+  if (!entries.length) return;
+  const objectIds = [...new Set(entries.map((entry) => entry.oid))];
+  const sizes = new Map<string, number>();
+  const metadata = String(git(["cat-file", "--batch-check"], { input: `${objectIds.join("\n")}\n` })).trimEnd().split("\n");
+  if (metadata.length !== objectIds.length) throw new Error("Incomplete Git object metadata");
+  for (const [index, line] of metadata.entries()) {
+    const [oid, type, sizeText] = line.split(" ");
+    const size = Number(sizeText);
+    if (oid !== objectIds[index] || type !== "blob" || !Number.isSafeInteger(size) || size < 0) {
+      throw new Error("Invalid Git blob metadata");
+    }
+    sizes.set(oid, size);
+  }
+  let cursor = 0;
+  while (cursor < entries.length) {
+    const batch: T[] = [];
+    const requested = new Set<string>();
+    let expectedBytes = 0;
+    while (cursor < entries.length && batch.length < 256) {
+      const entry = entries[cursor];
+      const size = sizes.get(entry.oid)!;
+      const additionalBytes = size > MAX_TEXT_BYTES || requested.has(entry.oid) ? 0 : size;
+      if (batch.length && expectedBytes + additionalBytes > 8 * 1024 * 1024) break;
+      batch.push(entry);
+      cursor++;
+      expectedBytes += additionalBytes;
+      if (size <= MAX_TEXT_BYTES) requested.add(entry.oid);
+    }
+    const blobs = new Map<string, Buffer>();
+    if (requested.size) {
+      const output: Buffer = git(["cat-file", "--batch"], { encoding: "buffer", input: `${[...requested].join("\n")}\n` });
+      let offset = 0;
+      for (const oid of requested) {
+        const size = sizes.get(oid)!;
+        const header = Buffer.from(`${oid} blob ${size}\n`);
+        if (!output.subarray(offset, offset + header.length).equals(header)) throw new Error("Invalid Git blob header");
+        offset += header.length;
+        if (output[offset + size] !== 10) throw new Error("Incomplete Git blob body");
+        blobs.set(oid, output.subarray(offset, offset + size));
+        offset += size + 1;
+      }
+      if (offset !== output.length) throw new Error("Unexpected Git blob output");
+    }
+    for (const entry of batch) yield { entry, bytes: blobs.get(entry.oid) ?? null };
+  }
+}
+
+function scanBlob(entry: BlobEntry, bytes: Buffer | null): any[] {
+  if (bytes === null) return [...scanPath(entry.file), finding("oversized-publication-candidate", entry.file)];
+  const findings = scanBytes(entry.file, bytes);
+  if (entry.mode === "120000" && path.isAbsolute(bytes.toString("utf8"))) {
+    findings.push(finding("absolute-symbolic-link", entry.file));
+  }
+  return findings;
+}
+
 function verifyIndexEntries(
   entries?: any,
   label?: any,
@@ -178,14 +238,10 @@ function verifyIndexEntries(
   for (const entry of entries) {
     if (entry.stage !== "0") {
       findings.push(finding("unmerged-index-entry", entry.file));
-      continue;
     }
-    const bytes: any = git(["cat-file", "blob", entry.oid], { encoding: "buffer" });
-    findings.push(...scanBytes(entry.file, bytes));
-    if (entry.mode === "120000") {
-      const target: any = bytes.toString("utf8");
-      if (path.isAbsolute(target)) findings.push(finding("absolute-symbolic-link", entry.file));
-    }
+  }
+  for (const { entry, bytes } of readBlobs<BlobEntry>(entries.filter((entry: { stage: string }) => entry.stage === "0"))) {
+    findings.push(...scanBlob(entry, bytes));
   }
   if (guardIndex) {
     const after: any = git(["write-tree"]).trim();
@@ -245,15 +301,16 @@ export function verifyOutgoingUpdates(input?: any) : any {
         scannedCommits.add(commit);
         findings.push(...scanBytes(`<commit-message:${commit.slice(0, 12)}>`, commitMessage(commit)));
       }
+      const unscanned: BlobEntry[] = [];
       for (const entry of entries) {
         findings.push(...scanPath(entry.file));
-        if (entry.type !== "blob" || scannedBlobs.has(entry.oid)) continue;
-        scannedBlobs.add(entry.oid);
-        const bytes: any = git(["cat-file", "blob", entry.oid], { encoding: "buffer" });
-        findings.push(...scanBytes(entry.file, bytes));
-        if (entry.mode === "120000" && path.isAbsolute(bytes.toString("utf8"))) {
-          findings.push(finding("absolute-symbolic-link", entry.file));
-        }
+        const identity = `${entry.mode}\0${entry.file}\0${entry.oid}`;
+        if (entry.type !== "blob" || scannedBlobs.has(identity)) continue;
+        scannedBlobs.add(identity);
+        unscanned.push(entry);
+      }
+      for (const { entry, bytes } of readBlobs(unscanned)) {
+        findings.push(...scanBlob(entry, bytes));
       }
     }
   }

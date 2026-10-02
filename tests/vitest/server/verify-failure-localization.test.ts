@@ -34,6 +34,7 @@ describe("pull-request verification feedback", () => {
     const localRoot = ["", "home", "fixture-user", "project"].join("/");
     const log = ["Stage: first", "Error: npm_artifact_failure_1_E404", ...Array.from({ length: 120 }, (_, index) => `diagnostic ${index}`),
       `${localRoot}/src/module.ts:4:2 error TS2322: Type mismatch`, `credential=${secret}`,
+      "docker exec cmd=[chown -R 1234:5678 /var/run/act/actions] user=0",
       ["-----BEGIN", "PRIVATE KEY-----"].join(" "), "syntheticKeyBody", ["-----END", "PRIVATE KEY-----"].join(" "),
       'payload: {"content":"synthetic private request"}', 'ciphertext="synthetic encrypted value"',
       "payload: {", '  "message": "synthetic private continuation"', "}",
@@ -43,6 +44,8 @@ describe("pull-request verification feedback", () => {
     expect(safe.split("\n")).toHaveLength(log.split("\n").length);
     for (const item of ["Stage: first", "npm_artifact_failure_1_E404", "diagnostic 0", "diagnostic 60", "diagnostic 119", "src/module.ts:4:2", "expected 1 to equal 2", "Stage: final"]) expect(safe).toContain(item);
     for (const item of [localRoot, secret, "syntheticKeyBody", "synthetic private", "synthetic encrypted", "synthetic continuation"]) expect(safe).not.toContain(item);
+    expect(safe).not.toContain("1234:5678");
+    expect(safe).toContain("chown -R <runner-uid>:<runner-gid>");
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-ci-diagnostics-"));
     try {
       const report = path.join(directory, "input.json");
