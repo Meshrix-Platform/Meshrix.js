@@ -2903,6 +2903,11 @@ export function createUpstreamGatewayRegistry({
         await Promise.allSettled(subscriptions);
         await Promise.allSettled([...activeRegistryWork]);
         try {
+          await schemaPort.close?.();
+        } catch {
+          closeFailed = true;
+        }
+        try {
           await closeGatewayRuntime?.();
         } catch {
           closeFailed = true;

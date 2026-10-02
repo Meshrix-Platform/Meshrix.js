@@ -147,9 +147,13 @@ Each upstream gateway registry owns one bounded MCP session manager. The support
 The Agents upstream-gateway feature consumes a narrow domain-owned schema port
 for synchronous budget inspection and isolated input validation; the
 composition root injects the Gateway-backed implementation, and Agents never
-imports Gateway internals or kernel error types. Each validation owns and
-closes its isolated worker work, caller cancellation propagates into the port,
-and an injected implementation retains its own lifetime.
+imports Gateway internals or kernel error types. A registry owns one injected
+port for its lifetime: the Gateway-backed port reuses one lazily started,
+bounded Worker pool for schema calls, and registry shutdown closes that pool
+after active work settles. Worker module/Ajv initialization completes before a
+schema job begins its execution budget; hostile schema compilation and value
+validation remain inside the isolated Worker and the existing execution budget.
+Caller cancellation propagates through the port and releases the affected job.
 
 The registry factory and its public methods are typed by
 `packages/agents/src/upstream-gateway/registry-types.ts`: options are explicit

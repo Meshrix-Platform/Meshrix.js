@@ -58,6 +58,10 @@ interface IsolatedReply {
   readonly code?: string;
 }
 
+type SchemaWorkerMessage =
+  | Readonly<{ type: "ready" }>
+  | Readonly<{ type: "result"; jobId: number; result: IsolatedReply }>;
+
 interface IsolationJob {
   readonly schema: unknown;
   readonly value?: unknown;
@@ -65,6 +69,17 @@ interface IsolationJob {
   readonly signal?: AbortSignal;
   readonly resolve: (result: IsolatedReply) => void;
   readonly reject: (error: unknown) => void;
+  queuedAbort?: () => void;
+}
+
+interface ActiveIsolationJob {
+  readonly job: IsolationJob;
+  readonly jobId: number;
+  readonly finish: (result?: IsolatedReply, error?: unknown, discard?: boolean) => void;
+  readonly aborted: () => void;
+  phase: "starting" | "running";
+  settled: boolean;
+  timer?: ReturnType<typeof setTimeout>;
 }
 
 /** Workers keep hostile Ajv compilation and RegExp evaluation off the ingress event loop. */
@@ -73,8 +88,9 @@ export class IsolatedSchemaValidator {
   readonly #pending: IsolationJob[] = [];
   readonly #workers = new Set<Worker>();
   readonly #idle: Worker[] = [];
-  readonly #active = new Map<Worker, (result?: IsolatedReply, error?: unknown, discard?: boolean) => void>();
+  readonly #active = new Map<Worker, ActiveIsolationJob>();
   readonly #terminating = new Set<Promise<number>>();
+  #nextJobId = 0;
   #closed = false;
 
   constructor(options: { readonly budget?: SchemaBudget } = {}) {
@@ -82,7 +98,8 @@ export class IsolatedSchemaValidator {
   }
 
   stats(): Readonly<{ workers: number; active: number; queued: number; deadlineTimers: number }> {
-    return Object.freeze({ workers: this.#workers.size, active: this.#active.size, queued: this.#pending.length, deadlineTimers: this.#active.size });
+    const deadlineTimers = [...this.#active.values()].filter((job) => job.timer !== undefined).length;
+    return Object.freeze({ workers: this.#workers.size, active: this.#active.size, queued: this.#pending.length, deadlineTimers });
   }
 
   async preflight(schema: unknown, signal?: AbortSignal): Promise<void> {
@@ -111,7 +128,23 @@ export class IsolatedSchemaValidator {
     if (this.#closed) return Promise.reject(new GatewaySchemaError("schema_worker_closed", "Schema isolation has closed."));
     if (signal?.aborted) return Promise.reject(new GatewaySchemaError("schema_validation_aborted", "Schema work was cancelled."));
     if (this.#active.size + this.#pending.length >= 72) return Promise.reject(new GatewaySchemaError("schema_worker_capacity", "Schema isolation capacity is exhausted."));
-    return new Promise<IsolatedReply>((resolve, reject) => { this.#pending.push({ schema, value, signal, validate, resolve, reject }); this.#pump(); });
+    return new Promise<IsolatedReply>((resolve, reject) => {
+      const job: IsolationJob = { schema, value, signal, validate, resolve, reject };
+      if (signal) {
+        job.queuedAbort = () => {
+          const index = this.#pending.indexOf(job);
+          if (index < 0) return;
+          this.#pending.splice(index, 1);
+          signal.removeEventListener("abort", job.queuedAbort!);
+          job.queuedAbort = undefined;
+          reject(new GatewaySchemaError("schema_validation_aborted", "Schema work was cancelled."));
+          this.#pump();
+        };
+        signal.addEventListener("abort", job.queuedAbort, { once: true });
+      }
+      this.#pending.push(job);
+      this.#pump();
+    });
   }
 
   #discard(worker: Worker): void {
@@ -120,15 +153,78 @@ export class IsolatedSchemaValidator {
     if (idle >= 0) this.#idle.splice(idle, 1);
     const stopping = worker.terminate();
     this.#terminating.add(stopping);
-    const finished = () => { this.#terminating.delete(stopping); this.#pump(); };
+    const finished = () => {
+      worker.removeAllListeners();
+      this.#terminating.delete(stopping);
+      this.#pump();
+    };
     void stopping.then(finished, finished);
+  }
+
+  #complete(worker: Worker, active: ActiveIsolationJob, result?: IsolatedReply, error?: unknown, discard = false): void {
+    if (active.settled) return;
+    active.settled = true;
+    if (active.timer !== undefined) clearTimeout(active.timer);
+    active.job.signal?.removeEventListener("abort", active.aborted);
+    if (this.#active.get(worker) === active) this.#active.delete(worker);
+    if (discard || this.#closed) this.#discard(worker);
+    else { worker.unref(); this.#idle.push(worker); }
+    if (error) active.job.reject(error);
+    else if (result?.code) active.job.reject(new GatewaySchemaError(result.code, "External schema was rejected in isolation."));
+    else active.job.resolve(result ?? {});
+    this.#pump();
+  }
+
+  #dispatch(worker: Worker, active: ActiveIsolationJob): void {
+    if (active.settled || this.#active.get(worker) !== active) return;
+    if (active.job.signal?.aborted) {
+      active.finish(undefined, new GatewaySchemaError("schema_validation_aborted", "Schema work was cancelled."), true);
+      return;
+    }
+    active.phase = "running";
+    // The deadline covers only work delivered to an initialized Worker. The worker's
+    // trusted module and Ajv bootstrap are complete before its ready message.
+    active.timer = setTimeout(() => active.finish(undefined, new GatewaySchemaError("schema_execution_timeout", "External schema exceeded its execution deadline."), true), 750);
+    try {
+      worker.postMessage({
+        type: "validate",
+        jobId: active.jobId,
+        schema: active.job.schema,
+        value: active.job.value,
+        validate: active.job.validate,
+        digest: createHash("sha256").update(canonicalJson(active.job.schema)).digest("hex")
+      });
+    } catch {
+      active.finish(undefined, new GatewaySchemaError("schema_validation_invalid", "Schema input could not be isolated."), true);
+    }
+  }
+
+  #receive(worker: Worker, message: SchemaWorkerMessage): void {
+    const active = this.#active.get(worker);
+    if (!active || active.settled) return;
+    if (message?.type === "ready") {
+      if (active.phase === "starting") this.#dispatch(worker, active);
+      return;
+    }
+    if (message?.type !== "result" || active.phase !== "running" || message.jobId !== active.jobId) return;
+    this.#complete(worker, active, message.result);
   }
 
   #pump(): void {
     while (!this.#closed && this.#pending.length > 0 && (this.#idle.length > 0 || this.#workers.size + this.#terminating.size < 8)) {
       const job = this.#pending.shift()!;
-      if (job.signal?.aborted) { job.reject(new GatewaySchemaError("schema_validation_aborted", "Schema work was cancelled.")); continue; }
+      if (job.signal?.aborted) {
+        job.signal.removeEventListener("abort", job.queuedAbort!);
+        job.queuedAbort = undefined;
+        job.reject(new GatewaySchemaError("schema_validation_aborted", "Schema work was cancelled."));
+        continue;
+      }
+      if (job.queuedAbort) {
+        job.signal?.removeEventListener("abort", job.queuedAbort);
+        job.queuedAbort = undefined;
+      }
       let worker: Worker;
+      let starting = false;
       if (this.#idle.length > 0) worker = this.#idle.pop()!;
       else {
         const workerUrl = new URL(import.meta.url.endsWith(".ts") ? "./isolated-worker.ts" : "./isolated-worker.js", import.meta.url);
@@ -137,44 +233,43 @@ export class IsolatedSchemaValidator {
         try { worker = new Worker(workerUrl, { execArgv: [] }); }
         catch (error) { job.reject(error); continue; }
         this.#workers.add(worker);
-        worker.on("message", (result: IsolatedReply) => this.#active.get(worker)?.(result));
-        worker.on("error", (error) => { this.#active.get(worker)?.(undefined, error, true); this.#discard(worker); });
+        starting = true;
+        worker.on("message", (message: SchemaWorkerMessage) => this.#receive(worker, message));
+        worker.on("error", (error) => {
+          const active = this.#active.get(worker);
+          if (active) this.#complete(worker, active, undefined, error, true);
+          else this.#discard(worker);
+        });
         worker.on("exit", (code) => {
-          if (code !== 0) this.#active.get(worker)?.(undefined, new GatewaySchemaError("schema_worker_lost", "Schema worker exited before completion."), true);
+          const active = this.#active.get(worker);
+          if (active) this.#complete(worker, active, undefined, new GatewaySchemaError("schema_worker_lost", "Schema worker exited before completion."), true);
           this.#workers.delete(worker);
           const idle = this.#idle.indexOf(worker);
           if (idle >= 0) this.#idle.splice(idle, 1);
+          worker.removeAllListeners();
           this.#pump();
         });
       }
       worker.ref();
-      let settled = false;
-      const finish = (result?: IsolatedReply, error?: unknown, discard = false) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        job.signal?.removeEventListener("abort", aborted);
-        this.#active.delete(worker);
-        if (discard || this.#closed) this.#discard(worker);
-        else { worker.unref(); this.#idle.push(worker); }
-        if (error) job.reject(error);
-        else if (result?.code) job.reject(new GatewaySchemaError(result.code, "External schema was rejected in isolation."));
-        else job.resolve(result ?? {});
-        this.#pump();
-      };
+      const jobId = ++this.#nextJobId;
+      let active: ActiveIsolationJob;
+      const finish = (result?: IsolatedReply, error?: unknown, discard = false) => this.#complete(worker, active, result, error, discard);
       const aborted = () => finish(undefined, new GatewaySchemaError("schema_validation_aborted", "Schema work was cancelled."), true);
-      const timer = setTimeout(() => finish(undefined, new GatewaySchemaError("schema_execution_timeout", "External schema exceeded its execution deadline."), true), 750);
-      this.#active.set(worker, finish);
+      active = { job, jobId, finish, aborted, phase: starting ? "starting" : "running", settled: false };
+      this.#active.set(worker, active);
       job.signal?.addEventListener("abort", aborted, { once: true });
-      try { worker.postMessage({ schema: job.schema, value: job.value, validate: job.validate, digest: createHash("sha256").update(canonicalJson(job.schema)).digest("hex") }); }
-      catch { finish(undefined, new GatewaySchemaError("schema_validation_invalid", "Schema input could not be isolated."), true); }
+      if (!starting) this.#dispatch(worker, active);
     }
   }
 
   async close(): Promise<void> {
     this.#closed = true;
-    for (const job of this.#pending.splice(0)) job.reject(new GatewaySchemaError("schema_worker_closed", "Schema isolation has closed."));
-    for (const finish of [...this.#active.values()]) finish(undefined, new GatewaySchemaError("schema_worker_closed", "Schema isolation has closed."), true);
+    for (const job of this.#pending.splice(0)) {
+      job.signal?.removeEventListener("abort", job.queuedAbort!);
+      job.queuedAbort = undefined;
+      job.reject(new GatewaySchemaError("schema_worker_closed", "Schema isolation has closed."));
+    }
+    for (const active of [...this.#active.values()]) active.finish(undefined, new GatewaySchemaError("schema_worker_closed", "Schema isolation has closed."), true);
     for (const worker of [...this.#idle]) this.#discard(worker);
     await Promise.allSettled([...this.#terminating]);
     this.#workers.clear();

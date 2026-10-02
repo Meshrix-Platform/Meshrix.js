@@ -4,7 +4,8 @@ import { Ajv2020, type AnySchema } from "ajv/dist/2020.js";
 if (!parentPort) throw new Error("Schema worker requires a parent port.");
 const ajv = new Ajv2020({ strict: false, strictSchema: true, strictTypes: false, allErrors: true, addUsedSchema: false, validateFormats: false, allowUnionTypes: true });
 const compiledSchemas = new Map<string, ReturnType<typeof ajv.compile>>();
-parentPort.on("message", ({ schema, value, validate, digest }: { readonly schema: unknown; readonly value?: unknown; readonly validate: boolean; readonly digest: string }) => {
+parentPort.on("message", ({ type, jobId, schema, value, validate, digest }: { readonly type: "validate"; readonly jobId: number; readonly schema: unknown; readonly value?: unknown; readonly validate: boolean; readonly digest: string }) => {
+  if (type !== "validate") return;
   try {
     let compiled = compiledSchemas.get(digest);
     if (!compiled) {
@@ -13,9 +14,12 @@ parentPort.on("message", ({ schema, value, validate, digest }: { readonly schema
       compiledSchemas.set(digest, compiled);
     }
     const valid = !validate || Boolean(compiled(value));
-    parentPort!.postMessage({ valid, errors: valid ? [] : (compiled.errors ?? []).map((error) => ({ instancePath: error.instancePath, schemaPath: error.schemaPath, keyword: error.keyword, params: error.params })) });
+    parentPort!.postMessage({ type: "result", jobId, result: { valid, errors: valid ? [] : (compiled.errors ?? []).map((error) => ({ instancePath: error.instancePath, schemaPath: error.schemaPath, keyword: error.keyword, params: error.params })) } });
   } catch {
     // Worker error details may contain input or schema fragments; never echo them.
-    parentPort!.postMessage({ code: "schema_invalid" });
+    parentPort!.postMessage({ type: "result", jobId, result: { code: "schema_invalid" } });
   }
 });
+// `ready` marks trusted module/Ajv initialization as complete. Untrusted schema
+// compilation and validation only start after the parent dispatches a job.
+parentPort.postMessage({ type: "ready" });

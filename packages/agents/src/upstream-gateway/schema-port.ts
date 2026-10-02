@@ -30,5 +30,6 @@ export interface UpstreamSchemaPort {
   assertSchemaBudget(schema: unknown): void;
   /** Compile in isolation and validate one value; classified outcome, never kernel types. */
   validate(input: UpstreamSchemaValidationInput): Promise<UpstreamSchemaValidationOutcome>;
+  /** Release the port-owned validator after registry work has drained. */
   close?(): Promise<void>;
 }
