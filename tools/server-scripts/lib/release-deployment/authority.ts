@@ -462,6 +462,48 @@ export function validateReleaseDispatchContext({
   });
 }
 
+export function decideReleaseBranchDispatch({
+  event,
+  refType,
+  refName,
+  releaseVersion,
+  bootstrapCandidate = "",
+}: Record<string, any> = {}): any {
+  const trigger = requireText(event, /^(push|workflow_dispatch)$/u, "release_branch_event_invalid");
+  requireText(refType, /^branch$/u, "release_branch_ref_type_invalid");
+  requireText(refName, /^release$/u, "release_branch_ref_invalid");
+  const version = requireText(
+    releaseVersion,
+    /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u,
+    "release_dispatch_version_invalid",
+  );
+  const bootstrap = String(bootstrapCandidate || "");
+
+  if (version === FIRST_NPM_BOOTSTRAP_VERSION) {
+    if (trigger === "push") {
+      if (bootstrap) fail("release_dispatch_bootstrap_candidate_invalid");
+      return Object.freeze({
+        action: "manual-bootstrap-required",
+        bootstrapCandidate: version,
+        dispatchRelease: false,
+      });
+    }
+    if (bootstrap !== version) fail("release_dispatch_bootstrap_candidate_required");
+    return Object.freeze({
+      action: "dispatch-bootstrap",
+      bootstrapCandidate: bootstrap,
+      dispatchRelease: true,
+    });
+  }
+
+  if (bootstrap) fail("release_dispatch_bootstrap_candidate_invalid");
+  return Object.freeze({
+    action: "dispatch-oidc",
+    bootstrapCandidate: "",
+    dispatchRelease: true,
+  });
+}
+
 export function releaseTagCreationAction(existingRevision: string | null, sourceRevision: string): "create" | "verify" {
   const expected = requireText(sourceRevision, SHA1, "release_tag_source_revision_invalid");
   if (existingRevision === null) return "create";

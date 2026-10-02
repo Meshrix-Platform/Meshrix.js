@@ -29,6 +29,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.release-definition.outputs.release_tag }}
       release_version: ${{ steps.release-definition.outputs.release_version }}
+      dispatch_release: ${{ steps.release-definition.outputs.dispatch_release }}
     permissions:
       contents: read
       actions: read
@@ -71,8 +72,24 @@ jobs:
             echo "The bootstrap candidate must exactly match the canonical release version." >&2
             exit 1
           fi
+          dispatch_decision="$(node tools/server-scripts/resolve-branch-promotion-authority.ts \
+            decide-release-branch-dispatch \
+            --event "$GITHUB_EVENT_NAME" \
+            --ref-type "$GITHUB_REF_TYPE" \
+            --ref-name "$GITHUB_REF_NAME" \
+            --release-version "$release_version" \
+            --bootstrap-candidate "$BOOTSTRAP_CANDIDATE")"
+          dispatch_release="$(jq -r '.dispatchRelease' <<<"$dispatch_decision")"
+          if [[ "$dispatch_release" != true && "$dispatch_release" != false ]]; then
+            echo "The release dispatcher returned an invalid decision." >&2
+            exit 1
+          fi
+          if [[ "$dispatch_release" == false ]]; then
+            echo "::notice::First npm publication requires a manual release-branch dispatch with bootstrap_candidate=$release_version after deployment and tag preparation succeed. Automatic OIDC release dispatch is disabled for this first version."
+          fi
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "dispatch_release=$dispatch_release" >> "$GITHUB_OUTPUT"
       - name: Require release to equal the current stable tip
         shell: bash
         run: |
@@ -214,6 +231,7 @@ jobs:
   dispatch-release:
     name: Dispatch the tag-bound release workflow
     needs: [release-deployment, ensure-release-tag]
+    if: ${{ needs.release-deployment.outputs.dispatch_release == 'true' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read

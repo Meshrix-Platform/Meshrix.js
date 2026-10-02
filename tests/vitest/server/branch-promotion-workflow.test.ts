@@ -12,6 +12,7 @@ import {
 import {
   buildReleaseWorkflowDispatchPayload,
   createStableAuthorityManifest,
+  decideReleaseBranchDispatch,
   releaseTagCreationAction,
   selectExactPromotionArtifact,
   selectSuccessfulPromotionRun,
@@ -19,7 +20,10 @@ import {
   validateReleaseDispatchContext,
   validateStableAuthorityManifest,
 } from "../../../tools/server-scripts/lib/release-deployment/authority.ts";
-import { sha256 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
+import {
+  FIRST_NPM_BOOTSTRAP_VERSION,
+  sha256,
+} from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
 import {
   dispatchReleaseWorkflow,
   ensureImmutableReleaseTag,
@@ -149,6 +153,98 @@ describe("branch promotion workflow", () : any => {
     expect(releaseTagCreationAction(sourceRevision, sourceRevision)).toBe("verify");
     expect(() => releaseTagCreationAction("b".repeat(40), sourceRevision))
       .toThrowError(expect.objectContaining({ code: "release_tag_target_conflict" }));
+  });
+
+  it("requires manual bootstrap for the first-version push and preserves automatic OIDC dispatch afterward", async () : Promise<any> => {
+    const firstPush = decideReleaseBranchDispatch({
+      event: "push",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: FIRST_NPM_BOOTSTRAP_VERSION,
+    });
+    expect(firstPush).toEqual({
+      action: "manual-bootstrap-required",
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+      dispatchRelease: false,
+    });
+    await expect(runAuthorityCommand([
+      "decide-release-branch-dispatch",
+      "--event", "push",
+      "--ref-type", "branch",
+      "--ref-name", "release",
+      "--release-version", FIRST_NPM_BOOTSTRAP_VERSION,
+      "--bootstrap-candidate", "",
+    ])).resolves.toMatchObject(firstPush);
+
+    const manualBootstrap = decideReleaseBranchDispatch({
+      event: "workflow_dispatch",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: FIRST_NPM_BOOTSTRAP_VERSION,
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+    });
+    expect(manualBootstrap).toEqual({
+      action: "dispatch-bootstrap",
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+      dispatchRelease: true,
+    });
+    await expect(runAuthorityCommand([
+      "decide-release-branch-dispatch",
+      "--event", "workflow_dispatch",
+      "--ref-type", "branch",
+      "--ref-name", "release",
+      "--release-version", FIRST_NPM_BOOTSTRAP_VERSION,
+      "--bootstrap-candidate", FIRST_NPM_BOOTSTRAP_VERSION,
+    ])).resolves.toMatchObject(manualBootstrap);
+
+    const laterPush = decideReleaseBranchDispatch({
+      event: "push",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: "0.0.2",
+    });
+    expect(laterPush).toEqual({
+      action: "dispatch-oidc",
+      bootstrapCandidate: "",
+      dispatchRelease: true,
+    });
+    await expect(runAuthorityCommand([
+      "decide-release-branch-dispatch",
+      "--event", "push",
+      "--ref-type", "branch",
+      "--ref-name", "release",
+      "--release-version", "0.0.2",
+      "--bootstrap-candidate", "",
+    ])).resolves.toMatchObject(laterPush);
+  });
+
+  it("rejects wrong release refs, invalid versions, and bootstrap outside the first manual dispatch", () : any => {
+    const valid = {
+      event: "push",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: FIRST_NPM_BOOTSTRAP_VERSION,
+    };
+    expect(() => decideReleaseBranchDispatch({ ...valid, refName: "stable" }))
+      .toThrowError(expect.objectContaining({ code: "release_branch_ref_invalid" }));
+    expect(() => decideReleaseBranchDispatch({ ...valid, refType: "tag" }))
+      .toThrowError(expect.objectContaining({ code: "release_branch_ref_type_invalid" }));
+    expect(() => decideReleaseBranchDispatch({ ...valid, releaseVersion: "latest" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_version_invalid" }));
+    expect(() => decideReleaseBranchDispatch({
+      ...valid,
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+    })).toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+    expect(() => decideReleaseBranchDispatch({
+      ...valid,
+      event: "workflow_dispatch",
+    })).toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_required" }));
+    expect(() => decideReleaseBranchDispatch({
+      ...valid,
+      event: "workflow_dispatch",
+      releaseVersion: "0.0.2",
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+    })).toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
   });
 
   it("creates or verifies a release tag through GitHub without replacing a conflicting ref", async () : Promise<any> => {
@@ -651,6 +747,9 @@ describe("branch promotion workflow", () : any => {
     expect(branchWorkflow).toContain('branches: ["release"]');
     expect(branchWorkflow).toContain("workflow_dispatch:");
     expect(branchWorkflow).toContain("bootstrap_candidate:");
+    expect(branchWorkflow).toContain("decide-release-branch-dispatch");
+    expect(branchWorkflow).toContain("dispatch_release: ${{ steps.release-definition.outputs.dispatch_release }}");
+    expect(branchWorkflow).toContain("if: ${{ needs.release-deployment.outputs.dispatch_release == 'true' }}");
     expect(branchWorkflow).toContain("ensure-release-tag");
     expect(branchWorkflow).toContain("dispatch-release");
     expect(branchWorkflow).toContain("stable-authority-${GITHUB_SHA}");

@@ -965,9 +965,20 @@ The published set is then installed without lifecycle scripts and checked with
 and provenance attestations. The GitHub Release becomes public only after this
 npm closure succeeds.
 
-For the first npm publication only, the release-branch workflow may be started
-manually with `bootstrap_candidate=0.0.1`. This is bound to the first canonical
-tag and exact deployed run. Store `NPM_BOOTSTRAP_TOKEN` temporarily as a
+The first canonical npm version uses an explicit bootstrap because the two npm
+packages do not have Trusted Publisher settings until after they exist. When
+the first `0.0.1` candidate reaches the `release` branch, the automatic
+release-branch run validates its deployment and creates or verifies the
+canonical tag, then skips the ordinary OIDC release dispatch. After that run
+succeeds, manually dispatch `Release branch deployment` on the `release` branch
+with `bootstrap_candidate=0.0.1`. This second run reuses the exact tag and
+deploys the exact candidate before dispatching `release.yml` with the explicit
+bootstrap input. Do not manually push the first tag or dispatch the release
+workflow without the bootstrap input; either would attempt ordinary OIDC before
+the package trust exists.
+
+Use `0.0.1` only if the final public registry recheck confirms that canonical
+version remains unused. Store `NPM_BOOTSTRAP_TOKEN` temporarily as a
 `release-candidate` environment secret; the release workflow exposes it only to
 the one bootstrap publication mutation step. It is not used by preparation,
 preflight, deployment, or authority verification. Remove this secret as soon as
