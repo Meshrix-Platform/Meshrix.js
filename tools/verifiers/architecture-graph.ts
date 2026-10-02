@@ -344,6 +344,15 @@ function declaredRuntimeDependencies(manifest: Record<string, any> = {}) : any {
   };
 }
 
+/** Package-owned build configuration runs in the development toolchain only. */
+export function declaredDependenciesForUsage(manifest: Record<string, any>, sourceRoot: string, files: string[]): Record<string, any> {
+  const developmentOnly = files.length > 0 && files.every((file) => file === `${sourceRoot}/vite.config.ts`);
+  return {
+    ...declaredRuntimeDependencies(manifest),
+    ...(developmentOnly ? manifest.devDependencies || {} : {})
+  };
+}
+
 async function resolveMappedTarget({ descriptor, target, capture, workspaces, seen }: Record<string, any>) : Promise<any> {
   const selected: any = selectMappedTarget(target);
   if (!selected) return { reason: "unsupported_conditional_target", target: null };
@@ -1040,7 +1049,7 @@ export async function runArchitectureGraph({
   const manifestDependencyViolations: any[] = [];
   for (const usage of manifestDependencies) {
     const sourceDescriptor: any = workspaces.byName.get(usage.sourcePackage);
-    const declared: any = declaredRuntimeDependencies(sourceDescriptor?.manifest);
+    const declared: any = declaredDependenciesForUsage(sourceDescriptor?.manifest || {}, usage.sourceRoot, usage.files);
     if (!Object.hasOwn(declared, usage.dependency)) {
       const violation: Record<string, any> = {
         rule: "workspace-runtime-dependency-not-declared",
