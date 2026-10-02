@@ -95,6 +95,7 @@ Separation is required when one file would otherwise own code from different reg
 - Protocol adapters own transport parsing, serialization, and protocol state. Authorization, policy, persistence, and domain behavior remain behind registered operations or explicit ports bound by composition.
 - The component that creates mutable state owns its writes. Other components use explicit commands, queries, events, or read-only contracts instead of sharing writable internals.
 - Cross-package consumers use registered public facades. Private helpers remain private, and facades expose only deliberate contracts rather than broad implementation re-exports.
+- Package-owned build configurations declare their tools in `devDependencies`. The architecture verifier admits those development dependencies only for the package-root `vite.config.ts`; production imports still require runtime, optional, or peer declarations.
 - Production modules do not import tests or fixtures. Tests are organized by current behavior or contract, not by implementation stage or numeric shard.
 - Console route views retain route-level orchestration and capability data binding. Reusable controls use independent component files and the common component registry; API clients and shared normalization remain in the console library boundary.
 

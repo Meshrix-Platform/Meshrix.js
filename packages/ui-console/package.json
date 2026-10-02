@@ -129,5 +129,11 @@
   "bugs": {
     "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.1.4",
+    "vue-tsc": "^3.3.8",
+    "typescript": "^5.8.3"
+  }
 }
