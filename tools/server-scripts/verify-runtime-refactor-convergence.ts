@@ -44,7 +44,7 @@ const FOCUSED_SUITES: readonly any[] = Object.freeze([
   "tests/vitest/server/runtime-refactor-governed-evidence.test.ts",
   "tests/vitest/console/use-console-shell-integration.test.ts",
   "tests/vitest/console/console-shell-preference-effects.test.ts",
-  "tests/vitest/server/gateway-performance-observation.test.ts"
+  "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
 ]);
 const SAFE_TOKEN: any = /^[a-z0-9][a-z0-9._:-]{0,79}$/u;
 const ALLOWED_PORTABLE_WILDCARD_CONSUMERS: readonly any[] = Object.freeze([
@@ -155,7 +155,9 @@ async function runFocusedSuites() : Promise<any> {
       "--config",
       "vitest.config.ts",
       suitePath
-    ]);
+    ], suitePath.startsWith("tests/vitest/gateway/performance/")
+      ? { env: { MESHRIX_VITEST_SCOPE: "gateway-performance" } }
+      : {});
     const passed: any = result.status === 0;
     suites.push({
       suite: suitePath,

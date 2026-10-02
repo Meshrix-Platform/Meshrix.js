@@ -5,7 +5,7 @@
   "profiles": {
     "gateway-benchmark": {
       "description": "Deterministic real-MCP benchmark harness correctness (not a performance verdict)",
-      "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "repo.script-registry"],
+      "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "gateway.performance-observation", "repo.script-registry"],
       "timeoutMs": 180000
     },
     "product-distribution": {
@@ -1477,16 +1477,16 @@
     },
     {
       "id": "gateway.performance-observation",
-      "label": "Bounded runtime observation and non-certifying gateway performance reduction",
+      "label": "Post-functional gateway observation and load-harness correctness",
       "owner": "platform",
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
       "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/server/gateway-performance-observation.test.ts"
+        "exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance",
+        "vitest", "run",
+        "tests/vitest/gateway/performance/gateway-performance-observation.test.ts",
+        "tests/vitest/gateway/performance/mcp-gateway-load-phase.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",

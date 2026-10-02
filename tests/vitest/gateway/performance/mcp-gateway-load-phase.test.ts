@@ -4,7 +4,7 @@ import {
   MCP_GATEWAY_LOAD_FIXTURE_OPERATION_TIMEOUT_MS,
   mcpGatewayLoadPhaseShouldIssueNext,
   runMcpGatewayLoadPhase
-} from "../../../tools/server-scripts/lib/mcp-gateway-load-phase.ts";
+} from "../../../../tools/server-scripts/lib/mcp-gateway-load-phase.ts";
 
 describe("MCP gateway load phase issuance", () : void => {
   it("declares a stable fixture operation deadline independently from the product default", () : void => {
