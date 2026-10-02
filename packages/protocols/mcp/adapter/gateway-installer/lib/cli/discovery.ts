@@ -16,7 +16,7 @@ import {
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
-  packageJson
+  packageInfo
 } from "./constants.ts";
 import { containsMxak1Credential, MXAK1_CREDENTIAL_PATTERN, mcpTargetHeaders, normalizeBaseUrl, normalizeTarget, option } from "./basic-utils.ts";
 import {
@@ -169,8 +169,8 @@ export async function verifyMeshrixHandshake(baseUrl?: any, discovery?: any) : P
     body: JSON.stringify({
       nonce,
       client: {
-        name: packageJson.name,
-        version: packageJson.version
+        name: packageInfo.name,
+        version: packageInfo.version
       }
     }),
     timeoutMs: 2500
@@ -325,7 +325,7 @@ export function authHeaders(token?: any, target: any = "") : any {
   return {
     "Content-Type": "application/json",
     "X-Meshrix.js-Api-Key": credential,
-    "X-Meshrix.js-Connector-Package-Id": "meshrix-mcp-connector",
+    "X-Meshrix.js-MCP-Client-Id": "meshrix-mcp",
     ...mcpTargetHeaders(target)
   };
 }
@@ -355,7 +355,7 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
         apiVersion: MCP_INTERFACE_VERSION,
         operation: "system.health",
         input: {},
-        clientVersion: packageJson.version
+        clientVersion: packageInfo.version
       }
     }
   });

@@ -459,21 +459,20 @@ describe("release-journey-report", () : any => {
   });
 
   it("produces step receipts with bounded error payloads", () : any => {
-    const receipt: any = stepReceipt("adapter-seed", {
+    const receipt: any = stepReceipt("adapter-components", {
       status: "failed",
       durationMs: 3.7,
-      error: { code: "release_journey_adapter_source_missing", message: "x".repeat(2000) }
+      error: { code: "release_journey_adapter_component_invalid", message: "x".repeat(2000) }
     });
     expect(receipt.durationMs).toBe(4);
     expect(receipt.error.message.length).toBeLessThanOrEqual(800);
-    expect(receipt.error.code).toBe("release_journey_adapter_source_missing");
+    expect(receipt.error.code).toBe("release_journey_adapter_component_invalid");
   });
 });
 
 describe("release-journey client selection", () : any => {
   it("uses every detected real client and forbids simulation", async () : Promise<any> => {
     const result: any = await discoverReleaseJourneyClients({
-      cacheRoot: "<adapter-cache>",
       baseUrl: "http://127.0.0.1:7228",
       scanTargets: async () : Promise<any> => ({
         candidates: [
@@ -497,7 +496,6 @@ describe("release-journey client selection", () : any => {
 
   it("permits a declared MCP simulator only after the complete scan detects zero clients", async () : Promise<any> => {
     const result: any = await discoverReleaseJourneyClients({
-      cacheRoot: "<adapter-cache>",
       baseUrl: "http://127.0.0.1:7228",
       fallbackCommand: "node",
       scanTargets: async () : Promise<any> => ({ candidates: [] })

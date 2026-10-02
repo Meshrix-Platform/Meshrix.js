@@ -20,7 +20,7 @@ export const RELEASE_JOURNEY_STEPS: readonly any[] = Object.freeze([
   "stack-build-up",
   "admin-bootstrap",
   "upstream-publish",
-  "adapter-seed",
+  "adapter-components",
   "client-discovery",
   "api-key-workload",
   "connector-install-matrix",

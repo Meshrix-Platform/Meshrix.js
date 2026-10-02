@@ -10,7 +10,7 @@ import {
   PRIORITY_INSTALL_TARGET,
   PRIORITY_INSTALL_TARGETS,
   SUPPORTED_TARGETS,
-  packageJson,
+  packageInfo,
   sharedHubContract,
   supportedTargetDetails
 } from "./constants.ts";
@@ -35,7 +35,7 @@ export function buildDeviceHubManifest({
   const mcpUrl: any = `${baseUrl}/mcp`;
   const vmMcpUrl: any = `${parsed.protocol}//host.orb.internal:${port}/mcp`;
   const env: any = deviceDiscoveryEnv({ baseUrl, primaryPath: discoveryPath });
-  const packageExec: any = `npx ${packageJson.name}@${packageJson.version}`;
+  const packageExec: any = `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp`;
   const urlArgs: any = ` --url ${shellQuote(baseUrl)}`;
   const tokenEnvArgs: any = tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : "";
   const contextArgs: any = `${urlArgs}${tokenEnvArgs}`;
@@ -91,8 +91,8 @@ export function buildDeviceHubManifest({
         stableToolName: MCP_STABLE_TOOL_NAME,
         sharedHub: sharedHubContract({ mcpUrl, vmMcpUrl }),
         connector: {
-          packageName: packageJson.name,
-          packageVersion: packageJson.version,
+          packageName: packageInfo.name,
+          packageVersion: packageInfo.version,
           registerCommand: `${packageExec} register${urlArgs}${tokenEnvArgs}`,
           interactiveInstallCommand,
           githubOneLineCommand,
@@ -313,7 +313,7 @@ export async function resetServerConfig({ options, publishEnv = true }: Record<s
       strategy: "shared-device-hub",
       localEntry: {
         type: "meshrix-mcp-discover-local",
-        command: `npx ${packageJson.name}@${packageJson.version} discover-local --json`,
+        command: `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp discover-local --json`,
         registryFile: discoveryPath
       },
       registryFile: discoveryPath,

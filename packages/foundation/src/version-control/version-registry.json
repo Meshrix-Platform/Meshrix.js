@@ -766,32 +766,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.client-adapter-cache",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.client-adapter-cache.",
-      "activeVersion": "v0.0.1:meshrix:client-adapter-cache-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:client-adapter-cache-1",
-          "ref": "meshrix.client-adapter-cache@v0.0.1:meshrix:client-adapter-cache-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-client-adapter-cache-1-source",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.client-adapter-descriptor",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.client-adapter-descriptor.",
@@ -838,32 +812,6 @@
               "evidenceId": "v0-0-1-meshrix-client-adapter-json-stdio-1-source",
               "kind": "other",
               "uri": "packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.client-adapter.release-index",
-      "kind": "schema",
-      "description": "Governed release index schema for repository-local client adapter packages.",
-      "activeVersion": "v0.0.1:client-adapter:release-index-1",
-      "versions": [
-        {
-          "version": "v0.0.1:client-adapter:release-index-1",
-          "ref": "meshrix.client-adapter.release-index@v0.0.1:client-adapter:release-index-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current repository-local adapter packaging contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-client-adapter-release-index-1-source",
-              "kind": "other",
-              "uri": "tools/plugins/client-adapter-packages.mjs"
             }
           ]
         }

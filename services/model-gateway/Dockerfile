@@ -1,7 +1,7 @@
 FROM node:24.16.0-bookworm-slim
 
 LABEL org.opencontainers.image.source="https://github.com/Meshrix-Platform/Meshrix.js" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="Apache-2.0"
 
 RUN groupadd --gid 10001 modelgw \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin modelgw \

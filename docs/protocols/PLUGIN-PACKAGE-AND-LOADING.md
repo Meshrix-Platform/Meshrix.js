@@ -2,6 +2,12 @@
 
 This contract defines the Core-owned boundary for loading optional plugin artifacts. Optional plugin implementations remain outside the Core ownership boundary; Core owns artifact admission, manifest validation, lifecycle ordering, contribution projection, and shutdown.
 
+Plugin source may be authored in TypeScript and compiled before packaging. The
+admitted artifact contains a `.mjs` runtime entrypoint that exports
+`activatePlugin`; the Host supplies its declared ports through the activation
+context. The protocol is artifact and injected-port data, not an importable npm
+Host SDK or a dependency on a private bundled module.
+
 ## Closed one-plugin bundle
 
 External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `meshrix.plugin-bundle.manifest.v1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.mjs` path present in that inventory.

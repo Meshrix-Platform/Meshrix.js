@@ -388,7 +388,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "CHANGELOG.md",
       "apps/*/package.json",
       "packages/*/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json",
+      "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
       "tools/server-scripts/prepare-release.ts",
       "tools/server-scripts/lib/release-metadata.ts"
     ], outputs: [
@@ -397,7 +397,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "CHANGELOG.md",
       "apps/*/package.json",
       "packages/*/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json"
+      "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts"
     ],
   },
   "release:promote-branches": {
@@ -444,7 +444,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "package-lock.json",
       "apps/*/package.json",
       "packages/*/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json",
       "tools/server-scripts/publish-release-set.ts",
       "tools/server-scripts/lib/release-metadata.ts",
       "tools/server-scripts/lib/npm-cli-invocation.ts"
@@ -485,6 +484,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "apps/server/bin/**",
       "packages/**",
       "tools/server-scripts/verify-npm-package-installability.ts",
+      "tools/server-scripts/publish-release-set.ts",
+      "tools/server-scripts/lib/npm-cli-invocation.ts",
       "tools/server-scripts/lib/lock-backed-npm-registry.ts",
       "tools/server-scripts/npm-package-consumer.ts",
       "tools/server-scripts/npm-registry-server.ts"
@@ -686,13 +687,13 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:mcp-release-portable-assembly", command: "npm run verify:mcp-release-portable-assembly", category: "verifier", subsystem: "downstream-mcp",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-mcp-release-portable-assembly.ts", "tools/server-scripts/lib/mcp-release-portable.ts", "tools/server-scripts/lib/mcp-release-reproducible-archives.ts", "tools/server-scripts/lib/mcp-release-common.ts", "packages/protocols/mcp/adapter/gateway-installer/**", "packages/protocols/mcp/adapter/native-installer/**"], outputs: ["build/reports/mcp-release-portable-assembly.json"],
+    inputs: ["package.json", "tools/server-scripts/verify-mcp-release-portable-assembly.ts", "tools/server-scripts/lib/mcp-release-portable.ts", "tools/server-scripts/lib/mcp-release-reproducible-archives.ts", "tools/server-scripts/lib/mcp-release-common.ts", "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts", "packages/protocols/mcp/adapter/gateway-installer/**", "packages/protocols/mcp/adapter/native-installer/**"], outputs: ["build/reports/mcp-release-portable-assembly.json"],
   },
   "verify:mcp-final-release-asset": {
     scriptName: "verify:mcp-final-release-asset", command: "npm run verify:mcp-final-release-asset", category: "verifier", subsystem: "downstream-mcp",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
-    inputs: ["build/release/mcp/**", "tools/server-scripts/verify-mcp-final-release-asset.ts"], outputs: ["build/reports/mcp-final-release-asset.json"],
+    inputs: ["build/release/mcp/**", "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts", "tools/server-scripts/lib/mcp-release-common.ts", "tools/server-scripts/verify-mcp-final-release-asset.ts"], outputs: ["build/reports/mcp-final-release-asset.json"],
   },
   "verify:mcp-proxy-transport": {
     scriptName: "verify:mcp-proxy-transport", command: "npm run verify:mcp-proxy-transport", category: "verifier", subsystem: "downstream-mcp",
@@ -934,6 +935,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
 	      "tools/server-scripts/verify-observability-semantics.ts",
       "packages/protocols/mcp/adapter/mcp-release-targets.ts",
       "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "packages/protocols/mcp/modern-downstream/discovery.ts",
       "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
       "tools/server-scripts/verify-mcp-release-target-scope.ts"
     ], outputs: ["build/reports/script-registry.json"],
@@ -1171,14 +1173,20 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "verify:local-client-adapters": {
     scriptName: "verify:local-client-adapters", command: "npm run verify:local-client-adapters", category: "verifier", subsystem: "module-system",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
+    owner: "platform", tier: "integration", sideEffects: "temp-files",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
     inputs: [
       "tools/plugins/verify-local-client-adapters.mjs",
-      "tools/plugins/**",
+      "tools/plugins/client-adapter-components.mjs",
+      "tools/plugins/smoke-test-client-adapters.mjs",
       "plugins/agents/**",
-      "tests/plugins/**"
-    ], outputs: ["build/client-adapters/**"],
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts",
+      "tests/plugins/client-adapter-contract.test.mjs",
+      "tests/plugins/client-adapters.test.mjs",
+      "tests/plugins/pi-extension.test.mjs",
+      "tests/vitest/server/pi-adapter-installed-component.test.ts"
+    ], outputs: [],
   },
   "verify:local-extension-package-closure": {
     scriptName: "verify:local-extension-package-closure", command: "npm run verify:local-extension-package-closure", category: "verifier", subsystem: "module-system",

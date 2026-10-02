@@ -71,22 +71,19 @@ as the current persistence contract.
 2. Load the matching `meshrix-js-agent-target-<target>` skill when one exists
    and use it only for target-specific discovery, configuration layout, and
    lifecycle behavior. Keep the connector protocol, credential custody, and
-   cache contract target-neutral.
+   target selection rules target-neutral.
 3. Keep provider API Keys and native session data in the Agent's own custody.
    Meshrix.js receives only connector metadata and its scoped MCP credential.
-4. Seed an isolated adapter cache through `seedClientAdapterCache` or
-   `seedClientAdapterCaches` in
-   `tools/server-scripts/lib/release-journey-adapter.ts`. Require the exact
-   trusted package coordinate, shared adapter kit, adapter package, complete
-   recursive runtime dependency closure, deterministic tree digest, and a
-   successful canonical descriptor probe before installation.
-5. Fail a missing dependency, coordinate mismatch, unsupported target, invalid
-   descriptor, or incomplete cache. Do not fall back to a host package tree or
-   treat detection of the native Agent binary as adapter readiness.
+4. Resolve the selected first-party adapter component from the installed
+   `meshrix.js` package using Node's normal package resolution. Validate its
+   package name, root-release version, entrypoint, and descriptor before an
+   explicit target action. No separate adapter download or cache is used.
+5. Fail a missing component, package identity or version mismatch, unsupported
+   target, or invalid descriptor. Do not fall back to an unrelated host package
+   tree or treat detection of the native Agent binary as adapter readiness.
 
 For Agent MCP credential changes, run the focused API-Key-only installer and
-credential tests selected by `npm test` or the test registry. For cache changes,
-cover the supported target catalog or the changed adapter coordinate; a
-single-Agent cache fixture is only a target regression, not proof of the
-generic cache contract. Never use a real provider key or live Agent history as
-test evidence.
+credential tests selected by `npm test` or the test registry. For component
+resolution changes, cover the supported target catalog, package identity and
+version agreement, and the selected external client action. Never use a real
+provider key or live Agent history as test evidence.

@@ -181,7 +181,6 @@ async function wildcardImportFindings() : Promise<any> {
   const topLevelPackages: any = (await fs.readdir(repoPath("packages"))).filter((name?: any) : any => !name.startsWith("."));
   const apps: any = (await fs.readdir(repoPath("apps"))).filter((name?: any) : any => !name.startsWith("."));
   const candidates: any = packageJsonFiles([...topLevelPackages.map((name?: any) : any => `packages/${name}`), ...apps.map((name?: any) : any => `apps/${name}`)]);
-  candidates.push("packages/protocols/mcp/adapter/gateway-installer/package.json");
   for (const candidate of candidates) {
     if (!(await exists(candidate))) continue;
     const manifest: any = JSON.parse(await readText(candidate));

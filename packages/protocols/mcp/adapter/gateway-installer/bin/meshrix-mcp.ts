@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   MCP_INTERFACE_VERSION,
   MCP_STABLE_TOOL_NAME,
-  packageJson
+  packageInfo
 } from "../lib/cli/constants.ts";
 import { parseArgs, usage } from "../lib/cli/basic-utils.ts";
 import { MESHRIX_MCP_COMMAND_REGISTRY } from "../lib/cli/commands.ts";
@@ -22,8 +22,8 @@ export async function main(argv: any = process.argv.slice(2)) : Promise<any> {
   const { command, options } = parseArgs(argv);
   if (options.version || command === "version" || command === "--version") {
     emitResult({
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       stableToolName: MCP_STABLE_TOOL_NAME,
       interfaceVersion: MCP_INTERFACE_VERSION
     }, options, "version");

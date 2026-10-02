@@ -1,7 +1,29 @@
 {
-  "name": "@meshrix/agent-kimi-adapter", "version": "0.0.1", "type": "module", "license": "Apache-2.0",
-  "bin": { "meshrix-agent-kimi-adapter": "./adapter.mjs" },
-  "files": ["adapter.mjs", "adapter.json", "README.md"],
-  "dependencies": { "@meshrix/client-adapter-kit": "0.0.1" },
-  "engines": { "node": "^22.0.0 || ^24.0.0" }
+  "name": "@meshrix/agent-kimi-adapter",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "files": [
+    "adapter.mjs",
+    "adapter.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "plugins/agents/kimi"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "description": "JSON-stdio MCP client adapter for Kimi CLI.",
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/client-adapter-kit": "0.0.1"
+  }
 }

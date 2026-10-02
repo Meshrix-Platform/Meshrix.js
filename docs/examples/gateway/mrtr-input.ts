@@ -1,11 +1,11 @@
 import { createGateway } from "@meshrix/gateway";
-import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
-import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
+import { createExampleAuthority, exampleContext } from "./example-ports.ts";
 
-const context = { tenant: "demo", principal: "operator", authGeneration: "auth-1", grant: { revision: "grant-1", routes: ["tool.prepare"], methods: ["tools/call"] } };
+const context = exampleContext("tool.prepare");
+const { policy, permits } = createExampleAuthority();
 const gateway = createGateway({
-  policy: createGatewayPolicy(),
-  permits: createGatewayPermitAuthority(),
+  policy,
+  permits,
   continuationKey: new Uint8Array(32).fill(7),
   descriptors: [{ kind: "tool", publicName: "prepare", route: { logicalRoute: "tool.prepare", upstreamIdentity: "local", endpointIdentity: "local.prepare", protocolVersion: "2026-07-28", schemaDigest: "none", policyRef: "default", revision: "route-1", effectClass: "read" } }],
   upstream: { async invoke({ request }) { return request.requestState ? { status: 200, body: { resultType: "complete", value: { accepted: request.params } } } : { status: 200, body: { resultType: "input_required", requestState: "upstream-state", inputRequests: [{ id: "confirm" }] } }; } }

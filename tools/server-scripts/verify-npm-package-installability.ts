@@ -8,13 +8,18 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { npmCliArgs, parseNpmPackJson, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 import {
   createLockBackedNpmRegistry,
   packageManifestFromTarball
 } from "./lib/lock-backed-npm-registry.ts";
 import { assertNoLeak } from "./lib/report-evidence-safety.ts";
-import { discoverReleaseSet } from "./publish-release-set.ts";
+import { discoverReleaseSet, loadPreparedReleaseSet } from "./publish-release-set.ts";
+import { resolveReleaseWorkspaceDirectories } from "./lib/release-metadata.ts";
+import {
+  NPM_PACKAGE_CONSUMER_FAILURE_CODES,
+  NPM_PACKAGE_CONSUMER_FAILURE_STAGES
+} from "./npm-package-consumer.ts";
 
 const execFileAsync: any = promisify(execFile);
 const DEFAULT_REPORT_PATH: any = "build/reports/npm-package-installability.json";
@@ -25,6 +30,77 @@ const PLATFORM_ARTIFACT_PATTERN: any =
   /(?:^|\/)(?:build\/Release|prebuilds)\/|\.(?:node|dll|dylib|so(?:\.\d+)*)$/iu;
 const ISOLATED_CONSUMER_SOURCE: any = "tools/server-scripts/npm-package-consumer.ts";
 const ISOLATED_REGISTRY_SOURCE: any = "tools/server-scripts/npm-registry-server.ts";
+const NPM_PACKAGE_INSTALLABILITY_FAILURE_CODES: ReadonlySet<string> = new Set([
+  ...NPM_PACKAGE_CONSUMER_FAILURE_CODES,
+  "npm_package_bundle_dependencies_invalid",
+  "npm_package_bundled_package_path_invalid",
+  "npm_package_bundled_packages_mismatch",
+  "npm_package_bug_tracker_missing",
+  "npm_package_cli_bin_contract_invalid",
+  "npm_package_cli_bin_missing",
+  "npm_package_consumer_architecture_mismatch",
+  "npm_package_consumer_image_build_failed",
+  "npm_package_consumer_network_create_failed",
+  "npm_package_consumer_package_count_mismatch",
+  "npm_package_consumer_platform_mismatch",
+  "npm_package_consumer_runtime_failed",
+  "npm_package_container_image_not_pinned",
+  "npm_package_docker_engine_architecture_unknown",
+  "npm_package_docker_engine_unavailable",
+  "npm_package_docker_operation_failed",
+  "npm_package_files_contract_missing",
+  "npm_package_homepage_missing",
+  "npm_package_install_failed",
+  "npm_package_install_oom_killed",
+  "npm_package_install_permission_denied",
+  "npm_package_install_script_failed",
+  "npm_package_install_target_missing",
+  "npm_package_installability_failed",
+  "npm_package_internal_runtime_source_missing",
+  "npm_package_license_contract_missing",
+  "npm_package_native_dependency_build_failed",
+  "npm_package_node_engine_contract_missing",
+  "npm_package_offline_cache_incomplete",
+  "npm_package_pack_tarball_invalid",
+  "npm_package_prepared_artifact_directory_required",
+  "npm_package_prepared_release_set_mismatch",
+  "npm_package_platform_artifact_forbidden",
+  "npm_package_platform_report_incomplete",
+  "npm_package_private_workspace_missing",
+  "npm_package_private_workspace_version_mismatch",
+  "npm_package_public_release_set_invalid",
+  "npm_package_probe_mode_conflict",
+  "npm_package_registry_image_build_failed",
+  "npm_package_registry_package_missing",
+  "npm_package_registry_start_failed",
+  "npm_package_registry_unreachable",
+  "npm_package_release_set_artifact_mismatch",
+  "npm_package_release_set_artifact_missing",
+  "npm_package_release_set_install_failed",
+  "npm_package_release_set_version_mismatch",
+  "npm_package_repository_contract_missing",
+  "npm_package_repository_directory_mismatch",
+  "npm_package_repository_url_missing",
+  "npm_package_required_artifact_missing",
+  "npm_package_root_artifact_missing",
+  "npm_package_root_install_lifecycle_forbidden",
+  "npm_package_runtime_assertion_failed",
+  "npm_package_runtime_file_missing",
+  "npm_package_runtime_module_resolution_failed",
+  "npm_package_runtime_native_storage_failed",
+  "npm_package_runtime_reason_reported",
+  "npm_package_runtime_write_boundary_failed",
+  "npm_package_scoped_access_not_public",
+  "npm_package_server_bin_contract_invalid",
+  "npm_package_server_bin_missing",
+  "npm_package_server_bin_shebang_missing",
+  "npm_package_mcp_bin_missing",
+  "npm_package_mcp_runtime_source_missing",
+  "npm_package_server_cli_help_failed",
+  "npm_package_server_startup_smoke_failed",
+  "npm_package_package_license_incorrect",
+  "npm_package_consumer_qualification_failed"
+]);
 const argv: any = process.argv.slice(2);
 const inContainer: any = argv.includes("--in-container");
 const hostPlatformProbe: any = argv.includes("--host-platform-probe");
@@ -42,29 +118,6 @@ function npmCommand() : any {
 
 function npmArgs(args?: any) : any {
   return npmCliArgs(npmCli, args);
-}
-
-export async function packInstallabilityArtifacts({
-  packageRecords,
-  packDirectory,
-  runPack
-}: Record<string, any>) : Promise<any[]> {
-  const packedArtifacts: any[] = [];
-  for (const packageRecord of packageRecords) {
-    const packed: any = await runPack(packageRecord, packDirectory);
-    const artifacts: any = parseNpmPackJson(packed.stdout);
-    assert.equal(artifacts.length, 1, "npm_package_pack_artifact_count_invalid");
-    const artifact: any = artifacts[0];
-    assert.equal(artifact?.name, packageRecord.name, "npm_package_release_set_artifact_mismatch");
-    assert.equal(artifact?.version, packageRecord.version, "npm_package_release_set_version_mismatch");
-    const filename: any = String(artifact?.filename || "");
-    assert.ok(filename && path.basename(filename) === filename, "npm_package_pack_filename_invalid");
-    const tarballPath: any = path.join(packDirectory, filename);
-    const tarballStat: any = await fs.lstat(tarballPath);
-    assert.ok(tarballStat.isFile() && !tarballStat.isSymbolicLink(), "npm_package_pack_tarball_invalid");
-    packedArtifacts.push({ ...artifact, tarballPath });
-  }
-  return packedArtifacts;
 }
 
 export async function prepareInstallabilityConsumer({
@@ -90,238 +143,12 @@ export async function prepareInstallabilityConsumer({
   );
 }
 
-function exportedTargets(exportsField?: any) : any[] {
-  if (typeof exportsField === "string") return [{ subpath: ".", target: exportsField }];
-  if (!exportsField || typeof exportsField !== "object" || Array.isArray(exportsField)) return [];
-  const keys: any[] = Object.keys(exportsField);
-  const hasSubpaths: any = keys.some((key?: any) : any => key === "." || key.startsWith("./"));
-  const entries: any[] = hasSubpaths
-    ? Object.entries(exportsField).map(([subpath, target]: any[]) : any => ({ subpath, target }))
-    : [{ subpath: ".", target: exportsField }];
-  return entries.filter(({ target }: Record<string, any>) : any => target !== null && target !== false);
-}
-
-function selectedExportTarget(target?: any, condition?: any) : any {
-  if (typeof target === "string") return target;
-  if (Array.isArray(target)) {
-    for (const entry of target) {
-      const selected: any = selectedExportTarget(entry, condition);
-      if (selected) return selected;
-    }
-    return "";
-  }
-  if (!target || typeof target !== "object") return "";
-  const priority: any[] = condition === "types"
-    ? ["types", "default", "import", "node"]
-    : ["import", "node", "default"];
-  for (const name of priority) {
-    if (Object.hasOwn(target, name)) {
-      const selected: any = selectedExportTarget(target[name], condition);
-      if (selected) return selected;
-    }
-  }
-  return "";
-}
-
-function selectedTypesTarget(target?: any) : any {
-  if (!target || typeof target !== "object") return "";
-  if (Array.isArray(target)) {
-    for (const entry of target) {
-      const selected: any = selectedTypesTarget(entry);
-      if (selected) return selected;
-    }
-    return "";
-  }
-  if (Object.hasOwn(target, "types")) return selectedExportTarget(target.types, "types");
-  return "";
-}
-
-function packageExportEntries(manifest?: any) : any {
-  const name: any = String(manifest?.name || "");
-  const entries: any[] = exportedTargets(manifest?.exports).map(({ subpath, target }: Record<string, any>) : any => {
-    const runtimeTarget: any = selectedExportTarget(target, "runtime");
-    const typesTarget: any = selectedTypesTarget(target);
-    const suffix: any = String(subpath || ".").slice(2);
-    return {
-      subpath,
-      specifier: subpath === "." ? name : `${name}/${suffix}`,
-      runtimeTarget,
-      typesTarget
-    };
-  });
-  if (entries.length === 0 && (manifest?.main || manifest?.module || manifest?.types || manifest?.typings)) {
-    entries.push({
-      subpath: ".",
-      specifier: name,
-      runtimeTarget: String(manifest.module || manifest.main || ""),
-      typesTarget: String(manifest.types || manifest.typings || "")
-    });
-  }
-  if (entries.length > 0 && (manifest?.types || manifest?.typings)) {
-    const rootEntry: any = entries.find(({ subpath }: Record<string, any>) : any => subpath === ".");
-    if (rootEntry && !rootEntry.typesTarget) {
-      rootEntry.typesTarget = String(manifest.types || manifest.typings);
-    }
-  }
-  return entries;
-}
-
-function packageImportSpecifiers(manifest?: any) : string[] {
-  return packageExportEntries(manifest)
-    .filter(({ runtimeTarget }: Record<string, any>) : any => runtimeTarget && !/\.(?:css|vue)$/iu.test(runtimeTarget))
-    .map(({ specifier }: Record<string, any>) : any => String(specifier));
-}
-
-function packageTypeSpecifiers(manifest?: any) : string[] {
-  return packageExportEntries(manifest)
-    .filter(({ typesTarget }: Record<string, any>) : any => Boolean(typesTarget))
-    .map(({ specifier }: Record<string, any>) : any => String(specifier));
-}
-
-function isVueConsumer(manifest?: any) : boolean {
-  return packageExportEntries(manifest).some(({ runtimeTarget }: Record<string, any>) : any => /\.(?:vue|css)$/iu.test(String(runtimeTarget || "")))
-    || Object.hasOwn(manifest?.peerDependencies || {}, "vue");
-}
-
 function consumerDirectoryName(name?: any) : any {
   return String(name || "package")
     .replace(/^@/u, "")
     .replace(/[^a-z0-9]+/giu, "-")
     .replace(/^-+|-+$/gu, "")
     .toLowerCase();
-}
-
-function commandEntries(binField?: any) : any[] {
-  if (typeof binField === "string") return [{ name: "meshrix", path: binField }];
-  if (!binField || typeof binField !== "object" || Array.isArray(binField)) return [];
-  return Object.entries(binField).map(([name, filePath]: any[]) : any => ({ name, path: filePath }));
-}
-
-function dependencyFields(manifest?: any) : any {
-  return Object.fromEntries([
-    "dependencies",
-    "optionalDependencies",
-    "peerDependencies",
-    "peerDependenciesMeta",
-    "engines",
-    "bin",
-    "license"
-  ].filter((field?: any) : any => manifest?.[field] !== undefined)
-    .map((field?: any) : any => [field, manifest[field]]));
-}
-
-async function runNodeExportProbe({ manifest, cwd, runProbeStage }: Record<string, any>) : Promise<number> {
-  const specifiers: string[] = packageImportSpecifiers(manifest);
-  if (specifiers.length === 0) return 0;
-  const source: any = `for (const specifier of ${JSON.stringify(specifiers)}) {\n  await import(specifier);\n}\n`;
-  await runProbeStage(
-    "npm_package_runtime_exports_failed",
-    process.execPath,
-    ["--input-type=module", "--eval", source],
-    { cwd, classifyRuntime: true }
-  );
-  return specifiers.length;
-}
-
-async function runTypeExportProbe({ manifest, cwd, runProbeStage, rootPackage }: Record<string, any>) : Promise<number> {
-  const specifiers: string[] = packageTypeSpecifiers(manifest);
-  if (specifiers.length === 0) return 0;
-  const typescriptVersion: any = rootPackage.devDependencies?.typescript;
-  assert.ok(typescriptVersion, "npm_package_typescript_verifier_dependency_missing");
-  const sourcePath: any = path.join(cwd, "meshrix-package-types.ts");
-  const imports: any = specifiers.map((specifier?: any, index?: any) : any =>
-    `import type * as PublicEntry${index} from ${JSON.stringify(specifier)};`
-  ).join("\n");
-  await fs.writeFile(sourcePath, `${imports}\nexport type PublicEntries = [${specifiers.map((_specifier?: any, index?: any) : any => `typeof PublicEntry${index}`).join(", ")}];\n`, "utf8");
-  const consumerTools: any = path.join(cwd, "node_modules", "typescript", "bin", "tsc");
-  await fs.access(consumerTools);
-  await runProbeStage(
-    "npm_package_types_exports_failed",
-    process.execPath,
-    [consumerTools, "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ES2022", "--strict", "--noEmit", "--skipLibCheck", sourcePath],
-    { cwd, classifyRuntime: true }
-  );
-  return specifiers.length;
-}
-
-function vueRuntimeTarget(entry?: any) : any {
-  return String(entry?.runtimeTarget || "");
-}
-
-async function runVuePackageConsumer({ manifest, cwd, runProbeStage, rootPackage }: Record<string, any>) : Promise<any> {
-  const entries: any[] = packageExportEntries(manifest)
-    .filter((entry?: any) : any => Boolean(entry.runtimeTarget));
-  const imports: any[] = entries
-    .filter((entry?: any) : any => !/\.d\.ts$/iu.test(String(entry.runtimeTarget)))
-    .map((entry?: any) : any => entry.specifier);
-  assert.ok(imports.length > 0, "npm_package_ui_runtime_exports_missing");
-  const interactiveEntry: any = entries.find((entry?: any) : any => /binary-checkbox/iu.test(String(entry.subpath)))
-    || entries.find((entry?: any) : any => /\.vue$/iu.test(vueRuntimeTarget(entry)));
-  assert.ok(interactiveEntry?.specifier, "npm_package_ui_interactive_export_missing");
-  const rootDevDependencies: any = rootPackage.devDependencies || {};
-  const toolNames: any[] = ["vite", "@vitejs/plugin-vue", "vue-tsc", "typescript", "vitest", "@vue/test-utils", "jsdom"];
-  const toolDependencies: any = Object.fromEntries(toolNames.map((name?: any) : any => {
-    assert.ok(rootDevDependencies[name], `npm_package_ui_verifier_dependency_missing_${consumerDirectoryName(name)}`);
-    return [name, rootDevDependencies[name]];
-  }));
-  await fs.mkdir(path.join(cwd, "src"), { recursive: true });
-  await fs.writeFile(path.join(cwd, "index.html"), "<!doctype html><html><body><div id=\"app\"></div><script type=\"module\" src=\"/src/main.ts\"></script></body></html>\n", "utf8");
-  await fs.writeFile(
-    path.join(cwd, "vite.config.mjs"),
-    `import { defineConfig } from "vitest/config";\nimport vue from "@vitejs/plugin-vue";\nexport default defineConfig({ plugins: [vue()], test: { environment: "jsdom", include: ["ui-consumer.test.ts"], server: { deps: { inline: [${JSON.stringify(manifest.name)}] } } } });\n`,
-    "utf8"
-  );
-  const importLines: any = imports.map((specifier?: any) : any => `import ${JSON.stringify(specifier)};`).join("\n");
-  await fs.writeFile(
-    path.join(cwd, "src", "main.ts"),
-    `import { createApp, h } from "vue";\nimport ElementPlus from "element-plus";\nimport Component from ${JSON.stringify(interactiveEntry.specifier)};\n${importLines}\ncreateApp({ render: () => h(Component, { modelValue: false, label: "Meshrix package probe" }) }).use(ElementPlus).mount("#app");\n`,
-    "utf8"
-  );
-  await fs.writeFile(
-    path.join(cwd, "ui-consumer.test.ts"),
-    `import { expect, it } from "vitest";\nimport { mount } from "@vue/test-utils";\nimport Component from ${JSON.stringify(interactiveEntry.specifier)};\nit("mounts and exercises an exported interactive component", async () => {\n  const wrapper = mount(Component, { props: { modelValue: false, label: "Meshrix package probe" } });\n  const control = wrapper.get('[role="checkbox"]');\n  expect(control.attributes("aria-checked")).toBe("false");\n  await control.trigger("click");\n  expect(wrapper.emitted("update:modelValue")).toEqual([[true]]);\n  wrapper.unmount();\n});\n`,
-    "utf8"
-  );
-  const typeSpecifiers: any[] = packageTypeSpecifiers(manifest);
-  const typeImports: any = typeSpecifiers.map((specifier?: any, index?: any) : any =>
-    `import type * as PublicEntry${index} from ${JSON.stringify(specifier)};`
-  ).join("\n");
-  await fs.writeFile(
-    path.join(cwd, "ui-types.ts"),
-    `${typeImports}\nexport type PublicEntries = [${typeSpecifiers.map((_specifier?: any, index?: any) : any => `typeof PublicEntry${index}`).join(", ")}];\n`,
-    "utf8"
-  );
-  await fs.writeFile(path.join(cwd, "tsconfig.json"), `${JSON.stringify({
-    compilerOptions: {
-      target: "ES2022",
-      module: "ESNext",
-      moduleResolution: "Bundler",
-      strict: true,
-      noEmit: true,
-      skipLibCheck: true,
-      types: ["vitest/globals"]
-    },
-    include: ["ui-types.ts", "ui-consumer.test.ts"]
-  }, null, 2)}\n`, "utf8");
-  await runProbeStage(
-    "npm_package_ui_vite_build_failed",
-    npmCommand(),
-    npmArgs(["exec", "--offline", "--", "vite", "build", "--config", "vite.config.mjs"]),
-    { cwd, classifyNpmInstall: true }
-  );
-  await runProbeStage(
-    "npm_package_ui_types_failed",
-    npmCommand(),
-    npmArgs(["exec", "--offline", "--", "vue-tsc", "--noEmit", "-p", "tsconfig.json"]),
-    { cwd, classifyRuntime: true }
-  );
-  await runProbeStage(
-    "npm_package_ui_interaction_failed",
-    npmCommand(),
-    npmArgs(["exec", "--offline", "--", "vitest", "run", "--config", "vite.config.mjs"]),
-    { cwd, classifyRuntime: true }
-  );
-  return { runtimeExportCount: imports.length, typeExportCount: typeSpecifiers.length, interactiveEntry: interactiveEntry.specifier, verifierToolCount: toolNames.length };
 }
 
 async function run(command?: any, args?: any, options: Record<string, any> = {}) : Promise<any> {
@@ -355,18 +182,7 @@ async function runStage(errorCode?: any, command?: any, args?: any, options: Rec
         }
       }
       if (/ENOTCACHED|cache mode is ['"]?only-if-cached/iu.test(output)) {
-        const registryPath: any = output.match(
-          /https:\/\/registry\.npmjs\.org\/([^\s?]+)/iu
-        )?.[1];
-        const packageCode: any = registryPath
-          ? decodeURIComponent(registryPath)
-              .replace(/^@/u, "")
-              .replace(/[^a-z0-9]+/giu, "_")
-              .replace(/^_+|_+$/gu, "")
-              .toLowerCase()
-              .slice(0, 80)
-          : "unknown";
-        throw new Error(`npm_package_offline_cache_incomplete_${packageCode}`);
+        throw new Error("npm_package_offline_cache_incomplete");
       }
       if (/node-gyp|gyp ERR|Could not locate the bindings file/iu.test(output)) {
         throw new Error("npm_package_native_dependency_build_failed");
@@ -495,10 +311,248 @@ async function runStage(errorCode?: any, command?: any, args?: any, options: Rec
   }
 }
 
-function failureCode(error?: any) : any {
-  const message: any = String(error?.message || "");
-  const match: any = message.match(/npm_package_[a-z0-9_]+/u);
-  return match?.[0] || "npm_package_installability_failed";
+export function failureCode(error?: any) : any {
+  const message: any = typeof error?.message === "string" ? error.message : "";
+  return NPM_PACKAGE_INSTALLABILITY_FAILURE_CODES.has(message)
+    ? message
+    : "npm_package_installability_failed";
+}
+
+export async function listInstallabilityTarballFiles(tarballPath?: any) : Promise<string[]> {
+  const fileList: any = await execFileAsync("tar", ["-tzf", tarballPath], {
+    encoding: "utf8",
+    maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
+    windowsHide: true
+  });
+  return String(fileList.stdout || "")
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .filter((entry?: any) : any => !entry.endsWith("/"))
+    .map((entry?: any) : any => {
+    const normalized: any = path.posix.normalize(String(entry).replace(/^\.\//u, ""));
+      assert.ok(
+        !String(entry).split("/").includes("..")
+          && normalized.startsWith("package/")
+          && !normalized.startsWith("/")
+          && !normalized.split("/").includes(".."),
+        "npm_package_pack_tarball_invalid"
+      );
+      return normalized.slice("package/".length);
+    });
+}
+
+export async function loadPreparedInstallabilityArtifacts({ artifactDirectory, rootDir = process.cwd() }: Record<string, any>) : Promise<any[]> {
+  assert.ok(artifactDirectory, "npm_package_prepared_artifact_directory_required");
+  const [releaseSet, prepared] = await Promise.all([
+    discoverReleaseSet({ rootDir }),
+    loadPreparedReleaseSet({ rootDir, artifactDirectory })
+  ]);
+  const expectedPackages: any[] = releaseSet.packages.map(({ name, version }: Record<string, any>) => ({ name, version }));
+  const preparedPackages: any[] = prepared.packages.map(({ name, version }: Record<string, any>) => ({ name, version }));
+  assert.deepEqual(preparedPackages, expectedPackages, "npm_package_prepared_release_set_mismatch");
+  const packageMetadata = new Map(releaseSet.packages.map((record?: any) : any => [record.name, record]));
+  return Promise.all(prepared.packages.map(async (artifact?: any) : Promise<any> => {
+    const packageRecord: any = packageMetadata.get(artifact.name);
+    assert.ok(packageRecord, "npm_package_release_set_artifact_missing");
+    const stat: any = await fs.lstat(artifact.tarballPath);
+    assert.ok(stat.isFile() && !stat.isSymbolicLink(), "npm_package_pack_tarball_invalid");
+    const manifest: any = packageManifestFromTarball(await fs.readFile(artifact.tarballPath));
+    assert.equal(manifest.name, artifact.name, "npm_package_release_set_artifact_mismatch");
+    assert.equal(manifest.version, artifact.version, "npm_package_release_set_version_mismatch");
+    const files: string[] = await listInstallabilityTarballFiles(artifact.tarballPath);
+    return {
+      ...artifact,
+      ...packageRecord,
+      manifest,
+      files,
+      integrity: artifact.integrity,
+      tarballPath: artifact.tarballPath
+    };
+  }));
+}
+
+const EXPECTED_PUBLIC_PACKAGES: readonly string[] = Object.freeze([
+  "@meshrix/gateway",
+  "meshrix.js"
+]);
+
+function sortedUnique(values: any[]) : string[] {
+  return [...new Set(values.map((value?: any) : any => String(value)))].sort((left?: any, right?: any) : any => left.localeCompare(right));
+}
+
+function internalRuntimeDependencyNames(manifest?: any) : string[] {
+  return sortedUnique(["dependencies", "optionalDependencies"].flatMap((field?: any) : string[] => {
+    const dependencies: any = manifest?.[field];
+    return dependencies && typeof dependencies === "object" && !Array.isArray(dependencies)
+      ? Object.keys(dependencies).filter((name?: any) : any => name.startsWith("@meshrix/"))
+      : [];
+  }));
+}
+
+function declaredBundleNames(manifest?: any) : string[] {
+  const current: any = manifest?.bundleDependencies;
+  const legacy: any = manifest?.bundledDependencies;
+  if (legacy !== undefined || !Array.isArray(current)) {
+    throw new Error("npm_package_bundle_dependencies_invalid");
+  }
+  const names: any[] = current.map((name?: any) : any => String(name));
+  if (
+    names.some((name?: any) : any => !name.startsWith("@meshrix/"))
+    || new Set(names).size !== names.length
+  ) {
+    throw new Error("npm_package_bundle_dependencies_invalid");
+  }
+  return names.sort((left?: any, right?: any) : any => left.localeCompare(right));
+}
+
+export function bundledPackageNamesInArtifact(files?: string[]) : string[] {
+  const names = new Set<string>();
+  for (const file of files || []) {
+    const marker = file.indexOf("node_modules/");
+    if (marker < 0) continue;
+    if (marker !== 0) throw new Error("npm_package_bundled_package_path_invalid");
+
+    const segments = file.split("/");
+    const packageName = segments[1]?.startsWith("@")
+      ? `${segments[1]}/${segments[2] || ""}`
+      : String(segments[1] || "");
+    if (!packageName || packageName.endsWith("/") || packageName.includes("..")) {
+      throw new Error("npm_package_bundled_package_path_invalid");
+    }
+
+    const packageRoot = `node_modules/${packageName}`;
+    if (
+      (file !== `${packageRoot}/package.json` && !file.startsWith(`${packageRoot}/`))
+      || file.slice(packageRoot.length + 1).split("/").includes("node_modules")
+    ) {
+      throw new Error("npm_package_bundled_package_path_invalid");
+    }
+    names.add(packageName);
+  }
+  return [...names].sort((left?: any, right?: any) : any => left.localeCompare(right));
+}
+
+export async function assertPreparedProductBundleClosure({
+  rootDir = process.cwd(),
+  rootPackage,
+  releaseSet,
+  packedArtifacts
+}: Record<string, any>) : Promise<Record<string, any>> {
+  const publicNames: any[] = releaseSet.packages.map((packageRecord?: any) : any => String(packageRecord.name));
+  if (
+    new Set(publicNames).size !== publicNames.length
+    || JSON.stringify(sortedUnique(publicNames)) !== JSON.stringify([...EXPECTED_PUBLIC_PACKAGES])
+  ) {
+    throw new Error("npm_package_public_release_set_invalid");
+  }
+
+  const workspaceDirectories: string[] = await resolveReleaseWorkspaceDirectories({
+    rootDir,
+    workspaces: rootPackage.workspaces
+  });
+  const workspaceByName: any = new Map();
+  for (const directory of workspaceDirectories) {
+    let manifest: any;
+    try {
+      manifest = JSON.parse(await fs.readFile(path.join(rootDir, directory, "package.json"), "utf8"));
+    } catch {
+      throw new Error("npm_package_private_workspace_missing");
+    }
+    if (!String(manifest.name || "").startsWith("@meshrix/") || workspaceByName.has(manifest.name)) {
+      throw new Error("npm_package_private_workspace_missing");
+    }
+    workspaceByName.set(manifest.name, { directory, manifest });
+  }
+
+  const publicNameSet = new Set<string>(publicNames);
+  const rootInternalDependencies = internalRuntimeDependencyNames(rootPackage);
+  for (const name of rootInternalDependencies) {
+    const workspace = workspaceByName.get(name);
+    if (!workspace) throw new Error("npm_package_private_workspace_missing");
+    if (workspace.manifest.version !== rootPackage.version) {
+      throw new Error("npm_package_private_workspace_version_mismatch");
+    }
+    if (publicNameSet.has(name)) {
+      if (workspace.manifest.private === true) throw new Error("npm_package_public_release_set_invalid");
+    } else if (workspace.manifest.private !== true) {
+      throw new Error("npm_package_private_workspace_missing");
+    }
+  }
+
+  const expectedRootBundles = rootInternalDependencies.filter((name?: any) : any => !publicNameSet.has(name));
+  const actualRootBundles = declaredBundleNames(rootPackage);
+  if (JSON.stringify(actualRootBundles) !== JSON.stringify(expectedRootBundles)) {
+    throw new Error("npm_package_bundle_dependencies_invalid");
+  }
+
+  const bundlesByProduct: Record<string, any> = {};
+  for (const packageRecord of releaseSet.packages) {
+    const artifact = packedArtifacts.find((candidate?: any) : any => candidate.name === packageRecord.name);
+    if (!artifact) throw new Error("npm_package_release_set_artifact_missing");
+    const sourceManifest = packageRecord.root === true
+      ? rootPackage
+      : workspaceByName.get(packageRecord.name)?.manifest;
+    if (!sourceManifest || sourceManifest.name !== artifact.manifest.name || sourceManifest.version !== artifact.manifest.version) {
+      throw new Error("npm_package_release_set_artifact_mismatch");
+    }
+    if (sourceManifest.license !== "Apache-2.0" || artifact.manifest.license !== "Apache-2.0") {
+      throw new Error("npm_package_package_license_incorrect");
+    }
+
+    const expectedBundles = internalRuntimeDependencyNames(sourceManifest)
+      .filter((name?: any) : any => !publicNameSet.has(name));
+    const sourceBundles = declaredBundleNames(sourceManifest);
+    const artifactBundles = declaredBundleNames(artifact.manifest);
+    if (
+      JSON.stringify(sourceBundles) !== JSON.stringify(expectedBundles)
+      || JSON.stringify(artifactBundles) !== JSON.stringify(sourceBundles)
+    ) {
+      throw new Error("npm_package_bundle_dependencies_invalid");
+    }
+
+    for (const name of sourceBundles) {
+      const workspace = workspaceByName.get(name);
+      const dependencyVersion = sourceManifest.dependencies?.[name]
+        || sourceManifest.optionalDependencies?.[name];
+      if (!workspace) throw new Error("npm_package_private_workspace_missing");
+      if (
+        workspace.manifest.private !== true
+        || workspace.manifest.version !== sourceManifest.version
+        || dependencyVersion !== workspace.manifest.version
+      ) {
+        throw new Error("npm_package_private_workspace_version_mismatch");
+      }
+    }
+
+    const bundledFiles = bundledPackageNamesInArtifact(artifact.files);
+    if (JSON.stringify(bundledFiles) !== JSON.stringify(sourceBundles)) {
+      throw new Error("npm_package_bundled_packages_mismatch");
+    }
+    const fileSet = new Set<string>(artifact.files);
+    if (!fileSet.has("LICENSE") || !fileSet.has("package.json")) {
+      throw new Error("npm_package_package_license_incorrect");
+    }
+    for (const name of sourceBundles) {
+      if (!fileSet.has(`node_modules/${name}/LICENSE`)) {
+        throw new Error("npm_package_package_license_incorrect");
+      }
+    }
+    if (packageRecord.root === true && !fileSet.has("THIRD_PARTY_NOTICES.md")) {
+      throw new Error("npm_package_package_license_incorrect");
+    }
+    bundlesByProduct[packageRecord.name] = sourceBundles.length;
+  }
+
+  return {
+    publicPackageCount: publicNames.length,
+    privateWorkspaceCount: rootInternalDependencies.filter((name?: any) : any => !publicNameSet.has(name)).length,
+    bundledPackageCountByProduct: bundlesByProduct
+  };
+}
+
+function artifactDirectoryArgument() : any {
+  const value: any = argumentValue("--artifact-dir") || process.env.MESHRIX_NPM_ARTIFACT_DIR || "";
+  return value ? path.resolve(value) : "";
 }
 
 function selectedHostEnvironment() : any {
@@ -523,7 +577,7 @@ function selectedHostEnvironment() : any {
   );
 }
 
-async function runProbe({ reportPath, freshContainer, requiredReleaseProbe = false }: Record<string, any>) : Promise<any> {
+async function runProbe({ reportPath, freshContainer, requiredReleaseProbe = false, artifactDirectory = artifactDirectoryArgument() }: Record<string, any>) : Promise<any> {
 const tempRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-package-installability-"));
 const isolatedHome: any = path.join(tempRoot, "home");
 const isolatedTemp: any = path.join(tempRoot, "tmp");
@@ -588,17 +642,24 @@ function record(name?: any, status?: any, evidence: Record<string, any> = {}) : 
 try {
   const rootPackage: any = JSON.parse(await fs.readFile("package.json", "utf8"));
   const releaseSet: any = await discoverReleaseSet({ rootDir: process.cwd() });
+  const packedArtifacts: any[] = await loadPreparedInstallabilityArtifacts({ artifactDirectory });
   assert.equal(releaseSet.version, rootPackage.version, "npm_package_release_set_version_mismatch");
+  const bundleEvidence: any = await assertPreparedProductBundleClosure({
+    rootDir: process.cwd(),
+    rootPackage,
+    releaseSet,
+    packedArtifacts
+  });
   const expectedBin: any = "dist/apps/server/bin/meshrix.js";
   const expectedServerBin: any = "dist/tools/server-scripts/start-server.js";
+  const expectedMcpBin: any = "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js";
   assert.equal(rootPackage.bin?.meshrix, expectedBin, "npm_package_cli_bin_contract_invalid");
   assert.equal(
     rootPackage.bin?.["meshrix-server"],
     expectedServerBin,
     "npm_package_server_bin_contract_invalid"
   );
-  assert.equal(rootPackage.bundleDependencies, undefined, "npm_package_bundled_dependencies_forbidden");
-  assert.equal(rootPackage.bundledDependencies, undefined, "npm_package_bundled_dependencies_forbidden");
+  assert.equal(rootPackage.bin?.["meshrix-mcp"], expectedMcpBin, "npm_package_mcp_bin_missing");
   for (const lifecycleScript of ["preinstall", "install", "postinstall"]) {
     assert.equal(
       rootPackage.scripts?.[lifecycleScript],
@@ -607,62 +668,21 @@ try {
     );
   }
 
-  const workspacePackages: any[] = releaseSet.packages
-    .filter((packageRecord?: any) : any => !packageRecord.root && packageRecord.name.startsWith("@meshrix/"))
-    .map((packageRecord?: any) : any => ({
-      directory: packageRecord.directory,
-      name: packageRecord.name
-    }));
-  const workspaceNames: any = workspacePackages.map(({ name }: Record<string, any>) : any => name).sort();
-  const rootInternalDependencies: any = Object.keys(rootPackage.dependencies || {})
-    .filter((name?: any) : any => name.startsWith("@meshrix/"))
-    .sort();
-  assert.deepEqual(
-    rootInternalDependencies,
-    workspaceNames,
-    "npm_package_workspace_dependency_set_incomplete"
-  );
-  for (const name of workspaceNames) {
-    assert.equal(
-      rootPackage.dependencies[name],
-      rootPackage.version,
-      "npm_package_workspace_dependency_version_mismatch"
-    );
-  }
-  record("root package declares the complete version-locked workspace release set", "passed", {
-    workspacePackageCount: workspacePackages.length,
+  record("canonical public packages declare their exact private bundle closure", "passed", {
+    privateWorkspaceCount: bundleEvidence.privateWorkspaceCount,
     releasePackageCount: releaseSet.packages.length,
-    connectorPackageIncluded: releaseSet.packages.some(({ name }: Record<string, any>) : any => name === "meshrix-mcp-connector"),
+    rootMcpBinDeclared: true,
+    standaloneConnectorPackageIncluded: false,
     versionLocked: true,
-    bundledDependencies: false,
+    bundledPackageCountByProduct: bundleEvidence.bundledPackageCountByProduct,
     rootInstallLifecycleHooks: false
-  });
-
-  const packDirectory: any = path.join(tempRoot, "pack");
-  await fs.mkdir(packDirectory, { recursive: true });
-  const packedArtifacts: any[] = await packInstallabilityArtifacts({
-    packageRecords: releaseSet.packages,
-    packDirectory,
-    runPack: (packageRecord?: any, destination?: any) : any => runProbeStage(
-      "npm_package_release_set_pack_failed",
-      npmCommand(),
-      npmArgs(["pack", "--json", "--ignore-scripts", "--pack-destination", destination]),
-      { cwd: packageRecord.absoluteDirectory }
-    )
   });
 
   let packedFileCount: any = 0;
   const tarballPaths: any[] = [];
   for (const artifact of packedArtifacts) {
-    const files: any = Array.isArray(artifact.files)
-      ? artifact.files.map((entry?: any) : any => String(entry.path))
-      : [];
+    const files: any = artifact.files;
     packedFileCount += files.length;
-    assert.equal(
-      files.some((file?: any) : any => file.startsWith("node_modules/")),
-      false,
-      "npm_package_bundled_node_modules_forbidden"
-    );
     assert.equal(
       files.some((file?: any) : any => PLATFORM_ARTIFACT_PATTERN.test(file)),
       false,
@@ -671,13 +691,11 @@ try {
     tarballPaths.push(artifact.tarballPath);
   }
   const rootArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === rootPackage.name);
-  const connectorArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === "meshrix-mcp-connector");
   assert.ok(rootArtifact, "npm_package_root_artifact_missing");
-  assert.ok(connectorArtifact, "npm_package_connector_artifact_missing");
-  const rootFiles: any = rootArtifact.files.map((entry?: any) : any => String(entry.path));
-  const connectorFiles: any = connectorArtifact.files.map((entry?: any) : any => String(entry.path));
+  const rootFiles: any = rootArtifact.files;
   assert.ok(rootFiles.includes(expectedBin), "npm_package_cli_bin_missing");
   assert.ok(rootFiles.includes(expectedServerBin), "npm_package_server_bin_missing");
+  assert.ok(rootFiles.includes(expectedMcpBin), "npm_package_mcp_bin_missing");
   assert.match(
     await fs.readFile(expectedServerBin, "utf8"),
     /^#!\/usr\/bin\/env node\r?\n/u,
@@ -688,24 +706,36 @@ try {
     "npm_package_internal_runtime_source_missing"
   );
   assert.ok(
-    connectorFiles.includes("dist/lib/mcp-proxy-session.js"),
-    "npm_package_connector_runtime_source_missing"
+    rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.js"),
+    "npm_package_mcp_runtime_source_missing"
   );
   assert.ok(
-    connectorFiles.includes("dist/mcp-identity.js"),
-    "npm_package_connector_identity_source_missing"
+    rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/mcp-identity.js"),
+    "npm_package_mcp_runtime_source_missing"
   );
-  record("release-set tarballs are source-portable and exclude host artifacts", "passed", {
+  record("release-set tarballs carry declared private bundles and exclude host artifacts", "passed", {
     packageCount: packedArtifacts.length,
+    packages: packedArtifacts.map(({ name, version, filename, integrity }: Record<string, any>) => ({
+      name,
+      version,
+      filename,
+      integrity
+    })),
     fileCount: packedFileCount,
-    bundledNodeModules: false,
+    bundledPackageCountByProduct: bundleEvidence.bundledPackageCountByProduct,
     platformArtifacts: false,
-    connectorRuntimeSource: true,
+    preparedReleaseSet: true,
+    preparedArtifactIntegrityVerified: true,
+    rootMcpRuntimeSource: true,
+    standaloneConnectorPackageIncluded: false,
     repositoryInstructionsExcluded: true
   });
 
   const consumerDirectory: any = path.join(tempRoot, "consumer");
-  await prepareInstallabilityConsumer({ consumerDirectory, packedArtifacts });
+  await prepareInstallabilityConsumer({
+    consumerDirectory,
+    packageRecord: { name: rootPackage.name, version: rootPackage.version }
+  });
   const registryMirror: any = freshContainer === true
     ? await createLockBackedNpmRegistry({
         lockPath: "package-lock.json",
@@ -776,20 +806,22 @@ try {
     /--allow-public-console/u,
     "npm_package_server_cli_help_failed"
   );
-  const connectorVersion: any = await runProbeStage(
-    "npm_package_connector_cli_failed",
+  const mcpVersion: any = await runProbeStage(
+    "npm_package_mcp_identity_invalid",
     npmCommand(),
     npmArgs(["exec", "--offline", "--", "meshrix-mcp", "version", "--json"]),
     { cwd: consumerDirectory, classifyRuntime: true }
   );
-  const connectorPayload: any = JSON.parse(connectorVersion.stdout);
-  assert.equal(connectorPayload.packageName, "meshrix-mcp-connector", "npm_package_connector_identity_invalid");
-  assert.equal(connectorPayload.packageVersion, rootPackage.version, "npm_package_connector_version_invalid");
+  const mcpPayload: any = JSON.parse(mcpVersion.stdout);
+  assert.equal(mcpPayload.packageName, rootPackage.name, "npm_package_mcp_identity_invalid");
+  assert.equal(mcpPayload.packageVersion, rootPackage.version, "npm_package_mcp_version_invalid");
   record("clean consumer install runs the packaged CLI", "passed", {
     cliHelp: true,
     offlineInterfaceCatalog: true,
     publicServerCliHelp: true,
-    connectorCli: true,
+    rootMcpCli: true,
+    rootOnlyInstall: true,
+    standaloneConnectorPackageFetched: false,
     registryPinned: true,
     lockBackedRegistryMirror: freshContainer === true,
     mirroredPackageCount: registryMirror?.packageCount || 0,
@@ -892,7 +924,7 @@ function resolveRepositoryRoot() : any {
 async function runContainerAuthority() : Promise<any> {
   const repoRoot: any = resolveRepositoryRoot();
   const workRoot: any = await fs.mkdtemp(path.join(repoRoot, "build", ".npm-package-isolation-"));
-  const packDirectory: any = path.join(workRoot, "artifacts");
+  const artifactDirectory: any = artifactDirectoryArgument();
   const inputDirectory: any = path.join(workRoot, "input");
   const evidenceDirectory: any = path.join(workRoot, "evidence");
   const rootReportPath: any = path.join(evidenceDirectory, "npm-package-installability.json");
@@ -919,14 +951,15 @@ async function runContainerAuthority() : Promise<any> {
     args
   );
   const names: any[] = [
-    "root package declares the complete version-locked workspace release set",
-    "release-set tarballs are source-portable and exclude host artifacts",
+    "canonical public packages declare their exact private bundle closure",
+    "release-set tarballs carry declared private bundles and exclude host artifacts",
     "clean consumer install runs the packaged CLI",
     "installed framework starts and serves its default health contracts"
   ];
 
   try {
-    await Promise.all([packDirectory, inputDirectory, evidenceDirectory].map((directory?: any) : any =>
+    assert.ok(artifactDirectory, "npm_package_prepared_artifact_directory_required");
+    await Promise.all([inputDirectory, evidenceDirectory].map((directory?: any) : any =>
       fs.mkdir(directory, { recursive: true })
     ));
     for (const source of [ISOLATED_CONSUMER_SOURCE, ISOLATED_REGISTRY_SOURCE]) {
@@ -936,82 +969,86 @@ async function runContainerAuthority() : Promise<any> {
     const rootPackage: any = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const lockfile: any = JSON.parse(await fs.readFile(path.join(repoRoot, "package-lock.json"), "utf8"));
     const releaseSet: any = await discoverReleaseSet({ rootDir: repoRoot });
+    const packedArtifacts: any[] = await loadPreparedInstallabilityArtifacts({
+      artifactDirectory,
+      rootDir: repoRoot
+    });
     assert.equal(releaseSet.version, rootPackage.version, "npm_package_release_set_version_mismatch");
+    const bundleEvidence: any = await assertPreparedProductBundleClosure({
+      rootDir: repoRoot,
+      rootPackage,
+      releaseSet,
+      packedArtifacts
+    });
     const expectedBin: any = "dist/apps/server/bin/meshrix.js";
     const expectedServerBin: any = "dist/tools/server-scripts/start-server.js";
+    const expectedMcpBin: any = "dist/packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.js";
     assert.equal(rootPackage.bin?.meshrix, expectedBin, "npm_package_cli_bin_contract_invalid");
     assert.equal(rootPackage.bin?.["meshrix-server"], expectedServerBin, "npm_package_server_bin_contract_invalid");
-    assert.equal(rootPackage.bundleDependencies, undefined, "npm_package_bundled_dependencies_forbidden");
-    assert.equal(rootPackage.bundledDependencies, undefined, "npm_package_bundled_dependencies_forbidden");
+    assert.equal(rootPackage.bin?.["meshrix-mcp"], expectedMcpBin, "npm_package_mcp_bin_missing");
     for (const lifecycleScript of ["preinstall", "install", "postinstall"]) {
       assert.equal(rootPackage.scripts?.[lifecycleScript], undefined, "npm_package_root_install_lifecycle_forbidden");
     }
 
-    const workspacePackages: any[] = releaseSet.packages.filter((packageRecord?: any) : any =>
-      !packageRecord.root && packageRecord.name.startsWith("@meshrix/")
-    );
-    const workspaceNames: any = workspacePackages.map(({ name }: Record<string, any>) : any => name).sort();
-    const rootInternalDependencies: any = Object.keys(rootPackage.dependencies || {})
-      .filter((name?: any) : any => name.startsWith("@meshrix/")).sort();
-    assert.deepEqual(rootInternalDependencies, workspaceNames, "npm_package_workspace_dependency_set_incomplete");
-    for (const name of workspaceNames) {
-      assert.equal(rootPackage.dependencies[name], rootPackage.version, "npm_package_workspace_dependency_version_mismatch");
-    }
-    record(names[0], "passed", {
-      workspacePackageCount: workspacePackages.length,
+    record("canonical public packages declare their exact private bundle closure", "passed", {
+      privateWorkspaceCount: bundleEvidence.privateWorkspaceCount,
       releasePackageCount: releaseSet.packages.length,
-      connectorPackageIncluded: releaseSet.packages.some(({ name }: Record<string, any>) : any => name === "meshrix-mcp-connector"),
+      rootMcpBinDeclared: true,
+      standaloneConnectorPackageIncluded: false,
       versionLocked: true,
-      bundledDependencies: false,
+      bundledPackageCountByProduct: bundleEvidence.bundledPackageCountByProduct,
       rootInstallLifecycleHooks: false
     });
 
-    const packedArtifacts: any[] = await packInstallabilityArtifacts({
-      packageRecords: releaseSet.packages,
-      packDirectory,
-      runPack: (packageRecord?: any, destination?: any) : any => runStage(
-        "npm_package_release_set_pack_failed",
-        npmCommand(),
-        npmArgs(["pack", "--json", "--ignore-scripts", "--pack-destination", destination]),
-        { cwd: packageRecord.absoluteDirectory }
-      )
-    });
     const rootArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === rootPackage.name);
-    const connectorArtifact: any = packedArtifacts.find(({ name }: Record<string, any>) : any => name === "meshrix-mcp-connector");
-    assert.ok(rootArtifact && connectorArtifact, "npm_package_required_artifact_missing");
+    assert.ok(rootArtifact, "npm_package_root_artifact_missing");
     const expectedServerBinText: any = await fs.readFile(path.join(repoRoot, expectedServerBin), "utf8");
     assert.match(expectedServerBinText, /^#!\/usr\/bin\/env node\r?\n/u, "npm_package_server_bin_shebang_missing");
+    const expectedMcpBinText: any = await fs.readFile(path.join(repoRoot, expectedMcpBin), "utf8");
+    assert.match(expectedMcpBinText, /^#!\/usr\/bin\/env node\r?\n/u, "npm_package_server_bin_shebang_missing");
     let packedFileCount: any = 0;
     for (const artifact of packedArtifacts) {
-      const files: any[] = Array.isArray(artifact.files) ? artifact.files.map((entry?: any) : any => String(entry.path)) : [];
+      const files: any[] = artifact.files;
       packedFileCount += files.length;
-      assert.equal(files.some((file?: any) : any => file.startsWith("node_modules/")), false, "npm_package_bundled_node_modules_forbidden");
       assert.equal(files.some((file?: any) : any => PLATFORM_ARTIFACT_PATTERN.test(file)), false, "npm_package_platform_artifact_forbidden");
     }
-    const rootFiles: any[] = rootArtifact.files.map((entry?: any) : any => String(entry.path));
-    const connectorFiles: any[] = connectorArtifact.files.map((entry?: any) : any => String(entry.path));
+    const rootFiles: any[] = rootArtifact.files;
     assert.ok(rootFiles.includes(expectedBin), "npm_package_cli_bin_missing");
     assert.ok(rootFiles.includes(expectedServerBin), "npm_package_server_bin_missing");
+    assert.ok(rootFiles.includes(expectedMcpBin), "npm_package_mcp_bin_missing");
     assert.ok(rootFiles.includes("dist/packages/contracts/src/operations/operation-registry.js"), "npm_package_internal_runtime_source_missing");
-    assert.ok(connectorFiles.includes("dist/lib/mcp-proxy-session.js"), "npm_package_connector_runtime_source_missing");
-    assert.ok(connectorFiles.includes("dist/mcp-identity.js"), "npm_package_connector_identity_source_missing");
+    assert.ok(rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.js"), "npm_package_mcp_runtime_source_missing");
+    assert.ok(rootFiles.includes("dist/packages/protocols/mcp/adapter/gateway-installer/mcp-identity.js"), "npm_package_mcp_runtime_source_missing");
     assert.ok(rootFiles.includes("build/dist/index.html"), "npm_package_console_build_assets_missing");
 
     const packagePlan: any[] = [];
     for (const packageRecord of releaseSet.packages) {
       const artifact: any = packedArtifacts.find((candidate?: any) : any => candidate.name === packageRecord.name);
       assert.ok(artifact, "npm_package_release_set_artifact_missing");
-      const manifest: any = packageManifestFromTarball(await fs.readFile(artifact.tarballPath));
+      const manifest: any = artifact.manifest;
       assert.equal(manifest.name, packageRecord.name, "npm_package_release_set_artifact_mismatch");
       assert.equal(manifest.version, packageRecord.version, "npm_package_release_set_version_mismatch");
+      assert.ok(Array.isArray(manifest.files) && manifest.files.length > 0, "npm_package_files_contract_missing");
+      assert.ok(manifest.license, "npm_package_license_contract_missing");
+      assert.ok(manifest.engines?.node, "npm_package_node_engine_contract_missing");
+      assert.equal(manifest.repository?.type, "git", "npm_package_repository_contract_missing");
+      assert.ok(manifest.repository?.url, "npm_package_repository_url_missing");
+      assert.ok(manifest.homepage, "npm_package_homepage_missing");
+      assert.ok(manifest.bugs?.url, "npm_package_bug_tracker_missing");
+      if (!packageRecord.root) {
+        assert.equal(manifest.repository?.directory, packageRecord.directory, "npm_package_repository_directory_mismatch");
+      }
+      if (manifest.name.startsWith("@meshrix/")) {
+        assert.equal(manifest.publishConfig?.access, "public", "npm_package_scoped_access_not_public");
+      }
       packagePlan.push({ name: manifest.name, version: manifest.version, root: packageRecord.root === true, manifest });
     }
     const registryArtifacts: any = packedArtifacts.map((artifact?: any) : any => ({
       name: String(artifact.name),
       version: String(artifact.version),
-      tarballPath: path.join("/artifacts", path.basename(artifact.tarballPath))
+      tarballPath: path.posix.join("/artifacts", String(artifact.filename))
     }));
-    const registryPlanPath: any = path.join(packDirectory, "registry-artifacts.json");
+    const registryPlanPath: any = path.join(inputDirectory, "registry-artifacts.json");
     await fs.writeFile(registryPlanPath, `${JSON.stringify({ artifacts: registryArtifacts }, null, 2)}\n`, "utf8");
 
     const lockedToolVersion: any = (name?: any) : any => {
@@ -1031,12 +1068,15 @@ async function runContainerAuthority() : Promise<any> {
       ].map((name?: any) : any => [name, lockedToolVersion(name)]))
     };
     await fs.writeFile(consumerPlanPath, `${JSON.stringify(containerPlan, null, 2)}\n`, "utf8");
-    record(names[1], "passed", {
+    record("release-set tarballs carry declared private bundles and exclude host artifacts", "passed", {
       packageCount: packedArtifacts.length,
       fileCount: packedFileCount,
-      bundledNodeModules: false,
+      bundledPackageCountByProduct: bundleEvidence.bundledPackageCountByProduct,
       platformArtifacts: false,
-      connectorRuntimeSource: true,
+      preparedReleaseSet: true,
+      preparedArtifactIntegrityVerified: true,
+      rootMcpRuntimeSource: true,
+      standaloneConnectorPackageIncluded: false,
       consoleBuildAssets: true,
       repositoryInstructionsExcluded: true,
       packedOnce: true
@@ -1071,8 +1111,9 @@ async function runContainerAuthority() : Promise<any> {
     await docker([
       "run", "--detach", "--rm", "--name", registryContainerName, "--network", networkName, "--network-alias", "meshrix-registry",
       "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--tmpfs", "/tmp:rw,nosuid,size=64m",
-      "--mount", `type=bind,src=${packDirectory},dst=/artifacts,readonly`, registryImage,
-      "node", "dist/tools/server-scripts/npm-registry-server.js"
+      "--mount", `type=bind,src=${artifactDirectory},dst=/artifacts,readonly`,
+      "--mount", `type=bind,src=${inputDirectory},dst=/input,readonly`, registryImage,
+      "node", "dist/tools/server-scripts/npm-registry-server.js", "--artifacts", "/input/registry-artifacts.json"
     ], "npm_package_registry_start_failed");
     registryStarted = true;
     for (;;) {
@@ -1087,6 +1128,7 @@ async function runContainerAuthority() : Promise<any> {
     }
 
     const platformReports: any[] = [];
+    const platformFailures: any[] = [];
     for (const target of platformImages) {
       const platformReportPath: any = path.join(evidenceDirectory, `${target.architecture}.json`);
       const platform: any = target.platform;
@@ -1103,12 +1145,57 @@ async function runContainerAuthority() : Promise<any> {
         "--mount", `type=bind,src=${evidenceDirectory},dst=/evidence`,
         target.tag, "node", "/opt/meshrix/npm-package-consumer.js"
       ];
-      await docker(args, "npm_package_consumer_runtime_failed");
-      const observed: any = JSON.parse(await fs.readFile(platformReportPath, "utf8"));
-      assert.equal(observed.summary?.success, true, "npm_package_consumer_runtime_failed");
-      assert.equal(observed.runtime?.platform, "linux", "npm_package_consumer_platform_mismatch");
-      assert.equal(observed.runtime?.architecture, target.architecture, "npm_package_consumer_architecture_mismatch");
-      assert.equal(observed.summary?.packageCount, releaseSet.packages.length, "npm_package_consumer_package_count_mismatch");
+      let observed: any = null;
+      try {
+        await docker(args, "npm_package_consumer_runtime_failed");
+        observed = JSON.parse(await fs.readFile(platformReportPath, "utf8"));
+      } catch {
+        observed = await fs.readFile(platformReportPath, "utf8")
+          .then((contents?: any) : any => JSON.parse(contents))
+          .catch(() : any => null);
+      }
+      if (observed?.summary?.success !== true) {
+        const summary: any = observed?.summary || {};
+        const packageIndex: any = Number.isInteger(summary.failurePackageIndex) &&
+          summary.failurePackageIndex >= 0 &&
+          summary.failurePackageIndex < releaseSet.packages.length
+          ? summary.failurePackageIndex
+          : null;
+        const completedConsumerCount: any = Number.isInteger(observed?.consumers?.length) &&
+          observed.consumers.length >= 0 &&
+          observed.consumers.length <= releaseSet.packages.length
+          ? observed.consumers.length
+          : 0;
+        platformFailures.push({
+          platform,
+          architecture: target.architecture,
+          stage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(summary.failureStage)
+            ? summary.failureStage
+            : "container_runtime",
+          errorCode: NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(summary.errorCode)
+            ? summary.errorCode
+            : "npm_package_consumer_runtime_failed",
+          packageIndex,
+          ...(packageIndex === null ? {} : { packageName: releaseSet.packages[packageIndex].name }),
+          completedConsumerCount
+        });
+        continue;
+      }
+      try {
+        assert.equal(observed.runtime?.platform, "linux", "npm_package_consumer_platform_mismatch");
+        assert.equal(observed.runtime?.architecture, target.architecture, "npm_package_consumer_architecture_mismatch");
+        assert.equal(observed.summary?.packageCount, releaseSet.packages.length, "npm_package_consumer_package_count_mismatch");
+      } catch (error: any) {
+        platformFailures.push({
+          platform,
+          architecture: target.architecture,
+          stage: "consumer_report_validation",
+          errorCode: failureCode(error),
+          packageIndex: null,
+          completedConsumerCount: 0
+        });
+        continue;
+      }
       platformReports.push({
         platform,
         architecture: target.architecture,
@@ -1123,16 +1210,32 @@ async function runContainerAuthority() : Promise<any> {
         server: observed.server,
         sqlite: observed.sqlite,
         migrations: observed.migrations,
+        offlineRestore: observed.offlineRestore,
         schemaWorker: observed.schemaWorker,
+        mcp: observed.mcp,
         browser: observed.browser
       });
+    }
+    if (platformFailures.length > 0) {
+      const failureEvidence: any = {
+        platformFailures,
+        qualifiedPlatforms: platformReports.map(({ platform, emulated, engineArchitecture }: Record<string, any>) : any => ({
+          platform,
+          emulated,
+          engineArchitecture
+        }))
+      };
+      record(names[2], "failed", failureEvidence);
+      record(names[3], "failed", failureEvidence);
+      throw new Error("npm_package_consumer_qualification_failed");
     }
     assert.equal(platformReports.length, 2, "npm_package_platform_report_incomplete");
     record(names[2], "passed", {
       platforms: platformReports.map(({ platform, emulated, engineArchitecture }: Record<string, any>) : any => ({ platform, emulated, engineArchitecture })),
       consumerCountPerPlatform: releaseSet.packages.length,
       installedRuntimeAndTypes: true,
-      installedCli: platformReports.every(({ cli }: Record<string, any>) : any => cli?.help && cli?.offlineInterfaceCatalog && cli?.serverHelp && cli?.connectorVersion),
+      installedCli: platformReports.every(({ cli }: Record<string, any>) : any => cli?.help && cli?.offlineInterfaceCatalog && cli?.serverHelp && cli?.mcpVersion && cli?.mcpHelp),
+      installedMcpProxy: platformReports.every(({ mcp }: Record<string, any>) : any => mcp?.installedRootBin === true && mcp?.standardInitialize === true && mcp?.initializedNotificationForwarded === true && mcp?.toolsListed === true && mcp?.representativeProxyCall === true && mcp?.credentialForwardedFromEnvironment === true && mcp?.processClosedCleanly === true),
       uiBrowserInteraction: platformReports.every(({ browser }: Record<string, any>) : any => browser?.uiPackage?.interaction === true),
       normalInstallLifecycle: platformReports.every(({ consumers }: Record<string, any>) : any => consumers.every((consumer?: any) : any => consumer.installLifecycleCompleted))
     });
@@ -1143,6 +1246,7 @@ async function runContainerAuthority() : Promise<any> {
       consoleAssetsSameOrigin: platformReports.every(({ server }: Record<string, any>) : any => server?.sameOrigin === true),
       sqliteRoundTrip: platformReports.every(({ sqlite }: Record<string, any>) : any => sqlite?.insertSelectRoundTrip === true),
       packagedMigrations: platformReports.every(({ migrations }: Record<string, any>) : any => migrations?.appliedVersionsAreIdempotent === true),
+      installedOfflineRestore: platformReports.every(({ offlineRestore }: Record<string, any>) : any => offlineRestore?.installedCli === true && offlineRestore?.applyVerified === true),
       installedSchemaWorker: platformReports.every(({ schemaWorker }: Record<string, any>) : any => schemaWorker?.validAndInvalidPayloadsChecked === true),
       platformResults: platformReports
     });

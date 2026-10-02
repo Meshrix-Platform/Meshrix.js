@@ -10,6 +10,9 @@ Apply these rules to every task inside the Meshrix.js product repository.
 ## Repository Scope
 
 - Own the server, console, protocol gateway, Operation Permission, security, storage, and canonical acceptance reducer.
+- The supported npm products are `meshrix.js` and `@meshrix/gateway`; workspace
+  package names and exports outside those products are private engineering
+  boundaries, not external npm support contracts.
 - External client products own their wire and lifecycle behavior. Packaged MCP
   client adapters in `plugins/agents/` have their own local implementation and
   verification boundary; they are not client product implementations.
@@ -71,7 +74,7 @@ actual scope, published-support, authority, or risk changes.
 - 前端控制台任务从 `apps/console/` 开始，只打开相关的 `apps/console/components/`、`apps/console/views/`、`apps/console/lib/` 和样式文件。
 - 服务端或运行时任务从 `packages/server-runtime/` 或 `apps/server/` 开始；domain 代码在 `packages/<domain>/` 下；只有涉及启动、挂载、运行行为或运维语义时再查阅 `docs/architecture/ARCHITECTURE.md`、`docs/functionality/SERVER-RUNTIME.md` 与 `docs/RUNBOOK.md`。
 - 安全、授权、风险控制或本地 stdio 边界任务从 `packages/foundation/src/security/` 开始，再查阅 `docs/functionality/SECURITY-AUTHORIZATION.md`；授权实现使用 `$meshrix-js-security-authorization`，新增外部或不可信输入面、漏洞修复和可突破性审查使用 `$meshrix-js-security-boundary-audit`。
-- MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。已打包的客户端适配器实现从 `plugins/agents/<target>/` 开始；外部客户端产品仍自行拥有其实现。Meshrix.js 安装契约是签名发现与连接器配置变更的权威。
+- MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。该运行时随根 `meshrix.js` npm 包发布，并由根包 `meshrix-mcp` bin 暴露；它不是独立 npm 包。`plugins/agents/<target>/` 中的第一方客户端适配器是随 `meshrix.js` 安装并纳入便携连接器声明运行时闭包的私有组件，不提供独立 npm 发布坐标；两种连接器均按根版本和受信清单使用标准 Node 包解析，只在明确目标动作中调用。`release:prepare` 同步工作区 package、adapter.json 与 registry 的版本投影。外部客户端产品仍自行拥有其实现。Meshrix.js 安装契约是签名发现与连接器配置变更的权威。
 - 架构、策略或治理类任务先看 `tools/registry/`，再打开与主题对应的核心文档。
 - 开发者手册是 `$meshrix-js-developer-handbook`，用户手册是 `$meshrix-js-user-handbook`。同一已授权任务可以依次包含开发与实例验证；分别使用对应手册，保留各自所有权、操作授权和证据声明。
 - 发布制品形状和对外地址规范使用 `$meshrix-js-release-artifact-contract`。运行中的实例使用和外部对接使用 `$meshrix-js-instance-usage`。
@@ -269,7 +272,7 @@ Own transport, negotiation, normalization, and protocol-local ports only. Reach 
 
 ### Scope
 
-- Owns the Meshrix.js Server MCP Gateway connector runtime under `packages/protocols/mcp/adapter/gateway-installer/`.
+- Owns the Meshrix.js MCP Gateway connector runtime source under `packages/protocols/mcp/adapter/gateway-installer/`; the runtime is published inside the root `meshrix.js` package through its `meshrix-mcp` bin, with no separate npm package.
 - User-device installer scripts live under `packages/protocols/mcp/adapter/native-installer/`.
 - Keep runtime proxy and process-identity changes inside this directory unless server MCP discovery or release packaging must be updated together.
 
@@ -278,14 +281,13 @@ Own transport, negotiation, normalization, and protocol-local ports only. Reach 
 - Start with the repository-wide rules in this skill, then this section.
 - Read `packages/protocols/mcp/adapter/gateway-installer/README.md` for runtime connector boundaries.
 - Read `packages/protocols/mcp/adapter/native-installer/README.md` for user-facing install and registration behavior.
-- Inspect `packages/protocols/mcp/adapter/gateway-installer/package.json` for connector package metadata.
 - Inspect `packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts` for CLI behavior.
 - Use `docs/RUNBOOK.md` only for install workflow or troubleshooting docs.
 
 ### Directory Routing
 
 - `bin/`: executable runtime connector entry points.
-- `packages/protocols/mcp/adapter/gateway-installer/package.json`: package metadata, bin mapping, and release surface.
+- Root `package.json`: public `meshrix-mcp` bin mapping and package release surface.
 - `packages/protocols/mcp/adapter/native-installer/`: canonical install guidance and scripts shared with users.
 
 ### Verification

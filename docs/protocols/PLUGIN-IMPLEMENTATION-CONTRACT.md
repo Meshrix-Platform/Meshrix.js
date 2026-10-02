@@ -11,6 +11,13 @@ Plugins consume public capabilities. They do not import Core runtime or
 composition modules, inspect Core storage paths, discover sibling repositories,
 or load unpackaged source directories.
 
+Plugin source may be authored in TypeScript, but the packaged runtime entrypoint
+is compiled to `.mjs`. The Host contract is expressed through the closed plugin
+manifest, archive and compatibility data, and the narrow ports injected into
+`activatePlugin` context. There is no external Host TypeScript SDK import; plugin
+consumers use the documented artifact and injected-port contract rather than an
+unpublished Contracts module or a private package path.
+
 ## Closed one-plugin package archive
 
 Every package archive contains exactly one plugin identity and one

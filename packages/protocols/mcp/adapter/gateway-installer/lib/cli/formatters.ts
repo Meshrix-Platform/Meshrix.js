@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 
-import { packageJson } from "./constants.ts";
+import { packageInfo } from "./constants.ts";
 import { targetLabel } from "./basic-utils.ts";
 import { commandFailureGuidance } from "./guidance.ts";
 import {
@@ -297,8 +297,8 @@ export function emitCommandError(error?: any, options: Record<string, any> = {},
     ok: false,
     commandFailed: true,
     command,
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     error: message,
     ...guidance
   }, options, command);

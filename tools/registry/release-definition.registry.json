@@ -29,8 +29,7 @@
       "plugins/agents/pi/package.json",
       "apps/server/package.json",
       "apps/mcp-gateway-installer/package.json",
-      "apps/console/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json"
+      "apps/console/package.json"
     ]
   },
   "container": {

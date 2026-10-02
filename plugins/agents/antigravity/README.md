@@ -4,9 +4,13 @@ Plugin ID: `agent-antigravity`
 
 Status: `stable`
 
-Package: `@meshrix/agent-antigravity-adapter`
+Internal component: `@meshrix/agent-antigravity-adapter`
 
 Group: `agents`
+
+This private first-party module is bundled with `meshrix.js` and included in
+the portable connector runtime. Both consumers use standard Node package
+resolution and invoke it only for an explicit target action.
 
 Antigravity MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
 

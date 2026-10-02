@@ -16,7 +16,7 @@ for the exact published artifact when it becomes available.
 | Storage | Self-contained local storage is the default. Optional stores or services are active only when explicitly configured and require evidence for the exact integration. |
 | Ingress | The runtime supports an administrator-managed TLS-terminating proxy under the documented trusted-forwarding contract. Forwarded headers do not establish identity or authorization. |
 | Plugin UI | Plugin browser content runs in an opaque-origin iframe and communicates through the versioned Host bridge. This boundary does not grant direct network access or same-origin privileges. |
-| npm package | Package manifests and their release definition are the source for package names and versions. A source checkout, local build, or local installation is not proof of registry publication or external platform support. |
+| npm products | The supported npm products are `meshrix.js` and `@meshrix/gateway`. Root-installed first-party client adapters are private components bundled with `meshrix.js`. Package manifests and the release definition own product names and versions; a source checkout, local build, or local installation is not proof of registry publication or external platform support. |
 
 ## Protocol and integration ownership
 
@@ -29,12 +29,12 @@ than discovered from a client-brand catalog.
 | --- | --- |
 | HTTP, MCP, plugin package, pubsub, storage, checkpoint, and Console protocols | The owning Meshrix.js protocol documents and schemas define the implemented wire contract. |
 | Upstream service publishing | The server gateway and Operation Permission own publication and governed invocation. An upstream's own availability and protocol conformance are external conditions. |
-| Downstream client integration | Clients use the declared protocol and authorization contract. Operators select and supply external client-adapter packages; their behavior is not implied by Core support. |
+| Downstream client integration | `meshrix.js` contains the first-party adapter components for its declared target catalog. Each runs only for an explicit target action through the bounded JSON-stdio contract; client applications remain independent external products. |
 | Optional parsers, providers, datastores, and service adapters | Optional integrations are disabled or absent by default. Each enabled implementation has its own contract, configuration, and verification evidence. |
 
 The root package and Foundation declare `pactium@0.8.1` as a runtime
 dependency, and `package-lock.json` pins the resolved package. The separate
 `vendor/pactium-0.8.0.tgz` source archive is not that runtime dependency; its
 license and inclusion in a release artifact must be assessed independently.
-The root package's `MIT` declaration alone does not determine the license
-obligations of every third-party artifact in a distribution.
+The project's Apache-2.0 declaration does not determine the license
+obligations of third-party artifacts in a distribution.

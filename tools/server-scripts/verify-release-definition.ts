@@ -11,6 +11,10 @@ import {
   loadReleaseDefinition,
   resolveReleaseWorkspaceDirectories
 } from "./lib/release-metadata.ts";
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const semverPattern: any =
@@ -58,14 +62,16 @@ export async function verifyReleaseDefinition({
   }
 
   const rootPackage: any = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
+  if (rootPackage.name !== MCP_NPM_PACKAGE_NAME || rootPackage.version !== MCP_NPM_PACKAGE_VERSION) {
+    fail("release_definition_mcp_package_identity_mismatch", "MCP executable identity must match the root npm package.");
+  }
   const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({
     rootDir,
     workspaces: rootPackage.workspaces
   });
   const expectedManifests: any[] = [
     "package.json",
-    ...workspaceDirectories.map((workspace?: any) : any => `${workspace}/package.json`),
-    "packages/protocols/mcp/adapter/gateway-installer/package.json"
+    ...workspaceDirectories.map((workspace?: any) : any => `${workspace}/package.json`)
   ];
   if (JSON.stringify(definition.packages.manifests) !== JSON.stringify(expectedManifests)) {
     fail("release_definition_manifest_set_mismatch", "Release manifest set is not the workspace release set.");

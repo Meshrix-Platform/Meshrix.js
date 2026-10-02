@@ -2,7 +2,7 @@
   "name": "@meshrix/ui-console",
   "version": "0.0.1",
   "description": "Reusable Vue components and browser-side helpers for Meshrix.js consoles",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },
@@ -12,12 +12,10 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "prepack": "npm run build"
   },
-  "dependencies": {
-    "@element-plus/icons-vue": "^2.3.2"
-  },
   "peerDependencies": {
     "element-plus": "^2.13.7",
-    "vue": "^3.5.32"
+    "vue": "^3.5.32",
+    "@element-plus/icons-vue": "^2.3.2"
   },
   "exports": {
     "./binary-checkbox": {
@@ -112,12 +110,24 @@
     },
     "./styles.css": "./dist/styles.css"
   },
-  "sideEffects": ["./dist/styles.css"],
+  "sideEffects": [
+    "./dist/styles.css"
+  ],
   "files": [
     "dist/**/*",
     "src/**/*",
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/ui-console"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true
 }

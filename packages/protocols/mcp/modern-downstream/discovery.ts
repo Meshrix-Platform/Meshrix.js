@@ -14,22 +14,22 @@ import {
   MCP_BOOTSTRAP_UNINSTALL_SCRIPT,
   MCP_BOOTSTRAP_WINDOWS_INSTALL_SCRIPT,
   MCP_BOOTSTRAP_WINDOWS_UNINSTALL_SCRIPT,
-  MCP_CLIENT_TARGETS,
   MCP_CONNECTOR_GITHUB_REPO,
-  MCP_CONNECTOR_PACKAGE_NAME,
-  MCP_CONNECTOR_VERSION,
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION,
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME,
   MCP_INTERFACE_VERSION,
-  MCP_PRIORITY_INSTALL_TARGET,
-  MCP_PRIORITY_INSTALL_TARGETS,
   MCP_PROTOCOL_VERSION,
   MCP_SERVER_VERSION,
   MCP_STABLE_TOOL_NAME,
   MCP_TOOLSET_VERSION
 } from "../adapter/http-mcp-adapter-constants.ts";
 import {
+  MCP_CLIENT_TARGETS,
   MCP_CLIENT_ADAPTER_PROTOCOL,
+  MCP_PRIORITY_INSTALL_TARGET,
+  MCP_PRIORITY_INSTALL_TARGETS,
   mcpPublicSupportedTargetDetails as releaseMcpPublicSupportedTargetDetails,
   mcpSupportedTargetDetails as releaseMcpSupportedTargetDetails
 } from "../adapter/mcp-release-targets.ts";
@@ -59,8 +59,8 @@ export function mcpVersionInfo() : any {
     listChanged: true,
     upgradeNotification: "notifications/tools/list_changed",
     connector: {
-      packageName: MCP_CONNECTOR_PACKAGE_NAME,
-      packageVersion: MCP_CONNECTOR_VERSION
+      packageName: MCP_NPM_PACKAGE_NAME,
+      packageVersion: MCP_NPM_PACKAGE_VERSION
     }
   };
 }
@@ -312,8 +312,8 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
       ]
     },
     installer: {
-      packageName: MCP_CONNECTOR_PACKAGE_NAME,
-      packageVersion: MCP_CONNECTOR_VERSION,
+      packageName: MCP_NPM_PACKAGE_NAME,
+      packageVersion: MCP_NPM_PACKAGE_VERSION,
       releaseChannel: "stable",
       supportedTargets,
       priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],

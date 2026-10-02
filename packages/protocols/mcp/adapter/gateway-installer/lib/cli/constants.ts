@@ -1,7 +1,10 @@
 import { execSync } from "node:child_process";
-import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 import {
   MCP_PRIORITY_INSTALL_TARGET,
   MCP_PRIORITY_INSTALL_TARGETS,
@@ -12,23 +15,10 @@ import {
   mcpSupportedTargetDetails
 } from "../../mcp-release-targets.ts";
 
-async function readConnectorPackageJson(): Promise<any> {
-  for (const relativePath of ["../../package.json", "../../../package.json"]) {
-    try {
-      const manifest: any = JSON.parse(
-        await fs.readFile(new URL(relativePath, import.meta.url), "utf8")
-      );
-      if (manifest?.name === "meshrix-mcp-connector") return manifest;
-    } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-  }
-  const error: Error & Record<string, any> = new Error("Connector package manifest is unavailable.");
-  error.code = "MCP_CONNECTOR_PACKAGE_MANIFEST_MISSING";
-  throw error;
-}
-
-export const packageJson: any = await readConnectorPackageJson();
+export const packageInfo: Readonly<Record<string, string>> = Object.freeze({
+  name: MCP_NPM_PACKAGE_NAME,
+  version: MCP_NPM_PACKAGE_VERSION
+});
 
 // Literal field names used in MCP gateway instrumentation.
 export const MCP_OTEL_ATTRIBUTES: Readonly<Record<string, any>> = Object.freeze({

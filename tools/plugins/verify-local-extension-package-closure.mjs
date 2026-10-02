@@ -26,9 +26,23 @@ async function main() {
   const registry = await readJson(path.join(repoRoot, "plugins", "registry", "plugins.json"));
   const counts = assertMigratedExtensionClosure(registry);
   const required = [
+    "LICENSE",
     "services/file-parser/format-convert/go.mod",
     "services/file-parser/format-convert/LICENSE",
+    "services/model-gateway/LICENSE",
+    "services/skill-hub/LICENSE",
     "plugins/LICENSE-APACHE-2.0",
+    "plugins/external-gateway/LICENSE",
+    "plugins/model-gateway/LICENSE",
+    "plugins/agents/antigravity/LICENSE",
+    "plugins/agents/claude-code/LICENSE",
+    "plugins/agents/client-adapter-kit/LICENSE",
+    "plugins/agents/codex/LICENSE",
+    "plugins/agents/kimi/LICENSE",
+    "plugins/agents/meshrix-self-maintenance/LICENSE",
+    "plugins/agents/openclaw/LICENSE",
+    "plugins/agents/opencode/LICENSE",
+    "plugins/agents/pi/LICENSE",
     "plugins/core-host-contract.json",
     "plugins/registry/plugins.json",
     "plugins/schemas/plugin-bundle.schema.json",
@@ -44,7 +58,7 @@ async function main() {
   const architectureRoots = packageJson["//architecture-governance"]?.canonicalSourceRoots || [];
   for (const root of ["services/", "plugins/"]) if (!architectureRoots.includes(root)) throw new Error(`architecture policy omits ${root}`);
   const notice = await fs.readFile(path.join(repoRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
-  for (const marker of ["Apache-2.0", "MIT", "tools/plugins/", "tests/plugins/"]) {
+  for (const marker of ["Apache-2.0", "pactium@0.8.1", "MIT", "GPL-3.0-or-later", "tools/plugins/", "tests/plugins/"]) {
     if (!notice.includes(marker)) throw new Error(`mixed license notice omits ${marker}`);
   }
   const pack = await run(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--dry-run", "--json", "--ignore-scripts"]);
@@ -53,7 +67,27 @@ async function main() {
   if (reports.length !== 1) throw new Error("npm pack returned an unexpected artifact count");
   const [report] = reports;
   const packed = new Set((report.files || []).map((entry) => String(entry.path || "").replace(/^package\//u, "")));
-  for (const file of ["services/file-parser/format-convert/go.mod", "services/file-parser/format-convert/LICENSE", "plugins/LICENSE-APACHE-2.0", "plugins/registry/plugins.json", "THIRD_PARTY_NOTICES.md"]) {
+  for (const file of [
+    "LICENSE",
+    "services/file-parser/format-convert/go.mod",
+    "services/file-parser/format-convert/LICENSE",
+    "services/model-gateway/LICENSE",
+    "services/skill-hub/LICENSE",
+    "plugins/LICENSE-APACHE-2.0",
+    "plugins/external-gateway/LICENSE",
+    "plugins/model-gateway/LICENSE",
+    "plugins/agents/antigravity/LICENSE",
+    "plugins/agents/claude-code/LICENSE",
+    "plugins/agents/client-adapter-kit/LICENSE",
+    "plugins/agents/codex/LICENSE",
+    "plugins/agents/kimi/LICENSE",
+    "plugins/agents/meshrix-self-maintenance/LICENSE",
+    "plugins/agents/openclaw/LICENSE",
+    "plugins/agents/opencode/LICENSE",
+    "plugins/agents/pi/LICENSE",
+    "plugins/registry/plugins.json",
+    "THIRD_PARTY_NOTICES.md"
+  ]) {
     if (![...packed].some((entry) => entry === file || entry.startsWith(`${file}/`))) throw new Error(`npm dry-run omitted ${file}`);
   }
   process.stdout.write(`${JSON.stringify({

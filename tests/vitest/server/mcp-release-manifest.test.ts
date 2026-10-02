@@ -44,11 +44,12 @@ describe("MCP release manifest", () : any => {
     const input: Record<string, any> = {
       channel: "stable",
       packageJson: {
-        name: "meshrix-mcp-connector",
+        name: "meshrix.js",
         version: "0.0.1",
         engines: { node: ">=22.19.0 <23 || >=24.3.0 <25" },
       },
-      tarballName: "meshrix-mcp-connector-0.0.1.tgz",
+      tarballName: "meshrix.js-0.0.1.tgz",
+      npmIntegrity: `sha512-${Buffer.alloc(64).toString("base64")}`,
       checksum: "1".repeat(64),
       sizeBytes: 100,
       portables: [{
@@ -76,6 +77,10 @@ describe("MCP release manifest", () : any => {
     expect(manifest.install.supportedTargetDetails.every(({ locations }: Record<string, any>) : any =>
       locations.length === 1 && locations[0] === "local"
     )).toBe(true);
+    expect(manifest.connector.packageName).toBe("meshrix.js");
+    expect(manifest.connector.tarball).toBe("meshrix.js-0.0.1.tgz");
+    expect(manifest.connector.npmIntegrity).toMatch(/^sha512-/u);
+    expect(manifest.install.registryCommand).toBe("npx --yes --package meshrix.js@0.0.1 meshrix-mcp install");
     expect(releaseManifest(input)).toEqual(manifest);
   });
 });

@@ -14,8 +14,6 @@
 //   --plan                  Print the step list without executing anything.
 //   --keep-stack            Leave the compose stack running (debug).
 //   --port N                Pin the host port (must be free).
-//   --adapter-source PATH   Directory or .tgz with the client adapters
-//                           or MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE).
 //   --image-name NAME       operator-supplied format-convert image.
 //   --json                  Also print the final report JSON to stdout.
 import fs from "node:fs/promises";
@@ -52,7 +50,7 @@ import {
 } from "./lib/release-journey-console.ts";
 import {
   discoverReleaseJourneyClients,
-  seedClientAdapterCaches
+  verifyClientAdapterComponents
 } from "./lib/release-journey-adapter.ts";
 import {
   createMatrixTargetEnvironment,
@@ -123,21 +121,19 @@ function usage() : any {
   --plan                 Print the gate step list and exit.
   --keep-stack           Leave the compose stack running for debugging.
   --port N               Pin the loopback host port for the server.
-  --adapter-source PATH  Client adapter package source (dir or .tgz).
   --image-name NAME      format-convert image (default ${DEFAULT_CONVERTER_IMAGE}).
   --json                 Print the final report JSON to stdout.
 `);
 }
 
 function parseArgs(argv?: any) : any {
-  const options: Record<string, any> = { plan: false, keepStack: false, port: 0, adapterSource: "", imageName: DEFAULT_CONVERTER_IMAGE, json: false };
+  const options: Record<string, any> = { plan: false, keepStack: false, port: 0, imageName: DEFAULT_CONVERTER_IMAGE, json: false };
   for (let index: any = 0; index < argv.length; index += 1) {
     const arg: any = argv[index];
     if (arg === "--plan") options.plan = true;
     else if (arg === "--keep-stack") options.keepStack = true;
     else if (arg === "--json") options.json = true;
     else if (arg === "--port") options.port = Number(argv[++index] || 0) || 0;
-    else if (arg === "--adapter-source") options.adapterSource = String(argv[++index] || "");
     else if (arg === "--image-name") options.imageName = String(argv[++index] || "");
     else if (arg === "--help" || arg === "-h") {
       usage();
@@ -224,7 +220,6 @@ async function main() : Promise<any> {
   report.candidate = candidateContext.candidate;
   const { addNeedle, redact, assertNoLeak } = redaction;
   const workDir: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-journey-"));
-  const adapterCacheRoot: any = path.join(workDir, "adapter-cache");
   const fetchOutputPath: any = path.join(workDir, "output.pdf");
   await fs.rm(htmlReportPath, { force: true });
   let visualRecorder: any = null;
@@ -260,7 +255,6 @@ async function main() : Promise<any> {
           connectorScript,
           target,
           env: targetEnvs.get(target),
-          adapterCacheRoot,
           redact
         });
         details.push({
@@ -493,26 +487,12 @@ async function main() : Promise<any> {
       return receipt;
     });
 
-    await recordStep("adapter-seed", async () : Promise<any> => {
-      const receipts: any = await seedClientAdapterCaches({
-        repoRoot,
-        adapterSource: options.adapterSource,
-        cacheRoot: adapterCacheRoot
-      });
-      return {
-        catalogTargetCount: receipts.length,
-        descriptorCount: receipts.filter((receipt?: any) : any => receipt.descriptorOk).length,
-        targets: receipts.map(({ target, coordinate, descriptorOk }: Record<string, any>) : any => ({
-          target,
-          coordinate,
-          descriptorOk
-        }))
-      };
+    await recordStep("adapter-components", async () : Promise<any> => {
+      return verifyClientAdapterComponents();
     });
 
     await recordStep("client-discovery", async () : Promise<any> => {
       const discovery: any = await discoverReleaseJourneyClients({
-        cacheRoot: adapterCacheRoot,
         baseUrl
       });
       const fallbackUsed: any = discovery.detected.length === 0;
@@ -533,7 +513,6 @@ async function main() : Promise<any> {
         targetEnvs.set(client.target, await createMatrixTargetEnvironment({
           workDir,
           target: client.target,
-          adapterCacheRoot
         }));
       }
       return {
@@ -619,7 +598,6 @@ async function main() : Promise<any> {
           target: client.target,
           clientCommand: client.command,
           baseUrl,
-          adapterCacheRoot,
           env: targetEnvs.get(client.target),
           redact
         });

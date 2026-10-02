@@ -117,6 +117,7 @@ export function releaseManifest({
   packageJson,
   tarballName,
   tarballPath,
+  npmIntegrity,
   checksum,
   sizeBytes,
   portables,
@@ -155,6 +156,7 @@ export function releaseManifest({
       packageName: packageJson.name,
       packageVersion: packageJson.version,
       minimumNodeVersion,
+      npmIntegrity,
       tarball: tarballName,
       sha256: checksum,
       sizeBytes,
@@ -217,7 +219,7 @@ export function releaseManifest({
       oneCommandPriorityInstallZhCN: bootstrap.localized.zhCN.oneLinePriorityInstallCommand,
       oneCommandUninstall: bootstrap.oneLineUninstallCommand,
       oneCommandUninstallZhCN: bootstrap.localized.zhCN.oneLineUninstallCommand,
-      registryCommand: bootstrap.oneLineCommand,
+      registryCommand: `npx --yes --package ${packageJson.name}@${packageJson.version} meshrix-mcp install`,
       tarballCommand: bootstrap.oneLineCommand,
       portableCommand: bootstrap.oneLineCommand,
       interactiveInstallCommand: bootstrap.oneLineCommand,
@@ -296,7 +298,7 @@ export function releaseManifest({
       startsInteractiveUninstaller: true,
       supportsMultiSelect: true
     },
-    publish: {
+      publish: {
       releaseFiles: [
         tarballName,
         ...portables.map((p?: any) : any => p.archiveName),

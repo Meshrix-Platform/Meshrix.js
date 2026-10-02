@@ -2,21 +2,11 @@
   "name": "@meshrix/server-runtime",
   "version": "0.0.1",
   "description": "Meshrix.js composition root, state stores, jobs, workers, product API",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/agents": "0.0.1",
-    "@meshrix/capabilities": "0.0.1",
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/gateway": "0.0.1",
-    "@meshrix/protocols": "0.0.1",
-    "better-sqlite3": "^12.9.0",
-    "pactium": "0.8.1"
-  },
   "imports": {
     "#meshrix/agents/agent-memory/index": "@meshrix/agents/agent-memory/index",
     "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand": "@meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
@@ -336,6 +326,11 @@
       "source": "./src/state/upload-session-support.ts",
       "types": "./dist/state/upload-session-support.d.ts",
       "default": "./dist/state/upload-session-support.js"
+    },
+    "./composition/platform-registry": {
+      "source": "./src/composition/platform-registry.ts",
+      "types": "./dist/composition/platform-registry.d.ts",
+      "default": "./dist/composition/platform-registry.js"
     }
   },
   "files": [
@@ -343,5 +338,25 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/server-runtime"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/agents": "0.0.1",
+    "@meshrix/capabilities": "0.0.1",
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
+    "@meshrix/protocols": "0.0.1",
+    "better-sqlite3": "^12.9.0",
+    "pactium": "0.8.1"
+  }
 }

@@ -4,6 +4,11 @@ This directory contains the Node.js MCP connector runtime used for protocol
 functions such as API-Key-authenticated stdio proxy forwarding and verifier
 coverage.
 
+The runtime is part of the `meshrix.js` npm package. Its public command is the
+root package's `meshrix-mcp` bin; generated client configuration selects that
+bin explicitly with `npx --yes --package meshrix.js@<VERSION> meshrix-mcp`.
+There is no separately installable connector npm package.
+
 It is not the canonical user-device installer. User-device MCP search,
 registration, batch install, interactive selection, and uninstall live in:
 
@@ -25,7 +30,14 @@ powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native
 powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
 ```
 
-Supported targets are supplied by pinned operator-provided client-adapter packages. Core retains only the target catalog, adapter protocol, package integrity/cache policy, API Key input, proxy, and local lifecycle transaction. Client commands, configuration formats, probes, and mutations remain remaining work in the operator-supplied adapter packages.
+The seven supported targets use optional first-party client-adapter components bundled
+with `meshrix.js` and included in the portable connector's declared runtime
+closure. The connector resolves the selected component through standard Node
+package resolution and invokes it only for an explicit target action. No adapter
+is fetched from npm or installed into a separate cache, and scanning a host does
+not change client configuration. Each component owns its target's command
+discovery, configuration format, probes, and mutation behavior behind the bounded
+JSON-stdio protocol.
 
 The published target matrix currently covers local connector-managed clients
 through a stdio proxy. The connector uses process-identity signing for local

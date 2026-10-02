@@ -11,15 +11,28 @@ editing it. Repository location does not merge its lifecycle with Core.
 | Skill Hub Service | `services/skill-hub/README.md` and its package scripts | Service-owned tests |
 | Format conversion Service | `services/file-parser/format-convert/README.md`, `go.mod`, and `scripts/acceptance.py` within that service | Service-owned Go tests and the separately authorized acceptance program |
 
+First-party Agent MCP adapters are private runtime components, not
+independently published npm packages. `meshrix.js` declares their npm bundle
+dependencies, and the portable connector includes the same adapters plus their
+shared kit in its declared runtime closure. Both consumers use standard Node
+package resolution and call a selected component only for an explicit target
+action. Plugin and Service artifact boundaries remain separate.
+
 Read command definitions in the current root or owning component's
 `package.json`; these names select owners, not a command sequence to run for
 every change. `$meshrix-js-regression-planner` selects verification scope.
 
-Native Plugins use TypeScript/Node.js and the published Host contract. Services
-may use another language and serve direct clients under their own governance.
+Native Plugins may be authored in TypeScript/Node.js and are packaged as compiled
+`.mjs` artifacts. Their Host contract consists of the plugin manifest, archive
+and compatibility data, and the narrow Host ports injected into `activatePlugin`
+context; this contract is not an importable npm SDK. Plugin consumers use those
+documented artifacts and ports rather than unpublished Contracts modules or
+private package paths. Services may use another language and serve direct clients under their own governance.
 Packaged Agent adapters configure external client products without absorbing
-those products' implementations. Preserve all admission, configuration, trust,
-credential custody, and operation authorization requirements.
+those products' implementations. Their package workspace names describe
+internal components; they are not external npm installation coordinates.
+Preserve all admission, configuration, trust, credential custody, and operation
+authorization requirements.
 
 Format conversion success returns document bytes through the multipart
 contract, with integrity headers; error responses are bounded JSON. Its

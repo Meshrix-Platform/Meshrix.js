@@ -265,7 +265,7 @@ const RELEASE_PROFILE_SOURCES: readonly any[] = Object.freeze([
   "tools/server-scripts/stress-gateway-platform-profile.ts"
 ]);
 const MCP_RELEASE_TARGET_CONSUMER_SOURCES: readonly any[] = Object.freeze([
-  "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+  "packages/protocols/mcp/modern-downstream/discovery.ts",
   "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
   "tools/server-scripts/verify-mcp-release-target-scope.ts"
 ]);
@@ -890,7 +890,10 @@ if (packResult.status !== 0) {
   }
   const artifactBoundary: any = await scanPublicArtifactFiles(repoRoot, [...packedFiles], {
     localNeedles: [repoRoot],
-    allowedGeneratedOutputSegments: ["dist"]
+    allowedGeneratedOutputSegments: ["dist"],
+    allowedGeneratedOutputPrefixes: ["build/dist"],
+    allowedBundledDependencyPaths: (packageJson.bundleDependencies || packageJson.bundledDependencies || [])
+      .map((name?: any) : any => `node_modules/${name}`)
   });
   for (const finding of artifactBoundary.findings) {
     packagePackFindings.push({

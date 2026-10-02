@@ -15,4 +15,4 @@ Prepared release candidate; public tags, artifacts, and deployment remain pendin
 - Persists non-read execution intents and dispatch fences, preserves uncertain outcomes after interruption, and prevents automatic replay of a fenced invocation.
 - Rechecks authorization at the final upstream send boundary and preserves caller-controlled cancellation and owned-resource cleanup.
 - Uses canonical registry dependencies and unchanged package tarballs for consumer installation checks.
-- Keeps optional services and operator-supplied external client-adapter integrations separately invoked. The repository root source declares MIT; third-party component licenses and notices remain applicable.
+- Bundles first-party client-adapter components with `meshrix.js` while keeping each target action explicit. The repository root source declares MIT; third-party component licenses and notices remain applicable.
