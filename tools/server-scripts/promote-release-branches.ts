@@ -63,9 +63,7 @@ export function extractSafeFailureSignals(logText?: any) : any {
     const probeFailures: any = /\bproductionBackendProbeFailures=([a-z0-9_:,-]{1,4096})(?:\s|$)/u.exec(line)?.[1];
     if (probeFailures) {
       for (const probeFailure of probeFailures.split(",")) {
-        const match: any = /^(sandbox_[a-z_]+:oci_(?:create|start|inspect|command|workload)_failed:oci_[a-z_]+):(-1|[0-9]{1,3})$/u.exec(probeFailure);
-        const exitCode: any = Number(match?.[2]);
-        if (match && Number.isSafeInteger(exitCode) && exitCode >= -1 && exitCode <= 255) {
+        if (/^sandbox_[a-z_]{1,64}:(?:oci_(?:create|start|inspect|command|workload)_failed|input_staging_failed|sandbox_backend_failed|resource_budget_exceeded|output_validation_failed|conformance_assertion_failed)$/u.test(probeFailure)) {
           signals.add(`probe:${probeFailure}`);
         }
       }
