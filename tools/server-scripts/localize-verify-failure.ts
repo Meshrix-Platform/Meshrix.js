@@ -126,7 +126,7 @@ export function sanitizeVerificationLog(value: string, root = repoRoot): string 
     if (sensitiveValue || /^\s*[+-]\s+[^0-9\s]|(?:Expected|Received):\s*["']/iu.test(line)) {
       return "[redacted-runtime-or-credential-value]";
     }
-    line = line.replace(/\b(?:npm_|mxak_|mxbk_)[A-Za-z0-9_-]{8,}\b|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[redacted-credential]");
+    line = line.replace(/\b(?:npm_[A-Za-z0-9]{30,}|(?:mxak_|mxbk_)[A-Za-z0-9_-]{24,})\b|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[redacted-credential]");
     line = redactReportText(line);
     const findings = [...sensitiveReportFindings(line), ...scanText("ci-verification.log", line).map((finding: { rule: string }) => finding.rule)];
     return findings.length ? "[redacted-sensitive-line]" : line;

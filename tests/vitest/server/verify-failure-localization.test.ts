@@ -16,9 +16,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 
 describe("pull-request verification feedback", () => {
   it("retains every diagnostic stage while removing private paths, credentials, key material and runtime output", async () => {
-    const secret = ["npm", "syntheticCredentialOnly123456"].join("_");
+    const secret = ["npm", "syntheticCredentialOnly12345678901234"].join("_");
     const localRoot = ["", "home", "fixture-user", "project"].join("/");
-    const log = ["Stage: first", ...Array.from({ length: 120 }, (_, index) => `diagnostic ${index}`),
+    const log = ["Stage: first", "Error: npm_artifact_failure_1_E404", ...Array.from({ length: 120 }, (_, index) => `diagnostic ${index}`),
       `${localRoot}/src/module.ts:4:2 error TS2322: Type mismatch`, `credential=${secret}`,
       ["-----BEGIN", "PRIVATE KEY-----"].join(" "), "syntheticKeyBody", ["-----END", "PRIVATE KEY-----"].join(" "),
       'payload: {"content":"synthetic private request"}', 'ciphertext="synthetic encrypted value"',
@@ -27,7 +27,7 @@ describe("pull-request verification feedback", () => {
       "FAIL tests/vitest/server/example.test.ts", "AssertionError: expected 1 to equal 2", "Stage: final"].join("\n");
     const safe = sanitizeVerificationLog(log, localRoot);
     expect(safe.split("\n")).toHaveLength(log.split("\n").length);
-    for (const item of ["Stage: first", "diagnostic 0", "diagnostic 60", "diagnostic 119", "src/module.ts:4:2", "expected 1 to equal 2", "Stage: final"]) expect(safe).toContain(item);
+    for (const item of ["Stage: first", "npm_artifact_failure_1_E404", "diagnostic 0", "diagnostic 60", "diagnostic 119", "src/module.ts:4:2", "expected 1 to equal 2", "Stage: final"]) expect(safe).toContain(item);
     for (const item of [localRoot, secret, "syntheticKeyBody", "synthetic private", "synthetic encrypted", "synthetic continuation"]) expect(safe).not.toContain(item);
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-ci-diagnostics-"));
     try {
