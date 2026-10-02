@@ -6,14 +6,19 @@ import path from "node:path";
 const MAX_TEXT_FILE_BYTES: any = 8 * 1024 * 1024;
 
 const TEXT_EXTENSIONS: any = new Set<any>([
+  ".bat",
   ".cjs",
+  ".cmd",
+  ".cts",
   ".css",
   ".html",
   ".js",
+  ".map",
   ".mjs",
+  ".mts",
   ".json",
   ".jsx",
-  ".ts",
+  ".ps1",
   ".md",
   ".sh",
   ".svg",

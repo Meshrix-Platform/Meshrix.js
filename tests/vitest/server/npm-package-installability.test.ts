@@ -113,6 +113,19 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it.each([".map", ".mts", ".cts", ".ps1", ".cmd", ".bat"])("scans credential material in delivered %s text", async (extension) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-delivered-text-"));
+    try {
+      const name = `fixture${extension}`;
+      const credential = ["Bearer", "synthetic".repeat(3)].join(" ");
+      await fs.writeFile(path.join(root, name), JSON.stringify({ synthetic: credential }));
+      const report = await scanPublicArtifactFiles(root, [name]);
+      expect(report.ok).toBe(false);
+      expect(report.findings).toMatchObject([{ relativePath: name, ruleId: "bearer_credential" }]);
+      expect(JSON.stringify(report)).not.toContain(credential);
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+
   it("retains browser same-origin evidence without recording private endpoints", async () => {
     const origin = "http://127.0.0.1:4173";
     const callbacks = new Map<string, (value: any) => void>();
