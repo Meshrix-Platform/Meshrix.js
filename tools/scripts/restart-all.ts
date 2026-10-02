@@ -4,6 +4,8 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { forwardSignalToChild, stopManagedProcesses } from "./lib/process-lifecycle.ts";
+import { launchAgentCleanupArguments, terminatePlatformProcessTree } from "./lib/startup-platform-adapter.ts";
 
 const scriptDir: any = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot: any = path.resolve(scriptDir, "..", "..");
@@ -70,7 +72,7 @@ function resolveDataDir(dataDir?: any) : any {
   if (dataDir) args.push("--data-dir", dataDir);
   const result: any = runSync(process.execPath, args);
   if (result.status !== 0) {
-    throw new Error(result.stderr || result.stdout || "failed to resolve data dir");
+    throw new Error("server_data_directory_resolution_failed");
   }
   const resolved: any = result.stdout.trim();
   mkdirSync(resolved, { recursive: true });
@@ -86,12 +88,7 @@ async function main() : Promise<any> {
     path.join(projectRoot, "tools", "scripts", "clean-existing-service.ts"),
     "--port", options.port,
     "--data-dir", dataDir,
-    "--launch-label", `dev.meshrix.server.${options.port}`,
-    "--launch-label", "dev.meshrix.background-supervisor",
-    "--launch-label", "dev.meshrix.system-inspection",
-    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", `dev.meshrix.server.${options.port}.plist`),
-    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.meshrix.background-supervisor.plist"),
-    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.meshrix.system-inspection.plist")
+    ...launchAgentCleanupArguments(options.port)
   ];
   if (options.dev) cleanArgs.push("--vite-port", options.vitePort);
   const clean: any = runSync(process.execPath, cleanArgs, { inherit: true });
@@ -104,21 +101,44 @@ async function main() : Promise<any> {
     stdio: "inherit",
     windowsHide: true
   });
-  const forward: any = (signal?: any) : any => {
-    if (child?.pid) {
-      try {
-        process.kill(child.pid, signal);
-      } catch {
-        // child already exited
-      }
+  let forwardingStarted = false;
+  let shutdownFailed = false;
+  let shutdownTask: Promise<void> = Promise.resolve();
+  const forward = (signal: NodeJS.Signals): void => {
+    if (forwardingStarted) return;
+    forwardingStarted = true;
+    if (process.platform === "win32" && child?.pid) {
+      shutdownTask = stopManagedProcesses([child.pid], {
+        gracefulSignal: signal,
+        signalTree: (pid, selectedSignal) => terminatePlatformProcessTree(pid, selectedSignal),
+      }).then((result) => {
+        if (result.gracefulFailed.length > 0) console.warn("[restart] graceful process-tree shutdown did not complete; force cleanup was requested");
+        if (result.permissionDenied.length > 0 || result.invalid.length > 0 || result.self.length > 0) {
+          shutdownFailed = true;
+          console.warn("[restart] owned process-tree shutdown could not be completed");
+        }
+      }).catch(() => {
+        shutdownFailed = true;
+        console.warn("[restart] process-tree shutdown failed");
+      });
+      return;
+    }
+    const result: any = forwardSignalToChild(child, signal);
+    if (result === "permission-denied" || result === "invalid" || result === "self") {
+      shutdownFailed = true;
+      console.warn("[restart] child shutdown signal could not be delivered");
     }
   };
-  process.on("SIGINT", () : any => forward("SIGINT"));
-  process.on("SIGTERM", () : any => forward("SIGTERM"));
-  const exitCode: any = await new Promise((resolve?: any) : any => {
-    child.once("exit", (code?: any) : any => resolve(code ?? 0));
+  process.once("SIGINT", () => forward("SIGINT"));
+  process.once("SIGTERM", () => forward("SIGTERM"));
+  const exitCode: any = await new Promise((resolve?: any, reject?: any) : any => {
+    child.once("error", reject);
+    child.once("exit", (code?: any, signal?: any) : any => {
+      resolve(code ?? (signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1));
+    });
   });
-  process.exitCode = exitCode;
+  await shutdownTask;
+  process.exitCode = shutdownFailed ? 1 : exitCode;
 }
 
 main().catch((error?: any) : any => {
