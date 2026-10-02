@@ -7,6 +7,12 @@ env:
 on:
   push:
     branches: ["release"]
+  workflow_dispatch:
+    inputs:
+      bootstrap_candidate:
+        description: "Exact canonical version to use for the first npm publication"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +26,9 @@ jobs:
     name: Runtime-ui external deployment smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    outputs:
+      release_tag: ${{ steps.release-definition.outputs.release_tag }}
+      release_version: ${{ steps.release-definition.outputs.release_version }}
     permissions:
       contents: read
       actions: read
@@ -32,8 +41,38 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
       - name: Install dependencies
         run: npm ci
+      - name: Require the release branch ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = branch
+          test "$GITHUB_REF_NAME" = release
+      - name: Validate the canonical release definition
+        id: release-definition
+        shell: bash
+        env:
+          BOOTSTRAP_CANDIDATE: ${{ github.event.inputs.bootstrap_candidate || '' }}
+        run: |
+          set -euo pipefail
+          npm run verify:release-definition
+          npm run release:prepare -- --check
+          release_tag="$(node tools/server-scripts/verify-release-definition.ts --field release.tag)"
+          release_version="$(node tools/server-scripts/verify-release-definition.ts --field release.version)"
+          if [[ -n "$BOOTSTRAP_CANDIDATE" && "$BOOTSTRAP_CANDIDATE" != "$release_version" ]]; then
+            echo "The bootstrap candidate must exactly match the canonical release version." >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
       - name: Require release to equal the current stable tip
         shell: bash
         run: |
@@ -127,6 +166,7 @@ jobs:
             --deployment "$bundle/release-deployment.json" \
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" \
             --output "$bundle/release-authority-manifest.json"
       - name: Upload the release authority bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -136,3 +176,85 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           overwrite: true
+
+  ensure-release-tag:
+    name: Create or verify the immutable release tag
+    needs: [release-deployment]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
+      - name: Install release tooling dependencies
+        run: npm ci --ignore-scripts
+      - name: Create or verify the canonical tag at this release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-deployment.outputs.release_tag }}
+        run: >-
+          node tools/server-scripts/resolve-branch-promotion-authority.ts
+          ensure-release-tag
+          --repository "$GITHUB_REPOSITORY"
+          --tag "$RELEASE_TAG"
+          --source-revision "$GITHUB_SHA"
+
+  dispatch-release:
+    name: Dispatch the tag-bound release workflow
+    needs: [release-deployment, ensure-release-tag]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Pin the canonical npm CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("tools/registry/release-definition.registry.json", "utf8")).github.npmCliVersion')"
+          npm install --global --no-audit --no-fund --ignore-scripts --registry=https://registry.npmjs.org/ "npm@${npm_version}"
+          test "$(npm --version)" = "$npm_version"
+      - name: Install release tooling dependencies
+        run: npm ci --ignore-scripts
+      - name: Dispatch the exact release commit and source run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-deployment.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.release-deployment.outputs.release_version }}
+          BOOTSTRAP_CANDIDATE: ${{ github.event.inputs.bootstrap_candidate || '' }}
+        run: |
+          set -euo pipefail
+          args=(
+            dispatch-release
+            --repository "$GITHUB_REPOSITORY"
+            --tag "$RELEASE_TAG"
+            --source-revision "$GITHUB_SHA"
+            --run-id "$GITHUB_RUN_ID"
+            --run-attempt "$GITHUB_RUN_ATTEMPT"
+            --source-event "$GITHUB_EVENT_NAME"
+            --release-version "$RELEASE_VERSION"
+          )
+          if [[ -n "$BOOTSTRAP_CANDIDATE" ]]; then
+            args+=(--bootstrap-candidate "$BOOTSTRAP_CANDIDATE")
+          fi
+          node tools/server-scripts/resolve-branch-promotion-authority.ts "${args[@]}"

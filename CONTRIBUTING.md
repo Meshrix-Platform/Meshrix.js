@@ -41,6 +41,22 @@ applies to every change:
 5. Integrate once through the integration owner, and maintain version,
    deprecation, and release facts in the canonical release source.
 
+## Public npm Products
+
+The public npm products are `meshrix.js` and `@meshrix/gateway`. Workspace
+boundaries describe source ownership and do not imply independent publication.
+Keep internal runtime modules, adapters, and tools within their owning product
+unless an external consumer has a distinct supported API, dependency set,
+lifecycle, and maintenance need that justifies a separate package.
+
+Before adding or changing a public package boundary, update
+[ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) with its external
+consumer and support surface, then migrate the package metadata, build and
+release consumers, tests, and documentation together. Prepare an archive once
+and verify that same unmodified archive in an isolated consumer. Do not create
+a package solely to mirror a workspace or make an internal module independently
+installable.
+
 ## Change Rules
 
 - Keep each change scoped to one capability, protocol boundary, verifier, or documentation area.

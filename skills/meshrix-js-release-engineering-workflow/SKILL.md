@@ -43,6 +43,26 @@ verify:acceptance`.
 
 ## Release boundary
 
+`.github/workflows/release-branch.yml` validates the exact stable authority,
+performs the release deployment, creates or verifies the canonical tag at that
+commit, and dispatches `.github/workflows/release.yml` at the tag. The release
+workflow validates the exact originating run and waits for it to complete
+before consuming its authority artifact. Direct tag pushes and API dispatches
+share this one publication workflow; do not add a reusable caller or a second
+publisher identity.
+
+The release definition owns the version and Node/npm toolchain pins. Build and
+prepare the `meshrix.js` and `@meshrix/gateway` npm archives once, before any
+publication credential is available. Registry preflight and the publisher must
+consume the same uploaded archive directory without repacking. Keep bootstrap
+explicitly limited to the first version, `0.0.1`; ordinary publication uses
+GitHub OIDC from the hosted `release.yml` publisher job. The publisher tests
+each package's npm OIDC exchange before attempting a registry mutation. Its
+GitHub workflow identity and environment are an intended configuration until
+that package-specific hosted exchange succeeds; workflow refs alone do not
+prove the npm-side match. See `docs/RUNBOOK.md` for hosted protection and npm
+publisher setup requirements.
+
 Commit only when covered by user authorization; treat push as a separate
 publication decision. Review the exact staged tree before commit and the exact
 outgoing commit range before push. A source task may finish with verified,

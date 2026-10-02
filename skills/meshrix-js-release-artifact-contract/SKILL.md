@@ -17,8 +17,16 @@ Operator commands live in `docs/RUNBOOK.md` and `workflows/catalog.json`.
 
 `tools/registry/release-definition.registry.json` is the sole source for the
 product version, tag, channel, package manifest set, container target, and
-platforms. `tools/registry/schema/release-definition.schema.json` locks those
+platforms, plus the exact Node.js and npm CLI versions used by release
+workflows. `tools/registry/schema/release-definition.schema.json` locks those
 fields. Verify with the repository-owned release-definition command.
+
+The public npm products are `meshrix.js` and `@meshrix/gateway`; the remaining
+workspaces are internal source boundaries. The existing publisher discovers
+the public package set from those manifests, builds both archives once in the
+credential-free assembly job, and transfers them as release inputs. Preflight
+and publication consume those same tarball bytes. Never rebuild or repack in a
+preflight, verification, or publisher job.
 
 The published container target is `runtime-ui`. Platforms are `linux/amd64`
 and `linux/arm64`. API-only `runtime` is a source-checkout verification image,

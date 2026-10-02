@@ -9,11 +9,16 @@ import { pathToFileURL } from "node:url";
 import { canonicalJson } from "../../packages/contracts/src/serialization/canonical-json.ts";
 import {
   assertManifestMatchesRun,
+  buildReleaseWorkflowDispatchPayload,
   createReleaseAuthorityManifest,
   createStableAuthorityManifest,
+  releaseTagCreationAction,
+  requireCurrentReleaseDeploymentEnvironment,
   selectExactPromotionArtifact,
   selectSuccessfulPromotionRun,
+  validateOriginatingReleaseRun,
   validatePromotionRunSelection,
+  validateReleaseDispatchContext,
   validateReleaseAuthorityManifest,
   validateStableAuthorityManifest,
 } from "./lib/release-deployment/authority.ts";
@@ -183,6 +188,9 @@ async function verifyReleaseBundle({
   const deploymentBytes = await readBoundedFile(deploymentPath);
   const deployment = JSON.parse(deploymentBytes.toString("utf8"));
   assertReleaseDeploymentReceipt(deployment);
+  if (deployment.executionEnvironment.runnerEnvironment !== "github-hosted") {
+    fail("release_authority_deployment_not_hosted");
+  }
   const stableManifestBytes = await readBoundedFile(stableManifestPath);
   const stableManifest = validateStableAuthorityManifest(
     JSON.parse(stableManifestBytes.toString("utf8")),
@@ -213,7 +221,7 @@ async function verifyReleaseBundle({
 function currentRun(options: Record<string, string>, stage: "stable" | "release", sourceRevision: string): any {
   return validatePromotionRunSelection({
     branch: stage,
-    event: "push",
+    event: stage === "release" ? String(options.event || "push") : "push",
     headSha: sourceRevision,
     runAttempt: Number(requireOption(options, "run-attempt")),
     runId: requireOption(options, "run-id"),
@@ -221,6 +229,138 @@ function currentRun(options: Record<string, string>, stage: "stable" | "release"
       ? ".github/workflows/ci.yml"
       : ".github/workflows/release-branch.yml",
   });
+}
+
+function githubRepository(value: string): string {
+  if (!/^[^/\s]+\/[^/\s]+$/u.test(value)) fail("github_repository_invalid");
+  return value;
+}
+
+function githubHeaders(token: string): Record<string, string> {
+  if (!token) fail("github_token_missing");
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+  };
+}
+
+async function githubTagObjectCommit(
+  repository: string,
+  tag: string,
+  headers: Record<string, string>,
+  fetchImplementation: typeof fetch,
+): Promise<string | null> {
+  const referenceResponse = await fetchImplementation(
+    `https://api.github.com/repos/${repository}/git/ref/tags/${encodeURIComponent(tag)}`,
+    { headers, redirect: "error" },
+  );
+  if (referenceResponse.status === 404) return null;
+  if (!referenceResponse.ok) fail("release_tag_lookup_failed");
+  let object: any = (await referenceResponse.json())?.object;
+  const visited = new Set<string>();
+  while (object?.type === "tag") {
+    const objectSha = String(object.sha || "");
+    if (!/^[a-f0-9]{40}$/u.test(objectSha) || visited.has(objectSha)) {
+      fail("release_tag_object_invalid");
+    }
+    visited.add(objectSha);
+    const tagResponse = await fetchImplementation(
+      `https://api.github.com/repos/${repository}/git/tags/${objectSha}`,
+      { headers, redirect: "error" },
+    );
+    if (!tagResponse.ok) fail("release_tag_lookup_failed");
+    object = (await tagResponse.json())?.object;
+  }
+  if (object?.type !== "commit" || !/^[a-f0-9]{40}$/u.test(String(object.sha || ""))) {
+    fail("release_tag_object_invalid");
+  }
+  return object.sha;
+}
+
+export async function ensureImmutableReleaseTag({
+  repository,
+  tag,
+  sourceRevision,
+  token = process.env.GH_TOKEN || "",
+  fetchImplementation = fetch,
+}: Record<string, any> = {}): Promise<any> {
+  const repositoryName = githubRepository(String(repository || ""));
+  if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u.test(String(tag || ""))) {
+    fail("release_tag_invalid");
+  }
+  if (!/^[a-f0-9]{40}$/u.test(String(sourceRevision || ""))) fail("release_tag_source_revision_invalid");
+  const headers = githubHeaders(String(token || ""));
+  let existingRevision = await githubTagObjectCommit(repositoryName, tag, headers, fetchImplementation);
+  let action = releaseTagCreationAction(existingRevision, sourceRevision);
+  if (action === "create") {
+    const response = await fetchImplementation(
+      `https://api.github.com/repos/${repositoryName}/git/refs`,
+      {
+        method: "POST",
+        headers,
+        redirect: "error",
+        body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: sourceRevision }),
+      },
+    );
+    if (response.status !== 201) {
+      // A concurrent identical run may create the ref after the initial 404.
+      existingRevision = await githubTagObjectCommit(repositoryName, tag, headers, fetchImplementation);
+      if (releaseTagCreationAction(existingRevision, sourceRevision) !== "verify") {
+        fail("release_tag_create_failed");
+      }
+    }
+    const observedRevision = await githubTagObjectCommit(repositoryName, tag, headers, fetchImplementation);
+    if (releaseTagCreationAction(observedRevision, sourceRevision) !== "verify") {
+      fail("release_tag_not_observed");
+    }
+    action = "verify";
+  }
+  return { action, tag, sourceRevision };
+}
+
+export async function dispatchReleaseWorkflow({
+  repository,
+  tag,
+  sourceRevision,
+  runId,
+  runAttempt,
+  sourceEvent,
+  bootstrapCandidate = "",
+  releaseVersion,
+  token = process.env.GH_TOKEN || "",
+  fetchImplementation = fetch,
+}: Record<string, any> = {}): Promise<any> {
+  const repositoryName = githubRepository(String(repository || ""));
+  const payload = buildReleaseWorkflowDispatchPayload({
+    tag,
+    canonicalTag: tag,
+    sourceRevision,
+    tagRevision: sourceRevision,
+    sourceRunId: runId,
+    sourceRunAttempt: runAttempt,
+    sourceEvent,
+    repository: repositoryName,
+    bootstrapCandidate,
+    releaseVersion,
+  });
+  const response = await fetchImplementation(
+    `https://api.github.com/repos/${repositoryName}/actions/workflows/release.yml/dispatches`,
+    {
+      method: "POST",
+      headers: githubHeaders(String(token || "")),
+      redirect: "error",
+      body: JSON.stringify(payload),
+    },
+  );
+  if (response.status !== 204) fail("release_workflow_dispatch_failed");
+  return {
+    tag,
+    sourceRevision,
+    sourceRunId: String(runId),
+    sourceRunAttempt: Number(runAttempt),
+  };
 }
 
 export async function runAuthorityCommand(argv: string[]): Promise<any> {
@@ -240,6 +380,56 @@ export async function runAuthorityCommand(argv: string[]): Promise<any> {
     });
     await writeJsonAtomic(requireOption(options, "output"), selection);
     return { command, artifactId: selection.artifactId };
+  }
+  if (command === "verify-originating-run") {
+    const result = validateOriginatingReleaseRun(
+      await readJson(requireOption(options, "input")),
+      {
+        repository: requireOption(options, "repository"),
+        runId: requireOption(options, "run-id"),
+        runAttempt: Number(requireOption(options, "run-attempt")),
+        sourceRevision: requireOption(options, "source-revision"),
+        event: requireOption(options, "event"),
+      },
+    );
+    if (!result.pending) await writeJsonAtomic(requireOption(options, "output"), result.selection);
+    return { command, ...result };
+  }
+  if (command === "verify-release-dispatch") {
+    const dispatch = validateReleaseDispatchContext({
+      tag: requireOption(options, "tag"),
+      canonicalTag: requireOption(options, "canonical-tag"),
+      sourceRevision: requireOption(options, "source-revision"),
+      tagRevision: requireOption(options, "tag-revision"),
+      sourceRunId: requireOption(options, "source-run-id"),
+      sourceRunAttempt: requireOption(options, "source-run-attempt"),
+      sourceEvent: requireOption(options, "source-event"),
+      repository: requireOption(options, "repository"),
+      bootstrapCandidate: options["bootstrap-candidate"] || "",
+      releaseVersion: requireOption(options, "release-version"),
+    });
+    return { command, ...dispatch };
+  }
+  if (command === "ensure-release-tag") {
+    const result = await ensureImmutableReleaseTag({
+      repository: requireOption(options, "repository"),
+      tag: requireOption(options, "tag"),
+      sourceRevision: requireOption(options, "source-revision"),
+    });
+    return { command, ...result };
+  }
+  if (command === "dispatch-release") {
+    const result = await dispatchReleaseWorkflow({
+      repository: requireOption(options, "repository"),
+      tag: requireOption(options, "tag"),
+      sourceRevision: requireOption(options, "source-revision"),
+      runId: requireOption(options, "run-id"),
+      runAttempt: Number(requireOption(options, "run-attempt")),
+      sourceEvent: requireOption(options, "source-event"),
+      bootstrapCandidate: options["bootstrap-candidate"] || "",
+      releaseVersion: requireOption(options, "release-version"),
+    });
+    return { command, ...result };
   }
   if (command === "create-stable-manifest") {
     const candidatePath = requireOption(options, "candidate");
@@ -280,6 +470,12 @@ export async function runAuthorityCommand(argv: string[]): Promise<any> {
     const deploymentBytes = await readBoundedFile(deploymentPath);
     const deployment = JSON.parse(deploymentBytes.toString("utf8"));
     assertReleaseDeploymentReceipt(deployment);
+    const observedEnvironment = await requireCurrentReleaseDeploymentEnvironment(
+      deployment.executionEnvironment,
+    );
+    if (observedEnvironment.runnerEnvironment !== "github-hosted") {
+      fail("release_authority_deployment_not_hosted");
+    }
     if (
       deployment.sourceRevision !== stable.candidate.source_revision ||
       deployment.candidateDigest !== stable.candidate.candidate_digest ||
@@ -301,6 +497,7 @@ export async function runAuthorityCommand(argv: string[]): Promise<any> {
       runId: run.runId,
       sourceRevision: stable.candidate.source_revision,
       stableManifestDigest: sha256(stableManifestBytes),
+      event: run.event,
     });
     await writeJsonAtomic(requireOption(options, "output"), manifest);
     return { command, stage: "release" };

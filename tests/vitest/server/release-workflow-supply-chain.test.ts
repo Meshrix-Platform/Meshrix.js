@@ -121,6 +121,9 @@ describe("release workflow supply-chain boundary", () : any => {
 
     expect(branchWorkflow).toContain("runs-on: ubuntu-24.04");
     expect(branchWorkflow).toContain('branches: ["release"]');
+    expect(branchWorkflow).toContain("workflow_dispatch:");
+    expect(branchWorkflow).toContain("ensure-release-tag");
+    expect(branchWorkflow).toContain("dispatch-release");
     expect(branchWorkflow).toContain("stable-authority-${GITHUB_SHA}");
     expect(branchWorkflow).toContain("release-authority-${{ github.sha }}");
     expect(branchWorkflow).toContain("npm run server:verify:release-deployment");
@@ -186,11 +189,17 @@ describe("release workflow supply-chain boundary", () : any => {
     const releaseAuthority: any = jobSource(workflow, "release-authority");
     const assembly: any = jobSource(workflow, "assemble-release-assets");
     expect(workflow).toContain('tags: ["v*"]');
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("originating_run_id:");
+    expect(workflow).toContain("originating_run_attempt:");
+    expect(workflow).toContain("source_revision:");
+    expect(workflow).toContain("verify-originating-run");
+    expect(workflow).toContain("while :");
+    expect(workflow).not.toContain("workflow_call:");
     expect(verification).toContain("npm run release:prepare -- --check --tag");
     expect(verification).toContain("npm run verify:release-definition -- --tag");
     expect(verification).toContain('test "$tag_commit" = "$release_commit"');
     expect(verification).not.toContain("git merge-base --is-ancestor");
-    expect(workflow).not.toContain("workflow_dispatch:");
     expect(verifyJob).toBeGreaterThan(0);
     expect(firstPublicationJob).toBeGreaterThan(verifyJob);
     expect(verification).not.toContain("npm run verify:acceptance");
@@ -213,8 +222,10 @@ describe("release workflow supply-chain boundary", () : any => {
       "needs: [verify, assemble-release-assets]"
     );
     const npmPreflight: any = jobSource(workflow, "npm-registry-preflight");
-    expect(npmPreflight).toContain("needs: [verify, release-authority]");
-    expect(npmPreflight).toContain("run: npm run release:publish-npm -- --preflight");
+    expect(directJobNeeds(workflow, "npm-registry-preflight"))
+      .toEqual(["verify", "release-authority", "assemble-release-assets"]);
+    expect(npmPreflight).toContain("name: Download the exact prepared public npm archives");
+    expect(npmPreflight).toContain("--preflight --artifact-dir build/release/npm-set");
     expect(jobSource(workflow, "build-release-image")).toContain(
       "needs: [verify-release-inputs, npm-registry-preflight]"
     );
@@ -230,6 +241,18 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(jobSource(workflow, "publish-github-release")).toContain(
       "needs: [prepare-release-draft, publish-container-version, publish-npm-release-set]"
     );
+    const npmPublisher: any = jobSource(workflow, "publish-npm-release-set");
+    expect(assembly).toContain("run: npm run build");
+    expect(assembly).toContain("--prepare --artifact-dir build/release/npm-set");
+    expect(assembly).toContain("build/release/npm-set/");
+    expect(npmPublisher).toContain("environment: release-candidate");
+    expect(npmPublisher).toContain("--verify-oidc-trust --artifact-dir build/release/npm-set");
+    expect(npmPublisher).toContain("--artifact-dir build/release/npm-set");
+    expect(npmPublisher).toContain("secrets.NPM_BOOTSTRAP_TOKEN");
+    expect(npmPublisher.match(/NODE_AUTH_TOKEN:/gu)).toHaveLength(1);
+    expect(npmPublisher.indexOf("Verify package-scoped npm trusted publisher access"))
+      .toBeLessThan(npmPublisher.indexOf("Publish or reverify the exact prepared archives through npm OIDC"));
+    expect(npmPublisher).not.toContain("--prepare");
     expect(jobTransitivelyNeeds(workflow, "publish-npm-release-set", "prepare-release-draft"))
       .toBe(true);
     expect(jobTransitivelyNeeds(workflow, "publish-npm-release-set", "publish-container-version"))
@@ -377,7 +400,8 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(releaseAuthority).not.toContain("id-token: write");
 
     expect(assembly).toContain("permissions:\n      contents: read");
-    expect(assembly).toContain("run: npm ci --ignore-scripts");
+    expect(assembly).toContain("run: npm ci");
+    expect(assembly).toContain("run: npm run build");
     expect(assembly).toContain("run: npm run release:prepare-node-runtime-source-evidence");
     expect(assembly).not.toContain("node tools/server-scripts/prepare-node-runtime-source-evidence.ts");
     expect(assembly).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
@@ -454,9 +478,12 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(npmRelease).toContain("npm run release:prepare -- --check --tag");
     expect(npmRelease).toContain("run: npm ci --ignore-scripts");
     expect(npmRelease).toContain("run: npm run release:publish-npm");
-    expect(npmRelease).not.toContain("NODE_AUTH_TOKEN");
     expect(npmRelease).not.toContain("NPM_TOKEN");
     expect(npmRelease).not.toContain("npm@latest");
+    const bootstrapStep: any = npmRelease.indexOf("- name: Publish the exact prepared archives with the explicit first-release bootstrap");
+    expect(bootstrapStep).toBeGreaterThan(0);
+    expect(npmRelease.slice(0, bootstrapStep)).not.toContain("NODE_AUTH_TOKEN");
+    expect(npmRelease.slice(bootstrapStep)).toContain("NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}");
 
     expect(latest).toContain("permissions:\n      contents: read\n      packages: write");
     expect(latest).not.toContain("contents: write");
@@ -504,6 +531,9 @@ describe("release workflow supply-chain boundary", () : any => {
     expect(workflow).toContain("RELEASE_SHA256SUMS.sigstore.json");
     expect(workflow).toContain("Build, sign, and verify the flattened checksum authority");
     expect(workflow).toContain("release_checksum_assets_missing");
+    expect(workflow).toContain('deploymentAuthority.executionEnvironment?.runner !== "ubuntu-24.04"');
+    expect(workflow).toContain('deploymentAuthority.executionEnvironment?.runnerEnvironment !== "github-hosted"');
+    expect(workflow).not.toContain("deploymentAuthority.runner !==");
     expect(workflow).toContain("generate-supply-chain-artifacts.ts --output build/release/supply-chain");
     expect(workflow).toContain("verify-supply-chain-artifacts.ts --input build/release/supply-chain");
     expect(releaseAuthority).toContain("resolve-branch-promotion-authority.ts verify-release-bundle");
@@ -525,7 +555,7 @@ describe("release workflow supply-chain boundary", () : any => {
     const assetVerificationStep: any = workflow.indexOf("name: Verify the exact remote release asset set");
     const releaseOrderStep: any = workflow.indexOf("name: Determine monotonic release ordering");
     const releasePublicationStep: any = workflow.indexOf("name: Publish the verified GitHub release draft");
-    const npmPublicationStep: any = workflow.indexOf("name: Publish missing tarballs or reverify immutable versions");
+    const npmPublicationStep: any = workflow.indexOf("name: Publish or reverify the exact prepared archives through npm OIDC");
     const latestStep: any = workflow.indexOf("name: Verify immutable publication and advance the stable container tag");
     expect(signingStep).toBeGreaterThan(0);
     expect(npmPreflightStep).toBeGreaterThan(0);

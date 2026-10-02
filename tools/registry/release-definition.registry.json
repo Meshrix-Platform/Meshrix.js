@@ -79,7 +79,8 @@
   },
   "github": {
     "environment": "release-candidate",
-    "nodeVersion": "24.16.0"
+    "nodeVersion": "24.16.0",
+    "npmCliVersion": "11.21.0"
   },
   "localVerification": {
     "engine": "podman",

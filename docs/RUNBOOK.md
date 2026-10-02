@@ -735,9 +735,10 @@ instead: `functional release accepted`, `real-machine verified on
 `tools/registry/release-definition.registry.json` is the sole source for the
 product version, Git tag, release channel, package manifest set, container
 platforms, functional acceptance profile, local container engine, and the exact
-fourteen-file upstream publishing candidate bundle. Package manifests, the
-lockfile, workflow expressions, tags, reports, and this runbook are projections
-of that definition.
+fourteen-file upstream publishing candidate bundle, and the Node.js and npm
+CLI versions used by release workflows. Package manifests, the lockfile,
+workflow expressions, tags, reports, and this runbook are projections of that
+definition.
 
 Before creating a tag, update the definition, prepare all version projections,
 and verify them:
@@ -838,16 +839,50 @@ screenshots. That recovery projection includes only the stable failing stage
 and code plus bounded step and cleanup identifier/status/duration rows; it never
 projects failure messages, receipts, logs, or runtime values.
 
-`.github/workflows/release.yml` is the sole publication path. It runs only for
-semantic version tags, serializes all release runs globally, and fails unless
-the tagged commit equals the canonical `release` branch tip. The release
-branch is promoted only by `.github/workflows/release-branch.yml`, which
-resolves the successful stable complete-gate run for the exact push commit,
-downloads its stable authority bundle, runs the external runtime-ui deployment
-verification on `ubuntu-24.04`, and uploads the `release-authority` bundle for
-that commit. `release.yml` imports that authority and revalidates candidate
-identity, functional receipt, and deployment receipt before any publication.
-Its protected `release-candidate` GitHub environment is the review boundary.
+`.github/workflows/release.yml` is the sole publication path. It accepts
+canonical semantic-version tag pushes and an exact workflow dispatch at that
+tag, and serializes release runs globally. `.github/workflows/release-branch.yml`
+runs on `release` pushes and supports a manual run on the same branch for the
+explicit first-publication bootstrap. It requires the release commit to equal
+the current stable tip, resolves the successful stable complete-gate run for
+that exact commit, downloads its stable authority bundle, and runs the external
+runtime-ui deployment verification on `ubuntu-24.04`. The receipt must record
+the actual `github-hosted` runner environment. After uploading the
+`release-authority` bundle, the source workflow creates the canonical tag only
+when it is absent, or verifies that an existing tag resolves to the same
+commit. A conflicting tag fails. It then calls GitHub's workflow-dispatch API
+for `release.yml` at the tag and sends the exact source run id, attempt, event,
+and commit. The dispatch returns before the source run completes; the target
+workflow waits for that exact release-branch run to finish successfully before
+consuming its authority artifact. This closes the source-run completion race.
+
+The release workflow revalidates candidate identity, functional receipt, and
+deployment receipt before publication. Its release-authority and npm publisher
+jobs both name the `release-candidate` environment. A workflow reference alone
+does not create the required protection: configure this environment with a
+tag deployment rule for `v*` before enabling the first release. The existing
+`release-portfolio` environment is restricted to the nightly branch and is not
+the publisher environment. Do not describe this deployment rule as an approval
+requirement.
+
+Before the first release run, verify these hosted protections in GitHub:
+
+1. An active tag ruleset covers `refs/tags/v*`, restricts tag updates and
+   deletions, and has no bypass actors. Leave tag creation allowed so the
+   release workflow token can create the first canonical tag. The local
+   create-or-verify helper does not provide server-side immutability.
+2. The `release-candidate` environment exists with a selected-tag deployment
+   policy for `v*`. The workflow's `environment:` field is a reference, not
+   evidence that this protection has been configured.
+3. Repository immutable releases are enabled and enforced by the repository
+   owner. Verify the actual immutable-release setting with an authorized
+   management identity before setting the repository variable
+   `RELEASE_IMMUTABLE_ENABLED=true`. The workflow's variable check is only a
+   configuration declaration; the ordinary workflow token does not have the
+   Administration permission needed to read this setting. After publication,
+   the existing release job also verifies that the release is immutable and
+   that its asset set and body match the candidate.
+
 Before that authority, a read-only `upstream-service-publishing` job runs the
 self-contained Core verifier. It checks out no detachable service or plugin
 repository and performs no registry or release mutation. Every later
@@ -856,20 +891,6 @@ prerequisites.
 Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
 the remaining Real-Machine Verification Workflows and cannot block publication.
-
-Meshrix.js `0.0.1` declares the exact public registry dependency
-`pactium@0.8.1`; `package-lock.json` pins its canonical registry tarball and
-SHA-512 integrity, and the resolved Pactium package metadata declares MIT.
-Meshrix.js and its first-party source declare Apache-2.0. The server source
-archive independently retains `vendor/pactium-0.8.0.tgz`, whose original
-GPL-3.0-or-later identity remains governed by the source-package contract. The
-Dockerfile copies that vendor directory, while npm installation resolves the
-runtime dependency from the registry rather than from the archive. These are
-distinct artifacts: the Pactium runtime dependency's MIT metadata does not
-relabel the retained archive or certify the terms of the complete Meshrix.js
-distribution.
-Publication of integrated Meshrix.js artifacts remains subject to full-package
-license review and the required release authority.
 
 The workflow stages a multi-platform container and compares the intended OCI
 manifest digest with the GHCR version tag before and after creating that tag.
@@ -896,37 +917,90 @@ verify `RELEASE_SHA256SUMS.sigstore.json` before using the checksum file.
 On a complete workflow rerun, finalized remote Sigstore assets are reused only
 when the release metadata, exact asset set, GitHub digests, and every
 deterministic source asset match the current tagged inputs. A mismatch on an
-already published release fails closed; an incomplete private draft may be
+already published release fails closed; an incomplete unpublished draft may be
 regenerated and replaced before publication.
 
-The credential-free npm preflight packs the complete public release set and
-checks every immutable version and dist-tag before the workflow receives GHCR
-write authority. After canonical acceptance and signed asset finalization, the
-trusted-publishing job repeats the same all-package preflight immediately before
-its first npm mutation. The checks cover immutable SHA-512 integrity, npm
-registry signatures, SLSA provenance attestations, and monotonic `latest` or
-`next` state. A missing or older tag on an existing version fails closed because
-GitHub OIDC trusted publishing cannot repair dist-tags; a newer tag is preserved.
-Missing versions are then published by dependency topology with the root
-`meshrix.js` package last, and every registry postcondition is reverified.
+The credential-free `assemble-release-assets` job builds the package files and
+prepares the public npm archives once. It transfers those exact tarballs with
+the other immutable release inputs. The read-only npm preflight and the later
+publisher download and use the same prepared archive directory; neither repacks
+the workspaces. The preflight checks every immutable version and dist-tag before
+remote container mutation. The publisher repeats the complete registry
+preflight immediately before its first npm mutation. Checks cover immutable
+SHA-512 integrity, npm registry signatures, SLSA provenance attestations, and
+monotonic `latest` or `next` state. A newer dist-tag is preserved; a missing or
+older tag on an existing version requires npm's separate `manage dist-tags`
+publisher permission. Direct publish permission alone does not grant that
+repair permission. Missing versions are published by dependency topology with
+`@meshrix/gateway` before the root `meshrix.js` package, and every registry
+postcondition is reverified.
 The published set is then installed without lifecycle scripts and checked with
 `npm audit signatures`, which cryptographically verifies registry signatures
 and provenance attestations. The GitHub Release becomes public only after this
 npm closure succeeds.
-Publication uses npm trusted publishing with GitHub OIDC and does not accept a
-raw npm token. The local release-set check is offline and does not contact or
-mutate the registry:
+
+For the first npm publication only, the release-branch workflow may be started
+manually with `bootstrap_candidate=0.0.1`. This is bound to the first canonical
+tag and exact deployed run. Store `NPM_BOOTSTRAP_TOKEN` temporarily as a
+`release-candidate` environment secret; the release workflow exposes it only to
+the one bootstrap publication mutation step. It is not used by preparation,
+preflight, deployment, or authority verification. Remove this secret as soon as
+the first publication succeeds. The publisher rejects bootstrap for later
+versions and never silently falls back to a token.
+
+After both packages exist, configure one GitHub Actions trusted publisher for
+each package with the deployed repository, workflow file `release.yml`, and
+environment `release-candidate`. The following bulk setup uses one npm login
+and makes both direct-publish configurations with npm 11.21.0:
 
 ```bash
-npm run release:publish-npm -- --dry-run
+for package in '@meshrix/gateway' 'meshrix.js'; do
+  npm trust github "$package" \
+    --file release.yml \
+    --repository Meshrix-Platform/Meshrix.js \
+    --environment release-candidate \
+    --allow-publish \
+    --yes
+  sleep 2
+done
 ```
 
-The read-only registry preflight contacts the public registry but does not use
-publication credentials and cannot publish:
+npm requires account-level 2FA for trusted-publisher management. During the
+first command, select the documented five-minute 2FA reuse option; the two
+second delay limits bulk-request rate. If automatic repair of a missing or
+older `latest`/`next` tag is required, grant `manage dist-tags` separately on
+each package. npm treats that as a separate permission, and the pinned `npm
+trust` v11 CLI does not expose a flag for it. Configure the complete permission
+set before ordinary publication. The temporary bootstrap token has already
+been removed after the first successful publication; ordinary publication
+never falls back to it.
+
+The first ordinary workflow run performs an actual npm OIDC exchange for each
+prepared package before the publisher can mutate the registry. A successful
+package-specific exchange is the required proof that the deployed GitHub
+workflow identity matches the npm configuration. The intended identity is
+`release.yml` + repository + `release-candidate`; the REST API dispatch targets
+`release.yml` at a tag as a new `workflow_dispatch` run. npm's generic
+`workflow_dispatch` guidance does not fully distinguish this API-triggered run
+from a reusable-workflow caller, so do not claim the matcher is proven until
+both hosted exchanges succeed. A repository/environment ref or a local unit
+test cannot substitute for that proof. See the [npm trusted publishing guide](https://docs.npmjs.com/trusted-publishers/),
+[`npm trust` v11 reference](https://docs.npmjs.com/cli/v11/commands/npm-trust/),
+[GitHub workflow dispatch API](https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28),
+and [GitHub reusable-workflow OIDC claims](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-with-reusable-workflows).
+
+Prepare the credential-free archives once, then run the read-only registry
+preflight against that same directory:
 
 ```bash
-npm run release:publish-npm -- --preflight
+npm run build
+npm run release:publish-npm -- --prepare --artifact-dir <artifact-dir> --tag <release-tag>
+npm run release:publish-npm -- --preflight --artifact-dir <artifact-dir> --tag <release-tag>
 ```
+
+The preparation and preflight commands do not publish. Use the GitHub release
+workflow for actual OIDC publication; direct local release commands are not
+hosted trusted-publisher evidence.
 
 The built-in project release runbook prepares and validates a candidate only.
 It does not commit, tag, push, upload assets, publish packages, or create a

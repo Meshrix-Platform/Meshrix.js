@@ -446,7 +446,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/*/package.json",
       "tools/server-scripts/publish-release-set.ts",
       "tools/server-scripts/lib/release-metadata.ts",
-      "tools/server-scripts/lib/npm-cli-invocation.ts"
+      "tools/server-scripts/lib/npm-cli-invocation.ts",
+      "tools/server-scripts/lib/release-deployment/contract.ts"
     ], outputs: [],
   },
   "release:prepare-node-runtime-source-evidence": {
