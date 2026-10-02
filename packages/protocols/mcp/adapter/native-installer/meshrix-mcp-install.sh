@@ -55,9 +55,9 @@ exec_connector() {
   connector="$1"
   shift
   case "$connector" in
-    *.ts)
+    *.ts|*.js)
       command -v node >/dev/null 2>&1 ||
-        fail "The repository connector requires Node.js. Use a verified portable release bundle when Node.js is unavailable."
+        fail "The MCP connector requires Node.js. Use a verified portable release bundle when Node.js is unavailable."
       exec node "$connector" "$@"
       ;;
     *)
@@ -73,8 +73,14 @@ resolve_and_exec_connector() {
     exec_connector "$SCRIPT_DIR/meshrix-mcp" "$@"
   fi
 
+  product_root=$(CDPATH= cd -- "$SCRIPT_DIR/../../../../.." && pwd)
+  packaged_connector="$product_root/dist/apps/server/bin/meshrix-mcp.js"
+  if [ -f "$packaged_connector" ]; then
+    exec_connector "$packaged_connector" "$@"
+  fi
+
   repository_connector="$SCRIPT_DIR/../gateway-installer/bin/meshrix-mcp.ts"
-  if [ -f "$repository_connector" ]; then
+  if [ -e "$product_root/.git" ] && [ -f "$repository_connector" ]; then
     exec_connector "$repository_connector" "$@"
   fi
 

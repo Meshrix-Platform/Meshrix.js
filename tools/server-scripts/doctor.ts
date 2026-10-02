@@ -1,11 +1,11 @@
 import path from "node:path";
 import process from "node:process";
-import { runStorageDoctor } from "../../packages/foundation/src/storage/ops-tools.ts";
+import { runStorageDoctor } from "@meshrix/foundation/storage/ops-tools";
 import { ServerConfig } from "#meshrix/server-config";
 import {
   describeCapabilityBindingGuardStatus,
   describeCapabilityKernelStatus
-} from "../../packages/foundation/src/security/authorization/capability-kernel-status.ts";
+} from "@meshrix/foundation/security/authorization/capability-kernel-status";
 
 function parseArgs(argv?: any) : any {
   const args: Record<string, any> = {

@@ -3,15 +3,16 @@ import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   MCP_STABLE_TOOL_NAME
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+} from "@meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 import {
   MCP_DISCOVER_METHOD,
   MCP_META_SERVER_INFO,
   mcpModernHttpRequest
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
+} from "@meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
 
 let fatalReported: any = false;
 function reportFatal(error?: any) : any {
@@ -38,6 +39,22 @@ function argValue(name?: any, fallback: any = "") : any {
 
 function hasArg(name?: any) : any {
   return process.argv.includes(name);
+}
+
+function productRootDirectory() : string {
+  let candidate: any = path.dirname(fileURLToPath(import.meta.url));
+  while (true) {
+    try {
+      const manifest: any = JSON.parse(readFileSync(path.join(candidate, "package.json"), "utf8"));
+      if (manifest.name === "meshrix.js") return candidate;
+    } catch {}
+    const parent: any = path.dirname(candidate);
+    if (parent === candidate) break;
+    candidate = parent;
+  }
+  throw Object.assign(new Error("The installed Meshrix.js package root could not be located."), {
+    code: "MESHRIX_PACKAGE_ROOT_NOT_FOUND"
+  });
 }
 
 async function readDoctorToken() : Promise<any> {
@@ -216,7 +233,8 @@ async function checkConfiguredOrbStackTargets(vmHealthUrl?: any) : Promise<any> 
 
 async function discoverSignedBaseUrl() : Promise<any> {
   const explicitUrl: any = String(argValue("--url", process.env.MESHRIX_MCP_BASE_URL || "")).trim();
-  const args: any[] = ["packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh", "discover-local", "--json"];
+  const installerPath: any = path.join(productRootDirectory(), "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh");
+  const args: any[] = [installerPath, "discover-local", "--json"];
   if (explicitUrl) {
     args.push("--url", explicitUrl);
   }

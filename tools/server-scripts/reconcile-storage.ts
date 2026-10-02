@@ -1,6 +1,6 @@
 import path from "node:path";
 import process from "node:process";
-import { reconcileStorage } from "../../packages/foundation/src/storage/ops-tools.ts";
+import { reconcileStorage } from "@meshrix/foundation/storage/ops-tools";
 import { ServerConfig } from "#meshrix/server-config";
 
 function parseArgs(argv?: any) : any {
