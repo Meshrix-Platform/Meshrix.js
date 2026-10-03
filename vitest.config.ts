@@ -158,9 +158,10 @@ export default defineConfig({
     // storage suites spawn real processes, bind loopback ports, drive real
     // HTTP/MCP round trips and run in-process verifiers; measured single-file
     // durations on a supported runtime reach 20-30s before any concurrent lane
-    // is added. A budget that expires during correct work is not a gate.
-    testTimeout: 120000,
-    hookTimeout: 120000,
+    // is added, and exceed 120s while the host is shared with other work. A
+    // budget that expires during correct work is not a gate.
+    testTimeout: 300000,
+    hookTimeout: 300000,
     // Script-style verifier/contract files are executed by tests/run.ts via
     // tools/registry/tests.registry.json, not by Vitest's file discovery.
     pool: "forks",

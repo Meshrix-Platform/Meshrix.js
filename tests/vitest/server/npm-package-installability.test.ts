@@ -170,7 +170,7 @@ describe("npm artifact installability source", () : any => {
       const result = await execFileAsync(process.execPath, ["-e", "process.stdout.write(String(require('meshrix.js').bundled))"], { cwd: consumer, env });
       expect(result.stdout).toBe("true");
     } finally { await registry?.close(); await fs.rm(root, { recursive: true, force: true }); }
-  }, 30000);
+  }, 300000);
 
   it("walks admitted generated directories and scans contents without admitting neighboring outputs", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-generated-directory-"));
@@ -529,5 +529,5 @@ describe("npm artifact installability source", () : any => {
       await registry?.close();
       await fs.rm(root, { recursive: true, force: true });
     }
-  }, 30000);
+  }, 300000);
 });
