@@ -1443,7 +1443,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
 
       await vi.waitFor(() : any => {
         expect(events).toContain("final-protected-sink-revalidate");
-      });
+      }, { timeout: 30_000, interval: 100 });
       expect(credentialReads).toHaveBeenCalled();
       expect(original.requests.some((request?: any) => request.body?.method === "initialize")).toBe(true);
       expect(original.requests.some((request?: any) => request.body?.method === "tools/list")).toBe(true);
@@ -1642,7 +1642,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       });
       await vi.waitFor(() : any => {
         expect(events).toContain("final-protected-sink-revalidate");
-      });
+      }, { timeout: 30_000, interval: 100 });
 
       let nextBaseUrl: any = original.baseUrl;
       let nextRawService: any = originalRawService;

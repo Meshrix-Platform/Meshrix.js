@@ -154,8 +154,13 @@ export default defineConfig({
     ],
   },
   test: {
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    // Sized for real work, not for an idle machine. The gateway, sandbox and
+    // storage suites spawn real processes, bind loopback ports, drive real
+    // HTTP/MCP round trips and run in-process verifiers; measured single-file
+    // durations on a supported runtime reach 20-30s before any concurrent lane
+    // is added. A budget that expires during correct work is not a gate.
+    testTimeout: 120000,
+    hookTimeout: 120000,
     // Script-style verifier/contract files are executed by tests/run.ts via
     // tools/registry/tests.registry.json, not by Vitest's file discovery.
     pool: "forks",
