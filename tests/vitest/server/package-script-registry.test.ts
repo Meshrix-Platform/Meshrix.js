@@ -63,6 +63,7 @@ describe("package script registry declarations", () : any => {
       outputs: [
         "build/acceptance-evidence/**",
         "build/acceptance-proof-ledger/**",
+        "build/release/npm-set/**",
         "build/reports/**"
       ]
     });
