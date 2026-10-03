@@ -127,6 +127,13 @@
           "artifactSemantics": {
             "type": "object",
             "additionalProperties": { "type": "string" }
+          },
+          "triggerPaths": {
+            "description": "Repository-relative path prefixes whose change means this suite must run again. Optional: an undeclared suite keeps the conservative whole-repository trigger, so declaring this only ever narrows what a change selects. Use [\".\"] for a suite that genuinely reads the whole repository.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
           }
         }
       }
