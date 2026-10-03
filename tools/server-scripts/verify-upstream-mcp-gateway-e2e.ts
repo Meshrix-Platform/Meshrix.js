@@ -383,7 +383,13 @@ try {
     assert.equal(tools.some((tool?: any) : any => tool.name === PUBLIC_TOOL_NAME), true, JSON.stringify(tools.map((tool?: any) : any => tool.name), null, 2));
     const tool: any = tools.find((item?: any) : any => item.name === PUBLIC_TOOL_NAME);
     assert.equal(tool._meta.serviceId, SERVICE_ID);
-    assert.deepEqual(tool._meta.requiredScopes, ["gateway:read"]);
+    // REQ-006: the required scope is the operator-configured `tools/call` operation
+    // scope for this service (`requiredScopes: ["gateway:write"]`, `risk: "safe_write"`),
+    // never the upstream tool's `readOnlyHint`. The previous expectation
+    // (`["gateway:read"]`) was the retired annotation-derived value.
+    assert.deepEqual(tool._meta.requiredScopes, ["gateway:write"]);
+    assert.equal(tool._meta["io.meshrix/gateway-policy"]?.source, "operator-service-operation");
+    assert.equal(tool._meta["io.meshrix/gateway-policy"]?.effectClass, "safe_write");
     return {
       toolCount: tools.length,
       upstreamToolVisible: true,

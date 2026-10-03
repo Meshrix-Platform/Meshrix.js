@@ -1,0 +1,81 @@
+{
+  "schema": "meshrix.gateway.interop.schema-vectors/v1",
+  "dialect": "https://json-schema.org/draft/2020-12/schema",
+  "source": {
+    "kind": "independent-standard-semantics",
+    "version": "2020-12",
+    "network": false
+  },
+  "vectors": [
+    {
+      "name": "exclusiveMinimum",
+      "schema": { "type": "object", "properties": { "count": { "type": "integer", "exclusiveMinimum": 0 } }, "required": ["count"] },
+      "instances": [{ "value": { "count": 1 }, "valid": true }, { "value": { "count": 0 }, "valid": false }]
+    },
+    {
+      "name": "multipleOf",
+      "schema": { "type": "object", "properties": { "count": { "type": "integer", "multipleOf": 3 } } },
+      "instances": [{ "value": { "count": 6 }, "valid": true }, { "value": { "count": 5 }, "valid": false }]
+    },
+    {
+      "name": "required-without-properties",
+      "schema": { "type": "object", "required": ["id"] },
+      "instances": [{ "value": { "id": "a" }, "valid": true }, { "value": {}, "valid": false }]
+    },
+    {
+      "name": "patternProperties",
+      "schema": { "type": "object", "patternProperties": { "^x-": { "type": "integer" } }, "additionalProperties": false },
+      "instances": [{ "value": { "x-a": 1 }, "valid": true }, { "value": { "a": 1 }, "valid": false }]
+    },
+    {
+      "name": "prefixItems",
+      "schema": { "type": "object", "properties": { "tuple": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer" }], "items": false } } },
+      "instances": [{ "value": { "tuple": ["a", 1] }, "valid": true }, { "value": { "tuple": ["a", 1, 2] }, "valid": false }]
+    },
+    {
+      "name": "unevaluatedProperties",
+      "schema": { "type": "object", "allOf": [{ "properties": { "id": { "type": "string" } } }], "unevaluatedProperties": false },
+      "instances": [{ "value": { "id": "x" }, "valid": true }, { "value": { "extra": 1 }, "valid": false }]
+    },
+    {
+      "name": "recursive-local-ref",
+      "schema": { "type": "object", "$defs": { "node": { "type": "object", "properties": { "children": { "type": "array", "items": { "$ref": "#/$defs/node" } } } } }, "properties": { "root": { "$ref": "#/$defs/node" } } },
+      "instances": [{ "value": { "root": { "children": [{ "children": [] }] } }, "valid": true }, { "value": { "root": { "children": [5] } }, "valid": false }]
+    },
+    {
+      "name": "boolean-sub-schema",
+      "schema": { "type": "object", "properties": { "allowed": true, "blocked": false } },
+      "instances": [{ "value": { "allowed": { "a": 1 } }, "valid": true }, { "value": { "blocked": null }, "valid": false }]
+    },
+    {
+      "name": "conditional",
+      "schema": { "type": "object", "properties": { "kind": { "enum": ["a", "b"] } }, "if": { "properties": { "kind": { "const": "a" } }, "required": ["kind"] }, "then": { "required": ["value"] }, "else": { "required": ["other"] } },
+      "instances": [{ "value": { "kind": "a", "value": 1 }, "valid": true }, { "value": { "kind": "a" }, "valid": false }]
+    },
+    {
+      "name": "dependentRequired",
+      "schema": { "type": "object", "dependentRequired": { "credit": ["billing"] } },
+      "instances": [{ "value": { "credit": 1, "billing": "b" }, "valid": true }, { "value": { "credit": 1 }, "valid": false }]
+    },
+    {
+      "name": "contains",
+      "schema": { "type": "object", "properties": { "values": { "type": "array", "contains": { "const": 7 }, "minContains": 1, "maxContains": 2 } } },
+      "instances": [{ "value": { "values": [7, 1] }, "valid": true }, { "value": { "values": [1, 2] }, "valid": false }]
+    },
+    {
+      "name": "unicode-length",
+      "schema": { "type": "object", "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 1 } } },
+      "instances": [{ "value": { "text": "🌏" }, "valid": true }, { "value": { "text": "ab" }, "valid": false }]
+    },
+    {
+      "name": "unknown-annotation",
+      "schema": { "type": "object", "x-business-extension": { "a": 1 } },
+      "instances": [{ "value": {}, "valid": true }, { "value": [], "valid": false }]
+    },
+    {
+      "name": "null-union",
+      "schema": { "type": "object", "properties": { "value": { "type": ["string", "null"] } } },
+      "instances": [{ "value": { "value": null }, "valid": true }, { "value": { "value": 2 }, "valid": false }]
+    }
+  ]
+}

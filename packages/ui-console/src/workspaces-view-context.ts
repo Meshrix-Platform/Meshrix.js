@@ -1,14 +1,14 @@
 import { inject, provide, type InjectionKey } from "vue";
 
-const workspacesViewKey: any = Symbol("workspaces-view") as InjectionKey<unknown>;
+const workspacesViewKey: InjectionKey<unknown> = Symbol("workspaces-view");
 
-export function provideWorkspacesView<T>(context: T) : any {
+export function provideWorkspacesView<T>(context: T): void {
   provide(workspacesViewKey, context);
 }
 
-export function useWorkspacesViewContext<T>() : any {
-  const context: any = inject(workspacesViewKey);
-  if (!context) {
+export function useWorkspacesViewContext<T = any>(): T {
+  const context = inject(workspacesViewKey);
+  if (context === undefined) {
     throw new Error("Workspaces view context is not available");
   }
   return context as T;

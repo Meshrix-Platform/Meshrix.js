@@ -11,7 +11,7 @@ const client: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn()
 }));
 const pageRefreshHandler: any = vi.hoisted(() : any => vi.fn());
@@ -144,6 +144,8 @@ describe("UpstreamServicePublishView published service list", () : any => {
       "Label of svc_inventory",
     );
     expect((clicked.wrapper.vm as any).selectedServiceId).toBe("svc_inventory");
+    expect((clicked.wrapper.find("#upstream-service-key").element as HTMLInputElement).value).toBe("svc_inventory");
+    expect(clicked.wrapper.find("#upstream-service-key").attributes("disabled")).toBeDefined();
     expect((clicked.wrapper.vm as any).selectedServiceRevision).toBe(2);
     clicked.wrapper.unmount();
   });
@@ -251,7 +253,18 @@ describe("UpstreamServicePublishView published service list", () : any => {
       services: [summary("svc_inventory", 2)],
     });
     client.getPublishedService.mockResolvedValue(detail("svc_inventory", 2));
-    client.republishUpstreamService.mockResolvedValue({ ok: true });
+    client.republishUpstreamService.mockResolvedValue({
+      ok: true, serviceId: "svc_inventory", state: "publishing", serviceRevision: 3, setRevision: 4,
+      manifestDigest: "b".repeat(64), receiptRef: "urn:meshrix:receipt:republish",
+      publication: publication(4), replayed: false,
+    });
+    client.observeUpstreamServicePublication.mockResolvedValue({
+      ok: true, setRevision: 4,
+      service: {
+        serviceId: "svc_inventory", state: "server_published", serviceRevision: 3,
+        manifestDigest: "b".repeat(64), publication: publication(4),
+      },
+    });
     registerConsoleConfirmHost();
     try {
       const { wrapper } = await mountView("/?serviceId=svc_inventory");

@@ -13,7 +13,7 @@ This starts the source API server. To build and serve the Web Console from the s
 
 ```bash
 npm run build
-npm run server:start -- --with-ui --strict-port
+npm run dev -- --with-ui --strict-port
 ```
 
 The default local origin is `http://127.0.0.1:7228`. See [local startup](../RUNBOOK.md#local-startup) for instance reuse, start/stop commands, and separate development-console ports. Deployment configuration, environment variables, secret custody, proxy configuration, backup mounts, and diagnostics belong to the [runbook](../RUNBOOK.md), not the repository landing page.
@@ -69,7 +69,7 @@ npm run verify:docs
 git diff --check
 ```
 
-Add `npm run verify:core-platform-surface-convergence` only when the affected Core surface contract requires it. Skill changes use `npm run verify:skills`. Source behavior changes follow the regression planner; do not run the entire Core test profile merely to select checks for a documentation edit. Complete all changes, source review, repairs, and focused checks before the single final regression selected for the task. Final-regression failures require the developer's repair and rerun decision.
+Add `npm run verify:core-platform-surface-convergence` only when the affected Core surface contract requires it. Skill changes use `npm run verify:skills`. Source behavior changes follow the regression planner; do not run the entire Core test profile merely to select checks for a documentation edit. Follow [Contributing](../../CONTRIBUTING.md#change-workflow) for source review, scoped repairs and final regression. Ordinary in-scope failures are repaired directly; decisions are needed only for changes to scope, published support, authority or risk.
 
 For source changes, select the relevant checks described in [Contributing](../../CONTRIBUTING.md#validation) and the [runbook](../RUNBOOK.md). Common commands include:
 
@@ -91,9 +91,9 @@ A protected-resource or side-effect path is acceptable only when the canonical g
 
 ### Release and environment qualification
 
-The [Runbook release contract](../RUNBOOK.md#release-definition-and-publication) separates the mandatory Functional Release Gate and mandatory Release Deployment Verification from remaining Real-Machine Verification Workflows and their Environment Support Claims. `npm run verify:acceptance` is the Functional Release Gate and must pass before publication. An accepted immutable candidate may then be exercised by `npm run verify:real-machine -- ...` for one exact system or deployment.
+The [Runbook release contract](../RUNBOOK.md#release-definition-and-publication) separates the mandatory Functional Release Gate and candidate-bound npm consumer qualification from optional container-deployment and Real-Machine Verification claims. `npm run verify:acceptance` is the canonical release controller; its selected profile qualifies the exact npm archives on the observed native platform and any usable local Docker target. One complete platform is sufficient for npm eligibility, and every selected target must pass. An accepted immutable candidate may then be exercised by `npm run verify:real-machine -- ...` for one exact system or deployment.
 
-Functional acceptance is a prerequisite for the exact-candidate runtime-ui deployment on `ubuntu-24.04` and for every real-machine workflow. A real-machine receipt never blocks, promotes, or changes functional acceptance. Offline delivery may run on Linux inside a virtual machine; Ubuntu is preferred and Debian is accepted. That evidence does not establish native Linux, Ubuntu, or Debian qualification, which remains owned by the named Real-Machine Verification Workflow.
+The runtime-ui deployment receipt is required only when that optional claim is selected. A real-machine receipt never blocks, promotes, or changes functional acceptance. Offline delivery may run on Linux inside a virtual machine; its evidence remains scoped to that Linux deployment and does not establish native Linux, Ubuntu, or Debian qualification.
 
 ### Evidence and telemetry
 
@@ -101,11 +101,11 @@ Governance evidence and ordinary telemetry have different value. Protected acces
 
 ### Dependency admission
 
-Dependency admission for private deployment is governed by [Private-Deployment Dependency Admission](../RUNBOOK.md#private-deployment-dependency-admission). It is fail-closed: a direct, transitive, bundled, optional, example, image, or deployment dependency is rejected whenever its licensing, redistribution, production-use, maintenance-continuity, or project-governance risk cannot be resolved from primary evidence. A customer must never be required to absorb a third-party commercial risk in order to deploy or operate Meshrix.js privately. License compliance alone is not admission: a production dependency must also pass the Runbook's authority, maturity, multi-organization adoption, security maintenance, operational evidence, and workload-conformance gates.
+Dependency licensing, security, maintenance and operational suitability are governed by [Dependency Admission](../RUNBOOK.md#dependency-admission). Apply that owning process to the actual runtime and distribution boundary.
 
 ### Plans and current status
 
-Temporary planning workspaces are execution aids, not durable product authorities. Delete them after their outcome is implemented and verified. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and candidate-bound reports.
+Use the existing long-lived Better Plan workspace according to [AGENTS.md](../../AGENTS.md). Preserve delivery results and history; generated navigation does not become a second editable plan. Keep private execution state out of public source. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and candidate-bound reports.
 
 ## Technical references
 

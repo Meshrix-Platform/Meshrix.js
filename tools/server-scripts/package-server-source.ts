@@ -17,6 +17,7 @@ import {
   AUTHORIZED_VENDORED_PACKAGE_ROOT,
   AUTHORIZED_VENDORED_TARBALL_PATTERN,
   INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS,
+  isInternalSourcePackagePath,
   ROOT_SOURCE_FILES,
   SOURCE_PACKAGE_ROOTS
 } from "./lib/source-package-contract.ts";
@@ -90,9 +91,7 @@ function shouldSkipRelativePath(relativePath: any = "", packageRemovePaths: any 
   if (isRemovedByPackagePlan(normalized, packageRemovePaths)) {
     return true;
   }
-  if (INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS.some((excludedPath?: any) : any =>
-    normalized === excludedPath || normalized.startsWith(`${excludedPath}/`)
-  )) {
+  if (isInternalSourcePackagePath(normalized)) {
     return true;
   }
   return normalized.split("/").some((segment?: any) : any => EXCLUDED_PATH_SEGMENTS.has(segment));

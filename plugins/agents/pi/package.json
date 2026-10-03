@@ -1,21 +1,51 @@
 {
   "name": "@meshrix/agent-pi-adapter",
   "version": "0.0.1",
-  "description": "Official Meshrix client adapter and MCP extension package for Pi.",
+  "description": "Pi client adapter and MCP extension package.",
   "type": "module",
   "license": "Apache-2.0",
-  "keywords": ["pi-package", "pi-extension", "meshrix", "mcp"],
-  "bin": { "meshrix-agent-pi-adapter": "./adapter.mjs" },
-  "files": ["adapter.mjs", "adapter.json", "extension.mjs", "README.md"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "meshrix",
+    "mcp"
+  ],
+  "files": [
+    "adapter.mjs",
+    "adapter.json",
+    "extension.mjs",
+    "README.md",
+    "LICENSE"
+  ],
   "pi": {
-    "extensions": ["./extension.mjs"]
-  },
-  "dependencies": {
-    "@meshrix/client-adapter-kit": "0.0.1",
-    "@modelcontextprotocol/sdk": "1.29.0",
-    "typebox": "1.3.6"
+    "extensions": [
+      "./extension.mjs"
+    ]
   },
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "plugins/agents/pi"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/client-adapter-kit": "0.0.1",
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "typebox": "1.3.6"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "typebox": {
+      "optional": true
+    }
   }
 }

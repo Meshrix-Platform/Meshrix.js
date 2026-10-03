@@ -12,7 +12,7 @@ audience: usage
 - IDE and CLI MCP configuration are vendor capabilities; they do not establish a Meshrix.js Hook conversation bridge or a history-store schema.
 
 Source: [vendor reference](https://antigravity.google/docs/mcp). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

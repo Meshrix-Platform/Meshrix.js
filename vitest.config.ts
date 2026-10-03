@@ -35,13 +35,20 @@ const excludedTestPatterns = [
   "tests/contract/foundation/**",
   "tests/unit/foundation/**",
 ];
-const scopedExcludedTestPatterns = isBackendFunctionalScope()
-  ? backendFunctionalExcludedTestPatterns
-  : [];
+// Performance tooling has separate installed inputs and functional prerequisites.
+// Scope exclusions belong to each project: a root CLI --exclude does not override them.
+const scopedExcludedTestPatterns = [
+  ...(isBackendFunctionalScope() ? backendFunctionalExcludedTestPatterns : []),
+  ...(process.env.MESHRIX_VITEST_SCOPE === "gateway-performance"
+    ? [] : ["tests/vitest/gateway/performance/**"]),
+  ...(process.env.MESHRIX_VITEST_SCOPE === "product-distribution"
+    ? [] : ["tests/vitest/server/distribution-artifacts.test.ts"])
+];
 
 
 const WORKSPACE_PACKAGE_DIRS: [string, string][] = [
   ["contracts", "packages/contracts"],
+  ["gateway", "packages/gateway"],
   ["foundation", "packages/foundation"],
   ["agents", "packages/agents"],
   ["capabilities", "packages/capabilities"],
@@ -88,6 +95,10 @@ function workspaceSourceAliases() : { find: any; replacement: string }[] {
     }
   }
   patterns.sort((left: any, right: any) : any => right[0].length - left[0].length);
+  // Exact aliases match by prefix too, so a shorter subpath such as
+  // `.../modern-downstream` would otherwise swallow `.../modern-downstream/discovery`
+  // purely because of its position in the exports map. Longest match wins.
+  exact.sort((left: any, right: any) : any => right.find.length - left.find.length);
   return [...exact, ...patterns.map((entry: any) : any => entry[1])];
 }
 
@@ -143,8 +154,13 @@ export default defineConfig({
     ],
   },
   test: {
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    // Sized for real work, not for an idle machine. The gateway, sandbox and
+    // storage suites spawn real processes, bind loopback ports, drive real
+    // HTTP/MCP round trips and run in-process verifiers; measured single-file
+    // durations on a supported runtime reach 20-30s before any concurrent lane
+    // is added. A budget that expires during correct work is not a gate.
+    testTimeout: 120000,
+    hookTimeout: 120000,
     // Script-style verifier/contract files are executed by tests/run.ts via
     // tools/registry/tests.registry.json, not by Vitest's file discovery.
     pool: "forks",

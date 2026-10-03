@@ -1,13 +1,21 @@
 # Third-party notices
 
-Meshrix.js remains MIT-licensed for its pre-existing code. The repository-local
-service and plugin implementation trees below are migrated Apache-2.0 code and
-retain the complete notice in their subtree:
+Meshrix.js and project-owned first-party source and documentation are licensed
+under Apache-2.0; see [LICENSE](LICENSE) for the complete terms. Existing
+copyright notices and applicable attribution for Plugins, Services, and other
+independent project assets remain in their shipped license files. This project
+license also covers the first-party plugin packaging and test support in
+`tools/plugins/` and `tests/plugins/`.
 
-- `services/file-parser/format-convert/` — Apache-2.0 (`LICENSE`)
-- `plugins/` runtime plugins and client adapters, plus their migrated
-  `tools/plugins/` and `tests/plugins/` support trees — Apache-2.0
-  (`plugins/LICENSE-APACHE-2.0`, plus each package manifest's `license` field)
+Third-party dependencies and incorporated assets retain their own terms. In
+particular:
 
-No migrated implementation is silently relicensed by co-location. Dependency
-licenses remain governed by their own package metadata and lockfile.
+- The runtime dependency `pactium@0.8.1` is distributed under MIT as declared by
+  its package metadata and pinned in `package-lock.json`.
+- `vendor/pactium-0.8.0.tgz` is a separate source archive under
+  GPL-3.0-or-later. It is not the `pactium@0.8.1` runtime dependency, and its
+  terms remain distinct in any artifact that includes it.
+
+Other dependency license and notice files are preserved with their package
+metadata and the corresponding distribution assets. Project-owned Apache-2.0
+terms do not replace third-party or independently governed asset licenses.

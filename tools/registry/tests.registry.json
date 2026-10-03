@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "generatedAt": "2026-07-22",
   "profiles": {
+    "gateway-benchmark": {
+      "description": "Deterministic real-MCP benchmark harness correctness (not a performance verdict)",
+      "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "gateway.performance-observation", "repo.script-registry"]
+    },
+    "product-distribution": {
+      "description": "Canonical two-product archives, installed dependency boundary and runtime image contents",
+      "suites": ["repo.product-distribution"]
+    },
     "core-baseline": {
       "description": "Shared repository and foundation baseline",
       "execution": {
@@ -28,8 +36,7 @@
         "foundation.state-machine",
         "release.acceptance-ledger-anchor",
         "gateway.external"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "core-public": {
       "description": "Core verifier gate",
@@ -138,8 +145,7 @@
         "regression.platform-services",
         "regression.platform-runtime-plugins",
         "regression.platform-client-adapters"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "security-public": {
       "description": "Security-focused gate",
@@ -157,10 +163,9 @@
         "security.authorization-hardening",
         "security.http-resource-admission",
         "governance.operation-permission-protocol-consistency",
-        "governance.authorization-coverage",
+        "authorization.governance-coverage",
         "downstream-mcp.installer-convergence"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-public": {
       "description": "Audit gate",
@@ -176,11 +181,11 @@
         "governance.operation-permission-universal-tag-policy",
         "governance.operation-permission-protocol-consistency",
         "governance.operation-permission-tag-governed-e2e",
-        "governance.authorization-coverage",
-        "governance.enterprise-authorization-enforcement",
-        "governance.enterprise-audit-retention-redaction",
+        "authorization.governance-coverage",
+        "authorization.enforcement",
+        "audit.retention-redaction",
         "observability.semantic-baseline",
-        "governance.enterprise-observability-coverage",
+        "observability.coverage",
         "approval-governance",
         "architecture.facts",
         "governance.organization-model",
@@ -232,8 +237,7 @@
         "model-gateway.service",
         "upstream-gateway.fixture-transit",
         "downstream-mcp.agent-tool-loop"
-      ],
-      "timeoutMs": 5400000
+      ]
     },
     "audit-stable-repository": {
       "description": "Stable audit checkpoint: repository and foundation contracts",
@@ -259,8 +263,7 @@
         "foundation.state-machine",
         "release.acceptance-ledger-anchor",
         "gateway.external"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-stable-resource": {
       "description": "Stable audit checkpoint: isolated resource discipline",
@@ -271,8 +274,7 @@
       },
       "suites": [
         "runtime.resource-discipline"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-stable-governance": {
       "description": "Stable audit checkpoint: governance and authorization",
@@ -289,8 +291,7 @@
         "architecture.facts",
         "governance.organization-model",
         "governance.agent-session"
-      ],
-      "timeoutMs": 2700000
+      ]
     },
     "audit-stable-runtime": {
       "description": "Stable audit checkpoint: runtime and workspace substrate",
@@ -308,8 +309,7 @@
         "workspace.proposal-protocol",
         "downstream-client.aspect",
         "security-alert.lifecycle"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-stable-downstream": {
       "description": "Stable audit checkpoint: downstream MCP boundaries",
@@ -325,8 +325,7 @@
         "downstream-mcp.release-target-scope",
         "downstream-mcp.release-portable-assembly",
         "downstream-mcp.proxy-transport"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-stable-sandbox": {
       "description": "Stable audit checkpoint: controlled execution sandbox",
@@ -338,8 +337,7 @@
       "suites": [
         "execution-sandbox.controlled-runtime",
         "execution-sandbox.convergence-final"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-stable-data": {
       "description": "Stable audit checkpoint: container, storage, and jobs",
@@ -358,8 +356,7 @@
         "jobs.work-queue-process-restart",
         "jobs.upload-workspace-materialization",
         "jobs.upload-custody-workspace-materialization-acceptance"
-      ],
-      "timeoutMs": 2700000
+      ]
     },
     "audit-stable-services": {
       "description": "Stable audit checkpoint: product services and upstream gateway",
@@ -377,8 +374,7 @@
         "upstream-gateway.service-publishing",
         "upstream-gateway.mcp-e2e",
         "workspace.core-file-ops"
-      ],
-      "timeoutMs": 2700000
+      ]
     },
     "audit-stable-console-evidence": {
       "description": "Stable audit checkpoint: real gateway and permission evidence for console workflows",
@@ -390,14 +386,13 @@
       "suites": [
         "governance.operation-permission-protocol-consistency",
         "governance.operation-permission-tag-governed-e2e",
-        "governance.authorization-coverage",
-        "governance.enterprise-audit-retention-redaction",
+        "authorization.governance-coverage",
+        "audit.retention-redaction",
         "observability.semantic-baseline",
-        "governance.enterprise-authorization-enforcement",
-        "governance.enterprise-observability-coverage",
+        "authorization.enforcement",
+        "observability.coverage",
         "upstream-gateway.e2e"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "audit-stable-console": {
       "description": "Stable audit checkpoint: console, internal platform, and plugins",
@@ -420,8 +415,7 @@
         "model-gateway.service",
         "upstream-gateway.fixture-transit",
         "downstream-mcp.agent-tool-loop"
-      ],
-      "timeoutMs": 2700000
+      ]
     },
     "smoke-public": {
       "description": "Smoke gate",
@@ -433,8 +427,7 @@
       "extends": "core-baseline",
       "suites": [
         "smoke.start-server-defaults"
-      ],
-      "timeoutMs": 1800000
+      ]
     },
     "release-public": {
       "description": "Functional completeness release gate",
@@ -447,17 +440,73 @@
       "suites": [
         "release.npm-package-installability",
         "jobs.work-queue-postgres-container",
-        "internal-platform.private-deployment-e2e"
+        "internal-platform.single-node-e2e"
+      ]
+    },
+    "engineering-public": {
+      "description": "Applicable local and hosted engineering, package consumption, and sandbox verification",
+      "extends": "core-public",
+      "suites": [
+        "gateway.task-001",
+        "repo.product-distribution",
+        "release.npm-package-prepare",
+        "release.npm-package-installability",
+        "execution-sandbox.provider-resolution",
+        "execution-sandbox.controlled-runtime",
+        "execution-sandbox.convergence-final",
+        "repo.unified-test-runner"
       ],
-      "timeoutMs": 7200000
+      "execution": {
+        "phases": [
+          {
+            "id": "engineering-delivery",
+            "label": "Package consumption and applicable sandbox verification",
+            "lanes": [
+              { "id": "gateway-focused", "suites": ["gateway.task-001"] },
+              { "id": "product-distribution", "dependsOn": ["gateway-focused"], "suites": ["repo.product-distribution"] },
+              { "id": "npm-prepare", "dependsOn": ["product-distribution"], "suites": ["release.npm-package-prepare"] },
+              { "id": "npm-consumer", "dependsOn": ["npm-prepare"], "suites": ["release.npm-package-installability"] },
+              { "id": "sandbox-provider", "suites": ["execution-sandbox.provider-resolution"] },
+              { "id": "sandbox-runtime", "dependsOn": ["sandbox-provider"], "suites": ["execution-sandbox.controlled-runtime"] },
+              { "id": "sandbox-convergence", "dependsOn": ["sandbox-runtime"], "suites": ["execution-sandbox.convergence-final"] },
+              { "id": "runner-contract", "suites": ["repo.unified-test-runner"] }
+            ]
+          }
+        ]
+      }
     },
     "changed": {
-      "description": "Tests affected by current changes",
+      "description": "Suites whose declared triggerPaths the current change touches. Whole-repository suites are reported instead of run; an uncovered verification-sensitive change fails the run.",
       "dynamic": true,
-      "timeoutMs": 120000
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true
+      }
     }
   },
   "suites": [
+    {
+      "id": "gateway.benchmark-node", "label": "Installed independent Node package correctness",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "node", "args": ["--test", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/privacy.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/schedule.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/transport.test.mjs"],
+      "sideEffects": "network-service", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
+    {
+      "id": "repo.product-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=product-distribution", "vitest", "run", "tests/vitest/server/distribution-policy.test.ts", "tests/vitest/server/distribution-artifacts.test.ts", "--maxWorkers=1"],
+      "sideEffects": "network-service", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
+    {
+      "id": "gateway.benchmark-correctness",
+      "label": "Network benchmark harness and failure-accounting correctness",
+      "owner": "platform", "package": "repo", "level": "integration",
+      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance", "vitest", "run", "tests/vitest/gateway/performance/benchmark.test.ts", "tests/vitest/gateway/performance/benchmark-boundary.test.ts", "tests/vitest/gateway/performance/benchmark-package.test.ts", "tests/vitest/server/package-script-registry.test.ts", "--maxWorkers=2"],
+      "sideEffects": "network-service", "requiredServices": [],
+      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+    },
     {
       "id": "regression.environment",
       "label": "Node, test, and Web Console type environment",
@@ -467,7 +516,6 @@
       "command": "npm",
       "args": ["run", "typecheck"],
       "sideEffects": "none",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -482,7 +530,6 @@
       "command": "npm",
       "args": ["run", "build:web"],
       "sideEffects": "build-output",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -497,7 +544,6 @@
       "command": "npm",
       "args": ["run", "test:functional:frontend"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -512,7 +558,6 @@
       "command": "npm",
       "args": ["run", "build:node"],
       "sideEffects": "build-output",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -527,7 +572,6 @@
       "command": "npm",
       "args": ["run", "test:functional:backend:server", "--", "shard-a"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -542,7 +586,6 @@
       "command": "npm",
       "args": ["run", "test:functional:backend:server", "--", "shard-b"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -557,7 +600,6 @@
       "command": "npm",
       "args": ["run", "test:functional:backend:worker-thread"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -572,7 +614,6 @@
       "command": "npm",
       "args": ["run", "test:functional:backend:unit"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -587,7 +628,6 @@
       "command": "npm",
       "args": ["run", "test:functional:backend:contract"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -602,7 +642,6 @@
       "command": "npm",
       "args": ["run", "test:interface"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -617,7 +656,6 @@
       "command": "npm",
       "args": ["run", "verify:local-services"],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -632,7 +670,6 @@
       "command": "npm",
       "args": ["run", "test:platform:runtime-plugins"],
       "sideEffects": "build-output",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -646,12 +683,11 @@
       "level": "integration",
       "command": "npm",
       "args": ["run", "verify:local-client-adapters"],
-      "sideEffects": "build-output",
-      "timeoutClass": "standard",
+      "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": ["build/adapters/index.json"]
+      "artifacts": []
     },
     {
       "id": "runtime.capacity-catalog-conformance",
@@ -667,7 +703,6 @@
         "tests/vitest/server/runtime-capacity-catalog-conformance.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -687,7 +722,6 @@
         "tests/vitest/server/runtime-capacity-work-queue-dispatch-conformance.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -707,7 +741,6 @@
         "tests/vitest/server/runtime-capacity-execution-fence-conformance.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -727,7 +760,6 @@
         "tests/vitest/server/interaction-cost-baseline.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -747,7 +779,6 @@
         "tests/vitest/server/service-collaboration-contract.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -755,7 +786,7 @@
     },
     {
       "id": "runtime.resource-discipline",
-      "label": "Priority-zero real-service and high-risk owner-path resource gate",
+      "label": "Resource ownership policy and deterministic persistence checks",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -764,17 +795,11 @@
         "run",
         "server:verify:resource-discipline"
       ],
-      "sideEffects": "build-output",
-      "timeoutClass": "standard",
+      "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": [
-        "build/reports/runtime-resource-discipline.json"
-      ],
-      "artifactSemantics": {
-        "build/reports/runtime-resource-discipline.json": "Compact synthetic owner-path resource verdict; raw heap profiles, payloads, paths, and load data are never retained by the gate."
-      }
+      "artifacts": []
     },
     {
       "id": "repo.public-boundary",
@@ -786,7 +811,6 @@
         "tools/server-scripts/verify-public-boundary.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -802,7 +826,6 @@
         "tests/verify-secret-hygiene.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -820,11 +843,11 @@
         "tests/security/local-path-boundary.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/foundation/src", "tests/security/local-path-boundary.test.ts"]
     },
     {
       "id": "repo.local-info-hygiene",
@@ -836,7 +859,6 @@
         "tools/config-scanner.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -854,7 +876,6 @@
         "tools/verifiers/registry-validator.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -871,7 +892,6 @@
         "tools/server-scripts/verify-version-registry.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -890,7 +910,6 @@
         "tools/server-scripts/verify-release-definition.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -907,7 +926,6 @@
         "tools/server-scripts/verify-version-naming.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -925,7 +943,6 @@
         "tests/verify-root-hygiene.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -942,7 +959,6 @@
         "tests/verify-script-registry.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -962,13 +978,35 @@
         "verify:repo-organization"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
       "artifacts": [
         "build/reports/repo-organization.json"
       ]
+    },
+    {
+      "id": "repo.unified-test-runner",
+      "label": "Unified test runner contract and input-scoped reuse",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/unified-test-runner-execution.test.ts",
+        "tests/vitest/server/changed-suite-selection.test.ts",
+        "tests/vitest/server/test-runner-dry-run.test.ts",
+        "tests/vitest/server/local-ci.test.ts"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": ["tests/run.ts", "tools/scripts/local-ci.ts", "tools/scripts/lib", "tools/registry", "tests/vitest/server/unified-test-runner-execution.test.ts", "tests/vitest/server/changed-suite-selection.test.ts", "tests/vitest/server/test-runner-dry-run.test.ts", "tests/vitest/server/local-ci.test.ts"]
     },
     {
       "id": "repo.source-organization-analysis",
@@ -984,7 +1022,6 @@
         "tests/vitest/server/source-organization-analysis.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1001,7 +1038,6 @@
         "tests/architecture/import-graph.test.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1021,7 +1057,6 @@
         "tools/server-scripts/verify-protocol-boundary.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1040,11 +1075,11 @@
         "tests/unit/foundation/checkpoint-tree.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/foundation/src", "tests/unit/foundation/checkpoint-tree.test.ts"]
     },
     {
       "id": "foundation.storage-object-lifecycle",
@@ -1062,7 +1097,7 @@
         "tests/vitest/server/merkle-state-substrate.test.ts",
         "tests/vitest/server/storage-backup-restore.test.ts",
         "tests/vitest/server/storage-independent-backup-root.test.ts",
-        "tests/vitest/server/enterprise-upgrade-rollback.test.ts",
+        "tests/vitest/server/single-node-upgrade-rollback.test.ts",
         "tests/vitest/server/storage-retention-and-maintenance.test.ts",
         "tests/vitest/server/storage-service-manifest.test.ts",
         "tests/vitest/server/storage-production-restore-evidence.test.ts",
@@ -1076,7 +1111,6 @@
         "tests/vitest/server/job-runner-background-workers.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1096,7 +1130,6 @@
         "tests/vitest/server/local-secret-store.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1117,7 +1150,6 @@
         "tests/vitest/server/delegated-mcp-parent-authority.test.ts",
         "tests/vitest/server/process-identity-nonce-conformance.test.ts",
         "tests/vitest/server/local-secret-crash-consistency.test.ts",
-        "tests/vitest/server/plugin-mcp-outlet-visibility.test.ts",
         "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts",
         "tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.ts",
         "tests/vitest/server/authorization-capability-binding-guard.test.ts",
@@ -1132,7 +1164,6 @@
         "tests/vitest/console/dashboard-approval-entry.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1155,7 +1186,6 @@
         "tests/vitest/server/client-registry-conformance-recovery.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1172,11 +1202,11 @@
         "tests/unit/foundation/state-machine.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/foundation/src", "tests/unit/foundation/state-machine.test.ts"]
     },
     {
       "id": "console.event-routing",
@@ -1193,7 +1223,6 @@
         "tests/vitest/console/use-console-shell-integration.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1213,6 +1242,11 @@
         "tests/vitest/server/architecture-acceptance-boundaries.test.ts",
         "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.ts",
         "tests/vitest/server/deployment-lifecycle-state-machine.test.ts",
+        "tests/vitest/server/environment-compatibility-command-resolution.test.ts",
+        "tests/vitest/server/generate-provenance.test.ts",
+        "tests/vitest/server/local-execution-environment.test.ts",
+        "tests/vitest/server/mcp-installer-portability.test.ts",
+        "tests/vitest/server/mcp-public-installer-command.test.ts",
         "tests/vitest/server/mcp-release-manifest.test.ts",
         "tests/vitest/server/plugin-runtime.test.ts",
         "tests/vitest/server/prepare-release.test.ts",
@@ -1226,12 +1260,12 @@
         "tests/vitest/server/release-command-dag-runner.test.ts",
         "tests/vitest/server/release-evidence-freshness.test.ts",
         "tests/vitest/server/real-machine-validation-workflow.test.ts",
+        "tests/vitest/server/release-workflow-automation.test.ts",
         "tests/vitest/server/release-workflow-supply-chain.test.ts",
         "tests/vitest/server/required-report-validator.test.ts",
         "tests/vitest/server/verify-failure-localization.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1251,7 +1285,6 @@
         "tests/vitest/server/branch-promotion-workflow.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1271,7 +1304,6 @@
         "tests/vitest/server/external-synthetic-requests.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1291,7 +1323,6 @@
         "tests/vitest/server/release-deployment-smoke.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1312,7 +1343,6 @@
         "tests/vitest/server/operation-dispatcher.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1352,12 +1382,10 @@
         "tests/vitest/server/upstream-publishing-http-integration.test.ts",
         "tests/vitest/console/upstream-service-publish-client.test.ts",
         "tests/vitest/console/upstream-service-publish-view.test.ts",
-        "tests/vitest/server/upstream-mcp-gateway.test.ts",
         "tests/vitest/server/upstream-service-publishing-html.test.ts",
         "tests/vitest/server/release-journey-visual-evidence.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1385,7 +1413,6 @@
         "tests/vitest/server/import-worker-canonical-queue.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1402,25 +1429,20 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/http-mcp-adapter-cancellation.test.ts",
-        "tests/vitest/server/mcp-sse-admission.test.ts",
+        "tests/vitest/gateway/modern-downstream/cancellation.test.ts",
         "tests/vitest/server/outbound-egress-policy.test.ts",
         "tests/vitest/server/upstream-mcp-session-manager.test.ts",
         "tests/vitest/server/upstream-endpoint-traffic-state.test.ts",
         "tests/vitest/server/upstream-gateway-ssrf.test.ts",
         "tests/vitest/server/upstream-gateway-session-cancellation.test.ts",
         "tests/vitest/server/mcp-proxy-cancellation.test.ts",
-        "tests/vitest/server/mcp-downstream-protocol-headers.test.ts",
         "tests/vitest/server/mcp-tool-schema-adapter.test.ts",
-        "tests/vitest/server/mcp-target-lookup-authorization.test.ts",
         "tests/vitest/server/mcp-tool-refresh-single-flight.test.ts",
-        "tests/vitest/server/mcp-tool-result-bridge.test.ts",
         "tests/vitest/server/mcp-operation-capability-attenuation.test.ts",
         "tests/vitest/server/mcp-tools-list-pagination.test.ts",
         "tests/vitest/server/mcp-execution-session-lifecycle.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1439,11 +1461,9 @@
         "--",
         "tests/vitest/server/upstream-payload-contract.test.ts",
         "tests/vitest/server/upstream-payload-transit.test.ts",
-        "tests/vitest/server/upstream-artifact-transit.test.ts",
-        "tests/vitest/server/upstream-artifact-mcp-projection.test.ts"
+        "tests/vitest/server/upstream-artifact-transit.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1451,19 +1471,18 @@
     },
     {
       "id": "gateway.performance-observation",
-      "label": "Bounded runtime observation and non-certifying gateway performance reduction",
+      "label": "Post-functional gateway observation and load-harness correctness",
       "owner": "platform",
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
       "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/server/gateway-performance-observation.test.ts"
+        "exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance",
+        "vitest", "run",
+        "tests/vitest/gateway/performance/gateway-performance-observation.test.ts",
+        "tests/vitest/gateway/performance/mcp-gateway-load-phase.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1486,7 +1505,6 @@
         "tests/vitest/server/runtime-refactor-governed-evidence.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1503,7 +1521,6 @@
         "tools/server-scripts/verify-plugin-runtime.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1520,7 +1537,6 @@
         "tools/server-scripts/verify-model-gateway-service.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1538,7 +1554,6 @@
         "server:verify:external-gateway"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1555,7 +1570,6 @@
         "tools/server-scripts/verify-start-server-defaults.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1576,7 +1590,6 @@
         "tests/contract/domains/domain-manifest.test.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1593,7 +1606,6 @@
         "tools/server-scripts/verify-agent-memory.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1613,7 +1625,6 @@
         "tests/vitest/server/agent-workspace-schema.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1630,7 +1641,6 @@
         "tools/server-scripts/verify-workspace-asset-management.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1650,7 +1660,6 @@
         "tests/vitest/server/workspace-governance.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1667,7 +1676,6 @@
         "tools/server-scripts/verify-communication-service.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1684,7 +1692,6 @@
         "tools/verifiers/core-platform-gap-audit.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -1703,7 +1710,6 @@
         "tools/server-scripts/verify-core-platform-surface-convergence.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1722,7 +1728,6 @@
         "tools/server-scripts/verify-core-platform-documentation-convergence.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1731,24 +1736,23 @@
       ]
     },
     {
-      "id": "internal-platform.private-deployment-e2e",
-      "label": "Private deployment internal platform aggregate E2E verifier",
+      "id": "internal-platform.single-node-e2e",
+      "label": "Single-node internal platform aggregate E2E verifier",
       "owner": "platform",
       "package": "repo",
       "level": "e2e",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
       ],
       "sideEffects": "container",
-      "timeoutClass": "slow",
       "requiredServices": [
         "docker"
       ],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/private-deployment-internal-platform-e2e.json"
+        "build/reports/single-node-internal-platform-e2e.json"
       ]
     },
     {
@@ -1762,7 +1766,6 @@
         "tools/server-scripts/verify-workspace-file-ops.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1779,7 +1782,6 @@
         "tools/server-scripts/verify-strategy-management.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1806,11 +1808,11 @@
         "tests/vitest/server/controlled-execution-sandbox.test.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/server-runtime/src", "tests/vitest/server/controlled-execution-sandbox.test.ts", "tests/vitest/server/execution-launcher-boundary.test.ts", "tests/vitest/server/oci-sandbox-backend.test.ts", "tests/vitest/server/opaque-sandbox-custody.test.ts", "tests/vitest/server/sandbox-configured-workload.test.ts", "tests/vitest/server/sandbox-streaming-input.test.ts", "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.ts", "tests/vitest/server/trusted-sandbox-provider-resolver.test.ts"]
     },
     {
       "id": "execution-sandbox.controlled-runtime",
@@ -1823,9 +1825,10 @@
         "tools/server-scripts/verify-controlled-execution-sandbox.ts"
       ],
       "sideEffects": "container",
-      "timeoutClass": "standard",
+      "platforms": ["darwin", "linux"],
       "requiredServices": [
-        "docker"
+        "docker",
+        "oci-conformance-native-image"
       ],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1847,7 +1850,6 @@
         "tools/server-scripts/verify-controlled-execution-convergence.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1866,7 +1868,6 @@
         "tools/server-scripts/verify-upstream-gateway-e2e.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1885,7 +1886,6 @@
         "tools/server-scripts/verify-upstream-service-publishing.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1904,7 +1904,6 @@
         "tools/server-scripts/verify-upstream-gateway-external-compatibility.ts"
       ],
       "sideEffects": "network-service",
-      "timeoutClass": "standard",
       "requiredServices": [
         "external-https-endpoint"
       ],
@@ -1925,7 +1924,6 @@
         "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1944,7 +1942,6 @@
         "tools/verifiers/downstream-mcp-completeness-audit.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1963,7 +1960,6 @@
         "tools/server-scripts/verify-operation-permission-external-http-boundary.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -1982,7 +1978,6 @@
         "tools/server-scripts/verify-mcp-installer-convergence.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2001,7 +1996,6 @@
         "tools/server-scripts/verify-mcp-release-target-scope.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2020,7 +2014,6 @@
         "tools/server-scripts/verify-mcp-release-portable-assembly.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2039,7 +2032,6 @@
         "tools/server-scripts/verify-architecture-facts.ts"
       ],
       "sideEffects": "none",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2056,7 +2048,6 @@
         "tools/server-scripts/verify-organization-model.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2073,7 +2064,6 @@
         "tools/server-scripts/verify-agent-session-governance.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2090,7 +2080,6 @@
         "tools/server-scripts/verify-trace-context.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2107,7 +2096,6 @@
         "tools/server-scripts/verify-unified-registration.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2124,7 +2112,6 @@
         "tools/server-scripts/verify-acceptance-ledger-anchor.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2141,7 +2128,6 @@
         "tools/server-scripts/verify-operation-proof-substrate.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2158,7 +2144,6 @@
         "tools/server-scripts/verify-merkle-state-substrate.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2175,7 +2160,6 @@
         "tools/server-scripts/verify-runtime-recovery-export.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2192,7 +2176,6 @@
         "tools/server-scripts/verify-workspace-proposal-protocol.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2209,7 +2192,6 @@
         "tools/server-scripts/verify-downstream-client-aspect.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2226,13 +2208,26 @@
         "tools/server-scripts/verify-work-queue-postgres-container.ts"
       ],
       "sideEffects": "container",
-      "timeoutClass": "slow",
       "requiredServices": [
         "docker"
       ],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": []
+    },
+    {
+      "id": "release.npm-package-prepare",
+      "label": "Prepare the canonical npm release set for isolated consumers",
+      "owner": "platform",
+      "package": "root",
+      "level": "integration",
+      "command": "npm",
+      "args": ["run", "release:publish-npm", "--", "--prepare", "--artifact-dir", "build/release/npm-set"],
+      "sideEffects": "build-output",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": ["build/release/npm-set/meshrix-release-set.json"]
     },
     {
       "id": "release.npm-package-installability",
@@ -2242,14 +2237,12 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-npm-package-installability.ts"
+        "tools/server-scripts/verify-npm-package-installability.ts",
+        "--artifact-dir",
+        "build/release/npm-set"
       ],
-      "sideEffects": "container",
-      "timeoutClass": "slow",
-      "requiredServices": [
-        "docker",
-        "npm-registry"
-      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
@@ -2267,7 +2260,6 @@
         "tools/server-scripts/verify-mcp-proxy-transport.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2286,7 +2278,6 @@
         "tools/server-scripts/verify-upstream-fixture-transit.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2305,7 +2296,6 @@
         "tools/server-scripts/verify-downstream-agent-tool-loop.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2324,7 +2314,6 @@
         "tools/server-scripts/verify-release-journey.ts"
       ],
       "sideEffects": "container",
-      "timeoutClass": "slow",
       "requiredServices": [
         "docker"
       ],
@@ -2347,7 +2336,6 @@
         "tools/server-scripts/verify-upstream-service-publishing-candidate.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
@@ -2366,7 +2354,6 @@
         "tools/server-scripts/verify-deployment-container-flow.ts"
       ],
       "sideEffects": "container",
-      "timeoutClass": "slow",
       "requiredServices": [
         "docker"
       ],
@@ -2390,7 +2377,6 @@
         "podman"
       ],
       "sideEffects": "container",
-      "timeoutClass": "slow",
       "requiredServices": [
         "podman"
       ],
@@ -2411,7 +2397,6 @@
         "tools/server-scripts/verify-backup-restore.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2428,7 +2413,6 @@
         "tools/server-scripts/verify-storage-production-restore-drill.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2447,7 +2431,6 @@
         "tools/server-scripts/verify-job-work-queue.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2464,7 +2447,6 @@
         "tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2483,7 +2465,6 @@
         "tools/server-scripts/verify-work-queue-conformance.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2500,7 +2481,6 @@
         "tools/server-scripts/verify-work-queue-process-restart.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2519,7 +2499,6 @@
         "tools/server-scripts/verify-upload-workspace-materialization.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2538,7 +2517,6 @@
         "tests/vitest/server/support/run-upload-workspace-materialization-acceptance.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "platforms": [
         "linux"
@@ -2558,7 +2536,6 @@
         "tools/server-scripts/verify-tag-management.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2575,7 +2552,6 @@
         "tools/server-scripts/verify-operation-permission-tag-governance-audit.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2594,7 +2570,6 @@
         "tools/server-scripts/verify-operation-permission-universal-tag-policy.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2613,7 +2588,6 @@
         "tools/server-scripts/verify-operation-permission-protocol-consistency.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2632,7 +2606,6 @@
         "tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts"
       ],
       "sideEffects": "container",
-      "timeoutClass": "slow",
       "requiredServices": [
         "docker"
       ],
@@ -2643,8 +2616,8 @@
       ]
     },
     {
-      "id": "governance.authorization-coverage",
-      "label": "Enterprise authorization governance coverage verifier",
+      "id": "authorization.governance-coverage",
+      "label": "Authorization governance coverage verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
@@ -2653,69 +2626,65 @@
         "tools/server-scripts/verify-authorization-governance.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-governance-coverage.json"
+        "build/reports/authorization-governance-coverage.json"
       ]
     },
     {
-      "id": "governance.enterprise-authorization-enforcement",
-      "label": "Enterprise authorization approval and grant enforcement verifier",
+      "id": "authorization.enforcement",
+      "label": "Authorization approval and grant enforcement verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-authorization-enforcement.ts"
+        "tools/server-scripts/verify-authorization-enforcement.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-authorization-enforcement.json"
+        "build/reports/authorization-enforcement.json"
       ]
     },
     {
-      "id": "governance.enterprise-audit-retention-redaction",
-      "label": "Enterprise audit retention export prune and redaction verifier",
+      "id": "audit.retention-redaction",
+      "label": "Audit retention export prune and redaction verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts"
+        "tools/server-scripts/verify-audit-retention-redaction.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-audit-retention-redaction.json"
+        "build/reports/audit-retention-redaction.json"
       ]
     },
     {
-      "id": "governance.enterprise-observability-coverage",
-      "label": "Enterprise metrics health trace observability verifier",
+      "id": "observability.coverage",
+      "label": "Metrics health trace observability verifier",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-observability-coverage.ts"
+        "tools/server-scripts/verify-observability-coverage.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/enterprise-observability-coverage.json"
+        "build/reports/observability-coverage.json"
       ]
     },
     {
@@ -2729,7 +2698,6 @@
         "tools/server-scripts/verify-security-alert-lifecycle.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2748,7 +2716,6 @@
         "tools/server-scripts/verify-console-administration-coverage.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2767,7 +2734,6 @@
         "tools/server-scripts/verify-console-gateway-mcp-workflows.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2786,7 +2752,6 @@
         "tools/server-scripts/verify-console-admin-browser-visual.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2806,7 +2771,6 @@
         "tools/server-scripts/verify-console-design-tokens.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2825,7 +2789,6 @@
         "tools/server-scripts/verify-console-component-reuse.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2844,7 +2807,6 @@
         "tools/server-scripts/verify-production-health-console.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2861,7 +2823,6 @@
         "tools/server-scripts/verify-observability-semantics.ts"
       ],
       "sideEffects": "build-output",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
@@ -2880,13 +2841,33 @@
         "tools/server-scripts/verify-approval-governance.ts"
       ],
       "sideEffects": "temp-files",
-      "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
         "build/reports/approval-governance.json"
       ]
+    },
+    {
+      "id": "gateway.task-001",
+      "label": "Meshrix Gateway convergence TASK-001 focused Vitest scope",
+      "owner": "platform",
+      "package": "gateway",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/gateway",
+        "--maxWorkers=2"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": ["packages/gateway/src", "tests/vitest/gateway"]
     }
   ]
 }

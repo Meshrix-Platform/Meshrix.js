@@ -57,6 +57,7 @@ import {
 import {
   structuredUpstreamServiceFixture
 } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const SECRET_REF: any = "secret://upstream-final-effect/fixture";
 const SERVICE_ID: any = "final-effect-fixture";
@@ -246,8 +247,33 @@ function authorizationResult({
 function serviceDescriptor(baseUrl?: any, {
   httpMethod = "POST",
   httpProtocol = "http",
-  httpRpcMethod = "http-write"
+  httpRpcMethod = "http-write",
+  mcp = false
 }: Record<string, any> = {}) : any {
+  if (mcp) {
+    return structuredUpstreamServiceFixture({
+      allowLocalNetwork: true,
+      baseUrl,
+      credentialRefs: [SECRET_REF],
+      mcp: {
+        protocolVersion: "2025-06-18",
+        toolNamePrefix: SERVICE_ID,
+        transport: "http",
+        url: `${baseUrl}/mcp`
+      },
+      operations: [{
+        method: "POST",
+        operationKey: "tools/call",
+        path: "/",
+        protocol: "mcp",
+        requiredScopes: ["gateway:write"],
+        risk: "safe_write"
+      }],
+      serviceId: SERVICE_ID,
+      serviceProtocol: "mcp",
+      trafficPolicy: { burst: 20, maxConcurrent: 4, perMinute: 20 }
+    });
+  }
   return structuredUpstreamServiceFixture({
     allowLocalNetwork: true,
     baseUrl,
@@ -329,11 +355,24 @@ async function startUpstreamPeer(name?: any, events?: any) : Promise<any> {
       method: request.method,
       pathname: new URL(request.url || "/", "http://127.0.0.1").pathname
     });
+    if (body?.method === "notifications/initialized") {
+      response.writeHead(202, { "cache-control": "no-store" }).end();
+      return;
+    }
+    const result: any = body?.method === "initialize"
+      ? { protocolVersion: "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name, version: "1" } }
+      : body?.method === "tools/list"
+        ? { tools: [{ name: "echo", inputSchema: { type: "object", properties: {
+            label: { type: "string" }, url: { type: "string" }, path: { type: "string" }, headers: { type: "object" }
+          }, required: ["label"], additionalProperties: false } }] }
+        : body?.method === "tools/call"
+          ? { content: [{ type: "text", text: "accepted" }], structuredContent: { accepted: true, toolName: body.params?.name } }
+          : { accepted: true, peer: name };
     const payload: any = body?.jsonrpc === "2.0"
       ? {
           jsonrpc: "2.0",
           id: body.id,
-          result: { accepted: true, peer: name }
+          result
         }
       : { accepted: true, peer: name };
     response.writeHead(200, {
@@ -354,7 +393,7 @@ async function startUpstreamPeer(name?: any, events?: any) : Promise<any> {
   };
 }
 
-async function createCredentialBoundRegistry(events?: any, baseUrl?: any) : Promise<any> {
+async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawService: Record<string, any> = serviceDescriptor(baseUrl)) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(
     path.join(os.tmpdir(), "meshrix-final-effect-wiring-")
   );
@@ -373,13 +412,13 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any) : Prom
     describe: () : any => baseKeyProvider.describe()
   });
   cleanupTasks.push(() : any => secretKeyProvider.close());
-  const registry: any = createUpstreamGatewayRegistry({
+  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
     secretKeyProvider,
     userDataPath
   });
   cleanupTasks.push(() : any => registry.close());
-  installService(registry, baseUrl, 1);
-  const target: any = new URL(baseUrl);
+  installService(registry, baseUrl, 1, { rawService });
+  const target: any = new URL(rawService.serviceProtocol === "mcp" ? rawService.mcp.url : baseUrl);
   await initializeLocalSecret({
     dataDir: userDataPath,
     keyProvider: secretKeyProvider,
@@ -393,7 +432,9 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any) : Prom
       scope: {
         allowedHosts: [target.hostname],
         allowedProtocols: [target.protocol.replace(/:$/u, "")],
-        scopes: ["gateway:write"],
+        scopes: rawService.serviceProtocol === "mcp"
+          ? ["gateway:read", "gateway:write"]
+          : ["gateway:write"],
         serviceId: SERVICE_ID
       },
       secretRef: SECRET_REF
@@ -625,18 +666,20 @@ function startDispatch({
       authorityOmission: executionAuthorityOmission
     });
   });
-  const input: Record<string, any> = {
-    body: {
-      message: `${operationKey}-request`
-    },
-    ...(includeTargetSelector
-      ? {
-          operationKey,
-          serviceId: SERVICE_ID
-        }
-      : {}),
-    ...inputOverrides
-  };
+  const input: Record<string, any> = operationContract?._meta?.upstreamProjectedOperation === true
+    ? { message: `${operationKey}-request`, ...inputOverrides }
+    : {
+        body: {
+          message: `${operationKey}-request`
+        },
+        ...(includeTargetSelector
+          ? {
+              operationKey,
+              serviceId: SERVICE_ID
+            }
+          : {}),
+        ...inputOverrides
+      };
   const requestBody: any = Buffer.from(JSON.stringify(input));
   const dispatch: any = dispatchOperation({
     actor: AUTH_SESSION.user,
@@ -823,6 +866,7 @@ function expectOrdered(events?: any, expected?: any) : any {
 }
 
 afterEach(async () : Promise<any> => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   while (cleanupTasks.length > 0) {
     await cleanupTasks.pop()();
@@ -1145,6 +1189,109 @@ describe("governed upstream final-effect permit wiring", () : any => {
     ]);
   });
 
+  it("keeps a real dispatcher attempt through preparation beyond 60 seconds before the protected effect", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const createdAt: any = Date.now();
+    const events: any[] = [];
+    const permits: any[] = [];
+    const handlerGate: any = deferred();
+    const peer: any = await startUpstreamPeer("long-preparation", events);
+    const { credentialReads, registry } = await createCredentialBoundRegistry(events, peer.baseUrl);
+    const started: any = startDispatch({
+      events,
+      handlerGate,
+      operationKey: "http-write",
+      permits,
+      registry
+    });
+
+    try {
+      await vi.waitFor(() : any => {
+        expect(events).toContain("handler-entry");
+        expect(permits).toHaveLength(1);
+      });
+      vi.setSystemTime(createdAt + 75_001);
+      handlerGate.resolve();
+      await expect(started.dispatch).resolves.toMatchObject({ ok: true, statusCode: 200 });
+
+      expect(credentialReads).toHaveBeenCalledOnce();
+      expect(peer.requests).toHaveLength(1);
+      expectOrdered(events, [
+        "revalidate:execution",
+        "handler-entry",
+        "final-protected-sink-revalidate",
+        "credential-read",
+        "network-request:long-preparation"
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["revocation", "cancellation"])(
+    "denies a delayed dispatcher attempt after 60 seconds on %s with zero effects",
+    async (change?: any) : Promise<any> => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const createdAt: any = Date.now();
+      const events: any[] = [];
+      const permits: any[] = [];
+      const handlerGate: any = deferred();
+      const finalGate: any = deferred();
+      const finalState: any = { allowed: true, revoked: false };
+      const controller: any = new AbortController();
+      const peer: any = await startUpstreamPeer(`long-preparation-${change}`, events);
+      const { credentialReads, registry } = await createCredentialBoundRegistry(events, peer.baseUrl);
+      const started: any = startDispatch({
+        events,
+        finalGate,
+        finalState,
+        handlerGate,
+        operationKey: "http-write",
+        permits,
+        registry,
+        signal: change === "cancellation" ? controller.signal : null
+      });
+      let released = false;
+
+      try {
+        await vi.waitFor(() : any => {
+          expect(events).toContain("handler-entry");
+          expect(permits).toHaveLength(1);
+        });
+        vi.setSystemTime(createdAt + 75_001);
+        if (change === "revocation") {
+          finalState.allowed = false;
+          finalState.revoked = true;
+        }
+        released = true;
+        handlerGate.resolve();
+        await vi.waitFor(() : any => {
+          expect(events).toContain("final-protected-sink-revalidate");
+        });
+        if (change === "cancellation") controller.abort(new Error("fixture caller cancellation"));
+        finalGate.resolve();
+        await expectDispatchDenied(started);
+
+        expect(events).toContain("final-protected-sink-revalidate");
+        expect(permits).toHaveLength(1);
+        expect(credentialReads).not.toHaveBeenCalled();
+        expect(peer.requests).toHaveLength(0);
+      } finally {
+        if (!released) {
+          if (change === "revocation") {
+            finalState.allowed = false;
+            finalState.revoked = true;
+          } else {
+            controller.abort(new Error("fixture cleanup cancellation"));
+          }
+          handlerGate.resolve();
+        }
+        finalGate.resolve();
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it("rejects a missing sink permit before credential resolution or network", async () : Promise<any> => {
     const events: any[] = [];
     const peer: any = await startUpstreamPeer("missing", events);
@@ -1261,6 +1408,60 @@ describe("governed upstream final-effect permit wiring", () : any => {
     }
   );
 
+  it.each([
+    ["revoked authority", { allowed: false, revoked: true }, false],
+    ["changed configured MCP target", { allowed: true, revoked: false }, true]
+  ])(
+    "rechecks the existing MCP sink permit after session setup for %s with zero tools/call bytes",
+    async (_label?: any, finalState?: any, changeTarget?: any) : Promise<any> => {
+      const events: any[] = [];
+      const permits: any[] = [];
+      const gate: any = deferred();
+      const original: any = await startUpstreamPeer("mcp-original", events);
+      const replacement: any = changeTarget
+        ? await startUpstreamPeer("mcp-replacement", events)
+        : null;
+      const originalService = serviceDescriptor(original.baseUrl, { mcp: true });
+      const { credentialReads, registry } = await createCredentialBoundRegistry(events, original.baseUrl, originalService);
+      const started: any = startDispatch({
+        events,
+        finalGate: gate,
+        finalState,
+        inputOverrides: {
+          arguments: {
+            label: "mcp-protected-write",
+            url: "https://tool-argument.invalid/",
+            path: "/tool-argument-is-not-a-route",
+            headers: { authorization: "tool-argument-is-not-a-credential" }
+          },
+          toolName: "echo"
+        },
+        operationKey: "tools/call",
+        permits,
+        registry
+      });
+
+      await vi.waitFor(() : any => {
+        expect(events).toContain("final-protected-sink-revalidate");
+      }, { timeout: 30_000, interval: 100 });
+      expect(credentialReads).toHaveBeenCalled();
+      expect(original.requests.some((request?: any) => request.body?.method === "initialize")).toBe(true);
+      expect(original.requests.some((request?: any) => request.body?.method === "tools/list")).toBe(true);
+      expect(original.requests.some((request?: any) => request.body?.method === "tools/call")).toBe(false);
+
+      if (changeTarget) {
+        const nextService = serviceDescriptor(replacement.baseUrl, { mcp: true });
+        installService(registry, replacement.baseUrl, 2, { rawService: nextService });
+      }
+      gate.resolve();
+      await expectDispatchDenied(started);
+
+      expect(permits).toHaveLength(1);
+      expect(original.requests.filter((request?: any) => request.body?.method === "tools/call")).toHaveLength(0);
+      expect(replacement?.requests.filter((request?: any) => request.body?.method === "tools/call") || []).toHaveLength(0);
+    }
+  );
+
   it("burns an aborted waiter before credential resolution or a request byte", async () : Promise<any> => {
     const events: any[] = [];
     const permits: any[] = [];
@@ -1357,9 +1558,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
             events.push("downstream-input-substituted");
             return {
               ...input,
-              rpcParams: {
-                message: "substituted-after-dispatch"
-              }
+              message: "substituted-after-dispatch"
             };
           }
         : (input?: any) : any => {
@@ -1377,10 +1576,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
         includeTargetSelector: !projected,
         inputOverrides: projected
           ? {
-              rpcId: "fixed-projected-request",
-              rpcParams: {
-                message: "authorized-before-dispatch"
-              }
+              message: "authorized-before-dispatch"
             }
           : {},
         operationContract,
@@ -1446,7 +1642,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       });
       await vi.waitFor(() : any => {
         expect(events).toContain("final-protected-sink-revalidate");
-      });
+      }, { timeout: 30_000, interval: 100 });
 
       let nextBaseUrl: any = original.baseUrl;
       let nextRawService: any = originalRawService;

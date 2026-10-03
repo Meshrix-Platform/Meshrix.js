@@ -7,6 +7,7 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { resolveCurrentAcceptedCandidate } from "./lib/platform-acceptance-generation-store.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REVISION: any = /^[a-f0-9]{40}$/u;
@@ -14,7 +15,7 @@ const BRANCHES: readonly any[] = Object.freeze(["nightly", "stable", "release"])
 const POLL_INTERVAL_MS: any = 10_000;
 const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/nightly-controlled-sandbox.yml"]),
+  nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
   release: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/release-branch.yml"]),
 });
@@ -52,7 +53,7 @@ export function isTransientGithubFailure(stderr?: any) : any {
 export function extractSafeFailureSignals(logText?: any) : any {
   const signals: any = new Set<any>();
   for (const line of String(logText || "").split(/\r?\n/u)) {
-    const suite: any = /\bFAILED ([a-z0-9][a-z0-9._-]{0,127}) \((?:\d+ms|profile timeout)\)/u.exec(line)?.[1];
+    const suite: any = /\bFAILED ([a-z0-9][a-z0-9._-]{0,127}) \(\d+ms\)/u.exec(line)?.[1];
     if (suite) signals.add(`suite:${suite}`);
     const checks: any = /\b(?:productionBackendFailedChecks|failedChecks)=([A-Za-z0-9,]{1,4096})(?:\s|$)/u.exec(line)?.[1];
     if (checks) {
@@ -63,9 +64,7 @@ export function extractSafeFailureSignals(logText?: any) : any {
     const probeFailures: any = /\bproductionBackendProbeFailures=([a-z0-9_:,-]{1,4096})(?:\s|$)/u.exec(line)?.[1];
     if (probeFailures) {
       for (const probeFailure of probeFailures.split(",")) {
-        const match: any = /^(sandbox_[a-z_]+:oci_(?:create|start|inspect|command|workload)_failed:oci_[a-z_]+):(-1|[0-9]{1,3})$/u.exec(probeFailure);
-        const exitCode: any = Number(match?.[2]);
-        if (match && Number.isSafeInteger(exitCode) && exitCode >= -1 && exitCode <= 255) {
+        if (/^sandbox_[a-z_]{1,64}:(?:oci_(?:create|start|inspect|command|workload)_failed|input_staging_failed|sandbox_backend_failed|resource_budget_exceeded|output_validation_failed|conformance_assertion_failed)$/u.test(probeFailure)) {
           signals.add(`probe:${probeFailure}`);
         }
       }
@@ -227,8 +226,9 @@ function verifyPublicationCandidate(candidate?: any) : any {
       });
       if (result.error || result.status !== 0) throw failure(code);
     };
-    runInCandidate("npm", ["run", "repo:local-info-hygiene"], "local_info_hygiene_failed");
-    runInCandidate("node", ["tools/scripts/verify-git-publication.ts", "--index"], "git_publication_check_failed");
+    const npmInvocation = resolveNpmCliInvocation();
+    runInCandidate(npmInvocation.command, npmCliArgs(npmInvocation, ["run", "repo:local-info-hygiene"]), "local_info_hygiene_failed");
+    runInCandidate(process.execPath, ["tools/scripts/verify-git-publication.ts", "--index"], "git_publication_check_failed");
     console.log("[release-promotion] publication preflight passed");
   } finally {
     spawnSync("git", ["worktree", "remove", "--force", workspace], { cwd: repoRoot, stdio: "ignore" });

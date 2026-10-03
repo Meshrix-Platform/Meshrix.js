@@ -2,15 +2,11 @@
   "name": "@meshrix/protocols",
   "version": "0.0.1",
   "description": "Meshrix.js MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1"
-  },
   "imports": {
     "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
     "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
@@ -21,18 +17,18 @@
     "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
     "#meshrix/http-response": "@meshrix/foundation/http/http-response",
     "#meshrix/http-utils": {
-      "types": "./dist/http/http-utils.d.ts",
       "source": "./http/http-utils.ts",
+      "types": "./dist/http/http-utils.d.ts",
       "default": "./dist/http/http-utils.js"
     },
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants": {
-      "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
       "source": "./mcp/adapter/http-mcp-adapter-constants.ts",
+      "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-constants.js"
     },
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire": {
-      "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
       "source": "./mcp/adapter/http-mcp-adapter-client-wire.ts",
+      "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-client-wire.js"
     },
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
@@ -40,99 +36,144 @@
   },
   "exports": {
     "./agent-sync/policy": {
-      "types": "./dist/agent-sync/policy.d.ts",
       "source": "./agent-sync/policy.ts",
+      "types": "./dist/agent-sync/policy.d.ts",
       "default": "./dist/agent-sync/policy.js"
     },
     "./downstream-client-aspect/index": {
-      "types": "./dist/downstream-client-aspect/index.d.ts",
       "source": "./downstream-client-aspect/index.ts",
+      "types": "./dist/downstream-client-aspect/index.d.ts",
       "default": "./dist/downstream-client-aspect/index.js"
     },
     "./http/api-facade": {
-      "types": "./dist/http/api-facade.d.ts",
       "source": "./http/api-facade.ts",
+      "types": "./dist/http/api-facade.d.ts",
       "default": "./dist/http/api-facade.js"
     },
     "./http/bootstrap-payload": {
-      "types": "./dist/http/bootstrap-payload.d.ts",
       "source": "./http/bootstrap-payload.ts",
+      "types": "./dist/http/bootstrap-payload.d.ts",
       "default": "./dist/http/bootstrap-payload.js"
     },
     "./http/client-connection-list": {
-      "types": "./dist/http/client-connection-list.d.ts",
       "source": "./http/client-connection-list.ts",
+      "types": "./dist/http/client-connection-list.d.ts",
       "default": "./dist/http/client-connection-list.js"
     },
     "./http/controllers/jobs-controller": {
-      "types": "./dist/http/controllers/jobs-controller.d.ts",
       "source": "./http/controllers/jobs-controller.ts",
+      "types": "./dist/http/controllers/jobs-controller.d.ts",
       "default": "./dist/http/controllers/jobs-controller.js"
     },
     "./http/controllers/jobs-controller-artifact-handlers": {
-      "types": "./dist/http/controllers/jobs-controller-artifact-handlers.d.ts",
       "source": "./http/controllers/jobs-controller-artifact-handlers.ts",
+      "types": "./dist/http/controllers/jobs-controller-artifact-handlers.d.ts",
       "default": "./dist/http/controllers/jobs-controller-artifact-handlers.js"
     },
     "./http/controllers/system-controller": {
-      "types": "./dist/http/controllers/system-controller.d.ts",
       "source": "./http/controllers/system-controller.ts",
+      "types": "./dist/http/controllers/system-controller.d.ts",
       "default": "./dist/http/controllers/system-controller.js"
     },
     "./http/controllers/system-controller-foundation-handlers": {
-      "types": "./dist/http/controllers/system-controller-foundation-handlers.d.ts",
       "source": "./http/controllers/system-controller-foundation-handlers.ts",
+      "types": "./dist/http/controllers/system-controller-foundation-handlers.d.ts",
       "default": "./dist/http/controllers/system-controller-foundation-handlers.js"
     },
     "./http/controllers/upstream-payload-transit-controller": {
-      "types": "./dist/http/controllers/upstream-payload-transit-controller.d.ts",
       "source": "./http/controllers/upstream-payload-transit-controller.ts",
+      "types": "./dist/http/controllers/upstream-payload-transit-controller.d.ts",
       "default": "./dist/http/controllers/upstream-payload-transit-controller.js"
     },
     "./http/http-utils": {
-      "types": "./dist/http/http-utils.d.ts",
       "source": "./http/http-utils.ts",
+      "types": "./dist/http/http-utils.d.ts",
       "default": "./dist/http/http-utils.js"
     },
-    "./mcp/adapter/http-mcp-adapter": {
-      "types": "./dist/mcp/adapter/http-mcp-adapter.d.ts",
-      "source": "./mcp/adapter/http-mcp-adapter.ts",
-      "default": "./dist/mcp/adapter/http-mcp-adapter.js"
-    },
     "./mcp/adapter/gateway-installer/connector-working-view": {
-      "types": "./dist/mcp/adapter/gateway-installer/connector-working-view.d.ts",
       "source": "./mcp/adapter/gateway-installer/connector-working-view.ts",
+      "types": "./dist/mcp/adapter/gateway-installer/connector-working-view.d.ts",
       "default": "./dist/mcp/adapter/gateway-installer/connector-working-view.js"
     },
-    "./mcp/adapter/mcp-notification-bus": {
-      "types": "./dist/mcp/adapter/mcp-notification-bus.d.ts",
-      "source": "./mcp/adapter/mcp-notification-bus.ts",
-      "default": "./dist/mcp/adapter/mcp-notification-bus.js"
-    },
     "./mcp/adapter/http-mcp-adapter-constants": {
-      "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
       "source": "./mcp/adapter/http-mcp-adapter-constants.ts",
+      "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-constants.js"
     },
     "./mcp/adapter/http-mcp-adapter-client-wire": {
-      "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
       "source": "./mcp/adapter/http-mcp-adapter-client-wire.ts",
+      "types": "./dist/mcp/adapter/http-mcp-adapter-client-wire.d.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter-client-wire.js"
     },
+    "./mcp/adapter/gateway": {
+      "source": "./mcp/adapter/gateway.ts",
+      "types": "./dist/mcp/adapter/gateway.d.ts",
+      "default": "./dist/mcp/adapter/gateway.js"
+    },
+    "./mcp/modern-upstream": {
+      "source": "./mcp/modern-upstream/index.ts",
+      "types": "./dist/mcp/modern-upstream/index.d.ts",
+      "default": "./dist/mcp/modern-upstream/index.js"
+    },
+    "./mcp/modern-downstream": {
+      "source": "./mcp/modern-downstream/index.ts",
+      "types": "./dist/mcp/modern-downstream/index.d.ts",
+      "default": "./dist/mcp/modern-downstream/index.js"
+    },
+    "./mcp/modern-downstream/discovery": {
+      "source": "./mcp/modern-downstream/discovery.ts",
+      "types": "./dist/mcp/modern-downstream/discovery.d.ts",
+      "default": "./dist/mcp/modern-downstream/discovery.js"
+    },
+    "./mcp/modern-downstream/protocol": {
+      "source": "./mcp/modern-downstream/protocol.ts",
+      "types": "./dist/mcp/modern-downstream/protocol.d.ts",
+      "default": "./dist/mcp/modern-downstream/protocol.js"
+    },
+    "./mcp/modern-downstream/response": {
+      "source": "./mcp/modern-downstream/response.ts",
+      "types": "./dist/mcp/modern-downstream/response.d.ts",
+      "default": "./dist/mcp/modern-downstream/response.js"
+    },
+    "./mcp/modern-downstream/tools": {
+      "source": "./mcp/modern-downstream/tools.ts",
+      "types": "./dist/mcp/modern-downstream/tools.d.ts",
+      "default": "./dist/mcp/modern-downstream/tools.js"
+    },
+    "./mcp/authorization": {
+      "source": "./mcp/authorization.ts",
+      "types": "./dist/mcp/authorization.d.ts",
+      "default": "./dist/mcp/authorization.js"
+    },
+    "./mcp/notifications": {
+      "source": "./mcp/notifications.ts",
+      "types": "./dist/mcp/notifications.d.ts",
+      "default": "./dist/mcp/notifications.js"
+    },
+    "./mcp/legacy": {
+      "source": "./mcp/legacy/index.ts",
+      "types": "./dist/mcp/legacy/index.d.ts",
+      "default": "./dist/mcp/legacy/index.js"
+    },
     "./mcp/adapter/mcp-identity": {
-      "types": "./dist/mcp/adapter/gateway-installer/mcp-identity.d.ts",
       "source": "./mcp/adapter/gateway-installer/mcp-identity.ts",
+      "types": "./dist/mcp/adapter/gateway-installer/mcp-identity.d.ts",
       "default": "./dist/mcp/adapter/gateway-installer/mcp-identity.js"
     },
     "./mcp/upstream-mcp-gateway-transport": {
-      "types": "./dist/mcp/upstream-mcp-gateway-transport.d.ts",
       "source": "./mcp/upstream-mcp-gateway-transport.ts",
+      "types": "./dist/mcp/upstream-mcp-gateway-transport.d.ts",
       "default": "./dist/mcp/upstream-mcp-gateway-transport.js"
     },
     "./pubsub/event-bus": {
-      "types": "./dist/pubsub/event-bus.d.ts",
       "source": "./pubsub/event-bus.ts",
+      "types": "./dist/pubsub/event-bus.d.ts",
       "default": "./dist/pubsub/event-bus.js"
+    },
+    "./mcp/adapter/gateway-installer/bin/meshrix-mcp": {
+      "source": "./mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "types": "./dist/mcp/adapter/gateway-installer/bin/meshrix-mcp.d.ts",
+      "default": "./dist/mcp/adapter/gateway-installer/bin/meshrix-mcp.js"
     }
   },
   "files": [
@@ -140,5 +181,20 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/protocols"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "undici": "^8.11.2"
+  }
 }

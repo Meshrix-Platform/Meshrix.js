@@ -1,6 +1,6 @@
 import { pipeline } from "node:stream/promises";
 import { contentDispositionHeader, sendJson } from "../http-utils.ts";
-import { mcpSubjectFromAuthorization, mcpSubjectFromGrant } from "../../mcp/adapter/http-mcp-adapter-session.ts";
+import { mcpSubjectFromAuthorization, mcpSubjectFromGrant } from "../../mcp/authorization.ts";
 
 const TRANSIT_ROUTE: any = /^\/api\/gateway\/v1\/transit\/([^/]+)\/([^/]+)$/u;
 const ARTIFACT_ROUTE: any = /^\/api\/gateway\/v1\/artifacts\/([^/]+)$/u;

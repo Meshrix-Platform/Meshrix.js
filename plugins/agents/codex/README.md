@@ -4,9 +4,13 @@ Plugin ID: `agent-codex`
 
 Status: `stable`
 
-Package: `@meshrix/agent-codex-adapter`
+Internal component: `@meshrix/agent-codex-adapter`
 
 Group: `agents`
+
+This private first-party module is bundled with `meshrix.js` and included in
+the portable connector runtime. Both consumers use standard Node package
+resolution and invoke it only for an explicit target action.
 
 Codex MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
 

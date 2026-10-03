@@ -13,7 +13,7 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import { DOWNSTREAM_CLIENT_ASPECT_ROUTE_TARGETS } from "../../packages/protocols/downstream-client-aspect/index.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -73,7 +73,7 @@ async function verifyModuleManifest() : Promise<any> {
 
   const manifestMcp: any = serviceById(manifest.services, "mcp-server-side");
   assert.equal(manifestMcp.routeTarget, DOWNSTREAM_CLIENT_ASPECT_ROUTE_TARGETS.mcp);
-  assert.equal(manifestMcp.modulePath, "packages/protocols/mcp/adapter/http-mcp-adapter.ts");
+  assert.equal(manifestMcp.modulePath, "packages/protocols/mcp/modern-downstream/index.ts");
 }
 
 async function verifyCoreDoesNotReverseDependOnPlugins() : Promise<any> {

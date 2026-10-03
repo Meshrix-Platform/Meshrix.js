@@ -1,7 +1,6 @@
-import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   MCP_CLIENT_ADAPTER_PROTOCOL,
@@ -10,10 +9,8 @@ import {
 import { INSTALL_COMMAND_TIMEOUT_MS } from "./constants.ts";
 import {
   connectorLaunchSpec,
-  runInstallCommand,
   runWithInput
 } from "./connector-process.ts";
-import { readJson, writeJson } from "./device-discovery-registry.ts";
 import { redactSensitiveText } from "./installer-output-safety.ts";
 
 export const CLIENT_ADAPTER_DESCRIPTOR_SCHEMA: any = "v0.0.1:meshrix:client-adapter-descriptor-1";
@@ -27,201 +24,78 @@ function adapterError(code?: any, message?: any) : any {
   return error;
 }
 
-function safeTargetPathPart(value?: any) : any {
-  const text: any = String(value || "");
-  if (!/^[a-z0-9][a-z0-9-]*$/u.test(text)) {
-    throw adapterError("CLIENT_ADAPTER_TARGET_INVALID", "Client adapter target is invalid.");
-  }
-  return text;
-}
-
-function packageDirectory(root?: any, packageName?: any) : any {
-  const segments: any = String(packageName || "").split("/").filter(Boolean);
-  if (segments.length === 0 || segments.some((segment?: any) : any => !/^@?[A-Za-z0-9._-]+$/u.test(segment))) {
-    throw adapterError("CLIENT_ADAPTER_PACKAGE_INVALID", "Client adapter package coordinate is invalid.");
-  }
-  return path.join(root, "node_modules", ...segments);
-}
-
-export function defaultClientAdapterCacheRoot() : any {
-  return path.join(os.homedir(), ".meshrix", "mcp", "client-adapters");
-}
-
-function cachePaths(cacheRoot?: any, target?: any, version?: any) : any {
-  const safeTarget: any = safeTargetPathPart(target);
-  if (!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/u.test(String(version || ""))) {
-    throw adapterError("CLIENT_ADAPTER_VERSION_INVALID", "Client adapter version is invalid.");
-  }
-  const root: any = path.join(path.resolve(cacheRoot), safeTarget, String(version));
-  return {
-    root,
-    tree: path.join(root, "tree"),
-    metadata: path.join(root, "cache.json")
-  };
-}
-
-async function collectTreeEntries(root?: any, current: any = root) : Promise<any> {
-  const entries: any[] = [];
-  for (const item of await fs.readdir(current, { withFileTypes: true })) {
-    const absolute: any = path.join(current, item.name);
-    const relative: any = path.relative(root, absolute).split(path.sep).join("/");
-    if (item.isDirectory()) {
-      entries.push({ type: "directory", relative });
-      entries.push(...await collectTreeEntries(root, absolute));
-    } else if (item.isFile()) {
-      entries.push({ type: "file", relative, absolute });
-    } else if (item.isSymbolicLink()) {
-      entries.push({ type: "symlink", relative, target: await fs.readlink(absolute) });
-    } else {
-      throw adapterError("CLIENT_ADAPTER_CACHE_INVALID", "Client adapter cache contains an unsupported file type.");
-    }
-  }
-  return entries.sort((left?: any, right?: any) : any => left.relative.localeCompare(right.relative));
-}
-
-export async function digestClientAdapterTree(root?: any) : Promise<any> {
-  const hash: any = createHash("sha256");
-  for (const entry of await collectTreeEntries(root)) {
-    hash.update(`${entry.type}\0${entry.relative}\0`);
-    if (entry.type === "file") hash.update(await fs.readFile(entry.absolute));
-    if (entry.type === "symlink") hash.update(entry.target);
-    hash.update("\0");
-  }
-  return hash.digest("hex");
-}
-
-async function validateInstalledPackage(tree?: any, adapter?: any) : Promise<any> {
-  const packageRoot: any = packageDirectory(tree, adapter.packageName);
-  const manifest: any = await readJson(path.join(packageRoot, "package.json"), null);
-  if (manifest?.name !== adapter.packageName || manifest?.version !== adapter.version) {
-    throw adapterError("CLIENT_ADAPTER_PACKAGE_MISMATCH", "Installed client adapter package identity does not match the trusted coordinate.");
-  }
-  const entrypoint: any = path.resolve(packageRoot, adapter.entrypoint);
-  if (!entrypoint.startsWith(`${path.resolve(packageRoot)}${path.sep}`)) {
-    throw adapterError("CLIENT_ADAPTER_ENTRYPOINT_INVALID", "Client adapter entrypoint escapes its package root.");
-  }
-  const stat: any = await fs.stat(entrypoint).catch(() : any => null);
-  if (!stat?.isFile()) {
-    throw adapterError("CLIENT_ADAPTER_ENTRYPOINT_MISSING", "Client adapter entrypoint is missing.");
-  }
-  return { packageRoot, entrypoint };
-}
-
-async function readVerifiedCache(paths?: any, adapter?: any) : Promise<any> {
-  const metadata: any = await readJson(paths.metadata, null);
-  if (
-    metadata?.schemaVersion !== "v0.0.1:meshrix:client-adapter-cache-1" ||
-    metadata?.target !== adapter.target ||
-    metadata?.coordinate !== adapter.coordinate ||
-    !/^[a-f0-9]{64}$/u.test(String(metadata?.sha256 || ""))
-  ) {
-    return null;
-  }
-  const installed: any = await validateInstalledPackage(paths.tree, adapter).catch(() : any => null);
-  if (!installed) return null;
-  const digest: any = await digestClientAdapterTree(paths.tree).catch(() : any => "");
-  if (digest !== metadata.sha256) return null;
-  return { ...installed, sha256: digest, cacheHit: true };
-}
-
-async function installNpmPackage(adapter?: any, tree?: any) : Promise<any> {
-  if (adapter.integrity) {
-    const viewed: any = await runInstallCommand(process.env.NPM_CLI_PATH || "npm", [
-      "view", adapter.coordinate, "dist.integrity", "--json"
-    ]);
-    let publishedIntegrity: any = "";
+async function findPackageRoot(entrypoint?: any, packageName?: any) : Promise<any> {
+  let current: any = path.dirname(entrypoint);
+  while (true) {
+    let manifest: any;
     try {
-      publishedIntegrity = JSON.parse(String(viewed.stdout || "").trim());
-    } catch {}
-    if (publishedIntegrity !== adapter.integrity) {
-      throw adapterError("CLIENT_ADAPTER_INTEGRITY_MISMATCH", "Client adapter package integrity does not match the trusted release index.");
-    }
-  }
-  await fs.mkdir(tree, { recursive: true, mode: 0o700 });
-  await runInstallCommand(process.env.NPM_CLI_PATH || "npm", [
-    "install",
-    "--ignore-scripts",
-    "--no-audit",
-    "--no-fund",
-    "--omit=dev",
-    "--no-save",
-    "--package-lock=false",
-    "--prefix",
-    tree,
-    adapter.coordinate
-  ]);
-}
-
-function delay(ms?: any) : any {
-  return new Promise((resolve?: any) : any => setTimeout(resolve, ms));
-}
-
-async function acquireCacheLock(paths?: any, adapter?: any) : Promise<any> {
-  const lockPath: any = `${paths.root}.lock`;
-  for (let attempt: any = 0; attempt < 50; attempt += 1) {
-    try {
-      await fs.mkdir(lockPath, { recursive: false, mode: 0o700 });
-      return { lockPath, cached: null };
+      manifest = JSON.parse(await fs.readFile(path.join(current, "package.json"), "utf8"));
     } catch (error: any) {
-      if (error?.code !== "EEXIST") throw error;
-      const cached: any = await readVerifiedCache(paths, adapter);
-      if (cached) return { lockPath: "", cached };
-      await delay(100);
+      if (error?.code !== "ENOENT") {
+        throw adapterError("CLIENT_ADAPTER_PACKAGE_INVALID", "Installed client adapter package metadata is invalid.");
+      }
     }
+    if (manifest?.name === packageName) return current;
+    const parent: any = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
-  throw adapterError("CLIENT_ADAPTER_CACHE_BUSY", "Client adapter cache is busy.");
+  throw adapterError("CLIENT_ADAPTER_PACKAGE_MISMATCH", "Installed client adapter package identity does not match the trusted component.");
 }
 
-export async function acquireClientAdapter({
+function containedPath(root?: any, candidate?: any) : boolean {
+  const relative: any = path.relative(root, candidate);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+/** Resolve one first-party adapter from the current installation using Node's package resolver. */
+export async function resolveInstalledClientAdapter({
   target,
-  cacheRoot = defaultClientAdapterCacheRoot(),
-  installPackage = installNpmPackage
+  resolveModule = import.meta.resolve
 }: Record<string, any> = {}) : Promise<any> {
   const trusted: any = mcpClientAdapterForTarget(target);
   if (!trusted) {
     throw adapterError("CLIENT_ADAPTER_TARGET_UNSUPPORTED", "Client adapter target is not trusted by this connector release.");
   }
-  const adapter: Record<string, any> = { ...trusted, target };
-  const paths: any = cachePaths(cacheRoot, target, adapter.version);
-  const cached: any = await readVerifiedCache(paths, adapter);
-  if (cached) return { ...cached, adapter };
 
-  await fs.mkdir(path.dirname(paths.root), { recursive: true, mode: 0o700 });
-  const lock: any = await acquireCacheLock(paths, adapter);
-  if (lock.cached) return { ...lock.cached, adapter };
-  const cachedAfterLock: any = await readVerifiedCache(paths, adapter);
-  if (cachedAfterLock) {
-    await fs.rm(lock.lockPath, { recursive: true, force: true });
-    return { ...cachedAfterLock, adapter };
-  }
-
-  const stagingRoot: any = `${paths.root}.staging-${process.pid}-${randomUUID()}`;
-  const stagingTree: any = path.join(stagingRoot, "tree");
+  let resolvedUrl: any;
   try {
-    await installPackage(adapter, stagingTree);
-    const installed: any = await validateInstalledPackage(stagingTree, adapter);
-    const sha256: any = await digestClientAdapterTree(stagingTree);
-    await writeJson(path.join(stagingRoot, "cache.json"), {
-      schemaVersion: "v0.0.1:meshrix:client-adapter-cache-1",
-      target,
-      coordinate: adapter.coordinate,
-      sha256
-    });
-    await fs.rm(paths.root, { recursive: true, force: true });
-    await fs.rename(stagingRoot, paths.root);
-    return {
-      packageRoot: installed.packageRoot.replace(stagingTree, paths.tree),
-      entrypoint: installed.entrypoint.replace(stagingTree, paths.tree),
-      sha256,
-      cacheHit: false,
-      adapter
-    };
-  } catch (error: any) {
-    await fs.rm(stagingRoot, { recursive: true, force: true }).catch(() : any => {});
-    throw error;
-  } finally {
-    await fs.rm(lock.lockPath, { recursive: true, force: true }).catch(() : any => {});
+    resolvedUrl = resolveModule(`${trusted.packageName}/${trusted.entrypoint}`);
+  } catch {
+    throw adapterError("CLIENT_ADAPTER_PACKAGE_MISSING", "The requested first-party client adapter is not present in this installation.");
   }
+  if (typeof resolvedUrl !== "string" || !resolvedUrl.startsWith("file:")) {
+    throw adapterError("CLIENT_ADAPTER_ENTRYPOINT_INVALID", "Installed client adapter entrypoint did not resolve to a local file.");
+  }
+
+  let entrypoint: any;
+  let packageRoot: any;
+  try {
+    entrypoint = await fs.realpath(fileURLToPath(resolvedUrl));
+    const resolvedPackageRoot: any = await findPackageRoot(entrypoint, trusted.packageName);
+    packageRoot = await fs.realpath(resolvedPackageRoot);
+  } catch (error: any) {
+    if (error?.code?.startsWith("CLIENT_ADAPTER_")) throw error;
+    throw adapterError("CLIENT_ADAPTER_ENTRYPOINT_MISSING", "Installed client adapter entrypoint is unavailable.");
+  }
+
+  if (!containedPath(packageRoot, entrypoint)) {
+    throw adapterError("CLIENT_ADAPTER_ENTRYPOINT_INVALID", "Client adapter entrypoint escapes its installed package root.");
+  }
+  const manifest: any = JSON.parse(await fs.readFile(path.join(packageRoot, "package.json"), "utf8"));
+  if (manifest?.name !== trusted.packageName || manifest?.version !== trusted.version) {
+    throw adapterError("CLIENT_ADAPTER_PACKAGE_MISMATCH", "Installed client adapter package version does not match the root release.");
+  }
+  const stat: any = await fs.stat(entrypoint).catch(() : any => null);
+  if (!stat?.isFile()) {
+    throw adapterError("CLIENT_ADAPTER_ENTRYPOINT_MISSING", "Installed client adapter entrypoint is unavailable.");
+  }
+
+  return {
+    packageRoot,
+    entrypoint,
+    adapter: { ...trusted, target }
+  };
 }
 
 function assertSecretFreeRequest(value?: any, pathParts: any = []) : any {
@@ -269,8 +143,7 @@ export async function runClientAdapter({
   target,
   action,
   request = {},
-  cacheRoot = defaultClientAdapterCacheRoot(),
-  installPackage
+  resolveModule
 }: Record<string, any> = {}) : Promise<any> {
   if (!CLIENT_ADAPTER_ACTIONS.has(action)) {
     throw adapterError("CLIENT_ADAPTER_ACTION_INVALID", "Client adapter action is invalid.");
@@ -281,8 +154,8 @@ export async function runClientAdapter({
   if (Buffer.byteLength(input) > CLIENT_ADAPTER_MAX_MESSAGE_BYTES) {
     throw adapterError("CLIENT_ADAPTER_REQUEST_TOO_LARGE", "Client adapter request exceeded the protocol limit.");
   }
-  const acquired: any = await acquireClientAdapter({ target, cacheRoot, installPackage });
-  const executed: any = await runWithInput(process.execPath, [acquired.entrypoint, action], input, {
+  const installed: any = await resolveInstalledClientAdapter({ target, resolveModule });
+  const executed: any = await runWithInput(process.execPath, [installed.entrypoint, action], input, {
     allowFailure: true,
     cleanEnv: true,
     timeoutMs: INSTALL_COMMAND_TIMEOUT_MS
@@ -292,8 +165,7 @@ export async function runClientAdapter({
   }
   return {
     result: parseAdapterResponse(executed.stdout),
-    cache: { hit: acquired.cacheHit, sha256: acquired.sha256 },
-    adapter: acquired.adapter
+    adapter: installed.adapter
   };
 }
 

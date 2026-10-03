@@ -19,7 +19,7 @@ const client: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn(),
 }));
 const pageRefreshHandler: any = vi.hoisted(() : any => vi.fn());
@@ -446,7 +446,11 @@ describe("PublishServiceForm preserved behaviors", () : any => {
     expect(descriptors.find(".operation-descriptor-summary").text()).toContain("GET /items");
     expect(descriptors.find(".operation-descriptor-summary").text()).toContain("maxBytes 1024");
     expect(descriptors.find("pre").text()).toContain('"maxBytes": 1024');
-    expect(wrapper.findAllComponents({ name: "JsonConfigFileEditor" })).toHaveLength(7);
+    const editors = wrapper.findAllComponents({ name: "JsonConfigFileEditor" });
+    expect(editors.map((editor) => editor.props("title")).sort()).toEqual([
+      "approvalPolicy", "audience", "circuitBreaker", "interfaceSchemas",
+      "mcp", "permissions", "tagPolicy", "trafficPolicy"
+    ]);
     expect(tabClasses(wrapper, "Advanced JSON")).not.toContain("meshrix-tab--draft");
     expect(wrapper.findAll(".console-form-field-error")).toHaveLength(0);
   });

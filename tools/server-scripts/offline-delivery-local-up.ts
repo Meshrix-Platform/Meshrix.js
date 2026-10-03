@@ -13,9 +13,9 @@ import {
   isRecord,
 } from "./offline-delivery-shared.ts";
 import {
-  loadEnterpriseOfflineBundle,
-  verifyEnterpriseOfflineBundle,
-} from "./enterprise-single-node-offline-bundle.ts";
+  loadSingleNodeOfflineBundle,
+  verifySingleNodeOfflineBundle,
+} from "./single-node-offline-bundle.ts";
 import {
   OFFLINE_VM_DEFAULT_HOST_PORT,
   OFFLINE_VM_LOADED_IMAGE,
@@ -147,9 +147,9 @@ async function validCachedBundle({
   const trustedPublicKeys: any = await readJson(trustPath);
   if (!isRecord(trustedPublicKeys)) return null;
   try {
-    const bundle: any = await loadEnterpriseOfflineBundle(bundleRoot);
+    const bundle: any = await loadSingleNodeOfflineBundle(bundleRoot);
     if (bundle.authorities?.source_candidate?.source_revision !== sourceRevision) return null;
-    await verifyEnterpriseOfflineBundle({
+    await verifySingleNodeOfflineBundle({
       bundleRoot,
       trustedPublicKeys,
       replayGuard: createOneShotReplayGuard(),

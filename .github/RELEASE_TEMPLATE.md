@@ -3,8 +3,9 @@
 This release was assembled by the canonical tag workflow after the Functional
 Release Gate, the required Node.js 22 clean install/start probe, and actionable
 high-severity scans of both container artifacts completed successfully.
-Real-machine qualification remains remaining required work after this release;
-absence or failure does not block this release.
+Runtime support is limited to exact artifact and environment pairs with a
+matching verification receipt. This release makes no support claim for an
+unqualified environment.
 
 ## Changes
 
@@ -28,17 +29,19 @@ docker run -d \
 
 ### npm (Framework Integration)
 
-The canonical tag workflow performs a credential-free preflight of the complete
-npm release set before any remote container mutation, repeats that preflight
-before the first npm mutation, then publishes or reverifies integrity, registry
-signatures, provenance, and monotonic release tags. It installs the published
-set without lifecycle scripts and completes `npm audit signatures` before the
-GitHub Release is exposed. Install the framework package at the exact release
-version:
+The release workflow publishes exactly `meshrix.js` and `@meshrix/gateway` to
+the public npm registry and records the resulting verification evidence.
+`meshrix.js` includes the platform runtime and its private first-party
+components; `@meshrix/gateway` is the separately embeddable Gateway API. Install
+the framework package at this exact release version:
 
 ```bash
 npm install --save-exact meshrix.js@<VERSION>
 ```
+
+The `meshrix-mcp` command ships in that same root package. No separate
+connector npm package is published. Generated `npx` commands select
+`meshrix.js@<VERSION>` and `meshrix-mcp` explicitly.
 
 ### MCP Connector (Agent Integration)
 
@@ -71,8 +74,8 @@ cd "${asset%.tar.gz}"
 
 | Asset | Description |
 | --- | --- |
-| `meshrix-mcp-connector-<VERSION>-macos-arm64.tar.gz` | MCP Connector for macOS Apple Silicon |
-| `meshrix-mcp-connector-<VERSION>-macos-arm64.zip` | MCP Connector for macOS Apple Silicon (zip) |
+| `meshrix-mcp-connector-<VERSION>-macos-arm64.tar.gz` | Offline portable MCP component for macOS Apple Silicon |
+| `meshrix-mcp-connector-<VERSION>-macos-arm64.zip` | Offline portable MCP component for macOS Apple Silicon (zip) |
 | `meshrix-mcp-install.sh` | Bootstrap installer script |
 | `meshrix-mcp-uninstall.sh` | Uninstaller script |
 | `meshrix-mcp-release.json` | Release manifest |
@@ -85,11 +88,11 @@ cd "${asset%.tar.gz}"
 
 | Surface | Target | Release status |
 | --- | --- | --- |
-| npm packages | Internal `@meshrix/*` workspaces, `meshrix-mcp-connector`, and `meshrix.js` | Published only to the configured private registry. |
+| npm products | `meshrix.js` and `@meshrix/gateway` | Published to the public npm registry for this version; private first-party runtime modules are included only in the product that owns them. |
 | Server and Web Console container | Linux amd64 and arm64 | Published as the signed multi-platform container after pinned Trivy scans and per-platform provenance/SBOM validation. Native runtime support is claimed only by a matching optional real-machine receipt. |
 | MCP Connector | macOS arm64 | Published as a functionally accepted artifact. Native runtime support is claimed only after the exact final archive passes the macOS arm64 Real-Machine Verification Workflow. |
 | MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Build support may remain in source; each runtime support claim requires its own optional real-machine receipt. |
-| Pactium substrate | `pactium@0.5.0`, `pactium.v0.2`, `pactium.v0.2.schema.latest` | Exact runtime dependency for this release. |
+| Pactium substrate | `pactium@0.8.1` | Runtime dependency pinned by the release package manifests and lockfile. |
 
 ## Uninstall
 
@@ -100,8 +103,10 @@ cd "meshrix-mcp-connector-<VERSION>-<PLATFORM>"
 
 ## Supported Agents
 
-Client adapters are explicit operator-supplied artifacts. They are not
-discovered from another source repository and are not part of this release.
+First-party client-adapter components are included in `meshrix.js` and run only
+when an operator explicitly selects a target action. They are private runtime
+components rather than separate npm products; governed Plugin and Service
+assets retain their independent installation and activation boundaries.
 
 ---
 

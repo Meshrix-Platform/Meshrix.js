@@ -45,6 +45,40 @@ describe("bounded observability primitives", () : any => {
     expect(sanitizeSensitiveReport({ path: "/tmp/private" })).toEqual({ path: "[redacted-path]" });
   });
 
+  it("redacts credential fields without erasing authorization command identities", () : any => {
+    const report: any = sanitizeSensitiveReport({
+      commandId: "authorization-enforcement",
+      producers: {
+        "authorization-enforcement": {
+          id: "authorization-enforcement",
+          script: "tools/server-scripts/verify-authorization-enforcement.ts"
+        }
+      },
+      credentials: {
+        authorization: "Bearer synthetic",
+        accessToken: "synthetic-access-token",
+        upstreamSecret: "synthetic-upstream-secret",
+        apiKey: "synthetic-api-key",
+        privateKeyJwk: { k: "synthetic-private-key" }
+      },
+      tokenCount: 2
+    });
+
+    expect(report.commandId).toBe("authorization-enforcement");
+    expect(report.producers["authorization-enforcement"]).toEqual({
+      id: "authorization-enforcement",
+      script: "tools/server-scripts/verify-authorization-enforcement.ts"
+    });
+    expect(report.credentials).toEqual({
+      authorization: "[redacted]",
+      accessToken: "[redacted]",
+      upstreamSecret: "[redacted]",
+      apiKey: "[redacted]",
+      privateKeyJwk: "[redacted]"
+    });
+    expect(report.tokenCount).toBe(2);
+  });
+
   it("rejects invalid report ownership before atomically publishing a finalized report", async () : Promise<any> => {
     const directory: any = await fs.mkdtemp(path.join(os.tmpdir(), "observability-report-finalizer-"));
     const filePath: any = path.join(directory, "report.json");

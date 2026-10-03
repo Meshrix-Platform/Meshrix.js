@@ -224,6 +224,123 @@ describe("Outbound egress policy", () : any => {
     }
   });
 
+  it("creates the response-timeout dispatcher for both hostname and literal-address fetches", async () : Promise<any> => {
+    const requests: any[] = [];
+    const fetchImpl: any = vi.fn(async (_url?: any, init?: any) : Promise<any> => {
+      requests.push(init);
+      return new Response("ok", { status: 200 });
+    });
+    const responseTimeouts = { headersTimeout: 0, bodyTimeout: 0 };
+    const hostnameFetch = await fetchWithPinnedDns({
+      url: "https://service.example.test/mcp",
+      lookup: async () : Promise<any> => [{ address: "203.0.113.10", family: 4 }],
+      fetchImpl,
+      responseTimeouts
+    });
+    const literalFetch = await fetchWithPinnedDns({
+      url: "http://127.0.0.1:43123/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      fetchImpl,
+      responseTimeouts
+    });
+
+    try {
+      expect(requests).toHaveLength(2);
+      expect(requests[0].dispatcher).toBeDefined();
+      expect(requests[1].dispatcher).toBeDefined();
+      expect(hostnameFetch.pinnedDns).toMatchObject({ host: "service.example.test", address: "203.0.113.10" });
+      expect(literalFetch.pinnedDns).toBeNull();
+    } finally {
+      await hostnameFetch.close();
+      await literalFetch.close();
+    }
+  });
+
+  it("runs request-scoped admission after DNS and immediately before the pinned fetch", async () : Promise<any> => {
+    const order: string[] = [];
+    const lookup = vi.fn(async () : Promise<any> => {
+      order.push("dns");
+      return [{ address: "203.0.113.10", family: 4 }];
+    });
+    const fetchImpl = vi.fn(async () : Promise<any> => {
+      order.push("fetch");
+      return new Response("ok", { status: 200 });
+    });
+    let result: any = null;
+    try {
+      result = await fetchWithPinnedDns({
+        url: "https://mcp.example.test/tools/call",
+        lookup,
+        fetchImpl,
+        async beforeFetch() {
+          order.push("admission");
+        }
+      });
+      expect(result.response.status).toBe(200);
+      expect(order).toEqual(["dns", "admission", "fetch"]);
+    } finally {
+      await result?.close?.();
+    }
+  });
+
+  it("observes authority revoked while DNS resolution is held before pinned fetch", async () : Promise<any> => {
+    const order: string[] = [];
+    let releaseDns!: () => void;
+    let authorityAllowed = true;
+    const dnsGate = new Promise<void>((resolve) => { releaseDns = resolve; });
+    let resolveDnsStarted!: () => void;
+    const dnsStarted = new Promise<void>((resolve) => { resolveDnsStarted = resolve; });
+    const lookup = vi.fn(async () : Promise<any> => {
+      order.push("dns-start");
+      resolveDnsStarted();
+      await dnsGate;
+      order.push("dns-complete");
+      return [{ address: "203.0.113.10", family: 4 }];
+    });
+    const fetchImpl = vi.fn(async () : Promise<any> => {
+      order.push("fetch");
+      return new Response("unexpected", { status: 200 });
+    });
+    const pending = fetchWithPinnedDns({
+      url: "https://mcp.example.test/tools/call",
+      lookup,
+      fetchImpl,
+      async beforeFetch() {
+        order.push(`admission:${authorityAllowed ? "allowed" : "revoked"}`);
+        if (!authorityAllowed) {
+          throw Object.assign(new Error("authority revoked during DNS resolution"), { code: "final_admission_rejected" });
+        }
+      }
+    });
+    await dnsStarted;
+    authorityAllowed = false;
+    releaseDns();
+
+    await expect(pending).rejects.toMatchObject({ code: "final_admission_rejected" });
+    expect(order).toEqual(["dns-start", "dns-complete", "admission:revoked"]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fetch when request-scoped admission rejects", async () : Promise<any> => {
+    const order: string[] = [];
+    const fetchImpl = vi.fn(async () : Promise<any> => {
+      order.push("fetch");
+      return new Response("unexpected", { status: 200 });
+    });
+    await expect(fetchWithPinnedDns({
+      url: "https://mcp.example.test/tools/call",
+      lookup: async () : Promise<any> => [{ address: "203.0.113.10", family: 4 }],
+      fetchImpl,
+      async beforeFetch() {
+        order.push("admission");
+        throw Object.assign(new Error("final admission rejected"), { code: "final_admission_rejected" });
+      }
+    })).rejects.toMatchObject({ code: "final_admission_rejected" });
+    expect(order).toEqual(["admission"]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("validates redirect Location decisions without following the redirect", async () : Promise<any> => {
     const literalDecision: any = await evaluateOutboundRedirectLocationWithDns({
       sourceUrl: "https://203.0.113.10:443/start",

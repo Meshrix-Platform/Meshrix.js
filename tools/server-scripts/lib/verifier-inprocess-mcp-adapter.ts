@@ -1,5 +1,5 @@
 import { executeConsoleDomainOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
-import { handleMeshrixMcpHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+import { createPlatformMcpGateway } from "../../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 export function stableJson(value?: any) : any {
@@ -16,30 +16,36 @@ export function requiredArray(schema: Record<string, any> = {}) : any {
 }
 
 export async function callDownstreamMcp({ body, provider, upstreamGatewayRegistry, token }: Record<string, any>) : Promise<any> {
-  const response: any = createMemoryResponse();
   const wire: any = mcpModernHttpRequest(body, {
     authorization: `Bearer ${token || "gateway-verifier"}`
   });
-  const handled: any = await handleMeshrixMcpHttpRequest({
-    request: {
-      headers: wire.headers,
-      socket: { remoteAddress: "127.0.0.1" },
-      __meshrixRequestId: "gateway-verifier"
-    },
-    response,
-    requestBody: Buffer.from(wire.body, "utf8"),
-    method: "POST",
-    url: new URL("/mcp", "http://127.0.0.1"),
+  const platform = createPlatformMcpGateway({
     toolSkillManagementProvider: provider,
-    upstreamGatewayRegistry,
-    listenUrl: "http://127.0.0.1:7331",
-    discoveryState: null
+    upstreamGatewayRegistry
   });
-  return {
-    handled,
-    statusCode: response.statusCode,
-    payload: response.body ? JSON.parse(response.body) : null
-  };
+  await platform.gateway.start();
+  try {
+    const handled: any = await platform.adapter.handle({
+      method: "POST",
+      headers: wire.headers,
+      body: wire.message,
+      rawRequest: {
+        method: "POST",
+        headers: wire.headers,
+        socket: { remoteAddress: "127.0.0.1" },
+        __meshrixRequestId: "gateway-verifier"
+      },
+      requestBody: Buffer.from(wire.body, "utf8"),
+      url: new URL("/mcp", "http://127.0.0.1")
+    } as any);
+    return {
+      handled,
+      statusCode: handled.status,
+      payload: handled.body || null
+    };
+  } finally {
+    await platform.close();
+  }
 }
 
 export function createVerifierSecurityPermissions() : any {
@@ -98,22 +104,6 @@ export function createVerifierUpstreamGatewayOperationHandler({ userDataPath, up
       }
     });
     sendJson(response, operationResult.status || 500, operationResult.payload || {});
-  };
-}
-
-function createMemoryResponse() : any {
-  return {
-    statusCode: 200,
-    headers: {},
-    body: "",
-    writeHead(statusCode?: any, headers: Record<string, any> = {}) : any {
-      this.statusCode = statusCode;
-      this.headers = { ...this.headers, ...headers };
-    },
-    end(chunk: any = "") : any {
-      this.body = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk || "");
-      this.ended = true;
-    }
   };
 }
 

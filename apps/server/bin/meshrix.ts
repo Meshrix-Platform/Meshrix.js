@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-import { DEFAULT_SERVER_PORT } from "../../../packages/foundation/src/config/server-env.ts";
+import { DEFAULT_SERVER_PORT } from "@meshrix/foundation/config/server-env";
 import { runNamedRpc, runRpc, runServerRpcCall, runToolsCommand } from "./lib/meshrix-cli-rpc-tools.ts";
 import { runSecretCommand } from "./lib/meshrix-cli-secrets.ts";
 import { runSecurityCommand } from "./lib/meshrix-cli-security.ts";
 import { runUpload } from "./lib/meshrix-cli-upload.ts";
+import { runGatewayCommand } from "./lib/meshrix-cli-gateway.ts";
+import { runStorageCommand } from "./lib/meshrix-cli-storage.ts";
 
 function parseArgs(argv?: any) : any {
   const args: Record<string, any> = {
@@ -73,6 +75,7 @@ function usage() : any {
     "  meshrix security binding-guard status [--binding-backend local-file] [--binding-alias meshrix-tool-bindings]",
     "  meshrix security recovery export --output recovery.json --passphrase-stdin",
     "  meshrix security recovery import --input recovery.json --passphrase-stdin",
+    "  meshrix storage restore --data-dir PATH --backup-id ID [--apply --confirm]",
     "  meshrix tools catalog|toolsets|toolsets resolve|execute|dry-run|audit|metrics ...",
     "  meshrix tools metrics [--tool-id ID] [--grant-id ID] [--profile-id ID] [--route PATH] [--transport mcp|http|operation-permission] [--bucket-seconds N]",
     "  meshrix tools metrics export [--kind all|tool|request] [--grant-id ID] [--profile-id ID] [--output metrics.json]",
@@ -82,6 +85,7 @@ function usage() : any {
     "  meshrix tools metrics prune --confirm --body prune.json",
     "  meshrix tools grants list|create|rotate|revoke ...",
     "  meshrix tools policy preview --body preview.json",
+    "  meshrix gateway-only --dry-run|--health",
     "",
     "Global options:",
     "  --data-dir PATH         Directory for offline data resolution",
@@ -128,6 +132,14 @@ async function main() : Promise<any> {
   const args: any = parseArgs(process.argv.slice(2));
   if (args.help || args.h) {
     console.log(usage());
+    return;
+  }
+
+  if (await runGatewayCommand(args)) {
+    return;
+  }
+
+  if (await runStorageCommand(args)) {
     return;
   }
 

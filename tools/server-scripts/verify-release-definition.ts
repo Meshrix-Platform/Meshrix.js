@@ -7,10 +7,16 @@ import { fileURLToPath } from "node:url";
 import {
   verifyReleaseAcceptanceStandards,
 } from "./verify-release-acceptance-standards.ts";
-import { resolveReleaseWorkspaceDirectories } from "./publish-release-set.ts";
+import {
+  loadReleaseDefinition,
+  resolveReleaseWorkspaceDirectories
+} from "./lib/release-metadata.ts";
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const definitionPath: any = "tools/registry/release-definition.registry.json";
 const semverPattern: any =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const upstreamCandidateArtifacts: readonly any[] = Object.freeze([
@@ -31,11 +37,6 @@ const upstreamCandidateArtifacts: readonly any[] = Object.freeze([
   "build/reports/upstream-service-publishing/screenshots/console-downstream-mcp-call.png"
 ]);
 
-export async function loadReleaseDefinition(rootDir: any = repoRoot) : Promise<any> {
-  const text: any = await fs.readFile(path.join(rootDir, definitionPath), "utf8");
-  return JSON.parse(text);
-}
-
 function fail(code?: any, detail?: any) : any {
   const error: Error & Record<string, any> = new Error(detail);
   error.code = code;
@@ -50,6 +51,21 @@ export async function verifyReleaseDefinition({
   const version: any = String(definition?.release?.version || "");
   const tag: any = String(definition?.release?.tag || "");
   const channel: any = String(definition?.release?.channel || "");
+  const npmCliVersion: any = String(definition?.github?.npmCliVersion || "");
+  const npmCliMatch: any = /^(\d+)\.(\d+)\.(\d+)$/u.exec(npmCliVersion);
+  if (!npmCliMatch) {
+    fail("release_definition_npm_cli_version_invalid", "The release workflow requires an exact npm CLI version.");
+  }
+  const npmCliCoordinates: number[] = npmCliMatch.slice(1).map(Number);
+  const npmCliMinimum = [11, 21, 0];
+  const npmCliSupported = npmCliCoordinates.some((part, index) => {
+    if (part === npmCliMinimum[index]) return false;
+    return part > npmCliMinimum[index] && npmCliCoordinates.slice(0, index)
+      .every((previous, previousIndex) => previous === npmCliMinimum[previousIndex]);
+  }) || npmCliCoordinates.every((part, index) => part === npmCliMinimum[index]);
+  if (!npmCliSupported) {
+    fail("release_definition_npm_cli_version_unsupported", "The release workflow requires npm 11.21.0 or newer.");
+  }
   if (!semverPattern.test(version) || tag !== `v${version}`) {
     fail("release_definition_coordinates_invalid", "Release version and tag do not agree.");
   }
@@ -61,14 +77,16 @@ export async function verifyReleaseDefinition({
   }
 
   const rootPackage: any = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
+  if (rootPackage.name !== MCP_NPM_PACKAGE_NAME || rootPackage.version !== MCP_NPM_PACKAGE_VERSION) {
+    fail("release_definition_mcp_package_identity_mismatch", "MCP executable identity must match the root npm package.");
+  }
   const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({
     rootDir,
     workspaces: rootPackage.workspaces
   });
   const expectedManifests: any[] = [
     "package.json",
-    ...workspaceDirectories.map((workspace?: any) : any => `${workspace}/package.json`),
-    "packages/protocols/mcp/adapter/gateway-installer/package.json"
+    ...workspaceDirectories.map((workspace?: any) : any => `${workspace}/package.json`)
   ];
   if (JSON.stringify(definition.packages.manifests) !== JSON.stringify(expectedManifests)) {
     fail("release_definition_manifest_set_mismatch", "Release manifest set is not the workspace release set.");
@@ -96,41 +114,28 @@ export async function verifyReleaseDefinition({
   } catch {
     fail("release_definition_plan_changelog_missing", "Release plan changelog is missing.");
   }
-  const platforms: any = definition?.container?.platforms;
-  if (JSON.stringify(platforms) !== JSON.stringify(["linux/amd64", "linux/arm64"])) {
-    fail("release_definition_platforms_invalid", "The release requires amd64 and arm64 image artifacts.");
+  if (
+    definition?.container?.target !== "runtime-ui" ||
+    definition?.container?.requiredForRelease !== false
+  ) {
+    fail("release_definition_container_scope_invalid", "Container deployment remains an optional release scope.");
   }
   if (
-    definition?.acceptance?.profile !== "enterprise-single-node" ||
+    definition?.acceptance?.profile !== "single-node" ||
     definition?.acceptance?.commandId !== "platform-acceptance" ||
     definition?.acceptance?.stableRequiredClaim !== "functional-complete" ||
-    definition?.acceptance?.releaseRequiredClaim !== "release-deployment-verified" ||
+    definition?.acceptance?.releaseRequiredClaim !== "npm-package-installability-passed" ||
     definition?.acceptance?.standardsRegistry !==
       "tools/registry/release-acceptance-standards.registry.json"
   ) {
     fail(
       "release_definition_acceptance_standard_invalid",
-      "The release definition must bind enterprise-single-node to the canonical platform-acceptance functional-complete claim.",
+      "The release definition must bind single-node to the canonical platform-acceptance functional-complete claim.",
     );
   }
-  if (
-    definition?.acceptance?.deployment?.claim !== "release-deployment-verified" ||
-    definition?.acceptance?.deployment?.requiredForRelease !== true ||
-    definition?.acceptance?.deployment?.requiresClaim !== "functional-complete" ||
-    definition?.acceptance?.deployment?.command !==
-      "npm run server:verify:release-deployment" ||
-    definition?.acceptance?.deployment?.controller !==
-      "tools/server-scripts/verify-release-deployment.ts" ||
-    definition?.acceptance?.deployment?.workflow !==
-      ".github/workflows/release-branch.yml" ||
-    definition?.acceptance?.deployment?.runner !== "ubuntu-24.04" ||
-    definition?.acceptance?.deployment?.receipt !==
-      "build/reports/release-deployment.json"
-  ) {
-    fail(
-      "release_definition_deployment_standard_invalid",
-      "The release definition must bind the mandatory external runtime-ui release-deployment claim.",
-    );
+  if (definition?.localVerification?.engine !== "automatic-local" ||
+    definition?.localVerification?.evidenceAuthority !== "local-only") {
+    fail("release_definition_local_verification_invalid", "Local release verification must use the automatic project entry.");
   }
   if (
     definition?.prepublication?.requiredClaim !==
@@ -189,10 +194,11 @@ async function main() : Promise<any> {
       version: definition.release.version,
       tag: definition.release.tag,
       channel: definition.release.channel,
-      platformCount: definition.container.platforms.length,
+      containerTarget: definition.container.target,
       prepublicationClaim: definition.prepublication.requiredClaim,
       stableClaim: definition.acceptance.stableRequiredClaim,
-      releaseClaim: definition.acceptance.releaseRequiredClaim
+      releaseClaim: definition.acceptance.releaseRequiredClaim,
+      npmCliVersion: definition.github.npmCliVersion
     })}\n`);
   }
 }

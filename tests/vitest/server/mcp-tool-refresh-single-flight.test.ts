@@ -2,15 +2,92 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createServer } from "node:http";
 
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function delay(ms?: any) : any {
   return new Promise((resolve?: any) : any => setTimeout(resolve, ms));
 }
 
 describe("MCP tool refresh single-flight", () : any => {
+  it("shares a modern HTTP refresh while a canceled caller leaves another waiter active", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-modern-refresh-flight-"));
+    const requests: string[] = [];
+    let releaseDiscovery!: () => void;
+    const discoveryGate = new Promise<void>((resolve) => { releaseDiscovery = resolve; });
+    let startDiscovery!: () => void;
+    const discoveryStarted = new Promise<void>((resolve) => { startDiscovery = resolve; });
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const wire = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      requests.push(wire.method);
+      if (wire.method === "server/discover") {
+        startDiscovery();
+        await discoveryGate;
+        if (response.destroyed) return;
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: wire.id,
+          result: { resultType: "complete", supportedVersions: ["2026-07-28"] }
+        }));
+        return;
+      }
+      if (wire.method === "tools/list") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: wire.id,
+          result: { resultType: "complete", tools: [{ name: "records.list", inputSchema: { type: "object" } }] }
+        }));
+        return;
+      }
+      response.writeHead(404).end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Synthetic modern MCP peer did not bind.");
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath: root });
+
+    try {
+      await installUpstreamRuntimeServices(registry, [{
+        serviceId: "modern-flight-service",
+        serviceProtocol: "mcp",
+        allowLocalNetwork: true,
+        mcp: {
+          transport: "http",
+          url: `http://127.0.0.1:${address.port}/mcp`,
+          protocolVersion: "2026-07-28",
+          toolsCacheTtlMs: 60_000
+        }
+      }]);
+      const creator = new AbortController();
+      const follower = new AbortController();
+      const first = registry.listMcpTools({ serviceId: "modern-flight-service" }, { signal: creator.signal });
+      await discoveryStarted;
+      const second = registry.listMcpTools({ serviceId: "modern-flight-service" }, { signal: follower.signal });
+
+      creator.abort();
+      await expect(first).rejects.toMatchObject({ reasonCode: "upstream_mcp_cancelled" });
+      releaseDiscovery();
+
+      const listed = await second;
+      expect(listed.items).toEqual([
+        expect.objectContaining({ name: "upstream.modern-flight-service.records.list" })
+      ]);
+      expect(requests).toEqual(["server/discover", "tools/list"]);
+    } finally {
+      releaseDiscovery();
+      await registry.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("keeps a shared refresh independent of cancelling creator and follower waiters", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-refresh-flight-"));
     let listStarted: any;
@@ -36,7 +113,7 @@ describe("MCP tool refresh single-flight", () : any => {
         tools: [{ name: "records.list", inputSchema: { type: "object" } }]
       };
     };
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: {
         listTools,

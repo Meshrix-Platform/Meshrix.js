@@ -1,18 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import { compileClosedJsonSchema } from "../../../packages/foundation/src/security/closed-json-schema.ts";
-import { compileMcpToolJsonSchema } from "../../../packages/agents/src/upstream-gateway/mcp-tool-schema.ts";
+import { compileExternalSchema } from "@meshrix/gateway/schema";
 import { publicUpstreamMcpTool } from "../../../packages/agents/src/upstream-gateway/tool-projection.ts";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
+import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createPlatformMcpGateway } from "../../../packages/server-runtime/src/composition/gateway-composition.ts";
+import { modernHttpRequest } from "../gateway/support.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("MCP tool JSON Schema adapter", () : any => {
   it("preserves $ref target and sibling constraints", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       properties: {
         name: {
@@ -25,18 +29,13 @@ describe("MCP tool JSON Schema adapter", () : any => {
         s: { type: "string" }
       }
     });
-    expect(compiled.schema.properties.name).toMatchObject({
-      allOf: [
-        { type: "string" },
-        { minLength: 5, description: "display name" }
-      ]
-    });
-    expect(compiled.validate({ name: "abcd" }).ok).toBe(false);
-    expect(compiled.validate({ name: "abcde" }).ok).toBe(true);
+    expect(compiled.schema.properties.name).toMatchObject({ $ref: "#/$defs/s", minLength: 5, description: "display name" });
+    expect(compiled.validate({ name: "abcd" })).toBe(false);
+    expect(compiled.validate({ name: "abcde" })).toBe(true);
   });
 
   it("keeps exact JSON Pointer escaping for names that contain slash or tilde", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       properties: {
         slash: { $ref: "#/$defs/foo~1bar" },
@@ -47,12 +46,12 @@ describe("MCP tool JSON Schema adapter", () : any => {
         "a~b": { type: "string", const: "tilde" }
       }
     });
-    expect(compiled.validate({ slash: "slash", tilde: "tilde" }).ok).toBe(true);
-    expect(compiled.validate({ slash: "no", tilde: "tilde" }).ok).toBe(false);
+    expect(compiled.validate({ slash: "slash", tilde: "tilde" })).toBe(true);
+    expect(compiled.validate({ slash: "no", tilde: "tilde" })).toBe(false);
   });
 
   it("accepts null against a nullable $ref when minLength only applies to strings", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       properties: {
         value: {
@@ -64,13 +63,13 @@ describe("MCP tool JSON Schema adapter", () : any => {
         value: { type: ["string", "null"] }
       }
     });
-    expect(compiled.validate({ value: null }).ok).toBe(true);
-    expect(compiled.validate({ value: "ab" }).ok).toBe(false);
-    expect(compiled.validate({ value: "abc" }).ok).toBe(true);
+    expect(compiled.validate({ value: null })).toBe(true);
+    expect(compiled.validate({ value: "ab" })).toBe(false);
+    expect(compiled.validate({ value: "abc" })).toBe(true);
   });
 
   it("keeps ordinary annotation keywords and nested local JSON Pointers", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       properties: {
         value: {
@@ -89,49 +88,38 @@ describe("MCP tool JSON Schema adapter", () : any => {
         }
       }
     });
-    expect(compiled.schema.properties.value).toMatchObject({
-      allOf: [
-        { type: "string", minLength: 1 },
-        { examples: ["abc"], deprecated: false, readOnly: true }
-      ]
-    });
-    expect(compiled.validate({ value: "a" }).ok).toBe(true);
+    expect(compiled.schema.properties.value).toMatchObject({ $ref: "#/$defs/container/properties/value", examples: ["abc"], deprecated: false, readOnly: true });
+    expect(compiled.validate({ value: "a" })).toBe(true);
   });
 
   it("rejects draft-07 instead of applying 2020-12 $ref-sibling semantics under that dialect", () : any => {
-    expect(() : any => compileMcpToolJsonSchema({
+    expect(() : any => compileExternalSchema({
       $schema: "http://json-schema.org/draft-07/schema#",
       type: "object"
-    })).toThrow(/unsupported JSON Schema dialect/);
+    })).toThrow(/Only JSON Schema 2020-12 is supported/);
   });
 
   it("fails closed on an unsupported explicit dialect", () : any => {
-    expect(() : any => compileMcpToolJsonSchema({
+    expect(() : any => compileExternalSchema({
       $schema: "https://json-schema.org/draft/2012-01/schema",
       type: "object"
-    })).toThrow(/unsupported JSON Schema dialect/);
+    })).toThrow(/Only JSON Schema 2020-12 is supported/);
   });
 
   it("keeps object-root input schemas and preserves array output schemas", () : any => {
-    expect(() : any => compileMcpToolJsonSchema({
+    const output: any = compileExternalSchema({
       type: "array",
       items: { type: "string" }
-    })).toThrow(/object root/);
-    const output: any = compileMcpToolJsonSchema({
-      type: "array",
-      items: { type: "string" }
-    }, {
-      label: "Upstream MCP tool output schema",
-      requireTopLevelObject: false
     });
     expect(output.schema).toMatchObject({
       type: "array",
       items: { type: "string" }
     });
-    expect(output.validate(["a", "b"]).ok).toBe(true);
-    expect(output.validate({ value: "a" }).ok).toBe(false);
+    expect(output.validate(["a", "b"])).toBe(true);
+    expect(output.validate({ value: "a" })).toBe(false);
+    expect(() => publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(), service: { serviceId: "schema-service" }, tool: { name: "invalid-root", inputSchema: { type: "array", items: { type: "string" } } } })).toThrow(/input schema is invalid/u);
 
-    const projected: any = publicUpstreamMcpTool({
+    const projected: any = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
       service: { serviceId: "schema-service", label: "Schema" },
       tool: {
         name: "list",
@@ -143,34 +131,19 @@ describe("MCP tool JSON Schema adapter", () : any => {
       type: "array",
       items: { type: "string" }
     });
-    expect(() : any => publicUpstreamMcpTool({
+    const booleanOutput: any = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
       service: { serviceId: "schema-service" },
       tool: {
         name: "list",
         inputSchema: { type: "object" },
         outputSchema: true
       }
-    })).toThrow(/output schema is invalid/);
-    try {
-      publicUpstreamMcpTool({
-        service: { serviceId: "schema-service" },
-        tool: {
-          name: "list",
-          inputSchema: { type: "object" },
-          outputSchema: true
-        }
-      });
-      throw new Error("expected output schema rejection");
-    } catch (error: any) {
-      expect(error).toMatchObject({
-        code: "upstream_tool_output_schema_invalid",
-        status: 502
-      });
-    }
+    });
+    expect(booleanOutput.outputSchema).toBe(true);
   });
 
-  it("keeps a $ref object root after allOf flattening", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+  it("keeps a $ref object root without rewriting it", () : any => {
+    const compiled: any = compileExternalSchema({
       type: "object",
       $ref: "#/$defs/root",
       $defs: {
@@ -182,12 +155,12 @@ describe("MCP tool JSON Schema adapter", () : any => {
         }
       }
     });
-    expect(compiled.validate({ value: "abc" }).ok).toBe(true);
-    expect(compiled.validate("abc").ok).toBe(false);
+    expect(compiled.validate({ value: "abc" })).toBe(true);
+    expect(compiled.validate("abc")).toBe(false);
   });
 
   it("keeps an explicit object root when the $ref target only has properties", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       $ref: "#/$defs/root",
       $defs: {
@@ -198,41 +171,39 @@ describe("MCP tool JSON Schema adapter", () : any => {
         }
       }
     });
-    expect(compiled.validate({ value: "abc" }).ok).toBe(true);
-    expect(compiled.validate("abc").ok).toBe(false);
+    expect(compiled.validate({ value: "abc" })).toBe(true);
+    expect(compiled.validate("abc")).toBe(false);
   });
 
   it("keeps an explicit object root when the $ref target is an empty schema", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       $ref: "#/$defs/root",
       $defs: {
         root: {}
       }
     });
-    expect(compiled.validate({}).ok).toBe(true);
-    expect(compiled.validate("abc").ok).toBe(false);
+    expect(compiled.validate({})).toBe(true);
+    expect(compiled.validate("abc")).toBe(false);
   });
 
   it("does not infer an output-root type from string keywords", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       minLength: 3
-    }, {
-      requireTopLevelObject: false
     });
-    expect(compiled.validate(null).ok).toBe(true);
-    expect(compiled.validate("ab").ok).toBe(false);
-    expect(compiled.validate("abc").ok).toBe(true);
+    expect(compiled.validate(null)).toBe(true);
+    expect(compiled.validate("ab")).toBe(false);
+    expect(compiled.validate("abc")).toBe(true);
   });
 
   it("ignores string keywords on an explicit null type", () : any => {
-    const compiled: any = compileMcpToolJsonSchema({
+    const compiled: any = compileExternalSchema({
       type: "object",
       properties: {
         value: { type: "null", minLength: 3 }
       }
     });
-    expect(compiled.validate({ value: null }).ok).toBe(true);
+    expect(compiled.validate({ value: null })).toBe(true);
     expect(() : any => compileClosedJsonSchema({
       type: "object",
       properties: {
@@ -252,13 +223,15 @@ describe("MCP tool JSON Schema adapter", () : any => {
 
   it("enforces the external schema through governed MCP execution", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-schema-exec-"));
-    const callTool: any = async (_config?: any, request?: any) : Promise<any> => ({
-      result: {
+    let effectCount = 0;
+    const callTool: any = async (_config?: any, request?: any) : Promise<any> => {
+      effectCount += 1;
+      return { result: {
         content: [{ type: "text", text: "ok" }],
         structuredContent: request.arguments
-      }
-    });
-    const registry: any = createUpstreamGatewayRegistry({
+      } };
+    };
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: {
         listTools: async () : Promise<any> => ({
@@ -274,7 +247,10 @@ describe("MCP tool JSON Schema adapter", () : any => {
             }
           }]
         }),
-        callTool,
+        async invokeGateway(config: any, invocation: any, options: any) {
+          await options.beforeSend?.();
+          return callTool(config, invocation.params);
+        },
         async retireServiceScopes() : Promise<any> { return { retired: 0 }; },
         async close() : Promise<any> {}
       }
@@ -288,23 +264,38 @@ describe("MCP tool JSON Schema adapter", () : any => {
         toolNamePrefix: "schema-service"
       }
     }]);
+    const proof = createOperationProofSubstrate({ dataDir: path.join(root, "proof") });
+    const subject = executionSubject({ publicToolName: "upstream.schema-service.echo" });
+    const platform = createPlatformMcpGateway({
+      upstreamGatewayRegistry: registry,
+      operationProofSubstrate: proof,
+      toolSkillManagementProvider: {
+        authorizeMcpClientRequest: async () => ({
+          ok: true,
+          tenantId: "schema-fixture-tenant",
+          subject,
+          grant: { ...subject.grant, revision: "schema-fixture-grant-r1", scopes: subject.scopes }
+        }),
+        listVisibleTools: () => []
+      }
+    });
     try {
-      await expect(registry.callMcpToolByPublicName(
-        "upstream.schema-service.echo",
-        { arguments: { name: "abcd" } },
-        executionSubject({ publicToolName: "upstream.schema-service.echo" })
-      )).rejects.toMatchObject({
-        status: 400,
-        reasonCode: "upstream_mcp_arguments_invalid"
+      await platform.gateway.start();
+      const call = (name: string) => platform.adapter.handle(modernHttpRequest("tools/call", `schema-${name}`, {
+        name: "upstream.schema-service.echo", arguments: { name }
+      }));
+      expect(await call("abcd")).toMatchObject({
+        status: 200,
+        body: { error: { data: { code: "schema_validation_failed", effectOutcome: "not_started" } } }
       });
-      const accepted: any = await registry.callMcpToolByPublicName(
-        "upstream.schema-service.echo",
-        { arguments: { name: "abcde" } },
-        executionSubject({ publicToolName: "upstream.schema-service.echo" })
-      );
-      expect(accepted.response.structuredContent).toEqual({ name: "abcde" });
+      expect(effectCount).toBe(0);
+      const accepted: any = await call("abcde");
+      expect(accepted.body.result.structuredContent).toEqual({ name: "abcde" });
+      expect(effectCount).toBe(1);
     } finally {
+      await platform.close();
       await registry.close();
+      await proof.close();
       await fs.rm(root, { recursive: true, force: true });
     }
   });

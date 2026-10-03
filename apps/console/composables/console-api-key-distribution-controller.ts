@@ -10,6 +10,8 @@ import {
   type ApiKeyCreateInput,
   type ApiKeyIssuerNode,
   type ApiKeyIssuerScopes,
+  type ApiKeyMcpToolIdentity,
+  type ApiKeyMcpToolSelection,
   type ApiKeyOneTimeResult,
   type ApiKeyPage,
   type ApiKeyPolicy,
@@ -20,10 +22,15 @@ import type {
   OperationPermissionCatalog,
   OperationPermissionTool,
 } from "../lib/types/operation-permission";
-import { apiKeyDistributionText, apiKeyErrorText } from "../i18n/api-key-distribution";
+import {
+  apiKeyDistributionText,
+  apiKeyDraftConfigErrorText,
+  apiKeyErrorText,
+} from "../i18n/api-key-distribution";
 import { operationPermissionToolsetName } from "../i18n/operation-permission-toolsets";
 import {
   API_KEY_DATA_CLASSIFICATION_OPTIONS,
+  API_KEY_MCP_CLIENT_GUIDE_OPTIONS,
   API_KEY_MCP_TARGET_OPTIONS,
 } from "../lib/api-key-mcp-targets";
 import {
@@ -44,7 +51,9 @@ export type ApiKeyPolicyDraft = {
   workloadDisplayName: string;
   organizationNodeId: string;
   expiresAt: string;
+  selectedClientGuide: string;
   selectedToolsetIds: string[];
+  selectedMcpTools: ApiKeyMcpToolIdentity[];
   allowedTools: string[];
   selectedProfileId: string;
   maximumRisk: "low" | "medium" | "high";
@@ -76,6 +85,7 @@ const RISK_ORDER = ["low", "medium", "high"] as const;
 type ApiKeyRisk = (typeof RISK_ORDER)[number];
 
 export type ApiKeyMcpTarget = (typeof API_KEY_MCP_TARGET_OPTIONS)[number]["value"];
+export type ApiKeyMcpClientGuide = (typeof API_KEY_MCP_CLIENT_GUIDE_OPTIONS)[number]["value"];
 
 export type ApiKeyKeyMaterial = {
   keyId: string;
@@ -90,32 +100,50 @@ export type ApiKeyKeyMaterial = {
  */
 export const CONNECTOR_SNIPPET_SECRET_PLACEHOLDER = "<paste-one-time-key-here>";
 const CONNECTOR_TOKEN_ENV = "MESHRIX_MCP_TOKEN";
-const CONNECTOR_TIMEOUT_MS = 300_000;
 const ADAPTER_VERSION = "0.0.1";
 
 /**
  * Copy-paste-runnable connector configuration for a frozen MCP client target
  * (mirrors the gateway installer MCP_CLIENT_TARGETS). Honest facts only: the
  * target's trusted adapter coordinate, the canonical Meshrix.js MCP server config
- * shape (http-mcp-adapter-discovery), and the token env channel. No invented
+ * shape (MCP discovery), and the token env channel. No invented
  * flags. Unknown targets return "" — the consumer renders guidance only.
  */
-export function buildConnectorConfigSnippet(target: string, keyMaterial: ApiKeyKeyMaterial): string {
+export function buildConnectorConfigSnippet(
+  target: string,
+  keyMaterial: ApiKeyKeyMaterial,
+  preferredServerAudience = "",
+): string {
+  if (target === "generic") {
+    const audience = resolveServerAudience(preferredServerAudience) || `127.0.0.1:${DEFAULT_API_PORT}`;
+    const scheme = typeof window !== "undefined" && window.location?.protocol === "https:" ? "https:" : "http:";
+    return [
+      "# Standard MCP Streamable HTTP connection (2026-07-28)",
+      `# Server URL: ${scheme}//${audience}/mcp`,
+      "# Configure a client that supports MCP 2026-07-28 over Streamable HTTP.",
+      "# In the client's standard HTTP headers setting, add:",
+      `#   X-Meshrix.js-Api-Key: \${${CONNECTOR_TOKEN_ENV}}`,
+      `# Set the credential locally: export ${CONNECTOR_TOKEN_ENV}=${CONNECTOR_SNIPPET_SECRET_PLACEHOLDER}`,
+      "# Client configuration syntax varies; use the client's standard URL and header fields.",
+      `# Key identifier: ${keyMaterial.keyId}`,
+      `# Key prefix: ${keyMaterial.displayPrefix}`,
+    ].join("\n");
+  }
   const targetEntry = API_KEY_MCP_TARGET_OPTIONS.find((entry) => entry.value === target);
   if (!targetEntry) {
     return "";
   }
   const adapterCoordinate = `@meshrix/agent-${targetEntry.value}-adapter@${ADAPTER_VERSION}`;
-  const audience = fallbackServerAudience() || `127.0.0.1:${DEFAULT_API_PORT}`;
+  const audience = resolveServerAudience(preferredServerAudience) || `127.0.0.1:${DEFAULT_API_PORT}`;
+  const scheme = typeof window !== "undefined" && window.location?.protocol === "https:" ? "https:" : "http:";
   const config = {
     mcpServers: {
       meshrix: {
-        httpUrl: `http://${audience}/mcp`,
+        httpUrl: `${scheme}//${audience}/mcp`,
         headers: {
           "X-Meshrix.js-Api-Key": `\${${CONNECTOR_TOKEN_ENV}}`,
         },
         authProviderType: "meshrix_api_key",
-        timeout: CONNECTOR_TIMEOUT_MS,
       },
     },
     auth: {
@@ -166,8 +194,8 @@ const defaultClient: ApiKeyClient = {
 
 function emptyDraft(): ApiKeyPolicyDraft {
   return {
-    workloadDisplayName: "", organizationNodeId: "", expiresAt: "",
-    selectedToolsetIds: [], allowedTools: [], selectedProfileId: "",
+    workloadDisplayName: "", organizationNodeId: "", expiresAt: "", selectedClientGuide: "generic",
+    selectedToolsetIds: [], selectedMcpTools: [], allowedTools: [], selectedProfileId: "",
     maximumRisk: "low", serverAudience: "", selectedTargetIds: [],
     resourcesUnrestricted: true, selectedDataClassifications: [], workspaceIds: "",
     requestsPerMinute: null, maxConcurrentEffects: null,
@@ -180,7 +208,18 @@ function toolsForToolsets(
 ): OperationPermissionTool[] {
   const selected = new Set([...toolsetIds].map((value) => String(value || "").trim()).filter(Boolean));
   if (selected.size === 0) return [];
-  return catalogTools.filter((tool) => (tool.toolsets || []).some((toolsetId) => selected.has(toolsetId)));
+  return catalogTools.filter((tool) => !isMcpBaseOperation(tool)
+    && (tool.toolsets || []).some((toolsetId) => selected.has(toolsetId)));
+}
+
+function isMcpBaseOperation(tool: OperationPermissionTool): boolean {
+  return tool.upstreamProjectedOperation === true
+    && tool.protocol === "mcp"
+    && tool.operationKey === "tools/call";
+}
+
+function mcpIdentityKey(identity: ApiKeyMcpToolIdentity): string {
+  return `${identity.serviceId}\0${identity.publicName}`;
 }
 
 function stringList(value: string): string[] {
@@ -276,30 +315,74 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
   const catalogTools = computed(() => catalog.value?.tools || []);
   const catalogToolsets = computed(() => catalog.value?.toolsets || []);
   const toolsById = computed(() => new Map(catalogTools.value.map((tool) => [tool.id, tool])));
+  const mcpToolSelection = computed(() => scopes.value?.mcpToolSelection || {
+    status: "unavailable" as const,
+    services: [],
+    tools: [],
+  });
+  const availableMcpToolFacts = computed(() => mcpToolSelection.value.tools.filter((tool) => {
+    const operation = toolsById.value.get(tool.operationToolId);
+    return Boolean(operation && isMcpBaseOperation(operation) && operation.serviceId === tool.serviceId);
+  }));
+  const selectedMcpToolFacts = computed(() => {
+    const current = new Map(availableMcpToolFacts.value.map((tool) => [mcpIdentityKey(tool), tool]));
+    return draft.value.selectedMcpTools
+      .map((identity) => current.get(mcpIdentityKey(identity)))
+      .filter((tool): tool is ApiKeyMcpToolSelection => Boolean(tool));
+  });
+  const selectedMcpOperationTools = computed(() => selectedMcpToolFacts.value
+    .map((tool) => toolsById.value.get(tool.operationToolId))
+    .filter((tool): tool is OperationPermissionTool => Boolean(tool)));
+  const unavailableSelectedMcpTools = computed(() => {
+    const current = new Set(availableMcpToolFacts.value.map(mcpIdentityKey));
+    return draft.value.selectedMcpTools.filter((identity) => !current.has(mcpIdentityKey(identity)));
+  });
+  const mcpToolOptions = computed(() => {
+    const selected = new Set(draft.value.selectedMcpTools.map(mcpIdentityKey));
+    return availableMcpToolFacts.value.map((tool) => ({
+      ...tool,
+      selected: selected.has(mcpIdentityKey(tool)),
+    }));
+  });
+  const selectableToolsetOptions = computed(() => catalogToolsets.value
+    .filter((toolset) => toolsForToolsets(catalogTools.value, [toolset.id]).length > 0));
 
   const selectedAllowedTools = computed(() =>
     draft.value.allowedTools
       .map((toolId) => toolsById.value.get(toolId))
-      .filter((tool): tool is OperationPermissionTool => Boolean(tool)),
+      .filter((tool): tool is OperationPermissionTool => tool !== undefined && !isMcpBaseOperation(tool)),
   );
 
   const inferredPolicy = computed(() => {
     const inferred = inferFromTools(selectedAllowedTools.value);
+    const selectedMcp = selectedMcpToolFacts.value;
     const toolsetScopes = uniqueSorted(
       draft.value.selectedToolsetIds.flatMap((toolsetId) =>
         catalogToolsets.value.find((toolset) => toolset.id === toolsetId)?.requiredScopes || []),
     );
     return {
       ...inferred,
-      scopeIds: uniqueSorted([...inferred.scopeIds, ...toolsetScopes]),
-      toolsetIds: uniqueSorted(draft.value.selectedToolsetIds.length
-        ? draft.value.selectedToolsetIds
-        : inferred.toolsetIds),
+      scopeIds: uniqueSorted([
+        ...inferred.scopeIds,
+        ...toolsetScopes,
+        ...selectedMcpOperationTools.value.flatMap((tool) => tool.requiredScopes || []),
+        ...selectedMcp.flatMap((tool) => tool.requiredScopes || []),
+      ]),
+      serviceIds: uniqueSorted([...inferred.serviceIds, ...selectedMcp.map((tool) => tool.serviceId)]),
+      capabilityIds: uniqueSorted([...inferred.capabilityIds, ...selectedMcp.map((tool) => tool.capabilityId)]),
+      toolsetIds: uniqueSorted([
+        ...(draft.value.selectedToolsetIds.length ? draft.value.selectedToolsetIds : inferred.toolsetIds),
+        ...selectedMcpOperationTools.value.flatMap((tool) => tool.toolsets || []),
+      ]),
+      minimumRisk: selectedMcp.reduce<ApiKeyRisk>(
+        (current, tool) => higherRisk(current, toApiKeyRisk(tool.risk)),
+        inferred.minimumRisk,
+      ),
     };
   });
 
   const toolsetOptions = computed(() =>
-    catalogToolsets.value.map((toolset) => ({
+    selectableToolsetOptions.value.map((toolset) => ({
       value: toolset.id,
       label: operationPermissionToolsetName(toolset.id, toolset.label || toolset.id),
       description: toolset.id,
@@ -311,6 +394,16 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
       value: target.value,
       label: target.label,
       description: target.value,
+    })),
+  );
+
+  const clientGuideOptions = computed(() =>
+    API_KEY_MCP_CLIENT_GUIDE_OPTIONS.map((guide) => ({
+      value: guide.value,
+      label: apiKeyDistributionText(guide.labelZh, guide.labelEn),
+      description: guide.value === "generic"
+        ? apiKeyDistributionText("按 MCP 标准协议配置连接，不依赖品牌适配器。", "Configure through the declared MCP protocol; no branded adapter is implied.")
+        : guide.value,
     })),
   );
 
@@ -349,13 +442,15 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     const empty = apiKeyDistributionText("（未选定）", "(none selected)");
     const join = (values: string[]) => values.length ? values.join(", ") : empty;
     const audience = resolveServerAudience(draft.value.serverAudience || scopes.value?.serverAudience);
+    const allowedToolCount = uniqueSorted(draft.value.allowedTools).length
+      + new Set(selectedMcpToolFacts.value.map(mcpIdentityKey)).size;
     return [
       {
         label: apiKeyDistributionText("允许的工具", "Allowed tools"),
-        value: draft.value.allowedTools.length
+        value: allowedToolCount
           ? apiKeyDistributionText(
-              `${draft.value.allowedTools.length} 个`,
-              `${draft.value.allowedTools.length} tools`,
+              `${allowedToolCount} 个`,
+              `${allowedToolCount} tools`,
             )
           : empty,
       },
@@ -403,19 +498,24 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
       || Date.parse(draft.value.expiresAt) <= Date.now()) {
       hints.push(apiKeyDistributionText("到期时间", "Expiry"));
     }
-    if (!draft.value.selectedToolsetIds.length || !draft.value.allowedTools.length) {
-      hints.push(apiKeyDistributionText("工具集", "Toolsets"));
+    const hasOrdinarySelection = draft.value.selectedToolsetIds.length > 0 && selectedAllowedTools.value.length > 0;
+    const hasMcpSelection = selectedMcpToolFacts.value.length > 0;
+    if (!hasOrdinarySelection && !hasMcpSelection) {
+      hints.push(apiKeyDistributionText("工具或已发现的 MCP 工具", "Tools or discovered MCP tools"));
+    }
+    if (unavailableSelectedMcpTools.value.length > 0) {
+      hints.push(apiKeyDistributionText(
+        "已选 MCP 工具已不可用，请移除后重新选择",
+        "A selected MCP tool is unavailable; remove it and select a current tool",
+      ));
     }
     if (!resolveServerAudience(draft.value.serverAudience)) {
       hints.push(apiKeyDistributionText("服务端受众", "Server audience"));
     }
-    if (!draft.value.selectedTargetIds.length) {
-      hints.push(apiKeyDistributionText("客户端目标", "Client targets"));
-    }
     if (!draft.value.resourcesUnrestricted
       && !draft.value.selectedDataClassifications.length
       && !stringList(draft.value.workspaceIds).length) {
-      hints.push(apiKeyDistributionText("资源范围", "Resource scope"));
+      hints.push(apiKeyDistributionText("资源筛选所需的工作空间 ID 或数据分类", "Workspace IDs or data classifications for resource filtering"));
     }
     if (!limitUnset(draft.value.requestsPerMinute) && !positiveInteger(draft.value.requestsPerMinute)) {
       hints.push(apiKeyDistributionText("每分钟调用次数", "Calls per minute"));
@@ -437,14 +537,19 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
 
   function syncToolsFromToolsets(): void {
     const toolsetIds = uniqueSorted(draft.value.selectedToolsetIds);
+    const selectableIds = new Set(selectableToolsetOptions.value.map((toolset) => toolset.id));
+    const validToolsetIds = toolsetIds.filter((toolsetId) => selectableIds.has(toolsetId));
     const allowed = uniqueSorted(
-      toolsForToolsets(catalogTools.value, toolsetIds).map((tool) => tool.id),
+      toolsForToolsets(catalogTools.value, validToolsetIds).map((tool) => tool.id),
     );
-    if (!sameIdList(draft.value.selectedToolsetIds, toolsetIds)) draft.value.selectedToolsetIds = toolsetIds;
+    if (!sameIdList(draft.value.selectedToolsetIds, validToolsetIds)) draft.value.selectedToolsetIds = validToolsetIds;
     if (!sameIdList(draft.value.allowedTools, allowed)) draft.value.allowedTools = allowed;
-    const minimumRisk = inferFromTools(
-      allowed.map((toolId) => toolsById.value.get(toolId)).filter((tool): tool is OperationPermissionTool => Boolean(tool)),
-    ).minimumRisk;
+    const minimumRisk = selectedMcpToolFacts.value.reduce<ApiKeyRisk>(
+      (current, tool) => higherRisk(current, toApiKeyRisk(tool.risk)),
+      inferFromTools(
+        allowed.map((toolId) => toolsById.value.get(toolId)).filter((tool): tool is OperationPermissionTool => Boolean(tool)),
+      ).minimumRisk,
+    );
     if (riskRank(draft.value.maximumRisk) < riskRank(minimumRisk)) {
       draft.value.maximumRisk = minimumRisk;
     }
@@ -454,6 +559,7 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     () => [
       draft.value.selectedToolsetIds.join("\0"),
       catalogTools.value.map((tool) => tool.id).join("\0"),
+      selectedMcpToolFacts.value.map((tool) => `${mcpIdentityKey(tool)}:${tool.risk}`).join("\0"),
     ] as const,
     () => { syncToolsFromToolsets(); },
     { flush: "sync" },
@@ -488,8 +594,17 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
       protocol: "mcp",
       serviceIds: inferred.serviceIds,
       capabilityIds: inferred.capabilityIds,
-      toolsetIds: uniqueSorted(value.selectedToolsetIds),
-      allowedTools: uniqueSorted(value.allowedTools),
+      toolsetIds: uniqueSorted([
+        ...value.selectedToolsetIds,
+        ...selectedMcpOperationTools.value.flatMap((tool) => tool.toolsets || []),
+      ]),
+      allowedTools: uniqueSorted([
+        ...value.allowedTools.filter((toolId) => {
+          const tool = toolsById.value.get(toolId);
+          return Boolean(tool && !isMcpBaseOperation(tool));
+        }),
+        ...selectedMcpToolFacts.value.map((tool) => tool.operationToolId),
+      ]),
       deniedTools: [],
       scopeIds: inferred.scopeIds,
       maximumRisk: higherRisk(value.maximumRisk, inferred.minimumRisk),
@@ -532,7 +647,7 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
 
   function importDraftConfig(value: unknown): void {
     const knownNodeIds = new Set(nodes.value.map((node) => node.nodeId));
-    const knownToolsetIds = new Set(catalogToolsets.value.map((toolset) => toolset.id));
+    const knownToolsetIds = new Set(selectableToolsetOptions.value.map((toolset) => toolset.id));
     const knownTargetIds = new Set(API_KEY_MCP_TARGET_OPTIONS.map((target) => target.value));
     const knownClassificationIds = new Set(
       API_KEY_DATA_CLASSIFICATION_OPTIONS.map((entry) => entry.value),
@@ -544,8 +659,10 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
         knownNodeIds,
         knownToolsetIds,
         knownTargetIds,
+        knownClientGuideIds: new Set(API_KEY_MCP_CLIENT_GUIDE_OPTIONS.map((guide) => guide.value)),
         knownClassificationIds,
         knownProfileIds,
+        knownMcpToolIdentities: new Set(availableMcpToolFacts.value.map(mcpIdentityKey)),
       });
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught || "");
@@ -564,6 +681,8 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
   }
 
   function localizeDraftConfigError(message: string): string {
+    const localized = apiKeyDraftConfigErrorText(message);
+    if (localized !== message) return localized;
     if (message.includes("must be a JSON object")) {
       return apiKeyDistributionText("配置必须是 JSON 对象。", "Config must be a JSON object.");
     }
@@ -593,16 +712,35 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     if (!draft.value.selectedProfileId || !catalog.value) return;
     const profile = catalog.value.profiles.find((entry) => entry.id === draft.value.selectedProfileId);
     if (!profile) return;
-    const toolsetIds = uniqueSorted(profile.toolsets || []);
+    const selectableIds = new Set(selectableToolsetOptions.value.map((toolset) => toolset.id));
+    const toolsetIds = uniqueSorted(profile.toolsets || []).filter((toolsetId) => selectableIds.has(toolsetId));
     const allowToolsets = uniqueSorted(
-      (profile.toolAllow || []).flatMap((toolId) => toolsById.value.get(toolId)?.toolsets || []),
-    );
+      (profile.toolAllow || []).flatMap((toolId) => {
+        const tool = toolsById.value.get(toolId);
+        return tool && !isMcpBaseOperation(tool) ? tool.toolsets || [] : [];
+      }),
+    ).filter((toolsetId) => selectableIds.has(toolsetId));
     draft.value.selectedToolsetIds = toolsetIds.length ? toolsetIds : allowToolsets;
     syncToolsFromToolsets();
     draft.value.maximumRisk = higherRisk(
       toApiKeyRisk(String(profile.maxRisk || "low")),
       inferredPolicy.value.minimumRisk,
     );
+  }
+
+  function toggleMcpToolSelection(identity: ApiKeyMcpToolIdentity): void {
+    const current = mcpToolSelection.value.tools.find((tool) => mcpIdentityKey(tool) === mcpIdentityKey(identity));
+    if (!current) return;
+    const key = mcpIdentityKey(current);
+    draft.value.selectedMcpTools = draft.value.selectedMcpTools.some((entry) => mcpIdentityKey(entry) === key)
+      ? draft.value.selectedMcpTools.filter((entry) => mcpIdentityKey(entry) !== key)
+      : [...draft.value.selectedMcpTools, { serviceId: current.serviceId, publicName: current.publicName }];
+  }
+
+  function clearUnavailableMcpSelections(): void {
+    const unavailable = new Set(unavailableSelectedMcpTools.value.map(mcpIdentityKey));
+    draft.value.selectedMcpTools = draft.value.selectedMcpTools
+      .filter((identity) => !unavailable.has(mcpIdentityKey(identity)));
   }
 
   function replaceRecord(record: ApiKeyRecord): void {
@@ -654,7 +792,9 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
         return false;
       }
       const toolsetIds = new Set(catalogToolsets.value.map((toolset) => toolset.id));
-      draft.value.selectedToolsetIds = draft.value.selectedToolsetIds.filter((toolsetId) => toolsetIds.has(toolsetId));
+      const selectableIds = new Set(selectableToolsetOptions.value.map((toolset) => toolset.id));
+      draft.value.selectedToolsetIds = draft.value.selectedToolsetIds
+        .filter((toolsetId) => toolsetIds.has(toolsetId) && selectableIds.has(toolsetId));
       if (draft.value.selectedProfileId
         && !(catalog.value.profiles || []).some((profile) => profile.id === draft.value.selectedProfileId)) {
         draft.value.selectedProfileId = "";
@@ -730,17 +870,17 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     catch { copied.value = false; error.value = apiKeyDistributionText("无法写入剪贴板，请手动复制。", "Could not write to the clipboard. Copy the value manually."); }
   }
 
-  // REQ-018 connector snippet: scoped to the first target chosen in the draft,
-  // built from the revealed record's key identity. Copying the snippet is a
+  // Connection instructions use a presentation-only guide choice. The selected
+  // guide never influences policyFromDraft or audience.targetIds. Copying the snippet is a
   // separate affordance — it does NOT satisfy the storage acknowledgement.
   const connectorSnippet = computed(() => {
     const record = revealedRecord.value;
-    const target = draft.value.selectedTargetIds[0] || "";
+    const target = draft.value.selectedClientGuide || "generic";
     if (!record || !target) return "";
     return buildConnectorConfigSnippet(target, {
       keyId: record.keyId,
       displayPrefix: record.displayPrefix,
-    });
+    }, resolveServerAudience(draft.value.serverAudience || scopes.value?.serverAudience));
   });
 
   const snippetCopied = ref(false);
@@ -761,6 +901,9 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     draft, draftConfigDocument, draftMissingHints, draftValid, eligible, error, importDraftConfig,
     inferredPolicy, inferredSummaryItems, loading, maximumRiskOptions, mutatingKeyId, nodes,
     oneTimeSecret, profileOptions, records, refresh, revealedRecord, revoke, rotate, scopes,
-    snippetCopied, status, targetOptions, toolsetOptions,
+    snippetCopied, status, targetOptions, clientGuideOptions, toolsetOptions,
+    mcpToolSelection, mcpToolOptions, unavailableSelectedMcpTools,
+    selectedMcpToolFacts,
+    toggleMcpToolSelection, clearUnavailableMcpSelections,
   };
 }

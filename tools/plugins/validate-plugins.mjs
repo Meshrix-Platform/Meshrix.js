@@ -76,11 +76,11 @@ async function validateCatalog(entry, manifest, pluginRoot) {
         adapter.target !== entry.id.replace(/^agent-/u, "") || adapter.packageName !== packageJson.name ||
         adapter.version !== packageJson.version || adapter.entrypoint !== "adapter.mjs" ||
         JSON.stringify(adapter.actions) !== JSON.stringify(["describe", "scan", "install", "verify", "uninstall"]) ||
-        JSON.stringify(adapter.locations) !== '["local"]' || !packageJson.bin?.[`meshrix-agent-${adapter.target}-adapter`] ||
+        JSON.stringify(adapter.locations) !== '["local"]' || packageJson.bin !== undefined ||
         !(await pathExists(path.join(pluginRoot, adapter.entrypoint)))) {
       throw new Error(`Client adapter ${entry.id} contract is invalid`);
     }
-    if (entry.release !== true || entry.adapter !== true || entry.runtime !== false || entry.version !== adapter.version ||
+    if (entry.release !== false || entry.adapter !== true || entry.runtime !== false || entry.version !== adapter.version ||
         JSON.stringify(entry.adapterContract) !== JSON.stringify({ target: adapter.target, packageName: adapter.packageName, entrypoint: adapter.entrypoint, protocol: adapter.protocol })) {
       throw new Error(`Client adapter ${entry.id} catalog entry is invalid`);
     }

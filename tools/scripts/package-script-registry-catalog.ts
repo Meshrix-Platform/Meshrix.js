@@ -36,18 +36,54 @@ export const SCRIPT_CATEGORIES: Readonly<Record<string, any>> = Object.freeze({
 
 /** @type {Readonly<Record<string, ScriptEntry>>} */
 const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
+  "test:startup-process-tree": {
+    scriptName: "test:startup-process-tree", command: "npm run test:startup-process-tree", category: "test", subsystem: "startup",
+    owner: "platform", tier: "integration", sideEffects: "temp-files",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: ["tools/scripts/process-tree-smoke.ts", "tools/scripts/lib/process-lifecycle.ts", "tools/scripts/lib/startup-platform-adapter.ts"], outputs: [],
+  },
+  "ci:local": {
+    scriptName: "ci:local", command: "npm run ci:local", category: "test", subsystem: "release",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "local", expectedDurationClass: "extended",
+    inputs: [
+      "tools/scripts/local-ci.ts",
+      "tests/run.ts",
+      "tools/scripts/lib/unified-test-runner-execution.ts",
+      "tools/registry/tests.registry.json",
+      "tools/registry/schema/test-suite.schema.json",
+      "tools/server-scripts/lib/local-execution-environment.ts",
+      "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts",
+      "tools/server-scripts/verify-platform-acceptance.ts",
+      "tools/registry/release-definition.registry.json"
+    ],
+    outputs: ["build/local-ci/**"],
+  },
   // ── Startup / runtime ──────────────────────────────────────────────────────
   "server:start": {
     scriptName: "server:start", command: "npm run server:start", category: "startup", subsystem: "server",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: [], outputs: [],
+    inputs: [
+      "package.json",
+      "tsconfig.node.json",
+      "tools/server-scripts/start-server.ts",
+      "apps/server/runtime/http-server.ts"
+    ], outputs: [],
   },
   "server:restart": {
     scriptName: "server:restart", command: "npm run server:restart", category: "startup", subsystem: "server",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: ["tools/scripts/restart-dev.ts", "tools/scripts/start-all.ts", "tools/scripts/clean-existing-service.ts"], outputs: [],
+    inputs: [
+      "tools/scripts/restart-dev.ts",
+      "tools/scripts/restart-all.ts",
+      "tools/scripts/start-all.ts",
+      "tools/scripts/clean-existing-service.ts",
+      "tools/scripts/lib/process-lifecycle.ts",
+      "tools/scripts/lib/startup-platform-adapter.ts",
+      "tools/scripts/lib/service-process-ownership.ts"
+    ], outputs: [],
   },
   "start:compose": {
     scriptName: "start:compose", command: "npm run start:compose", category: "startup", subsystem: "server",
@@ -202,9 +238,33 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
     inputs: ["tools/server-scripts/stress-gateway-platform-profile.ts", "tools/server-scripts/lib/release-evidence-readiness.ts", "tools/server-scripts/lib/release-evidence-freshness.ts", "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts"], outputs: ["build/reports/gateway-platform-profile.json"],
   },
+  "gateway:migrate": {
+    scriptName: "gateway:migrate", command: "npm run gateway:migrate", category: "maintenance", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "source-write",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: ["apps/mcp-gateway-installer/src/config-migration.ts", "tools/server-scripts/migrate-gateway-config.ts", "docs/migrations/gateway-convergence.md"], outputs: ["<operator-selected-config-backup>"],
+  },
+  "gateway:benchmark": {
+    scriptName: "gateway:benchmark", command: "npm run gateway:benchmark", category: "verifier", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "extended",
+    inputs: ["package.json", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/**", "tools/server-scripts/benchmark-gateway.ts", "tools/server-scripts/lib/runtime-performance-observer-preload.ts", "apps/mcp-gateway-installer/src/**", "packages/gateway/src/**", "packages/protocols/mcp/**", "packages/capabilities/src/**", "packages/foundation/src/**"], outputs: ["<operator-selected-local-report>"],
+  },
+  "test:gateway-benchmark": {
+    scriptName: "test:gateway-benchmark", command: "npm run test:gateway-benchmark", category: "test", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
+    inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "tests/vitest/gateway/performance/**", "tests/vitest/server/package-script-registry.test.ts", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/**"], outputs: ["build/reports/gateway-benchmark-tests.json"],
+  },
+  "test:product-distribution": {
+    scriptName: "test:product-distribution", command: "npm run test:product-distribution", category: "test", subsystem: "release",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
+    inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tools/server-scripts/lib/local-execution-environment.ts", "tools/server-scripts/publish-release-set.ts", "tests/vitest/server/distribution-*.test.ts"], outputs: ["build/reports/product-distribution.json", "build/packages/**", "dist/**"],
+  },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
+    owner: "platform", tier: "integration", sideEffects: "temp-files",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
     inputs: [
       "package.json",
@@ -215,7 +275,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/**",
       "tests/vitest/server/resource-discipline-policy.test.ts",
       "tests/vitest/server/job-pipeline-upload-session-persistence.test.ts",
-      "tests/vitest/server/upload-custody-workspace-materialization.test.ts",
       "tools/server-scripts/verify-resource-discipline.ts",
       "tools/server-scripts/verify-runtime-memory-leaks.ts",
       "tools/server-scripts/lib/resource-discipline-analysis.ts",
@@ -223,12 +282,12 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/runtime-memory-profiler-preload.ts",
       "tools/server-scripts/lib/resource-high-risk-workload-child.ts",
       "tools/registry/tests.registry.json"
-    ], outputs: ["build/reports/runtime-resource-discipline.json"],
+    ], outputs: [],
   },
   "server:verify:memory-leaks": {
     scriptName: "server:verify:memory-leaks", command: "npm run server:verify:memory-leaks", category: "verifier", subsystem: "resource-discipline",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
-    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "performance", expectedDurationClass: "standard",
     inputs: [
       "package.json",
       "package-lock.json",
@@ -247,7 +306,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   "verify:acceptance": {
     scriptName: "verify:acceptance", command: "npm run verify:acceptance", category: "verifier", subsystem: "platform-acceptance",
     owner: "platform", tier: "release", sideEffects: "destructive",
-    requiresFreshContainer: true, ciProfile: "release", expectedDurationClass: "extended",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
     inputs: [
       "tools/server-scripts/verify-platform-acceptance.ts",
       "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
@@ -255,11 +314,13 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
       "tools/server-scripts/verify-release-candidate-identity.ts",
       "tools/server-scripts/lib/platform-acceptance-reducer.ts",
-      "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts"
+      "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts",
+      "tools/server-scripts/publish-release-set.ts"
     ],
     outputs: [
       "build/acceptance-evidence/**",
       "build/acceptance-proof-ledger/**",
+      "build/release/npm-set/**",
       "build/reports/**"
     ],
   },
@@ -273,7 +334,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/platform-acceptance-reducer.ts",
       "tools/server-scripts/lib/platform-acceptance-contract.ts",
       "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
-      "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts"
+      "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts"
     ], outputs: [],
   },
   "verify:acceptance:standards": {
@@ -305,7 +366,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/cleanup-real-machine-secrets.ts",
       ".github/workflows/real-machine-validation.yml",
       "docker-compose.yml",
-      "docker-compose.enterprise.yml"
+      "docker-compose.single-node.yml"
     ], outputs: ["build/real-machine-validation/**"],
   },
   "verify:cross-system-offline-transfer": {
@@ -317,9 +378,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/release-definition.registry.json"
     ], outputs: ["build/reports/cross-system-offline-transfer.json"],
   },
-  "verify:enterprise-single-node:ubuntu-container": {
-    scriptName: "verify:enterprise-single-node:ubuntu-container",
-    command: "npm run verify:enterprise-single-node:ubuntu-container",
+  "verify:single-node:ubuntu-container": {
+    scriptName: "verify:single-node:ubuntu-container",
+    command: "npm run verify:single-node:ubuntu-container",
     category: "verifier",
     subsystem: "platform-acceptance",
     owner: "platform",
@@ -330,13 +391,13 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     expectedDurationClass: "extended",
     inputs: [
       "package-lock.json",
-      "tools/containers/enterprise-single-node-acceptance.Dockerfile",
+      "tools/containers/single-node-acceptance.Dockerfile",
       "tools/server-scripts/verify-cross-system-offline-transfer-evidence.ts",
-      "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
+      "tools/server-scripts/verify-single-node-ubuntu-container.ts"
     ],
     outputs: [
       "build/plan-proof-ledger/**",
-      "build/reports/enterprise-single-node-ubuntu/**",
+      "build/reports/single-node-ubuntu/**",
       "build/reports/cross-system-offline-transfer.json"
     ],
   },
@@ -384,15 +445,16 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "CHANGELOG.md",
       "apps/*/package.json",
       "packages/*/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json",
-      "tools/server-scripts/prepare-release.ts"
+      "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "tools/server-scripts/prepare-release.ts",
+      "tools/server-scripts/lib/release-metadata.ts"
     ], outputs: [
       "package.json",
       "package-lock.json",
       "CHANGELOG.md",
       "apps/*/package.json",
       "packages/*/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json"
+      "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts"
     ],
   },
   "release:promote-branches": {
@@ -404,7 +466,11 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       ".github/workflows/branch-flow.yml",
       ".github/workflows/ci.yml",
       ".github/workflows/release-branch.yml",
+      ".github/workflows/release.yml",
       "tools/server-scripts/promote-release-branches.ts",
+      "tools/server-scripts/release-workflow-automation.ts",
+      "tools/server-scripts/resolve-branch-promotion-authority.ts",
+      "tools/registry/release-definition.registry.json",
       "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
       "build/acceptance-evidence/current.json",
       "tools/scripts/verify-git-publication.ts"
@@ -439,10 +505,10 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "package-lock.json",
       "apps/*/package.json",
       "packages/*/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json",
       "tools/server-scripts/publish-release-set.ts",
-      "tools/server-scripts/prepare-release.ts",
-      "tools/server-scripts/lib/npm-cli-invocation.ts"
+      "tools/server-scripts/lib/release-metadata.ts",
+      "tools/server-scripts/lib/npm-cli-invocation.ts",
+      "tools/server-scripts/lib/release-deployment/contract.ts"
     ], outputs: [],
   },
   "release:prepare-node-runtime-source-evidence": {
@@ -470,8 +536,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "verify:npm-package-installability": {
     scriptName: "verify:npm-package-installability", command: "npm run verify:npm-package-installability", category: "packaging", subsystem: "npm-release-set",
-    owner: "platform", tier: "release", sideEffects: "docker",
-    requiresFreshContainer: true, ciProfile: "release", expectedDurationClass: "extended",
+    owner: "platform", tier: "release", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
     inputs: [
       "package.json",
       "package-lock.json",
@@ -479,8 +545,16 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/foundation/config/deployment/index.json",
       "apps/server/bin/**",
       "packages/**",
+      "plugins/agents/**",
+      "docs/examples/gateway/**",
+      "build/release/npm-set/**",
       "tools/server-scripts/verify-npm-package-installability.ts",
-      "tools/server-scripts/lib/lock-backed-npm-registry.ts"
+      "tools/server-scripts/lib/local-execution-environment.ts",
+      "tools/server-scripts/publish-release-set.ts",
+      "tools/server-scripts/lib/npm-cli-invocation.ts",
+      "tools/server-scripts/lib/lock-backed-npm-registry.ts",
+      "tools/server-scripts/npm-package-consumer.ts",
+      "tools/server-scripts/npm-registry-server.ts"
     ], outputs: ["build/reports/npm-package-installability.json"],
   },
   "verify:composition-source-package": {
@@ -521,6 +595,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/release-definition.registry.json",
       "tools/registry/schema/release-definition.schema.json",
       "tools/server-scripts/verify-release-definition.ts",
+      "tools/server-scripts/lib/release-metadata.ts",
       "package.json",
       "package-lock.json"
     ],
@@ -649,7 +724,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "apps/server/runtime/http-server.ts",
       "packages/agents/src/upstream-gateway/**",
       "packages/contracts/src/mcp-catalog-delivery.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter*.ts",
+      "packages/protocols/mcp/modern-downstream/**",
       "packages/server-runtime/src/state/sse-connection-state.ts",
       "tools/server-scripts/verify-upstream-service-publishing.ts",
       "tools/server-scripts/lib/mcp-catalog-protocol-peer.ts",
@@ -672,19 +747,19 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:downstream-agent-tool-loop", command: "npm run verify:downstream-agent-tool-loop", category: "verifier", subsystem: "downstream-gateway",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-downstream-agent-tool-loop.ts", "tools/server-scripts/upstream-fixture-service.ts", "tools/server-scripts/lib/upstream-fixture-service.ts", "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.ts", "tools/server-scripts/lib/upstream-fixture-grant.ts", "tools/server-scripts/lib/mcp-proxy-stdio-client.ts", "tools/server-scripts/lib/upstream-gateway-verifier-publication.ts", "packages/agents/src/upstream-gateway/**", "packages/protocols/mcp/upstream-mcp-*.ts", "packages/protocols/mcp/adapter/http-mcp-adapter*.ts", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**", "packages/foundation/src/security/secrets/**"], outputs: ["build/reports/downstream-agent-tool-loop.json"],
+    inputs: ["tools/server-scripts/verify-downstream-agent-tool-loop.ts", "tools/server-scripts/upstream-fixture-service.ts", "tools/server-scripts/lib/upstream-fixture-service.ts", "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.ts", "tools/server-scripts/lib/upstream-fixture-grant.ts", "tools/server-scripts/lib/mcp-proxy-stdio-client.ts", "tools/server-scripts/lib/upstream-gateway-verifier-publication.ts", "packages/agents/src/upstream-gateway/**", "packages/protocols/mcp/upstream-mcp-*.ts", "packages/protocols/mcp/modern-downstream/**", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**", "packages/foundation/src/security/secrets/**"], outputs: ["build/reports/downstream-agent-tool-loop.json"],
   },
   "verify:mcp-release-portable-assembly": {
     scriptName: "verify:mcp-release-portable-assembly", command: "npm run verify:mcp-release-portable-assembly", category: "verifier", subsystem: "downstream-mcp",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-mcp-release-portable-assembly.ts", "tools/server-scripts/lib/mcp-release-portable.ts", "tools/server-scripts/lib/mcp-release-reproducible-archives.ts", "tools/server-scripts/lib/mcp-release-common.ts", "packages/protocols/mcp/adapter/gateway-installer/**", "packages/protocols/mcp/adapter/native-installer/**"], outputs: ["build/reports/mcp-release-portable-assembly.json"],
+    inputs: ["package.json", "tools/server-scripts/verify-mcp-release-portable-assembly.ts", "tools/server-scripts/lib/mcp-release-portable.ts", "tools/server-scripts/lib/mcp-release-reproducible-archives.ts", "tools/server-scripts/lib/mcp-release-common.ts", "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts", "packages/protocols/mcp/adapter/gateway-installer/**", "packages/protocols/mcp/adapter/native-installer/**"], outputs: ["build/reports/mcp-release-portable-assembly.json"],
   },
   "verify:mcp-final-release-asset": {
     scriptName: "verify:mcp-final-release-asset", command: "npm run verify:mcp-final-release-asset", category: "verifier", subsystem: "downstream-mcp",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
-    inputs: ["build/release/mcp/**", "tools/server-scripts/verify-mcp-final-release-asset.ts"], outputs: ["build/reports/mcp-final-release-asset.json"],
+    inputs: ["build/release/mcp/**", "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts", "tools/server-scripts/lib/mcp-release-common.ts", "tools/server-scripts/verify-mcp-final-release-asset.ts"], outputs: ["build/reports/mcp-final-release-asset.json"],
   },
   "verify:mcp-proxy-transport": {
     scriptName: "verify:mcp-proxy-transport", command: "npm run verify:mcp-proxy-transport", category: "verifier", subsystem: "downstream-mcp",
@@ -708,7 +783,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:controlled-execution-convergence", command: "npm run verify:controlled-execution-convergence", category: "verifier", subsystem: "execution-sandbox",
     owner: "platform-security", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "security", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.ts", "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts", "tools/server-scripts/verify-release-candidate-identity.ts", "packages/foundation/src/observability/sensitive-report-scan.ts", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
+    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.ts", "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts", "tools/server-scripts/lib/source-tree-digest.ts", "packages/foundation/src/observability/sensitive-report-scan.ts", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
   },
   "verify:security-alert-lifecycle": {
     scriptName: "verify:security-alert-lifecycle", command: "npm run verify:security-alert-lifecycle", category: "verifier", subsystem: "security",
@@ -749,7 +824,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "verify:usage-skills-pack", command: "npm run verify:usage-skills-pack", category: "verifier", subsystem: "repository",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
-    inputs: ["build/usage-skills/**", "skills/**", "tools/validate-usage-skills-pack.mjs"], outputs: [],
+    inputs: ["build/usage-skills/**", "tools/validate-usage-skills-pack.mjs"], outputs: [],
   },
   "verify:repo-organization": {
     scriptName: "verify:repo-organization", command: "npm run verify:repo-organization", category: "verifier", subsystem: "repository",
@@ -763,6 +838,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/tests.registry.json",
       "tools/registry/architecture-layout-facade.ts",
       "tools/server-scripts/verify-repo-organization.ts",
+      "tsconfig.node.json",
       "tools/server-scripts/lib/repo-organization-ast-advisory.ts",
       "apps/**",
       "packages/**",
@@ -779,19 +855,94 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "server:doctor", command: "npm run server:doctor", category: "maintenance", subsystem: "server",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/doctor.ts"], outputs: [],
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "tools/server-scripts/doctor.ts",
+      "packages/foundation/src/storage/ops-tools.ts",
+      "packages/foundation/src/security/authorization/capability-kernel-status.ts"
+    ], outputs: [],
+  },
+  "server:auth": {
+    scriptName: "server:auth", command: "npm run server:auth", category: "maintenance", subsystem: "server-auth",
+    owner: "platform-security", tier: "integration", sideEffects: "runtime-data",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "packages/server-runtime/package.json",
+      "tools/server-scripts/console-auth.ts"
+    ], outputs: [],
+  },
+  "server:auth:rotate": {
+    scriptName: "server:auth:rotate", command: "npm run server:auth:rotate", category: "maintenance", subsystem: "server-auth",
+    owner: "platform-security", tier: "integration", sideEffects: "runtime-data",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "fast",
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "packages/server-runtime/package.json",
+      "tools/server-scripts/console-auth.ts"
+    ], outputs: [],
   },
   "server:locate": {
     scriptName: "server:locate", command: "npm run server:locate", category: "maintenance", subsystem: "storage",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/locate-storage.ts"], outputs: [],
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "tools/server-scripts/locate-storage.ts",
+      "packages/foundation/src/storage/ops-tools.ts"
+    ], outputs: [],
   },
   "server:reconcile": {
     scriptName: "server:reconcile", command: "npm run server:reconcile", category: "maintenance", subsystem: "storage",
     owner: "platform", tier: "integration", sideEffects: "runtime-data",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/reconcile-storage.ts"], outputs: [],
+    inputs: [
+      "package.json",
+      "packages/foundation/package.json",
+      "tools/server-scripts/reconcile-storage.ts",
+      "packages/foundation/src/storage/ops-tools.ts"
+    ], outputs: [],
+  },
+  "mcp:install": {
+    scriptName: "mcp:install", command: "npm run mcp:install", category: "mcp-installer", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "external", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "apps/server/bin/meshrix-mcp.ts",
+      "tools/server-scripts/mcp-install.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts"
+    ], outputs: [],
+  },
+  "server:mcp:register": {
+    scriptName: "server:mcp:register", command: "npm run server:mcp:register", category: "mcp-installer", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "network-service",
+    requiresFreshContainer: false, ciProfile: "external", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "apps/server/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/device-environment.ts"
+    ], outputs: [],
+  },
+  "mcp:doctor": {
+    scriptName: "mcp:doctor", command: "npm run mcp:doctor", category: "mcp-installer", subsystem: "gateway",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "packages/protocols/package.json",
+      "apps/server/bin/meshrix-mcp.ts",
+      "tools/server-scripts/mcp-doctor.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts"
+    ], outputs: [],
   },
   // ── Runtime downloads ──────────────────────────────────────────────────────
 
@@ -829,6 +980,16 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/verify-external-gateway-plugin.ts"
     ], outputs: ["build/reports/server-headless-verification.json"],
   },
+  "server:verify:model-gateway-detachment": {
+    scriptName: "server:verify:model-gateway-detachment", command: "npm run server:verify:model-gateway-detachment", category: "verifier", subsystem: "model-gateway",
+    owner: "platform", tier: "integration", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "audit", expectedDurationClass: "fast",
+    inputs: [
+      "package.json",
+      "tools/server-scripts/verify-model-gateway-detachment.ts",
+      "plugins/model-gateway/**"
+    ], outputs: [],
+  },
   "server:verify:checkpoints": {
     scriptName: "server:verify:checkpoints", command: "npm run server:verify:checkpoints", category: "verifier", subsystem: "workspace",
     owner: "platform", tier: "integration", sideEffects: "build-output",
@@ -847,7 +1008,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "audit", expectedDurationClass: "fast",
     inputs: [
       "package.json",
-      "packages/server-runtime/src/jobs/upload-workspace-materialization.ts",
+      "packages/server-runtime/src/jobs/upload-workspace-materialization/engine.ts",
+      "packages/server-runtime/src/jobs/upload-workspace-materialization/runtime.ts",
+      "packages/server-runtime/src/jobs/upload-workspace-materialization/transaction-store.ts",
       "packages/server-runtime/src/state/upload-session-store.ts",
       "packages/agents/src/agent-workspace/agent-workspace-file-write-api.ts",
       "tools/server-scripts/verify-upload-workspace-materialization.ts"
@@ -903,10 +1066,10 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
 	      "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
 	      "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
 	      "tools/server-scripts/lib/platform-acceptance-reducer.ts",
-	      "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts",
+	      "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts",
 	      "tools/server-scripts/verify-platform-acceptance.ts",
       "tools/server-scripts/production-readiness-gate.ts",
-      "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+      "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
       "tools/server-scripts/verify-upstream-fixture-transit.ts",
       "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
       "tools/server-scripts/stress-gateway-platform-profile.ts",
@@ -920,6 +1083,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
 	      "tools/server-scripts/verify-observability-semantics.ts",
       "packages/protocols/mcp/adapter/mcp-release-targets.ts",
       "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "packages/protocols/mcp/modern-downstream/discovery.ts",
       "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
       "tools/server-scripts/verify-mcp-release-target-scope.ts"
     ], outputs: ["build/reports/script-registry.json"],
@@ -1008,7 +1172,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/server-runtime/src/composition/http-application-assembly.ts",
       "packages/server-runtime/src/composition/server-runtime-providers.ts",
       "packages/protocols/http/controllers/system-controller.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter-replies.ts",
+      "packages/protocols/mcp/notifications.ts",
       "packages/server-runtime/src/composition/console-domain/operation-executor.ts"
     ], outputs: ["build/reports/capability-acceptance-machines.json"],
   },
@@ -1049,7 +1213,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/server-runtime/src/composition/http-application-assembly.ts",
       "packages/server-runtime/src/composition/server-runtime-providers.ts",
       "packages/protocols/http/controllers/system-controller.ts",
-      "packages/protocols/mcp/adapter/http-mcp-adapter-replies.ts",
+      "packages/protocols/mcp/notifications.ts",
       "packages/server-runtime/src/composition/console-domain/operation-executor.ts",
       "plugins/plugin.schema.json",
       "plugins/*/plugin.json"
@@ -1157,14 +1321,20 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   },
   "verify:local-client-adapters": {
     scriptName: "verify:local-client-adapters", command: "npm run verify:local-client-adapters", category: "verifier", subsystem: "module-system",
-    owner: "platform", tier: "integration", sideEffects: "build-output",
+    owner: "platform", tier: "integration", sideEffects: "temp-files",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
     inputs: [
       "tools/plugins/verify-local-client-adapters.mjs",
-      "tools/plugins/**",
+      "tools/plugins/client-adapter-components.mjs",
+      "tools/plugins/smoke-test-client-adapters.mjs",
       "plugins/agents/**",
-      "tests/plugins/**"
-    ], outputs: ["build/client-adapters/**"],
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts",
+      "tests/plugins/client-adapter-contract.test.mjs",
+      "tests/plugins/client-adapters.test.mjs",
+      "tests/plugins/pi-extension.test.mjs",
+      "tests/vitest/server/pi-adapter-installed-component.test.ts"
+    ], outputs: [],
   },
   "verify:local-extension-package-closure": {
     scriptName: "verify:local-extension-package-closure", command: "npm run verify:local-extension-package-closure", category: "verifier", subsystem: "module-system",
@@ -1206,7 +1376,7 @@ export const UNCLASSIFIED_ALLOWLIST: readonly any[] = Object.freeze([
   "generate:upstream-service-report-template", // Deterministic tracked template writer
   "platform:audit:report",    // Open-platform report alias
   "downstream:mcp:audit:report", // Downstream MCP report alias
-  "console:verify",           // Console build and typecheck composite
+  "console:verify",           // UI package and Console build/typecheck composite
   "vitest",                   // Vitest runner
   "vitest:coverage",          // Vitest with coverage
   "repo:branch-flow",         // Branch flow verification

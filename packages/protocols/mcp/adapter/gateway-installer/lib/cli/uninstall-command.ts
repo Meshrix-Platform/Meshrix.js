@@ -1,4 +1,4 @@
-import { MCP_SERVER_NAME, packageJson } from "./constants.ts";
+import { MCP_SERVER_NAME, packageInfo } from "./constants.ts";
 import { option, parseTargets, targetInstallMode } from "./basic-utils.ts";
 import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
 import { deleteMcpApiKeyCredential } from "./credential-store.ts";
@@ -40,7 +40,6 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
       const adapterExecution: any = await runClientAdapter({
         target,
         action: "uninstall",
-        cacheRoot: settings.adapterCacheRoot,
         request: clientAdapterConnectorRequest({
           baseUrl: settings.baseUrl,
           tokenEnv: settings.tokenEnv,
@@ -53,8 +52,7 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
         status: "not-installed",
         uninstallMode: "external-client-adapter",
         ...adapterExecution.result,
-        adapterPackage: adapterExecution.adapter.coordinate,
-        adapterCacheHit: adapterExecution.cache.hit
+        adapterPackage: adapterExecution.adapter.packageName
       };
     } catch (error: any) {
       uninstalled[target] = {
@@ -75,8 +73,8 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
     : "";
   return {
     ok: (Object.values(uninstalled) as any[]).every((value?: any) : any => value?.ok !== false),
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     targets,
     baseUrl: settings.baseUrl,
     discoveryManifest,
@@ -108,8 +106,8 @@ export async function uninstallSelectedCandidates({ options, selected }: Record<
   }
   return {
     ok: partials.every((partial?: any) : any => partial.ok),
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     targets: [...new Set<any>(selected.map((candidate?: any) : any => candidate.target))],
     baseUrl,
     discoveryManifest,
@@ -169,8 +167,8 @@ export async function uninstallTuiCommand(options?: any) : Promise<any> {
     return {
       ok: true,
       cancelled: true,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       reason: "No installed Meshrix.js MCP clients found to uninstall."
     };
   }
@@ -183,8 +181,8 @@ export async function uninstallTuiCommand(options?: any) : Promise<any> {
     return {
       ok: false,
       cancelled: true,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       reason: "Interactive uninstall cancelled."
     };
   }
@@ -211,8 +209,8 @@ export async function uninstallCommand(options?: any) : Promise<any> {
   if (!targetOpt) {
     return {
       ok: false,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       error: "Interactive mode requires a TTY. Please specify --target <client> for non-interactive use."
     };
   }

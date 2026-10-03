@@ -25,12 +25,14 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { isInternalSourcePackagePath } from "../tools/server-scripts/lib/source-package-contract.ts";
 import { scanPublicArtifactFiles } from "../tools/server-scripts/lib/public-artifact-boundary.ts";
 import { packageIncludedMismatches } from "../tools/scripts/package-layout-verification.ts";
 import {
   REQUIRED_REPORT_REDUCERS,
   requiredReportSpec
 } from "../tools/server-scripts/lib/required-report-validator.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../tools/server-scripts/lib/npm-cli-invocation.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -39,7 +41,9 @@ const packageJson: any = JSON.parse(
 );
 const allScripts: any = Object.keys(packageJson.scripts || {});
 const packageScripts: any = packageJson.scripts || {};
-const npmCommand: any = process.platform === "win32" ? "npm.cmd" : "npm";
+// Node refuses to spawn `npm.cmd` without a shell, and `shell: true` is not an
+// accepted launcher boundary, so invoke npm through its Node entrypoint.
+const npmInvocation: any = resolveNpmCliInvocation();
 const FORBIDDEN_PACKAGED_INTERNAL_PATH_PATTERN: any =
   /(^|\/)docs\/(?:plan|report|decisions)(?:\/|$)/u;
 
@@ -56,8 +60,8 @@ const { validateFactSourceAuthorityFindings } = await import(pathToFileURL(
 ).href);
 const {
   ACCEPTANCE_REQUIRED_REPORTS,
-  PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
-  PRIVATE_DEPLOYMENT_REQUIRED_REPORTS,
+  SINGLE_NODE_EVIDENCE_COMMANDS,
+  SINGLE_NODE_REQUIRED_REPORTS,
   PLATFORM_ACCEPTANCE_COMMANDS
 } = await import(pathToFileURL(
   path.join(repoRoot, "tools/server-scripts/verify-platform-acceptance.ts")
@@ -227,8 +231,8 @@ const PLATFORM_ACCEPTANCE_SOURCE: any =
   "tools/server-scripts/verify-platform-acceptance.ts";
 const PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE: any =
   "tools/server-scripts/lib/platform-acceptance-command-catalog.ts";
-const PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_CATALOG_SOURCE: any =
-  "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
+const SINGLE_NODE_INTERNAL_PLATFORM_E2E_CATALOG_SOURCE: any =
+  "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts";
 const FACT_SOURCE_AUTHORITY_REGISTRY: any = "tools/registry/fact-source-authority.registry.json";
 const REQUIRED_FACT_AUTHORITY_PATHS: readonly any[] = Object.freeze([
   "packages/contracts/src/operations/operation-registry.ts",
@@ -250,7 +254,7 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
   "process-identity.runtime-contract": "packages/foundation/src/security/process-identity/index.ts",
   "release.readiness-reduction": "tools/server-scripts/lib/release-evidence-readiness.ts",
   "platform.acceptance-workflow": "tools/server-scripts/verify-platform-acceptance.ts",
-  "private-deployment.internal-platform-e2e-catalog": PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
+  "single-node.internal-platform-e2e-catalog": PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
   "upstream-fixture.transit-evidence": "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts",
   "upstream-mcp.gateway-evidence": "tools/server-scripts/lib/upstream-mcp-gateway-evidence.ts",
   "downstream-agent.tool-loop-evidence": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
@@ -264,7 +268,7 @@ const RELEASE_PROFILE_SOURCES: readonly any[] = Object.freeze([
   "tools/server-scripts/stress-gateway-platform-profile.ts"
 ]);
 const MCP_RELEASE_TARGET_CONSUMER_SOURCES: readonly any[] = Object.freeze([
-  "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+  "packages/protocols/mcp/modern-downstream/discovery.ts",
   "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
   "tools/server-scripts/verify-mcp-release-target-scope.ts"
 ]);
@@ -604,9 +608,10 @@ for (const suite of suiteRegistry.suites || []) {
     continue;
   }
   if (suite.command.endsWith("npm") || suite.command.endsWith("npm.cmd")) {
-    const runIdx: any = suite.args.indexOf("run");
-    if (runIdx >= 0 && runIdx + 1 < suite.args.length) {
-      suiteScriptRefs.add(suite.args[runIdx + 1]);
+    // Only npm's own run subcommand names a package script. An npm exec
+    // payload may contain another tool's "run" argument followed by a file.
+    if (suite.args[0] === "run" && suite.args[1]) {
+      suiteScriptRefs.add(suite.args[1]);
     }
   }
 }
@@ -738,10 +743,10 @@ for (const scriptName of ["mcp:install", "server:mcp:register"]) {
   const entry: any = scriptReg.getDeclaredEntry(scriptName);
   if (
     entry?.sideEffects !== "network-service" ||
-    entry?.requiresFreshContainer !== true ||
+    entry?.requiresFreshContainer !== false ||
     entry?.ciProfile !== "external"
   ) {
-    console.error(`  ${scriptName}: installer/register side effects are understated`);
+    console.error(`  ${scriptName}: installer/register must declare external host effects without a container prerequisite`);
     issues++;
   }
 }
@@ -855,18 +860,18 @@ function assertNoInternalPackFiles(packRecords: any = [], source: any = "npm pac
   for (const record of packRecords) {
     for (const file of record.files || []) {
       const packedPath: any = normalizePackPath(file.path);
-      if (FORBIDDEN_PACKAGED_INTERNAL_PATH_PATTERN.test(packedPath)) {
+      if (FORBIDDEN_PACKAGED_INTERNAL_PATH_PATTERN.test(packedPath) || isInternalSourcePackagePath(packedPath)) {
         packagePackFindings.push({
           source: `${record.name || source}:${packedPath}`,
           kind: "internal-file-packaged",
-          detail: "published tarballs must not include docs/plans or docs/reports"
+          detail: "published tarballs must exclude canonical repository-only source"
         });
       }
     }
   }
 }
 
-const packResult: any = spawnSync(npmCommand, ["pack", "--dry-run", "--json", "--ignore-scripts", "--silent"], {
+const packResult: any = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["pack", "--dry-run", "--json", "--ignore-scripts", "--silent"]), {
   ...npmPackSpawnOptions
 });
 if (packResult.status !== 0) {
@@ -889,7 +894,10 @@ if (packResult.status !== 0) {
   }
   const artifactBoundary: any = await scanPublicArtifactFiles(repoRoot, [...packedFiles], {
     localNeedles: [repoRoot],
-    allowedGeneratedOutputSegments: ["dist"]
+    allowedGeneratedOutputSegments: ["dist"],
+    allowedGeneratedOutputPrefixes: ["build/dist", "build/usage-skills"],
+    allowedBundledDependencyPaths: (packageJson.bundleDependencies || packageJson.bundledDependencies || [])
+      .map((name?: any) : any => `node_modules/${name}`)
   });
   for (const finding of artifactBoundary.findings) {
     packagePackFindings.push({
@@ -910,7 +918,9 @@ if (packResult.status !== 0) {
     }
   }
   for (const requiredPath of [...requiredPackSources].sort()) {
-    if (!packedFiles.has(requiredPath)) {
+    // Repository-only helpers follow the canonical exclusion policy. Every
+    // other referenced source remains required in the public package.
+    if (!isInternalSourcePackagePath(requiredPath) && !packedFiles.has(requiredPath)) {
       packagePackFindings.push({
         source: requiredPath,
         kind: "package-script-source-missing-from-tarball",
@@ -919,7 +929,7 @@ if (packResult.status !== 0) {
     }
   }
 }
-const workspacePackResult: any = spawnSync(npmCommand, ["pack", "--dry-run", "--json", "--workspaces", "--ignore-scripts", "--silent"], {
+const workspacePackResult: any = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["pack", "--dry-run", "--json", "--workspaces", "--ignore-scripts", "--silent"]), {
   ...npmPackSpawnOptions
 });
 await fs.rm(npmPackCachePath, { recursive: true, force: true }).catch(() : any => {});
@@ -1016,8 +1026,8 @@ validateReleaseDagCatalogConsistency({
 });
 validateCommandReportCatalogConsistency({
   source: PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
-  commands: PRIVATE_DEPLOYMENT_EVIDENCE_COMMANDS,
-  requiredReports: PRIVATE_DEPLOYMENT_REQUIRED_REPORTS
+  commands: SINGLE_NODE_EVIDENCE_COMMANDS,
+  requiredReports: SINGLE_NODE_REQUIRED_REPORTS
 });
 if (!RELEASE_EVIDENCE_READINESS_REDUCER_PATTERN.test(releaseAggregatorSource)) {
   releaseSourceOfTruthFindings.push({
@@ -1091,7 +1101,7 @@ if (scriptRegistryWithFactSourceAuthorityFinding.releaseReady === true) {
     detail: "the shared release evidence reducer must reject script-registry reports that found fact-source authority violations"
   });
 }
-const governanceCoverageWithUnmappedOperation: any = createReleaseEvidenceReadiness("build/reports/enterprise-governance-coverage.json", registeredReleaseReportFixture("build/reports/enterprise-governance-coverage.json", {
+const governanceCoverageWithUnmappedOperation: any = createReleaseEvidenceReadiness("build/reports/authorization-governance-coverage.json", registeredReleaseReportFixture("build/reports/authorization-governance-coverage.json", {
   summary: {
     releaseReady: true,
     reportLeakScan: true,
@@ -1146,7 +1156,7 @@ if (!/createReportFreshnessEvidence/u.test(releaseEvidenceFreshnessHelperSource)
   });
 }
 for (const relativePath of [
-  "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+  "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
 ]) {
   const source: any = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
   if (!RELEASE_EVIDENCE_FRESHNESS_PATTERN.test(source)) {
@@ -1227,21 +1237,21 @@ if (!PRODUCTION_GATE_PROJECTION_ONLY_PATTERN.test(productionReadinessGateSource)
   });
 }
 const privateDeploymentSource: any = await fs.readFile(
-  path.join(repoRoot, "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"),
+  path.join(repoRoot, "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"),
   "utf8"
 );
 if (!PRIVATE_REDUCER_ONLY_PATTERN.test(privateDeploymentSource)) {
   releaseSourceOfTruthFindings.push({
-    source: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
-    kind: "private-deployment-not-reducer-only",
-    detail: "private deployment must reduce evidence already produced by canonical platform acceptance command owners"
+    source: "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
+    kind: "single-node-not-reducer-only",
+    detail: "single-node closure must reduce evidence already produced by canonical platform acceptance command owners"
   });
 }
 if (RELEASE_COMMAND_DAG_RUNNER_IMPORT_PATTERN.test(privateDeploymentSource)) {
   releaseSourceOfTruthFindings.push({
-    source: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
-    kind: "private-deployment-shadow-dag",
-    detail: "private deployment must not execute a second release command DAG"
+    source: "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
+    kind: "single-node-shadow-dag",
+    detail: "single-node closure must not execute a second release command DAG"
   });
 }
 if (releaseSourceOfTruthFindings.length > 0) {
@@ -1257,7 +1267,7 @@ if (releaseSourceOfTruthFindings.length > 0) {
 console.log("10. Checking self-contained gateway scenario source of truth...");
 for (const relativePath of [
   PLATFORM_ACCEPTANCE_SOURCE,
-  "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+  "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
   ...RELEASE_PROFILE_SOURCES
 ]) {
   const source: any = await fs.readFile(path.join(repoRoot, relativePath), "utf8");

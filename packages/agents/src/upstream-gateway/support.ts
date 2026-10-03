@@ -14,11 +14,21 @@ import {
   hasTrafficPolicyInput
 } from "./policy-source.ts";
 import { compilePayloadTransport } from "./payload-contract.ts";
+import type {
+  UpstreamGatewayExistingService,
+  UpstreamGatewayMcpConfig,
+  UpstreamGatewayNormalizedService,
+  UpstreamGatewayOperationRecord,
+  UpstreamGatewayPublicMcpConfig,
+  UpstreamGatewayPublicService,
+  UpstreamGatewayServiceRecord
+} from "./registry-types.ts";
 
 export const UPSTREAM_GATEWAY_PROTOCOL_VERSION: any = "v0.0.1:upstream-gateway:service-registry-1";
 export const MAX_UPSTREAM_ENDPOINTS: any = 64;
 export const MAX_UPSTREAM_ENDPOINT_WEIGHT: any = 100;
 export const MAX_UPSTREAM_TOTAL_ENDPOINT_WEIGHT: any = 1_024;
+export const MAX_UPSTREAM_TIMEOUT_MS: any = 2_147_483_647;
 
 /** Retired startup config path. Ordinary runtime must not load this file. */
 
@@ -92,18 +102,13 @@ export function normalizeBaseUrl(value?: any, { required = true }: Record<string
     if (!required) return "";
     throw new Error("Upstream service baseUrl is required.");
   }
-  const authority: any = raw.match(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/?#]+)/u)?.[1] || "";
-  const hostPort: any = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority;
-  const hasExplicitPort: any = /:\d+$/u.test(hostPort);
   const parsed: any = new URL(raw);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Upstream service baseUrl must use http or https.");
+  if (!/^https?:\/\//iu.test(raw) || !["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Upstream service baseUrl must use HTTP or HTTPS.");
   }
-  if (!hasExplicitPort) {
-    throw new Error("Upstream service baseUrl must include an explicit port.");
+  if (parsed.username || parsed.password) {
+    throw new Error("Upstream service baseUrl must not include embedded credentials.");
   }
-  parsed.username = "";
-  parsed.password = "";
   parsed.hash = "";
   return parsed.toString().replace(/\/+$/, "");
 }
@@ -377,7 +382,7 @@ export function redactSecretInput(input: Record<string, any> = {}) : any {
   };
 }
 
-export function normalizeOperation(input: Record<string, any> = {}, index: any = 0, { serviceProtocol = "http" }: Record<string, any> = {}) : any {
+export function normalizeOperation(input: Record<string, any> = {}, index: any = 0, { serviceProtocol = "http" }: Record<string, any> = {}) : UpstreamGatewayOperationRecord {
   const operationKey: any = text(input.operationKey || input.operationId || input.key || input.name || `operation-${index + 1}`);
   const method: any = normalizeMethod(input.method, "POST");
   const risk: any = normalizeRisk(input.risk);
@@ -394,6 +399,7 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
     ...(approvalLayers.length > 0 ? { approvalLayers: [...new Set<any>(approvalLayers)] } : { approvalLayers: [] })
   };
   const payloadTransport: any = serviceProtocol === "mcp" ? null : compilePayloadTransport(input);
+  const timeoutMs: any = normalizeOptionalTimeoutMs(input.timeoutMs, "operation.timeoutMs");
   return {
     operationKey,
     label: text(input.label || operationKey),
@@ -407,7 +413,7 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
     requiresApproval: input.requiresApproval === true || risk === "repair_write" || risk === "destructive",
     approvalScope: text(input.approvalScope || approvalInput.approvalScope),
     requiredApproval,
-    timeoutMs: Math.max(100, Math.min(Number(input.timeoutMs || 3000), 30000)),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
     responseMaxBytes: payloadTransport?.response.maxBytes || 8 * 1024 * 1024,
     jsonRpcMethod: text(input.jsonRpcMethod || input.rpcMethod || input.methodName || operationKey),
     sensitiveBodyFields: normalizeSensitiveBodyFields(input.sensitiveBodyFields || input.redactedBodyFields),
@@ -423,6 +429,14 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
   };
 }
 
+export function normalizeOptionalTimeoutMs(value: any, label: any = "timeoutMs") : any {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > MAX_UPSTREAM_TIMEOUT_MS) {
+    throw new TypeError(`${label} must be a positive whole number of milliseconds within the supported timer range.`);
+  }
+  return value;
+}
+
 export function normalizeMcpTransport(value?: any) : any {
   const transport: any = text(value || "stdio").toLowerCase();
   if (["http", "https", "remote", "streamable-http", "sse"].includes(transport)) {
@@ -431,7 +445,7 @@ export function normalizeMcpTransport(value?: any) : any {
   return transport === "stdio" ? "stdio" : transport;
 }
 
-export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Record<string, any> = {}, { serviceId = "" }: Record<string, any> = {}) : any {
+export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Record<string, any> = {}, { serviceId = "" }: Record<string, any> = {}) : UpstreamGatewayMcpConfig {
   const source: any = object(input.mcp || input.upstreamMcp || input);
   const previous: any = object(existing.mcp);
   const transport: any = normalizeMcpTransport(source.transport || source.type || previous.transport || "stdio");
@@ -443,6 +457,8 @@ export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Re
   const headers: any = Object.fromEntries((Object.entries(rawHeaders) as [string, any][])
     .map(([key, value]: any[]) : any => [text(key), text(value)])
     .filter(([key]: any[]) : any => key));
+  const rawTimeoutMs: any = Object.hasOwn(source, "timeoutMs") ? source.timeoutMs : previous.timeoutMs;
+  const timeoutMs: any = normalizeOptionalTimeoutMs(rawTimeoutMs, "mcp.timeoutMs");
   return {
     protocolVersion: "v0.0.1:upstream-gateway:mcp-service-1",
     transport,
@@ -454,7 +470,7 @@ export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Re
     protocolVersionHint: text(source.protocolVersion || previous.protocolVersionHint || ""),
     toolNamePrefix: safePublicToolSegment(source.toolNamePrefix || source.prefix || previous.toolNamePrefix || serviceId),
     toolsCacheTtlMs: Math.max(0, Math.min(Number(source.toolsCacheTtlMs ?? previous.toolsCacheTtlMs ?? 30_000), 600_000)),
-    timeoutMs: Math.max(100, Math.min(Number(source.timeoutMs || previous.timeoutMs || 30_000), 300_000))
+    ...(timeoutMs === undefined ? {} : { timeoutMs })
   };
 }
 
@@ -473,7 +489,7 @@ export function publicUrl(value: any = "") : any {
   }
 }
 
-export function publicMcpConfig(config: Record<string, any> = {}) : any {
+export function publicMcpConfig(config: Record<string, any> = {}) : UpstreamGatewayPublicMcpConfig {
   return {
     protocolVersion: config.protocolVersion || "v0.0.1:upstream-gateway:mcp-service-1",
     transport: config.transport || "stdio",
@@ -484,7 +500,7 @@ export function publicMcpConfig(config: Record<string, any> = {}) : any {
     headerCount: Object.keys(object(config.headers)).length,
     toolNamePrefix: config.toolNamePrefix || "",
     toolsCacheTtlMs: Number(config.toolsCacheTtlMs || 0),
-    timeoutMs: Number(config.timeoutMs || 0)
+    ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs })
   };
 }
 
@@ -527,7 +543,7 @@ export function normalizeCircuitBreaker(input: Record<string, any> = {}) : any {
   };
 }
 
-export function normalizeService(input: Record<string, any> = {}, existing: Record<string, any> = {}) : any {
+export function normalizeService(input: Record<string, any> = {}, existing: UpstreamGatewayExistingService = {}) : UpstreamGatewayNormalizedService {
   const serviceId: any = text(input.serviceId || input.id || existing.serviceId || stableId("upstream", {
     baseUrl: input.baseUrl,
     label: input.label
@@ -604,10 +620,11 @@ export function normalizeService(input: Record<string, any> = {}, existing: Reco
   };
 }
 
-export function publicService(service: Record<string, any> = {}) : any {
+export function publicService(service: UpstreamGatewayServiceRecord) : UpstreamGatewayPublicService {
   const {
     credentialRefs: privateCredentialRefs,
     credentialReferences: _privateCredentialReferences,
+    mcp: privateMcpConfig,
     ...publicFields
   } = service;
   const endpointRef: any = service.baseUrl
@@ -650,26 +667,14 @@ export function publicService(service: Record<string, any> = {}) : any {
       circuitBreakerInherited: endpoint.circuitBreakerInherited === true
     })),
     endpointCount: asArray(service.endpoints).length || (endpointRef ? 1 : 0),
-    ...(service.serviceProtocol === "mcp" ? { mcp: publicMcpConfig(service.mcp) } : {})
+    ...(service.serviceProtocol === "mcp" ? { mcp: publicMcpConfig(privateMcpConfig || {}) } : {})
   };
 }
 
-export function mcpToolReadOnly(tool: Record<string, any> = {}) : any {
-  const annotations: any = object(tool.annotations);
-  if (annotations.destructiveHint === true) return false;
-  if (annotations.readOnlyHint === true) return true;
-  return false;
-}
-
-export function mcpToolRisk(tool: Record<string, any> = {}) : any {
-  const annotations: any = object(tool.annotations);
-  // MCP destructiveHint means high-impact / approval-worthy work.
-  // Meshrix.js "destructive" is a hard dispatcher block; map to repair_write instead.
-  if (annotations.destructiveHint === true) return "repair_write";
-  return mcpToolReadOnly(tool) ? "read_only" : "safe_write";
-}
-
-export function parsePublicUpstreamMcpToolName(name: any = "") : any {
+export function parsePublicUpstreamMcpToolName(name: any = "") : Readonly<{
+  prefix: string;
+  upstreamToolName: string;
+}> | null {
   const raw: any = text(name);
   if (!raw.startsWith("upstream.")) return null;
   const withoutPrefix: any = raw.slice("upstream.".length);
@@ -681,7 +686,9 @@ export function parsePublicUpstreamMcpToolName(name: any = "") : any {
   };
 }
 
-export function mcpServiceConfig(service: Record<string, any> = {}) : any {
+export function mcpServiceConfig(
+  service: UpstreamGatewayServiceRecord | UpstreamGatewayNormalizedService
+) : Readonly<Record<string, unknown>> {
   return {
     ...object(service.mcp),
     protocolVersion: service.mcp?.protocolVersionHint || undefined

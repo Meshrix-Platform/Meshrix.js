@@ -12,7 +12,7 @@ audience: usage
 - RPC and session-file behavior need their own vendor or implementation evidence; installing the MCP extension does not qualify them.
 
 Source: [vendor reference](https://pi.dev/docs/latest/settings). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

@@ -8,11 +8,13 @@ import { init, parse } from "es-module-lexer";
 await init;
 
 const require: any = createRequire(import.meta.url);
+const ts: any = require("typescript");
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const reportDir: any = path.join(repoRoot, "build", "reports");
 const jsonReportPath: any = path.join(reportDir, "architecture-graph.json");
 const markdownReportPath: any = path.join(reportDir, "architecture-graph.md");
 const dependencyRules: any = require("../registry/dependency-rules.registry.json");
+const publicApiRegistry: any = require("../registry/public-api.registry.json");
 const rootPackageJson: any = require("../../package.json");
 
 const SOURCE_ROOTS: readonly any[] = Object.freeze(["apps", "packages", "plugins", "tools", "skills"]);
@@ -31,6 +33,8 @@ const BUILTINS: any = new Set<any>([
   ...builtinModules,
   ...builtinModules.map((name?: any) : any => `node:${name}`)
 ]);
+const WHITE_BOX_SEGMENTS: any = new Set<any>(["test", "tests", "verifiers", "generators", "fixtures"]);
+const COMPONENT_ROOTS: any = new Set<any>(["apps", "packages", "plugins", "services"]);
 
 function relativePath(absolutePath?: any) : any {
   return path.relative(repoRoot, absolutePath).split(path.sep).join("/");
@@ -93,6 +97,56 @@ function moduleSourceForFile(source?: any, absoluteFile: any = "") : any {
     .join("\n");
 }
 
+function importDeclarationIsTypeOnly(clause?: any) : any {
+  if (!clause) return false;
+  if (clause.isTypeOnly === true) return true;
+  if (clause.name) return false;
+  if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+    const elements: any[] = clause.namedBindings.elements;
+    return elements.length > 0 && elements.every((element?: any) : any => element.isTypeOnly === true);
+  }
+  return false;
+}
+
+function exportDeclarationIsTypeOnly(node?: any) : any {
+  if (node.isTypeOnly === true) return true;
+  if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+    const elements: any[] = node.exportClause.elements;
+    return elements.length > 0 && elements.every((element?: any) : any => element.isTypeOnly === true);
+  }
+  return false;
+}
+
+function analyzeImportOccurrences(source: string) {
+  const sourceFile = ts.createSourceFile("module.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const entries: { specifier: string; dynamic: boolean; classification: string }[] = [];
+  const seen = new Set<string>();
+  function mark(literal: any, classification: string, dynamic = false): void {
+    if (!literal || !ts.isStringLiteralLike(literal)) return;
+    const specifier: string = literal.text;
+    const key = `${specifier}\0${classification}\0${dynamic}`;
+    if (!specifier || seen.has(key)) return;
+    seen.add(key);
+    entries.push({ specifier, dynamic, classification });
+  }
+  function visit(node: any): void {
+    if (ts.isImportDeclaration(node)) {
+      mark(node.moduleSpecifier, importDeclarationIsTypeOnly(node.importClause) ? "type-only" : "runtime");
+    } else if (ts.isExportDeclaration(node)) {
+      mark(node.moduleSpecifier, exportDeclarationIsTypeOnly(node) ? "type-only" : "runtime");
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      mark(node.argument.literal, "type-only", true);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      mark(node.arguments[0], "dynamic", true);
+    } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      mark(node.moduleReference.expression, node.isTypeOnly ? "type-only" : "runtime");
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return entries;
+}
+
 export function extractImportSpecifiers(source?: any, absoluteFile: any = "") : any {
   return extractImportEntries(source, absoluteFile).map((entry?: any) : any => entry.specifier);
 }
@@ -105,6 +159,12 @@ export function extractImportEntries(source?: any, absoluteFile: any = "") : any
       specifier: entry.n,
       dynamic: entry.d > -1
     }));
+}
+
+export function classifyImportEntries(source: string, absoluteFile = "") {
+  // Classify syntax occurrences independently: a type import and a lazy import
+  // of the same module must never manufacture a static runtime dependency.
+  return analyzeImportOccurrences(moduleSourceForFile(source, absoluteFile));
 }
 
 async function resolveRelativeImport(fromFile?: any, specifier?: any) : Promise<any> {
@@ -122,6 +182,32 @@ async function resolveFileTarget(basePath?: any) : Promise<any> {
     if (await fileExists(candidate)) return relativePath(candidate);
   }
   return null;
+}
+
+async function declaredRuntimeEntryRoots() : Promise<any> {
+  const declaredBins: any = rootPackageJson.bin;
+  if (!declaredBins || typeof declaredBins !== "object" || Array.isArray(declaredBins)) {
+    return [];
+  }
+  const roots: any[] = [];
+  for (const [name, target] of (Object.entries(declaredBins) as [string, any][])) {
+    const normalized: any = String(target || "").replace(/\\/gu, "/").replace(/^\.\//u, "");
+    const sourcePath: any = normalized.startsWith("dist/") ? normalized.slice("dist/".length) : normalized;
+    const stem: any = sourcePath.replace(/\.[^./]+$/u, "");
+    const candidates: any[] = [`${stem}.ts`, `${stem}.mts`, `${stem}.js`, `${stem}.mjs`, `${stem}.cjs`, sourcePath];
+    let resolved: any = null;
+    for (const candidate of candidates) {
+      if (await fileExists(path.join(repoRoot, candidate))) {
+        resolved = candidate;
+        break;
+      }
+    }
+    if (!resolved) {
+      throw new Error(`Declared runtime entry ${name} (${target}) has no source file under the repository roots.`);
+    }
+    roots.push(resolved);
+  }
+  return [...new Set<any>(roots)].sort();
 }
 
 async function expandWorkspaceRoots() : Promise<any> {
@@ -255,6 +341,15 @@ function declaredRuntimeDependencies(manifest: Record<string, any> = {}) : any {
     ...(manifest.dependencies || {}),
     ...(manifest.optionalDependencies || {}),
     ...(manifest.peerDependencies || {})
+  };
+}
+
+/** Package-owned build configuration runs in the development toolchain only. */
+export function declaredDependenciesForUsage(manifest: Record<string, any>, sourceRoot: string, files: string[]): Record<string, any> {
+  const developmentOnly = files.length > 0 && files.every((file) => file === `${sourceRoot}/vite.config.ts`);
+  return {
+    ...declaredRuntimeDependencies(manifest),
+    ...(developmentOnly ? manifest.devDependencies || {} : {})
   };
 }
 
@@ -501,6 +596,220 @@ function layerForPath(relativeFile?: any, layers?: any) : any {
   return layers.find((layer?: any) : any => layerDirectoryMatches(relativeFile, layer.directory)) || null;
 }
 
+export function layerDependencyViolation(edge?: any, layers: any = []) : any {
+  const fromLayer: any = layers.find((layer?: any) : any => layer.id === String(edge?.fromLayer || ""));
+  const toLayer: any = layers.find((layer?: any) : any => layer.id === String(edge?.toLayer || ""));
+  if (!fromLayer || !toLayer || fromLayer.id === toLayer.id) return null;
+  if (fromLayer.forbiddenDependsOn.includes(toLayer.id)) {
+    return {
+      rule: `${fromLayer.id}-must-not-depend-on-${toLayer.id}`,
+      from: edge.from,
+      to: edge.to,
+      specifier: edge.specifier,
+      fromLayer: fromLayer.id,
+      toLayer: toLayer.id,
+      message: `${fromLayer.name} must not import ${toLayer.name}.`
+    };
+  }
+  if (!fromLayer.allowedDependsOn.includes(toLayer.id)) {
+    return {
+      rule: `${fromLayer.id}-dependency-not-allowed`,
+      from: edge.from,
+      to: edge.to,
+      specifier: edge.specifier,
+      fromLayer: fromLayer.id,
+      toLayer: toLayer.id,
+      message: `${fromLayer.name} has no allowlisted dependency on ${toLayer.name}.`
+    };
+  }
+  return null;
+}
+
+export function componentOf(relativeFile?: any) : any {
+  const parts: any = String(relativeFile || "").split("/");
+  if (COMPONENT_ROOTS.has(parts[0]) && parts.length >= 2) {
+    return `${parts[0]}/${parts[1]}`;
+  }
+  return parts[0] || "";
+}
+
+export function matchesPublicTarget(target?: any, publicTargets: any = []) : any {
+  const candidate: any = String(target || "");
+  for (const pattern of publicTargets) {
+    const text: any = String(pattern || "");
+    const star: any = text.indexOf("*");
+    if (star < 0) {
+      if (text === candidate) return true;
+      continue;
+    }
+    const prefix: any = text.slice(0, star);
+    const suffix: any = text.slice(star + 1);
+    if (candidate.length >= prefix.length + suffix.length &&
+      candidate.startsWith(prefix) &&
+      candidate.endsWith(suffix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isProductionConsumerPath(relativeFile?: any) : any {
+  if (!/^(?:apps|packages|plugins)\//u.test(String(relativeFile || ""))) return false;
+  const parts: any = String(relativeFile).split("/");
+  return !parts.some((part?: any) : any => WHITE_BOX_SEGMENTS.has(part));
+}
+
+export function findFacadeBoundaryViolations({ edges = [], enforcedFiles = new Set<any>(), publicTargets = [] }: Record<string, any> = {}) : any {
+  const violations: any[] = [];
+  for (const edge of edges) {
+    if (!edge?.to || !enforcedFiles.has(edge.from)) continue;
+    if (!String(edge.to).startsWith("packages/")) continue;
+    if (componentOf(edge.from) === componentOf(edge.to)) continue;
+    if (edge.kind === "relative") {
+      violations.push({
+        rule: "production-package-relative-import",
+        from: edge.from,
+        to: edge.to,
+        specifier: edge.specifier,
+        message: "Cross-package production consumers and shipped runtime entries must import a declared public package subpath or registered alias, not a source-relative path into another package."
+      });
+      continue;
+    }
+    if (!matchesPublicTarget(edge.to, publicTargets)) {
+      violations.push({
+        rule: "package-import-bypasses-public-facade",
+        from: edge.from,
+        to: edge.to,
+        specifier: edge.specifier,
+        message: "Cross-package production imports must resolve to a declared public target (package export or registered alias)."
+      });
+    }
+  }
+  return violations;
+}
+
+export function collectEntryClosure(roots: any = [], edges: any = []) : any {
+  const adjacency: any = new Map<any, any>();
+  for (const edge of edges) {
+    if (!edge?.to || edge.classification === "type-only") continue;
+    if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+    adjacency.get(edge.from).push(edge.to);
+  }
+  const closure: any = new Set<any>();
+  const queue: any[] = [...new Set<any>(roots)];
+  for (let head: any = 0; head < queue.length; head += 1) {
+    const file: any = queue[head];
+    if (closure.has(file)) continue;
+    closure.add(file);
+    for (const target of adjacency.get(file) || []) {
+      if (!closure.has(target)) queue.push(target);
+    }
+  }
+  return closure;
+}
+
+export function findStaticRuntimeCycles(edges: any = []) : any {
+  const adjacency: any = new Map<any, any>();
+  const nodeSet: any = new Set<any>();
+  for (const edge of edges) {
+    if (edge?.classification !== "runtime" || !edge.to) continue;
+    nodeSet.add(edge.from);
+    nodeSet.add(edge.to);
+    if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+    adjacency.get(edge.from).push(edge.to);
+  }
+  const nodes: any[] = [...nodeSet].sort();
+  const index: any = new Map<any, any>();
+  const low: any = new Map<any, any>();
+  const onStack: any = new Set<any>();
+  const stack: any[] = [];
+  const cycles: any[] = [];
+  let nextIndex: any = 0;
+
+  for (const start of nodes) {
+    if (index.has(start)) continue;
+    const work: any[] = [{ node: start, edgeIndex: 0 }];
+    while (work.length > 0) {
+      const frame: any = work[work.length - 1];
+      const node: any = frame.node;
+      if (frame.edgeIndex === 0) {
+        index.set(node, nextIndex);
+        low.set(node, nextIndex);
+        nextIndex += 1;
+        stack.push(node);
+        onStack.add(node);
+      }
+      const neighbors: any[] = adjacency.get(node) || [];
+      let descended: any = false;
+      while (frame.edgeIndex < neighbors.length) {
+        const neighbor: any = neighbors[frame.edgeIndex];
+        frame.edgeIndex += 1;
+        if (!index.has(neighbor)) {
+          work.push({ node: neighbor, edgeIndex: 0 });
+          descended = true;
+          break;
+        }
+        if (onStack.has(neighbor)) {
+          low.set(node, Math.min(low.get(node), index.get(neighbor)));
+        }
+      }
+      if (descended) continue;
+      if (low.get(node) === index.get(node)) {
+        const component: any[] = [];
+        let member: any;
+        do {
+          member = stack.pop();
+          onStack.delete(member);
+          component.push(member);
+        } while (member !== node);
+        const selfLoop: any = (adjacency.get(node) || []).includes(node);
+        if (component.length > 1 || selfLoop) {
+          component.sort((a?: any, b?: any) : any => a.localeCompare(b));
+          cycles.push(component);
+        }
+      }
+      work.pop();
+      if (work.length > 0) {
+        const parent: any = work[work.length - 1].node;
+        low.set(parent, Math.min(low.get(parent), low.get(node)));
+      }
+    }
+  }
+  return cycles.sort((a?: any, b?: any) : any => a[0].localeCompare(b[0]));
+}
+
+function publicTargetPatternVariants(pattern?: any) : any {
+  const variants: any = new Set<any>([pattern]);
+  if (!TARGET_EXTENSIONS.has(path.extname(pattern))) {
+    for (const extension of TARGET_EXTENSIONS) {
+      variants.add(`${pattern}${extension}`);
+      variants.add(`${pattern}/index${extension}`);
+    }
+  }
+  return variants;
+}
+
+function declaredPublicTargets(workspaces?: any) : any {
+  const patterns: any = new Set<any>();
+  function add(pattern?: any) : any {
+    for (const variant of publicTargetPatternVariants(pattern)) {
+      patterns.add(variant);
+    }
+  }
+  for (const descriptor of workspaces.scopes) {
+    for (const target of Object.values(descriptor.manifest.exports || {})) {
+      const selected: any = selectMappedTarget(target);
+      if (!selected || !String(selected).startsWith(".")) continue;
+      add(`${descriptor.relativeRoot}/${String(selected).replace(/^\.\//u, "")}`);
+    }
+  }
+  for (const alias of publicApiRegistry.aliases || []) {
+    const target: any = String(alias?.targetPath || "").replace(/^\.\//u, "");
+    if (target) add(target);
+  }
+  return [...patterns].sort();
+}
+
 function exceptionMatches(exception?: any, fromPath?: any, toPath?: any) : any {
   const fromPrefix: any = String(exception.from || "").replace(/\/+$/u, "");
   const toPrefix: any = String(exception.to || "").replace(/\/+$/u, "");
@@ -517,7 +826,13 @@ function markdownReport(report?: any) : any {
     `- Relative edges: ${report.graph.summary.relativeEdgeCount}`,
     `- Package-import (#meshrix/*) edges: ${report.graph.summary.packageImportEdgeCount}`,
     `- Workspace-package (@meshrix/*) edges: ${report.graph.summary.workspacePackageEdgeCount}`,
+    `- Static runtime edges: ${report.graph.summary.staticRuntimeEdgeCount}`,
+    `- Type-only edges: ${report.graph.summary.typeOnlyEdgeCount}`,
     `- Dynamic internal edges: ${report.graph.summary.dynamicInternalEdgeCount}`,
+    `- Runtime cycles: ${report.graph.summary.runtimeCycleCount}`,
+    `- Facade violations: ${report.graph.summary.facadeViolationCount}`,
+    `- Declared runtime entry roots: ${report.graph.summary.runtimeEntryRootCount}`,
+    `- Runtime entry closure nodes: ${report.graph.summary.runtimeEntryClosureNodeCount}`,
     `- Unresolved internal imports: ${report.graph.summary.unresolvedImportCount}`,
     `- Workspace dependency findings: ${report.graph.summary.manifestDependencyViolationCount}`,
     `- Constraints: ${report.graph.constraints.length}`,
@@ -528,6 +843,10 @@ function markdownReport(report?: any) : any {
   if (report.violations.length > 0) {
     lines.push("## Violations", "");
     for (const violation of report.violations) {
+      if (Array.isArray(violation.cycle) && violation.cycle.length > 0) {
+        lines.push(`- ${violation.rule}: ${violation.cycle.join(" -> ")} -> ${violation.cycle[0]}`);
+        continue;
+      }
       lines.push(`- ${violation.rule}: ${violation.from} -> ${violation.to} (${violation.specifier})`);
     }
     lines.push("");
@@ -554,6 +873,8 @@ export async function runArchitectureGraph({
   }
   const workspaces: any = await workspaceDescriptors();
   const files: any = await collectSourceFiles();
+  const runtimeEntryRoots: any = await declaredRuntimeEntryRoots();
+  const publicTargets: any = declaredPublicTargets(workspaces);
   const edges: any[] = [];
   const unresolvedImports: any[] = [];
   const dependencyUsage: any = new Map<any, any>();
@@ -596,7 +917,7 @@ export async function runArchitectureGraph({
     const source: any = await fs.readFile(absoluteFile, "utf8");
     let importEntries: any;
     try {
-      importEntries = extractImportEntries(source, absoluteFile);
+      importEntries = classifyImportEntries(source, absoluteFile);
     } catch {
       violations.push({
         rule: "source-import-parse-failed",
@@ -607,8 +928,10 @@ export async function runArchitectureGraph({
       });
       continue;
     }
+    const resolutionCache: any = new Map<any, any>();
     for (const importEntry of importEntries) {
       const specifier: any = importEntry.specifier;
+      const classification: any = importEntry.classification;
       const family: any = specifierFamily(specifier);
       if (family === "unsupported") {
         violations.push({
@@ -620,7 +943,11 @@ export async function runArchitectureGraph({
         });
         continue;
       }
-      const resolution: any = await resolveImportTarget(absoluteFile, specifier, workspaces);
+      let resolution: any = resolutionCache.get(specifier);
+      if (!resolution) {
+        resolution = await resolveImportTarget(absoluteFile, specifier, workspaces);
+        resolutionCache.set(specifier, resolution);
+      }
       if (!resolution.target) {
         if (resolution.external && !resolution.builtin) {
           recordDependencyUsage({
@@ -635,6 +962,7 @@ export async function runArchitectureGraph({
             from,
             specifier,
             dynamic: importEntry.dynamic,
+            classification,
             family,
             reason: resolution.reason || "unresolved_internal_import"
           };
@@ -667,6 +995,7 @@ export async function runArchitectureGraph({
         specifier,
         family,
         dynamic: importEntry.dynamic,
+        classification,
         kind: specifierKind(specifier),
         fromLayer: fromLayer?.id || "",
         toLayer: toLayer?.id || ""
@@ -700,31 +1029,10 @@ export async function runArchitectureGraph({
             violations.push(finding);
           }
         }
-      }
-      if (!fromLayer || fromLayer.id === toLayer.id) {
-        continue;
-      }
-      if (edgeIsExcepted) {
-        continue;
-      }
-      if (fromLayer.forbiddenDependsOn.includes(toLayer.id)) {
-        violations.push({
-          rule: `${fromLayer.id}-must-not-depend-on-${toLayer.id}`,
-          from,
-          to,
-          specifier,
-          message: `${fromLayer.name} must not import ${toLayer.name}.`
-        });
-        continue;
-      }
-      if (!fromLayer.allowedDependsOn.includes(toLayer.id)) {
-        violations.push({
-          rule: `${fromLayer.id}-dependency-not-allowed`,
-          from,
-          to,
-          specifier,
-          message: `${fromLayer.name} has no allowlisted dependency on ${toLayer.name}.`
-        });
+        const layerViolation: any = layerDependencyViolation(edge, layers);
+        if (layerViolation) {
+          violations.push(layerViolation);
+        }
       }
     }
   }
@@ -741,7 +1049,7 @@ export async function runArchitectureGraph({
   const manifestDependencyViolations: any[] = [];
   for (const usage of manifestDependencies) {
     const sourceDescriptor: any = workspaces.byName.get(usage.sourcePackage);
-    const declared: any = declaredRuntimeDependencies(sourceDescriptor?.manifest);
+    const declared: any = declaredDependenciesForUsage(sourceDescriptor?.manifest || {}, usage.sourceRoot, usage.files);
     if (!Object.hasOwn(declared, usage.dependency)) {
       const violation: Record<string, any> = {
         rule: "workspace-runtime-dependency-not-declared",
@@ -774,6 +1082,27 @@ export async function runArchitectureGraph({
     }
   }
 
+  const runtimeEntryClosure: any = collectEntryClosure(runtimeEntryRoots, edges);
+  const enforcedFiles: any = new Set<any>();
+  for (const absoluteFile of files) {
+    const relative: any = relativePath(absoluteFile);
+    if (isProductionConsumerPath(relative)) enforcedFiles.add(relative);
+  }
+  for (const entryFile of runtimeEntryClosure) enforcedFiles.add(entryFile);
+  const facadeViolations: any = findFacadeBoundaryViolations({ edges, enforcedFiles, publicTargets });
+  violations.push(...facadeViolations);
+  const runtimeCycles: any = findStaticRuntimeCycles(edges);
+  for (const cycle of runtimeCycles) {
+    violations.push({
+      rule: "static-runtime-import-cycle",
+      from: cycle[0],
+      to: cycle[cycle.length - 1],
+      specifier: "",
+      cycle,
+      message: `Static runtime imports form a cycle: ${cycle.join(" -> ")} -> ${cycle[0]}.`
+    });
+  }
+
   const graph: Record<string, any> = {
     schemaVersion: "v0.0.1:architecture:graph-report-3",
     registryDriven: true,
@@ -786,6 +1115,8 @@ export async function runArchitectureGraph({
       };
     }),
     edges,
+    runtimeEntryRoots,
+    runtimeEntryClosure: [...runtimeEntryClosure].sort(),
     constraints: [
       ...layers.flatMap((layer?: any) : any => [
         {
@@ -815,7 +1146,14 @@ export async function runArchitectureGraph({
       relativeEdgeCount: edges.filter((edge?: any) : any => edge.family === "relative").length,
       packageImportEdgeCount: edges.filter((edge?: any) : any => edge.family === "package-import").length,
       workspacePackageEdgeCount: edges.filter((edge?: any) : any => edge.family === "workspace-package").length,
-      dynamicInternalEdgeCount: edges.filter((edge?: any) : any => edge.dynamic).length,
+      staticRuntimeEdgeCount: edges.filter((edge?: any) : any => edge.classification === "runtime").length,
+      typeOnlyEdgeCount: edges.filter((edge?: any) : any => edge.classification === "type-only").length,
+      dynamicInternalEdgeCount: edges.filter((edge?: any) : any => edge.classification === "dynamic").length,
+      runtimeCycleCount: runtimeCycles.length,
+      runtimeCycleNodeCount: runtimeCycles.reduce((total?: any, cycle?: any) : any => total + cycle.length, 0),
+      facadeViolationCount: facadeViolations.length,
+      runtimeEntryRootCount: runtimeEntryRoots.length,
+      runtimeEntryClosureNodeCount: runtimeEntryClosure.size,
       unresolvedImportCount: unresolvedImports.length,
       manifestDependencyViolationCount: manifestDependencyViolations.length,
       constraintFindingCount: constraintFindings.length,
@@ -832,6 +1170,8 @@ export async function runArchitectureGraph({
     manifestDependencyViolations,
     constraintFindings,
     unresolvedImports,
+    facadeViolations,
+    runtimeCycles,
     violations
   };
 
@@ -842,7 +1182,7 @@ export async function runArchitectureGraph({
   }
 
   if (verbose) {
-    console.log(`[architecture-graph] nodes=${graph.summary.totalNodes} edges=${graph.summary.totalEdges} unresolved=${unresolvedImports.length} violations=${violations.length}`);
+    console.log(`[architecture-graph] nodes=${graph.summary.totalNodes} edges=${graph.summary.totalEdges} runtime=${graph.summary.staticRuntimeEdgeCount} type-only=${graph.summary.typeOnlyEdgeCount} dynamic=${graph.summary.dynamicInternalEdgeCount} cycles=${graph.summary.runtimeCycleCount} facade=${graph.summary.facadeViolationCount} unresolved=${unresolvedImports.length} violations=${violations.length}`);
     if (writeReport) {
       console.log(`[architecture-graph] report: ${relativePath(jsonReportPath)}`);
     }
@@ -850,7 +1190,7 @@ export async function runArchitectureGraph({
   return report;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result: any = await runArchitectureGraph();
   if (result.violations.length > 0) {
     process.exitCode = 1;

@@ -8,9 +8,11 @@ export const SOURCE_PACKAGE_ROOTS: readonly string[] = Object.freeze([
   AUTHORIZED_VENDORED_PACKAGE_ROOT,
   "services/model-gateway/contracts",
   "apps/server",
+  "apps/mcp-gateway-installer",
   "apps/console",
   "content",
   "tools",
+  "skills",
   "docs/README.md",
   "docs/RUNBOOK.md",
   "docs/COMPATIBILITY.md",
@@ -42,6 +44,7 @@ export const ROOT_SOURCE_FILES: readonly string[] = Object.freeze([
   "README.zh-CN.md",
   "PRODUCT.md",
   "LICENSE",
+  "THIRD_PARTY_NOTICES.md",
   "CHANGELOG.md",
   "SECURITY.md",
   "CONTRIBUTING.md",
@@ -49,6 +52,14 @@ export const ROOT_SOURCE_FILES: readonly string[] = Object.freeze([
 ]);
 
 export const INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS: readonly string[] = Object.freeze([
+  "tools/server-scripts/benchmark-gateway.ts",
   "docs/plans",
   "docs/reports"
 ]);
+
+/** Repository-only source is deliberately absent from every public source package. */
+export function isInternalSourcePackagePath(relativePath: string): boolean {
+  return INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS.some((excludedPath) =>
+    relativePath === excludedPath || relativePath.startsWith(`${excludedPath}/`)
+  );
+}

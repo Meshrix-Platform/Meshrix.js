@@ -258,7 +258,7 @@ rejected.
 Template roles may contain only `organization.structure.read`,
 `organization.membership.read`, and `organization.membership.manage`;
 `businessResourceActions` and `assignedSubjectIds` remain empty. Names and labels
-never confer authority. The five enterprise-template administrator roles bind
+never confer authority. The five template-derived administrator roles bind
 that same minimum management-action set to the group, primary organization,
 secondary organization, department, or team node respectively. Publication
 creates definitions and projections only; no person receives a template role

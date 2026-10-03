@@ -1,10 +1,17 @@
 import http from "node:http";
 import { Readable } from "node:stream";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanup: any[] = [];
+
+function deferred() : any {
+  let resolve: any;
+  const promise: any = new Promise((settle?: any) : any => { resolve = settle; });
+  return { promise, resolve };
+}
 
 async function listen(handler?: any) : Promise<any> {
   const server: any = http.createServer(handler);
@@ -24,7 +31,7 @@ function opaqueTransport(maxBytes: any = 1024 * 1024) : any {
 }
 
 function registryFor(baseUrl?: any, maxBytes: any = 1024 * 1024) : any {
-  const registry: any = createUpstreamGatewayRegistry();
+  const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
   installUpstreamRuntimeServices(registry, [{
     serviceId: "binary-fixture",
     serviceProtocol: "http",
@@ -149,5 +156,40 @@ describe("native upstream payload transit", () : any => {
       new Promise((resolve?: any) : any => setTimeout(resolve, 500))
     ]);
     expect(upstreamClosed).toBe(true);
+  });
+
+  it("keeps an admitted opaque transit open beyond retired implicit timeout durations", async () : Promise<any> => {
+    const responseGate: any = deferred();
+    const responseStarted: any = deferred();
+    const upstreamBytes: any = Buffer.from("opaque response released after virtual time");
+    const baseUrl: any = await listen(async (request?: any, response?: any) : Promise<any> => {
+      for await (const _chunk of request) { /* drain */ }
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      responseStarted.resolve();
+      await responseGate.promise;
+      if (!response.destroyed) response.end(upstreamBytes);
+    });
+    const registry: any = registryFor(baseUrl);
+    const received: any[] = [];
+    let settled: any = false;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const forwarding: any = registry.forwardHttpStream({
+      serviceId: "binary-fixture",
+      operationKey: "convert",
+      requestHeaders: { "content-type": "application/octet-stream" },
+      contentLength: 1,
+      requestStream: Readable.from([Buffer.from("x")])
+    }, { subjectId: "owner", scopes: ["gateway:write"] }, {
+      async consumeResponse(upstream?: any) : Promise<any> {
+        for await (const chunk of upstream.body) received.push(Buffer.from(chunk));
+      }
+    }).finally(() => { settled = true; });
+
+    await responseStarted.promise;
+    await vi.advanceTimersByTimeAsync(300_001);
+    expect(settled).toBe(false);
+    responseGate.resolve();
+    await expect(forwarding).resolves.toMatchObject({ ok: true, responseBytes: upstreamBytes.byteLength });
+    expect(Buffer.concat(received)).toEqual(upstreamBytes);
   });
 });

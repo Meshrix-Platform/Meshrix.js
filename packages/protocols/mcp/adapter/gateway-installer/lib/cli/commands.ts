@@ -2,7 +2,7 @@ import {
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
-  packageJson,
+  packageInfo,
   sharedHubContract
 } from "./constants.ts";
 import { MCP_META_SERVER_INFO } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
@@ -59,8 +59,8 @@ export async function registerCommand(options?: any) : Promise<any> {
   const guidance: any = installGuidanceMetadata({ includeUrl, baseUrl: settings.baseUrl, tokenEnv });
   return {
     ok: true,
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     mode: "device-hub-registration",
     baseUrl: settings.baseUrl,
     mcpUrl,
@@ -72,6 +72,8 @@ export async function registerCommand(options?: any) : Promise<any> {
     },
     localFiles,
     env,
+    envPublished: profile.envPublished,
+    envPersistence: profile.envPersistence,
     ...guidance,
     clientInstall: guidance.clientInstallJsonCommand,
     autoInstall: guidance.autoInstallCommand,
@@ -122,16 +124,16 @@ export async function discoverLocalCommand(options?: any) : Promise<any> {
   if (!discovered.ok) {
     return {
       ok: false,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       attempts: discovered.attempts,
       reason: discovered.reason
     };
   }
   return {
     ok: true,
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     sourceType: "signed-handshake",
     source: discovered.baseUrl,
     baseUrl: discovered.baseUrl,
@@ -264,8 +266,8 @@ export async function doctorCommand(options?: any) : Promise<any> {
       && checks.discovery.ok
       && checks.discover.ok
       && (!token || (checks.toolsList.ok && checks.systemHealth.ok)),
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     sharedHub: checks.discover.sharedHub,
     ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv }),
     ...guidance,

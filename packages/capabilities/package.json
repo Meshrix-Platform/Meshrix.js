@@ -2,36 +2,41 @@
   "name": "@meshrix/capabilities",
   "version": "0.0.1",
   "description": "Meshrix.js operation permission and runtime capabilities",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1"
-  },
   "exports": {
     "./operation-permission-core/index": {
-      "types": "./dist/operation-permission-core/index.d.ts",
       "source": "./src/operation-permission-core/index.ts",
+      "types": "./dist/operation-permission-core/index.d.ts",
       "default": "./dist/operation-permission-core/index.js"
     },
     "./operation-permission-core/runtime-schema": {
-      "types": "./dist/operation-permission-core/runtime-schema.d.ts",
       "source": "./src/operation-permission-core/runtime-schema.ts",
+      "types": "./dist/operation-permission-core/runtime-schema.d.ts",
       "default": "./dist/operation-permission-core/runtime-schema.js"
     },
     "./operation-permission-core/store": {
-      "types": "./dist/operation-permission-core/store.d.ts",
       "source": "./src/operation-permission-core/store.ts",
+      "types": "./dist/operation-permission-core/store.d.ts",
       "default": "./dist/operation-permission-core/store.js"
     },
     "./skills/tool-skill-management-provider": {
-      "types": "./dist/skills/tool-skill-management-provider.d.ts",
       "source": "./src/skills/tool-skill-management-provider.ts",
+      "types": "./dist/skills/tool-skill-management-provider.d.ts",
       "default": "./dist/skills/tool-skill-management-provider.js"
+    },
+    "./gateway-policy": {
+      "source": "./src/gateway-policy/index.ts",
+      "types": "./dist/gateway-policy/index.d.ts",
+      "default": "./dist/gateway-policy/index.js"
+    },
+    "./gateway-credentials": {
+      "source": "./src/gateway-credentials/index.ts",
+      "types": "./dist/gateway-credentials/index.d.ts",
+      "default": "./dist/gateway-credentials/index.js"
     }
   },
   "files": [
@@ -39,5 +44,20 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/capabilities"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
+  }
 }

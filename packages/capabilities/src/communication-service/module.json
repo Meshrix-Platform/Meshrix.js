@@ -14,7 +14,7 @@
       "label": "MCP Server",
       "protocol": "mcp",
       "routeTarget": "mcp-server-side",
-      "modulePath": "packages/protocols/mcp/adapter/http-mcp-adapter.ts"
+      "modulePath": "packages/protocols/mcp/modern-downstream/index.ts"
     }
   ],
   "components": {

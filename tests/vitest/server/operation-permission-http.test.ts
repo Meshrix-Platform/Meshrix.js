@@ -113,7 +113,8 @@ async function callRouter(router?: any, {
   body = null,
   rawRequestBody = null,
   headers = {},
-  requestId
+  requestId,
+  signal = null
 }: Record<string, any> = {}) : Promise<any> {
   const response: any = createResponse();
   const request: any = createRequest({ headers, id: requestId });
@@ -123,7 +124,8 @@ async function callRouter(router?: any, {
     response,
     requestBody,
     url: createUrl(path),
-    method
+    method,
+    signal
   });
   return { handled, request, response };
 }
@@ -136,6 +138,82 @@ beforeEach(() : any => {
 });
 
 describe("operation permission http behavior", () : any => {
+  it("returns MCP selection facts only after issuer authorization and only for eligible scopes", async () : Promise<any> => {
+    const selection = {
+      status: "available",
+      services: [{ serviceId: "service-current", label: "Current service", status: "available", toolCount: 1 }],
+      tools: [{
+        serviceId: "service-current",
+        publicName: "upstream.current.read",
+        label: "Read current data",
+        operationToolId: "upstream.service-current.tools-call",
+        capabilityId: "upstream:service-current:read",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        toolsets: ["upstream-mcp", "upstream:service-current"]
+      }]
+    };
+    const authorization = { ok: true, session: { user: { userId: "console-user" } } };
+    const scopesProvider = vi.fn(async () : Promise<any> => ({
+      organizationRevision: 1,
+      authorizationRevision: 2,
+      catalogFingerprint: "catalog-current",
+      eligibleRoots: [{ nodeId: "org-a" }],
+      eligibleNodes: [{ nodeId: "org-a" }]
+    }));
+    const discover = vi.fn(async () : Promise<any> => selection);
+    const platform = createPlatform({
+      apiKeyDistributionProvider: { getIssuerScopes: scopesProvider },
+      readMcpToolSelection: discover
+    });
+    const securityPermissions = {
+      authorizeOperation: vi.fn(async () : Promise<any> => authorization)
+    };
+    const router = createOperationPermissionHttpRouter({ platform, securityPermissions, logger: getRuntimeLoggerMock() });
+
+    const { response } = await callRouter(router, {
+      path: "/api/operation-permission/v1/api-keys/issuer-scopes",
+      headers: { host: "console.example.test" }
+    });
+    const payload = JSON.parse(response.body);
+    expect(response.statusCode).toBe(200);
+    expect(scopesProvider).toHaveBeenCalledWith({ subjectId: "console-user" });
+    expect(discover).toHaveBeenCalledWith({ authorization, signal: null });
+    expect(payload.mcpToolSelection).toEqual(selection);
+    expect(payload.serverAudience).toBe("console.example.test");
+
+    scopesProvider.mockResolvedValueOnce({ eligibleRoots: [], eligibleNodes: [] });
+    await callRouter(router, { path: "/api/operation-permission/v1/api-keys/issuer-scopes" });
+    expect(discover).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not discover tools for a denied issuer and hides provider errors behind unavailable status", async () : Promise<any> => {
+    const getIssuerScopes = vi.fn(async () : Promise<any> => ({ eligibleRoots: [{ nodeId: "org-a" }], eligibleNodes: [{ nodeId: "org-a" }] }));
+    const discover = vi.fn(async () : Promise<any> => { throw new Error("private upstream transport details"); });
+    const platform = createPlatform({
+      apiKeyDistributionProvider: { getIssuerScopes },
+      readMcpToolSelection: discover
+    });
+    const securityPermissions = {
+      authorizeOperation: vi.fn(async () : Promise<any> => ({ ok: false, status: 403, error: "denied" }))
+    };
+    const router = createOperationPermissionHttpRouter({ platform, securityPermissions, logger: getRuntimeLoggerMock() });
+
+    const denied = await callRouter(router, { path: "/api/operation-permission/v1/api-keys/issuer-scopes" });
+    expect(denied.response.statusCode).toBe(403);
+    expect(getIssuerScopes).not.toHaveBeenCalled();
+    expect(discover).not.toHaveBeenCalled();
+
+    securityPermissions.authorizeOperation = vi.fn(async () : Promise<any> => ({
+      ok: true,
+      session: { user: { userId: "console-user" } }
+    }));
+    const available = await callRouter(router, { path: "/api/operation-permission/v1/api-keys/issuer-scopes" });
+    const payload = JSON.parse(available.response.body);
+    expect(payload.mcpToolSelection).toEqual({ status: "unavailable", services: [], tools: [] });
+    expect(available.response.body).not.toContain("private upstream transport details");
+  });
+
   it("keeps the safe layered outcome while redacting every continuation identifier", async () : Promise<any> => {
     const pending: any = rowToPendingOperation({
       pending_operation_id: "custom-current-layer",

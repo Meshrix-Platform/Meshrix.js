@@ -14,8 +14,8 @@ import {
 import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
-import { mcpOutletForTool } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts";
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import { mcpOutletForTool } from "../../packages/protocols/mcp/modern-downstream/tools.ts";
 import { createPluginDeploymentAuditCatalog } from "./lib/plugin-deployment-audit-catalog.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -26,7 +26,7 @@ const BASELINE_CAPABILITY_FEATURES: Readonly<Record<string, any>> = Object.freez
   "upstream-gateway": ["upstream-gateway"],
   "downstream-mcp": ["downstream-mcp", "operation-permission-core"],
   "strategy-management": ["strategy-management"],
-  "enterprise-governance": ["security-permissions", "tag-management", "operation-permission-core", "devops-core"],
+  "governance-observability": ["security-permissions", "tag-management", "operation-permission-core", "devops-core"],
   "console-administration": ["console-shell"],
   "container-deployment": ["devops-core"],
   storage: ["storage-core"],

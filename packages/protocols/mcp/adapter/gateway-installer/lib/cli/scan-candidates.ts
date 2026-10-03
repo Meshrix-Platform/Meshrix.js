@@ -6,7 +6,7 @@ import {
   describeClientAdapter,
   runClientAdapter
 } from "./client-adapter-runner.ts";
-import { packageJson, SUPPORTED_TARGETS } from "./constants.ts";
+import { packageInfo, SUPPORTED_TARGETS } from "./constants.ts";
 import { withInstallCandidateGuidance } from "./guidance.ts";
 import { installerOptions } from "./installer-options.ts";
 import { detectLocalCommandPaths } from "./scan-local.ts";
@@ -44,13 +44,13 @@ export function candidateRemoteContext() : any {
   return null;
 }
 
-async function adapterDescriptor(target?: any, settings?: any) : Promise<any> {
-  return describeClientAdapter({ target, cacheRoot: settings.adapterCacheRoot });
+async function adapterDescriptor(target?: any) : Promise<any> {
+  return describeClientAdapter({ target });
 }
 
 export async function resolveClientAdapterForTarget(target?: any, settings?: any, requestedClient: Record<string, any> = {}) : Promise<any> {
   if (requestedClient?.command) return { ...requestedClient };
-  const described: any = await adapterDescriptor(target, settings);
+  const described: any = await adapterDescriptor(target);
   for (const commandName of described.result.commandNames) {
     const paths: any = await detectLocalCommandPaths(commandName);
     if (paths[0]) return { command: paths[0] };
@@ -62,7 +62,6 @@ async function verifyCandidate(settings?: any, target?: any, client?: any) : Pro
   const executed: any = await runClientAdapter({
     target,
     action: "verify",
-    cacheRoot: settings.adapterCacheRoot,
     request: clientAdapterConnectorRequest({
       baseUrl: settings.baseUrl,
       tokenEnv: settings.tokenEnv,
@@ -87,7 +86,7 @@ export async function annotateInstalledCandidates(settings?: any, candidates?: a
 }
 
 async function scanTarget(settings?: any, target?: any, explicitClient: Record<string, any> = {}) : Promise<any> {
-  const described: any = await adapterDescriptor(target, settings);
+  const described: any = await adapterDescriptor(target);
   const candidates: any[] = [];
   const commands: any = explicitClient.command
     ? [explicitClient.command]
@@ -97,7 +96,6 @@ async function scanTarget(settings?: any, target?: any, explicitClient: Record<s
       const scanned: any = await runClientAdapter({
         target,
         action: "scan",
-        cacheRoot: settings.adapterCacheRoot,
         request: clientAdapterConnectorRequest({
           baseUrl: settings.baseUrl,
           tokenEnv: settings.tokenEnv,
@@ -112,8 +110,7 @@ async function scanTarget(settings?: any, target?: any, explicitClient: Record<s
         status: "detected",
         detail: command,
         installed: scanned.result.installed === true,
-        adapterPackage: described.adapter.coordinate,
-        adapterCacheHit: described.cache.hit && scanned.cache.hit,
+        adapterPackage: described.adapter.packageName,
         optionOverrides: {
           "execution-location": "local",
           __meshrixAdapterClient: client
@@ -160,8 +157,8 @@ export async function scanInstallTargets(options: Record<string, any> = {}) : Pr
   await annotateInstalledCandidates(settings, candidates);
   return {
     ok: true,
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     hostOs: settings.hostOs,
     baseUrl: settings.baseUrl,
     mcpUrl: settings.baseUrl ? `${settings.baseUrl}/mcp` : "",

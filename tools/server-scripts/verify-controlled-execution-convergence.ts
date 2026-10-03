@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createReleaseCandidateIdentity } from "./verify-release-candidate-identity.ts";
 import { createSourceEvidenceContext } from "./lib/source-tree-digest.ts";
 import {
   CONTROLLED_EXECUTION_LEAF_SPECS,
@@ -20,17 +19,13 @@ async function readJson(filePath?: any) : Promise<any> {
 
 export async function verifyControlledExecutionConvergence({ repoRoot = REPO_ROOT, writeReport = true }: Record<string, any> = {}) : Promise<any> {
   const sourceContext: any = createSourceEvidenceContext(repoRoot, { verifier: VERIFIER, commandId: "controlled-execution-convergence-final" });
-  const [candidate, leafEntries] = await Promise.all([
-    createReleaseCandidateIdentity({ repoRoot }),
-    Promise.all(CONTROLLED_EXECUTION_LEAF_SPECS.map(async (spec?: any) : Promise<any> => [
+  const leafEntries = await Promise.all(CONTROLLED_EXECUTION_LEAF_SPECS.map(async (spec?: any) : Promise<any> => [
       spec.key,
       await readJson(path.join(repoRoot, spec.path))
-    ]))
-  ]);
+    ]));
   const report: any = reduceControlledExecutionConvergence({
     generatedAt: new Date().toISOString(),
     sourceContext,
-    candidate,
     leafReports: Object.fromEntries(leafEntries),
   });
   if (writeReport) {

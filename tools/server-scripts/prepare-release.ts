@@ -4,19 +4,21 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadReleaseDefinition } from "./verify-release-definition.ts";
+import {
+  assertReleaseVersion,
+  loadReleaseDefinition,
+  releaseVersionFromTag,
+  resolveReleaseWorkspaceDirectories
+} from "./lib/release-metadata.ts";
 
-const GATEWAY_INSTALLER_MANIFEST: any =
-  "packages/protocols/mcp/adapter/gateway-installer/package.json";
 const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
   "dependencies",
   "devDependencies",
   "optionalDependencies",
   "peerDependencies"
 ]);
-const RELEASE_SEMVER_PATTERN: any =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$/u;
-
+const MCP_RELEASE_IDENTITY_PATH: any = "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+const PLUGIN_REGISTRY_PATH: any = "plugins/registry/plugins.json";
 export class ReleasePreparationError extends Error {
   code: any;
   findings: any;
@@ -31,29 +33,6 @@ export class ReleasePreparationError extends Error {
 
 function releaseError(code?: any, message?: any, findings: any = []) : any {
   return new ReleasePreparationError(code, message, findings);
-}
-
-export function assertReleaseVersion(version?: any) : any {
-  const normalized: any = String(version || "").trim();
-  if (!RELEASE_SEMVER_PATTERN.test(normalized)) {
-    throw releaseError(
-      "release_version_invalid",
-      "Release version must be valid SemVer without build metadata."
-    );
-  }
-  return normalized;
-}
-
-export function releaseVersionFromTag(tag?: any) : any {
-  const normalized: any = String(tag || "").trim();
-  if (!normalized.startsWith("v")) {
-    throw releaseError("release_tag_invalid", "Release tag must use the v<semver> form.");
-  }
-  const version: any = assertReleaseVersion(normalized.slice(1));
-  if (normalized !== `v${version}`) {
-    throw releaseError("release_tag_invalid", "Release tag must use the v<semver> form.");
-  }
-  return version;
 }
 
 function assertReleaseDate(value?: any) : any {
@@ -136,13 +115,10 @@ async function loadReleaseState(rootDir?: any) : Promise<any> {
     );
   }
 
-  const workspaceDirectories: any = workspaces.map((workspace?: any) : any =>
-    normalizeRepositoryPath(workspace, "Workspace path")
-  );
+  const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({ rootDir, workspaces });
   const manifestPaths: any[] = [
     "package.json",
-    ...workspaceDirectories.map(manifestPathForWorkspace),
-    GATEWAY_INSTALLER_MANIFEST
+    ...workspaceDirectories.map(manifestPathForWorkspace)
   ];
   if (new Set<any>(manifestPaths).size !== manifestPaths.length) {
     throw releaseError("release_manifest_duplicate", "Release manifest paths must be unique.");
@@ -174,12 +150,35 @@ async function loadReleaseState(rootDir?: any) : Promise<any> {
     workspace.name = name;
   }
 
+  const pluginRegistry = await readJsonRecord(rootDir, PLUGIN_REGISTRY_PATH);
+  if (!Array.isArray(pluginRegistry.value.plugins)) {
+    throw releaseError("release_plugin_registry_invalid", `${PLUGIN_REGISTRY_PATH} must contain a plugins array.`);
+  }
+  const adapterDescriptorRecords: any[] = [];
+  for (const entry of pluginRegistry.value.plugins) {
+    if (entry?.adapter !== true) continue;
+    const directory = normalizeRepositoryPath(entry.path, "Client adapter workspace");
+    const workspace = workspaceRecords.find((candidate?: any) : any => candidate.directory === directory);
+    if (!workspace) {
+      throw releaseError("release_adapter_workspace_missing", `${PLUGIN_REGISTRY_PATH} references an adapter outside the declared workspaces.`);
+    }
+    const descriptorPath = `${directory}/adapter.json`;
+    adapterDescriptorRecords.push({
+      directory,
+      entryId: entry.id,
+      record: await readJsonRecord(rootDir, descriptorPath)
+    });
+  }
+
   return {
     rootDir,
     rootPackage,
     manifestRecords,
     workspaceRecords,
     internalNames,
+    pluginRegistry,
+    adapterDescriptorRecords,
+    mcpReleaseIdentity: await readTextRecord(rootDir, MCP_RELEASE_IDENTITY_PATH),
     packageLock: await readJsonRecord(rootDir, "package-lock.json"),
     changelog: await readTextRecord(rootDir, "CHANGELOG.md")
   };
@@ -285,11 +284,34 @@ function validateInternalDependencies({ value, relativePath }: Record<string, an
 
 function collectReleaseFindings(state?: any, version?: any) : any {
   const findings: any[] = [];
+  const mcpVersion: any = state.mcpReleaseIdentity.text.match(
+    /export const MCP_NPM_PACKAGE_VERSION:\s*any\s*=\s*"([^"]+)";/u
+  )?.[1];
+  if (mcpVersion !== version) {
+    addFinding(findings, MCP_RELEASE_IDENTITY_PATH, "release_mcp_identity_version_mismatch", "MCP_NPM_PACKAGE_VERSION");
+  }
   for (const record of state.manifestRecords.values()) {
     if (record.value.version !== version) {
       addFinding(findings, record.relativePath, "release_manifest_version_mismatch", "version");
     }
     validateInternalDependencies(record, version, state.internalNames, findings);
+  }
+
+  const pluginRegistry = state.pluginRegistry.value;
+  for (const adapter of state.adapterDescriptorRecords) {
+    const entry = pluginRegistry.plugins.find((candidate?: any) : any => candidate.id === adapter.entryId);
+    const workspace = state.workspaceRecords.find((candidate?: any) : any => candidate.directory === adapter.directory);
+    const descriptor = adapter.record.value;
+    if (!entry || !workspace || descriptor.target !== adapter.entryId.replace(/^agent-/u, "") ||
+        descriptor.packageName !== workspace.name || descriptor.entrypoint !== "adapter.mjs" ||
+        entry.path !== adapter.directory || entry.runtime !== false || entry.release !== false ||
+        entry.version !== version || descriptor.version !== version ||
+        entry.adapterContract?.target !== descriptor.target ||
+        entry.adapterContract?.packageName !== descriptor.packageName ||
+        entry.adapterContract?.entrypoint !== descriptor.entrypoint ||
+        entry.adapterContract?.protocol !== descriptor.protocol) {
+      addFinding(findings, PLUGIN_REGISTRY_PATH, "release_adapter_projection_mismatch", adapter.entryId);
+    }
   }
 
   const lock: any = state.packageLock.value;
@@ -306,7 +328,7 @@ function collectReleaseFindings(state?: any, version?: any) : any {
     }
     if (rootLock) {
       const rootWorkspaces: any = Array.isArray(rootLock.workspaces) ? rootLock.workspaces : [];
-      const packageWorkspaces: any = state.workspaceRecords.map(({ directory }: Record<string, any>) : any => directory);
+      const packageWorkspaces: any = state.rootPackage.value.workspaces;
       if (JSON.stringify(rootWorkspaces) !== JSON.stringify(packageWorkspaces)) {
         addFinding(findings, "package-lock.json", "release_lock_workspaces_mismatch", "packages[''].workspaces");
       }
@@ -359,6 +381,17 @@ function formatJson(value?: any) : any {
 
 function createDesiredFiles(state?: any, version?: any, date?: any) : any {
   const desiredFiles: any = new Map<any, any>();
+  const releaseVersionPattern: any = /(export const MCP_NPM_PACKAGE_VERSION:\s*any\s*=\s*")[^"]+(";)/u;
+  if (!releaseVersionPattern.test(state.mcpReleaseIdentity.text)) {
+    throw releaseError(
+      "release_mcp_identity_version_missing",
+      `${MCP_RELEASE_IDENTITY_PATH} must declare MCP_NPM_PACKAGE_VERSION.`
+    );
+  }
+  desiredFiles.set(MCP_RELEASE_IDENTITY_PATH, {
+    ...state.mcpReleaseIdentity,
+    desiredText: state.mcpReleaseIdentity.text.replace(releaseVersionPattern, `$1${version}$2`)
+  });
   for (const record of state.manifestRecords.values()) {
     const next: any = cloneJson(record.value);
     next.version = version;
@@ -370,6 +403,27 @@ function createDesiredFiles(state?: any, version?: any, date?: any) : any {
     });
   }
 
+  const pluginRegistry: any = cloneJson(state.pluginRegistry.value);
+  for (const adapter of state.adapterDescriptorRecords) {
+    const entry = pluginRegistry.plugins.find((candidate?: any) : any => candidate.id === adapter.entryId);
+    if (!entry) {
+      throw releaseError("release_adapter_registry_entry_missing", `${PLUGIN_REGISTRY_PATH} is missing ${adapter.entryId}.`);
+    }
+    entry.version = version;
+    const descriptor: any = cloneJson(adapter.record.value);
+    descriptor.version = version;
+    desiredFiles.set(adapter.record.relativePath, {
+      ...adapter.record,
+      value: descriptor,
+      desiredText: formatJson(descriptor)
+    });
+  }
+  desiredFiles.set(PLUGIN_REGISTRY_PATH, {
+    ...state.pluginRegistry,
+    value: pluginRegistry,
+    desiredText: formatJson(pluginRegistry)
+  });
+
   const lock: any = cloneJson(state.packageLock.value);
   lock.version = version;
   if (!lock.packages || typeof lock.packages !== "object" || Array.isArray(lock.packages)) {
@@ -379,7 +433,7 @@ function createDesiredFiles(state?: any, version?: any, date?: any) : any {
     throw releaseError("release_lock_root_missing", "package-lock.json must contain a root package entry.");
   }
   lock.packages[""].version = version;
-  lock.packages[""].workspaces = state.workspaceRecords.map(({ directory }: Record<string, any>) : any => directory);
+  lock.packages[""].workspaces = cloneJson(state.rootPackage.value.workspaces);
   for (const entry of (Object.values(lock.packages) as any[])) {
     if (entry && typeof entry === "object" && !Array.isArray(entry)) {
       synchronizeInternalDependencies(entry, version);
@@ -531,7 +585,16 @@ export async function prepareRelease({
         desiredFiles.get(manifestPath)
       ])
     ),
+    pluginRegistry: desiredFiles.get(PLUGIN_REGISTRY_PATH),
+    adapterDescriptorRecords: state.adapterDescriptorRecords.map((adapter?: any) : any => ({
+      ...adapter,
+      record: desiredFiles.get(adapter.record.relativePath)
+    })),
     packageLock: desiredFiles.get("package-lock.json"),
+    mcpReleaseIdentity: {
+      ...state.mcpReleaseIdentity,
+      text: desiredFiles.get(MCP_RELEASE_IDENTITY_PATH).desiredText
+    },
     changelog: {
       ...state.changelog,
       text: desiredFiles.get("CHANGELOG.md").desiredText

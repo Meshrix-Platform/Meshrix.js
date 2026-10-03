@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  createBootstrapInstaller,
   releaseGeneratedAtFromSourceDateEpoch,
   releaseManifest
 } from "./lib/mcp-release-manifest.ts";
-import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
+import { packageManifestFromTarball } from "./lib/lock-backed-npm-registry.ts";
+import { MCP_PORTABLE_ASSET_PREFIX } from "./lib/mcp-release-common.ts";
+import { loadPortableUndiciDependency } from "./lib/mcp-release-portable.ts";
 import {
   MCP_ASSET_PLATFORM_BY_PORTABLE_TARGET,
   MCP_RELEASE_TARGETS
@@ -37,14 +38,7 @@ const connectorRoot: any = path.join(
   "adapter",
   "gateway-installer"
 );
-const nativeInstallerRoot: any = path.join(
-  repoRoot,
-  "packages",
-  "protocols",
-  "mcp",
-  "adapter",
-  "native-installer"
-);
+const foundationSourceRoot: any = path.join(repoRoot, "packages", "foundation", "src");
 const nodeRuntimeLockPath: any = path.join(repoRoot, "tools", "release", "node-runtime.lock.json");
 const expectedPlatforms: any = Object.freeze(
   MCP_RELEASE_TARGETS.map((target?: any) : any => MCP_ASSET_PLATFORM_BY_PORTABLE_TARGET[target])
@@ -65,42 +59,40 @@ function argumentValue(name?: any, fallback: any = "") : any {
 }
 
 async function expectedConnectorFiles() : Promise<any> {
-  const fixed: any[] = ["package.json", "README.md", "LICENSE", "mcp-release-targets.ts", "bin/meshrix-mcp.ts"];
-  return sorted([...fixed, ...await listFilesRecursively(connectorRoot, "lib")]);
+  const fixed: any[] = ["README.md", "LICENSE", "mcp-release-targets.ts", "mcp-identity.ts", "bin/meshrix-mcp.ts"];
+  const undici: any = await loadPortableUndiciDependency();
+  return {
+    files: sorted([
+      ...fixed,
+      ...await listFilesRecursively(connectorRoot, "lib"),
+      ...(await listFilesRecursively(foundationSourceRoot, "environment-compatibility"))
+        .map((file?: any) : any => `vendor/foundation/${file}`),
+      ...undici.files.map((file?: any) : any => `node_modules/undici/${file}`)
+    ]),
+    undiciManifest: undici.portablePackageJson
+  };
 }
 
 function generatedPortableExecutables(platform?: any) : any {
   const runtimeExecutableName: any = platform.startsWith("windows-") ? "node.exe" : "node";
-  const commandScript: any = (scriptName?: any, operation: any = "") : any => [
-    "#!/usr/bin/env sh",
-    "set -e",
-    "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-    `\"$DIR/${scriptName}\"${operation ? ` ${operation}` : ""}`,
-    "printf '\\nDone. Press Enter to close.'",
-    "IFS= read -r _",
-    ""
-  ].join("\n");
-  return new Map<any, any>([
-    ["meshrix-mcp", [
+  const windowsTarget: any = platform.startsWith("windows-");
+  return new Map<any, any>(windowsTarget
+    ? [["meshrix-mcp.ps1", [
+        "$ErrorActionPreference = 'Stop'",
+        "$DIR = Split-Path -Parent $MyInvocation.MyCommand.Path",
+        "$env:MESHRIX_MCP_CONNECTOR_COMMAND = Join-Path $DIR 'meshrix-mcp.ps1'",
+        `& (Join-Path $DIR 'runtime\\${runtimeExecutableName}') (Join-Path $DIR 'app\\bin\\meshrix-mcp.ts') @args`,
+        "exit $LASTEXITCODE",
+        ""
+      ].join("\r\n")]]
+    : [["meshrix-mcp", [
       "#!/usr/bin/env sh",
       "set -e",
       "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
       "export MESHRIX_MCP_CONNECTOR_COMMAND=\"$DIR/meshrix-mcp\"",
       `exec \"$DIR/runtime/${runtimeExecutableName}\" \"$DIR/app/bin/meshrix-mcp.ts\" \"$@\"`,
       ""
-    ].join("\n")],
-    ["meshrix-mcp.ps1", [
-      "$ErrorActionPreference = 'Stop'",
-      "$DIR = Split-Path -Parent $MyInvocation.MyCommand.Path",
-      "$env:MESHRIX_MCP_CONNECTOR_COMMAND = Join-Path $DIR 'meshrix-mcp.ps1'",
-      `& (Join-Path $DIR 'runtime\\${runtimeExecutableName}') (Join-Path $DIR 'app\\bin\\meshrix-mcp.ts') @args`,
-      "exit $LASTEXITCODE",
-      ""
-    ].join("\r\n")],
-    ["install.command", commandScript("meshrix-mcp-install.sh", "install")],
-    ["uninstall.command", commandScript("meshrix-mcp-uninstall.sh")],
-    ["doctor.command", commandScript("meshrix-mcp-install.sh", "doctor")]
-  ]);
+    ].join("\n")]]);
 }
 
 async function assertArchiveSourceFile(archivePath?: any, rootName?: any, archiveRelativePath?: any, sourcePath?: any) : Promise<any> {
@@ -115,8 +107,10 @@ async function verifyPortableArchive({
   inputDir,
   packageName,
   packageVersion,
+  rootPackage,
   platform,
   appFiles,
+  undiciManifest,
   runtimeSource
 }: Record<string, any>) : Promise<any> {
   const rootName: any = `${packageName}-${packageVersion}-${platform}`;
@@ -139,15 +133,9 @@ async function verifyPortableArchive({
     "LICENSE",
     "THIRD_PARTY_NOTICES.txt",
     "README.txt",
-    "meshrix-mcp",
-    "meshrix-mcp.ps1",
-    "install.command",
-    "uninstall.command",
-    "doctor.command",
-    "meshrix-mcp-install.sh",
-    "meshrix-mcp-uninstall.sh",
-    "meshrix-mcp-install.ps1",
-    "meshrix-mcp-uninstall.ps1",
+    platform.startsWith("windows-") ? "meshrix-mcp.ps1" : "meshrix-mcp",
+    "app/package.json",
+    "app/node_modules/undici/package.json",
     runtimeName,
     "licenses/node/NODE_RUNTIME.lock.json",
     ...appFiles.map((name?: any) : any => `app/${name}`)
@@ -170,13 +158,7 @@ async function verifyPortableArchive({
     "mcp_release_portable_directory_set_mismatch"
   );
   const executableFiles: any = new Set<any>([
-    "meshrix-mcp",
-    "meshrix-mcp.ps1",
-    "install.command",
-    "uninstall.command",
-    "doctor.command",
-    "meshrix-mcp-install.sh",
-    "meshrix-mcp-uninstall.sh",
+    platform.startsWith("windows-") ? "meshrix-mcp.ps1" : "meshrix-mcp",
     runtimeName,
     "app/bin/meshrix-mcp.ts"
   ]);
@@ -193,13 +175,45 @@ async function verifyPortableArchive({
   }
 
   for (const appFile of appFiles) {
+    const isUndiciFile: any = appFile.startsWith("node_modules/undici/");
+    const isFoundationFile: any = appFile.startsWith("vendor/foundation/");
+    const appFileSourceRoot: any = isUndiciFile
+      ? path.join(repoRoot, "node_modules", "undici")
+      : isFoundationFile ? foundationSourceRoot : connectorRoot;
+    const sourceRelativePath: any = isUndiciFile
+      ? appFile.slice("node_modules/undici/".length)
+      : isFoundationFile ? appFile.slice("vendor/foundation/".length) : appFile;
     await assertArchiveSourceFile(
       tarPath,
       rootName,
       `app/${appFile}`,
-      path.join(connectorRoot, appFile)
+      path.join(appFileSourceRoot, sourceRelativePath)
     );
   }
+  const portablePackageManifest: Record<string, any> = {
+    private: true,
+    name: rootPackage.name,
+    version: rootPackage.version,
+    type: "module",
+    dependencies: {
+      undici: undiciManifest.version
+    },
+    imports: {
+      "#meshrix/foundation/environment-compatibility/index": "./vendor/foundation/environment-compatibility/index.ts",
+      "#meshrix/contracts/*": "./vendor/contracts/*.ts",
+      "#meshrix/protocols/*": "./vendor/protocols/*.ts"
+    }
+  };
+  assert.deepEqual(
+    await readTarEntry(tarPath, `${rootName}/app/package.json`),
+    Buffer.from(`${JSON.stringify(portablePackageManifest, null, 2)}\n`, "utf8"),
+    "mcp_release_portable_package_manifest_mismatch"
+  );
+  assert.deepEqual(
+    await readTarEntry(tarPath, `${rootName}/app/node_modules/undici/package.json`),
+    Buffer.from(`${JSON.stringify(undiciManifest, null, 2)}\n`, "utf8"),
+    "mcp_release_portable_undici_manifest_mismatch"
+  );
   await assertArchiveSourceFile(tarPath, rootName, "LICENSE", path.join(repoRoot, "LICENSE"));
   await assertArchiveSourceFile(
     tarPath,
@@ -207,19 +221,6 @@ async function verifyPortableArchive({
     "licenses/node/NODE_RUNTIME.lock.json",
     nodeRuntimeLockPath
   );
-  for (const scriptName of [
-    "meshrix-mcp-install.sh",
-    "meshrix-mcp-uninstall.sh",
-    "meshrix-mcp-install.ps1",
-    "meshrix-mcp-uninstall.ps1"
-  ]) {
-    await assertArchiveSourceFile(
-      tarPath,
-      rootName,
-      scriptName,
-      path.join(nativeInstallerRoot, scriptName)
-    );
-  }
   for (const [scriptName, expectedContent] of generatedPortableExecutables(platform)) {
     assert.deepEqual(
       await readTarEntry(tarPath, `${rootName}/${scriptName}`),
@@ -293,41 +294,28 @@ function parseChecksumIndex(text?: any) : any {
   return checksums;
 }
 
-async function verifyReproducibleConnectorTarball(inputDir?: any, expectedName?: any, expectedDigest?: any) : Promise<any> {
-  const temporary: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-release-repack-"));
-  try {
-    const npmCli: any = resolveNpmCliInvocation();
-    const { stdout } = await run(
-      npmCli.command,
-      npmCliArgs(npmCli, ["pack", "--ignore-scripts", "--json", "--pack-destination", temporary]),
-      {
-        cwd: connectorRoot,
-        env: {
-          PATH: process.env.PATH || "",
-          HOME: temporary,
-          USERPROFILE: temporary,
-          npm_config_cache: path.join(temporary, "npm-cache"),
-          npm_config_userconfig: path.join(temporary, "empty-npmrc"),
-          npm_config_audit: "false",
-          npm_config_fund: "false"
-        }
-      }
-    );
-    const [packed] = JSON.parse(stdout);
-    assert.equal(packed?.filename, expectedName, "mcp_release_connector_tarball_name_mismatch");
-    assert.equal(
-      await sha256(path.join(temporary, expectedName)),
-      expectedDigest,
-      "mcp_release_connector_tarball_not_reproducible"
-    );
-    assert.equal(
-      await sha256(path.join(inputDir, expectedName)),
-      expectedDigest,
-      "mcp_release_connector_tarball_digest_mismatch"
-    );
-  } finally {
-    await fs.rm(temporary, { recursive: true, force: true });
-  }
+async function verifyPreparedRootTarball({ inputDir, expectedName, expectedDigest, expectedIntegrity, rootPackage }: Record<string, any>) : Promise<any> {
+  const tarballPath: any = path.join(inputDir, expectedName);
+  const bytes: any = await fs.readFile(tarballPath);
+  const packageManifest: any = packageManifestFromTarball(bytes);
+  assert.equal(await sha256(tarballPath), expectedDigest, "mcp_release_root_tarball_digest_mismatch");
+  assert.equal(
+    `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
+    expectedIntegrity,
+    "mcp_release_root_tarball_integrity_mismatch"
+  );
+  assert.equal(packageManifest.name, rootPackage.name, "mcp_release_root_tarball_name_mismatch");
+  assert.equal(packageManifest.version, rootPackage.version, "mcp_release_root_tarball_version_mismatch");
+  assert.equal(packageManifest.bin?.["meshrix-mcp"], rootPackage.bin?.["meshrix-mcp"], "mcp_release_root_tarball_mcp_bin_mismatch");
+  const archive: any = await run("tar", ["-tzf", tarballPath]);
+  const files: any[] = String(archive.stdout).split(/\r?\n/u).filter(Boolean);
+  assert.equal(
+    files.includes(`package/${rootPackage.bin?.["meshrix-mcp"]}`),
+    true,
+    "mcp_release_root_tarball_mcp_bin_missing"
+  );
+  assert.equal(files.some((name?: any) : any => name.startsWith("package/node_modules/")), false, "mcp_release_root_tarball_bundles_node_modules");
+  return true;
 }
 
 async function verifyNodeRuntimeSourceEvidence(sourceDir?: any, nodeRuntimeLock?: any) : Promise<any> {
@@ -386,18 +374,16 @@ async function verifyNodeRuntimeSourceEvidence(sourceDir?: any, nodeRuntimeLock?
 
 async function buildCanonicalManifest({
   inputDir,
-  connectorPackage,
+  rootPackage,
+  npmIntegrity,
   nodeRuntimeLock,
   checksumIndex,
   channel,
   generatedAt
 }: Record<string, any>) : Promise<any> {
-  const temporary: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-release-manifest-"));
-  try {
-    const bootstrap: any = await createBootstrapInstaller({ outputDir: temporary, packageJson: connectorPackage });
-    const portables: any[] = [];
-    for (const platform of expectedPlatforms) {
-      const rootName: any = `${connectorPackage.name}-${connectorPackage.version}-${platform}`;
+  const portables: any[] = [];
+  for (const platform of expectedPlatforms) {
+      const rootName: any = `${MCP_PORTABLE_ASSET_PREFIX}-${rootPackage.version}-${platform}`;
       const archiveName: any = `${rootName}.tar.gz`;
       const archivePath: any = path.join(inputDir, archiveName);
       const archiveStat: any = await fs.stat(archivePath);
@@ -415,7 +401,7 @@ async function buildCanonicalManifest({
         zipSha256: zipArchiveName ? checksumIndex.get(zipArchiveName) : null,
         zipSizeBytes: zipStat?.size ?? null,
         rootName,
-        executable: "meshrix-mcp",
+        executable: platform.startsWith("windows-") ? "meshrix-mcp.ps1" : "meshrix-mcp",
         includesNodeRuntime: true,
         bundledNodeVersion: nodeRuntimeLock.version,
         projectLicensePath: "LICENSE",
@@ -424,24 +410,19 @@ async function buildCanonicalManifest({
         nodeRuntimeLockPath: "licenses/node/NODE_RUNTIME.lock.json",
         nodeLegalFiles: ["licenses/node/LICENSE"]
       });
-    }
-    const connectorTarball: any = `${connectorPackage.name}-${connectorPackage.version}.tgz`;
-    const tarballPath: any = path.join(inputDir, connectorTarball);
-    const expected: any = releaseManifest({
-      channel,
-      packageJson: connectorPackage,
-      tarballName: connectorTarball,
-      tarballPath,
-      checksum: checksumIndex.get(connectorTarball),
-      sizeBytes: (await fs.stat(tarballPath)).size,
-      portables,
-      bootstrap,
-      generatedAt
-    });
-    return expected;
-  } finally {
-    await fs.rm(temporary, { recursive: true, force: true });
   }
+  const rootTarball: any = `${rootPackage.name}-${rootPackage.version}.tgz`;
+  const tarballPath: any = path.join(inputDir, rootTarball);
+  return releaseManifest({
+    channel,
+    packageJson: rootPackage,
+    tarballName: rootTarball,
+    npmIntegrity,
+    checksum: checksumIndex.get(rootTarball),
+    sizeBytes: (await fs.stat(tarballPath)).size,
+    portables,
+    generatedAt
+  });
 }
 
 async function main() : Promise<any> {
@@ -490,7 +471,7 @@ async function main() : Promise<any> {
   const [manifestText, latestText, packageText, nodeRuntimeLockText] = await Promise.all([
     fs.readFile(path.join(inputDir, "meshrix-mcp-release.json"), "utf8"),
     fs.readFile(path.join(inputDir, "latest.json"), "utf8"),
-    fs.readFile(path.join(connectorRoot, "package.json"), "utf8"),
+    fs.readFile(path.join(repoRoot, "package.json"), "utf8"),
     fs.readFile(nodeRuntimeLockPath, "utf8")
   ]);
   assert.equal(latestText, manifestText, "mcp_release_latest_manifest_mismatch");
@@ -500,7 +481,7 @@ async function main() : Promise<any> {
     `${JSON.stringify(manifest, null, 2)}\n`,
     "mcp_release_manifest_not_unique_canonical_json"
   );
-  const connectorPackage: any = JSON.parse(packageText);
+  const rootPackage: any = JSON.parse(packageText);
   const nodeRuntimeLock: any = JSON.parse(nodeRuntimeLockText);
   const runtimeSources: any = await verifyNodeRuntimeSourceEvidence(nodeRuntimeSourceDir, nodeRuntimeLock);
   assert.equal(manifest.channel, expectedChannel, "mcp_release_channel_invalid");
@@ -511,38 +492,35 @@ async function main() : Promise<any> {
       "mcp_release_source_date_epoch_mismatch"
     );
   }
-  assert.equal(manifest.connector?.packageName, connectorPackage.name, "mcp_release_package_name_mismatch");
-  assert.equal(manifest.connector?.packageVersion, connectorPackage.version, "mcp_release_version_mismatch");
-  assert.equal(manifest.portable?.includesNodeRuntime, true, "mcp_release_node_runtime_missing");
-  assert.equal(
-    manifest.portable?.bundledNodeVersion,
-    nodeRuntimeLock.version,
-    "mcp_release_node_runtime_version_mismatch"
+  assert.equal(manifest.connector?.packageName, rootPackage.name, "mcp_release_package_name_mismatch");
+  assert.equal(manifest.connector?.packageVersion, rootPackage.version, "mcp_release_version_mismatch");
+  const portableArtifacts: any[] = manifest.portable?.artifacts;
+  assert.equal(Array.isArray(portableArtifacts), true, "mcp_release_portable_artifacts_missing");
+  assert.deepEqual(
+    portableArtifacts.map(({ platform }: Record<string, any>) => platform),
+    expectedPlatforms,
+    "mcp_release_portable_platform_set_mismatch"
   );
+  assert.equal(portableArtifacts.every((artifact?: any) : any => (
+    artifact.includesNodeRuntime === true
+    && artifact.bundledNodeVersion === nodeRuntimeLock.version
+    && artifact.launcher === (artifact.platform.startsWith("windows-") ? "meshrix-mcp.ps1" : "meshrix-mcp")
+  )), true, "mcp_release_portable_runtime_or_launcher_invalid");
 
   const declaredFiles: any = manifest.publish?.releaseFiles;
   assert.equal(Array.isArray(declaredFiles), true, "mcp_release_file_manifest_missing");
   assert.equal(new Set<any>(declaredFiles).size, declaredFiles.length, "mcp_release_file_manifest_duplicate");
-  const canonicalConnectorTarball: any = `${connectorPackage.name}-${connectorPackage.version}.tgz`;
+  const canonicalRootTarball: any = `${rootPackage.name}-${rootPackage.version}.tgz`;
   const canonicalPortableTarballs: any = expectedPlatforms.map((platform?: any) : any =>
-    `${connectorPackage.name}-${connectorPackage.version}-${platform}.tar.gz`
+    `${MCP_PORTABLE_ASSET_PREFIX}-${rootPackage.version}-${platform}.tar.gz`
   );
   const canonicalPortableZips: any = expectedPlatforms
     .filter((platform?: any) : any => zipPlatforms.has(platform))
-    .map((platform?: any) : any => `${connectorPackage.name}-${connectorPackage.version}-${platform}.zip`);
-  const canonicalBootstrapFiles: any[] = [
-    "meshrix-mcp-install.sh",
-    "meshrix-mcp-uninstall.sh",
-    "meshrix-mcp-install.zh-CN.sh",
-    "meshrix-mcp-uninstall.zh-CN.sh",
-    "meshrix-mcp-install.ps1",
-    "meshrix-mcp-uninstall.ps1"
-  ];
+    .map((platform?: any) : any => `${MCP_PORTABLE_ASSET_PREFIX}-${rootPackage.version}-${platform}.zip`);
   assertExactSet(declaredFiles, [
-    canonicalConnectorTarball,
+    canonicalRootTarball,
     ...canonicalPortableTarballs,
     ...canonicalPortableZips,
-    ...canonicalBootstrapFiles,
     "SHA256SUMS",
     "RELEASE_SHA256SUMS",
     "RELEASE_SHA256SUMS.sigstore.json",
@@ -568,7 +546,8 @@ async function main() : Promise<any> {
   );
   const canonicalManifest: any = await buildCanonicalManifest({
       inputDir,
-      connectorPackage,
+      rootPackage,
+      npmIntegrity: manifest.connector?.npmIntegrity,
       nodeRuntimeLock,
       checksumIndex,
       channel: expectedChannel,
@@ -580,71 +559,52 @@ async function main() : Promise<any> {
     "mcp_release_manifest_not_canonical"
   );
 
-  const connectorTarball: any = manifest.connector.tarball;
-  assert.equal(connectorTarball, canonicalConnectorTarball, "mcp_release_connector_tarball_name_mismatch");
+  const rootTarball: any = manifest.connector.tarball;
+  assert.equal(rootTarball, canonicalRootTarball, "mcp_release_root_tarball_name_mismatch");
   assert.equal(
     manifest.connector.sha256,
-    checksumIndex.get(connectorTarball),
-    "mcp_release_connector_manifest_digest_mismatch"
+    checksumIndex.get(rootTarball),
+    "mcp_release_root_manifest_digest_mismatch"
   );
-  const connectorStat: any = await fs.stat(path.join(inputDir, connectorTarball));
-  assert.equal(connectorStat.size, manifest.connector.sizeBytes, "mcp_release_connector_size_mismatch");
-  await verifyReproducibleConnectorTarball(inputDir, connectorTarball, manifest.connector.sha256);
+  const rootStat: any = await fs.stat(path.join(inputDir, rootTarball));
+  assert.equal(rootStat.size, manifest.connector.sizeBytes, "mcp_release_root_tarball_size_mismatch");
+  await verifyPreparedRootTarball({
+    inputDir,
+    expectedName: rootTarball,
+    expectedDigest: manifest.connector.sha256,
+    expectedIntegrity: manifest.connector.npmIntegrity,
+    rootPackage
+  });
 
-  const bootstrapSources: any[] = [
-    { assetName: manifest.bootstrap?.scriptName, sourceName: "meshrix-mcp-install.sh", digest: manifest.bootstrap?.sha256 },
-    { assetName: manifest.bootstrap?.uninstallScriptName, sourceName: "meshrix-mcp-uninstall.sh", digest: manifest.bootstrap?.uninstallSha256 },
-    { assetName: manifest.bootstrap?.localized?.zhCN?.scriptName, sourceName: "meshrix-mcp-install.sh", digest: manifest.bootstrap?.localized?.zhCN?.sha256 },
-    { assetName: manifest.bootstrap?.localized?.zhCN?.uninstallScriptName, sourceName: "meshrix-mcp-uninstall.sh", digest: manifest.bootstrap?.localized?.zhCN?.uninstallSha256 },
-    { assetName: manifest.bootstrap?.windows?.scriptName, sourceName: "meshrix-mcp-install.ps1", digest: manifest.bootstrap?.windows?.sha256 },
-    { assetName: manifest.bootstrap?.windows?.uninstallScriptName, sourceName: "meshrix-mcp-uninstall.ps1", digest: manifest.bootstrap?.windows?.uninstallSha256 }
-  ];
-  assertExactSet(
-    bootstrapSources.map(({ assetName }: Record<string, any>) : any => assetName),
-    canonicalBootstrapFiles,
-    "mcp_release_bootstrap_manifest_invalid"
-  );
-  for (const { assetName, sourceName, digest } of bootstrapSources) {
-    assert.ok(assetName, "mcp_release_bootstrap_asset_missing");
-    assert.equal(digest, checksumIndex.get(assetName), `mcp_release_bootstrap_digest_mismatch:${assetName}`);
-    assert.deepEqual(
-      await fs.readFile(path.join(inputDir, assetName)),
-      await fs.readFile(path.join(nativeInstallerRoot, sourceName)),
-      `mcp_release_bootstrap_source_mismatch:${assetName}`
-    );
-  }
-
-  const appFiles: any = await expectedConnectorFiles();
+  const portableApp: any = await expectedConnectorFiles();
   const portableTarballs: any[] = [];
   for (const platform of expectedPlatforms) {
     portableTarballs.push(await verifyPortableArchive({
       inputDir,
-      packageName: connectorPackage.name,
-      packageVersion: connectorPackage.version,
+      packageName: MCP_PORTABLE_ASSET_PREFIX,
+      packageVersion: rootPackage.version,
+      rootPackage,
       platform,
-      appFiles,
+      appFiles: portableApp.files,
+      undiciManifest: portableApp.undiciManifest,
       runtimeSource: runtimeSources.get(platform)
     }));
   }
-  assert.equal(
-    manifest.portable.tarball,
-    portableTarballs[0],
-    "mcp_release_preferred_portable_mismatch"
-  );
-  assert.equal(
-    manifest.portable.sha256,
-    checksumIndex.get(portableTarballs[0]),
-    "mcp_release_preferred_portable_digest_mismatch"
-  );
-  const preferredStat: any = await fs.stat(path.join(inputDir, portableTarballs[0]));
-  assert.equal(preferredStat.size, manifest.portable.sizeBytes, "mcp_release_preferred_portable_size_mismatch");
+  for (const platform of expectedPlatforms) {
+    const artifact = portableArtifacts.find((entry?: any) : any => entry.platform === platform);
+    const archiveName = `${MCP_PORTABLE_ASSET_PREFIX}-${rootPackage.version}-${platform}.tar.gz`;
+    const archiveStat = await fs.stat(path.join(inputDir, archiveName));
+    assert.equal(artifact.archive, archiveName, `mcp_release_portable_archive_mismatch:${platform}`);
+    assert.equal(artifact.sha256, checksumIndex.get(archiveName), `mcp_release_portable_digest_mismatch:${platform}`);
+    assert.equal(artifact.sizeBytes, archiveStat.size, `mcp_release_portable_size_mismatch:${platform}`);
+  }
 
   console.log(JSON.stringify({
     ok: true,
     assetCount: actualFiles.length,
     portableTargetCount: expectedPlatforms.length,
     exactAssetSet: true,
-    connectorTarballReproducible: true,
+    preparedRootTarballIntegrityValid: true,
     archiveSourceConvergence: true,
     archiveTarZipConvergence: true
   }));

@@ -1,27 +1,33 @@
 import { browserWindow } from "./browser-window";
 
-type ConsoleWindowEventListener<T> = (detail: T, event: CustomEvent<T>) => void;
+export type ConsoleWindowEventListener<T> = (detail: T, event: CustomEvent<T>) => void;
 
-export function createConsoleWindowEventChannel<T>(eventName: string) : any {
-  function dispatch(detail: T) : any {
-    const browser: any = browserWindow();
+export type ConsoleWindowEventChannel<T> = {
+  add(listener: ConsoleWindowEventListener<T>): () => void;
+  dispatch(detail: T): void;
+  eventName: string;
+};
+
+export function createConsoleWindowEventChannel<T>(eventName: string): ConsoleWindowEventChannel<T> {
+  function dispatch(detail: T): void {
+    const browser = browserWindow();
     if (!browser) {
       return;
     }
     browser.dispatchEvent(new CustomEvent<T>(eventName, { detail }));
   }
 
-  function add(listener: ConsoleWindowEventListener<T>) : any {
-    const browser: any = browserWindow();
+  function add(listener: ConsoleWindowEventListener<T>): () => void {
+    const browser = browserWindow();
     if (!browser) {
-      return () : any => {};
+      return () => {};
     }
 
-    const eventListener: any = (event: Event) : any => {
+    const eventListener = (event: Event): void => {
       listener((event as CustomEvent<T>).detail, event as CustomEvent<T>);
     };
     browser.addEventListener(eventName, eventListener);
-    return () : any => browser.removeEventListener(eventName, eventListener);
+    return () => browser.removeEventListener(eventName, eventListener);
   }
 
   return {

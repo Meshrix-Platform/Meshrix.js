@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-09-02",
+  "updatedAt": "2026-10-01",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -552,14 +552,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.authorization.enterprise-enforcement-report",
+      "artifactId": "meshrix.authorization.authorization-enforcement-report",
       "kind": "policy",
-      "description": "Governed version registry entry for meshrix.authorization.enterprise-enforcement-report.",
-      "activeVersion": "v0.0.1:authorization:enterprise-enforcement-report-1",
+      "description": "Governed version registry entry for meshrix.authorization.authorization-enforcement-report.",
+      "activeVersion": "v0.0.1:authorization:authorization-enforcement-report-1",
       "versions": [
         {
-          "version": "v0.0.1:authorization:enterprise-enforcement-report-1",
-          "ref": "meshrix.authorization.enterprise-enforcement-report@v0.0.1:authorization:enterprise-enforcement-report-1",
+          "version": "v0.0.1:authorization:authorization-enforcement-report-1",
+          "ref": "meshrix.authorization.authorization-enforcement-report@v0.0.1:authorization:authorization-enforcement-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -569,28 +569,28 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-enforcement-report-1-source-1",
+              "evidenceId": "v0-0-1-authorization-authorization-enforcement-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-enforcement-report-1-source-2",
+              "evidenceId": "v0-0-1-authorization-authorization-enforcement-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-authorization-enforcement.ts"
+              "uri": "tools/server-scripts/verify-authorization-enforcement.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.authorization.enterprise-governance-coverage-report",
+      "artifactId": "meshrix.authorization.authorization-governance-coverage-report",
       "kind": "policy",
-      "description": "Governed version registry entry for meshrix.authorization.enterprise-governance-coverage-report.",
-      "activeVersion": "v0.0.1:authorization:enterprise-governance-coverage-report-1",
+      "description": "Governed version registry entry for meshrix.authorization.authorization-governance-coverage-report.",
+      "activeVersion": "v0.0.1:authorization:authorization-governance-coverage-report-1",
       "versions": [
         {
-          "version": "v0.0.1:authorization:enterprise-governance-coverage-report-1",
-          "ref": "meshrix.authorization.enterprise-governance-coverage-report@v0.0.1:authorization:enterprise-governance-coverage-report-1",
+          "version": "v0.0.1:authorization:authorization-governance-coverage-report-1",
+          "ref": "meshrix.authorization.authorization-governance-coverage-report@v0.0.1:authorization:authorization-governance-coverage-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -600,14 +600,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-governance-coverage-report-1-source-1",
+              "evidenceId": "v0-0-1-authorization-authorization-governance-coverage-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-authorization-enterprise-governance-coverage-report-1-source-2",
+              "evidenceId": "v0-0-1-authorization-authorization-governance-coverage-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-governance-coverage.ts"
+              "uri": "tools/server-scripts/verify-authorization-governance.ts"
             }
           ]
         }
@@ -766,32 +766,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.client-adapter-cache",
-      "kind": "other",
-      "description": "Governed version registry entry for meshrix.client-adapter-cache.",
-      "activeVersion": "v0.0.1:meshrix:client-adapter-cache-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:client-adapter-cache-1",
-          "ref": "meshrix.client-adapter-cache@v0.0.1:meshrix:client-adapter-cache-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix.js contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-client-adapter-cache-1-source",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.client-adapter-descriptor",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.client-adapter-descriptor.",
@@ -838,32 +812,6 @@
               "evidenceId": "v0-0-1-meshrix-client-adapter-json-stdio-1-source",
               "kind": "other",
               "uri": "packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.client-adapter.release-index",
-      "kind": "schema",
-      "description": "Governed release index schema for repository-local client adapter packages.",
-      "activeVersion": "v0.0.1:client-adapter:release-index-1",
-      "versions": [
-        {
-          "version": "v0.0.1:client-adapter:release-index-1",
-          "ref": "meshrix.client-adapter.release-index@v0.0.1:client-adapter:release-index-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current repository-local adapter packaging contract."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-client-adapter-release-index-1-source",
-              "kind": "other",
-              "uri": "tools/plugins/client-adapter-packages.mjs"
             }
           ]
         }
@@ -1243,14 +1191,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.deployment.private-internal-platform-e2e-report",
+      "artifactId": "meshrix.deployment.single-node-internal-platform-e2e-report",
       "kind": "platform",
-      "description": "Governed version registry entry for meshrix.deployment.private-internal-platform-e2e-report.",
-      "activeVersion": "v0.0.1:deployment:private-internal-platform-e2e-report-1",
+      "description": "Governed version registry entry for meshrix.deployment.single-node-internal-platform-e2e-report.",
+      "activeVersion": "v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
       "versions": [
         {
-          "version": "v0.0.1:deployment:private-internal-platform-e2e-report-1",
-          "ref": "meshrix.deployment.private-internal-platform-e2e-report@v0.0.1:deployment:private-internal-platform-e2e-report-1",
+          "version": "v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
+          "ref": "meshrix.deployment.single-node-internal-platform-e2e-report@v0.0.1:deployment:single-node-internal-platform-e2e-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1260,14 +1208,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-deployment-private-internal-platform-e2e-report-1-source-1",
+              "evidenceId": "v0-0-1-deployment-single-node-internal-platform-e2e-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-deployment-private-internal-platform-e2e-report-1-source-2",
+              "evidenceId": "v0-0-1-deployment-single-node-internal-platform-e2e-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+              "uri": "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
             }
           ]
         }
@@ -1331,14 +1279,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.enterprise-single-node.ubuntu-evidence",
+      "artifactId": "meshrix.single-node.ubuntu-evidence",
       "kind": "report",
-      "description": "Governed report emitted by the network-isolated Ubuntu enterprise single-node acceptance worker.",
-      "activeVersion": "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
+      "description": "Governed report emitted by the network-isolated Ubuntu single-node acceptance worker.",
+      "activeVersion": "v0.0.1:meshrix:single-node-ubuntu-evidence-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
-          "ref": "meshrix.enterprise-single-node.ubuntu-evidence@v0.0.1:meshrix:enterprise-single-node-ubuntu-evidence-1",
+          "version": "v0.0.1:meshrix:single-node-ubuntu-evidence-1",
+          "ref": "meshrix.single-node.ubuntu-evidence@v0.0.1:meshrix:single-node-ubuntu-evidence-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1348,35 +1296,35 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "enterprise-single-node-ubuntu-evidence-source",
+              "evidenceId": "single-node-ubuntu-evidence-source",
               "kind": "other",
-              "uri": "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
+              "uri": "tools/server-scripts/verify-single-node-ubuntu-container.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.enterprise-upgrade.rollback-journal",
+      "artifactId": "meshrix.single-node-upgrade.rollback-journal",
       "kind": "runtime_capability",
-      "description": "Governed rollback journal schema for enterprise upgrade orchestration.",
-      "activeVersion": "v0.0.1:enterprise-upgrade:rollback-journal-1",
+      "description": "Governed rollback journal schema for single-node upgrade orchestration.",
+      "activeVersion": "v0.0.1:single-node-upgrade:rollback-journal-1",
       "versions": [
         {
-          "version": "v0.0.1:enterprise-upgrade:rollback-journal-1",
-          "ref": "meshrix.enterprise-upgrade.rollback-journal@v0.0.1:enterprise-upgrade:rollback-journal-1",
+          "version": "v0.0.1:single-node-upgrade:rollback-journal-1",
+          "ref": "meshrix.single-node-upgrade.rollback-journal@v0.0.1:single-node-upgrade:rollback-journal-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current enterprise upgrade rollback journal contract."
+            "notes": "Current single-node upgrade rollback journal contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "enterprise-upgrade-rollback-journal-source",
+              "evidenceId": "single-node-upgrade-rollback-journal-source",
               "kind": "other",
-              "uri": "tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts"
+              "uri": "tools/server-scripts/upgrade/single-node-upgrade-rollback.ts"
             }
           ]
         }
@@ -1963,7 +1911,7 @@
             {
               "evidenceId": "v0-0-1-jobs-upload-workspace-materialization-1-source-1",
               "kind": "other",
-              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization.ts"
+              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization/engine.ts"
             },
             {
               "evidenceId": "v0-0-1-jobs-upload-workspace-materialization-1-source-2",
@@ -1986,7 +1934,7 @@
             {
               "evidenceId": "v0-0-1-jobs-upload-workspace-materialization-3-source",
               "kind": "other",
-              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization.ts"
+              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization/model.ts"
             }
           ]
         }
@@ -2828,14 +2776,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.meshrix.enterprise-single-node-offline-bundle",
+      "artifactId": "meshrix.meshrix.single-node-offline-bundle",
       "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.meshrix.enterprise-single-node-offline-bundle.",
-      "activeVersion": "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
+      "description": "Governed version registry entry for meshrix.meshrix.single-node-offline-bundle.",
+      "activeVersion": "v0.0.1:meshrix:single-node-offline-bundle-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
-          "ref": "meshrix.meshrix.enterprise-single-node-offline-bundle@v0.0.1:meshrix:enterprise-single-node-offline-bundle-1",
+          "version": "v0.0.1:meshrix:single-node-offline-bundle-1",
+          "ref": "meshrix.meshrix.single-node-offline-bundle@v0.0.1:meshrix:single-node-offline-bundle-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -2845,9 +2793,9 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-enterprise-single-node-offline-bundle-1-source",
+              "evidenceId": "v0-0-1-meshrix-single-node-offline-bundle-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/enterprise-single-node-offline-bundle.ts"
+              "uri": "tools/server-scripts/single-node-offline-bundle.ts"
             }
           ]
         }
@@ -2908,12 +2856,12 @@
     {
       "artifactId": "meshrix.meshrix.provenance",
       "kind": "other",
-      "description": "Governed version registry entry for meshrix.meshrix.provenance.",
-      "activeVersion": "v0.0.1:meshrix:provenance-2",
+      "description": "Governed version registry entry for the unsigned local build-input report.",
+      "activeVersion": "v0.0.1:meshrix:build-input-report-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:provenance-2",
-          "ref": "meshrix.meshrix.provenance@v0.0.1:meshrix:provenance-2",
+          "version": "v0.0.1:meshrix:build-input-report-1",
+          "ref": "meshrix.meshrix.provenance@v0.0.1:meshrix:build-input-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -2923,7 +2871,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-provenance-2-source",
+              "evidenceId": "v0-0-1-meshrix-build-input-report-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/generate-provenance.ts"
             }
@@ -3133,7 +3081,7 @@
             {
               "evidenceId": "v0-0-1-meshrix-ubuntu-acceptance-runner-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts"
+              "uri": "tools/server-scripts/verify-single-node-ubuntu-container.ts"
             }
           ]
         }
@@ -3164,21 +3112,21 @@
             {
               "evidenceId": "v0-0-1-observability-audit-retention-redaction-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts"
+              "uri": "tools/server-scripts/verify-audit-retention-redaction.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.observability.enterprise-coverage-report",
+      "artifactId": "meshrix.observability.observability-coverage-report",
       "kind": "platform",
-      "description": "Governed version registry entry for meshrix.observability.enterprise-coverage-report.",
-      "activeVersion": "v0.0.1:observability:enterprise-coverage-report-1",
+      "description": "Governed version registry entry for meshrix.observability.observability-coverage-report.",
+      "activeVersion": "v0.0.1:observability:observability-coverage-report-1",
       "versions": [
         {
-          "version": "v0.0.1:observability:enterprise-coverage-report-1",
-          "ref": "meshrix.observability.enterprise-coverage-report@v0.0.1:observability:enterprise-coverage-report-1",
+          "version": "v0.0.1:observability:observability-coverage-report-1",
+          "ref": "meshrix.observability.observability-coverage-report@v0.0.1:observability:observability-coverage-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -3188,14 +3136,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-observability-enterprise-coverage-report-1-source-1",
+              "evidenceId": "v0-0-1-observability-observability-coverage-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-observability-enterprise-coverage-report-1-source-2",
+              "evidenceId": "v0-0-1-observability-observability-coverage-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-enterprise-observability-coverage.ts"
+              "uri": "tools/server-scripts/verify-observability-coverage.ts"
             }
           ]
         }
@@ -3833,7 +3781,7 @@
             {
               "evidenceId": "v0-0-1-performance-gateway-observation-report-1-test",
               "kind": "test",
-              "uri": "tests/vitest/server/gateway-performance-observation.test.ts"
+              "uri": "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
             }
           ]
         }
@@ -3864,7 +3812,7 @@
             {
               "evidenceId": "v0-0-1-performance-runtime-observation-1-test",
               "kind": "test",
-              "uri": "tests/vitest/server/gateway-performance-observation.test.ts"
+              "uri": "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
             }
           ]
         }
@@ -4612,7 +4560,7 @@
             {
               "evidenceId": "v0-0-1-platform-stable-json-1-source",
               "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts"
+              "uri": "packages/protocols/mcp/modern-downstream/discovery.ts"
             }
           ]
         }
@@ -7310,7 +7258,7 @@
             {
               "evidenceId": "v0-0-1-server-runtime-upload-workspace-materialization-schema-1-source",
               "kind": "other",
-              "uri": "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts"
+              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization/model.ts"
             }
           ]
         }
@@ -7336,7 +7284,7 @@
             {
               "evidenceId": "v0-0-1-server-runtime-upload-workspace-materialization-settlement-1-source",
               "kind": "other",
-              "uri": "packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts"
+              "uri": "packages/server-runtime/src/jobs/upload-workspace-materialization/model.ts"
             }
           ]
         }
@@ -9409,6 +9357,37 @@
       ]
     },
     {
+      "artifactId": "meshrix.upstream-gateway.mcp-final-effect-target",
+      "kind": "runtime_capability",
+      "description": "Exact discovered MCP operation binding used by the final protected effect permit.",
+      "activeVersion": "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+      "versions": [
+        {
+          "version": "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+          "ref": "meshrix.upstream-gateway.mcp-final-effect-target@v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current canonical MCP final effect target binding."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "mcp-final-effect-target-source",
+              "kind": "other",
+              "uri": "packages/agents/src/upstream-gateway/index.ts"
+            },
+            {
+              "evidenceId": "mcp-final-effect-target-test",
+              "kind": "test",
+              "uri": "tests/vitest/gateway/closure/platform-api-key-reservation-lifetime.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.upstream-gateway.mcp-service",
       "kind": "protocol",
       "description": "Governed version registry entry for meshrix.upstream-gateway.mcp-service.",
@@ -10981,31 +10960,31 @@
       ]
     },
     {
-      "artifactId": "meshrix.enterprise-operations-closure-report",
+      "artifactId": "meshrix.single-node-operations-closure-report",
       "kind": "other",
-      "description": "Versioned enterprise operations closure report.",
-      "activeVersion": "v0.0.1:meshrix:enterprise-operations-closure-report-1",
+      "description": "Versioned single-node operations closure report.",
+      "activeVersion": "v0.0.1:meshrix:single-node-operations-closure-report-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:enterprise-operations-closure-report-1",
-          "ref": "meshrix.enterprise-operations-closure-report@v0.0.1:meshrix:enterprise-operations-closure-report-1",
+          "version": "v0.0.1:meshrix:single-node-operations-closure-report-1",
+          "ref": "meshrix.single-node-operations-closure-report@v0.0.1:meshrix:single-node-operations-closure-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current enterprise operations closure report."
+            "notes": "Current single-node operations closure report."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-enterprise-operations-closure-report-1-source",
+              "evidenceId": "v0-0-1-meshrix-single-node-operations-closure-report-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/enterprise-operations-closure.ts"
+              "uri": "tools/server-scripts/single-node-operations-closure.ts"
             },
             {
-              "evidenceId": "v0-0-1-meshrix-enterprise-operations-closure-report-1-test",
+              "evidenceId": "v0-0-1-meshrix-single-node-operations-closure-report-1-test",
               "kind": "other",
-              "uri": "tests/vitest/server/enterprise-operations-closure.test.ts"
+              "uri": "tests/vitest/server/single-node-operations-closure.test.ts"
             }
           ]
         }
@@ -11686,62 +11665,112 @@
       ]
     },
     {
-      "artifactId": "meshrix.gateway-boundary-final.report",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.gateway-boundary-final.report.",
-      "activeVersion": "v0.0.1:gateway-boundary-final:report-1",
+      "artifactId": "meshrix.gateway.contract",
+      "kind": "schema",
+      "description": "Governed version registry entry for meshrix.gateway.contract.",
+      "activeVersion": "v0.0.1:meshrix:gateway-contract-1",
       "versions": [
         {
-          "version": "v0.0.1:gateway-boundary-final:report-1",
-          "ref": "meshrix.gateway-boundary-final.report@v0.0.1:gateway-boundary-final:report-1",
+          "version": "v0.0.1:meshrix:gateway-contract-1",
+          "ref": "meshrix.gateway.contract@v0.0.1:meshrix:gateway-contract-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Protocol-neutral gateway contract surface consumed by the kernel, the platform assembly and embedders."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-gateway-boundary-final-report-1-source-1",
+              "evidenceId": "v0-0-1-meshrix-gateway-contract-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-gateway-boundary-final-report-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/gateway-boundary-final.ts"
+              "uri": "packages/contracts/src/gateway/index.ts"
             }
           ]
         }
       ]
     },
     {
-      "artifactId": "meshrix.gateway-boundary-final.receipt",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.gateway-boundary-final.receipt.",
-      "activeVersion": "v0.0.1:gateway-boundary-final:receipt-1",
+      "artifactId": "meshrix.gateway.benchmark",
+      "kind": "other",
+      "description": "Governed version registry entry for meshrix.gateway.benchmark.",
+      "activeVersion": "v0.0.1:meshrix:gateway-benchmark-node-1",
       "versions": [
         {
-          "version": "v0.0.1:gateway-boundary-final:receipt-1",
-          "ref": "meshrix.gateway-boundary-final.receipt@v0.0.1:gateway-boundary-final:receipt-1",
+          "version": "v0.0.1:meshrix:gateway-benchmark-node-1",
+          "ref": "meshrix.gateway.benchmark@v0.0.1:meshrix:gateway-benchmark-node-1",
           "lifecycle": "active",
+          "compatibility": { "newBindingsAllowed": true, "historicalResolutionAllowed": true, "notes": "Independent installed Node benchmark; finite network source-CLI observations, not conformance or a performance threshold." },
+          "artifactRefs": [],
+          "evidenceRefs": [{ "evidenceId": "v0-0-1-meshrix-gateway-benchmark-node-1-source", "kind": "other", "uri": "tools/server-scripts/benchmark-gateway.ts" }]
+        },
+        {
+          "version": "v0.0.1:meshrix:gateway-benchmark-1",
+          "ref": "meshrix.gateway.benchmark@v0.0.1:meshrix:gateway-benchmark-1",
+          "lifecycle": "deprecated",
           "compatibility": {
-            "newBindingsAllowed": true,
+            "newBindingsAllowed": false,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Historical embedded callback/no-op report; not network benchmark evidence."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-gateway-boundary-final-receipt-1-source-1",
+              "evidenceId": "v0-0-1-meshrix-gateway-benchmark-1-source",
               "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
+              "uri": "tools/server-scripts/benchmark-gateway.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.gateway.migration",
+      "kind": "other",
+      "description": "Governed version registry entry for meshrix.gateway.migration.",
+      "activeVersion": "v0.0.1:meshrix:gateway-migration-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:gateway-migration-1",
+          "ref": "meshrix.gateway.migration@v0.0.1:meshrix:gateway-migration-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Gateway configuration migration plan schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-gateway-boundary-final-receipt-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/gateway-boundary-final.ts"
+              "evidenceId": "v0-0-1-meshrix-gateway-migration-1-source",
+              "kind": "other",
+              "uri": "apps/mcp-gateway-installer/src/config-migration.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.gateway.config",
+      "kind": "schema",
+      "description": "Governed version registry entry for meshrix.gateway.config.",
+      "activeVersion": "v0.0.1:meshrix:gateway-config-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:gateway-config-1",
+          "ref": "meshrix.gateway.config@v0.0.1:meshrix:gateway-config-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Migrated gateway service configuration schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-gateway-config-1-source",
+              "kind": "other",
+              "uri": "apps/mcp-gateway-installer/src/config-migration.ts"
             }
           ]
         }

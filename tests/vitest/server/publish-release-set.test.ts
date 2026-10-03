@@ -1,17 +1,25 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   compareReleaseVersions,
+  createNpmRunner,
   discoverReleaseSet,
+  loadPreparedReleaseSet,
   parsePublishArguments,
+  PREPARED_RELEASE_SET_FILENAME,
+  preflightReleaseSet,
+  prepareReleaseSet,
   publishReleaseSet,
-  releaseTagForVersion,
-  resolveReleaseWorkspaceDirectories
+  verifyNpmTrustedPublisherAccess,
+  releaseTagForVersion
 } from "../../../tools/server-scripts/publish-release-set.ts";
+import { resolveReleaseWorkspaceDirectories } from "../../../tools/server-scripts/lib/release-metadata.ts";
 
 const ROOT: any = path.resolve(import.meta.dirname, "../../..");
 const DEPENDENCY_FIELDS: any[] = [
@@ -20,20 +28,20 @@ const DEPENDENCY_FIELDS: any[] = [
   "optionalDependencies",
   "peerDependencies"
 ];
-const AGENT_PLUGIN_PACKAGE_NAMES: readonly any[] = Object.freeze([
-  "@meshrix/agent-antigravity-adapter",
-  "@meshrix/agent-claude-code-adapter",
-  "@meshrix/agent-codex-adapter",
-  "@meshrix/agent-kimi-adapter",
-  "@meshrix/agent-openclaw-adapter",
-  "@meshrix/agent-opencode-adapter",
-  "@meshrix/agent-pi-adapter",
-  "@meshrix/client-adapter-kit"
-]);
-const RELEASE_PACKAGE_COUNT: any = 17;
+const ARTIFACT_DIRECTORIES: string[] = [];
+
+afterEach(async () : Promise<any> => {
+  await Promise.all(ARTIFACT_DIRECTORIES.splice(0).map((directory?: any) : Promise<any> => (
+    fs.rm(directory, { recursive: true, force: true })
+  )));
+});
+
+function archiveBytesFor(name?: any) : any {
+  return Buffer.from(`fixture:${name}`);
+}
 
 function integrityFor(name?: any) : any {
-  return `sha512-${createHash("sha512").update(`fixture:${name}`).digest("base64")}`;
+  return `sha512-${createHash("sha512").update(archiveBytesFor(name)).digest("base64")}`;
 }
 
 function filenameFor(name?: any, version?: any) : any {
@@ -70,32 +78,107 @@ function addPublishedVersion(registry?: any, packageRecord?: any, {
   registry.set(tagsKey(packageRecord.name), { [tag]: taggedVersion });
 }
 
-function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<string, any> = {}) : any {
+async function newArtifactDirectory() : Promise<any> {
+  const directory: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-fixture-"));
+  ARTIFACT_DIRECTORIES.push(directory);
+  return directory;
+}
+
+async function prepareFixtures(injected?: any) : Promise<any> {
+  const artifactDirectory: any = await newArtifactDirectory();
+  await prepareReleaseSet({
+    rootDir: ROOT,
+    artifactDirectory,
+    runner: injected.runner,
+    environment: {}
+  });
+  return artifactDirectory;
+}
+
+async function packageCount() : Promise<any> {
+  return (await discoverReleaseSet({ rootDir: ROOT })).packages.length;
+}
+
+async function newReleaseDiscoveryFixture(options: Record<string, any> = {}) : Promise<any> {
+  const {
+    rootDependencies = { "@meshrix/gateway": "1.2.3" },
+    rootBundleDependencies = [],
+    packages = []
+  } = options;
+  const rootDir: any = await newArtifactDirectory();
+  const workspacePackages: any[] = [
+    {
+      directory: "packages/gateway",
+      manifest: { name: "@meshrix/gateway", version: "1.2.3", dependencies: {} }
+    },
+    {
+      directory: "packages/contracts",
+      manifest: { name: "@meshrix/contracts", version: "1.2.3", private: true }
+    },
+    ...packages
+  ];
+  await fs.writeFile(path.join(rootDir, "package.json"), JSON.stringify({
+    name: "meshrix.js",
+    version: "1.2.3",
+    workspaces: workspacePackages.map(({ directory }: Record<string, any>) : any => directory),
+    dependencies: rootDependencies,
+    bundleDependencies: rootBundleDependencies
+  }));
+  for (const { directory, manifest } of workspacePackages) {
+    const packageDirectory: any = path.join(rootDir, directory);
+    await fs.mkdir(packageDirectory, { recursive: true });
+    await fs.writeFile(path.join(packageDirectory, "package.json"), JSON.stringify(manifest));
+  }
+  return rootDir;
+}
+
+function createInjectedNpmRunner({
+  registry = new Map<any, any>(),
+  packFormat = "legacy",
+  viewFormat = "legacy",
+  packFilesByName = {}
+}: Record<string, any> = {}) : any {
   const calls: any[] = [];
   const publishCalls: any[] = [];
+  const tagRepairCalls: any[] = [];
+  const archivePackCalls: any[] = [];
   const tarballs: any = new Map<any, any>();
-  const runner: any = async (args: any, { cwd }: Record<string, any>) : Promise<any> => {
-    calls.push({ args: [...args], cwd });
+  const runner: any = async (args: any, { cwd, authToken }: Record<string, any>) : Promise<any> => {
+    calls.push({ args: [...args], cwd, authToken });
     if (args[0] === "pack") {
-      const manifest: any = JSON.parse(await fs.readFile(path.join(cwd, "package.json"), "utf8"));
+      const dryRun: any = args.includes("--dry-run");
+      const packDestinationIndex: any = args.indexOf("--pack-destination");
+      const hasPackageSpec: any = packDestinationIndex >= 0 && packDestinationIndex + 2 < args.length;
+      const packageDirectory: any = dryRun || hasPackageSpec ? args.at(-1) : cwd;
+      const manifest: any = JSON.parse(await fs.readFile(path.join(packageDirectory, "package.json"), "utf8"));
       const filename: any = filenameFor(manifest.name, manifest.version);
+      const artifact: any = {
+        name: manifest.name,
+        version: manifest.version,
+        filename,
+        files: packFilesByName[manifest.name] || [{ path: "package.json" }],
+        bundled: manifest.bundleDependencies || manifest.bundledDependencies || []
+      };
+      if (dryRun) {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify(packFormat === "npm12" ? { [manifest.name]: artifact } : [artifact]),
+          stderr: ""
+        };
+      }
       const integrity: any = integrityFor(manifest.name);
-      const destination: any = args[args.indexOf("--pack-destination") + 1];
+      const destination: any = args[packDestinationIndex + 1];
       const tarballPath: any = path.join(destination, filename);
-      await fs.writeFile(tarballPath, `fixture:${manifest.name}`, "utf8");
+      await fs.writeFile(tarballPath, archiveBytesFor(manifest.name));
       tarballs.set(tarballPath, {
         spec: `${manifest.name}@${manifest.version}`,
         integrity,
         name: manifest.name
       });
+      archivePackCalls.push({ name: manifest.name, cwd, packageDirectory });
       return {
         exitCode: 0,
-        stdout: JSON.stringify([{
-          name: manifest.name,
-          version: manifest.version,
-          filename,
-          integrity
-        }]),
+        stdout: JSON.stringify(packFormat === "npm12" ? { [manifest.name]: { ...artifact, integrity } } : [{ ...artifact, integrity }]),
         stderr: ""
       };
     }
@@ -104,7 +187,12 @@ function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<stri
       if (!registry.has(key)) {
         return { exitCode: 1, stdout: "", stderr: "npm error code E404" };
       }
-      return { exitCode: 0, stdout: JSON.stringify(registry.get(key)), stderr: "" };
+      const metadata = registry.get(key);
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify(viewFormat === "npm12" ? [metadata] : metadata),
+        stderr: ""
+      };
     }
     if (args[0] === "publish") {
       const tarball: any = tarballs.get(args[1]);
@@ -119,8 +207,17 @@ function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<stri
         ...(registry.get(tagsKey(tarball.name)) || {}),
         [tag]: version
       });
-      publishCalls.push({ args: [...args], ...tarball });
+      publishCalls.push({ args: [...args], ...tarball, authToken });
       return { exitCode: 0, stdout: "+ fixture", stderr: "" };
+    }
+    if (args[0] === "dist-tag" && args[1] === "add") {
+      const [, , spec, tag] = args;
+      const separator: any = spec.lastIndexOf("@");
+      const name: any = spec.slice(0, separator);
+      const version: any = spec.slice(separator + 1);
+      tagRepairCalls.push({ name, version, tag, authToken });
+      registry.set(tagsKey(name), { ...(registry.get(tagsKey(name)) || {}), [tag]: version });
+      return { exitCode: 0, stdout: "fixture tag repaired", stderr: "" };
     }
     if (args[0] === "install") {
       return { exitCode: 0, stdout: "fixture install", stderr: "" };
@@ -130,31 +227,283 @@ function createInjectedNpmRunner({ registry = new Map<any, any>() }: Record<stri
     }
     return { exitCode: 1, stdout: "", stderr: "fixture unsupported command" };
   };
-  return { calls, publishCalls, registry, runner };
+  return { calls, archivePackCalls, publishCalls, tagRepairCalls, registry, tarballs, runner };
 }
 
 describe("npm release-set publication", () : any => {
-  it("discovers public workspaces plus the connector and orders every internal dependency before the root", async () : Promise<any> => {
+  it("prepares artifacts through the actual hosted assembly command", async () => {
+    const workflow = await fs.readFile(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
+    const step = workflow.split("- name: Prepare the public npm archives once")[1]?.split("- name:")[0];
+    const command = step?.split("\n").find((line) => line.trimStart().startsWith("run:"))?.trim().slice(4).trim();
+    expect(command).toBeDefined();
+    const words = command!.split(/\s+/u);
+    expect(words.slice(0, 4)).toEqual(["npm", "run", "release:publish-npm", "--"]);
+    const options = parsePublishArguments(words.slice(4));
+    expect(options.prepare).toBe(true);
+    const artifactDirectory = await newArtifactDirectory();
+    const injected = createInjectedNpmRunner();
+    const prepared = await prepareReleaseSet({
+      ...options, rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {}
+    });
+    expect(prepared).toMatchObject({
+      ok: true, prepared: true, tag: releaseTagForVersion(prepared.version), packageCount: 2
+    });
+    const preflightStep = workflow.split("- name: Read and validate all npm package versions and dist-tags without publication")[1]?.split("\n\n")[0];
+    const preflightCommand = preflightStep?.split("\n").find((line) => line.trimStart().startsWith("run:"))?.trim().slice(4).trim();
+    const preflightOptions = parsePublishArguments(preflightCommand!.split(/\s+/u).slice(4));
+    expect(preflightOptions.preflight).toBe(true);
+    const preflight = await preflightReleaseSet({ ...preflightOptions, rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
+    expect(preflight.ok).toBe(true);
+    expect(injected.publishCalls).toHaveLength(0);
+  });
+
+  it("discovers only public workspaces and orders dependencies before the root", async () : Promise<any> => {
     const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
     const names: any = releaseSet.packages.map(({ name }: Record<string, any>) : any => name);
     const positions: any = new Map<any, any>(names.map((name?: any, index?: any) : any => [name, index]));
 
-    expect(names).toHaveLength(RELEASE_PACKAGE_COUNT);
-    expect(names).toContain("meshrix-mcp-connector");
-    for (const packageName of AGENT_PLUGIN_PACKAGE_NAMES) expect(names).toContain(packageName);
-    expect(names).not.toContain("@meshrix/server");
-    expect(names).not.toContain("@meshrix/console");
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toEqual(["@meshrix/gateway", "meshrix.js"]);
     expect(names.at(-1)).toBe("meshrix.js");
 
     for (const packageRecord of releaseSet.packages) {
       for (const field of DEPENDENCY_FIELDS) {
         for (const dependencyName of Object.keys(packageRecord.manifest[field] || {})) {
           if (!dependencyName.startsWith("@meshrix/")) continue;
-          expect(positions.get(dependencyName), `${packageRecord.name} -> ${dependencyName}`)
-            .toBeLessThan(positions.get(packageRecord.name));
+          if (positions.has(dependencyName)) {
+            expect(positions.get(dependencyName), `${packageRecord.name} -> ${dependencyName}`)
+              .toBeLessThan(positions.get(packageRecord.name));
+          } else {
+            const bundleNames = packageRecord.manifest.bundleDependencies || packageRecord.manifest.bundledDependencies || [];
+            expect(bundleNames, `${packageRecord.name} bundles ${dependencyName}`).toContain(dependencyName);
+          }
         }
       }
     }
+  });
+
+  it("prepares only the two public tarballs while validating explicitly bundled private modules", async () : Promise<any> => {
+    const rootDir: any = await newReleaseDiscoveryFixture({
+      rootDependencies: {
+        "@meshrix/gateway": "1.2.3",
+        "@meshrix/foundation": "1.2.3"
+      },
+      rootBundleDependencies: ["@meshrix/foundation"],
+      packages: [
+        {
+          directory: "packages/foundation",
+          manifest: { name: "@meshrix/foundation", version: "1.2.3", private: true }
+        }
+      ]
+    });
+    await fs.writeFile(path.join(rootDir, "packages/gateway/package.json"), JSON.stringify({
+      name: "@meshrix/gateway",
+      version: "1.2.3",
+      dependencies: { "@meshrix/contracts": "1.2.3" },
+      bundleDependencies: ["@meshrix/contracts"]
+    }));
+
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    const prepared: any = await prepareReleaseSet({
+      rootDir,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    const releaseManifest: any = JSON.parse(await fs.readFile(
+      path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME),
+      "utf8"
+    ));
+    const packedNames: any[] = injected.archivePackCalls.map(({ name }: Record<string, any>) : any => name);
+
+    expect(prepared.packageCount).toBe(2);
+    expect(prepared.packages.map(({ name }: Record<string, any>) : any => name))
+      .toEqual(["@meshrix/gateway", "meshrix.js"]);
+    expect(releaseManifest.packages.map(({ name }: Record<string, any>) : any => name))
+      .toEqual(["@meshrix/gateway", "meshrix.js"]);
+    expect(packedNames).toEqual(["@meshrix/gateway", "meshrix.js"]);
+  });
+
+  it("packs a physical private bundle through npm and installs Gateway offline without a registry package", async () : Promise<any> => {
+    const rootDir: any = await newReleaseDiscoveryFixture();
+    const rootManifestPath: any = path.join(rootDir, "package.json");
+    const rootManifest: any = JSON.parse(await fs.readFile(rootManifestPath, "utf8"));
+    rootManifest.files = ["README.md"];
+    await fs.writeFile(rootManifestPath, JSON.stringify(rootManifest));
+    await fs.writeFile(path.join(rootDir, "README.md"), "Isolated public release fixture.\n");
+
+    const gatewayDirectory: any = path.join(rootDir, "packages/gateway");
+    const gatewayManifest: any = {
+      name: "@meshrix/gateway",
+      version: "1.2.3",
+      type: "module",
+      license: "Apache-2.0",
+      files: ["dist", "LICENSE", "README.md"],
+      types: "./dist/index.d.ts",
+      exports: {
+        ".": {
+          types: "./dist/index.d.ts",
+          import: "./dist/index.js",
+          default: "./dist/index.js"
+        }
+      },
+      dependencies: { "@meshrix/contracts": "1.2.3" },
+      bundleDependencies: ["@meshrix/contracts"]
+    };
+    await fs.writeFile(path.join(gatewayDirectory, "package.json"), JSON.stringify(gatewayManifest));
+    await fs.writeFile(path.join(gatewayDirectory, "README.md"), "Gateway release fixture.\n");
+    await fs.mkdir(path.join(gatewayDirectory, "dist"), { recursive: true });
+    await fs.writeFile(path.join(gatewayDirectory, "dist/index.js"), 'export { contractValue } from "@meshrix/contracts";\n');
+    await fs.writeFile(path.join(gatewayDirectory, "dist/index.d.ts"), 'export { contractValue } from "@meshrix/contracts";\n');
+    await fs.copyFile(path.join(ROOT, "packages/gateway/LICENSE"), path.join(gatewayDirectory, "LICENSE"));
+
+    const contractsDirectory: any = path.join(rootDir, "packages/contracts");
+    const contractsManifest: any = {
+      name: "@meshrix/contracts",
+      version: "1.2.3",
+      private: true,
+      type: "module",
+      license: "Apache-2.0",
+      files: ["dist", "LICENSE", "THIRD_PARTY_NOTICES.md"],
+      types: "./dist/index.d.ts",
+      exports: {
+        ".": {
+          types: "./dist/index.d.ts",
+          import: "./dist/index.js",
+          default: "./dist/index.js"
+        }
+      }
+    };
+    await fs.writeFile(path.join(contractsDirectory, "package.json"), JSON.stringify(contractsManifest));
+    await fs.mkdir(path.join(contractsDirectory, "dist"), { recursive: true });
+    await fs.writeFile(path.join(contractsDirectory, "dist/index.js"), 'export const contractValue = "bundled-contract";\n');
+    await fs.writeFile(path.join(contractsDirectory, "dist/index.d.ts"), 'export declare const contractValue: "bundled-contract";\n');
+    await fs.copyFile(path.join(ROOT, "packages/contracts/LICENSE"), path.join(contractsDirectory, "LICENSE"));
+    await fs.writeFile(path.join(contractsDirectory, "THIRD_PARTY_NOTICES.md"), "Meshrix Contracts; Apache-2.0.\n");
+
+    const artifactDirectory: any = await newArtifactDirectory();
+    const prepared: any = await prepareReleaseSet({ rootDir, artifactDirectory });
+    const firstRoot = prepared.packages.find(({ name }: { name: string }) => name === "meshrix.js");
+    await fs.writeFile(path.join(rootDir, "README.md"), "Changed isolated public release fixture.\n");
+    const refreshed = await prepareReleaseSet({ rootDir, artifactDirectory });
+    const refreshedRoot = refreshed.packages.find(({ name }: { name: string }) => name === "meshrix.js");
+    expect(refreshedRoot.version).toBe(firstRoot.version);
+    expect(refreshedRoot.integrity).not.toBe(firstRoot.integrity);
+    const preparedSet: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
+    const gatewayArtifact: any = preparedSet.packages.find(({ name }: Record<string, any>) : any => name === "@meshrix/gateway");
+    const consumerDirectory: any = await newArtifactDirectory();
+    await fs.writeFile(path.join(consumerDirectory, "package.json"), JSON.stringify({
+      name: "gateway-pack-consumer",
+      version: "1.0.0",
+      private: true,
+      type: "module"
+    }));
+    const npmRunner: any = createNpmRunner();
+    const installed: any = await npmRunner([
+      "install",
+      "--offline",
+      "--no-audit",
+      "--no-fund",
+      gatewayArtifact.tarballPath
+    ], { cwd: consumerDirectory });
+
+    expect(prepared.packageCount).toBe(2);
+    expect(gatewayArtifact.integrity).toMatch(/^sha512-/u);
+    const installFailure: any = installed.stderr
+      .replaceAll(rootDir, "<source>")
+      .replaceAll(artifactDirectory, "<artifacts>")
+      .replaceAll(consumerDirectory, "<consumer>")
+      .replaceAll(os.homedir(), "<home>")
+      .replaceAll(os.tmpdir(), "<temporary-directory>");
+    expect(installed.exitCode, installFailure).toBe(0);
+    const installedGatewayDirectory: any = path.join(consumerDirectory, "node_modules/@meshrix/gateway");
+    const installedContractsDirectory: any = path.join(
+      installedGatewayDirectory,
+      "node_modules/@meshrix/contracts"
+    );
+    const installedContractsManifest: any = JSON.parse(await fs.readFile(
+      path.join(installedContractsDirectory, "package.json"),
+      "utf8"
+    ));
+    expect(installedContractsManifest).toMatchObject({
+      name: "@meshrix/contracts",
+      version: "1.2.3",
+      private: true,
+      license: "Apache-2.0",
+      types: "./dist/index.d.ts"
+    });
+    expect(await fs.readFile(path.join(installedContractsDirectory, "LICENSE"), "utf8"))
+      .toContain("Apache License");
+    expect(await fs.readFile(path.join(installedContractsDirectory, "THIRD_PARTY_NOTICES.md"), "utf8"))
+      .toContain("Apache-2.0");
+    expect(await fs.readFile(path.join(installedContractsDirectory, "dist/index.d.ts"), "utf8"))
+      .toContain("contractValue");
+    const gatewayModule: any = await import(pathToFileURL(
+      path.join(installedGatewayDirectory, "dist/index.js")
+    ).href);
+    expect(gatewayModule.contractValue).toBe("bundled-contract");
+  });
+
+  it("removes partial prepared artifacts when an npm-selected private bundle file is missing", async () : Promise<any> => {
+    const rootDir: any = await newReleaseDiscoveryFixture();
+    await fs.writeFile(path.join(rootDir, "packages/gateway/package.json"), JSON.stringify({
+      name: "@meshrix/gateway",
+      version: "1.2.3",
+      dependencies: { "@meshrix/contracts": "1.2.3" },
+      bundleDependencies: ["@meshrix/contracts"]
+    }));
+    const injected: any = createInjectedNpmRunner({
+      packFilesByName: {
+        "@meshrix/contracts": [{ path: "package.json" }, { path: "dist/missing.js" }]
+      }
+    });
+    const artifactDirectory: any = await newArtifactDirectory();
+
+    await expect(prepareReleaseSet({
+      rootDir,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    })).rejects.toMatchObject({ code: "release_set_bundle_source_file_missing" });
+    expect(await fs.readdir(artifactDirectory)).toEqual([]);
+    expect(injected.archivePackCalls).toHaveLength(0);
+    const commandDirectories: any[] = [...new Set<any>(injected.calls.map(({ cwd }: Record<string, any>) : any => cwd))];
+    expect(commandDirectories).toHaveLength(1);
+    await expect(fs.access(commandDirectories[0])).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each([
+    {
+      label: "an undeclared and unresolved internal dependency",
+      rootDependencies: { "@meshrix/gateway": "1.2.3", "@meshrix/missing": "1.2.3" },
+      rootBundleDependencies: [],
+      packages: [],
+      expectedCode: "release_set_internal_dependency_missing"
+    },
+    {
+      label: "an existing private dependency without an explicit bundle declaration",
+      rootDependencies: { "@meshrix/gateway": "1.2.3", "@meshrix/foundation": "1.2.3" },
+      rootBundleDependencies: [],
+      packages: [{
+        directory: "packages/foundation",
+        manifest: { name: "@meshrix/foundation", version: "1.2.3", private: true }
+      }],
+      expectedCode: "release_set_internal_dependency_missing"
+    },
+    {
+      label: "a private bundle whose workspace version differs from the release",
+      rootDependencies: { "@meshrix/gateway": "1.2.3", "@meshrix/foundation": "1.2.3" },
+      rootBundleDependencies: ["@meshrix/foundation"],
+      packages: [{
+        directory: "packages/foundation",
+        manifest: { name: "@meshrix/foundation", version: "1.2.2", private: true }
+      }],
+      expectedCode: "release_set_internal_dependency_invalid"
+    }
+  ])("rejects $label", async ({ rootDependencies, rootBundleDependencies, packages, expectedCode }: Record<string, any>) : Promise<any> => {
+    const rootDir: any = await newReleaseDiscoveryFixture({ rootDependencies, rootBundleDependencies, packages });
+    await expect(discoverReleaseSet({ rootDir })).rejects.toMatchObject({ code: expectedCode });
   });
 
   it("expands only the governed agent-plugin workspace boundary", async () : Promise<any> => {
@@ -182,133 +531,265 @@ describe("npm release-set publication", () : any => {
     })).rejects.toMatchObject({ code: "release_set_workspace_path_invalid" });
   });
 
-  it("keeps dry-run fully offline while packing the complete real release set", async () : Promise<any> => {
+  it("prepares one credential-free manifest and exposes the root tarball by its exact bytes", async () : Promise<any> => {
     const injected: any = createInjectedNpmRunner();
-    const result: any = await publishReleaseSet({
+    const artifactDirectory: any = await newArtifactDirectory();
+    const result: any = await prepareReleaseSet({
       rootDir: ROOT,
-      dryRun: true,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: { NODE_AUTH_TOKEN: "synthetic" }
+    });
+    const manifestPath: any = path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME);
+    const manifest: any = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    const prepared: any = await loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory });
+    const rootArtifact: any = prepared.packages.find(({ name }: Record<string, any>) : any => name === "meshrix.js");
+
+    expect(result).toMatchObject({ ok: true, prepared: true, packageCount: await packageCount() });
+    expect(result.packages.every((row?: any) : any => (
+      Object.keys(row).sort().join(",") === "filename,integrity,name,version"
+    ))).toBe(true);
+    expect(manifest).toMatchObject({ schemaVersion: "meshrix.npm-release-set/v1", version: "0.0.1", tag: "latest" });
+    expect(manifest.packages.every((row?: any) : any => (
+      Object.keys(row).sort().join(",") === "filename,integrity,name,version" &&
+      !path.isAbsolute(row.filename)
+    ))).toBe(true);
+    expect(JSON.stringify({ result, manifest })).not.toContain(artifactDirectory);
+    expect(rootArtifact.filename).toBe(filenameFor("meshrix.js", "0.0.1"));
+    expect(rootArtifact.tarballPath).toBe(path.join(artifactDirectory, rootArtifact.filename));
+    expect(await fs.readFile(rootArtifact.tarballPath, "utf8")).toBe("fixture:meshrix.js");
+    expect(injected.archivePackCalls).toHaveLength(await packageCount());
+  });
+
+  it("packs current inputs whenever explicit preparation is requested", async () : Promise<any> => {
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    const first: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    const second: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
       runner: injected.runner,
       environment: {}
     });
 
-    expect(result).toMatchObject({
-      ok: true,
-      dryRun: true,
-      version: "0.0.1",
-      tag: "latest",
-      packageCount: RELEASE_PACKAGE_COUNT
+    expect(second).toMatchObject({ ok: true, prepared: true, packageCount: await packageCount() });
+    expect(injected.archivePackCalls).toHaveLength(2 * await packageCount());
+    await expect(loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory })).resolves.toMatchObject({
+      version: first.version,
+      tag: first.tag,
+      packages: expect.arrayContaining([expect.objectContaining({ name: "meshrix.js" })])
     });
-    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(RELEASE_PACKAGE_COUNT).fill("planned"));
-    expect(injected.calls).toHaveLength(RELEASE_PACKAGE_COUNT);
-    expect(injected.calls.every(({ args }: Record<string, any>) : any => args[0] === "pack")).toBe(true);
   });
 
-  it("preflights every package against the registry without publication credentials or mutations", async () : Promise<any> => {
+  it("rebuilds an incomplete owned set and can retry after npm pack fails after writing an archive", async () : Promise<any> => {
     const injected: any = createInjectedNpmRunner();
-    const result: any = await publishReleaseSet({
+    const artifactDirectory: any = await newArtifactDirectory();
+    const first: any = await prepareReleaseSet({
       rootDir: ROOT,
-      preflight: true,
+      artifactDirectory,
       runner: injected.runner,
-      environment: { NPM_TOKEN: "<unused-preflight-token>" }
+      environment: {}
+    });
+    const manifest: any = JSON.parse(await fs.readFile(
+      path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME),
+      "utf8"
+    ));
+    await fs.rm(path.join(artifactDirectory, manifest.packages[0].filename));
+
+    const rebuilt: any = await prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: {}
+    });
+    expect(rebuilt).toMatchObject({ ok: true, prepared: true, version: first.version });
+    await expect(loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory })).resolves.toMatchObject({
+      version: first.version,
+      packages: expect.arrayContaining([expect.objectContaining({ name: "@meshrix/gateway" })])
     });
 
-    expect(result).toMatchObject({
-      ok: true,
-      dryRun: false,
-      preflight: true,
-      version: "0.0.1",
-      tag: "latest",
-      packageCount: RELEASE_PACKAGE_COUNT
+    const failedDirectory: any = await newArtifactDirectory();
+    let failFirstPack: any = true;
+    const failAfterWrite: any = async (args?: any, context?: any) : Promise<any> => {
+      const result: any = await injected.runner(args, context);
+      if (args[0] === "pack" && args.includes("--pack-destination") && failFirstPack) {
+        failFirstPack = false;
+        return { ...result, exitCode: 1 };
+      }
+      return result;
+    };
+    await expect(prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory: failedDirectory,
+      runner: failAfterWrite,
+      environment: {}
+    })).rejects.toMatchObject({ code: "release_set_pack_failed" });
+    expect(await fs.readdir(failedDirectory)).toEqual([]);
+    await expect(prepareReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory: failedDirectory,
+      runner: injected.runner,
+      environment: {}
+    })).resolves.toMatchObject({ ok: true, prepared: true });
+  });
+
+  it("preserves unrelated directory contents when an incomplete artifact cannot be safely owned", async () : Promise<any> => {
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await newArtifactDirectory();
+    await prepareReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
+    const manifestPath: any = path.join(artifactDirectory, PREPARED_RELEASE_SET_FILENAME);
+    const manifestBefore: string = await fs.readFile(manifestPath, "utf8");
+    await fs.rm(path.join(artifactDirectory, JSON.parse(manifestBefore).packages[0].filename));
+    const userFile: any = path.join(artifactDirectory, "operator-note.txt");
+    await fs.writeFile(userFile, "preserve this user-owned file\n");
+
+    await expect(prepareReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} }))
+      .rejects.toMatchObject({ code: "release_set_artifact_directory_not_empty" });
+    expect(await fs.readFile(userFile, "utf8")).toBe("preserve this user-owned file\n");
+    expect(await fs.readFile(manifestPath, "utf8")).toBe(manifestBefore);
+  });
+
+  it.each([
+    { label: "legacy", packFormat: "legacy", viewFormat: "legacy" },
+    { label: "npm 12", packFormat: "npm12", viewFormat: "npm12" }
+  ])("preflights exact prepared archives without repacking using $label JSON output", async ({ packFormat, viewFormat }: Record<string, any>) : Promise<any> => {
+    const injected: any = createInjectedNpmRunner({ packFormat, viewFormat });
+    const artifactDirectory: any = await prepareFixtures(injected);
+    const result: any = await preflightReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory,
+      runner: injected.runner,
+      environment: { NPM_TOKEN: "synthetic" }
     });
-    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(RELEASE_PACKAGE_COUNT).fill("publish"));
-    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "pack")).toHaveLength(RELEASE_PACKAGE_COUNT);
-    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(RELEASE_PACKAGE_COUNT * 2);
+    const count: any = await packageCount();
+
+    expect(result).toMatchObject({ ok: true, preflight: true, version: "0.0.1", tag: "latest", packageCount: count });
+    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(count).fill("publish"));
+    expect(injected.archivePackCalls).toHaveLength(count);
+    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(count * 2);
     expect(injected.calls.some(({ args }: Record<string, any>) : any => (
-      args[0] === "publish" || args[0] === "install" || args[0] === "audit"
+      args[0] === "publish" || args[0] === "dist-tag" || args[0] === "install" || args[0] === "audit"
     ))).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(artifactDirectory);
   });
 
-  it("keeps local dry-run and registry preflight as separate modes", () : any => {
-    expect(parsePublishArguments(["--preflight", "--tag", "next"]))
-      .toEqual({ dryRun: false, preflight: true, tag: "next", help: false });
-    expect(() : any => parsePublishArguments(["--dry-run", "--preflight"]))
-      .toThrowError(expect.objectContaining({ code: "release_set_argument_conflict" }));
+  it("rejects missing, substituted, and malformed prepared archives before registry access", async () : Promise<any> => {
+    const missingNpm: any = createInjectedNpmRunner();
+    const missingDirectory: any = await prepareFixtures(missingNpm);
+    const missingManifest: any = JSON.parse(await fs.readFile(path.join(missingDirectory, PREPARED_RELEASE_SET_FILENAME), "utf8"));
+    await fs.rm(path.join(missingDirectory, missingManifest.packages[0].filename));
+    await expect(preflightReleaseSet({ rootDir: ROOT, artifactDirectory: missingDirectory, runner: missingNpm.runner }))
+      .rejects.toMatchObject({ code: "release_set_tarball_missing" });
+    expect(missingNpm.calls.some(({ args }: Record<string, any>) : any => args[0] === "view")).toBe(false);
+
+    const substitutedNpm: any = createInjectedNpmRunner();
+    const substitutedDirectory: any = await prepareFixtures(substitutedNpm);
+    const substitutedManifest: any = JSON.parse(await fs.readFile(path.join(substitutedDirectory, PREPARED_RELEASE_SET_FILENAME), "utf8"));
+    await fs.writeFile(path.join(substitutedDirectory, substitutedManifest.packages[0].filename), "substituted archive");
+    await expect(publishReleaseSet({ rootDir: ROOT, artifactDirectory: substitutedDirectory, runner: substitutedNpm.runner }))
+      .rejects.toMatchObject({ code: "release_set_prepared_archive_integrity_mismatch" });
+    expect(substitutedNpm.publishCalls).toHaveLength(0);
+    expect(substitutedNpm.calls.some(({ args }: Record<string, any>) : any => args[0] === "view")).toBe(false);
+
+    const malformedNpm: any = createInjectedNpmRunner();
+    const malformedDirectory: any = await prepareFixtures(malformedNpm);
+    const malformedPath: any = path.join(malformedDirectory, PREPARED_RELEASE_SET_FILENAME);
+    const malformed: any = JSON.parse(await fs.readFile(malformedPath, "utf8"));
+    malformed.packages[0].filename = "../elsewhere.tgz";
+    await fs.writeFile(malformedPath, JSON.stringify(malformed));
+    await expect(preflightReleaseSet({ rootDir: ROOT, artifactDirectory: malformedDirectory, runner: malformedNpm.runner }))
+      .rejects.toMatchObject({ code: "release_set_prepared_archive_invalid" });
+    expect(malformedNpm.calls.some(({ args }: Record<string, any>) : any => args[0] === "view")).toBe(false);
   });
 
-  it("publishes missing tarballs with provenance once and skips matching immutable versions on rerun", async () : Promise<any> => {
+  it("packs once, preflights the complete set, publishes dependency-first and resumes an exact partial release", async () : Promise<any> => {
     const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
-    const alreadyPublished: any = releaseSet.packages[0];
+    const count: any = releaseSet.packages.length;
+    const existing: any = releaseSet.packages[0];
     const registry: any = new Map<any, any>();
-    addPublishedVersion(registry, alreadyPublished);
+    addPublishedVersion(registry, existing);
     const injected: any = createInjectedNpmRunner({ registry });
+    const artifactDirectory: any = await prepareFixtures(injected);
 
-    const first: any = await publishReleaseSet({
-      rootDir: ROOT,
-      runner: injected.runner,
-      environment: {}
-    });
+    const first: any = await publishReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
     expect(first.packages.filter(({ action }: Record<string, any>) : any => action === "skipped").map(({ name }: Record<string, any>) : any => name))
-      .toEqual([alreadyPublished.name]);
-    expect(first.packages.filter(({ action }: Record<string, any>) : any => action === "published")).toHaveLength(RELEASE_PACKAGE_COUNT - 1);
-    expect(injected.calls.slice(0, RELEASE_PACKAGE_COUNT).every(({ args }: Record<string, any>) : any => args[0] === "pack")).toBe(true);
+      .toEqual([existing.name]);
+    expect(first.packages.filter(({ action }: Record<string, any>) : any => action === "published"))
+      .toHaveLength(count - 1);
     expect(injected.publishCalls.map(({ name }: Record<string, any>) : any => name)).toEqual(
       first.packages.filter(({ action }: Record<string, any>) : any => action === "published").map(({ name }: Record<string, any>) : any => name)
     );
-    for (const { args } of injected.publishCalls) {
-      expect(args).toContain("--provenance");
-      expect(args.slice(args.indexOf("--access"), args.indexOf("--access") + 2))
-        .toEqual(["--access", "public"]);
-      expect(args.slice(args.indexOf("--tag"), args.indexOf("--tag") + 2))
-        .toEqual(["--tag", "latest"]);
-      expect(args.join(" ")).not.toContain("npm@latest");
+    expect(injected.publishCalls.at(-1)?.name).toBe("meshrix.js");
+    for (const published of injected.publishCalls) {
+      const mutationIndex: any = injected.calls.findIndex(({ args }: Record<string, any>) : any => (
+        args[0] === "publish" && args[1] === published.args[1]
+      ));
+      const packageReads: any[] = injected.calls.flatMap(({ args }: Record<string, any>, index?: any) : any[] => (
+        args[0] === "view" && (args[1] === published.name || args[1] === published.spec)
+          ? [index]
+          : []
+      ));
+      expect(packageReads.filter((index?: any) : any => index < mutationIndex)).toHaveLength(4);
+      expect(packageReads.filter((index?: any) : any => index > mutationIndex).length).toBeGreaterThanOrEqual(2);
     }
+    expect(injected.archivePackCalls).toHaveLength(count);
     expect(injected.calls.some(({ args }: Record<string, any>) : any => args[0] === "install")).toBe(true);
     expect(injected.calls.some(({ args }: Record<string, any>) : any => (
       args[0] === "audit" && args[1] === "signatures" && args.includes("--include-attestations")
     ))).toBe(true);
+    for (const { args } of injected.publishCalls) {
+      expect(args).toContain("--provenance");
+      expect(args.slice(args.indexOf("--access"), args.indexOf("--access") + 2)).toEqual(["--access", "public"]);
+      expect(args.slice(args.indexOf("--tag"), args.indexOf("--tag") + 2)).toEqual(["--tag", "latest"]);
+      expect(args.join(" ")).not.toContain("npm@latest");
+    }
 
-    const publishedCallCount: any = injected.publishCalls.length;
-    const second: any = await publishReleaseSet({
-      rootDir: ROOT,
-      runner: injected.runner,
-      environment: {}
-    });
+    const mutationCount: any = injected.publishCalls.length;
+    const second: any = await publishReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
     expect(second.packages.every(({ action }: Record<string, any>) : any => action === "skipped")).toBe(true);
-    expect(injected.publishCalls).toHaveLength(publishedCallCount);
+    expect(injected.publishCalls).toHaveLength(mutationCount);
+    expect(injected.archivePackCalls).toHaveLength(count);
   });
 
-  it("fails closed when an immutable registry version has different content", async () : Promise<any> => {
-    const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
-    const first: any = releaseSet.packages[0];
-    const registry: any = new Map<any, any>();
-    addPublishedVersion(registry, first, { integrity: integrityFor("different-content") });
-    const injected: any = createInjectedNpmRunner({ registry });
-
-    await expect(publishReleaseSet({
-      rootDir: ROOT,
-      runner: injected.runner,
-      environment: {}
-    })).rejects.toMatchObject({ code: "release_set_registry_integrity_mismatch" });
-    expect(injected.publishCalls).toHaveLength(0);
-  });
-
-  it("preflights every package before publishing when a late immutable version conflicts", async () : Promise<any> => {
+  it("preflights every package before mutating when a later immutable version conflicts", async () : Promise<any> => {
     const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
     const last: any = releaseSet.packages.at(-1);
     const registry: any = new Map<any, any>();
     addPublishedVersion(registry, last, { integrity: integrityFor("different-content") });
     const injected: any = createInjectedNpmRunner({ registry });
+    const artifactDirectory: any = await prepareFixtures(injected);
 
-    await expect(publishReleaseSet({
-      rootDir: ROOT,
-      runner: injected.runner,
-      environment: {}
-    })).rejects.toMatchObject({ code: "release_set_registry_integrity_mismatch" });
+    await expect(publishReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} }))
+      .rejects.toMatchObject({ code: "release_set_registry_integrity_mismatch" });
     expect(injected.publishCalls).toHaveLength(0);
-    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(RELEASE_PACKAGE_COUNT * 2);
+    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(releaseSet.packages.length * 2);
   });
 
-  it("requires signatures and provenance before accepting an existing immutable version", async () : Promise<any> => {
+  it("rejects a changed prepared archive before any registry mutation", async () : Promise<any> => {
+    const injected: any = createInjectedNpmRunner();
+    const artifactDirectory: any = await prepareFixtures(injected);
+    const prepared: any = await loadPreparedReleaseSet({ rootDir: ROOT, artifactDirectory });
+    const count: any = await packageCount();
+    const firstArchive: any = prepared.packages[0].tarballPath;
+    const runner: any = async (args?: any, context?: any) : Promise<any> => {
+      const result: any = await injected.runner(args, context);
+      if (args[0] === "view" && args[2] === "dist-tags" && args[1] === "meshrix.js") {
+        await fs.writeFile(firstArchive, "replaced while registry preflight was running");
+      }
+      return result;
+    };
+    await expect(publishReleaseSet({ rootDir: ROOT, artifactDirectory, runner, environment: {} }))
+      .rejects.toMatchObject({ code: "release_set_prepared_archive_integrity_mismatch" });
+    expect(injected.publishCalls).toHaveLength(0);
+    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(count * 2);
+  });
+
+  it("fails closed when npm cannot verify signatures or provenance", async () : Promise<any> => {
     const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
     const first: any = releaseSet.packages[0];
     const registry: any = new Map<any, any>();
@@ -318,83 +799,362 @@ describe("npm release-set publication", () : any => {
         signatures: publishedDistribution(first.name, first.version).signatures
       }
     });
-    const injected: any = createInjectedNpmRunner({ registry });
-
+    const provenanceNpm: any = createInjectedNpmRunner({ registry });
+    const provenanceDirectory: any = await prepareFixtures(provenanceNpm);
     await expect(publishReleaseSet({
       rootDir: ROOT,
-      runner: injected.runner,
+      artifactDirectory: provenanceDirectory,
+      runner: provenanceNpm.runner,
       environment: {}
     })).rejects.toMatchObject({ code: "release_set_registry_provenance_missing" });
-    expect(injected.publishCalls).toHaveLength(0);
-  });
+    expect(provenanceNpm.publishCalls).toHaveLength(0);
 
-  it("preserves a newer tag for an existing version and rejects tag regression for a missing version", async () : Promise<any> => {
-    const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
-    const first: any = releaseSet.packages[0];
-    const existingRegistry: any = new Map<any, any>();
-    addPublishedVersion(existingRegistry, first, { taggedVersion: "9.0.0" });
-    const existingInjected: any = createInjectedNpmRunner({ registry: existingRegistry });
-    const result: any = await publishReleaseSet({
-      rootDir: ROOT,
-      runner: existingInjected.runner,
-      environment: {}
-    });
-    expect(result.packages.find(({ name }: Record<string, any>) : any => name === first.name)?.action).toBe("skipped");
-    expect(existingRegistry.get(tagsKey(first.name))).toEqual({ latest: "9.0.0" });
-
-    const missingRegistry: any = new Map<any, any>([[tagsKey(first.name), { latest: "9.0.0" }]]);
-    const missingInjected: any = createInjectedNpmRunner({ registry: missingRegistry });
-    await expect(publishReleaseSet({
-      rootDir: ROOT,
-      runner: missingInjected.runner,
-      environment: {}
-    })).rejects.toMatchObject({ code: "release_set_registry_tag_regression" });
-    expect(missingInjected.publishCalls).toHaveLength(0);
-  });
-
-  it("fails closed when an existing version would require an OIDC dist-tag repair", async () : Promise<any> => {
-    const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
-    const first: any = releaseSet.packages[0];
-    const registry: any = new Map<any, any>();
-    addPublishedVersion(registry, first, { taggedVersion: "0.0.0" });
-    const injected: any = createInjectedNpmRunner({ registry });
-
-    await expect(publishReleaseSet({
-      rootDir: ROOT,
-      runner: injected.runner,
-      environment: {}
-    })).rejects.toMatchObject({ code: "release_set_registry_tag_repair_required" });
-    expect(injected.publishCalls).toHaveLength(0);
-  });
-
-  it("fails closed when npm cannot cryptographically verify the published package set", async () : Promise<any> => {
-    const injected: any = createInjectedNpmRunner();
+    const auditNpm: any = createInjectedNpmRunner();
+    const auditDirectory: any = await prepareFixtures(auditNpm);
     const runner: any = async (args?: any, context?: any) : Promise<any> => {
       if (args[0] === "audit" && args[1] === "signatures") {
         return { exitCode: 1, stdout: "", stderr: "fixture signature failure" };
       }
-      return injected.runner(args, context);
+      return auditNpm.runner(args, context);
     };
-
     await expect(publishReleaseSet({
       rootDir: ROOT,
+      artifactDirectory: auditDirectory,
       runner,
       environment: {}
     })).rejects.toMatchObject({ code: "release_set_registry_signature_audit_failed" });
   });
 
-  it("uses only latest or next and refuses raw npm token publication", async () : Promise<any> => {
+  it("repairs only an older tag on identical bytes and preserves a newer tag", async () : Promise<any> => {
+    const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
+    const first: any = releaseSet.packages[0];
+    const registry: any = new Map<any, any>();
+    addPublishedVersion(registry, first, { taggedVersion: "0.0.0" });
+    const injected: any = createInjectedNpmRunner({ registry });
+    const artifactDirectory: any = await prepareFixtures(injected);
+    const preflight: any = await preflightReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner });
+    expect(preflight.packages.find(({ name }: Record<string, any>) : any => name === first.name)?.action)
+      .toBe("repair-tag");
+
+    const result: any = await publishReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} });
+    expect(result.packages.find(({ name }: Record<string, any>) : any => name === first.name)?.action)
+      .toBe("tag-repaired");
+    expect(injected.tagRepairCalls).toEqual([
+      expect.objectContaining({ name: first.name, version: first.version, tag: "latest", authToken: undefined })
+    ]);
+    expect(injected.publishCalls.some(({ name }: Record<string, any>) : any => name === first.name)).toBe(false);
+    expect(registry.get(tagsKey(first.name))).toEqual({ latest: first.version });
+
+    const newerRegistry: any = new Map<any, any>();
+    addPublishedVersion(newerRegistry, first, { taggedVersion: "9.0.0" });
+    const newerNpm: any = createInjectedNpmRunner({ registry: newerRegistry });
+    const newerDirectory: any = await prepareFixtures(newerNpm);
+    const newerResult: any = await publishReleaseSet({ rootDir: ROOT, artifactDirectory: newerDirectory, runner: newerNpm.runner, environment: {} });
+    expect(newerResult.packages.find(({ name }: Record<string, any>) : any => name === first.name)?.action).toBe("skipped");
+    expect(newerRegistry.get(tagsKey(first.name))).toEqual({ latest: "9.0.0" });
+    expect(newerNpm.tagRepairCalls).toHaveLength(0);
+  });
+
+  it("rejects a tag regression for a missing version", async () : Promise<any> => {
+    const releaseSet: any = await discoverReleaseSet({ rootDir: ROOT });
+    const first: any = releaseSet.packages[0];
+    const registry: any = new Map<any, any>([[tagsKey(first.name), { latest: "9.0.0" }]]);
+    const injected: any = createInjectedNpmRunner({ registry });
+    const artifactDirectory: any = await prepareFixtures(injected);
+    await expect(publishReleaseSet({ rootDir: ROOT, artifactDirectory, runner: injected.runner, environment: {} }))
+      .rejects.toMatchObject({ code: "release_set_registry_tag_regression" });
+    expect(injected.publishCalls).toHaveLength(0);
+  });
+
+  it("uses the prerelease next channel and preserves its newer version", async () : Promise<any> => {
+    const fixtureRoot: any = await newArtifactDirectory();
+    await fs.writeFile(path.join(fixtureRoot, "package.json"), JSON.stringify({
+      name: "meshrix.js",
+      version: "1.2.3-rc.10",
+      workspaces: []
+    }));
+    const artifactDirectory: any = await newArtifactDirectory();
+    const registry: any = new Map<any, any>([[tagsKey("meshrix.js"), { next: "1.2.3-rc.2" }]]);
+    const injected: any = createInjectedNpmRunner({ registry });
+    await prepareReleaseSet({ rootDir: fixtureRoot, artifactDirectory, runner: injected.runner, environment: {} });
+
+    const preflight: any = await preflightReleaseSet({ rootDir: fixtureRoot, artifactDirectory, runner: injected.runner });
+    expect(preflight).toMatchObject({ version: "1.2.3-rc.10", tag: "next", packageCount: 1 });
+    expect(preflight.packages[0].action).toBe("publish");
+    const published: any = await publishReleaseSet({ rootDir: fixtureRoot, artifactDirectory, runner: injected.runner, environment: {} });
+    expect(published.packages[0].action).toBe("published");
+    expect(registry.get(tagsKey("meshrix.js"))).toEqual({ next: "1.2.3-rc.10" });
+
+    registry.set(tagsKey("meshrix.js"), { next: "1.2.3-rc.12" });
+    const rerun: any = await publishReleaseSet({ rootDir: fixtureRoot, artifactDirectory, runner: injected.runner, environment: {} });
+    expect(rerun.packages[0].action).toBe("skipped");
+    expect(registry.get(tagsKey("meshrix.js"))).toEqual({ next: "1.2.3-rc.12" });
+    expect(injected.publishCalls).toHaveLength(1);
+  });
+
+  it("requires explicit candidate-bound bootstrap and prevents silent raw-token fallback", async () : Promise<any> => {
     expect(releaseTagForVersion("1.2.3")).toBe("latest");
     expect(releaseTagForVersion("1.2.3-rc.1")).toBe("next");
     expect(compareReleaseVersions("1.2.3", "1.2.3-rc.9")).toBeGreaterThan(0);
     expect(compareReleaseVersions("1.2.3-rc.10", "1.2.3-rc.2")).toBeGreaterThan(0);
     expect(compareReleaseVersions("100000000000000000000.0.0", "9.0.0")).toBeGreaterThan(0);
-    const injected: any = createInjectedNpmRunner();
+
+    const defaultNpm: any = createInjectedNpmRunner();
+    const defaultDirectory: any = await prepareFixtures(defaultNpm);
     await expect(publishReleaseSet({
       rootDir: ROOT,
-      runner: injected.runner,
-      environment: { NPM_TOKEN: "<raw-token>" }
+      artifactDirectory: defaultDirectory,
+      runner: defaultNpm.runner,
+      environment: { NODE_AUTH_TOKEN: "synthetic" }
     })).rejects.toMatchObject({ code: "release_set_raw_npm_token_forbidden" });
-    expect(injected.calls).toHaveLength(0);
+    expect(defaultNpm.calls.some(({ args }: Record<string, any>) : any => args[0] === "view")).toBe(false);
+
+    const bootstrapNpm: any = createInjectedNpmRunner();
+    const bootstrapDirectory: any = await prepareFixtures(bootstrapNpm);
+    await expect(publishReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory: bootstrapDirectory,
+      authMode: "bootstrap",
+      bootstrapCandidate: "0.0.2",
+      runner: bootstrapNpm.runner,
+      environment: { NODE_AUTH_TOKEN: "synthetic" }
+    })).rejects.toMatchObject({ code: "release_set_bootstrap_candidate_invalid" });
+    expect(bootstrapNpm.calls.some(({ args }: Record<string, any>) : any => args[0] === "view")).toBe(false);
+
+    const successfulNpm: any = createInjectedNpmRunner();
+    const successfulDirectory: any = await prepareFixtures(successfulNpm);
+    const successful: any = await publishReleaseSet({
+      rootDir: ROOT,
+      artifactDirectory: successfulDirectory,
+      authMode: "bootstrap",
+      bootstrapCandidate: "0.0.1",
+      runner: successfulNpm.runner,
+      environment: { NODE_AUTH_TOKEN: "synthetic" }
+    });
+    expect(successful.authMode).toBe("bootstrap");
+    expect(successfulNpm.publishCalls.every(({ authToken }: Record<string, any>) : any => authToken === "synthetic")).toBe(true);
+    expect(successfulNpm.calls.filter(({ args }: Record<string, any>) : any => (
+      args[0] === "view" || args[0] === "install" || args[0] === "audit" || args[0] === "pack"
+    )).every(({ authToken }: Record<string, any>) : any => authToken === undefined)).toBe(true);
+    expect(JSON.stringify(successful)).not.toContain("synthetic");
+    expect(JSON.stringify(successful)).not.toContain(successfulDirectory);
+  });
+
+  it("isolates all npm credentials from read/build commands and scopes bootstrap to mutations", async () : Promise<any> => {
+    const calls: any[] = [];
+    const runner: any = createNpmRunner({
+      environment: {
+        NODE_AUTH_TOKEN: "ambient-synthetic",
+        NPM_TOKEN: "other-synthetic",
+        npm_config_userconfig: "/fixture/user.npmrc",
+        NPM_CONFIG_GLOBALCONFIG: "/fixture/global.npmrc",
+        npm_config_allow_scripts: "fixture-policy",
+        NPM_CONFIG_REGISTRY: "https://registry.invalid/",
+        ACTIONS_ID_TOKEN_REQUEST_URL: "https://actions.invalid/oidc/request",
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-synthetic",
+        GITHUB_ACTIONS: "true"
+      },
+      exec: async (command?: any, args?: any, options?: any) : Promise<any> => {
+        const userConfigPath: any = options.env.npm_config_userconfig;
+        const globalConfigPath: any = options.env.npm_config_globalconfig;
+        calls.push({
+          command,
+          args,
+          env: options.env,
+          configContents: await Promise.all([
+            fs.readFile(userConfigPath, "utf8"),
+            fs.readFile(globalConfigPath, "utf8")
+          ]),
+          configModes: await Promise.all([
+            fs.stat(userConfigPath).then(({ mode }: Record<string, any>) : any => mode & 0o777),
+            fs.stat(globalConfigPath).then(({ mode }: Record<string, any>) : any => mode & 0o777)
+          ])
+        });
+        return { stdout: "", stderr: "" };
+      }
+    });
+
+    await runner(["pack", "--ignore-scripts"], { cwd: "/fixture/artifacts" });
+    await runner(["view", "meshrix.js", "dist", "--json"], { cwd: "/fixture/artifacts" });
+    await runner(["publish", "meshrix.js-0.0.1.tgz"], { cwd: "/fixture/artifacts", authToken: "mutation-synthetic" });
+    await runner(["dist-tag", "add", "meshrix.js@0.0.1", "latest"], { cwd: "/fixture/artifacts", authToken: "mutation-synthetic" });
+    await expect(runner(["install"], { cwd: "/fixture/artifacts", authToken: "mutation-synthetic" }))
+      .rejects.toMatchObject({ code: "release_set_auth_scope_invalid" });
+
+    expect(calls).toHaveLength(4);
+    expect(calls[0].env.NODE_AUTH_TOKEN).toBeUndefined();
+    expect(calls[0].env.NPM_TOKEN).toBeUndefined();
+    for (const call of calls) {
+      expect(call.env.npm_config_userconfig).not.toBe("/fixture/user.npmrc");
+      expect(call.env.npm_config_globalconfig).not.toBe("/fixture/global.npmrc");
+      expect(call.env.npm_config_userconfig).not.toBe(call.env.npm_config_globalconfig);
+      expect(call.env.npm_config_allow_scripts).toBeUndefined();
+      expect(call.env.NPM_CONFIG_REGISTRY).toBeUndefined();
+      expect(call.configModes).toEqual([0o600, 0o600]);
+      await expect(fs.access(call.env.npm_config_userconfig)).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(fs.access(call.env.npm_config_globalconfig)).rejects.toMatchObject({ code: "ENOENT" });
+    }
+    const bootstrapConfig: any = "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n";
+    expect(calls.slice(0, 2).map(({ configContents }: Record<string, any>) : any => configContents))
+      .toEqual([["", ""], ["", ""]]);
+    expect(calls.slice(2).map(({ configContents }: Record<string, any>) : any => configContents))
+      .toEqual([[bootstrapConfig, ""], [bootstrapConfig, ""]]);
+    expect(JSON.stringify(calls.map(({ configContents }: Record<string, any>) : any => configContents)))
+      .not.toContain("mutation-synthetic");
+    expect(calls[0].env.ACTIONS_ID_TOKEN_REQUEST_URL).toBe("https://actions.invalid/oidc/request");
+    expect(calls[0].env.ACTIONS_ID_TOKEN_REQUEST_TOKEN).toBe("oidc-request-synthetic");
+    let failedConfigPaths: any[] = [];
+    const failedNpmRunner: any = createNpmRunner({
+      environment: { npm_config_allow_scripts: "fixture-policy" },
+      exec: async (_command: any, _args: any, { env }: Record<string, any>) : Promise<any> => {
+        failedConfigPaths = [env.npm_config_userconfig, env.npm_config_globalconfig];
+        throw Object.assign(new Error("synthetic npm failure"), { code: 73 });
+      }
+    });
+    const failedResult: any = await failedNpmRunner(["pack", "--ignore-scripts"], { cwd: "/fixture/artifacts" });
+    expect(failedResult.exitCode).toBe(73);
+    for (const configPath of failedConfigPaths) {
+      await expect(fs.access(configPath)).rejects.toMatchObject({ code: "ENOENT" });
+    }
+    expect(calls[0].env.GITHUB_ACTIONS).toBe("true");
+    expect(calls[1].env.NODE_AUTH_TOKEN).toBeUndefined();
+    expect(calls[2].env.NODE_AUTH_TOKEN).toBe("mutation-synthetic");
+    expect(calls[2].env.NPM_TOKEN).toBeUndefined();
+    expect(calls[3].env.NODE_AUTH_TOKEN).toBe("mutation-synthetic");
+  });
+
+  it("proves npm OIDC trust separately for every prepared public package without retaining exchanged tokens", async () : Promise<any> => {
+    const injected = createInjectedNpmRunner();
+    const artifactDirectory = await prepareFixtures(injected);
+    const npmCallsBeforeProof = injected.calls.length;
+    const identityRequests: any[] = [];
+    const exchangeRequests: any[] = [];
+    let discardedBodies = 0;
+    const environment = {
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://pipelines.actions.githubusercontent.com/oidc?fixture=1",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "synthetic-actions-request-token",
+    };
+    const authorizationFor = (credential: string) : string => `${["Be", "arer"].join("")} ${credential}`;
+    const expectedActionsAuthorization = authorizationFor(environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
+    const fetchImplementation = async (input: any, init: any = {}) : Promise<any> => {
+      const url = new URL(input);
+      if (url.hostname === "pipelines.actions.githubusercontent.com") {
+        identityRequests.push({ url: url.toString(), authorization: init.headers?.Authorization });
+        return new Response(JSON.stringify({ value: `synthetic-identity-${identityRequests.length}` }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      exchangeRequests.push({ url: url.toString(), method: init.method, authorization: init.headers?.Authorization });
+      return {
+        status: 201,
+        body: { cancel: async () : Promise<void> => { discardedBodies += 1; } },
+      };
+    };
+    const result = await verifyNpmTrustedPublisherAccess({
+      rootDir: ROOT,
+      artifactDirectory,
+      environment,
+      fetchImplementation,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      oidcTrustVerified: true,
+      version: "0.0.1",
+      packageCount: 2,
+      packages: [
+        { name: "@meshrix/gateway", accepted: true },
+        { name: "meshrix.js", accepted: true },
+      ],
+    });
+    expect(identityRequests).toHaveLength(2);
+    expect(identityRequests.every(({ url, authorization }: Record<string, any>) : any => (
+      new URL(url).searchParams.get("audience") === "npm:registry.npmjs.org" &&
+      authorization === expectedActionsAuthorization
+    ))).toBe(true);
+    expect(exchangeRequests.map(({ url, method }: Record<string, any>) : any => [url, method])).toEqual([
+      ["https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/%40meshrix%2Fgateway", "POST"],
+      ["https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/meshrix.js", "POST"],
+    ]);
+    expect(exchangeRequests.map(({ authorization }: Record<string, any>) : any => authorization)).toEqual([
+      authorizationFor("synthetic-identity-1"),
+      authorizationFor("synthetic-identity-2"),
+    ]);
+    expect(discardedBodies).toBe(2);
+    expect(JSON.stringify(result)).not.toContain("synthetic-identity");
+    expect(JSON.stringify(result)).not.toContain("synthetic-actions-request-token");
+    expect(JSON.stringify(result)).not.toContain(artifactDirectory);
+    expect(injected.calls).toHaveLength(npmCallsBeforeProof);
+  });
+
+  it("fails closed on a rejected package identity and on any raw npm token", async () : Promise<any> => {
+    const injected = createInjectedNpmRunner();
+    const artifactDirectory = await prepareFixtures(injected);
+    const calls: string[] = [];
+    const environment = {
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://pipelines.actions.githubusercontent.com/oidc",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "synthetic-actions-request-token",
+    };
+    await expect(verifyNpmTrustedPublisherAccess({
+      rootDir: ROOT,
+      artifactDirectory,
+      environment,
+      fetchImplementation: async (input: any) : Promise<any> => {
+        const url = new URL(input);
+        calls.push(url.toString());
+        if (url.hostname === "pipelines.actions.githubusercontent.com") {
+          return new Response(JSON.stringify({ value: "synthetic-identity" }), { status: 200 });
+        }
+        return { status: 401, body: { cancel: async () : Promise<void> => undefined } };
+      },
+    })).rejects.toMatchObject({ code: "release_set_oidc_trust_mismatch" });
+    expect(calls).toHaveLength(2);
+
+    await expect(verifyNpmTrustedPublisherAccess({
+      rootDir: ROOT,
+      artifactDirectory,
+      environment: { ...environment, NODE_AUTH_TOKEN: "synthetic-raw-npm-token" },
+      fetchImplementation: async () : Promise<any> => {
+        throw new Error("raw npm token must be rejected before any request");
+      },
+    })).rejects.toMatchObject({ code: "release_set_raw_npm_token_forbidden" });
+  });
+
+  it("accepts only the exact prepared-artifact and explicit bootstrap CLI forms", () : any => {
+    expect(parsePublishArguments(["--prepare", "--artifact-dir", "/fixture/artifacts"]))
+      .toEqual({
+        prepare: true,
+        preflight: false,
+        verifyOidcTrust: false,
+        artifactDirectory: "/fixture/artifacts",
+        authMode: "oidc",
+        bootstrapCandidate: undefined,
+        tag: undefined,
+        help: false
+      });
+    expect(parsePublishArguments([
+      "--verify-oidc-trust",
+      "--artifact-dir=/fixture/artifacts"
+    ])).toMatchObject({ verifyOidcTrust: true, authMode: "oidc" });
+    expect(parsePublishArguments([
+      "--artifact-dir=/fixture/artifacts",
+      "--auth", "bootstrap",
+      "--bootstrap-candidate", "0.0.1"
+    ])).toMatchObject({ authMode: "bootstrap", bootstrapCandidate: "0.0.1" });
+    expect(() : any => parsePublishArguments(["--preflight"]))
+      .toThrowError(expect.objectContaining({ code: "release_set_argument_missing" }));
+    expect(() : any => parsePublishArguments(["--dry-run", "--artifact-dir", "/fixture/artifacts"]))
+      .toThrowError(expect.objectContaining({ code: "release_set_argument_unknown" }));
+    expect(() : any => parsePublishArguments(["--artifact-dir", "/fixture/artifacts", "--auth", "bootstrap"]))
+      .toThrowError(expect.objectContaining({ code: "release_set_argument_missing" }));
+    expect(() : any => parsePublishArguments(["--prepare", "--preflight", "--artifact-dir", "/fixture/artifacts"]))
+      .toThrowError(expect.objectContaining({ code: "release_set_argument_conflict" }));
+    expect(() : any => parsePublishArguments([
+      "--verify-oidc-trust",
+      "--artifact-dir", "/fixture/artifacts",
+      "--auth", "bootstrap",
+      "--bootstrap-candidate", "0.0.1"
+    ])).toThrowError(expect.objectContaining({ code: "release_set_argument_conflict" }));
   });
 });

@@ -5,6 +5,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { backendFunctionalScopeEnvironment } from "./lib/backend-functional-test-scope.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../tools/server-scripts/lib/npm-cli-invocation.ts";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const shardById: Readonly<Record<string, string>> = Object.freeze({
@@ -30,9 +31,12 @@ export function backendServerShardVitestArgs(shardId: string): string[] {
 
 async function main(): Promise<void> {
   const args = backendServerShardVitestArgs(String(process.argv[2] || ""));
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  // Run npm through the Node entrypoint rather than spawning `npm.cmd`:
+  // Node refuses to spawn a `.cmd` without a shell, and `shell: true` is not an
+  // accepted launcher boundary here.
+  const npmInvocation = resolveNpmCliInvocation();
   const exitCode = await new Promise<number>((resolve, reject) => {
-    const child = spawn(npmCommand, args, {
+    const child = spawn(npmInvocation.command, npmCliArgs(npmInvocation, args), {
       cwd: repoRoot,
       env: backendFunctionalScopeEnvironment(),
       stdio: "inherit",

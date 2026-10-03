@@ -2,20 +2,11 @@
   "name": "@meshrix/server-runtime",
   "version": "0.0.1",
   "description": "Meshrix.js composition root, state stores, jobs, workers, product API",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/agents": "0.0.1",
-    "@meshrix/capabilities": "0.0.1",
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1",
-    "better-sqlite3": "^12.9.0",
-    "pactium": "0.8.0"
-  },
   "imports": {
     "#meshrix/agents/agent-memory/index": "@meshrix/agents/agent-memory/index",
     "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand": "@meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
@@ -103,229 +94,243 @@
     "#meshrix/protocols/downstream-client-aspect/index": "@meshrix/protocols/downstream-client-aspect/index",
     "#meshrix/protocols/http/controllers/jobs-controller": "@meshrix/protocols/http/controllers/jobs-controller",
     "#meshrix/protocols/http/controllers/system-controller": "@meshrix/protocols/http/controllers/system-controller",
-    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": "@meshrix/protocols/mcp/adapter/http-mcp-adapter",
-    "#meshrix/protocols/mcp/adapter/mcp-notification-bus": "@meshrix/protocols/mcp/adapter/mcp-notification-bus",
+    "#meshrix/protocols/mcp/notifications": "@meshrix/protocols/mcp/notifications",
     "#meshrix/protocols/pubsub/event-bus": "@meshrix/protocols/pubsub/event-bus",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/server-config": "@meshrix/foundation/config/server-config",
     "#meshrix/server-runtime/composition/core-platform-provider": {
-      "types": "./dist/composition/core-platform-provider.d.ts",
       "source": "./src/composition/core-platform-provider.ts",
+      "types": "./dist/composition/core-platform-provider.d.ts",
       "default": "./dist/composition/core-platform-provider.js"
     },
     "#meshrix/server-runtime/composition/core-platform-register": {
-      "types": "./dist/composition/core-platform-register.d.ts",
       "source": "./src/composition/core-platform-register.ts",
+      "types": "./dist/composition/core-platform-register.d.ts",
       "default": "./dist/composition/core-platform-register.js"
     },
     "#meshrix/server-runtime/composition/devops-provider": {
-      "types": "./dist/composition/devops-provider.d.ts",
       "source": "./src/composition/devops-provider.ts",
+      "types": "./dist/composition/devops-provider.d.ts",
       "default": "./dist/composition/devops-provider.js"
     },
     "#meshrix/server-runtime/composition/devops-register": {
-      "types": "./dist/composition/devops-register.d.ts",
       "source": "./src/composition/devops-register.ts",
+      "types": "./dist/composition/devops-register.d.ts",
       "default": "./dist/composition/devops-register.js"
     },
     "#meshrix/server-runtime/composition/dispatch-operation": {
-      "types": "./dist/composition/dispatch-operation.d.ts",
       "source": "./src/composition/dispatch-operation.ts",
+      "types": "./dist/composition/dispatch-operation.d.ts",
       "default": "./dist/composition/dispatch-operation.js"
     },
     "#meshrix/server-runtime/composition/strategy-management-provider": {
-      "types": "./dist/composition/strategy-management-provider.d.ts",
       "source": "./src/composition/strategy-management-provider.ts",
+      "types": "./dist/composition/strategy-management-provider.d.ts",
       "default": "./dist/composition/strategy-management-provider.js"
     },
     "#meshrix/server-runtime/events/protocol-event-runtime": {
-      "types": "./dist/events/protocol-event-runtime.d.ts",
       "source": "./src/events/protocol-event-runtime.ts",
+      "types": "./dist/events/protocol-event-runtime.d.ts",
       "default": "./dist/events/protocol-event-runtime.js"
     },
     "#meshrix/server-runtime/state/interface/index": {
-      "types": "./dist/state/interface/index.d.ts",
       "source": "./src/state/interface/index.ts",
+      "types": "./dist/state/interface/index.d.ts",
       "default": "./dist/state/interface/index.js"
     },
     "#meshrix/server-runtime/state/tag-store-adapter": {
-      "types": "./dist/state/tag-store-adapter.d.ts",
       "source": "./src/state/tag-store-adapter.ts",
+      "types": "./dist/state/tag-store-adapter.d.ts",
       "default": "./dist/state/tag-store-adapter.js"
     },
     "#meshrix/settings": "@meshrix/server-runtime/composition/settings",
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
+    "./composition/gateway-composition": {
+      "source": "./src/composition/gateway-composition.ts",
+      "types": "./dist/composition/gateway-composition.d.ts",
+      "default": "./dist/composition/gateway-composition.js"
+    },
+    "./composition/gateway-schema-port": {
+      "source": "./src/composition/gateway-schema-port.ts",
+      "types": "./dist/composition/gateway-schema-port.d.ts",
+      "default": "./dist/composition/gateway-schema-port.js"
+    },
     "./composition/composition-root": {
-      "types": "./dist/composition/composition-root.d.ts",
       "source": "./src/composition/composition-root.ts",
+      "types": "./dist/composition/composition-root.d.ts",
       "default": "./dist/composition/composition-root.js"
     },
     "./composition/console-domain/operation-executor": {
-      "types": "./dist/composition/console-domain/operation-executor.d.ts",
       "source": "./src/composition/console-domain/operation-executor.ts",
+      "types": "./dist/composition/console-domain/operation-executor.d.ts",
       "default": "./dist/composition/console-domain/operation-executor.js"
     },
     "./composition/console-domain/services": {
-      "types": "./dist/composition/console-domain/services.d.ts",
       "source": "./src/composition/console-domain/services.ts",
+      "types": "./dist/composition/console-domain/services.d.ts",
       "default": "./dist/composition/console-domain/services.js"
     },
     "./composition/core-platform-provider": {
-      "types": "./dist/composition/core-platform-provider.d.ts",
       "source": "./src/composition/core-platform-provider.ts",
+      "types": "./dist/composition/core-platform-provider.d.ts",
       "default": "./dist/composition/core-platform-provider.js"
     },
     "./composition/core-platform-register": {
-      "types": "./dist/composition/core-platform-register.d.ts",
       "source": "./src/composition/core-platform-register.ts",
+      "types": "./dist/composition/core-platform-register.d.ts",
       "default": "./dist/composition/core-platform-register.js"
     },
     "./composition/devops-provider": {
-      "types": "./dist/composition/devops-provider.d.ts",
       "source": "./src/composition/devops-provider.ts",
+      "types": "./dist/composition/devops-provider.d.ts",
       "default": "./dist/composition/devops-provider.js"
     },
     "./composition/devops-register": {
-      "types": "./dist/composition/devops-register.d.ts",
       "source": "./src/composition/devops-register.ts",
+      "types": "./dist/composition/devops-register.d.ts",
       "default": "./dist/composition/devops-register.js"
     },
     "./composition/dispatch-operation": {
-      "types": "./dist/composition/dispatch-operation.d.ts",
       "source": "./src/composition/dispatch-operation.ts",
+      "types": "./dist/composition/dispatch-operation.d.ts",
       "default": "./dist/composition/dispatch-operation.js"
     },
     "./composition/plugin-console-sandbox-document": {
-      "types": "./dist/composition/plugin-console-sandbox-document.d.ts",
       "source": "./src/composition/plugin-console-sandbox-document.ts",
+      "types": "./dist/composition/plugin-console-sandbox-document.d.ts",
       "default": "./dist/composition/plugin-console-sandbox-document.js"
     },
     "./composition/dispatch-operation-risk-control": {
-      "types": "./dist/composition/dispatch-operation-risk-control.d.ts",
       "source": "./src/composition/dispatch-operation-risk-control.ts",
+      "types": "./dist/composition/dispatch-operation-risk-control.d.ts",
       "default": "./dist/composition/dispatch-operation-risk-control.js"
     },
     "./composition/http-application-assembly": {
-      "types": "./dist/composition/http-application-assembly.d.ts",
       "source": "./src/composition/http-application-assembly.ts",
+      "types": "./dist/composition/http-application-assembly.d.ts",
       "default": "./dist/composition/http-application-assembly.js"
     },
     "./composition/operation-dispatch-lock": {
-      "types": "./dist/composition/operation-dispatch-lock.d.ts",
       "source": "./src/composition/operation-dispatch-lock.ts",
+      "types": "./dist/composition/operation-dispatch-lock.d.ts",
       "default": "./dist/composition/operation-dispatch-lock.js"
     },
     "./composition/plugin-contribution-transaction": {
-      "types": "./dist/composition/plugin-contribution-transaction.d.ts",
       "source": "./src/composition/plugin-contribution-transaction.ts",
+      "types": "./dist/composition/plugin-contribution-transaction.d.ts",
       "default": "./dist/composition/plugin-contribution-transaction.js"
     },
     "./composition/product-api": {
-      "types": "./dist/composition/product-api.d.ts",
       "source": "./src/composition/product-api.ts",
+      "types": "./dist/composition/product-api.d.ts",
       "default": "./dist/composition/product-api.js"
     },
     "./composition/settings": {
-      "types": "./dist/composition/settings.d.ts",
       "source": "./src/composition/settings.ts",
+      "types": "./dist/composition/settings.d.ts",
       "default": "./dist/composition/settings.js"
     },
     "./events/protocol-event-runtime": {
-      "types": "./dist/events/protocol-event-runtime.d.ts",
       "source": "./src/events/protocol-event-runtime.ts",
+      "types": "./dist/events/protocol-event-runtime.d.ts",
       "default": "./dist/events/protocol-event-runtime.js"
     },
     "./execution-sandbox/broker": {
-      "types": "./dist/execution-sandbox/broker.d.ts",
       "source": "./src/execution-sandbox/broker.ts",
+      "types": "./dist/execution-sandbox/broker.d.ts",
       "default": "./dist/execution-sandbox/broker.js"
     },
     "./execution-sandbox/custody-key-broker": {
-      "types": "./dist/execution-sandbox/custody-key-broker.d.ts",
       "source": "./src/execution-sandbox/custody-key-broker.ts",
+      "types": "./dist/execution-sandbox/custody-key-broker.d.ts",
       "default": "./dist/execution-sandbox/custody-key-broker.js"
     },
     "./execution-sandbox/oci-backend": {
-      "types": "./dist/execution-sandbox/oci-backend.d.ts",
       "source": "./src/execution-sandbox/oci-backend.ts",
+      "types": "./dist/execution-sandbox/oci-backend.d.ts",
       "default": "./dist/execution-sandbox/oci-backend.js"
     },
     "./execution-sandbox/opaque-custody": {
-      "types": "./dist/execution-sandbox/opaque-custody.d.ts",
       "source": "./src/execution-sandbox/opaque-custody.ts",
+      "types": "./dist/execution-sandbox/opaque-custody.d.ts",
       "default": "./dist/execution-sandbox/opaque-custody.js"
     },
     "./execution-sandbox/trusted-oci-provider-adapters": {
-      "types": "./dist/execution-sandbox/trusted-oci-provider-adapters.d.ts",
       "source": "./src/execution-sandbox/trusted-oci-provider-adapters.ts",
+      "types": "./dist/execution-sandbox/trusted-oci-provider-adapters.d.ts",
       "default": "./dist/execution-sandbox/trusted-oci-provider-adapters.js"
     },
     "./execution-sandbox/trusted-provider-receipt-store": {
-      "types": "./dist/execution-sandbox/trusted-provider-receipt-store.d.ts",
       "source": "./src/execution-sandbox/trusted-provider-receipt-store.ts",
+      "types": "./dist/execution-sandbox/trusted-provider-receipt-store.d.ts",
       "default": "./dist/execution-sandbox/trusted-provider-receipt-store.js"
     },
     "./execution-sandbox/trusted-provider-resolver": {
-      "types": "./dist/execution-sandbox/trusted-provider-resolver.d.ts",
       "source": "./src/execution-sandbox/trusted-provider-resolver.ts",
+      "types": "./dist/execution-sandbox/trusted-provider-resolver.d.ts",
       "default": "./dist/execution-sandbox/trusted-provider-resolver.js"
     },
     "./jobs/batch-deletion-coordinator": {
-      "types": "./dist/jobs/batch-deletion-coordinator.d.ts",
       "source": "./src/jobs/batch-deletion-coordinator.ts",
+      "types": "./dist/jobs/batch-deletion-coordinator.d.ts",
       "default": "./dist/jobs/batch-deletion-coordinator.js"
     },
     "./jobs/job-pipeline": {
-      "types": "./dist/jobs/job-pipeline.d.ts",
       "source": "./src/jobs/job-pipeline.ts",
+      "types": "./dist/jobs/job-pipeline.d.ts",
       "default": "./dist/jobs/job-pipeline.js"
     },
     "./jobs/upload-no-run-custody": {
-      "types": "./dist/jobs/upload-no-run-custody.d.ts",
       "source": "./src/jobs/upload-no-run-custody.ts",
+      "types": "./dist/jobs/upload-no-run-custody.d.ts",
       "default": "./dist/jobs/upload-no-run-custody.js"
     },
     "./module-runtime/server-runtime": {
-      "types": "./dist/module-runtime/server-runtime.d.ts",
       "source": "./src/module-runtime/server-runtime.ts",
+      "types": "./dist/module-runtime/server-runtime.d.ts",
       "default": "./dist/module-runtime/server-runtime.js"
     },
     "./routing/operation-route-index": {
-      "types": "./dist/routing/operation-route-index.d.ts",
       "source": "./src/routing/operation-route-index.ts",
+      "types": "./dist/routing/operation-route-index.d.ts",
       "default": "./dist/routing/operation-route-index.js"
     },
     "./routing/radix-path-trie": {
-      "types": "./dist/routing/radix-path-trie.d.ts",
       "source": "./src/routing/radix-path-trie.ts",
+      "types": "./dist/routing/radix-path-trie.d.ts",
       "default": "./dist/routing/radix-path-trie.js"
     },
     "./state/interface/index": {
-      "types": "./dist/state/interface/index.d.ts",
       "source": "./src/state/interface/index.ts",
+      "types": "./dist/state/interface/index.d.ts",
       "default": "./dist/state/interface/index.js"
     },
     "./state/tag-store-adapter": {
-      "types": "./dist/state/tag-store-adapter.d.ts",
       "source": "./src/state/tag-store-adapter.ts",
+      "types": "./dist/state/tag-store-adapter.d.ts",
       "default": "./dist/state/tag-store-adapter.js"
     },
     "./state/upload-session-admission": {
-      "types": "./dist/state/upload-session-admission.d.ts",
       "source": "./src/state/upload-session-admission.ts",
+      "types": "./dist/state/upload-session-admission.d.ts",
       "default": "./dist/state/upload-session-admission.js"
     },
     "./state/upload-session-store": {
-      "types": "./dist/state/upload-session-store.d.ts",
       "source": "./src/state/upload-session-store.ts",
+      "types": "./dist/state/upload-session-store.d.ts",
       "default": "./dist/state/upload-session-store.js"
     },
     "./state/upload-session-support": {
-      "types": "./dist/state/upload-session-support.d.ts",
       "source": "./src/state/upload-session-support.ts",
+      "types": "./dist/state/upload-session-support.d.ts",
       "default": "./dist/state/upload-session-support.js"
+    },
+    "./composition/platform-registry": {
+      "source": "./src/composition/platform-registry.ts",
+      "types": "./dist/composition/platform-registry.d.ts",
+      "default": "./dist/composition/platform-registry.js"
     }
   },
   "files": [
@@ -333,5 +338,25 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/server-runtime"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/agents": "0.0.1",
+    "@meshrix/capabilities": "0.0.1",
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
+    "@meshrix/protocols": "0.0.1",
+    "better-sqlite3": "^12.9.0",
+    "pactium": "0.8.1"
+  }
 }

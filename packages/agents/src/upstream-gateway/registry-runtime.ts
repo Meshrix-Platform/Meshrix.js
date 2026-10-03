@@ -16,6 +16,18 @@ import {
   stableId,
   text
 } from "./support.ts";
+import type {
+  UpstreamGatewayAuditEvent,
+  UpstreamGatewayLegacyRuntimeState,
+  UpstreamGatewayMetricsState,
+  UpstreamGatewayRuntime,
+  UpstreamGatewayRuntimeFlushResult,
+  UpstreamGatewayRuntimeInstrumentation,
+  UpstreamGatewayRuntimeOptions,
+  UpstreamGatewayWalDeltaRecord,
+  UpstreamGatewayWalRecord,
+  UpstreamGatewayWalSeedRecord
+} from "./registry-types.ts";
 
 const RUNTIME_WAL_SCHEMA_VERSION: any = "v0.0.1:upstream-gateway:runtime-wal-1";
 const LEGACY_RUNTIME_SCHEMA_VERSION: any = "v0.0.1:schema:definition-1";
@@ -23,9 +35,9 @@ const DEFAULT_FLUSH_BATCH_SIZE: any = 256;
 const DEFAULT_WAL_MAX_BYTES: any = 8 * 1024 * 1024;
 const DEFAULT_AUDIT_RING_LIMIT: any = 1000;
 const DEFAULT_METRIC_DIMENSION_LIMIT: any = 4096;
-const METRIC_BUCKET_KEYS: any = ["byService", "byStatus"];
+const METRIC_BUCKET_KEYS = ["byService", "byStatus"] as const;
 
-function emptyMetrics() : any {
+function emptyMetrics() : UpstreamGatewayMetricsState {
   return {
     totalForwardCount: 0,
     totalFailureCount: 0,
@@ -34,9 +46,9 @@ function emptyMetrics() : any {
   };
 }
 
-function boundedBucketInsert(bucket: Record<string, any>, key: any, amount: any, dimensionLimit: any, shed: any) : any {
-  const normalizedKey: any = text(key || "unknown");
-  const current: any = Number(bucket[normalizedKey] || 0);
+function boundedBucketInsert(bucket: Record<string, number>, key: unknown, amount: unknown, dimensionLimit: number, shed: { shedMetricDimensions: number }) : void {
+  const normalizedKey: string = text(key || "unknown");
+  const current: number = Number(bucket[normalizedKey] || 0);
   if (current === 0 && Object.keys(bucket).length >= dimensionLimit) {
     shed.shedMetricDimensions += 1;
     return;
@@ -44,11 +56,11 @@ function boundedBucketInsert(bucket: Record<string, any>, key: any, amount: any,
   bucket[normalizedKey] = current + Number(amount || 0);
 }
 
-function shedCounter() : any {
+function shedCounter() : { shedMetricDimensions: number } {
   return { shedMetricDimensions: 0 };
 }
 
-function applyMetricDeltas(target: Record<string, any>, deltas: Record<string, any>) : any {
+function applyMetricDeltas(target: UpstreamGatewayMetricsState, deltas: Record<string, any>) : void {
   target.totalForwardCount = Number(target.totalForwardCount || 0) + Number(deltas.totalForwardCount || 0);
   target.totalFailureCount = Number(target.totalFailureCount || 0) + Number(deltas.totalFailureCount || 0);
   for (const key of METRIC_BUCKET_KEYS) {
@@ -59,7 +71,7 @@ function applyMetricDeltas(target: Record<string, any>, deltas: Record<string, a
   }
 }
 
-function metricDeltasToDurable(deltas: Record<string, any>) : any {
+function metricDeltasToDurable(deltas: Record<string, any>) : UpstreamGatewayMetricsState {
   return {
     totalForwardCount: Number(deltas.totalForwardCount || 0),
     totalFailureCount: Number(deltas.totalFailureCount || 0),
@@ -68,11 +80,11 @@ function metricDeltasToDurable(deltas: Record<string, any>) : any {
   };
 }
 
-function auditIdentity(event: Record<string, any> = {}) : any {
+function auditIdentity(event: Record<string, any> = {}) : string {
   return text(event?.auditId || "");
 }
 
-function emptyWalDelta(sequence: any) : any {
+function emptyWalDelta(sequence: unknown) : UpstreamGatewayWalDeltaRecord {
   return {
     schemaVersion: RUNTIME_WAL_SCHEMA_VERSION,
     sequence: Number(sequence || 0),
@@ -83,18 +95,19 @@ function emptyWalDelta(sequence: any) : any {
   };
 }
 
-function walPathFor(filePath: any) : any {
+function walPathFor(filePath: unknown) : string {
   const raw: any = text(filePath);
   if (!raw) return "";
   return `${raw}.wal.jsonl`;
 }
 
-function parseWalLine(raw: any) : any {
+function parseWalLine(raw: unknown) : UpstreamGatewayWalRecord | null {
   if (!raw) return null;
   try {
-    const parsed: any = JSON.parse(raw);
+    const parsed: any = JSON.parse(String(raw));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     if (text(parsed.schemaVersion) !== RUNTIME_WAL_SCHEMA_VERSION) return null;
+    if (parsed.kind !== "seed" && parsed.kind !== "delta") return null;
     return parsed;
   } catch {
     return null;
@@ -109,12 +122,12 @@ export function createGatewayRuntime({
   walMaxBytes = DEFAULT_WAL_MAX_BYTES,
   auditRingLimit = DEFAULT_AUDIT_RING_LIMIT,
   metricDimensionLimit = DEFAULT_METRIC_DIMENSION_LIMIT
-}: Record<string, any> = {}) : any {
+}: UpstreamGatewayRuntimeOptions = {}) : UpstreamGatewayRuntime {
   const enabled: any = persistenceEnabled === true && Boolean(walPathFor(filePath));
   const walPath: any = enabled ? walPathFor(filePath) : "";
-  const auditEvents: any[] = [];
-  const metrics: any = emptyMetrics();
-  let metricDeltas: any = emptyMetrics();
+  const auditEvents: UpstreamGatewayAuditEvent[] = [];
+  const metrics: UpstreamGatewayMetricsState = emptyMetrics();
+  let metricDeltas: UpstreamGatewayMetricsState = emptyMetrics();
   let pendingAuditEvents: any[] = [];
   let shedMetricDimensions: any = 0;
   let flushedBatchCount: any = 0;
@@ -133,7 +146,7 @@ export function createGatewayRuntime({
   let flushBatchSizeResolved: any = Math.max(1, Math.min(Number(flushBatchSize || DEFAULT_FLUSH_BATCH_SIZE), 10_000));
   let metricDimensionLimitResolved: any = Math.max(1, Math.min(Number(metricDimensionLimit || DEFAULT_METRIC_DIMENSION_LIMIT), 100_000));
   const walMaxBytesResolved: any = Math.max(64 * 1024, Math.min(Number(walMaxBytes || DEFAULT_WAL_MAX_BYTES), 1024 * 1024 * 1024));
-  function pushAuditEvent(event: Record<string, any>) : any {
+  function pushAuditEvent(event: UpstreamGatewayAuditEvent) : void {
     auditEvents.push(event);
     if (auditEvents.length > auditRingLimitResolved) {
       const shedCount: any = auditEvents.length - auditRingLimitResolved;
@@ -161,7 +174,7 @@ export function createGatewayRuntime({
     }
   }
 
-  function applyRecoveredMetrics(recovered: Record<string, any> = {}) : any {
+  function applyRecoveredMetrics(recovered: Record<string, any> = {}) : void {
     metrics.totalForwardCount = Number(metrics.totalForwardCount || 0) + Number(recovered.totalForwardCount || 0);
     metrics.totalFailureCount = Number(metrics.totalFailureCount || 0) + Number(recovered.totalFailureCount || 0);
     const shed: any = shedCounter();
@@ -179,7 +192,7 @@ export function createGatewayRuntime({
     shedMetricDimensions += shed.shedMetricDimensions;
   }
 
-  function replayWal() : any {
+  function replayWal() : number {
     if (!enabled) return 0;
     let raw: any = "";
     try {
@@ -222,18 +235,19 @@ export function createGatewayRuntime({
     return applied;
   }
 
-  function normalizeLegacyRuntime(legacy: any) : any {
+  function normalizeLegacyRuntime(legacy: unknown) : UpstreamGatewayLegacyRuntimeState {
     if (!legacy || typeof legacy !== "object" || Array.isArray(legacy)) {
       throw new Error("Upstream gateway legacy runtime state is malformed.");
     }
+    const source: any = object(legacy);
     if (
-      legacy.schemaVersion &&
-      text(legacy.schemaVersion) !== LEGACY_RUNTIME_SCHEMA_VERSION
+      source.schemaVersion &&
+      text(source.schemaVersion) !== LEGACY_RUNTIME_SCHEMA_VERSION
     ) {
       throw new Error("Upstream gateway legacy runtime schema is unsupported.");
     }
     const byId: any = new Map<any, any>();
-    for (const event of asArray(legacy.auditEvents)) {
+    for (const event of asArray(source.auditEvents)) {
       const auditId: any = auditIdentity(event);
       if (auditId) byId.set(auditId, event);
     }
@@ -242,32 +256,34 @@ export function createGatewayRuntime({
         .sort((left?: any, right?: any) : any => text(left?.createdAt).localeCompare(text(right?.createdAt)))
         .slice(-auditRingLimitResolved),
       metrics: {
-        totalForwardCount: Number(legacy.metrics?.totalForwardCount || 0),
-        totalFailureCount: Number(legacy.metrics?.totalFailureCount || 0),
-        byService: { ...object(legacy.metrics?.byService) },
-        byStatus: { ...object(legacy.metrics?.byStatus) }
+        totalForwardCount: Number(source.metrics?.totalForwardCount || 0),
+        totalFailureCount: Number(source.metrics?.totalFailureCount || 0),
+        byService: { ...object(source.metrics?.byService) },
+        byStatus: { ...object(source.metrics?.byStatus) }
       }
     };
   }
 
-  function seedMatchesLegacy(seed: any, legacyState: any) : any {
+  function seedMatchesLegacy(seed: UpstreamGatewayWalRecord, legacyState: UpstreamGatewayLegacyRuntimeState) : boolean {
     return seed?.kind === "seed" &&
       JSON.stringify(asArray(seed.auditEvents)) === JSON.stringify(legacyState.auditEvents) &&
       JSON.stringify(object(seed.metrics)) === JSON.stringify(legacyState.metrics);
   }
 
-  function verifiedSeedFromDisk(expectedSequence: any) : any {
-    const entries: any = fs.readFileSync(walPath, "utf8")
+  function verifiedSeedFromDisk(expectedSequence: unknown) : UpstreamGatewayWalSeedRecord | null {
+    const entries: UpstreamGatewayWalRecord[] = fs.readFileSync(walPath, "utf8")
       .split("\n")
       .filter(Boolean)
-      .map((line?: any) : any => parseWalLine(line))
-      .filter(Boolean);
-    return entries.findLast((entry?: any) : any =>
-      entry.kind === "seed" && Number(entry.sequence) === Number(expectedSequence)
-    ) || null;
+      .map((line?: string) : UpstreamGatewayWalRecord | null => parseWalLine(line))
+      .filter((entry: UpstreamGatewayWalRecord | null) : entry is UpstreamGatewayWalRecord => entry !== null);
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry: UpstreamGatewayWalRecord = entries[index];
+      if (entry.kind === "seed" && Number(entry.sequence) === Number(expectedSequence)) return entry;
+    }
+    return null;
   }
 
-  async function removeVerifiedLegacyRuntimeJson() : Promise<any> {
+  async function removeVerifiedLegacyRuntimeJson() : Promise<boolean> {
     if (!fs.existsSync(filePath)) return false;
     const legacyState: any = normalizeLegacyRuntime(
       JSON.parse(fs.readFileSync(filePath, "utf8"))
@@ -286,7 +302,7 @@ export function createGatewayRuntime({
     return true;
   }
 
-  async function migrateLegacyRuntimeJson() : Promise<any> {
+  async function migrateLegacyRuntimeJson() : Promise<boolean> {
     if (!enabled) return false;
     let legacy: any = null;
     try {
@@ -335,14 +351,14 @@ export function createGatewayRuntime({
     return true;
   }
 
-  function hasMetricDeltas() : any {
+  function hasMetricDeltas() : boolean {
     return Number(metricDeltas.totalForwardCount || 0) !== 0 ||
       Number(metricDeltas.totalFailureCount || 0) !== 0 ||
       Object.keys(metricDeltas.byService).length > 0 ||
       Object.keys(metricDeltas.byStatus).length > 0;
   }
 
-  function subtractMetricDeltas(durable: Record<string, any>) : any {
+  function subtractMetricDeltas(durable: Record<string, any>) : void {
     metricDeltas.totalForwardCount = Math.max(
       0,
       Number(metricDeltas.totalForwardCount || 0) - Number(durable.totalForwardCount || 0)
@@ -363,7 +379,7 @@ export function createGatewayRuntime({
     }
   }
 
-  function currentSeed(nextSequence: any) : any {
+  function currentSeed(nextSequence: number) : UpstreamGatewayWalSeedRecord {
     return {
       schemaVersion: RUNTIME_WAL_SCHEMA_VERSION,
       protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
@@ -380,7 +396,7 @@ export function createGatewayRuntime({
     };
   }
 
-  async function flushDirtyBatch() : Promise<any> {
+  async function flushDirtyBatch() : Promise<UpstreamGatewayRuntimeFlushResult> {
     if (!enabled) return { flushed: 0, shedMetricDimensions: 0 };
     if (closed) return { flushed: 0, shedMetricDimensions: 0 };
     const batchAuditEvents: any = pendingAuditEvents.slice(0, flushBatchSizeResolved);
@@ -417,7 +433,7 @@ export function createGatewayRuntime({
     return { flushed: batchAuditEvents.length, shedMetricDimensions: shedMetricDimensions };
   }
 
-  async function persist() : Promise<any> {
+  async function persist() : Promise<UpstreamGatewayRuntimeFlushResult> {
     if (!enabled || closed) return { flushed: 0, shedMetricDimensions };
     if (flushOwner) return flushOwner;
     const run: Promise<any> = (async () : Promise<any> => {
@@ -440,7 +456,7 @@ export function createGatewayRuntime({
     return flushOwner;
   }
 
-  async function close() : Promise<any> {
+  async function close() : Promise<Readonly<{ ok: true }>> {
     if (closed) return { ok: true };
     await initPromise;
     if (flushOwner) await flushOwner;
@@ -454,7 +470,7 @@ export function createGatewayRuntime({
     return { ok: true };
   }
 
-  function recordMetric({ serviceId, statusCode = 0, failed = false }: Record<string, any> = {}) : any {
+  function recordMetric({ serviceId, statusCode = 0, failed = false }: { serviceId?: unknown; statusCode?: number; failed?: boolean } = {}) : Readonly<Record<string, unknown>> {
     const bucketKey: any = String(statusCode || (failed ? "failed" : "unknown"));
     const shed: any = shedCounter();
     metrics.totalForwardCount += 1;
@@ -471,8 +487,8 @@ export function createGatewayRuntime({
     return { serviceId, statusCode: Number(statusCode || 0), failed: failed === true };
   }
 
-  function appendAudit(eventType?: any, payload: Record<string, any> = {}) : any {
-    const audit: Record<string, any> = {
+  function appendAudit(eventType?: unknown, payload: Readonly<Record<string, unknown>> = {}) : UpstreamGatewayAuditEvent {
+    const audit: UpstreamGatewayAuditEvent = {
       auditId: stableId("upstream_gateway_audit", { eventType, payload, nonce: randomUUID() }),
       eventType,
       serviceId: text(payload.serviceId || ""),
@@ -513,7 +529,7 @@ export function createGatewayRuntime({
     return null;
   }
 
-  function getRefactorInstrumentation() : any {
+  function getRefactorInstrumentation() : UpstreamGatewayRuntimeInstrumentation {
     return {
       schemaVersion: "v0.0.1:upstream-gateway:runtime-refactor-instrumentation-1",
       requestPathFullStateReads,

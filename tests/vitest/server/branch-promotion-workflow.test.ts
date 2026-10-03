@@ -10,13 +10,31 @@ import {
   verifyProtectedPushTopology
 } from "../../../tools/scripts/verify-branch-flow.ts";
 import {
+  buildReleaseWorkflowDispatchPayload,
+  createReleaseAuthorityManifest,
   createStableAuthorityManifest,
+  decideReleaseBranchDispatch,
+  releaseTagCreationAction,
   selectExactPromotionArtifact,
   selectSuccessfulPromotionRun,
+  validateOriginatingReleaseRun,
+  validateReleaseAuthorityManifest,
+  validateReleaseDispatchContext,
   validateStableAuthorityManifest,
 } from "../../../tools/server-scripts/lib/release-deployment/authority.ts";
-import { sha256 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
-import { runAuthorityCommand } from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
+import {
+  FIRST_NPM_BOOTSTRAP_VERSION,
+  sha256,
+} from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
+import {
+  RELEASE_REPORT_PROVENANCE_SCHEMA,
+  releaseEvidenceReportPayloadDigest,
+} from "../../../tools/server-scripts/lib/release-report-provenance.ts";
+import {
+  dispatchReleaseWorkflow,
+  ensureImmutableReleaseTag,
+  runAuthorityCommand,
+} from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
 import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
 import {
   githubProcessEnvironment,
@@ -50,7 +68,342 @@ function sameRepositoryPayload(base?: any, head?: any) : any {
   };
 }
 
+function npmQualificationReport(candidate?: any) : any {
+  const packageVersion = candidate.release_packages[0].version;
+  const nativePlatform = "darwin/arm64";
+  const target = (kind: "native" | "local_docker", testName: string) => ({
+    kind,
+    ...(kind === "native" ? { platform: nativePlatform } : {}),
+    ...(kind === "local_docker" ? { status: "not_run", reasonCode: "docker_unavailable" } : {
+      status: "passed",
+      evidence: {
+        lockBackedRegistryMirror: true,
+        mirroredPackageCount: 2,
+        mirroredArtifactCount: 2,
+        ...(testName === "clean consumer install runs the packaged CLI"
+          ? { publicServerCliHelp: true }
+          : { publicServerBin: true }),
+      },
+    }),
+  });
+  const consumerTest = (name: string) => ({
+    name,
+    status: "passed",
+    evidence: { targets: [target("native", name), target("local_docker", name)] },
+  });
+  const report: any = {
+    schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
+    verifier: "tools/server-scripts/verify-npm-package-installability.ts",
+    generatedAt: "2026-10-02T00:00:00.000Z",
+    finishedAt: "2026-10-02T00:00:01.000Z",
+    candidate: {
+      version: packageVersion,
+      artifacts: candidate.release_packages.map((item: any) => ({
+        name: item.name,
+        version: item.version,
+        filename: `${item.name.replace("/", "-")}-${item.version}.tgz`,
+        integrity: "sha512-aGVsbG8=",
+      })),
+    },
+    environment: {
+      native: {
+        os: "darwin",
+        architecture: "arm64",
+        platform: nativePlatform,
+        nodeVersion: "24.18.1",
+      },
+      docker: { status: "unavailable", reasonCode: "docker_unavailable" },
+    },
+    tests: [
+      { name: "root package declares the complete version-locked workspace release set", status: "passed" },
+      { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed" },
+      consumerTest("clean consumer install runs the packaged CLI"),
+      consumerTest("installed framework starts and serves its default health contracts"),
+    ],
+    summary: {
+      testCount: 4,
+      failedCount: 0,
+      releaseReady: true,
+      reportLeakScan: true,
+      qualifiedPlatforms: [{ kind: "native", platform: nativePlatform }],
+    },
+  };
+  report.releaseEvidenceProvenance = {
+    schemaVersion: RELEASE_REPORT_PROVENANCE_SCHEMA,
+    commandId: "npm-package-installability",
+    producer: "tools/server-scripts/verify-npm-package-installability.ts",
+    runId: "42",
+    candidateDigest: candidate.candidate_digest,
+    recordedAt: "2026-10-02T00:00:02.000Z",
+    reportPayloadDigest: releaseEvidenceReportPayloadDigest(report),
+  };
+  return report;
+}
+
 describe("branch promotion workflow", () : any => {
+  it("waits for the exact successful deployment run before accepting its release authority", () : any => {
+    const sourceRevision = "a".repeat(40);
+    const context = {
+      repository: "Meshrix-Platform/Meshrix.js",
+      runId: "90210",
+      runAttempt: 2,
+      sourceRevision,
+      event: "workflow_dispatch",
+    };
+    const run = {
+      id: 90210,
+      run_attempt: 2,
+      path: ".github/workflows/release-branch.yml",
+      head_branch: "release",
+      head_sha: sourceRevision,
+      event: "workflow_dispatch",
+      repository: { full_name: context.repository },
+      status: "in_progress",
+      conclusion: null,
+    };
+    expect(validateOriginatingReleaseRun(run, context)).toEqual({ pending: true });
+    expect(validateOriginatingReleaseRun({ ...run, status: "completed", conclusion: "success" }, context))
+      .toMatchObject({
+        pending: false,
+        selection: {
+          branch: "release",
+          event: "workflow_dispatch",
+          headSha: sourceRevision,
+          runAttempt: 2,
+          runId: "90210",
+          workflowPath: ".github/workflows/release-branch.yml",
+        },
+      });
+    for (const altered of [
+      { ...run, path: ".github/workflows/release.yml" },
+      { ...run, event: "push" },
+      { ...run, head_sha: "b".repeat(40) },
+      { ...run, run_attempt: 1 },
+      { ...run, repository: { full_name: "other/repository" } },
+    ]) {
+      expect(() => validateOriginatingReleaseRun(altered, context))
+        .toThrowError(expect.objectContaining({ code: "promotion_authority_originating_run_mismatch" }));
+    }
+    expect(() => validateOriginatingReleaseRun({ ...run, status: "completed", conclusion: "failure" }, context))
+      .toThrowError(expect.objectContaining({ code: "promotion_authority_originating_run_unsuccessful" }));
+  });
+
+  it("binds release dispatch to the immutable canonical tag and permits only an exact manual bootstrap candidate", () : any => {
+    const sourceRevision = "a".repeat(40);
+    const context = {
+      tag: "v0.0.1",
+      canonicalTag: "v0.0.1",
+      sourceRevision,
+      tagRevision: sourceRevision,
+      sourceRunId: "90210",
+      sourceRunAttempt: 2,
+      sourceEvent: "workflow_dispatch",
+      repository: "Meshrix-Platform/Meshrix.js",
+      releaseVersion: "0.0.1",
+      bootstrapCandidate: "0.0.1",
+    };
+    expect(validateReleaseDispatchContext(context)).toMatchObject({
+      tag: "v0.0.1",
+      sourceRevision,
+      runId: "90210",
+      runAttempt: 2,
+      bootstrapCandidate: "0.0.1",
+    });
+    expect(buildReleaseWorkflowDispatchPayload(context)).toEqual({
+      ref: "v0.0.1",
+      inputs: {
+        originating_event: "workflow_dispatch",
+        originating_run_attempt: "2",
+        originating_run_id: "90210",
+        source_revision: sourceRevision,
+        bootstrap_candidate: "0.0.1",
+      },
+    });
+    expect(() => validateReleaseDispatchContext({ ...context, tagRevision: "b".repeat(40) }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_tag_revision_mismatch" }));
+    expect(() => validateReleaseDispatchContext({ ...context, canonicalTag: "v0.0.2" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_tag_mismatch" }));
+    expect(() => validateReleaseDispatchContext({ ...context, bootstrapCandidate: "0.0.2" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+    expect(() => validateReleaseDispatchContext({ ...context, sourceEvent: "push" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+    expect(releaseTagCreationAction(null, sourceRevision)).toBe("create");
+    expect(releaseTagCreationAction(sourceRevision, sourceRevision)).toBe("verify");
+    expect(() => releaseTagCreationAction("b".repeat(40), sourceRevision))
+      .toThrowError(expect.objectContaining({ code: "release_tag_target_conflict" }));
+  });
+
+  it("requires manual bootstrap for the first-version push and preserves automatic OIDC dispatch afterward", async () : Promise<any> => {
+    const firstPush = decideReleaseBranchDispatch({
+      event: "push",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: FIRST_NPM_BOOTSTRAP_VERSION,
+    });
+    expect(firstPush).toEqual({
+      action: "manual-bootstrap-required",
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+      dispatchRelease: false,
+    });
+    await expect(runAuthorityCommand([
+      "decide-release-branch-dispatch",
+      "--event", "push",
+      "--ref-type", "branch",
+      "--ref-name", "release",
+      "--release-version", FIRST_NPM_BOOTSTRAP_VERSION,
+      "--bootstrap-candidate", "",
+    ])).resolves.toMatchObject(firstPush);
+
+    const manualBootstrap = decideReleaseBranchDispatch({
+      event: "workflow_dispatch",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: FIRST_NPM_BOOTSTRAP_VERSION,
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+    });
+    expect(manualBootstrap).toEqual({
+      action: "dispatch-bootstrap",
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+      dispatchRelease: true,
+    });
+    await expect(runAuthorityCommand([
+      "decide-release-branch-dispatch",
+      "--event", "workflow_dispatch",
+      "--ref-type", "branch",
+      "--ref-name", "release",
+      "--release-version", FIRST_NPM_BOOTSTRAP_VERSION,
+      "--bootstrap-candidate", FIRST_NPM_BOOTSTRAP_VERSION,
+    ])).resolves.toMatchObject(manualBootstrap);
+
+    const laterPush = decideReleaseBranchDispatch({
+      event: "push",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: "0.0.2",
+    });
+    expect(laterPush).toEqual({
+      action: "dispatch-oidc",
+      bootstrapCandidate: "",
+      dispatchRelease: true,
+    });
+    await expect(runAuthorityCommand([
+      "decide-release-branch-dispatch",
+      "--event", "push",
+      "--ref-type", "branch",
+      "--ref-name", "release",
+      "--release-version", "0.0.2",
+      "--bootstrap-candidate", "",
+    ])).resolves.toMatchObject(laterPush);
+  });
+
+  it("rejects wrong release refs, invalid versions, and bootstrap outside the first manual dispatch", () : any => {
+    const valid = {
+      event: "push",
+      refType: "branch",
+      refName: "release",
+      releaseVersion: FIRST_NPM_BOOTSTRAP_VERSION,
+    };
+    expect(() => decideReleaseBranchDispatch({ ...valid, refName: "stable" }))
+      .toThrowError(expect.objectContaining({ code: "release_branch_ref_invalid" }));
+    expect(() => decideReleaseBranchDispatch({ ...valid, refType: "tag" }))
+      .toThrowError(expect.objectContaining({ code: "release_branch_ref_type_invalid" }));
+    expect(() => decideReleaseBranchDispatch({ ...valid, releaseVersion: "latest" }))
+      .toThrowError(expect.objectContaining({ code: "release_dispatch_version_invalid" }));
+    expect(() => decideReleaseBranchDispatch({
+      ...valid,
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+    })).toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+    expect(() => decideReleaseBranchDispatch({
+      ...valid,
+      event: "workflow_dispatch",
+    })).toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_required" }));
+    expect(() => decideReleaseBranchDispatch({
+      ...valid,
+      event: "workflow_dispatch",
+      releaseVersion: "0.0.2",
+      bootstrapCandidate: FIRST_NPM_BOOTSTRAP_VERSION,
+    })).toThrowError(expect.objectContaining({ code: "release_dispatch_bootstrap_candidate_invalid" }));
+  });
+
+  it("creates or verifies a release tag through GitHub without replacing a conflicting ref", async () : Promise<any> => {
+    const revision = "a".repeat(40);
+    const calls: any[] = [];
+    const fetchImplementation = async (url: any, init: any = {}) : Promise<any> => {
+      calls.push({ url: String(url), method: init.method || "GET", body: init.body });
+      if (String(url).endsWith("/git/ref/tags/v0.0.1")) {
+        return new Response(JSON.stringify({ object: { type: "commit", sha: revision } }), { status: 200 });
+      }
+      throw new Error("unexpected GitHub request");
+    };
+    await expect(ensureImmutableReleaseTag({
+      repository: "Meshrix-Platform/Meshrix.js",
+      tag: "v0.0.1",
+      sourceRevision: revision,
+      token: "synthetic-github-token",
+      fetchImplementation,
+    })).resolves.toMatchObject({ action: "verify", tag: "v0.0.1", sourceRevision: revision });
+    expect(calls.map(({ method }: Record<string, any>) : any => method)).toEqual(["GET"]);
+    expect(JSON.stringify(calls)).not.toContain("synthetic-github-token");
+
+    const createCalls: any[] = [];
+    let lookupCount = 0;
+    const createFetch = async (url: any, init: any = {}) : Promise<any> => {
+      createCalls.push({ url: String(url), method: init.method || "GET", body: init.body });
+      if (String(url).endsWith("/git/ref/tags/v0.0.1")) {
+        lookupCount += 1;
+        return lookupCount === 1
+          ? new Response(null, { status: 404 })
+          : new Response(JSON.stringify({ object: { type: "commit", sha: revision } }), { status: 200 });
+      }
+      if (String(url).endsWith("/git/refs")) return new Response("{}", { status: 201 });
+      throw new Error("unexpected GitHub request");
+    };
+    await expect(ensureImmutableReleaseTag({
+      repository: "Meshrix-Platform/Meshrix.js",
+      tag: "v0.0.1",
+      sourceRevision: revision,
+      token: "synthetic-github-token",
+      fetchImplementation: createFetch,
+    })).resolves.toMatchObject({ action: "verify" });
+    expect(createCalls.map(({ method }: Record<string, any>) : any => method)).toEqual(["GET", "POST", "GET"]);
+    expect(JSON.parse(createCalls[1].body)).toEqual({ ref: "refs/tags/v0.0.1", sha: revision });
+  });
+
+  it("dispatches only the release workflow with source-run facts and the canonical tag ref", async () : Promise<any> => {
+    const revision = "a".repeat(40);
+    let request: any;
+    const result = await dispatchReleaseWorkflow({
+      repository: "Meshrix-Platform/Meshrix.js",
+      tag: "v0.0.1",
+      sourceRevision: revision,
+      runId: "90210",
+      runAttempt: 2,
+      sourceEvent: "push",
+      releaseVersion: "0.0.1",
+      token: "synthetic-github-token",
+      fetchImplementation: async (url: any, init: any = {}) : Promise<any> => {
+        request = { url: String(url), method: init.method, body: JSON.parse(init.body) };
+        return new Response(null, { status: 204 });
+      },
+    });
+    expect(request).toMatchObject({
+      url: "https://api.github.com/repos/Meshrix-Platform/Meshrix.js/actions/workflows/release.yml/dispatches",
+      method: "POST",
+      body: {
+        ref: "v0.0.1",
+        inputs: {
+          originating_event: "push",
+          originating_run_attempt: "2",
+          originating_run_id: "90210",
+          source_revision: revision,
+          bootstrap_candidate: "",
+        },
+      },
+    });
+    expect(result).toMatchObject({ sourceRunId: "90210", sourceRunAttempt: 2 });
+    expect(JSON.stringify({ request, result })).not.toContain("synthetic-github-token");
+  });
+
   it("keeps nightly direct-write feedback without a promotion gate", () : any => {
     expect(LONG_LIVED_BRANCHES).toEqual(["nightly", "stable", "release"]);
 
@@ -100,7 +453,7 @@ describe("branch promotion workflow", () : any => {
 
     expect(requiredWorkflowPaths("nightly")).toEqual([
       ".github/workflows/branch-flow.yml",
-      ".github/workflows/nightly-controlled-sandbox.yml",
+      ".github/workflows/ci.yml",
     ]);
     expect(requiredWorkflowPaths("stable")).toEqual([
       ".github/workflows/branch-flow.yml",
@@ -145,12 +498,13 @@ describe("branch promotion workflow", () : any => {
       "FAILED execution-sandbox.controlled-runtime (1200ms)",
       "FAILED noisy",
       "productionBackendFailedChecks=cpuLimitEnforced,pidLimitEnforced",
+      "productionBackendProbeFailures=sandbox_runtime_failed:oci_create_failed",
       "productionBackendProbeFailures=sandbox_runtime_failed:oci_create_failed:oci_option_unsupported:125",
       "private payload must not pass through",
     ].join("\n"))).toEqual([
       "check:cpuLimitEnforced",
       "check:pidLimitEnforced",
-      "probe:sandbox_runtime_failed:oci_create_failed:oci_option_unsupported:125",
+      "probe:sandbox_runtime_failed:oci_create_failed",
       "suite:execution-sandbox.controlled-runtime",
     ]);
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");
@@ -300,7 +654,7 @@ describe("branch promotion workflow", () : any => {
 
   it("runs the complete stable gate only on stable and exports one stable authority bundle", () : any => {
     const ciWorkflow: any = read(".github/workflows/ci.yml");
-    const marker: any = "\n  functional-completeness:\n";
+    const marker: any = "\n  stable-functional-completeness:\n";
     const start: any = ciWorkflow.indexOf(marker);
     expect(start).toBeGreaterThan(0);
     const remainder: any = ciWorkflow.slice(start + marker.length);
@@ -309,15 +663,17 @@ describe("branch promotion workflow", () : any => {
       start,
       nextJob < 0 ? ciWorkflow.length : start + marker.length + nextJob,
     );
-    expect(stableGate).toContain("github.ref_name == 'stable'");
+    expect(stableGate).toContain("github.event_name == 'push' && github.ref_name == 'stable'");
     expect(stableGate).not.toContain("github.ref_name == 'release'");
-    expect(stableGate).toContain(
-      "needs: [stable-candidate, repository-checkpoint, audit-reduction, enterprise-delivery, functional-acceptance, supply-chain]"
-    );
+    expect(stableGate).toContain("npm run ci:local -- --scope release");
+    expect(stableGate).toContain("create-stable-bundle");
+    expect(stableGate).toContain("--candidate build/release/control/SOURCE_CANDIDATE.json");
+    expect(stableGate).toContain("--functional build/reports/accepted-candidate.json");
+    expect(stableGate).toContain("--npm-report build/reports/npm-package-installability.json");
+    expect(stableGate).toContain("--run-id ${{ github.run_id }}");
+    expect(stableGate).toContain("--run-attempt ${{ github.run_attempt }}");
     expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
-    expect(stableGate).toContain("name: stable-source-candidate-${{ github.sha }}");
-    expect(stableGate).toContain("name: stable-functional-acceptance-${{ github.sha }}");
-    expect(stableGate).toContain("stable-authority-manifest.json");
+    expect(stableGate).toContain("--bundle build/release/control/stable-authority");
     expect(stableGate).not.toContain("verify-release-deployment");
   });
 
@@ -374,6 +730,7 @@ describe("branch promotion workflow", () : any => {
       candidateDigest: "b".repeat(64),
       candidateFileDigest: "c".repeat(64),
       functionalReceiptDigest: "d".repeat(64),
+      npmQualificationReceiptDigest: "e".repeat(64),
       runAttempt: 2,
       runId: "9001",
       sourceRevision: sha,
@@ -391,7 +748,7 @@ describe("branch promotion workflow", () : any => {
     const root: any = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-authority-test-"));
     try {
       const bundle: any = path.join(root, "bundle");
-      await fs.promises.mkdir(bundle);
+      const releaseBundle: any = path.join(root, "release-bundle");
       const candidate: any = buildReleaseCandidateIdentity({
         sourceRevision: "a".repeat(40),
         repositoryTreeDigest: `sha256:${"b".repeat(64)}`,
@@ -404,7 +761,7 @@ describe("branch promotion workflow", () : any => {
           version: "0.0.1",
         }],
         reportInventoryDigest: `sha256:${"f".repeat(64)}`,
-        supportedProfiles: ["enterprise-single-node"],
+        supportedProfiles: ["single-node"],
       });
       const candidateText: any = `${JSON.stringify(candidate, null, 2)}\n`;
       const functional: any = {
@@ -413,20 +770,16 @@ describe("branch promotion workflow", () : any => {
         status: "accepted",
         releaseReady: true,
         generationId: "stable-test-generation",
-        selectedProfile: "enterprise-single-node",
+        selectedProfile: "single-node",
         sourceRevision: candidate.source_revision,
         candidateDigest: candidate.candidate_digest,
       };
       const functionalText: any = `${JSON.stringify(functional, null, 2)}\n`;
-      const manifest: any = createStableAuthorityManifest({
-        artifactName: `stable-authority-${candidate.source_revision}`,
-        candidateDigest: candidate.candidate_digest,
-        candidateFileDigest: sha256(candidateText),
-        functionalReceiptDigest: sha256(functionalText),
-        runAttempt: 2,
-        runId: "42",
-        sourceRevision: candidate.source_revision,
-      });
+      const npmReport: any = npmQualificationReport(candidate);
+      const npmText: any = `${JSON.stringify(npmReport, null, 2)}\n`;
+      const candidatePath = path.join(root, "candidate.json");
+      const functionalPath = path.join(root, "accepted-candidate.json");
+      const npmReportPath = path.join(root, "npm-package-installability.json");
       const run: any = {
         branch: "stable",
         event: "push",
@@ -436,12 +789,21 @@ describe("branch promotion workflow", () : any => {
         workflowPath: ".github/workflows/ci.yml",
       };
       await Promise.all([
-        fs.promises.writeFile(path.join(bundle, "SOURCE_CANDIDATE.json"), candidateText),
+        fs.promises.writeFile(candidatePath, candidateText),
         fs.promises.writeFile(path.join(root, "expected.json"), candidateText),
-        fs.promises.writeFile(path.join(bundle, "accepted-candidate.json"), functionalText),
-        fs.promises.writeFile(path.join(bundle, "stable-authority-manifest.json"), `${JSON.stringify(manifest)}\n`),
+        fs.promises.writeFile(functionalPath, functionalText),
+        fs.promises.writeFile(npmReportPath, npmText),
         fs.promises.writeFile(path.join(root, "run.json"), `${JSON.stringify(run)}\n`),
       ]);
+      await expect(runAuthorityCommand([
+        "create-stable-bundle",
+        "--candidate", candidatePath,
+        "--functional", functionalPath,
+        "--npm-report", npmReportPath,
+        "--run-id", "42",
+        "--run-attempt", "2",
+        "--bundle", bundle,
+      ])).resolves.toMatchObject({ stage: "stable" });
       await expect(runAuthorityCommand([
         "verify-stable-bundle",
         "--bundle", bundle,
@@ -449,9 +811,58 @@ describe("branch promotion workflow", () : any => {
         "--run", path.join(root, "run.json"),
       ])).resolves.toMatchObject({ stage: "stable" });
 
+      const releaseManifestPath = path.join(releaseBundle, "release-authority-manifest.json");
+      await expect(runAuthorityCommand([
+        "create-release-bundle",
+        "--stable-bundle", bundle,
+        "--expected-candidate", path.join(root, "expected.json"),
+        "--stable-run", path.join(root, "run.json"),
+        "--run-id", "43",
+        "--run-attempt", "1",
+        "--bundle", releaseBundle,
+      ])).resolves.toMatchObject({ stage: "release" });
+      const releaseManifest = validateReleaseAuthorityManifest(
+        JSON.parse(await fs.promises.readFile(releaseManifestPath, "utf8")),
+      );
+      expect(releaseManifest).toMatchObject({
+        deploymentClaim: null,
+        deploymentReceiptDigest: null,
+        npmQualificationReceiptDigest: sha256(npmText),
+      });
+      const releaseRun = {
+        branch: "release",
+        event: "push",
+        headSha: candidate.source_revision,
+        runAttempt: 1,
+        runId: "43",
+        workflowPath: ".github/workflows/release-branch.yml",
+      };
+      await fs.promises.writeFile(path.join(root, "release-run.json"), `${JSON.stringify(releaseRun)}\n`);
+      await expect(runAuthorityCommand([
+        "verify-release-bundle",
+        "--bundle", releaseBundle,
+        "--expected-candidate", path.join(root, "expected.json"),
+        "--run", path.join(root, "release-run.json"),
+      ])).resolves.toMatchObject({ stage: "release" });
+      const invalidDeploymentPath = path.join(root, "invalid-deployment.json");
+      await fs.promises.writeFile(invalidDeploymentPath, "{}\n");
+      await expect(runAuthorityCommand([
+        "create-release-bundle",
+        "--stable-bundle", bundle,
+        "--expected-candidate", path.join(root, "expected.json"),
+        "--stable-run", path.join(root, "run.json"),
+        "--run-id", "44",
+        "--run-attempt", "1",
+        "--deployment", invalidDeploymentPath,
+        "--bundle", path.join(root, "invalid-release-authority"),
+      ])).rejects.toMatchObject({ code: "release_deployment_receipt_fields_invalid" });
+
       await fs.promises.writeFile(
         path.join(bundle, "stable-authority-manifest.json"),
-        `${JSON.stringify({ ...manifest, unexpected: true })}\n`,
+        `${JSON.stringify({
+          ...JSON.parse(await fs.promises.readFile(path.join(bundle, "stable-authority-manifest.json"), "utf8")),
+          unexpected: true,
+        })}\n`,
       );
       await expect(runAuthorityCommand([
         "verify-stable-bundle",
@@ -464,23 +875,28 @@ describe("branch promotion workflow", () : any => {
     }
   });
 
-  it("consumes the stable authority on release and requires the tag commit to equal the release tip", () : any => {
+  it("promotes the exact accepted npm candidate without a deployment receipt", () : any => {
     const branchWorkflow: any = read(".github/workflows/release-branch.yml");
     const releaseWorkflow: any = read(".github/workflows/release.yml");
 
-    expect(branchWorkflow).toContain("runs-on: ubuntu-24.04");
     expect(branchWorkflow).toContain('branches: ["release"]');
-    expect(branchWorkflow).toContain("stable-authority-${GITHUB_SHA}");
-    expect(branchWorkflow).toContain("npm run server:verify:release-deployment");
+    expect(branchWorkflow).toContain("workflow_dispatch:");
+    expect(branchWorkflow).toContain("bootstrap_candidate:");
+    expect(branchWorkflow).toContain("release-authority:");
+    expect(branchWorkflow).toContain("prepare-branch-authority");
+    expect(branchWorkflow).toContain("BOOTSTRAP_CANDIDATE");
+    expect(branchWorkflow).toContain("ensure-release-tag");
+    expect(branchWorkflow).toContain("dispatch-release");
+    expect(branchWorkflow).not.toContain("release-deployment");
     expect(branchWorkflow).toContain("release-authority-${{ github.sha }}");
     expect(branchWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
 
-    expect(releaseWorkflow).toContain('test "$tag_commit" = "$release_commit"');
-    expect(releaseWorkflow).not.toContain("git merge-base --is-ancestor");
+    expect(releaseWorkflow).toContain("workflow_dispatch:");
+    expect(releaseWorkflow).toContain("release-workflow-automation.ts resolve-release-authority");
     expect(releaseWorkflow).toContain("name: release-authority-${{ github.sha }}");
     expect(releaseWorkflow).not.toContain("\n  functional-completeness:\n");
-    expect(releaseWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
-    expect(releaseWorkflow.indexOf("- name: Install dependencies"))
-      .toBeLessThan(releaseWorkflow.indexOf("- name: Validate the canonical release definition"));
+    expect(releaseWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(2);
+    expect(releaseWorkflow.indexOf("- name: Install release verification dependencies"))
+      .toBeLessThan(releaseWorkflow.indexOf("- name: Verify the canonical tag and package state"));
   });
 });

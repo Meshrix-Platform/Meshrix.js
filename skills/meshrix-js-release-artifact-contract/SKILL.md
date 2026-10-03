@@ -17,14 +17,26 @@ Operator commands live in `docs/RUNBOOK.md` and `workflows/catalog.json`.
 ## Authority
 
 `tools/registry/release-definition.registry.json` is the sole source for the
-product version, tag, channel, package manifest set, container target, and
-platforms. `tools/registry/schema/release-definition.schema.json` locks those
-fields. Verify with the repository-owned release-definition command.
+product version, tag, channel, package manifest set, optional container target,
+and release acceptance profile, plus the exact Node.js and npm CLI versions
+used by release workflows. `tools/registry/schema/release-definition.schema.json`
+locks those fields. Verify with the repository-owned release-definition
+command.
 
-The published container target is `runtime-ui`. Platforms are `linux/amd64`
-and `linux/arm64`. API-only `runtime` is a source-checkout verification image,
-not the published artifact. Offline delivery and the enterprise single-node
-bundle must use `runtime-ui` with the server serving the Web Console.
+The public npm products are `meshrix.js` and `@meshrix/gateway`; the remaining
+workspaces are internal source boundaries. The existing publisher discovers
+the public package set from those manifests, builds both archives once in the
+credential-free assembly job, and transfers them as release inputs. Preflight
+and publication consume those same tarball bytes. Never rebuild or repack in a
+preflight, verification, or publisher job.
+
+The optional container artifact uses the `runtime-ui` target and serves the
+Web Console from the same process as the server. Its actual platform list is
+owned by the release definition and its own evidence; it is separate from npm
+eligibility. npm consumer qualification records the observed native platform
+and any usable local Docker target. One complete passing platform is
+sufficient; unavailable platforms are not prerequisites. API-only `runtime`
+remains a source-checkout verification image.
 
 ## Public address contract
 
@@ -62,6 +74,7 @@ external integration instructions.
 
 ## Verify
 
-Confirm the release definition still locks `container.target` to `runtime-ui`
-and both Linux platforms. Confirm pack or image evidence names `runtime-ui`
-and a single origin. Do not treat a Vite console port as published surface.
+Confirm the release definition names the optional `runtime-ui` target and
+single-origin behavior. For any selected image claim, confirm its declared
+platform evidence names `runtime-ui`. Do not infer npm platform support from
+image claims or treat a Vite console port as published surface.

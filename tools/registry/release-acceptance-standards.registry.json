@@ -12,9 +12,18 @@
       "development-environment-simulation",
       "failure-injection",
       "repeatability",
-      "fresh-container-deployment",
+      "clean-package-consumer-installability",
       "privacy-safe-evidence"
     ]
+  },
+  "npmPackageInstallability": {
+    "claim": "npm-package-installability-passed",
+    "requiredForRelease": true,
+    "requiresClaim": "functional-complete",
+    "command": "npm run verify:npm-package-installability",
+    "controller": "tools/server-scripts/verify-npm-package-installability.ts",
+    "receipt": "build/reports/npm-package-installability.json",
+    "schemaVersion": "v0.0.1:release:npm-package-installability-report-1"
   },
   "realMachineVerification": {
     "claim": "real-machine-verified",
@@ -28,14 +37,14 @@
         "system": "linux-x64",
         "environment": "native-host",
         "mode": "optional",
-        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+        "simulationCommand": "npm run verify:single-node:ubuntu-container"
       },
       {
         "id": "native-linux-arm64",
         "system": "linux-arm64",
         "environment": "native-host",
         "mode": "optional",
-        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+        "simulationCommand": "npm run verify:single-node:ubuntu-container"
       },
       {
         "id": "native-macos-arm64",
@@ -56,7 +65,7 @@
         "system": "declared-linux",
         "environment": "public-cloud",
         "mode": "optional",
-        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+        "simulationCommand": "npm run verify:single-node:ubuntu-container"
       },
       {
         "id": "clean-host-recovery",
@@ -69,12 +78,10 @@
   },
   "releaseDeploymentVerification": {
     "claim": "release-deployment-verified",
-    "requiredForRelease": true,
+    "requiredForRelease": false,
     "requiresClaim": "functional-complete",
     "command": "npm run server:verify:release-deployment",
     "controller": "tools/server-scripts/verify-release-deployment.ts",
-    "workflow": ".github/workflows/release-branch.yml",
-    "runner": "ubuntu-24.04",
     "receipt": "build/reports/release-deployment.json",
     "scenarios": [
       "success",

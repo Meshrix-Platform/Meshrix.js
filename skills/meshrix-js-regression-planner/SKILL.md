@@ -49,16 +49,16 @@ unexecuted dependency-bound checks explicitly; an early stop never proves that
 all defects are known. A continuous user journey follows
 `$meshrix-js-checkpoint-real-validation`: freeze the failed attempt, preserve
 its failure packet, and follow its repair handoff instead of crossing a failed
-checkpoint. This does not authorize unsafe discovery or override an applicable
-AGENTS.md requirement for maintainer direction.
+checkpoint. This does not authorize unsafe discovery.
 
 Run one final complete regression for the selected outcome only after all
 changes, source review, in-scope repairs, and focused checks are complete.
 Do not disguise a full regression as a diagnostic run to bypass that limit.
-If final regression fails, diagnose and report the concrete repair and
-verification proposal; the developer decides whether to repair and rerun.
-Do not automatically loop. A successful unchanged receipt may be reused, but a
-failed or partial result never establishes completion.
+Repair ordinary scoped failures and rerun only the affected checks; escalate
+only when a repair changes actual scope, published support, authority, or
+risk. Do not automatically loop the complete regression. A successful
+unchanged receipt may be reused, but a failed or partial result never
+establishes completion.
 
 ## Bound side effects
 

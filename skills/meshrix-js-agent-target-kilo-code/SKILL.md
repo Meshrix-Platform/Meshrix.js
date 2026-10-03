@@ -12,7 +12,7 @@ audience: usage
 - Configuration discovery does not establish a Meshrix.js HTTP conversation adapter, a named SQLite schema, or an editor-extension history reader.
 
 Source: [vendor reference](https://kilo.ai/docs/getting-started/settings). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

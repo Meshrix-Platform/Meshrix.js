@@ -24,7 +24,7 @@
       },
       {
         "checked": true,
-        "text": "Private deployment E2E proves enabled plugin set, disabled plugin absence, storage persistence, job resume, and health reporting.",
+        "text": "Single-node deployment E2E proves enabled plugin set, disabled plugin absence, storage persistence, job resume, and health reporting.",
         "evidence": [
           {
             "acceptanceCommandId": "deployment-container-flow",
@@ -66,7 +66,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete container-deployment-resumability",
-      "target": "tools/registry/internal-platform-capability-matrix.json, packages/foundation/config/deployment/README.md, tools/server-scripts/verify-platform-acceptance.ts, tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts, docs/RUNBOOK.md"
+      "target": "tools/registry/internal-platform-capability-matrix.json, packages/foundation/config/deployment/README.md, tools/server-scripts/verify-platform-acceptance.ts, tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts, docs/RUNBOOK.md"
     },
     "next": [
       "2a03f84d-0df2-47f3-b1fa-d0d3d733491c"

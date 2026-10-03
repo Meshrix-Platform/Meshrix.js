@@ -12,7 +12,7 @@ audience: usage
 - Profile configuration does not establish a Meshrix.js ACP lane, remote VM transport, state.db schema, or conversation-history scanner.
 
 Source: [vendor reference](https://hermes-agent.nousresearch.com/docs/user-guide/configuration). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

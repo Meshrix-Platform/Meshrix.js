@@ -3,6 +3,7 @@ import {
   asObject,
   assertNegotiatedProtocolVersion,
   assertJsonRpcResponse,
+  DEFAULT_MCP_INITIALIZE_TIMEOUT_MS,
   fatalSessionError,
   initializeParams,
   jsonRpcNotification,
@@ -12,6 +13,7 @@ import {
   parseJson,
   positiveInt,
   protocolError,
+  requestTimeoutMs,
   requestedProtocolVersion,
   text,
   timeoutError
@@ -101,7 +103,7 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     const entry: any = pending.get(id);
     if (!entry) return false;
     pending.delete(id);
-    clearTimeout(entry.timeout);
+    if (entry.timeout) clearTimeout(entry.timeout);
     entry.signal?.removeEventListener("abort", entry.abortListener);
     callback(entry);
     updateReferences();
@@ -224,7 +226,7 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     if (!closed) markFatal();
   });
 
-  function writePayload(payload?: any) : any {
+  function writePayload(payload?: any, beforeWrite?: () => void | Promise<void>, signal?: AbortSignal, isPending?: () => boolean) : any {
     if (fatalError) return Promise.reject(fatalError);
     if (closed || !child.stdin?.writable) {
       return Promise.reject(fatalSessionError("Upstream MCP stdio session is closed."));
@@ -237,29 +239,34 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     activeWrites += 1;
     queuedWriteBytes += bytes;
     updateReferences();
-    const write: any = writeChain.then(() : any => new Promise((resolve?: any, reject?: any) : any => {
-      let callbackDone: any = false;
-      let drained: any = false;
-      const complete: any = () : any => {
-        if (callbackDone && drained) resolve();
-      };
-      try {
-        const accepted: any = child.stdin.write(serialized, "utf8", (error?: any) : any => {
-          if (error) reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
-          else {
-            callbackDone = true;
+    const write: any = writeChain.then(async () : Promise<any> => {
+      if (signal?.aborted || (isPending && !isPending())) throw abortError();
+      await beforeWrite?.();
+      if (signal?.aborted || (isPending && !isPending())) throw abortError();
+      return new Promise((resolve?: any, reject?: any) : any => {
+        let callbackDone: any = false;
+        let drained: any = false;
+        const complete: any = () : any => {
+          if (callbackDone && drained) resolve();
+        };
+        try {
+          const accepted: any = child.stdin.write(serialized, "utf8", (error?: any) : any => {
+            if (error) reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
+            else {
+              callbackDone = true;
+              complete();
+            }
+          });
+          if (accepted) drained = true;
+          else child.stdin.once("drain", () : any => {
+            drained = true;
             complete();
-          }
-        });
-        if (accepted) drained = true;
-        else child.stdin.once("drain", () : any => {
-          drained = true;
-          complete();
-        });
-      } catch (error: any) {
-        reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
-      }
-    }));
+          });
+        } catch (error: any) {
+          reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
+        }
+      });
+    });
     writeChain = write.catch(() : any => {});
     return write.finally(() : any => {
         activeWrites = Math.max(0, activeWrites - 1);
@@ -286,8 +293,13 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     }
     if (fatalError) return Promise.reject(fatalError);
     if (closed) return Promise.reject(fatalSessionError("Upstream MCP stdio session is closed."));
+    let timeoutMs: any;
+    try {
+      timeoutMs = requestTimeoutMs(requestOptions, normalized);
+    } catch (error: any) {
+      return Promise.reject(error);
+    }
     const id: any = nextId++;
-    const timeoutMs: any = positiveInt(requestOptions.timeoutMs, normalized.timeoutMs);
     const cancelNotification: any = requestOptions.cancelNotification !== false;
     const payload: any = jsonRpcRequest(id, method, params);
     const promise: any = new Promise((resolve?: any, reject?: any) : any => {
@@ -295,11 +307,13 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
         if (cancelNotification) sendCancellation(id, false);
         finishEntry(id, (entry?: any) : any => entry.reject(abortError()));
       };
-      const timeout: any = setTimeout(() : any => {
-        if (cancelNotification) sendCancellation(id, true);
-        finishEntry(id, (entry?: any) : any => entry.reject(timeoutError(method)));
-      }, timeoutMs);
-      timeout.unref?.();
+      const timeout: any = timeoutMs > 0
+        ? setTimeout(() : any => {
+            if (cancelNotification) sendCancellation(id, true);
+            finishEntry(id, (entry?: any) : any => entry.reject(timeoutError(method)));
+          }, timeoutMs)
+        : null;
+      timeout?.unref?.();
       pending.set(id, {
         resolve,
         reject,
@@ -312,7 +326,13 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
       requestOptions.signal?.addEventListener("abort", abortListener, { once: true });
       updateReferences();
     });
-    void writePayload(payload).catch((error?: any) : any => {
+    const beforeWrite = method === "tools/call" && typeof requestOptions.beforeSend === "function"
+      ? async () : Promise<void> => {
+          await requestOptions.beforeSend();
+          if (requestOptions.signal?.aborted) throw abortError();
+        }
+      : undefined;
+    void writePayload(payload, beforeWrite, requestOptions.signal, () => pending.has(id)).catch((error?: any) : any => {
       finishEntry(id, (entry?: any) : any => entry.reject(error));
     });
     return promise.then((result?: any) : any => {
@@ -374,8 +394,12 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
   }
 
   try {
+    const initializeTimeoutMs: any = positiveInt(
+      normalized.timeoutMs,
+      DEFAULT_MCP_INITIALIZE_TIMEOUT_MS
+    );
     initializedResult = await request("initialize", initializeParams(normalized), {
-      timeoutMs: normalized.timeoutMs,
+      timeoutMs: initializeTimeoutMs,
       cancelNotification: false
     });
     assertNegotiatedProtocolVersion(initializedResult, requestedProtocolVersion(normalized));

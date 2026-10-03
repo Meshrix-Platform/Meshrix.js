@@ -25,6 +25,9 @@ import {
   REQUIRED_SANDBOX_PROVIDER_RESTRICTIONS
 } from "@meshrix/server-runtime/execution-sandbox/trusted-provider-resolver";
 import { createSourceEvidenceContext } from "./lib/source-tree-digest.ts";
+import { resolveCommandCandidate } from "../../packages/foundation/src/environment-compatibility/host-runtime.ts";
+import { discoverLocalExecutionEnvironment } from "./lib/local-execution-environment.ts";
+import type { LocalExecutionEnvironment } from "./lib/local-execution-environment.ts";
 
 const REPORT_SCHEMA: any = "v0.0.1:execution-sandbox:oci-conformance-report-1";
 const REPORT_PATH: any = "build/reports/execution-sandbox-oci-conformance.json";
@@ -41,6 +44,22 @@ const RUNTIME_PROFILE: any = "hardened-oci";
 const OPERATOR_VALUE_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const ADVERSARIAL_PROFILE: any = "oci-adversarial";
 const ADVERSARIAL_POLICY_REVISION: any = "oci-adversarial-policy";
+const SAFE_PROBE_FAILURE_CODES: any = new Set([
+  ...Object.values(SANDBOX_DENIAL_REASONS),
+  "sandbox_conformance_assertion_failed"
+]);
+const SAFE_PROBE_FAILURE_STAGES: any = new Set([
+  "oci_create_failed",
+  "oci_start_failed",
+  "oci_inspect_failed",
+  "oci_command_failed",
+  "oci_workload_failed",
+  "input_staging_failed",
+  "sandbox_backend_failed",
+  "resource_budget_exceeded",
+  "output_validation_failed",
+  "conformance_assertion_failed"
+]);
 
 const RESOURCE_PROBE_SOURCE: any = String.raw`
 import fs from "node:fs";
@@ -149,19 +168,24 @@ export function failedOciConformanceCheckIds(report?: any) : any {
 function boundedProbeFailure(error?: any) : any {
   const code: any = String(error?.code || "");
   const failureStage: any = String(error?.failureStage || "");
-  const failureReason: any = String(error?.failureReason || "");
-  const exitCode: any = Number(error?.exitCode);
   return Object.freeze({
-    code: /^(?:sandbox_[a-z_]+)$/u.test(code) ? code : "sandbox_runtime_failed",
-    failureStage: /^(?:oci_(?:create|start|inspect|command|workload)_failed)$/u.test(failureStage)
+    code: SAFE_PROBE_FAILURE_CODES.has(code) ? code : SANDBOX_DENIAL_REASONS.RUNTIME_FAILED,
+    failureStage: SAFE_PROBE_FAILURE_STAGES.has(failureStage)
       ? failureStage
       : "sandbox_backend_failed",
-    failureReason: /^oci_[a-z_]+$/u.test(failureReason)
-      ? failureReason
-      : "oci_failure_unclassified",
-    exitCode: Number.isSafeInteger(exitCode) && exitCode >= 0 && exitCode <= 255
-      ? exitCode
-      : -1
+  });
+}
+
+function boundedConformanceMismatch(receipt?: any) : any {
+  const code: any = String(receipt?.reasonCode || "");
+  const failureStage: any = String(receipt?.failureStage || "");
+  return Object.freeze({
+    code: SAFE_PROBE_FAILURE_CODES.has(code)
+      ? code
+      : "sandbox_conformance_assertion_failed",
+    failureStage: SAFE_PROBE_FAILURE_STAGES.has(failureStage)
+      ? failureStage
+      : "conformance_assertion_failed"
   });
 }
 
@@ -230,6 +254,58 @@ export function ensureOciPinnedImage(binary?: any, image: any = PINNED_IMAGE) : 
   return Object.freeze({ present: true, pulled: true });
 }
 
+export type OciConformanceImageAvailability =
+  | { status: "available"; platform: "linux/amd64" | "linux/arm64" }
+  | { status: "unavailable"; reasonCode: "docker_unavailable" | "oci_image_platform_mismatch" }
+  | { status: "failed"; reasonCode: "oci_image_prepare_failed" | "oci_image_inspect_failed" };
+
+interface OciConformanceImageOptions {
+  environment?: LocalExecutionEnvironment;
+  binary?: string;
+  image?: string;
+  commandRunner?: typeof runOciEngineCommand;
+  ensureImage?: typeof ensureOciPinnedImage;
+}
+
+/** Inspect the pinned workload without starting a container or enabling emulation. */
+export async function discoverOciConformanceImageAvailability({
+  environment,
+  binary,
+  image = PINNED_IMAGE,
+  commandRunner = runOciEngineCommand,
+  ensureImage = ensureOciPinnedImage
+}: OciConformanceImageOptions = {}): Promise<OciConformanceImageAvailability> {
+  const observed = environment ?? await discoverLocalExecutionEnvironment();
+  if (observed.docker.status !== "available") {
+    return { status: "unavailable", reasonCode: "docker_unavailable" };
+  }
+  const executable = binary ?? resolveCommandCandidate("docker", { includeDefaultLocalBin: false }).path;
+  try {
+    if (!executable) throw new Error("docker_cli_missing");
+    await ensureImage(executable, image);
+  } catch {
+    return { status: "failed", reasonCode: "oci_image_prepare_failed" };
+  }
+  try {
+    const result = commandRunner(executable, ["image", "inspect", "--format", "{{json .}}", image], {
+      allowFailure: true,
+      timeoutMs: 30_000
+    });
+    if (result.status !== 0) throw new Error("image_inspect_failed");
+    const inspected: unknown = JSON.parse(String(result.stdout || ""));
+    if (!inspected || typeof inspected !== "object" || Array.isArray(inspected)) throw new Error("image_metadata_invalid");
+    const metadata = inspected as { Os?: unknown; Architecture?: unknown };
+    if (typeof metadata.Os !== "string" || typeof metadata.Architecture !== "string") throw new Error("image_metadata_invalid");
+    const imagePlatform = `${metadata.Os}/${metadata.Architecture}`;
+    if (imagePlatform !== observed.docker.platform) {
+      return { status: "unavailable", reasonCode: "oci_image_platform_mismatch" };
+    }
+    return { status: "available", platform: observed.docker.platform };
+  } catch {
+    return { status: "failed", reasonCode: "oci_image_inspect_failed" };
+  }
+}
+
 export async function waitForOciEngineReady(binary?: any, {
   timeoutMs = OCI_ENGINE_READY_TIMEOUT_MS,
   intervalMs = OCI_ENGINE_READY_INTERVAL_MS,
@@ -254,7 +330,8 @@ export async function waitForOciEngineReady(binary?: any, {
 export async function runOciConformancePreflight(target?: any, {
   image = PINNED_IMAGE,
   waitForEngine = waitForOciEngineReady,
-  ensureImage = ensureOciPinnedImage
+  ensureImage = ensureOciPinnedImage,
+  inspectImageAvailability = discoverOciConformanceImageAvailability
 }: Record<string, any> = {}) : Promise<any> {
   const binary: any = String(target?.binary || "").trim();
   if (!binary) {
@@ -263,7 +340,16 @@ export async function runOciConformancePreflight(target?: any, {
     throw error;
   }
   await waitForEngine(binary);
-  return ensureImage(binary, image);
+  const prepared = await ensureImage(binary, image);
+  if (target.engine === "docker") {
+    const availability = await inspectImageAvailability({ binary, image, ensureImage: () => prepared });
+    if (availability.status !== "available") {
+      const error: Error & Record<string, any> = new Error("The OCI conformance workload requires a matching native platform.");
+      error.code = availability.reasonCode;
+      throw error;
+    }
+  }
+  return prepared;
 }
 
 export function parseExecutionSandboxOciConformanceArguments(argv: any = []) : any {
@@ -793,40 +879,40 @@ async function waitForFile(targetPath?: any, timeoutMs: any = 45_000) : Promise<
 
 async function attemptedProbe(operation?: any) : Promise<any> {
   try {
-    return await operation();
-  } catch {
-    return null;
+    return Object.freeze({ value: await operation(), failure: null });
+  } catch (error: any) {
+    return Object.freeze({ value: null, failure: boundedProbeFailure(error) });
   }
 }
 
 export async function runOciAdversarialConformanceMatrix(target?: any, root?: any) : Promise<any> {
-  const resourceProbe: any = await attemptedProbe(() : any => runBrokerProbe(target, root, RESOURCE_PROBE_SOURCE, {
+  const resourceAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, RESOURCE_PROBE_SOURCE, {
     kind: "resource_probe",
     resources: adversarialResources({ wallTimeMs: 8_000, cpuMillis: 2_000 }),
     idempotencyKey: `resource-${crypto.randomUUID()}`,
     readResult: true
   }));
   const cancellationKey: any = `cancel-${crypto.randomUUID()}`;
-  const cancelled: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LONG_RUNNING_SOURCE, {
+  const cancellationAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LONG_RUNNING_SOURCE, {
     kind: "cancellation_probe",
     resources: adversarialResources({ wallTimeMs: 8_000, cpuMillis: 1_000 }),
     idempotencyKey: cancellationKey,
     cancelAfterMs: 500
   }));
-  const cancelledReplay: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LONG_RUNNING_SOURCE, {
+  const cancelledReplayAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LONG_RUNNING_SOURCE, {
     kind: "cancellation_probe",
     resources: adversarialResources({ wallTimeMs: 8_000, cpuMillis: 1_000 }),
     idempotencyKey: cancellationKey,
     cancelAfterMs: 500
   }));
-  const timedOut: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LONG_RUNNING_SOURCE, {
+  const timeoutAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LONG_RUNNING_SOURCE, {
     kind: "timeout_probe",
     resources: adversarialResources({ wallTimeMs: 350, cpuMillis: 100 }),
     idempotencyKey: `timeout-${crypto.randomUUID()}`
   }));
-  const outputOverflow: any = await attemptedProbe(() : any => runBrokerProbe(target, root, OUTPUT_OVERFLOW_SOURCE, {
+  const outputAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, OUTPUT_OVERFLOW_SOURCE, {
     kind: "output_probe",
-    resources: adversarialResources(),
+    resources: adversarialResources({ wallTimeMs: 8_000 }),
     outputs: Object.freeze({
       schema: "oci-output-limit",
       maxFiles: 1,
@@ -835,33 +921,44 @@ export async function runOciAdversarialConformanceMatrix(target?: any, root?: an
     }),
     idempotencyKey: `output-${crypto.randomUUID()}`
   }));
-  const logOverflow: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LOG_OVERFLOW_SOURCE, {
+  const logAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, LOG_OVERFLOW_SOURCE, {
     kind: "log_probe",
-    resources: adversarialResources({ logBytes: 1_024 }),
+    resources: adversarialResources({ wallTimeMs: 8_000, logBytes: 1_024 }),
     idempotencyKey: `log-${crypto.randomUUID()}`
   }));
-  const subprocessProbe: any = await attemptedProbe(() : any => runBrokerProbe(target, root, SUBPROCESS_DENIAL_SOURCE, {
+  const subprocessAttempt: any = await attemptedProbe(() : any => runBrokerProbe(target, root, SUBPROCESS_DENIAL_SOURCE, {
     kind: "subprocess_probe",
-    resources: adversarialResources({ processes: 64 }),
+    resources: adversarialResources({ wallTimeMs: 8_000, processes: 64 }),
     idempotencyKey: `subprocess-${crypto.randomUUID()}`,
     readResult: true
   }));
-  const forbiddenNetwork: any = await attemptedProbe(
+  const forbiddenNetworkAttempt: any = await attemptedProbe(
     () : any => forbiddenCapabilityDenied(target, root, "network", "https")
   );
-  const forbiddenSecret: any = await attemptedProbe(
+  const forbiddenSecretAttempt: any = await attemptedProbe(
     () : any => forbiddenCapabilityDenied(target, root, "secretRefs", "secret-ref")
   );
-  const forbiddenTool: any = await attemptedProbe(
+  const forbiddenToolAttempt: any = await attemptedProbe(
     () : any => forbiddenCapabilityDenied(target, root, "tools", "tool-ref")
   );
 
-  const closeRun: any = await attemptedProbe(() : any => prepareDirectContext(
+  const closeRunAttempt: any = await attemptedProbe(() : any => prepareDirectContext(
     root,
     `close-${crypto.randomUUID()}`,
     READY_LONG_RUNNING_SOURCE,
     { resources: adversarialResources({ wallTimeMs: 8_000, cpuMillis: 1_000 }) }
   ));
+  const resourceProbe: any = resourceAttempt.value;
+  const cancelled: any = cancellationAttempt.value;
+  const cancelledReplay: any = cancelledReplayAttempt.value;
+  const timedOut: any = timeoutAttempt.value;
+  const outputOverflow: any = outputAttempt.value;
+  const logOverflow: any = logAttempt.value;
+  const subprocessProbe: any = subprocessAttempt.value;
+  const forbiddenNetwork: any = forbiddenNetworkAttempt.value;
+  const forbiddenSecret: any = forbiddenSecretAttempt.value;
+  const forbiddenTool: any = forbiddenToolAttempt.value;
+  const closeRun: any = closeRunAttempt.value;
   let backendCloseReapedActiveRun: any = false;
   if (closeRun) {
     const closeRunPromise: any = target.backend.run(closeRun.context);
@@ -881,7 +978,7 @@ export async function runOciAdversarialConformanceMatrix(target?: any, root?: an
     }
   }
 
-  return Object.freeze({
+  const checks = Object.freeze({
     cancellationObserved:
       cancelled?.receipt?.runtimeState === "cancelled" &&
       cancelled.receipt.reasonCode === SANDBOX_DENIAL_REASONS.CANCELLED,
@@ -913,6 +1010,29 @@ export async function runOciAdversarialConformanceMatrix(target?: any, root?: an
     forbiddenSecretDenied: forbiddenSecret === true,
     forbiddenToolDenied: forbiddenTool === true,
     backendCloseReapedActiveRun
+  });
+  const failureByProbe = [
+    resourceAttempt.failure,
+    cancellationAttempt.failure,
+    cancelledReplayAttempt.failure,
+    timeoutAttempt.failure,
+    outputAttempt.failure || (!checks.outputLimitEnforced && outputOverflow
+      ? boundedConformanceMismatch(outputOverflow.receipt)
+      : null),
+    logAttempt.failure || (!checks.logLimitEnforced && logOverflow
+      ? boundedConformanceMismatch(logOverflow.receipt)
+      : null),
+    subprocessAttempt.failure || ((!checks.subprocessProbeCompleted || !checks.subprocessZeroEnforced) && subprocessProbe
+      ? boundedConformanceMismatch(subprocessProbe.receipt)
+      : null),
+    forbiddenNetworkAttempt.failure,
+    forbiddenSecretAttempt.failure,
+    forbiddenToolAttempt.failure,
+    closeRunAttempt.failure
+  ].filter(Boolean);
+  return Object.freeze({
+    ...checks,
+    probeFailures: Object.freeze(failureByProbe)
   });
 }
 
@@ -1083,7 +1203,7 @@ async function runOciTargetConformance({
     const probeResults: any = await runIndependentConformanceProbes(probeRunner, target, root);
     const first: any = probeResults[0].status === "fulfilled" ? probeResults[0].value : null;
     const second: any = probeResults[1].status === "fulfilled" ? probeResults[1].value : null;
-    const probeFailures: any = probeResults
+    const independentProbeFailures: any = probeResults
       .filter((entry?: any) : any => entry.status === "rejected")
       .map((entry?: any) : any => boundedProbeFailure(entry.reason));
     const generatedAt: any = now();
@@ -1095,7 +1215,12 @@ async function runOciTargetConformance({
       runtimeProfile,
       receiptRequirement
     });
-    const adversarialChecks: any = await adversarialRunner(target, root);
+    const adversarialResult: any = await adversarialRunner(target, root);
+    const { probeFailures: rawAdversarialProbeFailures = [], ...adversarialChecks } = adversarialResult || {};
+    const adversarialProbeFailures: any = Array.isArray(rawAdversarialProbeFailures)
+      ? rawAdversarialProbeFailures.map((failure?: any) : any => boundedProbeFailure(failure))
+      : [];
+    const probeFailures: any = [...independentProbeFailures, ...adversarialProbeFailures];
     const checks: Readonly<Record<string, any>> = Object.freeze({
       executionSucceeded: first?.execution?.status === "succeeded" && second?.execution?.status === "succeeded",
       nonRootIdentity: first?.result?.nonRootIdentity === true && second?.result?.nonRootIdentity === true,

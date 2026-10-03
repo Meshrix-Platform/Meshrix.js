@@ -196,6 +196,7 @@ export async function dispatchOperation({
   params = {},
   input = null,
   transport = "internal",
+  operationBudgetOwned = false,
   method = operation?.http?.method || "POST",
   applyHttpQuery = true,
   authorizeOperation = null,
@@ -1318,17 +1319,18 @@ export async function dispatchOperation({
 	          return invokeOperation({
 	            operation,
 	            controllers,
-            request,
-            response,
-            requestBody,
+	            request,
+	            response,
+	            requestBody,
 	            url,
 	            params,
 	            input: operationInput,
 	            applyHttpQuery,
 	            authSession,
-            operationLock,
+	            operationLock,
 	            signal: operationLock?.signal || signal,
-              finalProtectedSinkPermit
+	            operationBudgetOwned: operationBudgetOwned === true,
+	            finalProtectedSinkPermit
 	          });
 	        }
 	      });

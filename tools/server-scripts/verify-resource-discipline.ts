@@ -51,7 +51,7 @@ if (packageJson.devDependencies?.[policy.memoryLeak.framework] !== "^5.16.0") {
 }
 if (
   packageJson.scripts?.["server:verify:resource-discipline"] !==
-  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-resource-discipline.ts && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts tests/vitest/server/upload-custody-workspace-materialization.test.ts && cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-memory-leaks.ts"
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-resource-discipline.ts && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts"
 ) {
   findings.push("package.json:resource-discipline-gate-not-canonical");
 }

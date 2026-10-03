@@ -90,11 +90,13 @@ export function releaseEvidenceReportPayloadDigest(report: Record<string, any> =
   return reportPayloadDigest(reportWithoutReleaseProvenance(report));
 }
 
-export function expectedReleaseReportProvenance({ commandId, producer }: Record<string, any> = {}) : any {
+export function expectedReleaseReportProvenance({ commandId, producer, runId, candidateDigest }: Record<string, any> = {}) : any {
   return Object.freeze({
     schemaVersion: RELEASE_REPORT_PROVENANCE_SCHEMA,
     commandId: String(commandId || "").trim(),
-    producer: String(producer || "").trim()
+    producer: String(producer || "").trim(),
+    ...(runId ? { runId: String(runId) } : {}),
+    ...(candidateDigest ? { candidateDigest: String(candidateDigest) } : {})
   });
 }
 
@@ -103,6 +105,8 @@ export async function stampReleaseReportProvenance({
   commands = [],
   results = [],
   requiredReportPaths = [],
+  runId,
+  candidateDigest,
   recordedAt = new Date().toISOString()
 }: Record<string, any> = {}) : Promise<any> {
   const { owners } = validateReleaseReportCatalogClosure({ commands, requiredReportPaths });
@@ -116,7 +120,9 @@ export async function stampReleaseReportProvenance({
     if (!spec) throw new Error(`Release report has no registered specification: ${reportPath}`);
     const expected: any = expectedReleaseReportProvenance({
       commandId,
-      producer: spec.verifier
+      producer: spec.verifier,
+      runId,
+      candidateDigest
     });
     expectedByPath.set(reportPath, expected);
     const result: any = resultById.get(commandId);

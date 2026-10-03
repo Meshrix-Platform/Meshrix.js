@@ -1,8 +1,21 @@
+import { MCP_NPM_PACKAGE_VERSION } from "../http-mcp-adapter-constants.ts";
+
 export const MCP_CLIENT_ADAPTER_PROTOCOL: any = "v0.0.1:meshrix:client-adapter-json-stdio-1";
 
+const ADAPTER_PACKAGES: Readonly<Record<string, string>> = Object.freeze({
+  openclaw: "@meshrix/agent-openclaw-adapter",
+  codex: "@meshrix/agent-codex-adapter",
+  "claude-code": "@meshrix/agent-claude-code-adapter",
+  antigravity: "@meshrix/agent-antigravity-adapter",
+  opencode: "@meshrix/agent-opencode-adapter",
+  pi: "@meshrix/agent-pi-adapter",
+  kimi: "@meshrix/agent-kimi-adapter"
+});
+
 function trustedAdapter(target?: any, label?: any) : any {
-  const version: any = "0.0.1";
-  const packageName: any = `@meshrix/agent-${target}-adapter`;
+  const version: any = MCP_NPM_PACKAGE_VERSION;
+  const packageName: any = ADAPTER_PACKAGES[target];
+  if (!packageName) throw new Error("Client adapter package mapping is incomplete.");
   return Object.freeze({
     target,
     label,
@@ -11,21 +24,16 @@ function trustedAdapter(target?: any, label?: any) : any {
     adapter: Object.freeze({
       packageName,
       version,
-      coordinate: `${packageName}@${version}`,
       entrypoint: "adapter.mjs",
       protocol: MCP_CLIENT_ADAPTER_PROTOCOL,
-      source: "npm",
-      trustPolicy: "npm-exact-coordinate",
-      // Populated by the signed Plugins release index once the package is
-      // published. The runner enforces it whenever it is present.
-      integrity: ""
+      source: "meshrix-root-bundle",
+      trustPolicy: "root-private-component"
     })
   });
 }
 
-// This catalog is an allowlist, not an implementation registry. Client-specific
-// discovery and lifecycle behavior lives in the exact external package named by
-// each coordinate.
+// This catalog identifies the first-party components delivered with meshrix.js.
+// Client-specific discovery and lifecycle behavior remains inside each component.
 export const MCP_CLIENT_TARGETS: readonly any[] = Object.freeze([
   trustedAdapter("openclaw", "OpenClaw"),
   trustedAdapter("codex", "Codex"),

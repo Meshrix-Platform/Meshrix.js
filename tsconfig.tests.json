@@ -11,7 +11,10 @@
   "include": [
     "tests/run.ts",
     "tests/verify-script-registry.ts",
-    "tests/verify-secret-hygiene.ts"
+    "tests/verify-secret-hygiene.ts",
+    "tests/type-fixtures/upstream-gateway-boundaries.ts",
+    "tests/type-fixtures/upstream-publishing-contract.ts",
+    "tests/type-fixtures/upload-workspace-materialization-model.ts"
   ],
   "exclude": [
     "node_modules/**",

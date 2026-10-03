@@ -12,7 +12,25 @@ function addColumnIfMissing(db?: any, tableName?: any, columnName?: any, columnS
   db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnSql}`);
 }
 
-export function ensureSchema(db?: any) : any {
+function recreateApiKeyEffectLeases(db?: any): void {
+  db.transaction(() : void => {
+    db.exec("DROP INDEX IF EXISTS idx_api_key_effect_leases_expiry;");
+    db.exec("DROP TABLE IF EXISTS api_key_effect_leases;");
+    db.exec(`CREATE TABLE api_key_effect_leases (
+      key_id TEXT NOT NULL,
+      lease_id TEXT NOT NULL,
+      lifecycle_revision INTEGER NOT NULL,
+      policy_fingerprint TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (key_id, lease_id),
+      FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
+    );`);
+  })();
+}
+
+export function ensureSchema(db?: any, {
+  recoverStaleApiKeyEffectReservations = false
+}: { recoverStaleApiKeyEffectReservations?: boolean } = {}) : any {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -245,12 +263,10 @@ export function ensureSchema(db?: any) : any {
       lease_id TEXT NOT NULL,
       lifecycle_revision INTEGER NOT NULL,
       policy_fingerprint TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       PRIMARY KEY (key_id, lease_id),
       FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
     );
-    CREATE INDEX IF NOT EXISTS idx_api_key_effect_leases_expiry ON api_key_effect_leases(expires_at);
 
     CREATE TABLE IF NOT EXISTS api_key_lifecycle_events (
       event_id TEXT PRIMARY KEY,
@@ -612,12 +628,10 @@ export function ensureSchema(db?: any) : any {
             lease_id TEXT NOT NULL,
             lifecycle_revision INTEGER NOT NULL,
             policy_fingerprint TEXT NOT NULL,
-            expires_at INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             PRIMARY KEY (key_id, lease_id),
             FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
           );
-          CREATE INDEX IF NOT EXISTS idx_api_key_effect_leases_expiry ON api_key_effect_leases(expires_at);
           CREATE TABLE IF NOT EXISTS api_key_lifecycle_events (
             event_id TEXT PRIMARY KEY,
             key_id TEXT NOT NULL,
@@ -695,4 +709,12 @@ export function ensureSchema(db?: any) : any {
       }
     }
   ]);
+
+  if (recoverStaleApiKeyEffectReservations === true) {
+    recreateApiKeyEffectLeases(db);
+  } else if (hasColumn(db, "api_key_effect_leases", "expires_at")) {
+    throw Object.assign(new Error("API Key reservations require a verified Operation Permission owner recovery."), {
+      code: "operation_permission_owner_recovery_required"
+    });
+  }
 }

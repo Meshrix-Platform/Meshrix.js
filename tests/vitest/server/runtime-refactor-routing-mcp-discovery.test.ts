@@ -18,6 +18,7 @@ import {
   getRouteIndexRefactorInstrumentation
 } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const cleanupTasks: any[] = [];
 
@@ -185,11 +186,12 @@ describe("runtime refactor routing and MCP discovery", () : any => {
         }
       }
     }));
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath,
       mcpSessionManager: {
         listTools,
         callTool,
+        invokeGateway: async (config?: any, invocation?: any) : Promise<any> => callTool(config, { name: invocation?.params?.name, arguments: invocation?.params?.arguments }),
         async retireScope() : Promise<any> { return { retired: 0 }; },
         async close() : Promise<any> {}
       }
@@ -199,11 +201,14 @@ describe("runtime refactor routing and MCP discovery", () : any => {
       serviceId: "discovery-fixture",
       serviceProtocol: "mcp",
       label: "Discovery fixture",
+      // Operator-configured policy is the only source of the required scope; the upstream
+      // tool's own readOnlyHint annotation is reported but never grants access.
+      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only" }],
       mcp: {
         transport: "http",
         url: "https://example.invalid:443/mcp",
         toolNamePrefix: "discovery-fixture",
-        toolsCacheTtlMs: 150
+        toolsCacheTtlMs: 2_000
       }
     }]);
 
@@ -238,7 +243,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
       serviceDiscoveryCount: 1
     });
 
-    await new Promise((resolve?: any) : any => setTimeout(resolve, 200));
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 2_050));
     const third: any = await registry.callMcpToolByPublicName(publicName, { arguments: { owner: "c" } }, subject);
     expect(third).toMatchObject({ ok: true });
     expect(listTools).toHaveBeenCalledTimes(2);

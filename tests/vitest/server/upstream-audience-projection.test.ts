@@ -5,11 +5,13 @@ import {
   evaluateAudienceDecision,
   evaluateAudienceParity,
   opaqueAudiencePartitionKey,
-  compileUpstreamOperationProjection
+  compileUpstreamOperationProjection,
+  createUpstreamGatewayRegistry
 } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
 import { apiKeyAuthorizationEvaluationInput } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
-import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 function serviceEntry({
   serviceId = "svc_audience_a",
@@ -175,6 +177,59 @@ describe("upstream audience projection", () : any => {
       service,
       purpose: "execution"
     })).toMatchObject({ allowed: false, reasonCode: "audience_service_not_granted" });
+  });
+
+  it("keeps exact discovered MCP capability grants identical for discovery and execution", async () : Promise<any> => {
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
+      mcpSessionManager: {
+        listTools: async () => ({ tools: [{ name: "read_selected" }, { name: "read_sibling" }] }),
+        retireScope: async () => ({ retired: 0 }),
+        close: async () => {}
+      }
+    });
+    try {
+      await installUpstreamRuntimeServices(registry, [{
+        serviceId: "svc_mcp_audience",
+        serviceProtocol: "mcp",
+        label: "MCP audience fixture",
+        allowLocalNetwork: true,
+        operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
+      }]);
+      const { items } = await registry.listMcpTools({ serviceId: "svc_mcp_audience" });
+      const selected: any = items.find((tool: Record<string, any>) => tool._meta?.upstreamToolName === "read_selected");
+      const sibling: any = items.find((tool: Record<string, any>) => tool._meta?.upstreamToolName === "read_sibling");
+      expect(selected && sibling).toBeTruthy();
+
+      const selectedGrant: any = grant({
+        id: "grant-selected-mcp-tool",
+        scopes: ["gateway:read"],
+        toolsets: ["meshrix.gateway.read"],
+        dynamicCapabilities: [selected._meta.dynamicCapability.capabilityId],
+        allowedServiceIds: ["svc_mcp_audience"],
+        allowedSecretBindings: selected._meta.dynamicCapability.credentialBindingIds,
+        maxRisk: "read_only"
+      });
+      for (const purpose of ["discovery", "execution"]) {
+        expect(registry.evaluateDiscoveredMcpToolAudience({
+          grant: selectedGrant,
+          tool: selected,
+          purpose
+        })).toMatchObject({ allowed: true, reasonCode: "audience_allowed", purpose, visibleMetadata: true });
+        expect(registry.evaluateDiscoveredMcpToolAudience({
+          grant: selectedGrant,
+          tool: sibling,
+          purpose
+        })).toMatchObject({
+          allowed: false,
+          reasonCode: "audience_capability_missing",
+          purpose,
+          visibleMetadata: false
+        });
+      }
+    } finally {
+      await registry.close();
+    }
   });
 
   it("applies deny-tag precedence and fails closed for missing metadata", () : any => {

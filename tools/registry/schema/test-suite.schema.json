@@ -19,7 +19,6 @@
             "type": "array",
             "items": { "type": "string" }
           },
-          "timeoutMs": { "type": "integer", "minimum": 1000 },
           "coverage": { "type": "boolean" },
           "dynamic": { "type": "boolean" },
           "trackedArtifacts": {
@@ -100,13 +99,16 @@
             "type": "string",
             "enum": ["none", "build-output", "temp-files", "network-service", "local-agent-state", "container"]
           },
-          "timeoutClass": {
-            "type": "string",
-            "enum": ["fast", "standard", "slow"]
-          },
           "requiredServices": {
             "type": "array",
             "items": { "type": "string" }
+          },
+          "platforms": {
+            "description": "Actual Node.js process.platform values supported by this suite's host adapters; omitted means no host OS prerequisite. A container's guest platform does not replace the executing host identity.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
           },
           "flakePolicy": {
             "type": "string",
@@ -125,6 +127,13 @@
           "artifactSemantics": {
             "type": "object",
             "additionalProperties": { "type": "string" }
+          },
+          "triggerPaths": {
+            "description": "Repository-relative path prefixes whose change means this suite must run again. Optional: an undeclared suite keeps the conservative whole-repository trigger, so declaring this only ever narrows what a change selects. Use [\".\"] for a suite that genuinely reads the whole repository.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
           }
         }
       }

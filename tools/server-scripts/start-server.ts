@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 
 import { ServerConfig } from "#meshrix/server-config";
-import { DEFAULT_SERVER_PORT } from "../../packages/foundation/src/config/server-env.ts";
+import { DEFAULT_SERVER_PORT } from "@meshrix/foundation/config/server-env";
 import {
   resolveDeploymentProfileId,
   ENABLED_PLUGINS_CONFIG_PATH,

@@ -226,9 +226,16 @@ export function createQueuePushDispatcher({
     };
   }
 
-  async function drain({ timeoutMs = 30_000 }: { timeoutMs?: number } = {}) {
+  async function drain({ timeoutMs }: { timeoutMs?: number } = {}) {
+    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0)) {
+      throw new RangeError("Queue drain timeout must be a non-negative safe integer.");
+    }
     const startedAt = Date.now();
     while (inFlight.size > 0) {
+      if (timeoutMs === undefined) {
+        await Promise.allSettled([...inFlight.values()].map((entry) => entry.promise));
+        continue;
+      }
       const remainingMs = Math.max(0, Number(timeoutMs) - (Date.now() - startedAt));
       if (remainingMs <= 0) {
         return {

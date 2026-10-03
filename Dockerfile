@@ -7,16 +7,27 @@ FROM ${NODE_BASE_IMAGE} AS deps
 ARG ROOTFS=/
 WORKDIR app
 
-COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE ./
+COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE THIRD_PARTY_NOTICES.md ./
 COPY apps/server/package.json ./apps/server/package.json
+COPY apps/mcp-gateway-installer/package.json ./apps/mcp-gateway-installer/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY packages/agents/package.json ./packages/agents/package.json
 COPY packages/capabilities/package.json ./packages/capabilities/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/foundation/package.json ./packages/foundation/package.json
+COPY packages/gateway/package.json ./packages/gateway/package.json
 COPY packages/protocols/package.json ./packages/protocols/package.json
 COPY packages/server-runtime/package.json ./packages/server-runtime/package.json
 COPY packages/ui-console/package.json ./packages/ui-console/package.json
+COPY plugins/agents/antigravity/package.json ./plugins/agents/antigravity/package.json
+COPY plugins/agents/claude-code/package.json ./plugins/agents/claude-code/package.json
+COPY plugins/agents/client-adapter-kit/package.json ./plugins/agents/client-adapter-kit/package.json
+COPY plugins/agents/codex/package.json ./plugins/agents/codex/package.json
+COPY plugins/agents/kimi/package.json ./plugins/agents/kimi/package.json
+COPY plugins/agents/meshrix-self-maintenance/package.json ./plugins/agents/meshrix-self-maintenance/package.json
+COPY plugins/agents/openclaw/package.json ./plugins/agents/openclaw/package.json
+COPY plugins/agents/opencode/package.json ./plugins/agents/opencode/package.json
+COPY plugins/agents/pi/package.json ./plugins/agents/pi/package.json
 COPY vendor ./vendor
 RUN rm -f "${ROOTFS}etc/apt/apt.conf.d/docker-clean"
 
@@ -44,30 +55,53 @@ RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm
     && cp -a "${ROOTFS}var/cache/meshrix/npm/_cacache" "${ROOTFS}opt/meshrix-npm-cache/_cacache" \
     && chmod -R a+rX "${ROOTFS}opt/meshrix-npm-cache"
 
+FROM npm-package-verifier AS npm-package-registry
+
+COPY dist/tools/server-scripts/lib/lock-backed-npm-registry.js ./dist/tools/server-scripts/lib/lock-backed-npm-registry.js
+COPY dist/tools/server-scripts/npm-registry-server.js ./dist/tools/server-scripts/npm-registry-server.js
+
+FROM ${NODE_BASE_IMAGE} AS npm-package-consumer
+
+ARG ROOTFS=/
+RUN --mount=type=cache,target=${ROOTFS}var/cache/apt,sharing=locked \
+    --mount=type=cache,target=${ROOTFS}var/lib/apt/lists,sharing=locked \
+    apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ chromium \
+    && rm -rf "${ROOTFS}var/lib/apt/lists"/*
+
+COPY dist/tools/server-scripts/npm-package-consumer.js /opt/meshrix/npm-package-consumer.js
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 FROM deps AS build
 
 COPY apps/server ./apps/server
+COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
+COPY plugins/agents ./plugins/agents
 COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build:node
+RUN npm run build:node && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
 FROM deps AS build-ui
 
+COPY skills ./skills
+
 COPY apps/server ./apps/server
+COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
+COPY plugins/agents ./plugins/agents
 COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build
+RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
 FROM ${NODE_BASE_IMAGE} AS runtime
@@ -92,12 +126,13 @@ RUN groupadd --system --gid 10001 meshrix \
 WORKDIR app
 
 COPY --chown=meshrix:meshrix --from=build app/package.json app/package-lock.json ./
-COPY --chown=meshrix:meshrix --from=build app/LICENSE ./LICENSE
+COPY --chown=meshrix:meshrix --from=build app/LICENSE app/THIRD_PARTY_NOTICES.md ./
 COPY --chown=meshrix:meshrix --from=build app/node_modules ./node_modules
 COPY --chown=meshrix:meshrix --from=build app/dist ./dist
 COPY --chown=meshrix:meshrix --from=build app/apps/server ./apps/server
 COPY --chown=meshrix:meshrix --from=build app/apps/console/package.json ./apps/console/package.json
 COPY --chown=meshrix:meshrix --from=build app/packages ./packages
+COPY --chown=meshrix:meshrix --from=build app/plugins/agents ./plugins/agents
 COPY --chown=meshrix:meshrix --from=build app/content ./content
 COPY --chown=meshrix:meshrix --from=build app/tools ./tools
 COPY --chown=meshrix:meshrix --from=build app/docs ./docs

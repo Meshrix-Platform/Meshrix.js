@@ -12,7 +12,7 @@ audience: usage
 - That named database is a vendor fact. It does not establish a Meshrix.js SQLite reader, table mapping, ACP conversation lane, or editor-history integration.
 
 Source: [vendor reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

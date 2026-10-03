@@ -33,7 +33,8 @@ function stageReport(profile: string): any {
       failed: 0,
       skipped: 0,
       dryRun: 0,
-      timedOut: 0,
+      cancelled: 0,
+      notRun: 0,
       coverageReady: true,
       releaseReady: true,
       reportLeakScan: true,
@@ -55,11 +56,11 @@ describe("stable audit checkpoint reducer", () => {
     expect(stages["audit-stable-console-evidence"]).toEqual([
       "governance.operation-permission-protocol-consistency",
       "governance.operation-permission-tag-governed-e2e",
-      "governance.authorization-coverage",
-      "governance.enterprise-audit-retention-redaction",
+      "authorization.governance-coverage",
+      "audit.retention-redaction",
       "observability.semantic-baseline",
-      "governance.enterprise-authorization-enforcement",
-      "governance.enterprise-observability-coverage",
+      "authorization.enforcement",
+      "observability.coverage",
       "upstream-gateway.e2e",
     ]);
     expect(new Set(staged).size).toBe(staged.length);
@@ -97,5 +98,18 @@ describe("stable audit checkpoint reducer", () => {
       registry,
       reports: STABLE_AUDIT_PROFILES.slice(1).map(stageReport),
     })).toThrowError(expect.objectContaining({ code: "stable_audit_stage_report_missing" }));
+  });
+
+  it.each([
+    ["cancelled", "cancelled"],
+    ["not_run", "notRun"],
+  ])("rejects a stage with %s work despite a stale ready flag", (status, summaryField) => {
+    const reports = STABLE_AUDIT_PROFILES.map(stageReport);
+    const report = reports[0];
+    report.summary[summaryField] = 1;
+    report.suites[0].status = status;
+
+    expect(() => reduceStableAuditReports({ registry, reports }))
+      .toThrowError(expect.objectContaining({ code: "stable_audit_stage_not_ready" }));
   });
 });

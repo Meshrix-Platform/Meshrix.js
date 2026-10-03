@@ -1,5 +1,5 @@
-import { normalizeEnabledPluginIds } from "../../../packages/foundation/src/module-system/plugin-registry.ts";
-import { normalizePluginArtifactTrustedPublicKeys } from "../../../packages/foundation/src/module-system/plugin-artifact-trust.ts";
+import { normalizeEnabledPluginIds } from "@meshrix/foundation/module-system/plugin-registry";
+import { normalizePluginArtifactTrustedPublicKeys } from "@meshrix/foundation/module-system/plugin-artifact-trust";
 
 function isPlainObject(value?: any) : any {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

@@ -1,6 +1,6 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { getDefaultServerUrl } from "../../../../packages/foundation/src/config/server-env.ts";
+import { getDefaultServerUrl } from "@meshrix/foundation/config/server-env";
 
 export const DEFAULT_SERVER_URL: any = process.env.MESHRIX_SERVER_URL || getDefaultServerUrl();
 

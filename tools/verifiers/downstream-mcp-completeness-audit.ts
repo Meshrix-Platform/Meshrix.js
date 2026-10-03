@@ -5,13 +5,15 @@ import { fileURLToPath } from "node:url";
 
 import { SERVER_API_OPERATIONS } from "../../packages/contracts/src/operations/operation-registry.ts";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.ts";
+import { createPlatformMcpGateway } from "../../packages/server-runtime/src/composition/gateway-composition.ts";
 import {
+  mcpOutletForTool as resolveMcpOutletForTool
+} from "../../packages/protocols/mcp/modern-downstream/tools.ts";
+import {
+  CATEGORIZED_TOOL_NAMES,
   MCP_DISCOVERY_TOOL_NAME,
-  MCP_GATEWAY_TOOL_NAME,
-  MCP_INTERFACE_VERSION,
-  handleMeshrixMcpHttpRequest
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
-import { mcpOutletForTool as resolveMcpOutletForTool } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts";
+  MCP_GATEWAY_TOOL_NAME
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -144,45 +146,7 @@ function mcpOutletForTool(tool: Record<string, any> = {}) : any {
   return resolveMcpOutletForTool(tool).toolName;
 }
 
-function createCapturedHttpResponse() : any {
-  return {
-    statusCode: 200,
-    headers: {},
-    chunks: [],
-    writeHead(statusCode?: any, headers: Record<string, any> = {}) : any {
-      this.statusCode = statusCode;
-      this.headers = { ...this.headers, ...headers };
-    },
-    end(chunk: any = "") : any {
-      if (chunk !== undefined && chunk !== null && chunk !== "") {
-        this.chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-      }
-      this.ended = true;
-    }
-  };
-}
-
-function capturedJson(response?: any) : any {
-  const text: any = Buffer.concat(response.chunks || []).toString("utf8").trim();
-  return text ? JSON.parse(text) : null;
-}
-
 async function callMcpCapabilitiesList({ catalog }: Record<string, any>) : Promise<any> {
-  const response: any = createCapturedHttpResponse();
-  const wire: any = mcpModernHttpRequest({
-    jsonrpc: "2.0",
-    id: "downstream-mcp-completeness-audit",
-    method: "tools/call",
-    params: {
-      name: MCP_DISCOVERY_TOOL_NAME,
-      arguments: {
-        apiVersion: MCP_INTERFACE_VERSION,
-        operation: "meshrix.capabilities.list",
-        input: {}
-      }
-    }
-  });
-  const requestBody: any = Buffer.from(wire.body, "utf8");
   const provider: Record<string, any> = {
     async authorizeMcpClientRequest() : Promise<any> {
       return {
@@ -213,30 +177,69 @@ async function callMcpCapabilitiesList({ catalog }: Record<string, any>) : Promi
       };
     }
   };
-  await handleMeshrixMcpHttpRequest({
-    request: {
-      method: "POST",
-      headers: {
-        ...wire.headers,
-        "user-agent": "downstream-mcp-completeness-audit"
-      },
-      socket: { remoteAddress: "127.0.0.1" }
-    },
-    response,
-    requestBody,
-    method: "POST",
-    url: new URL("http://127.0.0.1/mcp"),
-    toolSkillManagementProvider: provider
-  });
-  const payload: any = capturedJson(response);
-  if (response.statusCode !== 200 || payload?.error) {
-    throw new Error(`MCP capabilities call failed with status ${response.statusCode}`);
+  const platform = createPlatformMcpGateway({ toolSkillManagementProvider: provider });
+  await platform.gateway.start();
+  try {
+    const tools: any[] = [];
+    let cursor: string | undefined;
+    do {
+      const wire: any = mcpModernHttpRequest({
+        jsonrpc: "2.0",
+        id: `downstream-mcp-completeness-audit-${tools.length}`,
+        method: "tools/list",
+        params: { limit: 100, ...(cursor ? { cursor } : {}) }
+      });
+      const result: any = await platform.adapter.handle({
+        method: "POST",
+        headers: wire.headers,
+        body: wire.message,
+        rawRequest: {
+          method: "POST",
+          headers: { ...wire.headers, "user-agent": "downstream-mcp-completeness-audit" },
+          socket: { remoteAddress: "127.0.0.1" }
+        },
+        requestBody: Buffer.from(wire.body, "utf8"),
+        url: new URL("http://127.0.0.1/mcp")
+      } as any);
+      const payload: any = result.body;
+      if (result.status !== 200 || payload?.error) {
+        throw new Error(`MCP tools/list call failed with status ${result.status}`);
+      }
+      // A malformed surface must be reported as such: defaulting to an empty list here would
+      // let every catalog tool be reported as undiscoverable and hide the shape error behind
+      // 221 unrelated findings.
+      if (!Array.isArray(payload?.result?.tools)) {
+        throw new Error("MCP tools/list response did not include a result.tools array.");
+      }
+      tools.push(...payload.result.tools);
+      cursor = typeof payload?.result?.nextCursor === "string" && payload.result.nextCursor
+        ? payload.result.nextCursor
+        : undefined;
+    } while (cursor);
+    // The stable categorized outlets are the routers a caller names to reach an operation, not
+    // operations themselves: the adapter publishes them in `tools/list` as the surface's entry
+    // points, and `meshrix.capabilities.list` enumerates the concrete operations. The catalog
+    // bijection is checked over the operation set; the outlets are checked as the baseline the
+    // surface must carry.
+    const surfaceNames: any = new Set<any>(tools.map((tool?: any) : any => String(tool?.name || "")));
+    const operations = tools
+      .filter((tool?: any) : any => !CATEGORIZED_TOOL_NAMES.has(tool?.name))
+      .map((tool?: any) => ({
+        name: tool.name,
+        inputSchema: tool.inputSchema,
+        _meta: tool._meta || {}
+      }));
+    const outlets: Record<string, any> = {};
+    for (const operation of operations) {
+      const outlet = operation._meta?.mcpOutlet || MCP_DISCOVERY_TOOL_NAME;
+      const summary = outlets[outlet] || (outlets[outlet] = { operationCount: 0, operations: [] });
+      summary.operationCount += 1;
+      summary.operations.push(operation.name);
+    }
+    return { operations, outlets, surfaceNames };
+  } finally {
+    await platform.close();
   }
-  const structuredContent: any = payload?.result?.structuredContent;
-  if (!structuredContent || !Array.isArray(structuredContent.operations)) {
-    throw new Error("MCP capabilities response did not include structuredContent.operations.");
-  }
-  return structuredContent;
 }
 
 function summarizeOperationProjection({ publicOperation, tool, sourceOperation, toolsetsById }: Record<string, any>) : any {
@@ -482,6 +485,20 @@ function auditCompleteness({ catalog, capabilities }: Record<string, any>) : any
     }
   }
 
+  // Every operation is called through an outlet, so an outlet missing from the surface leaves
+  // its operations unreachable however complete the catalog behind it is.
+  const surfaceNames: any = capabilities.surfaceNames instanceof Set ? capabilities.surfaceNames : new Set<any>(capabilities.surfaceNames || []);
+  for (const outlet of CATEGORIZED_TOOL_NAMES) {
+    if (surfaceNames.has(outlet)) {
+      continue;
+    }
+    addFinding(findings, {
+      code: "mcp_outlet_absent",
+      message: `Stable MCP outlet ${outlet} is absent from the downstream MCP tool surface.`,
+      evidence: { outlet }
+    });
+  }
+
   for (const [outlet, summary] of (Object.entries(capabilities.outlets || {}) as [string, any][])) {
     if (outlet !== MCP_DISCOVERY_TOOL_NAME && Number(summary?.operationCount || 0) === 0) {
       addFinding(findings, {
@@ -542,7 +559,7 @@ async function main() : Promise<any> {
     source: {
       serverOperationRegistry: "packages/contracts/src/operations/operation-registry.ts",
       toolCatalog: "packages/capabilities/src/operation-permission-core/catalog.ts",
-      mcpAdapter: "packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+      mcpAdapter: "packages/protocols/mcp/modern-downstream/index.ts",
       installerDocs: "packages/protocols/mcp/adapter/native-installer/README.md"
     },
     summary: {

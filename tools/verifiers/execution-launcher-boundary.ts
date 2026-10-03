@@ -26,6 +26,33 @@ const INTERNAL_EXECUTION_IMPORT: any = /(?:^|\/)execution-sandbox\/(?:broker|oci
 
 const LAUNCHER_CATALOG: any = new Map<any, any>([
   [
+    "apps/mcp-gateway-installer/src/upstream-transport.ts",
+    Object.freeze({
+      approved: true,
+      classification: "standalone_gateway_stdio_session_launcher",
+      authority: "core.gateway.upstream",
+      reason: "owns the configured no-shell stdio peer and drains or terminates its child during standalone gateway shutdown"
+    })
+  ],
+  [
+    "packages/gateway/src/schema/index.ts",
+    Object.freeze({
+      approved: true,
+      classification: "isolated_schema_worker_owner",
+      authority: "core.gateway.schema",
+      reason: "owns resource-limited schema workers, cancellation and worker teardown for untrusted schema compilation"
+    })
+  ],
+  [
+    "packages/gateway/src/schema/isolated-worker.ts",
+    Object.freeze({
+      approved: true,
+      classification: "bounded_internal_worker_endpoint",
+      authority: "core.gateway.schema",
+      reason: "receives the closed schema compilation protocol from its owning gateway worker pool"
+    })
+  ],
+  [
     "packages/foundation/src/module-system/isolated-plugin-process-host.ts",
     Object.freeze({
       approved: true,

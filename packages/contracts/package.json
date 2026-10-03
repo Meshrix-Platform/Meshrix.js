@@ -2,143 +2,148 @@
   "name": "@meshrix/contracts",
   "version": "0.0.1",
   "description": "Meshrix.js operation/api/event/receipt/schema/protocol contracts",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.18.0 <23 || >=24.3.0"
   },
   "type": "module",
   "exports": {
     "./mcp-catalog-delivery": {
-      "types": "./dist/mcp-catalog-delivery.d.ts",
       "source": "./src/mcp-catalog-delivery.ts",
+      "types": "./dist/mcp-catalog-delivery.d.ts",
       "default": "./dist/mcp-catalog-delivery.js"
     },
     "./service-collaboration-contract": {
-      "types": "./dist/service-collaboration-contract.d.ts",
       "source": "./src/service-collaboration-contract.ts",
+      "types": "./dist/service-collaboration-contract.d.ts",
       "default": "./dist/service-collaboration-contract.js"
     },
     "./model-gateway/client-port": {
-      "types": "./dist/model-gateway/model-gateway-client-port.d.ts",
       "source": "./src/model-gateway/model-gateway-client-port.ts",
+      "types": "./dist/model-gateway/model-gateway-client-port.d.ts",
       "default": "./dist/model-gateway/model-gateway-client-port.js"
     },
     "./model-gateway/adapter-config": {
-      "types": "./dist/model-gateway/model-gateway-adapter-config.d.ts",
       "source": "./src/model-gateway/model-gateway-adapter-config.ts",
+      "types": "./dist/model-gateway/model-gateway-adapter-config.d.ts",
       "default": "./dist/model-gateway/model-gateway-adapter-config.js"
     },
     "./model-gateway": {
-      "types": "./dist/model-gateway/index.d.ts",
       "source": "./src/model-gateway/index.ts",
+      "types": "./dist/model-gateway/index.d.ts",
       "default": "./dist/model-gateway/index.js"
     },
     "./agent-mcp-traffic": {
-      "types": "./dist/agent-mcp-traffic/index.d.ts",
       "source": "./src/agent-mcp-traffic/index.ts",
+      "types": "./dist/agent-mcp-traffic/index.d.ts",
       "default": "./dist/agent-mcp-traffic/index.js"
     },
     "./agent-mcp-traffic/pipeline-contract": {
-      "types": "./dist/agent-mcp-traffic/pipeline-contract.d.ts",
       "source": "./src/agent-mcp-traffic/pipeline-contract.ts",
+      "types": "./dist/agent-mcp-traffic/pipeline-contract.d.ts",
       "default": "./dist/agent-mcp-traffic/pipeline-contract.js"
     },
     "./agent-mcp-traffic/traffic-model": {
-      "types": "./dist/agent-mcp-traffic/traffic-model.d.ts",
       "source": "./src/agent-mcp-traffic/traffic-model.ts",
+      "types": "./dist/agent-mcp-traffic/traffic-model.d.ts",
       "default": "./dist/agent-mcp-traffic/traffic-model.js"
     },
     "./gateway-transit": {
-      "types": "./dist/gateway-transit/index.d.ts",
       "source": "./src/gateway-transit/index.ts",
+      "types": "./dist/gateway-transit/index.d.ts",
       "default": "./dist/gateway-transit/index.js"
     },
     "./gateway-transit/direct-transit-contract": {
-      "types": "./dist/gateway-transit/direct-transit-contract.d.ts",
       "source": "./src/gateway-transit/direct-transit-contract.ts",
+      "types": "./dist/gateway-transit/direct-transit-contract.d.ts",
       "default": "./dist/gateway-transit/direct-transit-contract.js"
     },
+    "./gateway": {
+      "source": "./src/gateway/index.ts",
+      "types": "./dist/gateway/index.d.ts",
+      "default": "./dist/gateway/index.js"
+    },
     "./modules/manifest": {
-      "types": "./dist/modules/manifest.d.ts",
       "source": "./src/modules/manifest.ts",
+      "types": "./dist/modules/manifest.d.ts",
       "default": "./dist/modules/manifest.js"
     },
     "./modules/model-usage": {
-      "types": "./dist/modules/model-usage.d.ts",
       "source": "./src/modules/model-usage.ts",
+      "types": "./dist/modules/model-usage.d.ts",
       "default": "./dist/modules/model-usage.js"
     },
     "./operations/operation-decorators": {
-      "types": "./dist/operations/operation-decorators.d.ts",
       "source": "./src/operations/operation-decorators.ts",
+      "types": "./dist/operations/operation-decorators.d.ts",
       "default": "./dist/operations/operation-decorators.js"
     },
     "./operations/operation-feature-resolution": {
-      "types": "./dist/operations/operation-feature-resolution.d.ts",
       "source": "./src/operations/operation-feature-resolution.ts",
+      "types": "./dist/operations/operation-feature-resolution.d.ts",
       "default": "./dist/operations/operation-feature-resolution.js"
     },
     "./operations/operation-registry": {
-      "types": "./dist/operations/operation-registry.d.ts",
       "source": "./src/operations/operation-registry.ts",
+      "types": "./dist/operations/operation-registry.d.ts",
       "default": "./dist/operations/operation-registry.js"
     },
     "./operations/protocol-operation-definitions": {
-      "types": "./dist/operations/protocol-operation-definitions.d.ts",
       "source": "./src/operations/protocol-operation-definitions.ts",
+      "types": "./dist/operations/protocol-operation-definitions.d.ts",
       "default": "./dist/operations/protocol-operation-definitions.js"
     },
     "./operations/static-semantic-family-catalog": {
-      "types": "./dist/operations/static-semantic-family-catalog.d.ts",
       "source": "./src/operations/static-semantic-family-catalog.ts",
+      "types": "./dist/operations/static-semantic-family-catalog.d.ts",
       "default": "./dist/operations/static-semantic-family-catalog.js"
     },
     "./plugins/gateway-channel-contract": {
-      "types": "./dist/plugins/gateway-channel-contract.d.ts",
       "source": "./src/plugins/gateway-channel-contract.ts",
+      "types": "./dist/plugins/gateway-channel-contract.d.ts",
       "default": "./dist/plugins/gateway-channel-contract.js"
     },
     "./plugins/plugin-confinement-contract": {
-      "types": "./dist/plugins/plugin-confinement-contract.d.ts",
       "source": "./src/plugins/plugin-confinement-contract.ts",
+      "types": "./dist/plugins/plugin-confinement-contract.d.ts",
       "default": "./dist/plugins/plugin-confinement-contract.js"
     },
     "./plugins/plugin-bundle-manifest": {
-      "types": "./dist/plugins/plugin-bundle-manifest.d.ts",
       "source": "./src/plugins/plugin-bundle-manifest.ts",
+      "types": "./dist/plugins/plugin-bundle-manifest.d.ts",
       "default": "./dist/plugins/plugin-bundle-manifest.js"
     },
     "./plugins/plugin-package-receipt": {
-      "types": "./dist/plugins/plugin-package-receipt.d.ts",
       "source": "./src/plugins/plugin-package-receipt.ts",
+      "types": "./dist/plugins/plugin-package-receipt.d.ts",
       "default": "./dist/plugins/plugin-package-receipt.js"
     },
     "./plugins/plugin-package-source": {
-      "types": "./dist/plugins/plugin-package-source.d.ts",
       "source": "./src/plugins/plugin-package-source.ts",
+      "types": "./dist/plugins/plugin-package-source.d.ts",
       "default": "./dist/plugins/plugin-package-source.js"
     },
     "./plugins/plugin-package-state": {
-      "types": "./dist/plugins/plugin-package-state.d.ts",
       "source": "./src/plugins/plugin-package-state.ts",
+      "types": "./dist/plugins/plugin-package-state.d.ts",
       "default": "./dist/plugins/plugin-package-state.js"
     },
     "./plugins/verified-plugin-package": {
-      "types": "./dist/plugins/verified-plugin-package.d.ts",
       "source": "./src/plugins/verified-plugin-package.ts",
+      "types": "./dist/plugins/verified-plugin-package.d.ts",
       "default": "./dist/plugins/verified-plugin-package.js"
     },
     "./serialization/canonical-json": {
-      "types": "./dist/serialization/canonical-json.d.ts",
       "source": "./src/serialization/canonical-json.ts",
+      "types": "./dist/serialization/canonical-json.d.ts",
       "default": "./dist/serialization/canonical-json.js"
     },
     "./upstream-service-publishing": {
-      "types": "./dist/upstream-service-publishing.d.ts",
       "source": "./src/upstream-service-publishing.ts",
+      "types": "./dist/upstream-service-publishing.d.ts",
       "default": "./dist/upstream-service-publishing.js"
     }
   },
@@ -147,5 +152,15 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/contracts"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true
 }

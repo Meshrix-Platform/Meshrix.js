@@ -24,7 +24,6 @@ jobs:
     name: Pull request verification
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -33,30 +32,28 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      - name: Ordered regression verification with localized failures
-        shell: bash
-        run: |
-          run_check() {
-            local command_label="$1"
-            local log_file="$2"
-            shift 2
-            if ! "$@" > "$log_file" 2>&1; then
-              node tools/server-scripts/localize-verify-failure.ts "$log_file" --command "$command_label" || true
-              tail -n 60 "$log_file"
-              return 1
-            fi
-          }
-          run_check "npm test" /tmp/pr-regression.log npm test
+      - name: Run the maintained engineering entry
+        run: npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json
+      - name: Retain sanitized logs and structured results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pull-request-engineering-${{ github.sha }}
+          path: |
+            build/ci-diagnostics/local-ci/results.json
+            build/local-ci/
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
 
-  stable-candidate:
-    name: Stable candidate checkpoint
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
+  engineering:
+    name: Engineering verification
+    if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && github.ref_name == 'stable') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -65,395 +62,54 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Run the maintained engineering entry
+        run: npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json
+      - name: Retain sanitized logs and structured results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: engineering-${{ github.sha }}
+          path: |
+            build/ci-diagnostics/local-ci/results.json
+            build/local-ci/
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
+
+  stable-functional-completeness:
+    name: Stable functional completeness release gate
+    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
           cache: "npm"
       - name: Install dependencies
         run: npm ci
       - name: Materialize the immutable source-candidate authority
+        run: node tools/server-scripts/verify-release-candidate-identity.ts --output build/release/control/SOURCE_CANDIDATE.json
+      - name: Run the canonical release acceptance controller
+        run: npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json
+      - name: Assemble the validated stable authority bundle
         run: >-
-          node tools/server-scripts/verify-release-candidate-identity.ts
-          --output build/release/control/SOURCE_CANDIDATE.json
-      - name: Export the candidate checkpoint
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-source-candidate-${{ github.sha }}
-          path: build/release/control/SOURCE_CANDIDATE.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  repository-checkpoint:
-    name: Ordered repository regression checkpoint
-    needs: [stable-candidate]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Run the canonical four-stage regression
-        run: npm test
-      - name: Export compiled console assets
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-console-build-${{ github.sha }}
-          path: build/dist/
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  audit-checkpoint:
-    name: Audit checkpoint / ${{ matrix.stage }}
-    needs: [repository-checkpoint]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - stage: repository
-            profile: audit-stable-repository
-          - stage: governance
-            profile: audit-stable-governance
-          - stage: runtime
-            profile: audit-stable-runtime
-          - stage: downstream
-            profile: audit-stable-downstream
-          - stage: data
-            profile: audit-stable-data
-          - stage: services
-            profile: audit-stable-services
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Run complete checkpoint and retain all failures
-        run: >-
-          npm run test:audit:stage --
-          --profile ${{ matrix.profile }}
-          --report build/test-reports/stable-audit-stages/${{ matrix.profile }}.json
-      - name: Export the audit checkpoint report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-audit-stage-${{ matrix.stage }}-${{ github.sha }}
-          path: build/test-reports/stable-audit-stages/${{ matrix.profile }}.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  audit-resource-checkpoint:
-    name: Audit checkpoint / resource
-    needs: [repository-checkpoint]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.16.0"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Run isolated resource checkpoint
-        run: >-
-          npm run test:audit:stage --
-          --profile audit-stable-resource
-          --report build/test-reports/stable-audit-stages/audit-stable-resource.json
-      - name: Export the resource checkpoint report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-audit-stage-resource-${{ github.sha }}
-          path: build/test-reports/stable-audit-stages/audit-stable-resource.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  audit-sandbox-checkpoint:
-    name: Audit checkpoint / sandbox
-    needs: [repository-checkpoint]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.16.0"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Run isolated controlled sandbox checkpoint
-        run: >-
-          npm run test:audit:stage --
-          --profile audit-stable-sandbox
-          --report build/test-reports/stable-audit-stages/audit-stable-sandbox.json
-      - name: Export the sandbox checkpoint report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-audit-stage-sandbox-${{ github.sha }}
-          path: build/test-reports/stable-audit-stages/audit-stable-sandbox.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  audit-console-evidence-checkpoint:
-    name: Audit checkpoint / console evidence
-    needs: [repository-checkpoint]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Produce complete real gateway evidence and retain all failures
-        run: >-
-          npm run test:audit:stage --
-          --profile audit-stable-console-evidence
-          --report build/test-reports/stable-audit-stages/audit-stable-console-evidence.json
-      - name: Export the console evidence checkpoint report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-audit-stage-console-evidence-${{ github.sha }}
-          path: build/test-reports/stable-audit-stages/audit-stable-console-evidence.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-      - name: Export real gateway evidence for the console checkpoint
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-console-evidence-${{ github.sha }}
-          path: |
-            build/reports/operation-permission-protocol-consistency.json
-            build/reports/operation-permission-tag-governed-e2e.json
-            build/reports/upstream-gateway-e2e.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  audit-console-checkpoint:
-    name: Audit checkpoint / console
-    needs: [repository-checkpoint, audit-console-evidence-checkpoint]
-    if: ${{ always() && github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Restore compiled console assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: stable-console-build-${{ github.sha }}
-          path: build/dist
-      - name: Restore gateway workflow evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: stable-console-evidence-${{ github.sha }}
-          path: build/reports
-      - name: Install Chromium for browser checkpoint
-        run: npx playwright install --with-deps chromium
-      - name: Run complete console checkpoint and retain all failures
-        run: >-
-          npm run test:audit:stage --
-          --profile audit-stable-console
-          --report build/test-reports/stable-audit-stages/audit-stable-console.json
-      - name: Export the console checkpoint report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-audit-stage-console-${{ github.sha }}
-          path: build/test-reports/stable-audit-stages/audit-stable-console.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  audit-reduction:
-    name: Audit checkpoint reduction
-    needs: [audit-checkpoint, audit-resource-checkpoint, audit-sandbox-checkpoint, audit-console-evidence-checkpoint, audit-console-checkpoint]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install reducer dependencies
-        run: npm ci --ignore-scripts
-      - name: Restore successful audit checkpoints
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: stable-audit-stage-*-${{ github.sha }}
-          path: build/test-reports/stable-audit-stages
-          merge-multiple: true
-      - name: Verify exact, non-overlapping audit closure
-        run: npm run test:audit:reduce
-      - name: Export the complete audit receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-audit-${{ github.sha }}
-          path: build/test-reports/audit-public.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  enterprise-delivery:
-    name: Enterprise delivery checkpoint
-    needs: [stable-candidate, audit-reduction]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Restore the candidate checkpoint
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: stable-source-candidate-${{ github.sha }}
-          path: build/release/control
-      - name: Produce enterprise single-node delivery receipt in Ubuntu
-        run: >-
-          npm run verify:enterprise-single-node:ubuntu-container --
-          --source-candidate build/release/control/SOURCE_CANDIDATE.json
-
-  functional-acceptance:
-    name: Functional acceptance checkpoint
-    needs: [audit-reduction, enterprise-delivery, supply-chain]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 395
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Install Chromium for functional acceptance
-        run: npx playwright install --with-deps chromium
-      - name: Run functional-complete authority
-        env:
-          MESHRIX_RELEASE_PARALLELISM: "4"
-        run: >-
-          node tools/server-scripts/verify-platform-acceptance.ts
-          --profile "$(node tools/server-scripts/verify-release-definition.ts --field acceptance.profile)"
-      - name: Export the functional acceptance checkpoint
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-functional-acceptance-${{ github.sha }}
-          path: build/reports/accepted-candidate.json
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
-  functional-completeness:
-    name: Stable functional completeness release gate
-    needs: [stable-candidate, repository-checkpoint, audit-reduction, enterprise-delivery, functional-acceptance, supply-chain]
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install reducer dependencies
-        run: npm ci --ignore-scripts
-      - name: Restore the candidate checkpoint
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: stable-source-candidate-${{ github.sha }}
-          path: build/release/control/stable-authority
-      - name: Restore the functional acceptance checkpoint
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: stable-functional-acceptance-${{ github.sha }}
-          path: build/release/control/stable-authority
-      - name: Assemble the closed stable authority bundle
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle="build/release/control/stable-authority"
-          node tools/server-scripts/resolve-branch-promotion-authority.ts create-stable-manifest \
-            --candidate "$bundle/SOURCE_CANDIDATE.json" \
-            --functional "$bundle/accepted-candidate.json" \
-            --run-id "$GITHUB_RUN_ID" \
-            --run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --output "$bundle/stable-authority-manifest.json"
+          node tools/server-scripts/resolve-branch-promotion-authority.ts
+          create-stable-bundle
+          --candidate build/release/control/SOURCE_CANDIDATE.json
+          --functional build/reports/accepted-candidate.json
+          --npm-report build/reports/npm-package-installability.json
+          --run-id ${{ github.run_id }}
+          --run-attempt ${{ github.run_attempt }}
+          --bundle build/release/control/stable-authority
       - name: Export the stable candidate authority bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -462,94 +118,25 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           overwrite: true
-
-  node-22-compatibility:
-    name: Supported Node 22 compatibility
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'nightly') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "22"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Vitest suite
-        run: npm run vitest
-
-  npm-package-portability:
-    name: Fresh-container npm package simulation
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'nightly') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install verifier workspace dependencies
-        run: npm ci --ignore-scripts
-      - name: Run the fresh-container package authority
-        run: npm run verify:npm-package-installability
-
-  supply-chain:
-    name: Supply-chain evidence
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: "npm"
-      - name: Install dependency graph without lifecycle scripts
-        run: npm ci --ignore-scripts
-      - name: Verify the fresh-container npm release set
-        run: npm run verify:npm-package-installability
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
-      - name: Verify pinned Node runtime checksum signature
-        run: node tools/server-scripts/verify-node-runtime-supply-chain.ts
-      - name: Generate reproducible SBOM and third-party notices
-        run: node tools/generators/generate-supply-chain-artifacts.ts
-      - name: Verify supply-chain artifacts and negative cases
-        run: node tools/verifiers/verify-supply-chain-artifacts.ts --self-test
-      - name: Upload verified supply-chain evidence
+      - name: Retain sanitized logs and structured results
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: supply-chain-node-24
+          name: stable-engineering-${{ github.sha }}
           path: |
-            build/reports/supply-chain/
-            build/reports/node-runtime-supply-chain.json
-            build/reports/npm-package-installability.json
-          if-no-files-found: error
+            build/ci-diagnostics/release-local-ci/results.json
+            build/local-ci/
+          if-no-files-found: warn
           retention-days: 30
+          overwrite: true
 
   dependency-review:
     name: Dependency review
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Review dependency changes
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0

@@ -14,6 +14,7 @@ const factories: any = vi.hoisted(() : any => ({
   createStrategyManagementProvider: vi.fn(),
   createToolSkillManagementProvider: vi.fn(),
   createUpstreamGatewayRegistry: vi.fn(),
+  createUpstreamConfigFileLoader: vi.fn(),
   createUpstreamManifestObserver: vi.fn(),
   createUpstreamManifestSnapshotCommitter: vi.fn(),
   createUpstreamPublishingApplication: vi.fn(),
@@ -21,6 +22,9 @@ const factories: any = vi.hoisted(() : any => ({
   createWorkspaceGovernanceRegistry: vi.fn()
 }));
 
+vi.mock("../../../packages/server-runtime/src/composition/upstream-config-file.ts", () => ({
+  createUpstreamConfigFileLoader: factories.createUpstreamConfigFileLoader
+}));
 vi.mock("#meshrix/settings", () : any => ({ loadSettings: vi.fn() }));
 vi.mock("#meshrix/agents/upstream-gateway/index", () : any => ({
   createUpstreamGatewayRegistry: factories.createUpstreamGatewayRegistry,
@@ -129,7 +133,8 @@ beforeEach(() : any => {
   factories.createUpstreamGatewayRegistry.mockReturnValue({});
   factories.createUpstreamManifestObserver.mockReturnValue({ start: vi.fn(async () : Promise<any> => {}), close: vi.fn() });
   factories.createUpstreamManifestSnapshotCommitter.mockReturnValue({});
-  factories.createUpstreamPublishingApplication.mockReturnValue({ execute: vi.fn() });
+  factories.createUpstreamPublishingApplication.mockReturnValue({ execute: vi.fn(), prepareConfigFileService: vi.fn() });
+  factories.createUpstreamConfigFileLoader.mockReturnValue({ start: vi.fn(async () => {}), close: vi.fn(async () => {}) });
   factories.createWorkspaceAssetRegistry.mockReturnValue({});
   factories.createWorkspaceGovernanceRegistry.mockReturnValue({});
 });
@@ -156,6 +161,8 @@ describe("server runtime provider construction unwind", () : any => {
     const closeOrder: any[] = [];
     const constructionFailure: any = new Error("security alert construction failed");
     const upstream: any = closeable("upstream", closeOrder);
+    const configLoader = { ...closeable("config-loader", closeOrder), start: vi.fn(async () => {}) };
+    factories.createUpstreamConfigFileLoader.mockReturnValue(configLoader);
     const workspaceAsset: any = closeable("workspace-asset", closeOrder, {
       closeFailure: new Error("workspace asset close failed")
     });
@@ -175,7 +182,8 @@ describe("server runtime provider construction unwind", () : any => {
     }).catch((error?: any) : any => error);
 
     expect(failure).toBe(constructionFailure);
-    expect(closeOrder).toEqual(["workspace-asset", "upstream"]);
+    expect(closeOrder).toEqual(["workspace-asset", "config-loader", "upstream"]);
+    expect(configLoader.close).toHaveBeenCalledOnce();
     expect(workspaceAsset.close).toHaveBeenCalledOnce();
     expect(upstream.close).toHaveBeenCalledOnce();
   });
@@ -183,6 +191,8 @@ describe("server runtime provider construction unwind", () : any => {
   it("shares one successful console-provider close barrier and closes owned resources once", async () : Promise<any> => {
     const closeOrder: any[] = [];
     const upstream: any = closeable("upstream", closeOrder);
+    const configLoader = { ...closeable("config-loader", closeOrder), start: vi.fn(async () => {}) };
+    factories.createUpstreamConfigFileLoader.mockReturnValue(configLoader);
     const workspaceAsset: any = closeable("workspace-asset", closeOrder);
     const securityAlert: any = closeable("security-alert", closeOrder);
     factories.createUpstreamGatewayRegistry.mockReturnValue(upstream);
@@ -203,7 +213,8 @@ describe("server runtime provider construction unwind", () : any => {
     expect(secondClose).toBe(firstClose);
     await firstClose;
     await providers.close();
-    expect(closeOrder).toEqual(["security-alert", "workspace-asset", "upstream"]);
+    expect(closeOrder).toEqual(["security-alert", "workspace-asset", "config-loader", "upstream"]);
+    expect(configLoader.close).toHaveBeenCalledOnce();
     expect(securityAlert.close).toHaveBeenCalledOnce();
     expect(workspaceAsset.close).toHaveBeenCalledOnce();
     expect(upstream.close).toHaveBeenCalledOnce();

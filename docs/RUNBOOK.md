@@ -5,15 +5,13 @@
 > [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-This runbook covers local startup, container startup, verification, and operational checks for the internal platform repository.
+This runbook covers local startup, container startup, verification, and
+operational checks for the Meshrix.js source repository.
 
-Select commands for the accepted task outcome and its evidence claim.
-References to remaining work belong to the named capability or environment;
-they do not add every platform gap to the current task. Reuse explicit
-authorization for the same target, operation, and side-effect scope, and obtain
-a new decision for new targets or materially different effects. A command flag
-does not grant authority by itself. Prepare concrete actions and continue
-independent authorized work while any required decision is pending.
+Select commands for the requested outcome and the evidence they produce.
+Treat each result as evidence for its stated scope only. Follow
+[CONTRIBUTING.md](../CONTRIBUTING.md) for the common engineering workflow and
+[AGENTS.md](../AGENTS.md) for execution and publication authority.
 
 ## Required Runtime
 
@@ -23,14 +21,12 @@ independent authorized work while any required decision is pending.
 
 The default runtime is self-contained. Optional middleware integrations are enabled explicitly for deployment-specific extensions.
 
-## Private-Deployment Dependency Admission
+## Dependency Admission
 
-Meshrix.js is delivered to enterprises for private deployment. Dependency
-admission therefore protects an operator's continuing right to install,
-redistribute, operate, maintain, back up, restore, modify, and upgrade the
-delivered system without an unexpected third-party commercial condition.
-Source availability, popularity, or current zero-cost use is not sufficient
-evidence of acceptability.
+Dependency admission protects the project's ability to build, test, distribute,
+and maintain a reproducible open-source system under clear licensing,
+provenance, security, and support conditions. Source availability, popularity,
+or current zero-cost use is not sufficient evidence of acceptability.
 
 This gate applies to:
 
@@ -39,7 +35,7 @@ This gate applies to:
 - Operators, charts, deployment templates, installers, and release assets;
 - default, optional, example, development, test, and observability components
   that enter a source or release candidate; and
-- a new version, edition, module, plugin, or distribution of an already
+- a new version, package, module, plugin, or distribution of an already
   admitted project.
 
 A generic protocol adapter is not an adoption of every compatible product only
@@ -49,7 +45,7 @@ licensing claim for the operator-supplied service.
 ### Authority and maturity baseline
 
 License compliance is necessary but does not establish technical authority.
-Default enterprise profiles must use established projects with durable public
+Default configurations must use established projects with durable public
 governance, current security maintenance, broad production evidence, and an
 operational ecosystem appropriate to the workload. Repository popularity,
 vendor marketing, a single large deployment, protocol compatibility, or an
@@ -69,7 +65,7 @@ A baseline dependency must satisfy every applicable condition:
 4. its standard protocol and data format permit replacement without moving
    Meshrix.js governance or business authority into the dependency; and
 5. the exact artifact passes Meshrix.js conformance, failure injection,
-   migration, resource-bound, and private-deployment tests.
+   migration, resource-bound, and operational-path verification.
 
 In addition, a default dependency needs at least one authority anchor:
 
@@ -113,13 +109,11 @@ An allowlisted license is necessary but not sufficient. Reject a candidate
 when any of the following is true:
 
 - source-available, proprietary, custom, trial, or delayed-conversion terms
-  restrict production use, field of use, revenue, organization size, cluster
-  size, user count, geography, resale, hosting, managed service, competition,
-  or redistribution;
+  restrict modification, integration, production use, or redistribution;
 - production operation, security maintenance, or a required capability needs
   a license key, account registration, mandatory telemetry, paid entitlement,
-  recurring renewal, or commercial edition;
-- dual, mixed, or edition-specific licensing leaves the rights of the exact
+  or recurring renewal;
+- dual, mixed, or variant-specific licensing leaves the rights of the exact
   source, binary, container, chart, Operator, plugin, or management component
   unclear;
 - a material licensing, copyright, trademark, project-control, or governance
@@ -130,13 +124,13 @@ when any of the following is true:
   to a separately licensed product;
 - the release artifact, its source, its license and notice files, and its SBOM
   cannot be bound to the same immutable version and digest; or
-- approval would require an enterprise customer to obtain a separate license,
-  accept new third-party terms, disclose unrelated source, or assume an
+- approval would require downstream users to obtain an undisclosed separate
+  license, accept unreviewed terms, disclose unrelated source, or assume an
   unresolved interpretation.
 
 Unknown, conflicting, or incomplete evidence is a rejection. Maintainers must
-not use a disclaimer, an optional-install label, a customer-supplied image, or
-an instruction to contact the vendor as a substitute for admission.
+not use a disclaimer, an optional-install label, or an instruction to contact
+the vendor as a substitute for admission.
 Existing presence is not approval or grandfathering: an artifact that has not
 passed this gate must be removed, replaced, or admitted before it can enter the
 next release candidate.
@@ -146,23 +140,23 @@ next release candidate.
 Before a dependency enters a change or release candidate, record and review:
 
 1. the exact upstream owner, repository, version, source revision, artifact,
-   image digest, and selected edition;
+   image digest, and selected variant;
 2. the authoritative license text, SPDX expression, notices, bundled
    third-party inventory, and release-candidate SBOM;
 3. production, redistribution, hosting, trademark, support, security-update,
    registration, telemetry, and renewal terms;
 4. current maintenance and governance status, including public relicensing or
    ownership disputes; and
-5. an offline private-deployment path that does not require vendor approval or
-   a vendor control plane.
+5. an installation and maintenance path that does not require a vendor account
+   or vendor-controlled service.
 
 Review a fixed artifact, never a floating tag. Every upgrade or distribution
 change is a new admission decision. A scanner may collect evidence but cannot
-resolve ambiguous legal or commercial terms; ambiguity remains denied until a
+resolve ambiguous legal terms; ambiguity remains denied until a
 competent review records a safe conclusion.
 
 If an admitted upstream later changes its terms or develops a material
-commercial or governance risk:
+license or governance risk:
 
 1. stop upgrades and prevent the affected artifact from entering a new release
    candidate;
@@ -172,8 +166,59 @@ commercial or governance risk:
    port or protocol boundary;
 4. migrate once, remove the affected implementation and product-specific
    defaults, and verify that no release surface still installs it; and
-5. do not require existing private-deployment users to purchase a license or
-   accept the upstream's new terms as the migration path.
+5. do not carry the affected implementation into another release until its
+   license terms and a tested replacement path are established.
+
+### Routine version maintenance and automated merge admission
+
+Semver patch/minor Dependabot updates on `nightly` are eligible for the
+existing automation, but a clean scan and a semver label are not admission.
+The auto-merge job requires a current non-dismissed approving review from an
+maintainer with current repository write authority on the exact proposed head,
+plus the latest named GitHub Actions pull-request verification and dependency-review
+checks completed successfully for that same head. Organization membership alone
+does not establish authority. Review and CI may arrive in either order;
+eligibility is re-evaluated on both the review event and completed CI. Comments
+preserve the reviewer's operative decision; dismissal revokes that approval, and
+an unresolved authorized change request prevents automatic merge. Paginated
+review and check history is evaluated in full. The merge request binds the verified
+head with an expected-head match and never bypasses branch protections or uses
+an administrative override, and no separate approval ledger is maintained.
+
+Evidence ownership follows the common workflow in
+[CONTRIBUTING.md](../CONTRIBUTING.md): the dependency maintainer reviews the
+exact license, governance and advisory changes; the module owner covers
+reachable behavior; the normal reviewer integrates; the schema owner handles
+published-support and data-preserving migration and recovery; and the release
+owner maintains support, security and candidate validity. Operational and
+recovery procedures remain in their owning sections above rather than being
+copied here.
+
+## npm Installation
+
+The two npm products are `meshrix.js` (the complete platform and bundled MCP
+connector) and `@meshrix/gateway` (the standalone Gateway API). After publication:
+
+```bash
+npm install --global meshrix.js
+meshrix-server --with-ui --data-dir <server-data-dir>
+```
+
+[npm 12 requires an explicit install-script policy](https://docs.npmjs.com/cli/install/#allow-scripts). For its global installation,
+allow only the native SQLite dependency:
+
+```bash
+npm install --global --allow-scripts=better-sqlite3 meshrix.js
+```
+
+For a project-scoped npm 12 installation, put
+`"allowScripts": { "better-sqlite3": true }` in the consumer's `package.json`
+before installing `meshrix.js`. The Gateway package does not need native install
+scripts. Do not enable all dependency scripts as an installation workaround.
+The source checkout declares its required native runtime, profiler build and
+optional filesystem watcher scripts in the root `allowScripts` policy. Keep
+that policy aligned with dependency admission when changing those dependencies.
+The release workflow uses the separate exact npm CLI pin in the release definition.
 
 ## Local Startup
 
@@ -191,7 +236,7 @@ One-click start, stop, and restart:
 These commands reuse a healthy instance of the same mode, refuse an occupied default port or a different stack on the `meshrix-server` container name, and do not wipe volumes on stop. Restart of the same mode stops then starts that stack; a different running mode fails closed. A published, offline, or `--with-ui` instance has one public origin: the Web Console at `/` and the Server API at `/api/`. External services and agents connect to that same origin; source development may add a Vite console port, and that port is not the published integration address. The developer handbook owns that address contract; the user handbook owns how operators and external systems use it. `npm run pack:offline` writes the signed Server + Web Console dual-arch bundle to `build/offline-delivery-bundle` and does not start, stop, or clean up a running instance. `node tools/server-scripts/offline-delivery-closure.ts` remains the offline acceptance oracle and is not a start or pack command.
 
 ```bash
-npm install
+npm ci
 npm run start:dev
 ```
 
@@ -230,11 +275,15 @@ Non-development server startup:
 npm run server:start
 ```
 
+This command starts the Core edition with the Web Console on the same origin.
+It uses the default runtime profile; `--profile` selects `default` or `minimal`
+and is separate from `--edition`.
+
 Automation that requests a dynamic port must use the private readiness file
 instead of parsing stdout:
 
 ```bash
-node tools/server-scripts/start-server.ts --port 0 --ready-file <private-ready-file>
+meshrix-server --port 0 --ready-file <private-ready-file>
 ```
 
 The file is atomically created with mode `0600`, contains the selected local
@@ -285,10 +334,11 @@ npm run release:package-server-source
 
 The command writes to `build/packages`. This is a source package: it excludes
 installed dependencies and container images, so a target host still needs
-network access while building the remaining npm artifacts. It includes the
-authorized vendored Pactium tarball under `vendor/` so `Dockerfile` `COPY vendor`
-and `npm ci` can resolve `file:vendor/pactium-*.tgz` without a public npmjs hit
-for that package.
+network access while building uncached npm artifacts. It retains the authorized
+Pactium archive under `vendor/` for the source-package contract. The Dockerfile
+copies that directory, but the root package resolves Pactium from the public npm
+registry at exact version `0.8.1`, with integrity pinned in `package-lock.json`;
+the source archive's vendor copy does not satisfy that npm dependency.
 
 Set `MESHRIX_HOST_PORT` to change the loopback host port. The Compose contract uses
 that same value for bootstrap, advertised, and active service URLs while the
@@ -371,7 +421,7 @@ MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source" \
 MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE="$proof_signer_source" \
 MESHRIX_PUBLIC_BASE_URL="$public_base_url" \
 MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
-  docker compose -f docker-compose.yml -f docker-compose.enterprise.yml \
+  docker compose -f docker-compose.yml -f docker-compose.single-node.yml \
   up -d --no-build --pull never --wait meshrix-server
 ```
 
@@ -382,7 +432,7 @@ MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source" \
 MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE="$proof_signer_source" \
 MESHRIX_PUBLIC_BASE_URL="$public_base_url" \
 MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
-  node tools/server-scripts/enterprise-single-node-cloud-deployment.ts \
+  node tools/server-scripts/single-node-cloud-deployment.ts \
   plan --candidate "$candidate" --offline
 ```
 
@@ -398,7 +448,7 @@ Offline activation itself has no registry dependency after the exact image is
 loaded and addressable by digest. Candidate-bound Linux amd64 and arm64 OCI
 layouts, inventory, SBOM, provenance, signatures, and activation instructions
 are assembled by composing
-`tools/server-scripts/enterprise-single-node-offline-bundle.ts`. Prove exact
+`tools/server-scripts/single-node-offline-bundle.ts`. Prove exact
 byte transfer and the disconnected lifecycle contract with:
 
 ```bash
@@ -415,9 +465,10 @@ Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when
 that Linux VM is reachable. When a Linux VM target or a dual-architecture
 builder is unavailable, the oracle fails closed with `blocked_by_environment`
 and a finite reason. Contract-fixture bytes do not satisfy acceptance. Native
-Linux, Ubuntu, Debian, capacity, and publication qualification remain remaining
-required work after the named workflows. To write the signed Server + Web Console dual-arch bundle without
-starting or stopping an instance, run `npm run pack:offline`. To import and
+Linux, Ubuntu, Debian, and capacity qualification remain separate environment
+claims; none is a prerequisite for npm publication. To write the signed Server
+and Web Console dual-architecture bundle without starting or stopping an instance, run
+`npm run pack:offline`. To import and
 start that bundle without the closure's stop and cleanup steps, run
 `npm run start:offline`. Stop it with `npm run stop:offline`. Restart the same
 offline stack with `npm run restart:offline`.
@@ -428,18 +479,18 @@ retain its successful receipt; backups are written to the independent
 `--previous` to inspect the rollback activation plus the governed
 `storage.backups.restore_preview` and `storage.backups.restore` recovery
 entries. The durable orchestration state machine is implemented at
-`tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts`; verify its
+`tools/server-scripts/upgrade/single-node-upgrade-rollback.ts`; verify its
 successful, rolled-back, and `in_doubt` paths with
-`npm run vitest -- tests/vitest/server/enterprise-upgrade-rollback.test.ts`. The candidate-bound
-enterprise operations closure is:
+`npm run vitest -- tests/vitest/server/single-node-upgrade-rollback.test.ts`. The candidate-bound
+single-node operations closure is:
 
 ```bash
-node tools/server-scripts/enterprise-operations-closure.ts
+node tools/server-scripts/single-node-operations-closure.ts
 ```
 
 It composes governed MCP, denial and uncertainty, diagnostics, emergency
 administration, key lifecycle, clean-root restore, and N-1 upgrade / failed
-rollback producers into `build/reports/enterprise-operations-closure.json`.
+rollback producers into `build/reports/single-node-operations-closure.json`.
 Missing container, key, or restore environments fail closed with a finite
 blocker. Capacity, production-readiness, and environment qualification remain remaining
 required work after this closure. Digest-pinned images may be supplied as
@@ -608,9 +659,23 @@ listener, persistence routine, or scheduler:
 npm run server:verify:resource-discipline
 ```
 
-The command first rejects new unbounded append paths and missing retention
-contracts. It then starts the complete default service in an isolated temporary
-data directory, warms it, applies repeated concurrent requests, and performs
+This engineering command rejects new unbounded append paths and missing
+retention contracts, then runs deterministic resource-policy and upload-session
+persistence checks. The complete upload workspace security matrix runs once
+through its registered `jobs.upload-custody-workspace-materialization-acceptance`
+suite.
+
+After the same candidate has passed real Core, Console, MCP and normal shutdown
+verification, run the separate resource profile:
+
+```bash
+npm run server:verify:memory-leaks
+```
+
+Platform acceptance schedules this profile only after its real Console browser
+and upstream MCP producers succeed. The profile starts the complete default
+service in an isolated temporary data directory, warms it, applies repeated
+concurrent requests, and performs
 forced garbage collection between measurement rounds. Retained heap growth is
 evaluated with a robust multi-round slope instead of a single RSS comparison,
 while `@datadog/pprof` independently samples live V8 allocations in standard
@@ -625,8 +690,9 @@ Only a compact, redacted, atomically replaced result is written under
 `build/reports/`. Raw heap profiles, readiness state, service data, and load
 responses remain private temporary data and are removed when the command ends.
 Any policy, persistence-growth, log-growth, heap-growth, allocation-growth, or
-request-integrity violation returns a non-zero exit code and blocks the Core
-gate.
+request-integrity violation returns a non-zero exit code and fails release
+acceptance. The profile owns `build/reports/runtime-resource-discipline.json`;
+the earlier static engineering command does not claim that result.
 
 ### Governed evidence capacity review
 
@@ -664,7 +730,8 @@ non-converged rather than compensating with additional logs.
 
 ## Release Definition and Publication
 
-Meshrix.js has three deliberately separate acceptance standards:
+Meshrix.js keeps functional completeness, npm artifact qualification, and
+optional environment-specific claims distinct:
 
 1. The **Functional Release Gate** is the mandatory project release closure.
    It proves that the implementation and code organization are complete,
@@ -672,52 +739,50 @@ Meshrix.js has three deliberately separate acceptance standards:
    by every simulation, container, failure-injection, recovery, packaging, and
    protocol check that the development environment can execute. A missing,
    skipped, stale, or failing required functional check fails this gate.
-2. **Release Deployment Verification** is the mandatory runtime-ui deployment
-   closure for the exact stable candidate. On a GitHub-hosted `ubuntu-24.04`
-   runner it deploys the runtime-ui surface and a process-isolated fixture in
-   separate containers on one disposable private network, then drives bounded
-   external deterministic synthetic requests with no real model dependency
-   and verifies termination and cleanup of every deployment resource. Its
-   fixed-size privacy-safe receipt is the named **Release Deployment Claim**.
-3. A **Real-Machine Verification Workflow** is remaining required work that
-   independently repeats the exact accepted candidate on one declared
-   operating system, architecture, device, host, or network environment. Its
-   successful receipt is the named **Environment Support Claim** for that
-   exact environment.
+2. **NPM Package Installability** qualifies the exact release archives through
+   clean consumers on the observed native platform and any actually usable
+   local Docker platform. The report binds package name, version, tarball
+   filename, and integrity. One complete qualified platform is sufficient for
+   npm eligibility; a genuinely unavailable optional Docker target is recorded
+   as `not_run` and does not block publication. Every selected target must
+   pass, and no successful target means the npm claim is absent.
+3. **Release Deployment Verification** and **Real-Machine Verification** are
+   optional, separate claims. Deployment verification exercises the selected
+   `runtime-ui` container claim; a real-machine run binds evidence to the
+   exact system or device tested. Neither adds an unavailable environment to
+   npm eligibility requirements.
 
 The dependency is one-way:
 
 ```text
 Functional Release Gate receipt
+  + NPM Package Installability report with at least one qualified platform
+  -> npm release eligibility
+Optional selected runtime-ui claim
   -> Release Deployment Verification receipt
-  -> Release Deployment Claim
-Functional Release Gate receipt
-  -> Real-Machine Verification Workflow receipt
-  -> Environment Support Claim
+Optional selected system or device claim
+  -> Real-Machine Verification receipt
 ```
 
-A release-deployment workflow must refuse an unaccepted or mismatched
-candidate, and its absence or failure blocks tag publication for that commit.
-A real-machine workflow must refuse an unaccepted or mismatched candidate, but
-its absence, unavailability, failure, or expired receipt never changes the
-Functional Release Gate result and never blocks project publication. It only
-leaves that environment qualification as remaining required work. Project-level
-functional results are `passed` or `failed`; `blocked` is not a project release
-result. Real-machine workflow results are `not_run`, `ineligible`, `passed`, or
-`failed`.
+A selected deployment or real-machine workflow must refuse an unaccepted or
+mismatched candidate. If neither claim is selected, its report is not part of
+the npm bundle. Project-level functional results are `passed` or `failed`;
+`blocked` is not a project release result. Real-machine workflow results are
+`not_run`, `ineligible`, `passed`, or `failed`.
 
 Avoid the ambiguous standalone terms `production-ready`, `final readiness`,
 and `platform acceptance`. State the exact remaining-work or completed evidence
-instead: `functional release accepted`, `real-machine verified on
-<environment>`, `release deployment verified on ubuntu-24.04`, or
-`environment qualification remains remaining required work`.
+instead: `functional release accepted`, `npm artifacts qualified on
+<platform>`, `release deployment verified for runtime-ui`, or
+`real-machine verified on <environment>`.
 
 `tools/registry/release-definition.registry.json` is the sole source for the
-product version, Git tag, release channel, package manifest set, container
-platforms, functional acceptance profile, local container engine, and the exact
-fourteen-file upstream publishing candidate bundle. Package manifests, the
-lockfile, workflow expressions, tags, reports, and this runbook are projections
-of that definition.
+product version, Git tag, release channel, package manifest set, optional
+container target, functional acceptance profile, local verification policy,
+and the exact upstream publishing candidate bundle, plus the Node.js and npm
+CLI versions used by release workflows. Package manifests, the lockfile,
+workflow expressions, tags, reports, and this runbook are projections of that
+definition.
 
 Before creating a tag, update the definition, prepare all version projections,
 and verify them:
@@ -818,125 +883,198 @@ screenshots. That recovery projection includes only the stable failing stage
 and code plus bounded step and cleanup identifier/status/duration rows; it never
 projects failure messages, receipts, logs, or runtime values.
 
-`.github/workflows/release.yml` is the sole publication path. It runs only for
-semantic version tags, serializes all release runs globally, and fails unless
-the tagged commit equals the canonical `release` branch tip. The release
-branch is promoted only by `.github/workflows/release-branch.yml`, which
-resolves the successful stable complete-gate run for the exact push commit,
-downloads its stable authority bundle, runs the external runtime-ui deployment
-verification on `ubuntu-24.04`, and uploads the `release-authority` bundle for
-that commit. `release.yml` imports that authority and revalidates candidate
-identity, functional receipt, and deployment receipt before any publication.
-Its protected `release-candidate` GitHub environment is the review boundary.
-Before that authority, a read-only `upstream-service-publishing` job runs the
-self-contained Core verifier. It checks out no detachable service or plugin
-repository and performs no registry or release mutation. Every later
-publication job inherits the Core prepublication and release deployment
-prerequisites.
-Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
-functional artifact requirements. Native host execution is performed only by
-the remaining Real-Machine Verification Workflows and cannot block publication.
+`.github/workflows/release.yml` is the sole publication path. It accepts
+canonical semantic-version tag pushes and an exact workflow dispatch at that
+tag, and serializes release runs globally. `.github/workflows/release-branch.yml`
+runs on `release` pushes and supports a manual run on the same branch for the
+explicit first-publication bootstrap. It requires the release commit to equal
+the current stable tip, resolves the successful stable complete-gate run for
+that exact commit, and downloads its stable authority bundle containing the
+accepted candidate, functional receipt, npm installability report, and stable
+authority manifest. The normal npm release path does not run container
+deployment verification. After uploading the `release-authority` bundle, the
+source workflow creates the canonical tag only when it is absent, or verifies
+that an existing tag resolves to the same
+commit. A conflicting tag fails. It then calls GitHub's workflow-dispatch API
+for `release.yml` at the tag and sends the exact source run id, attempt, event,
+and commit. The dispatch returns before the source run completes; the target
+workflow waits for that exact release-branch run to finish successfully before
+consuming its authority artifact. This closes the source-run completion race.
 
-Meshrix.js `0.0.1` consumes exact file-vendored `pactium@0.8.0` from
-`vendor/pactium-0.8.0.tgz`. The server source archive and container build copy
-that tarball; they must not require a live npmjs fetch for Pactium. Public
-publication of Meshrix.js `0.0.1` remains remaining required work and is a
-separate npm-channel decision.
+The release workflow revalidates candidate identity, functional receipt, and
+npm installability report before publication. The npm publisher job uses
+the `release-candidate` environment. A workflow reference alone
+does not create the required protection: configure this environment with a
+tag deployment rule for `v*` before enabling the first release. This deployment
+rule selects allowed refs and does not require manual approval.
 
-The workflow stages a multi-platform container and compares the intended OCI
-manifest digest with the GHCR version tag before and after creating that tag.
-An existing equal digest is idempotent; an existing different digest fails
-without replacing the version tag. Before any candidate image is pushed, the
-workflow requires a clean packed-package install and headless start on Node.js
-22 and performs a read-only registry preflight for every npm release-set
-package. The assembly jobs remain credential-free. Execution of the final MCP
-archive on a native macOS, Linux, or Windows runner belongs to a separate
-Real-Machine Verification Workflow.
+Before the first release run, verify these hosted protections in GitHub:
 
-The commit-pinned Trivy action uses the pinned Trivy `v0.69.3` binary to scan
-both `linux/amd64` and `linux/arm64` operating-system and library packages. It
-rejects actionable `HIGH` or `CRITICAL` findings before the image authority is
-signed. The image authority also requires exact platform manifest and
-attestation-subject digest bindings, SLSA provenance schema and build semantics,
-exact repository/ref/commit build arguments, and a non-empty SPDX document for
-each platform. The signing job refetches the registry evidence and accepts it
-only when all validated evidence hashes remain identical. GitHub Release assets are covered by
-`RELEASE_SHA256SUMS`; its entries use the final flattened asset basenames. The
-workflow signs that checksum file with Sigstore and verifies the exact workflow
-identity and GitHub Actions issuer before publication. Release consumers must
-verify `RELEASE_SHA256SUMS.sigstore.json` before using the checksum file.
-On a complete workflow rerun, finalized remote Sigstore assets are reused only
-when the release metadata, exact asset set, GitHub digests, and every
-deterministic source asset match the current tagged inputs. A mismatch on an
-already published release fails closed; an incomplete private draft may be
-regenerated and replaced before publication.
+1. An active tag ruleset covers `refs/tags/v*`, restricts tag updates and
+   deletions, and has no bypass actors. Leave tag creation allowed so the
+   release workflow token can create the first canonical tag. The local
+   create-or-verify helper does not provide server-side immutability.
+2. The `release-candidate` environment exists with a selected-tag deployment
+   policy for `v*`. The workflow's `environment:` field is a reference, not
+   evidence that this protection has been configured.
+3. Repository immutable releases are enabled. Verify the actual setting with
+   an authorized management identity. After publication, the release job
+   verifies the returned release's actual immutability and matching asset set;
+   a repository variable is not evidence of this postcondition.
 
-The credential-free npm preflight packs the complete public release set and
-checks every immutable version and dist-tag before the workflow receives GHCR
-write authority. After canonical acceptance and signed asset finalization, the
-trusted-publishing job repeats the same all-package preflight immediately before
-its first npm mutation. The checks cover immutable SHA-512 integrity, npm
-registry signatures, SLSA provenance attestations, and monotonic `latest` or
-`next` state. A missing or older tag on an existing version fails closed because
-GitHub OIDC trusted publishing cannot repair dist-tags; a newer tag is preserved.
-Missing versions are then published by dependency topology with the root
-`meshrix` package last, and every registry postcondition is reverified.
+The release workflow consumes the accepted Core functional and npm consumer
+evidence from the exact successful stable run. It publishes `meshrix.js` and
+`@meshrix/gateway`; container images and portable archives are separate delivery
+choices with their own applicable verification. Additional operating systems
+remain unmeasured until their actual qualification is recorded.
+
+The npm release set manifest binds both tarballs through their SHA-512
+integrity values. The supply-chain manifest binds the generated CycloneDX SBOM
+and third-party notices. npm publication supplies GitHub Actions provenance;
+registry signatures and provenance are verified after publication. The GitHub
+Release attaches the two tarballs, release-set manifest, SBOM, notices, and
+supply-chain manifest. It verifies GitHub's uploaded asset digests before
+publishing the draft and then checks actual release immutability. An existing
+published release must match that exact asset set; reruns reverify it without
+replacement. No additional detached signature bundle is required.
+
+The credential-free assembly job builds the package files and
+prepares the public npm archives once. It transfers those exact tarballs with
+the other immutable release inputs. The read-only npm preflight and the later
+publisher download and use the same prepared archive directory; neither repacks
+the workspaces. The preflight checks every immutable version and dist-tag before
+publication. The publisher repeats the complete registry
+preflight immediately before its first npm mutation. Checks cover immutable
+SHA-512 integrity, npm registry signatures, SLSA provenance attestations, and
+monotonic `latest` or `next` state. A newer dist-tag is preserved; a missing or
+older tag on an existing version requires npm's separate `manage dist-tags`
+publisher permission. Direct publish permission alone does not grant that
+repair permission. Missing versions are published by dependency topology with
+`@meshrix/gateway` before the root `meshrix.js` package, and every registry
+postcondition is reverified.
 The published set is then installed without lifecycle scripts and checked with
 `npm audit signatures`, which cryptographically verifies registry signatures
 and provenance attestations. The GitHub Release becomes public only after this
 npm closure succeeds.
-Publication uses npm trusted publishing with GitHub OIDC and does not accept a
-raw npm token. The local release-set check is offline and does not contact or
-mutate the registry:
 
-```bash
-npm run release:publish-npm -- --dry-run
+The first canonical npm version uses an explicit bootstrap because the two npm
+packages do not have Trusted Publisher settings until after they exist. When
+the first `0.0.1` candidate reaches the `release` branch, the automatic
+release-branch run validates the accepted candidate and creates or verifies the
+canonical tag, then skips the ordinary OIDC release dispatch. After that run
+succeeds, dispatch `.github/workflows/release-branch.yml` on the `release`
+branch with `bootstrap_candidate=0.0.1`. This run revalidates the same tag,
+candidate, and originating stable authority before dispatching `release.yml`
+with the explicit bootstrap input. It does not require or create a deployment
+receipt. Do not manually push the first tag or dispatch `release.yml` without
+the bootstrap input; either would attempt ordinary OIDC before the package
+trust exists.
+
+Use `0.0.1` only if the final public registry recheck confirms that canonical
+version remains unused. Store `NPM_BOOTSTRAP_TOKEN` temporarily as a
+`release-candidate` environment secret; the release workflow exposes it only to
+the one bootstrap publication mutation step. It is not used by preparation,
+preflight, or authority verification. Remove this secret as soon as
+the first publication succeeds. The publisher rejects bootstrap for later
+versions and never silently falls back to a token.
+
+After both packages exist, configure one GitHub Actions trusted publisher for
+each package with the deployed repository, workflow file `release.yml`, and
+environment `release-candidate`. After one npm login, the following commands
+configure direct publication for both packages with npm 11.21.0:
+
+```text
+npm trust github @meshrix/gateway --file release.yml --repository Meshrix-Platform/Meshrix.js --environment release-candidate --allow-publish --yes
+npm trust github meshrix.js --file release.yml --repository Meshrix-Platform/Meshrix.js --environment release-candidate --allow-publish --yes
 ```
 
-The read-only registry preflight contacts the public registry but does not use
-publication credentials and cannot publish:
+npm requires account-level 2FA and an authenticated npm login for trusted-publisher
+management. A granular token with bypass 2FA, including the bootstrap publishing
+token, cannot authorize `npm trust` operations. During the
+first command, select the documented five-minute 2FA reuse option. If automatic repair of a missing or
+older `latest`/`next` tag is required, grant `manage dist-tags` separately on
+each package. npm treats that as a separate permission, and the pinned `npm
+trust` v11 CLI does not expose a flag for it. Configure the complete permission
+set before ordinary publication. The temporary bootstrap token has already
+been removed after the first successful publication; ordinary publication
+never falls back to it.
+
+The first ordinary workflow run performs an actual npm OIDC exchange for each
+prepared package before the publisher can mutate the registry. A successful
+package-specific exchange is the required proof that the deployed GitHub
+workflow identity matches the npm configuration. The intended identity is
+`release.yml` + repository + `release-candidate`; the REST API dispatch targets
+`release.yml` at a tag as a new `workflow_dispatch` run. npm's generic
+`workflow_dispatch` guidance does not fully distinguish this API-triggered run
+from a reusable-workflow caller, so do not claim the matcher is proven until
+both hosted exchanges succeed. A repository/environment ref or a local unit
+test cannot substitute for that proof. See the [npm trusted publishing guide](https://docs.npmjs.com/trusted-publishers/),
+[`npm trust` v11 reference](https://docs.npmjs.com/cli/v11/commands/npm-trust/),
+[GitHub workflow dispatch API](https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28),
+and [GitHub reusable-workflow OIDC claims](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-with-reusable-workflows).
+
+Prepare the credential-free archives once, then run the read-only registry
+preflight against that same directory:
 
 ```bash
-npm run release:publish-npm -- --preflight
+npm run build
+npm run release:publish-npm -- --prepare --artifact-dir <artifact-dir>
+npm run verify:npm-package-installability -- --artifact-dir <artifact-dir>
+npm run release:publish-npm -- --preflight --artifact-dir <artifact-dir>
 ```
+
+The canonical version determines the npm dist-tag (`latest` for stable versions,
+`next` for prereleases); a Git `v*` tag is not an npm dist-tag. The preparation,
+installation verification and preflight commands do not publish. Use the GitHub release
+workflow for actual OIDC publication; direct local release commands are not
+hosted trusted-publisher evidence.
+
+An explicit `--prepare` rebuilds the owned archives from current build inputs,
+even at an unchanged unpublished version. After qualification, preflight and
+publication consume that fixed directory; qualify the archives again if another
+preparation changes their bytes.
 
 The built-in project release runbook prepares and validates a candidate only.
 It does not commit, tag, push, upload assets, publish packages, or create a
 parallel release path.
 
-Run the mandatory Functional Release Gate:
+The Agent runs the maintained npm release preparation entry:
 
 ```bash
-npm run verify:acceptance
+npm run ci:local -- --scope release
 ```
 
-The command accepts a release candidate only when every required functional
-report is fresh, command-owned, schema-valid, privacy-safe, and successful.
-Development-host simulations, isolated containers, neutral protocol peers,
-fault injection, bounded-load checks, clean temporary roots, offline artifact
-inspection, startup and shutdown, rollback rehearsal, and recovery rehearsal
-belong in this gate whenever they can be executed without a particular real
-machine or external deployment. Exit code `0` means `passed`; every non-zero
-exit means `failed`.
+It invokes the existing acceptance controller for Core engineering regression,
+preparation of the two npm archives, installed consumers on the available native
+and matching local Docker platforms, real Console and standard MCP operations,
+publishing authorization/revocation, and recovery. Each required report must be
+fresh, command-owned, schema-valid, privacy-safe, and successful. The engineering
+regression includes deterministic architecture, security and failure-path tests.
+Optional portable runtimes, container delivery, independent Model/Agent services
+and performance experiments keep their separate workflows and do not expand this
+npm claim. Performance work requires its own current functional prerequisite.
+Exit code `0` means the selected scope passed; non-zero means it is incomplete.
 
 The acceptance orchestrator materializes the explicit Git commit in a detached
 private worktree. It never copies a dirty caller workspace, and a failed run
 retains one candidate-bound fixed-field failure envelope without moving the
 accepted-generation pointer. A successful run publishes one digest-bound
-accepted-candidate receipt. Detailed reports remain diagnostic evidence owned
-by acceptance; bootstrap, deployment, branch promotion, and production closure
-consume only the receipt and never revalidate the report inventory.
-The fresh-container npm release-set authority is a separate supply-chain
-checkpoint. Stable promotion requires both that checkpoint and functional
-acceptance, so package installation is proven once in a clean job without
-coupling browser preparation or functional scheduling to package verification.
+accepted-candidate receipt. The same generation owns the npm installability
+report, which records the exact archives and each selected native or local
+Docker consumer result. Stable and release authority bundles revalidate that
+report alongside the receipt. The successful controller exports that report and
+the same verified archives to `build/reports/npm-package-installability.json` and
+`build/release/npm-set/` before removing its temporary source workspace. An
+unavailable optional Docker target remains
+`not_run`, while a selected target failure rejects qualification.
 Acceptance commands run until they exit or the operator cancels the run; the
 orchestrator does not convert elapsed wall-clock time into a failure. The CI
 job retains one infrastructure-level cap solely to contain abandoned runner
 cost, and that cap is not part of the acceptance result.
 
-For the first installation on a clean supported Ubuntu or Debian x64/arm64
-Orb target, create an owner-only (`0600`) non-symlink login input containing
+The following bootstrap procedure is specific to a Linux Orb deployment and
+does not constrain npm eligibility. For its documented Ubuntu or Debian
+x64/arm64 target, create an owner-only (`0600`) non-symlink login input containing
 exact UTF-8 JSON with only `username` and `password`; the normalized username
 must be `owner`. Keep this file under operator-private custody and run:
 
@@ -980,15 +1118,16 @@ be proven. A successful health probe is emitted only after runtime composition,
 including startup-owned storage schema initialization, has completed. Retained
 evidence contains only bounded booleans and public candidate identities.
 
-After both local acceptance and existing-target verification, branch promotion
-uses the explicit accepted commit. Nightly feedback is bounded and
+When this Orb deployment workflow is selected, branch promotion follows local
+acceptance and existing-target verification for the explicit accepted commit.
+Nightly feedback is bounded and
 non-gating; stable and release require their own exact successful authorities.
 No completed failed workflow is automatically retried, and this procedure
 does not publish tags or assets or modify branch policy.
 
-After branch promotion, reduce the accepted generation, existing-target
-deployment, live Core state, active service, and branch authority for that
-exact candidate:
+For an Orb deployment, after branch promotion reduce the accepted generation,
+existing-target deployment, live Core state, active service, and branch
+authority for that exact candidate:
 
 ```bash
 npm run verify:production-closure
@@ -1004,8 +1143,9 @@ Inspect the sanitized functional DAG without executing it:
 npm run verify:acceptance:plan
 ```
 
-Run the mandatory Release Deployment Verification against an exact stable
-candidate and its functional receipt:
+Release Deployment Verification is an optional runtime-ui claim. Run it against
+the exact accepted candidate when that deployment claim is selected; npm
+publication does not require it:
 
 ```bash
 npm run server:verify:release-deployment -- \
@@ -1019,10 +1159,10 @@ The controller deploys the runtime-ui surface and fixture in separate
 containers on one disposable private network for the exact candidate, drives
 the bounded external deterministic synthetic request scenarios with unique MCP
 request IDs, verifies termination and exact-resource cleanup, and writes one
-fixed-size privacy-safe deployment receipt with `capacityCertified: false`. Exit
-code `0` means the Release
-Deployment Claim is present; every non-zero exit means the claim is absent
-and tag publication for that commit is blocked. If the controller is
+fixed-size privacy-safe deployment receipt with `capacityCertified: false`.
+Exit code `0` means the optional Release Deployment Claim is present; a
+non-zero exit means only that selected claim is absent. It blocks publication
+only when the release explicitly selects deployment verification. If the controller is
 interrupted, invoke the same exact-resource cleanup through
 `--cleanup-only --cleanup-state <private-cleanup-state>`; never substitute a
 broad container, volume, process, or directory cleanup.
@@ -1172,7 +1312,7 @@ that profile owns the public-boundary, secret-hygiene, local-info, registry,
 root-hygiene, and script-registry child reports. The remaining functional
 layers refresh plugin-package admission and runtime evidence, protocol-only
 upstream fixture transit, neutral downstream peer conformance, gateway
-profiling, surface convergence, private-deployment aggregate E2E, and gap
+profiling, surface convergence, single-node deployment aggregate E2E, and gap
 audit. External product adoption and real-machine receipts remain outside this
 DAG and cannot block or promote it.
 
@@ -1229,7 +1369,7 @@ rather than a document-only statement. The drill exercises the registered
 `storage.backups.list`, `storage.backups.create`,
 `storage.backups.retention`, `storage.backups.restore_preview`, and
 `storage.backups.restore` operation path against the selected
-private-deployment storage backend. It verifies authorization denial with zero
+configured storage backend. It verifies authorization denial with zero
 storage side effects, confirmation denial before restore execution, retention
 approval, the confirmed restore, proof and audit lifecycle completion, and
 storage-kernel reopen. The functional verifier writes only a redacted fact
@@ -1392,6 +1532,15 @@ The generated report separates contract evidence, live backend conformance, opaq
 The current hardened OCI adapter accepts only the governed Node runtime profile. It enables the Node permission model without child-process, worker, native-addon, WASI, FFI, inspector, or network grants and layers that policy with the container isolation controls. Requests for a different runtime command or a non-zero subprocess capability fail as unsupported instead of being approximated through the cgroup PID budget.
 
 ## Evidence Handling
+
+### Gateway-only profile
+
+For a small embedded deployment, use `meshrix gateway-only --dry-run` for
+configuration diagnostics or `meshrix gateway-only --health` for a clean
+start/health/close check. This profile owns only the gateway kernel and does
+not start the Console, plugins, agents, or optional services. Configuration
+changes use the preview-then-apply migration command with an expected revision
+and backup; a local rollback never claims to reverse an external effect.
 
 - Reports use redacted evidence for secrets, grant tokens, local absolute paths, private runtime state, and raw prompts.
 - Keep complete machine-readable reports, raw output, and transient evidence under `build/`.

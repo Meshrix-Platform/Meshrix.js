@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach } from "vitest";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const roots: any[] = [];
 
@@ -89,7 +90,7 @@ async function platformHarness() : Promise<any> {
 describe("upstream manifest snapshot commit", () : any => {
   it("commits one projected capability per operation with gateway/catalog revision agreement", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const publications: any[] = [];
     const protocolEventBus: Record<string, any> = {
       publish(topic?: any, event?: any) : any {
@@ -146,7 +147,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("replays identical snapshots without duplicate catalog publication events", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const publications: any[] = [];
     const committer: any = createUpstreamManifestSnapshotCommitter({
       registry,
@@ -167,7 +168,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("publishes an audience-only revision after a grant projection changes", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const candidate: any = snapshot(2, [serviceEntry({ revision: 2 })]);
     const operation: any = compileUpstreamOperationProjection(candidate).operations[0];
     const capability: any = operation._meta.dynamicCapability;
@@ -231,7 +232,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("preserves the paired upstream catalog when base or plugin operations refresh", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const committer: any = createUpstreamManifestSnapshotCommitter({
       registry,
       getBaseOperations: () : any => [BASE_OPERATION],
@@ -264,7 +265,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("rolls back the gateway snapshot when Operation Permission refresh fails", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const committer: any = createUpstreamManifestSnapshotCommitter({
       registry,
       getBaseOperations: () : any => [BASE_OPERATION],
@@ -306,7 +307,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("emits no publication when gateway finalization fails and restores the paired state", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const baseRegistry: any = createUpstreamGatewayRegistry({});
+    const baseRegistry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const firstCommitter: any = createUpstreamManifestSnapshotCommitter({
       registry: baseRegistry,
       getBaseOperations: () : any => [],
@@ -344,7 +345,7 @@ describe("upstream manifest snapshot commit", () : any => {
   it("keeps paired state pending and retries durable publication without repeating finalization", async () : Promise<any> => {
     const { platform } = await platformHarness();
     const retireScope: any = vi.fn(async () : Promise<any> => ({ retired: 1 }));
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       mcpSessionManager: {
         retireScope,
         close: async () : Promise<any> => {},
@@ -404,7 +405,7 @@ describe("upstream manifest snapshot commit", () : any => {
   it("retries audience admission without duplicating its durable event or finalization", async () : Promise<any> => {
     const { platform } = await platformHarness();
     const retireScope: any = vi.fn(async () : Promise<any> => ({ retired: 1 }));
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       mcpSessionManager: {
         retireScope,
         close: async () : Promise<any> => {},
@@ -448,7 +449,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("ignores stale revisions and does not emit a publication event", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const publications: any[] = [];
     const committer: any = createUpstreamManifestSnapshotCommitter({
       registry,
@@ -468,7 +469,7 @@ describe("upstream manifest snapshot commit", () : any => {
 
   it("forwards projected operations through the same governed path and denies before network side effects", async () : Promise<any> => {
     const { platform } = await platformHarness();
-    const registry: any = createUpstreamGatewayRegistry({});
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),});
     const committer: any = createUpstreamManifestSnapshotCommitter({
       registry,
       getBaseOperations: () : any => [BASE_OPERATION],

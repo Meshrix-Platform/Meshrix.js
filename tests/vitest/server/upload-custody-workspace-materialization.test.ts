@@ -27,9 +27,14 @@ import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtim
 import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { createServerCompositionRoot } from "../../../packages/server-runtime/src/composition/composition-root.ts";
 import {
-  createUploadWorkspaceMaterializationProvider,
-  createUploadWorkspaceMaterializationTransactionStore
+  createUploadWorkspaceMaterializationProvider
 } from "../../../packages/server-runtime/src/composition/upload-workspace-materialization-provider.ts";
+import {
+  createUploadWorkspaceMaterializationTransactionStore
+} from "../../../packages/server-runtime/src/jobs/upload-workspace-materialization/index.ts";
+import {
+  terminateOwnedCrashChild
+} from "./support/upload-workspace-materialization-crash-lifecycle.ts";
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
 const CRASH_ADMISSION_USERNAME: any =
@@ -1568,10 +1573,11 @@ async function spawnCrashChild(
   ]);
   expect(Buffer.byteLength(JSON.stringify(marker), "utf8"))
     .toBeLessThanOrEqual(512);
-  child.disconnect();
-  await once(child, "disconnect");
-  terminateCrashUnit();
-  const [, signal] = await childExited;
+  const [, signal] = await terminateOwnedCrashChild(
+    child,
+    terminateCrashUnit,
+    childExited
+  );
   const [stdout, stderr] = await Promise.all([
     fs.readFile(stdoutPath),
     fs.readFile(stderrPath)
@@ -2125,6 +2131,32 @@ describe(
       await expect(
         fs.lstat(path.join(externalNeighbor, "forbidden-child"))
       ).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("joins in-progress admission and repeated close calls before releasing its queue", async () => {
+      const fixture = await createFixture();
+      const runtime = await fixture.openRuntime();
+      const upload = await createCompletedUpload(fixture, Buffer.from("close-admission"), "close-admission");
+      const pause = createPausePoint();
+      fixture.faultHooks.afterTransactionCreatedBeforeEnqueue = pause.hook;
+      const admission = submitMaterialization(fixture, runtime, upload);
+      await pause.reached;
+      let closed = false;
+      const firstClose = runtime.provider.close();
+      expect(runtime.provider.close()).toBe(firstClose);
+      const closing = firstClose.then(() => { closed = true; });
+      try {
+        await expect(runtime.provider.get("not-admitted")).rejects.toMatchObject({ code: "materialization_provider_closing" });
+        expect(closed).toBe(false);
+        expect(runtime.queueApplicationPort.describe().queueCount).toBe(1);
+      } finally {
+        pause.release();
+      }
+      const admitted = await admission;
+      expect(admitted.payload.accepted).toBe(true);
+      await closing;
+      expect(runtime.queueApplicationPort.describe().queueCount).toBe(0);
+      expect(await runtime.transactionStore.get(admitted.payload.requestRef)).toMatchObject({ status: "queued" });
     });
 
     it("admits only the canonical logical target and denies changed authority after bounded precommit reads but before protected effects", async () : Promise<any> => {

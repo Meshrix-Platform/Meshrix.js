@@ -1,8 +1,5 @@
-import { CLOSED_EMPTY_JSON_OBJECT_SCHEMA } from "@meshrix/foundation/security/closed-json-schema";
-import { compileMcpToolJsonSchema } from "./mcp-tool-schema.ts";
 import {
   asArray,
-  mcpToolRisk,
   normalizeRisk,
   object,
   safePublicToolSegment,
@@ -32,16 +29,16 @@ function invalidToolSchemaError(kind: any = "input") : any {
 }
 
 function projectedMcpSchema(
-  schema?: any,
+  schema: any,
+  schemaPort: any,
   label?: any,
   { requireTopLevelObject = true, kind = "input" }: Record<string, any> = {}
 ) : any {
-  if (schema === undefined) return CLOSED_EMPTY_JSON_OBJECT_SCHEMA;
+  if (schema === undefined) return { type: "object" };
   try {
-    return compileMcpToolJsonSchema(schema, {
-      label,
-      requireTopLevelObject
-    }).schema;
+    if (requireTopLevelObject && (typeof schema !== "object" || schema === null || Array.isArray(schema) || "type" in schema && schema.type !== "object")) throw invalidToolSchemaError(kind);
+    schemaPort.assertSchemaBudget(schema);
+    return structuredClone(schema);
   } catch {
     throw invalidToolSchemaError(kind);
   }
@@ -51,53 +48,65 @@ function safeNamespacedUpstreamMeta(meta: Record<string, any> = {}) : any {
   const output: Record<string, any> = {};
   for (const [key, value] of Object.entries(object(meta)) as [string, any][]) {
     if (typeof key !== "string" || !key.includes("/")) continue;
-    if (["toolExecutionId", "traceId", "auditId"].includes(key.split("/").pop() || "")) continue;
+    if (key.startsWith("io.meshrix/")) continue;
     output[key] = value;
   }
   return output;
 }
 
-function mcpToolAnnotations(tool: Record<string, any> = {}, readOnly?: any) : any {
+function mcpToolAnnotations(tool: Record<string, any> = {}) : any {
   const annotations: any = object(tool.annotations);
-  return {
-    readOnlyHint: annotations.readOnlyHint === true || readOnly === true,
-    destructiveHint: annotations.destructiveHint === true,
-    ...(typeof annotations.idempotentHint === "boolean" ? { idempotentHint: annotations.idempotentHint } : {}),
-    ...(typeof annotations.openWorldHint === "boolean" ? { openWorldHint: annotations.openWorldHint } : {})
-  };
+  return { ...annotations };
 }
 
-export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string, any> = {}) : any {
+function operatorMcpOperation(service: Record<string, any> = {}) : Record<string, any> {
+  return asArray(service.operations).find((operation: any) => text(operation?.operationKey || operation?.operationId) === "tools/call") || {};
+}
+
+function operatorMcpRisk(service: Record<string, any> = {}) : any {
+  return normalizeRisk(operatorMcpOperation(service).risk);
+}
+
+export function publicUpstreamMcpTool({ service = {}, tool = {}, schemaPort = null }: Record<string, any> = {}) : any {
+  if (!schemaPort || typeof schemaPort.assertSchemaBudget !== "function") {
+    throw new TypeError("Upstream MCP tool projection requires the injected schema port.");
+  }
   const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
   const upstreamToolName: any = text(tool.name);
-  const risk: any = mcpToolRisk(tool);
-  const readOnly: any = risk === "read_only";
+  const configuredOperation: any = operatorMcpOperation(service);
+  const risk: any = operatorMcpRisk(service);
+  const requiresApproval: any = configuredOperation.requiresApproval === true || risk === "repair_write" || risk === "destructive";
   const dynamicCapability: any = compileUpstreamOperationCapability(service, {
     operationKey: "tools/call",
     protocol: "mcp",
-    requiredScopes: readOnly ? ["gateway:read"] : ["gateway:write"],
+    requiredScopes: asArray(configuredOperation.requiredScopes || (risk === "read_only" ? ["gateway:read"] : ["gateway:write"])),
     risk,
-    requiresApproval: risk === "repair_write" || risk === "destructive"
+    requiresApproval
   }, { upstreamToolName });
   return {
     name: `upstream.${prefix}.${upstreamToolName}`,
     title: `${service.label || service.serviceId}: ${tool.title || upstreamToolName}`,
     description: tool.description || `Upstream MCP tool ${upstreamToolName} from ${service.label || service.serviceId}.`,
-    inputSchema: projectedMcpSchema(tool.inputSchema, "Upstream MCP tool input schema", {
+    inputSchema: projectedMcpSchema(tool.inputSchema, schemaPort, "Upstream MCP tool input schema", {
       requireTopLevelObject: true,
       kind: "input"
     }),
     ...(tool.outputSchema === undefined
       ? {}
       : {
-          outputSchema: projectedMcpSchema(tool.outputSchema, "Upstream MCP tool output schema", {
+          outputSchema: projectedMcpSchema(tool.outputSchema, schemaPort, "Upstream MCP tool output schema", {
             requireTopLevelObject: false,
             kind: "output"
           })
         }),
-    annotations: mcpToolAnnotations(tool, readOnly),
+    annotations: mcpToolAnnotations(tool),
     _meta: {
+      ...safeNamespacedUpstreamMeta(tool._meta),
       upstreamMcp: true,
+      // The projected operation every discovered tool of this service executes as. It is
+      // the identity Operation Permission governs, so a peer (and the gateway sink) can
+      // address the governed operation rather than the discovered tool name alone.
+      toolId: `upstream.${safePublicToolSegment(service.serviceId)}.${safePublicToolSegment(configuredOperation.operationKey || "tools/call")}`,
       serviceId: service.serviceId,
       upstreamToolName,
       capabilityId: dynamicCapability.capabilityId,
@@ -105,50 +114,14 @@ export function publicUpstreamMcpTool({ service = {}, tool = {} }: Record<string
       dynamicCapability,
       resourceContext: dynamicCapability.resourceContext,
       toolsets: ["upstream-mcp", ...gatewayToolsetsForRisk(risk), `upstream:${service.serviceId}`],
-      requiredScopes: readOnly ? ["gateway:read"] : ["gateway:write"],
+      requiredScopes: asArray(configuredOperation.requiredScopes || (risk === "read_only" ? ["gateway:read"] : ["gateway:write"])),
       risk,
-      ...safeNamespacedUpstreamMeta(tool._meta)
-    }
-  };
-}
-
-export function publicUpstreamOperationTool({ service = {}, operation = {} }: Record<string, any> = {}) : any {
-  const prefix: any = safePublicToolSegment(service.serviceId);
-  const operationSegment: any = safePublicToolSegment(operation.operationKey);
-  const risk: any = normalizeRisk(operation.risk);
-  const readOnly: any = risk === "read_only";
-  const dynamicCapability: any = compileUpstreamOperationCapability(service, operation);
-  const toolId: any = `upstream.${prefix}.${operationSegment}`;
-  return {
-    name: toolId,
-    title: `${service.label || service.serviceId}: ${operation.label || operation.operationKey}`,
-    description: operation.description ||
-      `Configured upstream ${operation.protocol || "http"} operation ${operation.operationKey} from ${service.label || service.serviceId}.`,
-    inputSchema: projectedMcpSchema(
-      operation.requestSchema,
-      "Configured upstream operation input schema",
-      { requireTopLevelObject: true, kind: "input" }
-    ),
-    annotations: {
-      readOnlyHint: readOnly,
-      destructiveHint: risk === "destructive"
-    },
-    _meta: {
-      upstreamConfiguredOperation: true,
-      toolId,
-      serviceId: service.serviceId,
-      operationKey: operation.operationKey,
-      capabilityId: dynamicCapability.capabilityId,
-      requiredCapabilities: [dynamicCapability.capabilityId],
-      dynamicCapability,
-      resourceContext: dynamicCapability.resourceContext,
-      protocol: operation.protocol || "http",
-      method: operation.method || "POST",
-      payloadTransport: operation.payloadTransport || null,
-      toolsets: ["upstream-gateway", ...gatewayToolsetsForRisk(risk), `upstream:${service.serviceId}`],
-      requiredScopes: asArray(operation.requiredScopes),
-      risk,
-      requiresApproval: operation.requiresApproval === true
+      requiresApproval,
+      "io.meshrix/gateway-policy": {
+        source: "operator-service-operation",
+        effectClass: risk,
+        requiresApproval
+      }
     }
   };
 }

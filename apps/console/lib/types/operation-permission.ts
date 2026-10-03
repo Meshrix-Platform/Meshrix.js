@@ -107,12 +107,15 @@ export type OperationPermissionTool = {
   };
   requiresApproval: boolean;
   approvalScope: string;
-  timeoutMs: number;
+  timeoutMs: number | null;
   maxResultBytes: number;
   status: string;
   tags: string[];
   serviceId?: string;
   capabilityId?: string;
+  upstreamProjectedOperation?: boolean;
+  protocol?: string;
+  operationKey?: string;
   dynamicCapability?: {
     capabilityId?: string;
     [key: string]: unknown;

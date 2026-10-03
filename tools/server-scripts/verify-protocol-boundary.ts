@@ -201,19 +201,12 @@ async function main() : Promise<any> {
   });
 
   await check("mcp-adapter-reaches-authorization-only-through-injected-ports", async () : Promise<any> => {
-    const transport: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts");
-    const tools: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts");
-    for (const required of [
-      "toolSkillManagementProvider.authorizeMcpClientRequest",
-      "toolSkillManagementProvider?.listVisibleTools",
-      "listVisibleTools({ authorization })"
-    ]) {
-      if (!transport.includes(required) && !tools.includes(required)) {
-        throw new Error(`MCP adapter must use injected Operation Permission port: ${required}`);
-      }
+    const downstream: any = await readText("packages/protocols/mcp/modern-downstream/index.ts");
+    if (!downstream.includes("authenticate") || !downstream.includes("gateway.catalog") || !downstream.includes("gateway.invoke")) {
+      throw new Error("Modern MCP downstream adapter must use injected authentication and gateway ports.");
     }
-    if (transport.includes("createOperationPermission") || tools.includes("createOperationPermission")) {
-      throw new Error("MCP adapter must not construct Operation Permission internals directly.");
+    if (downstream.includes("createOperationPermission") || downstream.includes("toolSkillManagementProvider")) {
+      throw new Error("Modern MCP downstream adapter must not construct or import Operation Permission internals.");
     }
     return { approvedPorts: APPROVED_PROTOCOL_PORTS };
   });
@@ -241,21 +234,18 @@ async function main() : Promise<any> {
   });
 
   await check("mcp-runtime-state-is-injected-through-port", async () : Promise<any> => {
-    const replies: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-replies.ts");
-    const transport: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts");
-    const bus: any = await readText("packages/protocols/mcp/adapter/mcp-notification-bus.ts");
+    const notifications: any = await readText("packages/protocols/mcp/notifications.ts");
+    const downstream: any = await readText("packages/protocols/mcp/modern-downstream/index.ts");
     const serverRoutes: any = await readText("apps/server/runtime/http-server-routes.ts");
     const compositionBinding: any = await readText(
       "packages/server-runtime/src/composition/mcp-notification-bus-binding.ts"
     );
-    if (!replies.includes("broadcastConfiguredMcpNotification")) {
-      throw new Error("MCP replies must use the configured notification port.");
-    }
-    if (!transport.includes("registerConfiguredMcpSubscription")) {
-      throw new Error("MCP transport must use the configured SSE registration port.");
-    }
-    if (!bus.includes("configureMcpNotificationBus")) {
+    if (!notifications.includes("configureMcpNotificationBus") ||
+        !notifications.includes("broadcastConfiguredMcpNotification")) {
       throw new Error("MCP notification bus configurator is missing.");
+    }
+    if (downstream.includes("configureMcpNotificationBus") || downstream.includes("registerConfiguredMcpSubscription")) {
+      throw new Error("Modern MCP downstream adapter must not own process-wide notification state.");
     }
     if (!compositionBinding.includes("configureMcpNotificationBus") ||
         !compositionBinding.includes("registerMcpSseConnection")) {
@@ -268,10 +258,10 @@ async function main() : Promise<any> {
   });
 
   await check("mcp-identity-provider-is-wired-in-composition", async () : Promise<any> => {
-    const discovery: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts");
+    const discovery: any = await readText("packages/protocols/mcp/modern-downstream/discovery.ts");
     const identity: any = await readText("packages/protocols/mcp/adapter/gateway-installer/mcp-identity.ts");
     const runtimeIdentity: any = await readText("packages/server-runtime/src/composition/mcp-identity-provider.ts");
-    if (!discovery.includes("./gateway-installer/mcp-identity.ts")) {
+    if (!discovery.includes("../adapter/gateway-installer/mcp-identity.ts")) {
       throw new Error("MCP discovery must import identity contract helpers from protocols.");
     }
     if (!identity.includes("buildMcpHandshakePayload") || !identity.includes("signMcpHandshake")) {

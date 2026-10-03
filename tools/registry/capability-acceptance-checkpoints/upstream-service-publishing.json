@@ -71,7 +71,7 @@
           },
           {
             "acceptanceCommandId": "authorization-enforcement",
-            "report": "build/reports/enterprise-authorization-enforcement.json"
+            "report": "build/reports/authorization-enforcement.json"
           }
         ]
       }
@@ -123,7 +123,7 @@
           },
           {
             "acceptanceCommandId": "authorization-enforcement",
-            "report": "build/reports/enterprise-authorization-enforcement.json"
+            "report": "build/reports/authorization-enforcement.json"
           }
         ]
       },

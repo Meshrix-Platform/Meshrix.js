@@ -1,11 +1,12 @@
 {
   "name": "meshrix.js",
   "version": "0.0.1",
-  "description": "Meshrix.js — an internal Vue.js and Node.js platform for governed service and agent access.",
+  "description": "Open-source TypeScript framework for composable HTTP, MCP, and agent services.",
   "author": "Meshrix.js Maintainers",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "workspaces": [
     "packages/contracts",
+    "packages/gateway",
     "packages/foundation",
     "packages/agents",
     "packages/capabilities",
@@ -14,28 +15,29 @@
     "packages/ui-console",
     "plugins/agents/*",
     "apps/server",
+    "apps/mcp-gateway-installer",
     "apps/console"
   ],
   "imports": {
     "#meshrix/agents/agent-memory/index": {
       "source": "./packages/agents/src/agent-memory/index.ts",
-      "default": "./packages/agents/dist/agent-memory/index.js"
+      "default": "@meshrix/agents/agent-memory/index"
     },
     "#meshrix/agents/upstream-gateway/index": {
       "source": "./packages/agents/src/upstream-gateway/index.ts",
-      "default": "./packages/agents/dist/upstream-gateway/index.js"
+      "default": "@meshrix/agents/upstream-gateway/index"
     },
     "#meshrix/authorization-engine": {
       "source": "./packages/foundation/src/security/authorization/authorization-engine.ts",
-      "default": "./packages/foundation/dist/security/authorization/authorization-engine.js"
+      "default": "@meshrix/foundation/security/authorization/authorization-engine"
     },
     "#meshrix/capabilities/operation-permission-core/store": {
       "source": "./packages/capabilities/src/operation-permission-core/store.ts",
-      "default": "./packages/capabilities/dist/operation-permission-core/store.js"
+      "default": "@meshrix/capabilities/operation-permission-core/store"
     },
     "#meshrix/client-strings": {
       "source": "./packages/foundation/src/security/client-strings.ts",
-      "default": "./packages/foundation/dist/security/client-strings.js"
+      "default": "@meshrix/foundation/security/client-strings"
     },
     "#meshrix/console/server-console-shell-context": {
       "source": "./apps/console/composables/server-console-shell-context.ts",
@@ -43,271 +45,275 @@
     },
     "#meshrix/contracts/operations/operation-decorators": {
       "source": "./packages/contracts/src/operations/operation-decorators.ts",
-      "default": "./packages/contracts/dist/operations/operation-decorators.js"
+      "default": "@meshrix/contracts/operations/operation-decorators"
     },
     "#meshrix/contracts/operations/operation-feature-resolution": {
       "source": "./packages/contracts/src/operations/operation-feature-resolution.ts",
-      "default": "./packages/contracts/dist/operations/operation-feature-resolution.js"
+      "default": "@meshrix/contracts/operations/operation-feature-resolution"
     },
     "#meshrix/contracts/operations/operation-registry": {
       "source": "./packages/contracts/src/operations/operation-registry.ts",
-      "default": "./packages/contracts/dist/operations/operation-registry.js"
+      "default": "@meshrix/contracts/operations/operation-registry"
     },
     "#meshrix/contracts/operations/protocol-operation-definitions": {
       "source": "./packages/contracts/src/operations/protocol-operation-definitions.ts",
-      "default": "./packages/contracts/dist/operations/protocol-operation-definitions.js"
+      "default": "@meshrix/contracts/operations/protocol-operation-definitions"
     },
     "#meshrix/contracts/plugins/plugin-bundle-manifest": {
       "source": "./packages/contracts/src/plugins/plugin-bundle-manifest.ts",
-      "default": "./packages/contracts/dist/plugins/plugin-bundle-manifest.js"
+      "default": "@meshrix/contracts/plugins/plugin-bundle-manifest"
     },
     "#meshrix/contracts/plugins/plugin-package-source": {
       "source": "./packages/contracts/src/plugins/plugin-package-source.ts",
-      "default": "./packages/contracts/dist/plugins/plugin-package-source.js"
+      "default": "@meshrix/contracts/plugins/plugin-package-source"
     },
     "#meshrix/contracts/plugins/plugin-package-state": {
       "source": "./packages/contracts/src/plugins/plugin-package-state.ts",
-      "default": "./packages/contracts/dist/plugins/plugin-package-state.js"
+      "default": "@meshrix/contracts/plugins/plugin-package-state"
     },
     "#meshrix/contracts/service-collaboration-contract": {
       "source": "./packages/contracts/src/service-collaboration-contract.ts",
-      "default": "./packages/contracts/dist/service-collaboration-contract.js"
+      "default": "@meshrix/contracts/service-collaboration-contract"
     },
     "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection": {
       "source": "./packages/foundation/src/checkpoint/tree/checkpoint-tree-projection.ts",
-      "default": "./packages/foundation/dist/checkpoint/tree/checkpoint-tree-projection.js"
+      "default": "@meshrix/foundation/checkpoint/tree/checkpoint-tree-projection"
     },
     "#meshrix/foundation/checkpoint/tree/data-structure-substrate": {
       "source": "./packages/foundation/src/checkpoint/tree/data-structure-substrate.ts",
-      "default": "./packages/foundation/dist/checkpoint/tree/data-structure-substrate.js"
+      "default": "@meshrix/foundation/checkpoint/tree/data-structure-substrate"
     },
     "#meshrix/foundation/checkpoint/tree/merkle-state-substrate": {
       "source": "./packages/foundation/src/checkpoint/tree/merkle-state-substrate.ts",
-      "default": "./packages/foundation/dist/checkpoint/tree/merkle-state-substrate.js"
+      "default": "@meshrix/foundation/checkpoint/tree/merkle-state-substrate"
     },
     "#meshrix/foundation/checkpoint/tree/pactium-runtime": {
       "source": "./packages/foundation/src/checkpoint/tree/pactium-runtime.ts",
-      "default": "./packages/foundation/dist/checkpoint/tree/pactium-runtime.js"
+      "default": "@meshrix/foundation/checkpoint/tree/pactium-runtime"
     },
     "#meshrix/foundation/concurrency/lock-manager": {
       "source": "./packages/foundation/src/concurrency/lock-manager.ts",
-      "default": "./packages/foundation/dist/concurrency/lock-manager.js"
+      "default": "@meshrix/foundation/concurrency/lock-manager"
+    },
+    "#meshrix/foundation/environment-compatibility/index": {
+      "source": "./packages/foundation/src/environment-compatibility/index.ts",
+      "default": "@meshrix/foundation/environment-compatibility/index"
     },
     "#meshrix/foundation/module-system/github-release-plugin-package-source": {
       "source": "./packages/foundation/src/module-system/github-release-plugin-package-source.ts",
-      "default": "./packages/foundation/dist/module-system/github-release-plugin-package-source.js"
+      "default": "@meshrix/foundation/module-system/github-release-plugin-package-source"
     },
     "#meshrix/foundation/module-system/local-plugin-package-source": {
       "source": "./packages/foundation/src/module-system/local-plugin-package-source.ts",
-      "default": "./packages/foundation/dist/module-system/local-plugin-package-source.js"
+      "default": "@meshrix/foundation/module-system/local-plugin-package-source"
     },
     "#meshrix/foundation/module-system/plugin-package-acquisition": {
       "source": "./packages/foundation/src/module-system/plugin-package-acquisition.ts",
-      "default": "./packages/foundation/dist/module-system/plugin-package-acquisition.js"
+      "default": "@meshrix/foundation/module-system/plugin-package-acquisition"
     },
     "#meshrix/foundation/module-system/plugin-package-acquisition-port": {
       "source": "./packages/foundation/src/module-system/plugin-package-acquisition-port.ts",
-      "default": "./packages/foundation/dist/module-system/plugin-package-acquisition-port.js"
+      "default": "@meshrix/foundation/module-system/plugin-package-acquisition-port"
     },
     "#meshrix/foundation/module-system/plugin-package-custody": {
       "source": "./packages/foundation/src/module-system/plugin-package-custody.ts",
-      "default": "./packages/foundation/dist/module-system/plugin-package-custody.js"
+      "default": "@meshrix/foundation/module-system/plugin-package-custody"
     },
     "#meshrix/foundation/module-system/plugin-package-lifecycle": {
       "source": "./packages/foundation/src/module-system/plugin-package-lifecycle.ts",
-      "default": "./packages/foundation/dist/module-system/plugin-package-lifecycle.js"
+      "default": "@meshrix/foundation/module-system/plugin-package-lifecycle"
     },
     "#meshrix/foundation/module-system/plugin-package-tar": {
       "source": "./packages/foundation/src/module-system/plugin-package-tar.ts",
-      "default": "./packages/foundation/dist/module-system/plugin-package-tar.js"
+      "default": "@meshrix/foundation/module-system/plugin-package-tar"
     },
     "#meshrix/foundation/module-system/plugin-package-validator": {
       "source": "./packages/foundation/src/module-system/plugin-package-validator.ts",
-      "default": "./packages/foundation/dist/module-system/plugin-package-validator.js"
+      "default": "@meshrix/foundation/module-system/plugin-package-validator"
     },
     "#meshrix/foundation/observability/trace-context": {
       "source": "./packages/foundation/src/observability/trace-context.ts",
-      "default": "./packages/foundation/dist/observability/trace-context.js"
+      "default": "@meshrix/foundation/observability/trace-context"
     },
     "#meshrix/foundation/proof/proof-substrate/index": {
       "source": "./packages/foundation/src/proof/proof-substrate/index.ts",
-      "default": "./packages/foundation/dist/proof/proof-substrate/index.js"
+      "default": "@meshrix/foundation/proof/proof-substrate/index"
     },
     "#meshrix/foundation/security/final-protected-sink-permit": {
       "source": "./packages/foundation/src/security/final-protected-sink-permit.ts",
-      "default": "./packages/foundation/dist/security/final-protected-sink-permit.js"
+      "default": "@meshrix/foundation/security/final-protected-sink-permit"
     },
     "#meshrix/foundation/security/governed-execution-permit-authority": {
       "source": "./packages/foundation/src/security/governed-execution-permit-authority.ts",
-      "default": "./packages/foundation/dist/security/governed-execution-permit-authority.js"
+      "default": "@meshrix/foundation/security/governed-execution-permit-authority"
     },
     "#meshrix/foundation/security/production-ingress-contract": {
       "source": "./packages/foundation/src/security/production-ingress-contract.ts",
-      "default": "./packages/foundation/dist/security/production-ingress-contract.js"
+      "default": "@meshrix/foundation/security/production-ingress-contract"
     },
     "#meshrix/foundation/security/secrets/local-secret-key-provider": {
       "source": "./packages/foundation/src/security/secrets/local-secret-key-provider.ts",
-      "default": "./packages/foundation/dist/security/secrets/local-secret-key-provider.js"
+      "default": "@meshrix/foundation/security/secrets/local-secret-key-provider"
     },
     "#meshrix/foundation/security/secrets/local-secret-store": {
       "source": "./packages/foundation/src/security/secrets/local-secret-store.ts",
-      "default": "./packages/foundation/dist/security/secrets/local-secret-store.js"
+      "default": "@meshrix/foundation/security/secrets/local-secret-store"
     },
     "#meshrix/foundation/storage/backup-contract": {
       "source": "./packages/foundation/src/storage/backup-contract.ts",
-      "default": "./packages/foundation/dist/storage/backup-contract.js"
+      "default": "@meshrix/foundation/storage/backup-contract"
     },
     "#meshrix/foundation/storage/bounded-jsonl": {
       "source": "./packages/foundation/src/storage/bounded-jsonl.ts",
-      "default": "./packages/foundation/dist/storage/bounded-jsonl.js"
+      "default": "@meshrix/foundation/storage/bounded-jsonl"
     },
     "#meshrix/foundation/storage/storage-kernel": {
       "source": "./packages/foundation/src/storage/storage-kernel.ts",
-      "default": "./packages/foundation/dist/storage/storage-kernel.js"
+      "default": "@meshrix/foundation/storage/storage-kernel"
     },
     "#meshrix/foundation/storage/storage-provider": {
       "source": "./packages/foundation/src/storage/storage-provider.ts",
-      "default": "./packages/foundation/dist/storage/storage-provider.js"
+      "default": "@meshrix/foundation/storage/storage-provider"
     },
     "#meshrix/http-utils": {
       "source": "./packages/protocols/http/http-utils.ts",
-      "default": "./packages/protocols/dist/http/http-utils.js"
+      "default": "@meshrix/protocols/http/http-utils"
     },
     "#meshrix/operation-registry": {
       "source": "./packages/contracts/src/operations/operation-registry.ts",
-      "default": "./packages/contracts/dist/operations/operation-registry.js"
+      "default": "@meshrix/contracts/operations/operation-registry"
     },
     "#meshrix/platform-registry": {
       "source": "./packages/server-runtime/src/composition/platform-registry.ts",
-      "default": "./packages/server-runtime/dist/composition/platform-registry.js"
+      "default": "@meshrix/server-runtime/composition/platform-registry"
     },
     "#meshrix/product-api": {
       "source": "./packages/server-runtime/src/composition/product-api.ts",
-      "default": "./packages/server-runtime/dist/composition/product-api.js"
+      "default": "@meshrix/server-runtime/composition/product-api"
     },
     "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers": {
       "source": "./packages/protocols/http/controllers/jobs-controller-artifact-handlers.ts",
-      "default": "./packages/protocols/dist/http/controllers/jobs-controller-artifact-handlers.js"
+      "default": "@meshrix/protocols/http/controllers/jobs-controller-artifact-handlers"
     },
     "#meshrix/protocols/http/controllers/upstream-payload-transit-controller": {
       "source": "./packages/protocols/http/controllers/upstream-payload-transit-controller.ts",
-      "default": "./packages/protocols/dist/http/controllers/upstream-payload-transit-controller.js"
-    },
-    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": {
-      "source": "./packages/protocols/mcp/adapter/http-mcp-adapter.ts",
-      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter.js"
+      "default": "@meshrix/protocols/http/controllers/upstream-payload-transit-controller"
     },
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants": {
       "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
-      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-constants.js"
+      "default": "@meshrix/protocols/mcp/adapter/http-mcp-adapter-constants"
     },
     "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire": {
       "source": "./packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts",
-      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter-client-wire.js"
+      "default": "@meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire"
+    },
+    "#meshrix/protocols/mcp/notifications": {
+      "source": "./packages/protocols/mcp/notifications.ts",
+      "default": "@meshrix/protocols/mcp/notifications"
     },
     "#meshrix/protocols/http/controllers/system-controller-foundation-handlers": {
       "source": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
-      "default": "./packages/protocols/dist/http/controllers/system-controller-foundation-handlers.js"
+      "default": "@meshrix/protocols/http/controllers/system-controller-foundation-handlers"
     },
     "#meshrix/runtime-logger": {
       "source": "./packages/foundation/src/observability/runtime-logger.ts",
-      "default": "./packages/foundation/dist/observability/runtime-logger.js"
+      "default": "@meshrix/foundation/observability/runtime-logger"
     },
     "#meshrix/server-config": {
       "source": "./packages/foundation/src/config/server-config.ts",
-      "default": "./packages/foundation/dist/config/server-config.js"
+      "default": "@meshrix/foundation/config/server-config"
     },
     "#meshrix/server-runtime/composition/composition-root": {
       "source": "./packages/server-runtime/src/composition/composition-root.ts",
-      "default": "./packages/server-runtime/dist/composition/composition-root.js"
+      "default": "@meshrix/server-runtime/composition/composition-root"
     },
     "#meshrix/server-runtime/composition/console-domain/operation-executor": {
       "source": "./packages/server-runtime/src/composition/console-domain/operation-executor.ts",
-      "default": "./packages/server-runtime/dist/composition/console-domain/operation-executor.js"
+      "default": "@meshrix/server-runtime/composition/console-domain/operation-executor"
     },
     "#meshrix/server-runtime/composition/console-domain/services": {
       "source": "./packages/server-runtime/src/composition/console-domain/services.ts",
-      "default": "./packages/server-runtime/dist/composition/console-domain/services.js"
+      "default": "@meshrix/server-runtime/composition/console-domain/services"
     },
     "#meshrix/server-runtime/composition/core-platform-provider": {
       "source": "./packages/server-runtime/src/composition/core-platform-provider.ts",
-      "default": "./packages/server-runtime/dist/composition/core-platform-provider.js"
+      "default": "@meshrix/server-runtime/composition/core-platform-provider"
     },
     "#meshrix/server-runtime/composition/dispatch-operation": {
       "source": "./packages/server-runtime/src/composition/dispatch-operation.ts",
-      "default": "./packages/server-runtime/dist/composition/dispatch-operation.js"
+      "default": "@meshrix/server-runtime/composition/dispatch-operation"
     },
     "#meshrix/server-runtime/composition/dispatch-operation-risk-control": {
       "source": "./packages/server-runtime/src/composition/dispatch-operation-risk-control.ts",
-      "default": "./packages/server-runtime/dist/composition/dispatch-operation-risk-control.js"
+      "default": "@meshrix/server-runtime/composition/dispatch-operation-risk-control"
     },
     "#meshrix/server-runtime/composition/http-application-assembly": {
       "source": "./packages/server-runtime/src/composition/http-application-assembly.ts",
-      "default": "./packages/server-runtime/dist/composition/http-application-assembly.js"
+      "default": "@meshrix/server-runtime/composition/http-application-assembly"
     },
     "#meshrix/server-runtime/composition/operation-dispatch-lock": {
       "source": "./packages/server-runtime/src/composition/operation-dispatch-lock.ts",
-      "default": "./packages/server-runtime/dist/composition/operation-dispatch-lock.js"
+      "default": "@meshrix/server-runtime/composition/operation-dispatch-lock"
     },
     "#meshrix/server-runtime/composition/plugin-contribution-transaction": {
       "source": "./packages/server-runtime/src/composition/plugin-contribution-transaction.ts",
-      "default": "./packages/server-runtime/dist/composition/plugin-contribution-transaction.js"
+      "default": "@meshrix/server-runtime/composition/plugin-contribution-transaction"
     },
     "#meshrix/server-runtime/execution-sandbox/custody-key-broker": {
       "source": "./packages/server-runtime/src/execution-sandbox/custody-key-broker.ts",
-      "default": "./packages/server-runtime/dist/execution-sandbox/custody-key-broker.js"
+      "default": "@meshrix/server-runtime/execution-sandbox/custody-key-broker"
     },
     "#meshrix/server-runtime/execution-sandbox/oci-backend": {
       "source": "./packages/server-runtime/src/execution-sandbox/oci-backend.ts",
-      "default": "./packages/server-runtime/dist/execution-sandbox/oci-backend.js"
+      "default": "@meshrix/server-runtime/execution-sandbox/oci-backend"
     },
     "#meshrix/server-runtime/jobs/batch-deletion-coordinator": {
       "source": "./packages/server-runtime/src/jobs/batch-deletion-coordinator.ts",
-      "default": "./packages/server-runtime/dist/jobs/batch-deletion-coordinator.js"
+      "default": "@meshrix/server-runtime/jobs/batch-deletion-coordinator"
     },
     "#meshrix/server-runtime/jobs/job-pipeline": {
       "source": "./packages/server-runtime/src/jobs/job-pipeline.ts",
-      "default": "./packages/server-runtime/dist/jobs/job-pipeline.js"
+      "default": "@meshrix/server-runtime/jobs/job-pipeline"
     },
     "#meshrix/server-runtime/jobs/upload-no-run-custody": {
       "source": "./packages/server-runtime/src/jobs/upload-no-run-custody.ts",
-      "default": "./packages/server-runtime/dist/jobs/upload-no-run-custody.js"
+      "default": "@meshrix/server-runtime/jobs/upload-no-run-custody"
     },
     "#meshrix/server-runtime/module-runtime/server-runtime": {
       "source": "./packages/server-runtime/src/module-runtime/server-runtime.ts",
-      "default": "./packages/server-runtime/dist/module-runtime/server-runtime.js"
+      "default": "@meshrix/server-runtime/module-runtime/server-runtime"
     },
     "#meshrix/server-runtime/routing/operation-route-index": {
       "source": "./packages/server-runtime/src/routing/operation-route-index.ts",
-      "default": "./packages/server-runtime/dist/routing/operation-route-index.js"
+      "default": "@meshrix/server-runtime/routing/operation-route-index"
     },
     "#meshrix/server-runtime/routing/radix-path-trie": {
       "source": "./packages/server-runtime/src/routing/radix-path-trie.ts",
-      "default": "./packages/server-runtime/dist/routing/radix-path-trie.js"
+      "default": "@meshrix/server-runtime/routing/radix-path-trie"
     },
     "#meshrix/server-runtime/state/interface/index": {
       "source": "./packages/server-runtime/src/state/interface/index.ts",
-      "default": "./packages/server-runtime/dist/state/interface/index.js"
+      "default": "@meshrix/server-runtime/state/interface/index"
     },
     "#meshrix/server-runtime/state/upload-session-admission": {
       "source": "./packages/server-runtime/src/state/upload-session-admission.ts",
-      "default": "./packages/server-runtime/dist/state/upload-session-admission.js"
+      "default": "@meshrix/server-runtime/state/upload-session-admission"
     },
     "#meshrix/server-runtime/state/upload-session-store": {
       "source": "./packages/server-runtime/src/state/upload-session-store.ts",
-      "default": "./packages/server-runtime/dist/state/upload-session-store.js"
+      "default": "@meshrix/server-runtime/state/upload-session-store"
     },
     "#meshrix/server-runtime/state/upload-session-support": {
       "source": "./packages/server-runtime/src/state/upload-session-support.ts",
-      "default": "./packages/server-runtime/dist/state/upload-session-support.js"
+      "default": "@meshrix/server-runtime/state/upload-session-support"
     },
     "#meshrix/settings": {
       "source": "./packages/server-runtime/src/composition/settings.ts",
-      "default": "./packages/server-runtime/dist/composition/settings.js"
+      "default": "@meshrix/server-runtime/composition/settings"
     },
     "#meshrix/state-coordinator": {
       "source": "./packages/foundation/src/storage/state-coordinator.ts",
-      "default": "./packages/foundation/dist/storage/state-coordinator.js"
+      "default": "@meshrix/foundation/storage/state-coordinator"
     }
   },
   "files": [
@@ -329,9 +335,8 @@
     "tools/registry/architecture-layout-manifest.ts",
     "tools/registry/source-layout-manifest.ts",
     "tools/server-scripts/start-server.ts",
-    "tools/scripts/start-all.sh",
-    "tools/scripts/restart-all.sh",
-    "tools/scripts/restart-dev.sh",
+    "!tools/server-scripts/benchmark-gateway.ts",
+    "!dist/tools/server-scripts/benchmark-gateway.*",
     "docs/README.md",
     "docs/architecture/ARCHITECTURE.md",
     "docs/architecture/EXECUTION-SANDBOX.md",
@@ -342,6 +347,7 @@
     "docs/protocols/*.md",
     "docs/examples/",
     "docs/adrs/",
+    "docs/development/",
     "docs/RUNBOOK.md",
     "docs/COMPATIBILITY.md",
     "THIRD_PARTY_NOTICES.md",
@@ -364,10 +370,13 @@
     "tsconfig.json",
     "tsconfig.node.json",
     "tools/server-scripts/verify-public-boundary.ts",
-    "!apps/*/node_modules",
-    "!packages/*/node_modules",
+    "!**/node_modules",
+    "!packages/*/dist/",
+    "!apps/server/dist/",
     "build/usage-skills/",
-    "dist/**/*"
+    "build/dist/**/*",
+    "dist/**/*",
+    "!dist/packages/"
   ],
   "//architecture-governance": {
     "description": "Canonical architecture governance — production code resolves through apps, packages, content, tools, and tests.",
@@ -394,14 +403,17 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22.18.0 <23 || >=24.3.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "bin": {
     "meshrix": "dist/apps/server/bin/meshrix.js",
-    "meshrix-server": "dist/tools/server-scripts/start-server.js"
+    "meshrix-server": "dist/tools/server-scripts/start-server.js",
+    "meshrix-mcp": "dist/apps/server/bin/meshrix-mcp.js"
   },
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/start-server.ts --profile core --dev",
+    "ci:local": "node --conditions=source tools/scripts/local-ci.ts",
+    "test:startup-process-tree": "node tools/scripts/process-tree-smoke.ts",
+    "dev": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/start-server.ts --edition core",
     "start:dev": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/instance-lifecycle.ts start dev",
     "stop:dev": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/instance-lifecycle.ts stop dev",
     "restart:dev": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/instance-lifecycle.ts restart dev",
@@ -428,7 +440,7 @@
     "prepack": "npm run pack:usage-skills",
     "prepublishOnly": "npm run pack:usage-skills",
     "verify:usage-skills-pack": "node tools/validate-usage-skills-pack.mjs",
-    "build": "npm run build:node && npm run build:web",
+    "build": "npm run build:node && npm run build:web && npm run pack:usage-skills",
     "typecheck": "npm run typecheck:node && npm run typecheck:test && npm run typecheck:web",
     "test": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile core-public --continue-on-failure",
     "test:security": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile security-public",
@@ -453,7 +465,7 @@
     "server:verify:state-machines": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-state-machines.ts",
     "server:verify:protocol-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-protocol-boundary.ts",
     "server:deployment-index": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/deployment-index.ts",
-    "verify:enterprise-single-node-offline-bundle": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/enterprise-single-node-offline-bundle.ts",
+    "verify:single-node-offline-bundle": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/single-node-offline-bundle.ts",
     "verify:platform-audit": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/core-platform-gap-audit.ts",
     "verify:docs": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/run-verifiers.ts --profile docs",
     "verify:skills": "node tools/validate-skills.mjs",
@@ -462,7 +474,7 @@
     "verify:core-platform-documentation-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-documentation-convergence.ts",
     "verify:runtime-refactor-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-refactor-convergence.ts",
     "verify:composition-source-package": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-composition-source-package.ts",
-    "verify:private-deployment-internal-platform-e2e": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts --reduce-existing",
+    "verify:single-node:internal-platform-e2e": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-single-node-internal-platform-e2e.ts --reduce-existing",
     "verify:release-authority-baseline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-authority-baseline.ts",
     "verify:upstream-service-publishing": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upstream-service-publishing.ts",
     "verify:upstream-service-publishing-candidate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upstream-service-publishing-candidate.ts",
@@ -482,18 +494,18 @@
     "release:publish-npm": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/publish-release-set.ts",
     "release:prepare-node-runtime-source-evidence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/prepare-node-runtime-source-evidence.ts",
     "release:generate-provenance": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/generate-provenance.ts",
-    "verify:npm-package-installability": "npm run build && cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-npm-package-installability.ts",
+    "verify:npm-package-installability": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-npm-package-installability.ts",
     "verify:mcp-proxy-transport": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-mcp-proxy-transport.ts",
     "verify:downstream-agent-tool-loop": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-downstream-agent-tool-loop.ts",
     "verify:path-abstraction-audit": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-path-abstraction-audit.ts",
     "verify:controlled-execution-sandbox": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-controlled-execution-sandbox.ts",
     "verify:controlled-execution-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-controlled-execution-convergence.ts",
-    "verify:acceptance": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-platform-acceptance.ts --profile enterprise-single-node",
-    "verify:acceptance:plan": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-platform-acceptance.ts --profile enterprise-single-node --plan",
+    "verify:acceptance": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-platform-acceptance.ts --profile single-node",
+    "verify:acceptance:plan": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-platform-acceptance.ts --profile single-node --plan",
     "verify:acceptance:standards": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-acceptance-standards.ts",
     "verify:real-machine": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-real-machine-validation.ts",
     "verify:cross-system-offline-transfer": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-cross-system-offline-transfer-evidence.ts",
-    "verify:enterprise-single-node:ubuntu-container": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts --receipt-only",
+    "verify:single-node:ubuntu-container": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-single-node-ubuntu-container.ts --receipt-only",
     "verify:capability-acceptance-machines": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-capability-acceptance-machines.ts",
     "verify:plugin-bundle-protocol": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-plugin-bundle-protocol.ts",
     "verify:plugin-runtime": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-plugin-bundle-protocol.ts && cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-plugin-runtime.ts",
@@ -519,9 +531,9 @@
     "verify:operation-permission-domain-model:report": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-operation-permission-domain-model.ts --allow-open-gaps",
     "verify:authorization-governance": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-authorization-governance.ts",
     "verify:approval-governance": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-approval-governance.ts",
-    "verify:enterprise-authorization-enforcement": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-enterprise-authorization-enforcement.ts",
-    "verify:enterprise-audit-retention-redaction": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-enterprise-audit-retention-redaction.ts",
-    "verify:enterprise-observability-coverage": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-enterprise-observability-coverage.ts",
+    "verify:authorization-enforcement": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-authorization-enforcement.ts",
+    "verify:audit-retention-redaction": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-audit-retention-redaction.ts",
+    "verify:observability-coverage": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-observability-coverage.ts",
     "verify:console-administration-coverage": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-console-administration-coverage.ts",
     "verify:console-admin-browser-visual": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-console-admin-browser-visual.ts",
     "verify:console-component-reuse": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-console-component-reuse.ts",
@@ -537,24 +549,24 @@
     "repo:branch-flow": "cross-env NODE_OPTIONS=--conditions=source node tools/scripts/verify-branch-flow.ts",
     "repo:git-publication": "cross-env NODE_OPTIONS=--conditions=source node tools/scripts/verify-git-publication.ts --self-test && cross-env NODE_OPTIONS=--conditions=source node tools/scripts/verify-git-publication.ts --index",
     "security:hygiene": "cross-env NODE_OPTIONS=--conditions=source node tests/verify-secret-hygiene.ts",
-    "server:start": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/start-server.ts --profile core",
+    "server:start": "meshrix-server --with-ui --edition core",
     "server:dev:web": "npm run dev --workspace @meshrix/console",
     "server:restart": "cross-env NODE_OPTIONS=--conditions=source node tools/scripts/restart-dev.ts --profile core",
-    "server:auth": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/console-auth.ts",
-    "server:auth:rotate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/console-auth.ts set-password --username owner --generate-password",
-    "server:doctor": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/doctor.ts",
-    "server:locate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/locate-storage.ts",
-    "server:reconcile": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/reconcile-storage.ts",
+    "server:auth": "node dist/tools/server-scripts/console-auth.js",
+    "server:auth:rotate": "node dist/tools/server-scripts/console-auth.js set-password --username owner --generate-password",
+    "server:doctor": "node dist/tools/server-scripts/doctor.js",
+    "server:locate": "node dist/tools/server-scripts/locate-storage.js",
+    "server:reconcile": "node dist/tools/server-scripts/reconcile-storage.js",
     "server:verify:public-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-public-boundary.ts",
     "server:verify:script-registry": "cross-env NODE_OPTIONS=--conditions=source node tests/verify-script-registry.ts",
-    "server:verify:resource-discipline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-resource-discipline.ts && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts tests/vitest/server/upload-custody-workspace-materialization.test.ts && cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-memory-leaks.ts",
+    "server:verify:resource-discipline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-resource-discipline.ts && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts",
     "server:verify:memory-leaks": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-memory-leaks.ts",
     "server:verify:strategy-management": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-strategy-management.ts",
     "server:verify:strategy-management-browser": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-strategy-management-browser.ts",
     "server:verify:external-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-external-gateway-plugin.ts && npm --prefix plugins/external-gateway test && npx vitest run tests/vitest/server/external-gateway-plugin.test.ts",
     "server:verify:agent-self-maintenance-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-agent-self-maintenance-runtime.ts && npm --prefix plugins/agents/meshrix-self-maintenance test && npx vitest run tests/acceptance/agent-self-maintenance-directionality.test.ts",
     "server:verify:model-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-plugin.ts && npm --prefix plugins/model-gateway test",
-    "server:verify:model-gateway-detachment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-detachment.ts && npx vitest run tests/acceptance/model-gateway-adapter-boundary.test.ts tests/acceptance/agent-mcp-fixed-gateway-pipeline.test.ts tests/acceptance/gateway-application-stage-bypass.test.ts",
+    "server:verify:model-gateway-detachment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-detachment.ts",
     "server:verify:release-deployment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-deployment.ts",
     "server:verify:integration-task-supervisor": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-integration-task-supervisor.ts",
     "server:verify:trusted-forwarding": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-trusted-forwarding-invariants.ts",
@@ -564,18 +576,22 @@
     "server:verify:deployment-index": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-deployment-index.ts",
     "server:verify:security-hardening": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-security-hardening.ts",
     "server:verify:upload-workspace-materialization": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upload-workspace-materialization.ts",
-    "console:verify": "npm run build --workspace @meshrix/console && npm run typecheck --workspace @meshrix/console",
-    "mcp:doctor": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/mcp-doctor.ts",
-    "mcp:install": "sh packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh",
+    "console:verify": "npm run build --workspace @meshrix/ui-console && npm run build --workspace @meshrix/console && npm run typecheck --workspace @meshrix/console",
+    "mcp:doctor": "node dist/tools/server-scripts/mcp-doctor.js",
+    "mcp:install": "node dist/tools/server-scripts/mcp-install.js",
     "server:stress:mcp-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/stress-mcp-gateway.ts",
     "server:stress:mcp-gateway-observed": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/observe-mcp-gateway-load.ts",
     "server:stress:gateway-platform": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/stress-gateway-platform-profile.ts",
-    "server:mcp:register": "sh packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh register",
+    "gateway:migrate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/migrate-gateway-config.ts",
+    "gateway:benchmark": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/benchmark-gateway.ts",
+    "test:gateway-benchmark": "node tests/run.ts --profile gateway-benchmark --continue-on-failure --report build/reports/gateway-benchmark-tests.json",
+    "test:product-distribution": "node tests/run.ts --profile product-distribution --continue-on-failure --report build/reports/product-distribution.json",
+    "server:mcp:register": "node dist/apps/server/bin/meshrix-mcp.js register",
     "setup": "npm install",
     "vitest": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",
     "vitest:coverage": "node --conditions=source ./node_modules/vitest/vitest.mjs run --config vitest.config.ts --coverage",
-    "build:node": "tsc -p tsconfig.node.json && node tools/scripts/sync-typescript-package-dist.ts",
-    "build:web": "npm run build --workspace @meshrix/console",
+    "build:node": "node tools/scripts/clean-node-build-output.ts && tsc -p tsconfig.node.json && node tools/scripts/sync-typescript-package-dist.ts",
+    "build:web": "npm run build --workspace @meshrix/ui-console && npm run build --workspace @meshrix/console",
     "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.tests.json --noEmit",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.json",
@@ -595,6 +611,7 @@
     "@meshrix/client-adapter-kit": "0.0.1",
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
+    "@meshrix/gateway": "0.0.1",
     "@meshrix/protocols": "0.0.1",
     "@meshrix/server-runtime": "0.0.1",
     "@meshrix/ui-console": "0.0.1",
@@ -603,14 +620,15 @@
     "es-module-lexer": "^2.3.1",
     "fflate": "^0.8.3",
     "marked": "^18.0.2",
-    "pactium": "file:vendor/pactium-0.8.0.tgz",
+    "pactium": "0.8.1",
     "pg": "^8.22.0",
-    "undici": "^8.8.0",
+    "undici": "^8.11.2",
     "vue": "^3.5.32",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "smol-toml": "^1.7.1"
   },
   "overrides": {
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.8",
     "qs": "6.16.0"
   },
   "devDependencies": {
@@ -619,15 +637,51 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.0.10",
     "@types/pg": "^8.21.0",
+    "@types/semver": "7.8.0",
     "@vitejs/plugin-vue": "^6.0.6",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "@vue/test-utils": "2.4.11",
     "cross-env": "^10.1.0",
     "jsdom": "^30.0.0",
     "openpgp": "^6.3.1",
+    "semver": "7.8.1",
     "typescript": "^5.8.3",
     "vite": "^8.1.4",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.11",
     "vue-tsc": "^3.3.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "bundleDependencies": [
+    "@meshrix/agent-antigravity-adapter",
+    "@meshrix/agent-claude-code-adapter",
+    "@meshrix/agent-codex-adapter",
+    "@meshrix/agent-kimi-adapter",
+    "@meshrix/agent-openclaw-adapter",
+    "@meshrix/agent-opencode-adapter",
+    "@meshrix/agent-pi-adapter",
+    "@meshrix/agents",
+    "@meshrix/capabilities",
+    "@meshrix/client-adapter-kit",
+    "@meshrix/contracts",
+    "@meshrix/foundation",
+    "@meshrix/protocols",
+    "@meshrix/server-runtime",
+    "@meshrix/ui-console"
+  ],
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "typebox": "1.3.6"
+  },
+  "allowScripts": {
+    "@datadog/pprof": true,
+    "better-sqlite3": true,
+    "fsevents": true
   }
 }

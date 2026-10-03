@@ -2,63 +2,67 @@
   "name": "@meshrix/agents",
   "version": "0.0.1",
   "description": "Meshrix.js agent library, collaboration, relay domain, memory/context contracts",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
-    "node": "^22.0.0 || ^24.0.0"
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
   },
   "type": "module",
-  "dependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1",
-    "better-sqlite3": "^12.9.0"
-  },
   "exports": {
     "./agent-memory/index": {
-      "types": "./dist/agent-memory/index.d.ts",
       "source": "./src/agent-memory/index.ts",
+      "types": "./dist/agent-memory/index.d.ts",
       "default": "./dist/agent-memory/index.js"
     },
     "./agent-workspace/agent-workspace-materialization": null,
     "./agent-workspace/agent-workspace-materialization-brand": {
-      "types": "./dist/agent-workspace/agent-workspace-materialization-brand.d.ts",
       "source": "./src/agent-workspace/agent-workspace-materialization-brand.ts",
+      "types": "./dist/agent-workspace/agent-workspace-materialization-brand.d.ts",
       "default": "./dist/agent-workspace/agent-workspace-materialization-brand.js"
     },
     "./agent-workspace/agent-workspace-materialization-file-worker": null,
     "./agent-workspace/agent-workspace-materialization-port": {
-      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
       "source": "./src/agent-workspace/agent-workspace-materialization-port.ts",
+      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
       "default": "./dist/agent-workspace/agent-workspace-materialization-port.js"
     },
     "./agent-workspace/index": {
-      "types": "./dist/agent-workspace/index.d.ts",
       "source": "./src/agent-workspace/index.ts",
+      "types": "./dist/agent-workspace/index.d.ts",
       "default": "./dist/agent-workspace/index.js"
     },
     "./upstream-gateway/index": {
-      "types": "./dist/upstream-gateway/index.d.ts",
       "source": "./src/upstream-gateway/index.ts",
+      "types": "./dist/upstream-gateway/index.d.ts",
       "default": "./dist/upstream-gateway/index.js"
     },
+    "./upstream-gateway/gateway-executor": {
+      "source": "./src/upstream-gateway/gateway-executor.ts",
+      "types": "./dist/upstream-gateway/gateway-executor.d.ts",
+      "default": "./dist/upstream-gateway/gateway-executor.js"
+    },
+    "./service-events": {
+      "source": "./src/service-events/index.ts",
+      "types": "./dist/service-events/index.d.ts",
+      "default": "./dist/service-events/index.js"
+    },
     "./workspace-asset-registry/index": {
-      "types": "./dist/workspace-asset-registry/index.d.ts",
       "source": "./src/workspace-asset-registry/index.ts",
+      "types": "./dist/workspace-asset-registry/index.d.ts",
       "default": "./dist/workspace-asset-registry/index.js"
     },
     "./workspace-contribution": {
-      "types": "./dist/workspace-contribution/index.d.ts",
       "source": "./src/workspace-contribution/index.ts",
+      "types": "./dist/workspace-contribution/index.d.ts",
       "default": "./dist/workspace-contribution/index.js"
     },
     "./workspace-contribution/index": {
-      "types": "./dist/workspace-contribution/index.d.ts",
       "source": "./src/workspace-contribution/index.ts",
+      "types": "./dist/workspace-contribution/index.d.ts",
       "default": "./dist/workspace-contribution/index.js"
     },
     "./workspace-governance/index": {
-      "types": "./dist/workspace-governance/index.d.ts",
       "source": "./src/workspace-governance/index.ts",
+      "types": "./dist/workspace-governance/index.d.ts",
       "default": "./dist/workspace-governance/index.js"
     }
   },
@@ -70,5 +74,21 @@
   ],
   "imports": {
     "#meshrix/foundation/storage/bounded-jsonl": "@meshrix/foundation/storage/bounded-jsonl"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/agents"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1",
+    "better-sqlite3": "^12.9.0"
   }
 }

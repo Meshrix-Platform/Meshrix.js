@@ -38,6 +38,25 @@ export function trustedApprovedPendingOperation(value: any = null) : any {
   return String(value.pendingOperationId || "").trim() ? value : null;
 }
 
+/**
+ * The front gate's escalation assertion. A caller that sets it asks this runtime only to
+ * record the pending approval the gate refused for, never to run the effect.
+ *
+ * The assertion describes that one call, so it is not execution context a later call may
+ * inherit. A pending operation persists the context that created it and an approved resume
+ * replays that context: a replayed assertion would re-arm the escalation over the very call
+ * whose approval already satisfies the policy, so the resumed operation could only ever
+ * suspend itself again and never execute.
+ */
+export const ESCALATION_ONLY_CONTEXT_KEY: any = "approvalOnly";
+
+/** The execution context a pending operation may persist: never the escalation assertion. */
+export function pendingOperationContext(context: Record<string, any> = {}) : any {
+  if (context?.[ESCALATION_ONLY_CONTEXT_KEY] === undefined) return context;
+  const { [ESCALATION_ONLY_CONTEXT_KEY]: _escalationOnly, ...inheritable } = context;
+  return inheritable;
+}
+
 export function uniqueStrings(values: any = []) : any {
   return [...new Set<any>(values.map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
 }

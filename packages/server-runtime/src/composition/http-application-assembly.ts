@@ -23,13 +23,13 @@ import {
 } from "./plugin-contribution-controller.ts";
 import { createPluginWorkspaceAccess } from "./plugin-workspace-access.ts";
 import { createQueuedJobWorkflowProvider } from "./queued-job-workflow-provider.ts";
-import { createAgentMcpGatewayPipeline } from "./agent-mcp-gateway-pipeline.ts";
-import { createWorkspaceApplicationEnvelope } from "@meshrix/contracts/agent-mcp-traffic";
+import { createPlatformMcpGateway } from "./gateway-composition.ts";
 import {
   createServerConsoleDomainServices,
   createServerConsoleOperationProviders,
   createServerOperationPermissionPlatform,
-  createServerToolSkillManagementProvider
+  createServerToolSkillManagementProvider,
+  readAuthorizedMcpToolSelection
 } from "./server-runtime-providers.ts";
 
 const API_KEY_AUDIENCE_MAX_RISK: Readonly<Record<string, string>> = Object.freeze({
@@ -107,6 +107,7 @@ export function createHttpApplicationAssemblyCloser({
   uploadWorkspaceMaterializationProvider,
   agentWorkspace,
   integrationTaskSupervisor,
+  platformMcpGateway,
   consoleOperationProviders,
   unregisterPluginListeners = () : any => {},
   operationPermissionPlatform,
@@ -139,6 +140,7 @@ export function createHttpApplicationAssemblyCloser({
       if (typeof agentWorkspace?.close === "function") {
         await closeOwner(() : any => agentWorkspace.close());
       }
+      await closeOwner(() : any => platformMcpGateway?.close?.());
       await closeOwner(() : any => unregisterPluginListeners());
       await closeOwner(() : any => consoleOperationProviders.close());
       await closeOwner(() : any => operationPermissionPlatform.close());
@@ -545,6 +547,12 @@ export async function createHttpApplicationAssembly({
     consoleAuth,
     securityPermissions,
     proofSubstrate: registeredOperationProofSubstrate,
+    readMcpToolSelection: ({ authorization, signal }: Record<string, any> = {}) => readAuthorizedMcpToolSelection({
+      registry: consoleOperationProviders.upstreamGatewayRegistry,
+      operationRegistry: operationPermissionPlatformRef?.registry,
+      authorization,
+      signal
+    }),
     logger: runtimeLogger
   });
   operationPermissionPlatformRef = operationPermissionPlatform;
@@ -618,49 +626,18 @@ export async function createHttpApplicationAssembly({
         ?.getAudienceCatalogFactsForGrant(grantId) || null,
     logger: runtimeLogger
   });
-  const agentMcpGatewayPipeline: any = createAgentMcpGatewayPipeline({
-    router: compositionRoot.gatewayChannelRouter,
-    workspaceApplication: {
-      async execute({ descriptor, callerInput, applicationContext }: Record<string, any>): Promise<any> {
-        const context: any = applicationContext || {};
-        const resolved: any = await toolSkillManagementProvider.resolveMcpWorkspaceInput({
-          input: callerInput,
-          request: context.request,
-          context: context.executionContext,
-          signal: context.signal
-        });
-        const workspaceId: any = String(context.executionContext?.workspaceId || "").trim();
-        const workingSetId: any = workspaceId
-          ? `working-set:${workspaceId}`
-          : `working-set:operation:${descriptor.operationId}`;
-        const applicationRef: any = workspaceId
-          ? `workspace:${workspaceId}`
-          : `workspace-operation:${descriptor.operationId}`;
-        return Object.freeze({
-          envelope: createWorkspaceApplicationEnvelope({
-            trafficModel: "workspace_application",
-            operationId: descriptor.operationId,
-            subjectRef: String(context.subjectRef || "subject:unknown"),
-            workingSetId,
-            cursorRef: null,
-            changeSetRef: null,
-            resourceRefs: [],
-            cacheScope: "private"
-          }),
-          result: Object.freeze({
-            stage: "workspace_application",
-            trafficModel: "workspace_application",
-            envelopeRef: applicationRef,
-            status: "admitted",
-            normalizedOutcomeRef: workspaceId ? "workspace:resolved" : "workspace-operation:resolved",
-            errorRef: null,
-            generationRef: applicationRef
-          }),
-          output: resolved
-        });
-      }
-    }
+  const platformMcpGateway: any = createPlatformMcpGateway({
+    toolSkillManagementProvider,
+    upstreamGatewayRegistry: consoleOperationProviders.upstreamGatewayRegistry,
+    operationProofSubstrate: registeredOperationProofSubstrate,
+    runtimeLogger,
+    platformName: "meshrix-platform"
   });
+  registerStartupCleanup({
+    close: () : any => platformMcpGateway.close(),
+    blocksDependencyShutdown: true
+  });
+  await platformMcpGateway.gateway.start();
   toolSkillManagementProviderRef = toolSkillManagementProvider;
   controllers.plugin = createPluginContributionController({
     registry: pluginContributions,
@@ -735,7 +712,7 @@ export async function createHttpApplicationAssembly({
       subjectRateLimiter,
       tenantRateLimiter,
       toolSkillManagementProvider,
-      agentMcpGatewayPipeline,
+      platformMcpGatewayAdapter: platformMcpGateway.adapter,
       upstreamGatewayRegistryForMcp: consoleOperationProviders.upstreamGatewayRegistry,
       ipRateLimiter
     });
@@ -773,6 +750,7 @@ export async function createHttpApplicationAssembly({
     uploadWorkspaceMaterializationProvider,
     agentWorkspace,
     integrationTaskSupervisor,
+    platformMcpGateway,
     consoleOperationProviders,
     unregisterPluginListeners,
     operationPermissionPlatform,
@@ -805,6 +783,7 @@ export async function createHttpApplicationAssembly({
     securityAlertStore: consoleOperationProviders.securityAlertStore,
     securityPermissions,
     toolSkillManagementProvider,
+    platformMcpGateway,
     upstreamGatewayRegistryForMcp: consoleOperationProviders.upstreamGatewayRegistry,
     activateListeningEndpoint,
     close,

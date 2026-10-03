@@ -7,8 +7,8 @@ import { assertNodeVersion, startCommands, runCommand, start } from '../../tools
 
 export function registerSourceStartTests(test) {
   test('accepts the supported source-running Node versions', () => {
-    for (const version of ['22.18.0', '22.20.0', '24.0.0', '24.18.1']) assertNodeVersion(version);
-    for (const version of ['20.19.0', '22.16.0', '23.6.0', '25.0.0', 'invalid']) {
+    for (const version of ['22.19.0', '22.20.0', '24.3.0', '24.18.1']) assertNodeVersion(version);
+    for (const version of ['20.19.0', '22.18.0', '23.6.0', '24.0.0', '24.2.9', '25.0.0', 'invalid']) {
       assert.throws(() => assertNodeVersion(version), /Node.js 24/);
     }
   });
@@ -39,20 +39,20 @@ export function registerSourceStartTests(test) {
   }
   test('checks the port before dependency work and runs each step in checkout root', () => fixture(async (root) => {
     const events = [];
-    await start({ root, version: '24.0.0', log: () => {}, checkPort: async () => events.push('port'),
+    await start({ root, version: '24.3.0', log: () => {}, checkPort: async () => events.push('port'),
       run: async (command, options) => { assert.equal(options.cwd, root); events.push(command.id); } });
     assert.deepEqual(events, ['port', 'dependencies', 'build', 'console']);
   }));
   test('an occupied port prevents installation and startup', () => fixture(async (root) => {
     const calls = [];
-    await assert.rejects(start({ root, version: '24.0.0', log: () => {},
+    await assert.rejects(start({ root, version: '24.3.0', log: () => {},
       checkPort: async () => { throw new Error('occupied'); }, run: async (command) => calls.push(command.id) }), /occupied/);
     assert.deepEqual(calls, []);
   }));
   for (const failing of ['dependencies', 'build', 'console']) {
     test(`${failing} failure stops the sequence without a fallback`, () => fixture(async (root) => {
       const calls = [];
-      await assert.rejects(start({ root, version: '24.0.0', log: () => {}, checkPort: async () => {},
+      await assert.rejects(start({ root, version: '24.3.0', log: () => {}, checkPort: async () => {},
         run: async (command) => { calls.push(command.id); if (command.id === failing) throw new Error('failed'); } }), /failed/);
       const expected = ['dependencies', 'build', 'console'];
       assert.deepEqual(calls, expected.slice(0, expected.indexOf(failing) + 1));
@@ -61,13 +61,13 @@ export function registerSourceStartTests(test) {
   test('a missing lockfile does not run npm', () => fixture(async (root) => {
     await rm(path.join(root, 'package-lock.json'));
     const calls = [];
-    await assert.rejects(start({ root, version: '24.0.0', log: () => {},
+    await assert.rejects(start({ root, version: '24.3.0', log: () => {},
       checkPort: async () => calls.push('port'), run: async () => calls.push('run') }), /ENOENT/);
     assert.deepEqual(calls, []);
   }));
   test('a wrong checkout is rejected before any command', () => fixture(async (root) => {
     await writeFile(path.join(root, 'package.json'), '{"name":"other-project"}');
-    await assert.rejects(start({ root, version: '24.0.0' }), /source checkout/);
+    await assert.rejects(start({ root, version: '24.3.0' }), /source checkout/);
   }));
   test('a real subprocess success restores signal handlers', async () => {
     const before = process.listenerCount('SIGTERM');

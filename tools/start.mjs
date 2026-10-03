@@ -12,8 +12,8 @@ const port = 7228;
 
 export function assertNodeVersion(version = process.versions.node) {
   const [major, minor] = version.split('.').map(Number);
-  if (!(major === 24 || (major === 22 && minor >= 18))) {
-    throw new Error('Install Node.js 24 (including npm), then run this command again.');
+  if (!((major === 24 && minor >= 3) || (major === 22 && minor >= 19))) {
+    throw new Error('Install supported Node.js 24.3+ or 22.19+ (including npm), then run this command again.');
   }
 }
 

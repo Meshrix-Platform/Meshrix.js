@@ -6,8 +6,10 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import * as openpgp from "openpgp";
 import { ServerConfig } from "#meshrix/server-config";
+import { MCP_CLIENT_TARGETS } from "../../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
 import {
   connectorRoot,
+  MCP_PORTABLE_ASSET_PREFIX,
   PRIORITY_INSTALL_TARGET,
   projectRoot,
   readJson,
@@ -15,6 +17,8 @@ import {
   sha256
 } from "./mcp-release-common.ts";
 import { createReproduciblePortableArchives } from "./mcp-release-reproducible-archives.ts";
+import { resolveReleaseWorkspaceDirectories } from "./release-metadata.ts";
+import { listFilesRecursively } from "./release-archive-inspection.ts";
 
 const NODE_LEGAL_FILE_NAMES: readonly any[] = Object.freeze([
   "LICENSE",
@@ -44,6 +48,48 @@ const PINNED_DOWNLOAD_RETRY_HTTP_STATUSES: ReadonlySet<number> = new Set<any>([
 ]);
 let nodeRuntimeLockPromise: any = null;
 const activePinnedDownloads: any = new Map<any, any>();
+
+export async function loadPortableUndiciDependency(rootPackageJson: any = null) : Promise<any> {
+  const packageJson: any = rootPackageJson || await readJson(path.join(projectRoot, "package.json"));
+  const packageLock: any = await readJson(path.join(projectRoot, "package-lock.json"));
+  const installedRoot: any = path.join(projectRoot, "node_modules", "undici");
+  const installedPackage: any = await readJson(path.join(installedRoot, "package.json"));
+  const rootManifestSpec: any = packageJson.dependencies?.undici;
+  const lockRootSpec: any = packageLock.packages?.[""]?.dependencies?.undici;
+  const lockEntry: any = packageLock.packages?.["node_modules/undici"];
+  if (
+    typeof rootManifestSpec !== "string"
+    || rootManifestSpec !== lockRootSpec
+    || installedPackage.name !== "undici"
+    || installedPackage.version !== lockEntry?.version
+    || !/^sha512-[A-Za-z0-9+/]+=*$/u.test(String(lockEntry?.integrity || ""))
+    || Object.keys(installedPackage.dependencies || {}).length > 0
+    || Object.keys(installedPackage.optionalDependencies || {}).length > 0
+  ) {
+    throw new Error("portable_undici_dependency_not_lock_backed");
+  }
+  const packageFiles: any[] = await listFilesRecursively(installedRoot);
+  const files: any[] = packageFiles.filter((file?: any) : any => (
+    file === "LICENSE"
+    || file === "index.js"
+    || file === "index-fetch.js"
+    || file === "lib/web/fetch/LICENSE"
+    || (file.startsWith("lib/") && file.endsWith(".js"))
+  ));
+  if (!files.includes("LICENSE") || !files.includes("index.js") || !files.includes("index-fetch.js")) {
+    throw new Error("portable_undici_runtime_or_license_missing");
+  }
+  return {
+    sourceRoot: installedRoot,
+    packageJson: installedPackage,
+    portablePackageJson: {
+      name: installedPackage.name,
+      version: installedPackage.version,
+      main: "index.js"
+    },
+    files
+  };
+}
 
 function unixExecutableName(name?: any) : any {
   return name;
@@ -206,6 +252,157 @@ export async function resolveBundledNodeVersion(explicitVersion: any = "") : Pro
     throw new Error("node_runtime_version_not_locked");
   }
   return lock.version;
+}
+
+function strictChildPath(parentPath?: any, candidatePath?: any) : boolean {
+  const relative: any = path.relative(parentPath, candidatePath);
+  return Boolean(relative)
+    && relative !== ".."
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
+}
+
+function declaredPortablePackageFiles(manifest?: any) : any[] {
+  if (!Array.isArray(manifest?.files) || manifest.files.length === 0) {
+    throw new Error("portable_adapter_file_manifest_missing");
+  }
+  const files: any[] = [...new Set<any>(manifest.files)];
+  if (files.length !== manifest.files.length || files.some((relativeFile?: any) : any => (
+    typeof relativeFile !== "string"
+    || !relativeFile
+    || relativeFile.includes("\\")
+    || path.posix.isAbsolute(relativeFile)
+    || path.posix.normalize(relativeFile) !== relativeFile
+    || relativeFile.split("/").some((part?: any) : any => !part || part === "." || part === "..")
+    || /[*?{}[\]]/u.test(relativeFile)
+  ))) {
+    throw new Error("portable_adapter_file_manifest_invalid");
+  }
+  return files.sort((left?: any, right?: any) : any => left.localeCompare(right));
+}
+
+async function loadPortableClientAdapterClosure(rootPackageJson?: any) : Promise<any> {
+  const workspaceDirectories: any[] = await resolveReleaseWorkspaceDirectories({
+    rootDir: projectRoot,
+    workspaces: rootPackageJson.workspaces
+  });
+  const workspacePackages: any = new Map<any, any>();
+  for (const directory of workspaceDirectories) {
+    const packageJsonPath: any = path.join(projectRoot, directory, "package.json");
+    const manifest: any = await readJson(packageJsonPath);
+    if (typeof manifest.name !== "string" || workspacePackages.has(manifest.name)) {
+      throw new Error("portable_workspace_package_identity_invalid");
+    }
+    workspacePackages.set(manifest.name, {
+      directory,
+      packageJsonPath,
+      manifest
+    });
+  }
+
+  const bundledNames: any = new Set<any>(
+    rootPackageJson.bundleDependencies || rootPackageJson.bundledDependencies || []
+  );
+  const componentPackages: any = new Map<any, any>();
+  const pendingPackages: any[] = [];
+  const rootDependencies: any = {
+    ...(rootPackageJson.dependencies || {}),
+    ...(rootPackageJson.optionalDependencies || {})
+  };
+
+  function requirePrivateBundle(packageName?: any, expectedVersion?: any) : any {
+    const workspacePackage: any = workspacePackages.get(packageName);
+    if (!workspacePackage || workspacePackage.manifest.private !== true) {
+      throw new Error("portable_adapter_workspace_package_not_private");
+    }
+    if (
+      !bundledNames.has(packageName)
+      || rootDependencies[packageName] !== workspacePackage.manifest.version
+      || (expectedVersion && expectedVersion !== workspacePackage.manifest.version)
+    ) {
+      throw new Error("portable_adapter_root_bundle_identity_mismatch");
+    }
+    if (workspacePackage.manifest.license !== rootPackageJson.license) {
+      throw new Error("portable_adapter_license_mismatch");
+    }
+    if (!componentPackages.has(packageName)) {
+      const packageFiles: any[] = declaredPortablePackageFiles(workspacePackage.manifest);
+      componentPackages.set(packageName, {
+        ...workspacePackage,
+        files: packageFiles
+      });
+      pendingPackages.push(packageName);
+    }
+    return workspacePackage.manifest;
+  }
+
+  for (const target of MCP_CLIENT_TARGETS) {
+    const adapter: any = target.adapter;
+    if (!adapter || typeof adapter.packageName !== "string" || typeof adapter.entrypoint !== "string") {
+      throw new Error("portable_adapter_target_catalog_invalid");
+    }
+    const manifest: any = requirePrivateBundle(adapter.packageName, adapter.version);
+    if (!manifest.files.includes(adapter.entrypoint)) {
+      throw new Error("portable_adapter_entrypoint_not_declared");
+    }
+  }
+
+  for (let cursor = 0; cursor < pendingPackages.length; cursor += 1) {
+    const packageName: any = pendingPackages[cursor];
+    const manifest: any = componentPackages.get(packageName).manifest;
+    const unsupportedDependencies: any[] = [
+      ...Object.keys(manifest.dependencies || {}),
+      ...Object.keys(manifest.optionalDependencies || {})
+    ];
+    if (unsupportedDependencies.length > 0) {
+      throw new Error("portable_adapter_external_runtime_dependency_requires_locked_closure");
+    }
+    for (const [peerName, peerVersion] of Object.entries(manifest.peerDependencies || {}) as [string, any][]) {
+      if (manifest.peerDependenciesMeta?.[peerName]?.optional === true) continue;
+      const peerManifest: any = requirePrivateBundle(peerName, peerVersion);
+      if (!peerManifest) throw new Error("portable_adapter_required_peer_unavailable");
+    }
+  }
+
+  const packageNames: any[] = [...componentPackages.keys()].sort((left?: any, right?: any) : any => left.localeCompare(right));
+  const dependencies: Record<string, any> = {};
+  for (const packageName of packageNames) {
+    dependencies[packageName] = componentPackages.get(packageName).manifest.version;
+  }
+  return {
+    packages: packageNames.map((packageName?: any) : any => componentPackages.get(packageName)),
+    dependencies
+  };
+}
+
+async function copyPortableClientAdapterClosure({ appRoot, closure }: Record<string, any> = {}) : Promise<any> {
+  const nodeModulesRoot: any = path.join(appRoot, "node_modules");
+  for (const workspacePackage of closure.packages) {
+    const sourceRoot: any = path.join(projectRoot, workspacePackage.directory);
+    const sourceRootReal: any = await fs.realpath(sourceRoot);
+    const rootStat: any = await fs.lstat(sourceRoot);
+    if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+      throw new Error("portable_adapter_workspace_source_invalid");
+    }
+    const packageDestination: any = path.join(nodeModulesRoot, ...workspacePackage.manifest.name.split("/"));
+    await fs.mkdir(packageDestination, { recursive: true });
+    await fs.copyFile(workspacePackage.packageJsonPath, path.join(packageDestination, "package.json"));
+    for (const relativeFile of workspacePackage.files) {
+      const sourceFile: any = path.join(sourceRoot, ...relativeFile.split("/"));
+      const sourceStat: any = await fs.lstat(sourceFile).catch(() : any => null);
+      const sourceReal: any = await fs.realpath(sourceFile).catch(() : any => "");
+      if (
+        !sourceStat?.isFile()
+        || sourceStat.isSymbolicLink()
+        || !strictChildPath(sourceRootReal, sourceReal)
+      ) {
+        throw new Error("portable_adapter_declared_file_unavailable");
+      }
+      const destinationFile: any = path.join(packageDestination, ...relativeFile.split("/"));
+      await fs.mkdir(path.dirname(destinationFile), { recursive: true });
+      await fs.copyFile(sourceFile, destinationFile);
+    }
+  }
 }
 
 async function collectNodeLegalFiles(distributionRoot?: any) : Promise<any> {
@@ -549,13 +746,15 @@ export async function createPortableBundle({
   }
   const platform: any = releaseBundlePlatform(target);
   const windowsBundle: any = platform.startsWith("windows");
-  const macosBundle: any = platform.startsWith("macos");
-  const rootName: any = `${packageJson.name}-${packageJson.version}-${platform}`;
+  const rootName: any = `${MCP_PORTABLE_ASSET_PREFIX}-${packageJson.version}-${platform}`;
   const stagingRoot: any = path.join(outputDir, rootName);
   const appRoot: any = path.join(stagingRoot, "app");
   const runtimeRoot: any = path.join(stagingRoot, "runtime");
   const runtimeExecutableName: any = platform.startsWith("windows") ? "node.exe" : "node";
   const runtimePath: any = path.join(runtimeRoot, runtimeExecutableName);
+  const undiciDependency: any = await loadPortableUndiciDependency(packageJson);
+  const adapterClosure: any = await loadPortableClientAdapterClosure(packageJson);
+  const portableUndiciRoot: any = path.join(appRoot, "node_modules", "undici");
   const generateZip: any = !platform.startsWith("linux");
   const archiveName: any = `${rootName}.tar.gz`;
   const archivePath: any = path.join(outputDir, archiveName);
@@ -576,8 +775,16 @@ export async function createPortableBundle({
   await fs.chmod(runtimePath, 0o755);
   await fs.copyFile(path.join(projectRoot, "LICENSE"), path.join(stagingRoot, "LICENSE"));
   const portablePackageJson: Record<string, any> = {
-    ...packageJson,
+    private: true,
+    name: packageJson.name,
+    version: packageJson.version,
+    type: "module",
+    dependencies: Object.fromEntries(Object.entries({
+      undici: undiciDependency.packageJson.version,
+      ...adapterClosure.dependencies
+    }).sort(([left], [right]) : any => String(left).localeCompare(String(right)))),
     imports: {
+      "#meshrix/foundation/environment-compatibility/index": "./vendor/foundation/environment-compatibility/index.ts",
       "#meshrix/contracts/*": "./vendor/contracts/*.ts",
       "#meshrix/protocols/*": "./vendor/protocols/*.ts"
     }
@@ -599,11 +806,32 @@ export async function createPortableBundle({
     `${JSON.stringify(portablePackageJson, null, 2)}\n`,
     "utf8"
   );
+  await copyPortableClientAdapterClosure({ appRoot, closure: adapterClosure });
   await fs.copyFile(path.join(connectorRoot, "README.md"), path.join(appRoot, "README.md"));
   await fs.copyFile(path.join(connectorRoot, "LICENSE"), path.join(appRoot, "LICENSE"));
+  for (const relativeFile of undiciDependency.files) {
+    const sourceFile: any = path.join(undiciDependency.sourceRoot, relativeFile);
+    const destinationFile: any = path.join(portableUndiciRoot, relativeFile);
+    await fs.mkdir(path.dirname(destinationFile), { recursive: true });
+    await fs.copyFile(sourceFile, destinationFile);
+  }
+  await fs.writeFile(
+    path.join(portableUndiciRoot, "package.json"),
+    `${JSON.stringify(undiciDependency.portablePackageJson, null, 2)}\n`,
+    "utf8"
+  );
+  await fs.copyFile(
+    path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "mcp-release-targets.ts"),
+    path.join(appRoot, "mcp-release-targets.ts")
+  );
+  await fs.mkdir(path.join(appRoot, "gateway-installer"), { recursive: true });
   await fs.copyFile(
     path.join(connectorRoot, "mcp-release-targets.ts"),
-    path.join(appRoot, "mcp-release-targets.ts")
+    path.join(appRoot, "gateway-installer", "mcp-release-targets.ts")
+  );
+  await fs.copyFile(
+    path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "http-mcp-adapter-constants.ts"),
+    path.join(appRoot, "http-mcp-adapter-constants.ts")
   );
   await fs.copyFile(
     path.join(connectorRoot, "mcp-identity.ts"),
@@ -618,6 +846,11 @@ export async function createPortableBundle({
     path.join(appRoot, "bin", "meshrix-mcp.ts")
   );
   await fs.cp(path.join(connectorRoot, "lib"), path.join(appRoot, "lib"), { recursive: true });
+  await fs.cp(
+    path.join(projectRoot, "packages", "foundation", "src", "environment-compatibility"),
+    path.join(appRoot, "vendor", "foundation", "environment-compatibility"),
+    { recursive: true }
+  );
   const portableContractsRoot: any = path.join(appRoot, "vendor", "contracts");
   await fs.mkdir(portableContractsRoot, { recursive: true });
   await fs.copyFile(
@@ -662,17 +895,6 @@ export async function createPortableBundle({
     path.join(projectRoot, "packages", "protocols", "mcp", "adapter", "gateway-installer", "mcp-release-targets.ts"),
     path.join(portableProtocolsRoot, "mcp", "adapter", "gateway-installer", "mcp-release-targets.ts")
   );
-  const nativeInstallerRoot: any = path.join(connectorRoot, "..", "native-installer");
-  const nativeInstallerFiles: any = windowsBundle
-    ? ["meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]
-    : ["meshrix-mcp-install.sh", "meshrix-mcp-uninstall.sh"];
-  for (const filename of nativeInstallerFiles) {
-    const destination: any = path.join(stagingRoot, filename);
-    await fs.copyFile(path.join(nativeInstallerRoot, filename), destination);
-    if (filename.endsWith(".sh") && process.platform !== "win32") {
-      await fs.chmod(destination, 0o755);
-    }
-  }
   const nodeLegalRoot: any = path.join(stagingRoot, "licenses", "node");
   await fs.mkdir(nodeLegalRoot, { recursive: true });
   for (const legalFile of resolvedNodeRuntime.legalFiles) {
@@ -681,6 +903,12 @@ export async function createPortableBundle({
   await fs.copyFile(NODE_RUNTIME_LOCK_PATH, path.join(nodeLegalRoot, "NODE_RUNTIME.lock.json"));
   await fs.writeFile(path.join(stagingRoot, "THIRD_PARTY_NOTICES.txt"), [
     "Third-Party Notices",
+    "",
+    `Undici ${undiciDependency.packageJson.version} runtime is bundled under app/node_modules/undici/ and is licensed under the MIT License.`,
+    "The package license and fetch implementation notice are preserved at app/node_modules/undici/LICENSE and app/node_modules/undici/lib/web/fetch/LICENSE.",
+    "",
+    "First-party MCP adapter components and client-adapter-kit are included under app/node_modules/@meshrix/.",
+    "Their declared package files and manifests are covered by the Apache-2.0 project license at LICENSE and app/LICENSE.",
     "",
     "This portable distribution bundles Node.js " + lockedVersion + ".",
     "The runtime version, official archive checksum, signed checksum manifest,",
@@ -710,70 +938,44 @@ export async function createPortableBundle({
       ""
     ].join("\n"));
   }
-  if (macosBundle) {
-    await writeExecutable(path.join(stagingRoot, "install.command"), [
-      "#!/usr/bin/env sh",
-      "set -e",
-      "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/meshrix-mcp-install.sh\" install",
-      "printf '\\nDone. Press Enter to close.'",
-      "IFS= read -r _",
-      ""
-    ].join("\n"));
-    await writeExecutable(path.join(stagingRoot, "uninstall.command"), [
-      "#!/usr/bin/env sh",
-      "set -e",
-      "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/meshrix-mcp-uninstall.sh\"",
-      "printf '\\nDone. Press Enter to close.'",
-      "IFS= read -r _",
-      ""
-    ].join("\n"));
-    await writeExecutable(path.join(stagingRoot, "doctor.command"), [
-      "#!/usr/bin/env sh",
-      "set -e",
-      "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/meshrix-mcp-install.sh\" doctor",
-      "printf '\\nDone. Press Enter to close.'",
-      "IFS= read -r _",
-      ""
-    ].join("\n"));
-  }
   const usageLines: any = windowsBundle
     ? [
-        "Windows PowerShell install:",
-        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp-install.ps1 -Command install -Target auto -Json",
+        "Register the local shared hub:",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp.ps1 register",
         "",
-        "Windows PowerShell uninstall:",
-        `  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp-uninstall.ps1 -Target ${PRIORITY_INSTALL_TARGET} -Json`
+        "Connect detected clients:",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp.ps1 install --target auto --json",
+        "",
+        "Uninstall a client:",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp.ps1 uninstall --target codex --json"
       ]
     : [
         "Command-line hub registration:",
-        "  ./meshrix-mcp-install.sh register",
+        "  ./meshrix-mcp register",
         "",
         "Discover the local shared hub:",
-        "  ./meshrix-mcp-install.sh discover-local --json",
+        "  ./meshrix-mcp discover-local --json",
         "",
         "Connect clients interactively:",
-        "  ./meshrix-mcp-install.sh install",
+        "  ./meshrix-mcp install",
         "",
         "Connect every detected client from a script:",
-        "  ./meshrix-mcp-install.sh install --target auto --json",
+        "  ./meshrix-mcp install --target auto --json",
         "",
         "Connect a known client from a script:",
-        "  ./meshrix-mcp-install.sh install --target <client> --json",
+        "  ./meshrix-mcp install --target codex --json",
         "",
         "Connect the priority agent clients from a script:",
-        `  ./meshrix-mcp-install.sh install --target ${PRIORITY_INSTALL_TARGET} --json`,
+        `  ./meshrix-mcp install --target ${PRIORITY_INSTALL_TARGET} --json`,
         "",
         "Use --token-stdin only when installing with a pre-issued custom grant token:",
-        "  printf '%s\\n' '<issued-token>' | ./meshrix-mcp-install.sh install --target auto --token-stdin --json",
+        "  printf '%s\\n' '<issued-token>' | ./meshrix-mcp install --target auto --token-stdin --json",
         "",
         "Uninstall:",
-        "  ./meshrix-mcp-uninstall.sh",
+        "  ./meshrix-mcp uninstall --target codex --json",
         "",
         "Uninstall priority clients from a script:",
-        `  ./meshrix-mcp-uninstall.sh --target ${PRIORITY_INSTALL_TARGET}`
+        `  ./meshrix-mcp uninstall --target ${PRIORITY_INSTALL_TARGET} --json`
       ];
   await fs.writeFile(path.join(stagingRoot, "README.txt"), [
     "Meshrix.js MCP Connector Portable Package",
@@ -782,17 +984,13 @@ export async function createPortableBundle({
     "",
     "Licenses:",
     "  Meshrix.js: LICENSE",
+    `  Undici ${undiciDependency.packageJson.version} (MIT): app/node_modules/undici/LICENSE and app/node_modules/undici/lib/web/fetch/LICENSE`,
     "  Node.js and bundled Node.js notices: licenses/node/",
     "  Third-party notice index: THIRD_PARTY_NOTICES.txt",
     "",
     ...usageLines,
     "",
     "The connector scans local Meshrix.js candidates and verifies the MCP identity signature before using a URL.",
-    ...(macosBundle ? [
-      "",
-      "macOS double-click flow:",
-      "  Open install.command, choose one or more clients. The connector requests a local Meshrix.js grant automatically."
-    ] : []),
     "",
     `Platform: ${platform}`,
     `Connector: ${packageJson.name}@${packageJson.version}`,
@@ -831,6 +1029,12 @@ export async function createPortableBundle({
     projectLicensePath: "LICENSE",
     connectorLicensePath: "app/LICENSE",
     thirdPartyNoticesPath: "THIRD_PARTY_NOTICES.txt",
+    undiciVersion: undiciDependency.packageJson.version,
+    undiciLicensePaths: [
+      "app/node_modules/undici/LICENSE",
+      "app/node_modules/undici/lib/web/fetch/LICENSE"
+    ],
+    clientAdapterPackages: adapterClosure.packages.map((workspacePackage?: any) : any => workspacePackage.manifest.name),
     nodeRuntimeLockPath: "licenses/node/NODE_RUNTIME.lock.json",
     nodeLegalFiles: resolvedNodeRuntime.legalFiles.map((file?: any) : any =>
       "licenses/node/" + file.filename

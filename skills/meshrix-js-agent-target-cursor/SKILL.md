@@ -12,7 +12,7 @@ audience: usage
 - IDE chat, in-app Agent UI, and Agent CLI are distinct task contexts. These configuration facts do not establish database tables, history merging, or cross-form resume compatibility. Verify the specific form and client version before making such a claim.
 
 Source: [vendor reference](https://cursor.com/docs/cli/reference/configuration). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

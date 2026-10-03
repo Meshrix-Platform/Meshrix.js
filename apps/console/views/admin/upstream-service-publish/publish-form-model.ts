@@ -3,9 +3,10 @@ import type {
   UpstreamServiceDescriptor
 } from "../../../lib/upstream-service-publish-client";
 
-export type PublishDescriptorForm = Omit<UpstreamServiceDescriptor, "serviceProtocol"> & {
+export type PublishDescriptorForm = Omit<UpstreamServiceDescriptor, "serviceProtocol" | "mcp"> & {
   serviceKey: string;
   serviceProtocol?: UpstreamServiceDescriptor["serviceProtocol"] | "";
+  mcp?: Record<string, unknown>;
   operationKey?: string;
   method?: string;
   path?: string;
@@ -16,6 +17,9 @@ export type PublishDescriptorForm = Omit<UpstreamServiceDescriptor, "serviceProt
   responseMaxBytes?: number | "";
   requestMediaTypes?: string;
   responseMediaTypes?: string;
+  mcpTransport?: string;
+  mcpUrl?: string;
+  mcpProtocolVersion?: string;
   credentialMode?: "none" | "saved" | "";
   credentialSelection?: string;
   savedCredentialOptions?: TypedServiceReference[];
@@ -28,7 +32,8 @@ export type DescriptorObjectField =
   | "trafficPolicy"
   | "audience"
   | "tagPolicy"
-  | "circuitBreaker";
+  | "circuitBreaker"
+  | "mcp";
 
 export const descriptorObjectFields: readonly DescriptorObjectField[] = [
   "interfaceSchemas",
@@ -37,5 +42,6 @@ export const descriptorObjectFields: readonly DescriptorObjectField[] = [
   "trafficPolicy",
   "audience",
   "tagPolicy",
-  "circuitBreaker"
+  "circuitBreaker",
+  "mcp"
 ];

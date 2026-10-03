@@ -1,220 +1,229 @@
 #!/usr/bin/env node
 /**
- * generate-provenance.ts — SLSA-aligned Provenance Report Generator
+ * Generate a bounded local build-input report.
  *
- * Produces build/reports/provenance.json with:
- * - Git SHA, branch, tags, dirty flag
- * - Node/npm/rust/cargo/flutter/docker toolchain versions
- * - Build commands executed (from env, --command flags, script-registry.json)
- * - Package artifact subjects with sha256 + size + kind
- * - Runtime, feature, and composition profiles
- * - Reports inventory
+ * This report is not a signed attestation and does not claim that external
+ * build, test, registry, or deployment steps ran. Its inputs are the fixed
+ * source files registered for `release:generate-provenance`.
  *
  * Usage:
  *   node tools/server-scripts/generate-provenance.ts
- *   node tools/server-scripts/generate-provenance.ts --command "npm test"
- *   node tools/server-scripts/generate-provenance.ts --command "npm test" --command "npm run repo:layout:audit"
- *   node tools/server-scripts/generate-provenance.ts --output build/reports/my-provenance.json
+ *   node tools/server-scripts/generate-provenance.ts --output build/reports/local-build-inputs.json
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const maximumInputBytes = 16 * 1024 * 1024;
+const fixedBuildInputs = [
+  ["package.json", "package-manifest"],
+  ["package-lock.json", "dependency-lock"],
+  ["tools/server-scripts/generate-provenance.ts", "generator-source"],
+  ["build/composition-presets.json", "composition-input"]
+] as const;
+const versionPattern = /^(?:v)?((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/u;
+const stableToolVersionPattern = /^v?((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/u;
 
-function exec(cmd?: any) : any {
+type BuildSubject = Readonly<{
+  path: string;
+  sha256: string;
+  size: number;
+  kind: string;
+}>;
+
+function runFixedCommand(command: string, args: readonly string[]): string | null {
   try {
-    return execSync(cmd, { cwd: repoRoot, encoding: "utf8", timeout: 30000 }).trim();
+    return execFileSync(command, [...args], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 4096,
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 10_000,
+      windowsHide: true
+    }).trim();
   } catch {
     return null;
   }
 }
 
-async function fileSha256(filePath?: any) : Promise<any> {
+function parsedVersion(output: string | null): string | null {
+  if (!output || output.length > 64) return null;
+  return stableToolVersionPattern.exec(output)?.[1] ?? null;
+}
+
+function parsedRevision(output: string | null): string | null {
+  if (!output || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(output)) return null;
+  return output.toLowerCase();
+}
+
+function publicPackageName(value: unknown): string | null {
+  return typeof value === "string"
+    && value.length <= 214
+    && /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/iu.test(value)
+    ? value
+    : null;
+}
+
+function publicPackageVersion(value: unknown): string | null {
+  return typeof value === "string" && versionPattern.test(value)
+    ? value.replace(/^v/u, "")
+    : null;
+}
+
+function publicRepositoryCoordinate(value: unknown): string | null {
+  const configuredUrl = typeof value === "string"
+    ? value
+    : value && typeof value === "object" && "url" in value
+      ? (value as { url?: unknown }).url
+      : null;
+  if (typeof configuredUrl !== "string" || configuredUrl.length > 2048 || configuredUrl !== configuredUrl.trim()) {
+    return null;
+  }
+
+  const urlText = configuredUrl.startsWith("git+https://")
+    ? configuredUrl.slice("git+".length)
+    : configuredUrl;
   try {
-    const { createHash } = await import("node:crypto");
-    const data: any = await fs.readFile(filePath);
-    const hash: any = createHash("sha256").update(data).digest("hex");
-    const stat: any = await fs.stat(filePath);
-    return { sha256: hash, size: stat.size };
+    const url = new URL(urlText);
+    if (url.protocol !== "https:"
+      || url.hostname.toLowerCase() !== "github.com"
+      || url.port
+      || url.username
+      || url.password
+      || url.search
+      || url.hash) {
+      return null;
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (segments.length !== 2) return null;
+    const [owner, configuredRepository] = segments;
+    const repository = configuredRepository.replace(/\.git$/iu, "");
+    const coordinatePart = /^[A-Za-z0-9_.-]{1,100}$/u;
+    if (!coordinatePart.test(owner) || !coordinatePart.test(repository) || owner === "." || owner === ".." || repository === "." || repository === "..") {
+      return null;
+    }
+    return `https://github.com/${owner}/${repository}`;
   } catch {
     return null;
   }
 }
 
-async function main() : Promise<any> {
-  // Parse --command flags (can appear multiple times)
-  const commandFlags: any[] = [];
-  const remainingArgs: any[] = [];
-  for (let i: any = 0; i < process.argv.length; i++) {
-    if (process.argv[i] === "--command" && i + 1 < process.argv.length) {
-      commandFlags.push(process.argv[++i]);
+async function packageIdentity(): Promise<Readonly<{ name: string | null; version: string | null; repository: string | null }>> {
+  try {
+    const metadata = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8")) as Record<string, unknown>;
+    return {
+      name: publicPackageName(metadata.name),
+      version: publicPackageVersion(metadata.version),
+      repository: publicRepositoryCoordinate(metadata.repository)
+    };
+  } catch {
+    return { name: null, version: null, repository: null };
+  }
+}
+
+async function fileSubject(relativePath: string, kind: string): Promise<BuildSubject | null> {
+  const absolutePath = path.join(repoRoot, relativePath);
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+  try {
+    const pathStat = await fs.lstat(absolutePath);
+    if (!pathStat.isFile() || pathStat.size > maximumInputBytes) return null;
+    handle = await fs.open(absolutePath, "r");
+    const fileStat = await handle.stat();
+    if (!fileStat.isFile() || fileStat.size !== pathStat.size || fileStat.size > maximumInputBytes) return null;
+
+    const bytes = Buffer.alloc(fileStat.size);
+    const { bytesRead } = await handle.read(bytes, 0, fileStat.size, 0);
+    if (bytesRead !== fileStat.size) return null;
+    return {
+      path: relativePath,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      size: bytesRead,
+      kind
+    };
+  } catch {
+    return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+async function localReportFileCount(outputPath: string): Promise<number> {
+  try {
+    const reportDirectory = path.join(repoRoot, "build", "reports");
+    const entries = await fs.readdir(reportDirectory, { withFileTypes: true });
+    return entries.filter((entry) => {
+      if (!entry.isFile() || !(entry.name.endsWith(".json") || entry.name.endsWith(".md"))) return false;
+      return path.resolve(reportDirectory, entry.name) !== outputPath;
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
+function outputPathFromArgs(args: readonly string[]): string {
+  let configuredOutput: string | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--output") {
+      configuredOutput = args[index + 1];
+      if (!configuredOutput) throw new Error("invalid_arguments");
+      index += 1;
+    } else if (argument.startsWith("--output=")) {
+      configuredOutput = argument.slice("--output=".length);
+      if (!configuredOutput) throw new Error("invalid_arguments");
     } else {
-      remainingArgs.push(process.argv[i]);
+      throw new Error("invalid_arguments");
     }
   }
+  return configuredOutput ? path.resolve(repoRoot, configuredOutput) : path.join(repoRoot, "build", "reports", "provenance.json");
+}
 
-  const outputArg: any = remainingArgs.find((a?: any) : any => a.startsWith("--output="));
-  const outputPath: any = outputArg
-    ? path.resolve(repoRoot, outputArg.slice("--output=".length))
-    : path.join(repoRoot, "build", "reports", "provenance.json");
-
-  // ── Git metadata ──────────────────────────────────────────────────────────
-  const sha: any = exec("git rev-parse HEAD");
-  const branch: any = exec("git rev-parse --abbrev-ref HEAD");
-  const tagsRaw: any = exec("git tag --points-at HEAD");
-  const remoteUrl: any = exec("git remote get-url origin");
-  const dirty: any = exec("git status --porcelain") !== "" ? true : (exec("git status --porcelain") === "" ? false : null);
-
-  // ── Toolchain versions ────────────────────────────────────────────────────
-  const nodeVersion: any = process.version;
-  const npmVersion: any = exec("npm --version");
-  const rustVersion: any = exec("rustc --version");
-  const cargoVersion: any = exec("cargo --version");
-  const flutterVersion: any = exec("flutter --version 2>/dev/null | head -1");
-  const dockerVersion: any = exec("docker --version 2>/dev/null");
-
-  // ── Git dirty check ───────────────────────────────────────────────────────
-  let gitDirty: any = false;
-  try {
-    const statusOutput: any = exec("git status --porcelain");
-    gitDirty = statusOutput !== null && statusOutput.length > 0;
-  } catch {
-    gitDirty = null;
+async function main(): Promise<void> {
+  const outputPath = outputPathFromArgs(process.argv.slice(2));
+  const subjects: BuildSubject[] = [];
+  for (const [relativePath, kind] of fixedBuildInputs) {
+    const subject = await fileSubject(relativePath, kind);
+    if (subject) subjects.push(subject);
   }
 
-  // ── Build commands executed ───────────────────────────────────────────────
-  const commands: any[] = [];
+  const identity = await packageIdentity();
+  const revision = parsedRevision(runFixedCommand("git", ["rev-parse", "--verify", "HEAD^{commit}"]));
+  const toolchain = {
+    node: parsedVersion(runFixedCommand(process.execPath, ["--version"])),
+    npm: parsedVersion(runFixedCommand("npm", ["--version"]))
+  };
+  const reportCount = await localReportFileCount(outputPath);
 
-  // From environment
-  if (process.env.GITHUB_WORKFLOW) commands.push(`CI workflow: ${process.env.GITHUB_WORKFLOW}`);
-  if (process.env.GITHUB_JOB) commands.push(`CI job: ${process.env.GITHUB_JOB}`);
-  if (process.env.npm_lifecycle_event) commands.push(`npm: ${process.env.npm_lifecycle_event}`);
-
-  // From --command flags
-  for (const cmd of commandFlags) {
-    commands.push(cmd);
-  }
-
-  // From script-registry.json if it exists
-  try {
-    const regPath: any = path.join(repoRoot, "build", "reports", "script-registry.json");
-    const reg: any = JSON.parse(await fs.readFile(regPath, "utf8"));
-    if (reg.entries) {
-      commands.push(`Script registry: ${reg.entries.length} entries recorded`);
-    }
-  } catch { /* no script registry report yet */ }
-
-  // ── Subjects (source inputs, reports, release artifacts) ──────────────────
-
-  /** @type {Array<{path: string, sha256: string, size: number, kind: string}>} */
-  const subjects: any[] = [];
-
-  // Source inputs — key lock files and configs (NOT node_modules or runtime payloads)
-  const sourceInputs: any[] = [
-    "package.json",
-    "package-lock.json",
-    "tsconfig.json",
-    "vite.config.ts",
-    "vitest.config.ts",
-  ];
-  for (const file of sourceInputs) {
-    const hash: any = await fileSha256(path.join(repoRoot, file));
-    if (hash) {
-      subjects.push({ path: file, sha256: hash.sha256, size: hash.size, kind: "source-input" });
-    }
-  }
-
-  // ── Reports inventory ─────────────────────────────────────────────────────
-  /** @type {string[]} */
-  const reportFiles: any[] = [];
-  const reportDir: any = path.join(repoRoot, "build", "reports");
-  try {
-    const reportEntries: any = await fs.readdir(reportDir);
-    for (const entry of reportEntries) {
-      const entryPath: any = path.join(reportDir, entry);
-      const stat: any = await fs.stat(entryPath);
-      if (entry.endsWith(".json") || entry.endsWith(".md")) {
-        const hash: any = await fileSha256(entryPath);
-        const reportRelPath: any = `build/reports/${entry}`;
-        reportFiles.push(reportRelPath);
-        if (hash && stat.size < 1024 * 1024) { // Only hash reports < 1MB
-          subjects.push({ path: reportRelPath, sha256: hash.sha256, size: hash.size, kind: "report" });
-        }
-      }
-    }
-  } catch { /* no reports yet */ }
-
-  // ── Composition presets ───────────────────────────────────────────────────
-  let compositionPresets: any = null;
-  let compositionPreset: any = null;
-  try {
-    const presetsPath: any = path.join(repoRoot, "build", "composition-presets.json");
-    compositionPresets = JSON.parse(await fs.readFile(presetsPath, "utf8"));
-    compositionPreset = Object.keys(compositionPresets).join(",");
-  } catch { /* no presets file */ }
-
-  // ── Runtime kind from actual build inputs (not just directory existence) ──
-  const runtimeKindParts: any[] = ["node"]; // Node is always present
-
-  // Check if Docker was used (build was run)
-  if (dockerVersion && commands.some((c?: any) : any => c.toLowerCase().includes("docker"))) {
-    runtimeKindParts.push("docker");
-  }
-
-  // Check if network dependencies were actually involved (not just directory exists)
-  const networkServiceReportExists: any = reportFiles.some((f?: any) : any => f.includes("external-dependency"));
-  if (networkServiceReportExists) {
-    runtimeKindParts.push("network-service");
-  }
-
-  const runtimeKind: any = runtimeKindParts.join("-");
-
-  // ── Build the provenance document ─────────────────────────────────────────
-  const provenance: Record<string, any> = {
-    schemaVersion: "v0.0.1:meshrix:provenance-2",
+  const report = {
+    schemaVersion: "v0.0.1:meshrix:build-input-report-1",
+    reportKind: "unsigned-local-build-input-report",
     generatedAt: new Date().toISOString(),
-    git: {
-      sha,
-      branch,
-      tags: tagsRaw ? tagsRaw.split("\n").filter(Boolean) : [],
-      remoteUrl,
-      dirty: gitDirty,
-    },
-    toolchain: {
-      node: nodeVersion,
-      npm: npmVersion,
-      rust: rustVersion,
-      cargo: cargoVersion,
-      flutter: flutterVersion,
-      docker: dockerVersion,
-    },
-    commands,
-    subjects,
-    reports: reportFiles,
-    compositionPreset,
-    runtimeKind,
-    composition: compositionPresets ? { presets: Object.keys(compositionPresets) } : null,
+    project: identity,
+    revision,
+    toolchain,
+    observedBuildSteps: ["hash-registered-build-inputs", "count-local-report-files"],
+    localReportFileCount: reportCount,
+    subjects
   };
 
-  // ── Write output ──────────────────────────────────────────────────────────
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, JSON.stringify(provenance, null, 2), "utf8");
+  await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
-  console.log(`Provenance report written to ${outputPath}`);
-  console.log(`  Git SHA: ${sha?.slice(0, 8) || "unknown"}`);
-  console.log(`  Branch: ${branch || "unknown"}`);
-  console.log(`  Dirty: ${gitDirty}`);
-  console.log(`  Node: ${nodeVersion}`);
-  console.log(`  Runtime kind: ${runtimeKind}`);
-  console.log(`  Subjects: ${subjects.length} (${subjects.filter((s?: any) : any => s.kind === "source-input").length} source-input, ${subjects.filter((s?: any) : any => s.kind === "report").length} report)`);
-  console.log(`  Commands: ${commands.length}`);
+  console.log("Unsigned local build-input report written.");
+  console.log(`Package: ${identity.name ?? "unknown"}@${identity.version ?? "unknown"}`);
+  console.log(`Revision: ${revision ?? "unknown"}`);
+  console.log(`Toolchain: Node ${toolchain.node ?? "unknown"}; npm ${toolchain.npm ?? "unknown"}`);
+  console.log(`Subjects: ${subjects.length}`);
+  console.log(`Local report files: ${reportCount}`);
 }
 
-main().catch((error?: any) : any => {
-  console.error(error);
+main().catch(() => {
+  console.error("provenance_generation_failed");
   process.exitCode = 1;
 });

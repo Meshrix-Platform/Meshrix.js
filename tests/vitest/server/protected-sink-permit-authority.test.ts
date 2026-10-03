@@ -5,6 +5,8 @@ import {
   mintGovernedExecutionPermit
 } from "#meshrix/foundation/security/governed-execution-permit-authority";
 import {
+  claimFinalProtectedSinkAttempt,
+  createFinalProtectedSinkAttempt,
   createFinalProtectedSinkPermitGuard
 } from "#meshrix/foundation/security/final-protected-sink-permit";
 
@@ -84,6 +86,63 @@ function binding(overrides: Record<string, any> = {}) : any {
 }
 
 const EXACT_BINDING: any = binding();
+const ATTEMPT_TARGET_SELECTOR: Readonly<Record<string, any>> = Object.freeze({
+  operationKey: "fixture-write",
+  serviceId: "fixture-service"
+});
+
+function deferred() : any {
+  let resolve: any;
+  const promise: any = new Promise((settle?: any) : any => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+function finalSinkAttemptOptions(overrides: Record<string, any> = {}) : any {
+  return {
+    audience: AUDIENCE,
+    subject: SUBJECT,
+    operationId: OPERATION_ID,
+    requestDigest: REQUEST_DIGEST,
+    context: {
+      approvalRevision: CONTEXT.approvalRevision,
+      grantRevision: CONTEXT.grantRevision,
+      policyRevision: CONTEXT.policyRevision,
+      riskRevision: CONTEXT.riskRevision,
+      workloadGeneration: CONTEXT.workloadGeneration
+    },
+    targetSelector: ATTEMPT_TARGET_SELECTOR,
+    proofRef: PROOF_REF,
+    authorization: {
+      grantRevision: CONTEXT.grantRevision,
+      policyRevision: CONTEXT.policyRevision,
+      workloadGeneration: CONTEXT.workloadGeneration
+    },
+    approval: { approvalRevision: CONTEXT.approvalRevision },
+    risk: { riskRevision: CONTEXT.riskRevision },
+    revalidateCurrentAuthority: async ({ binding: current }: Record<string, any>) : Promise<any> => ({
+      allowed: true,
+      subject: current.subject,
+      context: current.context
+    }),
+    ...overrides
+  };
+}
+
+function claimFinalSinkAttempt(attempt: any, overrides: Record<string, any> = {}) : Promise<any> {
+  return claimFinalProtectedSinkAttempt({
+    attempt,
+    targetSelector: ATTEMPT_TARGET_SELECTOR,
+    effect: EFFECT,
+    resourceRevision: CONTEXT.resourceRevision,
+    resolveCurrentResource: async ({ binding: current }: Record<string, any>) : Promise<any> => ({
+      effect: current.effect,
+      resourceRevision: current.context.resourceRevision
+    }),
+    ...overrides
+  });
+}
 
 function authorityExpected(value: any = EXACT_BINDING) : any {
   return {
@@ -209,6 +268,82 @@ function expectCanonicalReceipt(
 }
 
 describe("final protected sink permit primitive", () : any => {
+  it("keeps an unspecified preparation attempt alive past both former ttl limits", async () : Promise<any> => {
+    let currentTime: any = NOW;
+    const attempt: any = createFinalProtectedSinkAttempt(finalSinkAttemptOptions({
+      now: () : any => currentTime
+    }));
+
+    currentTime += 75_001;
+    const receipt: any = await claimFinalSinkAttempt(attempt);
+
+    expectCanonicalReceipt(receipt);
+    const replay: any = await captureFailure(() : any => claimFinalSinkAttempt(attempt));
+    expect(replay).toMatchObject({ code: "governed_execution_permit_unknown_or_replayed" });
+  });
+
+  it("honors explicit attempt expiry beyond the retired cap and burns expired attempts", async () : Promise<any> => {
+    let currentTime: any = NOW;
+    const extended: any = createFinalProtectedSinkAttempt(finalSinkAttemptOptions({
+      now: () : any => currentTime,
+      ttlMs: 90_000
+    }));
+    currentTime += 60_001;
+    expectCanonicalReceipt(await claimFinalSinkAttempt(extended));
+
+    currentTime = NOW;
+    const expiresBeforeClaim: any = createFinalProtectedSinkAttempt(finalSinkAttemptOptions({
+      now: () : any => currentTime,
+      ttlMs: 100
+    }));
+    currentTime += 100;
+    const expired: any = await captureFailure(() : any => claimFinalSinkAttempt(expiresBeforeClaim));
+    expect(expired).toMatchObject({ code: "governed_execution_permit_unknown_or_replayed" });
+    expect(await captureFailure(() : any => claimFinalSinkAttempt(expiresBeforeClaim))).toMatchObject({
+      code: "governed_execution_permit_unknown_or_replayed"
+    });
+  });
+
+  it("denies an explicit expiry that elapses during current-resource revalidation", async () : Promise<any> => {
+    let currentTime: any = NOW;
+    const resourceStarted: any = deferred();
+    const releaseResource: any = deferred();
+    const revalidateCurrentAuthority: any = vi.fn(async ({ binding: current }: Record<string, any>) : Promise<any> => ({
+      allowed: true,
+      subject: current.subject,
+      context: current.context
+    }));
+    const attempt: any = createFinalProtectedSinkAttempt(finalSinkAttemptOptions({
+      now: () : any => currentTime,
+      ttlMs: 100,
+      revalidateCurrentAuthority
+    }));
+    const pending: any = claimFinalSinkAttempt(attempt, {
+      resolveCurrentResource: async ({ binding: current }: Record<string, any>) : Promise<any> => {
+        resourceStarted.resolve(null);
+        await releaseResource.promise;
+        return { effect: current.effect, resourceRevision: current.context.resourceRevision };
+      }
+    });
+
+    await resourceStarted.promise;
+    currentTime += 100;
+    releaseResource.resolve(null);
+    const denied: any = await captureFailure(() : any => pending);
+
+    expect(denied).toMatchObject({ statusCode: 403 });
+    expect(revalidateCurrentAuthority).toHaveBeenCalledOnce();
+    expect(await captureFailure(() : any => claimFinalSinkAttempt(attempt))).toMatchObject({
+      code: "governed_execution_permit_unknown_or_replayed"
+    });
+  });
+
+  it("rejects invalid explicit attempt ttl values instead of coercing or capping them", () : any => {
+    for (const ttlMs of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "90000", Number.MAX_SAFE_INTEGER]) {
+      expect(() : any => createFinalProtectedSinkAttempt(finalSinkAttemptOptions({ ttlMs }))).toThrow(TypeError);
+    }
+  });
+
   it("returns one canonical branded receipt and rejects caller-authored authority", async () : Promise<any> => {
     const permit: any = mintForBinding();
     const harness: any = createHarness();

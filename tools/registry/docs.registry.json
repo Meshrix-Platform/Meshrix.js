@@ -4,6 +4,30 @@
   "generatedAt": "2026-06-30",
   "entries": [
     {
+      "id": "docs.architecture.gateway",
+      "path": "docs/architecture/gateway.md",
+      "source": "packages/gateway",
+      "description": "Protocol-neutral gateway kernel architecture and ownership boundaries."
+    },
+    {
+      "id": "docs.protocols.gateway",
+      "path": "docs/protocols/gateway.md",
+      "source": "packages/protocols/mcp",
+      "description": "Gateway protocol boundary, MCP peer versions, and result semantics."
+    },
+    {
+      "id": "docs.migrations.gateway-convergence",
+      "path": "docs/migrations/gateway-convergence.md",
+      "source": "packages/gateway",
+      "description": "Gateway convergence migration and compatibility boundary."
+    },
+    {
+      "id": "docs.migrations.gateway-deletion-ledger",
+      "path": "docs/migrations/gateway-deletion-ledger.md",
+      "source": "packages/gateway",
+      "description": "Gateway convergence deletion ledger and residual compatibility inventory."
+    },
+    {
       "id": "docs.functionality.gateway",
       "path": "docs/functionality/GATEWAY.md",
       "source": "tools/registry/internal-platform-capability-matrix.json",

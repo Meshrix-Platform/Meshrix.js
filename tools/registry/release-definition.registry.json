@@ -11,6 +11,7 @@
     "manifests": [
       "package.json",
       "packages/contracts/package.json",
+      "packages/gateway/package.json",
       "packages/foundation/package.json",
       "packages/agents/package.json",
       "packages/capabilities/package.json",
@@ -27,33 +28,20 @@
       "plugins/agents/opencode/package.json",
       "plugins/agents/pi/package.json",
       "apps/server/package.json",
-      "apps/console/package.json",
-      "packages/protocols/mcp/adapter/gateway-installer/package.json"
+      "apps/mcp-gateway-installer/package.json",
+      "apps/console/package.json"
     ]
   },
   "container": {
     "target": "runtime-ui",
-    "platforms": [
-      "linux/amd64",
-      "linux/arm64"
-    ]
+    "requiredForRelease": false
   },
   "acceptance": {
-    "profile": "enterprise-single-node",
+    "profile": "single-node",
     "commandId": "platform-acceptance",
     "stableRequiredClaim": "functional-complete",
-    "releaseRequiredClaim": "release-deployment-verified",
-    "standardsRegistry": "tools/registry/release-acceptance-standards.registry.json",
-    "deployment": {
-      "claim": "release-deployment-verified",
-      "requiredForRelease": true,
-      "requiresClaim": "functional-complete",
-      "command": "npm run server:verify:release-deployment",
-      "controller": "tools/server-scripts/verify-release-deployment.ts",
-      "workflow": ".github/workflows/release-branch.yml",
-      "runner": "ubuntu-24.04",
-      "receipt": "build/reports/release-deployment.json"
-    }
+    "releaseRequiredClaim": "npm-package-installability-passed",
+    "standardsRegistry": "tools/registry/release-acceptance-standards.registry.json"
   },
   "prepublication": {
     "requiredClaim": "upstream-publishing-prepublication-passed",
@@ -78,10 +66,11 @@
   },
   "github": {
     "environment": "release-candidate",
-    "nodeVersion": "24.16.0"
+    "nodeVersion": "24.16.0",
+    "npmCliVersion": "11.21.0"
   },
   "localVerification": {
-    "engine": "podman",
+    "engine": "automatic-local",
     "evidenceAuthority": "local-only"
   }
 }

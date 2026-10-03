@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { isInternalSourcePackagePath } from "../../../tools/server-scripts/lib/source-package-contract.ts";
 
 import { describe, expect, it } from "vitest";
 
@@ -11,11 +12,17 @@ import {
   isClassified
 } from "../../../tools/scripts/package-script-registry.ts";
 
-const packageScripts: any = Object.keys(
-  JSON.parse(fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf8")).scripts || {}
+const packageManifest: any = JSON.parse(
+  fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf8")
 );
+const packageScripts: any = Object.keys(packageManifest.scripts || {});
 
 describe("package script registry declarations", () : any => {
+  it("distinguishes explicit repository-only source from required product tooling", () => {
+    expect(isInternalSourcePackagePath("tools/server-scripts/benchmark-gateway.ts")).toBe(true);
+    expect(isInternalSourcePackagePath("tools/server-scripts/start-server.ts")).toBe(false);
+    expect(isInternalSourcePackagePath("tools/server-scripts/benchmark-gateway.ts.bak")).toBe(false);
+  });
   it("does not classify an undeclared name merely because it has a known prefix", () : any => {
     expect(isClassified("verify:undeclared-fixture")).toBe(false);
     expect(isClassified("server:verify:undeclared-fixture")).toBe(false);
@@ -50,14 +57,32 @@ describe("package script registry declarations", () : any => {
     expect(getDeclaredEntry("verify:acceptance")).toMatchObject({
       tier: "release",
       sideEffects: "destructive",
-      requiresFreshContainer: true,
+      requiresFreshContainer: false,
       ciProfile: "release",
       expectedDurationClass: "extended",
       outputs: [
         "build/acceptance-evidence/**",
         "build/acceptance-proof-ledger/**",
+        "build/release/npm-set/**",
         "build/reports/**"
       ]
     });
+  });
+  it("keeps supported installed operator commands on packaged Node entries", () => {
+    expect(packageManifest.scripts["server:start"]).toBe("meshrix-server --with-ui --edition core");
+    for (const name of ["server:auth", "server:doctor", "server:locate", "server:reconcile", "mcp:doctor", "mcp:install"]) {
+      expect(packageManifest.scripts[name]).toMatch(/^node dist\/tools\/server-scripts\/[a-z-]+\.js$/u);
+    }
+    expect(packageManifest.scripts["server:auth:rotate"]).toMatch(/^node dist\/tools\/server-scripts\/[a-z-]+\.js /u);
+    expect(packageManifest.scripts["server:start"]).not.toMatch(/--profile core/u);
+    expect(packageManifest.scripts["server:mcp:register"]).toBe("node dist/apps/server/bin/meshrix-mcp.js register");
+    expect(getDeclaredEntry("mcp:install").inputs).toContain("tools/server-scripts/mcp-install.ts");
+    expect(getDeclaredEntry("mcp:install").inputs).toContain("apps/server/bin/meshrix-mcp.ts");
+    expect(getDeclaredEntry("mcp:doctor").inputs).toContain("apps/server/bin/meshrix-mcp.ts");
+  });
+  it("registers benchmark execution and correctness as distinct explicit contracts", () => {
+    expect(getDeclaredEntry("gateway:benchmark")).toMatchObject({ tier: "integration", sideEffects: "network-service", ciProfile: "performance" });
+    expect(getDeclaredEntry("test:gateway-benchmark")).toMatchObject({ tier: "integration", sideEffects: "network-service" });
+    expect(getDeclaredEntry("test:product-distribution")).toMatchObject({ tier: "integration", sideEffects: "network-service", requiresFreshContainer: false });
   });
 });

@@ -1,8 +1,5 @@
-import path from "node:path";
-
 import { DEFAULT_TOKEN_ENV } from "./constants.ts";
 import { normalizeBaseUrl, option } from "./basic-utils.ts";
-import { defaultClientAdapterCacheRoot } from "./client-adapter-runner.ts";
 import { explicitBaseUrl } from "./discovery.ts";
 import { assertSafeEnvName } from "./connector-process.ts";
 import { detectHostOs } from "./scan-local.ts";
@@ -15,12 +12,7 @@ export function installerOptions(options?: any) : any {
     tokenEnv,
     executionLocation: String(option(options, "execution-location", "local")),
     remoteKind: String(option(options, "remote-kind", "")),
-    clientCommand: String(option(options, "client-command", "")).trim(),
-    adapterCacheRoot: path.resolve(String(option(
-      options,
-      "adapter-cache",
-      process.env.MESHRIX_MCP_ADAPTER_CACHE || defaultClientAdapterCacheRoot()
-    )))
+    clientCommand: String(option(options, "client-command", "")).trim()
   };
 }
 

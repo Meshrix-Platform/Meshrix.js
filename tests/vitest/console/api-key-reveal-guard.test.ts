@@ -6,7 +6,7 @@ import { defineComponent, ref } from "vue";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import ApiKeyDistributionView from "../../../apps/console/views/admin/ApiKeyDistributionView.vue";
 import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
-import type { ApiKeyPolicy, ApiKeyRecord } from "../../../apps/console/lib/api-key-distribution-client";
+import type { ApiKeyMcpToolSelection, ApiKeyPolicy, ApiKeyRecord } from "../../../apps/console/lib/api-key-distribution-client";
 
 const ONE_TIME_SENTINEL = "opaque-one-time-credential";
 const ROTATED_SENTINEL = "opaque-rotated-credential";
@@ -62,8 +62,11 @@ function createFakeController() {
   });
   return {
     applyProfile: vi.fn(),
+    clearUnavailableMcpSelections: vi.fn(),
     busy: ref(false),
     copied,
+    connectorSnippet: ref("# Standard MCP Streamable HTTP connection (2026-07-28)\n# X-Meshrix.js-Api-Key: ${MESHRIX_MCP_TOKEN}"),
+    copyConnectorSnippet: vi.fn(async () => {}),
     copySecret: vi.fn(async () => { copied.value = true; }),
     create: vi.fn(async () => {
       revealedRecord.value = record();
@@ -73,9 +76,11 @@ function createFakeController() {
     dataClassificationOptions: ref([]),
     dismissSecret,
     draft: ref({
-      workloadDisplayName: "", organizationNodeId: "", expiresAt: "",
+      workloadDisplayName: "Build worker", organizationNodeId: "organization-a",
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 16),
       selectedToolsetIds: [] as string[], allowedTools: [] as string[], selectedProfileId: "",
-      maximumRisk: "low", serverAudience: "", selectedTargetIds: [] as string[],
+      selectedMcpTools: [],
+      maximumRisk: "low", serverAudience: "", selectedClientGuide: "generic", selectedTargetIds: [] as string[],
       resourcesUnrestricted: true, selectedDataClassifications: [] as string[], workspaceIds: "",
       requestsPerMinute: null as number | null, maxConcurrentEffects: null as number | null,
     }),
@@ -88,6 +93,11 @@ function createFakeController() {
     inferredSummaryItems: ref([]),
     loading: ref(false),
     maximumRiskOptions: ref([{ value: "low", label: "Low" }]),
+    mcpToolSelection: ref({ status: "available", services: [], tools: [] }),
+    mcpToolOptions: ref([]),
+    selectedMcpToolFacts: ref<ApiKeyMcpToolSelection[]>([]),
+    unavailableSelectedMcpTools: ref([]),
+    toggleMcpToolSelection: vi.fn(),
     mutatingKeyId: ref(""),
     nodes: ref([{ nodeId: "organization-a", name: "Organization A", breadcrumb: [], nodeType: "organization" }]),
     oneTimeSecret,
@@ -103,20 +113,26 @@ function createFakeController() {
       oneTimeSecret.value = ROTATED_SENTINEL;
     }),
     scopes: ref({ organizationRevision: 1, authorizationRevision: 2 }),
+    snippetCopied: ref(false),
     status,
-    targetOptions: ref([]),
-    toolsetOptions: ref([]),
+    targetOptions: ref([{ value: "codex", label: "Codex", description: "codex" }]),
+    clientGuideOptions: ref([
+      { value: "generic", label: "Standard MCP client", description: "MCP 2026-07-28" },
+      { value: "codex", label: "Codex", description: "codex" },
+    ]),
+    toolsetOptions: ref<Array<{ value: string; label: string }>>([]),
   };
 }
 
 type FakeController = ReturnType<typeof createFakeController>;
 
-async function mountConsoleView(): Promise<{
+async function mountConsoleView(configure?: (controller: FakeController) => void): Promise<{
   controller: FakeController;
   router: Router;
   wrapper: VueWrapper;
 }> {
   const controller = createFakeController();
+  configure?.(controller);
   controllerHolder.factory = () => controller;
   const router = createRouter({
     history: createMemoryHistory(),
@@ -154,6 +170,99 @@ afterEach(() => {
 });
 
 describe("API key one-time reveal guard", () => {
+  it.each([
+    { locale: "en" as const, accessLabel: "Access", separator: ", " },
+    { locale: "zh-CN" as const, accessLabel: "能力", separator: "、" },
+  ])("shows selected MCP tools and toolsets in the $locale confirmation summary", async ({ locale, accessLabel, separator }) => {
+    setConsoleLocaleState(locale);
+    const { controller, wrapper } = await mountConsoleView((state) => {
+      state.selectedMcpToolFacts.value = [{
+        serviceId: "service-inventory",
+        publicName: "upstream.service-inventory.inspect_inventory",
+        label: "Inventory: inspect_inventory",
+        operationToolId: "upstream.service-inventory.tools-call",
+        capabilityId: "cap:upstream:service-inventory:tools-call-inspect_inventory",
+        risk: "safe_write",
+        requiredScopes: ["gateway:write"],
+        toolsets: ["upstream-mcp"],
+      }];
+      state.toolsetOptions.value = [
+        { value: "toolset-read", label: "Workspace read" },
+        { value: "toolset-write", label: "Workspace write" },
+      ];
+    });
+    await wrapper.find('[data-testid="agent-setup-step-3"]').trigger("click");
+    const review = wrapper.find('[data-testid="agent-setup-review-step"]');
+    expect(review.isVisible()).toBe(true);
+    const access = review.findAll(".api-key-review-summary > div")
+      .find((entry) => entry.find("span").text() === accessLabel)!;
+    expect(access.find("strong").text()).toBe("Inventory: inspect_inventory");
+
+    controller.draft.value.selectedToolsetIds = ["toolset-read"];
+    controller.draft.value.allowedTools = ["workspace.read"];
+    await flushPromises();
+    expect(access.find("strong").text()).toBe(["Workspace read", "Inventory: inspect_inventory"].join(separator));
+    expect(access.text()).not.toContain("Workspace write");
+    wrapper.unmount();
+  });
+
+  it("keeps connection guidance separate from the optional authorization audience control", async () => {
+    const { controller, wrapper } = await mountConsoleView();
+    const clientGuide = wrapper.find('[data-testid="client-guide-select"]');
+    expect((clientGuide.element as HTMLSelectElement).value).toBe("generic");
+    await clientGuide.setValue("codex");
+    expect(controller.draft.value.selectedClientGuide).toBe("codex");
+    expect(controller.draft.value.selectedTargetIds).toEqual([]);
+
+    await wrapper.find('[data-testid="agent-setup-step-2"]').trigger("click");
+    const restriction = wrapper.find('[data-testid="client-audience-restriction"]');
+    expect(restriction.exists()).toBe(true);
+    expect(restriction.text()).toContain("Client audience restriction (optional)");
+    expect(restriction.text()).toContain("Leave empty to avoid a brand-based restriction");
+    expect(restriction.element.closest("details")?.querySelector("summary")?.textContent)
+      .toContain("Advanced settings");
+    expect(controller.draft.value.selectedTargetIds).toEqual([]);
+  });
+
+  it("tells generic-client users to store the key on their own client", async () => {
+    const { wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    expect(wrapper.find('[data-testid="api-key-connector-snippet"] h4').text())
+      .toBe("Configure your MCP client");
+    const note = wrapper.find('[data-testid="generic-client-secret-note"]');
+    expect(note.text()).toContain("local environment variable or secret manager");
+    expect(note.text()).toContain("does not store the credential for you");
+    expect(wrapper.find(".api-key-connector-snippet-code").text())
+      .toContain("X-Meshrix.js-Api-Key: ${MESHRIX_MCP_TOKEN}");
+    expect(wrapper.find('[data-testid="api-key-connector-snippet-copy"]').text())
+      .toBe("Copy connection guide");
+  });
+
+  it("keeps the branded connector guidance for an explicitly selected guide", async () => {
+    const { wrapper } = await mountConsoleView((controller) => {
+      controller.draft.value.selectedClientGuide = "codex";
+    });
+    await revealViaCreate(wrapper);
+    expect(wrapper.find('[data-testid="api-key-connector-snippet"] h4').text())
+      .toBe("Then copy the Agent config");
+    expect(wrapper.find('[data-testid="generic-client-secret-note"]').exists()).toBe(false);
+    expect(wrapper.find(".api-key-connector-snippet-note").text())
+      .toContain("Set the one-time key in the MESHRIX_MCP_TOKEN environment variable");
+    expect(wrapper.find('[data-testid="api-key-connector-snippet-copy"]').text()).toBe("Copy config");
+  });
+
+  it("explains both organization setup and scope assignment and links to governance", async () => {
+    const { wrapper } = await mountConsoleView((controller) => {
+      controller.eligible.value = false;
+    });
+    const emptyState = wrapper.find('[data-access="restricted-empty"]');
+    expect(emptyState.text()).toContain("If organization governance is not configured");
+    expect(emptyState.text()).toContain("If governance is already configured");
+    expect(emptyState.text()).toContain("never infers global authority");
+    expect(emptyState.find('[data-testid="organization-governance-link"]').attributes("href"))
+      .toBe("/admin/organization-governance");
+  });
+
   it("makes copy the primary, initially focused action and confirms copies inline", async () => {
     const { controller, wrapper } = await mountConsoleView();
     await revealViaCreate(wrapper);

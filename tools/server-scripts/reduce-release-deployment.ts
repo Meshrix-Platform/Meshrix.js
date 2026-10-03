@@ -15,6 +15,11 @@ import {
   createReleaseDeploymentReceipt,
   validateDriverAggregate,
 } from "./lib/release-deployment/contract.ts";
+import {
+  assertReleaseDeploymentResourcesRemoved,
+  readReleaseDeploymentCleanupState,
+  requireCurrentReleaseDeploymentEnvironment,
+} from "./lib/release-deployment/authority.ts";
 
 function fail(code: string, detail = code): never {
   throw Object.assign(new Error(detail), { code });
@@ -51,7 +56,7 @@ export async function reduceDeploymentEvidence({
   sourceRevision = "",
   candidateDigest = "",
   functionalReceiptDigest = "",
-  cleanupVerified = false,
+  cleanupStatePath = "",
   outputPath = "",
 }: Record<string, any> = {}): Promise<any> {
   if (!/^[a-f0-9]{40}$/u.test(String(sourceRevision || ""))) {
@@ -63,15 +68,19 @@ export async function reduceDeploymentEvidence({
   if (!/^[a-f0-9]{64}$/u.test(String(functionalReceiptDigest || ""))) {
     fail("release_reducer_functional_digest_invalid");
   }
-  if (cleanupVerified !== true) fail("release_reducer_cleanup_unverified");
   const reasons = validateDriverAggregate(aggregate);
   if (reasons.length > 0) fail(reasons[0], reasons.join("; "));
+  const cleanupState = await readReleaseDeploymentCleanupState(cleanupStatePath);
+  if (cleanupState.sourceRevision !== sourceRevision || cleanupState.candidateDigest !== candidateDigest) {
+    fail("release_reducer_cleanup_candidate_mismatch");
+  }
+  await assertReleaseDeploymentResourcesRemoved(cleanupState);
   const receipt = createReleaseDeploymentReceipt({
     sourceRevision,
     candidateDigest,
     functionalReceiptDigest,
+    executionEnvironment: aggregate.executionEnvironment,
     scenarios: aggregate.scenarios,
-    cleanupVerified: true,
   });
   if (outputPath) await writeJsonAtomic(outputPath, receipt);
   return receipt;
@@ -99,6 +108,13 @@ function selfTestAggregate(): any {
   return {
     schemaVersion: RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA,
     externalBoundary: true,
+    executionEnvironment: {
+      architecture: "x64",
+      nodeVersion: "24.16.0",
+      platform: "linux",
+      runner: "ubuntu-24.04",
+      runnerEnvironment: "github-hosted",
+    },
     scenarios: Object.fromEntries(RELEASE_DEPLOYMENT_SCENARIOS.map((scenario) => [
       scenario,
       scenarioAggregate(scenario),
@@ -109,36 +125,44 @@ function selfTestAggregate(): any {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === "--self-test") {
-    const receipt = await reduceDeploymentEvidence({
-      aggregate: selfTestAggregate(),
-      sourceRevision: "a".repeat(40),
-      candidateDigest: "b".repeat(64),
-      functionalReceiptDigest: "c".repeat(64),
-      cleanupVerified: true,
-    });
-    process.stdout.write(`${JSON.stringify({ ok: true, receipt })}\n`);
+    const aggregate = selfTestAggregate();
+    const reasons = validateDriverAggregate(aggregate);
+    if (reasons.length > 0) fail(reasons[0]);
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      schemaVersion: RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA,
+      scenarioCount: RELEASE_DEPLOYMENT_SCENARIOS.length,
+      syntheticEvidence: true,
+    })}\n`);
     return;
   }
-  const options: Record<string, string | boolean> = {};
+  const optionNames = new Set([
+    "input", "source-revision", "candidate-digest", "functional-receipt-digest", "cleanup-state", "output",
+  ]);
+  const options: Record<string, string> = {};
   for (let index = 0; index < args.length; index += 1) {
     const name = args[index];
-    if (name === "--cleanup-verified") {
-      options["cleanup-verified"] = true;
-    } else if (name?.startsWith("--") && args[index + 1] && !args[index + 1].startsWith("--")) {
-      options[name.slice(2)] = args[++index];
-    } else {
+    const key = name?.startsWith("--") ? name.slice(2) : "";
+    const value = args[index + 1];
+    if (!optionNames.has(key) || options[key] !== undefined || !value || value.startsWith("--")) {
       fail("release_reducer_argument_invalid");
     }
+    options[key] = value;
+    index += 1;
   }
-  for (const key of ["input", "source-revision", "candidate-digest", "functional-receipt-digest", "output"]) {
+  for (const key of [
+    "input", "source-revision", "candidate-digest", "functional-receipt-digest", "cleanup-state", "output",
+  ]) {
     if (!options[key]) fail("release_reducer_argument_incomplete");
   }
+  const aggregate = await readDriverAggregate(String(options.input));
+  await requireCurrentReleaseDeploymentEnvironment(aggregate.executionEnvironment);
   const receipt = await reduceDeploymentEvidence({
-    aggregate: await readDriverAggregate(String(options.input)),
+    aggregate,
     sourceRevision: String(options["source-revision"]),
     candidateDigest: String(options["candidate-digest"]),
     functionalReceiptDigest: String(options["functional-receipt-digest"]),
-    cleanupVerified: options["cleanup-verified"] === true,
+    cleanupStatePath: String(options["cleanup-state"]),
     outputPath: String(options.output),
   });
   process.stdout.write(`${JSON.stringify({ ok: true, scenarioCount: Object.keys(receipt.scenarios).length })}\n`);

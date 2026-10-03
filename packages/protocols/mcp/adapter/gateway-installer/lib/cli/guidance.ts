@@ -1,6 +1,6 @@
 import {
-  BOOTSTRAP_INSTALL_SCRIPT_ZH_CN,
   DEFAULT_TOKEN_ENV,
+  packageInfo,
   PRIORITY_INSTALL_TARGET,
   PRIORITY_INSTALL_TARGETS,
   SUPPORTED_TARGETS,
@@ -8,7 +8,12 @@ import {
 } from "./constants.ts";
 import { normalizeBaseUrl, option } from "./basic-utils.ts";
 import { explicitBaseUrl } from "./discovery.ts";
-import { githubOneLineMcpInstallCommand, shellQuote } from "./connector-process.ts";
+import { shellQuote } from "./connector-process.ts";
+
+export function npmPackageCommand(command = ""): string {
+  const executable = `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp`;
+  return command ? `${executable} ${command}` : executable;
+}
 
 export function shellCommandForInstall({
   target = "codex",
@@ -17,7 +22,7 @@ export function shellCommandForInstall({
   includeToken = false,
   tokenEnv = ""
 }: Record<string, any> = {}) : any {
-  const parts: any[] = ["meshrix-mcp", "install", "--target", target];
+  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "install", "--target", target];
   if (includeUrl) {
     parts.push("--url", shellQuote(baseUrl));
   }
@@ -54,14 +59,14 @@ export function appendGuidanceContextArgs(parts?: any, { baseUrl = "", tokenEnv 
 }
 
 export function shellCommandForScan({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
-  const parts: any[] = ["meshrix-mcp", "scan"];
+  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "scan"];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv });
   parts.push("--json");
   return parts.join(" ");
 }
 
 export function shellCommandForDiscoverLocal({ includeUrl = false, baseUrl = "" }: Record<string, any> = {}) : any {
-  const parts: any[] = ["meshrix-mcp", "discover-local"];
+  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "discover-local"];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv: DEFAULT_TOKEN_ENV });
   parts.push("--json");
   return parts.join(" ");
@@ -73,7 +78,7 @@ export function shellCommandForDoctor({
   baseUrl = "",
   tokenEnv = DEFAULT_TOKEN_ENV
 }: Record<string, any> = {}) : any {
-  const parts: any[] = ["meshrix-mcp", "doctor"];
+  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "doctor"];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv });
   if (includeToken) {
     parts.push("--token-stdin");
@@ -83,60 +88,38 @@ export function shellCommandForDoctor({
 }
 
 export function shellCommandForUninstall({ target = "codex", includeUrl = false, baseUrl = "" }: Record<string, any> = {}) : any {
-  const parts: any[] = ["meshrix-mcp", "uninstall", "--target", target];
+  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "uninstall", "--target", target];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv: DEFAULT_TOKEN_ENV });
   parts.push("--json");
   return parts.join(" ");
 }
 
 export function shellCommandForServerConfig({ baseUrl = "http://127.0.0.1:7228" }: Record<string, any> = {}) : any {
-  return `meshrix-mcp server-config --set --url ${shellQuote(normalizeBaseUrl(baseUrl) || "http://127.0.0.1:7228")}`;
+  return npmPackageCommand(`server-config --set --url ${shellQuote(normalizeBaseUrl(baseUrl) || "http://127.0.0.1:7228")}`);
 }
 
-export function githubOneLineInstallGuidance({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
-  const command: any = githubOneLineMcpInstallCommand();
-  const commandZhCN: any = githubOneLineMcpInstallCommand(BOOTSTRAP_INSTALL_SCRIPT_ZH_CN);
+export function npmInstallGuidance({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
+  const command: any = npmPackageCommand();
   const contextArgs: any = [
     includeUrl && baseUrl ? ` --url ${shellQuote(baseUrl)}` : "",
     tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : ""
   ].join("");
-  const build: any = (oneLineCommand?: any) : any => ({
-    installCommand: contextArgs ? `${oneLineCommand} --${contextArgs}` : oneLineCommand,
-    clientInstallJsonCommand: `${oneLineCommand} -- --target <client>${contextArgs} --json`,
-    autoInstallCommand: `${oneLineCommand} -- --target auto${contextArgs} --json`,
-    priorityInstallCommand: `${oneLineCommand} -- --target ${PRIORITY_INSTALL_TARGET}${contextArgs} --json`
-  });
-  const english: any = build(command);
-  const zhCN: any = build(commandZhCN);
   return {
-    githubOneLineCommand: command,
-    githubOneLineInstallCommand: english.installCommand,
-    githubOneLineClientInstallJsonCommand: english.clientInstallJsonCommand,
-    githubOneLineAutoInstallCommand: english.autoInstallCommand,
-    githubOneLinePriorityInstallCommand: english.priorityInstallCommand,
-    githubOneLineCommandZhCN: commandZhCN,
-    githubOneLineInstallCommandZhCN: zhCN.installCommand,
-    githubOneLineClientInstallJsonCommandZhCN: zhCN.clientInstallJsonCommand,
-    githubOneLineAutoInstallCommandZhCN: zhCN.autoInstallCommand,
-    githubOneLinePriorityInstallCommandZhCN: zhCN.priorityInstallCommand,
-    oneCommandInstall: english.installCommand,
-    oneCommandInstallZhCN: zhCN.installCommand,
-    oneCommandClientInstallJson: english.clientInstallJsonCommand,
-    oneCommandClientInstallJsonZhCN: zhCN.clientInstallJsonCommand,
-    oneCommandAutoInstall: english.autoInstallCommand,
-    oneCommandAutoInstallZhCN: zhCN.autoInstallCommand,
-    oneCommandPriorityInstall: english.priorityInstallCommand,
-    oneCommandPriorityInstallZhCN: zhCN.priorityInstallCommand
+    installCommand: contextArgs ? `${command} install${contextArgs}` : `${command} install`,
+    clientInstallJsonCommand: `${command} install --target codex${contextArgs} --json`,
+    autoInstallCommand: `${command} install --target auto${contextArgs} --json`,
+    priorityInstallCommand: `${command} install --target ${PRIORITY_INSTALL_TARGET}${contextArgs} --json`,
+    uninstallCommand: `${command} uninstall --target codex${contextArgs} --json`
   };
 }
 
 export function installGuidanceMetadata({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
-  const oneLineGuidance: any = githubOneLineInstallGuidance({ includeUrl, baseUrl, tokenEnv });
+  const npmGuidance: any = npmInstallGuidance({ includeUrl, baseUrl, tokenEnv });
   return {
     priorityTargets: [...PRIORITY_INSTALL_TARGETS],
     supportedTargets: [...SUPPORTED_TARGETS],
     supportedTargetDetails: supportedTargetDetails(),
-    ...oneLineGuidance,
+    ...npmGuidance,
     discoverCommand: shellCommandForDiscoverLocal({ includeUrl, baseUrl }),
     scanCommand: shellCommandForScan({ includeUrl, baseUrl, tokenEnv }),
     doctorCommand: shellCommandForDoctor({ includeUrl, baseUrl, tokenEnv }),
@@ -185,13 +168,11 @@ export function commandFailureGuidance({ command = "", message = "", options = {
   if (lower.includes("missing api key")) {
     const target: any = String(option(options, "target", "codex")) || "codex";
     const urlArgs: any = baseUrl ? ` --url ${shellQuote(baseUrl)}` : "";
-    const tokenEnvArgs: any = tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : "";
     return {
       errorCode: "MISSING_API_KEY",
       nextCommand: shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
       repairCommands: [
-        shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
-        `${tokenEnv}=your-api-key meshrix-mcp ${command || "install"} --target ${target}${urlArgs}${tokenEnvArgs} --json`
+        shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv })
       ],
       ...installGuidanceMetadata({ includeUrl: Boolean(baseUrl), baseUrl, tokenEnv })
     };
@@ -233,7 +214,7 @@ export function commandOptionArgs(options: Record<string, any> = {}) : any {
 }
 
 export function candidateInstallCommand(candidate?: any, settings?: any) : any {
-  const args: any[] = ["meshrix-mcp", "install", "--target", candidate.target];
+  const args: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "install", "--target", candidate.target];
   if (settings.baseUrl) {
     args.push("--url", shellQuote(settings.baseUrl));
   }

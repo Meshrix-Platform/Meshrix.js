@@ -22,7 +22,7 @@ export const EFFICIENCY_PROFILE_REPORT_SCHEMA_VERSION: any =
   "v0.0.1:efficiency:named-profile-report-1";
 export const EFFICIENCY_PROFILE_MEASUREMENT_KIND: any = "named-warm-profile";
 export const EFFICIENCY_NAMED_PROFILE: any = "warm";
-export const EFFICIENCY_OWNER_PROFILE: any = "enterprise-single-node";
+export const EFFICIENCY_OWNER_PROFILE: any = "single-node";
 export const EFFICIENCY_CALL_REDUCTION_THRESHOLD: any = 60;
 export const EFFICIENCY_BYTE_REDUCTION_THRESHOLD: any = 70;
 export const EFFICIENCY_FINITE_REASON_PATTERN: any = /^[a-z][a-z0-9_]{2,64}$/u;

@@ -303,27 +303,63 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     return mcpPayload(payload);
   }
 
+  /**
+   * A tool-level refusal travels in-band as `result.isError === true`; a top-level
+   * JSON-RPC `error` is reserved for protocol faults (see `mcpRefusal`). A positive
+   * step therefore has to reject both carriers: asserting only `payload.error`
+   * would accept an in-band refusal — an authorization, tag-policy or outlet
+   * denial — as a successful call.
+   */
   function assertMcpOk(payload?: any, label?: any) : any {
     assert.equal(payload.error, undefined, `${label} returned MCP error: ${JSON.stringify(safeEvidence(payload.error || {}))}`);
+    assert.notEqual(
+      payload?.result?.isError,
+      true,
+      `${label} was refused in-band: ${JSON.stringify(safeEvidence(mcpPayload(payload)))}`
+    );
   }
 
-  function assertMcpDenied(payload?: any, label?: any) : any {
-    assert.ok(payload.error, `${label} unexpectedly succeeded`);
-    const text: any = JSON.stringify(payload.error || {}).toLowerCase();
+  /**
+   * A tool-level refusal travels in-band: `result.isError === true` with the
+   * operation payload under `result.structuredContent`. A top-level JSON-RPC
+   * `error` is reserved for protocol faults. This is the MCP tool-result
+   * convention for an operation that failed at the tool level, and the platform
+   * sinks already answer that way; do not re-tighten this to `payload.error`
+   * alone, and do not relax the reason check that follows it. A positive step
+   * must still reject the in-band carrier — see `assertMcpOk`.
+   */
+  function mcpRefusal(payload?: any) : any {
+    if (payload?.error) return payload.error;
+    return payload?.result?.isError === true ? mcpPayload(payload) : null;
+  }
+
+  function assertMcpDenied(payload?: any, label?: any, expectedReason?: any) : any {
+    const denial: any = mcpRefusal(payload);
+    assert.ok(denial, `${label} unexpectedly succeeded`);
+    const text: any = JSON.stringify(denial || {}).toLowerCase();
+    // An array names the acceptable refusal reasons; a destructive operation may
+    // be stopped by the approval gate before the tag policy is consulted, so the
+    // caller states which refusals prove the step, and the no-effect assertion
+    // that follows the call remains the proof that nothing executed.
+    const expected: any[] = expectedReason === undefined
+      ? []
+      : (Array.isArray(expectedReason) ? expectedReason : [expectedReason]).map((reason?: any) : any => String(reason).toLowerCase());
     assert.equal(
-      text.includes("tag_policy_denied") ||
-        text.includes("policy_denied") ||
-        text.includes("denied") ||
-        text.includes("unknown") ||
-        text.includes("not_found") ||
-        text.includes("not found") ||
-        text.includes("outlet") ||
-        text.includes("missing") ||
-        text.includes("permission") ||
-        text.includes("forbidden") ||
-        text.includes("权限不足"),
+      expected.length > 0
+        ? expected.some((reason?: any) : any => text.includes(reason))
+        : text.includes("tag_policy_denied") ||
+            text.includes("policy_denied") ||
+            text.includes("denied") ||
+            text.includes("unknown") ||
+            text.includes("not_found") ||
+            text.includes("not found") ||
+            text.includes("outlet") ||
+            text.includes("missing") ||
+            text.includes("permission") ||
+            text.includes("forbidden") ||
+            text.includes("权限不足"),
       true,
-      `${label} did not expose a denial reason`
+      `${label} did not expose a denial reason${expected.length > 0 ? ` (${expected.join("|")})` : ""}: ${JSON.stringify(denial || {})}`
     );
   }
 

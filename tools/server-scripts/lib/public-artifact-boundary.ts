@@ -6,13 +6,19 @@ import path from "node:path";
 const MAX_TEXT_FILE_BYTES: any = 8 * 1024 * 1024;
 
 const TEXT_EXTENSIONS: any = new Set<any>([
+  ".bat",
   ".cjs",
+  ".cmd",
+  ".cts",
   ".css",
   ".html",
   ".js",
+  ".map",
+  ".mjs",
+  ".mts",
   ".json",
   ".jsx",
-  ".ts",
+  ".ps1",
   ".md",
   ".sh",
   ".svg",
@@ -138,6 +144,61 @@ function createFinding(ruleId?: any, relativePath?: any, line: any = 0) : any {
   };
 }
 
+function generatedOutputPrefixSegmentIndex(relativePath?: any, prefixes: any = []) : any {
+  const segments: any = normalizeRelativePath(relativePath).split("/");
+  for (const prefix of prefixes) {
+    const prefixSegments: any = normalizeRelativePath(prefix).split("/").filter(Boolean);
+    if (
+      prefixSegments.length > 0 &&
+      prefixSegments.length <= segments.length &&
+      prefixSegments.every((segment?: any, index?: any) : any => segments[index] === segment)
+    ) {
+      return prefixSegments.length;
+    }
+  }
+  return 0;
+}
+
+function bundledDependencyCandidateSegments(candidate?: any) : any[] | null {
+  if (typeof candidate !== "string") return null;
+  const normalizedCandidate: any = normalizeRelativePath(candidate);
+  const candidateSegments: any[] = normalizedCandidate.split("/").filter(Boolean);
+  if (path.isAbsolute(candidate) || candidateSegments.some((segment?: any) : any => segment === "." || segment === "..")) {
+    return null;
+  }
+  const dependencyIndex: any = candidateSegments.lastIndexOf("node_modules");
+  const packageSegments: any[] = candidateSegments.slice(dependencyIndex + 1);
+  const validPackagePath: any = dependencyIndex >= 0 && (
+    packageSegments.length === 1 && /^[a-z0-9][a-z0-9._-]*$/iu.test(packageSegments[0])
+    || packageSegments.length === 2 && /^@[a-z0-9][a-z0-9._-]*$/iu.test(packageSegments[0]) && /^[a-z0-9][a-z0-9._-]*$/iu.test(packageSegments[1])
+  );
+  return validPackagePath ? candidateSegments : null;
+}
+
+function allowedBundledDependencyPath(relativePath?: any, options: Record<string, any> = {}) : any {
+  const normalizedPath: any = normalizeRelativePath(relativePath);
+  const pathSegments: any[] = normalizedPath.split("/").filter(Boolean);
+  const allowedPaths: any[] = options.allowedBundledDependencyPaths || [];
+  return allowedPaths.some((candidate?: any) : any => {
+    const candidateSegments: any[] | null = bundledDependencyCandidateSegments(candidate);
+    if (candidateSegments === null || pathSegments.length < candidateSegments.length) return false;
+    if (!candidateSegments.every((segment?: any, index?: any) : any => pathSegments[index] === segment)) return false;
+    return !pathSegments.slice(candidateSegments.length).includes("node_modules");
+  });
+}
+
+function allowedBundledDependencyAncestorPath(relativePath?: any, options: Record<string, any> = {}) : any {
+  const normalizedPath: any = normalizeRelativePath(relativePath);
+  const pathSegments: any[] = normalizedPath.split("/").filter(Boolean);
+  const allowedPaths: any[] = options.allowedBundledDependencyPaths || [];
+  return allowedPaths.some((candidate?: any) : any => {
+    const candidateSegments: any[] | null = bundledDependencyCandidateSegments(candidate);
+    return candidateSegments !== null
+      && pathSegments.length < candidateSegments.length
+      && pathSegments.every((segment?: any, index?: any) : any => segment === candidateSegments[index]);
+  });
+}
+
 function pathFinding(relativePath?: any, options: Record<string, any> = {}) : any {
   const normalizedPath: any = normalizeRelativePath(relativePath);
   const allowedGeneratedOutputSegments: any = new Set<any>(
@@ -150,10 +211,20 @@ function pathFinding(relativePath?: any, options: Record<string, any> = {}) : an
   }
 
   const segments: any = normalizedPath.split("/");
+  const allowedGeneratedOutputPrefixLength: any = generatedOutputPrefixSegmentIndex(
+    normalizedPath,
+    options.allowedGeneratedOutputPrefixes || []
+  );
   for (const rule of FORBIDDEN_PATH_SEGMENT_RULES) {
-    if (segments.some((segment?: any) : any => (
+    if (segments.some((segment?: any, index?: any) : any => (
       rule.segments.includes(segment) &&
-      !(rule.ruleId === "generated_or_local_output" && allowedGeneratedOutputSegments.has(segment))
+      !(rule.ruleId === "repository_or_dependency_metadata" &&
+        segment === "node_modules" &&
+        allowedBundledDependencyPath(normalizedPath, options)) &&
+      !(rule.ruleId === "generated_or_local_output" && (
+        allowedGeneratedOutputSegments.has(segment) ||
+        index < allowedGeneratedOutputPrefixLength
+      ))
     ))) {
       return createFinding(rule.ruleId, normalizedPath);
     }
@@ -254,7 +325,7 @@ function localPathNeedleIndex(text?: any, needle?: any) : any {
   return -1;
 }
 
-async function collectArtifactFiles(rootPath?: any) : Promise<any> {
+async function collectArtifactFiles(rootPath?: any, options: Record<string, any> = {}) : Promise<any> {
   const files: any[] = [];
   const findings: any[] = [];
 
@@ -264,21 +335,29 @@ async function collectArtifactFiles(rootPath?: any) : Promise<any> {
       const relativePath: any = normalizeRelativePath(
         relativeDirectory ? path.join(relativeDirectory, entry.name) : entry.name
       );
-      const forbidden: any = pathFinding(relativePath);
-      if (forbidden) {
-        findings.push(forbidden);
-        continue;
-      }
       const absolutePath: any = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) {
         findings.push(createFinding("symbolic_link_not_allowed", relativePath));
         continue;
       }
       if (entry.isDirectory()) {
+        const forbidden: any = pathFinding(relativePath, options);
+        const generatedAncestor = forbidden?.ruleId === "generated_or_local_output" &&
+          (options.allowedGeneratedOutputPrefixes || []).some((prefix: string) =>
+            normalizeRelativePath(prefix).startsWith(`${relativePath}/`));
+        if (forbidden && !generatedAncestor && !allowedBundledDependencyAncestorPath(relativePath, options)) {
+          findings.push(forbidden);
+          continue;
+        }
         await visit(absolutePath, relativePath);
         continue;
       }
       if (entry.isFile()) {
+        const forbidden: any = pathFinding(relativePath, options);
+        if (forbidden) {
+          findings.push(forbidden);
+          continue;
+        }
         files.push({ absolutePath, relativePath });
       }
     }
@@ -395,6 +474,6 @@ export async function scanPublicArtifact(rootPath?: any, options: Record<string,
   if (!stat?.isDirectory()) {
     throw new Error("public_artifact_scan_root_missing");
   }
-  const { files, findings } = await collectArtifactFiles(absoluteRoot);
+  const { files, findings } = await collectArtifactFiles(absoluteRoot, options);
   return scanCollectedArtifactFiles(files, findings, options);
 }

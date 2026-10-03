@@ -1,17 +1,63 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
   formatLocalizedFailures,
-  parseFailureLog
+  parseFailureLog,
+  sanitizeVerificationLog,
+  writeVerificationArtifacts
 } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("pull-request verification feedback", () => {
+  it("retains later failures after a truncated structured assertion diff", () => {
+    const safe = sanitizeVerificationLog([
+      "{", '  "payload": "synthetic private value",',
+      " FAIL tests/vitest/server/next.test.ts > next case",
+      "AssertionError: expected 1 to equal 2",
+      'credential="synthetic private credential"',
+      " Test Files  2 failed (2)",
+    ].join("\n"));
+    expect(safe).not.toContain("synthetic private");
+    expect(safe).toContain("FAIL tests/vitest/server/next.test.ts");
+    expect(safe).toContain("AssertionError: expected 1 to equal 2");
+    expect(safe).toContain("Test Files  2 failed (2)");
+  });
+
+  it("retains every diagnostic stage while removing private paths, credentials, key material and runtime output", async () => {
+    const secret = ["npm", "syntheticCredentialOnly12345678901234"].join("_");
+    const localRoot = ["", "home", "fixture-user", "project"].join("/");
+    const log = ["Stage: first", "Error: npm_artifact_failure_1_E404", ...Array.from({ length: 120 }, (_, index) => `diagnostic ${index}`),
+      `${localRoot}/src/module.ts:4:2 error TS2322: Type mismatch`, `credential=${secret}`,
+      "docker exec cmd=[chown -R 1234:5678 /var/run/act/actions] user=0",
+      ["-----BEGIN", "PRIVATE KEY-----"].join(" "), "syntheticKeyBody", ["-----END", "PRIVATE KEY-----"].join(" "),
+      'payload: {"content":"synthetic private request"}', 'ciphertext="synthetic encrypted value"',
+      "payload: {", '  "message": "synthetic private continuation"', "}",
+      "stdout | runtime fixture", "synthetic private output", "", "synthetic continuation",
+      "FAIL tests/vitest/server/example.test.ts", "AssertionError: expected 1 to equal 2", "Stage: final"].join("\n");
+    const safe = sanitizeVerificationLog(log, localRoot);
+    expect(safe.split("\n")).toHaveLength(log.split("\n").length);
+    for (const item of ["Stage: first", "npm_artifact_failure_1_E404", "diagnostic 0", "diagnostic 60", "diagnostic 119", "src/module.ts:4:2", "expected 1 to equal 2", "Stage: final"]) expect(safe).toContain(item);
+    for (const item of [localRoot, secret, "syntheticKeyBody", "synthetic private", "synthetic encrypted", "synthetic continuation"]) expect(safe).not.toContain(item);
+    expect(safe).not.toContain("1234:5678");
+    expect(safe).toContain("chown -R <runner-uid>:<runner-gid>");
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-ci-diagnostics-"));
+    try {
+      const report = path.join(directory, "input.json");
+      await fs.writeFile(report, JSON.stringify({ suites: [{ id: "example", status: "failed" }], token: secret }));
+      await writeVerificationArtifacts(log, path.join(directory, "public"), report);
+      expect(await fs.readFile(path.join(directory, "public", "verification.log"), "utf8")).toContain("diagnostic 60");
+      const published = JSON.parse(await fs.readFile(path.join(directory, "public", "regression.json"), "utf8"));
+      expect(published.suites).toEqual([{ id: "example", status: "failed" }]);
+      expect(published.token).toBe("[redacted]");
+    } finally { await fs.rm(directory, { recursive: true, force: true }); }
+  });
+
   it("names assertion, file, and command on vitest failures", () => {
     const log = [
       "RUN  v4.1.10",
@@ -88,53 +134,47 @@ describe("pull-request verification feedback", () => {
     }
   });
 
-  it("runs pull requests and stable through the ordered regression and resumable audit checkpoints", async () => {
+  it("routes each CI event through one maintained profile and retains its diagnostics", async () => {
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
-    const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const pullRequestJob = workflow.indexOf("  pull-request-verify:\n");
-    const stableCandidate = workflow.indexOf("  stable-candidate:\n");
-    const functionalCompleteness = workflow.indexOf("\n  functional-completeness:\n", stableCandidate);
-    const stableEnd = workflow.indexOf("\n  node-22-compatibility:\n", functionalCompleteness);
+    const engineeringJob = workflow.indexOf("  engineering:\n");
+    const stableJob = workflow.indexOf("  stable-functional-completeness:\n");
+    const dependencyReview = workflow.indexOf("  dependency-review:\n");
     expect(pullRequestJob).toBeGreaterThan(0);
-    expect(stableCandidate).toBeGreaterThan(pullRequestJob);
-    expect(functionalCompleteness).toBeGreaterThan(stableCandidate);
-    expect(stableEnd).toBeGreaterThan(functionalCompleteness);
+    expect(engineeringJob).toBeGreaterThan(pullRequestJob);
+    expect(stableJob).toBeGreaterThan(engineeringJob);
+    expect(dependencyReview).toBeGreaterThan(stableJob);
 
-    const prSection = workflow.slice(pullRequestJob, stableCandidate);
+    const prSection = workflow.slice(pullRequestJob, engineeringJob);
     expect(prSection).toContain("if: ${{ github.event_name == 'pull_request' }}");
-    expect(prSection).toContain('run_check "npm test"');
-    expect(prSection).toContain('--command "$command_label"');
-    expect(prSection).toContain("localize-verify-failure.ts");
-    expect(prSection).not.toContain("npm run verify");
-    expect(prSection).not.toContain("verify:acceptance");
-    expect(prSection).not.toContain("--shard");
+    expect(prSection).toContain("npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json");
+    expect(prSection).toContain("name: Retain sanitized logs and structured results");
+    expect(prSection).toContain("if: ${{ always() }}");
+    expect(prSection).toContain("build/ci-diagnostics/local-ci/results.json");
+    expect(prSection).toContain("build/local-ci/");
 
-    const gateSection = workflow.slice(stableCandidate, stableEnd);
-    expect(gateSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
-    expect(gateSection).not.toContain("run: npm run verify");
-    expect(gateSection).toContain("Ordered repository regression checkpoint");
-    expect(gateSection).toContain("Run the canonical four-stage regression");
-    expect(gateSection).toContain("Audit checkpoint / ${{ matrix.stage }}");
-    expect(gateSection).toContain("Audit checkpoint / resource");
-    expect(gateSection).toContain("Audit checkpoint / sandbox");
-    expect(gateSection).toContain("Audit checkpoint / console evidence");
-    expect(gateSection).toContain("Audit checkpoint / console");
-    expect(gateSection).toContain("needs: [repository-checkpoint, audit-console-evidence-checkpoint]");
-    expect(gateSection).toContain("stable-console-build-${{ github.sha }}");
-    expect(gateSection).toMatch(/- name: Export compiled console assets\n\s+if: \$\{\{ always\(\) \}\}/u);
-    expect(gateSection).toContain("stable-console-evidence-${{ github.sha }}");
-    expect(gateSection).toContain("--profile audit-stable-resource");
-    expect(gateSection).toContain("--profile audit-stable-sandbox");
-    expect(gateSection).toContain("--profile audit-stable-console-evidence");
-    expect(gateSection).toContain("npm run test:audit:stage");
-    expect(gateSection).toContain("npm run test:audit:reduce");
-    expect(gateSection).toContain("fail-fast: false");
-    expect(gateSection).toContain("timeout-minutes: 120");
-    expect(packageJson.scripts["test:audit"]).toContain("--continue-on-failure");
-    expect(packageJson.scripts["test:audit"]).toContain("--report build/test-reports/audit-public.json");
+    const engineeringSection = workflow.slice(engineeringJob, stableJob);
+    expect(engineeringSection).toContain("if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && github.ref_name == 'stable') }}");
+    expect(engineeringSection).toContain("npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json");
+    expect(engineeringSection).toContain("build/local-ci/");
+
+    const stableSection = workflow.slice(stableJob, dependencyReview);
+    expect(stableSection).toContain("name: Stable functional completeness release gate");
+    expect(stableSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
+    expect(stableSection).toContain("npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json");
+    expect(stableSection).toContain("resolve-branch-promotion-authority.ts");
+    expect(stableSection).toContain("create-stable-bundle");
+    expect(stableSection).toContain("npm-package-installability.json");
+    expect(stableSection).toContain("stable-authority-${{ github.sha }}");
+    expect(stableSection).toContain("if: ${{ always() }}");
+    expect(stableSection).toContain("build/local-ci/");
+
+    const reviewSection = workflow.slice(dependencyReview);
+    expect(reviewSection).toContain("name: Dependency review");
+    expect(reviewSection).toContain("actions/dependency-review-action@");
   });
 
-  it("lets Dependabot wait only for checks that actually execute on pull requests", async () => {
+  it("binds Dependabot auto-merge to the exact reviewed revision and executed checks", async () => {
     const workflow = await fs.readFile(
       path.join(repoRoot, ".github/workflows/dependabot-security-automerge.yml"),
       "utf8",
@@ -143,5 +183,68 @@ describe("pull-request verification feedback", () => {
     expect(workflow).toContain("'Dependency review'");
     expect(workflow).not.toContain("'Public platform gate'");
     expect(workflow).not.toContain("'Supply-chain evidence'");
+    expect(workflow).toContain("pull_request_review:");
+    expect(workflow).toContain("dismissed");
+    expect(workflow).toContain("reviews?per_page=100");
+    expect(workflow).toContain('"APPROVED"');
+    expect(workflow).toContain("check-runs?per_page=100");
+    expect(workflow).toContain('--match-head-commit "$head_sha"');
+    expect(workflow).not.toContain("--admin");
+  });
+});
+
+
+describe("executed Dependabot admission", () => {
+  it("requires current write-authorized approval and rejects stale, revoked or failing evidence", async () => {
+    const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/dependabot-security-automerge.yml"), "utf8");
+    const source = workflow.slice(workflow.indexOf("      - name: Merge the exact admitted Dependabot revision"));
+    const script = source.slice(source.indexOf("        run: |\n") + "        run: |\n".length).split("\n").map((line) => line.startsWith("          ") ? line.slice(10) : line).join("\n");
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-dependency-admission-"));
+    const eventPath = path.join(directory, "event.json");
+    const fixturePath = path.join(directory, "fixture.json");
+    const receiptPath = path.join(directory, "merge.json");
+    const head = "candidate-head";
+    const review = (id: number, state: string, commit = head, login = "maintainer") => ({ id, state, commit_id: commit, user: { login, type: "User" }, author_association: "MEMBER" });
+    const checks = ["Pull request verification", "Dependency review"].map((name, index) => ({ id: index + 1, name, conclusion: "success", app: { slug: "github-actions" } }));
+    const cases = [
+      { name: "approved", reviews: [review(1, "APPROVED")], merge: true },
+      { name: "comment preserves operative approval", reviews: [review(1, "APPROVED"), review(2, "COMMENTED")], merge: true },
+      { name: "read-only organization member", reviews: [review(1, "APPROVED")], permission: "read", merge: false },
+      { name: "stale approval", reviews: [review(1, "APPROVED", "old-head")], merge: false },
+      { name: "dismissed", reviews: [review(1, "APPROVED"), review(2, "DISMISSED")], merge: false },
+      { name: "changes requested by another maintainer", reviews: [review(1, "APPROVED"), review(2, "CHANGES_REQUESTED", head, "second")], merge: false },
+      { name: "prior unresolved change request", reviews: [review(1, "CHANGES_REQUESTED", "old-head", "second"), review(2, "APPROVED")], merge: false },
+      { name: "paginated approval", reviews: [review(1, "COMMENTED"), review(2, "APPROVED")], paginate: true, merge: true },
+      { name: "failed check", reviews: [review(1, "APPROVED")], failed: true, merge: false },
+      { name: "latest rerun supersedes older run", reviews: [review(1, "APPROVED")], rerun: true, merge: true },
+      { name: "changed head", reviews: [review(1, "APPROVED")], changed: true, merge: false },
+    ];
+    try {
+      await fs.writeFile(eventPath, JSON.stringify({ pull_request: { number: 7, head: { sha: head } } }));
+      await fs.writeFile(path.join(directory, "gh"), `#!/usr/bin/env node
+const fs = require("node:fs");
+const f = JSON.parse(fs.readFileSync(process.env.FIXTURE, "utf8"));
+const args = process.argv.slice(2);
+if (args[0] === "pr" && args[1] === "merge") { fs.writeFileSync(process.env.RECEIPT, JSON.stringify(args)); process.exit(0); }
+const endpoint = args.find((x) => x.startsWith("repos/"));
+let result;
+if (endpoint.endsWith("/permission")) { process.stdout.write(f.permission || "write"); process.exit(0); }
+if (endpoint.includes("/reviews?")) result = f.paginate ? [f.reviews.slice(0, 1), f.reviews.slice(1)] : [f.reviews];
+else if (endpoint.includes("/check-runs?")) result = [{ check_runs: f.checks }];
+else result = { user: { login: "dependabot[bot]" }, base: { ref: "nightly" }, head: { sha: f.changed ? "changed-head" : "candidate-head" }, state: "open", labels: [{ name: "dependabot-automerge" }] };
+process.stdout.write(JSON.stringify(result));
+`);
+      await fs.chmod(path.join(directory, "gh"), 0o700);
+      for (const entry of cases) {
+        const currentChecks = entry.failed ? checks.map((check) => ({ ...check, conclusion: "failure" })) : entry.rerun ? [...checks.map((check) => ({ ...check, conclusion: "failure" })), ...checks.map((check) => ({ ...check, id: check.id + 10 }))] : checks;
+        await fs.writeFile(fixturePath, JSON.stringify({ ...entry, checks: currentChecks }));
+        await fs.rm(receiptPath, { force: true });
+        const result = spawnSync("bash", ["-euo", "pipefail", "-c", script], { encoding: "utf8", env: { PATH: `${directory}:${path.dirname(process.execPath)}:${process.env.PATH}`, EVENT_NAME: "pull_request_review", AUTOMERGE_LABEL: "dependabot-automerge", GITHUB_REPOSITORY: "example/project", GITHUB_EVENT_PATH: eventPath, FIXTURE: fixturePath, RECEIPT: receiptPath } });
+        expect(result.status, `${entry.name}: ${result.stderr}`).toBe(0);
+        const receipt = await fs.readFile(receiptPath, "utf8").catch(() => "");
+        expect(Boolean(receipt), entry.name).toBe(entry.merge);
+        if (receipt) expect(JSON.parse(receipt).slice(-2)).toEqual(["--match-head-commit", head]);
+      }
+    } finally { await fs.rm(directory, { recursive: true, force: true }); }
   });
 });

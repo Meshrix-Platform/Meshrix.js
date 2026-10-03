@@ -76,16 +76,15 @@ function normalizeRisk(operation: Record<string, any> = {}) : any {
 }
 
 function operationTimeoutMs(operation: Record<string, any> = {}, fallback: any = 30_000) : any {
-  const raw: any = operation.execution?.timeoutMs ??
-    operation.target?.timeoutMs ??
-    operation.safety?.timeoutMs ??
-    operation.timeoutMs ??
-    fallback;
-  const value: any = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    return fallback;
+  const sources: any[] = [operation.execution, operation.target, operation.safety, operation];
+  const source: any = sources.find((candidate?: any) => candidate && Object.hasOwn(candidate, "timeoutMs"));
+  if (!source) return fallback;
+  const raw: any = source.timeoutMs;
+  if (raw === null) return null;
+  if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 1 || raw > 2_147_483_647) {
+    throw new TypeError("Operation execution timeout must be a positive whole number within the supported timer range, or null for no deadline.");
   }
-  return Math.max(100, Math.min(Math.trunc(value), 300_000));
+  return raw;
 }
 
 function inferToolsets(operation?: any, scopes: any = [], toolId: any = "", risk: any = "read_only") : any {
@@ -369,6 +368,11 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
       serviceRevision: Number(operation._meta?.serviceRevision || 0),
       operationKey: String(operation._meta?.operationKey || ""),
       protocol: String(operation._meta?.protocol || ""),
+      // A projected operation is addressed as a tool, so its callers may send the operation's
+      // own arguments. These are the representation facts those arguments are placed by; they
+      // come from the operator's projection of the operation, never from an upstream payload.
+      method: String(operation._meta?.method || ""),
+      payloadTransport: operation._meta?.payloadTransport || null,
       dynamicCapability: operation._meta?.dynamicCapability || null,
       operationId: operation.id,
       trafficModel: operation.trafficModel,
@@ -395,7 +399,11 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
           ? operation._meta.resourceContext
           : undefined,
       inputSchema: operation.inputSchema || { type: "object" },
-      outputSchema: operation.binary ? { type: "binary" } : { type: "object" },
+      // A binary operation streams bytes rather than a JSON value, so it has no standard
+      // 2020-12 output schema to declare. The kernel compiles every declared schema
+      // strictly, and {"type":"binary"} is not a JSON Schema type; the binary nature is
+      // carried by the `binary` transfer flag below instead.
+      ...(operation.binary ? {} : { outputSchema: { type: "object" } }),
       risk,
       readOnly: operation.readOnly !== false,
       destructive: operation.destructive === true || risk === "destructive",

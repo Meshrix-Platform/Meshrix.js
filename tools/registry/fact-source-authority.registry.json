@@ -52,7 +52,7 @@
       ],
       "consumerPaths": [
         "tools/server-scripts/lib/release-image-evidence.ts",
-        "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts",
+        "tools/server-scripts/verify-single-node-ubuntu-container.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
         ".github/workflows/release.yml"
       ],
@@ -209,13 +209,13 @@
       "authorityRole": "release-readiness-reducer",
       "projectionPaths": [
         "build/acceptance-evidence/current.json",
-        "build/reports/private-deployment-internal-platform-e2e.json",
+        "build/reports/single-node-internal-platform-e2e.json",
         "build/reports/production-readiness-gates.json",
         "build/reports/gateway-platform-profile.json"
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
         "tools/server-scripts/production-readiness-gate.ts",
         "tools/server-scripts/stress-gateway-platform-profile.ts"
       ],
@@ -282,18 +282,18 @@
       ]
     },
     {
-      "id": "private-deployment-internal-platform-e2e-catalog",
-      "factKey": "private-deployment.internal-platform-e2e-catalog",
-      "domain": "Private deployment internal platform evidence command selection, required report derivation, and canonical scheduling.",
+      "id": "single-node-internal-platform-e2e-catalog",
+      "factKey": "single-node.internal-platform-e2e-catalog",
+      "domain": "Single-node internal platform evidence command selection, required report derivation, and canonical scheduling.",
       "authorityPath": "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
       "authorityRole": "platform-acceptance-command-and-report-ownership-catalog",
       "projectionPaths": [
-        "build/reports/private-deployment-internal-platform-e2e.json",
+        "build/reports/single-node-internal-platform-e2e.json",
         "build/acceptance-evidence/current.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts",
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+        "tools/server-scripts/lib/single-node-internal-platform-e2e-catalog.ts",
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
         "tests/verify-script-registry.ts"
       ],
@@ -302,8 +302,8 @@
         "npm run verify:acceptance"
       ],
       "nonAuthorityBoundaries": [
-        "The private deployment verifier only reduces reports already produced by registered functional-completeness command owners.",
-        "The private deployment constants module owns only its aggregate report path and fixture scan constants; it does not own command execution, scheduling, or report membership."
+        "The single-node internal platform verifier only reduces reports already produced by registered functional-completeness command owners.",
+        "The single-node internal platform constants module owns only its aggregate report path and fixture scan constants; it does not own command execution, scheduling, or report membership."
       ]
     },
     {
@@ -320,7 +320,7 @@
         "tools/server-scripts/lib/required-report-validator.ts",
         "tools/server-scripts/lib/release-evidence-readiness.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:upstream-service-publishing",
@@ -367,7 +367,7 @@
       "consumerPaths": [
         "tools/server-scripts/verify-upstream-fixture-transit.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
         "tools/server-scripts/stress-gateway-platform-profile.ts"
       ],
       "verification": [
@@ -413,7 +413,7 @@
       "consumerPaths": [
         "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
+        "tools/server-scripts/verify-single-node-internal-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:downstream-agent-tool-loop",
@@ -497,7 +497,7 @@
     {
       "id": "controlled-execution-convergence-reducer",
       "factKey": "controlled-execution.convergence-readiness",
-      "domain": "Current Controlled Execution Convergence readiness reduction over the exact canonical release candidate, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
+      "domain": "Current Controlled Execution Convergence readiness reduction over the exact source provenance and sandbox leaf reports, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
       "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts",
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [
@@ -505,11 +505,10 @@
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-controlled-execution-convergence.ts",
-        "tools/server-scripts/lib/platform-acceptance-command-catalog.ts"
+        "tools/registry/tests.registry.json"
       ],
       "verification": [
-        "npm run verify:controlled-execution-convergence",
-        "npm run verify:acceptance:plan"
+        "npm run verify:controlled-execution-convergence"
       ],
       "nonAuthorityBoundaries": [
         "Sandbox leaf reports are reducer inputs and cannot independently claim current convergence readiness."
@@ -574,7 +573,7 @@
         "tests/vitest/server/runtime-refactor-authorization-compiler.test.ts",
         "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts",
         "tests/vitest/server/runtime-refactor-governed-evidence.test.ts",
-        "tests/vitest/server/gateway-performance-observation.test.ts"
+        "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
       ],
       "verification": [
         "npm run verify:runtime-refactor-convergence"

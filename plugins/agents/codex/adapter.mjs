@@ -16,8 +16,9 @@ function marketplacePaths(request) {
 
 async function writeMarketplace(request, connector) {
   const paths = marketplacePaths(request);
+  const packageManifest = JSON.parse(await fs.readFile(new URL("./package.json", import.meta.url), "utf8"));
   await writeJson(path.join(paths.pluginRoot, ".codex-plugin", "plugin.json"), {
-    name: PLUGIN_NAME, version: "0.0.1", description: "Meshrix MCP integration for Codex.", license: "Apache-2.0", mcpServers: "./.mcp.json"
+    name: PLUGIN_NAME, version: packageManifest.version, description: "Meshrix MCP integration for Codex.", license: "Apache-2.0", mcpServers: "./.mcp.json"
   });
   await writeJson(path.join(paths.pluginRoot, ".mcp.json"), { mcpServers: { [MCP_SERVER_NAME]: { command: connector.command, args: connector.args } } });
   const catalog = await readJson(paths.catalog, { name: MARKETPLACE_NAME, plugins: [] });

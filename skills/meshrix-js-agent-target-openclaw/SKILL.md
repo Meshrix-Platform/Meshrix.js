@@ -12,7 +12,7 @@ audience: usage
 - An OpenClaw config path is not evidence of Meshrix.js history scanning, ACP attachment, or database-schema support.
 
 Source: [vendor reference](https://docs.openclaw.ai/gateway/configuration). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

@@ -15,7 +15,7 @@
 
 ## Purpose and actors
 
-Use this contract to publish an upstream REST or JSON-RPC service through Meshrix.js so authorized protocol peers can discover and invoke its operations through the governed server path.
+Use this contract to publish an upstream REST, JSON-RPC, or remote HTTP MCP service through Meshrix.js so authorized protocol peers can discover and invoke its operations through the governed server path.
 
 Actors:
 
@@ -65,6 +65,7 @@ Reject missing, stale, cross-service, ambiguous, replayed, or unauthorized bindi
 Accept a closed, versioned command containing only supported fields. The command may describe:
 
 - REST or JSON-RPC protocol and an HTTPS or explicitly permitted private target;
+- a remote MCP HTTP descriptor with an explicit transport, endpoint URL, and supported protocol version; its tools come from the remote catalog, not an `operations` array;
 - operations, HTTP methods or RPC method names, normalized relative paths, request and response schemas;
 - credential and certificate references;
 - required scopes, risk, approval, response projection, and redaction policy;
@@ -72,11 +73,18 @@ Accept a closed, versioned command containing only supported fields. The command
 - organization, team, role, grant, or other governed audience expressions;
 - health and timeout policy.
 
+For `serviceProtocol: "mcp"`, the portable descriptor admits remote HTTP only.
+The modern upstream HTTP path uses `server/discover` at `2026-07-28` without
+initialize or session state. The legacy stateful/ephemeral HTTP and internal
+stdio paths use their legacy initialize/session lifecycle; internal stdio is
+not a portable descriptor transport. The legacy
+`MCP_SUPPORTED_PROTOCOL_VERSIONS` list does not define the modern HTTP version.
+
 Reject unknown fields, duplicate object keys, invalid Unicode or control characters, excessive sizes, excessive nesting, invalid identifiers, overlapping operation keys, unsupported schema constructs, unsafe targets, and policy references outside the subject's authority.
 
 ### 3. Compile and persist the canonical manifest
 
-Compile the validated command into a fresh domain object. Never merge caller objects into process-global state and never evaluate caller strings as source, template, shell, path, regular expression, environment-variable name, or header name.
+Compile the validated command into a fresh domain object. Never merge caller objects into process-global state and never evaluate caller strings as source, template, shell, path, regular expression, environment-variable name, or executable header configuration. MCP may carry declarative request-context headers only through the bounded `descriptor.mcp.headers` field; credential material remains typed references.
 
 Derive filenames and directories from server-owned opaque identifiers. Write through a dedicated control-plane identity using this durability sequence:
 
@@ -160,7 +168,7 @@ compatibility.
 - Use closed object schemas and reject unknown properties.
 - Normalize identifiers into a restricted alphabet and length; do not use display names as identifiers.
 - Normalize paths as relative API paths only; reject schemes, authorities, backslashes, dot segments, encoded traversal, and controls.
-- Restrict methods, protocols, auth types, header bindings, and policy kinds to server-owned enums.
+- Restrict methods, protocols, auth types, header bindings, and policy kinds to server-owned enums. The `descriptor.mcp.headers` exception is limited to declarative remote request-context fields; it cannot carry credentials or executable syntax.
 - Compile request and response schemas through a safe, bounded schema subset.
 
 ### Credential and certificate isolation
@@ -170,6 +178,12 @@ compatibility.
 - Materialize a reference only after authentication, Operation Permission, tag policy, risk, and approval allow execution.
 - Do not accept private keys, bearer values, passwords, or certificate bodies in publishing commands, logs, audit, reports, process arguments, or environment variables.
 - Keep rotation and revocation in the secret authority; a changed reference revision invalidates the affected gateway session generation.
+
+#### Declarative configuration credentials
+
+The server composition may load services from `<userDataPath>/upstream-config/services.json`. This file is protected local configuration input and must be managed separately from the encrypted secret store. An entry without authentication remains unauthenticated; an entry using bearer authentication requires the configured external local-secret key provider. The loader obtains each service identity and authoritative reference set from the publishing application, prepares the complete credential in the local secret store, then submits one ordinary revision-checked create or replace containing the descriptor and typed reference. Credential values and raw configuration are never copied into a publishing command, manifest, audit event, log, or public diagnostic. Non-sensitive MCP request-context headers remain supported; credential-bearing custom header names are rejected.
+
+An unchanged credential reuses its active typed reference. A changed credential is stored under the next service-revision reference, so the existing candidate and published service continue to use the old value until the replacement is accepted. Failed preparation or publication does not invalidate the existing binding, and an unchanged file is retried. Cleanup consults both candidate and published references and revokes only unused entries with their current secret revision; an uncommitted next-revision preparation remains reusable for an idempotent retry. Services are applied one entry at a time; the file does not imply a cross-service transaction.
 
 ### File-system isolation
 
@@ -295,7 +309,7 @@ The Core JSON report emits only minimum evidence:
 
 Never emit absolute paths, usernames, host identity, service URLs, raw manifests, operation payloads, tag values, grants, tokens, keys, certificates, cookies, ciphertext, or backend rows.
 
-The capability report is evidence input only. Register its command and report with the core acceptance command catalog, required-report validator, readiness reducer, private-deployment aggregate, capability acceptance checkpoint, test registry, package script registry, and repository-local maintenance workflow catalog. Only the platform acceptance reducer may produce the release-ready claim.
+The capability report is evidence input only. Register its command and report with the core acceptance command catalog, required-report validator, readiness reducer, single-node operations closure, capability acceptance checkpoint, test registry, package script registry, and repository-local maintenance workflow catalog. Only the platform acceptance reducer may produce the release-ready claim.
 
 The mandatory pre-release HTML is a separate human-readable projection. Its
 tracked blank template is the public structural contract, not evidence. Change

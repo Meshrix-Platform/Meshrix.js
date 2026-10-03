@@ -13,14 +13,41 @@ import {
   TRACKED_REGRESSION_REPORT_PATH
 } from "./lib/regression-html-report.ts";
 import {
+  isCachedTestResultReusable,
+  mergeInheritedProfileExecution,
   parseTestShard,
+  notRunSuiteResult,
   planTestExecutionPhases,
   profileInherits,
-  resolveExecutionTimeout,
+  resolveRequiredServiceApplicability,
   runTestPhaseLanes,
   runSuiteProcess,
-  timeoutMsForSuite
-} from "./lib/unified-test-runner-execution.ts";
+  sourceNodeEnvironment,
+  summarizeTestResults
+} from "../tools/scripts/lib/unified-test-runner-execution.ts";
+import {
+  discoverLocalExecutionEnvironment,
+  type LocalExecutionEnvironment
+} from "../tools/server-scripts/lib/local-execution-environment.ts";
+import {
+  computeSuiteInputFingerprint,
+  createSuiteInputScopeCache
+} from "../tools/scripts/lib/suite-input-fingerprint.ts";
+import {
+  describeUnsupportedNodeRuntime,
+  resolveNodeRuntimeSupport
+} from "../tools/scripts/lib/node-runtime-support.ts";
+import {
+  describeChangedSelection,
+  selectChangedSuites,
+  selectionIsUnverifiable
+} from "../tools/scripts/lib/changed-suite-selection.ts";
+import {
+  discoverOciConformanceImageAvailability
+} from "../tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
+import { resolveCommandCandidate } from "../packages/foundation/src/environment-compatibility/host-runtime.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../tools/server-scripts/lib/npm-cli-invocation.ts";
+import { loadPreparedReleaseSet } from "../tools/server-scripts/publish-release-set.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const defaultReportDir: any = path.join(repoRoot, "build", "test-reports");
@@ -56,17 +83,13 @@ async function loadRegistry() : Promise<any> {
       `Registry suites without executable command: ${missingCommands.map((s?: any) : any => s.id).join(", ")}`
     );
   }
-  for (const suite of suites) {
-    timeoutMsForSuite(suite);
-  }
-
   // Resolve profile extends and build profile→suiteId map
   const rawProfiles: any = resolveProfiles(reg.profiles);
   const suiteById: any = new Map<any, any>(suites.map((s?: any) : any => [s.id, s]));
   const profileMap: Record<string, any> = {};
   const profileConfigs: Record<string, any> = {};
   for (const name of Object.keys(rawProfiles)) {
-    profileConfigs[name] = Object.freeze({ ...rawProfiles[name] });
+    profileConfigs[name] = Object.freeze(resolveInheritedProfileConfig(name, rawProfiles));
     // Skip dynamic profiles (e.g. "changed"); the runner handles them natively
     if (rawProfiles[name].dynamic) continue;
     const resolved: any = resolveProfileExtends(name, rawProfiles);
@@ -80,6 +103,23 @@ async function loadRegistry() : Promise<any> {
   return _registry;
 }
 
+function resolveInheritedProfileConfig(name: string, profiles: Record<string, any>, visited = new Set<string>()): any {
+  if (visited.has(name)) throw new Error(`Circular profile extends: ${name}`);
+  const profile = profiles[name];
+  if (!profile) return {};
+  visited.add(name);
+  const parent = profile.extends ? resolveInheritedProfileConfig(profile.extends, profiles, visited) : {};
+  visited.delete(name);
+  const execution = Array.isArray(profile.execution?.phases)
+    ? mergeInheritedProfileExecution(parent.execution, profile.execution)
+    : profile.execution;
+  return {
+    ...profile,
+    execution,
+    trackedArtifacts: [...new Set([...(parent.trackedArtifacts || []), ...(profile.trackedArtifacts || [])])]
+  };
+}
+
 function resolveProfiles(profiles?: any) : any {
   const resolved: Record<string, any> = {};
   for (const [name, def] of (Object.entries(profiles) as [string, any][])) {
@@ -87,7 +127,6 @@ function resolveProfiles(profiles?: any) : any {
       suites: def.suites ? [...def.suites] : [],
       extends: def.extends || null,
       dynamic: def.dynamic || false,
-      timeoutMs: def.timeoutMs,
       trackedArtifacts: def.trackedArtifacts ? [...def.trackedArtifacts] : [],
       execution: def.execution || {},
     };
@@ -269,7 +308,7 @@ function printFeatureConsistencyGate() : any {
       "- Documentation gate: keep docs tied to current runtime behavior and update the owning document instead of creating parallel notes.",
       "- No version-named boundaries: name features, modules, and docs by functional boundary or change summary, not v2/version/release numbers.",
       "- Repo local-info hygiene: npm run repo:local-info-hygiene scans source, docs, fixtures, tests, and tools; high-risk privacy, identity, production, and deployment metadata fails the process.",
-      "- Core repository gate: run npm test for documentation, registry, or boundary changes.",
+      "- Core repository gate: run the owning narrow checks for documentation, registry, or boundary changes, and the selected integration profile for the accepted task outcome (see CONTRIBUTING.md).",
       "- Commit-ready: before commit, confirm upstream/downstream adaptation passed the smallest relevant verifier or document an objective blocker with follow-up command.",
       "- Guide: docs/RUNBOOK.md."
     ].join("\n")
@@ -291,7 +330,7 @@ function resolveSuiteIds(options?: any) : any {
   }
 
   if (options.profile === "changed") {
-    return changedSuiteIds(options.changedBase || "HEAD");
+    return resolveChangedSuiteIds(options.changedBase || "HEAD");
   }
 
   const ids: any = profileSuites[options.profile];
@@ -316,7 +355,7 @@ function uniqueKnownSuites(ids?: any) : any {
   return selected;
 }
 
-function changedSuiteIds(baseRef?: any) : any {
+function collectChangedFiles(baseRef?: any) : string[] {
   const changedFiles: any = new Set<any>();
   for (const file of gitLines(["diff", "--name-only", "--diff-filter=ACMRTUXB", baseRef])) {
     changedFiles.add(file);
@@ -324,28 +363,32 @@ function changedSuiteIds(baseRef?: any) : any {
   for (const file of gitLines(["ls-files", "--others", "--exclude-standard"])) {
     changedFiles.add(file);
   }
+  return [...changedFiles];
+}
 
-  const selected: any = new Set<any>([
-    "repo.public-boundary",
-    "security.secret-hygiene",
-    "repo.local-info-hygiene",
-    "registry.consistency"
-  ]);
-  for (const file of changedFiles) {
-    if (file === "package.json" || file === "package-lock.json" || file.startsWith("tests/")) {
-      selected.add("repo.root-hygiene");
-      selected.add("repo.organization");
-    }
-    if (file.startsWith("apps/console/") || file.startsWith("packages/ui-console/") || file === "vite.config.ts") {
-      selected.add("repo.public-boundary");
-    }
-    if (file.startsWith("docs/") || file === "README.md") {
-      selected.add("repo.public-boundary");
-    }
+/**
+ * Resolve the `changed` profile from the inputs each suite declares.
+ *
+ * This replaces a hardcoded path-prefix table that returned the same few repository
+ * hygiene suites for every change. That answer looked authoritative while covering
+ * nothing the change touched, which is worse than selecting nothing at all.
+ */
+function resolveChangedSuiteIds(baseRef?: any) : any {
+  const selection: any = selectChangedSuites({
+    changedFiles: collectChangedFiles(baseRef),
+    suites
+  });
+  console.log(describeChangedSelection(selection));
+  if (selectionIsUnverifiable(selection)) {
+    // The selection report above already states the gap; a stack trace would only repeat it.
+    const refusal: any = new Error(
+      "changed_selection_uncovered: no suite declares the changed verification-sensitive file(s), so this run "
+      + "would verify nothing. Run `npm run ci:local` (engineering scope) instead."
+    );
+    refusal.expectedRefusal = true;
+    throw refusal;
   }
-
-  selected.add("repo.root-hygiene");
-  return uniqueKnownSuites([...selected]);
+  return uniqueKnownSuites(selection.selected.map((entry: any) : any => entry.id));
 }
 
 function gitLines(args?: any) : any {
@@ -363,25 +406,29 @@ function commandLine(entry?: any) : any {
   return [entry.command, ...entry.args].join(" ");
 }
 
-function cleanSourceRevision() : string | null {
-  const status = spawnSync("git", ["status", "--porcelain"], { cwd: repoRoot, encoding: "utf8" });
-  if (status.status !== 0 || status.stdout.trim() !== "") return null;
+/**
+ * The observed HEAD revision.
+ *
+ * Reuse is decided by `computeSuiteInputFingerprint`, so a dirty worktree no longer
+ * suppresses the revision. Recording the actual revision keeps the report usable by
+ * consumers that require one, including the stable audit stage reducer.
+ */
+function observedRevision() : string | null {
   const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" });
-  return revision.status === 0 ? revision.stdout.trim() || null : null;
+  if (revision.status !== 0) return null;
+  return revision.stdout.trim() || null;
 }
 
-function passedResultCache(profile: string, sourceRevision: string | null): Map<string, any> {
-  if (!sourceRevision) return new Map();
+function passedResultCache(profile: string): Map<string, any> {
   const reportPath = path.join(defaultReportDir, "latest.json");
   if (!existsSync(reportPath)) return new Map();
   try {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    if (
-      !profileInherits(profileConfigs, profile, report.profile) ||
-      report.sourceRevision !== sourceRevision
-    ) return new Map();
+    if (!profileInherits(profileConfigs, profile, report.profile)) return new Map();
     return new Map((Array.isArray(report.suites) ? report.suites : [])
-      .filter((result: any) => result?.status === "passed" && typeof result.command === "string")
+      .filter((result: any) => result?.status === "passed"
+        && typeof result.command === "string"
+        && typeof result.inputFingerprint === "string")
       .map((result: any) => [result.command, result]));
   } catch {
     return new Map();
@@ -397,6 +444,65 @@ function displayReportPath(filePath?: any) : any {
 
 function isPlatformCompatible(entry?: any) : any {
   return !entry.platforms || entry.platforms.includes(process.platform);
+}
+
+async function discoverRequiredServiceCapabilities(requiredServices: readonly string[]): Promise<{
+  environment?: LocalExecutionEnvironment;
+  capabilities: Record<string, { status: "available" | "unavailable" | "failed"; reasonCode?: string }>;
+}> {
+  const capabilities: Record<string, { status: "available" | "unavailable" | "failed"; reasonCode?: string }> = {};
+  const required = new Set(requiredServices);
+  let environment: LocalExecutionEnvironment | undefined;
+
+  if (required.has("docker") || required.has("oci-conformance-native-image")) {
+    try {
+      environment = await discoverLocalExecutionEnvironment();
+      capabilities.docker = environment.docker.status === "available"
+        ? { status: "available" }
+        : { status: "unavailable", reasonCode: environment.docker.reasonCode };
+    } catch {
+      capabilities.docker = { status: "failed", reasonCode: "service_probe_failed" };
+    }
+  }
+
+  for (const service of required) {
+    if (service === "oci-conformance-native-image") {
+      if (!environment) {
+        capabilities[service] = { status: "failed", reasonCode: "service_probe_failed" };
+        continue;
+      }
+      try {
+        const availability = await discoverOciConformanceImageAvailability({ environment });
+        capabilities[service] = availability.status === "available"
+          ? { status: "available" }
+          : { status: availability.status, reasonCode: availability.reasonCode };
+      } catch {
+        capabilities[service] = { status: "failed", reasonCode: "oci_image_inspect_failed" };
+      }
+      continue;
+    }
+    if (service === "podman") {
+      let available = false;
+      try {
+        available = Boolean(resolveCommandCandidate("podman", { includeDefaultLocalBin: false }).path);
+      } catch { /* A missing executable is an unavailable optional service. */ }
+      capabilities[service] = available
+        ? { status: "available" }
+        : { status: "unavailable", reasonCode: "podman_cli_missing" };
+      continue;
+    }
+    if (service === "external-https-endpoint") {
+      capabilities[service] = process.env.MESHRIX_UPSTREAM_EXTERNAL_COMPAT === "1"
+        ? { status: "available" }
+        : { status: "unavailable", reasonCode: "external_endpoint_not_opted_in" };
+      continue;
+    }
+    if (service !== "docker") {
+      capabilities[service] = { status: "failed", reasonCode: "service_capability_unknown" };
+    }
+  }
+
+  return { environment, capabilities };
 }
 
 async function writeJsonAtomic(filePath?: any, data?: any) : Promise<any> {
@@ -424,13 +530,37 @@ async function main() : Promise<any> {
     return;
   }
 
+  // Inspection and dry runs stay available on any runtime; executing suites does not,
+  // because an unsupported runtime fails inside product tests as if they were defects.
+  if (!options.dryRun) {
+    const runtimeSupport: any = resolveNodeRuntimeSupport({
+      rootDir: repoRoot,
+      version: process.version,
+      modules: process.versions.modules
+    });
+    if (!runtimeSupport.supported) {
+      console.error(describeUnsupportedNodeRuntime(runtimeSupport));
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   const selectedIds: any = resolveSuiteIds(options);
+  // A change that touches nothing executable needs no suite run; that is a real answer,
+  // not a configuration error.
+  if (options.profile === "changed" && selectedIds.length === 0) {
+    console.log('Profile "changed": no verification-sensitive change requires a suite run.');
+    return;
+  }
   const productManifest: any = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   const productVersion: string = String(productManifest.version || "");
   const profileExecution: any = profileConfigs[options.profile]?.execution || {};
   const shardEnvironment: string = String(profileExecution.shardEnvironment || "").trim();
   const shard = parseTestShard(options.shard || (shardEnvironment ? process.env[shardEnvironment] : null));
   const selectedEntries: any[] = selectedIds.map((id: string) => suiteById.get(id));
+  const requiredServices = [...new Set(selectedEntries
+    .filter((entry: any) => isPlatformCompatible(entry))
+    .flatMap((entry: any) => entry.requiredServices || []))];
   const selectedByProfile: any = options.suites.length === 0 && options.tags.length === 0;
   const refreshTrackedReport = shouldRefreshTrackedRegressionReport({
     profile: options.profile,
@@ -452,17 +582,9 @@ async function main() : Promise<any> {
   );
   const startedAt: any = new Date();
   const results: any[] = [];
-  const profileTimeoutMs: any = selectedByProfile
-    ? profileConfigs[options.profile]?.timeoutMs
-    : null;
-  if (selectedByProfile && (!Number.isInteger(profileTimeoutMs) || profileTimeoutMs <= 0)) {
-    throw new Error(`Profile "${options.profile}" must declare a positive timeoutMs.`);
-  }
-  const profileDeadlineMs: any = profileTimeoutMs
-    ? startedAt.getTime() + profileTimeoutMs
-    : null;
-  const sourceRevision = profileExecution.cachePassedResults === true ? cleanSourceRevision() : null;
-  const resultCache = passedResultCache(options.profile, sourceRevision);
+  const sourceRevision: any = observedRevision();
+  const resultCache: any = profileExecution.cachePassedResults === true ? passedResultCache(options.profile) : new Map();
+  const inputScopeCache: any = createSuiteInputScopeCache();
   const executionLaneCount = executionPhases.reduce(
     (count: number, phase: any) => count + phase.lanes.length,
     0
@@ -479,22 +601,53 @@ async function main() : Promise<any> {
     throw new Error(`Profile "${options.profile}" selected zero suites.`);
   }
 
-  const executeEntry = async (entry: any): Promise<any> => {
+  const cancellation = new AbortController();
+  let receivedSignal: string | null = null;
+  const requestCancellation = (signal: string): void => {
+    if (cancellation.signal.aborted) return;
+    receivedSignal = signal;
+    cancellation.abort(signal);
+  };
+  const onSigint = (): void => requestCancellation("SIGINT");
+  const onSigterm = (): void => requestCancellation("SIGTERM");
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
+  let serviceDiscovery: Awaited<ReturnType<typeof discoverRequiredServiceCapabilities>> = {
+    environment: undefined,
+    capabilities: {}
+  };
+
+  const markNotRun = (entry: any, reason: string, blockedBy: string[] = []): any => {
+    const result: any = { ...notRunSuiteResult(entry, { reason, blockedBy }), reasonCode: reason };
+    console.log(`NOT_RUN ${entry.id} (${reason})`);
+    return result;
+  };
+
+  const executeEntry = async (
+    entry: any,
+    context: { blockedBy: readonly string[] } = { blockedBy: [] }
+  ): Promise<any> => {
+    if (cancellation.signal.aborted) {
+      return markNotRun(entry, "runner_interrupted_before_start", [...context.blockedBy]);
+    }
+    if (context.blockedBy.length > 0) {
+      return markNotRun(entry, "prerequisite_lane_incomplete", [...context.blockedBy]);
+    }
+
     const compatible: any = isPlatformCompatible(entry);
     if (!compatible) {
-      const status: any = options.strictPlatform ? "failed" : "skipped";
+      const status: any = options.strictPlatform ? "not_run" : "skipped";
       const result: Record<string, any> = {
         id: entry.id,
         label: entry.label || entry.id,
         command: commandLine(entry),
+        childSuiteIds: entry.childSuiteIds || [entry.id],
         status,
-        timedOut: false,
+        reasonCode: "platform_unavailable",
         reason: `Suite supports ${entry.platforms.join(", ")} but current platform is ${process.platform}`,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        durationMs: 0
+        ...(options.strictPlatform ? { notRunReason: "platform_incompatible_strict" } : {})
       };
-      console.log(`${status.toUpperCase()} ${entry.id} - ${result.reason}`);
+      console.log(`${status.toUpperCase()} ${entry.id} (${result.reason})`);
       return result;
     }
 
@@ -503,105 +656,141 @@ async function main() : Promise<any> {
         id: entry.id,
         label: entry.label || entry.id,
         command: commandLine(entry),
-        status: "dry-run",
-        timedOut: false,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        durationMs: 0
+        childSuiteIds: entry.childSuiteIds || [entry.id],
+        status: "dry-run"
       };
       console.log(`DRY-RUN ${entry.id}: ${result.command}`);
       return result;
     }
 
+    const applicability = resolveRequiredServiceApplicability(entry.requiredServices || [], serviceDiscovery.capabilities);
+    if (applicability.status !== "available") {
+      const result: Record<string, any> = {
+        ...notRunSuiteResult(entry, { reason: applicability.status === "failed" ? "required_service_probe_failed" : "required_service_unavailable" }),
+        status: applicability.status,
+        reasonCode: applicability.reasonCode,
+        requiredService: applicability.requiredService,
+        ...(applicability.status === "not_run" ? { notRunReason: applicability.reasonCode } : {})
+      };
+      console.log(`${applicability.status.toUpperCase()} ${entry.id} (${applicability.requiredService}: ${applicability.reasonCode})`);
+      return result;
+    }
+
     console.log(`\nRUN ${entry.id}: ${entry.label || entry.id}`);
     console.log(commandLine(entry));
+    const inputFingerprint: any = computeSuiteInputFingerprint(entry, {
+      rootDir: repoRoot,
+      cache: inputScopeCache
+    });
     const cached = resultCache.get(commandLine(entry));
-    if (cached) {
-      const now = new Date().toISOString();
+    if (await isCachedTestResultReusable(entry, cached, {
+      rootDir: repoRoot,
+      inputFingerprint,
+      validatePreparedReleaseSet: loadPreparedReleaseSet
+    })) {
       const result: any = {
         ...cached,
         id: entry.id,
         label: entry.label || entry.id,
-        childSuiteIds: entry.childSuiteIds,
+        childSuiteIds: entry.childSuiteIds || [entry.id],
         cached: true,
-        startedAt: now,
-        finishedAt: now,
-        durationMs: 0
+        inputFingerprint
       };
-      console.log(`PASSED ${entry.id} (cached)`);
+      console.log(`PASSED ${entry.id} (cached: inputs unchanged)`);
       return result;
     }
-    const declaredSuiteTimeoutMs: any = timeoutMsForSuite(entry);
-    const profileRemainingMs: any = profileDeadlineMs === null
-      ? null
-      : profileDeadlineMs - Date.now();
-    if (profileRemainingMs !== null && profileRemainingMs <= 0) {
-      const now: any = new Date();
-      const result: any = {
+    if (cached?.status === "passed") {
+      console.log(`RERUN ${entry.id} (inputs changed since the recorded pass)`);
+    }
+
+    const childEnv = sourceNodeEnvironment();
+    let result: any;
+    try {
+      const npmInvocation = entry.command === "npm" ? resolveNpmCliInvocation({ env: childEnv }) : null;
+      result = await runSuiteProcess(entry, {
+        cwd: repoRoot,
+        env: childEnv,
+        signal: cancellation.signal,
+        ...(npmInvocation ? {
+          executionCommand: npmInvocation.command,
+          executionArgs: npmCliArgs(npmInvocation, entry.args)
+        } : {})
+      });
+    } catch {
+      result = {
         id: entry.id,
         label: entry.label || entry.id,
         command: commandLine(entry),
+        childSuiteIds: entry.childSuiteIds || [entry.id],
         status: "failed",
-        reason: "Profile timeout budget was exhausted before this suite could start.",
-        timedOut: true,
-        timeoutMs: profileTimeoutMs,
-        timeoutScope: "profile",
-        terminationSignals: [],
-        startedAt: now.toISOString(),
-        finishedAt: now.toISOString(),
-        durationMs: 0
+        reasonCode: "command_invocation_failed",
+        exitCode: null
       };
-      console.log(`FAILED ${entry.id} (profile timeout)`);
-      return result;
     }
-    const timeout: any = resolveExecutionTimeout({
-      suiteTimeoutMs: declaredSuiteTimeoutMs,
-      profileRemainingMs
-    });
-    const result: any = await runSuiteProcess(entry, {
-      cwd: repoRoot,
-      timeoutMs: timeout.timeoutMs,
-      timeoutScope: timeout.timeoutScope
-    });
-    result.timeoutClass = entry.timeoutClass;
-    result.declaredSuiteTimeoutMs = declaredSuiteTimeoutMs;
-    result.childSuiteIds = entry.childSuiteIds;
     result.cached = false;
-    console.log(`${result.status.toUpperCase()} ${entry.id} (${result.durationMs}ms)`);
+    result.inputFingerprint = inputFingerprint;
+    if (result.status === "not_run") {
+      console.log(`NOT_RUN ${entry.id} (${result.reason})`);
+    } else {
+      console.log(`${result.status.toUpperCase()} ${entry.id} (${result.durationMs}ms)`);
+    }
     return result;
   };
 
-  for (const phase of executionPhases) {
-    console.log("");
-    console.log(`PHASE ${phase.id}: ${phase.label || phase.id}`);
-    console.log(`LANES ${phase.lanes.map((lane: any) => lane.id).join(", ")}`);
-    const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry);
-    const phaseResults: any[] = laneOutcomes.flatMap((lane: any) =>
-      lane.results.map((result: any) => ({
-        ...result,
-        phaseId: phase.id,
-        laneId: lane.id
-      }))
-    );
-    results.push(...phaseResults);
-    if (phaseResults.some((result: any) => result.status === "failed") && !options.continueOnFailure) {
-      console.log(`STOP after phase ${phase.id}: later phases were not started.`);
-      break;
+  try {
+    if (!options.dryRun) serviceDiscovery = await discoverRequiredServiceCapabilities(requiredServices);
+    let stopReason: { reason: string; blockedBy: string[] } | null = null;
+    for (const phase of executionPhases) {
+      console.log("");
+      console.log(`PHASE ${phase.id}: ${phase.label || phase.id}`);
+      console.log(`LANES ${phase.lanes.map((lane: any) => lane.id).join(", ")}`);
+      let phaseResults: any[];
+      if (stopReason) {
+        phaseResults = phase.lanes.flatMap((lane: any) => lane.entries.map((entry: any) => ({
+          ...markNotRun(entry, stopReason!.reason, stopReason!.blockedBy),
+          phaseId: phase.id,
+          laneId: lane.id
+        })));
+      } else {
+        const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry);
+        phaseResults = laneOutcomes.flatMap((lane: any) =>
+          lane.results.map((result: any) => ({
+            ...result,
+            phaseId: phase.id,
+            laneId: lane.id
+          }))
+        );
+      }
+      results.push(...phaseResults);
+
+      if (receivedSignal) {
+        stopReason = { reason: "runner_interrupted_before_start", blockedBy: [] };
+      } else if (!stopReason && phaseResults.some((result: any) => ["failed", "cancelled", "not_run"].includes(result.status)) && !options.continueOnFailure) {
+        const hasFailedCommand = phaseResults.some((result: any) => result.status === "failed");
+        const failedSuites = phaseResults.filter((result: any) => ["failed", "cancelled", "not_run"].includes(result.status))
+          .flatMap((result: any) => result.childSuiteIds || [result.id]);
+        console.log(`STOP after phase ${phase.id}: later phases were not started.`);
+        stopReason = {
+          reason: hasFailedCommand ? "previous_phase_failed" : "previous_phase_incomplete",
+          blockedBy: failedSuites
+        };
+      }
     }
+  } finally {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
   }
 
   const finishedAt: any = new Date();
-  const summary: any = summarize(results);
-  summary.coverageReady = summary.passed > 0 && summary.failed === 0 && summary.dryRun === 0;
-  summary.releaseReady = summary.coverageReady;
+  const summary: any = summarizeTestResults(results, executionEntries.length);
   summary.reportLeakScan = true;
 
   console.log("");
-  console.log(`Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.dryRun} dry-run, ${summary.timedOut} timed out`);
+  console.log(`Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.cancelled} cancelled, ${summary.notRun} not run, ${summary.dryRun} dry-run`);
   if (options.dryRun) {
     console.log("Report: not written (dry-run)");
-    if (summary.failed > 0) {
-      process.exitCode = 1;
+    if (summary.failed > 0 || summary.notRun > 0 || summary.cancelled > 0) {
+      process.exitCode = receivedSignal === "SIGINT" ? 130 : receivedSignal === "SIGTERM" ? 143 : 1;
     }
     return;
   }
@@ -645,13 +834,18 @@ async function main() : Promise<any> {
       cachePassedResults: profileExecution.cachePassedResults === true,
       phasedExecution: Array.isArray(phaseDefinitions),
       phaseCount: executionPhases.length,
-      laneCount: executionLaneCount,
-      profileTimeoutMs
+      laneCount: executionLaneCount
     },
+    ...(receivedSignal ? { interruption: { receivedSignal } } : {}),
     environment: {
       platform: process.platform,
       arch: process.arch,
-      node: process.version
+      node: process.version,
+      ...(serviceDiscovery.environment ? { localExecution: serviceDiscovery.environment } : {}),
+      serviceCapabilities: Object.fromEntries(Object.entries(serviceDiscovery.capabilities).map(([name, capability]) => [
+        name,
+        { status: capability.status, ...(capability.reasonCode ? { reasonCode: capability.reasonCode } : {}) }
+      ]))
     },
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
@@ -677,37 +871,14 @@ async function main() : Promise<any> {
 
   console.log(`Report: ${displayReportPath(reportPath)}`);
 
-  if (summary.failed > 0) {
-    process.exitCode = 1;
+  if (summary.failed > 0 || summary.notRun > 0 || summary.cancelled > 0) {
+    process.exitCode = receivedSignal === "SIGINT" ? 130 : receivedSignal === "SIGTERM" ? 143 : 1;
   }
-}
-
-function summarize(results?: any) : any {
-  const summary: Record<string, any> = {
-    passed: 0,
-    failed: 0,
-    skipped: 0,
-    dryRun: 0,
-    timedOut: 0
-  };
-  for (const result of results) {
-    if (result.status === "passed") {
-      summary.passed += 1;
-    } else if (result.status === "failed") {
-      summary.failed += 1;
-    } else if (result.status === "skipped") {
-      summary.skipped += 1;
-    } else if (result.status === "dry-run") {
-      summary.dryRun += 1;
-    }
-    if (result.timedOut === true) {
-      summary.timedOut += 1;
-    }
-  }
-  return summary;
 }
 
 main().catch((error?: any) : any => {
-  console.error(error);
+  // A refusal that states its own cause and remedy reads better without a stack trace.
+  if (error?.expectedRefusal === true) console.error(String(error.message));
+  else console.error(error);
   process.exitCode = 1;
 });

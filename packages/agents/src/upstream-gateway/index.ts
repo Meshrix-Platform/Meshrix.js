@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
@@ -9,7 +9,12 @@ import {
 } from "@meshrix/foundation/security/final-protected-sink-permit";
 import { createSecurityAlertStore } from "@meshrix/foundation/security/security-alerts";
 import { fetchWithPinnedDns, requestWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
-import { createUpstreamMcpSessionManager } from "@meshrix/protocols/mcp/upstream-mcp-gateway-transport";
+import {
+  assertJsonRpcResponse,
+  collectCompleteMcpToolsList,
+  createUpstreamMcpSessionManager
+} from "@meshrix/protocols/mcp/upstream-mcp-gateway-transport";
+import { createModernUpstreamAdapter } from "@meshrix/protocols/mcp/modern-upstream";
 import {
   UPSTREAM_GATEWAY_PROTOCOL_VERSION,
   asArray,
@@ -20,6 +25,7 @@ import {
   configuredRpcMethod,
   jsonRpcRequestBody,
   nowIso,
+  normalizeOptionalTimeoutMs,
   object,
   parsePublicUpstreamMcpToolName,
   publicService,
@@ -31,7 +37,7 @@ import {
   summarizeUrl,
   text
 } from "./support.ts";
-import { publicUpstreamMcpTool, publicUpstreamOperationTool } from "./tool-projection.ts";
+import { publicUpstreamMcpTool } from "./tool-projection.ts";
 import { resolveCredentialMaterial, resolveMcpServiceConfigWithCredentials } from "./credential-material.ts";
 import { createGatewayRuntime } from "./registry-runtime.ts";
 import {
@@ -44,10 +50,10 @@ import { publicTagPolicyDecision } from "./tag-policy-decision.ts";
 import { createEndpointTrafficController } from "./endpoint-traffic.ts";
 import { callerApprovalOverrideFields, pendingApproval, trustedApprovalForForward } from "./approval.ts";
 import { compileUpstreamOperationCapability, evaluateDynamicOperationAuthorization, operationWithUpstreamCapability } from "./operation-capability.ts";
-import { createMcpForwarder } from "./mcp-forwarder.ts";
+import { createMcpExecutionAdapter, normalizeMcpResultForDownstream, publicMcpResult } from "./mcp-execution-adapter.ts";
 import { constructWithOwnedResourceCleanup, createForwardAbortContext } from "./registry-lifecycle.ts";
 import { fingerprint } from "./manifest-compiler.ts";
-import { upstreamProjectedOperationId } from "./operation-projection.ts";
+import { upstreamProjectedOperationId, projectedOperationForwardInput } from "./operation-projection.ts";
 import { createUpstreamManifestSnapshotCommitter } from "./manifest-snapshot-commit.ts";
 import { evaluateAudienceDecision } from "./audience-projection.ts";
 import {
@@ -59,6 +65,56 @@ import {
   selectResponseRepresentationHeaders
 } from "./payload-contract.ts";
 import { createArtifactBodySource, createMultipartBodyStream } from "./multipart-stream.ts";
+import type {
+  UpstreamEndpointTrafficController,
+  UpstreamGatewayArtifactDownload,
+  UpstreamGatewayArtifactTransaction,
+  UpstreamGatewayArtifactTransitPort,
+  UpstreamGatewayAudienceDecision,
+  UpstreamGatewayAuditListResult,
+  UpstreamGatewayCallOptions,
+  UpstreamGatewayEndpointCircuit,
+  UpstreamGatewayEndpointCursor,
+  UpstreamGatewayForwardPreview,
+  UpstreamGatewayForwardResult,
+  UpstreamGatewayHealthResult,
+  UpstreamGatewayInvokeTypedMcpResult,
+  UpstreamGatewayManifestFinalizationResult,
+  UpstreamGatewayManifestRevision,
+  UpstreamGatewayManifestSnapshotDiff,
+  UpstreamGatewayManifestSnapshotState,
+  UpstreamGatewayMcpSessionManagerPort,
+  UpstreamGatewayMcpToolCallResult,
+  UpstreamGatewayMcpToolCacheEntry,
+  UpstreamGatewayMcpToolCacheRecord,
+  UpstreamGatewayMcpToolConfigPreparation,
+  UpstreamGatewayMcpToolRefreshFlight,
+  UpstreamGatewayMcpToolRefreshWaiter,
+  UpstreamGatewayMcpToolListResult,
+  UpstreamGatewayMetrics,
+  UpstreamGatewayOperationRecord,
+  UpstreamGatewayOperationSelection,
+  UpstreamGatewayPluginCallResult,
+  UpstreamGatewayProjectedOperationTarget,
+  UpstreamGatewayPublicMcpTool,
+  UpstreamGatewayPublicService,
+  UpstreamGatewayRefactorInstrumentation,
+  UpstreamGatewayRegistry,
+  UpstreamGatewayResolvedCredentialMaterial,
+  UpstreamGatewayRegistryOptions,
+  UpstreamGatewayResolvedMcpServiceConfig,
+  UpstreamGatewayRuntime,
+  UpstreamGatewayServiceListResult,
+  UpstreamGatewayServiceRecord,
+  UpstreamGatewaySkillHubSubscription,
+  UpstreamGatewayStreamForwardResult,
+  UpstreamGatewayStructuredTargetFacts,
+  UpstreamGatewayTagPolicyEvaluation,
+  UpstreamGatewayTagStorePort,
+  UpstreamGatewayTrafficBucket,
+  UpstreamMcpRouteForwardResult,
+  UpstreamSkillHubUpdate
+} from "./registry-types.ts";
 
 const PROJECTED_PROVIDER_INPUT: any = Symbol(
   "meshrix.upstream-gateway.projected-provider-input"
@@ -71,8 +127,16 @@ export {
   createUpstreamPublishingApplication,
   UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
 } from "./publishing-application.ts";
+export type {
+  UpstreamConfigServicePreparation,
+  UpstreamPublishingApplication,
+  UpstreamPublishingExecuteOptions,
+  UpstreamPublishingRequestOptions,
+  UpstreamPublishingSubject
+} from "./publishing-application.ts";
 export {
   compileUpstreamOperationProjection,
+  projectedOperationForwardInput,
   upstreamProjectedOperationId
 } from "./operation-projection.ts";
 export {
@@ -85,6 +149,13 @@ export {
   opaqueAudiencePartitionKey
 } from "./audience-projection.ts";
 export { createUpstreamManifestSnapshotCommitter } from "./manifest-snapshot-commit.ts";
+export { UpstreamSchemaPortError } from "./schema-port.ts";
+export type {
+  UpstreamSchemaPort,
+  UpstreamSchemaValidationInput,
+  UpstreamSchemaValidationOutcome
+} from "./schema-port.ts";
+export type * from "./registry-types.ts";
 export function createUpstreamGatewayRegistry({
   userDataPath = "",
   tagStore = null,
@@ -93,74 +164,179 @@ export function createUpstreamGatewayRegistry({
   artifactTransitPort = null,
   secretKeyProvider = null,
   publishSkillHubUpdate = null,
+  schemaPort = null,
   claimProtectedSinkAttempt = claimFinalProtectedSinkAttempt
-}: Record<string, any> = {}) : any {
-  const persistenceEnabled: any = Boolean(userDataPath);
-  const filePath: any = persistenceEnabled ? runtimePath(userDataPath) : "";
-  let services: any = new Map<any, any>();
-  let projectedOperationTargets: any = new Map<any, any>();
-  let mcpServicesByPublicPrefix: any = new Map<any, any>();
-  let configuredOperationsByPublicName: any = new Map<any, any>();
-  let manifestSnapshotRevision: Readonly<Record<string, any>> = Object.freeze({ sourceRevision: 0, sourceDigest: "" });
-  const trafficBuckets: any = new Map<any, any>();
-  const endpointCursors: any = new Map<any, any>();
-  const endpointCircuits: any = new Map<any, any>();
-  const mcpToolCache: any = new Map<any, any>();
-  const mcpToolRefreshInFlight: any = new Map<any, any>();
-  const skillHubEventSubscriptions: any = new Map<any, any>();
-  let targetedCallMapHits: any = 0;
-  let targetedServiceIndexHits: any = 0;
-  let serviceDiscoveryCount: any = 0;
+}: UpstreamGatewayRegistryOptions = {}) : UpstreamGatewayRegistry {
+  if (!schemaPort || typeof schemaPort.validate !== "function" || typeof schemaPort.assertSchemaBudget !== "function") {
+    throw new TypeError("Upstream gateway registry requires the injected schema port.");
+  }
+  const persistenceEnabled: boolean = Boolean(userDataPath);
+  const filePath: string = persistenceEnabled ? runtimePath(userDataPath) : "";
+  let services: Map<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>();
+  let projectedOperationTargets: Map<string, UpstreamGatewayProjectedOperationTarget> = new Map<string, UpstreamGatewayProjectedOperationTarget>();
+  let mcpServicesByPublicPrefix: ReadonlyMap<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>();
+  let manifestSnapshotRevision: Readonly<{ sourceRevision: number; sourceDigest: string }> = Object.freeze({ sourceRevision: 0, sourceDigest: "" });
+  const trafficBuckets: Map<string, UpstreamGatewayTrafficBucket> = new Map<string, UpstreamGatewayTrafficBucket>();
+  const endpointCursors: Map<string, UpstreamGatewayEndpointCursor> = new Map<string, UpstreamGatewayEndpointCursor>();
+  const endpointCircuits: Map<string, UpstreamGatewayEndpointCircuit> = new Map<string, UpstreamGatewayEndpointCircuit>();
+  const mcpToolCache: Map<string, UpstreamGatewayMcpToolCacheRecord> = new Map<string, UpstreamGatewayMcpToolCacheRecord>();
+  const mcpToolRefreshInFlight: Map<string, UpstreamGatewayMcpToolRefreshFlight> = new Map<string, UpstreamGatewayMcpToolRefreshFlight>();
+  const deferredMcpToolRefreshesByService: Map<string, Map<string, UpstreamGatewayMcpToolRefreshFlight>> = new Map<string, Map<string, UpstreamGatewayMcpToolRefreshFlight>>();
+  const mcpToolConfigPreparations: Map<string, Set<AbortController>> = new Map<string, Set<AbortController>>();
+  const mcpRegistryCloseController = new AbortController();
+  const activeRegistryWork: Set<Promise<unknown>> = new Set<Promise<unknown>>();
+  const skillHubEventSubscriptions: Map<string, UpstreamGatewaySkillHubSubscription> = new Map<string, UpstreamGatewaySkillHubSubscription>();
+  let targetedCallMapHits: number = 0;
+  let targetedServiceIndexHits: number = 0;
+  let serviceDiscoveryCount: number = 0;
 
-  function compilePublicToolTargetIndexes(serviceMap: Map<any, any>) : any {
-    const mcpByPrefix: any = new Map<any, any>();
-    const configuredByName: any = new Map<any, any>();
+  function compilePublicToolTargetIndexes(serviceMap: ReadonlyMap<string, UpstreamGatewayServiceRecord>) : Readonly<{ mcpByPrefix: ReadonlyMap<string, UpstreamGatewayServiceRecord> }> {
+    const mcpByPrefix: Map<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>();
     for (const service of serviceMap.values()) {
       if (service.disabled === true) continue;
-      if (service.serviceProtocol === "mcp") {
-        const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
-        if (mcpByPrefix.has(prefix)) {
-          throw new TypeError("Upstream gateway manifest snapshot contains duplicate MCP tool prefixes.");
-        }
-        mcpByPrefix.set(prefix, service);
-        continue;
+      if (service.serviceProtocol !== "mcp") continue;
+      const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
+      if (mcpByPrefix.has(prefix)) {
+        throw new TypeError("Upstream gateway manifest snapshot contains duplicate MCP tool prefixes.");
       }
-      for (const operation of asArray(service.operations)) {
-        if (!operation?.operationKey) continue;
-        const publicName: any = `upstream.${safePublicToolSegment(service.serviceId)}.${safePublicToolSegment(operation.operationKey)}`;
-        if (configuredByName.has(publicName)) {
-          throw new TypeError("Upstream gateway manifest snapshot contains duplicate public tool names.");
-        }
-        configuredByName.set(publicName, Object.freeze({ service, operation }));
-      }
+      mcpByPrefix.set(prefix, service);
     }
-    return Object.freeze({ mcpByPrefix, configuredByName });
+    return Object.freeze({ mcpByPrefix });
   }
 
-  function clearServiceRuntimeState(serviceIds: any = []) : any {
-    const prefixes: any = asArray(serviceIds).map((serviceId?: any) : any => `${serviceId}::`);
+  function cancelMcpToolRefreshes(serviceIds: readonly unknown[] | null = null) : Promise<unknown>[] {
+    const prefixes: string[] | null = serviceIds === null
+      ? null
+      : asArray(serviceIds).map((serviceId?: unknown) : string => `${text(serviceId)}::`);
+    const pending: Promise<unknown>[] = [];
+    for (const [key, flight] of mcpToolRefreshInFlight) {
+      if (prefixes && !prefixes.some((prefix: string) : boolean => String(key).startsWith(prefix))) continue;
+      pending.push(flight.promise);
+      removeDeferredMcpToolRefresh(flight.serviceId, key, flight);
+      flight.controller.abort();
+      mcpToolRefreshInFlight.delete(key);
+    }
+    return pending;
+  }
+
+  function cancelMcpToolConfigPreparations(serviceIds: readonly unknown[] | null = null) : void {
+    const selectedServiceIds: string[] = serviceIds === null
+      ? [...mcpToolConfigPreparations.keys()]
+      : asArray(serviceIds).map(text);
+    for (const serviceId of selectedServiceIds) {
+      const controllers: Set<AbortController> | undefined = mcpToolConfigPreparations.get(serviceId);
+      mcpToolConfigPreparations.delete(serviceId);
+      for (const controller of controllers || []) controller.abort();
+    }
+  }
+
+  function trackMcpToolConfigPreparation(serviceId?: unknown) : UpstreamGatewayMcpToolConfigPreparation {
+    const normalizedServiceId: string = text(serviceId);
+    const controller: AbortController = new AbortController();
+    let disposed = false;
+    let controllers: Set<AbortController> | undefined = mcpToolConfigPreparations.get(normalizedServiceId);
+    if (!controllers) {
+      controllers = new Set<AbortController>();
+      mcpToolConfigPreparations.set(normalizedServiceId, controllers);
+    }
+    controllers.add(controller);
+    return {
+      controller,
+      dispose() : boolean {
+        if (disposed) return false;
+        disposed = true;
+        const current: Set<AbortController> | undefined = mcpToolConfigPreparations.get(normalizedServiceId);
+        current?.delete(controller);
+        if (current?.size === 0) mcpToolConfigPreparations.delete(normalizedServiceId);
+        return true;
+      }
+    };
+  }
+
+  function hasMcpToolConfigPreparations(serviceId?: unknown) : boolean {
+    return (mcpToolConfigPreparations.get(text(serviceId))?.size || 0) > 0;
+  }
+
+  function removeDeferredMcpToolRefresh(serviceId?: unknown, cacheKey?: unknown, flight?: UpstreamGatewayMcpToolRefreshFlight | null) : void {
+    if (!flight) return;
+    const normalizedServiceId: string = text(serviceId);
+    const deferred: Map<string, UpstreamGatewayMcpToolRefreshFlight> | undefined = deferredMcpToolRefreshesByService.get(normalizedServiceId);
+    if (deferred?.get(text(cacheKey)) === flight) {
+      deferred.delete(text(cacheKey));
+      if (deferred.size === 0) deferredMcpToolRefreshesByService.delete(normalizedServiceId);
+    }
+  }
+
+  function deferMcpToolRefreshCancellation(serviceId?: unknown, cacheKey?: unknown, flight?: UpstreamGatewayMcpToolRefreshFlight | null) : void {
+    if (!flight) return;
+    const normalizedServiceId: string = text(serviceId);
+    let deferred: Map<string, UpstreamGatewayMcpToolRefreshFlight> | undefined = deferredMcpToolRefreshesByService.get(normalizedServiceId);
+    if (!deferred) {
+      deferred = new Map<string, UpstreamGatewayMcpToolRefreshFlight>();
+      deferredMcpToolRefreshesByService.set(normalizedServiceId, deferred);
+    }
+    deferred.set(text(cacheKey), flight);
+  }
+
+  function cancelMcpToolRefreshIfUnobserved(serviceId?: unknown, cacheKey?: unknown, flight?: UpstreamGatewayMcpToolRefreshFlight | null) : void {
+    if (!flight) return;
+    if (flight.waiters.size > 0) {
+      removeDeferredMcpToolRefresh(serviceId, cacheKey, flight);
+      return;
+    }
+    if (mcpToolRefreshInFlight.get(text(cacheKey)) !== flight) {
+      removeDeferredMcpToolRefresh(serviceId, cacheKey, flight);
+      return;
+    }
+    if (hasMcpToolConfigPreparations(serviceId)) {
+      deferMcpToolRefreshCancellation(serviceId, cacheKey, flight);
+      return;
+    }
+    removeDeferredMcpToolRefresh(serviceId, cacheKey, flight);
+    mcpToolRefreshInFlight.delete(text(cacheKey));
+    if (!flight.controller.signal.aborted) flight.controller.abort();
+  }
+
+  function settleDeferredMcpToolRefreshes(serviceId?: unknown) : void {
+    if (hasMcpToolConfigPreparations(serviceId)) return;
+    const normalizedServiceId: string = text(serviceId);
+    const deferred: Map<string, UpstreamGatewayMcpToolRefreshFlight> | undefined = deferredMcpToolRefreshesByService.get(normalizedServiceId);
+    if (!deferred) return;
+    deferredMcpToolRefreshesByService.delete(normalizedServiceId);
+    for (const [cacheKey, flight] of deferred) {
+      if (flight.waiters.size === 0 && mcpToolRefreshInFlight.get(cacheKey) === flight) {
+        mcpToolRefreshInFlight.delete(cacheKey);
+        if (!flight.controller.signal.aborted) flight.controller.abort();
+      }
+    }
+  }
+
+  function finishMcpToolConfigPreparation(serviceId?: unknown, preparation?: UpstreamGatewayMcpToolConfigPreparation | null) : void {
+    if (!preparation?.dispose?.()) return;
+    settleDeferredMcpToolRefreshes(serviceId);
+  }
+
+  function clearServiceRuntimeState(serviceIds: readonly unknown[] = []) : void {
+    const prefixes: string[] = asArray(serviceIds).map((serviceId?: unknown) : string => `${serviceId}::`);
     if (prefixes.length === 0) return;
     for (const serviceId of asArray(serviceIds).map(text).filter(Boolean)) {
-      const subscription: any = skillHubEventSubscriptions.get(serviceId);
+      const subscription: UpstreamGatewaySkillHubSubscription | undefined = skillHubEventSubscriptions.get(serviceId);
       if (subscription) {
         subscription.controller.abort();
         skillHubEventSubscriptions.delete(serviceId);
       }
     }
-    for (const [key, flight] of mcpToolRefreshInFlight) {
-      if (prefixes.some((prefix?: any) : any => String(key).startsWith(prefix))) {
-        flight.controller?.abort?.();
-        mcpToolRefreshInFlight.delete(key);
-      }
-    }
-    for (const stateMap of [trafficBuckets, endpointCursors, endpointCircuits, mcpToolCache]) {
+    cancelMcpToolConfigPreparations(serviceIds);
+    cancelMcpToolRefreshes(serviceIds);
+    for (const stateMap of [trafficBuckets, endpointCursors, endpointCircuits]) {
       for (const key of stateMap.keys()) {
-        if (prefixes.some((prefix?: any) : any => String(key).startsWith(prefix))) stateMap.delete(key);
+        if (prefixes.some((prefix: string) : boolean => String(key).startsWith(prefix))) stateMap.delete(key);
       }
     }
+    for (const serviceId of asArray(serviceIds).map(text).filter(Boolean)) mcpToolCache.delete(serviceId);
   }
 
-  function discoveryCancelledError(cause?: any) : any {
+  function discoveryCancelledError(cause?: unknown) : Error {
     return Object.assign(new Error("Upstream MCP discovery was cancelled."), {
       status: 499,
       reasonCode: "upstream_mcp_cancelled",
@@ -169,52 +345,83 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  function waitForAbortable(promise?: any, signal?: any) : any {
+  function discoveryRegistryClosedError() : Error {
+    return Object.assign(new Error("Upstream MCP registry is closed."), {
+      status: 503,
+      reasonCode: "upstream_mcp_registry_closed"
+    });
+  }
+
+  function waitForAbortable<T>(promise: Promise<T>, signal?: AbortSignal | null) : Promise<T> {
     if (!signal) return promise;
     if (signal.aborted) return Promise.reject(discoveryCancelledError(signal.reason));
-    return new Promise((resolve?: any, reject?: any) : any => {
-      let settled: any = false;
-      const finish: any = (fn?: any, value?: any) : any => {
+    return new Promise<T>((resolve?: (value: T) => void, reject?: (reason?: unknown) => void) : void => {
+      let settled = false;
+      const finish: (fn?: (value?: any) => void, value?: any) => void = (fn?: (value?: any) => void, value?: any) : void => {
         if (settled) return;
         settled = true;
         signal.removeEventListener("abort", onAbort);
-        fn(value);
+        fn?.(value);
       };
-      const onAbort: any = () : any => finish(reject, discoveryCancelledError(signal.reason));
+      const onAbort: () => void = () : void => finish(reject, discoveryCancelledError(signal.reason));
       signal.addEventListener("abort", onAbort, { once: true });
       promise.then(
-        (value?: any) : any => finish(resolve, value),
-        (error?: any) : any => finish(reject, error)
+        (value?: T) : void => finish(resolve as (value?: any) => void, value),
+        (error?: unknown) : void => finish(reject, error)
       );
     });
   }
 
-  function mcpToolCacheKey(service?: any) : any {
-    return `${service.serviceId}::${service.updatedAt || ""}`;
+  function mcpToolCacheKey(service: UpstreamGatewayServiceRecord, config: UpstreamGatewayResolvedMcpServiceConfig) : string {
+    return `${service.serviceId}::${service.updatedAt || ""}::${JSON.stringify(config.sessionGeneration || {})}`;
   }
 
-  function cacheEntryFromTools(tools: any = []) : any {
+  function cacheEntryFromTools(tools: readonly UpstreamGatewayPublicMcpTool[] = []) : UpstreamGatewayMcpToolCacheEntry {
     return {
       loadedAt: Date.now(),
       tools,
-      byPublicName: new Map<any, any>(tools.map((tool?: any) : any => [tool?.name, tool])),
-      byUpstreamName: new Map<any, any>(
+      byPublicName: new Map<string, UpstreamGatewayPublicMcpTool>(tools.map((tool: UpstreamGatewayPublicMcpTool) : [string, UpstreamGatewayPublicMcpTool] => [tool.name, tool])),
+      byUpstreamName: new Map<string, UpstreamGatewayPublicMcpTool>(
         tools
-          .filter((tool?: any) : any => text(tool?._meta?.upstreamToolName))
-          .map((tool?: any) : any => [tool._meta.upstreamToolName, tool])
+          .filter((tool: UpstreamGatewayPublicMcpTool) : boolean => Boolean(text(tool._meta?.upstreamToolName)))
+          .map((tool: UpstreamGatewayPublicMcpTool) : [string, UpstreamGatewayPublicMcpTool] => [String(tool._meta.upstreamToolName), tool])
       )
     };
   }
   const securityAlertStore: any = persistenceEnabled
     ? createSecurityAlertStore({ userDataPath })
     : null;
-  let closed: any = false;
-  let closePromise: any = null;
-  const resolvedTagStore: any =
+  let closed: boolean = false;
+  let closePromise: Promise<void> | null = null;
+  async function withRegistryWork<T>(options: UpstreamGatewayCallOptions = {}, run?: ((options: UpstreamGatewayCallOptions & { signal: AbortSignal }) => Promise<T>) | null) : Promise<T> {
+    if (closed || closePromise || mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+    if (typeof run !== "function") throw new TypeError("Upstream registry work requires an operation.");
+    if (options.timeoutMs !== null) normalizeOptionalTimeoutMs(options.timeoutMs, "request.timeoutMs");
+    const operation = run;
+    const abortContext: any = createForwardAbortContext(options.signal || null, null, mcpRegistryCloseController.signal);
+    let work: Promise<T> | null = null;
+    try {
+      if (abortContext.ownerAborted()) throw discoveryRegistryClosedError();
+      if (abortContext.callerAborted()) {
+        throw Object.assign(new Error("Upstream gateway request was cancelled."), {
+          status: 499,
+          reasonCode: "upstream_forward_cancelled",
+          name: "AbortError"
+        });
+      }
+      work = Promise.resolve().then(() => operation({ ...options, signal: abortContext.signal }));
+      activeRegistryWork.add(work);
+      return await work;
+    } finally {
+      if (work) activeRegistryWork.delete(work);
+      abortContext.dispose();
+    }
+  }
+  const resolvedTagStore: UpstreamGatewayTagStorePort | null =
     tagStore ||
     securityPermissions?.tagManagementStore ||
     null;
-  const gatewayRuntime: any = constructWithOwnedResourceCleanup(
+  const gatewayRuntime: UpstreamGatewayRuntime = constructWithOwnedResourceCleanup(
     securityAlertStore,
     () : any => createGatewayRuntime({
       persistenceEnabled,
@@ -232,14 +439,7 @@ export function createUpstreamGatewayRegistry({
     close: closeGatewayRuntime,
     getRefactorInstrumentation
   } = gatewayRuntime;
-  const {
-    endpointsFor,
-    publicEndpoint,
-    recordEndpointOutcome,
-    retireServices: retireEndpointTrafficServices,
-    selectEndpointTraffic,
-    withTrafficSlot
-  } = constructWithOwnedResourceCleanup(
+  const endpointTraffic: UpstreamEndpointTrafficController = constructWithOwnedResourceCleanup(
     securityAlertStore,
     () : any => createEndpointTrafficController({
       trafficBuckets,
@@ -250,17 +450,26 @@ export function createUpstreamGatewayRegistry({
       persist
     })
   );
-  const upstreamMcpSessions: any = mcpSessionManager || createUpstreamMcpSessionManager({
+  const {
+    endpointsFor,
+    publicEndpoint,
+    recordEndpointOutcome,
+    retireServices: retireEndpointTrafficServices,
+    selectEndpointTraffic,
+    withTrafficSlot
+  } = endpointTraffic;
+  const upstreamMcpSessions: UpstreamGatewayMcpSessionManagerPort = mcpSessionManager || createUpstreamMcpSessionManager({
     fetchTransport: fetchConfiguredMcpUpstream
   });
-  const forwardMcp: any = constructWithOwnedResourceCleanup(
+  const recordMcpExecution: any = constructWithOwnedResourceCleanup(
     securityAlertStore,
-    () : any => createMcpForwarder({
+    () : any => createMcpExecutionAdapter({
       appendAudit,
-      mcpSessionManager: upstreamMcpSessions,
-      mcpServiceConfigWithCredentials,
+      invokeTypedMcp,
+      claimMcpProtectedSink,
       persist,
       publicEndpoint,
+      schemaPort,
       recordEndpointOutcome,
       recordMetric
     })
@@ -280,6 +489,7 @@ export function createUpstreamGatewayRegistry({
       label,
       policies: upstreamEgressPolicies(service),
       init,
+      responseTimeouts: { headersTimeout: 0, bodyTimeout: 0 },
       maxRedirects: 0
     });
   }
@@ -289,11 +499,11 @@ export function createUpstreamGatewayRegistry({
       url,
       label,
       policies: upstreamEgressPolicies(service),
-      init
+      init: { headersTimeout: 0, bodyTimeout: 0, ...init }
     });
   }
 
-  function fetchConfiguredMcpUpstream(url?: any, init?: any, { config = {} }: Record<string, any> = {}) : any {
+  function fetchConfiguredMcpUpstream(url?: any, init?: any, { config = {}, beforeFetch }: Record<string, any> = {}) : any {
     return fetchWithPinnedDns({
       url,
       label: `upstream-gateway.${text(config.gatewayServiceId || "mcp")}.mcp`,
@@ -302,12 +512,14 @@ export function createUpstreamGatewayRegistry({
           allowLocalForConfiguredModelService: config.allowLocalNetwork === true
         }
       },
-      init
+      init,
+      responseTimeouts: { headersTimeout: 0, bodyTimeout: 0 },
+      beforeFetch
     });
   }
 
-  function requireService(serviceId?: any) : any {
-    const service: any = services.get(text(serviceId));
+  function requireService(serviceId?: unknown) : UpstreamGatewayServiceRecord {
+    const service: UpstreamGatewayServiceRecord | undefined = services.get(text(serviceId));
     if (!service) {
       throw new Error(`Upstream service not found: ${serviceId}`);
     }
@@ -346,8 +558,60 @@ export function createUpstreamGatewayRegistry({
     operation,
     input,
     endpoint,
-    inputDigest
-  }: Record<string, any>) : any {
+    inputDigest,
+    targetSelectorInputDigest = inputDigest
+  }: Record<string, any>) : UpstreamGatewayStructuredTargetFacts {
+    const mcpConfig: Record<string, any> = object(service?.mcp);
+    if (service?.serviceProtocol === "mcp" || text(operation?.protocol).toLowerCase() === "mcp") {
+      const transport = text(mcpConfig.transport || "stdio").toLowerCase();
+      const stdio = transport === "stdio";
+      const mcpTargetUrl: URL | null = stdio ? null : new URL(text(mcpConfig.url || service.baseUrl));
+      const launchIdentityDigest = stdio ? sha256Canonical({
+        command: text(mcpConfig.command),
+        args: asArray(mcpConfig.args).map((argument?: any) : any => String(argument))
+      }) : "";
+      const mcpConfigurationVersion = text(mcpConfig.protocolVersion);
+      const protocolVersionHint = text(mcpConfig.protocolVersionHint);
+      const callDigest = text(inputDigest) || digestFinalProtectedSinkInput(object(input));
+      const targetSelectorDigest = text(targetSelectorInputDigest) || callDigest;
+      const targetTuple: Readonly<Record<string, any>> = Object.freeze({
+        schemaVersion: "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        protocol: "mcp",
+        transport,
+        method: "tools/call",
+        endpointId: text(endpoint?.endpointId || "primary"),
+        ...(stdio ? { launchIdentityDigest } : { url: mcpTargetUrl?.toString() || "" }),
+        callDigest,
+        mcpConfigurationVersion,
+        protocolVersionHint,
+        manifestSetRevision: manifestSnapshotRevision.sourceRevision,
+        manifestSetDigest: manifestSnapshotRevision.sourceDigest,
+        serviceRevision: service.serviceRevision,
+        manifestDigest: service.manifestDigest
+      });
+      const resourceRevision = sha256Canonical({
+        schemaVersion: "v0.0.1:upstream-gateway:structured-resource-revision-1",
+        manifestSetRevision: targetTuple.manifestSetRevision,
+        manifestSetDigest: targetTuple.manifestSetDigest,
+        serviceRevision: targetTuple.serviceRevision,
+        manifestDigest: targetTuple.manifestDigest,
+        transport,
+        ...(stdio ? { launchIdentityDigest } : { url: mcpTargetUrl?.toString() || "" }),
+        mcpConfigurationVersion,
+        protocolVersionHint
+      });
+      return Object.freeze({
+        targetUrl: mcpTargetUrl,
+        method: stdio ? "stdio" : "POST",
+        protocol: "mcp",
+        rpcMethod: "tools/call",
+        targetSelector: Object.freeze({ inputDigest: targetSelectorDigest, operationKey: operation.operationKey, serviceId: service.serviceId }),
+        effect: Object.freeze({ kind: stdio ? "upstream-mcp-stdio-tools-call" : "upstream-mcp-http-tools-call", targetDigest: sha256Canonical(targetTuple) }),
+        resourceRevision
+      });
+    }
     const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
     const method: any = configuredHttpMethod(operation);
     const protocol: any = text(operation.protocol || "http").toLowerCase();
@@ -405,7 +669,7 @@ export function createUpstreamGatewayRegistry({
     endpointId,
     input,
     inputDigest
-  }: Record<string, any>) : any {
+  }: Record<string, any>) : UpstreamGatewayStructuredTargetFacts {
     const currentService: any = services.get(text(serviceId));
     if (!currentService || currentService.disabled === true) {
       throw Object.assign(
@@ -448,7 +712,44 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  function previewFor(service?: any, operation?: any, subject: Record<string, any> = {}) : any {
+  function currentMcpTargetFacts({ serviceId, operationKey, endpointId, input, inputDigest, targetSelectorInputDigest = inputDigest }: Record<string, any>) : UpstreamGatewayStructuredTargetFacts {
+    const currentService: any = services.get(text(serviceId));
+    const currentOperation: any = asArray(currentService?.operations).find((candidate?: any) : any => candidate.operationKey === operationKey);
+    if (!currentService || currentService.disabled === true || !currentOperation ||
+        currentService.serviceProtocol !== "mcp" && currentOperation.protocol !== "mcp") {
+      throw Object.assign(new Error("The current upstream MCP operation is unavailable."), { code: "upstream_final_effect_resource_stale", statusCode: 403 });
+    }
+    const endpoint: any = endpointsFor(currentService).find((candidate?: any) : any => text(candidate.endpointId || "primary") === text(endpointId || "primary"));
+    if (!endpoint) throw Object.assign(new Error("The current upstream MCP target is unavailable."), { code: "upstream_final_effect_resource_stale", statusCode: 403 });
+    return structuredTargetFacts({ service: currentService, operation: operationWithUpstreamCapability(currentService, currentOperation), input, endpoint, inputDigest, targetSelectorInputDigest });
+  }
+
+  async function claimMcpProtectedSink(service: any, operation: any, input: Record<string, any>, endpoint: any, options: Record<string, any>): Promise<any> {
+    // Preserve the original Operation Permission input before clone drops its private symbol.
+    const providerInput: any = input?.[PROJECTED_PROVIDER_INPUT];
+    const sinkInput: any = clone(input);
+    const mcpCallInput: any = object(options.mcpCallInput || sinkInput);
+    const sinkInputDigest: any = digestFinalProtectedSinkInput(mcpCallInput);
+    const targetSelectorInputDigest: any = digestFinalProtectedSinkInput(
+      providerInput ? clone(providerInput) : sinkInput
+    );
+    const targetFacts: any = structuredTargetFacts({ service, operation, input: mcpCallInput, endpoint, inputDigest: sinkInputDigest, targetSelectorInputDigest });
+    const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
+    if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) finalEffectAuthorityRequired();
+    return claimProtectedSinkAttempt({
+      attempt: finalProtectedSinkPermit,
+      targetSelector: targetFacts.targetSelector,
+      effect: targetFacts.effect,
+      resourceRevision: targetFacts.resourceRevision,
+      resolveCurrentResource: async () : Promise<any> => {
+        const currentFacts: any = currentMcpTargetFacts({ serviceId: service.serviceId, operationKey: operation.operationKey,
+          endpointId: endpoint?.endpointId || "primary", input: mcpCallInput, inputDigest: sinkInputDigest, targetSelectorInputDigest });
+        return Object.freeze({ effect: currentFacts.effect, resourceRevision: currentFacts.resourceRevision });
+      }
+    });
+  }
+
+  function previewFor(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, subject: Record<string, any> = {}) : UpstreamGatewayForwardPreview {
     const { traffic } = selectEndpointTraffic(service, operation, { consume: false });
     const subjectScopes: any = new Set<any>(asArray(subject.scopes).map(text));
     const roleId: any = text(subject.roleId || subject.role || "");
@@ -506,7 +807,7 @@ export function createUpstreamGatewayRegistry({
     return output;
   }
 
-  function evaluateServiceTagPolicy(service?: any, subject: Record<string, any> = {}) : any {
+  function evaluateServiceTagPolicy(service: UpstreamGatewayServiceRecord, subject: Record<string, any> = {}) : UpstreamGatewayTagPolicyEvaluation {
     if (!hasUniversalTagPolicyRules(service.tagPolicy || {})) {
       return {
         allowed: true,
@@ -543,7 +844,7 @@ export function createUpstreamGatewayRegistry({
     };
   }
 
-  function rejectServiceTagPolicy(service?: any, operation?: any, decision: Record<string, any> = {}) : any {
+  function rejectServiceTagPolicy(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, decision: Readonly<Record<string, unknown>> = {}) : never {
     recordMetric({ serviceId: service.serviceId, statusCode: 403, failed: true });
     const audit: any = appendAudit("upstream.tag_policy.denied", {
       serviceId: service.serviceId,
@@ -596,7 +897,7 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  function authorizeForwardPreview(service?: any, operation?: any, subject?: any) : any {
+  function authorizeForwardPreview(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, subject?: Record<string, any>) : UpstreamGatewayForwardPreview {
     const preview: any = previewFor(service, operation, subject);
     if (preview.missingScopes.length > 0) {
       throw Object.assign(new Error("Upstream gateway scope denied."), { status: 403, details: preview });
@@ -628,7 +929,7 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  async function credentialMaterialFor(service?: any, operation: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+  async function credentialMaterialFor(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationSelection, options: Record<string, any> = {}) : Promise<UpstreamGatewayResolvedCredentialMaterial> {
     return resolveCredentialMaterial({
       userDataPath,
       service,
@@ -638,7 +939,7 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  async function mcpServiceConfigWithCredentials(service?: any, operation: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+  async function mcpServiceConfigWithCredentials(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationSelection, options: Record<string, any> = {}) : Promise<UpstreamGatewayResolvedMcpServiceConfig> {
     return resolveMcpServiceConfigWithCredentials({
       userDataPath,
       service,
@@ -647,6 +948,68 @@ export function createUpstreamGatewayRegistry({
       purpose: options.purpose || "discovery",
       subject: options.subject || null
     });
+  }
+
+  function createConfiguredModernMcpAdapter(config: UpstreamGatewayResolvedMcpServiceConfig, maxResponseBytes: number, options: Record<string, any> = {}) : any {
+    const transport: any = {
+      send: async ({ request, headers, signal }: Record<string, any>) : Promise<any> => {
+        const timeoutMs: any = timeoutFor({ timeoutMs: config.timeoutMs }, options);
+        const abortContext: any = createForwardAbortContext(signal || null, timeoutMs);
+        let pinned: any = null;
+        try {
+          pinned = await fetchConfiguredMcpUpstream(config.url, {
+            method: "POST",
+            headers: { ...object(config.headers), ...object(headers), "content-type": "application/json" },
+            body: JSON.stringify(request),
+            signal: abortContext.signal
+          }, {
+            config,
+            ...(request.method === "tools/call" && typeof options.beforeSend === "function"
+              ? { beforeFetch: options.beforeSend }
+              : {})
+          });
+          const response: any = pinned.response;
+          const bytes: any = await readResponseBufferWithLimit(response, maxResponseBytes);
+          const body: any = JSON.parse(bytes.toString("utf8"));
+          if (response.status < 400 && request.method === "server/discover") {
+            assertJsonRpcResponse(body, request.id);
+          }
+          return { status: response.status, headers: Object.fromEntries(response.headers.entries()), body };
+        } finally {
+          await pinned?.close?.().catch?.(() : any => {});
+          abortContext.dispose();
+        }
+      }
+    };
+    return createModernUpstreamAdapter({ transport });
+  }
+
+  /** Single configured modern/legacy transport for platform tools and Console's governed forward path. */
+  async function invokeTypedMcp(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, params: Record<string, any>, options: Record<string, any> = {}) : Promise<UpstreamGatewayInvokeTypedMcpResult> {
+    const config: any = await mcpServiceConfigWithCredentials(service, operation, { purpose: "execution", subject: options.subject });
+    const protocolVersion: any = text(config.protocolVersion) || "2025-06-18";
+    const requestId: any = `gateway-${randomUUID()}`;
+    if (protocolVersion === "2026-07-28") {
+      if (text(config.transport) === "stdio") throw Object.assign(new Error("Modern stdio peer transport is not configured."), { status: 501, reasonCode: "upstream_mcp_transport_unavailable" });
+      const adapter: any = createConfiguredModernMcpAdapter(config, operation.responseMaxBytes, options);
+      try {
+        const response: any = await adapter.invoke({ request: { id: requestId, method: "tools/call", params,
+          protocolVersion, headers: {}, ...(options.requestState !== undefined ? { requestState: options.requestState } : {}) },
+          route: { upstreamName: params.name, protocolVersion }, signal: options.signal });
+        const body = object(response.body);
+        if (response.status >= 400) return { requestId, protocolVersion, httpFailure: response };
+        if (Object.hasOwn(body, "error")) return { requestId, protocolVersion, jsonRpcError: response.body };
+        return { requestId, protocolVersion, result: Object.hasOwn(body, "result") ? body.result : response.body };
+      } finally { await adapter.close(); }
+    }
+    if (typeof upstreamMcpSessions.invokeGateway !== "function") throw Object.assign(new Error("Typed legacy MCP session port is unavailable."), { status: 503, reasonCode: "upstream_mcp_transport_unavailable" });
+    const response: any = await upstreamMcpSessions.invokeGateway(config, { method: "tools/call", params }, {
+      signal: options.signal,
+      onNotification: options.onNotification,
+      ...(Object.hasOwn(options, "timeoutMs") ? { timeoutMs: options.timeoutMs } : {}),
+      ...(typeof options.beforeSend === "function" ? { beforeSend: options.beforeSend } : {})
+    });
+    return { requestId, protocolVersion, result: response.result };
   }
 
   function eventDelay(milliseconds?: any, signal?: any) : any {
@@ -661,14 +1024,14 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
-  async function ensureSkillHubEventSubscription(service?: any, operation: Record<string, any> = {}) : Promise<any> {
+  async function ensureSkillHubEventSubscription(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationSelection = {}) : Promise<void> {
     if (typeof publishSkillHubUpdate !== "function" || skillHubEventSubscriptions.has(service.serviceId)) return;
-    const controller: any = new AbortController();
-    const state: Record<string, any> = { controller, cursor: 0, ready: null, promise: null };
+    const controller: AbortController = new AbortController();
+    let resolveReady: (value: boolean) => void = () : void => {};
+    const ready: Promise<boolean> = new Promise<boolean>((resolve: (value: boolean) => void) : void => { resolveReady = resolve; });
+    const state: UpstreamGatewaySkillHubSubscription = { controller, cursor: 0, ready, promise: null };
     skillHubEventSubscriptions.set(service.serviceId, state);
-    let resolveReady: any;
-    state.ready = new Promise((resolve?: any) : any => { resolveReady = resolve; });
-    state.promise = (async () : Promise<any> => {
+    state.promise = (async () : Promise<void> => {
       let retryMs: any = 250;
       let firstAttempt = true;
       while (!controller.signal.aborted) {
@@ -767,11 +1130,16 @@ export function createUpstreamGatewayRegistry({
     return object(input.arguments || input.params || input.payload || input.body);
   }
 
-  function timeoutFor(operation?: any, options: Record<string, any> = {}) : any {
-    const requestedTimeoutMs: any = Number(options.timeoutMs || 0);
-    return Number.isSafeInteger(requestedTimeoutMs) && requestedTimeoutMs >= 100
-      ? Math.min(operation.timeoutMs, requestedTimeoutMs)
-      : operation.timeoutMs;
+  function timeoutFor(operation?: any, options: Record<string, any> = {}, service: any = null) : any {
+    if (Object.hasOwn(options, "timeoutMs") && options.timeoutMs === null) return null;
+    const requestedTimeoutMs: any = normalizeOptionalTimeoutMs(options.timeoutMs, "request.timeoutMs");
+    const operationTimeoutMs: any = normalizeOptionalTimeoutMs(operation?.timeoutMs, "operation.timeoutMs");
+    const mcpTimeoutMs: any = service?.serviceProtocol === "mcp"
+      ? normalizeOptionalTimeoutMs(service.mcp?.timeoutMs, "mcp.timeoutMs")
+      : undefined;
+    const budgets: number[] = [requestedTimeoutMs, operationTimeoutMs, mcpTimeoutMs]
+      .filter((value?: any) : any => value !== undefined);
+    return budgets.length ? Math.min(...budgets) : null;
   }
 
   async function requestBodySourceFor(operation?: any, input?: any, subject?: any, readAccess: Record<string, any> = {}) : Promise<any> {
@@ -837,6 +1205,7 @@ export function createUpstreamGatewayRegistry({
     traffic,
     endpoint
   }: Record<string, any>) : Promise<any> {
+    const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
     const transport: any = compilePayloadTransport(operation);
     const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
     const method: any = configuredHttpMethod(operation);
@@ -898,17 +1267,18 @@ export function createUpstreamGatewayRegistry({
       }
     );
     const startedAt: any = Date.now();
-    const abortContext: any = createForwardAbortContext(options.signal || null, timeoutFor(operation, options));
+    const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
     let pinnedRequest: any = null;
-    let artifactTransaction: any = null;
+    let artifactTransaction: UpstreamGatewayArtifactTransaction | null = null;
+    let artifactWriterPort: UpstreamGatewayArtifactTransitPort | null = null;
     try {
       pinnedRequest = await requestConfiguredUpstream(service, targetUrl, {
         method,
         headers,
         body: source?.openBody?.(),
         signal: abortContext.signal,
-        headersTimeout: timeoutFor(operation, options),
-        bodyTimeout: timeoutFor(operation, options)
+        headersTimeout: effectiveTimeoutMs ?? 0,
+        bodyTimeout: effectiveTimeoutMs ?? 0
       }, `upstream-gateway.${service.serviceId}.${operation.operationKey}.payload`);
       const response: any = pinnedRequest.response;
       const status: any = Number(response.statusCode || 0);
@@ -989,7 +1359,8 @@ export function createUpstreamGatewayRegistry({
           409
         );
       }
-      const artifactPort: any = requireArtifactTransitPort();
+      const artifactPort: UpstreamGatewayArtifactTransitPort = requireArtifactTransitPort();
+      artifactWriterPort = artifactPort;
       artifactTransaction = await artifactPort.beginWrite(subject, {
         name: artifactNameFromHeaders(response.headers),
         mediaType: contentType
@@ -1051,7 +1422,7 @@ export function createUpstreamGatewayRegistry({
       };
     } catch (error: any) {
       if (artifactTransaction) {
-        await artifactTransitPort.abort(artifactTransaction, String(error?.code || "artifact_write_aborted")).catch(() : any => {});
+        await artifactWriterPort?.abort(artifactTransaction, String(error?.code || "artifact_write_aborted")).catch(() : any => {});
       }
       const callerAborted: any = abortContext.callerAborted();
       const timedOut: any = !callerAborted && (abortContext.timedOut() || error?.name === "AbortError");
@@ -1088,90 +1459,183 @@ export function createUpstreamGatewayRegistry({
     }
   }
 
-  async function ensureMcpToolCache(service?: any, {
+  async function ensureMcpToolCache(service: UpstreamGatewayServiceRecord, {
     refresh = false,
     signal = null,
     onNotification = null,
-    purpose = "discovery"
-  }: Record<string, any> = {}) : Promise<any> {
+    purpose = "discovery",
+    countCacheHit = false
+  }: UpstreamGatewayCallOptions = {}) : Promise<UpstreamGatewayMcpToolCacheEntry> {
     if (service.serviceProtocol !== "mcp") {
       return cacheEntryFromTools([]);
     }
-    const cacheKey: any = mcpToolCacheKey(service);
-    const cached: any = mcpToolCache.get(cacheKey);
-    const ttlMs: any = Number(service.mcp?.toolsCacheTtlMs || 0);
-    if (!refresh && cached && ttlMs > 0 && Date.now() - cached.loadedAt <= ttlMs) {
-      return cached;
+    if (closed || closePromise || mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+    if (signal?.aborted) throw discoveryCancelledError(signal.reason);
+    let config: UpstreamGatewayResolvedMcpServiceConfig;
+    const preparation: UpstreamGatewayMcpToolConfigPreparation = trackMcpToolConfigPreparation(service.serviceId);
+    try {
+      const signals: AbortSignal[] = [preparation.controller.signal, mcpRegistryCloseController.signal];
+      if (signal) signals.push(signal);
+      const configSignal: AbortSignal = AbortSignal.any(signals);
+      config = await waitForAbortable(mcpServiceConfigWithCredentials(service, {
+        operationKey: "tools/list",
+        requiredScopes: ["gateway:read"]
+      }, { purpose: purpose === "health" ? "health" : "discovery" }), configSignal);
+    } catch (cause: any) {
+      finishMcpToolConfigPreparation(service.serviceId, preparation);
+      if (signal?.aborted) throw discoveryCancelledError(cause);
+      if (mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+      if (cause?.name === "AbortError") throw discoveryCancelledError(cause);
+      throw Object.assign(new Error("Upstream MCP discovery failed."), {
+        status: 502,
+        reasonCode: "upstream_mcp_discovery_failed",
+        cause
+      });
     }
-    let flight: any = mcpToolRefreshInFlight.get(cacheKey);
-    if (flight?.controller?.signal?.aborted) {
-      mcpToolRefreshInFlight.delete(cacheKey);
-      flight = null;
-    }
-    if (!flight) {
-      const controller: any = new AbortController();
-      const waiters: any = new Set<any>();
-      const work: any = (async () : Promise<any> => {
-        let listed: any;
-        try {
-          serviceDiscoveryCount += 1;
-          listed = await upstreamMcpSessions.listTools(
-            await mcpServiceConfigWithCredentials(service, {
-              operationKey: "tools/list",
-              requiredScopes: ["gateway:read"]
-            }, { purpose: purpose === "health" ? "health" : "discovery" }),
-            { signal: controller.signal, onNotification }
-          );
-        } catch (cause: any) {
-          if (controller.signal.aborted || cause?.name === "AbortError") {
-            throw discoveryCancelledError(cause);
+    let cacheKey: string;
+    let flight: UpstreamGatewayMcpToolRefreshFlight | null | undefined;
+    let waiter: UpstreamGatewayMcpToolRefreshWaiter;
+    try {
+      if (signal?.aborted) throw discoveryCancelledError(signal.reason);
+      if (preparation.controller.signal.aborted) throw discoveryCancelledError(preparation.controller.signal.reason);
+      if (closed || closePromise || mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+      cacheKey = mcpToolCacheKey(service, config);
+      let cachedRecord: UpstreamGatewayMcpToolCacheRecord | undefined = mcpToolCache.get(service.serviceId);
+      if (cachedRecord && cachedRecord.cacheKey !== cacheKey) {
+        mcpToolCache.delete(service.serviceId);
+        cachedRecord = undefined;
+      }
+      const cached: UpstreamGatewayMcpToolCacheEntry | undefined = cachedRecord?.entry;
+      const ttlMs: number = Number(service.mcp?.toolsCacheTtlMs || 0);
+      if (!refresh && cached && ttlMs > 0 && Date.now() - cached.loadedAt <= ttlMs) {
+        if (countCacheHit) targetedCallMapHits += 1;
+        finishMcpToolConfigPreparation(service.serviceId, preparation);
+        return cached;
+      }
+      flight = mcpToolRefreshInFlight.get(cacheKey);
+      if (flight?.controller.signal.aborted) {
+        removeDeferredMcpToolRefresh(service.serviceId, cacheKey, flight);
+        mcpToolRefreshInFlight.delete(cacheKey);
+        flight = null;
+      }
+      if (!flight) {
+        const controller: AbortController = new AbortController();
+        const waiters: Set<UpstreamGatewayMcpToolRefreshWaiter> = new Set<UpstreamGatewayMcpToolRefreshWaiter>();
+        const work: Promise<UpstreamGatewayMcpToolCacheEntry> = (async () : Promise<UpstreamGatewayMcpToolCacheEntry> => {
+          let listed: any;
+          try {
+            serviceDiscoveryCount += 1;
+            if (text(config.protocolVersion) === "2026-07-28") {
+              if (text(config.transport) === "stdio") {
+                throw Object.assign(new Error("Modern stdio peer transport is not configured."), {
+                  status: 501,
+                  reasonCode: "upstream_mcp_transport_unavailable"
+                });
+              }
+              const adapter: any = createConfiguredModernMcpAdapter(config, 8 * 1024 * 1024);
+              try {
+                const tools: any = await collectCompleteMcpToolsList(async (cursor?: any) : Promise<any> => {
+                  const requestId: any = `gateway-list-${randomUUID()}`;
+                  const response: any = await adapter.invoke({
+                    request: {
+                      id: requestId,
+                      method: "tools/list",
+                      params: cursor === undefined ? {} : { cursor },
+                      protocolVersion: "2026-07-28",
+                      headers: {}
+                    },
+                    route: { upstreamName: "tools/list", protocolVersion: "2026-07-28" },
+                    signal: controller.signal
+                  });
+                  if (response.status >= 400) {
+                    throw Object.assign(new Error("Modern MCP tools/list request failed."), {
+                      code: "upstream_mcp_tools_list_failed",
+                      status: 502
+                    });
+                  }
+                  const result: any = assertJsonRpcResponse(object(response.body), requestId);
+                  if (result.resultType !== "complete") {
+                    throw Object.assign(new Error("Modern MCP tools/list returned an incomplete result."), {
+                      code: "upstream_mcp_tools_list_malformed",
+                      status: 502
+                    });
+                  }
+                  return result;
+                });
+                listed = { protocolVersion: "2026-07-28", tools };
+              } finally {
+                await adapter.close();
+              }
+            } else {
+              listed = await upstreamMcpSessions.listTools(config, {
+                signal: controller.signal,
+                onNotification
+              });
+            }
+          } catch (cause: any) {
+            if (controller.signal.aborted || cause?.name === "AbortError") {
+              throw discoveryCancelledError(cause);
+            }
+            if (cause?.reasonCode === "upstream_mcp_transport_unavailable") throw cause;
+            throw Object.assign(new Error("Upstream MCP discovery failed."), {
+              status: 502,
+              reasonCode: "upstream_mcp_discovery_failed",
+              cause
+            });
           }
-          throw Object.assign(new Error("Upstream MCP discovery failed."), {
-            status: 502,
-            reasonCode: "upstream_mcp_discovery_failed",
-            cause
-          });
-        }
-        const tools: any = asArray(listed.tools)
-          .filter((tool?: any) : any => text(tool.name))
-          .map((tool?: any) : any => publicUpstreamMcpTool({ service, tool }));
-        const entry: any = cacheEntryFromTools(tools);
-        mcpToolCache.set(cacheKey, entry);
-        return entry;
-      })();
-      flight = { promise: work, controller, waiters };
-      mcpToolRefreshInFlight.set(cacheKey, flight);
-      const releaseFlight: any = () : any => {
-        if (mcpToolRefreshInFlight.get(cacheKey) === flight) {
-          mcpToolRefreshInFlight.delete(cacheKey);
-        }
-      };
-      void work.then(releaseFlight, releaseFlight);
+          const tools: any = asArray(listed.tools)
+            .filter((tool?: any) : any => text(tool.name))
+            .map((tool?: any) : any => publicUpstreamMcpTool({ service, tool, schemaPort }));
+          const entry: UpstreamGatewayMcpToolCacheEntry = cacheEntryFromTools(tools);
+          if (controller.signal.aborted) throw discoveryCancelledError(controller.signal.reason);
+          mcpToolCache.set(service.serviceId, { cacheKey, entry });
+          return entry;
+        })();
+        const nextFlight: UpstreamGatewayMcpToolRefreshFlight = { serviceId: service.serviceId, promise: work, controller, waiters };
+        flight = nextFlight;
+        mcpToolRefreshInFlight.set(cacheKey, flight);
+        const releaseFlight: () => void = () : void => {
+          removeDeferredMcpToolRefresh(service.serviceId, cacheKey, flight);
+          if (mcpToolRefreshInFlight.get(cacheKey) === flight) {
+            mcpToolRefreshInFlight.delete(cacheKey);
+          }
+        };
+        void work.then(releaseFlight, releaseFlight);
+      }
+      waiter = { signal, onNotification };
+      flight.waiters.add(waiter);
+      removeDeferredMcpToolRefresh(service.serviceId, cacheKey, flight);
+      finishMcpToolConfigPreparation(service.serviceId, preparation);
+    } catch (cause: any) {
+      finishMcpToolConfigPreparation(service.serviceId, preparation);
+      throw cause;
     }
-    const waiter: any = { signal, onNotification };
-    flight.waiters.add(waiter);
     try {
       return await waitForAbortable(flight.promise, signal);
     } finally {
       flight.waiters.delete(waiter);
       if (flight.waiters.size === 0 && mcpToolRefreshInFlight.get(cacheKey) === flight) {
-        mcpToolRefreshInFlight.delete(cacheKey);
-        if (!flight.controller.signal.aborted) {
-          flight.controller.abort();
+        if (hasMcpToolConfigPreparations(service.serviceId)) {
+          deferMcpToolRefreshCancellation(service.serviceId, cacheKey, flight);
+        } else {
+          cancelMcpToolRefreshIfUnobserved(service.serviceId, cacheKey, flight);
         }
       }
     }
   }
 
-  async function listMcpToolsForService(service?: any, options: Record<string, any> = {}) : Promise<any> {
-    const entry: any = await ensureMcpToolCache(service, options);
+  async function listMcpToolsForService(service: UpstreamGatewayServiceRecord, options: UpstreamGatewayCallOptions = {}) : Promise<readonly UpstreamGatewayPublicMcpTool[]> {
+    const entry: UpstreamGatewayMcpToolCacheEntry = await ensureMcpToolCache(service, options);
     return clone(entry.tools);
   }
 
-  function serviceForPublicMcpToolName(publicName: any = "") : any {
-    const parsed: any = parsePublicUpstreamMcpToolName(publicName);
+  function serviceForPublicMcpToolName(publicName?: unknown) : Readonly<{
+    service: UpstreamGatewayServiceRecord;
+    upstreamToolName: string;
+  }> | null {
+    const parsed: Readonly<{ prefix: string; upstreamToolName: string }> | null = parsePublicUpstreamMcpToolName(publicName);
     if (!parsed) return null;
-    const service: any = mcpServicesByPublicPrefix.get(parsed.prefix);
+    const service: UpstreamGatewayServiceRecord | undefined = mcpServicesByPublicPrefix.get(parsed.prefix);
     if (!service) return null;
     targetedServiceIndexHits += 1;
     return {
@@ -1180,20 +1644,7 @@ export function createUpstreamGatewayRegistry({
     };
   }
 
-  function configuredOperationForPublicToolName(publicName: any = "") : any {
-    const target: any = configuredOperationsByPublicName.get(String(publicName || "")) || null;
-    if (target) targetedServiceIndexHits += 1;
-    return target;
-  }
-
-  function configuredOperationToolsForService(service?: any) : any {
-    if (service.serviceProtocol === "mcp" || service.disabled) return [];
-    return asArray(service.operations)
-      .filter((operation?: any) : any => operation?.operationKey)
-      .map((operation?: any) : any => publicUpstreamOperationTool({ service, operation }));
-  }
-
-  async function resolvedMcpOperationForInput(service?: any, operation?: any, input: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+  async function resolvedMcpOperationForInput(service?: any, operation?: any, input: Record<string, any> = {}, options: Record<string, any> = {}, catalogEntry: any = null) : Promise<any> {
     if (service.serviceProtocol !== "mcp" && operation.protocol !== "mcp") {
       return operation;
     }
@@ -1208,7 +1659,7 @@ export function createUpstreamGatewayRegistry({
     if (!upstreamToolName) {
       return operation;
     }
-    const entry: any = await ensureMcpToolCache(service, options);
+    const entry: any = catalogEntry || await ensureMcpToolCache(service, options);
     const publicTool: any =
       (text(input.publicToolName) && entry.byPublicName.get(input.publicToolName)) ||
       (text(input.upstreamPublicToolName) && entry.byPublicName.get(input.upstreamPublicToolName)) ||
@@ -1231,17 +1682,47 @@ export function createUpstreamGatewayRegistry({
     };
   }
 
+  /**
+   * Narrow the manifest snapshot container through the same checks the commit
+   * path always performed; per-service validation happened in the compiler.
+   */
+  function manifestSnapshotEntries(snapshot?: unknown) : Readonly<{
+    setRevision: number;
+    setDigest: string;
+    serviceEntries: readonly (readonly [string, UpstreamGatewayServiceRecord])[];
+  }> {
+    const source: any = object(snapshot);
+    const entries: any = source.serviceEntries ||
+      (source.services instanceof Map ? [...source.services.entries()] : null);
+    if (!Array.isArray(entries) || !Number.isSafeInteger(source.setRevision)) {
+      throw new TypeError("Upstream gateway manifest snapshot is invalid.");
+    }
+    return {
+      setRevision: source.setRevision,
+      setDigest: source.setDigest,
+      serviceEntries: entries
+    };
+  }
+
+  function capturedManifestSnapshotState(state?: unknown) : UpstreamGatewayManifestSnapshotState {
+    const source: any = object(state);
+    if (!Array.isArray(source.serviceEntries) || !Array.isArray(source.projectedOperationTargets)) {
+      throw new TypeError("Upstream gateway manifest snapshot rollback state is invalid.");
+    }
+    return source;
+  }
+
   return {
     protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
-    listServices() : any {
-      const items: any = [...services.values()].map(publicService);
+    listServices() : UpstreamGatewayServiceListResult {
+      const items: readonly UpstreamGatewayPublicService[] = [...services.values()].map(publicService);
       return {
         protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
         items,
         count: items.length
       };
     },
-    getService(serviceId?: any) : any {
+    getService(serviceId?: unknown) : UpstreamGatewayPublicService {
       return publicService(requireService(serviceId));
     },
     evaluateProjectedOperationAudience({
@@ -1250,7 +1731,7 @@ export function createUpstreamGatewayRegistry({
       subject = null,
       tool = null,
       purpose = "discovery"
-    }: Record<string, any> = {}) : any {
+    }: Record<string, any> = {}) : UpstreamGatewayAudienceDecision {
       if (tool?.upstreamProjectedOperation !== true) {
         return Object.freeze({
           allowed: true,
@@ -1288,7 +1769,7 @@ export function createUpstreamGatewayRegistry({
       subject = null,
       tool = null,
       purpose = "discovery"
-    }: Record<string, any> = {}) : any {
+    }: Record<string, any> = {}) : UpstreamGatewayAudienceDecision {
       const meta: any = object(tool?._meta);
       if (meta.upstreamMcp !== true) {
         return Object.freeze({
@@ -1313,6 +1794,7 @@ export function createUpstreamGatewayRegistry({
           toolsets: asArray(meta.toolsets),
           safety: { risk: text(meta.risk || meta.dynamicCapability?.risk || "read_only") },
           _meta: {
+            upstreamMcp: true,
             serviceId: text(meta.serviceId),
             risk: text(meta.risk || meta.dynamicCapability?.risk || "read_only"),
             dynamicCapability: meta.dynamicCapability || null
@@ -1320,7 +1802,7 @@ export function createUpstreamGatewayRegistry({
         }
       });
     },
-    async listMcpTools(input: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+    async listMcpTools(input: Record<string, any> = {}, options: UpstreamGatewayCallOptions = {}) : Promise<UpstreamGatewayMcpToolListResult> {
       const requestedServiceId: any = text(input.serviceId || "");
       const refresh: any = input.refresh === true;
       const items: any[] = [];
@@ -1346,8 +1828,6 @@ export function createUpstreamGatewayRegistry({
             lastMcpError = error;
             if (requestedServiceId) throw error;
           }
-        } else {
-          items.push(...configuredOperationToolsForService(service));
         }
       }
       if (attemptedMcp > 0 && succeededMcp === 0 && lastMcpError) {
@@ -1359,11 +1839,11 @@ export function createUpstreamGatewayRegistry({
         count: items.length
       };
     },
-    getMcpServiceForPublicToolName(publicName: any = "") : any {
+    getMcpServiceForPublicToolName(publicName?: unknown) : UpstreamGatewayPublicService | null {
       const target: any = serviceForPublicMcpToolName(publicName);
       return target ? publicService(target.service) : null;
     },
-    async resolveMcpToolByPublicName(publicName: any = "", options: Record<string, any> = {}) : Promise<any> {
+    async resolveMcpToolByPublicName(publicName?: unknown, options: UpstreamGatewayCallOptions = {}) : Promise<UpstreamGatewayPublicMcpTool | null> {
       const target: any = serviceForPublicMcpToolName(publicName);
       if (!target) return null;
       const entry: any = await ensureMcpToolCache(target.service, {
@@ -1373,65 +1853,132 @@ export function createUpstreamGatewayRegistry({
       const tool: any = entry.byPublicName.get(publicName) || null;
       return tool ? clone(tool) : null;
     },
-    async callMcpToolByPublicName(publicName: any = "", input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
-      const target: any = serviceForPublicMcpToolName(publicName);
-      const configuredTarget: any = target ? null : configuredOperationForPublicToolName(publicName);
-      if (!target && !configuredTarget) {
-        throw Object.assign(new Error(`Upstream MCP tool not found: ${publicName}`), { status: 404 });
+    async callMcpToolByPublicName(publicName: any = "", input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamGatewayMcpToolCallResult> {
+      try {
+        const forwarded: any = await this.executePublishedMcpRoute(publicName, { ...input, arguments: object(input.arguments || input.args || input.input || input.body || input.payload) }, subject,
+          { ...options, ...(input.requestState === undefined ? {} : { requestState: input.requestState }) });
+        if (forwarded?.status >= 400) throw Object.assign(new Error("Upstream MCP tool failed."), { status: forwarded.status, reasonCode: "upstream_mcp_call_failed" });
+        const result: any = object(forwarded?.body)?.result ?? forwarded?.body;
+        return { protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION, ok: true, serviceId: forwarded?.serviceId, operationKey: "tools/call",
+          upstream: { protocol: "mcp", toolName: forwarded?.upstreamToolName }, response: result, auditId: forwarded?.auditId || "" };
+      } catch (error: any) {
+        if (error?.status === 404) throw error;
+        throw Object.assign(new Error("Upstream MCP forwarding failed."), { status: Number(error?.status || 502), reasonCode: text(error?.reasonCode || "upstream_mcp_call_failed") });
       }
-      if (configuredTarget) {
-        const operationInput: any = object(input.arguments || input.input || input.payload || input);
-        return this.forward({
-          serviceId: configuredTarget.service.serviceId,
-          operationKey: configuredTarget.operation.operationKey,
-          ...(configuredTarget.operation.protocol === "json-rpc"
-            ? { rpcParams: operationInput }
-            : ["GET", "HEAD"].includes(configuredTarget.operation.method)
-              ? { query: operationInput }
-              : { body: operationInput })
-        }, subject, options);
-      }
-      authorizeMcpDiscoverySubject(subject);
-      const cacheKey: any = mcpToolCacheKey(target.service);
-      const ttlMs: any = Number(target.service.mcp?.toolsCacheTtlMs || 0);
-      const cached: any = mcpToolCache.get(cacheKey);
-      let tool: any = null;
-      if (ttlMs > 0 && cached && Date.now() - cached.loadedAt <= ttlMs) {
-        targetedCallMapHits += 1;
-        tool = cached.byPublicName?.get(publicName) || null;
-      } else {
-        const entry: any = await ensureMcpToolCache(target.service, {
-          refresh: true,
-          signal: options.signal || null,
-          onNotification: options.onNotification || null
-        });
-        tool = entry.byPublicName?.get(publicName) || null;
-      }
-      if (!tool) {
-        throw Object.assign(new Error(`Upstream MCP tool not found: ${publicName}`), { status: 404 });
-      }
-      return this.forward({
-        ...input,
-        serviceId: target.service.serviceId,
-        operationKey: "tools/call",
-        toolName: target.upstreamToolName,
-        upstreamPublicToolName: publicName
-      }, subject, options);
     },
-    previewPolicy(input: Record<string, any> = {}, subject: Record<string, any> = {}) : any {
+    /** Governed gateway final sink: resolves the currently configured target and calls its real transport. */
+    async executePublishedMcpRoute(publicName: any = "", input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamMcpRouteForwardResult> {
+      return withRegistryWork(options, async (registryOptions?: any) : Promise<any> => {
+      options = registryOptions;
+      const target: any = serviceForPublicMcpToolName(publicName);
+      if (!target) throw Object.assign(new Error("Published MCP route is unavailable."), { status: 404 });
+      authorizeMcpDiscoverySubject(subject);
+      const entry: any = await ensureMcpToolCache(target.service, { signal: options.signal || null, onNotification: options.onNotification || null, countCacheHit: true });
+      if (!entry.byPublicName.get(publicName)) throw Object.assign(new Error("Published MCP tool was removed."), { status: 404 });
+      const service: any = requireService(target.service.serviceId);
+      const configuredOperation: any = operationWithUpstreamCapability(service, operationFor(service, "tools/call"));
+      const operation: any = operationWithUpstreamCapability(service, await resolvedMcpOperationForInput(service, configuredOperation, {
+        serviceId: service.serviceId, operationKey: "tools/call", toolName: target.upstreamToolName, upstreamPublicToolName: publicName, arguments: object(input.arguments)
+      }, options, entry));
+      const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
+      const preview: any = authorizeForwardPreview(service, operation, subject);
+      if (!preview.traffic.allowed) throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), { status: 429 });
+      rejectCallerApprovalOverride(input, service, operation, subject);
+      if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) return pendingApproval(service, operation);
+      return withTrafficSlot(service, operation, preview, async (_traffic?: any, endpoint?: any) : Promise<any> => {
+        const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
+        try {
+        const args = object(input.arguments);
+        const readOnly = text(operation.risk || operation.safety?.risk).toLowerCase() === "read_only";
+        const mcpCallInput: Record<string, any> = {
+          name: target.upstreamToolName,
+          arguments: args,
+          ...(options.requestState !== undefined ? { requestState: options.requestState } : {}),
+          ...(input.inputResponses !== undefined ? { inputResponses: input.inputResponses } : {})
+        };
+        let effectLifecycle: any = null;
+        if (!readOnly) {
+          const lifecyclePort = options.platformEffectLifecycle;
+          if (typeof lifecyclePort?.prepare !== "function") {
+            throw Object.assign(new Error("Durable operation proof is unavailable for this MCP effect."), {
+              code: "operation_proof_unavailable",
+              status: 503
+            });
+          }
+          const targetFacts = structuredTargetFacts({
+            service,
+            operation,
+            input: mcpCallInput,
+            endpoint,
+            inputDigest: digestFinalProtectedSinkInput(mcpCallInput)
+          });
+          effectLifecycle = await lifecyclePort.prepare({
+            service,
+            operation,
+            input: mcpCallInput,
+            endpoint,
+            targetFacts,
+            upstreamToolName: target.upstreamToolName,
+            subject
+          });
+        }
+        const beforeSend = effectLifecycle ? async () : Promise<void> => {
+          await effectLifecycle.beginDispatch();
+          await claimMcpProtectedSink(service, operation, mcpCallInput, endpoint, {
+            ...options,
+            finalProtectedSinkPermit: effectLifecycle.finalProtectedSinkPermit
+          });
+          effectLifecycle.markDispatchStarted();
+        } : undefined;
+        const { requestId, result, httpFailure, jsonRpcError, protocolVersion }: any = await invokeTypedMcp(service, operation, mcpCallInput, {
+          ...options,
+          subject,
+          signal: abortContext.signal,
+          timeoutMs: null,
+          ...(beforeSend ? { beforeSend } : {})
+        });
+        if (httpFailure) return httpFailure;
+        if (jsonRpcError) {
+          return { status: 200, body: jsonRpcError, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (result?.resultType === "input_required") {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (typeof result?.resultType === "string" && result.resultType !== "complete") {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (!result || typeof result !== "object" || Array.isArray(result)) {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        const publicResponse: any = publicMcpResult(result, operation);
+        const projectedResult = normalizeMcpResultForDownstream(publicResponse.result, protocolVersion);
+        const audit: any = appendAudit("upstream.mcp.gateway.completed", { serviceId: service.serviceId, operationKey: operation.operationKey,
+          upstreamToolName: target.upstreamToolName, protocol: "mcp", endpoint: publicEndpoint(endpoint), responseBytes: Buffer.byteLength(JSON.stringify(projectedResult)) });
+        recordEndpointOutcome(service, operation, endpoint, { statusCode: 200, ok: true });
+        recordMetric({ serviceId: service.serviceId, statusCode: 200, failed: false });
+        persist();
+        return { status: 200, body: { jsonrpc: "2.0", id: requestId, result: projectedResult }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName, auditId: audit.auditId };
+        } finally {
+          abortContext.dispose();
+        }
+      });
+      });
+    },
+    previewPolicy(input: Record<string, any> = {}, subject: Record<string, any> = {}) : UpstreamGatewayForwardPreview {
       const service: any = requireService(input.serviceId);
       const operation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
       return previewFor(service, operation, subject);
     },
-    async health(serviceId?: any) : Promise<any> {
+    async health(serviceId?: unknown) : Promise<UpstreamGatewayHealthResult> {
       const service: any = requireService(serviceId);
+      const resolvedServiceId: string = text(serviceId);
       if (service.serviceProtocol === "mcp") {
         const startedAt: any = Date.now();
         try {
           const tools: any = await listMcpToolsForService(service, { refresh: true, purpose: "health" });
           return {
             ok: true,
-            serviceId,
+            serviceId: resolvedServiceId,
             status: 200,
             protocol: "mcp",
             toolCount: tools.length,
@@ -1441,7 +1988,7 @@ export function createUpstreamGatewayRegistry({
         } catch (error: any) {
           return {
             ok: false,
-            serviceId,
+            serviceId: resolvedServiceId,
             status: 0,
             protocol: "mcp",
             latencyMs: Date.now() - startedAt,
@@ -1479,7 +2026,7 @@ export function createUpstreamGatewayRegistry({
         const firstOk: any = checks.find((item?: any) : any => item.ok) || checks[0] || { ok: false, status: 0 };
         return {
           ok: firstOk.ok,
-          serviceId,
+          serviceId: resolvedServiceId,
           status: firstOk.status,
           endpointCount: endpoints.length,
           healthyEndpointCount: checks.filter((item?: any) : any => item.ok).length,
@@ -1490,7 +2037,7 @@ export function createUpstreamGatewayRegistry({
       } catch (error: any) {
         return {
           ok: false,
-          serviceId,
+          serviceId: resolvedServiceId,
           status: 0,
           latencyMs: Date.now() - startedAt,
           checkedAt: nowIso(),
@@ -1500,7 +2047,8 @@ export function createUpstreamGatewayRegistry({
         clearTimeout(timeout);
       }
     },
-    async requestPluginExternalService(request: Record<string, any> = {}, { subject = {}, signal = null }: Record<string, any> = {}) : Promise<any> {
+    async requestPluginExternalService(request: Record<string, any> = {}, { subject = {}, signal = null }: Record<string, any> = {}) : Promise<UpstreamGatewayPluginCallResult> {
+      const timeoutMs: any = normalizeOptionalTimeoutMs(request.timeoutMs, "request.timeoutMs");
       const serviceRef: any = text(request.serviceRef);
       const operationRef: any = text(request.operationRef);
       const pluginId: any = text(request.pluginId);
@@ -1523,12 +2071,9 @@ export function createUpstreamGatewayRegistry({
         await ensureSkillHubEventSubscription(service, configuredOperation);
       }
       const requestInput: any = object(request.input);
-      const timeoutMs: any = Number(request.timeoutMs || 0);
       const forwardOptions: Record<string, any> = {
         signal,
-        ...(Number.isSafeInteger(timeoutMs) && timeoutMs >= 100
-          ? { timeoutMs: Math.min(timeoutMs, 300_000) }
-          : {})
+        ...(timeoutMs === undefined ? {} : { timeoutMs })
       };
       if (service.serviceProtocol === "mcp" || configuredOperation.protocol === "mcp") {
         const pluginSubject: Record<string, any> = {
@@ -1607,7 +2152,7 @@ export function createUpstreamGatewayRegistry({
         ...(forwarded?.auditId ? { receiptRef: text(forwarded.auditId) } : {})
       });
     },
-    previewHttpStream(input: Record<string, any> = {}, subject: Record<string, any> = {}) : any {
+    previewHttpStream(input: Record<string, any> = {}, subject: Record<string, any> = {}) : Readonly<{ ok: true; serviceId: string; operationKey: string }> {
       const service: any = requireService(input.serviceId);
       const operation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
       if (service.disabled) {
@@ -1649,9 +2194,12 @@ export function createUpstreamGatewayRegistry({
       }
       return Object.freeze({ ok: true, serviceId: service.serviceId, operationKey: operation.operationKey });
     },
-    async forwardHttpStream(input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+    async forwardHttpStream(input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamGatewayStreamForwardResult> {
+      return withRegistryWork(options, async (registryOptions?: any) : Promise<any> => {
+      options = registryOptions;
       const service: any = requireService(input.serviceId);
       const operation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
+      const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
       if (service.disabled) {
         throw Object.assign(new Error("Upstream service is disabled."), { status: 403 });
       }
@@ -1706,7 +2254,7 @@ export function createUpstreamGatewayRegistry({
           "x-meshrix-gateway-service": service.serviceId
         };
         const startedAt: any = Date.now();
-        const abortContext: any = createForwardAbortContext(options.signal || null, timeoutFor(operation, options));
+        const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
         const requestCounter: any = createPayloadCountingTransform(payloadTransport.request.maxBytes, {
           tooLargeCode: "request_body_too_large",
           tooLargeStatus: 413
@@ -1721,8 +2269,8 @@ export function createUpstreamGatewayRegistry({
             headers,
             body,
             signal: abortContext.signal,
-            headersTimeout: timeoutFor(operation, options),
-            bodyTimeout: timeoutFor(operation, options)
+            headersTimeout: effectiveTimeoutMs ?? 0,
+            bodyTimeout: effectiveTimeoutMs ?? 0
           }, `upstream-gateway.${service.serviceId}.${operation.operationKey}.stream`);
           const upstreamResponse: any = pinnedRequest.response;
           const status: any = Number(upstreamResponse.statusCode || 0);
@@ -1837,8 +2385,9 @@ export function createUpstreamGatewayRegistry({
           abortContext.dispose();
         }
       });
+      });
     },
-    async openArtifactDownload({ artifactId = "", range = "" }: Record<string, any> = {}, subject: Record<string, any> = {}) : Promise<any> {
+    async openArtifactDownload({ artifactId = "", range = "" }: Record<string, any> = {}, subject: Record<string, any> = {}) : Promise<UpstreamGatewayArtifactDownload> {
       const port: any = requireArtifactTransitPort();
       const reference: any = `artifact:${String(artifactId || "").trim()}`;
       const metadata: any = await port.resolve(reference, subject, "download");
@@ -1881,7 +2430,9 @@ export function createUpstreamGatewayRegistry({
         body: source.open()
       });
     },
-    async forward(input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+    async forward(input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamGatewayForwardResult> {
+      return withRegistryWork(options, async (registryOptions?: any) : Promise<any> => {
+      options = registryOptions;
       const service: any = requireService(input.serviceId);
       const configuredOperation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
       const routingOverrideFields: any = callerRoutingOverrideFields(input);
@@ -1915,6 +2466,7 @@ export function createUpstreamGatewayRegistry({
         input,
         options
       ));
+      const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
       const preview: any = authorizeForwardPreview(service, operation, subject);
       if (!preview.traffic.allowed) {
         throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), { status: 429, details: preview });
@@ -1925,7 +2477,7 @@ export function createUpstreamGatewayRegistry({
       }
       return withTrafficSlot(service, operation, preview, async (traffic?: any, endpoint?: any) : Promise<any> => {
         if (service.serviceProtocol === "mcp" || operation.protocol === "mcp") {
-          return forwardMcp(service, operation, input, endpoint, { ...options, subject });
+          return recordMcpExecution(service, operation, input, endpoint, { ...options, subject });
         }
         const payloadTransport: any = compilePayloadTransport(operation);
         if (
@@ -2037,10 +2589,6 @@ export function createUpstreamGatewayRegistry({
           contentType: "application/json"
         });
         const startedAt: any = Date.now();
-        const requestedTimeoutMs: any = Number(options.timeoutMs || 0);
-        const effectiveTimeoutMs: any = Number.isSafeInteger(requestedTimeoutMs) && requestedTimeoutMs >= 100
-          ? Math.min(operation.timeoutMs, requestedTimeoutMs)
-          : operation.timeoutMs;
         const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
         let pinnedFetch: any = null;
         try {
@@ -2173,8 +2721,9 @@ export function createUpstreamGatewayRegistry({
           abortContext.dispose();
         }
       });
+      });
     },
-    listAudit(input: Record<string, any> = {}) : any {
+    listAudit(input: Record<string, any> = {}) : UpstreamGatewayAuditListResult {
       const serviceId: any = text(input.serviceId || "");
       const limit: any = Math.max(1, Math.min(Number(input.limit || 100), 500));
       const items: any = auditEvents
@@ -2187,7 +2736,7 @@ export function createUpstreamGatewayRegistry({
         count: items.length
       };
     },
-    getMetrics() : any {
+    getMetrics() : UpstreamGatewayMetrics {
       return {
         protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
         ...clone(metrics),
@@ -2199,16 +2748,16 @@ export function createUpstreamGatewayRegistry({
         }
       };
     },
-    async flushRuntimeState() : Promise<any> {
+    async flushRuntimeState() : Promise<unknown> {
       return persist();
     },
-    isClosed() : any {
+    isClosed() : boolean {
       return closed;
     },
-    getManifestSnapshotRevision() : any {
+    getManifestSnapshotRevision() : UpstreamGatewayManifestRevision {
       return manifestSnapshotRevision;
     },
-    captureManifestSnapshotState() : any {
+    captureManifestSnapshotState() : UpstreamGatewayManifestSnapshotState {
       return Object.freeze({
         setRevision: manifestSnapshotRevision.sourceRevision,
         setDigest: manifestSnapshotRevision.sourceDigest,
@@ -2216,18 +2765,15 @@ export function createUpstreamGatewayRegistry({
         projectedOperationTargets: Object.freeze([...projectedOperationTargets.entries()].map(([operationId, target]: any[]) : any => Object.freeze([operationId, target])))
       });
     },
-    restoreManifestSnapshotState(state?: any) : any {
-      if (!state || !Array.isArray(state.serviceEntries) || !Array.isArray(state.projectedOperationTargets)) {
-        throw new TypeError("Upstream gateway manifest snapshot rollback state is invalid.");
-      }
-      services = new Map<any, any>(state.serviceEntries);
-      projectedOperationTargets = new Map<any, any>(state.projectedOperationTargets);
-      const restoredTargetIndexes: any = compilePublicToolTargetIndexes(services);
+    restoreManifestSnapshotState(state?: unknown) : Readonly<{ ok: true }> {
+      const captured: UpstreamGatewayManifestSnapshotState = capturedManifestSnapshotState(state);
+      services = new Map<string, UpstreamGatewayServiceRecord>(captured.serviceEntries);
+      projectedOperationTargets = new Map<string, UpstreamGatewayProjectedOperationTarget>(captured.projectedOperationTargets);
+      const restoredTargetIndexes = compilePublicToolTargetIndexes(services);
       mcpServicesByPublicPrefix = restoredTargetIndexes.mcpByPrefix;
-      configuredOperationsByPublicName = restoredTargetIndexes.configuredByName;
       manifestSnapshotRevision = Object.freeze({
-        sourceRevision: Number.isSafeInteger(state.setRevision) ? state.setRevision : 0,
-        sourceDigest: String(state.setDigest || "")
+        sourceRevision: Number.isSafeInteger(captured.setRevision) ? captured.setRevision : 0,
+        sourceDigest: String(captured.setDigest || "")
       });
       trafficBuckets.clear();
       endpointCursors.clear();
@@ -2235,33 +2781,29 @@ export function createUpstreamGatewayRegistry({
       mcpToolCache.clear();
       return { ok: true };
     },
-    replaceFromManifestSnapshot(snapshot?: any, { deferSideEffects = false }: Record<string, any> = {}) : any {
-      const entries: any = snapshot?.serviceEntries ||
-        (snapshot?.services instanceof Map ? [...snapshot.services.entries()] : null);
-      if (!Array.isArray(entries) || !Number.isSafeInteger(snapshot.setRevision)) {
-        throw new TypeError("Upstream gateway manifest snapshot is invalid.");
-      }
-      const next: any = new Map<any, any>(entries);
-      if (next.size !== entries.length) {
+    replaceFromManifestSnapshot(snapshot?: unknown, { deferSideEffects = false }: { deferSideEffects?: boolean } = {}) : UpstreamGatewayManifestSnapshotDiff {
+      const { setRevision, setDigest, serviceEntries } = manifestSnapshotEntries(snapshot);
+      const next: Map<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>(serviceEntries);
+      if (next.size !== serviceEntries.length) {
         throw new TypeError("Upstream gateway manifest snapshot contains duplicate service identities.");
       }
-      const nextProjectedTargets: any = new Map<any, any>();
+      const nextProjectedTargets: Map<string, UpstreamGatewayProjectedOperationTarget> = new Map<string, UpstreamGatewayProjectedOperationTarget>();
       for (const [serviceId, service] of next) {
         if (service.disabled === true) continue;
         for (const operation of service.operations || []) {
-          const operationId: any = upstreamProjectedOperationId(serviceId, operation.operationKey);
+          const operationId: string = upstreamProjectedOperationId(serviceId, operation.operationKey);
           if (nextProjectedTargets.has(operationId)) {
             throw new TypeError("Upstream gateway manifest snapshot contains duplicate projected operations.");
           }
           nextProjectedTargets.set(operationId, Object.freeze({ serviceId, operationKey: operation.operationKey }));
         }
       }
-      const nextTargetIndexes: any = compilePublicToolTargetIndexes(next);
-      const added: any[] = [];
-      const updated: any[] = [];
-      const removed: any[] = [];
+      const nextTargetIndexes = compilePublicToolTargetIndexes(next);
+      const added: string[] = [];
+      const updated: string[] = [];
+      const removed: string[] = [];
       for (const [serviceId, service] of next) {
-        const existing: any = services.get(serviceId);
+        const existing: UpstreamGatewayServiceRecord | undefined = services.get(serviceId);
         if (!existing) added.push(serviceId);
         else if (existing.manifestDigest !== service.manifestDigest || existing.serviceRevision !== service.serviceRevision) updated.push(serviceId);
       }
@@ -2271,15 +2813,14 @@ export function createUpstreamGatewayRegistry({
       services = next;
       projectedOperationTargets = nextProjectedTargets;
       mcpServicesByPublicPrefix = nextTargetIndexes.mcpByPrefix;
-      configuredOperationsByPublicName = nextTargetIndexes.configuredByName;
       manifestSnapshotRevision = Object.freeze({
-        sourceRevision: snapshot.setRevision,
-        sourceDigest: snapshot.setDigest
+        sourceRevision: setRevision,
+        sourceDigest: setDigest
       });
       clearServiceRuntimeState([...updated, ...removed]);
-      const diff: Readonly<Record<string, any>> = Object.freeze({
-        setRevision: snapshot.setRevision,
-        setDigest: snapshot.setDigest,
+      const diff: UpstreamGatewayManifestSnapshotDiff = Object.freeze({
+        setRevision,
+        setDigest,
         added: Object.freeze(added),
         updated: Object.freeze(updated),
         removed: Object.freeze(removed)
@@ -2289,16 +2830,16 @@ export function createUpstreamGatewayRegistry({
       }
       return diff;
     },
-    retireMcpGrantScopes(grantId: any = "", options: Record<string, any> = {}) : any {
+    retireMcpGrantScopes(grantId: unknown = "", options: { remove?: boolean } = {}) : Promise<unknown> {
       return upstreamMcpSessions.retireGrantScopes?.(grantId, options) ||
         Promise.resolve({ retired: 0, removed: false, scopes: 0 });
     },
-    async finalizeManifestSnapshot(diff?: any) : Promise<any> {
+    async finalizeManifestSnapshot(diff?: UpstreamGatewayManifestSnapshotDiff) : Promise<UpstreamGatewayManifestFinalizationResult> {
       if (!diff || !Array.isArray(diff.updated) || !Array.isArray(diff.removed)) {
         throw new TypeError("Upstream gateway manifest snapshot finalization diff is invalid.");
       }
       retireEndpointTrafficServices([...diff.updated, ...diff.removed]);
-      const results: any[] = [];
+      const results: unknown[] = [];
       for (const serviceId of diff.updated) {
         try {
           results.push(await (upstreamMcpSessions.retireServiceScopes || upstreamMcpSessions.retireScope)?.(serviceId));
@@ -2325,9 +2866,19 @@ export function createUpstreamGatewayRegistry({
       if (!target) {
         throw Object.assign(new Error("Projected upstream operation was not found."), { status: 404 });
       }
+      const service: any = requireService(target.serviceId);
+      const operation: any = operationFor(service, target.operationKey);
       const providerInput: any = clone(input);
+      const forwardInput: any = projectedOperationForwardInput({
+        protocol: text(operation.protocol || service.serviceProtocol),
+        method: text(operation.method || "POST").toUpperCase(),
+        payloadTransport: operation.payloadTransport || null,
+        upstreamMcp: service.serviceProtocol === "mcp" || operation.protocol === "mcp",
+        upstreamToolName: text(operation.toolName || operation.upstreamToolName ||
+          (operation.operationKey !== "tools/call" ? operation.operationKey : ""))
+      }, providerInput);
       const projectedInput: Record<string, any> = {
-        ...providerInput,
+        ...forwardInput,
         ...target
       };
       Object.defineProperty(projectedInput, PROJECTED_PROVIDER_INPUT, {
@@ -2343,10 +2894,19 @@ export function createUpstreamGatewayRegistry({
       if (closePromise) return closePromise;
       closePromise = (async () : Promise<any> => {
         let closeFailed: any = false;
+        mcpRegistryCloseController.abort();
+        const pendingMcpRefreshes: any[] = cancelMcpToolRefreshes();
+        mcpToolCache.clear();
         for (const state of skillHubEventSubscriptions.values()) state.controller.abort();
         const subscriptions: any = [...skillHubEventSubscriptions.values()].map((state?: any) : any => state.promise);
         skillHubEventSubscriptions.clear();
         await Promise.allSettled(subscriptions);
+        await Promise.allSettled([...activeRegistryWork]);
+        try {
+          await schemaPort.close?.();
+        } catch {
+          closeFailed = true;
+        }
         try {
           await closeGatewayRuntime?.();
         } catch {
@@ -2357,6 +2917,7 @@ export function createUpstreamGatewayRegistry({
         } catch {
           closeFailed = true;
         }
+        await Promise.allSettled(pendingMcpRefreshes);
         try {
           await securityAlertStore?.close?.();
         } catch {
@@ -2374,7 +2935,7 @@ export function createUpstreamGatewayRegistry({
         throw error;
       }
     },
-    getRefactorInstrumentation() : any {
+    getRefactorInstrumentation() : UpstreamGatewayRefactorInstrumentation {
       return {
         ...getRefactorInstrumentation(),
         targetedCallMapHits,

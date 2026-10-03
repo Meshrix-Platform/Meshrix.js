@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 
-import { packageJson } from "./constants.ts";
+import { packageInfo } from "./constants.ts";
 import { targetLabel } from "./basic-utils.ts";
 import { commandFailureGuidance } from "./guidance.ts";
 import {
@@ -72,8 +72,6 @@ export function appendInstallShortcutLines(lines?: any, result?: any) : any {
     }
     shortcuts.push([label, command]);
   };
-  pushShortcut("One-command priority install", result?.oneCommandPriorityInstall || result?.githubOneLinePriorityInstallCommand);
-  pushShortcut("One-command auto install", result?.oneCommandAutoInstall || result?.githubOneLineAutoInstallCommand);
   pushShortcut("Priority install", result?.priorityInstallCommand);
   pushShortcut("Auto install", result?.autoInstallCommand);
   if (shortcuts.length === 0 || (result?.ok !== false && !resultHasInstallRepair(result))) {
@@ -297,8 +295,8 @@ export function emitCommandError(error?: any, options: Record<string, any> = {},
     ok: false,
     commandFailed: true,
     command,
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     error: message,
     ...guidance
   }, options, command);

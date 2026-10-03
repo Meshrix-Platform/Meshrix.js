@@ -40,3 +40,24 @@ export function resolveNpmCliInvocation({
 export function npmCliArgs(invocation?: any, args: any = []) : any {
   return [...invocation.prefixArgs, ...args];
 }
+
+export function parseNpmPackJson(stdout?: any) : any[] {
+  const parsed: any = JSON.parse(String(stdout || "[]"));
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("npm_pack_json_shape_invalid");
+  }
+  if (typeof parsed.name === "string" || typeof parsed.filename === "string") {
+    return [parsed];
+  }
+  return Object.values(parsed).flatMap((value?: any) : any => Array.isArray(value) ? value : [value]);
+}
+
+export function parseNpmExactViewJson(stdout?: any) : any {
+  const parsed: any = JSON.parse(String(stdout || ""));
+  if (!Array.isArray(parsed)) return parsed;
+  if (parsed.length !== 1 || Array.isArray(parsed[0])) {
+    throw new Error("npm_exact_view_result_count_invalid");
+  }
+  return parsed[0];
+}
