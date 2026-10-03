@@ -20,6 +20,7 @@ import {
   planTestExecutionPhases,
   profileInherits,
   resolveRequiredServiceApplicability,
+  normalizeMaxConcurrentLanes,
   runTestPhaseLanes,
   runSuiteProcess,
   sourceNodeEnvironment,
@@ -172,7 +173,8 @@ function parseArgs(argv?: any) : any {
     strictPlatform: false,
     report: null,
     changedBase: null,
-    shard: null
+    shard: null,
+    maxLanes: normalizeMaxConcurrentLanes(process.env.MESHRIX_TEST_MAX_LANES)
   };
 
   for (let index: any = 0; index < argv.length; index += 1) {
@@ -211,6 +213,14 @@ function parseArgs(argv?: any) : any {
     }
     if (arg === "--report") {
       options.report = takeValue(argv, ++index, arg);
+      continue;
+    }
+    if (arg === "--max-lanes") {
+      options.maxLanes = normalizeMaxConcurrentLanes(takeValue(argv, ++index, arg));
+      continue;
+    }
+    if (arg.startsWith("--max-lanes=")) {
+      options.maxLanes = normalizeMaxConcurrentLanes(arg.slice("--max-lanes=".length));
       continue;
     }
     if (arg.startsWith("--report=")) {
@@ -279,6 +289,8 @@ Options:
   --report <path>         Write report JSON to an explicit path.
   --shard <index/count>   Shard merged Vitest processes (for example 1/4).
   --changed-base <ref>    Base ref for the changed profile. Defaults to HEAD.
+  --max-lanes <count>     Run at most this many independent lanes at once.
+                          Defaults to MESHRIX_TEST_MAX_LANES, then all lanes.
 `);
 }
 
@@ -752,7 +764,9 @@ async function main() : Promise<any> {
           laneId: lane.id
         })));
       } else {
-        const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry);
+        const laneOutcomes: any[] = await runTestPhaseLanes(phase, executeEntry, {
+          maxConcurrentLanes: options.maxLanes
+        });
         phaseResults = laneOutcomes.flatMap((lane: any) =>
           lane.results.map((result: any) => ({
             ...result,

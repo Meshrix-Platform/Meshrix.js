@@ -343,9 +343,16 @@ export function planTestExecutionPhases(
   return phases;
 }
 
+export function normalizeMaxConcurrentLanes(value: unknown): number {
+  const configured = Number(value);
+  if (Number.isFinite(configured) && configured > 0) return Math.max(1, Math.trunc(configured));
+  return 0;
+}
+
 export async function runTestPhaseLanes<Result>(
   phase: TestExecutionPhase,
-  executeEntry: (entry: TestSuiteEntry, context?: TestExecutionContext) => Promise<Result>
+  executeEntry: (entry: TestSuiteEntry, context?: TestExecutionContext) => Promise<Result>,
+  { maxConcurrentLanes = 0 }: { maxConcurrentLanes?: number } = {}
 ): Promise<TestExecutionLaneResult<Result>[]> {
   const laneById = new Map(phase.lanes.map((lane) => [lane.id, lane]));
   const executions = new Map<string, Promise<TestExecutionLaneResult<Result>>>();
@@ -376,7 +383,41 @@ export async function runTestPhaseLanes<Result>(
     executions.set(lane.id, execution);
     return execution;
   };
-  return Promise.all(phase.lanes.map(executeLane));
+  const laneLimit = normalizeMaxConcurrentLanes(maxConcurrentLanes);
+  if (!laneLimit || laneLimit >= phase.lanes.length) return Promise.all(phase.lanes.map(executeLane));
+  // A shared machine may not have capacity for every independent lane at once;
+  // oversubscribing it turns correct work into timeouts. Group lanes into
+  // dependency waves and run each wave in bounded batches. A lane still
+  // resolves its dependencies through the memoized map, and every earlier wave
+  // has already settled, so bounding cannot deadlock a dependency.
+  const depthById = new Map<string, number>();
+  const depthOf = (lane: TestExecutionLane, seen: Set<string>): number => {
+    const known = depthById.get(lane.id);
+    if (known !== undefined) return known;
+    if (seen.has(lane.id)) return 0;
+    seen.add(lane.id);
+    const depth = (lane.dependsOn ?? []).reduce((highest, dependencyId) => {
+      const dependency = laneById.get(dependencyId);
+      return dependency ? Math.max(highest, depthOf(dependency, seen) + 1) : highest;
+    }, 0);
+    depthById.set(lane.id, depth);
+    return depth;
+  };
+  const waves = new Map<number, TestExecutionLane[]>();
+  for (const lane of phase.lanes) {
+    const depth = depthOf(lane, new Set<string>());
+    const wave = waves.get(depth);
+    if (wave) wave.push(lane);
+    else waves.set(depth, [lane]);
+  }
+  const outcomes: TestExecutionLaneResult<Result>[] = [];
+  for (const depth of [...waves.keys()].sort((left, right) => left - right)) {
+    const wave = waves.get(depth)!;
+    for (let index = 0; index < wave.length; index += laneLimit) {
+      outcomes.push(...await Promise.all(wave.slice(index, index + laneLimit).map(executeLane)));
+    }
+  }
+  return outcomes;
 }
 
 export const TEST_PROCESS_TERMINATION_GRACE_MS = 1000;
