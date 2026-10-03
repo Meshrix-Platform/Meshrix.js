@@ -14,14 +14,24 @@ import {
   sourceNodeEnvironment,
   type TestSuiteEntry
 } from "./lib/unified-test-runner-execution.ts";
+import {
+  describeUnsupportedNodeRuntime,
+  resolveNodeRuntimeSupport
+} from "./lib/node-runtime-support.ts";
 export { sourceNodeEnvironment } from "./lib/unified-test-runner-execution.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_ENGINEERING_PROFILE = "engineering-public";
+const CHANGED_PROFILE = "changed";
+const LOCAL_CI_SCOPES: readonly string[] = Object.freeze(["engineering", "release", "changed"]);
+
+function isLocalCiScope(value: string): value is LocalCiOptions["scope"] {
+  return LOCAL_CI_SCOPES.includes(value);
+}
 const NODE_SOURCE_CONDITION = "--conditions=source";
 
 export interface LocalCiOptions {
-  scope: "engineering" | "release";
+  scope: "engineering" | "release" | "changed";
   reportPath: string | null;
   help: boolean;
 }
@@ -60,7 +70,7 @@ export function parseLocalCiArguments(argv: readonly string[]): LocalCiOptions {
       const value = argv[++index];
       if (!value || value.startsWith("--")) throw new Error("local_ci_option_value_missing");
       if (argument === "--scope") {
-        if (value !== "engineering" && value !== "release") throw new Error("local_ci_scope_invalid");
+        if (!isLocalCiScope(value)) throw new Error("local_ci_scope_invalid");
         scope = value;
       } else {
         reportPath = repositoryRelativePath(value);
@@ -75,7 +85,7 @@ export function parseLocalCiArguments(argv: readonly string[]): LocalCiOptions {
       seen.add(flag);
       if (!value) throw new Error("local_ci_option_value_missing");
       if (flag === "--scope") {
-        if (value !== "engineering" && value !== "release") throw new Error("local_ci_scope_invalid");
+        if (!isLocalCiScope(value)) throw new Error("local_ci_scope_invalid");
         scope = value;
       } else {
         reportPath = repositoryRelativePath(value);
@@ -375,7 +385,10 @@ function helpText(): string {
     "  npm run ci:local -- --scope release",
     "",
     "Options:",
-    "  --scope engineering|release  Select ordinary verification or release acceptance preparation.",
+    "  --scope engineering  Ordinary verification (default).",
+    "  --scope changed      Only suites that declare the changed paths; reports whole-repository",
+    "                       suites and uncovered changes instead of silently running less.",
+    "  --scope release      Release acceptance preparation; actual publication stays separate.",
     "  --report <repo-relative-path>  Write the structured result to a deterministic path."
   ].join("\n");
 }
@@ -384,6 +397,19 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
   const options = parseLocalCiArguments(argv);
   if (options.help) {
     process.stdout.write(`${helpText()}\n`);
+    return;
+  }
+
+  // The runtime gate runs before any run directory exists: an unsupported runtime
+  // produces failures that are not verification results, so none are recorded.
+  const runtimeSupport = resolveNodeRuntimeSupport({
+    rootDir: repoRoot,
+    version: process.version,
+    modules: process.versions.modules
+  });
+  if (!runtimeSupport.supported) {
+    process.stderr.write(`${describeUnsupportedNodeRuntime(runtimeSupport)}\n`);
+    process.exitCode = 1;
     return;
   }
 
@@ -413,7 +439,8 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
   let execution: ChildExecution | null = null;
   let outcome: ReturnType<typeof evaluateEngineeringOutcomes> | null = null;
   let environmentFacts: any = null;
-  let selectedProfile: string | null = options.scope === "engineering" ? DEFAULT_ENGINEERING_PROFILE : null;
+  let selectedProfile: string | null = options.scope === "release" ? null
+    : options.scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
   let setupReasonCode: string | null = null;
   const scope = options.scope;
   const startedScope = options.scope;
@@ -434,13 +461,33 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
         optionalNotRun: 0
       };
     } else {
-      const profile = DEFAULT_ENGINEERING_PROFILE;
+      const profile = scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
       const result = await runTestProfile(profile, rawRunnerReportPath, rawLogPath, cancellation.signal);
       execution = result.execution;
       flows = result.flows;
       selectedProfile = profile;
       outcome = result.summary;
       if (!result.runnerReport) setupReasonCode = "runner_report_missing";
+      // A change-driven run that needs no suite is a real answer: the change touched
+      // nothing executable. The runner reports it by exiting zero without a report.
+      if (scope === CHANGED_PROFILE && !result.runnerReport && execution.exitCode === 0 && !execution.cancelled) {
+        setupReasonCode = null;
+        outcome = {
+          status: "passed",
+          reasonCode: "changed_no_verification_required",
+          passed: 0, failed: 0, notRun: 0, cancelled: 0, optionalNotRun: 0
+        };
+      }
+      // Within this scope the runner writes no report only when it refuses an uncovered
+      // change: the profile declares no phases and its suites come from the registry.
+      if (scope === CHANGED_PROFILE && !result.runnerReport && execution.exitCode !== 0 && !execution.cancelled) {
+        setupReasonCode = "changed_selection_uncovered";
+        outcome = {
+          status: "failed",
+          reasonCode: setupReasonCode,
+          passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0
+        };
+      }
       if (result.runnerReport?.environment) {
         const observed = result.runnerReport.environment.localExecution;
         environmentFacts = observed ? {

@@ -453,7 +453,8 @@
         "release.npm-package-installability",
         "execution-sandbox.provider-resolution",
         "execution-sandbox.controlled-runtime",
-        "execution-sandbox.convergence-final"
+        "execution-sandbox.convergence-final",
+        "repo.unified-test-runner"
       ],
       "execution": {
         "phases": [
@@ -467,15 +468,20 @@
               { "id": "npm-consumer", "dependsOn": ["npm-prepare"], "suites": ["release.npm-package-installability"] },
               { "id": "sandbox-provider", "suites": ["execution-sandbox.provider-resolution"] },
               { "id": "sandbox-runtime", "dependsOn": ["sandbox-provider"], "suites": ["execution-sandbox.controlled-runtime"] },
-              { "id": "sandbox-convergence", "dependsOn": ["sandbox-runtime"], "suites": ["execution-sandbox.convergence-final"] }
+              { "id": "sandbox-convergence", "dependsOn": ["sandbox-runtime"], "suites": ["execution-sandbox.convergence-final"] },
+              { "id": "runner-contract", "suites": ["repo.unified-test-runner"] }
             ]
           }
         ]
       }
     },
     "changed": {
-      "description": "Tests affected by current changes",
-      "dynamic": true
+      "description": "Suites whose declared triggerPaths the current change touches. Whole-repository suites are reported instead of run; an uncovered verification-sensitive change fails the run.",
+      "dynamic": true,
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true
+      }
     }
   },
   "suites": [
@@ -840,7 +846,8 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/foundation/src", "tests/security/local-path-boundary.test.ts"]
     },
     {
       "id": "repo.local-info-hygiene",
@@ -979,6 +986,29 @@
       ]
     },
     {
+      "id": "repo.unified-test-runner",
+      "label": "Unified test runner contract and input-scoped reuse",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/unified-test-runner-execution.test.ts",
+        "tests/vitest/server/changed-suite-selection.test.ts",
+        "tests/vitest/server/test-runner-dry-run.test.ts",
+        "tests/vitest/server/local-ci.test.ts"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": ["tests/run.ts", "tools/scripts/local-ci.ts", "tools/scripts/lib", "tools/registry", "tests/vitest/server/unified-test-runner-execution.test.ts", "tests/vitest/server/changed-suite-selection.test.ts", "tests/vitest/server/test-runner-dry-run.test.ts", "tests/vitest/server/local-ci.test.ts"]
+    },
+    {
       "id": "repo.source-organization-analysis",
       "label": "Source organization AST advisory contract",
       "owner": "platform",
@@ -1048,7 +1078,8 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/foundation/src", "tests/unit/foundation/checkpoint-tree.test.ts"]
     },
     {
       "id": "foundation.storage-object-lifecycle",
@@ -1174,7 +1205,8 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/foundation/src", "tests/unit/foundation/state-machine.test.ts"]
     },
     {
       "id": "console.event-routing",
@@ -1779,7 +1811,8 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/server-runtime/src", "tests/vitest/server/controlled-execution-sandbox.test.ts", "tests/vitest/server/execution-launcher-boundary.test.ts", "tests/vitest/server/oci-sandbox-backend.test.ts", "tests/vitest/server/opaque-sandbox-custody.test.ts", "tests/vitest/server/sandbox-configured-workload.test.ts", "tests/vitest/server/sandbox-streaming-input.test.ts", "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.ts", "tests/vitest/server/trusted-sandbox-provider-resolver.test.ts"]
     },
     {
       "id": "execution-sandbox.controlled-runtime",
@@ -2833,7 +2866,8 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": ["packages/gateway/src", "tests/vitest/gateway"]
     }
   ]
 }

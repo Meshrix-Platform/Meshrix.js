@@ -30,6 +30,19 @@ import {
   type LocalExecutionEnvironment
 } from "../tools/server-scripts/lib/local-execution-environment.ts";
 import {
+  computeSuiteInputFingerprint,
+  createSuiteInputScopeCache
+} from "../tools/scripts/lib/suite-input-fingerprint.ts";
+import {
+  describeUnsupportedNodeRuntime,
+  resolveNodeRuntimeSupport
+} from "../tools/scripts/lib/node-runtime-support.ts";
+import {
+  describeChangedSelection,
+  selectChangedSuites,
+  selectionIsUnverifiable
+} from "../tools/scripts/lib/changed-suite-selection.ts";
+import {
   discoverOciConformanceImageAvailability
 } from "../tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
 import { resolveCommandCandidate } from "../packages/foundation/src/environment-compatibility/host-runtime.ts";
@@ -317,7 +330,7 @@ function resolveSuiteIds(options?: any) : any {
   }
 
   if (options.profile === "changed") {
-    return changedSuiteIds(options.changedBase || "HEAD");
+    return resolveChangedSuiteIds(options.changedBase || "HEAD");
   }
 
   const ids: any = profileSuites[options.profile];
@@ -342,7 +355,7 @@ function uniqueKnownSuites(ids?: any) : any {
   return selected;
 }
 
-function changedSuiteIds(baseRef?: any) : any {
+function collectChangedFiles(baseRef?: any) : string[] {
   const changedFiles: any = new Set<any>();
   for (const file of gitLines(["diff", "--name-only", "--diff-filter=ACMRTUXB", baseRef])) {
     changedFiles.add(file);
@@ -350,28 +363,32 @@ function changedSuiteIds(baseRef?: any) : any {
   for (const file of gitLines(["ls-files", "--others", "--exclude-standard"])) {
     changedFiles.add(file);
   }
+  return [...changedFiles];
+}
 
-  const selected: any = new Set<any>([
-    "repo.public-boundary",
-    "security.secret-hygiene",
-    "repo.local-info-hygiene",
-    "registry.consistency"
-  ]);
-  for (const file of changedFiles) {
-    if (file === "package.json" || file === "package-lock.json" || file.startsWith("tests/")) {
-      selected.add("repo.root-hygiene");
-      selected.add("repo.organization");
-    }
-    if (file.startsWith("apps/console/") || file.startsWith("packages/ui-console/") || file === "vite.config.ts") {
-      selected.add("repo.public-boundary");
-    }
-    if (file.startsWith("docs/") || file === "README.md") {
-      selected.add("repo.public-boundary");
-    }
+/**
+ * Resolve the `changed` profile from the inputs each suite declares.
+ *
+ * This replaces a hardcoded path-prefix table that returned the same few repository
+ * hygiene suites for every change. That answer looked authoritative while covering
+ * nothing the change touched, which is worse than selecting nothing at all.
+ */
+function resolveChangedSuiteIds(baseRef?: any) : any {
+  const selection: any = selectChangedSuites({
+    changedFiles: collectChangedFiles(baseRef),
+    suites
+  });
+  console.log(describeChangedSelection(selection));
+  if (selectionIsUnverifiable(selection)) {
+    // The selection report above already states the gap; a stack trace would only repeat it.
+    const refusal: any = new Error(
+      "changed_selection_uncovered: no suite declares the changed verification-sensitive file(s), so this run "
+      + "would verify nothing. Run `npm run ci:local` (engineering scope) instead."
+    );
+    refusal.expectedRefusal = true;
+    throw refusal;
   }
-
-  selected.add("repo.root-hygiene");
-  return uniqueKnownSuites([...selected]);
+  return uniqueKnownSuites(selection.selected.map((entry: any) : any => entry.id));
 }
 
 function gitLines(args?: any) : any {
@@ -389,25 +406,29 @@ function commandLine(entry?: any) : any {
   return [entry.command, ...entry.args].join(" ");
 }
 
-function cleanSourceRevision() : string | null {
-  const status = spawnSync("git", ["status", "--porcelain"], { cwd: repoRoot, encoding: "utf8" });
-  if (status.status !== 0 || status.stdout.trim() !== "") return null;
+/**
+ * The observed HEAD revision.
+ *
+ * Reuse is decided by `computeSuiteInputFingerprint`, so a dirty worktree no longer
+ * suppresses the revision. Recording the actual revision keeps the report usable by
+ * consumers that require one, including the stable audit stage reducer.
+ */
+function observedRevision() : string | null {
   const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" });
-  return revision.status === 0 ? revision.stdout.trim() || null : null;
+  if (revision.status !== 0) return null;
+  return revision.stdout.trim() || null;
 }
 
-function passedResultCache(profile: string, sourceRevision: string | null): Map<string, any> {
-  if (!sourceRevision) return new Map();
+function passedResultCache(profile: string): Map<string, any> {
   const reportPath = path.join(defaultReportDir, "latest.json");
   if (!existsSync(reportPath)) return new Map();
   try {
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    if (
-      !profileInherits(profileConfigs, profile, report.profile) ||
-      report.sourceRevision !== sourceRevision
-    ) return new Map();
+    if (!profileInherits(profileConfigs, profile, report.profile)) return new Map();
     return new Map((Array.isArray(report.suites) ? report.suites : [])
-      .filter((result: any) => result?.status === "passed" && typeof result.command === "string")
+      .filter((result: any) => result?.status === "passed"
+        && typeof result.command === "string"
+        && typeof result.inputFingerprint === "string")
       .map((result: any) => [result.command, result]));
   } catch {
     return new Map();
@@ -509,7 +530,28 @@ async function main() : Promise<any> {
     return;
   }
 
+  // Inspection and dry runs stay available on any runtime; executing suites does not,
+  // because an unsupported runtime fails inside product tests as if they were defects.
+  if (!options.dryRun) {
+    const runtimeSupport: any = resolveNodeRuntimeSupport({
+      rootDir: repoRoot,
+      version: process.version,
+      modules: process.versions.modules
+    });
+    if (!runtimeSupport.supported) {
+      console.error(describeUnsupportedNodeRuntime(runtimeSupport));
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   const selectedIds: any = resolveSuiteIds(options);
+  // A change that touches nothing executable needs no suite run; that is a real answer,
+  // not a configuration error.
+  if (options.profile === "changed" && selectedIds.length === 0) {
+    console.log('Profile "changed": no verification-sensitive change requires a suite run.');
+    return;
+  }
   const productManifest: any = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   const productVersion: string = String(productManifest.version || "");
   const profileExecution: any = profileConfigs[options.profile]?.execution || {};
@@ -540,8 +582,9 @@ async function main() : Promise<any> {
   );
   const startedAt: any = new Date();
   const results: any[] = [];
-  const sourceRevision = profileExecution.cachePassedResults === true ? cleanSourceRevision() : null;
-  const resultCache = passedResultCache(options.profile, sourceRevision);
+  const sourceRevision: any = observedRevision();
+  const resultCache: any = profileExecution.cachePassedResults === true ? passedResultCache(options.profile) : new Map();
+  const inputScopeCache: any = createSuiteInputScopeCache();
   const executionLaneCount = executionPhases.reduce(
     (count: number, phase: any) => count + phase.lanes.length,
     0
@@ -635,9 +678,14 @@ async function main() : Promise<any> {
 
     console.log(`\nRUN ${entry.id}: ${entry.label || entry.id}`);
     console.log(commandLine(entry));
+    const inputFingerprint: any = computeSuiteInputFingerprint(entry, {
+      rootDir: repoRoot,
+      cache: inputScopeCache
+    });
     const cached = resultCache.get(commandLine(entry));
     if (await isCachedTestResultReusable(entry, cached, {
       rootDir: repoRoot,
+      inputFingerprint,
       validatePreparedReleaseSet: loadPreparedReleaseSet
     })) {
       const result: any = {
@@ -645,10 +693,14 @@ async function main() : Promise<any> {
         id: entry.id,
         label: entry.label || entry.id,
         childSuiteIds: entry.childSuiteIds || [entry.id],
-        cached: true
+        cached: true,
+        inputFingerprint
       };
-      console.log(`PASSED ${entry.id} (cached)`);
+      console.log(`PASSED ${entry.id} (cached: inputs unchanged)`);
       return result;
+    }
+    if (cached?.status === "passed") {
+      console.log(`RERUN ${entry.id} (inputs changed since the recorded pass)`);
     }
 
     const childEnv = sourceNodeEnvironment();
@@ -676,6 +728,7 @@ async function main() : Promise<any> {
       };
     }
     result.cached = false;
+    result.inputFingerprint = inputFingerprint;
     if (result.status === "not_run") {
       console.log(`NOT_RUN ${entry.id} (${result.reason})`);
     } else {
@@ -824,6 +877,8 @@ async function main() : Promise<any> {
 }
 
 main().catch((error?: any) : any => {
-  console.error(error);
+  // A refusal that states its own cause and remedy reads better without a stack trace.
+  if (error?.expectedRefusal === true) console.error(String(error.message));
+  else console.error(error);
   process.exitCode = 1;
 });

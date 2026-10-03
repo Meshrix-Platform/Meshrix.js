@@ -47,7 +47,7 @@ describe("delivery feedback scale", () => {
     expect(() => parseTestShard("2/1")).toThrow();
   });
 
-  it("registers merge, clean-revision cache, and environment-driven sharding", () => {
+  it("registers merge, input-fingerprint result reuse, and environment-driven sharding", () => {
     const registry = JSON.parse(fs.readFileSync(path.join(repoRoot, "tools/registry/tests.registry.json"), "utf8"));
     const publicProfiles = Object.entries(registry.profiles)
       .filter(([name]) => name.endsWith("-public"));

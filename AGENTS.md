@@ -38,6 +38,11 @@ only dependent work. Ordinary authorized scoped repairs continue without another
 general approval request. Record Task and Tree delivery conclusions separately
 from Node progress; completed Nodes alone do not establish accepted delivery.
 
+Long-running work leaves recoverable intermediate conclusions. A delivery that
+runs for many hours without an observable intermediate result cannot be reviewed,
+stopped or resumed; record conclusions in the repository as they are established
+so a later session resumes from evidence instead of re-deriving current state.
+
 ## Functional Availability Before Benchmarking And Optimization
 
 Meshrix development must first establish that the actual service is usable.
@@ -76,6 +81,12 @@ to rerun the whole regression at every step, create a second gate framework,
 deploy to production, or weaken the deployment boundary below. Repair original
 script defects in the original owner under Report And Repair Repository Scripts
 below; a wrapper or a second gate is never the repair vehicle.
+
+Functional evidence is not the last stage of a serial chain. Run the functional
+scenarios as soon as a build exists, in parallel with static and unit checks, and
+serialize only on genuine shared dependencies. A benchmark that measures a
+substitute workload - a no-op, a fixture, or a mock path - is not performance
+evidence for the product and must not be recorded as an evaluated result.
 
 ## Upstream Service Custom Fields
 
@@ -232,3 +243,51 @@ from an early-stop run.
 If continuing after failure would create unsafe, destructive, or external side
 effects, stop before repair, report the undiscovered scope and the required
 authority, and obtain a maintainer decision.
+
+## Change-Scoped Verification And Result Reuse
+
+A verification result is reusable only when it is bound to the inputs it
+actually exercised. Every registered suite declares the source and configuration
+it covers, so a source change selects the affected suites instead of forcing a
+choice between the whole profile and hand-picked test files.
+
+- Reuse is keyed by an input fingerprint: covered source, direct dependencies,
+  relevant configuration and command inputs. Do not key it on the command string
+  alone, and do not invalidate it merely because the working tree is dirty.
+- A product source file that no suite claims is reported as a selection gap.
+  Silently skipping unselected source is not acceptable; an incomplete selection
+  is itself a reported outcome.
+- The maintained entry reports suites executed, suites reused, and the basis for
+  each skip, so a reader can tell what was actually proven.
+
+Manual test picking is diagnosis, not the evidence path. Prefer repairing the
+maintained entry's selection over working around it.
+
+## Verification Apparatus Budget
+
+Verification exists to make product change safe; it must not become the
+engineering object. Apparatus growth is measured against product growth and is
+reviewed like any other change.
+
+- One logical change must not require editing several catalogs in lockstep. A
+  fact derivable from a single source is generated from that source rather than
+  registered a second time.
+- A new gate, registry, verifier or profile states the failure class it prevents
+  and the observed incident that motivates it. A gate that must be relaxed,
+  re-scoped or waived for ordinary work to proceed is evidence that the gate's
+  contract is wrong; repair the contract instead of carrying the waiver.
+- Registration stays mandatory and explicit under Automatic Tool And Script
+  Registration above, but registration must not become the bulk of a change.
+
+## Publication Consumes The Verified Artifact
+
+The published object and the verified object must be the same object.
+
+- Publication consumes the archive that verification already validated. Do not
+  rebuild, repackage or re-derive artifacts inside the publication path;
+  re-packaging after verification creates a new, unverified candidate.
+- A publication retry reuses the same prepared artifact. Changed inputs produce a
+  new candidate and re-verify only the affected part.
+- Candidate-bound evidence names the exact commit and artifact digest it covers.
+  A report whose revision is a working tree is a diagnostic, not release
+  evidence.

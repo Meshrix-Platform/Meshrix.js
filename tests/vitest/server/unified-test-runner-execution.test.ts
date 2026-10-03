@@ -1,8 +1,21 @@
 import { EventEmitter } from "node:events";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  computeSuiteInputFingerprint,
+  createSuiteInputScopeCache,
+  describeSuiteInputScope
+} from "../../../tools/scripts/lib/suite-input-fingerprint.ts";
+import {
+  describeUnsupportedNodeRuntime,
+  readDeclaredNodeEngine,
+  resolveNodeRuntimeSupport,
+  satisfiesNodeEngine
+} from "../../../tools/scripts/lib/node-runtime-support.ts";
 import {
   planTestExecutionPhases,
   profileInherits,
@@ -23,6 +36,32 @@ function suite(id: string): TestSuiteEntry {
     command: "node",
     args: [`${id}.ts`]
   };
+}
+
+/**
+ * A workspace fixture with a real dependency chain: server-runtime depends on gateway,
+ * gateway depends on foundation.
+ */
+function createWorkspaceFixture(): string {
+  const root = mkdtempSync(path.join(tmpdir(), "meshrix-suite-fingerprint-"));
+  const manifests: Record<string, any> = {
+    "packages/contracts": { name: "@meshrix/contracts" },
+    "packages/foundation": { name: "@meshrix/foundation", dependencies: { "@meshrix/contracts": "0.0.1" } },
+    "packages/gateway": { name: "@meshrix/gateway", dependencies: { "@meshrix/foundation": "0.0.1" } },
+    "packages/server-runtime": { name: "@meshrix/server-runtime", dependencies: { "@meshrix/gateway": "0.0.1" } },
+    "packages/ui-console": { name: "@meshrix/ui-console" },
+    "apps/console": { name: "@meshrix/console", dependencies: { "@meshrix/ui-console": "0.0.1" } }
+  };
+  for (const [directory, manifest] of Object.entries(manifests)) {
+    mkdirSync(path.join(root, ...directory.split("/")), { recursive: true });
+    writeFileSync(path.join(root, ...directory.split("/"), "package.json"), JSON.stringify(manifest, null, 2));
+    writeFileSync(path.join(root, ...directory.split("/"), "index.ts"), `export const ${directory.replace(/[^a-z]/gu, "")} = 1;\n`);
+  }
+  mkdirSync(path.join(root, "docs"), { recursive: true });
+  writeFileSync(path.join(root, "docs", "guide.md"), "# Guide\n");
+  mkdirSync(path.join(root, "tests", "vitest", "server"), { recursive: true });
+  writeFileSync(path.join(root, "tests", "vitest", "server", "sample.test.ts"), "export {};\n");
+  return root;
 }
 
 afterEach(() => vi.useRealTimers());
@@ -79,12 +118,39 @@ describe("unified test runner execution lifecycle", () : any => {
     });
   });
 
-  it("reuses same-candidate side-effect results while validating prepared release archives", async () => {
-    const cached = { status: "passed" };
-    const temporarySuite = { ...suite("fixture.temp-files"), sideEffects: "temp-files" };
+  it("reuses a passed result only when its recorded input fingerprint matches", async () => {
     const rootDir = path.resolve("test-root");
-    expect(await isCachedTestResultReusable(temporarySuite, cached, { rootDir })).toBe(true);
+    const temporarySuite = { ...suite("fixture.temp-files"), sideEffects: "temp-files" };
+    const fingerprint = "fingerprint-a";
 
+    expect(await isCachedTestResultReusable(
+      temporarySuite,
+      { status: "passed", inputFingerprint: fingerprint },
+      { rootDir, inputFingerprint: fingerprint }
+    )).toBe(true);
+
+    // A changed input, an unrecorded fingerprint, and an absent expectation all refuse reuse.
+    expect(await isCachedTestResultReusable(
+      temporarySuite,
+      { status: "passed", inputFingerprint: "fingerprint-b" },
+      { rootDir, inputFingerprint: fingerprint }
+    )).toBe(false);
+    expect(await isCachedTestResultReusable(
+      temporarySuite,
+      { status: "passed" },
+      { rootDir, inputFingerprint: fingerprint }
+    )).toBe(false);
+    expect(await isCachedTestResultReusable(
+      temporarySuite,
+      { status: "passed", inputFingerprint: fingerprint },
+      { rootDir }
+    )).toBe(false);
+  });
+
+  it("validates prepared release archives even when the input fingerprint matches", async () => {
+    const rootDir = path.resolve("test-root");
+    const fingerprint = "fingerprint-a";
+    const cached = { status: "passed", inputFingerprint: fingerprint };
     const prepareSuite: TestSuiteEntry = {
       id: "release.npm-package-prepare",
       command: "npm",
@@ -94,6 +160,7 @@ describe("unified test runner execution lifecycle", () : any => {
     const validatePreparedReleaseSet = vi.fn(async () => ({ packages: [] }));
     expect(await isCachedTestResultReusable(prepareSuite, cached, {
       rootDir,
+      inputFingerprint: fingerprint,
       validatePreparedReleaseSet
     })).toBe(true);
     expect(validatePreparedReleaseSet).toHaveBeenCalledWith({
@@ -103,6 +170,7 @@ describe("unified test runner execution lifecycle", () : any => {
 
     expect(await isCachedTestResultReusable(prepareSuite, cached, {
       rootDir,
+      inputFingerprint: fingerprint,
       validatePreparedReleaseSet: async () => { throw new Error("prepared output missing"); }
     })).toBe(false);
   });
@@ -447,5 +515,174 @@ describe("unified test runner phase execution", () => {
       { id: "server-a", status: "not_run", blockedBy: ["build"] },
       { id: "server-b", status: "not_run", blockedBy: ["build"] }
     ]);
+  });
+});
+
+describe("suite input fingerprints", () => {
+  it("scopes a suite to its package and that package's workspace dependencies", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const cache = createSuiteInputScopeCache();
+      const scope = describeSuiteInputScope({ ...suite("gateway.task-001"), package: "gateway" }, root, cache);
+      expect(scope.directories).toEqual(["packages/contracts", "packages/foundation", "packages/gateway"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps whole-repository packages on the entire tree", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const cache = createSuiteInputScopeCache();
+      expect(describeSuiteInputScope({ ...suite("repo.root-hygiene"), package: "repo" }, root, cache).directories)
+        .toEqual(["."]);
+      expect(describeSuiteInputScope({ ...suite("repo.root-hygiene") }, root, cache).directories)
+        .toEqual(["."]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a fingerprint stable across edits outside the suite's inputs", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const cache = createSuiteInputScopeCache();
+      const entry: TestSuiteEntry = { ...suite("foundation.local-secret-store"), package: "foundation" };
+      const before = computeSuiteInputFingerprint(entry, { rootDir: root, cache });
+
+      writeFileSync(path.join(root, "docs", "guide.md"), "# Guide, revised\n");
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache })).toBe(before);
+
+      // An unrelated package edit must not invalidate this suite either.
+      writeFileSync(path.join(root, "packages", "ui-console", "index.ts"), "export const uiConsole = 2;\n");
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache })).toBe(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("changes a fingerprint when the suite's own package or a dependency changes", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const dependency: TestSuiteEntry = { ...suite("foundation.local-secret-store"), package: "foundation" };
+      const consumer: TestSuiteEntry = { ...suite("runtime.operation-routing"), package: "server-runtime" };
+      const before = computeSuiteInputFingerprint(dependency, { rootDir: root, cache: createSuiteInputScopeCache() });
+      const beforeConsumer = computeSuiteInputFingerprint(consumer, { rootDir: root, cache: createSuiteInputScopeCache() });
+
+      writeFileSync(path.join(root, "packages", "foundation", "index.ts"), "export const foundation = 99;\n");
+
+      expect(computeSuiteInputFingerprint(dependency, { rootDir: root, cache: createSuiteInputScopeCache() })).not.toBe(before);
+      // server-runtime depends on gateway, which depends on foundation.
+      expect(computeSuiteInputFingerprint(consumer, { rootDir: root, cache: createSuiteInputScopeCache() })).not.toBe(beforeConsumer);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("changes a fingerprint when the suite's own command definition changes", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const cache = createSuiteInputScopeCache();
+      const entry: TestSuiteEntry = { ...suite("foundation.local-secret-store"), package: "foundation" };
+      const before = computeSuiteInputFingerprint(entry, { rootDir: root, cache });
+      expect(computeSuiteInputFingerprint({ ...entry, args: [...entry.args, "--maxWorkers=1"] }, { rootDir: root, cache }))
+        .not.toBe(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("treats an explicitly named argument path as an input even inside a generated directory", () => {
+    const root = createWorkspaceFixture();
+    try {
+      mkdirSync(path.join(root, ".cache", "installed", "test"), { recursive: true });
+      writeFileSync(path.join(root, ".cache", "installed", "test", "privacy.test.mjs"), "export {};\n");
+      const entry: TestSuiteEntry = {
+        id: "gateway.benchmark-node",
+        package: "repo",
+        command: "node",
+        args: ["--test", ".cache/installed/test/privacy.test.mjs"]
+      };
+      const before = computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() });
+      writeFileSync(path.join(root, ".cache", "installed", "test", "privacy.test.mjs"), "export const changed = true;\n");
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() })).not.toBe(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("changes a fingerprint when the executing runtime differs", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const entry: TestSuiteEntry = { ...suite("foundation.local-secret-store"), package: "foundation" };
+      const before = computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() });
+      const original = process.versions.modules;
+      Object.defineProperty(process.versions, "modules", { value: "999", configurable: true, writable: true });
+      try {
+        expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() })).not.toBe(before);
+      } finally {
+        Object.defineProperty(process.versions, "modules", { value: original, configurable: true, writable: true });
+      }
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() })).toBe(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores generated build output", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const cache = createSuiteInputScopeCache();
+      const entry: TestSuiteEntry = { ...suite("repo.root-hygiene"), package: "repo" };
+      const before = computeSuiteInputFingerprint(entry, { rootDir: root, cache });
+      mkdirSync(path.join(root, "build", "test-reports"), { recursive: true });
+      writeFileSync(path.join(root, "build", "test-reports", "latest.json"), "{}\n");
+      mkdirSync(path.join(root, "node_modules", "left-pad"), { recursive: true });
+      writeFileSync(path.join(root, "node_modules", "left-pad", "index.js"), "module.exports = 1;\n");
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache })).toBe(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("supported Node runtime gate", () => {
+  const REPOSITORY_ENGINE = ">=22.19.0 <23 || >=24.3.0 <25";
+
+  it("accepts the declared supported lines and rejects everything else", () => {
+    for (const version of ["22.19.0", "22.20.3", "v24.3.0", "24.18.1", "24.99.0"]) {
+      expect(satisfiesNodeEngine(version, REPOSITORY_ENGINE)).toBe(true);
+    }
+    // 25 and 26 are what an unmanaged local install resolves to; they must be refused.
+    for (const version of ["22.18.9", "23.0.0", "24.2.9", "25.0.0", "26.8.2", "21.7.0"]) {
+      expect(satisfiesNodeEngine(version, REPOSITORY_ENGINE)).toBe(false);
+    }
+  });
+
+  it("treats an absent or unparseable declaration the way npm does", () => {
+    // No declaration means no constraint, so the entry must not refuse to run.
+    expect(satisfiesNodeEngine("26.8.2", "")).toBe(true);
+    expect(satisfiesNodeEngine("26.8.2", "   ")).toBe(true);
+    // A declaration that no runtime can satisfy refuses rather than silently allowing.
+    expect(satisfiesNodeEngine("24.18.1", "not-a-range")).toBe(false);
+    expect(satisfiesNodeEngine("not-a-version", REPOSITORY_ENGINE)).toBe(false);
+  });
+
+  it("reads the declared range from the repository manifest", () => {
+    expect(readDeclaredNodeEngine(path.resolve("."))).toBe(REPOSITORY_ENGINE);
+    expect(readDeclaredNodeEngine(path.join(tmpdir(), "meshrix-absent-root"))).toBe("");
+  });
+
+  it("reports the observed runtime and the declared range when refusing", () => {
+    const support = resolveNodeRuntimeSupport({
+      rootDir: path.resolve("."),
+      version: "v26.8.2",
+      modules: "147"
+    });
+    expect(support.supported).toBe(false);
+    const message = describeUnsupportedNodeRuntime(support);
+    expect(message).toContain(REPOSITORY_ENGINE);
+    expect(message).toContain("26.8.2");
+    expect(message).toContain("147");
   });
 });

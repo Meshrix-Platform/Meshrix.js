@@ -13,6 +13,8 @@ export function sourceNodeEnvironment(env: NodeJS.ProcessEnv = process.env): Nod
 export interface TestSuiteEntry {
   id: string;
   label?: string;
+  /** Registry `package` field, which scopes the inputs whose content decides reuse. */
+  package?: string;
   command: string;
   args: string[];
   platforms?: string[];
@@ -60,18 +62,30 @@ export function resolveRequiredServiceApplicability(
   return unavailable ?? { status: "available" };
 }
 
+/**
+ * Whether a previously passed result may stand in for running the suite again.
+ *
+ * Reuse requires the inputs recorded with that result to match the suite's current
+ * inputs. A worktree does not have to be clean: an unrelated edit leaves a suite's own
+ * inputs unchanged, and the fingerprint recognises that. A result without a recorded
+ * input fingerprint cannot be shown to be current, so it is never reused.
+ */
 export async function isCachedTestResultReusable(
   entry: TestSuiteEntry,
-  result: { status?: string } | null | undefined,
+  result: { status?: string; inputFingerprint?: string } | null | undefined,
   {
     rootDir,
+    inputFingerprint,
     validatePreparedReleaseSet
   }: {
     rootDir: string;
+    inputFingerprint?: string;
     validatePreparedReleaseSet?: (options: { rootDir: string; artifactDirectory: string }) => Promise<unknown>;
   }
 ): Promise<boolean> {
   if (result?.status !== "passed") return false;
+  if (typeof inputFingerprint !== "string" || inputFingerprint.length === 0) return false;
+  if (result.inputFingerprint !== inputFingerprint) return false;
   const isReleaseSetPreparation = entry.command === "npm"
     && entry.args.includes("release:publish-npm")
     && entry.args.includes("--prepare");

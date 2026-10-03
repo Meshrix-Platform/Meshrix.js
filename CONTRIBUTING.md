@@ -58,6 +58,14 @@ verification commands. Do not hard-code a maintainer's device inventory, replace
 scripted discovery with manual probing, or connect to remote machines during
 local discovery.
 
+The entry also supports a change-driven scope for the developer loop:
+`npm run ci:local -- --scope changed` runs only the suites that declare the changed
+paths, reports the whole-repository suites it deliberately leaves to the full
+engineering scope, and refuses rather than reporting success when a
+verification-sensitive change no suite declares. A suite declares those paths with
+`triggerPaths`; an undeclared suite keeps the conservative whole-repository
+behaviour, so declaring them only ever narrows what a change selects.
+
 Implement this toolchain in cross-platform Node.js. Use Node APIs for file
 operations, process ownership, orchestration and reporting instead of sh, Bash,
 PowerShell or inline workflow shell logic whenever Node.js can provide the
