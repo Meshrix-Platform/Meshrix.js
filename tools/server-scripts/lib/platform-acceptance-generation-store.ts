@@ -204,10 +204,46 @@ export async function withAcceptanceExecutionLease(repoRoot?: any, action?: any)
 
 const WORKSPACE_PACKAGE_SCOPE: any = "@meshrix";
 
+async function readManifest(filePath?: any) : Promise<any> {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Map every declared workspace package name to its directory inside the
+ * candidate worktree. Workspace packages are not all under `packages/`, so
+ * resolving by directory name alone would leave some of them pointing back at
+ * the caller's tree and break the guarantee that a generation never consumes a
+ * dirty caller workspace.
+ */
+async function candidateWorkspacePackages(workspace?: any) : Promise<Map<string, string>> {
+  const manifest: any = await readManifest(path.join(workspace, "package.json"));
+  const declared: any = Array.isArray(manifest?.workspaces)
+    ? manifest.workspaces
+    : Array.isArray(manifest?.workspaces?.packages) ? manifest.workspaces.packages : [];
+  const byName: any = new Map<string, string>();
+  for (const pattern of declared) {
+    const normalized: any = String(pattern || "").trim().replace(/\/+$/u, "");
+    if (!normalized) continue;
+    const directories: any = normalized.endsWith("/*")
+      ? (await fs.readdir(path.join(workspace, normalized.slice(0, -2))).catch(() : any => []))
+        .map((entry?: any) : any => `${normalized.slice(0, -2)}/${entry}`)
+      : [normalized];
+    for (const directory of directories) {
+      const packageManifest: any = await readManifest(path.join(workspace, directory, "package.json"));
+      const name: any = String(packageManifest?.name || "").trim();
+      if (name) byName.set(name, path.join(workspace, directory));
+    }
+  }
+  return byName;
+}
+
 async function linkWorkspaceNodeModules(repoRoot?: any, workspace?: any) : Promise<any> {
   const sourceRoot: any = path.join(repoRoot, "node_modules");
   const targetRoot: any = path.join(workspace, "node_modules");
-  const localPackages: any = path.join(workspace, "packages");
   await fs.mkdir(targetRoot, { recursive: true, mode: 0o700 });
   const entries: any = await fs.readdir(sourceRoot);
   for (const entry of entries) {
@@ -221,13 +257,17 @@ async function linkWorkspaceNodeModules(repoRoot?: any, workspace?: any) : Promi
     if (error?.code === "ENOENT") return [];
     throw error;
   });
-  const localEntries: any = await fs.readdir(localPackages).catch(() : any => []);
-  const localNames: any = new Set<any>(localEntries);
+  const workspacePackages: any = await candidateWorkspacePackages(workspace);
+  const linkedFromCandidate: any = new Set<string>();
+  for (const [name, directory] of workspacePackages) {
+    const unscoped: any = String(name).slice(String(name).indexOf("/") + 1);
+    if (!unscoped) continue;
+    await fs.symlink(directory, path.join(scopeTarget, unscoped), "junction");
+    linkedFromCandidate.add(unscoped);
+  }
   await Promise.all(scopeEntries.map(async (entry?: any) : Promise<any> => {
-    const localPackage: any = path.join(localPackages, entry);
-    const stats: any = localNames.has(entry) ? await fs.stat(localPackage).catch(() : any => null) : null;
-    const source: any = stats?.isDirectory() ? localPackage : path.join(scopeSource, entry);
-    await fs.symlink(source, path.join(scopeTarget, entry), "junction");
+    if (linkedFromCandidate.has(entry)) return;
+    await fs.symlink(path.join(scopeSource, entry), path.join(scopeTarget, entry), "junction");
   }));
 }
 
