@@ -32,6 +32,7 @@ import {
   REQUIRED_REPORT_REDUCERS,
   requiredReportSpec
 } from "../tools/server-scripts/lib/required-report-validator.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../tools/server-scripts/lib/npm-cli-invocation.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -40,7 +41,9 @@ const packageJson: any = JSON.parse(
 );
 const allScripts: any = Object.keys(packageJson.scripts || {});
 const packageScripts: any = packageJson.scripts || {};
-const npmCommand: any = process.platform === "win32" ? "npm.cmd" : "npm";
+// Node refuses to spawn `npm.cmd` without a shell, and `shell: true` is not an
+// accepted launcher boundary, so invoke npm through its Node entrypoint.
+const npmInvocation: any = resolveNpmCliInvocation();
 const FORBIDDEN_PACKAGED_INTERNAL_PATH_PATTERN: any =
   /(^|\/)docs\/(?:plan|report|decisions)(?:\/|$)/u;
 
@@ -868,7 +871,7 @@ function assertNoInternalPackFiles(packRecords: any = [], source: any = "npm pac
   }
 }
 
-const packResult: any = spawnSync(npmCommand, ["pack", "--dry-run", "--json", "--ignore-scripts", "--silent"], {
+const packResult: any = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["pack", "--dry-run", "--json", "--ignore-scripts", "--silent"]), {
   ...npmPackSpawnOptions
 });
 if (packResult.status !== 0) {
@@ -926,7 +929,7 @@ if (packResult.status !== 0) {
     }
   }
 }
-const workspacePackResult: any = spawnSync(npmCommand, ["pack", "--dry-run", "--json", "--workspaces", "--ignore-scripts", "--silent"], {
+const workspacePackResult: any = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["pack", "--dry-run", "--json", "--workspaces", "--ignore-scripts", "--silent"]), {
   ...npmPackSpawnOptions
 });
 await fs.rm(npmPackCachePath, { recursive: true, force: true }).catch(() : any => {});
