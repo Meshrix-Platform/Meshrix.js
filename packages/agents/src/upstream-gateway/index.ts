@@ -1882,7 +1882,17 @@ export function createUpstreamGatewayRegistry({
       }, options, entry));
       const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
       const preview: any = authorizeForwardPreview(service, operation, subject);
-      if (!preview.traffic.allowed) throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), { status: 429 });
+      if (!preview.traffic.allowed) {
+        // Refuse under the same stable capacity code `withTrafficSlot` declares, so the
+        // declared public failure carries the throttling class rather than the origin fallback.
+        const deniedReason: any = text(preview.traffic.deniedReason) || "traffic_limit_exceeded";
+        throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), {
+          code: `upstream_gateway_${deniedReason}`,
+          reasonCode: `upstream_gateway_${deniedReason}`,
+          status: 429,
+          details: preview
+        });
+      }
       rejectCallerApprovalOverride(input, service, operation, subject);
       if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) return pendingApproval(service, operation);
       return withTrafficSlot(service, operation, preview, async (_traffic?: any, endpoint?: any) : Promise<any> => {
@@ -1939,6 +1949,12 @@ export function createUpstreamGatewayRegistry({
         });
         if (httpFailure) return httpFailure;
         if (jsonRpcError) {
+          // A peer JSON-RPC error is a counted upstream failure: the kernel answers it as an
+          // `upstream_jsonrpc_error` peer failure at 502, so the endpoint circuit must observe
+          // the same outcome the caller does.
+          recordEndpointOutcome(service, operation, endpoint, { statusCode: 502, ok: false });
+          recordMetric({ serviceId: service.serviceId, statusCode: 502, failed: true });
+          persist();
           return { status: 200, body: jsonRpcError, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
         }
         if (result?.resultType === "input_required") {
@@ -1958,6 +1974,17 @@ export function createUpstreamGatewayRegistry({
         recordMetric({ serviceId: service.serviceId, statusCode: 200, failed: false });
         persist();
         return { status: 200, body: { jsonrpc: "2.0", id: requestId, result: projectedResult }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName, auditId: audit.auditId };
+        } catch (error: any) {
+          // The governed final sink owns its failure accounting, exactly as the forwarding
+          // paths do: without this a failed upstream MCP call never reaches
+          // `recordEndpointOutcome`, so the endpoint circuit can never open.
+          const callerAborted: any = abortContext.callerAborted();
+          const timedOut: any = !callerAborted && (abortContext.timedOut() || error?.name === "AbortError");
+          const failureStatus: any = callerAborted ? 499 : timedOut ? 504 : Number(error?.status || error?.statusCode || 502);
+          recordEndpointOutcome(service, operation, endpoint, { statusCode: failureStatus, ok: false });
+          recordMetric({ serviceId: service.serviceId, statusCode: failureStatus, failed: true });
+          persist();
+          throw error;
         } finally {
           abortContext.dispose();
         }

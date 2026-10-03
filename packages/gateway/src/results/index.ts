@@ -62,7 +62,14 @@ export function decodeUpstreamResult(value: unknown, options: { readonly legacy?
     return failure({ origin: "protocol", code: "upstream_result_type_unnegotiated", message: "Upstream result type was not negotiated.", status: 502, effectOutcome: "unknown" });
   }
   if (options.legacy || resultType === "complete") {
-    return complete(value, { isError: value.isError === true, requestState: typeof value.requestState === "string" ? value.requestState : undefined });
+    // A protocol result (content/structuredContent/resource/_meta) is its own payload and is
+    // preserved whole; only the declared `{ resultType: "complete", value }` envelope carries
+    // its payload one level down. Without this unwrap the platform's own projected-operation
+    // answer arrives an envelope too deep and `structuredContent.payload` never reaches the
+    // peer. `isError` is deliberately not a marker here: the platform's own `resultEnvelope`
+    // emits it as an envelope flag.
+    const protocolResult = Object.hasOwn(value, "content") || Object.hasOwn(value, "structuredContent") || Object.hasOwn(value, "resource") || Object.hasOwn(value, "_meta");
+    return complete(resultType === "complete" && !protocolResult ? value.value ?? value : value, { isError: value.isError === true, requestState: typeof value.requestState === "string" ? value.requestState : undefined });
   }
   return failure({ origin: "protocol", code: "upstream_result_type_unnegotiated", message: "Upstream result type was not negotiated.", status: 502, effectOutcome: "unknown" });
 }

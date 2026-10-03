@@ -194,6 +194,14 @@ export const GATEWAY_PUBLIC_FAILURES = Object.freeze({
   api_key_use_limit_reached: { message: "API Key use limit reached.", status: 429 },
   api_key_inactive: { message: "API Key is inactive.", status: 410 },
   UPSTREAM_MCP_SESSION_CAPACITY: { message: "Upstream MCP session capacity is currently exhausted.", status: 503 },
+  // The four refusals `endpoint-traffic.ts` raises from its single denial site
+  // (`code: upstream_gateway_<deniedReason>`). They are declared so a throttled or
+  // circuit-open upstream reaches a peer as the 429 it is, instead of collapsing into
+  // the origin's transport fallback; each names only a capacity class, never a cause.
+  upstream_gateway_circuit_open: { message: "The upstream endpoint circuit is open.", status: 429 },
+  upstream_gateway_token_bucket_empty: { message: "The upstream endpoint traffic budget is exhausted.", status: 429 },
+  upstream_gateway_concurrency_limit_exceeded: { message: "The upstream endpoint concurrency limit is reached.", status: 429 },
+  upstream_gateway_no_enabled_endpoint: { message: "No upstream endpoint is enabled for this service.", status: 429 },
   api_key_policy_denied: { message: "API Key policy denied the operation.", status: 403 },
   workspace_binding_invalid: { message: "The workspace binding is invalid.", status: 403 },
   context_unknown: { message: "The business context is unknown or expired.", status: 410 },
