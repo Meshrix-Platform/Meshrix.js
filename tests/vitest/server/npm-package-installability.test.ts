@@ -20,6 +20,7 @@ import {
   bundledPackageNamesInArtifact,
   failureCode,
   listInstallabilityTarballFiles,
+  lockfilePlaywrightChromiumExecutable,
   prepareInstallabilityConsumer,
   targetForTest
 } from "../../../tools/server-scripts/verify-npm-package-installability.ts";
@@ -137,17 +138,11 @@ describe("npm artifact installability source", () : any => {
     const native = { kind: "native", platform: "linux/amd64" };
     const cliTarget = targetForTest(native, { status: "passed", evidence: registryEvidence }, "cli");
     const runtimeTarget = targetForTest(native, { status: "passed", evidence: registryEvidence }, "runtime");
-    const dockerNotRun = targetForTest(
-      { kind: "local_docker" },
-      { status: "not_run", reasonCode: "docker_cli_missing" },
-      "runtime"
-    );
     const report: any = {
       schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
       verifier: "tools/server-scripts/verify-npm-package-installability.ts",
       environment: {
         native: { os: "linux", architecture: "amd64", platform: "linux/amd64", nodeVersion: "22.1.0" },
-        docker: { status: "unavailable", reasonCode: "docker_cli_missing" }
       },
       candidate: {
         version: "0.0.1",
@@ -161,8 +156,8 @@ describe("npm artifact installability source", () : any => {
       tests: [
         { name: "root package declares the complete version-locked workspace release set", status: "passed", evidence: {} },
         { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed", evidence: {} },
-        { name: "clean consumer install runs the packaged CLI", status: "passed", evidence: { targets: [cliTarget, dockerNotRun] } },
-        { name: "installed framework starts and serves its default health contracts", status: "passed", evidence: { targets: [runtimeTarget, dockerNotRun] } }
+        { name: "clean consumer install runs the packaged CLI", status: "passed", evidence: { targets: [cliTarget] } },
+        { name: "installed framework starts and serves its default health contracts", status: "passed", evidence: { targets: [runtimeTarget] } }
       ],
       summary: {
         releaseReady: true,
@@ -346,6 +341,34 @@ describe("npm artifact installability source", () : any => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("uses the repository Playwright browser across the isolated consumer home", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-browser-path-"));
+    try {
+      const moduleDirectory = path.join(root, "node_modules", "@playwright", "test");
+      const executable = path.join(root, "chromium");
+      await fs.mkdir(moduleDirectory, { recursive: true });
+      await fs.writeFile(path.join(root, "package.json"), "{}");
+      await fs.writeFile(path.join(moduleDirectory, "index.js"),
+        `module.exports={chromium:{executablePath:()=>${JSON.stringify(executable)}}};`);
+      await fs.writeFile(executable, "synthetic browser");
+      expect(lockfilePlaywrightChromiumExecutable(root)).toBe(executable);
+      await fs.rm(executable);
+      expect(lockfilePlaywrightChromiumExecutable(root)).toBe("");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["browserType.launch: Executable doesn't exist at synthetic-browser", "npm_package_browser_executable_missing"],
+    ["browserType.launch: Host system is missing dependencies to run browsers", "npm_package_browser_system_dependencies_missing"],
+    ["browserType.launch: error while loading shared libraries", "npm_package_browser_system_dependencies_missing"],
+    ["browserType.launch: Target page, context or browser has been closed", "npm_package_browser_launch_failed"],
+    ["npm_package_ui_browser_error", "npm_package_ui_browser_error"]
+  ])("classifies browser failures without raw diagnostics: %s", (message, errorCode) => {
+    expect(consumerFailureSummary(new Error(message))).toEqual({ success: false, errorCode });
   });
 
   it("bounds consumer and controller failure diagnostics to published codes and stages", () : void => {

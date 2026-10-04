@@ -37,6 +37,8 @@ jobs:
         run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
       - name: Install dependencies
         run: npm ci
+      - name: Install the locked Chromium browser and system dependencies
+        run: npm exec --offline -- playwright install --with-deps chromium
       - name: Run the maintained engineering entry
         run: npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json
       - name: Retain sanitized logs and structured results
@@ -70,6 +72,8 @@ jobs:
         run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
       - name: Install dependencies
         run: npm ci
+      - name: Install the locked Chromium browser and system dependencies
+        run: npm exec --offline -- playwright install --with-deps chromium
       - name: Run the maintained engineering entry
         run: npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json
       - name: Retain sanitized logs and structured results

@@ -48,35 +48,18 @@ const DOCUMENTATION_PATH_URL: any = [
 ].join("/");
 const DOCUMENTATION_QUERY_URL: any = `https://docs.example.test/guide?path=${SYNTHETIC_LINUX_HOME_PATH}`;
 
-function npmPackageInstallabilityReport({ dockerAvailable = false }: Record<string, any> = {}) : any {
+function npmPackageInstallabilityReport() : any {
   const nativePlatform = "darwin/arm64";
-  const dockerPlatform = "linux/arm64";
-  const target = (kind: any, status: any = "passed") : any => ({
-    kind,
-    ...(kind === "native" || dockerAvailable ? { platform: kind === "native" ? nativePlatform : dockerPlatform } : {}),
-    status,
-    ...(kind === "local_docker" && !dockerAvailable ? { reasonCode: "docker_unavailable" } : {}),
-    ...(status === "passed" ? {
-      evidence: kind === "native" ? {
-        lockBackedRegistryMirror: true,
-        mirroredPackageCount: 1,
-        mirroredArtifactCount: 1,
-        publicServerCliHelp: true,
-        publicServerBin: true
-      } : {
-        lockBackedRegistryMirror: true,
-        mirroredPackageCount: 1,
-        mirroredArtifactCount: 1,
-        publicServerCliHelp: true,
-        publicServerBin: true
-      }
-    } : {})
+  const target = () : any => ({
+    kind: "native", platform: nativePlatform, status: "passed",
+    evidence: { lockBackedRegistryMirror: true, mirroredPackageCount: 1,
+      mirroredArtifactCount: 1, publicServerCliHelp: true, publicServerBin: true }
   });
   const consumerTest = (name?: any) : any => ({
     name,
     status: "passed",
     evidence: {
-      targets: [target("native"), target("local_docker", dockerAvailable ? "passed" : "not_run")]
+      targets: [target()]
     }
   });
   const report: Record<string, any> = {
@@ -94,10 +77,7 @@ function npmPackageInstallabilityReport({ dockerAvailable = false }: Record<stri
       }]
     },
     environment: {
-      native: { os: "darwin", architecture: "arm64", platform: nativePlatform, nodeVersion: "24.18.1" },
-      docker: dockerAvailable
-        ? { status: "available", platform: dockerPlatform }
-        : { status: "unavailable", reasonCode: "docker_unavailable" }
+      native: { os: "darwin", architecture: "arm64", platform: nativePlatform, nodeVersion: "24.18.1" }
     },
     tests: [
       { name: "root package declares the complete version-locked workspace release set", status: "passed" },
@@ -111,8 +91,7 @@ function npmPackageInstallabilityReport({ dockerAvailable = false }: Record<stri
       releaseReady: true,
       reportLeakScan: true,
       qualifiedPlatforms: [
-        { kind: "native", platform: nativePlatform },
-        ...(dockerAvailable ? [{ kind: "local_docker", platform: dockerPlatform }] : [])
+        { kind: "native", platform: nativePlatform }
       ]
     }
   };
@@ -864,8 +843,8 @@ describe("platform acceptance foundation ownership", () : any => {
     });
 
     const options: Record<string, any> = { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS };
-    for (const dockerAvailable of [false, true]) {
-      const report = npmPackageInstallabilityReport({ dockerAvailable });
+    {
+      const report = npmPackageInstallabilityReport();
       expect(createReleaseEvidenceReadiness(
         "build/reports/npm-package-installability.json",
         report,
@@ -874,35 +853,20 @@ describe("platform acceptance foundation ownership", () : any => {
     }
   });
 
-  it("accepts an unavailable optional Docker target but rejects any selected target failure", () : any => {
+  it.each(["failed", "not_run"])("rejects a %s native consumer even when the summary claims success", (status) : any => {
     const options: Record<string, any> = { minimumTimestampMs: MINIMUM_TIMESTAMP_MS, nowMs: NOW_MS };
-    const unavailable = npmPackageInstallabilityReport();
-    for (const test of unavailable.tests.slice(2)) {
-      expect(test.evidence.targets[1]).toMatchObject({
-        kind: "local_docker",
-        status: "not_run",
-        reasonCode: "docker_unavailable"
-      });
-    }
-    expect(createReleaseEvidenceReadiness(
-      "build/reports/npm-package-installability.json",
-      unavailable,
-      options
-    ).releaseReady).toBe(true);
-
-    const selectedFailure = npmPackageInstallabilityReport({ dockerAvailable: true });
-    for (const test of selectedFailure.tests.slice(2)) test.evidence.targets[1].status = "failed";
-    selectedFailure.tests[2].status = "failed";
-    selectedFailure.tests[3].status = "failed";
-    selectedFailure.summary.failedCount = 2;
-    selectedFailure.summary.releaseReady = false;
+    const selectedFailure = npmPackageInstallabilityReport();
+    for (const test of selectedFailure.tests.slice(2)) test.evidence.targets[0].status = status;
     expect(createReleaseEvidenceReadiness(
       "build/reports/npm-package-installability.json",
       selectedFailure,
       options
     )).toMatchObject({
       releaseReady: false,
-      reasons: expect.arrayContaining(["npm-package-release-ready-not-true"])
+      reasons: expect.arrayContaining([
+        "npm-package-test-target-status-mismatch:clean consumer install runs the packaged CLI",
+        "npm-package-qualified-platforms-mismatch"
+      ])
     });
   });
 
@@ -932,9 +896,9 @@ describe("platform acceptance foundation ownership", () : any => {
       ...base,
       summary: { ...base.summary, qualifiedPlatforms: [] }
     }).reasons).toContain("npm-package-qualified-platforms-mismatch");
-    const missingUnavailableTarget = structuredClone(base);
-    for (const test of missingUnavailableTarget.tests.slice(2)) test.evidence.targets.pop();
-    expect(readiness(missingUnavailableTarget).reasons)
+    const missingNativeTarget = structuredClone(base);
+    for (const test of missingNativeTarget.tests.slice(2)) test.evidence.targets.pop();
+    expect(readiness(missingNativeTarget).reasons)
       .toContain("npm-package-target-count-invalid:clean consumer install runs the packaged CLI");
   });
 

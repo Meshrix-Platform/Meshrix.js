@@ -525,8 +525,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "package.json",
       "package-lock.json",
-      "Dockerfile",
-      "packages/foundation/config/deployment/index.json",
       "apps/server/bin/**",
       "packages/**",
       "plugins/agents/**",
@@ -537,8 +535,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/publish-release-set.ts",
       "tools/server-scripts/lib/npm-cli-invocation.ts",
       "tools/server-scripts/lib/lock-backed-npm-registry.ts",
-      "tools/server-scripts/npm-package-consumer.ts",
-      "tools/server-scripts/npm-registry-server.ts"
+      "tools/server-scripts/npm-package-consumer.ts"
     ], outputs: ["build/reports/npm-package-installability.json"],
   },
   "verify:composition-source-package": {

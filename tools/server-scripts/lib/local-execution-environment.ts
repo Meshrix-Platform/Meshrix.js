@@ -80,7 +80,7 @@ function safeNodeVersion(value: unknown): string {
   return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(version) ? version : "unknown";
 }
 
-function nativeFacts({ platform, architecture, nodeVersion }: Required<Pick<LocalEnvironmentProbeOptions, "platform" | "architecture" | "nodeVersion">>): LocalEnvironmentNativeFacts {
+export function nativeFacts({ platform = process.platform, architecture = process.arch, nodeVersion = process.version }: Pick<LocalEnvironmentProbeOptions, "platform" | "architecture" | "nodeVersion"> = {}): LocalEnvironmentNativeFacts {
   const os = normalizedOs(platform);
   const arch = normalizedArchitecture(architecture);
   return {

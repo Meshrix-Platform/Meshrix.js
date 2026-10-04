@@ -28,6 +28,7 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain("Use the repository-configured npm CLI for Trusted Publishing");
     expect(workflow).toContain("release-definition.registry.json");
     expect(workflow.indexOf("npm install --global")).toBeLessThan(workflow.indexOf("run: npm ci"));
+    expect(workflow).toContain("npm exec --offline -- playwright install --with-deps chromium");
     expect(workflow).toContain("npm run release:prepare -- --check --tag \"$RELEASE_TAG\"");
     expect(workflow).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
     expect(workflow).toContain("npm run release:publish-npm -- --artifact-dir build/release/npm-set");
@@ -62,6 +63,7 @@ describe("standard npm release workflow", () => {
       expect(start).toBeGreaterThanOrEqual(0);
       expect(section).toContain(`node-version: "${definition.github.nodeVersion}"`);
       expect(section).toContain(npmCliSetup);
+      expect(section).toContain("npm exec --offline -- playwright install --with-deps chromium");
       expect(section.indexOf(npmCliSetup)).toBeLessThan(section.indexOf("run: npm ci"));
       expect(section).toContain("if: ${{ always() }}");
       expect(section).toContain("build/reports/npm-package-installability.json");

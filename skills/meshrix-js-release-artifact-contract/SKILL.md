@@ -33,7 +33,7 @@ The optional container artifact uses the `runtime-ui` target and serves the
 Web Console from the same process as the server. Its actual platform list is
 owned by the release definition and its own evidence; it is separate from npm
 eligibility. npm consumer qualification records the observed native platform
-and any usable local Docker target. One complete passing platform is
+as the representative npm target. One complete passing platform is
 sufficient; unavailable platforms are not prerequisites. API-only `runtime`
 remains a source-checkout verification image.
 

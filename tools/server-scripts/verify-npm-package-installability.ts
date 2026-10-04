@@ -11,8 +11,7 @@ import { fileURLToPath } from "node:url";
 import semver from "semver";
 
 import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
-import { resolveCommandCandidate } from "../../packages/foundation/src/environment-compatibility/host-runtime.ts";
-import { discoverLocalExecutionEnvironment } from "./lib/local-execution-environment.ts";
+import { nativeFacts } from "./lib/local-execution-environment.ts";
 import {
   createLockBackedNpmRegistry,
   packageManifestFromTarball
@@ -27,13 +26,10 @@ import {
 
 const execFileAsync: any = promisify(execFile);
 const DEFAULT_REPORT_PATH: any = "build/reports/npm-package-installability.json";
-const DEPLOYMENT_INDEX_PATH: any = "packages/foundation/config/deployment/index.json";
-const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
 const MAX_COMMAND_OUTPUT_BYTES: any = 64 * 1024 * 1024;
 const PLATFORM_ARTIFACT_PATTERN: any =
   /(?:^|\/)(?:build\/Release|prebuilds)\/|\.(?:node|dll|dylib|so(?:\.\d+)*)$/iu;
 const ISOLATED_CONSUMER_SOURCE: any = "tools/server-scripts/npm-package-consumer.ts";
-const ISOLATED_REGISTRY_SOURCE: any = "tools/server-scripts/npm-registry-server.ts";
 const NPM_PACKAGE_INSTALLABILITY_FAILURE_CODES: ReadonlySet<string> = new Set([
   ...NPM_PACKAGE_CONSUMER_FAILURE_CODES,
   "npm_package_bundle_dependencies_invalid",
@@ -43,13 +39,9 @@ const NPM_PACKAGE_INSTALLABILITY_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_cli_bin_contract_invalid",
   "npm_package_cli_bin_missing",
   "npm_package_consumer_architecture_mismatch",
-  "npm_package_consumer_image_build_failed",
-  "npm_package_consumer_network_create_failed",
   "npm_package_consumer_package_count_mismatch",
   "npm_package_consumer_platform_mismatch",
   "npm_package_consumer_runtime_failed",
-  "npm_package_container_image_not_pinned",
-  "npm_package_docker_operation_failed",
   "npm_package_files_contract_missing",
   "npm_package_homepage_missing",
   "npm_package_install_failed",
@@ -70,9 +62,7 @@ const NPM_PACKAGE_INSTALLABILITY_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_private_workspace_missing",
   "npm_package_private_workspace_version_mismatch",
   "npm_package_public_release_set_invalid",
-  "npm_package_registry_image_build_failed",
   "npm_package_registry_package_missing",
-  "npm_package_registry_start_failed",
   "npm_package_registry_unreachable",
   "npm_package_release_set_artifact_mismatch",
   "npm_package_release_set_artifact_missing",
@@ -104,8 +94,6 @@ const NPM_PACKAGE_INSTALLABILITY_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_consumer_report_missing",
   "npm_package_consumer_report_invalid",
   "npm_package_consumer_process_failed",
-  "npm_package_docker_cli_missing",
-  "npm_package_docker_cleanup_failed",
   "npm_package_registry_close_failed",
   "npm_package_install_lifecycle_failed",
   "npm_package_node_runtime_unsupported",
@@ -515,14 +503,6 @@ async function resolveNpmCacheRoot(userConfig: string): Promise<string> {
   return cacheRoot;
 }
 
-async function dockerExecutablePath(): Promise<string> {
-  const candidate = resolveCommandCandidate("docker", {
-    env: process.env, platform: process.platform, includeDefaultLocalBin: false
-  });
-  assert.ok(candidate.found && candidate.path, "npm_package_docker_cli_missing");
-  return candidate.path;
-}
-
 function normalizedConsumerFailures(observed: any, packageNames: string[]): Record<string, any>[] {
   return (Array.isArray(observed?.failures) ? observed.failures : []).map((failure: any) => {
     const index = Number.isInteger(failure?.failurePackageIndex)
@@ -531,7 +511,7 @@ function normalizedConsumerFailures(observed: any, packageNames: string[]): Reco
       ? failure.failurePackageIndex
       : null;
     return {
-      failureStage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(failure?.failureStage) ? failure.failureStage : "container_runtime",
+      failureStage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(failure?.failureStage) ? failure.failureStage : "consumer_report_validation",
       errorCode: NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(failure?.errorCode) ? failure.errorCode : "npm_package_consumer_failed",
       packageIndex: index,
       ...(index === null ? {} : { packageName: packageNames[index] })
@@ -637,18 +617,12 @@ function validateConsumerObservation(observed: any, target: Record<string, any>,
   };
 }
 
-function dockerCommandEnvironment(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  delete env.DOCKER_DEFAULT_PLATFORM;
-  return env;
-}
-
 /**
  * The consumer runs with an isolated HOME, so its own Playwright installation cannot find a browser
- * in that empty cache. Prefer a browser on PATH, otherwise hand over the browser that the
+ * in that empty cache. Use the browser that the
  * lockfile-pinned Playwright installation of this repository already provisioned.
  */
-function lockfilePlaywrightChromiumExecutable(rootDir: string): string {
+export function lockfilePlaywrightChromiumExecutable(rootDir: string): string {
   try {
     const hostRequire = createRequire(path.join(rootDir, "package.json"));
     const { chromium } = hostRequire("@playwright/test");
@@ -659,17 +633,10 @@ function lockfilePlaywrightChromiumExecutable(rootDir: string): string {
   }
 }
 
-function nativeChromiumExecutable(rootDir: string): string {
-  const onPath = resolveCommandCandidate(["chromium", "chromium-browser", "google-chrome", "chrome"], {
-    env: process.env, platform: process.platform, includeDefaultLocalBin: false
-  }).path;
-  return onPath || lockfilePlaywrightChromiumExecutable(rootDir);
-}
-
 async function runConsumerProcess({
-  repoRoot, workRoot, target, registry, planPath, mirroredPackageCount, mirroredArtifactCount, dockerCommand
+  repoRoot, workRoot, target, registry, planPath, mirroredPackageCount, mirroredArtifactCount
 }: Record<string, any>): Promise<Record<string, any>> {
-  const targetName = target.kind === "native" ? "native" : "local-docker";
+  const targetName = "native";
   const directory = path.join(workRoot, "consumer-" + targetName);
   const home = path.join(directory, "home");
   const temporary = path.join(directory, "tmp");
@@ -682,9 +649,7 @@ async function runConsumerProcess({
   await Promise.all([home, temporary, data, codex, cache, evidenceDirectory].map((entry: string) => fs.mkdir(entry, { recursive: true })));
   await fs.writeFile(userConfig, "", "utf8");
 
-  const chromiumExecutable = target.kind === "local_docker"
-    ? "/usr/bin/chromium"
-    : nativeChromiumExecutable(repoRoot);
+  const chromiumExecutable = lockfilePlaywrightChromiumExecutable(repoRoot);
   const environment: NodeJS.ProcessEnv = {
     ...selectedNpmEnvironment(home, temporary, cache, userConfig),
     CODEX_HOME: codex,
@@ -698,38 +663,16 @@ async function runConsumerProcess({
 
   let processFailed = false;
   try {
-    if (target.kind === "local_docker") {
-      await execFileAsync(dockerCommand, [
-        "run", "--rm", "--platform", target.platform, "--network", target.networkName,
-        "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--shm-size=1g",
-        "--tmpfs", "/tmp:rw,exec,nosuid,size=4096m",
-        "--env", "HOME=/tmp/home", "--env", "TMPDIR=/tmp", "--env", "MESHRIX_USER_DATA_DIR=/tmp/meshrix-data",
-        "--env", "CODEX_HOME=/tmp/codex-home", "--env", "npm_config_userconfig=/tmp/home/.npmrc",
-        "--env", "npm_config_cache=/tmp/npm-cache", "--env", "npm_config_nodedir=/usr/local",
-        "--env", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1",
-        "--env", "MESHRIX_CHROMIUM_EXECUTABLE=/usr/bin/chromium",
-        "--env", "MESHRIX_NPM_REGISTRY=http://meshrix-registry:4873/",
-        "--env", "MESHRIX_NPM_PLAN=/input/consumer-plan.json",
-        "--env", "MESHRIX_NPM_REPORT=/evidence/consumer-report.json",
-        "--env", "MESHRIX_NPM_PLATFORM=" + target.platform,
-        "--mount", "type=bind,src=" + target.inputDirectory + ",dst=/input,readonly",
-        "--mount", "type=bind,src=" + evidenceDirectory + ",dst=/evidence",
-        target.imageTag, "node", "/opt/meshrix/npm-package-consumer.js"
-      ], {
-        cwd: repoRoot, encoding: "utf8", maxBuffer: MAX_COMMAND_OUTPUT_BYTES, windowsHide: true, env: dockerCommandEnvironment()
-      });
-    } else {
-      await execFileAsync(process.execPath, [path.join(repoRoot, "dist/tools/server-scripts/npm-package-consumer.js")], {
-        cwd: repoRoot, encoding: "utf8", maxBuffer: MAX_COMMAND_OUTPUT_BYTES, windowsHide: true,
-        env: {
-          ...environment,
-          npm_config_registry: registry,
-          npm_config_audit: "false",
-          npm_config_fund: "false",
-          npm_config_ignore_scripts: "false"
-        }
-      });
-    }
+    await execFileAsync(process.execPath, [path.join(repoRoot, "dist/tools/server-scripts/npm-package-consumer.js")], {
+      cwd: repoRoot, encoding: "utf8", maxBuffer: MAX_COMMAND_OUTPUT_BYTES, windowsHide: true,
+      env: {
+        ...environment,
+        npm_config_registry: registry,
+        npm_config_audit: "false",
+        npm_config_fund: "false",
+        npm_config_ignore_scripts: "false"
+      }
+    });
   } catch {
     processFailed = true;
   }
@@ -799,102 +742,11 @@ async function runNativeTarget({
         await registry.close();
       } catch {
         result = { status: "failed", reasonCode: "npm_package_registry_close_failed",
-          evidence: { failures: [{ failureStage: "container_runtime", errorCode: "npm_package_registry_close_failed" }] } };
+          evidence: { failures: [{ failureStage: "npm_install", errorCode: "npm_package_registry_close_failed" }] } };
       }
     }
   }
   return result!;
-}
-
-async function runDockerTarget({
-  repoRoot, workRoot, target, rootPackage, releaseSet, inputDirectory, consumerPlanPath
-}: Record<string, any>): Promise<Record<string, any>> {
-  let dockerCommand = "";
-  let networkCreated = false;
-  let registryStarted = false;
-  let cleanupFailed = false;
-  const suffix = String(process.pid) + "-" + String(Date.now());
-  const networkName = "meshrix-npm-" + suffix;
-  const registryContainerName = networkName + "-registry";
-  const registryImage = "meshrix-npm-registry:" + suffix;
-  const consumerImage = "meshrix-npm-consumer:" + suffix;
-  const imageTags = [registryImage, consumerImage];
-  let result: Record<string, any> = { status: "failed", reasonCode: "npm_package_docker_operation_failed", evidence: {} };
-  const docker = async (args: string[], errorCode: string): Promise<any> => {
-    try {
-      return await execFileAsync(dockerCommand, args, {
-        cwd: repoRoot, encoding: "utf8", maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
-        windowsHide: true, env: dockerCommandEnvironment()
-      });
-    } catch { throw new Error(errorCode); }
-  };
-
-  try {
-    dockerCommand = await dockerExecutablePath();
-    const deploymentIndex = JSON.parse(await fs.readFile(path.join(repoRoot, DEPLOYMENT_INDEX_PATH), "utf8"));
-    const nodeImage = String(deploymentIndex?.dockerPresets?.baseImages?.mainService || "");
-    assert.match(nodeImage, /^docker\.io\/library\/node:\d+\.\d+\.\d+-[a-z0-9.-]+@sha256:[a-f0-9]{64}$/u, "npm_package_container_image_not_pinned");
-    await docker(["build", "--platform", target.platform, "--quiet", "--target", "npm-package-registry", "--tag", registryImage,
-      "--build-arg", "NODE_BASE_IMAGE=" + nodeImage, "--build-arg", "NPM_REGISTRY=" + OFFICIAL_NPM_REGISTRY,
-      "--file", "Dockerfile", "."], "npm_package_registry_image_build_failed");
-    await docker(["build", "--platform", target.platform, "--quiet", "--target", "npm-package-consumer", "--tag", consumerImage,
-      "--build-arg", "NODE_BASE_IMAGE=" + nodeImage, "--file", "Dockerfile", "."], "npm_package_consumer_image_build_failed");
-    await docker(["network", "create", "--internal", networkName], "npm_package_consumer_network_create_failed");
-    networkCreated = true;
-    await docker(["run", "--detach", "--rm", "--name", registryContainerName, "--network", networkName,
-      "--network-alias", "meshrix-registry", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
-      "--tmpfs", "/tmp:rw,nosuid,size=64m",
-      "--mount", "type=bind,src=" + target.artifactDirectory + ",dst=/artifacts,readonly",
-      "--mount", "type=bind,src=" + inputDirectory + ",dst=/input,readonly",
-      registryImage, "node", "dist/tools/server-scripts/npm-registry-server.js", "--artifacts", "/input/registry-artifacts.json"
-    ], "npm_package_registry_start_failed");
-    registryStarted = true;
-
-    const packageUrl = "http://127.0.0.1:4873/" + encodeURIComponent(rootPackage.name) + "/" + encodeURIComponent(rootPackage.version);
-    for (;;) {
-      const readiness = await docker(["exec", registryContainerName, "node", "--input-type=module", "--eval",
-        "const response = await fetch(" + JSON.stringify(packageUrl) + "); if (!response.ok) process.exit(1);"
-      ], "npm_package_registry_unreachable").catch(() => null);
-      if (readiness) break;
-      const state = String((await docker(["inspect", "--format", "{{.State.Running}}", registryContainerName], "npm_package_registry_start_failed")).stdout || "").trim();
-      assert.equal(state, "true", "npm_package_registry_start_failed");
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    const registryLog = String((await docker(["logs", registryContainerName], "npm_package_registry_start_failed")).stdout || "")
-      .split(/\r?\n/u).filter(Boolean).map((line: string) => { try { return JSON.parse(line); } catch { return null; } })
-      .find((entry: any) => entry?.status === "ready");
-    assert.ok(Number.isInteger(registryLog?.packageCount) && registryLog.packageCount > 0, "npm_package_registry_start_failed");
-    assert.ok(Number.isInteger(registryLog?.artifactCount) && registryLog.artifactCount > 0, "npm_package_registry_start_failed");
-
-    result = await runConsumerProcess({
-      repoRoot, workRoot,
-      target: { ...target, kind: "local_docker", networkName, imageTag: consumerImage, inputDirectory,
-        packageNames: releaseSet.packages.map((entry: any) => entry.name) },
-      registry: "http://meshrix-registry:4873/", planPath: consumerPlanPath,
-      mirroredPackageCount: registryLog.packageCount, mirroredArtifactCount: registryLog.artifactCount, dockerCommand
-    });
-  } catch (error: unknown) {
-    const code = failureCode(error);
-    result = { status: "failed", reasonCode: code, evidence: { failures: [{ failureStage: "container_runtime", errorCode: code }] } };
-  } finally {
-    if (dockerCommand) {
-      const cleanup = async (args: string[]) => {
-        try {
-          await execFileAsync(dockerCommand, args, {
-            cwd: repoRoot, encoding: "utf8", maxBuffer: 4096, windowsHide: true, env: dockerCommandEnvironment()
-          });
-        } catch { cleanupFailed = true; }
-      };
-      if (registryStarted) await cleanup(["rm", "--force", registryContainerName]);
-      if (networkCreated) await cleanup(["network", "rm", networkName]);
-      await cleanup(["image", "rm", "--force", ...imageTags]);
-    }
-  }
-  if (cleanupFailed) return {
-    status: "failed", reasonCode: "npm_package_docker_cleanup_failed",
-    evidence: { ...result.evidence, cleanupFailed: true }
-  };
-  return result;
 }
 
 export function targetForTest(target: Record<string, any>, observation: Record<string, any>, evidenceKind: "cli" | "runtime"): Record<string, any> {
@@ -958,20 +810,17 @@ async function runInstallabilityQualification({ reportPath, artifactDirectory }:
     generatedAt: new Date().toISOString(), startedAt: new Date().toISOString(), tests: [], summary: {}
   };
   let selectedTargets: any[] = [];
-  let dockerUnavailableReason = "";
   let sourceChecksPassed = false;
   let sourceFailure = "";
 
   try {
-    const environment = await discoverLocalExecutionEnvironment();
+    const environment = { native: nativeFacts() };
     report.environment = environment;
     selectedTargets = [{ kind: "native", platform: environment.native.platform }];
-    if (environment.docker.status === "available") selectedTargets.push({ kind: "local_docker", platform: environment.docker.platform });
-    else dockerUnavailableReason = environment.docker.reasonCode;
 
     assert.ok(artifactDirectory, "npm_package_prepared_artifact_directory_required");
     await fs.mkdir(inputDirectory, { recursive: true });
-    for (const source of [ISOLATED_CONSUMER_SOURCE, ISOLATED_REGISTRY_SOURCE]) {
+    for (const source of [ISOLATED_CONSUMER_SOURCE]) {
       await fs.access(path.join(repoRoot, source));
       await fs.access(path.join(repoRoot, "dist", source.replace(/\.ts$/u, ".js")));
     }
@@ -1039,11 +888,6 @@ async function runInstallabilityQualification({ reportPath, artifactDirectory }:
       packagePlan.push({ name: manifest.name, version: manifest.version, root: packageRecord.root === true, manifest });
     }
 
-    const registryArtifacts = packedArtifacts.map((artifact: any) => ({
-      name: String(artifact.name), version: String(artifact.version),
-      tarballPath: path.posix.join("/artifacts", String(artifact.filename))
-    }));
-    await fs.writeFile(path.join(inputDirectory, "registry-artifacts.json"), JSON.stringify({ artifacts: registryArtifacts }, null, 2) + "\n");
     const verifierTools = Object.fromEntries(VERIFIER_TOOL_NAMES.map((name: string) => {
       const version = lockfile.packages?.["node_modules/" + name]?.version;
       assert.ok(version, "npm_package_locked_verifier_tool_missing_" + consumerDirectoryName(name));
@@ -1071,19 +915,11 @@ async function runInstallabilityQualification({ reportPath, artifactDirectory }:
     const targetInputs = selectedTargets.map((target: any) => ({ ...target, nodeEngine, packageNames, artifactDirectory }));
     const targetResults = new Map<string, Record<string, any>>();
     for (const target of targetInputs) {
-      const observation = target.kind === "native"
-        ? await runNativeTarget({ repoRoot, workRoot, target, packedArtifacts, consumerPlanPath })
-        : await runDockerTarget({ repoRoot, workRoot, target, rootPackage, releaseSet, inputDirectory, consumerPlanPath });
+      const observation = await runNativeTarget({ repoRoot, workRoot, target, packedArtifacts, consumerPlanPath });
       targetResults.set(target.kind, observation);
     }
 
-    const targetRows = [
-      ...targetInputs.map((target: any) => ({ target, observation: targetResults.get(target.kind) })),
-      ...(dockerUnavailableReason ? [{
-        target: { kind: "local_docker", status: "not_run", reasonCode: dockerUnavailableReason },
-        observation: { status: "not_run", reasonCode: dockerUnavailableReason }
-      }] : [])
-    ];
+    const targetRows = targetInputs.map((target: any) => ({ target, observation: targetResults.get(target.kind) }));
     for (const name of CONSUMER_TEST_NAMES) {
       const type = name === CONSUMER_TEST_NAMES[0] ? "cli" : "runtime";
       const targets = targetRows.map(({ target, observation }: any) => targetForTest(target, observation, type));
@@ -1117,7 +953,6 @@ async function runInstallabilityQualification({ reportPath, artifactDirectory }:
           kind: target.kind, platform: target.platform, status: "not_run",
           reasonCode: "npm_package_qualification_precondition_failed"
         }));
-        if (dockerUnavailableReason) targets.push({ kind: "local_docker", status: "not_run", reasonCode: dockerUnavailableReason });
         report.tests.push({ name, status: "failed", evidence: { errorCode: sourceFailure, targets } });
       } else {
         report.tests.push({ name, status: "failed", evidence: { errorCode: sourceFailure } });

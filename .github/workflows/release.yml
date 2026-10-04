@@ -41,6 +41,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      - name: Install the locked Chromium browser and system dependencies
+        run: npm exec --offline -- playwright install --with-deps chromium
 
       - name: Check the tag against the release packages
         env:

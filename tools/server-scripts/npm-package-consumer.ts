@@ -84,6 +84,9 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_server_not_ready",
   "npm_package_server_shutdown_failed",
   "npm_package_ui_browser_error",
+  "npm_package_browser_executable_missing",
+  "npm_package_browser_system_dependencies_missing",
+  "npm_package_browser_launch_failed",
   "npm_package_ui_build_javascript_missing",
   "npm_package_ui_build_stylesheet_missing",
   "npm_package_ui_cross_origin_asset",
@@ -93,7 +96,6 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
 ]);
 export const NPM_PACKAGE_CONSUMER_FAILURE_STAGES: ReadonlySet<string> = new Set([
   "adapter_cli",
-  "container_runtime",
   "consumer_report_validation",
   "installed_manifest",
   "installed_runtime",
@@ -113,9 +115,15 @@ export function consumerFailureSummary(error?: any) : Record<string, any> {
   if (NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(message)) {
     return { success: false, errorCode: message };
   }
-  // A browser that cannot start is a ui_browser failure, not an unattributed consumer failure.
-  if (/browserType\.launch|Executable doesn't exist/iu.test(message)) {
-    return { success: false, errorCode: "npm_package_ui_browser_error" };
+  // Classify startup failures without retaining browser output or local paths.
+  if (/Executable doesn't exist/iu.test(message)) {
+    return { success: false, errorCode: "npm_package_browser_executable_missing" };
+  }
+  if (/Host system is missing dependencies|error while loading shared libraries|cannot open shared object file/iu.test(message)) {
+    return { success: false, errorCode: "npm_package_browser_system_dependencies_missing" };
+  }
+  if (/browserType\.launch/iu.test(message)) {
+    return { success: false, errorCode: "npm_package_browser_launch_failed" };
   }
 
   const output: any = `${String(error?.stdout || "")}\n${String(error?.stderr || "")}`;

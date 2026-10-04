@@ -887,7 +887,10 @@ npm run ci:local
 The default `engineering-public` profile runs the applicable Core build and
 engineering tests, prepares the
 `meshrix.js` and `@meshrix/gateway` archives under `build/release/npm-set`, and
-installs and smoke-tests those archives in clean consumers. On success the same
+installs and smoke-tests those archives in clean consumers on the native host.
+Hosted CI and Release install the lockfile-pinned Playwright Chromium browser
+and its system dependencies before verification. Container qualification is a
+separate capability and is not an additional npm consumer target. On success the same
 workflow publishes that directory to npm, then creates the GitHub Release. The
 release result does not depend on an optional deployment, system-specific test,
 or performance run.

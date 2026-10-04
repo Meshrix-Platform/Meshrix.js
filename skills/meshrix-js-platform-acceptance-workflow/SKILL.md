@@ -33,10 +33,8 @@ workflow.
 Plan with `npm run verify:acceptance:plan`. Confirm that every selected task declares its dependencies, locks, timeout, side-effect class, and owner.
 
 The canonical release profile also qualifies the exact npm archives through
-clean consumers on the observed native platform and any usable local Docker
-target. One complete qualified platform is sufficient for npm eligibility;
-unavailable Docker is recorded as `not_run`, and every selected target must
-pass. This is artifact evidence within the existing acceptance workflow, not a
+clean consumers on the observed native platform. That complete platform must
+pass; container qualification remains a separate optional workflow. This is artifact evidence within the existing acceptance workflow, not a
 real-machine or registry-publication claim.
 
 Run targeted and layer checks before the acceptance task. Required

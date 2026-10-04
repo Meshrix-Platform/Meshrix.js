@@ -90,8 +90,7 @@ function validateNpmPlatformQualification(record: any, tests: any[], summary: an
   const reasons: any[] = [];
   const environment: any = asRecord(record.environment);
   const native: any = asRecord(environment.native);
-  const docker: any = asRecord(environment.docker);
-  if (!exactRecordKeys(environment, ["docker", "native"]) ||
+  if (!exactRecordKeys(environment, ["native"]) ||
       !exactRecordKeys(native, ["architecture", "nodeVersion", "os", "platform"]) ||
       !["linux", "darwin", "windows", "other"].includes(String(native.os || "")) ||
       !["amd64", "arm64", "other"].includes(String(native.architecture || "")) ||
@@ -100,21 +99,6 @@ function validateNpmPlatformQualification(record: any, tests: any[], summary: an
       !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(String(native.nodeVersion || ""))) {
     reasons.push("npm-package-native-environment-invalid");
   }
-  const dockerAvailable: any = docker.status === "available";
-  if (dockerAvailable) {
-    if (!exactRecordKeys(docker, ["platform", "status"]) ||
-        !["linux/amd64", "linux/arm64"].includes(String(docker.platform || ""))) {
-      reasons.push("npm-package-docker-environment-invalid");
-    }
-  } else if (docker.status === "unavailable") {
-    if (!exactRecordKeys(docker, ["reasonCode", "status"]) ||
-        typeof docker.reasonCode !== "string" || !/^[a-z][a-z0-9_]{0,79}$/u.test(docker.reasonCode)) {
-      reasons.push("npm-package-docker-unavailable-reason-invalid");
-    }
-  } else {
-    reasons.push("npm-package-docker-environment-invalid");
-  }
-
   const qualifiedByTest: any[][] = [];
   for (const testName of NPM_PACKAGE_CONSUMER_TEST_NAMES) {
     const test: any = tests.find((item?: any) : any => item.name === testName) || {};
@@ -125,7 +109,7 @@ function validateNpmPlatformQualification(record: any, tests: any[], summary: an
     }
     const identities: any[] = [];
     const qualified: any[] = [];
-    if (targets.length !== 2) reasons.push(`npm-package-target-count-invalid:${testName}`);
+    if (targets.length !== 1) reasons.push(`npm-package-target-count-invalid:${testName}`);
     for (const target of targets) {
       const kind: any = String(target.kind || "");
       const status: any = String(target.status || "");
@@ -138,31 +122,16 @@ function validateNpmPlatformQualification(record: any, tests: any[], summary: an
         if (platform !== native.platform) reasons.push(`npm-package-native-target-mismatch:${testName}`);
         identities.push(`native:${platform}`);
         if (status === "passed") qualified.push({ kind, platform });
-      } else if (kind === "local_docker") {
-        if (dockerAvailable) {
-          const platform: any = String(target.platform || "");
-          if (platform !== docker.platform || status === "not_run") {
-            reasons.push(`npm-package-docker-target-mismatch:${testName}`);
-          }
-          identities.push(`local_docker:${platform}`);
-          if (status === "passed") qualified.push({ kind, platform });
-        } else {
-          if (target.platform !== undefined || status !== "not_run" || target.reasonCode !== docker.reasonCode) {
-            reasons.push(`npm-package-unavailable-docker-target-invalid:${testName}`);
-          }
-          identities.push("local_docker:not_run");
-        }
       } else {
         reasons.push(`npm-package-target-kind-invalid:${testName}`);
       }
     }
-    const expectedDockerTarget = dockerAvailable ? `local_docker:${docker.platform}` : "local_docker:not_run";
     if (new Set<any>(identities).size !== identities.length ||
-        !identities.includes(`native:${native.platform}`) || !identities.includes(expectedDockerTarget)) {
+        !identities.includes(`native:${native.platform}`)) {
       reasons.push(`npm-package-target-set-invalid:${testName}`);
     }
     const selectedTargets = targets.filter((target?: any) : any =>
-      target.kind === "native" || (target.kind === "local_docker" && dockerAvailable)
+      target.kind === "native"
     );
     if ((test.status === "passed") !== (
       selectedTargets.length > 0 && selectedTargets.every((target?: any) : any => target.status === "passed")
@@ -537,8 +506,7 @@ export function createNpmPackageInstallabilityReadiness(report: Record<string, a
   for (const test of [installTest, serverTest]) {
     const testEvidence: any = asRecord(test.evidence);
     for (const target of Array.isArray(testEvidence.targets) ? testEvidence.targets.map(asRecord) : []) {
-      if (target.status !== "passed" ||
-          (target.kind === "local_docker" && record.environment?.docker?.status !== "available")) {
+      if (target.status !== "passed") {
         continue;
       }
       const evidence: any = asRecord(target.evidence);
