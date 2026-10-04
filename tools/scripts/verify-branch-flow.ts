@@ -111,9 +111,13 @@ export function verifyProtectedPushTopology({
   // a GitHub PR merge commit whose first parent is the upstream tip. Both bring
   // exactly the upstream tip's content onto the promoted branch; a merge whose
   // first parent is anything else must be rejected.
-  return after === tip || parentOf(after) === tip
-    ? { ok: true, code: `${upstream}-advanced-${branch}` }
-    : { ok: false, code: "promotion-source-tip-mismatch" };
+  if (after === tip) {
+    return { ok: true, code: `${upstream}-fast-forward-advanced-${branch}` };
+  }
+  if (parentOf(after) === tip) {
+    return { ok: true, code: `${upstream}-merge-advanced-${branch}` };
+  }
+  return { ok: false, code: "promotion-source-tip-mismatch" };
 }
 
 function firstParentOf(revision?: any) : any {
