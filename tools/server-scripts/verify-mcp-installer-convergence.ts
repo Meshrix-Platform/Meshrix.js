@@ -267,7 +267,8 @@ try {
     const installSource: any = await fs.readFile(STANDALONE_INSTALL_WRAPPER, "utf8");
     const doctorSource: any = await fs.readFile(STANDALONE_DOCTOR, "utf8");
     for (const source of [installSource, doctorSource]) {
-      assert.match(source, /gateway-installer\/bin\/meshrix-mcp\.ts/u);
+      assert.match(source, /from "@meshrix\/protocols\/mcp\/adapter\/gateway-installer\/bin\/meshrix-mcp"/u);
+      assert.equal(/\.\.\/\.\.\/packages\//u.test(source), false);
       assert.match(source, /runCli\(/u);
       assert.equal(/\b(?:spawn|execFile|execSync)\s*\(/u.test(source), false);
       assert.equal(/native-installer|powershell|\/bin\/sh/u.test(source), false);
@@ -362,7 +363,8 @@ try {
 
   await test("standalone install wrapper delegates to the Node installer", async () : Promise<any> => {
     const source: any = await fs.readFile(STANDALONE_INSTALL_WRAPPER, "utf8");
-    assert.match(source, /gateway-installer\/bin\/meshrix-mcp\.ts/u);
+    assert.match(source, /from "@meshrix\/protocols\/mcp\/adapter\/gateway-installer\/bin\/meshrix-mcp"/u);
+    assert.equal(/\.\.\/\.\.\/packages\//u.test(source), false);
     assert.match(source, /runCli\(\["install"/u);
     assert.equal(/native-installer|powershell|\/bin\/sh/u.test(source), false);
     return {

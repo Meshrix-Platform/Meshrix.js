@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -641,6 +643,29 @@ function dockerCommandEnvironment(): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * The consumer runs with an isolated HOME, so its own Playwright installation cannot find a browser
+ * in that empty cache. Prefer a browser on PATH, otherwise hand over the browser that the
+ * lockfile-pinned Playwright installation of this repository already provisioned.
+ */
+function lockfilePlaywrightChromiumExecutable(rootDir: string): string {
+  try {
+    const hostRequire = createRequire(path.join(rootDir, "package.json"));
+    const { chromium } = hostRequire("@playwright/test");
+    const executable = chromium.executablePath();
+    return typeof executable === "string" && existsSync(executable) ? executable : "";
+  } catch {
+    return "";
+  }
+}
+
+function nativeChromiumExecutable(rootDir: string): string {
+  const onPath = resolveCommandCandidate(["chromium", "chromium-browser", "google-chrome", "chrome"], {
+    env: process.env, platform: process.platform, includeDefaultLocalBin: false
+  }).path;
+  return onPath || lockfilePlaywrightChromiumExecutable(rootDir);
+}
+
 async function runConsumerProcess({
   repoRoot, workRoot, target, registry, planPath, mirroredPackageCount, mirroredArtifactCount, dockerCommand
 }: Record<string, any>): Promise<Record<string, any>> {
@@ -659,9 +684,7 @@ async function runConsumerProcess({
 
   const chromiumExecutable = target.kind === "local_docker"
     ? "/usr/bin/chromium"
-    : resolveCommandCandidate(["chromium", "chromium-browser", "google-chrome", "chrome"], {
-        env: process.env, platform: process.platform, includeDefaultLocalBin: false
-      }).path;
+    : nativeChromiumExecutable(repoRoot);
   const environment: NodeJS.ProcessEnv = {
     ...selectedNpmEnvironment(home, temporary, cache, userConfig),
     CODEX_HOME: codex,

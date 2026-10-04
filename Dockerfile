@@ -70,6 +70,7 @@ RUN --mount=type=cache,target=${ROOTFS}var/cache/apt,sharing=locked \
     && rm -rf "${ROOTFS}var/lib/apt/lists"/*
 
 COPY dist/tools/server-scripts/npm-package-consumer.js /opt/meshrix/npm-package-consumer.js
+COPY dist/tools/server-scripts/lib/npm-cli-invocation.js /opt/meshrix/lib/npm-cli-invocation.js
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 FROM deps AS build

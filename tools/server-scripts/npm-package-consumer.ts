@@ -76,10 +76,12 @@ export const NPM_PACKAGE_CONSUMER_FAILURE_CODES: ReadonlySet<string> = new Set([
   "npm_package_offline_cache_incomplete",
   "npm_package_registry_unreachable",
   "npm_package_registry_package_missing",
+  "npm_package_server_bin_missing",
   "npm_package_server_bootstrap_failed",
   "npm_package_server_cli_help_failed",
   "npm_package_server_exited",
   "npm_package_server_health_failed",
+  "npm_package_server_not_ready",
   "npm_package_server_shutdown_failed",
   "npm_package_ui_browser_error",
   "npm_package_ui_build_javascript_missing",
@@ -111,6 +113,10 @@ export function consumerFailureSummary(error?: any) : Record<string, any> {
   if (NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(message)) {
     return { success: false, errorCode: message };
   }
+  // A browser that cannot start is a ui_browser failure, not an unattributed consumer failure.
+  if (/browserType\.launch|Executable doesn't exist/iu.test(message)) {
+    return { success: false, errorCode: "npm_package_ui_browser_error" };
+  }
 
   const output: any = `${String(error?.stdout || "")}\n${String(error?.stderr || "")}`;
   const classifiers: any[] = [
@@ -128,6 +134,11 @@ export function consumerFailureSummary(error?: any) : Record<string, any> {
 
 let activeFailureStage: any = "plan_loading";
 let activeFailurePackageIndex: any = -1;
+// Wall-clock budgets: a consumer that never reaches a verdict stalls the whole release gate, so
+// readiness and shutdown waits are bounded and report their own published failure codes.
+const SERVER_READY_TIMEOUT_MS: any = 180_000;
+const SERVER_SHUTDOWN_TIMEOUT_MS: any = 30_000;
+const SERVER_OUTPUT_LIMIT: any = 8_000;
 const report: Record<string, any> = {
   platform,
   runtime: { platform: runtimeOs, architecture: runtimeArchitecture, nodeVersion: process.version },
@@ -811,9 +822,10 @@ async function runSchemaWorkerProbe({ cwd }: Record<string, any>) : Promise<void
   report.schemaWorker = { installedWorkerEntryLoaded: true, validAndInvalidPayloadsChecked: true, workerClosed: true };
 }
 
-function waitForFile(pathValue?: any, child?: any) : Promise<any> {
+function waitForFile(pathValue?: any, child?: any, timeoutMs: any = SERVER_READY_TIMEOUT_MS) : Promise<any> {
   return new Promise((resolve?: any, reject?: any) : any => {
     let settled = false;
+    const deadline: any = Date.now() + timeoutMs;
     const finish: any = (error?: any, value?: any) : any => {
       if (settled) return;
       settled = true;
@@ -829,16 +841,42 @@ function waitForFile(pathValue?: any, child?: any) : Promise<any> {
       } catch (error: any) {
         if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) finish(error);
       }
+      if (!settled && Date.now() >= deadline) finish(new Error("npm_package_server_not_ready"));
     }, 50);
     child.once("exit", onExit);
   });
 }
 
-function childExit(child?: any) : Promise<any> {
+function childExit(child?: any, timeoutMs: any = SERVER_SHUTDOWN_TIMEOUT_MS) : Promise<any> {
   return new Promise((resolve?: any) : any => {
     if (child.exitCode !== null || child.signalCode !== null) return resolve({ code: child.exitCode, signal: child.signalCode });
-    child.once("exit", (code?: any, signal?: any) : any => resolve({ code, signal }));
+    const finish: any = (code?: any, signal?: any) : any => {
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      resolve({ code, signal });
+    };
+    const onExit: any = (code?: any, signal?: any) : any => finish(code, signal);
+    const timer: any = setTimeout(() : any => {
+      child.kill("SIGKILL");
+      finish(null, "SIGKILL");
+    }, timeoutMs);
+    child.once("exit", onExit);
   });
+}
+
+function captureServerOutput(sink: Record<string, any>, key: any) : any {
+  return (chunk?: any) : any => {
+    sink[key] = (sink[key] + Buffer.from(chunk).toString("utf8")).slice(-SERVER_OUTPUT_LIMIT);
+  };
+}
+
+async function writeConsumerDiagnostic(name?: any, content?: any) : Promise<void> {
+  try {
+    await fs.mkdir(path.dirname(reportPath), { recursive: true });
+    await fs.writeFile(path.join(path.dirname(reportPath), name), content, { encoding: "utf8", mode: 0o600 });
+  } catch {
+    // Diagnostics never change the verdict.
+  }
 }
 
 async function request(serverUrl?: any, requestPath?: any) : Promise<any> {
@@ -866,18 +904,36 @@ async function runPackagedServerUi({ cwd, rootManifest, onStage = () => {} }: Re
   const readyFile: any = path.join(process.env.TMPDIR || "/tmp", `meshrix-ready-${process.pid}.json`);
   const serverData: any = path.join(process.env.MESHRIX_USER_DATA_DIR || "/tmp/meshrix-data", "server-ui");
   await fs.mkdir(serverData, { recursive: true });
-  const serverEnv: any = npmEnv({ MESHRIX_USER_DATA_DIR: serverData, CODEX_HOME: path.join(serverData, "codex-home") });
-  const child: any = spawn(npmCommand(), npmCliArgs(npmInvocation(), ["exec", "--offline", "--", "meshrix-server", "--with-ui", "--port", "0", "--ready-file", readyFile, "--profile", "default", "--data-dir", serverData]), {
+  // Launch the installed entry directly: an `npm exec` launcher swallows SIGTERM on some npm
+  // versions, so the product would never receive the shutdown request that this stage verifies.
+  const serverBin: any = rootManifest.bin?.["meshrix-server"];
+  assert.equal(typeof serverBin, "string", "npm_package_server_bin_missing");
+  const serverEntry: any = path.join(cwd, "node_modules", rootManifest.name, serverBin);
+  await fs.access(serverEntry);
+  const serverEnv: any = npmEnv({
+    MESHRIX_USER_DATA_DIR: serverData,
+    CODEX_HOME: path.join(serverData, "codex-home"),
+    PATH: `${path.join(cwd, "node_modules", ".bin")}${path.delimiter}${process.env.PATH || ""}`
+  });
+  const child: any = spawn(process.execPath, [serverEntry, "--with-ui", "--port", "0", "--ready-file", readyFile, "--profile", "default", "--data-dir", serverData], {
     cwd,
     env: serverEnv,
     stdio: ["ignore", "pipe", "pipe"]
   });
-  child.stdout.resume();
-  child.stderr.resume();
+  const serverOutput: Record<string, any> = { stdout: "", stderr: "" };
+  child.stdout.on("data", captureServerOutput(serverOutput, "stdout"));
+  child.stderr.on("data", captureServerOutput(serverOutput, "stderr"));
   let browser: any = null;
   let browserEvidence: any = null;
   try {
-    const ready: any = await waitForFile(readyFile, child);
+    let ready: any;
+    try {
+      ready = await waitForFile(readyFile, child);
+    } catch (error: any) {
+      await writeConsumerDiagnostic("server-ui-diagnostics.log",
+        `readyFile=${readyFile}\nchildExitCode=${String(child.exitCode)}\nchildSignal=${String(child.signalCode)}\n--- child stdout ---\n${serverOutput.stdout}\n--- child stderr ---\n${serverOutput.stderr}\n`);
+      throw error;
+    }
     assert.equal(ready.status, "ready");
     const serverUrl: any = `http://${ready.host}:${ready.port}/`;
     const health: any = await request(serverUrl, "/api/healthz");
@@ -1095,5 +1151,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   } finally {
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    // The verdict is persisted; a surviving grandchild process must not keep its stdio pipes (and
+    // therefore this harness process, or a container running it) alive beyond the recorded result.
+    process.exit(process.exitCode ?? 0);
   }
 }

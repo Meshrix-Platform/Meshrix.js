@@ -913,6 +913,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "external", expectedDurationClass: "standard",
     inputs: [
       "package.json",
+      "packages/protocols/package.json",
       "apps/server/bin/meshrix-mcp.ts",
       "tools/server-scripts/mcp-install.ts",
       "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
