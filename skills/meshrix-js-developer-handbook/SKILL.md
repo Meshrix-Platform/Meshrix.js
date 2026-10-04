@@ -69,6 +69,7 @@ module.
 ## Remaining host qualification
 
 A Linux VM may provide offline-delivery evidence. Prefer Ubuntu; accept Debian.
-That evidence does not establish native Linux qualification, which remains
-owned by the named Real-Machine Verification Workflow. Project-level
-functional acceptance remains `npm run verify:acceptance`.
+That evidence does not establish native Linux qualification. If a specific
+environment claim is needed, run the independent `npm run verify:real-machine`
+entry for that environment. Project-level functional acceptance remains
+`npm run verify:acceptance`.

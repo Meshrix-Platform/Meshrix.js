@@ -344,10 +344,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "tools/registry/release-acceptance-standards.registry.json",
       "tools/registry/schema/release-acceptance-standards.schema.json",
-      "tools/server-scripts/verify-release-acceptance-standards.ts",
-      ".github/workflows/release.yml",
-      ".github/workflows/release-branch.yml",
-      ".github/workflows/real-machine-validation.yml"
+      "tools/server-scripts/verify-release-acceptance-standards.ts"
     ], outputs: [],
   },
   "verify:real-machine": {
@@ -360,11 +357,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/real-machine-validation-workflow.ts",
       "tools/server-scripts/real-machine-target-phase.ts",
       "tools/server-scripts/real-machine-targets/*.commands.json",
-      "tools/server-scripts/verify-real-machine-source-run.ts",
-      "tools/server-scripts/verify-real-machine-workflow-inputs.ts",
-      "tools/server-scripts/resolve-real-machine-candidate.ts",
-      "tools/server-scripts/cleanup-real-machine-secrets.ts",
-      ".github/workflows/real-machine-validation.yml",
       "docker-compose.yml",
       "docker-compose.single-node.yml"
     ], outputs: ["build/real-machine-validation/**"],
@@ -465,12 +457,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "package.json",
       ".github/workflows/branch-flow.yml",
       ".github/workflows/ci.yml",
-      ".github/workflows/release-branch.yml",
-      ".github/workflows/release.yml",
       "tools/server-scripts/promote-release-branches.ts",
-      "tools/server-scripts/release-workflow-automation.ts",
-      "tools/server-scripts/resolve-branch-promotion-authority.ts",
-      "tools/registry/release-definition.registry.json",
       "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
       "build/acceptance-evidence/current.json",
       "tools/scripts/verify-git-publication.ts"
@@ -507,8 +494,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "packages/*/package.json",
       "tools/server-scripts/publish-release-set.ts",
       "tools/server-scripts/lib/release-metadata.ts",
-      "tools/server-scripts/lib/npm-cli-invocation.ts",
-      "tools/server-scripts/lib/release-deployment/contract.ts"
+      "tools/server-scripts/lib/npm-cli-invocation.ts"
     ], outputs: [],
   },
   "release:prepare-node-runtime-source-evidence": {
@@ -654,31 +640,6 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     ], outputs: [
       "build/reports/runtime-capacity-convergence/convergence.json",
       "build/reports/runtime-capacity-convergence/stages/*.json"
-    ],
-  },
-  "verify:upstream-service-publishing-candidate": {
-    scriptName: "verify:upstream-service-publishing-candidate",
-    command: "npm run verify:upstream-service-publishing-candidate",
-    category: "verifier",
-    subsystem: "release",
-    owner: "platform",
-    tier: "release",
-    sideEffects: "build-output",
-    requiresFreshContainer: false,
-    ciProfile: "release",
-    expectedDurationClass: "fast",
-    inputs: [
-      "tools/registry/release-definition.registry.json",
-      "tools/server-scripts/verify-upstream-service-publishing-candidate.ts",
-      "tools/server-scripts/lib/upstream-service-publishing-candidate-receipt.ts",
-      "build/reports/upstream-service-publishing.json",
-      "build/reports/release-journey.json",
-      "build/reports/upstream-service-publishing/upstream-service-basic-config.json",
-      "build/reports/upstream-service-publishing.html",
-      "build/reports/upstream-service-publishing/screenshots/**"
-    ],
-    outputs: [
-      "build/reports/upstream-service-publishing-candidate.json"
     ],
   },
   "verify:upstream-service-report-template": {

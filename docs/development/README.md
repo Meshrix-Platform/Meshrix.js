@@ -91,7 +91,7 @@ A protected-resource or side-effect path is acceptable only when the canonical g
 
 ### Release and environment qualification
 
-The [Runbook release contract](../RUNBOOK.md#release-definition-and-publication) separates the mandatory Functional Release Gate and candidate-bound npm consumer qualification from optional container-deployment and Real-Machine Verification claims. `npm run verify:acceptance` is the canonical release controller; its selected profile qualifies the exact npm archives on the observed native platform and any usable local Docker target. One complete platform is sufficient for npm eligibility, and every selected target must pass. An accepted immutable candidate may then be exercised by `npm run verify:real-machine -- ...` for one exact system or deployment.
+The [Runbook release procedure](../RUNBOOK.md#release-definition-and-publication) uses the `release.yml` tag workflow for npm publication and runs its maintained build, test, pack, and consumer smoke scope. `npm run verify:acceptance` remains the local functional-acceptance entry. A specific optional system or deployment qualification can be run independently with `npm run verify:real-machine -- ...`; it does not gate npm publication.
 
 The runtime-ui deployment receipt is required only when that optional claim is selected. A real-machine receipt never blocks, promotes, or changes functional acceptance. Offline delivery may run on Linux inside a virtual machine; its evidence remains scoped to that Linux deployment and does not establish native Linux, Ubuntu, or Debian qualification.
 
@@ -105,7 +105,7 @@ Dependency licensing, security, maintenance and operational suitability are gove
 
 ### Plans and current status
 
-Use the existing long-lived Better Plan workspace according to [AGENTS.md](../../AGENTS.md). Preserve delivery results and history; generated navigation does not become a second editable plan. Keep private execution state out of public source. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and candidate-bound reports.
+Use the existing long-lived Better Plan workspace according to [AGENTS.md](../../AGENTS.md). Preserve delivery results and history; generated navigation does not become a second editable plan. Keep private execution state out of public source. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and reports.
 
 ## Technical references
 

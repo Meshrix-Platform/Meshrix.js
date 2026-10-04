@@ -46,27 +46,23 @@ verify:acceptance`.
 
 ## Release boundary
 
-`.github/workflows/release-branch.yml` validates the exact stable authority,
-including its functional receipt and npm installability report, then creates
-or verifies the canonical tag at that commit and dispatches
-`.github/workflows/release.yml` at the tag. A runtime-ui deployment receipt is
-present only when that optional claim is selected. The release workflow
-validates the exact originating run and waits for it to complete before
-consuming its authority artifact. Direct tag pushes and API dispatches share
-this one publication workflow; do not add a reusable caller or a second
-publisher identity.
+`.github/workflows/release.yml` is the normal npm publication workflow. A
+`v*` tag push or manual dispatch from that tag checks out the selected source,
+confirms that its version matches package metadata, runs the applicable build
+and release tests, packs and smoke-tests the `meshrix.js` and
+`@meshrix/gateway` archives, publishes those archives to npm through standard
+GitHub Actions Trusted Publishing, and creates a GitHub Release.
 
-The release definition owns the version and Node/npm toolchain pins. Build and
-prepare the `meshrix.js` and `@meshrix/gateway` npm archives once, before any
-publication credential is available. Registry preflight and the publisher must
-consume the same uploaded archive directory without repacking. Keep bootstrap
-explicitly limited to the first version, `0.0.1`; ordinary publication uses
-GitHub OIDC from the hosted `release.yml` publisher job. The publisher tests
-each package's npm OIDC exchange before attempting a registry mutation. Its
-GitHub workflow identity and environment are an intended configuration until
-that package-specific hosted exchange succeeds; workflow refs alone do not
-prove the npm-side match. See `docs/RUNBOOK.md` for hosted protection and npm
-publisher setup requirements.
+The release definition owns the version and Node/npm toolchain pins. Existing
+npm Trusted Publisher configuration uses the `release-candidate` GitHub
+environment. For first publication, the temporary `NPM_BOOTSTRAP_TOKEN`
+environment secret is exposed as `NODE_AUTH_TOKEN` to create packages that do
+not yet exist; configure Trusted Publishing once the packages exist and then
+remove the secret. Do not make stable-branch promotion a release prerequisite,
+or add cross-workflow run identifiers, custom OIDC probes, or
+candidate receipts as extra publication steps. Branch maintenance remains
+separate from npm publication. The [release runbook](../../docs/RUNBOOK.md#release-definition-and-publication)
+owns the exact operator steps.
 
 Commit only when covered by user authorization; treat push as a separate
 publication decision. Review the exact staged tree before commit and the exact

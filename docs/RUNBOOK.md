@@ -730,68 +730,84 @@ non-converged rather than compensating with additional logs.
 
 ## Release Definition and Publication
 
-Meshrix.js keeps functional completeness, npm artifact qualification, and
-optional environment-specific claims distinct:
+The release flow is one GitHub Actions workflow: `.github/workflows/release.yml`.
+Push a `v*` Git tag or dispatch the workflow from an existing tag.
+The workflow checks out that tag, confirms it matches the package version,
+installs dependencies, runs the maintained release verification scope, builds
+and packs the npm archives, smoke-tests those archives in clean consumers,
+publishes them to npm, then creates a GitHub Release with generated notes.
 
-1. The **Functional Release Gate** is the mandatory project release closure.
-   It proves that the implementation and code organization are complete,
-   internally consistent, secure, resource-bounded, reproducible, and covered
-   by every simulation, container, failure-injection, recovery, packaging, and
-   protocol check that the development environment can execute. A missing,
-   skipped, stale, or failing required functional check fails this gate.
-2. **NPM Package Installability** qualifies the exact release archives through
-   clean consumers on the observed native platform and any actually usable
-   local Docker platform. The report binds package name, version, tarball
-   filename, and integrity. One complete qualified platform is sufficient for
-   npm eligibility; a genuinely unavailable optional Docker target is recorded
-   as `not_run` and does not block publication. Every selected target must
-   pass, and no successful target means the npm claim is absent.
-3. **Release Deployment Verification** and **Real-Machine Verification** are
-   optional, separate claims. Deployment verification exercises the selected
-   `runtime-ui` container claim; a real-machine run binds evidence to the
-   exact system or device tested. Neither adds an unavailable environment to
-   npm eligibility requirements.
+For a manual run, select the tag as the workflow ref:
 
-The dependency is one-way:
-
-```text
-Functional Release Gate receipt
-  + NPM Package Installability report with at least one qualified platform
-  -> npm release eligibility
-Optional selected runtime-ui claim
-  -> Release Deployment Verification receipt
-Optional selected system or device claim
-  -> Real-Machine Verification receipt
+```bash
+gh workflow run release.yml --ref vX.Y.Z
 ```
 
-A selected deployment or real-machine workflow must refuse an unaccepted or
-mismatched candidate. If neither claim is selected, its report is not part of
-the npm bundle. Project-level functional results are `passed` or `failed`;
-`blocked` is not a project release result. Real-machine workflow results are
-`not_run`, `ineligible`, `passed`, or `failed`.
+The `release-candidate` environment permits release tags. GitHub evaluates the
+dispatch ref for environment access. See the [GitHub CLI dispatch reference](https://cli.github.com/manual/gh_workflow_run)
+and [environment branch and tag rules](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
+Optional deployment, system-specific qualification, and performance checks are
+separate tasks and do not block npm publication.
 
-Avoid the ambiguous standalone terms `production-ready`, `final readiness`,
-and `platform acceptance`. State the exact remaining-work or completed evidence
-instead: `functional release accepted`, `npm artifacts qualified on
-<platform>`, `release deployment verified for runtime-ui`, or
-`real-machine verified on <environment>`.
-
-`tools/registry/release-definition.registry.json` is the sole source for the
-product version, Git tag, release channel, package manifest set, optional
-container target, functional acceptance profile, local verification policy,
-and the exact upstream publishing candidate bundle, plus the Node.js and npm
-CLI versions used by release workflows. Package manifests, the lockfile,
-workflow expressions, tags, reports, and this runbook are projections of that
-definition.
-
-Before creating a tag, update the definition, prepare all version projections,
-and verify them:
+`tools/registry/release-definition.registry.json` owns the product version,
+release tag, package manifests, and Node.js/npm versions used by the workflow.
+When preparing a new version, update that definition and its package projections
+before creating the tag:
 
 ```bash
 npm run release:prepare
 npm run verify:release-definition
 npm run release:prepare -- --check
 ```
+
+The hosted workflow runs the non-mutating tag check and
+`npm run ci:local -- --scope release`. That maintained scope prepares the two
+archives under `build/release/npm-set` and performs the package install smoke
+test; the publisher checks for conflicting published bytes for the exact
+version, then consumes those archives. Do not repeat separate packing,
+installation, registry-preflight, OIDC-probe, or post-publication audit steps.
+
+The `release-candidate` GitHub environment supplies npm publishing identity.
+For the first publication only, npm packages do not yet have Trusted Publisher
+settings, so store a temporary `NPM_BOOTSTRAP_TOKEN` secret in that environment.
+The workflow exposes it as `NODE_AUTH_TOKEN` only to the npm
+publish command. After both packages have been created and their Trusted
+Publishers are configured, delete the secret; subsequent releases authenticate
+with npm's standard GitHub Actions OIDC support.
+
+Create the temporary token from npm's profile menu under **Access Tokens →
+Generate New Token**. Choose a granular token with package publish permission,
+the narrowest package scope npm offers, and an expiration suited to the first
+release. Enable its **Bypass two-factor authentication** option only if npm
+requires it for this non-interactive first publish. In GitHub, add its value as
+an environment secret named
+`NPM_BOOTSTRAP_TOKEN` under **Settings → Environments → release-candidate**.
+After the first release, delete this GitHub secret and revoke the token in npm.
+See npm's [granular access token instructions](https://docs.npmjs.com/creating-and-viewing-access-tokens/).
+
+### Configure npm Trusted Publishing
+
+After the first release creates each package, configure a Trusted Publisher for
+both `meshrix.js` and `@meshrix/gateway` from each package's npm settings:
+
+1. Sign in to [npmjs.com](https://www.npmjs.com/) and open the package's
+   **Settings → Trusted Publisher** section.
+2. Choose **GitHub Actions**, then enter organization/user
+   `Meshrix-Platform`, repository `Meshrix.js`, workflow filename `release.yml`,
+   and environment `release-candidate`.
+3. Allow `npm publish`, which the release workflow uses. Do not enable the
+   separate dist-tag permission; the workflow assigns the publish tag as part
+   of `npm publish`.
+4. Save the configuration and repeat for the other package. Enable account-level
+   two-factor authentication for the npm maintainer account; npm requires it to
+   manage Trusted Publisher settings. Once both entries are saved, remove
+   `NPM_BOOTSTRAP_TOKEN` from the GitHub environment.
+
+npm does not confirm the GitHub values when they are saved. The next ordinary
+release proves the configured identity through the actual publish. Do not add a
+separate OIDC probe or a local identity-verification gate. See the [npm Trusted
+Publishing guide](https://docs.npmjs.com/trusted-publishers/) and [npm 2FA
+requirements](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/).
 
 The detachable format-conversion integration can be checked separately with
 explicitly supplied service and adapter artifacts. Inspect its steps first:
@@ -855,224 +871,29 @@ the command is neither a Meshrix.js Functional Release Gate input
 nor a Meshrix.js publication dependency. Its absence or failure cannot change the
 Core `functional-complete` result.
 
-A successful journey writes a ten-section, navigable, bilingual, single-file
-HTML projection with captions, lazy embedded screenshots, total timing, and
-cleanup timing. Its safe-configuration section places the verified publication
-state and bounded runtime health immediately before the digest-bound health and
-operation interface catalog. The client lifecycle is ordered as discovery,
-install, upload, tools/list, both operation branches, uninstall, and cleanup;
-every detected or fallback row must carry its own passing lifecycle outcomes.
-The provenance section projects only step or cleanup identifiers, statuses, and
-bounded durations—never their receipts or messages. It records candidate
-context but remains unbound: embedding a
-final receipt would create an HTML/receipt digest cycle. On a clean immutable
-tag, bind the final HTML and all other required bytes with:
+The optional journey can produce a navigable bilingual HTML report with live
+screenshots and the published interface catalog. It records only observed
+journey evidence and does not issue a release receipt or gate npm publication.
+If the journey fails, its failed HTML projection omits screenshots, logs,
+receipts, and runtime values.
 
-```bash
-npm run verify:upstream-service-publishing-candidate
-```
-
-The resulting
-`build/reports/upstream-service-publishing-candidate.json` binds the tag,
-source commit and tree, release-definition digest, Core JSON, journey JSON,
-publishing JSON, final HTML, and ten screenshots. Its scoped
-`upstream-publishing-prepublication-passed` claim never establishes
-`functional-complete`. A failed journey writes only a redacted,
-non-authoritative HTML recovery projection without candidate status or embedded
-screenshots. That recovery projection includes only the stable failing stage
-and code plus bounded step and cleanup identifier/status/duration rows; it never
-projects failure messages, receipts, logs, or runtime values.
-
-`.github/workflows/release.yml` is the sole publication path. It accepts
-canonical semantic-version tag pushes and an exact workflow dispatch at that
-tag, and serializes release runs globally. `.github/workflows/release-branch.yml`
-runs on `release` pushes and supports a manual run on the same branch for the
-explicit first-publication bootstrap. It requires the release commit to equal
-the current stable tip, resolves the successful stable complete-gate run for
-that exact commit, and downloads its stable authority bundle containing the
-accepted candidate, functional receipt, npm installability report, and stable
-authority manifest. The normal npm release path does not run container
-deployment verification. After uploading the `release-authority` bundle, the
-source workflow creates the canonical tag only when it is absent, or verifies
-that an existing tag resolves to the same
-commit. A conflicting tag fails. It then calls GitHub's workflow-dispatch API
-for `release.yml` at the tag and sends the exact source run id, attempt, event,
-and commit. The dispatch returns before the source run completes; the target
-workflow waits for that exact release-branch run to finish successfully before
-consuming its authority artifact. This closes the source-run completion race.
-
-The release workflow revalidates candidate identity, functional receipt, and
-npm installability report before publication. The npm publisher job uses
-the `release-candidate` environment. A workflow reference alone
-does not create the required protection: configure this environment with a
-tag deployment rule for `v*` before enabling the first release. This deployment
-rule selects allowed refs and does not require manual approval.
-
-Before the first release run, verify these hosted protections in GitHub:
-
-1. An active tag ruleset covers `refs/tags/v*`, restricts tag updates and
-   deletions, and has no bypass actors. Leave tag creation allowed so the
-   release workflow token can create the first canonical tag. The local
-   create-or-verify helper does not provide server-side immutability.
-2. The `release-candidate` environment exists with a selected-tag deployment
-   policy for `v*`. The workflow's `environment:` field is a reference, not
-   evidence that this protection has been configured.
-3. Repository immutable releases are enabled. Verify the actual setting with
-   an authorized management identity. After publication, the release job
-   verifies the returned release's actual immutability and matching asset set;
-   a repository variable is not evidence of this postcondition.
-
-The release workflow consumes the accepted Core functional and npm consumer
-evidence from the exact successful stable run. It publishes `meshrix.js` and
-`@meshrix/gateway`; container images and portable archives are separate delivery
-choices with their own applicable verification. Additional operating systems
-remain unmeasured until their actual qualification is recorded.
-
-The npm release set manifest binds both tarballs through their SHA-512
-integrity values. The supply-chain manifest binds the generated CycloneDX SBOM
-and third-party notices. npm publication supplies GitHub Actions provenance;
-registry signatures and provenance are verified after publication. The GitHub
-Release attaches the two tarballs, release-set manifest, SBOM, notices, and
-supply-chain manifest. It verifies GitHub's uploaded asset digests before
-publishing the draft and then checks actual release immutability. An existing
-published release must match that exact asset set; reruns reverify it without
-replacement. No additional detached signature bundle is required.
-
-The credential-free assembly job builds the package files and
-prepares the public npm archives once. It transfers those exact tarballs with
-the other immutable release inputs. The read-only npm preflight and the later
-publisher download and use the same prepared archive directory; neither repacks
-the workspaces. The preflight checks every immutable version and dist-tag before
-publication. The publisher repeats the complete registry
-preflight immediately before its first npm mutation. Checks cover immutable
-SHA-512 integrity, npm registry signatures, SLSA provenance attestations, and
-monotonic `latest` or `next` state. A newer dist-tag is preserved; a missing or
-older tag on an existing version requires npm's separate `manage dist-tags`
-publisher permission. Direct publish permission alone does not grant that
-repair permission. Missing versions are published by dependency topology with
-`@meshrix/gateway` before the root `meshrix.js` package, and every registry
-postcondition is reverified.
-The published set is then installed without lifecycle scripts and checked with
-`npm audit signatures`, which cryptographically verifies registry signatures
-and provenance attestations. The GitHub Release becomes public only after this
-npm closure succeeds.
-
-The first canonical npm version uses an explicit bootstrap because the two npm
-packages do not have Trusted Publisher settings until after they exist. When
-the first `0.0.1` candidate reaches the `release` branch, the automatic
-release-branch run validates the accepted candidate and creates or verifies the
-canonical tag, then skips the ordinary OIDC release dispatch. After that run
-succeeds, dispatch `.github/workflows/release-branch.yml` on the `release`
-branch with `bootstrap_candidate=0.0.1`. This run revalidates the same tag,
-candidate, and originating stable authority before dispatching `release.yml`
-with the explicit bootstrap input. It does not require or create a deployment
-receipt. Do not manually push the first tag or dispatch `release.yml` without
-the bootstrap input; either would attempt ordinary OIDC before the package
-trust exists.
-
-Use `0.0.1` only if the final public registry recheck confirms that canonical
-version remains unused. Store `NPM_BOOTSTRAP_TOKEN` temporarily as a
-`release-candidate` environment secret; the release workflow exposes it only to
-the one bootstrap publication mutation step. It is not used by preparation,
-preflight, or authority verification. Remove this secret as soon as
-the first publication succeeds. The publisher rejects bootstrap for later
-versions and never silently falls back to a token.
-
-After both packages exist, configure one GitHub Actions trusted publisher for
-each package with the deployed repository, workflow file `release.yml`, and
-environment `release-candidate`. After one npm login, the following commands
-configure direct publication for both packages with npm 11.21.0:
-
-```text
-npm trust github @meshrix/gateway --file release.yml --repository Meshrix-Platform/Meshrix.js --environment release-candidate --allow-publish --yes
-npm trust github meshrix.js --file release.yml --repository Meshrix-Platform/Meshrix.js --environment release-candidate --allow-publish --yes
-```
-
-npm requires account-level 2FA and an authenticated npm login for trusted-publisher
-management. A granular token with bypass 2FA, including the bootstrap publishing
-token, cannot authorize `npm trust` operations. During the
-first command, select the documented five-minute 2FA reuse option. If automatic repair of a missing or
-older `latest`/`next` tag is required, grant `manage dist-tags` separately on
-each package. npm treats that as a separate permission, and the pinned `npm
-trust` v11 CLI does not expose a flag for it. Configure the complete permission
-set before ordinary publication. The temporary bootstrap token has already
-been removed after the first successful publication; ordinary publication
-never falls back to it.
-
-The first ordinary workflow run performs an actual npm OIDC exchange for each
-prepared package before the publisher can mutate the registry. A successful
-package-specific exchange is the required proof that the deployed GitHub
-workflow identity matches the npm configuration. The intended identity is
-`release.yml` + repository + `release-candidate`; the REST API dispatch targets
-`release.yml` at a tag as a new `workflow_dispatch` run. npm's generic
-`workflow_dispatch` guidance does not fully distinguish this API-triggered run
-from a reusable-workflow caller, so do not claim the matcher is proven until
-both hosted exchanges succeed. A repository/environment ref or a local unit
-test cannot substitute for that proof. See the [npm trusted publishing guide](https://docs.npmjs.com/trusted-publishers/),
-[`npm trust` v11 reference](https://docs.npmjs.com/cli/v11/commands/npm-trust/),
-[GitHub workflow dispatch API](https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28),
-and [GitHub reusable-workflow OIDC claims](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-with-reusable-workflows).
-
-Prepare the credential-free archives once, then run the read-only registry
-preflight against that same directory:
-
-```bash
-npm run build
-npm run release:publish-npm -- --prepare --artifact-dir <artifact-dir>
-npm run verify:npm-package-installability -- --artifact-dir <artifact-dir>
-npm run release:publish-npm -- --preflight --artifact-dir <artifact-dir>
-```
-
-The canonical version determines the npm dist-tag (`latest` for stable versions,
-`next` for prereleases); a Git `v*` tag is not an npm dist-tag. The preparation,
-installation verification and preflight commands do not publish. Use the GitHub release
-workflow for actual OIDC publication; direct local release commands are not
-hosted trusted-publisher evidence.
-
-An explicit `--prepare` rebuilds the owned archives from current build inputs,
-even at an unchanged unpublished version. After qualification, preflight and
-publication consume that fixed directory; qualify the archives again if another
-preparation changes their bytes.
-
-The built-in project release runbook prepares and validates a candidate only.
-It does not commit, tag, push, upload assets, publish packages, or create a
-parallel release path.
-
-The Agent runs the maintained npm release preparation entry:
+The release workflow runs the maintained npm release preparation entry:
 
 ```bash
 npm run ci:local -- --scope release
 ```
 
-It invokes the existing acceptance controller for Core engineering regression,
-preparation of the two npm archives, installed consumers on the available native
-and matching local Docker platforms, real Console and standard MCP operations,
-publishing authorization/revocation, and recovery. Each required report must be
-fresh, command-owned, schema-valid, privacy-safe, and successful. The engineering
-regression includes deterministic architecture, security and failure-path tests.
-Optional portable runtimes, container delivery, independent Model/Agent services
-and performance experiments keep their separate workflows and do not expand this
-npm claim. Performance work requires its own current functional prerequisite.
-Exit code `0` means the selected scope passed; non-zero means it is incomplete.
+This scope runs the applicable Core build and release tests, prepares the
+`meshrix.js` and `@meshrix/gateway` archives under `build/release/npm-set`, and
+installs and smoke-tests those archives in clean consumers. On success the same
+workflow publishes that directory to npm, then creates the GitHub Release. The
+release result does not depend on an optional deployment, system-specific test,
+or performance run.
 
-The acceptance orchestrator materializes the explicit Git commit in a detached
-private worktree. It never copies a dirty caller workspace, and a failed run
-retains a candidate-bound fixed-field `failure.json` envelope and, when available,
-its validated, privacy-scanned failed aggregate in `aggregate.json`, without
-moving the accepted-generation pointer. These files share one bounded, private,
-retained failure generation. A successful run publishes one digest-bound
-accepted-candidate receipt. The same generation owns the npm installability
-report, which records the exact archives and each selected native or local
-Docker consumer result. Stable and release authority bundles revalidate that
-report alongside the receipt. The successful controller exports that report and
-the same verified archives to `build/reports/npm-package-installability.json` and
-`build/release/npm-set/` before removing its temporary source workspace. An
-unavailable optional Docker target remains
-`not_run`, while a selected target failure rejects qualification.
-Acceptance commands run until they exit or the operator cancels the run; the
-orchestrator does not convert elapsed wall-clock time into a failure. The CI
-job retains one infrastructure-level cap solely to contain abandoned runner
-cost, and that cap is not part of the acceptance result.
+Use `npm run verify:acceptance:plan` to inspect the maintained Core test scope
+without executing it. A non-zero exit from the release scope means the build,
+tests, archive preparation, or consumer smoke test needs repair before that
+release can proceed.
 
 The following bootstrap procedure is specific to a Linux Orb deployment and
 does not constrain npm eligibility. For its documented Ubuntu or Debian
@@ -1206,40 +1027,10 @@ The target selects its source-controlled command manifest; `--commands` may
 name another reviewed repository-relative manifest when the workflow contract
 explicitly permits it.
 
-For repository-operated verification, dispatch
-`.github/workflows/real-machine-validation.yml`. Every run requires the target,
-the exact 40-character source revision, and the successful release-workflow
-run ID that produced the functional receipt and candidate. The workflow checks
-that the run used `.github/workflows/release.yml`, completed successfully, and
-has the same source revision; it then downloads both inputs from that run and
-derives the candidate digest locally. It does not accept a hand-entered
-candidate digest.
-
-Target-specific inputs fail before deployment:
-
-- Native macOS and Windows require the portable artifact name and filename;
-  macOS also declares its verifier input subdirectory.
-- Native Linux requires the production base URL and trusted-proxy contract.
-- Public-cloud verification additionally requires the Agent MCP, governed
-  upstream HTTP, governed upstream MCP, and deliberate-fault HTTPS endpoints,
-  the expected `sha256:<64-hex>` TLS certificate digest, and a bounded capacity
-  count.
-- Clean-host recovery requires an independent backup workflow run and artifact
-  whose root contains `backup-manifest.json`.
-
-Docker-backed targets consume the repository environment secrets for the local
-secret master key and operation-proof signer. Public-cloud endpoint tokens are
-also repository environment secrets, never workflow inputs. Secret custody
-files live only in a bounded runner-temporary directory, are excluded from
-receipt artifacts, are removed before materialization, and are removed again
-under `always()` after the run. The public-cloud and clean-host targets require
-self-hosted runners carrying the corresponding labels; lack of such a runner
-leaves that environment qualification as remaining required work.
-
-An optional workflow that cannot run returns its own `not_run`, `ineligible`,
-or `failed` result and leaves only its environment qualification as remaining
-required work. The Functional Release Gate does not read, wait for, or
-aggregate these receipts.
+`npm run verify:real-machine` remains an explicit local entry for a specific
+environment claim. It executes the selected source-controlled phases from the
+current checkout and records only that environment's result; it is not a
+GitHub Actions publication stage and does not gate npm release eligibility.
 
 ### Upstream Service Publishing Functional Evidence
 
@@ -1287,10 +1078,9 @@ backend payloads remain protected.
 
 The HTML has exactly ten semantic sections with in-document navigation and
 table captions. Runtime health is listed beside the published operations, and
-client rows separately expose upload, uninstall, and cleanup outcomes. A fresh
-local success is scoped but unbound evidence; only the external candidate
-receipt binds the final HTML bytes and complete bundle. The Functional Release
-Gate remains the sole platform release authority.
+client rows separately expose upload, uninstall, and cleanup outcomes. A local
+success describes the observed integration journey and does not establish npm
+release eligibility. Core functional acceptance remains a separate result.
 
 The reducer recomputes authenticated mutation, durable publication, immutable
 runtime snapshot, Operation Permission revision agreement, scoped audience

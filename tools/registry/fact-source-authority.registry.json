@@ -75,8 +75,6 @@
         "tools/registry/release-definition.registry.json",
         ".github/workflows/ci.yml",
         ".github/workflows/release.yml",
-        ".github/workflows/release-branch.yml",
-        ".github/workflows/real-machine-validation.yml",
         "docs/RUNBOOK.md"
       ],
       "consumerPaths": [
@@ -102,14 +100,10 @@
       "authorityPath": "tools/server-scripts/verify-release-deployment.ts",
       "authorityRole": "release-deployment-verifier",
       "projectionPaths": [
-        "build/reports/release-deployment.json",
-        ".github/workflows/release-branch.yml",
-        ".github/workflows/release.yml"
+        "build/reports/release-deployment.json"
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-release-acceptance-standards.ts",
-        ".github/workflows/release-branch.yml",
-        ".github/workflows/release.yml",
         "tools/server-scripts/verify-release-deployment.ts",
         "tests/vitest/server/release-deployment-smoke.test.ts",
         "tests/vitest/server/external-synthetic-requests.test.ts"
@@ -122,30 +116,6 @@
         "The deployment receipt is a write-once projection of this verifier; workflows, reports, and documentation cannot recompute or relax its bounded scenarios.",
         "Deployment evidence is capacity-uncertified by contract and cannot be reused as a runtime-capacity claim.",
         "Receipts must contain only the fixed-size allowlisted aggregate fields and never embed runtime environment, machine identity, or personal data."
-      ]
-    },
-    {
-      "id": "release-branch-workflow",
-      "factKey": "release.branch-workflow",
-      "domain": "The release-branch workflow that resolves the successful stable complete-gate authority for the exact push commit and runs the external runtime-ui deployment verification before any release publication can consume that commit.",
-      "authorityPath": ".github/workflows/release-branch.yml",
-      "authorityRole": "release-branch-workflow-authority",
-      "projectionPaths": [
-        ".github/workflows/release.yml",
-        "docs/RUNBOOK.md"
-      ],
-      "consumerPaths": [
-        "tools/server-scripts/verify-release-acceptance-standards.ts",
-        ".github/workflows/release.yml",
-        "tools/registry/release-authority-baseline.registry.json"
-      ],
-      "verification": [
-        "npm run verify:acceptance:standards",
-        "npm run verify:release-definition"
-      ],
-      "nonAuthorityBoundaries": [
-        "The release workflow projects the release-branch deployment authority and cannot redefine its runner, receipt, or scenario set.",
-        "Tag publication must consume the release authority produced for the exact release tip commit and cannot bypass deployment verification."
       ]
     },
     {
@@ -329,30 +299,6 @@
       "nonAuthorityBoundaries": [
         "The server report terminates at server_published and depends only on the frozen wire contract observed through a neutral protocol peer.",
         "Client repositories, builds, tests, caches, reports, receipts, and adoption state cannot block or promote this server fact."
-      ]
-    },
-    {
-      "id": "upstream-service-publishing-candidate",
-      "factKey": "release.upstream-service-publishing-candidate",
-      "domain": "Immutable release tag, source commit and tree, complete upstream publishing report bundle, privacy scan, and the scoped upstream-publishing-prepublication-passed claim.",
-      "authorityPath": "tools/server-scripts/lib/upstream-service-publishing-candidate-receipt.ts",
-      "authorityRole": "upstream-service-publishing-candidate-receipt-authority",
-      "projectionPaths": [
-        "build/reports/upstream-service-publishing-candidate.json"
-      ],
-      "consumerPaths": [
-        "tools/server-scripts/verify-upstream-service-publishing-candidate.ts",
-        "tools/registry/release-definition.registry.json",
-        ".github/workflows/release.yml"
-      ],
-      "verification": [
-        "npm run verify:upstream-service-publishing-candidate",
-        "npm run server:verify:script-registry"
-      ],
-      "nonAuthorityBoundaries": [
-        "The candidate receipt establishes only scoped upstream publishing prepublication evidence and never establishes or replaces the functional-complete release claim.",
-        "The HTML report is a human-readable candidate-context projection; only the external receipt binds the final HTML bytes and the complete artifact set.",
-        "Optional sibling services, plugins, clients, and their repositories do not become Meshrix.js Core release authorities."
       ]
     },
     {

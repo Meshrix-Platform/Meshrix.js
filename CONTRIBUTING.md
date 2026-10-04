@@ -123,6 +123,18 @@ those artifacts when they are included in the delivery.
   Local environment discovery and engineering results do not establish those
   external facts.
 
+## npm Release
+
+The release workflow is `.github/workflows/release.yml`. Push a `v*` tag or
+manually dispatch it from the release tag; the workflow checks the tag
+against package metadata, builds and runs the applicable release tests, packs
+and smoke-tests the public npm archives, publishes them to npm, and creates a
+GitHub Release. It uses npm Trusted Publishing for ordinary publication. For
+the first publication only, a temporary `NPM_BOOTSTRAP_TOKEN` environment
+secret is exposed as `NODE_AUTH_TOKEN` to create the packages; configure npm
+Trusted Publishers after the packages exist, then remove the secret. See the
+[release procedure](docs/RUNBOOK.md#release-definition-and-publication).
+
 Keep this orchestration and its tools in the canonical implementation and update
 their existing consumers together. Any genuinely necessary manual step must
 state what the operator must do, why automation cannot do it and what input lets

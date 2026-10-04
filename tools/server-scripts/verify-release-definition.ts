@@ -5,9 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  verifyReleaseAcceptanceStandards,
-} from "./verify-release-acceptance-standards.ts";
-import {
   loadReleaseDefinition,
   resolveReleaseWorkspaceDirectories
 } from "./lib/release-metadata.ts";
@@ -19,23 +16,6 @@ import {
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const semverPattern: any =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
-const upstreamCandidateArtifacts: readonly any[] = Object.freeze([
-  "build/reports/upstream-service-publishing.json",
-  "build/reports/release-journey.json",
-  "build/reports/upstream-service-publishing/upstream-service-basic-config.json",
-  "build/reports/upstream-service-publishing.html",
-  "build/reports/upstream-service-publishing/screenshots/console-authenticated.png",
-  "build/reports/upstream-service-publishing/screenshots/console-organization-permissions.png",
-  "build/reports/upstream-service-publishing/screenshots/console-upstream-basic-config.png",
-  "build/reports/upstream-service-publishing/screenshots/console-upstream-operation-config.png",
-  "build/reports/upstream-service-publishing/screenshots/console-upstream-published.png",
-  "build/reports/upstream-service-publishing/screenshots/console-published-tool.png",
-  "build/reports/upstream-service-publishing/screenshots/console-api-key-generated.png",
-  "build/reports/upstream-service-publishing/screenshots/console-downstream-agent-configured.png",
-  "build/reports/upstream-service-publishing/screenshots/console-operation-approval-pending.png",
-  "build/reports/upstream-service-publishing/screenshots/console-operation-approval-completed.png",
-  "build/reports/upstream-service-publishing/screenshots/console-downstream-mcp-call.png"
-]);
 
 function fail(code?: any, detail?: any) : any {
   const error: Error & Record<string, any> = new Error(detail);
@@ -57,14 +37,14 @@ export async function verifyReleaseDefinition({
     fail("release_definition_npm_cli_version_invalid", "The release workflow requires an exact npm CLI version.");
   }
   const npmCliCoordinates: number[] = npmCliMatch.slice(1).map(Number);
-  const npmCliMinimum = [11, 21, 0];
+  const npmCliMinimum = [11, 5, 1];
   const npmCliSupported = npmCliCoordinates.some((part, index) => {
     if (part === npmCliMinimum[index]) return false;
     return part > npmCliMinimum[index] && npmCliCoordinates.slice(0, index)
       .every((previous, previousIndex) => previous === npmCliMinimum[previousIndex]);
   }) || npmCliCoordinates.every((part, index) => part === npmCliMinimum[index]);
   if (!npmCliSupported) {
-    fail("release_definition_npm_cli_version_unsupported", "The release workflow requires npm 11.21.0 or newer.");
+    fail("release_definition_npm_cli_version_unsupported", "The release workflow requires npm 11.5.1 or newer for trusted publishing.");
   }
   if (!semverPattern.test(version) || tag !== `v${version}`) {
     fail("release_definition_coordinates_invalid", "Release version and tag do not agree.");
@@ -137,20 +117,6 @@ export async function verifyReleaseDefinition({
     definition?.localVerification?.evidenceAuthority !== "local-only") {
     fail("release_definition_local_verification_invalid", "Local release verification must use the automatic project entry.");
   }
-  if (
-    definition?.prepublication?.requiredClaim !==
-      "upstream-publishing-prepublication-passed"
-    || definition?.prepublication?.candidateReceipt !==
-      "build/reports/upstream-service-publishing-candidate.json"
-    || JSON.stringify(definition?.prepublication?.artifacts) !==
-      JSON.stringify(upstreamCandidateArtifacts)
-  ) {
-    fail(
-      "release_definition_prepublication_invalid",
-      "The release definition must bind the complete upstream candidate artifact set."
-    );
-  }
-  await verifyReleaseAcceptanceStandards({ rootDir, rootPackage });
   return definition;
 }
 
@@ -195,7 +161,6 @@ async function main() : Promise<any> {
       tag: definition.release.tag,
       channel: definition.release.channel,
       containerTarget: definition.container.target,
-      prepublicationClaim: definition.prepublication.requiredClaim,
       stableClaim: definition.acceptance.stableRequiredClaim,
       releaseClaim: definition.acceptance.releaseRequiredClaim,
       npmCliVersion: definition.github.npmCliVersion

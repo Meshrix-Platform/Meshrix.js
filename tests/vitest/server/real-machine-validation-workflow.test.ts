@@ -58,46 +58,6 @@ function workflowOptions(fx?: any, commandRunner?: any, overrides: Record<string
 }
 
 describe("real machine validation workflow", () : any => {
-  it("uses one prefixed TLS certificate digest contract from preflight to target probe", () : any => {
-    const script: any = path.join(
-      repoRoot,
-      "tools/server-scripts/verify-real-machine-workflow-inputs.ts",
-    );
-    const commonEnv: Record<string, any> = {
-      ...process.env,
-      MESHRIX_REAL_MACHINE_TARGET: "public-cloud-single-node",
-      MESHRIX_PUBLIC_BASE_URL: "https://meshrix.invalid",
-      MESHRIX_TRUSTED_PROXIES: "192.0.2.0/24",
-      MESHRIX_PUBLIC_AGENT_MCP_URL: "https://meshrix.invalid/mcp",
-      MESHRIX_PUBLIC_UPSTREAM_HTTP_URL: "https://meshrix.invalid/upstream",
-      MESHRIX_PUBLIC_UPSTREAM_MCP_URL: "https://meshrix.invalid/upstream/mcp",
-      MESHRIX_PUBLIC_FAULT_URL: "https://meshrix.invalid/fault",
-      MESHRIX_CAPACITY_REQUESTS: "20",
-    };
-    const accepted: any = spawnSync(process.execPath, [script], {
-      cwd: repoRoot,
-      env: {
-        ...commonEnv,
-        MESHRIX_EXPECTED_CERT_SHA256: `sha256:${"a".repeat(64)}`,
-      },
-      encoding: "utf8",
-    });
-    expect(accepted.status).toBe(0);
-
-    const rejected: any = spawnSync(process.execPath, [script], {
-      cwd: repoRoot,
-      env: {
-        ...commonEnv,
-        MESHRIX_EXPECTED_CERT_SHA256: "a".repeat(64),
-      },
-      encoding: "utf8",
-    });
-    expect(rejected.status).toBe(1);
-    expect(rejected.stderr).toContain(
-      "real_machine_workflow_certificate_digest_invalid",
-    );
-  });
-
   it("provides a complete repository-controlled command manifest for every target", async () : Promise<any> => {
     expect(Object.keys(REAL_MACHINE_TARGET_COMMAND_MANIFESTS)).toEqual([
       "native-linux-x64",

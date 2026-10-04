@@ -1260,7 +1260,7 @@
         "tests/vitest/server/release-command-dag-runner.test.ts",
         "tests/vitest/server/release-evidence-freshness.test.ts",
         "tests/vitest/server/real-machine-validation-workflow.test.ts",
-        "tests/vitest/server/release-workflow-automation.test.ts",
+        "tests/vitest/server/release-workflow.test.ts",
         "tests/vitest/server/release-workflow-supply-chain.test.ts",
         "tests/vitest/server/required-report-validator.test.ts",
         "tests/vitest/server/verify-failure-localization.test.ts",
@@ -1274,6 +1274,8 @@
       "coverageContribution": false,
       "artifacts": [],
       "triggerPaths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
         "packages/foundation/src/environment-compatibility/host-backends.ts",
         "packages/foundation/src/environment-compatibility/host-runtime.ts",
         "packages/foundation/src/module-system/mount-manager.ts",
@@ -1312,7 +1314,7 @@
         "tests/vitest/server/release-candidate-identity.test.ts",
         "tests/vitest/server/release-command-dag-runner.test.ts",
         "tests/vitest/server/release-evidence-freshness.test.ts",
-        "tests/vitest/server/release-workflow-automation.test.ts",
+        "tests/vitest/server/release-workflow.test.ts",
         "tests/vitest/server/release-workflow-supply-chain.test.ts",
         "tests/vitest/server/required-report-validator.test.ts",
         "tests/vitest/server/single-node-reduce-existing.test.ts",
@@ -1322,6 +1324,7 @@
         "tools/generators/generate-architecture-diagram-digests.ts",
         "tools/generators/generate-supply-chain-artifacts.ts",
         "tools/registry/release-acceptance-standards.registry.json",
+        "tools/registry/release-definition.registry.json",
         "tools/registry/tests.registry.json",
         "tools/server-scripts/capability-acceptance-checkpoint-reducer.ts",
         "tools/server-scripts/lib/local-execution-environment.ts",
@@ -1356,7 +1359,6 @@
         "tools/server-scripts/npm-package-consumer.ts",
         "tools/server-scripts/prepare-release.ts",
         "tools/server-scripts/publish-release-set.ts",
-        "tools/server-scripts/release-workflow-automation.ts",
         "tools/server-scripts/verify-capability-acceptance-machines.ts",
         "tools/server-scripts/verify-mcp-release-assets.ts",
         "tools/server-scripts/verify-npm-package-installability.ts",
@@ -1364,6 +1366,7 @@
         "tools/server-scripts/verify-plugin-runtime.ts",
         "tools/server-scripts/verify-release-acceptance-standards.ts",
         "tools/server-scripts/verify-release-candidate-identity.ts",
+        "tools/server-scripts/verify-release-definition.ts",
         "tools/server-scripts/verify-single-node-internal-platform-e2e.ts",
         "tools/verifiers/architecture-graph.ts",
         "tools/verifiers/registry-release-authority-baseline.ts"
@@ -2421,24 +2424,6 @@
         "build/reports/release-journey.json",
         "build/reports/upstream-service-publishing.html",
         "build/reports/upstream-service-publishing/screenshots"
-      ]
-    },
-    {
-      "id": "release.upstream-service-publishing-candidate",
-      "label": "Immutable upstream publishing candidate artifact receipt verifier",
-      "owner": "platform",
-      "package": "server-runtime",
-      "level": "integration",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-upstream-service-publishing-candidate.ts"
-      ],
-      "sideEffects": "build-output",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [
-        "build/reports/upstream-service-publishing-candidate.json"
       ]
     },
     {

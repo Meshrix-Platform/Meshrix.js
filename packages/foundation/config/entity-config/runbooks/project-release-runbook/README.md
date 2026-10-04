@@ -1,65 +1,46 @@
 # Meshrix.js Project Release Runbook
 
-This built-in runbook prepares a release candidate for the repository-owned
-publication workflow. It does not commit, tag, push, upload, or publish. It is
-not exposed to downstream agents (`allowDownstream: false`).
+Use the repository-owned `.github/workflows/release.yml` to publish the two npm
+packages, `meshrix.js` and `@meshrix/gateway`. The workflow accepts a `v*` tag
+push or a manual run with an existing tag selected.
 
-## Candidate Preparation
+## Prepare and release
 
-1. Use `npm run release:prepare -- <version>` to update the canonical
-   release definition, package manifests, lockfile, and versioned consumers.
-   Review the version diff and run `npm run release:prepare -- --check`.
-2. The responsible Agent starts `npm run ci:local`. This single entry discovers
-   the current device's supported Node.js environment and usable local Docker,
-   selects applicable engineering checks, and retains their reports and logs.
-   Unavailable optional environments are recorded as `not_run`; they are not
-   simulated or replaced by a required remote or all-platform matrix.
-3. Complete source review and scoped repairs, then use the same entry with
-   `--scope release` for functional acceptance and qualification of the two
-   actual npm archives. Every selected check must pass. Repair the workflow or
-   product when a selected check fails, rerun affected checks, and reuse results
-   whose inputs remain unchanged. Artifact review belongs in this local flow.
-   Remove redundant or inapplicable restrictions without hiding a real failure.
-4. Submit the reviewed candidate through the governed `nightly` → `stable` →
-   `release` branch flow. The stable run binds the accepted candidate,
-   functional receipt, and npm installability report to the exact revision.
+1. Set the next version with `npm run release:prepare -- <version>`. Review the
+   version diff, then run `npm run release:prepare -- --check` and
+   `npm run verify:release-definition`.
+2. Commit and push the prepared version. Push its `v<version>` tag to start the
+   release, or dispatch `release.yml` from the existing tag:
+   `gh workflow run release.yml --ref vX.Y.Z`.
+3. The workflow checks the tag against package metadata, installs dependencies,
+   runs `npm run ci:local -- --scope release`, publishes the prepared package
+   archives, and creates a GitHub Release with generated notes. The release
+   scope builds and tests the products, packs the archives, and checks that
+   consumers can install and smoke-test them.
 
-One successfully qualified available environment establishes the npm
-installation claim. Other platforms remain unmeasured until separately tested.
-Containers, portable archives, offline delivery, and real-machine deployment
-claims have their own applicable checks and are not prerequisites for npm
-publication. A real Agent conversation is not a substitute for deterministic
-engineering verification.
+Optional deployment, real-machine, platform-matrix, and performance runs are
+separate from npm publication.
 
-## Publication
+## Configure npm
 
-`.github/workflows/release-branch.yml` validates the candidate and originating
-stable authority when a version reaches `release`, creates or verifies its
-canonical version tag, and dispatches `.github/workflows/release.yml`. The first
-version uses the explicitly authorized bootstrap-token procedure documented in
-`docs/RUNBOOK.md`; subsequent releases use npm trusted publishing through
-GitHub Actions OIDC. Temporary bootstrap credentials are removed after use.
+The first publication uses the temporary `NPM_BOOTSTRAP_TOKEN` GitHub
+environment secret, mapped to `NODE_AUTH_TOKEN` for the npm publish command.
+The secret belongs to the repository's `release-candidate` environment.
 
-The release workflow validates the tag and authority, prepares `meshrix.js` and
-`@meshrix/gateway`, and compares the exact archives with the existing npm
-qualification report. Read-only registry preflight and publication use those
-same archives. Gateway is published before the root package. The publisher
-verifies registry integrity, signatures, provenance, and version tags, preserving
-a newer `latest` or `next` tag. MCP support is included in `meshrix.js`.
+After both packages exist on npm, open each package's **Settings → Trusted
+Publisher** and add a **GitHub Actions** publisher with:
 
-After npm verification succeeds, the workflow uploads both archives, their
-release-set manifest, the production dependency SBOM, third-party notices, and
-the supply-chain manifest to a GitHub draft release. It verifies uploaded asset
-digests, publishes the release, and verifies actual immutability. A rerun may
-resume owned draft assets or reverify an identical published release. It must
-not replace a conflicting immutable release. No separate container publication
-or detached signature bundle is required for this npm release.
+- Organization or user: `Meshrix-Platform`
+- Repository: `Meshrix.js`
+- Workflow filename: `release.yml`
+- Environment: `release-candidate`
+- Allowed action: `npm publish`
 
-## Consumer Verification
+Enable account-level two-factor authentication before changing npm publisher
+settings. The workflow sets the publish dist-tag as part of `npm publish`, so
+the separate dist-tag permission is unnecessary. Once the publisher is set for
+both packages, delete the GitHub environment secret and revoke the temporary
+npm token. Ongoing releases use npm's standard GitHub Actions OIDC publishing.
 
-Install the desired published package from npm and use `npm audit signatures`
-to verify registry signatures and provenance. Downloaded GitHub archives can
-be checked against the SHA-512 integrity values in `meshrix-release-set.json`;
-the supply-chain manifest identifies the associated SBOM and notices. The
-release uses Apache-2.0. `docs/RUNBOOK.md` owns the operational publication and
-trusted-publisher setup procedure.
+See [docs/RUNBOOK.md](../../../../../../docs/RUNBOOK.md#release-definition-and-publication)
+for the full release procedure and npm settings links.

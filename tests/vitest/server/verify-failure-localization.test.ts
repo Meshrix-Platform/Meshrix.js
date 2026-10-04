@@ -138,12 +138,10 @@ describe("pull-request verification feedback", () => {
     const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
     const pullRequestJob = workflow.indexOf("  pull-request-verify:\n");
     const engineeringJob = workflow.indexOf("  engineering:\n");
-    const stableJob = workflow.indexOf("  stable-functional-completeness:\n");
     const dependencyReview = workflow.indexOf("  dependency-review:\n");
     expect(pullRequestJob).toBeGreaterThan(0);
     expect(engineeringJob).toBeGreaterThan(pullRequestJob);
-    expect(stableJob).toBeGreaterThan(engineeringJob);
-    expect(dependencyReview).toBeGreaterThan(stableJob);
+    expect(dependencyReview).toBeGreaterThan(engineeringJob);
 
     const prSection = workflow.slice(pullRequestJob, engineeringJob);
     expect(prSection).toContain("if: ${{ github.event_name == 'pull_request' }}");
@@ -153,21 +151,10 @@ describe("pull-request verification feedback", () => {
     expect(prSection).toContain("build/ci-diagnostics/local-ci/results.json");
     expect(prSection).toContain("build/local-ci/");
 
-    const engineeringSection = workflow.slice(engineeringJob, stableJob);
-    expect(engineeringSection).toContain("if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && github.ref_name == 'stable') }}");
+    const engineeringSection = workflow.slice(engineeringJob, dependencyReview);
+    expect(engineeringSection).toContain("if: ${{ github.event_name != 'pull_request' }}");
     expect(engineeringSection).toContain("npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json");
     expect(engineeringSection).toContain("build/local-ci/");
-
-    const stableSection = workflow.slice(stableJob, dependencyReview);
-    expect(stableSection).toContain("name: Stable functional completeness release gate");
-    expect(stableSection).toContain("if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}");
-    expect(stableSection).toContain("npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json");
-    expect(stableSection).toContain("resolve-branch-promotion-authority.ts");
-    expect(stableSection).toContain("create-stable-bundle");
-    expect(stableSection).toContain("npm-package-installability.json");
-    expect(stableSection).toContain("stable-authority-${{ github.sha }}");
-    expect(stableSection).toContain("if: ${{ always() }}");
-    expect(stableSection).toContain("build/local-ci/");
 
     const reviewSection = workflow.slice(dependencyReview);
     expect(reviewSection).toContain("name: Dependency review");

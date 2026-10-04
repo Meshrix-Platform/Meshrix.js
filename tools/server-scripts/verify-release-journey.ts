@@ -16,12 +16,10 @@
 //   --port N                Pin the host port (must be free).
 //   --image-name NAME       operator-supplied format-convert image.
 //   --json                  Also print the final report JSON to stdout.
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -103,12 +101,6 @@ const basicConfigReportPath: any = path.join(repoRoot, UPSTREAM_SERVICE_BASIC_CO
 const connectorScript: any = path.join(repoRoot, "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts");
 const binaryUploadChildScript: any = path.join(repoRoot, "tools/server-scripts/lib/release-journey-binary-upload-child.ts");
 const descriptorPath: any = path.join(repoRoot, "docs/examples/file-parser-format-convert.upstream.json");
-const releaseDefinitionPath: any = path.join(
-  repoRoot,
-  "tools/registry/release-definition.registry.json"
-);
-const execFileAsync: any = promisify(execFile);
-
 const API_KEY_TOOLSETS: any = "meshrix.gateway.write,meshrix.storage.read,meshrix.storage.write,meshrix.uploads.write";
 const API_KEY_SCOPES: any = "gateway:read,gateway:write,storage:read,storage:write,uploads:write";
 const API_KEY_MAX_RISK: any = "safe_write";
@@ -162,51 +154,6 @@ async function readVisualEvidenceFiles(root?: any, visualEvidence?: any) : Promi
   })));
 }
 
-async function createCandidateProjection() : Promise<any> {
-  const [releaseDefinitionText, commitResult, treeResult] = await Promise.all([
-    fs.readFile(releaseDefinitionPath, "utf8"),
-    execFileAsync("git", ["rev-parse", "HEAD"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    }),
-    execFileAsync("git", ["rev-parse", "HEAD^{tree}"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    })
-  ]);
-  const releaseDefinition: any = JSON.parse(releaseDefinitionText);
-  const releaseDefinitionSha256: any =
-    `sha256:${createHash("sha256").update(releaseDefinitionText).digest("hex")}`;
-  const sourceCommit: any = commitResult.stdout.trim();
-  const sourceTree: any = treeResult.stdout.trim();
-  const candidate: Record<string, any> = {
-    releaseTag: String(releaseDefinition?.release?.tag || ""),
-    releaseVersion: String(releaseDefinition?.release?.version || ""),
-    releaseDefinitionVersion: String(releaseDefinition?.version || ""),
-    sourceCommit,
-    sourceTree,
-    releaseDefinitionSha256
-  };
-  return {
-    candidate,
-    projection: {
-      claim: "upstream-publishing-prepublication-passed",
-      release: {
-        version: candidate.releaseVersion,
-        tag: candidate.releaseTag,
-        definitionVersion: candidate.releaseDefinitionVersion,
-        definitionSha256: candidate.releaseDefinitionSha256
-      },
-      source: {
-        commit: sourceCommit,
-        tree: sourceTree
-      }
-    }
-  };
-}
-
 async function main() : Promise<any> {
   const options: any = parseArgs(process.argv.slice(2));
   if (options.plan) {
@@ -214,10 +161,8 @@ async function main() : Promise<any> {
     return;
   }
 
-  const candidateContext: any = await createCandidateProjection();
   const redaction: any = createRedaction({ repoRoot });
   const report: any = createReleaseJourneyReport({});
-  report.candidate = candidateContext.candidate;
   const { addNeedle, redact, assertNoLeak } = redaction;
   const workDir: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-journey-"));
   const fetchOutputPath: any = path.join(workDir, "output.pdf");
@@ -996,8 +941,7 @@ async function main() : Promise<any> {
         coreReport,
         finalized.report,
         upstreamServiceBasicConfigText,
-        visualEvidenceFiles,
-        candidateContext.projection
+        visualEvidenceFiles
       ),
       "utf8"
     );
@@ -1008,8 +952,7 @@ async function main() : Promise<any> {
         null,
         finalized.report,
         "",
-        new Map<any, any>(),
-        null
+        new Map<any, any>()
       ),
       "utf8"
     );

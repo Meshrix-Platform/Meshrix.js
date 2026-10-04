@@ -17,7 +17,7 @@ const GITHUB_RETRY_INTERVAL_MS: any = 2_000;
 const WORKFLOW_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   nightly: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
   stable: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
-  release: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/release-branch.yml"]),
+  release: Object.freeze([".github/workflows/branch-flow.yml", ".github/workflows/ci.yml"]),
 });
 
 function failure(code?: any) : any {

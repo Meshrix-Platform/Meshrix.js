@@ -279,15 +279,20 @@ reviewed like any other change.
 - Registration stays mandatory and explicit under Automatic Tool And Script
   Registration above, but registration must not become the bulk of a change.
 
-## Publication Consumes The Verified Artifact
+## npm Publication
 
-The published object and the verified object must be the same object.
+The ordinary npm release path is `.github/workflows/release.yml`. A `v*` tag
+push or a manual run selecting a tag checks out that tag, confirms its package
+version, runs the applicable build and release tests, packs the public npm
+archives, installs and smoke-tests those archives, publishes them through npm's
+standard GitHub Actions Trusted Publisher flow, and creates the GitHub Release.
+Publish the archives produced by that run; do not add a second preparation or
+publication authority.
 
-- Publication consumes the archive that verification already validated. Do not
-  rebuild, repackage or re-derive artifacts inside the publication path;
-  re-packaging after verification creates a new, unverified candidate.
-- A publication retry reuses the same prepared artifact. Changed inputs produce a
-  new candidate and re-verify only the affected part.
-- Candidate-bound evidence names the exact commit and artifact digest it covers.
-  A report whose revision is a working tree is a diagnostic, not release
-  evidence.
+The first publication may use a temporary `NPM_BOOTSTRAP_TOKEN` environment
+secret because npm Trusted Publishing can only be configured after the package
+exists. Expose it as `NODE_AUTH_TOKEN` only to the publish command and remove
+it after the packages' Trusted Publishers are configured. Do not make
+cross-workflow receipts, manually constructed OIDC probes, or post-publication
+signature audits prerequisites for this release flow. A package version
+conflict must still be caught before publishing.

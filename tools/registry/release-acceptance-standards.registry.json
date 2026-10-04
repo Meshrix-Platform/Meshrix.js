@@ -30,7 +30,6 @@
     "requiredForRelease": false,
     "requiresClaim": "functional-complete",
     "command": "npm run verify:real-machine",
-    "workflow": ".github/workflows/real-machine-validation.yml",
     "targets": [
       {
         "id": "native-linux-x64",

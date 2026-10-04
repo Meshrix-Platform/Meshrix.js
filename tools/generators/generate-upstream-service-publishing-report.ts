@@ -25,8 +25,7 @@ if (journeyReport.releaseReady !== true) {
     null,
     journeyReport,
     "",
-    new Map<any, any>(),
-    null
+    new Map<any, any>()
   );
 } else {
   const [coreReportText, upstreamServiceBasicConfigText] = await Promise.all([
@@ -45,25 +44,11 @@ if (journeyReport.releaseReady !== true) {
     return [item.file, await fs.readFile(path.join(ROOT, item.file))];
     })
   ));
-  const candidateProjection: Record<string, any> = {
-    claim: "upstream-publishing-prepublication-passed",
-    release: {
-      version: journeyReport.candidate?.releaseVersion,
-      tag: journeyReport.candidate?.releaseTag,
-      definitionVersion: journeyReport.candidate?.releaseDefinitionVersion,
-      definitionSha256: journeyReport.candidate?.releaseDefinitionSha256
-    },
-    source: {
-      commit: journeyReport.candidate?.sourceCommit,
-      tree: journeyReport.candidate?.sourceTree
-    }
-  };
   html = renderUpstreamServicePublishingHtml(
     JSON.parse(coreReportText),
     journeyReport,
     upstreamServiceBasicConfigText,
-    visualEvidenceFiles,
-    candidateProjection
+    visualEvidenceFiles
   );
 }
 await fs.writeFile(path.join(ROOT, UPSTREAM_SERVICE_PUBLISHING_HTML_REPORT_PATH), html, "utf8");

@@ -24,7 +24,7 @@ skill.
    - Client implementations independently own cache consumption, product lifecycle, packaging, and compatibility. Core never discovers, imports, executes, or waits for those implementations or their evidence.
    - repository-local maintenance owns this skill and the catalog-backed workflow task.
 4. Use `$meshrix-js-security-authorization`, `$meshrix-js-protocol-gateway`, `$meshrix-js-operation-permission`, and `$meshrix-js-platform-acceptance-workflow` only for the Core boundaries actually changed.
-5. Use `$meshrix-js-release-journey-producer` for the pre-release verification lanes and receipt, `$meshrix-js-html-report-contract` for the report template, renderer, and screenshots, and `$meshrix-js-client-compatibility-matrix` for the downstream client matrix.
+5. Use `$meshrix-js-release-journey-producer` for Core verification and the optional integration journey, `$meshrix-js-html-report-contract` for the report template, renderer, and screenshots, and `$meshrix-js-client-compatibility-matrix` for the downstream client matrix.
 
 ## Preserve the publishing transaction
 
@@ -272,8 +272,8 @@ actual addresses, tokens, and scopes for the instance at hand.
 
 ## Boundaries
 
-Do not run the release verification lanes, prepublication verifier,
-screenshot capture, or HTML report from this skill; those belong to
+Do not run the optional integration journey, screenshot capture, or HTML report
+from this skill; those belong to
 `$meshrix-js-release-journey-producer`, `$meshrix-js-html-report-contract`,
 and `$meshrix-js-client-compatibility-matrix`. Do not copy a host credential
 into a container merely to make a host-owned command reachable; publish only

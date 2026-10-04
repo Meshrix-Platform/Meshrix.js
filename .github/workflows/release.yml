@@ -1,4 +1,4 @@
-# Publishes the canonical two-package npm release and its verified GitHub release.
+# Publish the packages and GitHub Release from one tagged source revision.
 name: Release
 
 env:
@@ -7,31 +7,7 @@ env:
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      originating_run_id:
-        description: "Successful release-branch workflow run that produced this candidate"
-        required: true
-        type: string
-      originating_run_attempt:
-        description: "Attempt number for the originating release-branch run"
-        required: true
-        type: string
-      originating_event:
-        description: "Event that started the originating release-branch run"
-        required: true
-        type: choice
-        options:
-          - push
-          - workflow_dispatch
-      source_revision:
-        description: "Exact source commit for this release"
-        required: true
-        type: string
-      bootstrap_candidate:
-        description: "Exact canonical version for first npm publication only"
-        required: false
-        type: string
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -41,204 +17,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release-definition:
-    name: Resolve the canonical release definition
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      node-version: ${{ steps.definition.outputs.node_version }}
-      npm-cli-version: ${{ steps.definition.outputs.npm_cli_version }}
-      release-tag: ${{ steps.definition.outputs.release_tag }}
-      release-version: ${{ steps.definition.outputs.release_version }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-      - name: Export canonical Node, npm, version, and tag
-        id: definition
-        run: node tools/server-scripts/release-workflow-automation.ts release-definition-outputs
-
-  release-authority:
-    name: Resolve and verify the exact release authority
-    needs: [release-definition]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ needs.release-definition.outputs.node-version }}
-      - name: Pin the canonical npm CLI
-        run: node tools/server-scripts/release-workflow-automation.ts pin-npm-cli
-      - name: Install release verification dependencies
-        run: npm ci --ignore-scripts
-      - name: Verify the canonical tag and package state
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          npm run verify:release-definition -- --tag "$RELEASE_TAG"
-          npm run release:prepare -- --check --tag "$RELEASE_TAG"
-      - name: Materialize the tag checkout candidate
-        run: node tools/server-scripts/verify-release-candidate-identity.ts --output build/release/control/expected/SOURCE_CANDIDATE.json
-      - name: Resolve the exact originating run and authority bundle
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ORIGINATING_RUN_ID: ${{ inputs.originating_run_id || '' }}
-          ORIGINATING_RUN_ATTEMPT: ${{ inputs.originating_run_attempt || '' }}
-          ORIGINATING_EVENT: ${{ inputs.originating_event || '' }}
-          SOURCE_REVISION: ${{ inputs.source_revision || '' }}
-          BOOTSTRAP_CANDIDATE: ${{ inputs.bootstrap_candidate || '' }}
-        run: node tools/server-scripts/release-workflow-automation.ts resolve-release-authority
-      - name: Retain the verified release authority bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: release-authority-${{ github.sha }}
-          path: build/release/control/release-authority/
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
-          overwrite: true
-
-  assemble-release-assets:
-    name: Build, package, and verify npm products without credentials
-    needs: [release-definition, release-authority]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ needs.release-definition.outputs.node-version }}
-      - name: Pin the canonical npm CLI
-        run: node tools/server-scripts/release-workflow-automation.ts pin-npm-cli
-      - name: Install build dependencies
-        run: npm ci
-      - name: Build the canonical npm products
-        run: npm run build
-      - name: Download the exact qualified release authority
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: release-authority-${{ github.sha }}
-          path: build/release/control/release-authority
-      - name: Generate the production dependency SBOM and notices
-        run: node tools/generators/generate-supply-chain-artifacts.ts --output build/release/supply-chain
-      - name: Verify the generated supply-chain artifacts
-        run: node tools/verifiers/verify-supply-chain-artifacts.ts --input build/release/supply-chain
-      - name: Prepare the public npm archives once
-        run: npm run release:publish-npm -- --prepare --artifact-dir build/release/npm-set
-      - name: Match prepared npm archives to the qualified candidate
-        run: node tools/server-scripts/release-workflow-automation.ts verify-prepared-qualification
-      - name: Retain the exact package archives and supply-chain files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: release-inputs-${{ github.sha }}
-          path: |
-            build/release/npm-set/
-            build/release/supply-chain/
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
-          overwrite: true
-
-  npm-registry-preflight:
-    name: Preflight both npm packages before publication
-    needs: [release-definition, assemble-release-assets]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ needs.release-definition.outputs.node-version }}
-      - name: Pin the canonical npm CLI
-        run: node tools/server-scripts/release-workflow-automation.ts pin-npm-cli
-      - name: Install release tooling without lifecycle scripts
-        run: npm ci --ignore-scripts
-      - name: Download the prepared package archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: release-inputs-${{ github.sha }}
-          path: build/release
-      - name: Read and validate all npm package versions and dist-tags without publication
-        run: npm run release:publish-npm -- --preflight --artifact-dir build/release/npm-set
-
-  publish-npm-release-set:
-    name: Publish or reverify the exact npm release set
-    needs: [release-definition, npm-registry-preflight]
+  release:
+    name: Verify and publish release
     runs-on: ubuntu-latest
     environment: release-candidate
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+          ref: ${{ github.ref }}
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: ${{ needs.release-definition.outputs.node-version }}
-      - name: Pin the canonical npm CLI
-        run: node tools/server-scripts/release-workflow-automation.ts pin-npm-cli
-      - name: Install release tooling without lifecycle scripts
-        run: npm ci --ignore-scripts
-      - name: Download the preflighted package set
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: release-inputs-${{ github.sha }}
-          path: build/release
-      - name: Verify package-scoped npm trusted publisher access
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.bootstrap_candidate == '' }}
-        run: npm run release:publish-npm -- --verify-oidc-trust --artifact-dir build/release/npm-set
-      - name: Publish or reverify the exact prepared archives through npm OIDC
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.bootstrap_candidate == '' }}
-        run: npm run release:publish-npm -- --artifact-dir build/release/npm-set
-      - name: Publish the first canonical release with the explicit bootstrap token
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_candidate != '' }}
+          node-version: "24.16.0"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Use the repository-configured npm CLI for Trusted Publishing
+        run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
+
+      - name: Check the tag against the release packages
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
+
+      - name: Run release acceptance and prepare the qualified npm archives
+        run: npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json
+
+      - name: Publish the qualified npm archives
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
-          BOOTSTRAP_CANDIDATE: ${{ inputs.bootstrap_candidate }}
-        run: >-
-          npm run release:publish-npm --
-          --artifact-dir build/release/npm-set
-          --auth bootstrap
-          --bootstrap-candidate "$BOOTSTRAP_CANDIDATE"
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npm run release:publish-npm -- --artifact-dir build/release/npm-set
 
-  publish-github-release:
-    name: Publish and verify the immutable GitHub Release
-    needs: [release-definition, publish-npm-release-set, assemble-release-assets]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ needs.release-definition.outputs.node-version }}
-      - name: Install release tooling without lifecycle scripts
-        run: npm ci --ignore-scripts
-      - name: Download the exact qualified npm release assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: release-inputs-${{ github.sha }}
-          path: build/release
-      - name: Publish or verify the immutable release and exact assets
+      - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node tools/server-scripts/release-workflow-automation.ts publish-github-release
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub Release already exists for $RELEASE_TAG"
+          else
+            gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes
+          fi

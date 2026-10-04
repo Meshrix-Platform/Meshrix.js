@@ -110,8 +110,7 @@ export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?
     realMachine?.claim !== EXPECTED_REAL_MACHINE_CLAIM ||
     realMachine?.requiredForRelease !== false ||
     realMachine?.requiresClaim !== EXPECTED_FUNCTIONAL_CLAIM ||
-    realMachine?.command !== "npm run verify:real-machine" ||
-    realMachine?.workflow !== ".github/workflows/real-machine-validation.yml"
+    realMachine?.command !== "npm run verify:real-machine"
   ) {
     reasons.push("real_machine_release_standard_invalid");
   }
@@ -160,142 +159,10 @@ export async function verifyReleaseAcceptanceStandards({
   const result: any = validateReleaseAcceptanceStandards(registry, packageDefinition);
   if (!result.valid) fail(result.reasons[0]);
 
-  const [realMachineWorkflow, releaseWorkflow, ciWorkflow, releaseBranchWorkflow, releaseWorkflowAutomation] =
-    await Promise.all([
-      fs.readFile(path.join(rootDir, registry.realMachineVerification.workflow), "utf8")
-        .catch(() : any => fail("real_machine_workflow_missing")),
-      fs.readFile(path.join(rootDir, ".github/workflows/release.yml"), "utf8")
-        .catch(() : any => fail("release_workflow_missing")),
-      fs.readFile(path.join(rootDir, ".github/workflows/ci.yml"), "utf8")
-        .catch(() : any => fail("ci_workflow_missing")),
-      fs.readFile(path.join(rootDir, ".github/workflows/release-branch.yml"), "utf8")
-        .catch(() : any => fail("release_branch_workflow_missing")),
-      fs.readFile(path.join(rootDir, "tools/server-scripts/release-workflow-automation.ts"), "utf8")
-        .catch(() : any => fail("release_workflow_automation_missing")),
-    ]);
-  const releaseBranchMarkers: any[] = [
-    "node tools/server-scripts/release-workflow-automation.ts prepare-branch-authority",
-    "node tools/server-scripts/release-workflow-automation.ts ensure-release-tag",
-    "node tools/server-scripts/release-workflow-automation.ts dispatch-release",
-    "BOOTSTRAP_CANDIDATE",
-    "release-authority-${{ github.sha }}",
-  ];
-  if (
-    releaseBranchMarkers.some((marker?: any) : any => !releaseBranchWorkflow.includes(marker)) ||
-    releaseBranchWorkflow.includes("verify-platform-acceptance.ts") ||
-    releaseBranchWorkflow.includes("functional-completeness") ||
-    releaseBranchWorkflow.includes("release-deployment") ||
-    !releaseWorkflowAutomation.includes("STABLE_AUTHORITY_FILES") ||
-    !releaseWorkflowAutomation.includes('"npm-package-installability.json"') ||
-    !releaseWorkflowAutomation.includes('"create-release-bundle"') ||
-    !releaseWorkflowAutomation.includes('"verify-release-bundle"')
-  ) {
-    fail("release_branch_workflow_contract_invalid");
-  }
-  if (
-    releaseWorkflow.includes("\n  functional-completeness:\n") ||
-    releaseWorkflow.includes("git merge-base --is-ancestor")
-  ) {
-    fail("release_workflow_functional_rerun_forbidden");
-  }
-  const stableGateStart: any = ciWorkflow.indexOf("\n  stable-functional-completeness:\n");
-  const stableGateSection: any = stableGateStart < 0
-    ? ""
-    : ciWorkflow.slice(stableGateStart);
-  const nextStableJob: any = stableGateSection.slice("\n  stable-functional-completeness:\n".length)
-    .search(/\n  [a-z][a-z0-9-]*:\n/u);
-  const stableGate: any = stableGateStart < 0
-    ? ""
-    : ciWorkflow.slice(
-      stableGateStart,
-      nextStableJob < 0 ? ciWorkflow.length : stableGateStart + "\n  stable-functional-completeness:\n".length + nextStableJob,
-    );
-  const stableGateMarkers: any[] = [
-    "github.event_name == 'push' && github.ref_name == 'stable'",
-    "npm run ci:local -- --scope release",
-    "create-stable-bundle",
-    "--candidate build/release/control/SOURCE_CANDIDATE.json",
-    "--functional build/reports/accepted-candidate.json",
-    "--npm-report build/reports/npm-package-installability.json",
-    "--run-id ${{ github.run_id }}",
-    "--run-attempt ${{ github.run_attempt }}",
-    "--bundle build/release/control/stable-authority",
-    "name: stable-authority-${{ github.sha }}",
-    "path: build/release/control/stable-authority/",
-  ];
-  if (
-    stableGateMarkers.some((marker?: any) : any => !stableGate.includes(marker)) ||
-    stableGate === "" ||
-    stableGate.includes("github.ref_name == 'release'") ||
-    stableGate.includes("verify-release-deployment")
-  ) {
-    fail("ci_workflow_stable_gate_contract_invalid");
-  }
   await fs.access(path.join(rootDir, registry.npmPackageInstallability.controller))
     .catch(() : any => fail("npm_package_installability_verifier_missing"));
   await fs.access(path.join(rootDir, registry.releaseDeploymentVerification.controller))
     .catch(() : any => fail("release_deployment_verifier_missing"));
-  const realMachineRequiredMarkers: any[] = [
-    "workflow_dispatch:",
-    "source_revision:",
-    "functional_run_id:",
-    "ref: ${{ inputs.source_revision }}",
-    "verify-real-machine-source-run.ts",
-    "verify-real-machine-workflow-inputs.ts",
-    "run-id: ${{ inputs.functional_run_id }}",
-    "name: release-authority-${{ inputs.source_revision }}",
-    "name: unsigned-release-image-${{ inputs.source_revision }}",
-    "resolve-real-machine-candidate.ts",
-    "MESHRIX_REAL_MACHINE_CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}",
-    '--candidate "${{ steps.candidate.outputs.digest }}"',
-    "MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE:",
-    "MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE:",
-    "MESHRIX_REAL_MACHINE_BACKUP_INPUT:",
-    "MESHRIX_REAL_MACHINE_PUBLIC_AGENT_MCP_URL:",
-    "MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_HTTP_URL:",
-    "MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_MCP_URL:",
-    "MESHRIX_REAL_MACHINE_PUBLIC_FAULT_URL:",
-    "MESHRIX_REAL_MACHINE_EXPECTED_CERT_SHA256:",
-    "npm run verify:real-machine --",
-    "Remove ephemeral production secret custody inputs",
-    "MESHRIX_REAL_MACHINE_SECRET_ROOT: ${{ runner.temp }}/meshrix-real-machine-secrets",
-  ];
-  if (
-    realMachineRequiredMarkers.some((marker?: any) : any => !realMachineWorkflow.includes(marker)) ||
-    realMachineWorkflow.includes("candidate_artifact_run_id:") ||
-    realMachineWorkflow.includes("candidate_digest:") ||
-    registry.realMachineVerification.targets.some(
-      (target?: any) : any => !realMachineWorkflow.includes(target.id),
-    )
-  ) {
-    fail("real_machine_workflow_contract_invalid");
-  }
-  const mandatoryWorkflowForbiddenMarkers: any[] = [
-    "verify-release-image-native",
-    "verify-macos-mcp-final-asset",
-    "npm-package-node22",
-    "--host-platform-probe",
-    "npm run verify:real-machine",
-    "continue-on-error: true",
-    "\n  platform-acceptance:\n",
-    "Canonical platform acceptance",
-  ];
-  if (mandatoryWorkflowForbiddenMarkers.some((marker?: any) : any => releaseWorkflow.includes(marker))) {
-    fail("release_workflow_real_machine_dependency_forbidden");
-  }
-  const ciForbiddenMarkers: any[] = [
-    "windows-installer-security:",
-    "--host-platform-probe",
-    "macos-latest",
-    "windows-latest",
-    "npm run verify:real-machine",
-    "continue-on-error: true",
-    "\n  platform-acceptance:\n",
-    "Canonical platform acceptance",
-  ];
-  if (ciForbiddenMarkers.some((marker?: any) : any => ciWorkflow.includes(marker))) {
-    fail("ci_workflow_real_machine_dependency_forbidden");
-  }
   for (const target of registry.realMachineVerification.targets) {
     const nodeScript: any = simulationCommandExists(target.simulationCommand, packageDefinition);
     if (typeof nodeScript === "string") {
@@ -309,16 +176,6 @@ export async function verifyReleaseAcceptanceStandards({
   ).catch(() : any => {
     fail("real_machine_verifier_missing");
   });
-  for (const supportScript of [
-    "tools/server-scripts/verify-real-machine-source-run.ts",
-    "tools/server-scripts/resolve-real-machine-candidate.ts",
-    "tools/server-scripts/verify-real-machine-workflow-inputs.ts",
-    "tools/server-scripts/cleanup-real-machine-secrets.ts",
-  ]) {
-    await fs.access(path.join(rootDir, supportScript)).catch(() : any => {
-      fail("real_machine_workflow_support_missing");
-    });
-  }
   for (const target of registry.realMachineVerification.targets) {
     const commandsPath: any = path.join(
       rootDir,

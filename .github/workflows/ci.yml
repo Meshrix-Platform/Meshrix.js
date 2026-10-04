@@ -7,7 +7,6 @@ env:
 on:
   push:
     branches: ["nightly", "stable", "release"]
-    tags: ["v*"]
   pull_request:
     branches: ["nightly", "stable", "release"]
   workflow_dispatch:
@@ -52,7 +51,7 @@ jobs:
 
   engineering:
     name: Engineering verification
-    if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && github.ref_name == 'stable') }}
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,56 +77,6 @@ jobs:
             build/local-ci/
           if-no-files-found: warn
           retention-days: 14
-          overwrite: true
-
-  stable-functional-completeness:
-    name: Stable functional completeness release gate
-    if: ${{ github.event_name == 'push' && github.ref_name == 'stable' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.21.0"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Materialize the immutable source-candidate authority
-        run: node tools/server-scripts/verify-release-candidate-identity.ts --output build/release/control/SOURCE_CANDIDATE.json
-      - name: Run the canonical release acceptance controller
-        run: npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json
-      - name: Assemble the validated stable authority bundle
-        run: >-
-          node tools/server-scripts/resolve-branch-promotion-authority.ts
-          create-stable-bundle
-          --candidate build/release/control/SOURCE_CANDIDATE.json
-          --functional build/reports/accepted-candidate.json
-          --npm-report build/reports/npm-package-installability.json
-          --run-id ${{ github.run_id }}
-          --run-attempt ${{ github.run_attempt }}
-          --bundle build/release/control/stable-authority
-      - name: Export the stable candidate authority bundle
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-authority-${{ github.sha }}
-          path: build/release/control/stable-authority/
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-      - name: Retain sanitized logs and structured results
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: stable-engineering-${{ github.sha }}
-          path: |
-            build/ci-diagnostics/release-local-ci/results.json
-            build/local-ci/
-          if-no-files-found: warn
-          retention-days: 30
           overwrite: true
 
   dependency-review:

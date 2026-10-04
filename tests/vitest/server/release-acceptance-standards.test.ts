@@ -1,3 +1,7 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import standards from "../../../tools/registry/release-acceptance-standards.registry.json" with {
@@ -6,6 +10,8 @@ import standards from "../../../tools/registry/release-acceptance-standards.regi
 import {
   validateReleaseAcceptanceStandards,
 } from "../../../tools/server-scripts/verify-release-acceptance-standards.ts";
+
+import { verifyReleaseDefinition } from "../../../tools/server-scripts/verify-release-definition.ts";
 
 function rootPackage() : any {
   return {
@@ -63,5 +69,33 @@ describe("release acceptance standards", () : any => {
     expect(
       validateReleaseAcceptanceStandards(standards, packageDefinition).reasons,
     ).toContain("real_machine_command_missing_or_mismatched");
+  });
+});
+
+
+describe("release metadata verification", () => {
+  it("verifies publish metadata independently of optional platform workflows and live evidence", async () => {
+    const repository = fileURLToPath(new URL("../../../", import.meta.url));
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-metadata-"));
+    const definitionPath = "tools/registry/release-definition.registry.json";
+    const definition = JSON.parse(await fs.readFile(path.join(repository, definitionPath), "utf8"));
+    definition.github.npmCliVersion = "11.5.1";
+    const plan = JSON.parse(await fs.readFile(path.join(repository, "docs/releases/plan.json"), "utf8"));
+    try {
+      for (const filename of [...definition.packages.manifests, "package-lock.json", "docs/releases/plan.json", plan.changelog]) {
+        const destination = path.join(rootDir, filename);
+        await fs.mkdir(path.dirname(destination), { recursive: true });
+        await fs.copyFile(path.join(repository, filename), destination);
+      }
+      await fs.mkdir(path.dirname(path.join(rootDir, definitionPath)), { recursive: true });
+      await fs.writeFile(path.join(rootDir, definitionPath), JSON.stringify(definition));
+      await expect(verifyReleaseDefinition({ rootDir, expectedTag: definition.release.tag })).resolves.toEqual(definition);
+      await expect(verifyReleaseDefinition({ rootDir, expectedTag: "v9.9.9" })).rejects.toMatchObject({ code: "release_definition_tag_mismatch" });
+      definition.github.npmCliVersion = "11.5.0";
+      await fs.writeFile(path.join(rootDir, definitionPath), JSON.stringify(definition));
+      await expect(verifyReleaseDefinition({ rootDir })).rejects.toMatchObject({ code: "release_definition_npm_cli_version_unsupported" });
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
   });
 });

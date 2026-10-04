@@ -16,12 +16,9 @@ import {
   resolveNpmCliInvocation
 } from "./lib/npm-cli-invocation.ts";
 import { assertReleaseVersion, resolveReleaseWorkspaceDirectories } from "./lib/release-metadata.ts";
-import { FIRST_NPM_BOOTSTRAP_VERSION } from "./lib/release-deployment/contract.ts";
 
 const execFileAsync: any = promisify(execFile);
 const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
-const NPM_OIDC_AUDIENCE: any = "npm:registry.npmjs.org";
-const BOOTSTRAP_USER_CONFIG: any = "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n";
 export const PREPARED_RELEASE_SET_FILENAME: any = "meshrix-release-set.json";
 const PREPARED_RELEASE_SET_SCHEMA: any = "meshrix.npm-release-set/v1";
 const PREPARATION_OWNERSHIP_FILENAME: any = ".meshrix-release-set-preparation.json";
@@ -32,23 +29,9 @@ const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
   "optionalDependencies",
   "peerDependencies"
 ]);
-const RAW_NPM_TOKEN_ENVIRONMENT_NAMES: readonly any[] = Object.freeze([
-  "NODE_AUTH_TOKEN",
-  "NPM_TOKEN",
-  "NPM_CONFIG__AUTHTOKEN",
-  "npm_config__authToken",
-  "NPM_CONFIG__AUTH",
-  "npm_config__auth",
-  "NPM_CONFIG_AUTH",
-  "npm_config_auth"
-]);
 const PACKAGE_NAME_PATTERN: any =
   /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
 const INTEGRITY_PATTERN: any = /^sha512-[A-Za-z0-9+/]+={0,2}$/u;
-const REGISTRY_SIGNATURE_KEY_PATTERN: any = /^SHA256:[A-Za-z0-9+/]+={0,2}$/u;
-const BASE64_PATTERN: any = /^[A-Za-z0-9+/]+={0,2}$/u;
-const BUILD_METADATA_PATTERN: any = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
-const SLSA_PROVENANCE_PREDICATE: any = "https://slsa.dev/provenance/v1";
 const MAX_COMMAND_OUTPUT_BYTES: any = 16 * 1024 * 1024;
 
 export class ReleaseSetPublicationError extends Error {
@@ -352,73 +335,6 @@ export function releaseTagForVersion(version?: any) : any {
   return normalized.split("+", 1)[0].includes("-") ? "next" : "latest";
 }
 
-function parseComparableVersion(value?: any) : any {
-  const normalized: any = String(value || "").trim();
-  const versionParts: any = normalized.split("+");
-  if (
-    versionParts.length > 2 ||
-    (versionParts.length === 2 && !BUILD_METADATA_PATTERN.test(versionParts[1]))
-  ) {
-    throw new Error("registry_version_invalid");
-  }
-  const withoutBuildMetadata: any = versionParts[0];
-  const validated: any = assertReleaseVersion(withoutBuildMetadata);
-  const prereleaseOffset: any = validated.indexOf("-");
-  const core: any = prereleaseOffset < 0 ? validated : validated.slice(0, prereleaseOffset);
-  const prerelease: any = prereleaseOffset < 0 ? null : validated.slice(prereleaseOffset + 1);
-  return {
-    normalized,
-    core: core.split("."),
-    prerelease: prerelease === null ? null : prerelease.split(".")
-  };
-}
-
-function compareNumericIdentifiers(left?: any, right?: any) : any {
-  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
-  return left === right ? 0 : left < right ? -1 : 1;
-}
-
-function comparePrereleaseIdentifiers(left?: any, right?: any) : any {
-  const leftNumeric: any = /^\d+$/u.test(left);
-  const rightNumeric: any = /^\d+$/u.test(right);
-  if (leftNumeric && rightNumeric) return compareNumericIdentifiers(left, right);
-  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
-  return left === right ? 0 : left < right ? -1 : 1;
-}
-
-export function compareReleaseVersions(leftValue?: any, rightValue?: any) : any {
-  let left: any;
-  let right: any;
-  try {
-    left = parseComparableVersion(leftValue);
-    right = parseComparableVersion(rightValue);
-  } catch {
-    throw publicationError(
-      "release_set_registry_tag_version_invalid",
-      "The npm registry returned an invalid dist-tag version."
-    );
-  }
-  for (let index: any = 0; index < 3; index += 1) {
-    const comparison: any = compareNumericIdentifiers(left.core[index], right.core[index]);
-    if (comparison !== 0) return comparison;
-  }
-  if (left.prerelease === null || right.prerelease === null) {
-    if (left.prerelease === right.prerelease) return 0;
-    return left.prerelease === null ? 1 : -1;
-  }
-  const length: any = Math.max(left.prerelease.length, right.prerelease.length);
-  for (let index: any = 0; index < length; index += 1) {
-    if (left.prerelease[index] === undefined) return -1;
-    if (right.prerelease[index] === undefined) return 1;
-    const comparison: any = comparePrereleaseIdentifiers(
-      left.prerelease[index],
-      right.prerelease[index]
-    );
-    if (comparison !== 0) return comparison;
-  }
-  return 0;
-}
-
 function normalizeRequestedTag(version?: any, requestedTag?: any) : any {
   const expected: any = releaseTagForVersion(version);
   const normalized: any = requestedTag === undefined ? expected : String(requestedTag);
@@ -431,127 +347,36 @@ function normalizeRequestedTag(version?: any, requestedTag?: any) : any {
   return normalized;
 }
 
-function assertNoRawNpmToken(environment?: any) : any {
-  if (Object.entries(environment || {}).some(([name, value]) => (
-    isSensitiveNpmEnvironmentName(name) && Boolean(value)
-  ))) {
-    throw publicationError(
-      "release_set_raw_npm_token_forbidden",
-      "OIDC publication does not accept raw npm token credentials."
-    );
-  }
-}
-
-function selectPublicationAuth({
-  authMode = "oidc",
-  bootstrapCandidate,
-  version,
-  environment = process.env
-}: Record<string, any> = {}) : any {
-  if (authMode === "oidc") {
-    if (bootstrapCandidate !== undefined) {
-      throw publicationError(
-        "release_set_bootstrap_candidate_invalid",
-        "A bootstrap candidate is valid only with explicit bootstrap authentication."
-      );
-    }
-    assertNoRawNpmToken(environment);
-    return { authMode, authToken: undefined };
-  }
-  if (authMode !== "bootstrap") {
-    throw publicationError(
-      "release_set_auth_mode_invalid",
-      "Publication authentication must be OIDC or an explicit bootstrap candidate."
-    );
-  }
-  if (bootstrapCandidate !== version || version !== FIRST_NPM_BOOTSTRAP_VERSION) {
-    throw publicationError(
-      "release_set_bootstrap_candidate_invalid",
-      "Bootstrap authentication must explicitly name the prepared release version."
-    );
-  }
-  const tokenNames: any[] = Object.keys(environment || {}).filter((name?: any) : any => (
-    isSensitiveNpmEnvironmentName(name) && Boolean(environment[name])
-  ));
-  if (tokenNames.length !== 1 || tokenNames[0] !== "NODE_AUTH_TOKEN") {
-    throw publicationError(
-      "release_set_bootstrap_credential_missing",
-      "Explicit bootstrap publication requires only NODE_AUTH_TOKEN."
-    );
-  }
-  return { authMode, authToken: environment.NODE_AUTH_TOKEN };
-}
-
-function isSensitiveNpmEnvironmentName(name?: any) : any {
-  const normalized: any = String(name).toLowerCase();
-  return RAW_NPM_TOKEN_ENVIRONMENT_NAMES.some((candidate?: any) : any => (
-    candidate.toLowerCase() === normalized
-  ));
-}
-
-function isolatedNpmEnvironment(environment?: any) : any {
-  const result: any = {};
-  for (const [name, value] of Object.entries(environment || {})) {
-    if (isSensitiveNpmEnvironmentName(name)) continue;
-    if (String(name).toLowerCase().startsWith("npm_config_")) continue;
-    result[name] = value;
-  }
-  return result;
-}
-
 export function createNpmRunner({
   environment = process.env,
   exec = execFileAsync
 }: Record<string, any> = {}) : any {
   const invocation: any = resolveNpmCliInvocation({ env: environment });
-  const safeEnvironment: any = isolatedNpmEnvironment(environment);
-  return async (args: any, { cwd, authToken }: Record<string, any>) : Promise<any> => {
-    const mutating: any = args[0] === "publish" || args[0] === "dist-tag";
-    if (authToken && !mutating) {
-      throw publicationError(
-        "release_set_auth_scope_invalid",
-        "A bootstrap credential may only be used by an npm publication mutation."
-      );
-    }
-    let configDirectory: any;
+  return async (args: any, { cwd }: Record<string, any> = {}) : Promise<any> => {
+    const publishing: any = args[0] === "publish";
     try {
-      configDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-config-"));
-      const userConfigPath: any = path.join(configDirectory, "user.npmrc");
-      const globalConfigPath: any = path.join(configDirectory, "global.npmrc");
-      const bootstrapMutation: any = Boolean(authToken && mutating);
-      await Promise.all([
-        fs.writeFile(userConfigPath, bootstrapMutation ? BOOTSTRAP_USER_CONFIG : "", {
-          encoding: "utf8",
-          mode: 0o600
-        }),
-        fs.writeFile(globalConfigPath, "", { encoding: "utf8", mode: 0o600 })
-      ]);
-      const childEnvironment: any = {
-        ...safeEnvironment,
-        npm_config_userconfig: userConfigPath,
-        npm_config_globalconfig: globalConfigPath
-      };
-      if (bootstrapMutation) childEnvironment.NODE_AUTH_TOKEN = authToken;
       const result: any = await exec(
         invocation.command,
         npmCliArgs(invocation, args),
         {
           cwd,
           encoding: "utf8",
-          env: childEnvironment,
+          env: { ...environment },
           maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
           windowsHide: true
         }
       );
-      return { exitCode: 0, stdout: result.stdout || "", stderr: result.stderr || "" };
+      return {
+        exitCode: 0,
+        stdout: publishing ? "" : result.stdout || "",
+        stderr: publishing ? "" : result.stderr || ""
+      };
     } catch (error: any) {
       return {
         exitCode: typeof error?.code === "number" ? error.code : 1,
-        stdout: String(error?.stdout || ""),
-        stderr: String(error?.stderr || "")
+        stdout: publishing ? "" : String(error?.stdout || ""),
+        stderr: publishing ? "" : String(error?.stderr || "")
       };
-    } finally {
-      if (configDirectory) await fs.rm(configDirectory, { recursive: true, force: true }).catch(() : any => undefined);
     }
   };
 }
@@ -1291,92 +1116,12 @@ function registryVersionMissing(result?: any) : any {
   return /(?:\bE404\b|404\s+Not\s+Found)/iu.test(output);
 }
 
-function parseRegistryJson(result?: any, code?: any, message?: any) : any {
-  try {
-    return parseNpmExactViewJson(result.stdout);
-  } catch {
-    throw publicationError(code, message);
-  }
-}
-
-function hasValidRegistrySignatures(signatures?: any) : any {
-  return Array.isArray(signatures) && signatures.length > 0 && signatures.every((signature?: any) : any => (
-    signature &&
-    typeof signature === "object" &&
-    REGISTRY_SIGNATURE_KEY_PATTERN.test(String(signature.keyid || "")) &&
-    BASE64_PATTERN.test(String(signature.sig || ""))
-  ));
-}
-
-function hasValidProvenanceAttestation(attestations?: any, packageRecord?: any) : any {
-  if (
-    !attestations ||
-    typeof attestations !== "object" ||
-    Array.isArray(attestations) ||
-    attestations?.provenance?.predicateType !== SLSA_PROVENANCE_PREDICATE
-  ) {
-    return false;
-  }
-  let attestationUrl: any;
-  try {
-    attestationUrl = new URL(String(attestations.url || ""));
-  } catch {
-    return false;
-  }
-  if (
-    attestationUrl.origin !== new URL(OFFICIAL_NPM_REGISTRY).origin ||
-    attestationUrl.username ||
-    attestationUrl.password ||
-    attestationUrl.search ||
-    attestationUrl.hash
-  ) {
-    return false;
-  }
-  const prefix: any = "/-/npm/v1/attestations/";
-  if (!attestationUrl.pathname.startsWith(prefix)) return false;
-  try {
-    return decodeURIComponent(attestationUrl.pathname.slice(prefix.length)) ===
-      `${packageRecord.name}@${packageRecord.version}`;
-  } catch {
-    return false;
-  }
-}
-
-function validatePublishedDistribution(distribution?: any, packageRecord?: any) : any {
-  if (!distribution || typeof distribution !== "object" || Array.isArray(distribution)) {
-    throw publicationError(
-      "release_set_registry_distribution_invalid",
-      "The npm registry returned invalid package distribution metadata."
-    );
-  }
-  const integrity: any = String(distribution.integrity || "");
-  if (!INTEGRITY_PATTERN.test(integrity)) {
-    throw publicationError(
-      "release_set_registry_integrity_invalid",
-      "The npm registry returned an invalid integrity value."
-    );
-  }
-  if (!hasValidRegistrySignatures(distribution.signatures)) {
-    throw publicationError(
-      "release_set_registry_signature_missing",
-      "Every published release-set version must carry a valid npm registry signature record."
-    );
-  }
-  if (!hasValidProvenanceAttestation(distribution.attestations, packageRecord)) {
-    throw publicationError(
-      "release_set_registry_provenance_missing",
-      "Every published release-set version must carry an npm provenance attestation."
-    );
-  }
-  return { integrity };
-}
-
-async function queryPublishedDistribution(packageRecord?: any, runner?: any, commandDirectory?: any) : Promise<any> {
+async function queryPublishedIntegrity(packageRecord?: any, runner?: any, commandDirectory?: any) : Promise<any> {
   const result: any = await runner(
     [
       "view",
       `${packageRecord.name}@${packageRecord.version}`,
-      "dist",
+      "dist.integrity",
       "--json",
       "--registry",
       OFFICIAL_NPM_REGISTRY
@@ -1387,140 +1132,37 @@ async function queryPublishedDistribution(packageRecord?: any, runner?: any, com
     if (registryVersionMissing(result)) return null;
     throw publicationError(
       "release_set_registry_query_failed",
-      "The npm registry version check did not complete successfully."
+      "The npm registry package-version check did not complete successfully."
     );
   }
-  return validatePublishedDistribution(
-    parseRegistryJson(
-      result,
-      "release_set_registry_distribution_invalid",
-      "The npm registry returned invalid package distribution metadata."
-    ),
-    packageRecord
-  );
-}
-
-async function queryPublishedTag(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
-  const result: any = await runner(
-    [
-      "view",
-      packageRecord.name,
-      "dist-tags",
-      "--json",
-      "--registry",
-      OFFICIAL_NPM_REGISTRY
-    ],
-    { cwd: commandDirectory }
-  );
-  if (result?.exitCode !== 0) {
-    if (registryVersionMissing(result)) return null;
-    throw publicationError(
-      "release_set_registry_query_failed",
-      "The npm registry dist-tag check did not complete successfully."
-    );
-  }
-  const tags: any = parseRegistryJson(
-    result,
-    "release_set_registry_tags_invalid",
-    "The npm registry returned invalid dist-tag metadata."
-  );
-  if (!tags || typeof tags !== "object" || Array.isArray(tags)) {
-    throw publicationError(
-      "release_set_registry_tags_invalid",
-      "The npm registry returned invalid dist-tag metadata."
-    );
-  }
-  const taggedVersion: any = tags[tag];
-  if (taggedVersion === undefined) return null;
   try {
-    return parseComparableVersion(taggedVersion).normalized;
+    const integrity: any = parseNpmExactViewJson(result.stdout);
+    if (typeof integrity !== "string" || !INTEGRITY_PATTERN.test(integrity)) throw new Error();
+    return integrity;
   } catch {
     throw publicationError(
-      "release_set_registry_tag_version_invalid",
-      "The npm registry returned an invalid dist-tag version."
+      "release_set_registry_integrity_invalid",
+      "The npm registry returned an invalid package integrity value."
     );
   }
 }
 
-async function queryRegistryState(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
-  const [distribution, taggedVersion] = await Promise.all([
-    queryPublishedDistribution(packageRecord, runner, commandDirectory),
-    queryPublishedTag(packageRecord, tag, runner, commandDirectory)
-  ]);
-  return { distribution, taggedVersion };
-}
-
-function preflightPackagePublication(packageRecord?: any, registryState?: any) : any {
-  const { distribution, taggedVersion } = registryState;
-  if (distribution !== null && distribution.integrity !== packageRecord.integrity) {
+function preflightPackagePublication(packageRecord?: any, publishedIntegrity?: any) : any {
+  if (publishedIntegrity !== null && publishedIntegrity !== packageRecord.integrity) {
     throw publicationError(
       "release_set_registry_integrity_mismatch",
       "An immutable npm package version already exists with different content."
     );
   }
-  const tagComparison: any = taggedVersion === null
-    ? null
-    : compareReleaseVersions(taggedVersion, packageRecord.version);
-  if (distribution !== null) {
-    if (tagComparison === null || tagComparison < 0) {
-      return {
-        action: "repair-tag",
-        expectedTaggedVersion: packageRecord.version
-      };
-    }
-    return {
-      action: "skipped",
-      expectedTaggedVersion: taggedVersion
-    };
-  }
-  if (tagComparison !== null && tagComparison >= 0) {
-    throw publicationError(
-      tagComparison > 0
-        ? "release_set_registry_tag_regression"
-        : "release_set_registry_state_inconsistent",
-      tagComparison > 0
-        ? "Publishing this release would regress the npm dist-tag."
-        : "The npm dist-tag names a version that is missing from the registry."
-    );
-  }
-  return {
-    action: "publish",
-    expectedTaggedVersion: packageRecord.version
-  };
+  return { action: publishedIntegrity === null ? "publish" : "skip" };
 }
 
-function verifyPostPublicationState(packageRecord?: any, plan?: any, state?: any) : any {
-  if (state.distribution === null) {
-    throw publicationError(
-      "release_set_registry_post_publish_missing",
-      "The published release-set version is missing from the npm registry."
-    );
-  }
-  if (state.distribution.integrity !== packageRecord.integrity) {
-    throw publicationError(
-      "release_set_registry_integrity_mismatch",
-      "An immutable npm package version already exists with different content."
-    );
-  }
-  if (
-    state.taggedVersion === null ||
-    compareReleaseVersions(state.taggedVersion, packageRecord.version) < 0 ||
-    compareReleaseVersions(state.taggedVersion, plan.expectedTaggedVersion) < 0
-  ) {
-    throw publicationError(
-      "release_set_registry_tag_postcondition_failed",
-      "The npm dist-tag is missing or below the verified monotonic publication plan."
-    );
-  }
-}
-
-async function publishTarball(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any, authToken?: any) : Promise<any> {
+async function publishTarball(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
   assertSuccessfulResult(
     await runner(
       [
         "publish",
         packageRecord.tarballPath,
-        "--provenance",
         "--access",
         "public",
         "--tag",
@@ -1529,283 +1171,59 @@ async function publishTarball(packageRecord?: any, tag?: any, runner?: any, comm
         "--registry",
         OFFICIAL_NPM_REGISTRY
       ],
-      { cwd: commandDirectory, authToken }
+      { cwd: commandDirectory }
     ),
     "release_set_publish_failed",
     "A release-set tarball could not be published."
   );
 }
 
-async function repairPublishedTag(packageRecord?: any, tag?: any, runner?: any, commandDirectory?: any, authToken?: any) : Promise<any> {
-  assertSuccessfulResult(
-    await runner(
-      [
-        "dist-tag",
-        "add",
-        `${packageRecord.name}@${packageRecord.version}`,
-        tag,
-        "--registry",
-        OFFICIAL_NPM_REGISTRY
-      ],
-      { cwd: commandDirectory, authToken }
-    ),
-    "release_set_tag_repair_failed",
-    "The existing verified release could not receive its intended npm dist-tag."
-  );
-}
-
-async function verifyPublishedPackageSignatures(packages?: any, temporaryRoot?: any, runner?: any) : Promise<any> {
-  const auditDirectory: any = path.join(temporaryRoot, "registry-signature-audit");
-  await fs.mkdir(auditDirectory);
-  const dependencies: any = Object.fromEntries(
-    packages.map(({ name, version }: Record<string, any>) : any => [name, version])
-  );
-  await fs.writeFile(
-    path.join(auditDirectory, "package.json"),
-    `${JSON.stringify({
-      name: "meshrix-release-set-signature-audit",
-      version: "0.0.0",
-      private: true,
-      dependencies
-    }, null, 2)}\n`,
-    { encoding: "utf8", flag: "wx", mode: 0o600 }
-  );
-  assertSuccessfulResult(
-    await runner(
-      [
-        "install",
-        "--ignore-scripts",
-        "--no-audit",
-        "--no-fund",
-        "--omit=optional",
-        "--registry",
-        OFFICIAL_NPM_REGISTRY
-      ],
-      { cwd: auditDirectory }
-    ),
-    "release_set_registry_audit_install_failed",
-    "The published release set could not be installed for signature verification."
-  );
-  assertSuccessfulResult(
-    await runner(
-      [
-        "audit",
-        "signatures",
-        "--json",
-        "--include-attestations",
-        "--omit=optional",
-        "--registry",
-        OFFICIAL_NPM_REGISTRY
-      ],
-      { cwd: auditDirectory }
-    ),
-    "release_set_registry_signature_audit_failed",
-    "npm could not cryptographically verify the published release-set signatures and provenance."
-  );
-}
-
-function preparedSetTag(prepared?: any, requestedTag?: any) : any {
-  const tag: any = normalizeRequestedTag(prepared.version, requestedTag);
-  if (tag !== prepared.tag) {
-    throw publicationError(
-      "release_set_prepared_tag_mismatch",
-      "The requested dist-tag does not match the prepared release set."
-    );
-  }
-  return tag;
-}
-
-async function inspectPreparedReleaseSet(prepared?: any, tag?: any, runner?: any, commandDirectory?: any) : Promise<any> {
-  const states: any = await Promise.all(
-    prepared.packages.map((packageRecord?: any) : any => queryRegistryState(packageRecord, tag, runner, commandDirectory))
-  );
-  const plans: any[] = prepared.packages.map((packageRecord?: any, index?: any) : any => (
-    preflightPackagePublication(packageRecord, states[index])
-  ));
-  return {
-    ok: true,
-    preflight: true,
-    version: prepared.version,
-    tag,
-    packageCount: prepared.packages.length,
-    packages: prepared.packages.map((packageRecord?: any, index?: any) : any => ({
-      name: packageRecord.name,
-      version: packageRecord.version,
-      integrity: packageRecord.integrity,
-      action: plans[index].action
-    }))
-  };
-}
-
-export async function preflightReleaseSet({
-  rootDir = process.cwd(),
-  artifactDirectory,
-  tag: requestedTag,
-  runner,
-  environment = process.env
-}: Record<string, any> = {}) : Promise<any> {
-  const prepared: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
-  const tag: any = preparedSetTag(prepared, requestedTag);
-  const commandRunner: any = runner || createNpmRunner({ environment });
-  const commandDirectory: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-preflight-"));
-  try {
-    return await inspectPreparedReleaseSet(prepared, tag, commandRunner, commandDirectory);
-  } finally {
-    await fs.rm(commandDirectory, { recursive: true, force: true });
-  }
-}
-
-async function requestGithubNpmIdentityToken(
-  fetchImplementation: typeof fetch,
-  environment: Record<string, any>,
-): Promise<string> {
-  const requestUrlValue = String(environment.ACTIONS_ID_TOKEN_REQUEST_URL || "");
-  const requestToken = String(environment.ACTIONS_ID_TOKEN_REQUEST_TOKEN || "");
-  let requestUrl: URL;
-  try {
-    requestUrl = new URL(requestUrlValue);
-  } catch {
-    throw publicationError("release_set_oidc_unavailable", "GitHub Actions OIDC is not available for this release.");
-  }
-  if (
-    requestUrl.protocol !== "https:" ||
-    requestUrl.hostname !== "pipelines.actions.githubusercontent.com" ||
-    !requestToken
-  ) {
-    throw publicationError("release_set_oidc_unavailable", "GitHub Actions OIDC is not available for this release.");
-  }
-  requestUrl.searchParams.set("audience", NPM_OIDC_AUDIENCE);
-  let response: Response;
-  try {
-    response = await fetchImplementation(requestUrl, {
-      headers: { Authorization: `Bearer ${requestToken}` },
-      redirect: "error",
-      cache: "no-store",
-    });
-  } catch {
-    throw publicationError("release_set_oidc_request_failed", "GitHub Actions OIDC could not be requested.");
-  }
-  const contentLength = Number(response.headers.get("content-length") || 0);
-  if (!response.ok || (contentLength > 0 && contentLength > 16_384)) {
-    await response.body?.cancel().catch(() => undefined);
-    throw publicationError("release_set_oidc_request_failed", "GitHub Actions OIDC could not be requested.");
-  }
-  let token: any;
-  try {
-    token = (await response.json())?.value;
-  } catch {
-    throw publicationError("release_set_oidc_response_invalid", "GitHub Actions OIDC returned an invalid response.");
-  }
-  if (typeof token !== "string" || token.length === 0 || token.length > 16_384) {
-    throw publicationError("release_set_oidc_response_invalid", "GitHub Actions OIDC returned an invalid response.");
-  }
-  return token;
-}
-
-export async function verifyNpmTrustedPublisherAccess({
-  rootDir = process.cwd(),
-  artifactDirectory,
-  environment = process.env,
-  fetchImplementation = fetch,
-}: Record<string, any> = {}): Promise<any> {
-  assertNoRawNpmToken(environment);
-  const prepared = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
-  const acceptedPackages: any[] = [];
-  for (const packageRecord of prepared.packages) {
-    const identityToken = await requestGithubNpmIdentityToken(fetchImplementation, environment);
-    let response: Response;
-    try {
-      const endpoint = new URL(
-        `-/npm/v1/oidc/token/exchange/package/${encodeURIComponent(packageRecord.name)}`,
-        OFFICIAL_NPM_REGISTRY,
-      );
-      response = await fetchImplementation(endpoint, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${identityToken}`, Accept: "application/json" },
-        redirect: "error",
-        cache: "no-store",
-      });
-    } catch {
-      throw publicationError("release_set_oidc_trust_request_failed", "npm did not accept the hosted publisher identity.");
-    }
-    const accepted = response.status === 201;
-    await response.body?.cancel().catch(() => undefined);
-    if (!accepted) {
-      throw publicationError("release_set_oidc_trust_mismatch", "npm did not accept the hosted publisher identity.");
-    }
-    acceptedPackages.push({ name: packageRecord.name, accepted: true });
-  }
-  return {
-    ok: true,
-    oidcTrustVerified: true,
-    version: prepared.version,
-    packageCount: acceptedPackages.length,
-    packages: acceptedPackages,
-  };
-}
-
 export async function publishReleaseSet({
   rootDir = process.cwd(),
   artifactDirectory,
-  tag: requestedTag,
-  authMode = "oidc",
-  bootstrapCandidate,
   runner,
   environment = process.env
 }: Record<string, any> = {}) : Promise<any> {
   const prepared: any = await loadPreparedReleaseSet({ rootDir, artifactDirectory });
-  const tag: any = preparedSetTag(prepared, requestedTag);
-  const auth: any = selectPublicationAuth({ authMode, bootstrapCandidate, version: prepared.version, environment });
+  const tag: any = prepared.tag;
   const commandRunner: any = runner || createNpmRunner({ environment });
-  const outcomes: any[] = [];
-  const temporaryRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-release-set-"));
+  const commandDirectory: any = prepared.repositoryRoot;
+  const publishedIntegrities: any[] = await Promise.all(
+    prepared.packages.map((packageRecord?: any) : any => (
+      queryPublishedIntegrity(packageRecord, commandRunner, commandDirectory)
+    ))
+  );
+  const plans: any[] = prepared.packages.map((packageRecord?: any, index?: any) : any => (
+    preflightPackagePublication(packageRecord, publishedIntegrities[index])
+  ));
 
-  try {
-    await inspectPreparedReleaseSet(prepared, tag, commandRunner, temporaryRoot);
-    for (const packageRecord of prepared.packages) {
-      await assertPreparedArchiveIntegrity(packageRecord);
-    }
-
-    for (const packageRecord of prepared.packages) {
-      const stateBefore: any = await queryRegistryState(packageRecord, tag, commandRunner, temporaryRoot);
-      const plan: any = preflightPackagePublication(packageRecord, stateBefore);
-      let action: any = "skipped";
-      if (plan.action === "publish") {
-        await publishTarball(packageRecord, tag, commandRunner, temporaryRoot, auth.authToken);
-        action = "published";
-      } else if (plan.action === "repair-tag") {
-        await repairPublishedTag(packageRecord, tag, commandRunner, temporaryRoot, auth.authToken);
-        action = "tag-repaired";
-      }
-      const stateAfter: any = await queryRegistryState(packageRecord, tag, commandRunner, temporaryRoot);
-      verifyPostPublicationState(packageRecord, plan, stateAfter);
-      outcomes.push({ plan, action });
-    }
-
-    const finalStates: any = await Promise.all(
-      prepared.packages.map((packageRecord?: any) : any => queryRegistryState(packageRecord, tag, commandRunner, temporaryRoot))
-    );
-    const packages: any = prepared.packages.map((packageRecord?: any, index?: any) : any => {
-      verifyPostPublicationState(packageRecord, outcomes[index].plan, finalStates[index]);
-      return {
-        name: packageRecord.name,
-        version: packageRecord.version,
-        integrity: packageRecord.integrity,
-        action: outcomes[index].action
-      };
-    });
-    await verifyPublishedPackageSignatures(prepared.packages, temporaryRoot, commandRunner);
-    return {
-      ok: true,
-      authMode: auth.authMode,
-      version: prepared.version,
-      tag,
-      packageCount: packages.length,
-      packages
-    };
-  } finally {
-    await fs.rm(temporaryRoot, { recursive: true, force: true });
+  // Hash again after the registry check so publication consumes the same bytes
+  // that the prepared manifest recorded, even if a file changed during the check.
+  for (const packageRecord of prepared.packages) {
+    await assertPreparedArchiveIntegrity(packageRecord);
   }
+
+  const packages: any[] = [];
+  for (const [index, packageRecord] of prepared.packages.entries()) {
+    const action: any = plans[index].action === "publish" ? "published" : "skipped";
+    if (action === "published") {
+      await publishTarball(packageRecord, tag, commandRunner, commandDirectory);
+    }
+    packages.push({
+      name: packageRecord.name,
+      version: packageRecord.version,
+      integrity: packageRecord.integrity,
+      action
+    });
+  }
+
+  return {
+    ok: true,
+    version: prepared.version,
+    tag,
+    packageCount: packages.length,
+    packages
+  };
 }
 
 function optionValue(args?: any, index?: any, option?: any) : any {
@@ -1818,21 +1236,12 @@ function optionValue(args?: any, index?: any, option?: any) : any {
 
 export function parsePublishArguments(argv?: any) : any {
   let prepare: any = false;
-  let preflight: any = false;
-  let verifyOidcTrust: any = false;
   let artifactDirectory: any;
-  let authMode: any = "oidc";
-  let bootstrapCandidate: any;
-  let tag: any;
   let help: any = false;
   for (let index: any = 0; index < argv.length; index += 1) {
     const argument: any = argv[index];
     if (argument === "--prepare") {
       prepare = true;
-    } else if (argument === "--preflight") {
-      preflight = true;
-    } else if (argument === "--verify-oidc-trust") {
-      verifyOidcTrust = true;
     } else if (argument === "--help" || argument === "-h") {
       help = true;
     } else if (argument === "--artifact-dir") {
@@ -1840,71 +1249,26 @@ export function parsePublishArguments(argv?: any) : any {
       index += 1;
     } else if (argument.startsWith("--artifact-dir=")) {
       artifactDirectory = argument.slice("--artifact-dir=".length);
-    } else if (argument === "--auth") {
-      authMode = optionValue(argv, index, "--auth");
-      index += 1;
-    } else if (argument.startsWith("--auth=")) {
-      authMode = argument.slice("--auth=".length);
-    } else if (argument === "--bootstrap-candidate") {
-      bootstrapCandidate = optionValue(argv, index, "--bootstrap-candidate");
-      index += 1;
-    } else if (argument.startsWith("--bootstrap-candidate=")) {
-      bootstrapCandidate = argument.slice("--bootstrap-candidate=".length);
-    } else if (argument === "--tag") {
-      tag = optionValue(argv, index, "--tag");
-      index += 1;
-    } else if (argument.startsWith("--tag=")) {
-      tag = argument.slice("--tag=".length);
     } else {
       throw publicationError(
         "release_set_argument_unknown",
-        "Only prepared-artifact, authentication, and release-tag options are supported."
+        "Only --prepare and --artifact-dir are supported."
       );
     }
-  }
-  if ([prepare, preflight, verifyOidcTrust].filter(Boolean).length > 1) {
-    throw publicationError(
-      "release_set_argument_conflict",
-      "Only one read, preparation, trust-check, or publish mode may be selected."
-    );
   }
   if (!help && !artifactDirectory) {
     throw publicationError("release_set_argument_missing", "--artifact-dir is required.");
   }
-  if (!new Set<any>(["oidc", "bootstrap"]).has(authMode)) {
-    throw publicationError("release_set_auth_mode_invalid", "--auth must be oidc or bootstrap.");
-  }
-  if (bootstrapCandidate !== undefined && authMode !== "bootstrap") {
-    throw publicationError(
-      "release_set_bootstrap_candidate_invalid",
-      "--bootstrap-candidate requires --auth bootstrap."
-    );
-  }
-  if ((prepare || preflight || verifyOidcTrust) && authMode !== "oidc") {
-    throw publicationError(
-      "release_set_argument_conflict",
-      "Prepared-artifact creation, registry preflight, and OIDC verification do not accept bootstrap credentials."
-    );
-  }
-  if (authMode === "bootstrap" && !bootstrapCandidate && !help) {
-    throw publicationError(
-      "release_set_argument_missing",
-      "--bootstrap-candidate is required for bootstrap publication."
-    );
-  }
-  return { prepare, preflight, verifyOidcTrust, artifactDirectory, authMode, bootstrapCandidate, tag, help };
+  return { prepare, artifactDirectory, help };
 }
 
 function usage() : any {
   return [
     "Usage:",
     "  npm run release:publish-npm -- --prepare --artifact-dir DIR",
-    "  npm run release:publish-npm -- --preflight --artifact-dir DIR",
-    "  npm run release:publish-npm -- --verify-oidc-trust --artifact-dir DIR",
-    "  npm run release:publish-npm -- --artifact-dir DIR [--auth oidc]",
-    "  npm run release:publish-npm -- --artifact-dir DIR --auth bootstrap --bootstrap-candidate VERSION",
+    "  npm run release:publish-npm -- --artifact-dir DIR",
     "",
-    "Preparation writes one credential-free meshrix-release-set.json and the exact npm tarballs. Preflight reads the registry without publishing. OIDC is the default; bootstrap is explicit, candidate-bound, and reads NODE_AUTH_TOKEN only for npm mutations."
+    "Preparation writes the exact npm tarballs and a meshrix-release-set.json manifest. Publication uses npm's configured authentication, checks existing versions against the prepared archive integrity, then publishes missing archives."
   ].join("\n");
 }
 
@@ -1916,11 +1280,7 @@ async function main() : Promise<any> {
   }
   const result: any = options.prepare
     ? await prepareReleaseSet(options)
-    : options.preflight
-      ? await preflightReleaseSet(options)
-      : options.verifyOidcTrust
-        ? await verifyNpmTrustedPublisherAccess(options)
-        : await publishReleaseSet(options);
+    : await publishReleaseSet(options);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

@@ -43,27 +43,6 @@
     "releaseRequiredClaim": "npm-package-installability-passed",
     "standardsRegistry": "tools/registry/release-acceptance-standards.registry.json"
   },
-  "prepublication": {
-    "requiredClaim": "upstream-publishing-prepublication-passed",
-    "candidateReceipt": "build/reports/upstream-service-publishing-candidate.json",
-    "artifacts": [
-      "build/reports/upstream-service-publishing.json",
-      "build/reports/release-journey.json",
-      "build/reports/upstream-service-publishing/upstream-service-basic-config.json",
-      "build/reports/upstream-service-publishing.html",
-      "build/reports/upstream-service-publishing/screenshots/console-authenticated.png",
-      "build/reports/upstream-service-publishing/screenshots/console-organization-permissions.png",
-      "build/reports/upstream-service-publishing/screenshots/console-upstream-basic-config.png",
-      "build/reports/upstream-service-publishing/screenshots/console-upstream-operation-config.png",
-      "build/reports/upstream-service-publishing/screenshots/console-upstream-published.png",
-      "build/reports/upstream-service-publishing/screenshots/console-published-tool.png",
-      "build/reports/upstream-service-publishing/screenshots/console-api-key-generated.png",
-      "build/reports/upstream-service-publishing/screenshots/console-downstream-agent-configured.png",
-      "build/reports/upstream-service-publishing/screenshots/console-operation-approval-pending.png",
-      "build/reports/upstream-service-publishing/screenshots/console-operation-approval-completed.png",
-      "build/reports/upstream-service-publishing/screenshots/console-downstream-mcp-call.png"
-    ]
-  },
   "github": {
     "environment": "release-candidate",
     "nodeVersion": "24.16.0",

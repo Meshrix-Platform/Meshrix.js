@@ -311,30 +311,21 @@ Never emit absolute paths, usernames, host identity, service URLs, raw manifests
 
 The capability report is evidence input only. Register its command and report with the core acceptance command catalog, required-report validator, readiness reducer, single-node operations closure, capability acceptance checkpoint, test registry, package script registry, and repository-local maintenance workflow catalog. Only the platform acceptance reducer may produce the release-ready claim.
 
-The mandatory pre-release HTML is a separate human-readable projection. Its
-tracked blank template is the public structural contract, not evidence. Change
-the skill and this contract first, then the blank template and its deterministic
+The optional integration journey can produce a human-readable HTML projection.
+Its tracked blank template defines structure, not execution evidence. Change the
+skill and this contract first, then the blank template and its deterministic
 `--check` generator, then the renderer and focused tests, and only then
-regenerate the local report from verified evidence. Template verification is an
-explicit dependency of both the Core publisher and the runtime journey; task
-array order and a shared resource lock are not ordering contracts. The Core
-report, final candidate receipt, and runtime report outputs are bound by byte
-length and SHA-256. The blank template remains portable, offline, bilingual,
-synthetic, and visibly marked `Not executed / 未执行`; it contains no real
-screenshot, digest, runtime value, private path, or `build/` artifact reference.
+regenerate the report from verified evidence. The blank template remains
+portable, offline, bilingual, synthetic, and visibly marked
+`Not executed / 未执行`; it contains no real screenshot, digest, runtime value,
+private path, or `build/` artifact reference.
 
-The catalog exposes two separate execution lanes. The side-effecting
-`upstream-service-publishing` lane is the only producer of a fresh external
-service, Console, client, screenshot, and portable-report bundle. Run it before
-every release candidate with explicit side-effect admission. The
-`upstream-service-prepublication` lane starts no runtime component and consumes
-only an already-produced complete bundle. It fails closed on missing, stale,
-dirty-candidate-bound, privacy-unsafe, reordered, or digest-mismatched inputs
-and writes a bounded receipt. It cannot claim `functional-complete`, overall
-`releaseReady`, or replace the platform reducer. Do not add the runtime journey
-to tag CI by checking out floating sibling repositories. It may move there only
-after the converter image and adapter bundle have immutable coordinates
-published by their owners.
+The actual service publishing capability is covered by its registered Core
+functional checks. The separately invoked `verify:release-journey` operation
+exercises a real external service, Console, client, screenshots, and portable
+report when its explicit artifacts and side effects are available. It is
+optional and does not block npm publication. Do not add this journey to tag CI
+by checking out floating sibling repositories.
 
 The generated HTML includes a mandatory published-upstream-interface catalog
 derived only from the exact publication JSON bytes used by the journey. It
@@ -383,8 +374,8 @@ index, and only the step cards assigned to that group. Grouping may not reorder,
 duplicate, omit, or renumber evidence. Group headings must remain visually
 distinct from step headings in screen, narrow-viewport, and print layouts.
 
-Place all non-procedural material in the final appendix: candidate scope,
-execution summary, startup and connector configuration, published interface
+Place all non-procedural material in the final appendix: execution summary,
+startup and connector configuration, published interface
 catalog, client matrix, golden path, requirements, production boundaries,
 revision semantics, protocol delivery, provenance, timings, and cleanup. Keep
 the cover limited to the manual title and one short scope sentence. Generate
@@ -400,11 +391,8 @@ print styling forces deferred content visible.
 
 A successful HTML headline is scoped to the upstream publishing journey. The
 document must say that only the platform acceptance reducer can declare overall
-functional acceptance. Candidate coordinates may be projected only from
-explicit renderer input. The HTML never owns candidate status. Render the final
-HTML first, then create the external candidate receipt that binds those exact
-bytes; never embed the final receipt digest into the HTML and create a recursive
-digest dependency.
+functional acceptance. The HTML reports observed journey details and does not
+claim overall release readiness.
 
 On failure, write a portable, visibly failed, non-authoritative HTML at the
 canonical path and keep the verifier exit non-zero. Include only the stable
@@ -515,18 +503,6 @@ evidence must visibly bind hierarchy, governed tags, and administrator roles.
 The API Key evidence must visibly bind the organization-scoped issued record
 while masking credential and workload identifiers and must never contain the
 plaintext key.
-
-The final
-`build/reports/upstream-service-publishing-candidate.json` receipt binds one
-release-definition version and tag, exact source commit and tree, Core report,
-journey report, actual publishing JSON, final HTML, and the eleven ordered PNGs.
-Each artifact binding contains only a repository-relative path, byte length,
-and SHA-256. The receipt itself has a canonical SHA-256 and the fixed scoped
-claim `upstream-publishing-prepublication-passed`. It contains no raw report,
-runtime payload, URL, account fact, local path, host fact, or whole-project
-readiness field. A tag resolving to another commit, a dirty worktree, a stale
-journey candidate, a changed byte, an unknown artifact, or a privacy-unsafe
-artifact fails verification without redisclosing the offending value.
 
 ## Documentation and migration closure
 

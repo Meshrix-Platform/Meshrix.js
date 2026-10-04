@@ -2958,32 +2958,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.meshrix.release-authority-manifest",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.meshrix.release-authority-manifest.",
-      "activeVersion": "v0.0.1:meshrix:release-authority-manifest-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:release-authority-manifest-1",
-          "ref": "meshrix.meshrix.release-authority-manifest@v0.0.1:meshrix:release-authority-manifest-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-release-authority-manifest-1-source",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/release-deployment/contract.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.meshrix.release-deployment-receipt",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.meshrix.release-deployment-receipt.",
@@ -3030,32 +3004,6 @@
               "evidenceId": "v0-0-1-meshrix-release-source-candidate-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/verify-release-candidate-identity.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.meshrix.stable-authority-manifest",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.meshrix.stable-authority-manifest.",
-      "activeVersion": "v0.0.1:meshrix:stable-authority-manifest-1",
-      "versions": [
-        {
-          "version": "v0.0.1:meshrix:stable-authority-manifest-1",
-          "ref": "meshrix.meshrix.stable-authority-manifest@v0.0.1:meshrix:stable-authority-manifest-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-meshrix-stable-authority-manifest-1-source",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/release-deployment/contract.ts"
             }
           ]
         }
@@ -6044,32 +5992,6 @@
               "evidenceId": "v0-0-1-release-unified-production-closure-report-2-source-1",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-unified-production-closure.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.report.upstream-service-publishing-candidate",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.report.upstream-service-publishing-candidate.",
-      "activeVersion": "v0.0.1:report:upstream-service-publishing-candidate-1",
-      "versions": [
-        {
-          "version": "v0.0.1:report:upstream-service-publishing-candidate-1",
-          "ref": "meshrix.report.upstream-service-publishing-candidate@v0.0.1:report:upstream-service-publishing-candidate-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-report-upstream-service-publishing-candidate-1-source",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/upstream-service-publishing-candidate-receipt.ts"
             }
           ]
         }
