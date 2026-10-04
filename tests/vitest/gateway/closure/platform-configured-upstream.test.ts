@@ -328,11 +328,9 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
           result: {
             resultType: "complete",
             structuredContent: {
-              value: {
-                operation: toolId,
-                upstreamConfiguredOperation: true,
-                payload: { resultType: "complete", structuredContent: { json } }
-              }
+              operation: toolId,
+              upstreamConfiguredOperation: true,
+              payload: { resultType: "complete", structuredContent: { json } }
             }
           }
         }
@@ -384,7 +382,8 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
           resultType: "complete",
           isError: true,
           structuredContent: {
-            value: { operation: writeTool, payload: { error: { code: "operation_outcome_in_doubt" } } }
+            operation: writeTool,
+            payload: { error: { code: "operation_outcome_in_doubt" } }
           }
         }
       }

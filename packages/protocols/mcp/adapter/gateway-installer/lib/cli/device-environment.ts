@@ -76,7 +76,7 @@ export function disabledDeviceEnvironmentResult(platform = process.platform): De
   return {
     supported,
     persisted: false,
-    reason: supported ? "disabled" : "unsupported-platform"
+    reason: "disabled"
   };
 }
 

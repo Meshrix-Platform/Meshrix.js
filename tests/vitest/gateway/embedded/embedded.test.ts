@@ -30,7 +30,7 @@ describe("embedded gateway composition", () => {
     try {
       (original.route as { revision?: string }).revision = "mutated";
       const outcome = await gateway.invoke(context, { routeRef: "route.demo", method: "tools/call", params: { traceId: "business" } });
-      expect(outcome).toMatchObject({ kind: "complete", value: { resultType: "complete", value: { traceId: "business" } } });
+      expect(outcome).toMatchObject({ kind: "complete", value: { traceId: "business" } });
       expect(upstream.requests[0].route.revision).toBe("route-1");
     } finally {
       await gateway.close();

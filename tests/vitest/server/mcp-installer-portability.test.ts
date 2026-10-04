@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  createDeviceEnvironmentPort
+  createDeviceEnvironmentPort,
+  disabledDeviceEnvironmentResult
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/device-environment.ts";
 import {
   publishDeviceHubManifest,
@@ -56,6 +57,14 @@ function controlledEnvironmentRunner(initial: Record<string, string> = {}) {
 }
 
 describe("portable MCP installer discovery", () => {
+  it.each(["darwin", "win32", "linux"] as const)("reports explicit environment persistence disablement on %s", (platform) => {
+    expect(disabledDeviceEnvironmentResult(platform)).toEqual({
+      supported: platform !== "linux",
+      persisted: false,
+      reason: "disabled"
+    });
+  });
+
   it("reads, writes and removes exactly the macOS discovery keys", async () => {
     const { values, runCommand } = controlledEnvironmentRunner({ MESHRIX_MCP_OTHER: "preserve" });
     const port = createDeviceEnvironmentPort({ platform: "darwin", runCommand });

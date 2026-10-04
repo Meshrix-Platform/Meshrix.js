@@ -55,6 +55,10 @@ async function waitForListenerClose(endpoint: string, timeoutMs: number): Promis
       });
       request.once("error", (error: NodeJS.ErrnoException) => {
         if (error.code === "ECONNREFUSED") resolve(false);
+        // A fresh probe can race the listener closing and get reset before the
+        // kernel reports that the port is no longer accepting connections. Keep
+        // probing so this cannot hide a reset of the already-held MCP request.
+        else if (error.code === "ECONNRESET") resolve(true);
         else reject(error);
       });
     });

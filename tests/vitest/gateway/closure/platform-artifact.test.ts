@@ -56,8 +56,8 @@ describe("default platform binary/artifact boundary", () => {
       const tool = (listed.body as { result: { tools: Array<{ name: string; _meta?: { serviceId?: string } }> } }).result.tools.find((entry) => entry._meta?.serviceId === "format");
       expect(tool, JSON.stringify(listed.body)).toBeDefined();
       const result = await send("tools/call", { name: tool!.name, arguments: { file: "upload:synthetic:0", targetFormat: "pdf" } });
-      const artifactRef = (result.body as { result?: { structuredContent?: { value?: { payload?: { artifact?: { reference?: string } } } } } }).result?.structuredContent?.value?.payload?.artifact?.reference;
-      expect(result.body).toMatchObject({ result: { structuredContent: { value: { upstreamConfiguredOperation: true, payload: { artifact: { reference: expect.stringMatching(/^artifact:/u) } } } } } });
+      const artifactRef = (result.body as { result?: { structuredContent?: { payload?: { artifact?: { reference?: string } } } } }).result?.structuredContent?.payload?.artifact?.reference;
+      expect(result.body).toMatchObject({ result: { structuredContent: { upstreamConfiguredOperation: true, payload: { artifact: { reference: expect.stringMatching(/^artifact:/u) } } } } });
       const multipart = Buffer.concat(received).toString("utf8");
       expect(multipart).toContain('name="target_format"');
       expect(multipart).toContain("pdf");

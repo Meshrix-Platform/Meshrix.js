@@ -17,7 +17,7 @@ describe("gateway MRTR continuation binding", () => {
       expect(first.requestState).toMatch(/^mxcs1\./u);
       expect(first.inputRequests).toEqual({ confirm: { method: "elicitation/create" } });
       const second = await gateway.continue(context, first.requestState as string, { confirm: { action: "accept" } });
-      expect(second).toMatchObject({ kind: "complete", value: { value: { accepted: true } } });
+      expect(second).toMatchObject({ kind: "complete", value: { accepted: true } });
       expect(upstream.requests[1].request.requestState).toBe("opaque-upstream-state");
       expect(upstream.requests[1].request.params).toMatchObject({ inputResponses: { confirm: { action: "accept" } } });
     } finally {
