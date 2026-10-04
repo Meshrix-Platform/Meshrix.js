@@ -50,6 +50,9 @@ describe("standard multi-round input continuation", () => {
   it("[GC-020] propagates the second-round abort and does not replay an uncertain write", async () => {
     let sent = 0;
     let aborted = 0;
+    let markFinalRoundStarted!: () => void;
+    const finalRoundStarted = new Promise<void>((resolve) => { markFinalRoundStarted = resolve; });
+    const signal = new AbortController();
     const gateway = createTestGateway({ continuationKey: key(), descriptors: [descriptor({ route: route({ effectClass: "safe_write" }) })],
       upstream: { async invoke({ signal }) {
         sent += 1;
@@ -58,6 +61,7 @@ describe("standard multi-round input continuation", () => {
           const cancelled = () => { aborted += 1; reject(Object.assign(new Error("peer cancelled"), { name: "AbortError" })); };
           if (signal?.aborted) cancelled();
           else signal?.addEventListener("abort", cancelled, { once: true });
+          markFinalRoundStarted();
         });
       } } });
     await gateway.start();
@@ -66,16 +70,19 @@ describe("standard multi-round input continuation", () => {
       const second = await gateway.continue(context, first.kind === "input_required" ? first.requestState! : "", { confirm: { answer: 1 } });
       expect(second.kind).toBe("input_required");
       const token = second.kind === "input_required" ? second.requestState! : "";
-      const signal = new AbortController();
       const pending = gateway.continue(context, token, { confirm: { answer: 2 } }, signal.signal);
-      for (let attempt = 0; sent !== 3 && attempt < 100; attempt++) await new Promise((resolve) => setImmediate(resolve));
+      const reachedPeer = await Promise.race([
+        finalRoundStarted.then(() => true),
+        pending.then(() => false)
+      ]);
+      expect(reachedPeer).toBe(true);
       expect(sent).toBe(3);
       signal.abort();
       expect(await pending).toMatchObject({ kind: "failure", effectOutcome: "unknown" });
       expect(aborted).toBe(1);
       expect(await gateway.continue(context, token, { confirm: { answer: 2 } })).toMatchObject({ kind: "failure", code: "continuation_outcome_unknown" });
       expect(gateway.stats()).toMatchObject({ activeInvocations: 0, admission: { active: 0, queued: 0 } });
-    } finally { await gateway.close(); }
+    } finally { signal.abort(); await gateway.close(); }
   }, 10_000);
 
   it("[GC-022] keeps two business contexts isolated when per-hop client capabilities change", async () => {

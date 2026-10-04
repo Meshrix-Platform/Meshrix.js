@@ -1,17 +1,70 @@
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import Database from "better-sqlite3";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ExecutionPermit } from "@meshrix/contracts/gateway";
 import { createContinuationCodec } from "@meshrix/gateway";
 import { createSqliteGatewayContinuationLedger } from "@meshrix/foundation/security/gateway-continuation-ledger";
 import { acquireStorageMaintenanceLock } from "../../../../packages/foundation/src/storage/storage-lifecycle-lock.ts";
 import { context, createTestGateway, descriptor, route } from "../support";
+import { sanitizeSensitiveError } from "../../../../packages/foundation/src/observability/sensitive-report-scan.ts";
 
 describe("persistent one-time continuation ownership", () => {
+  it("opens retained claims when the last connection removes WAL during permission checking", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "meshrix-continuation-sidecar-"));
+    const filePath = join(directory, "claims.sqlite");
+    const previous = createSqliteGatewayContinuationLedger({ filePath });
+    let previousClosed = false;
+    let reopened: ReturnType<typeof createSqliteGatewayContinuationLedger> | undefined;
+    const lstat = fs.lstatSync;
+    const inspection = vi.spyOn(fs, "lstatSync").mockImplementation(((target: fs.PathLike, options?: any) => {
+      const result = lstat(target, options);
+      if (target === `${filePath}-wal` && !previousClosed) {
+        previous.close();
+        previousClosed = true;
+        expect(fs.existsSync(target)).toBe(false);
+      }
+      return result;
+    }) as typeof fs.lstatSync);
+    try {
+      previous.claim("synthetic-retained-id", Date.now() + 60_000);
+      reopened = createSqliteGatewayContinuationLedger({ filePath });
+      expect(previousClosed).toBe(true);
+      expect(reopened.state("synthetic-retained-id")).toBe("executing");
+      expect(() => reopened!.claim("synthetic-retained-id", Date.now() + 60_000)).toThrowError(expect.objectContaining({ code: "continuation_in_progress" }));
+    } finally {
+      inspection.mockRestore();
+      reopened?.close();
+      if (!previousClosed) previous.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    { suffix: "", code: "ENOENT" },
+    { suffix: "-wal", code: "EACCES" }
+  ])("preserves permission failures for $suffix with $code", async ({ suffix, code }) => {
+    const directory = await mkdtemp(join(tmpdir(), "meshrix-continuation-permissions-"));
+    const filePath = join(directory, "claims.sqlite");
+    const ledger = createSqliteGatewayContinuationLedger({ filePath });
+    const chmod = fs.chmodSync;
+    const permissions = vi.spyOn(fs, "chmodSync").mockImplementation((target, mode) => {
+      if (target === `${filePath}${suffix}`) throw Object.assign(new Error("Synthetic permission failure"), { code });
+      chmod(target, mode);
+    });
+    try {
+      expect(() => createSqliteGatewayContinuationLedger({ filePath })).toThrowError(expect.objectContaining({ code }));
+    } finally {
+      permissions.mockRestore();
+      ledger.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("retains prepared and dispatched effect fences in the existing owned ledger across reopen", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-execution-intent-ledger-"));
     const filePath = join(directory, "gateway", "execution.sqlite");
@@ -180,9 +233,11 @@ finally { ledger.close(); }`;
         const child = spawn(process.execPath, ["--conditions=source", "--input-type=module", "-e", program, filePath], { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] });
         children.push(child);
         let output = "";
+        let diagnostics = "";
+        child.stderr!.on("data", (chunk: Buffer) => { diagnostics += chunk.toString("utf8"); });
         child.stdout!.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); });
         child.once("error", reject);
-        child.once("exit", (code) => code === 0 ? resolve(output) : reject(new Error("Synthetic replay contender exited unexpectedly.")));
+        child.once("close", (code, signal) => code === 0 ? resolve(output) : reject(new Error(`Synthetic replay contender exited unexpectedly (code=${code}, signal=${signal}): ${sanitizeSensitiveError(diagnostics)}`)));
       });
       const results = await Promise.all(Array.from({ length: 12 }, () => run()));
       expect(results.filter((result) => result === "claimed")).toHaveLength(1);

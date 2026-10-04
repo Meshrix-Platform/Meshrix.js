@@ -15,7 +15,7 @@ function errorCode(error: unknown): string {
   return error && typeof error === "object" && "code" in error ? String(error.code || "") : "";
 }
 
-function enforcePrivateRegularFile(filePath: string): void {
+function enforcePrivateRegularFile(filePath: string, isSidecar: boolean): void {
   let stat: fs.Stats;
   try {
     stat = fs.lstatSync(filePath);
@@ -26,14 +26,20 @@ function enforcePrivateRegularFile(filePath: string): void {
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw privateSqliteError("SQLite state files must be regular non-symbolic-link files.");
   }
-  fs.chmodSync(filePath, 0o600);
+  try {
+    fs.chmodSync(filePath, 0o600);
+  } catch (error: unknown) {
+    // SQLite may remove a sidecar when the last connection closes after lstat.
+    if (isSidecar && errorCode(error) === "ENOENT") return;
+    throw error;
+  }
 }
 
 export function ensurePrivateSqliteLocation(databasePath: unknown): string {
   const resolvedPath = path.resolve(String(databasePath || ""));
   ensurePrivateDir(path.dirname(resolvedPath));
   for (const suffix of SQLITE_PRIVATE_SUFFIXES) {
-    enforcePrivateRegularFile(`${resolvedPath}${suffix}`);
+    enforcePrivateRegularFile(`${resolvedPath}${suffix}`, suffix !== "");
   }
   return resolvedPath;
 }
