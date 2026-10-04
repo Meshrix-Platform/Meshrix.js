@@ -19,10 +19,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Single-platform npm qualification per AGENTS.md: an npm release may be
+  # qualified on one or two available platforms; native Ubuntu, containers, or
+  # VM coverage is not a universal publication prerequisite. The qualification
+  # environment matches the release pipeline (release.yml runs on macos-15):
+  # device-gated checks (installed MCP hub, browser launch) pass there.
   pull-request-verify:
     name: Pull request verification
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
@@ -57,7 +62,7 @@ jobs:
   engineering:
     name: Engineering verification
     if: ${{ github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
