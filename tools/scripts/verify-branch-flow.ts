@@ -92,7 +92,7 @@ export function verifyProtectedPushTopology({
   after,
   branchTip = resolveBranch,
   ancestor = isAncestor,
-  parentOf = firstParentOf
+  parentsOf = commitParentsOf
 }: Record<string, any> = {}) : any {
   if (!LONG_LIVED.has(branch)) return { ok: false, code: "protected-branch-invalid" };
   if (!before || !after || before === ZERO_OID || after === ZERO_OID) {
@@ -108,23 +108,26 @@ export function verifyProtectedPushTopology({
   const tip: any = branchTip(upstream);
   if (!tip) return { ok: false, code: "promotion-source-missing" };
   // Promotions arrive either as a direct fast-forward to the upstream tip or as
-  // a GitHub PR merge commit whose first parent is the upstream tip. Both bring
-  // exactly the upstream tip's content onto the promoted branch; a merge whose
-  // first parent is anything else must be rejected.
+  // a GitHub PR merge commit that has the upstream tip as one of its direct
+  // parents. GitHub orders the merge parents as [base, head], so the upstream
+  // tip is normally the second parent; both orders are accepted because either
+  // one incorporates exactly the upstream tip's content. A promotion commit
+  // without the upstream tip as a direct parent must be rejected.
   if (after === tip) {
     return { ok: true, code: `${upstream}-fast-forward-advanced-${branch}` };
   }
-  if (parentOf(after) === tip) {
+  if (parentsOf(after).includes(tip)) {
     return { ok: true, code: `${upstream}-merge-advanced-${branch}` };
   }
   return { ok: false, code: "promotion-source-tip-mismatch" };
 }
 
-function firstParentOf(revision?: any) : any {
+function commitParentsOf(revision?: any) : any {
   try {
-    return git(["rev-parse", "--verify", `${revision}^`]);
+    const line: any = git(["rev-list", "--parents", "-n", "1", String(revision)]);
+    return String(line).split(/\s+/).slice(1).filter(Boolean);
   } catch {
-    return "";
+    return [];
   }
 }
 
@@ -193,20 +196,20 @@ export function runSelfTest() : any {
     ["release non-fast-forward", false, "release", "old-release", "stable-tip", false,
       { nightly: "nightly-tip", stable: "stable-tip", release: "stable-tip" }],
     ["stable upstream-tip PR merge", true, "stable", "old-stable", "merge-tip", true,
-      { nightly: "nightly-tip", stable: "merge-tip", release: "old-release" }, "nightly-tip"],
+      { nightly: "nightly-tip", stable: "merge-tip", release: "old-release" }, ["old-stable", "nightly-tip"]],
     ["release upstream-tip PR merge", true, "release", "old-release", "merge-tip", true,
-      { nightly: "nightly-tip", stable: "stable-tip", release: "merge-tip" }, "stable-tip"],
+      { nightly: "nightly-tip", stable: "stable-tip", release: "merge-tip" }, ["old-release", "stable-tip"]],
     ["stable PR merge from wrong source", false, "stable", "old-stable", "merge-tip", true,
-      { nightly: "nightly-tip", stable: "merge-tip", release: "old-release" }, "other-tip"]
+      { nightly: "nightly-tip", stable: "merge-tip", release: "old-release" }, ["old-stable", "other-tip"]]
   ];
-  for (const [label, expected, branch, before, after, isFastForward, branchTips, mergeParent] of topologyCases) {
+  for (const [label, expected, branch, before, after, isFastForward, branchTips, mergeParents] of topologyCases) {
     const result: any = verifyProtectedPushTopology({
       branch,
       before,
       after,
       branchTip: (name?: any) : any => branchTips[name] || "",
       ancestor: () : any => isFastForward,
-      parentOf: () : any => mergeParent || ""
+      parentsOf: () : any => (Array.isArray(mergeParents) ? mergeParents : mergeParents ? [mergeParents] : [])
     });
     if (result.ok !== expected) throw new Error(`topology fixture failed: ${label}`);
   }
