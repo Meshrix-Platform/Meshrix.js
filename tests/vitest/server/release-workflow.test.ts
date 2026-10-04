@@ -14,6 +14,7 @@ describe("standard npm release workflow", () => {
     const workflow = read(".github/workflows/release.yml");
     const ci = read(".github/workflows/ci.yml");
     const definition = JSON.parse(read("tools/registry/release-definition.registry.json"));
+    const uploadArtifactAction = ci.match(/uses: (actions\/upload-artifact@[^\s]+)/)?.[1];
 
     expect(workflow).toContain('tags: ["v*"]');
     expect(workflow).toContain("workflow_dispatch: {}");
@@ -33,6 +34,11 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain('NPM_CONFIG_PROVENANCE: "true"');
     expect(workflow).toContain('if gh release view "$RELEASE_TAG"');
     expect(workflow).toContain("gh release create \"$RELEASE_TAG\"");
+    expect(workflow).toContain("if: ${{ always() }}");
+    expect(uploadArtifactAction).toBe("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain(`uses: ${uploadArtifactAction}`);
+    expect(workflow).toContain("build/ci-diagnostics/release-local-ci/results.json");
+    expect(workflow).toContain("build/local-ci/");
 
     expect(ci).not.toContain('tags: ["v*"]');
     expect(ci).toContain("if: ${{ github.event_name != 'pull_request' }}");

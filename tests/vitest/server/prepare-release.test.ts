@@ -80,6 +80,10 @@ async function createFixture({ lockDependencyVersion = INITIAL_VERSION }: Record
     }
   });
   await writeJson(rootDir, "plugins/registry/plugins.json", { plugins: [] });
+  await writeJson(rootDir, "docs/releases/plan.json", {
+    schemaVersion: 2, repository: "Meshrix.js", currentVersion: INITIAL_VERSION,
+    changelog: "CHANGELOG.md", releases: []
+  });
   await fs.writeFile(
     path.join(rootDir, "CHANGELOG.md"),
     "# Changelog\n\n## Unreleased\n\n- Added the release fixture.\n",
@@ -135,6 +139,8 @@ describe("release package version preparation", () : any => {
       );
 
       expect(rootPackage.version).toBe(version);
+      expect(JSON.parse(await fs.readFile(path.join(rootDir, "docs/releases/plan.json"), "utf8")))
+        .toMatchObject({ currentVersion: version, releases: [] });
       expect(rootPackage.dependencies).toEqual({
         "@meshrix/contracts": version,
         "external-package": "^1.0.0"

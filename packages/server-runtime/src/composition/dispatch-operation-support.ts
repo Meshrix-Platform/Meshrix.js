@@ -1,10 +1,11 @@
 import { sendJson } from "#meshrix/foundation/http/http-response";
 import { OPERATION_PROOF_PROFILES } from "#meshrix/contracts/operations/operation-decorators";
+import packageManifest from "../../package.json" with { type: "json" };
 
 // Literal field names used in dispatch proof lifecycle instrumentation.
 export const OP_DISPATCH_OTEL_ATTRIBUTES: Readonly<Record<string, any>> = Object.freeze({
   "service.name": "meshrix-server",
-  "service.version": "0.0.1",
+  "service.version": packageManifest.version,
   "meshrix.operation.id": null,
   "meshrix.workspace.id": null,
   "meshrix.capability.id": null,

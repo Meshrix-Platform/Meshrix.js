@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import {
   MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, homePath, isDirectInvocation, readJson, run, runAdapterCli, writeJson
 } from "@meshrix/client-adapter-kit";
@@ -7,7 +8,7 @@ import path from "node:path";
 
 const PLUGIN_NAME = "lico";
 const MARKETPLACE_NAME = "meshrix-local";
-export const description = descriptor({ target: "codex", label: "Codex", version: "0.0.1", packageName: "@meshrix/agent-codex-adapter", commandNames: ["codex"], installMode: "codex-marketplace-and-mcp-cli" });
+export const description = descriptor({ target: "codex", label: "Codex", version: packageManifest.version, packageName: "@meshrix/agent-codex-adapter", commandNames: ["codex"], installMode: "codex-marketplace-and-mcp-cli" });
 
 function marketplacePaths(request) {
   const root = String(request?.client?.marketplaceRoot || homePath(".lico", "codex-plugin-marketplace"));

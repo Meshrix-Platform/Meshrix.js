@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import { MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, isDirectInvocation, run, runAdapterCli } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "claude-code", label: "Claude Code", version: "0.0.1", packageName: "@meshrix/agent-claude-code-adapter", commandNames: ["claude"], installMode: "external-client-adapter" });
+export const description = descriptor({ target: "claude-code", label: "Claude Code", version: packageManifest.version, packageName: "@meshrix/agent-claude-code-adapter", commandNames: ["claude"], installMode: "external-client-adapter" });
 async function installed(command) {
   const result = await run(command, ["mcp", "get", MCP_SERVER_NAME], { allowFailure: true });
   return result.ok && /\blico\b/iu.test(result.stdout);

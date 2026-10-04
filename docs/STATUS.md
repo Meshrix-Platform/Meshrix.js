@@ -13,7 +13,7 @@ ordinary use.
 
 | Dimension | Current status |
 | --- | --- |
-| **Product direction** | Complete the `0.0.1` open-source npm release of the Meshrix.js platform and programmable gateway. The first release claim covers the exact npm artifacts and the available platforms that actually pass their consumer checks; optional container deployment claims keep separate evidence. |
+| **Product direction** | Complete the first `0.1.0` open-source npm release of the Meshrix.js platform and programmable gateway. The first release claim covers the exact npm artifacts and the available platforms that actually pass their consumer checks; optional container deployment claims keep separate evidence. |
 | **Implementation** | Core includes the Server, Web Console, security, storage, jobs, governed operation dispatch, plugin contract, and standard MCP ingress. Optional plugins, independent services, external providers, model services, Agent products, and named-client scenarios retain separate opt-in lifecycles. |
 | **Verification** | `npm test` is the core public regression. `npm run verify:acceptance` is the single product-level functional gate. Focused checks are used only to repair concrete failures before that final gate. |
 | **Operation** | Existing production evidence describes an earlier accepted Core candidate. It does not establish the current gateway candidate's deployment or present service health. A supported deployment uses one `runtime-ui` process with one public origin: Console at `<server-url>/`, API at `<server-url>/api/`, and health at `<server-url>/api/healthz`. |
@@ -96,11 +96,20 @@ accepted generation. That result describes its source revision only.
 The current release workflow uses one selected version tag to build, test, pack,
 and smoke-install both npm products, then invokes standard npm publication and
 creates the GitHub Release. External journey receipts and prior workflow authority
-bundles are not publication prerequisites. The simplification has focused
-engineering coverage, a current Node build, and successful clean native installs
-of both prepared npm products. Additional Docker verification was stopped at the
+bundles are not publication prerequisites. The simplification at `aef59e1b` has
+focused engineering coverage and successful clean native installs of both prepared
+npm products. Additional Docker verification was stopped at the
 scope boundary and has no completed verdict. The normal publication workflow runs
 its own release checks when invoked. No npm or GitHub publication is recorded here.
+
+The first hosted attempt, run `37211672824` for `v0.0.1`, failed during local release
+checks before publication; its detailed failure report was unavailable. The failed
+tag was removed and the original tag protections restored. The `0.1.0` source
+preparation fixes the isolated Podman fixture's dependency on an installed binary,
+retains sanitized workflow diagnostics, synchronizes production version metadata,
+and passes focused release checks and both npm archive builds. These local results
+do not establish the unavailable hosted failure's sole cause or a successful
+`0.1.0` hosted publication.
 
 | Boundary | Required result | Current candidate evidence |
 | --- | --- | --- |

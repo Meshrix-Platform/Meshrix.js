@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import packageManifest from "./package.json" with { type: "json" };
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -63,7 +64,7 @@ export default async function meshrixPiExtension(pi) {
     if (!config) return;
     started = true;
     try {
-      client = new Client({ name: "meshrix-pi-extension", version: "0.0.1" }, { capabilities: {} });
+      client = new Client({ name: "meshrix-pi-extension", version: packageManifest.version }, { capabilities: {} });
       const transport = new StdioClientTransport({
         command: config.command,
         args: config.args,

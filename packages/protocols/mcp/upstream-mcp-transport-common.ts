@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { MCP_NPM_PACKAGE_VERSION } from "./adapter/http-mcp-adapter-constants.ts";
 
 export const UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION: any = "v0.0.1:mcp:upstream-client-1";
 export const MCP_JSONRPC_VERSION: any = "2.0";
@@ -178,7 +179,7 @@ export function initializeParams(config: Record<string, any> = {}) : any {
     capabilities: {},
     clientInfo: {
       name: "Meshrix.js Upstream MCP Gateway",
-      version: "0.0.1"
+      version: MCP_NPM_PACKAGE_VERSION
     }
   };
 }

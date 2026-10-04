@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/capabilities",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Meshrix.js operation permission and runtime capabilities",
   "license": "Apache-2.0",
   "engines": {
@@ -56,8 +56,8 @@
   },
   "private": true,
   "peerDependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1"
+    "@meshrix/contracts": "0.1.0",
+    "@meshrix/foundation": "0.1.0",
+    "@meshrix/protocols": "0.1.0"
   }
 }

@@ -22,7 +22,7 @@ export const packageInfo: Readonly<Record<string, string>> = Object.freeze({
 // Literal field names used in MCP gateway instrumentation.
 export const MCP_OTEL_ATTRIBUTES: Readonly<Record<string, any>> = Object.freeze({
   "service.name": "meshrix-server",
-  "service.version": "0.0.1",
+  "service.version": MCP_NPM_PACKAGE_VERSION,
   "mcp.method.name": null,
 });
 

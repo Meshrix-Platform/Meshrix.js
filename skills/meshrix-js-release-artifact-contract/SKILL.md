@@ -25,10 +25,9 @@ command.
 
 The public npm products are `meshrix.js` and `@meshrix/gateway`; the remaining
 workspaces are internal source boundaries. The existing publisher discovers
-the public package set from those manifests, builds both archives once in the
-credential-free assembly job, and transfers them as release inputs. Preflight
-and publication consume those same tarball bytes. Never rebuild or repack in a
-preflight, verification, or publisher job.
+the public package set from those manifests and builds both archives once before
+the publish step receives credentials. Package checks and publication consume
+those same tarball bytes; the publisher does not rebuild or repack them.
 
 The optional container artifact uses the `runtime-ui` target and serves the
 Web Console from the same process as the server. Its actual platform list is

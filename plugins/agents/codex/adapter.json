@@ -3,11 +3,21 @@
   "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
   "target": "codex",
   "label": "Codex",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "packageName": "@meshrix/agent-codex-adapter",
   "entrypoint": "adapter.mjs",
-  "commandNames": ["codex"],
-  "locations": ["local"],
-  "actions": ["describe", "scan", "install", "verify", "uninstall"],
+  "commandNames": [
+    "codex"
+  ],
+  "locations": [
+    "local"
+  ],
+  "actions": [
+    "describe",
+    "scan",
+    "install",
+    "verify",
+    "uninstall"
+  ],
   "installMode": "codex-marketplace-and-mcp-cli"
 }

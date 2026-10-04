@@ -66,3 +66,15 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes
           fi
+
+      - name: Retain sanitized release diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-diagnostics-${{ github.sha }}
+          path: |
+            build/ci-diagnostics/release-local-ci/results.json
+            build/local-ci/
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true

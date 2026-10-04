@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import packageManifest from "../../../package.json";
 
 import {
   buildMeshrixMcpDiscovery,
@@ -12,7 +13,7 @@ describe("public MCP install command metadata", () => {
   it("uses the shipped npm Node bin for discovery, clients, errors and upgrades", () => {
     const listenUrl = "http://127.0.0.1:7228";
     const discovery = buildMeshrixMcpDiscovery({ listenUrl });
-    const baseCommand = "npx --yes --package meshrix.js@0.0.1 meshrix-mcp";
+    const baseCommand = `npx --yes --package meshrix.js@${packageManifest.version} meshrix-mcp`;
 
     expect(npmMcpCommand("install", listenUrl)).toBe(`${baseCommand} install --url '${listenUrl}'`);
     expect(discovery.localDiscovery.entrypoint.command)
@@ -36,7 +37,7 @@ describe("public MCP install command metadata", () => {
     const authError = mcpAuthorizationErrorData({ listenUrl });
     for (const value of [discovery, runtime, authError]) {
       const serialized = JSON.stringify(value);
-      expect(serialized).toContain("npx --yes --package meshrix.js@0.0.1 meshrix-mcp");
+      expect(serialized).toContain(baseCommand);
       expect(serialized).not.toMatch(/\/bin\/sh|githubOneLine|nativeEntrypoint|windowsEntrypoint|bootstrapScript|\.ps1|\.sh/u);
     }
     expect(runtime.autoInstallCommand).toBe(discovery.installer.autoInstallCommand);

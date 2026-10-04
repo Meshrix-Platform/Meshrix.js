@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import packageManifest from "../../../package.json";
+
+const VERSION = packageManifest.version;
 
 import { releaseManifest } from "../../../tools/server-scripts/lib/mcp-release-manifest.ts";
 import { MCP_SUPPORTED_TARGETS } from "../../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
@@ -8,19 +11,19 @@ function manifestInput(): Record<string, any> {
     channel: "stable",
     packageJson: {
       name: "meshrix.js",
-      version: "0.0.1",
+      version: VERSION,
       engines: { node: ">=22.19.0 <23 || >=24.3.0 <25" }
     },
-    tarballName: "meshrix.js-0.0.1.tgz",
+    tarballName: `meshrix.js-${VERSION}.tgz`,
     npmIntegrity: `sha512-${Buffer.alloc(64).toString("base64")}`,
     checksum: "1".repeat(64),
     sizeBytes: 100,
     portables: [{
       platform: "macos-arm64",
-      archiveName: "meshrix-mcp-connector-0.0.1-macos-arm64.tar.gz",
+      archiveName: `meshrix-mcp-connector-${VERSION}-macos-arm64.tar.gz`,
       sha256: "2".repeat(64),
       sizeBytes: 200,
-      zipArchiveName: "meshrix-mcp-connector-0.0.1-macos-arm64.zip",
+      zipArchiveName: `meshrix-mcp-connector-${VERSION}-macos-arm64.zip`,
       zipSha256: "3".repeat(64),
       zipSizeBytes: 220,
       executable: "meshrix-mcp",
@@ -43,23 +46,23 @@ describe("MCP release manifest", () => {
       .toEqual(MCP_SUPPORTED_TARGETS);
     expect(manifest.connector).toMatchObject({
       packageName: "meshrix.js",
-      tarball: "meshrix.js-0.0.1.tgz",
+      tarball: `meshrix.js-${VERSION}.tgz`,
       npmIntegrity: input.npmIntegrity,
       userDeviceInstaller: "node-bin"
     });
     expect(manifest.install.registryCommand)
-      .toBe("npx --yes --package meshrix.js@0.0.1 meshrix-mcp install");
+      .toBe(`npx --yes --package meshrix.js@${VERSION} meshrix-mcp install`);
     expect(manifest.portable.artifacts[0]).toMatchObject({
       platform: "macos-arm64",
       launcher: "meshrix-mcp",
-      archive: "meshrix-mcp-connector-0.0.1-macos-arm64.tar.gz",
-      zipArchive: "meshrix-mcp-connector-0.0.1-macos-arm64.zip",
+      archive: `meshrix-mcp-connector-${VERSION}-macos-arm64.tar.gz`,
+      zipArchive: `meshrix-mcp-connector-${VERSION}-macos-arm64.zip`,
       includesNodeRuntime: true
     });
     expect(manifest.publish.releaseFiles).toEqual([
-      "meshrix.js-0.0.1.tgz",
-      "meshrix-mcp-connector-0.0.1-macos-arm64.tar.gz",
-      "meshrix-mcp-connector-0.0.1-macos-arm64.zip",
+      `meshrix.js-${VERSION}.tgz`,
+      `meshrix-mcp-connector-${VERSION}-macos-arm64.tar.gz`,
+      `meshrix-mcp-connector-${VERSION}-macos-arm64.zip`,
       "SHA256SUMS",
       "RELEASE_SHA256SUMS",
       "RELEASE_SHA256SUMS.sigstore.json",

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,7 @@ import {
 
 const PACKAGE_NAME = "@meshrix/agent-pi-adapter";
 const LOCAL_PACKAGE_SOURCE = path.dirname(fileURLToPath(import.meta.url));
-export const description = descriptor({ target: "pi", label: "Pi", version: "0.0.1", packageName: PACKAGE_NAME, commandNames: ["pi"], installMode: "external-client-adapter" });
+export const description = descriptor({ target: "pi", label: "Pi", version: packageManifest.version, packageName: PACKAGE_NAME, commandNames: ["pi"], installMode: "external-client-adapter" });
 function configPath(request) { return String(request?.client?.configPath || homePath(".lico", "mcp", "pi.json")); }
 function packageSource() { return LOCAL_PACKAGE_SOURCE; }
 async function packageInstalled(command, source) { const result = await run(command, ["list"], { allowFailure: true }); return result.ok && (result.stdout.includes(PACKAGE_NAME) || result.stdout.includes(source)); }

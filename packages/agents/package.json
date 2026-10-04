@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/agents",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Meshrix.js agent library, collaboration, relay domain, memory/context contracts",
   "license": "Apache-2.0",
   "engines": {
@@ -86,9 +86,9 @@
   },
   "private": true,
   "peerDependencies": {
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1",
+    "@meshrix/contracts": "0.1.0",
+    "@meshrix/foundation": "0.1.0",
+    "@meshrix/protocols": "0.1.0",
     "better-sqlite3": "^12.9.0"
   }
 }

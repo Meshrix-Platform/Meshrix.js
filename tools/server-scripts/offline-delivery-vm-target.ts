@@ -7,7 +7,7 @@ import path from "node:path";
 import { gunzipSync } from "node:zlib";
 
 import { canonicalJson } from "../../packages/contracts/src/serialization/canonical-json.ts";
-import { MCP_INTERFACE_VERSION } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import { MCP_INTERFACE_VERSION, MCP_NPM_PACKAGE_VERSION } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import {
   MCP_DISCOVER_METHOD,
   MCP_META_SERVER_INFO,
@@ -46,7 +46,7 @@ const OCI_LAYER_TAR_MEDIA_TYPE: any = "application/vnd.oci.image.layer.v1.tar";
 const OCI_LAYER_GZIP_MEDIA_TYPE: any = "application/vnd.oci.image.layer.v1.tar+gzip";
 const VM_REPOSITORY: any = "Meshrix-Platform/Meshrix.js";
 const VM_IMAGE: any = "ghcr.io/meshrix-platform/meshrix.js";
-const VM_SOURCE_REF: any = "refs/tags/v0.0.1";
+const VM_SOURCE_REF: any = `refs/tags/v${MCP_NPM_PACKAGE_VERSION}`;
 const VM_IMAGE_TAG: any = `${VM_IMAGE}:offline-vm`;
 const VM_HOST_PORT: any = 17328;
 const RELEASE_DEFINITION_PATH: any = "tools/registry/release-definition.registry.json";
@@ -777,7 +777,7 @@ export async function resolveOfflineDeliveryVmMaterials({
   const authorityInput: Record<string, any> = {
     image: VM_IMAGE,
     digest: layout.imageDigest,
-    target: `${VM_IMAGE}:0.0.1`,
+    target: `${VM_IMAGE}:${MCP_NPM_PACKAGE_VERSION}`,
     candidate: `${VM_IMAGE}:candidate-${sourceCommit}`,
     reused: false,
     repository: VM_REPOSITORY,

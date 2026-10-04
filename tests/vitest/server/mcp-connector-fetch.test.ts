@@ -200,7 +200,7 @@ describe("Meshrix connector caller-owned request lifetime", () : any => {
     expect(version.stderr).toBe("");
     expect(JSON.parse(version.stdout)).toMatchObject({
       packageName: "meshrix.js",
-      packageVersion: "0.0.1"
+      packageVersion: JSON.parse(await fs.readFile(new URL("../../../package.json", import.meta.url), "utf8")).version
     });
 
     const help: any = await runNode([commandLink, "help"]);

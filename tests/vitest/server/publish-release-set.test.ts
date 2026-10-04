@@ -524,7 +524,7 @@ describe("npm release-set publication", () => {
     expect(injected.publishCalls.map(({ name }) => name)).toEqual(["meshrix.js"]);
     expect(injected.publishCalls[0].args.slice(0, 4)).toEqual([
       "publish",
-      path.join(artifactDirectory, filenameFor("meshrix.js", "0.0.1")),
+      path.join(artifactDirectory, filenameFor("meshrix.js", releaseSet.version)),
       "--access",
       "public"
     ]);

@@ -1,4 +1,5 @@
 import { computed, ref, shallowRef, watch } from "vue";
+import packageManifest from "../package.json";
 import { confirmConsoleAction, copyConsoleText } from "./console-browser-effects";
 import { setApiKeyDistributionAvailability } from "./console-api-key-distribution-availability";
 import {
@@ -100,7 +101,6 @@ export type ApiKeyKeyMaterial = {
  */
 export const CONNECTOR_SNIPPET_SECRET_PLACEHOLDER = "<paste-one-time-key-here>";
 const CONNECTOR_TOKEN_ENV = "MESHRIX_MCP_TOKEN";
-const ADAPTER_VERSION = "0.0.1";
 
 /**
  * Copy-paste-runnable connector configuration for a frozen MCP client target
@@ -133,7 +133,7 @@ export function buildConnectorConfigSnippet(
   if (!targetEntry) {
     return "";
   }
-  const adapterCoordinate = `@meshrix/agent-${targetEntry.value}-adapter@${ADAPTER_VERSION}`;
+  const connectorCommand = `npx --yes --package meshrix.js@${packageManifest.version} meshrix-mcp install --target ${targetEntry.value} --json`;
   const audience = resolveServerAudience(preferredServerAudience) || `127.0.0.1:${DEFAULT_API_PORT}`;
   const scheme = typeof window !== "undefined" && window.location?.protocol === "https:" ? "https:" : "http:";
   const config = {
@@ -152,7 +152,7 @@ export function buildConnectorConfigSnippet(
   };
   return [
     `# ${targetEntry.label} — Meshrix.js MCP connector`,
-    `# Install the ${targetEntry.label} adapter: npx -y ${adapterCoordinate}`,
+    `# Install the ${targetEntry.label} connector: ${connectorCommand}`,
     `# Key identifier: ${keyMaterial.keyId}`,
     `# Key prefix: ${keyMaterial.displayPrefix}`,
     `# The one-time key is never embedded in this config. Set it first:`,

@@ -19,6 +19,7 @@ const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
 ]);
 const MCP_RELEASE_IDENTITY_PATH: any = "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 const PLUGIN_REGISTRY_PATH: any = "plugins/registry/plugins.json";
+const RELEASE_PLAN_PATH = "docs/releases/plan.json";
 export class ReleasePreparationError extends Error {
   code: any;
   findings: any;
@@ -180,6 +181,7 @@ async function loadReleaseState(rootDir?: any) : Promise<any> {
     adapterDescriptorRecords,
     mcpReleaseIdentity: await readTextRecord(rootDir, MCP_RELEASE_IDENTITY_PATH),
     packageLock: await readJsonRecord(rootDir, "package-lock.json"),
+    releasePlan: await readJsonRecord(rootDir, RELEASE_PLAN_PATH),
     changelog: await readTextRecord(rootDir, "CHANGELOG.md")
   };
 }
@@ -284,6 +286,9 @@ function validateInternalDependencies({ value, relativePath }: Record<string, an
 
 function collectReleaseFindings(state?: any, version?: any) : any {
   const findings: any[] = [];
+  if (state.releasePlan.value.currentVersion !== version) {
+    addFinding(findings, RELEASE_PLAN_PATH, "release_plan_version_mismatch", "currentVersion");
+  }
   const mcpVersion: any = state.mcpReleaseIdentity.text.match(
     /export const MCP_NPM_PACKAGE_VERSION:\s*any\s*=\s*"([^"]+)";/u
   )?.[1];
@@ -381,6 +386,12 @@ function formatJson(value?: any) : any {
 
 function createDesiredFiles(state?: any, version?: any, date?: any) : any {
   const desiredFiles: any = new Map<any, any>();
+  const releasePlan = { ...state.releasePlan.value, currentVersion: version };
+  desiredFiles.set(RELEASE_PLAN_PATH, {
+    ...state.releasePlan,
+    value: releasePlan,
+    desiredText: formatJson(releasePlan)
+  });
   const releaseVersionPattern: any = /(export const MCP_NPM_PACKAGE_VERSION:\s*any\s*=\s*")[^"]+(";)/u;
   if (!releaseVersionPattern.test(state.mcpReleaseIdentity.text)) {
     throw releaseError(
@@ -591,6 +602,7 @@ export async function prepareRelease({
       record: desiredFiles.get(adapter.record.relativePath)
     })),
     packageLock: desiredFiles.get("package-lock.json"),
+    releasePlan: desiredFiles.get(RELEASE_PLAN_PATH),
     mcpReleaseIdentity: {
       ...state.mcpReleaseIdentity,
       text: desiredFiles.get(MCP_RELEASE_IDENTITY_PATH).desiredText

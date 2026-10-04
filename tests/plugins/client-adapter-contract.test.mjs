@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import packageManifest from "../../package.json" with { type: "json" };
 
 import { ADAPTER_DESCRIPTOR_SCHEMA, ADAPTER_PROTOCOL } from "@meshrix/client-adapter-kit";
 
@@ -36,7 +37,7 @@ test("every adapter descriptor satisfies the Core runner contract", async () => 
     assert.equal(declared.protocol, CANONICAL_PROTOCOL, `${target} adapter.json protocol`);
     assert.equal(declared.target, target, `${target} adapter.json target`);
     assert.equal(declared.packageName, packageName, `${target} adapter.json packageName`);
-    assert.equal(declared.version, "0.0.1", `${target} adapter.json version`);
+    assert.equal(declared.version, packageManifest.version, `${target} adapter.json version`);
     assert.deepEqual(declared.actions, CANONICAL_ACTIONS, `${target} adapter.json actions`);
     assert.deepEqual(declared.locations, CANONICAL_LOCATIONS, `${target} adapter.json locations`);
 
@@ -48,7 +49,7 @@ test("every adapter descriptor satisfies the Core runner contract", async () => 
     assert.equal(described.protocol, CANONICAL_PROTOCOL, `${target} describe protocol`);
     assert.equal(described.target, target, `${target} describe target`);
     assert.equal(described.packageName, packageName, `${target} describe packageName`);
-    assert.equal(described.version, "0.0.1", `${target} describe version`);
+    assert.equal(described.version, packageManifest.version, `${target} describe version`);
     assert.ok(Array.isArray(described.commandNames) && described.commandNames.length > 0, `${target} describe commandNames`);
     assert.ok(CANONICAL_ACTIONS.every((action) => described.actions.includes(action)), `${target} describe actions`);
     assert.deepEqual(described.locations, CANONICAL_LOCATIONS, `${target} describe locations`);

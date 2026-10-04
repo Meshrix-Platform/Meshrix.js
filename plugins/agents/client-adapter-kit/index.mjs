@@ -221,15 +221,7 @@ export async function runAdapterCli(adapter) {
   const action = String(process.argv[2] || "describe");
   try {
     const result = await invokeAdapter(adapter, action, await readRequest());
-    let output = result;
-    if (action === "describe" && process.argv[1]) {
-      const adapterPath = await fs.realpath(process.argv[1]);
-      const manifest = await readJson(path.join(path.dirname(adapterPath), "package.json"), null);
-      if (manifest?.name === result?.packageName && typeof manifest.version === "string") {
-        output = { ...result, version: manifest.version };
-      }
-    }
-    process.stdout.write(`${JSON.stringify({ schemaVersion: ADAPTER_PROTOCOL, ok: true, result: output })}\n`);
+    process.stdout.write(`${JSON.stringify({ schemaVersion: ADAPTER_PROTOCOL, ok: true, result })}\n`);
   } catch (error) {
     process.stdout.write(`${JSON.stringify({
       schemaVersion: ADAPTER_PROTOCOL,

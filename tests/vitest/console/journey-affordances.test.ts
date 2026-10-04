@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
+import packageManifest from "../../../package.json";
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, nextTick, ref } from "vue";
@@ -428,6 +429,7 @@ describe("connector configuration snippet", () : any => {
       const snippet: string = buildConnectorConfigSnippet(target, keyMaterial);
       expect(snippet.length).toBeGreaterThan(0);
       expect(snippet).toContain(target);
+      expect(snippet).toContain(`npx --yes --package meshrix.js@${packageManifest.version} meshrix-mcp install --target ${target} --json`);
       expect(snippet).toContain(keyMaterial.keyId);
       expect(snippet).toContain(keyMaterial.displayPrefix);
       expect(snippet).toContain(CONNECTOR_SNIPPET_SECRET_PLACEHOLDER);

@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
+import packageManifest from "../../../package.json";
 
 import { resolveInstalledClientAdapter } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
 
@@ -21,7 +22,7 @@ describe("Pi adapter installed component", () : any => {
     const installed: any = await resolveInstalledClientAdapter({ target: "pi" });
     expect(installed.adapter).toMatchObject({
       packageName: "@meshrix/agent-pi-adapter",
-      version: "0.0.1",
+      version: packageManifest.version,
       source: "meshrix-root-bundle"
     });
 

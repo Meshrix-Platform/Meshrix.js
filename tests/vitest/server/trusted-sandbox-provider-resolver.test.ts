@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -373,32 +376,41 @@ describe("trusted sandbox provider resolver", () : any => {
   });
 
   it("constructs the preferred Podman conformance target without Docker", async () : Promise<any> => {
-    const backend: any = {
-      async descriptor() : Promise<any> {
-        return { healthy: true, production: true, enforcedRestrictions: [] };
-      }
-    };
-    const backendFactory: any = vi.fn(() : any => backend);
-    const target: any = await createOciBackendConformanceTarget({
-      platform: "darwin",
-      pathExists: (candidatePath?: any) : any => candidatePath === "podman",
-      rootlessProbe: async () : Promise<any> => true,
-      runtimeClassProbe: async () : Promise<any> => "crun",
-      executableIdentityProbe: async () : Promise<any> => EXECUTABLE_IDENTITY_DIGEST,
-      backendFactory
-    });
+    const binaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-oci-provider-fixture-"));
+    await fs.writeFile(path.join(binaryDirectory, "podman"), "fixture executable identity\n");
+    vi.stubEnv("PATH", binaryDirectory);
+    try {
+      const backend: any = {
+        async descriptor() : Promise<any> {
+          return { healthy: true, production: true, enforcedRestrictions: [] };
+        }
+      };
+      const backendFactory: any = vi.fn(() : any => backend);
+      const target: any = await createOciBackendConformanceTarget({
+        platform: "darwin",
+        pathExists: (candidatePath?: any) : any => candidatePath === "podman",
+        rootlessProbe: async () : Promise<any> => true,
+        runtimeClassProbe: async () : Promise<any> => "crun",
+        executableIdentityProbe: async () : Promise<any> => EXECUTABLE_IDENTITY_DIGEST,
+        backendFactory
+      });
 
-    expect(target).toMatchObject({
-      id: "oci.rootless-podman",
-      providerClass: "rootless-podman",
-      engine: "podman",
-      backend
-    });
-    expect(backendFactory).toHaveBeenCalledWith(expect.objectContaining({
-      id: "oci.rootless-podman",
-      engine: "podman",
-      runtimeClass: "crun",
-      rootless: true,
-    }));
+      expect(target).toMatchObject({
+        id: "oci.rootless-podman",
+        providerClass: "rootless-podman",
+        engine: "podman",
+        backend
+      });
+      expect(backendFactory).toHaveBeenCalledWith(expect.objectContaining({
+        id: "oci.rootless-podman",
+        engine: "podman",
+        binary: path.join(binaryDirectory, "podman"),
+        runtimeClass: "crun",
+        rootless: true,
+      }));
+    } finally {
+      vi.unstubAllEnvs();
+      await fs.rm(binaryDirectory, { recursive: true, force: true });
+    }
   });
 });
