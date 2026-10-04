@@ -35,6 +35,10 @@ jobs:
           node-version: "24.16.0"
           cache: npm
           registry-url: https://registry.npmjs.org
+      - name: Provide the Go toolchain for service verification
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: services/file-parser/format-convert/go.mod
 
       - name: Use the repository-configured npm CLI for Trusted Publishing
         run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"

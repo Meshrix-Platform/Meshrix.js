@@ -38,6 +38,10 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Provide the Go toolchain for service verification
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: services/file-parser/format-convert/go.mod
       - name: Use the repository-configured npm CLI
         run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
       - name: Install dependencies
@@ -73,6 +77,10 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Provide the Go toolchain for service verification
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: services/file-parser/format-convert/go.mod
       - name: Use the repository-configured npm CLI
         run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
       - name: Install dependencies
