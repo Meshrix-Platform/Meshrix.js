@@ -6,8 +6,9 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import { containsMxak1Credential, normalizeBaseUrl, option } from "./basic-utils.ts";
-import { HTTP_TIMEOUT_MS, packageJson } from "./constants.ts";
+import { packageInfo } from "./constants.ts";
 import { authHeaders, optionsWithDiscoveredBaseUrl } from "./discovery.ts";
+import { CALLER_OWNED_HTTP_LIFETIME, fetchResponse } from "./http-json-client.ts";
 import { resolveProxyCredentials } from "./proxy-command.ts";
 
 // Mirrors the 2 GiB artifact limit enforced by the gateway artifact download
@@ -118,7 +119,7 @@ async function commitTemporaryFile(temporaryPath?: any, outputPath?: any) : Prom
   await fsp.rm(temporaryPath, { force: true });
 }
 
-async function streamResponseToFile(response?: any, outputPath?: any) : Promise<any> {
+async function streamResponseToFile(response?: any, outputPath?: any, signal?: any) : Promise<any> {
   const temporaryPath: any = `${outputPath}.part-${randomBytes(6).toString("hex")}`;
   const hash: any = createHash("sha256");
   let byteLength: any = 0;
@@ -137,7 +138,8 @@ async function streamResponseToFile(response?: any, outputPath?: any) : Promise<
           callback(null, chunk);
         }
       }),
-      fileStream
+      fileStream,
+      { signal }
     );
   } catch (error: any) {
     fileStream.destroy();
@@ -152,51 +154,73 @@ async function streamResponseToFile(response?: any, outputPath?: any) : Promise<
 }
 
 export async function fetchCommand(options: Record<string, any> = {}) : Promise<any> {
-  const { target, token } = await resolveProxyCredentials(options);
-  const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
-  const { url, artifactId } = resolveArtifactUrl(resolvedOptions);
-  const outputPath: any = requiredOutputPath(resolvedOptions);
   const controller: any = new AbortController();
-  const timeout: any = setTimeout(() : any => {
-    const error: Error & Record<string, any> = new Error(`HTTP request timed out after ${HTTP_TIMEOUT_MS} ms.`);
-    error.name = "TimeoutError";
-    controller.abort(error);
-  }, HTTP_TIMEOUT_MS);
+  const externalSignal: any = options.signal;
+  const abortFromCaller: any = () : any => {
+    if (!controller.signal.aborted) controller.abort(externalSignal?.reason);
+  };
+  if (externalSignal?.aborted) abortFromCaller();
+  else externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
+
   try {
-    const response: any = await fetch(url, {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    const { target, token } = await resolveProxyCredentials(options);
+    if (controller.signal.aborted) throw controller.signal.reason;
+    const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
+    if (controller.signal.aborted) throw controller.signal.reason;
+    const { url, artifactId } = resolveArtifactUrl(resolvedOptions);
+    const outputPath: any = requiredOutputPath(resolvedOptions);
+    const request: any = await fetchResponse(url, {
       method: "GET",
       redirect: "error",
       signal: controller.signal,
+      requestLifetime: CALLER_OWNED_HTTP_LIFETIME,
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+      ...(options.dispatcherFactory ? { dispatcherFactory: options.dispatcherFactory } : {}),
       headers: authHeaders(token, target)
     });
-    if (!response.ok) {
-      const reason: any = await responseErrorReason(response);
-      throw new Error(`Meshrix.js artifact fetch failed: ${reason}`);
+    let completed: any = false;
+    try {
+      const response: any = request.response;
+      if (!response.ok) {
+        const reason: any = await responseErrorReason(response);
+        throw new Error(`Meshrix.js artifact fetch failed: ${reason}`);
+      }
+      const contentLength: any = Number(response.headers.get("content-length") || "");
+      if (Number.isSafeInteger(contentLength) && contentLength > MCP_FETCH_MAX_ARTIFACT_BYTES) {
+        await response.body?.cancel().catch(() : any => {});
+        throw new Error("Artifact exceeds the 2 GiB gateway artifact limit.");
+      }
+      const expectedDigest: any = digestHeaderSha256(response.headers);
+      const streamed: any = await streamResponseToFile(response, outputPath, request.signal);
+      let committed: any = false;
+      try {
+        request.signal.throwIfAborted();
+        if (expectedDigest && streamed.sha256 !== expectedDigest) {
+          throw new Error("Meshrix.js artifact fetch failed: response Digest header did not match the downloaded bytes.");
+        }
+        await commitTemporaryFile(streamed.temporaryPath, outputPath);
+        committed = true;
+      } finally {
+        if (!committed) await fsp.rm(streamed.temporaryPath, { force: true });
+      }
+      completed = true;
+      return {
+        ok: true,
+        packageName: packageInfo.name,
+        packageVersion: packageInfo.version,
+        target,
+        artifactId,
+        outputPath: redactOutputPath(outputPath),
+        byteLength: streamed.byteLength,
+        sha256: streamed.sha256,
+        digestVerified: Boolean(expectedDigest)
+      };
+    } finally {
+      await request.dispose({ failed: !completed });
     }
-    const contentLength: any = Number(response.headers.get("content-length") || "");
-    if (Number.isSafeInteger(contentLength) && contentLength > MCP_FETCH_MAX_ARTIFACT_BYTES) {
-      response.body?.cancel().catch(() : any => {});
-      throw new Error("Artifact exceeds the 2 GiB gateway artifact limit.");
-    }
-    const expectedDigest: any = digestHeaderSha256(response.headers);
-    const streamed: any = await streamResponseToFile(response, outputPath);
-    if (expectedDigest && streamed.sha256 !== expectedDigest) {
-      await fsp.rm(streamed.temporaryPath, { force: true });
-      throw new Error("Meshrix.js artifact fetch failed: response Digest header did not match the downloaded bytes.");
-    }
-    await commitTemporaryFile(streamed.temporaryPath, outputPath);
-    return {
-      ok: true,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
-      target,
-      artifactId,
-      outputPath: redactOutputPath(outputPath),
-      byteLength: streamed.byteLength,
-      sha256: streamed.sha256,
-      digestVerified: Boolean(expectedDigest)
-    };
   } finally {
-    clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
   }
 }

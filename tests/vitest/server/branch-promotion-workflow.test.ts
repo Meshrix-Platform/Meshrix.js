@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -9,15 +8,6 @@ import {
   evaluateBranchFlow,
   verifyProtectedPushTopology
 } from "../../../tools/scripts/verify-branch-flow.ts";
-import {
-  createStableAuthorityManifest,
-  selectExactPromotionArtifact,
-  selectSuccessfulPromotionRun,
-  validateStableAuthorityManifest,
-} from "../../../tools/server-scripts/lib/release-deployment/authority.ts";
-import { sha256 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
-import { runAuthorityCommand } from "../../../tools/server-scripts/resolve-branch-promotion-authority.ts";
-import { buildReleaseCandidateIdentity } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
 import {
   githubProcessEnvironment,
   isTransientGithubFailure,
@@ -100,7 +90,7 @@ describe("branch promotion workflow", () : any => {
 
     expect(requiredWorkflowPaths("nightly")).toEqual([
       ".github/workflows/branch-flow.yml",
-      ".github/workflows/nightly-controlled-sandbox.yml",
+      ".github/workflows/ci.yml",
     ]);
     expect(requiredWorkflowPaths("stable")).toEqual([
       ".github/workflows/branch-flow.yml",
@@ -108,7 +98,7 @@ describe("branch promotion workflow", () : any => {
     ]);
     expect(requiredWorkflowPaths("release")).toEqual([
       ".github/workflows/branch-flow.yml",
-      ".github/workflows/release-branch.yml",
+      ".github/workflows/ci.yml",
     ]);
 
     const run: any = selectLatestWorkflowRun([
@@ -145,12 +135,13 @@ describe("branch promotion workflow", () : any => {
       "FAILED execution-sandbox.controlled-runtime (1200ms)",
       "FAILED noisy",
       "productionBackendFailedChecks=cpuLimitEnforced,pidLimitEnforced",
+      "productionBackendProbeFailures=sandbox_runtime_failed:oci_create_failed",
       "productionBackendProbeFailures=sandbox_runtime_failed:oci_create_failed:oci_option_unsupported:125",
       "private payload must not pass through",
     ].join("\n"))).toEqual([
       "check:cpuLimitEnforced",
       "check:pidLimitEnforced",
-      "probe:sandbox_runtime_failed:oci_create_failed:oci_option_unsupported:125",
+      "probe:sandbox_runtime_failed:oci_create_failed",
       "suite:execution-sandbox.controlled-runtime",
     ]);
     const automation: any = read("tools/server-scripts/promote-release-branches.ts");
@@ -298,189 +289,5 @@ describe("branch promotion workflow", () : any => {
     }).ok).toBe(false);
   });
 
-  it("runs the complete stable gate only on stable and exports one stable authority bundle", () : any => {
-    const ciWorkflow: any = read(".github/workflows/ci.yml");
-    const marker: any = "\n  functional-completeness:\n";
-    const start: any = ciWorkflow.indexOf(marker);
-    expect(start).toBeGreaterThan(0);
-    const remainder: any = ciWorkflow.slice(start + marker.length);
-    const nextJob: any = remainder.search(/\n  [a-z][a-z0-9-]*:\n/u);
-    const stableGate: any = ciWorkflow.slice(
-      start,
-      nextJob < 0 ? ciWorkflow.length : start + marker.length + nextJob,
-    );
-    expect(stableGate).toContain("github.ref_name == 'stable'");
-    expect(stableGate).not.toContain("github.ref_name == 'release'");
-    expect(stableGate).toContain(
-      "needs: [stable-candidate, repository-checkpoint, audit-reduction, enterprise-delivery, functional-acceptance, supply-chain]"
-    );
-    expect(stableGate).toContain("name: stable-authority-${{ github.sha }}");
-    expect(stableGate).toContain("name: stable-source-candidate-${{ github.sha }}");
-    expect(stableGate).toContain("name: stable-functional-acceptance-${{ github.sha }}");
-    expect(stableGate).toContain("stable-authority-manifest.json");
-    expect(stableGate).not.toContain("verify-release-deployment");
-  });
 
-  it("selects the highest exact successful rerun and exactly one unexpired artifact", () : any => {
-    const sha: any = "a".repeat(40);
-    const common: any = {
-      path: ".github/workflows/ci.yml",
-      event: "push",
-      head_branch: "stable",
-      head_sha: sha,
-      status: "completed",
-      conclusion: "success",
-    };
-    const selected: any = selectSuccessfulPromotionRun({
-      workflow_runs: [
-        { ...common, id: 101, run_attempt: 1 },
-        { ...common, id: 102, run_attempt: 2 },
-        { ...common, id: 103, run_attempt: 3, conclusion: "failure" },
-        { ...common, id: 104, run_attempt: 4, head_sha: "b".repeat(40) },
-      ],
-    }, {
-      workflowPath: ".github/workflows/ci.yml",
-      branch: "stable",
-      headSha: sha,
-    });
-    expect(selected).toMatchObject({ runId: "102", runAttempt: 2, headSha: sha });
-
-    expect(selectExactPromotionArtifact({ artifacts: [{
-      id: 501,
-      name: `stable-authority-${sha}`,
-      expired: false,
-      archive_download_url: "https://api.example.invalid/artifact",
-    }] }, { artifactName: `stable-authority-${sha}` }).artifactId).toBe("501");
-
-    expect(() : any => selectSuccessfulPromotionRun({ workflow_runs: [
-      { ...common, id: 201, run_attempt: 2 },
-      { ...common, id: 202, run_attempt: 2 },
-    ] }, {
-      workflowPath: ".github/workflows/ci.yml",
-      branch: "stable",
-      headSha: sha,
-    })).toThrowError(expect.objectContaining({ code: "promotion_authority_run_ambiguous" }));
-    expect(() : any => selectExactPromotionArtifact({ artifacts: [
-      { id: 1, name: `stable-authority-${sha}`, expired: false, archive_download_url: "one" },
-      { id: 2, name: `stable-authority-${sha}`, expired: false, archive_download_url: "two" },
-    ] }, { artifactName: `stable-authority-${sha}` }))
-      .toThrowError(expect.objectContaining({ code: "promotion_authority_artifact_ambiguous" }));
-  });
-
-  it("keeps stable authority manifests closed and exact-run bound", () : any => {
-    const sha: any = "a".repeat(40);
-    const manifest: any = createStableAuthorityManifest({
-      artifactName: `stable-authority-${sha}`,
-      candidateDigest: "b".repeat(64),
-      candidateFileDigest: "c".repeat(64),
-      functionalReceiptDigest: "d".repeat(64),
-      runAttempt: 2,
-      runId: "9001",
-      sourceRevision: sha,
-    });
-    expect(validateStableAuthorityManifest(manifest)).toEqual(manifest);
-    expect(() : any => validateStableAuthorityManifest({ ...manifest, stale: true }))
-      .toThrowError(expect.objectContaining({ code: "stable_authority_manifest_fields_invalid" }));
-    expect(() : any => validateStableAuthorityManifest({
-      ...manifest,
-      workflowPath: ".github/workflows/release.yml",
-    })).toThrowError(expect.objectContaining({ code: "stable_authority_workflow_path_invalid" }));
-  });
-
-  it("revalidates a stable bundle against an independently materialized candidate", async () : Promise<any> => {
-    const root: any = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-authority-test-"));
-    try {
-      const bundle: any = path.join(root, "bundle");
-      await fs.promises.mkdir(bundle);
-      const candidate: any = buildReleaseCandidateIdentity({
-        sourceRevision: "a".repeat(40),
-        repositoryTreeDigest: `sha256:${"b".repeat(64)}`,
-        releaseDefinitionSha256: `sha256:${"c".repeat(64)}`,
-        packageLockSha256: `sha256:${"d".repeat(64)}`,
-        releasePackages: [{
-          manifest_path: "package.json",
-          manifest_sha256: "e".repeat(64),
-          name: "meshrix.js",
-          version: "0.0.1",
-        }],
-        reportInventoryDigest: `sha256:${"f".repeat(64)}`,
-        supportedProfiles: ["enterprise-single-node"],
-      });
-      const candidateText: any = `${JSON.stringify(candidate, null, 2)}\n`;
-      const functional: any = {
-        schemaVersion: "v0.0.1:meshrix:accepted-candidate-receipt-1",
-        claim: "functional-complete",
-        status: "accepted",
-        releaseReady: true,
-        generationId: "stable-test-generation",
-        selectedProfile: "enterprise-single-node",
-        sourceRevision: candidate.source_revision,
-        candidateDigest: candidate.candidate_digest,
-      };
-      const functionalText: any = `${JSON.stringify(functional, null, 2)}\n`;
-      const manifest: any = createStableAuthorityManifest({
-        artifactName: `stable-authority-${candidate.source_revision}`,
-        candidateDigest: candidate.candidate_digest,
-        candidateFileDigest: sha256(candidateText),
-        functionalReceiptDigest: sha256(functionalText),
-        runAttempt: 2,
-        runId: "42",
-        sourceRevision: candidate.source_revision,
-      });
-      const run: any = {
-        branch: "stable",
-        event: "push",
-        headSha: candidate.source_revision,
-        runAttempt: 2,
-        runId: "42",
-        workflowPath: ".github/workflows/ci.yml",
-      };
-      await Promise.all([
-        fs.promises.writeFile(path.join(bundle, "SOURCE_CANDIDATE.json"), candidateText),
-        fs.promises.writeFile(path.join(root, "expected.json"), candidateText),
-        fs.promises.writeFile(path.join(bundle, "accepted-candidate.json"), functionalText),
-        fs.promises.writeFile(path.join(bundle, "stable-authority-manifest.json"), `${JSON.stringify(manifest)}\n`),
-        fs.promises.writeFile(path.join(root, "run.json"), `${JSON.stringify(run)}\n`),
-      ]);
-      await expect(runAuthorityCommand([
-        "verify-stable-bundle",
-        "--bundle", bundle,
-        "--expected-candidate", path.join(root, "expected.json"),
-        "--run", path.join(root, "run.json"),
-      ])).resolves.toMatchObject({ stage: "stable" });
-
-      await fs.promises.writeFile(
-        path.join(bundle, "stable-authority-manifest.json"),
-        `${JSON.stringify({ ...manifest, unexpected: true })}\n`,
-      );
-      await expect(runAuthorityCommand([
-        "verify-stable-bundle",
-        "--bundle", bundle,
-        "--expected-candidate", path.join(root, "expected.json"),
-        "--run", path.join(root, "run.json"),
-      ])).rejects.toMatchObject({ code: "stable_authority_manifest_fields_invalid" });
-    } finally {
-      await fs.promises.rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it("consumes the stable authority on release and requires the tag commit to equal the release tip", () : any => {
-    const branchWorkflow: any = read(".github/workflows/release-branch.yml");
-    const releaseWorkflow: any = read(".github/workflows/release.yml");
-
-    expect(branchWorkflow).toContain("runs-on: ubuntu-24.04");
-    expect(branchWorkflow).toContain('branches: ["release"]');
-    expect(branchWorkflow).toContain("stable-authority-${GITHUB_SHA}");
-    expect(branchWorkflow).toContain("npm run server:verify:release-deployment");
-    expect(branchWorkflow).toContain("release-authority-${{ github.sha }}");
-    expect(branchWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
-
-    expect(releaseWorkflow).toContain('test "$tag_commit" = "$release_commit"');
-    expect(releaseWorkflow).not.toContain("git merge-base --is-ancestor");
-    expect(releaseWorkflow).toContain("name: release-authority-${{ github.sha }}");
-    expect(releaseWorkflow).not.toContain("\n  functional-completeness:\n");
-    expect(releaseWorkflow.match(/GH_TOKEN: \$\{\{ github\.token \}\}/gu)).toHaveLength(3);
-    expect(releaseWorkflow.indexOf("- name: Install dependencies"))
-      .toBeLessThan(releaseWorkflow.indexOf("- name: Validate the canonical release definition"));
-  });
 });

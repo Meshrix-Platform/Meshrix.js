@@ -4,6 +4,7 @@ import {
   authorizationSubjectType,
   nowIso,
   parseJsonObject,
+  pendingOperationContext,
   pendingResumeInput,
   sourceIpFromRequest,
   uniqueStrings
@@ -132,7 +133,7 @@ export async function completeHandlerPendingApproval({
     riskReason: handlerPending.reason || "Tool handler requested approval before execution.",
     originalInput: input,
     resumeInput: pendingResumeInput(input, tool.operationId),
-    context,
+    context: pendingOperationContext(context),
     sourceIp: authorization.sourceIp || sourceIpFromRequest(request),
     userAgent: request?.headers?.["user-agent"] || "",
     expiresAt: context.expiresAt || context.approvalExpiresAt || ""

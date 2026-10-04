@@ -173,7 +173,7 @@ export async function validateFunctionalAcceptedCandidateReceipt(
   try {
     validateAcceptedCandidateReceipt(receipt, {
       candidateDigest: selectedCandidate.slice("sha256:".length),
-      selectedProfile: "enterprise-single-node",
+      selectedProfile: "single-node",
       sourceRevision: selectedRevision,
     });
   } catch {

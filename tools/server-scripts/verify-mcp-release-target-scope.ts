@@ -24,15 +24,17 @@ const REPORT_PATH: any = "build/reports/mcp-release-target-scope.json";
 const RELEASE_TARGETS: any = MCP_SUPPORTED_TARGETS;
 const RELEASE_LABELS: any = Object.freeze(RELEASE_TARGETS.map((target?: any) : any => MCP_TARGET_LABELS[target]));
 const PUBLIC_SCOPE_FILES: readonly any[] = Object.freeze([
-  "packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+  "packages/protocols/mcp/modern-downstream/index.ts",
+  "packages/protocols/mcp/modern-downstream/discovery.ts",
   "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts",
-  "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh",
-  "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1",
+  "packages/protocols/mcp/adapter/gateway-installer/lib/cli/device-config.ts",
+  "tools/server-scripts/lib/mcp-release-manifest.ts",
+  "tools/server-scripts/lib/mcp-release-portable.ts",
   "tools/server-scripts/mcp-install.ts",
   ".github/RELEASE_TEMPLATE.md",
-  "packages/protocols/mcp/adapter/gateway-installer/package.json",
+  "package.json",
   "packages/protocols/mcp/adapter/gateway-installer/README.md",
-  "packages/protocols/mcp/adapter/native-installer/README.md"
+  "packages/protocols/mcp/adapter/gateway-installer/README.md"
 ]);
 const ADAPTER_BOUNDARY_DOCUMENT_FILES: readonly any[] = Object.freeze([
   "CHANGELOG.md",
@@ -42,7 +44,6 @@ const ADAPTER_BOUNDARY_DOCUMENT_FILES: readonly any[] = Object.freeze([
   "docs/architecture/MCP-NATIVE-INSTALLER.md",
   "docs/functionality/GATEWAY.md",
   "docs/functionality/AGENT-COLLABORATION.md",
-  "packages/protocols/mcp/adapter/native-installer/README.md",
   "packages/protocols/mcp/adapter/gateway-installer/README.md"
 ]);
 
@@ -221,15 +222,17 @@ try {
     };
   });
 
-  await test("documentation declares the external client-adapter boundary", async () : Promise<any> => {
+  await test("documentation declares the root-bundled client-adapter boundary", async () : Promise<any> => {
     for (const filePath of ADAPTER_BOUNDARY_DOCUMENT_FILES) {
       const source: any = await fs.readFile(filePath, "utf8");
       assertNoHostPathText(source, filePath);
-      assert.equal(/operator-supplied|external (?:client-)?adapter|external plugin/iu.test(source), true, `${filePath} does not declare the external adapter boundary`);
+      const declaresRootBundle: any = /meshrix\.js/iu.test(source) &&
+        /client[- ]adapter/iu.test(source) && /bundl|includ|ship|deliver/iu.test(source);
+      assert.equal(declaresRootBundle, true, `${filePath} does not declare the root-bundled adapter boundary`);
     }
     return {
       filesChecked: ADAPTER_BOUNDARY_DOCUMENT_FILES.length,
-      boundary: "external-client-adapter-packages"
+      boundary: "meshrix-js-private-adapter-components"
     };
   });
 
@@ -258,22 +261,27 @@ try {
     };
   });
 
-  await test("installer CLI help, discovery, and scan output expose only release targets", async () : Promise<any> => {
+  await test("installer CLI help exposes only release targets", async () : Promise<any> => {
     const help: any = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", ["help"]);
     assert.equal(help.status, 0);
     assert.equal(RELEASE_TARGETS.every((target?: any) : any => help.stdout.includes(target)), true);
+    return { helpChecked: true, releaseTargetCount: RELEASE_TARGETS.length };
+  });
 
+  await test("installer discovery exposes only release targets", async () : Promise<any> => {
     const discover: any = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", ["discover", "--url", server.url, "--json"]);
     assert.equal(discover.status, 0);
     const discoverPayload: any = parseJsonOutput(discover.stdout, "installer discover");
     assertReleaseTargets(targetIds(discoverPayload.installer?.supportedTargets || []), "installer discover supportedTargets");
+    return { supportedTargetCount: discoverPayload.installer?.supportedTargets?.length || 0 };
+  });
 
+  await test("installer scan exposes only release targets", async () : Promise<any> => {
     const scan: any = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", ["scan", "--url", server.url, "--no-scan", "--json"]);
     assert.equal(scan.status, 0);
     const scanPayload: any = parseJsonOutput(scan.stdout, "installer scan");
     assertReleaseTargets(targetIds(scanPayload.candidates || []), "installer scan candidates");
     return {
-      helpChecked: true,
       scanCandidateCount: scanPayload.candidates?.length || 0
     };
   });

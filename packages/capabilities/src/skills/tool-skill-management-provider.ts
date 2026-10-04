@@ -17,6 +17,7 @@ import {
   revokeDelegatedMcpGrantForPlatform
 } from "./tool-skill-management-provider-delegated-mcp.ts";
 import { authenticateMcpApiKey } from "./mcp-api-key-authentication.ts";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   apiKeyAuthorizationEvaluationInput,
   apiKeyResourcePolicyAllowsOperation
@@ -462,6 +463,27 @@ export function createToolSkillManagementProvider({
     });
   }
 
+  async function runApiKeyMcpInvocation({ authorization = null, ...input }: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (typeof current.runtime?.runApiKeyMcpInvocation !== "function") {
+      throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+        code: "api_key_authority_unavailable",
+        statusCode: 503
+      });
+    }
+    let keyAuthorization: any = null;
+    if (authorization?.credentialKind === "scoped_api_key") {
+      keyAuthorization = authorization.apiKeyAuthorization;
+      if (keyAuthorization?.credentialKind !== "scoped_api_key") {
+        throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+          code: "api_key_authority_unavailable",
+          statusCode: 503
+        });
+      }
+    }
+    return current.runtime.runApiKeyMcpInvocation({ ...input, authorization: keyAuthorization });
+  }
+
   async function resolveMcpWorkspaceInput({ input, request, context = {}, signal = null }: Record<string, any> = {}) : Promise<any> {
     if (!inputMayNeedWorkspaceResolution(input)) {
       return { input, workspaceDirectory: null };
@@ -498,6 +520,39 @@ export function createToolSkillManagementProvider({
     return current.router.handleOperationPermissionHttpRequest(input);
   }
 
+  /** Never trusts a wire approval flag: only the current, stored Operation Permission resume may authorize. */
+  async function verifyCurrentApprovedMcpOperation({ request, authorization, toolId, operationInput }: Record<string, any> = {}) : Promise<any> {
+    const attested: any = request?.__meshrixToolRuntimeAuthorization?.approvedPendingOperation;
+    const pendingId: string = String(attested?.pendingOperationId || "");
+    if (!pendingId || !authorization?.ok) return null;
+    const current: any = requirePlatform();
+    if (typeof current.store?.getPendingOperation !== "function" || typeof securityPermissions?.getGovernanceApproval !== "function") return null;
+    const pending: any = await current.store.getPendingOperation(pendingId, { includeOriginalInput: true });
+    const now: number = Date.now();
+    if (!pending || pending.status !== "approved" || pending.resumedToolExecutionId ||
+        !Number.isFinite(Date.parse(pending.expiresAt || "")) || Date.parse(pending.expiresAt) <= now ||
+        pending.toolId !== toolId || pending.toolId !== attested.toolId ||
+        !pending.grantId || pending.grantId !== String(authorization.grant?.id || "") ||
+        !Array.isArray(pending.approvalLayers) || pending.approvalLayers.length === 0 ||
+        pending.resolvedAt !== attested.resolvedAt || pending.resolvedBy !== attested.resolvedBy) return null;
+    const binding: any = pending.requiredApproval?.operationBinding;
+    if (!binding?.bindingDigest || binding.bindingDigest !== attested.requiredApproval?.operationBinding?.bindingDigest ||
+        binding.approvalActorId !== pending.resolvedBy) return null;
+    if (canonicalJson(pending.originalInput) !== canonicalJson(operationInput)) return null;
+    if (authorization.credentialKind === "scoped_api_key") {
+      const original: any = pending.credentialAuthorization;
+      const latest: any = authorization.apiKeyAuthorization;
+      if (!original || !latest || original.keyId !== latest.keyId || original.policyFingerprint !== latest.policyFingerprint ||
+          original.lifecycleRevision !== latest.lifecycleRevision) return null;
+    }
+    const approval: any = await securityPermissions.getGovernanceApproval(`pending-${pendingId}`);
+    if (!approval || approval.effect !== "allow" || approval.revokedAt || !Number.isFinite(Date.parse(approval.expiresAt || "")) || Date.parse(approval.expiresAt) <= now ||
+        !Array.isArray(approval.approvalLayers) || pending.approvalLayers.some((layer: string) => !approval.approvalLayers.includes(layer))) return null;
+    return Object.freeze({ status: "approved", ref: pendingId, revision: pending.resolvedAt,
+      expiresAt: Math.min(Date.parse(approval.expiresAt), Date.parse(pending.expiresAt)),
+      approvedPendingOperation: Object.freeze({ pendingOperationId: pendingId, status: "approved", operationId: pending.operationId, approvalScope: pending.approvalScope }) });
+  }
+
   return Object.freeze({
     protocolVersion: OPERATION_PERMISSION_FACADE_PROTOCOL_VERSION,
     describe() : any {
@@ -515,6 +570,7 @@ export function createToolSkillManagementProvider({
     },
     authorizeRequest,
     authorizeMcpClientRequest,
+    verifyCurrentApprovedMcpOperation,
     revalidateApiKeyAuthorization,
     authorizeApiKeyOperation,
     visibleGrantSummary,
@@ -523,6 +579,7 @@ export function createToolSkillManagementProvider({
     listVisibleTools,
     resolveActiveTool,
     executeTool,
+    runApiKeyMcpInvocation,
     resolveMcpWorkspaceInput,
     publicMcpToolPayload,
     createDelegatedMcpGrant,
@@ -558,7 +615,10 @@ function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
   const dynamicCapability: any = tool.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
     ? tool.dynamicCapability
     : null;
-  if (!dynamicCapability && (policy.deniedTools || []).includes(toolId)) return false;
+  if (!dynamicCapability) {
+    if ((policy.deniedTools || []).includes(toolId)) return false;
+    if ((policy.allowedTools || []).length > 0 && !policy.allowedTools.includes(toolId)) return false;
+  }
   const requiredScopes: any[] = Array.isArray(tool.requiredScopes) ? tool.requiredScopes : [];
   const toolsets: any[] = Array.isArray(tool.toolsets) ? tool.toolsets : [];
   const toolsetDenied: any = dynamicCapability

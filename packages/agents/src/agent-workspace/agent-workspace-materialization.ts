@@ -49,7 +49,14 @@ interface MaterializationInput extends GuardOptions {
   claimPublicationAuthority?: () => Promise<AsyncIterable<unknown>>;
   recordTempReserved?: (publication: PublicationDescriptor) => Promise<unknown>;
   recordPublicationPrepared?: (publication: PublicationDescriptor) => Promise<unknown>;
-  [hook: `after${string}`]: ((payload: PlainRecord) => void | Promise<void>) | undefined;
+  afterDirectoryWorkerBoundBeforeReserve?: (input: { intentDigest: string; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterTempInodeReservedBeforeWal?: (input: { intentDigest: string; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterTempReservedBeforeFirstWrite?: (input: { reservationDigest: string; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterFirstChunkWrittenBeforeContinue?: (input: { copiedBytes: number; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterPublicationPreparedBeforeLink?: (input: { proofDigest: string; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterPublicationLinkedBeforeTempUnlink?: (input: { proofDigest: string; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterPublishedFileDurableBeforeStateCommit?: (input: { proofDigest: string; publicationId: string; stateOperationId: string }) => Promise<unknown>;
+  afterStateAndCheckpointDurableBeforeReceipt?: (input: { checkpointRef: string; proofDigest: string; publicationId: string; publishedRevision: string; stateOperationId: string }) => Promise<unknown>;
 }
 interface FileStateApi {
   workspaceStateScope(workspace: WorkspaceRecord): string;
@@ -878,7 +885,7 @@ async function copyBoundedStream({
   afterFirstWrite = null
 }: {
   stream: AsyncIterable<unknown>; worker: MaterializationDirectoryWorker; byteCount: number;
-  guard: GuardOptions; afterFirstWrite?: ((input: { copiedBytes: number }) => void | Promise<void>) | null;
+  guard: GuardOptions; afterFirstWrite?: ((input: { copiedBytes: number }) => unknown | Promise<unknown>) | null;
 }): Promise<void> {
   if (!stream || typeof stream[Symbol.asyncIterator] !== "function") {
     throw materializationError(
@@ -1975,6 +1982,8 @@ function createBoundRequestPort(binding: MaterializationBinding, dependencies: M
     }
   });
 }
+
+export type AgentWorkspaceMaterializationSession = ReturnType<typeof createBoundRequestPort>;
 
 export function createAgentWorkspaceMaterializationPort(
   dependencies: Partial<MaterializationDependencies> = {}

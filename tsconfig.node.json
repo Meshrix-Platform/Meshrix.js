@@ -25,10 +25,12 @@
   },
   "include": [
     "apps/server/**/*.ts",
+    "apps/mcp-gateway-installer/**/*.ts",
     "packages/**/*.ts",
     "tools/**/*.ts"
   ],
   "exclude": [
+    "tools/server-scripts/benchmark-gateway.ts",
     "apps/console/**",
     "packages/ui-console/**",
     "tests/**",

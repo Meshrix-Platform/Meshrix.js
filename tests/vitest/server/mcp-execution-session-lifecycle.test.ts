@@ -5,11 +5,15 @@ import os from "node:os";
 import path from "node:path";
 
 import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
+import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createPlatformMcpGateway } from "../../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { resolveMcpServiceConfigWithCredentials } from "../../../packages/agents/src/upstream-gateway/credential-material.ts";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { fingerprint } from "../../../packages/agents/src/upstream-gateway/manifest-compiler.ts";
 import { normalizeService } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
+import { modernHttpRequest } from "../gateway/support.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 const managers: any = new Set<any>();
 const servers: any = new Set<any>();
@@ -77,6 +81,61 @@ function installLifecycleService(registry?: any, revision: any = 1) : any {
     setDigest: fingerprint({ serviceId: "lifecycle", revision }),
     serviceEntries: Object.freeze([Object.freeze(["lifecycle", service])])
   }));
+}
+
+function registryExecutionSubject(publicToolName: string, subjectId = "subject-1", grantId = "grant-1") : Record<string, any> {
+  const subject: Record<string, any> = executionSubject({
+    publicToolName,
+    subjectId,
+    grantId,
+    grant: { id: grantId, revision: `${grantId}-revision`, subjectId }
+  });
+  return { ...subject, grant: { ...subject.grant, scopes: subject.scopes } };
+}
+
+async function createAuthorizedLifecyclePlatform({
+  registry,
+  root,
+  serviceId,
+  initialSubject
+}: Record<string, any>) : Promise<Record<string, any>> {
+  const proofSubstrate: any = createOperationProofSubstrate({ dataDir: path.join(root, "proof") });
+  let activeSubject: Record<string, any> = initialSubject;
+  const platform: any = createPlatformMcpGateway({
+    upstreamGatewayRegistry: registry,
+    operationProofSubstrate: proofSubstrate,
+    toolSkillManagementProvider: {
+      authorizeMcpClientRequest: async () => ({
+        ok: true,
+        tenantId: "synthetic-tenant",
+        grant: activeSubject.grant,
+        subject: activeSubject
+      }),
+      listVisibleTools: () => []
+    }
+  });
+  try {
+    await platform.gateway.start();
+    let requestId = 0;
+    const send = (method: string, params: Record<string, unknown> = {}) =>
+      platform.adapter.handle(modernHttpRequest(method, `lifecycle-${++requestId}`, params));
+    const listed: any = await send("tools/list");
+    const tool = listed.body?.result?.tools?.find((entry: Record<string, any>) =>
+      entry?._meta?.serviceId === serviceId && entry?._meta?.upstreamToolName === "state.increment");
+    if (typeof tool?.name !== "string") throw new Error(`Authorized lifecycle tool was not published for ${serviceId}.`);
+    return {
+      platform,
+      proofSubstrate,
+      async call(subject: Record<string, any>) {
+        activeSubject = subject;
+        return send("tools/call", { name: tool.name, arguments: {} });
+      }
+    };
+  } catch (error) {
+    await platform.close();
+    await proofSubstrate.close();
+    throw error;
+  }
 }
 
 function statefulConfig(overrides: Record<string, any> = {}) : any {
@@ -173,31 +232,30 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-exec-lifecycle-"));
     const manager: any = createUpstreamMcpSessionManager();
     managers.add(manager);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: manager
     });
     installLifecycleService(registry, 1);
-    const subject: Record<string, any> = executionSubject({
-      publicToolName: "upstream.lifecycle.state.increment"
-    });
+    const subject = registryExecutionSubject("upstream.lifecycle.state.increment");
+    let platformFixture: Record<string, any> | null = null;
     try {
-      const first: any = await registry.callMcpToolByPublicName(
-        "upstream.lifecycle.state.increment",
-        { arguments: {} },
-        subject
-      );
-      expect(first.response.structuredContent.value).toBe(1);
+      platformFixture = await createAuthorizedLifecyclePlatform({
+        registry,
+        root,
+        serviceId: "lifecycle",
+        initialSubject: subject
+      });
+      const first: any = await platformFixture.call(subject);
+      expect(first.body.result.structuredContent.value).toBe(1);
       expect(manager.snapshot().sessions.some((session?: any) : any => session.kind === "stateful")).toBe(true);
       installLifecycleService(registry, 2);
-      const afterRepublish: any = await registry.callMcpToolByPublicName(
-        "upstream.lifecycle.state.increment",
-        { arguments: {} },
-        subject
-      );
-      expect(afterRepublish.response.structuredContent.value).toBe(1);
+      const afterRepublish: any = await platformFixture.call(subject);
+      expect(afterRepublish.body.result.structuredContent.value).toBe(1);
     } finally {
+      await platformFixture?.platform.close();
       await registry.close();
+      await platformFixture?.proofSubstrate.close();
       await fs.rm(root, { recursive: true, force: true });
     }
   });
@@ -356,7 +414,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-exec-capacity-"));
     const manager: any = createUpstreamMcpSessionManager({ maxSessions: 2 });
     managers.add(manager);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: manager
     });
@@ -382,26 +440,34 @@ describe("Stateful MCP execution session lifecycle", () : any => {
         updatedAt: "revision-1"
       })])])
     }));
-    const subject: any = (id?: any) : any => executionSubject({
-      publicToolName: "upstream.synthetic.state.increment",
-      subjectId: `synthetic-principal-${id}`,
-      grantId: `synthetic-grant-${id}`,
-      grant: { id: `synthetic-grant-${id}` }
-    });
+    const subject = (id: number) => registryExecutionSubject(
+      "upstream.synthetic.state.increment",
+      `synthetic-principal-${id}`,
+      `synthetic-grant-${id}`
+    );
+    let platformFixture: Record<string, any> | null = null;
     try {
-      const first: any = await registry.callMcpToolByPublicName("upstream.synthetic.state.increment", { arguments: {} }, subject(1));
-      expect(first.response.structuredContent.value).toBe(1);
-      const second: any = await registry.callMcpToolByPublicName("upstream.synthetic.state.increment", { arguments: {} }, subject(2));
-      expect(second.response.structuredContent.value).toBe(1);
-      const again: any = await registry.callMcpToolByPublicName("upstream.synthetic.state.increment", { arguments: {} }, subject(1));
-      expect(again.response.structuredContent.value).toBe(2);
-      await expect(registry.callMcpToolByPublicName("upstream.synthetic.state.increment", { arguments: {} }, subject(3)))
-        .rejects.toMatchObject({
-          status: 503,
-          reasonCode: "upstream_mcp_call_failed"
-        });
+      platformFixture = await createAuthorizedLifecyclePlatform({
+        registry,
+        root,
+        serviceId: "synthetic",
+        initialSubject: subject(1)
+      });
+      const first: any = await platformFixture.call(subject(1));
+      expect(first.body.result.structuredContent.value).toBe(1);
+      const second: any = await platformFixture.call(subject(2));
+      expect(second.body.result.structuredContent.value).toBe(1);
+      const again: any = await platformFixture.call(subject(1));
+      expect(again.body.result.structuredContent.value).toBe(2);
+      const overCapacity: any = await platformFixture.call(subject(3));
+      expect(overCapacity).toMatchObject({
+        status: 200,
+        body: { error: { data: { code: "UPSTREAM_MCP_SESSION_CAPACITY" } } }
+      });
     } finally {
+      await platformFixture?.platform.close();
       await registry.close();
+      await platformFixture?.proofSubstrate.close();
       await fs.rm(root, { recursive: true, force: true });
     }
   });
@@ -512,32 +578,31 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-exec-grant-"));
     const manager: any = createUpstreamMcpSessionManager();
     managers.add(manager);
-    const registry: any = createUpstreamGatewayRegistry({
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
       userDataPath: root,
       mcpSessionManager: manager
     });
     installLifecycleService(registry, 1);
-    const subject: Record<string, any> = executionSubject({
-      publicToolName: "upstream.lifecycle.state.increment"
-    });
+    const subject = registryExecutionSubject("upstream.lifecycle.state.increment");
+    let platformFixture: Record<string, any> | null = null;
     try {
-      const first: any = await registry.callMcpToolByPublicName(
-        "upstream.lifecycle.state.increment",
-        { arguments: {} },
-        subject
-      );
-      expect(first.response.structuredContent.value).toBe(1);
+      platformFixture = await createAuthorizedLifecyclePlatform({
+        registry,
+        root,
+        serviceId: "lifecycle",
+        initialSubject: subject
+      });
+      const first: any = await platformFixture.call(subject);
+      expect(first.body.result.structuredContent.value).toBe(1);
       await expect(registry.retireMcpGrantScopes("grant-1", { remove: true })).resolves.toMatchObject({
         retired: 1
       });
-      const afterRelease: any = await registry.callMcpToolByPublicName(
-        "upstream.lifecycle.state.increment",
-        { arguments: {} },
-        subject
-      );
-      expect(afterRelease.response.structuredContent.value).toBe(1);
+      const afterRelease: any = await platformFixture.call(subject);
+      expect(afterRelease.body.result.structuredContent.value).toBe(1);
     } finally {
+      await platformFixture?.platform.close();
       await registry.close();
+      await platformFixture?.proofSubstrate.close();
       await fs.rm(root, { recursive: true, force: true });
     }
   });

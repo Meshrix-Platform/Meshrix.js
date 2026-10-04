@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 
 import {
   assertConformanceNeverCertifies,
@@ -813,7 +814,7 @@ async function stageCap10b() : Promise<any> {
     if (!source.includes(symbol)) findings.push(`pactium-cas:${symbol}-missing`);
   }
   const manifest: any = JSON.parse(await readPactiumText("package.json"));
-  if (manifest.version !== "0.8.0") findings.push("pactium-package:expected-0.8.0");
+  if (manifest.version !== "0.8.1") findings.push("pactium-package:expected-0.8.1");
   const suite: any = await runPactiumTest("tests/pactium/runtime-capacity.test.mjs");
   assert.strictEqual(findings.length, 0, `Pactium pin findings: ${findings.join(", ")}`);
   return { stage: "cap-10b", passed: true, counters: { findings: 0, focusedSuites: 1 }, suiteResults: [suite], capacityCertified: false };
@@ -822,12 +823,19 @@ async function stageCap10b() : Promise<any> {
 async function stageCap11() : Promise<any> {
   const findings: any[] = [];
   const manifest: any = JSON.parse(await readText("package.json"));
-  if (manifest.dependencies?.pactium !== "file:vendor/pactium-0.8.0.tgz") {
+  if (manifest.dependencies?.pactium !== "0.8.1") {
     findings.push("meshrix:exact-pactium-artifact-missing");
   }
-  const lock: any = await readText("package-lock.json");
-  for (const symbol of ["file:vendor/pactium-0.8.0.tgz", '"version": "0.8.0"']) {
-    if (!lock.includes(symbol)) findings.push(`meshrix-lock:${symbol}-missing`);
+  const lock: any = JSON.parse(await readText("package-lock.json"));
+  const pactiumLock: any = lock.packages?.["node_modules/pactium"];
+  if (lock.packages?.[""]?.dependencies?.pactium !== "0.8.1") {
+    findings.push("meshrix-lock:exact-pactium-dependency-missing");
+  }
+  if (
+    pactiumLock?.version !== "0.8.1" ||
+    pactiumLock?.resolved !== "https://registry.npmjs.org/pactium/-/pactium-0.8.1.tgz"
+  ) {
+    findings.push("meshrix-lock:exact-pactium-registry-artifact-missing");
   }
   for (const removedPath of [
     "packages/foundation/src/checkpoint/tree/pactium-substrate-preflight.ts",
@@ -941,10 +949,11 @@ async function stageCap13(stage?: any) : Promise<any> {
     : "tests/vitest/server/runtime-sqlite-execution-lane-conformance.test.ts";
   // Keep Vitest one process below this synchronous verifier for the audit
   // suite; its thread pool owns nested SQLite workers.
+  const npmInvocation = resolveNpmCliInvocation();
   const result: any = stage === "cap-13-evidence"
-    ? runCommand(process.platform === "win32" ? "npm.cmd" : "npm", [
+    ? runCommand(npmInvocation.command, npmCliArgs(npmInvocation, [
         "run", "vitest", "--", suitePath
-      ])
+      ]))
     : runCommand(process.execPath, [
         "--conditions=source", VITEST_RUNNER, "run", "--config", "vitest.config.ts",
         suitePath
@@ -971,8 +980,8 @@ async function stageCap14(stage?: any) : Promise<any> {
   if (!concurrency.includes("new Array(list.length)") || !concurrency.includes("cursor++")) {
     findings.push("async-concurrency:first-party-scheduler-missing");
   }
-  const discovery: any = await readTextIfExists("packages/protocols/mcp/adapter/http-mcp-adapter-upstream.ts");
-  for (const symbol of ["discoveryConcurrency", "signal?.aborted", "responses[index]"]) {
+  const discovery: any = await readTextIfExists("packages/protocols/mcp/modern-upstream/index.ts");
+  for (const symbol of ["ModernUpstreamAdapter", "signal", "Mcp-Protocol-Version"]) {
     if (!discovery.includes(symbol)) findings.push(`mcp-discovery:${symbol}-missing`);
   }
   const session: any = await readTextIfExists("packages/protocols/mcp/upstream-mcp-session-manager.ts");

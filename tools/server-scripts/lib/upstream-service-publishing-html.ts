@@ -265,8 +265,7 @@ export function renderUpstreamServicePublishingHtml(
   report?: any,
   journeyReport?: any,
   upstreamServiceBasicConfigText?: any,
-  visualEvidenceFiles?: any,
-  candidateReceipt?: any
+  visualEvidenceFiles?: any
 ) : any {
   if (journeyReport?.releaseReady !== true) {
     return renderFailedUpstreamServicePublishingHtml(journeyReport);
@@ -626,21 +625,6 @@ export function renderUpstreamServicePublishingHtml(
       return `<li value="${stepNumber}"><a href="#evidence-${escapeHtml(stepId)}">${bilingual(`Step ${stepNumber}: ${item?.title || stepId}`, `第 ${stepNumber} 步：${chineseTitle || stepId}`)}</a></li>`;
     }
   });
-  if (
-    candidateReceipt?.claim !== "upstream-publishing-prepublication-passed"
-    || !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u
-      .test(String(candidateReceipt?.release?.tag || ""))
-    || !/^sha256:[a-f0-9]{64}$/u
-      .test(String(candidateReceipt?.release?.definitionSha256 || ""))
-    || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u
-      .test(String(candidateReceipt?.source?.commit || ""))
-    || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u
-      .test(String(candidateReceipt?.source?.tree || ""))
-  ) {
-    const error: Error & Record<string, any> = new Error("The scoped candidate context is required.");
-    error.code = "upstream_service_publishing_html_candidate_invalid";
-    throw error;
-  }
   const startedAtMs: any = Date.parse(journeyReport.startedAt);
   const finishedAtMs: any = Date.parse(journeyReport.finishedAt);
   const totalDurationMs: any = Number.isFinite(startedAtMs) && Number.isFinite(finishedAtMs)
@@ -649,19 +633,6 @@ export function renderUpstreamServicePublishingHtml(
   const cleanupDurationMs: any = Number.isSafeInteger(journeyReport.cleanup?.durationMs)
     ? journeyReport.cleanup.durationMs
     : 0;
-  const candidateBound: any = (
-    Array.isArray(candidateReceipt?.artifacts)
-    && /^sha256:[a-f0-9]{64}$/u.test(
-      String(candidateReceipt?.receiptSha256 || "")
-    )
-  );
-  const candidateAuthorityAttributes: any = candidateBound
-    ? 'data-report-authority="scoped-candidate" data-candidate-claim="upstream-publishing-prepublication-passed"'
-    : 'data-report-authority="scoped-evidence-unbound" data-candidate-state="unbound"';
-  const candidateScope: any = `<article class="config-card" data-report-slot="candidate-scope" data-candidate-scope-status="${candidateBound ? "bound" : "unbound"}">
-      <header class="config-card-header"><div><p class="card-kicker">${bilingual("Candidate scope", "候选范围")}</p><h3>${bilingual(candidateBound ? "Scoped candidate receipt bound" : "Fresh scoped evidence; candidate binding pending", candidateBound ? "已绑定限定候选收据" : "全新限定证据；候选绑定待完成")}</h3></div></header>
-      <dl><dt>${bilingual("Release tag", "发布标签")}</dt><dd>${escapeHtml(candidateReceipt.release.tag)}</dd><dt>${bilingual("Claim boundary", "声明边界")}</dt><dd>${bilingual(candidateBound ? "Upstream publishing prepublication only" : "No candidate-passed claim", candidateBound ? "仅限上游发布预发布" : "不含候选通过声明")}</dd></dl>
-    </article>`;
   const reportNavigation: any = renderReportNavigation();
 
   return `<!doctype html>
@@ -1548,7 +1519,7 @@ export function renderUpstreamServicePublishingHtml(
     }
   </style>
 </head>
-<body data-report-portability="single-file" ${candidateAuthorityAttributes}>
+<body data-report-portability="single-file">
   <a class="skip-link" href="#report-content">${bilingual("Skip to report content", "跳到报告内容")}</a>
   <nav class="language-switch" aria-label="Language / 语言">
     <button type="button" data-language="zh-CN" aria-pressed="false">中文</button>
@@ -1590,7 +1561,6 @@ export function renderUpstreamServicePublishingHtml(
       <div class="metric"><strong>${escapeHtml(report.summary.revisionEdgeCount)}</strong>${bilingual("revision edges", "条修订边")}</div>
       <div class="metric"><strong>0</strong>${bilingual("failed assertions", "项断言失败")}</div>
     </div>
-    ${candidateScope}
     <div class="approval-proof" aria-label="Approval and execution proof">
       <article>
         <small>${bilingual("Before approval", "审批前")}</small>
@@ -1608,7 +1578,7 @@ export function renderUpstreamServicePublishingHtml(
         <span>${bilingual("Execution resumes after the decision and is recorded separately.", "执行在决定之后恢复，并以独立状态记录。")}</span>
       </article>
     </div>
-    <p class="authority-note">${bilingual(candidateBound ? "This HTML document is a local-only human-readable projection of a scoped candidate receipt. Synthetic fixture and generated platform identifiers remain visible; credentials and protected identities remain protected. The Functional Release Gate remains the sole platform release authority." : "This HTML document is a local-only human-readable projection of fresh scoped evidence. It remains unbound until an external candidate receipt hashes the final HTML and complete artifact set; it is not a candidate-passed claim. The Functional Release Gate remains the sole platform release authority.", candidateBound ? "此 HTML 文档是限定候选收据的本地可读投影。合成测试与平台生成标识保持可见；凭据及受保护身份仍受保护。Functional Release Gate 仍是唯一的平台发布权威。" : "此 HTML 文档是全新限定证据的本地可读投影。在外部候选收据对最终 HTML 与完整制品集进行哈希绑定前，它保持未绑定状态，也不构成候选通过声明。Functional Release Gate 仍是唯一的平台发布权威。")}</p>
+    <p class="authority-note">${bilingual("This standalone HTML report summarizes the upstream publishing verification, runtime health, approvals, audit results, and Console checkpoints observed in this run.", "此独立 HTML 报告汇总本次运行中观察到的上游发布验证、运行时健康状态、审批、审计结果与管控台检查点。")}</p>
   </section>
   <section class="appendix-section" id="safe-configuration" aria-labelledby="safe-configuration-title" data-appendix-section="safe-configuration">
     <header class="section-heading">
@@ -1805,7 +1775,7 @@ function renderFailedUpstreamServicePublishingHtml(journeyReport?: any) : any {
     <p class="status"><strong>${bilingual("Failing stage", "失败阶段")}</strong><br><code>${escapeHtml(failureStage)}</code><br><strong>${bilingual("Failure code", "失败代码")}</strong><br><code>${escapeHtml(failureCode)}</code></p>
     <div class="table-shell"><table><caption>${bilingual("Completed journey steps", "已完成路线步骤")}</caption><thead><tr><th>${bilingual("Step", "步骤")}</th><th>${bilingual("Status", "状态")}</th><th>${bilingual("Duration", "耗时")}</th></tr></thead><tbody>${completedStepRows}</tbody></table></div>
     <div class="table-shell"><table><caption>${bilingual("Cleanup progress", "清理进度")}</caption><thead><tr><th>${bilingual("Cleanup", "清理")}</th><th>${bilingual("Status", "状态")}</th><th>${bilingual("Duration", "耗时")}</th></tr></thead><tbody>${boundedCleanupRows}</tbody></table></div>
-    <p>${bilingual("Run the complete upstream publishing journey again after correcting the reported failure. Only a new fully successful run may produce scoped candidate evidence.", "修复所报告的失败后，重新运行完整的上游服务发布路线。只有全新且完全成功的运行才能生成限定候选证据。")}</p>
+    <p>${bilingual("Run the complete upstream publishing journey again after correcting the reported failure. A successful run will produce a current report.", "修复所报告的失败后，重新运行完整的上游服务发布路线。成功运行后将生成当前报告。")}</p>
   </main>
   <script>
     (() => {
@@ -1851,7 +1821,7 @@ export function renderUpstreamServicePublishingBlankTemplate() : any {
     }
   });
   const appendixSections: any = `<section class="appendix-section" data-appendix-section="executive-summary">
-    <article class="catalog" data-report-slot="candidate-scope"><h3>${bilingual("Candidate scope — not bound", "候选范围——未绑定")}</h3><p>${bilingual("Not executed; no candidate claim is present.", "未执行；不存在候选声明。")}</p></article>
+    <p>${bilingual("Summary of the completed upstream publishing journey.", "已完成上游发布路线的摘要。")}</p>
   </section>
   <section class="appendix-section" data-appendix-section="safe-configuration">
     <article class="catalog" data-report-slot="upstream-publication-runtime-health"><h3>${bilingual("Publication and runtime health — required", "发布与运行时健康——必填")}</h3><p>${bilingual("Not executed; populate only from the bounded upstream-publish receipt.", "未执行；只能从有界 upstream-publish 收据填充。")}</p></article>
@@ -1970,7 +1940,7 @@ function renderInterfaceCatalogRows(catalog?: any) : any {
     <td><code>${escapeHtml(operation.method)} ${escapeHtml(operation.path)}</code></td>
     <td><code>${escapeHtml(operation.requestMode)} · ${escapeHtml(operation.requestMediaTypes.join(", "))}</code><small>${bilingual(`Required file; optional targetFormat; external file budget ${catalog.externalFileBudgetBytes} B; request envelope ${operation.requestMaxBytes} B`, `必填 file；可选 targetFormat；外部文件预算 ${catalog.externalFileBudgetBytes} B；请求封装上限 ${operation.requestMaxBytes} B`)}</small></td>
     <td><code>${escapeHtml(operation.responseMode)} · ${escapeHtml(operation.responseMediaTypes.join(", "))}</code><small>${bilingual(`Artifact response; byte ranges enabled; maximum ${operation.responseMaxBytes} B`, `制品响应；支持字节范围；上限 ${operation.responseMaxBytes} B`)}</small></td>
-    <td><code>${escapeHtml(operation.requiredScopes.join(", "))} · ${escapeHtml(operation.risk)} · ${escapeHtml(operation.timeoutMs)} ms</code><small>${bilingual(operation.approvalRequired ? "Request approval required; forwarded through the governed Meshrix.js gateway" : "No approval wait; Grant, scope, risk, owner, permit, and audit checks remain enforced by the Meshrix.js gateway", operation.approvalRequired ? "需要请求级审批；通过受治理的 Meshrix.js 网关转发" : "无需等待审批；Meshrix.js 网关仍执行 Grant、权限域、风险、所有者、许可与审计检查")}</small></td>
+    <td><code>${escapeHtml(operation.requiredScopes.join(", "))} · ${escapeHtml(operation.risk)} · ${operation.timeoutMs === undefined ? bilingual("No configured execution deadline", "未配置执行期限") : `${escapeHtml(operation.timeoutMs)} ms`}</code><small>${bilingual(operation.approvalRequired ? "Request approval required; forwarded through the governed Meshrix.js gateway" : "No approval wait; Grant, scope, risk, owner, permit, and audit checks remain enforced by the Meshrix.js gateway", operation.approvalRequired ? "需要请求级审批；通过受治理的 Meshrix.js 网关转发" : "无需等待审批；Meshrix.js 网关仍执行 Grant、权限域、风险、所有者、许可与审计检查")}</small></td>
   </tr>`).join("");
   return `${healthRow}${operationRows}`;
 }
@@ -2069,8 +2039,8 @@ function readVerifiedUpstreamServiceInterfaces({ journeyReport, sourceText }: Re
       || !Array.isArray(operation?.requiredScopes)
       || !operation.requiredScopes.includes("gateway:write")
       || operation?.risk !== "safe_write"
-      || !Number.isSafeInteger(operation?.timeoutMs)
-      || operation.timeoutMs <= 0
+      || (operation?.timeoutMs !== undefined &&
+        (!Number.isSafeInteger(operation.timeoutMs) || operation.timeoutMs <= 0 || operation.timeoutMs > 2_147_483_647))
     ) {
       throw interfaceCatalogError();
     }

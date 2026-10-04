@@ -13,11 +13,30 @@ function finiteNumber(value: unknown): number {
 
 function safeStatus(value: unknown): string {
   const status = String(value || "unknown");
-  return ["passed", "failed", "skipped", "dry-run"].includes(status) ? status : "unknown";
+  return ["passed", "failed", "skipped", "dry-run", "cancelled", "not_run"].includes(status)
+    ? status
+    : "unknown";
 }
 
 function boundedText(value: unknown, maxLength = 320): string {
   return String(value || "").trim().slice(0, maxLength);
+}
+
+function identitySetMatches(actual: readonly string[], expected: readonly string[]): boolean {
+  if (actual.length === 0 || actual.length !== expected.length) return false;
+  const actualSet = new Set(actual);
+  const expectedSet = new Set(expected);
+  return actualSet.size === actual.length
+    && expectedSet.size === expected.length
+    && actual.every((identity) => identity.length > 0 && expectedSet.has(identity));
+}
+
+function suiteIdentities(value: unknown, fallback: unknown): string[] {
+  const record = asRecord(value);
+  const identities = Array.isArray(record.childSuiteIds) && record.childSuiteIds.length > 0
+    ? record.childSuiteIds
+    : [fallback];
+  return identities.map((identity) => boundedText(identity, 240));
 }
 
 function wallDurationMs(results: readonly Record<string, any>[]): number {
@@ -36,6 +55,7 @@ export function createRegressionReportSnapshot(
   { productVersion }: { productVersion: string }
 ): Record<string, any> {
   const report = asRecord(reportValue);
+  const rawResults = Array.isArray(report.suites) ? report.suites : [];
   const results = (Array.isArray(report.suites) ? report.suites : []).map((value) => {
     const result = asRecord(value);
     return {
@@ -47,7 +67,6 @@ export function createRegressionReportSnapshot(
       durationMs: finiteNumber(result.durationMs),
       command: boundedText(result.command, 500),
       cached: result.cached === true,
-      timedOut: result.timedOut === true,
       childSuiteCount: Array.isArray(result.childSuiteIds) ? result.childSuiteIds.length : 1
     };
   });
@@ -76,6 +95,8 @@ export function createRegressionReportSnapshot(
         passed: laneResults.filter((result) => result.status === "passed").length,
         failed: laneResults.filter((result) => result.status === "failed").length,
         skipped: laneResults.filter((result) => result.status === "skipped").length,
+        cancelled: laneResults.filter((result) => result.status === "cancelled").length,
+        notRun: laneResults.filter((result) => result.status === "not_run").length,
         processCount: laneResults.length
       };
     });
@@ -87,6 +108,8 @@ export function createRegressionReportSnapshot(
       passed: phaseResults.filter((result) => result.status === "passed").length,
       failed: phaseResults.filter((result) => result.status === "failed").length,
       skipped: phaseResults.filter((result) => result.status === "skipped").length,
+      cancelled: phaseResults.filter((result) => result.status === "cancelled").length,
+      notRun: phaseResults.filter((result) => result.status === "not_run").length,
       lanes
     };
   });
@@ -105,7 +128,57 @@ export function createRegressionReportSnapshot(
   const passed = finiteNumber(summary.passed);
   const failed = finiteNumber(summary.failed);
   const skipped = finiteNumber(summary.skipped);
-  const total = passed + failed + skipped + finiteNumber(summary.dryRun);
+  const cancelled = finiteNumber(summary.cancelled);
+  const notRun = finiteNumber(summary.notRun);
+  const dryRun = finiteNumber(summary.dryRun);
+  const actualCounts = {
+    passed: results.filter((result) => result.status === "passed").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    cancelled: results.filter((result) => result.status === "cancelled").length,
+    notRun: results.filter((result) => result.status === "not_run").length,
+    dryRun: results.filter((result) => result.status === "dry-run").length,
+    unknown: results.filter((result) => result.status === "unknown").length
+  };
+  const executionProcesses = Array.isArray(report.executionProcesses) ? report.executionProcesses : [];
+  const plannedProcessIds = executionProcesses.map((value: unknown) => boundedText(asRecord(value).id, 240));
+  const reportedProcessIds = rawResults.map((value: unknown) => boundedText(asRecord(value).id, 240));
+  const plannedSuiteIds = executionProcesses.flatMap((value: unknown) => {
+    const process = asRecord(value);
+    return suiteIdentities(process, process.id);
+  });
+  const reportedSuiteIds = rawResults.flatMap((value: unknown) => {
+    const result = asRecord(value);
+    return suiteIdentities(result, result.id);
+  });
+  const selectedSuiteIds = Array.isArray(report.selectedSuites)
+    ? report.selectedSuites.map((value: unknown) => boundedText(value, 240))
+    : [];
+  const processAccountingComplete = identitySetMatches(reportedProcessIds, plannedProcessIds);
+  const selectedSuiteAccountingComplete = identitySetMatches(reportedSuiteIds, selectedSuiteIds)
+    && identitySetMatches(plannedSuiteIds, selectedSuiteIds);
+  const summaryMatchesResults = summary.passed === actualCounts.passed
+    && summary.failed === actualCounts.failed
+    && summary.skipped === actualCounts.skipped
+    && summary.cancelled === actualCounts.cancelled
+    && summary.notRun === actualCounts.notRun
+    && summary.dryRun === actualCounts.dryRun;
+  const unaccounted = Math.max(executionProcesses.length - results.length, 0);
+  const total = results.length + unaccounted;
+  const releaseReady = summary.coverageReady === true
+    && summary.releaseReady === true
+    && summaryMatchesResults
+    && actualCounts.passed > 0
+    && actualCounts.failed === 0
+    && actualCounts.skipped === 0
+    && actualCounts.cancelled === 0
+    && actualCounts.notRun === 0
+    && actualCounts.dryRun === 0
+    && actualCounts.unknown === 0
+    && results.length > 0
+    && results.every((result) => result.status === "passed")
+    && processAccountingComplete
+    && selectedSuiteAccountingComplete;
   return {
     schemaVersion: "meshrix.regression-report.snapshot.v1",
     product: "Meshrix.js",
@@ -114,14 +187,18 @@ export function createRegressionReportSnapshot(
     revision,
     generatedAt: boundedText(report.finishedAt || report.startedAt, 80),
     durationMs,
-    releaseReady: summary.releaseReady === true,
+    releaseReady,
     summary: {
       total,
-      passed,
-      failed,
-      skipped,
-      timedOut: finiteNumber(summary.timedOut),
-      passRate: total > 0 ? Math.round((passed / total) * 10000) / 100 : 0
+      passed: actualCounts.passed,
+      failed: actualCounts.failed,
+      skipped: actualCounts.skipped,
+      cancelled: actualCounts.cancelled,
+      notRun: actualCounts.notRun,
+      dryRun: actualCounts.dryRun,
+      unknown: actualCounts.unknown,
+      unaccounted,
+      passRate: total > 0 ? Math.round((actualCounts.passed / total) * 10000) / 100 : 0
     },
     longestLane,
     phases,
@@ -164,9 +241,9 @@ export function createRegressionHtmlReport(
   <meta name="color-scheme" content="light dark">
   <title>Meshrix.js Regression — ${titleStatus}</title>
   <style>
-    :root{--bg:#f5f4ef;--panel:#fffefa;--ink:#171914;--muted:#65695f;--line:#d8d8cf;--pass:#237451;--fail:#b83b31;--skip:#8b6a22;--accent:#315bdb;--shadow:0 10px 30px rgba(30,33,24,.07)}
-    @media(prefers-color-scheme:dark){:root{--bg:#151713;--panel:#1e211b;--ink:#f0f1ea;--muted:#a8ada0;--line:#393e34;--pass:#62c89a;--fail:#ff8177;--skip:#e4bd66;--accent:#89a5ff;--shadow:none}}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}main{width:min(1240px,calc(100% - 32px));margin:0 auto;padding:42px 0 64px}.eyebrow{margin:0 0 8px;color:var(--accent);font-weight:750;letter-spacing:.08em;text-transform:uppercase}.hero{display:flex;gap:24px;align-items:flex-end;justify-content:space-between;margin-bottom:26px}.hero h1{font-size:clamp(32px,6vw,66px);line-height:.98;letter-spacing:-.055em;margin:0;max-width:780px}.meta{color:var(--muted);text-align:right;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.metric,.panel,.phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}.metric{padding:17px}.metric .value{display:block;font-size:27px;font-weight:760;letter-spacing:-.04em}.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.07em}.status-pass{color:var(--pass)}.status-fail{color:var(--fail)}.status-skip{color:var(--skip)}.section-title{display:flex;align-items:end;justify-content:space-between;margin:34px 0 12px}.section-title h2{font-size:21px;margin:0}.section-title p{margin:0;color:var(--muted)}.phases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.phase{padding:18px;text-align:left;color:inherit;cursor:pointer}.phase:hover,.phase.active{border-color:var(--accent)}.phase-head{display:flex;justify-content:space-between;gap:16px}.phase h3{margin:0 0 3px;font-size:17px}.phase small{color:var(--muted)}.bar{height:7px;border-radius:999px;background:var(--line);overflow:hidden;margin:15px 0}.bar span{display:block;height:100%;background:var(--pass)}.lanes{display:flex;flex-wrap:wrap;gap:6px}.lane{border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted);font-size:12px}.panel{padding:16px}.filters{display:grid;grid-template-columns:1fr 180px auto;gap:10px;margin-bottom:14px}.filters input,.filters select,.filters button{border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);padding:10px 12px}.filters button{cursor:pointer}.filters button:hover{border-color:var(--accent)}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;min-width:860px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{position:sticky;top:0;background:var(--panel);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}tr:last-child td{border-bottom:0}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:700}.dot{width:6px;height:6px;border-radius:50%;background:currentColor}.process-id{font-weight:680}.process-label{display:block;color:var(--muted);font-size:12px;margin-top:2px}.command{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);max-width:430px;overflow-wrap:anywhere}.empty{padding:36px;text-align:center;color:var(--muted)}footer{margin-top:18px;color:var(--muted);font-size:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    :root{--bg:#f5f4ef;--panel:#fffefa;--ink:#171914;--muted:#65695f;--line:#d8d8cf;--pass:#237451;--fail:#b83b31;--skip:#8b6a22;--cancel:#7051a5;--notrun:#59677d;--accent:#315bdb;--shadow:0 10px 30px rgba(30,33,24,.07)}
+    @media(prefers-color-scheme:dark){:root{--bg:#151713;--panel:#1e211b;--ink:#f0f1ea;--muted:#a8ada0;--line:#393e34;--pass:#62c89a;--fail:#ff8177;--skip:#e4bd66;--cancel:#c1a5fb;--notrun:#abb9d0;--accent:#89a5ff;--shadow:none}}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}main{width:min(1240px,calc(100% - 32px));margin:0 auto;padding:42px 0 64px}.eyebrow{margin:0 0 8px;color:var(--accent);font-weight:750;letter-spacing:.08em;text-transform:uppercase}.hero{display:flex;gap:24px;align-items:flex-end;justify-content:space-between;margin-bottom:26px}.hero h1{font-size:clamp(32px,6vw,66px);line-height:.98;letter-spacing:-.055em;margin:0;max-width:780px}.meta{color:var(--muted);text-align:right;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.metric,.panel,.phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}.metric{padding:17px}.metric .value{display:block;font-size:27px;font-weight:760;letter-spacing:-.04em}.metric .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.07em}.status-pass{color:var(--pass)}.status-fail{color:var(--fail)}.status-skip{color:var(--skip)}.status-cancelled{color:var(--cancel)}.status-not-run{color:var(--notrun)}.section-title{display:flex;align-items:end;justify-content:space-between;margin:34px 0 12px}.section-title h2{font-size:21px;margin:0}.section-title p{margin:0;color:var(--muted)}.phases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.phase{padding:18px;text-align:left;color:inherit;cursor:pointer}.phase:hover,.phase.active{border-color:var(--accent)}.phase-head{display:flex;justify-content:space-between;gap:16px}.phase h3{margin:0 0 3px;font-size:17px}.phase small{color:var(--muted)}.bar{height:7px;border-radius:999px;background:var(--line);overflow:hidden;margin:15px 0}.bar span{display:block;height:100%;background:var(--pass)}.lanes{display:flex;flex-wrap:wrap;gap:6px}.lane{border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted);font-size:12px}.panel{padding:16px}.filters{display:grid;grid-template-columns:1fr 180px auto;gap:10px;margin-bottom:14px}.filters input,.filters select,.filters button{border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);padding:10px 12px}.filters button{cursor:pointer}.filters button:hover{border-color:var(--accent)}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;min-width:860px}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{position:sticky;top:0;background:var(--panel);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}tr:last-child td{border-bottom:0}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:700}.dot{width:6px;height:6px;border-radius:50%;background:currentColor}.process-id{font-weight:680}.process-label{display:block;color:var(--muted);font-size:12px;margin-top:2px}.command{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);max-width:430px;overflow-wrap:anywhere}.empty{padding:36px;text-align:center;color:var(--muted)}footer{margin-top:18px;color:var(--muted);font-size:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}.phases{grid-template-columns:1fr}.hero{align-items:flex-start;flex-direction:column}.meta{text-align:left}.filters{grid-template-columns:1fr 1fr}.filters button{grid-column:1/-1}}
     @media(max-width:560px){main{width:min(100% - 20px,1240px);padding-top:24px}.grid{grid-template-columns:repeat(2,1fr)}.metric{padding:13px}.filters{grid-template-columns:1fr}.filters button{grid-column:auto}}
   </style>
@@ -184,7 +261,7 @@ export function createRegressionHtmlReport(
     <section class="panel">
       <div class="filters">
         <label><span class="sr-only">Search processes</span><input id="search" type="search" placeholder="Search suite, lane, or command"></label>
-        <label><span class="sr-only">Filter by status</span><select id="status"><option value="all">All statuses</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select></label>
+        <label><span class="sr-only">Filter by status</span><select id="status"><option value="all">All statuses</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="skipped">Skipped</option><option value="cancelled">Cancelled</option><option value="not_run">Not run</option><option value="dry-run">Dry run</option></select></label>
         <button id="reset" type="button">Reset filters</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Status</th><th>Process</th><th>Phase / lane</th><th>Duration</th><th>Command</th></tr></thead><tbody id="results"></tbody></table><div class="empty" id="empty" hidden>No matching processes.</div></div>
@@ -203,7 +280,7 @@ export function createRegressionHtmlReport(
         const minutes = Math.floor(ms / 60000);
         return minutes + 'm ' + Math.round((ms % 60000) / 1000) + 's';
       };
-      const statusClass = (status) => status === 'passed' ? 'status-pass' : status === 'failed' ? 'status-fail' : 'status-skip';
+      const statusClass = (status) => status === 'passed' ? 'status-pass' : status === 'failed' ? 'status-fail' : status === 'cancelled' ? 'status-cancelled' : status === 'not_run' ? 'status-not-run' : 'status-skip';
       const element = (tag, className, text) => {
         const node = document.createElement(tag);
         if (className) node.className = className;
@@ -218,6 +295,11 @@ export function createRegressionHtmlReport(
         ['Pass rate', data.summary.passRate + '%', ''],
         ['Passed', String(data.summary.passed), 'status-pass'],
         ['Failed', String(data.summary.failed), data.summary.failed ? 'status-fail' : ''],
+        ['Skipped', String(data.summary.skipped), data.summary.skipped ? 'status-skip' : ''],
+        ['Cancelled', String(data.summary.cancelled), data.summary.cancelled ? 'status-cancelled' : ''],
+        ['Not run', String(data.summary.notRun), data.summary.notRun ? 'status-not-run' : ''],
+        ['Dry run', String(data.summary.dryRun), data.summary.dryRun ? 'status-skip' : ''],
+        ['Unaccounted', String(data.summary.unaccounted), data.summary.unaccounted ? 'status-not-run' : ''],
         ['Total time', formatDuration(data.durationMs), ''],
         ['Longest lane', data.longestLane ? formatDuration(data.longestLane.durationMs) : '—', '']
       ];
@@ -238,17 +320,26 @@ export function createRegressionHtmlReport(
         title.append(element('h3', '', phase.label));
         title.append(element('small', '', phase.lanes.length + ' lanes · ' + formatDuration(phase.durationMs)));
         head.append(title);
-        head.append(element('span', phase.failed ? 'status-fail' : 'status-pass', phase.failed ? phase.failed + ' failed' : phase.passed + ' passed'));
+        const phaseIssues = phase.failed + phase.cancelled + phase.notRun;
+        const phaseStatusClass = phase.failed ? 'status-fail' : phase.cancelled ? 'status-cancelled' : phase.notRun ? 'status-not-run' : 'status-pass';
+        const phaseStatus = phaseIssues
+          ? [phase.failed ? phase.failed + ' failed' : '', phase.cancelled ? phase.cancelled + ' cancelled' : '', phase.notRun ? phase.notRun + ' not run' : ''].filter(Boolean).join(' · ')
+          : phase.passed + ' passed';
+        head.append(element('span', phaseStatusClass, phaseStatus));
         card.append(head);
         const bar = element('div', 'bar');
         const fill = element('span');
-        const phaseTotal = phase.passed + phase.failed + phase.skipped;
+        const phaseTotal = phase.passed + phase.failed + phase.skipped + phase.cancelled + phase.notRun;
         fill.style.width = (phaseTotal ? (phase.passed / phaseTotal) * 100 : 0) + '%';
         bar.append(fill); card.append(bar);
         const lanes = element('div', 'lanes');
         for (const lane of phase.lanes) {
           const dependency = lane.dependsOn.length ? ' · after ' + lane.dependsOn.join(', ') : '';
-          lanes.append(element('span', 'lane', lane.id + ' · ' + formatDuration(lane.durationMs) + dependency));
+          const laneIssues = lane.failed + lane.cancelled + lane.notRun;
+          const laneStatus = laneIssues
+            ? [lane.failed ? lane.failed + ' failed' : '', lane.cancelled ? lane.cancelled + ' cancelled' : '', lane.notRun ? lane.notRun + ' not run' : ''].filter(Boolean).join(', ')
+            : lane.passed + ' passed';
+          lanes.append(element('span', 'lane', lane.id + ' · ' + laneStatus + ' · ' + formatDuration(lane.durationMs) + dependency));
         }
         card.append(lanes);
         card.addEventListener('click', () => setPhase(state.phase === phase.id ? 'all' : phase.id));

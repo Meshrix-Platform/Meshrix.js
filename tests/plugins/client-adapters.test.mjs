@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import packageManifest from "../../package.json" with { type: "json" };
 
 import { ADAPTER_PROTOCOL, invokeAdapter } from "@meshrix/client-adapter-kit";
 import { adapter as antigravity } from "../../plugins/agents/antigravity/adapter.mjs";
@@ -19,6 +20,7 @@ test("all client adapters expose the closed JSON-stdio contract", async () => {
   for (const adapter of [antigravity, claudeCode, codex, kimi, openclaw, opencode, pi]) {
     const result = await invokeAdapter(adapter, "describe");
     assert.equal(result.protocol, ADAPTER_PROTOCOL);
+    assert.equal(result.version, packageManifest.version);
     assert.deepEqual(result.actions, ["describe", "scan", "install", "verify", "uninstall"]);
     assert.deepEqual(result.locations, ["local"]);
   }
@@ -94,10 +96,10 @@ test("configuration and Pi adapters preserve unrelated state", async (t) => {
   assert.equal(antigravityRemaining.theme, "retained");
   assert.equal("mcpServers" in antigravityRemaining, false);
 
-  const piRequest = { ...base, client: { command: executable, configPath: path.join(root, "pi.json") } };
+  const piRequest = { ...base, client: { command: executable, configPath: path.join(root, "pi.json"), packageSource: "https://registry.invalid/agent-pi-adapter" } };
   assert.equal((await invokeAdapter(pi, "install", piRequest)).installed, true);
   const piState = JSON.parse(await fs.readFile(process.env.MESHRIX_FAKE_CLIENT_STATE, "utf8"));
-  assert.equal(path.basename(piState.lastInstallSource), "pi");
+  assert.equal(piState.lastInstallSource, path.resolve("plugins/agents/pi"));
   assert.equal((await invokeAdapter(pi, "verify", piRequest)).installed, true);
   assert.equal((await invokeAdapter(pi, "uninstall", piRequest)).installed, false);
 });

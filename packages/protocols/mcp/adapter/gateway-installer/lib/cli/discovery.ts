@@ -1,12 +1,16 @@
 import { randomBytes } from "node:crypto";
 
 import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
+import { deviceEnvironmentPort } from "./device-environment.ts";
 import {
   MCP_DISCOVER_METHOD,
   MCP_META_SERVER_INFO,
   mcpModernJsonRpcMessage,
   mcpModernRequestHeaders
 } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
+import {
+  MCP_PROTOCOL_VERSION
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,
@@ -16,23 +20,15 @@ import {
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
-  packageJson
+  packageInfo
 } from "./constants.ts";
 import { containsMxak1Credential, MXAK1_CREDENTIAL_PATTERN, mcpTargetHeaders, normalizeBaseUrl, normalizeTarget, option } from "./basic-utils.ts";
 import {
   discoveryRegistryPath,
   readJson
 } from "./device-discovery-registry.ts";
-import { assertSafeEnvName, readStdin, run, uniqueValues } from "./connector-process.ts";
+import { assertSafeEnvName, readStdin, uniqueValues } from "./connector-process.ts";
 import { fetchJson } from "./http-json-client.ts";
-
-export async function readLaunchctlEnv(name?: any) : Promise<any> {
-  if (process.platform !== "darwin") {
-    return "";
-  }
-  const result: any = await run("launchctl", ["getenv", name], { allowFailure: true });
-  return result.ok ? result.stdout.trim() : "";
-}
 
 export function explicitBaseUrl(options: Record<string, any> = {}) : any {
   const value: any = option(options, "url", process.env.MESHRIX_MCP_BASE_URL || "");
@@ -104,12 +100,13 @@ export async function candidateBaseUrls(options: Record<string, any> = {}) : Pro
   if (explicit) {
     return [explicit];
   }
-  const launchDiscoveryFile: any = await readLaunchctlEnv(MESHRIX_MCP_DISCOVERY_FILE_ENV);
-  const launchDiscoveryUrl: any = await readLaunchctlEnv(MESHRIX_MCP_DISCOVERY_URL_ENV);
-  const launchMcpUrl: any = await readLaunchctlEnv(MESHRIX_MCP_URL_ENV);
+  const persistedEnvironment: Record<string, string> = await deviceEnvironmentPort.read();
+  const persistedDiscoveryFile: any = persistedEnvironment[MESHRIX_MCP_DISCOVERY_FILE_ENV] || "";
+  const persistedDiscoveryUrl: any = persistedEnvironment[MESHRIX_MCP_DISCOVERY_URL_ENV] || "";
+  const persistedMcpUrl: any = persistedEnvironment[MESHRIX_MCP_URL_ENV] || "";
   const fileCandidates: any = uniqueValues([
     discoveryRegistryPath(options),
-    launchDiscoveryFile
+    persistedDiscoveryFile
   ]);
   const fromFiles: any[] = [];
   for (const filePath of fileCandidates) {
@@ -135,8 +132,8 @@ export async function candidateBaseUrls(options: Record<string, any> = {}) : Pro
   return uniqueValues([
     baseUrlFromEndpoint(process.env[MESHRIX_MCP_URL_ENV]),
     baseUrlFromEndpoint(process.env[MESHRIX_MCP_DISCOVERY_URL_ENV]),
-    baseUrlFromEndpoint(launchMcpUrl),
-    baseUrlFromEndpoint(launchDiscoveryUrl),
+    baseUrlFromEndpoint(persistedMcpUrl),
+    baseUrlFromEndpoint(persistedDiscoveryUrl),
     ...fromFiles,
     ...scanned
   ]).map(normalizeBaseUrl);
@@ -169,8 +166,8 @@ export async function verifyMeshrixHandshake(baseUrl?: any, discovery?: any) : P
     body: JSON.stringify({
       nonce,
       client: {
-        name: packageJson.name,
-        version: packageJson.version
+        name: packageInfo.name,
+        version: packageInfo.version
       }
     }),
     timeoutMs: 2500
@@ -242,34 +239,6 @@ export async function optionsWithDiscoveredBaseUrl(options: Record<string, any> 
   };
 }
 
-export async function publishLaunchctlEnv(env?: any) : Promise<any> {
-  for (const name of Object.keys(env || {})) {
-    if (/(?:token|secret|password|credential|api[_-]?key)/iu.test(name)) {
-      throw new Error("sensitive_environment_persistence_requires_a_secret_store");
-    }
-  }
-  if (process.platform === "darwin") {
-    for (const [name, value] of (Object.entries(env) as [string, any][])) {
-      await run("launchctl", ["setenv", name, value], { allowFailure: true });
-    }
-    return true;
-  }
-
-  if (process.platform === "win32") {
-    for (const [name, value] of (Object.entries(env) as [string, any][])) {
-      await run("setx", [name, value], { allowFailure: true });
-    }
-    return true;
-  }
-
-  process.stderr.write("\n[Notice] Please add the following to your ~/.bashrc or ~/.zshrc:\n");
-  for (const [name, value] of (Object.entries(env) as [string, any][])) {
-    process.stderr.write(`export ${name}="${value}"\n`);
-  }
-  process.stderr.write("\n");
-  return false;
-}
-
 export async function resolveApiKey(options: Record<string, any> = {}, { required = false }: Record<string, any> = {}) : Promise<any> {
   const tokenEnv: any = assertSafeEnvName(String(option(options, "token-env", DEFAULT_TOKEN_ENV)));
   const envToken: any = String(process.env[tokenEnv] || "").trim();
@@ -310,8 +279,18 @@ export async function ensureService(baseUrl?: any) : Promise<any> {
     headers: mcpModernRequestHeaders(outgoing),
     body: JSON.stringify(outgoing)
   });
-  const serverInfo: any = discover.payload?.result?._meta?.[MCP_META_SERVER_INFO] || {};
-  if (!discover.ok || serverInfo.name !== "Meshrix.js") {
+  const result: any = discover.payload?.result || {};
+  const metadata: any = result._meta || {};
+  const serverInfo: any = metadata[MCP_META_SERVER_INFO] || {};
+  const supportedVersions: any = Array.isArray(result.supportedVersions) ? result.supportedVersions : [];
+  if (
+    !discover.ok
+    || !String(serverInfo.name || "").trim()
+    || !String(serverInfo.version || "").trim()
+    || !supportedVersions.includes(MCP_PROTOCOL_VERSION)
+    || metadata.interfaceVersion !== MCP_INTERFACE_VERSION
+    || metadata.stableToolName !== MCP_STABLE_TOOL_NAME
+  ) {
     throw new Error(`Meshrix.js MCP is not available at ${baseUrl}/mcp.`);
   }
   return discover;
@@ -325,7 +304,7 @@ export function authHeaders(token?: any, target: any = "") : any {
   return {
     "Content-Type": "application/json",
     "X-Meshrix.js-Api-Key": credential,
-    "X-Meshrix.js-Connector-Package-Id": "meshrix-mcp-connector",
+    "X-Meshrix.js-MCP-Client-Id": "meshrix-mcp",
     ...mcpTargetHeaders(target)
   };
 }
@@ -355,7 +334,7 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
         apiVersion: MCP_INTERFACE_VERSION,
         operation: "system.health",
         input: {},
-        clientVersion: packageJson.version
+        clientVersion: packageInfo.version
       }
     }
   });

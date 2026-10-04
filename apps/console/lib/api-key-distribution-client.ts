@@ -10,6 +10,33 @@ export interface ApiKeyIssuerNode {
   nodeType: string;
 }
 
+export type ApiKeyMcpToolIdentity = {
+  serviceId: string;
+  publicName: string;
+};
+
+export type ApiKeyMcpToolSelection = ApiKeyMcpToolIdentity & {
+  label: string;
+  operationToolId: string;
+  capabilityId: string;
+  risk: string;
+  requiredScopes: string[];
+  toolsets: string[];
+};
+
+export type ApiKeyMcpServiceSelection = {
+  serviceId: string;
+  label: string;
+  status: "available" | "partial" | "unavailable";
+  toolCount: number;
+};
+
+export type ApiKeyMcpToolSelectionSnapshot = {
+  status: "available" | "partial" | "unavailable";
+  services: ApiKeyMcpServiceSelection[];
+  tools: ApiKeyMcpToolSelection[];
+};
+
 export interface ApiKeyIssuerScopes {
   organizationRevision: number;
   authorizationRevision: number;
@@ -18,6 +45,7 @@ export interface ApiKeyIssuerScopes {
   serverAudience?: string;
   eligibleRoots: ApiKeyIssuerNode[];
   eligibleNodes: ApiKeyIssuerNode[];
+  mcpToolSelection?: ApiKeyMcpToolSelectionSnapshot;
 }
 
 export interface ApiKeyPolicy {
@@ -139,8 +167,8 @@ export function revokeApiKey(
   expectedLifecycleRevision: number,
   reasonCode: "administrator_revoked" = "administrator_revoked",
 ): Promise<ApiKeyRecord> {
-  return postJson<ApiKeyRecord>(`${ENDPOINT}/${encodePathSegment(keyId)}/revoke`, {
+  return postJson<{ record: ApiKeyRecord }>(`${ENDPOINT}/${encodePathSegment(keyId)}/revoke`, {
     expectedLifecycleRevision,
     reasonCode,
-  }, { safetyConfirm: true });
+  }, { safetyConfirm: true }).then((result) => result.record);
 }

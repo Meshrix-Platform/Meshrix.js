@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import type { StatusPillProps } from "./status-pill-types";
 
-const props = withDefaults(defineProps<{
-  label: string | number;
-  tone?: string;
-  enabled?: boolean | null;
-  showDot?: boolean;
-  ariaLabel?: string;
-}>(), {
+const props = withDefaults(defineProps<StatusPillProps>(), {
   tone: "",
   enabled: null,
   showDot: true,

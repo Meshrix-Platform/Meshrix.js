@@ -44,17 +44,21 @@ packing or verifying a `runtime-ui` release or offline bundle is a
 
 ## Developer workflow
 
-1. Preserve unrelated work. Identify one independently acceptable closure.
-2. Update the canonical source first, then every owned consumer, derived
-   fact, test, and document in the same change.
-3. Keep the published address contract in `$meshrix-js-release-artifact-contract`.
-4. Run the narrowest owning verifier, then the repository-owned release
-   definition check when the artifact or address contract changed.
-5. Commit only when covered by user authorization; treat push as a separate
-   publication decision. Review the staged tree and outgoing changes at their
-   respective boundaries. A source task may finish with verified, reviewable
-   changes when no commit was requested; a requested publication remains
-   incomplete until its authorized publication steps finish.
+Apply the common engineering workflow owned by `CONTRIBUTING.md`: preserve
+unrelated work, identify one independently acceptable closure and its owners,
+update the canonical source with every owned consumer, test, derived fact, and
+document, run targeted evidence, and integrate once. This handbook only adds
+the release-specific routing below.
+
+Keep the published address contract in `$meshrix-js-release-artifact-contract`.
+Run the narrowest owning verifier, then the repository-owned release
+definition check when the artifact or address contract changed.
+
+Commit only when covered by user authorization; treat push as a separate
+publication decision. Review the staged tree and outgoing changes at their
+respective boundaries. A source task may finish with verified, reviewable
+changes when no commit was requested; a requested publication remains
+incomplete until its authorized publication steps finish.
 
 Specialist development modules stay under `$meshrix-js`. Load only the module
 that owns the current change: repository, core-platform-operations,
@@ -65,6 +69,8 @@ module.
 ## Remaining host qualification
 
 A Linux VM may provide offline-delivery evidence. Prefer Ubuntu; accept Debian.
-That evidence does not establish native Linux qualification, which remains
-owned by the named Real-Machine Verification Workflow. Project-level
-functional acceptance remains `npm run verify:acceptance`.
+That evidence does not establish native Linux qualification. If a specific
+environment claim is needed, run the independent `npm run verify:real-machine`
+entry for that environment. Project-level functional acceptance remains the
+independent `npm run verify:acceptance` workflow. Normal npm publication uses
+the default `npm run ci:local` engineering scope and its prepared archives.

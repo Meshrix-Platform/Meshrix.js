@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const packRoot = path.join(repoRoot, "build", "usage-skills");
-const sourceSkillsRoot = path.join(repoRoot, "skills");
 
 const packedEntries = (await readdir(packRoot, { withFileTypes: true }).catch(() => {
   throw new Error("build/usage-skills missing; run npm run pack:usage-skills first");
@@ -21,10 +20,6 @@ const packedEntries = (await readdir(packRoot, { withFileTypes: true }).catch(()
 if (packedEntries.length === 0) throw new Error("usage skills pack is empty");
 
 const packed = new Set(packedEntries);
-const sourceEntries = (await readdir(sourceSkillsRoot, { withFileTypes: true }))
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
-const knownSource = new Set(sourceEntries);
 
 const manifest = JSON.parse(await readFile(path.join(packRoot, "manifest.json"), "utf8"));
 if (!Array.isArray(manifest.skills) || manifest.count !== manifest.skills.length) {
@@ -36,6 +31,11 @@ if (manifest.count !== packedEntries.length) {
 for (const name of manifest.skills) {
   if (!packed.has(name)) throw new Error(`manifest lists missing skill ${name}`);
 }
+
+if (!Array.isArray(manifest.developmentSkills) || manifest.developmentSkills.some((name) => typeof name !== "string" || !/^meshrix-js(?:-[a-z0-9-]+)?$/.test(name) || packed.has(name))) {
+  throw new Error("manifest.json developmentSkills must list development-only documentation pointers");
+}
+const developmentPointers = new Set(manifest.developmentSkills);
 
 const problems = [];
 for (const name of packedEntries) {
@@ -61,26 +61,22 @@ async function checkMarkdown(directory, baseUrl) {
     );
     for (const [, reference] of prose.matchAll(/\$(meshrix-js(?:-[a-z0-9-]+)?)/g)) {
       if (packed.has(reference)) continue;
-      if (knownSource.has(reference)) continue; // development-only pointer in full checkout
+      if (developmentPointers.has(reference)) continue; // explicit full-checkout documentation pointer
       problems.push(`${relative}: unknown skill $${reference}`);
     }
     for (const [, target] of prose.matchAll(/\[[^\]]+\]\(([^\s)]+)\)/g)) {
       if (/^(?:[a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) continue;
       const targetPath = target.split("#")[0];
-      // Relative links that escape the packed tree into development skills are
-      // treated as full-checkout pointers when the destination exists in source.
+      const destination = path.resolve(path.dirname(absolute), targetPath);
+      const withinPack = path.relative(packRoot, destination);
+      if (withinPack.startsWith(`..${path.sep}`) || withinPack === ".." || path.isAbsolute(withinPack)) {
+        problems.push(`${relative}: reference escapes the usage pack ${target}`);
+        continue;
+      }
       try {
-        await access(path.resolve(path.dirname(absolute), targetPath));
+        await access(destination);
       } catch {
-        const fromSource = path.resolve(
-          sourceSkillsRoot,
-          path.relative(packRoot, path.resolve(path.dirname(absolute), targetPath)),
-        );
-        try {
-          await access(fromSource);
-        } catch {
-          problems.push(`${relative}: missing reference ${target}`);
-        }
+        problems.push(`${relative}: missing reference ${target}`);
       }
     }
   }

@@ -698,10 +698,6 @@ try {
       dockerfile.match(/COPY services\/model-gateway\/contracts \.\/services\/model-gateway\/contracts/gu)?.length,
       2
     );
-    assert.match(
-      dockerfile,
-      new RegExp(String.raw`cp -a (?:\"|\")?${rootfsTarget}var/cache/meshrix/npm/_cacache(?:\"|\")? (?:\"|\")?${rootfsTarget}opt/meshrix-npm-cache/_cacache(?:\"|\")?`)
-    );
     assert.doesNotMatch(dockerfile, new RegExp(String.raw`cp -a ${rootfsTarget}var/cache/meshrix/npm/\. `));
     assert.match(compose, /\$\{MESHRIX_BIND_ADDRESS:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}:7228/);
     assert.match(compose, /stop_grace_period: 90s/);

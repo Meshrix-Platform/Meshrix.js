@@ -42,6 +42,8 @@ HTTP or MCP as registered operations.
 | Storage operations | `packages/foundation/src/storage/` for storage contracts and providers; server-runtime owns server runtime state. |
 | Cross-layer binding | `packages/server-runtime` only. |
 
+Optional first-party MCP client-adapter components ship with `meshrix.js` and are selected explicitly by the installer. The client applications remain independent products; adapters do not install or update them.
+
 There are no documentation-only protocol package roots for checkpoint, console, or storage. A protocol
 directory owns executable transport or normalization code; runtime state and persistence remain with
 their current domain owners. Protocol packages must not import `packages/agents`,
@@ -117,10 +119,10 @@ notification; a batch is rejected before authorization or execution. Modern
 `initialize` is not a downstream method. Upstream MCP forwarding keeps its
 independent initialize/session revision.
 
-The published `meshrix-mcp-connector` package and the offline portable
-connector both depend on the shared `http-mcp-adapter-client-wire` contract,
-not the server protocol-owner module. Portable vendor assembly copies that
-module next to the existing constants vendor file. A connector that has
+The `meshrix.js` package's `meshrix-mcp` executable and the offline portable
+MCP component both depend on the shared `http-mcp-adapter-client-wire`
+contract, not the server protocol-owner module. Portable vendor assembly copies
+that module next to the existing constants vendor file. A connector that has
 explicitly persisted `autoUpdate: true` opens one authenticated
 `subscriptions/listen` POST stream and requests an object capability filter
 (`toolsListChanged` and the Meshrix extras). Known-but-unsupported types are
@@ -155,13 +157,19 @@ The MCP adapter compares every request binding field with the authenticated gran
 
 ## Adapter Target Scope
 
-The internal platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Their implementations and compatibility evidence are explicit operator-supplied artifacts; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
+The platform downstream adapter target scope is OpenClaw, Codex, Claude Code,
+Antigravity, OpenCode, Pi, and Kimi CLI. Their optional first-party adapter
+components are private modules bundled with `meshrix.js` and operate through
+the bounded JSON-stdio protocol only after an explicit target action. The
+client applications remain independent products; the connector owns credential
+custody and the install/uninstall transaction.
 
-MCP user-device installation begins at platform-native launchers: macOS and Linux
-use `meshrix-mcp-install.sh`, and Windows uses `meshrix-mcp-install.ps1` only. The
-launchers validate arguments and delegate to the bundled connector, which is
-the single implementation of signed discovery, grants, local client search,
-batch and interactive installation, configuration, and uninstall.
+MCP user-device installation uses the `meshrix-mcp` executable shipped by the
+`meshrix.js` Node.js package. That CLI is the single implementation of argument
+validation, credential handling, signed discovery, local client search, client
+configuration, registration, and uninstall. The verified portable archive
+contains the same CLI and Node runtime behind a small POSIX or PowerShell
+launcher; those launchers only start the sibling runtime and forward arguments.
 
 ## Governance
 

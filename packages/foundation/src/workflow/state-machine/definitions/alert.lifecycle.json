@@ -325,8 +325,8 @@
       "obligationId": "PO-ALERT-OBSERVABILITY",
       "method": "required_report",
       "params": {
-        "command": "npm run verify:enterprise-observability-coverage",
-        "reportPath": "build/reports/enterprise-observability-coverage.json"
+        "command": "npm run verify:observability-coverage",
+        "reportPath": "build/reports/observability-coverage.json"
       }
     },
     {

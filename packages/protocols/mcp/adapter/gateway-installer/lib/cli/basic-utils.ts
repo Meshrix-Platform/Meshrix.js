@@ -43,11 +43,10 @@ export function usage() : any {
     "  --no-verify                   Skip post-install MCP HTTP verification.",
     "  --json                        Emit JSON.",
     "  --pretty                      Pretty-print JSON output.",
-    "  --no-env                      Do not publish launchctl environment variables during register.",
+    "  --no-env                      Do not persist discovery environment variables during register.",
     "  --discovery-file PATH         Registry file used by register/discover-local. Default: ~/.meshrix/mcp/servers.json.",
     "  --auto-update                 Enable automatic push updates when installing (non-interactive mode).",
     "  --client-command COMMAND      Explicit local client command or path for one selected target.",
-    "  --adapter-cache PATH          Verified external adapter cache. Default: ~/.meshrix/mcp/client-adapters.",
     "  --artifact URL_OR_ID          Gateway artifact URL or id downloaded by fetch.",
     "  --out PATH                    Output file written by fetch. Must not already exist.",
     "",
@@ -67,7 +66,7 @@ export function parseArgs(argv?: any) : any {
   ]);
   const valueOptions: any = new Set<any>([
     "target", "url", "scan-ports", "token-env", "discovery-file", "client-command",
-    "adapter-cache", "artifact", "out", "name", "switch", "execution-location", "remote-kind"
+    "artifact", "out", "name", "switch", "execution-location", "remote-kind"
   ]);
   const options: Record<string, any> = {};
   const positionals: any[] = [];

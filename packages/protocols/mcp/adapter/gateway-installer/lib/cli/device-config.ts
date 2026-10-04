@@ -1,28 +1,29 @@
 import {
-  BOOTSTRAP_INSTALL_SCRIPT_ZH_CN,
   DEFAULT_TOKEN_ENV,
-  MESHRIX_MCP_DISCOVERY_FILE_ENV,
-  MESHRIX_MCP_DISCOVERY_URL_ENV,
-  MESHRIX_MCP_URL_ENV,
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
   PRIORITY_INSTALL_TARGET,
   PRIORITY_INSTALL_TARGETS,
   SUPPORTED_TARGETS,
-  packageJson,
+  packageInfo,
   sharedHubContract,
   supportedTargetDetails
 } from "./constants.ts";
 import { option, targetInstallMode } from "./basic-utils.ts";
-import { discardConfiguredApiKeyEnvironment, discoverMeshrixHub, explicitBaseUrl, publishLaunchctlEnv } from "./discovery.ts";
+import { discardConfiguredApiKeyEnvironment, discoverMeshrixHub, explicitBaseUrl } from "./discovery.ts";
+import {
+  deviceEnvironmentPort,
+  disabledDeviceEnvironmentResult,
+  type DeviceEnvironmentPort
+} from "./device-environment.ts";
 import {
   deviceDiscoveryEnv,
   discoveryRegistryPath,
   readJson,
   writeJson
 } from "./device-discovery-registry.ts";
-import { githubOneLineMcpInstallCommand, run, shellQuote } from "./connector-process.ts";
+import { shellQuote } from "./connector-process.ts";
 
 export function buildDeviceHubManifest({
   baseUrl,
@@ -35,20 +36,9 @@ export function buildDeviceHubManifest({
   const mcpUrl: any = `${baseUrl}/mcp`;
   const vmMcpUrl: any = `${parsed.protocol}//host.orb.internal:${port}/mcp`;
   const env: any = deviceDiscoveryEnv({ baseUrl, primaryPath: discoveryPath });
-  const packageExec: any = `npx ${packageJson.name}@${packageJson.version}`;
+  const packageExec: any = `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp`;
   const urlArgs: any = ` --url ${shellQuote(baseUrl)}`;
   const tokenEnvArgs: any = tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : "";
-  const contextArgs: any = `${urlArgs}${tokenEnvArgs}`;
-  const githubOneLineCommand: any = githubOneLineMcpInstallCommand();
-  const githubOneLineCommandZhCN: any = githubOneLineMcpInstallCommand(BOOTSTRAP_INSTALL_SCRIPT_ZH_CN);
-  const githubOneLineInstallCommand: any = `${githubOneLineCommand} --${contextArgs}`;
-  const githubOneLineInstallCommandZhCN: any = `${githubOneLineCommandZhCN} --${contextArgs}`;
-  const githubOneLineClientInstallJsonCommand: any = `${githubOneLineCommand} -- --target <client>${contextArgs} --json`;
-  const githubOneLineClientInstallJsonCommandZhCN: any = `${githubOneLineCommandZhCN} -- --target <client>${contextArgs} --json`;
-  const githubOneLineAutoInstallCommand: any = `${githubOneLineCommand} -- --target auto${contextArgs} --json`;
-  const githubOneLineAutoInstallCommandZhCN: any = `${githubOneLineCommandZhCN} -- --target auto${contextArgs} --json`;
-  const githubOneLinePriorityInstallCommand: any = `${githubOneLineCommand} -- --target ${PRIORITY_INSTALL_TARGET}${contextArgs} --json`;
-  const githubOneLinePriorityInstallCommandZhCN: any = `${githubOneLineCommandZhCN} -- --target ${PRIORITY_INSTALL_TARGET}${contextArgs} --json`;
   const discoverCommand: any = `${packageExec} discover-local${urlArgs} --json`;
   const interactiveInstallCommand: any = `${packageExec} install${urlArgs}${tokenEnvArgs}`;
   const clientInstallJsonCommand: any = `${packageExec} install --target <client>${urlArgs}${tokenEnvArgs} --json`;
@@ -91,36 +81,18 @@ export function buildDeviceHubManifest({
         stableToolName: MCP_STABLE_TOOL_NAME,
         sharedHub: sharedHubContract({ mcpUrl, vmMcpUrl }),
         connector: {
-          packageName: packageJson.name,
-          packageVersion: packageJson.version,
+          packageName: packageInfo.name,
+          packageVersion: packageInfo.version,
           registerCommand: `${packageExec} register${urlArgs}${tokenEnvArgs}`,
           interactiveInstallCommand,
-          githubOneLineCommand,
-          githubOneLineCommandZhCN,
-          githubOneLineInstallCommand,
-          githubOneLineInstallCommandZhCN,
-          githubOneLineClientInstallJsonCommand,
-          githubOneLineClientInstallJsonCommandZhCN,
-          githubOneLineAutoInstallCommand,
-          githubOneLineAutoInstallCommandZhCN,
-          githubOneLinePriorityInstallCommand,
-          githubOneLinePriorityInstallCommandZhCN,
-          oneCommandInstall: githubOneLineInstallCommand,
-          oneCommandInstallZhCN: githubOneLineInstallCommandZhCN,
-          oneCommandClientInstallJson: githubOneLineClientInstallJsonCommand,
-          oneCommandClientInstallJsonZhCN: githubOneLineClientInstallJsonCommandZhCN,
-          oneCommandAutoInstall: githubOneLineAutoInstallCommand,
-          oneCommandAutoInstallZhCN: githubOneLineAutoInstallCommandZhCN,
-          oneCommandPriorityInstall: githubOneLinePriorityInstallCommand,
-          oneCommandPriorityInstallZhCN: githubOneLinePriorityInstallCommandZhCN,
+          installCommand: interactiveInstallCommand,
+          clientInstallJsonCommand,
           autoInstallCommand,
           priorityInstallCommand,
           priorityTargets: [...PRIORITY_INSTALL_TARGETS],
           supportedTargets: [...SUPPORTED_TARGETS],
           supportedTargetDetails: supportedTargetDetails(),
-          installCommand: `${packageExec} install --target <client>${urlArgs}${tokenEnvArgs}`,
-          clientInstallJsonCommand,
-          uninstallCommand: `${packageExec} uninstall --target <client>${urlArgs}`,
+          uninstallCommand: `${packageExec} uninstall --target codex${urlArgs}`,
           discoverCommand,
           scanCommand,
           doctorCommand
@@ -128,22 +100,10 @@ export function buildDeviceHubManifest({
         upgrade: {
           listChanged: true,
           notification: "notifications/tools/list_changed",
-          reinstallCommand: githubOneLineInstallCommand,
-          reinstallCommandZhCN: githubOneLineInstallCommandZhCN,
-          clientReinstallJsonCommand: githubOneLineClientInstallJsonCommand,
-          clientReinstallJsonCommandZhCN: githubOneLineClientInstallJsonCommandZhCN,
-          agentReinstallCommand: githubOneLineAutoInstallCommand,
-          agentReinstallCommandZhCN: githubOneLineAutoInstallCommandZhCN,
-          priorityAgentReinstallCommand: githubOneLinePriorityInstallCommand,
-          priorityAgentReinstallCommandZhCN: githubOneLinePriorityInstallCommandZhCN,
-          oneCommandReinstall: githubOneLineInstallCommand,
-          oneCommandReinstallZhCN: githubOneLineInstallCommandZhCN,
-          oneCommandClientReinstallJson: githubOneLineClientInstallJsonCommand,
-          oneCommandClientReinstallJsonZhCN: githubOneLineClientInstallJsonCommandZhCN,
-          oneCommandAgentReinstall: githubOneLineAutoInstallCommand,
-          oneCommandAgentReinstallZhCN: githubOneLineAutoInstallCommandZhCN,
-          oneCommandPriorityAgentReinstall: githubOneLinePriorityInstallCommand,
-          oneCommandPriorityAgentReinstallZhCN: githubOneLinePriorityInstallCommandZhCN,
+          reinstallCommand: `${packageExec} install${urlArgs}${tokenEnvArgs}`,
+          clientInstallJsonCommand,
+          autoInstallCommand,
+          priorityInstallCommand,
           priorityTargets: [...PRIORITY_INSTALL_TARGETS]
         },
         auth: {
@@ -158,15 +118,25 @@ export function buildDeviceHubManifest({
   };
 }
 
-export async function publishDeviceHubManifest({ baseUrl, targets, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = true, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
+export async function publishDeviceHubManifest({
+  baseUrl,
+  targets,
+  tokenEnv = DEFAULT_TOKEN_ENV,
+  publishEnv = true,
+  discoveryPath = discoveryRegistryPath(),
+  environmentPort = deviceEnvironmentPort
+}: Record<string, any> & { environmentPort?: DeviceEnvironmentPort }): Promise<any> {
   const manifest: any = buildDeviceHubManifest({ baseUrl, targets, tokenEnv, discoveryPath });
   await writeJson(discoveryPath, manifest);
-  const envPublished: any = publishEnv ? await publishLaunchctlEnv(manifest.discovery.env) : false;
+  const envPersistence = publishEnv
+    ? await environmentPort.write(manifest.discovery.env)
+    : disabledDeviceEnvironmentResult();
   return {
     primaryPath: discoveryPath,
     paths: [discoveryPath],
     env: manifest.discovery.env,
-    envPublished,
+    envPublished: envPersistence.persisted,
+    envPersistence,
     manifest
   };
 }
@@ -268,7 +238,13 @@ export function existingManifestTokenEnv(server: Record<string, any> = {}) : any
   return String(server.auth?.tokenEnv || DEFAULT_TOKEN_ENV);
 }
 
-export async function writeServerConfigProfile({ options, name = "default", discovered, publishEnv = true }: Record<string, any>) : Promise<any> {
+export async function writeServerConfigProfile({
+  options,
+  name = "default",
+  discovered,
+  publishEnv = true,
+  environmentPort = deviceEnvironmentPort
+}: Record<string, any> & { environmentPort?: DeviceEnvironmentPort }): Promise<any> {
   const discoveryPath: any = discoveryRegistryPath(options);
   const existingManifest: any = await readJson(discoveryPath, {});
   const existingServer: any = existingManifest?.servers?.[MCP_SERVER_NAME] || {};
@@ -280,7 +256,8 @@ export async function writeServerConfigProfile({ options, name = "default", disc
     targets: defaultTargetStatuses(existingServer.targets || {}),
     tokenEnv,
     publishEnv,
-    discoveryPath
+    discoveryPath,
+    environmentPort
   });
   const manifest: any = await readJson(discoveryPath, {});
   manifest.serverConfig = {
@@ -298,11 +275,17 @@ export async function writeServerConfigProfile({ options, name = "default", disc
     path: published.primaryPath,
     activeName: name,
     profile: manifest.serverConfig.profiles[name],
-    tokenEnv
+    tokenEnv,
+    envPublished: published.envPublished,
+    envPersistence: published.envPersistence
   };
 }
 
-export async function resetServerConfig({ options, publishEnv = true }: Record<string, any>) : Promise<any> {
+export async function resetServerConfig({
+  options,
+  publishEnv = true,
+  environmentPort = deviceEnvironmentPort
+}: Record<string, any> & { environmentPort?: DeviceEnvironmentPort }): Promise<any> {
   const discoveryPath: any = discoveryRegistryPath(options);
   const existingManifest: any = await readJson(discoveryPath, {});
   const resetManifest: Record<string, any> = {
@@ -313,7 +296,7 @@ export async function resetServerConfig({ options, publishEnv = true }: Record<s
       strategy: "shared-device-hub",
       localEntry: {
         type: "meshrix-mcp-discover-local",
-        command: `npx ${packageJson.name}@${packageJson.version} discover-local --json`,
+        command: `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp discover-local --json`,
         registryFile: discoveryPath
       },
       registryFile: discoveryPath,
@@ -332,16 +315,16 @@ export async function resetServerConfig({ options, publishEnv = true }: Record<s
       previousActiveName: existingManifest?.serverConfig?.activeName || ""
     }
   };
+  const envPersistence = publishEnv
+    ? await environmentPort.remove()
+    : disabledDeviceEnvironmentResult();
   await writeJson(discoveryPath, resetManifest);
-  if (publishEnv && process.platform === "darwin") {
-    await run("launchctl", ["unsetenv", MESHRIX_MCP_URL_ENV], { allowFailure: true });
-    await run("launchctl", ["unsetenv", MESHRIX_MCP_DISCOVERY_URL_ENV], { allowFailure: true });
-    await run("launchctl", ["unsetenv", MESHRIX_MCP_DISCOVERY_FILE_ENV], { allowFailure: true });
-  }
   return {
     ok: true,
     path: discoveryPath,
-    reset: true
+    reset: true,
+    envPublished: envPersistence.persisted,
+    envPersistence
   };
 }
 

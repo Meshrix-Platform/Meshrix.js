@@ -1,92 +1,40 @@
 # Meshrix.js Compatibility
 
-This document records current compatibility targets and the evidence required
-for a support claim. [Status](STATUS.md) owns the product-wide intent,
-implementation, verification, release, and support result.
+This document records compatibility implemented by the current source tree.
+It does not create a support claim for a package, platform, or deployment
+profile. Meshrix.js is preparing its first npm release; use release evidence
+for the exact published artifact when it becomes available.
 
-This matrix is informational. It does not block the current production-use
-closure, deployment to the existing virtual machine, or iteration from real
-usage. Only a concrete defect in an actively used path enters current work.
+## Runtime and deployment boundaries
 
-## Evidence and remaining-work rules
-
-- A source path or configured target is an implementation fact. Support remains
-  remaining required work until the named qualification evidence exists.
-- A passing focused check is verification for its exact scope. Release
-  completeness remains remaining required work until the Functional Release
-  Gate accepts the immutable candidate.
-- A Functional Release Gate receipt applies only to its immutable candidate.
-- Functional candidate acceptance, including Linux amd64 and arm64 offline
-  artifacts delivered onto a Linux virtual machine reachable from a macOS
-  operator host, closes the current offline and plan receipts. A Linux OS
-  inside the VM is enough for those closures. Ubuntu is preferred; Debian is
-  accepted. Native Linux, Ubuntu, Debian, cloud, macOS, Windows, connector,
-  cross-host, and recovery-environment qualification remain remaining required
-  work after the named Real-Machine Verification Workflow.
-- A source tag, npm package, container manifest, GitHub Release, and hosted
-  deployment are separate remaining release or operation workstreams.
-- Environment qualification requires the same accepted candidate to pass the
-  named Real-Machine Verification Workflow for the exact system, architecture,
-  artifact, configuration, and deployment profile.
-- Client, plugin, and optional-service adoption evidence is independently
-  owned remaining work and cannot block or promote Meshrix.js acceptance.
-
-## Runtime and delivery matrix
-
-| Surface | Current target | Current status |
-| --- | --- | --- |
-| Enterprise single-node profile | `enterprise-single-node` private-deployment release profile | Pre-release target; release publication and environment qualification remain remaining required work. |
-| Node.js runtime | Version range declared by `package.json` | Implemented target; operating-system qualification remains remaining required work on the named host workflow. |
-| Local source startup | Repository npm scripts and local server entry point | Development path; release and production qualification remain remaining required work. |
-| Server and Web Console container | Linux amd64 and arm64 OCI artifacts on a Linux VM | Assembly and functional-verification target; Ubuntu preferred, Debian accepted; native Linux or distribution qualification remains remaining required work until its exact workflow passes. |
-| Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Implemented through an authenticated Host-served sandbox document in an iframe without `allow-same-origin`, with a bounded and revocable Host bridge. |
-| npm release set | Manifests named by the release definition | Publication target; package publication remains remaining required work for the immutable accepted candidate. |
-| MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact still requires its own publication and environment receipt. |
-| Storage | Self-contained local storage by default; optional integrations only when explicitly configured | Local implementation target; each optional datastore remains remaining qualification work. |
-| Production ingress | Administrator-owned TLS boundary conforming to the documented trusted-proxy contract | Functional target; each deployed proxy environment remains remaining qualification work. |
-| Backup and restore | Independent backup root and clean-root recovery journey | Required candidate closure; recovery-environment qualification remains remaining required work. |
-| Upgrade and rollback | N-1 preflight, backup, migration, health admission, and failure rollback | Required candidate closure; upgrade-environment qualification remains remaining required work. |
+| Surface | Current source contract |
+| --- | --- |
+| Node.js | The root `package.json` declares `>=22.19.0 <23 || >=24.3.0 <25`. |
+| Server and Console | The server serves the Console at `/` and its API at `/api/` from one origin. The default local port is `7228`; source development may use a separate Vite port for hot reload. |
+| MCP ingress | The modern downstream HTTP profile uses MCP `2026-07-28`. Legacy `initialize` client sessions are not implemented at this ingress. |
+| MCP upstream | Configured upstreams support modern HTTP `2026-07-28` discovery. The legacy upstream transport supports HTTP and local stdio protocol versions `2025-03-26`, `2025-06-18`, and `2025-11-25`. These legacy upstream paths do not define a legacy downstream server. |
+| Storage | Self-contained local storage is the default. Optional stores or services are active only when explicitly configured and require evidence for the exact integration. |
+| Ingress | The runtime supports an administrator-managed TLS-terminating proxy under the documented trusted-forwarding contract. Forwarded headers do not establish identity or authorization. |
+| Plugin UI | Plugin browser content runs in an opaque-origin iframe and communicates through the versioned Host bridge. This boundary does not grant direct network access or same-origin privileges. |
+| npm products | The supported npm products are `meshrix.js` and `@meshrix/gateway`. Root-installed first-party client adapters are private components bundled with `meshrix.js`. Package manifests and the release definition own product names and versions; a source checkout, local build, or local installation is not proof of registry publication or external platform support. |
 
 ## Protocol and integration ownership
 
-| Surface | Owner and boundary | Current status |
-| --- | --- | --- |
-| HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocols | Meshrix.js protocol and technical documents | Implemented scope is defined only by the owning documents and schemas. |
-| Plugin browser code | Opaque-origin iframe with a bounded Host bridge | Implemented. The server embeds verified plugin source in a nonce-bound sandbox document; the parent Console receives only `sandboxUrl` and the iframe receives no same-origin privilege or direct network access. |
-| Upstream service publishing | Meshrix.js server gateway and Operation Permission | Server-side functional target; compatible external-service adoption is independently owned. |
-| Downstream client protocol | Meshrix.js generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix.js release dependency. |
-| Client-specific adapters | Operator-supplied external client-adapter packages selected explicitly | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
-| Optional parsers, providers, datastores, and service adapters | Repository-local `services/` or `plugins/` implementation when present | Disabled or absent by default; each enabled path needs its own contract and evidence. |
-| Pactium | Exact file-vendored dependency `pactium@0.8.0` (`file:vendor/pactium-0.8.0.tgz`) and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities. Meshrix.js release and environment qualification remain remaining required work on their own receipts. |
+Compatibility is directional. The protocol adapter owns parsing, negotiation,
+and transport state. Authorization and capability decisions remain in the
+governed runtime, and upstream integrations are enabled explicitly rather
+than discovered from a client-brand catalog.
 
-## Pactium host-helper deprecation
+| Boundary | Ownership |
+| --- | --- |
+| HTTP, MCP, plugin package, pubsub, storage, checkpoint, and Console protocols | The owning Meshrix.js protocol documents and schemas define the implemented wire contract. |
+| Upstream service publishing | The server gateway and Operation Permission own publication and governed invocation. An upstream's own availability and protocol conformance are external conditions. |
+| Downstream client integration | `meshrix.js` contains the first-party adapter components for its declared target catalog. Each runs only for an explicit target action through the bounded JSON-stdio contract; client applications remain independent external products. |
+| Optional parsers, providers, datastores, and service adapters | Optional integrations are disabled or absent by default. Each enabled implementation has its own contract, configuration, and verification evidence. |
 
-Meshrix.js consumes host-neutral Pactium helpers as the authoritative implementation. The following Meshrix.js-local exports remain callable only as Deprecated delegates until Meshrix.js 1.0.0 removes them:
-
-| Deprecated Meshrix.js export | Replacement | Removal |
-| --- | --- | --- |
-| `toPactiumCanonicalSafeValue` | `toCanonicalSafeValue` from `pactium` | Meshrix.js 1.0.0 |
-| `classifyProtocolSubstrateStorageArtifact` | `classifyProtocolStorageArtifact` from `pactium` | Meshrix.js 1.0.0 |
-| `inspectPactiumFreshDataDir` | `inspectDataDir` from `pactium` | Meshrix.js 1.0.0 |
-| `assertPactiumFreshDataDir` | `assertCurrentDataDir` from `pactium` | Meshrix.js 1.0.0 |
-| `PACTIUM_MANIFEST_FILE` / `PACTIUM_SQLITE_FILE` / `PROTOCOL_SUBSTRATE_STORAGE_CATEGORY` | Same names from `pactium` (`PROTOCOL_STORAGE_CATEGORY`) | Meshrix.js 1.0.0 |
-
-Iteration workflow: Pactium publishes first; Meshrix.js switches and Deprecated-wraps second; Meshrix.js next major removes the wrappers. Host product semantics (aspect, checkpoint tree, LSM, backup) remain Meshrix.js-owned.
-
-### Meshrix.js 1.0.0 removal checklist (phase B; not this release)
-
-When Meshrix.js 1.0.0 is cut, delete the Deprecated wrappers and retarget callers—no compatibility layer and no redirect tests:
-
-1. Remove `packages/foundation/src/checkpoint/tree/pactium-canonical-safe.ts` and every import of `toPactiumCanonicalSafeValue`; call `toCanonicalSafeValue` from `pactium` instead.
-2. In `packages/foundation/src/checkpoint/tree/pactium-substrate-preflight.ts`, remove Deprecated re-exports (`PACTIUM_MANIFEST_FILE`, `PACTIUM_SQLITE_FILE`, `PROTOCOL_SUBSTRATE_STORAGE_CATEGORY`, `classifyProtocolSubstrateStorageArtifact`, `inspectPactiumFreshDataDir`, `assertPactiumFreshDataDir`) and update Meshrix.js callers to the Pactium symbols above. Keep Meshrix.js-owned helpers (`resolveMeshrixPactiumDataDir`, `createMeshrixPactiumRuntime`, lease/config wiring).
-3. Delete Deprecated smoke/delegate tests that exist only to cover the old Meshrix.js export names; keep coverage on the Pactium path and Meshrix.js host surfaces.
-4. Drop this section and the Unreleased CHANGELOG deprecation note once the symbols are gone; `COMPATIBILITY.md` then describes only the current `pactium` dependency path.
-
-## MCP client targets
-
-Meshrix.js verifies only its neutral connector boundary. The documented
-downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity,
-OpenCode, Pi, and Kimi CLI. A named client becomes qualified only when the
-operator supplies an exact adapter artifact with a named client version and
-configuration plus current lifecycle evidence. Those client qualifications
-remain remaining required work until that evidence exists.
+The root package and Foundation declare `pactium@0.8.1` as a runtime
+dependency, and `package-lock.json` pins the resolved package. The separate
+`vendor/pactium-0.8.0.tgz` source archive is not that runtime dependency; its
+license and inclusion in a release artifact must be assessed independently.
+The project's Apache-2.0 declaration does not determine the license
+obligations of third-party artifacts in a distribution.

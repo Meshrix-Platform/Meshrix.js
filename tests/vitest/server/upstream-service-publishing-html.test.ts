@@ -56,7 +56,6 @@ const BASIC_CONFIG_DOCUMENT: Readonly<Record<string, any>> = Object.freeze({
         path: "/v1/convert",
         risk: "safe_write",
         requiredScopes: ["gateway:write"],
-        timeoutMs: 30_000,
         payloadTransport: {
           request: {
             mode: "artifact_multipart",
@@ -99,8 +98,7 @@ const SYNTHETIC_SCREENSHOT_SHA256: any = createHash("sha256")
 
 function renderUpstreamServicePublishingHtml(
   report?: any,
-  journey?: any,
-  candidateReceipt: any = verifiedCandidateReceipt()
+  journey?: any
 ) : any {
   const visualEvidenceFiles: any = new Map<any, any>(
     journey.visualEvidence.map((item?: any) : any => [item.file, SYNTHETIC_SCREENSHOT_BYTES])
@@ -109,8 +107,7 @@ function renderUpstreamServicePublishingHtml(
     report,
     journey,
     BASIC_CONFIG_TEXT,
-    visualEvidenceFiles,
-    candidateReceipt
+    visualEvidenceFiles
   );
 }
 
@@ -219,26 +216,6 @@ function verifiedReport() : any {
     productionBoundaries: [{ id: "control-plane", traversed: true }],
     revisionEdges: [{ scenario: "create", from: 0, to: 1, outcome: "advanced" }],
     protocolCohorts: [{ id: "affected-ack", outcome: "acknowledged", count: 1 }]
-  };
-}
-
-function verifiedCandidateReceipt() : any {
-  return {
-    schemaVersion: "v0.0.1:report:upstream-service-publishing-candidate-1",
-    claim: "upstream-publishing-prepublication-passed",
-    generatedAt: "2026-01-01T00:04:01.000Z",
-    release: {
-      version: "0.0.1",
-      tag: "v0.0.1",
-      definitionVersion: "v0.0.1:registry:release-definition-1",
-      definitionSha256: `sha256:${"a".repeat(64)}`
-    },
-    source: {
-      commit: "b".repeat(40),
-      tree: "c".repeat(40)
-    },
-    artifacts: [],
-    receiptSha256: `sha256:${"d".repeat(64)}`
   };
 }
 
@@ -433,6 +410,7 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain("application/pdf");
     expect(html).toContain("104857600 B");
     expect(html).toContain("30000 ms");
+    expect(html).toContain('data-en="No configured execution deadline"');
     expect(html).toContain(BASIC_CONFIG_SHA256);
     expect(html).toContain("not a standalone download endpoint");
     expect(html).toContain("不是独立的下载接口");
@@ -476,7 +454,6 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html.match(/src="data:image\/png;base64,/gu)).toHaveLength(VISUAL_EVIDENCE.length);
     expect(html.match(/2880×2000 · 2×/gu)).toHaveLength(VISUAL_EVIDENCE.length);
     expect(html).toContain('href="data:application/json;charset=utf-8;base64,');
-    expect(html).toContain('data-report-slot="candidate-scope"');
     expect(html).toMatch(
       /<main\b(?=[^>]*\bid="report-content")(?=[^>]*\btabindex="-1")[^>]*>/u
     );
@@ -583,12 +560,7 @@ describe("upstream service publishing HTML report", () : any => {
         'data-service-interface="convert-require-approval-debug"'
       ));
 
-    expect(html).toContain('data-report-authority="scoped-candidate"');
-    expect(html).toContain(
-      'data-candidate-claim="upstream-publishing-prepublication-passed"'
-    );
-    expect(html).not.toContain('data-report-authority="functional-release"');
-    expect(html).not.toContain("Functional release accepted");
+    expect(html).toContain("This standalone HTML report summarizes the upstream publishing verification");
     expect(html).toContain('data-report-timing="journey-total"');
     expect(html).toContain('data-duration-ms="240000"');
     expect(html).toContain('data-report-cleanup="passed"');
@@ -649,7 +621,6 @@ describe("upstream service publishing HTML report", () : any => {
     const templateSlots: any = [...template.matchAll(/data-report-slot="([^"]+)"/gu)]
       .map((match?: any) : any => match[1]);
     expect(templateSlots).toContain("operation-guide-groups");
-    expect(templateSlots).toContain("candidate-scope");
     expect(templateSlots).toContain("upstream-publication-runtime-health");
     expect(templateSlots).toContain("upstream-service-interface-catalog");
     expect(templateSlots).toContain("client-lifecycle");
@@ -906,8 +877,7 @@ describe("upstream service publishing HTML report", () : any => {
       verifiedReport(),
       journey,
       BASIC_CONFIG_TEXT,
-      new Map<any, any>(),
-      null
+      new Map<any, any>()
     );
 
     expect(html).toContain('data-report-authority="non-authoritative-failure"');
@@ -933,7 +903,6 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).not.toContain("synthetic-secret-value");
     expect(html).not.toContain("/Users/");
     expect(html).not.toContain("functional-complete");
-    expect(html).not.toContain('data-candidate-claim="upstream-publishing-prepublication-passed"');
     expect(html).not.toContain("data:image/png;base64");
     expect(html).toMatch(/<main\b[^>]*\btabindex="-1"[^>]*>/u);
     expect(html).toContain('data-language="zh-CN"');

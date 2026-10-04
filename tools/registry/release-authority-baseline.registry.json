@@ -75,14 +75,14 @@
       {
         "id": "release-acceptance-standards-positive-path",
         "classification": "retained-positive-forwarding",
-        "description": "The acceptance-standards registry remains the sole authority for the mandatory functional-complete and release-deployment claims and the downstream optional real-machine claim.",
+        "description": "The acceptance-standards registry defines the functional-complete and npm-package-installability release requirements and the separate optional deployment and real-machine claims.",
         "authorityPaths": [
           "tools/registry/release-acceptance-standards.registry.json",
           "tools/server-scripts/verify-release-acceptance-standards.ts"
         ],
         "assertions": [
           "Functional completeness is a mandatory project release gate.",
-          "Release-deployment verification is a mandatory project release gate consuming a functional-complete receipt for the exact candidate.",
+          "Npm package installability is required for npm publication; deployment verification is a separate optional claim consuming the functional-complete receipt for its candidate.",
           "Real-machine verification consumes a candidate-bound functional receipt.",
           "Real-machine results cannot block or revoke functional completeness."
         ]

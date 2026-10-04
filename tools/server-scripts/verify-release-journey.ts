@@ -14,16 +14,12 @@
 //   --plan                  Print the step list without executing anything.
 //   --keep-stack            Leave the compose stack running (debug).
 //   --port N                Pin the host port (must be free).
-//   --adapter-source PATH   Directory or .tgz with the client adapters
-//                           or MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE).
 //   --image-name NAME       operator-supplied format-convert image.
 //   --json                  Also print the final report JSON to stdout.
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -52,7 +48,7 @@ import {
 } from "./lib/release-journey-console.ts";
 import {
   discoverReleaseJourneyClients,
-  seedClientAdapterCaches
+  verifyClientAdapterComponents
 } from "./lib/release-journey-adapter.ts";
 import {
   createMatrixTargetEnvironment,
@@ -105,12 +101,6 @@ const basicConfigReportPath: any = path.join(repoRoot, UPSTREAM_SERVICE_BASIC_CO
 const connectorScript: any = path.join(repoRoot, "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts");
 const binaryUploadChildScript: any = path.join(repoRoot, "tools/server-scripts/lib/release-journey-binary-upload-child.ts");
 const descriptorPath: any = path.join(repoRoot, "docs/examples/file-parser-format-convert.upstream.json");
-const releaseDefinitionPath: any = path.join(
-  repoRoot,
-  "tools/registry/release-definition.registry.json"
-);
-const execFileAsync: any = promisify(execFile);
-
 const API_KEY_TOOLSETS: any = "meshrix.gateway.write,meshrix.storage.read,meshrix.storage.write,meshrix.uploads.write";
 const API_KEY_SCOPES: any = "gateway:read,gateway:write,storage:read,storage:write,uploads:write";
 const API_KEY_MAX_RISK: any = "safe_write";
@@ -123,21 +113,19 @@ function usage() : any {
   --plan                 Print the gate step list and exit.
   --keep-stack           Leave the compose stack running for debugging.
   --port N               Pin the loopback host port for the server.
-  --adapter-source PATH  Client adapter package source (dir or .tgz).
   --image-name NAME      format-convert image (default ${DEFAULT_CONVERTER_IMAGE}).
   --json                 Print the final report JSON to stdout.
 `);
 }
 
 function parseArgs(argv?: any) : any {
-  const options: Record<string, any> = { plan: false, keepStack: false, port: 0, adapterSource: "", imageName: DEFAULT_CONVERTER_IMAGE, json: false };
+  const options: Record<string, any> = { plan: false, keepStack: false, port: 0, imageName: DEFAULT_CONVERTER_IMAGE, json: false };
   for (let index: any = 0; index < argv.length; index += 1) {
     const arg: any = argv[index];
     if (arg === "--plan") options.plan = true;
     else if (arg === "--keep-stack") options.keepStack = true;
     else if (arg === "--json") options.json = true;
     else if (arg === "--port") options.port = Number(argv[++index] || 0) || 0;
-    else if (arg === "--adapter-source") options.adapterSource = String(argv[++index] || "");
     else if (arg === "--image-name") options.imageName = String(argv[++index] || "");
     else if (arg === "--help" || arg === "-h") {
       usage();
@@ -166,51 +154,6 @@ async function readVisualEvidenceFiles(root?: any, visualEvidence?: any) : Promi
   })));
 }
 
-async function createCandidateProjection() : Promise<any> {
-  const [releaseDefinitionText, commitResult, treeResult] = await Promise.all([
-    fs.readFile(releaseDefinitionPath, "utf8"),
-    execFileAsync("git", ["rev-parse", "HEAD"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    }),
-    execFileAsync("git", ["rev-parse", "HEAD^{tree}"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    })
-  ]);
-  const releaseDefinition: any = JSON.parse(releaseDefinitionText);
-  const releaseDefinitionSha256: any =
-    `sha256:${createHash("sha256").update(releaseDefinitionText).digest("hex")}`;
-  const sourceCommit: any = commitResult.stdout.trim();
-  const sourceTree: any = treeResult.stdout.trim();
-  const candidate: Record<string, any> = {
-    releaseTag: String(releaseDefinition?.release?.tag || ""),
-    releaseVersion: String(releaseDefinition?.release?.version || ""),
-    releaseDefinitionVersion: String(releaseDefinition?.version || ""),
-    sourceCommit,
-    sourceTree,
-    releaseDefinitionSha256
-  };
-  return {
-    candidate,
-    projection: {
-      claim: "upstream-publishing-prepublication-passed",
-      release: {
-        version: candidate.releaseVersion,
-        tag: candidate.releaseTag,
-        definitionVersion: candidate.releaseDefinitionVersion,
-        definitionSha256: candidate.releaseDefinitionSha256
-      },
-      source: {
-        commit: sourceCommit,
-        tree: sourceTree
-      }
-    }
-  };
-}
-
 async function main() : Promise<any> {
   const options: any = parseArgs(process.argv.slice(2));
   if (options.plan) {
@@ -218,13 +161,10 @@ async function main() : Promise<any> {
     return;
   }
 
-  const candidateContext: any = await createCandidateProjection();
   const redaction: any = createRedaction({ repoRoot });
   const report: any = createReleaseJourneyReport({});
-  report.candidate = candidateContext.candidate;
   const { addNeedle, redact, assertNoLeak } = redaction;
   const workDir: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-journey-"));
-  const adapterCacheRoot: any = path.join(workDir, "adapter-cache");
   const fetchOutputPath: any = path.join(workDir, "output.pdf");
   await fs.rm(htmlReportPath, { force: true });
   let visualRecorder: any = null;
@@ -260,7 +200,6 @@ async function main() : Promise<any> {
           connectorScript,
           target,
           env: targetEnvs.get(target),
-          adapterCacheRoot,
           redact
         });
         details.push({
@@ -493,26 +432,12 @@ async function main() : Promise<any> {
       return receipt;
     });
 
-    await recordStep("adapter-seed", async () : Promise<any> => {
-      const receipts: any = await seedClientAdapterCaches({
-        repoRoot,
-        adapterSource: options.adapterSource,
-        cacheRoot: adapterCacheRoot
-      });
-      return {
-        catalogTargetCount: receipts.length,
-        descriptorCount: receipts.filter((receipt?: any) : any => receipt.descriptorOk).length,
-        targets: receipts.map(({ target, coordinate, descriptorOk }: Record<string, any>) : any => ({
-          target,
-          coordinate,
-          descriptorOk
-        }))
-      };
+    await recordStep("adapter-components", async () : Promise<any> => {
+      return verifyClientAdapterComponents();
     });
 
     await recordStep("client-discovery", async () : Promise<any> => {
       const discovery: any = await discoverReleaseJourneyClients({
-        cacheRoot: adapterCacheRoot,
         baseUrl
       });
       const fallbackUsed: any = discovery.detected.length === 0;
@@ -533,7 +458,6 @@ async function main() : Promise<any> {
         targetEnvs.set(client.target, await createMatrixTargetEnvironment({
           workDir,
           target: client.target,
-          adapterCacheRoot
         }));
       }
       return {
@@ -619,7 +543,6 @@ async function main() : Promise<any> {
           target: client.target,
           clientCommand: client.command,
           baseUrl,
-          adapterCacheRoot,
           env: targetEnvs.get(client.target),
           redact
         });
@@ -1018,8 +941,7 @@ async function main() : Promise<any> {
         coreReport,
         finalized.report,
         upstreamServiceBasicConfigText,
-        visualEvidenceFiles,
-        candidateContext.projection
+        visualEvidenceFiles
       ),
       "utf8"
     );
@@ -1030,8 +952,7 @@ async function main() : Promise<any> {
         null,
         finalized.report,
         "",
-        new Map<any, any>(),
-        null
+        new Map<any, any>()
       ),
       "utf8"
     );

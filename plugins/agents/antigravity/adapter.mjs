@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -6,7 +7,7 @@ import {
   readJson, run, runAdapterCli, writeJson
 } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "antigravity", label: "Antigravity", version: "0.0.1", packageName: "@meshrix/agent-antigravity-adapter", commandNames: ["antigravity-ide", "agy", "agy-ide", "antigravity"], installMode: "external-client-adapter" });
+export const description = descriptor({ target: "antigravity", label: "Antigravity", version: packageManifest.version, packageName: "@meshrix/agent-antigravity-adapter", commandNames: ["antigravity-ide", "agy", "agy-ide", "antigravity"], installMode: "external-client-adapter" });
 
 function configPath(request) {
   if (request?.client?.configPath) return String(request.client.configPath);

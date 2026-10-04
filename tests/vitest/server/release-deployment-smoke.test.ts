@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -15,13 +18,25 @@ import {
   validateReleaseDeploymentReceipt,
   validateScenarioAggregate,
 } from "../../../tools/server-scripts/lib/release-deployment/contract.ts";
+import { classifyReleaseDeploymentEnvironment } from "../../../tools/server-scripts/lib/release-deployment/authority.ts";
 import { reduceDeploymentEvidence } from "../../../tools/server-scripts/reduce-release-deployment.ts";
-import { releaseDriverFailureCode } from "../../../tools/server-scripts/verify-release-deployment.ts";
+import { standardClientHeaders } from "../../../tools/server-scripts/release-deployment-driver.ts";
+import {
+  releaseDriverFailureCode,
+  standardMcpClientAudience,
+} from "../../../tools/server-scripts/verify-release-deployment.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const SHA_REVISION = "a".repeat(40);
 const SHA_CANDIDATE = "b".repeat(64);
 const SHA_FUNCTIONAL = "c".repeat(64);
+const EXECUTION_ENVIRONMENT = Object.freeze({
+  architecture: "x64",
+  nodeVersion: "24.16.0",
+  platform: "linux",
+  runner: "ubuntu-24.04",
+  runnerEnvironment: "github-hosted",
+});
 
 function scenarioAggregate(scenario: string, attempts = SCENARIO_BUDGETS[scenario].requests): any {
   const successful = scenario === "success" || scenario === "concurrency";
@@ -44,6 +59,7 @@ function scenarioAggregate(scenario: string, attempts = SCENARIO_BUDGETS[scenari
 
 function aggregate(): any {
   return {
+    executionEnvironment: { ...EXECUTION_ENVIRONMENT },
     schemaVersion: RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA,
     externalBoundary: true,
     scenarios: Object.fromEntries(RELEASE_DEPLOYMENT_SCENARIOS.map((scenario) => [
@@ -109,19 +125,21 @@ describe("release deployment smoke", () => {
       .toContain("scenario_latency_invalid");
   });
 
-  it("creates a closed privacy-safe cleanup receipt without capacity authority", () => {
+  it("projects a bounded receipt contract without capacity authority", () => {
     const value = aggregate();
     const receipt = createReleaseDeploymentReceipt({
       sourceRevision: SHA_REVISION,
       candidateDigest: SHA_CANDIDATE,
       functionalReceiptDigest: SHA_FUNCTIONAL,
+      executionEnvironment: value.executionEnvironment,
       scenarios: value.scenarios,
-      cleanupVerified: true,
     });
     expect(validateReleaseDeploymentReceipt(receipt)).toEqual([]);
     expect(receipt.schemaVersion).toBe(RELEASE_DEPLOYMENT_RECEIPT_SCHEMA);
     expect(receipt.privacy.retainedFields).toEqual([...RECEIPT_RETAINED_FIELDS].sort());
     expect(receipt.capacityCertified).toBe(false);
+    expect(receipt.executionEnvironment).toEqual(EXECUTION_ENVIRONMENT);
+    expect(RECEIPT_RETAINED_FIELDS).not.toContain("runner");
     expect(receipt.releaseDeploymentVerified).toBe(true);
     expect(receipt.violationCodes).toEqual([]);
 
@@ -133,6 +151,16 @@ describe("release deployment smoke", () => {
     processLeak.processSeparation.driverPid = 123;
     expect(validateReleaseDeploymentReceipt(processLeak))
       .toContain("release_deployment_process_separation_invalid");
+    const runnerMismatch = structuredClone(receipt);
+    runnerMismatch.executionEnvironment.runner = "debian-12";
+    expect(validateReleaseDeploymentReceipt(runnerMismatch))
+      .toContain("release_deployment_environment_runner_invalid");
+    const duplicateRunner = { ...receipt, runner: "ubuntu-24.04" };
+    expect(validateReleaseDeploymentReceipt(duplicateRunner))
+      .toContain("release_deployment_receipt_fields_invalid");
+    const localPreparation = structuredClone(receipt);
+    localPreparation.executionEnvironment.runnerEnvironment = "local";
+    expect(validateReleaseDeploymentReceipt(localPreparation)).toEqual([]);
     const latencyLeak = structuredClone(receipt);
     latencyLeak.scenarios.success.latency.samples = [1, 2, 3];
     expect(validateReleaseDeploymentReceipt(latencyLeak))
@@ -147,7 +175,6 @@ describe("release deployment smoke", () => {
       sourceRevision: SHA_REVISION,
       candidateDigest: SHA_CANDIDATE,
       functionalReceiptDigest: SHA_FUNCTIONAL,
-      cleanupVerified: true,
     })).rejects.toMatchObject({ code: "cancellation:scenario_workload_incomplete" });
 
     const unexpected = aggregate();
@@ -158,7 +185,6 @@ describe("release deployment smoke", () => {
       sourceRevision: SHA_REVISION,
       candidateDigest: SHA_CANDIDATE,
       functionalReceiptDigest: SHA_FUNCTIONAL,
-      cleanupVerified: true,
     })).rejects.toMatchObject({ code: "provider-fault:scenario_provider_fault_outcome_invalid" });
 
     await expect(reduceDeploymentEvidence({
@@ -166,8 +192,98 @@ describe("release deployment smoke", () => {
       sourceRevision: SHA_REVISION,
       candidateDigest: SHA_CANDIDATE,
       functionalReceiptDigest: SHA_FUNCTIONAL,
-      cleanupVerified: false,
-    })).rejects.toMatchObject({ code: "release_reducer_cleanup_unverified" });
+    })).rejects.toMatchObject({ code: "release_reducer_cleanup_state_invalid" });
+
+    const resourceId = "00000000-0000-4000-8000-000000000001";
+    const cleanupStatePath = path.join(os.tmpdir(), `meshrix-release-cleanup-test-${randomUUID()}.json`);
+    const cleanupState = {
+      backupVolume: `meshrix-release-backup-${resourceId}`,
+      candidateDigest: "d".repeat(64),
+      containerName: `meshrix-release-smoke-${resourceId}`,
+      dataVolume: `meshrix-release-data-${resourceId}`,
+      fixtureContainerName: `meshrix-release-fixture-${resourceId}`,
+      imageName: `meshrix-release-smoke:${resourceId}`,
+      networkName: `meshrix-release-network-${resourceId}`,
+      resourceId,
+      schemaVersion: "meshrix.release-deployment.cleanup/2",
+      sourceRevision: SHA_REVISION,
+      tempRoot: path.join(os.tmpdir(), `meshrix-release-deployment-${resourceId}`),
+    };
+    await fs.writeFile(cleanupStatePath, JSON.stringify(cleanupState));
+    try {
+      await expect(reduceDeploymentEvidence({
+        aggregate: aggregate(),
+        sourceRevision: SHA_REVISION,
+        candidateDigest: SHA_CANDIDATE,
+        functionalReceiptDigest: SHA_FUNCTIONAL,
+        cleanupStatePath,
+      })).rejects.toMatchObject({ code: "release_reducer_cleanup_candidate_mismatch" });
+    } finally {
+      await fs.rm(cleanupStatePath, { force: true });
+    }
+  });
+
+  it("derives local and GitHub-hosted Ubuntu runtimes while rejecting unsupported and forged contexts", () => {
+    const supported = classifyReleaseDeploymentEnvironment({
+      platform: "linux",
+      architecture: "x64",
+      nodeVersion: "24.16.0",
+      osRelease: 'ID=ubuntu\nVERSION_ID="24.04"\n',
+      githubActions: "true",
+      runnerEnvironment: "github-hosted",
+      runnerOs: "Linux",
+      runnerArchitecture: "X64",
+    });
+    expect(supported).toEqual(EXECUTION_ENVIRONMENT);
+    expect(classifyReleaseDeploymentEnvironment({
+      platform: "linux",
+      architecture: "x64",
+      nodeVersion: "24.16.0",
+      osRelease: 'ID=ubuntu\nVERSION_ID="24.04"\n',
+    })).toEqual({ ...EXECUTION_ENVIRONMENT, runnerEnvironment: "local" });
+
+    expect(() => classifyReleaseDeploymentEnvironment({
+      platform: "linux",
+      architecture: "x64",
+      nodeVersion: "24.16.0",
+      osRelease: 'ID=debian\nVERSION_ID="12"\n',
+      githubActions: "true",
+      runnerEnvironment: "github-hosted",
+      runnerOs: "Linux",
+      runnerArchitecture: "X64",
+    })).toThrowError(expect.objectContaining({ code: "release_deployment_environment_runner_invalid" }));
+
+    expect(() => classifyReleaseDeploymentEnvironment({
+      platform: "linux",
+      architecture: "x64",
+      nodeVersion: "24.16.0",
+      osRelease: 'ID=ubuntu\nVERSION_ID="24.04"\n',
+      githubActions: "true",
+      runnerEnvironment: "self-hosted",
+      runnerOs: "Linux",
+      runnerArchitecture: "X64",
+    })).toThrowError(expect.objectContaining({ code: "release_deployment_environment_runner_context_invalid" }));
+
+    expect(() => classifyReleaseDeploymentEnvironment({
+      platform: "linux",
+      architecture: "x64",
+      nodeVersion: "24.16.0",
+      osRelease: 'ID=ubuntu\nVERSION_ID="24.04"\n',
+      runnerEnvironment: "github-hosted",
+      runnerOs: "Linux",
+      runnerArchitecture: "X64",
+    })).toThrowError(expect.objectContaining({ code: "release_deployment_environment_runner_context_invalid" }));
+  });
+
+  it("uses an unbranded standard MCP client identity", () => {
+    expect(standardClientHeaders("synthetic-credential")).toEqual({
+      "X-Meshrix.js-Api-Key": "synthetic-credential",
+    });
+    expect(standardMcpClientAudience("server-a")).toEqual({
+      serverAudience: "server-a",
+      targetIds: [],
+      connectorPackageIds: [],
+    });
   });
 
   it("keeps reducer, driver, controller, and fixture self-tests process isolated", () => {
@@ -184,6 +300,22 @@ describe("release deployment smoke", () => {
       expect(result.status, `${script}: ${result.stderr}`).toBe(0);
       expect(result.stdout).toContain('"ok":true');
     }
+  });
+
+  it("rejects the removed caller-authored cleanup flag", () => {
+    const result = spawnSync(process.execPath, [
+      "tools/server-scripts/reduce-release-deployment.ts",
+      "--input", "unused.json",
+      "--source-revision", SHA_REVISION,
+      "--candidate-digest", SHA_CANDIDATE,
+      "--functional-receipt-digest", SHA_FUNCTIONAL,
+      "--cleanup-verified",
+      "true",
+      "--cleanup-state", "unused-cleanup.json",
+      "--output", "unused-output.json",
+    ], { cwd: ROOT, encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('"code":"release_reducer_argument_invalid"');
   });
 
   it("retains only fixed driver failure codes for controller diagnostics", () => {

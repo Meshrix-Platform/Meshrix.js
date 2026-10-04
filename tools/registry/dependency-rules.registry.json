@@ -1,15 +1,15 @@
 {
   "$schema": "./schema/dependency-rule.schema.json",
-  "version": "v0.2.0",
+  "version": "v0.3.0",
   "layers": [
     {
       "id": "contracts",
       "name": "Contracts",
       "directory": "packages/contracts",
-      "allowedDependsOn": [
-        "foundation"
-      ],
+      "allowedDependsOn": [],
       "forbiddenDependsOn": [
+        "foundation",
+        "gateway",
         "agents",
         "capabilities",
         "protocols",
@@ -22,12 +22,37 @@
       ]
     },
     {
+      "id": "gateway",
+      "name": "Gateway Kernel",
+      "directory": "packages/gateway",
+      "allowedDependsOn": [
+        "contracts"
+      ],
+      "forbiddenDependsOn": [
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "tools",
+        "skill-tools",
+        "model-gateway-contracts"
+      ]
+    },
+    {
       "id": "model-gateway-contracts",
       "name": "Model Gateway Service Contracts",
       "directory": "services/model-gateway/contracts",
       "allowedDependsOn": [],
       "forbiddenDependsOn": [
         "contracts",
+        "gateway",
         "foundation",
         "agents",
         "capabilities",
@@ -51,6 +76,7 @@
         "contracts"
       ],
       "forbiddenDependsOn": [
+        "gateway",
         "agents",
         "capabilities",
         "protocols",
@@ -71,6 +97,7 @@
         "protocols"
       ],
       "forbiddenDependsOn": [
+        "gateway",
         "capabilities",
         "server-runtime",
         "ui-console",
@@ -90,6 +117,7 @@
         "protocols"
       ],
       "forbiddenDependsOn": [
+        "gateway",
         "agents",
         "server-runtime",
         "ui-console",
@@ -108,6 +136,7 @@
         "foundation"
       ],
       "forbiddenDependsOn": [
+        "gateway",
         "agents",
         "capabilities",
         "server-runtime",
@@ -127,7 +156,8 @@
         "foundation",
         "agents",
         "capabilities",
-        "protocols"
+        "protocols",
+        "gateway"
       ],
       "forbiddenDependsOn": [
         "ui-console",
@@ -149,6 +179,7 @@
         "protocols"
       ],
       "forbiddenDependsOn": [
+        "gateway",
         "server-runtime",
         "apps",
         "plugins",
@@ -165,11 +196,33 @@
         "foundation",
         "server-runtime",
         "protocols",
-        "ui-console"
+        "ui-console",
+        "gateway"
       ],
       "forbiddenDependsOn": [
         "agents",
         "capabilities",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "gateway-installer-app",
+      "name": "Standalone Gateway Application",
+      "directory": "apps/mcp-gateway-installer",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "capabilities",
+        "protocols",
+        "gateway"
+      ],
+      "forbiddenDependsOn": [
+        "agents",
+        "server-runtime",
+        "ui-console",
+        "apps",
         "plugins",
         "tools",
         "skill-tools"
@@ -257,6 +310,7 @@
       "allowedDependsOn": [],
       "forbiddenDependsOn": [
         "contracts",
+        "gateway",
         "foundation",
         "agents",
         "capabilities",
@@ -290,7 +344,8 @@
         "plugin-verifiers",
         "plugin-tests",
         "model-gateway-contracts",
-        "skill-tools"
+        "skill-tools",
+        "gateway-installer-app"
       ],
       "forbiddenDependsOn": []
     }

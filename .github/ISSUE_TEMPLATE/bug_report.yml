@@ -23,7 +23,7 @@ body:
     id: version
     attributes:
       label: Meshrix.js version or source revision
-      placeholder: v0.0.1 or a commit identifier
+      placeholder: v0.1.0 or a commit identifier
     validations:
       required: true
   - type: dropdown

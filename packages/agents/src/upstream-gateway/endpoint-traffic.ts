@@ -3,6 +3,26 @@ import {
   normalizeTrafficPolicy,
   text
 } from "./support.ts";
+import type {
+  UpstreamEndpointTrafficController,
+  UpstreamEndpointTrafficControllerDependencies,
+  UpstreamGatewayEndpointRecord,
+  UpstreamGatewayEndpointCircuit,
+  UpstreamGatewayEndpointTrafficSelection,
+  UpstreamGatewayOperationRecord,
+  UpstreamGatewayPublicEndpoint,
+  UpstreamGatewayServiceRecord,
+  UpstreamGatewayTrafficBucket,
+  UpstreamGatewayTrafficDecision
+} from "./registry-types.ts";
+
+interface UpstreamGatewayCircuitState extends Readonly<{
+  consecutiveFailures: number;
+  openedUntilMs: number;
+  open: boolean;
+  openedUntil: string;
+  retryAfterMs: number;
+}> {}
 
 export function createEndpointTrafficController({
   trafficBuckets,
@@ -11,14 +31,14 @@ export function createEndpointTrafficController({
   appendAudit,
   recordMetric,
   persist
-}: Record<string, any>) : any {
-  function trafficKey(service?: any, operation?: any) : any {
+}: UpstreamEndpointTrafficControllerDependencies) : UpstreamEndpointTrafficController {
+  function trafficKey(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord) : string {
     return `${service.serviceId}::${operation.operationKey}`;
   }
-  function endpointKey(service?: any, operation?: any, endpoint: Record<string, any> = {}) : any {
+  function endpointKey(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, endpoint: UpstreamGatewayEndpointRecord) : string {
     return `${trafficKey(service, operation)}::${endpoint.endpointId || "primary"}`;
   }
-  function endpointsFor(service?: any) : any {
+  function endpointsFor(service: UpstreamGatewayServiceRecord) : readonly UpstreamGatewayEndpointRecord[] {
     const configured: any = asArray(service.endpoints).filter(Boolean);
     const endpoints: any = configured.filter(
       (endpoint?: any) : any => endpoint.disabled !== true
@@ -37,10 +57,10 @@ export function createEndpointTrafficController({
       circuitBreakerInherited: true
     }];
   }
-  function endpointHasOwnTrafficPolicy(endpoint: Record<string, any> = {}) : any {
+  function endpointHasOwnTrafficPolicy(endpoint: UpstreamGatewayEndpointRecord) : boolean {
     return endpoint.trafficPolicySource === "endpoint" && endpoint.trafficPolicyInherited !== true;
   }
-  function publicEndpoint(endpoint: Record<string, any> = {}) : any {
+  function publicEndpoint(endpoint: UpstreamGatewayEndpointRecord) : UpstreamGatewayPublicEndpoint {
     return {
       endpointId: endpoint.endpointId || "primary",
       weight: Number(endpoint.weight || 1),
@@ -49,14 +69,14 @@ export function createEndpointTrafficController({
       circuitBreakerSource: endpoint.circuitBreakerSource || "service"
     };
   }
-  function circuitSnapshot(key?: any, breaker: Record<string, any> = {}) : any {
+  function circuitSnapshot(key: string, breaker: Record<string, any> = {}) : UpstreamGatewayCircuitState {
     const nowMs: any = Date.now();
     const current: any = endpointCircuits.get(key) || {
       consecutiveFailures: 0,
       openedUntilMs: 0
     };
     if (Number(current.openedUntilMs || 0) > 0 && Number(current.openedUntilMs || 0) <= nowMs) {
-      const reset: Record<string, any> = { consecutiveFailures: 0, openedUntilMs: 0 };
+      const reset: UpstreamGatewayEndpointCircuit = { consecutiveFailures: 0, openedUntilMs: 0 };
       endpointCircuits.set(key, reset);
       return {
         ...reset,
@@ -74,7 +94,7 @@ export function createEndpointTrafficController({
       retryAfterMs
     };
   }
-  function recordEndpointOutcome(service?: any, operation?: any, endpoint?: any, { statusCode = 0, ok = false }: Record<string, any> = {}) : any {
+  function recordEndpointOutcome(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, endpoint: UpstreamGatewayEndpointRecord | null | undefined, { statusCode = 0, ok = false }: { statusCode?: number; ok?: boolean } = {}) : void {
     if (!endpoint?.endpointId) return;
     const breaker: any = endpoint.circuitBreaker || service.circuitBreaker || {};
     if (breaker.enabled === false) return;
@@ -97,7 +117,7 @@ export function createEndpointTrafficController({
         : 0
     });
   }
-  function trafficSnapshot(service?: any, operation?: any, policy?: any, { commit = false, endpoint = null }: Record<string, any> = {}) : any {
+  function trafficSnapshot(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, policy: Record<string, any>, { commit = false, endpoint = null }: { commit?: boolean; endpoint?: UpstreamGatewayEndpointRecord | null } = {}) : UpstreamGatewayTrafficBucket {
     const nowMs: any = Date.now();
     const key: any = endpoint ? endpointKey(service, operation, endpoint) : trafficKey(service, operation);
     const current: any = trafficBuckets.get(key) || {
@@ -108,7 +128,7 @@ export function createEndpointTrafficController({
     const elapsedMs: any = Math.max(0, nowMs - Number(current.updatedAtMs || nowMs));
     const refillRatePerMs: any = policy.perMinute / 60_000;
     const tokens: any = Math.min(policy.burst, Number(current.tokens ?? policy.burst) + elapsedMs * refillRatePerMs);
-    const next: Record<string, any> = {
+    const next: UpstreamGatewayTrafficBucket = {
       tokens,
       updatedAtMs: nowMs,
       inFlight: Math.max(0, Number(current.inFlight || 0))
@@ -118,7 +138,7 @@ export function createEndpointTrafficController({
     }
     return next;
   }
-  function trafficDecision(service?: any, operation?: any, { consume = true, endpoint = null }: Record<string, any> = {}) : any {
+  function trafficDecision(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, { consume = true, endpoint = null }: { consume?: boolean; endpoint?: UpstreamGatewayEndpointRecord | null } = {}) : UpstreamGatewayTrafficDecision {
     const selectedEndpoint: any = endpoint || endpointsFor(service)[0];
     const policy: any = normalizeTrafficPolicy(service.trafficPolicy);
     const endpointPolicy: any = endpointHasOwnTrafficPolicy(selectedEndpoint)
@@ -204,7 +224,7 @@ export function createEndpointTrafficController({
       deniedScope
     };
   }
-  function consumeAllowedTraffic(service?: any, operation?: any, endpoint?: any, traffic?: any) : any {
+  function consumeAllowedTraffic(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, endpoint: UpstreamGatewayEndpointRecord, traffic: UpstreamGatewayTrafficDecision) : UpstreamGatewayTrafficDecision {
     const policy: any = normalizeTrafficPolicy(service.trafficPolicy);
     const bucket: any = trafficSnapshot(service, operation, policy, {
       commit: false
@@ -246,7 +266,7 @@ export function createEndpointTrafficController({
       endpointLimit
     };
   }
-  function noEnabledEndpointTraffic(service?: any, operation?: any) : any {
+  function noEnabledEndpointTraffic(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord) : UpstreamGatewayTrafficDecision {
     const policy: any = normalizeTrafficPolicy(service.trafficPolicy);
     const bucket: any = trafficSnapshot(service, operation, policy, {
       commit: false
@@ -281,7 +301,7 @@ export function createEndpointTrafficController({
       deniedScope: "endpoint"
     };
   }
-  function selectEndpointTraffic(service?: any, operation?: any, { consume = false }: Record<string, any> = {}) : any {
+  function selectEndpointTraffic(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, { consume = false }: { consume?: boolean } = {}) : UpstreamGatewayEndpointTrafficSelection {
     const endpoints: any = endpointsFor(service);
     const cursorKey: any = trafficKey(service, operation);
     if (endpoints.length === 0) {
@@ -356,7 +376,7 @@ export function createEndpointTrafficController({
       traffic: trafficDecision(service, operation, { consume: false, endpoint: endpoints[0] })
     };
   }
-  function releaseTraffic(service?: any, operation?: any, endpoint: any = null) : any {
+  function releaseTraffic(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, endpoint: UpstreamGatewayEndpointRecord | null = null) : void {
     const selectedEndpoint: any = endpoint || endpointsFor(service)[0];
     if (!selectedEndpoint) return;
     const policy: any = normalizeTrafficPolicy(service.trafficPolicy);
@@ -376,7 +396,7 @@ export function createEndpointTrafficController({
       trafficBuckets.set(key, endpointBucket);
     }
   }
-  async function withTrafficSlot(service?: any, operation?: any, preview?: any, run?: any) : Promise<any> {
+  async function withTrafficSlot<T>(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, preview: any, run: (traffic: UpstreamGatewayTrafficDecision, endpoint: UpstreamGatewayEndpointRecord | null) => Promise<T>) : Promise<T> {
     const { endpoint, traffic } = selectEndpointTraffic(service, operation, { consume: true });
     if (!traffic.allowed) {
       recordMetric({ serviceId: service.serviceId, statusCode: 429, failed: true });
@@ -406,7 +426,7 @@ export function createEndpointTrafficController({
       releaseTraffic(service, operation, endpoint);
     }
   }
-  function retireServices(serviceIds: any = []) : any {
+  function retireServices(serviceIds: readonly unknown[] = []) : Readonly<{ removed: number }> {
     const retired: any = new Set<any>(
       (Array.isArray(serviceIds) ? serviceIds : [])
         .map((serviceId?: any) : any => text(serviceId))

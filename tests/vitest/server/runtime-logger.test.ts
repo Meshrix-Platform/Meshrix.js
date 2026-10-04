@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import packageManifest from "../../../package.json";
 
 import {
   createRuntimeLogger,
@@ -49,12 +50,14 @@ beforeEach(() : any => {
 });
 
 afterEach(async () : Promise<any> => {
+  vi.unstubAllEnvs();
   setRuntimeLogger(null);
   await Promise.all(tempRoots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
 });
 
 describe("runtime logger behavior", () : any => {
   it("writes JSONL records, honors explicit log sinks, and prunes stale files", async () : Promise<any> => {
+    vi.stubEnv("npm_package_version", "99.0.0-host");
     const userDataPath: any = await makeTempRoot();
     const logDir: any = path.join(userDataPath, "custom-logs");
     await fs.mkdir(logDir, { recursive: true });
@@ -167,6 +170,7 @@ describe("runtime logger behavior", () : any => {
     const stored: any = records.find((entry?: any) : any => entry.event === "runtime.file.sink");
     expect(stored).toMatchObject({
       schemaVersion: "v0.0.1:schema:definition-1",
+      "service.version": packageManifest.version,
       level: "info",
       component: "server",
       event: "runtime.file.sink",

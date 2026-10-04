@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { compileUpstreamOperationCapability } from "./operation-capability.ts";
-import { safePublicToolSegment } from "./support.ts";
+import { object, safePublicToolSegment, text } from "./support.ts";
 
 function digest(value?: any) : any {
   return createHash("sha256").update(String(value)).digest("base64url");
@@ -24,29 +24,43 @@ function projectedForwardInputSchema(operation: Record<string, any> = {}) : any 
   const requestSchema: any = operation.requestSchema && typeof operation.requestSchema === "object" && !Array.isArray(operation.requestSchema)
     ? operation.requestSchema
     : { type: "object" };
-  const requestProperties: any = requestSchema.properties && typeof requestSchema.properties === "object" && !Array.isArray(requestSchema.properties)
-    ? requestSchema.properties
-    : {};
-  return Object.freeze({
-    type: "object",
-    additionalProperties: true,
-    // Declare forward envelope fields so Operation Permission keeps body/query wrappers
-    // when MCP/console callers use the same shape as gateway.forward.
-    properties: Object.freeze({
-      ...requestProperties,
-      serviceId: { type: "string" },
-      operationKey: { type: "string" },
-      toolName: { type: "string" },
-      arguments: { type: "object" },
-      query: { type: "object" },
-      params: { type: "object" },
-      rpcParams: { type: "object" },
-      rpcId: { type: "string" },
-      body: {},
-      bodyJson: {},
-      payload: { type: "object" }
-    })
-  });
+  if (Object.keys(requestSchema).length === 0) return { type: "object" };
+  // Operation Permission publishes and validates the caller's actual arguments. Keep the
+  // complete operator-declared schema intact; the internal forwarding envelope is formed
+  // only after that input has been approved and bound to its execution.
+  return structuredClone(requestSchema);
+}
+
+/**
+ * Map the caller's declared arguments to the configured operation's internal forward
+ * representation. This runs after Operation Permission has validated and bound the raw
+ * argument object. In particular, argument names such as `body` and `query` have no special
+ * meaning here: they remain business data inside the selected representation.
+ *
+ * Every routing fact comes from the platform's own operation projection (never from an
+ * upstream tool annotation).
+ */
+export function projectedOperationForwardInput(
+  metadata: Record<string, any> = {},
+  input: Record<string, any> = {}
+) : any {
+  const args: any = object(input);
+  if (metadata.upstreamMcp === true) {
+    const toolName: any = text(metadata.upstreamToolName);
+    if (toolName) return { toolName, arguments: args };
+    // A service-level MCP tools/call operation is an internal authority record. Its
+    // established caller supplies the complete {toolName, arguments} call envelope.
+    return args;
+  }
+  const protocol: any = text(metadata.protocol).toLowerCase();
+  const declaredRequestMode: any = text(object(object(metadata.payloadTransport).request).mode);
+  if (declaredRequestMode === "artifact_body" || declaredRequestMode === "artifact_multipart") {
+    return { arguments: args };
+  }
+  if (protocol === "mcp") return { arguments: args };
+  if (protocol === "json-rpc") return { rpcParams: args };
+  if (["GET", "HEAD"].includes(text(metadata.method).toUpperCase())) return { query: args };
+  return { body: args };
 }
 
 export function compileUpstreamOperationProjection(snapshot?: any) : any {
@@ -81,7 +95,11 @@ export function compileUpstreamOperationProjection(snapshot?: any) : any {
         concurrency: risk === "read_only"
           ? { workloadClass: "light", maxParallel: 64, cost: 1 }
           : { workloadClass: "standard", key: `upstream:${serviceId}`, maxParallel: 1, cost: 2 },
-        execution: { timeoutMs: operation.timeoutMs || 30_000 },
+        execution: {
+          timeoutMs: operation.timeoutMs ??
+            (service.serviceProtocol === "mcp" ? service.mcp?.timeoutMs : undefined) ??
+            null
+        },
         safety: {
           risk,
           requiresConfirmation: requiresApproval,
@@ -102,6 +120,10 @@ export function compileUpstreamOperationProjection(snapshot?: any) : any {
           serviceRevision: service.serviceRevision,
           operationKey: operation.operationKey,
           protocol: operation.protocol,
+          // The representation facts a caller's own arguments are placed by. They belong to
+          // the operator's projection of the operation, exactly as the discovered-tool
+          // projection already publishes them.
+          method: text(operation.method || "POST").toUpperCase(),
           payloadTransport: operation.payloadTransport || null,
           dynamicCapability: Object.freeze(dynamicCapability),
           resourceContext: Object.freeze(dynamicCapability.resourceContext)

@@ -17,6 +17,7 @@ import { createAuthorizationEngine } from "../../packages/foundation/src/securit
 import { createMemoryLocalSecretKeyProvider } from "../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import { initializeLocalSecret } from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
 import { createSystemControllerFoundationHandlers } from "../../packages/protocols/http/controllers/system-controller-foundation-handlers.ts";
+import { createGatewaySchemaPort } from "../../packages/server-runtime/src/composition/gateway-schema-port.ts";
 import { dispatchRegisteredHttpOperation } from "../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
 import { executeConsoleDomainOperation } from "../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
 import {
@@ -43,7 +44,7 @@ const FOCUSED_SUITES: readonly any[] = Object.freeze([
   "tests/vitest/server/runtime-refactor-governed-evidence.test.ts",
   "tests/vitest/console/use-console-shell-integration.test.ts",
   "tests/vitest/console/console-shell-preference-effects.test.ts",
-  "tests/vitest/server/gateway-performance-observation.test.ts"
+  "tests/vitest/gateway/performance/gateway-performance-observation.test.ts"
 ]);
 const SAFE_TOKEN: any = /^[a-z0-9][a-z0-9._:-]{0,79}$/u;
 const ALLOWED_PORTABLE_WILDCARD_CONSUMERS: readonly any[] = Object.freeze([
@@ -154,7 +155,9 @@ async function runFocusedSuites() : Promise<any> {
       "--config",
       "vitest.config.ts",
       suitePath
-    ]);
+    ], suitePath.startsWith("tests/vitest/gateway/performance/")
+      ? { env: { MESHRIX_VITEST_SCOPE: "gateway-performance" } }
+      : {});
     const passed: any = result.status === 0;
     suites.push({
       suite: suitePath,
@@ -180,7 +183,6 @@ async function wildcardImportFindings() : Promise<any> {
   const topLevelPackages: any = (await fs.readdir(repoPath("packages"))).filter((name?: any) : any => !name.startsWith("."));
   const apps: any = (await fs.readdir(repoPath("apps"))).filter((name?: any) : any => !name.startsWith("."));
   const candidates: any = packageJsonFiles([...topLevelPackages.map((name?: any) : any => `packages/${name}`), ...apps.map((name?: any) : any => `apps/${name}`)]);
-  candidates.push("packages/protocols/mcp/adapter/gateway-installer/package.json");
   for (const candidate of candidates) {
     if (!(await exists(candidate))) continue;
     const manifest: any = JSON.parse(await readText(candidate));
@@ -461,6 +463,7 @@ async function gatewayCleanRun() : Promise<any> {
     });
     registry = createUpstreamGatewayRegistry({
       secretKeyProvider,
+      schemaPort: createGatewaySchemaPort(),
       userDataPath
     });
     installService(registry, sinkBaseUrl, 1);

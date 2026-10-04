@@ -26,8 +26,8 @@ Integrity registry: `tools/registry/state-machines/state-machine-integrity.regis
 - `strategy-management.json`: `acceptance.strategy-management` @ `sha256:687b915fbfc4069d55b25ccd6d74daf8698cef67bc4f53aaa54d55c4c37afea6`.
 - `upstream-mcp-passthrough.json`: `acceptance.upstream-mcp-passthrough` @ `sha256:f68d5ae6ae077e102aa8861cb1e64f6faf6d55190983311aacf4dfba8b94d07f`.
 - `upstream-service-publishing.json`: `acceptance.upstream-service-publishing` @ `sha256:e533580288ea55888ff32c0cdf232200219002c7134dee0bfff13514751dfaac`.
-- `alert.lifecycle.json`: `alert.lifecycle` @ `sha256:4ad852cb858debea7edc76504f884edabbdbdec28d93730928efef5820d95bc1`.
-- `deployment.lifecycle.json`: `deployment.lifecycle` @ `sha256:418191bb87702bc98e0640b9c337128b37be1a64eb0958e74f80a3ff10a565bd`.
+- `alert.lifecycle.json`: `alert.lifecycle` @ `sha256:7caedde26a4e62a404a8e5414681f9d95e88aabd5b999db1c378710f63c77bfb`.
+- `deployment.lifecycle.json`: `deployment.lifecycle` @ `sha256:4390aa05debe6d6ab9db610158e1aa967e2fb9a9f3a7beaa0a0cf57dde296e5b`.
 - `operation.narrow.json`: `operation.narrow` @ `sha256:b8b9c2e58678a125db10910688bebcb26aa903dd1579807a64225ea411ba6986`.
 - `production.readiness.lifecycle.json`: `production.readiness.lifecycle` @ `sha256:3f14e7a8684f2b84f7406ba79175151527a78360cafcde6f2b87c8f5b1f4d167`.
 - `storage.backup.lifecycle.json`: `storage.backup.lifecycle` @ `sha256:dd59a37c93ddb4e78bdfa0fd0d7b8a685a51ef1e4f6d78a945bb0c9b1c859aa6`.

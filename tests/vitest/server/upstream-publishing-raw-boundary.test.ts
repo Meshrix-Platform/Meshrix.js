@@ -6,6 +6,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { startHttpServer } from "../../../apps/server/runtime/http-server.ts";
+import {
+  UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+  type UpstreamServiceCreateCommand,
+} from "@meshrix/contracts/upstream-service-publishing";
 import { parseWithDuplicateRejection } from "../../../packages/agents/src/upstream-gateway/manifest-compiler.ts";
 import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
@@ -94,8 +98,8 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
     const fixture: any = await startFixture();
     const { server, session } = await startProductionServer();
     const collection: any = `${server.url}/api/gateway/v1/services`;
-    const command: any = {
-      schemaVersion: "v0.0.1:upstream-service-publishing:command-2",
+    const command: UpstreamServiceCreateCommand = {
+      schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
       action: "create",
       expectedServiceRevision: 0,
       expectedSetRevision: 0,

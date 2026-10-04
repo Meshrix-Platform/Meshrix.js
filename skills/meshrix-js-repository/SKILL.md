@@ -11,6 +11,9 @@ Apply these rules to every task inside the Meshrix.js product repository.
 ## Repository Scope
 
 - Own the server, console, protocol gateway, Operation Permission, security, storage, and canonical acceptance reducer.
+- The supported npm products are `meshrix.js` and `@meshrix/gateway`; workspace
+  package names and exports outside those products are private engineering
+  boundaries, not external npm support contracts.
 - External client products own their wire and lifecycle behavior. Packaged MCP
   client adapters in `plugins/agents/` have their own local implementation and
   verification boundary; they are not client product implementations.
@@ -30,9 +33,11 @@ Apply these rules to every task inside the Meshrix.js product repository.
 
 Existing explicit authorization remains valid for the same target, operation,
 and side-effect scope. Report findings promptly, continue authorized local
-work, and ask only for unresolved decisions or additional authority. Preserve
-the applicable AGENTS.md requirements for script repairs and final-regression
-failures; skill routing and successful checks do not grant that authority.
+work, and ask only for unresolved decisions or additional authority. Apply the
+common engineering workflow owned by `CONTRIBUTING.md`; `AGENTS.md` owns Agent
+execution authority and the report-and-repair rule for repository scripts.
+Ordinary scoped repairs continue without renewed permission; escalate only
+actual scope, published-support, authority, or risk changes.
 
 ## Document Maintenance Gate
 
@@ -74,7 +79,7 @@ failures; skill routing and successful checks do not grant that authority.
 - 前端控制台任务从 `apps/console/` 开始，只打开相关的 `apps/console/components/`、`apps/console/views/`、`apps/console/lib/` 和样式文件。
 - 服务端或运行时任务从 `packages/server-runtime/` 或 `apps/server/` 开始；domain 代码在 `packages/<domain>/` 下；只有涉及启动、挂载、运行行为或运维语义时再查阅 `docs/architecture/ARCHITECTURE.md`、`docs/functionality/SERVER-RUNTIME.md` 与 `docs/RUNBOOK.md`。
 - 安全、授权、风险控制或本地 stdio 边界任务从 `packages/foundation/src/security/` 开始，再查阅 `docs/functionality/SECURITY-AUTHORIZATION.md`；授权实现使用 `$meshrix-js-security-authorization`，新增外部或不可信输入面、漏洞修复和可突破性审查使用 `$meshrix-js-security-boundary-audit`。
-- MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。已打包的客户端适配器实现从 `plugins/agents/<target>/` 开始；外部客户端产品仍自行拥有其实现。Meshrix.js 安装契约是签名发现与连接器配置变更的权威。
+- MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。该运行时随根 `meshrix.js` npm 包发布，并由根包 `meshrix-mcp` bin 暴露；它不是独立 npm 包。`plugins/agents/<target>/` 中的第一方客户端适配器是随 `meshrix.js` 安装并纳入便携连接器声明运行时闭包的私有组件，不提供独立 npm 发布坐标；两种连接器均按根版本和受信清单使用标准 Node 包解析，只在明确目标动作中调用。`release:prepare` 同步工作区 package、adapter.json 与 registry 的版本投影。外部客户端产品仍自行拥有其实现。Meshrix.js 安装契约是签名发现与连接器配置变更的权威。
 - 架构、策略或治理类任务先看 `tools/registry/`，再打开与主题对应的核心文档。
 - 开发者手册是 `$meshrix-js-developer-handbook`，用户手册是 `$meshrix-js-user-handbook`。同一已授权任务可以依次包含开发与实例验证；分别使用对应手册，保留各自所有权、操作授权和证据声明。
 - 发布制品形状和对外地址规范使用 `$meshrix-js-release-artifact-contract`。运行中的实例使用和外部对接使用 `$meshrix-js-instance-usage`。
@@ -85,7 +90,7 @@ failures; skill routing and successful checks do not grant that authority.
 ## 任务启动流程
 
 - 开始工作时建议说明当前 worktree、目标子系统和计划写入范围；先应用本技能的仓库级规则，再查看目标子系统对应小节，没有对应小节时再读取最近的 README。
-- 临时计划只用于组织当前复杂工作，不是产品状态或执行授权。实现与验证完成后删除计划工作区；产品事实写入拥有该事实的源码、状态文档、运行手册或候选绑定证据。项目级功能验收仍是 `npm run verify:acceptance`。
+- Better Plan 工作区维护长期交付状态、需求和可检索历史，不是产品状态或执行授权。交付结束后使用当前技能记录验收结论并保留工作区；清理已退役的临时计划须先归档仍有价值的上下文和证据，不删除用户数据。产品事实写入拥有该事实的源码、状态文档、运行手册或候选绑定证据。项目级功能验收仍是 `npm run verify:acceptance`。
 - 如果任务需要跨子系统修改，建议切换到集成 worktree 或明确唯一负责人，再开始编辑。
 - 涉及入口文件或文档索引调整时，运行对应的入口健康检查；最终验证范围由 `$meshrix-js-regression-planner` 选择。
 
@@ -136,7 +141,7 @@ failures; skill routing and successful checks do not grant that authority.
 - 公开文档、规范文档、产品说明、功能说明、协议说明、运行说明和新增 Markdown 文档默认必须使用英文；只有文件名或目录明确标注为本地化版本（例如 `*.zh-CN.md`）或用户明确要求本地化内容时，才使用对应语言。
 - 文档只记录技术事实、运行方式、配置字段、协议边界、验证命令、决策结果和明确归属的能力缺口。只有已接受目标要求的缺口才是该目标的剩余必做工作。
 - 不记录未验证的背景说明、来源解释、内部讨论过程、夸张表述或未落实承诺。
-- 开源平台文档以企业私有化部署为前提，默认能力必须自包含；外部中间件只能写成可选增强或集成目标，不能写成基础运行依赖，除非代码和部署清单已经强制依赖。
+- 核心能力应具备自包含运行路径。只有代码和部署清单已将某项外部中间件声明为必需依赖时，文档才将其描述为基础运行依赖；其他外部中间件按可选集成或增强说明。
 - 能力缺口必须以可验证事实描述，并指向代码路径、拥有该事实的技术文档或验证命令；不能用愿景描述替代实现状态，不能把未经决策的缺口写成永久拒绝或已经承诺的能力。
 
 ## Remaining required work
@@ -272,7 +277,7 @@ Own transport, negotiation, normalization, and protocol-local ports only. Reach 
 
 ### Scope
 
-- Owns the Meshrix.js Server MCP Gateway connector runtime under `packages/protocols/mcp/adapter/gateway-installer/`.
+- Owns the Meshrix.js MCP Gateway connector runtime source under `packages/protocols/mcp/adapter/gateway-installer/`; the runtime is published inside the root `meshrix.js` package through its `meshrix-mcp` bin, with no separate npm package.
 - User-device installer scripts live under `packages/protocols/mcp/adapter/native-installer/`.
 - Keep runtime proxy and process-identity changes inside this directory unless server MCP discovery or release packaging must be updated together.
 
@@ -281,14 +286,13 @@ Own transport, negotiation, normalization, and protocol-local ports only. Reach 
 - Start with the repository-wide rules in this skill, then this section.
 - Read `packages/protocols/mcp/adapter/gateway-installer/README.md` for runtime connector boundaries.
 - Read `packages/protocols/mcp/adapter/native-installer/README.md` for user-facing install and registration behavior.
-- Inspect `packages/protocols/mcp/adapter/gateway-installer/package.json` for connector package metadata.
 - Inspect `packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts` for CLI behavior.
 - Use `docs/RUNBOOK.md` only for install workflow or troubleshooting docs.
 
 ### Directory Routing
 
 - `bin/`: executable runtime connector entry points.
-- `packages/protocols/mcp/adapter/gateway-installer/package.json`: package metadata, bin mapping, and release surface.
+- Root `package.json`: public `meshrix-mcp` bin mapping and package release surface.
 - `packages/protocols/mcp/adapter/native-installer/`: canonical install guidance and scripts shared with users.
 
 ### Verification

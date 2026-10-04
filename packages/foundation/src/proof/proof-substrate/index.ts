@@ -40,7 +40,19 @@ import {
 } from "../../checkpoint/tree/pactium-runtime.ts";
 import type { MeshrixPactiumRuntime } from "../../checkpoint/tree/types.ts";
 
-type ProofField = string | number | boolean | null | ProofField[] | ProofRecord;
+type ProofField = string | number | boolean | null | ProofField[] | ProofRecord | OperationDispatchProjection;
+
+interface OperationDispatchProjection {
+  state: "unlinked" | "settled" | "in_doubt";
+  status: string;
+  parentLedgerEventId: string;
+  parentIntentId?: string;
+  outcomeLedgerEventId?: string;
+  outcomeId?: string;
+}
+
+export const MCP_DISPATCH_ADMISSION_RECEIPT_OPERATION_ID = "meshrix.mcp.dispatch-admission";
+export const MCP_DISPATCH_PARENT_INTENT_REF_PREFIX = "operation-intent-ledger-event:";
 
 interface ProofRecord {
   [key: string]: ProofField | undefined;
@@ -213,6 +225,8 @@ interface OperationProofEntry extends ProofRecord {
   auditId?: string;
   resultDigest?: string;
   receiptRefs?: ProofField[];
+  hostEvidenceRefs?: ProofField[];
+  dispatchProjection?: OperationDispatchProjection;
   warnings?: ProofField[];
   proof: ProofRecord;
   pactium: ProofRecord;
@@ -729,6 +743,7 @@ function normalizeReceiptEntry(input: ProofRecord = {}, envelope?: ProofEnvelope
     semantic: text(input.semantic),
     status: text(input.status, "succeeded"),
     outcomeKind: text(input.outcomeKind, text(input.status, "succeeded")),
+    hostEvidenceRefs: asArray(input.hostEvidenceRefs),
     idempotencyKey: normalizeIdempotencyKey(input),
     changeDigest: text(input.changeDigest),
     resultDigest: text(input.resultHash || input.resultDigest),
@@ -844,7 +859,53 @@ async function projectLedgerEntry(core: PactiumCore, ledgerEntry: PactiumRecord 
   if (!fact) return null;
   if (fact.factType === "operation.receipt") {
     const locator = await core.lookupReceipt(text(fact.receiptId));
-    return normalizeReceiptEntry(fact, locatorEnvelope(fact.receiptId, asObject(locator)));
+    const entry = normalizeReceiptEntry(fact, locatorEnvelope(fact.receiptId, asObject(locator)));
+    if (fact.operationId !== MCP_DISPATCH_ADMISSION_RECEIPT_OPERATION_ID || fact.status !== "in_doubt") {
+      return entry;
+    }
+    const parentRefs = asArray(fact.hostEvidenceRefs)
+      .map((value) => text(value))
+      .filter((value) => value.startsWith(MCP_DISPATCH_PARENT_INTENT_REF_PREFIX));
+    const parentLedgerEventId = parentRefs.length === 1
+      ? parentRefs[0].slice(MCP_DISPATCH_PARENT_INTENT_REF_PREFIX.length)
+      : "";
+    const parentLedgerEntry = parentLedgerEventId
+      ? await readLedgerEntryByEventId(core, parentLedgerEventId)
+      : null;
+    const parentIntent = asObject(parentLedgerEntry?.fact, null);
+    if (
+      parentIntent?.factType !== "operation.intent" ||
+      !text(parentIntent.intentId) ||
+      !text(fact.workspaceId) ||
+      text(parentIntent.workspaceId) !== text(fact.workspaceId)
+    ) {
+      return {
+        ...entry,
+        dispatchProjection: {
+          state: "unlinked",
+          status: "in_doubt",
+          parentLedgerEventId
+        }
+      };
+    }
+    const parentOutcome = await core.lookupOutcome(text(parentIntent.intentId));
+    const outcome = asObject(parentOutcome.outcome, null);
+    const outcomeStatusValue = text(outcome?.status, "in_doubt");
+    const outcomeSettled = parentOutcome.exists === true && outcome !== null &&
+      ["succeeded", "failed", "denied"].includes(outcomeStatusValue);
+    return {
+      ...entry,
+      dispatchProjection: {
+        state: outcomeSettled ? "settled" : "in_doubt",
+        status: outcomeStatusValue,
+        parentIntentId: text(parentIntent.intentId),
+        parentLedgerEventId,
+        ...(parentOutcome.exists && outcome ? {
+          outcomeLedgerEventId: text(parentOutcome.ledgerEventId),
+          outcomeId: text(outcome.outcomeId)
+        } : {})
+      }
+    };
   }
   if (fact.factType === "operation.intent") {
     const intentLocator = await core.lookupOpenIntent(text(fact.intentId));
@@ -1818,6 +1879,7 @@ export function createOperationProofSubstrate({
       subject: {
         subjectDigest: protocolHash("meshrix.subject", cleanValue(asObject(input.subject)))
       },
+      hostEvidenceRefs: asArray(input.hostEvidenceRefs),
       result: receiptResult,
       extensions: [...evidenceExtensions, ...asArray(input.extensions)],
       finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)

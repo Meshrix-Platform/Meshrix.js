@@ -1,7 +1,9 @@
+import { npmCliArgs, resolveNpmCliInvocation } from "./npm-cli-invocation.ts";
+
 export const PLATFORM_ACCEPTANCE_PARALLELISM: any = 4;
 export const PLATFORM_ACCEPTANCE_REPORT_SCHEMA: any = "v0.0.1:acceptance:platform-report-4";
 export const PLATFORM_ACCEPTANCE_PROFILES: Readonly<Record<string, any>> = Object.freeze({
-  "enterprise-single-node": Object.freeze({ id: "enterprise-single-node" }),
+  "single-node": Object.freeze({ id: "single-node" }),
 });
 
 export function requirePlatformAcceptanceProfile(value?: any) : any {
@@ -35,22 +37,22 @@ export const PLATFORM_ACCEPTANCE_STATE_MACHINE: Readonly<Record<string, any>> = 
   ],
   parallelRegions: [
     "foundation",
-    "downstream-gateway",
     "upstream-gateway",
     "platform-capability",
-    "profile",
     "final-regression"
   ]
 });
 
-export function npmCommand() : any {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
-}
-
-export function commandExecutable(command?: any) : any {
-  if (command === "node") return process.execPath;
-  if (command === "npm") return npmCommand();
-  return command;
+export function resolveAcceptanceCommandInvocation(
+  command: any = "",
+  args: any = [],
+  { nodeExecutable = process.execPath, npmInvocation = resolveNpmCliInvocation() }: Record<string, any> = {}
+) : any {
+  if (command === "node") return { executable: nodeExecutable, args: [...args] };
+  if (command === "npm") {
+    return { executable: npmInvocation.command, args: npmCliArgs(npmInvocation, args) };
+  }
+  return { executable: command, args: [...args] };
 }
 
 export function commandLine(command: Record<string, any> = {}) : any {

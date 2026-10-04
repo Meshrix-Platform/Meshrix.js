@@ -9,6 +9,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+import { MCP_PORTABLE_ASSET_PREFIX } from "./lib/mcp-release-common.ts";
+
 const execFileAsync: any = promisify(execFile);
 const DEFAULT_INPUT_DIR: any = "build/release/mcp";
 const DEFAULT_REPORT_PATH: any = "build/reports/mcp-final-release-asset.json";
@@ -147,26 +153,22 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
     fs.readFile(checksumPath, "utf8")
   ]);
   const manifest: any = parseJsonOutput(manifestText, "mcp_final_release_asset_manifest_invalid");
-  const portable: any = manifest.portable;
+  const portable: any = manifest.portable?.artifacts?.find((entry?: any) : any => entry.platform === RELEASE_PLATFORM);
+  const portableContract: any = manifest.portable;
   const connector: any = manifest.connector;
   if (
-    portable?.currentPlatform !== RELEASE_PLATFORM
+    portable?.platform !== RELEASE_PLATFORM
     || portable?.includesNodeRuntime !== true
-    || portable?.requiresInstalledNode !== false
-    || portable?.executable !== "meshrix-mcp"
+    || portableContract?.requiresInstalledNode !== false
+    || portable?.launcher !== "meshrix-mcp"
     || !/^v\d+\.\d+\.\d+$/u.test(String(portable?.bundledNodeVersion || ""))
-    || typeof connector?.packageName !== "string"
-    || typeof connector?.packageVersion !== "string"
+    || connector?.packageName !== MCP_NPM_PACKAGE_NAME
+    || connector?.packageVersion !== MCP_NPM_PACKAGE_VERSION
   ) {
     throw new Error("mcp_final_release_asset_manifest_semantics_invalid");
   }
-  const archiveName: any = `${connector.packageName}-${connector.packageVersion}-${RELEASE_PLATFORM}.tar.gz`;
-  if (
-    portable.tarball !== archiveName
-    || portable.installArchive !== archiveName
-    || !SHA256_PATTERN.test(String(portable.sha256 || ""))
-    || portable.installArchiveSha256 !== portable.sha256
-  ) {
+  const archiveName: any = `${MCP_PORTABLE_ASSET_PREFIX}-${connector.packageVersion}-${RELEASE_PLATFORM}.tar.gz`;
+  if (portable.archive !== archiveName || !SHA256_PATTERN.test(String(portable.sha256 || ""))) {
     throw new Error("mcp_final_release_asset_archive_coordinate_invalid");
   }
   const checksums: any = parseReleaseChecksumIndex(checksumText);
@@ -180,7 +182,6 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
     archiveDigest !== portable.sha256
     || archiveDigest !== checksums.get(archiveName)
     || archiveStat.size !== portable.sizeBytes
-    || archiveStat.size !== portable.installArchiveSizeBytes
   ) {
     throw new Error("mcp_final_release_asset_archive_digest_mismatch");
   }
@@ -203,10 +204,9 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
     }
     const portableRoot: any = path.join(extractRoot, rootName);
     await assertExtractedTree(portableRoot);
-    const executable: any = path.join(portableRoot, portable.executable);
-    const installer: any = path.join(portableRoot, "meshrix-mcp-install.sh");
+    const executable: any = path.join(portableRoot, portable.launcher);
     const runtime: any = path.join(portableRoot, "runtime", "node");
-    for (const filePath of [executable, installer, runtime]) {
+    for (const filePath of [executable, runtime]) {
       const stat: any = await assertRegularFile(filePath, "mcp_final_release_asset_executable_invalid");
       if ((stat.mode & 0o111) === 0) throw new Error("mcp_final_release_asset_executable_invalid");
     }
@@ -219,11 +219,7 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
       await runPortable(executable, ["version", "--json"], temporaryRoot),
       "mcp_final_release_asset_version_output_invalid"
     );
-    const installerPayload: any = parseJsonOutput(
-      await runPortable(installer, ["version", "--json"], temporaryRoot),
-      "mcp_final_release_asset_installer_output_invalid"
-    );
-    for (const payload of [versionPayload, installerPayload]) {
+    for (const payload of [versionPayload]) {
       if (
         payload.packageName !== connector.packageName
         || payload.packageVersion !== connector.packageVersion
@@ -265,7 +261,6 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }: Record<s
       },
       probes: {
         launcherVersion: true,
-        installerDelegation: true,
         noScanCandidateCount: scanPayload.candidates.length,
         installedCandidateCount: 0
       },

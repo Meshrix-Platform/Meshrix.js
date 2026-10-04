@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { npmCliArgs, resolveNpmCliInvocation } from "./npm-cli-invocation.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
-const npmCommand: any = process.platform === "win32" ? "npm.cmd" : "npm";
 
 function commandDisplay(entry?: any) : any {
   if (entry.script) {
@@ -38,9 +38,10 @@ export function nodeScript(id?: any, file?: any, args: any = []) : any {
 
 function spawnForEntry(entry?: any) : any {
   if (entry.kind === "npm-script") {
+    const npmInvocation = resolveNpmCliInvocation();
     return {
-      command: npmCommand,
-      args: ["run", entry.script]
+      command: npmInvocation.command,
+      args: npmCliArgs(npmInvocation, ["run", entry.script])
     };
   }
   if (entry.kind === "node-script") {

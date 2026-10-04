@@ -9,7 +9,7 @@ audience: development
 This skill owns the **portable HTML report contract** of the upstream service
 publishing journey: the tracked blank template, the shared renderer, the
 digest-bound screenshots, the interface catalog, the operation evidence, and
-the privacy constraints. The verification lanes and candidate receipt belong
+the privacy constraints. The verification lanes and journey report belong
 to `$meshrix-js-release-journey-producer`; the downstream client compatibility
 matrix belongs to `$meshrix-js-client-compatibility-matrix`.
 
@@ -17,7 +17,7 @@ matrix belongs to `$meshrix-js-client-compatibility-matrix`.
 
 1. Run `git status --short` for every repository boundary before editing.
 2. Read [references/publishing-contract.md](../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or report contract.
-3. Keep the report contract separate from the verification lanes: this skill owns the template, renderer, screenshots, and content contract; `$meshrix-js-release-journey-producer` owns the two verification lanes and the receipt.
+3. Keep the report contract separate from the verification lanes: this skill owns the template, renderer, screenshots, and content contract; `$meshrix-js-release-journey-producer` owns Core verification and the optional integration journey.
 
 ## Maintain the report template first
 
@@ -79,8 +79,8 @@ bilingual purpose sentence, a grouped step index, and its own ordered step
 cards. The four group headings must be visually stronger than step headings and
 must remain understandable in print and narrow viewports.
 
-Move every non-procedural item to the final `appendix`: candidate scope,
-execution summary, startup and connector configuration, published interface
+Move every non-procedural item to the final `appendix`: execution summary,
+startup and connector configuration, published interface
 catalog, client matrix, golden path, requirements, production boundaries,
 revision semantics, protocol delivery, provenance, timings, and cleanup. The
 cover may contain only the manual title and one short scope sentence; it must
@@ -94,10 +94,8 @@ image uses explicit physical dimensions plus `loading="lazy"` and
 
 The success headline is scoped to the upstream publishing journey. It must not
 say or imply that Meshrix.js is functionally complete or generally release-ready.
-The HTML may project candidate coordinates passed into the renderer, but it
-does not own candidate readiness. Generate the external receipt only after the
-final HTML bytes exist, so the receipt can bind the HTML without a recursive
-HTML-to-receipt digest.
+The HTML summarizes the observed journey, configuration, and verified
+screenshots. It does not issue a release receipt or gate npm publication.
 
 If the journey fails, still write one privacy-safe portable HTML at the
 canonical report path. Mark it non-authoritative and failed, include only the

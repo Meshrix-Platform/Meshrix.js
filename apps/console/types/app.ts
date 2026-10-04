@@ -1,5 +1,11 @@
 import type { Ref } from "vue";
 import type { ServerPathBrowseResponse } from "../lib/types";
+export type {
+  OptionBarIcon,
+  OptionBarModelValue,
+  OptionBarOption,
+  OptionBarValue,
+} from "@meshrix/ui-console/option-bar";
 
 export type AppView = "dashboard" | "approval" | "workspaces" | "admin" | string;
 export type AdminView = string;
@@ -10,19 +16,6 @@ export type CloudProvider =
   | "copilot"
   | "local-model"
   | string;
-
-export type OptionBarValue = string | number | boolean;
-export type OptionBarModelValue = OptionBarValue | OptionBarValue[];
-export type OptionBarIcon = "moon" | "sun";
-
-export type OptionBarOption = {
-  value: OptionBarValue;
-  label: string;
-  description?: string;
-  disabled?: boolean;
-  swatches?: string[];
-  icon?: OptionBarIcon;
-};
 
 export type RefreshStateOptions = {
   silent?: boolean;

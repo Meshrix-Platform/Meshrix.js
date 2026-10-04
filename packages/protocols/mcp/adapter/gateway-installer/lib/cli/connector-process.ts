@@ -3,10 +3,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import {
-  BOOTSTRAP_INSTALL_SCRIPT,
-  PACKAGE_MANAGER_DISCOVERY_ENV
-} from "./constants.ts";
+import { PACKAGE_MANAGER_DISCOVERY_ENV } from "./constants.ts";
 
 export function uniqueValues(values?: any) : any {
   return [...new Set<any>(values.filter(Boolean))];
@@ -33,13 +30,6 @@ export function connectorLaunchSpec() : any {
     command: process.execPath,
     args: [entrypoint]
   };
-}
-
-export function githubOneLineMcpInstallCommand(scriptName: any = BOOTSTRAP_INSTALL_SCRIPT) : any {
-  if (!/^[A-Za-z0-9._-]+$/u.test(String(scriptName || ""))) {
-    throw new Error("invalid_local_installer_name");
-  }
-  return `/bin/sh -c 'exec /bin/sh ./${scriptName} "$@"'`;
 }
 
 export function assertSafeEnvName(name?: any) : any {

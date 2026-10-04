@@ -12,7 +12,7 @@ audience: usage
 - For the packaged Meshrix.js MCP installer, use target id `kimi` and `$meshrix-js-agent-target-kimi`. The skill name `kimi-code` does not introduce another installer id or an ACP conversation implementation.
 
 Source: [vendor reference](https://moonshotai.github.io/kimi-code/en/configuration/config-files). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

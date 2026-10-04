@@ -1,4 +1,4 @@
-import { packageJson, PRIORITY_INSTALL_TARGETS } from "./constants.ts";
+import { packageInfo, PRIORITY_INSTALL_TARGETS } from "./constants.ts";
 import { isAutoTargetRequest, option, parseTargets, targetInstallMode } from "./basic-utils.ts";
 import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
 import { saveMcpApiKeyCredential } from "./credential-store.ts";
@@ -47,7 +47,6 @@ export async function installTargets({ options, targets, token, tokenInfo = null
       const adapterExecution: any = await runClientAdapter({
         target,
         action: "install",
-        cacheRoot: settings.adapterCacheRoot,
         request: clientAdapterConnectorRequest({
           baseUrl: settings.baseUrl,
           tokenEnv: settings.tokenEnv,
@@ -57,8 +56,7 @@ export async function installTargets({ options, targets, token, tokenInfo = null
       const clientResult: Record<string, any> = {
         installMode: "external-client-adapter",
         ...adapterExecution.result,
-        adapterPackage: adapterExecution.adapter.coordinate,
-        adapterCacheHit: adapterExecution.cache.hit
+        adapterPackage: adapterExecution.adapter.packageName
       };
       const httpVerification: any = verify ? await verifyMcpTools({ baseUrl: settings.baseUrl, token, target }) : null;
       const credential: any = await saveMcpApiKeyCredential({
@@ -100,15 +98,14 @@ export async function installTargets({ options, targets, token, tokenInfo = null
       tokenSource: value.tokenSource || tokenInfo?.source || "provided",
       httpVerification: value.httpVerification || null,
       adapterPackage: value.adapterPackage || "",
-      adapterCacheHit: value.adapterCacheHit === true,
       credentialStored: value.credentialStored === true
     };
   }
 
   return {
     ok: (Object.values(installed) as any[]).every((value?: any) : any => value?.ok !== false),
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     targets,
     baseUrl: settings.baseUrl,
     discoveryManifest,
@@ -140,8 +137,8 @@ export async function installTuiCommand(options?: any, tokenInfo?: any) : Promis
     return {
       ok: false,
       cancelled: true,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       reason: "Interactive install cancelled."
     };
   }
@@ -198,8 +195,8 @@ export async function installSelectedCandidates({ options, selected, tokenInfo }
   }
   return {
     ok: partials.every((partial?: any) : any => partial.ok),
-    packageName: packageJson.name,
-    packageVersion: packageJson.version,
+    packageName: packageInfo.name,
+    packageVersion: packageInfo.version,
     targets: [...new Set<any>(selected.map((candidate?: any) : any => candidate.target))],
     baseUrl,
     discoveryManifest,
@@ -251,10 +248,10 @@ export async function installAutoDetectedCommand(resolvedOptions?: any, tokenInf
     return {
       ok: false,
       autoDetected: true,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       baseUrl: installerOptions(resolvedOptions).baseUrl,
-      error: "No supported MCP clients were detected. Install the trusted adapter package for the target or run in a TTY for selection.",
+      error: "No supported MCP client was detected. Install or configure a supported client application, then retry or choose a target in a TTY.",
       ...noDetectedClientGuidance(candidates, resolvedOptions),
       candidates
     };
@@ -282,8 +279,8 @@ export async function installCommand(options?: any) : Promise<any> {
     return {
       ok: false,
       skipped: true,
-      packageName: packageJson.name,
-      packageVersion: packageJson.version,
+      packageName: packageInfo.name,
+      packageVersion: packageInfo.version,
       ...resolvedOptions.__meshrixSkippedDiscovery
     };
   }

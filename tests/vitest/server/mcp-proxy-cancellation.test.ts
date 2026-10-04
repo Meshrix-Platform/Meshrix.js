@@ -6,10 +6,12 @@ import { fetchJson } from "../../../packages/protocols/mcp/adapter/gateway-insta
 import {
   createProxyStdioTransport,
   encodeStdioJsonRpc,
+  forwardProxyMessage,
   MCP_STDIO_FRAMING_CONTENT_LENGTH
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
 
 afterEach(() : any => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -417,6 +419,143 @@ describe("MCP stdio proxy cancellation", () : any => {
       method: "tools/list"
     }));
     expect(writable.write).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps actual proxy forwarding alive beyond helper and former business cutoffs, then closes its dispatcher", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let responseController: any;
+    let observedOptions: any;
+    const dispatcher: any = { close: vi.fn(async () : Promise<any> => {}), destroy: vi.fn(async () : Promise<any> => {}) };
+    const fetchMock: any = vi.fn((_url?: any, options?: any) : any => {
+      observedOptions = options;
+      return Promise.resolve(new Response(new ReadableStream({
+        start(controller?: any) : any {
+          responseController = controller;
+        }
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const forwarded: any = forwardProxyMessage({
+      baseUrl: "http://gateway.invalid",
+      token: `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`,
+      target: "codex",
+      message: { jsonrpc: "2.0", id: "long-proxy", method: "tools/list" },
+      signal: new AbortController().signal,
+      fetchImpl: fetchMock,
+      dispatcherFactory: vi.fn((options?: any) : any => {
+        expect(options).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+        return dispatcher;
+      })
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(300_001);
+    expect(observedOptions.signal.aborted).toBe(false);
+    expect(dispatcher.destroy).not.toHaveBeenCalled();
+
+    responseController.enqueue(Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: "long-proxy", result: { ok: true } })));
+    responseController.close();
+    await expect(forwarded).resolves.toMatchObject({ id: "long-proxy", result: { ok: true } });
+    expect(observedOptions.dispatcher).toBe(dispatcher);
+    expect(dispatcher.close).toHaveBeenCalledOnce();
+    expect(dispatcher.destroy).not.toHaveBeenCalled();
+  });
+
+  it("stops active requests and forwarded notifications together", async () : Promise<any> => {
+    const signals: any[] = [];
+    const writes: any[] = [];
+    const transport: any = createProxyStdioTransport({
+      forwardMessage({ signal }: Record<string, any>) : any {
+        signals.push(signal);
+        return new Promise((_resolve?: any, reject?: any) : any => {
+          if (signal.aborted) reject(signal.reason);
+          else signal.addEventListener("abort", () : any => reject(signal.reason), { once: true });
+        });
+      },
+      writeMessage(payload?: any) : any {
+        writes.push(payload);
+      }
+    });
+    transport.push(Buffer.concat([
+      encodeStdioJsonRpc({ jsonrpc: "2.0", method: "notifications/progress", params: { progress: 1 } }),
+      encodeStdioJsonRpc({ jsonrpc: "2.0", id: "stop-owned", method: "tools/call" })
+    ]));
+
+    transport.stop();
+    await transport.close();
+
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal?: any) : any => signal.aborted)).toBe(true);
+    expect(transport.activeRequestCount).toBe(0);
+    expect(transport.pendingDispatchCount).toBe(0);
+    expect(transport.pendingWorkCount).toBe(0);
+    expect(writes).toEqual([]);
+  });
+
+  it("retains the bounded default timeout for control requests", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("fetch", vi.fn((_url?: any, options?: any) : any => new Promise((_resolve?: any, reject?: any) : any => {
+      options.signal.addEventListener("abort", () : any => reject(options.signal.reason), { once: true });
+    })));
+    const response: any = fetchJson("http://gateway.invalid/control");
+    const rejection: any = expect(response).rejects.toMatchObject({ name: "TimeoutError" });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejection;
+  });
+
+  it("honors a deliberately selected business deadline together with caller cancellation", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const dispatcher: any = { close: vi.fn(async () : Promise<any> => {}), destroy: vi.fn(async () : Promise<any> => {}) };
+    let requestSignal: any;
+    vi.stubGlobal("fetch", vi.fn((_url?: any, options?: any) : any => {
+      requestSignal = options.signal;
+      return new Promise((_resolve?: any, reject?: any) : any => {
+        options.signal.addEventListener("abort", () : any => reject(options.signal.reason), { once: true });
+      });
+    }));
+    const externalController: any = new AbortController();
+    const result: any = forwardProxyMessage({
+      baseUrl: "http://gateway.invalid",
+      token: `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`,
+      target: "codex",
+      message: { jsonrpc: "2.0", id: "bounded-proxy", method: "tools/list" },
+      signal: externalController.signal,
+      timeoutMs: 5,
+      fetchImpl: (url?: any, options?: any) : any => fetch(url, options),
+      dispatcherFactory: () : any => dispatcher
+    });
+    const rejection: any = expect(result).rejects.toMatchObject({ name: "TimeoutError" });
+
+    await vi.advanceTimersByTimeAsync(5);
+    await rejection;
+    expect(requestSignal.aborted).toBe(true);
+    expect(externalController.signal.aborted).toBe(false);
+    expect(dispatcher.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("keeps explicit zero timeout unbounded until caller cancellation and rejects unsupported budgets", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requestSignals: any[] = [];
+    const fetchMock: any = vi.fn((_url?: any, options?: any) : any => new Promise((_resolve?: any, reject?: any) : any => {
+      requestSignals.push(options.signal);
+      options.signal.addEventListener("abort", () : any => reject(options.signal.reason), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const caller: any = new AbortController();
+
+    const pending: any = fetchJson("http://gateway.invalid/zero-timeout", { timeoutMs: 0, signal: caller.signal });
+    const rejection: any = expect(pending).rejects.toThrow("caller cancellation");
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(requestSignals[0].aborted).toBe(false);
+    caller.abort(new Error("caller cancellation"));
+    await rejection;
+    expect(requestSignals[0].aborted).toBe(true);
+
+    for (const timeoutMs of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
+      await expect(fetchJson("http://gateway.invalid/invalid-timeout", { timeoutMs })).rejects.toThrow(RangeError);
+    }
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("keeps the timeout active when an external abort signal is supplied", async () : Promise<any> => {

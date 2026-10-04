@@ -43,9 +43,9 @@ const RELEASE_EVIDENCE_INVENTORY: readonly any[] = Object.freeze([Object.freeze(
   reducer: "tools/reduce-child.ts#createReadiness",
   provenanceSchemaVersion: "v0.0.1:meshrix:release-evidence-report-provenance-1"
 })]);
-function candidateIdentity(workspace?: any) : any {
+function candidateIdentity(workspace?: any, sourceRevision: string = String(git(workspace, ["rev-parse", "HEAD"])).trim()) : any {
   return buildReleaseCandidateIdentity({
-    sourceRevision: String(git(workspace, ["rev-parse", "HEAD"])).trim(),
+    sourceRevision,
     repositoryTreeDigest: `sha256:${"1".repeat(64)}`,
     releaseDefinitionSha256: `sha256:${"2".repeat(64)}`,
     packageLockSha256: `sha256:${"3".repeat(64)}`,
@@ -55,7 +55,7 @@ function candidateIdentity(workspace?: any) : any {
       version: "0.0.1",
       manifest_sha256: "4".repeat(64)
     }],
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY })
   });
 }
@@ -152,7 +152,7 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
       acceptanceStandard: "functional-completeness",
       claim: "functional-complete",
       verifier: "tools/server-scripts/verify-platform-acceptance.ts",
-      selectedProfile: "enterprise-single-node",
+      selectedProfile: "single-node",
       sourceRevision: identity.source_revision,
       generatedAt: "2026-01-01T00:00:00.000Z",
       status: accepted ? "accepted" : "failed",
@@ -205,7 +205,7 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
         evidenceContext: {
           schemaVersion: "v0.0.1:meshrix:acceptance-evidence-anchor-context-2",
           sourceRevision: identity.source_revision,
-          selectedProfile: "enterprise-single-node",
+          selectedProfile: "single-node",
           ownedReportsInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
           candidateDigest: identity.candidate_digest,
           privacySafe: true
@@ -341,12 +341,12 @@ describe("platform acceptance generation store", () : any => {
       status: "accepted",
       releaseReady: true,
       generationId: "accepted-generation",
-      selectedProfile: "enterprise-single-node"
+      selectedProfile: "single-node"
     });
     const current: any = await resolveFixture(repoRoot);
     expect(current.pointer.generationId).toBe("accepted-generation");
     expect(current.receipt.generationId).toBe("accepted-generation");
-    expect(current.receipt.selectedProfile).toBe("enterprise-single-node");
+    expect(current.receipt.selectedProfile).toBe("single-node");
     expect(current.pointer.receiptSha256).toMatch(/^[a-f0-9]{64}$/u);
     await expect(fs.readFile(path.join(repoRoot, "build", "reports", "child.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -437,6 +437,32 @@ describe("platform acceptance generation store", () : any => {
     const failed: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "retained-failure" });
     const failedWorkspace: any = failed.workspace;
     await writeWorkerEvidence(failed.workspace, { accepted: false });
+    const installability = {
+      summary: { releaseReady: false, reportLeakScan: true },
+      tests: [{
+        name: "packaged runtime",
+        status: "failed",
+        evidence: { targets: [{
+          kind: "native", platform: "linux/amd64", status: "failed",
+          reasonCode: "npm_package_consumer_runtime_failed",
+          evidence: { failures: [{ failureStage: "installed_runtime", errorCode: "npm_package_consumer_runtime_failed" }] }
+        }] }
+      }]
+    };
+    await fs.writeFile(path.join(failedWorkspace, "build/reports/npm-package-installability.json"), JSON.stringify(installability));
+    const aggregatePath: any = path.join(failedWorkspace, "build", "reports", "platform-acceptance.json");
+    const failedAggregate: any = JSON.parse(await fs.readFile(aggregatePath, "utf8"));
+    failedAggregate.sourceRevision = "";
+    failedAggregate.summary.failedCommandCount = 1;
+    failedAggregate.summary.failedCommands = ["core-regression"];
+    failedAggregate.summary.missingEvidenceCount = 1;
+    failedAggregate.summary.missingEvidence = ["report-ready:build/reports/child.json"];
+    failedAggregate.reportWriteAudit = {
+      consistent: false,
+      currentRunOrphans: ["build/reports/unregistered-owner.json"],
+      currentRunOrphanCount: 1
+    };
+    await fs.writeFile(aggregatePath, `${JSON.stringify(failedAggregate, null, 2)}\n`, "utf8");
     const diagnostic: any = await publishAcceptanceFailureDiagnostic({
       repoRoot,
       paths: failed,
@@ -453,12 +479,52 @@ describe("platform acceptance generation store", () : any => {
     await expect(fs.access(failedWorkspace)).rejects.toMatchObject({ code: "ENOENT" });
     const retained: any = JSON.parse(await fs.readFile(path.join(repoRoot, diagnostic.path), "utf8"));
     expect(retained.status).toBe("failed");
+    const retainedAggregate: any = JSON.parse(await fs.readFile(
+      path.join(repoRoot, ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT, "retained-failure", "aggregate.json"),
+      "utf8"
+    ));
+    expect(retained.sourceRevision).toBe(failedAggregate.candidateIdentity.source_revision);
+    expect(retained.candidateDigest).toBe(failedAggregate.candidate_digest);
+    expect(retainedAggregate.summary.failedCommands).toEqual(["core-regression"]);
+    expect(retainedAggregate.summary.missingEvidence).toEqual(["report-ready:build/reports/child.json"]);
+    expect(retainedAggregate.reportWriteAudit).toEqual(failedAggregate.reportWriteAudit);
+    expect(JSON.parse(await fs.readFile(
+      path.join(repoRoot, ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT, "retained-failure", "npm-package-installability.json"),
+      "utf8"
+    ))).toEqual(installability);
     expect(await fs.readFile(path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER), "utf8"))
       .toBe(pointerBeforeFailure);
     expect((await resolveFixture(repoRoot)).pointer.generationId).toBe("accepted-before-failure");
   });
 
-  it("rejects a privacy-unsafe failed aggregate and still permits workspace cleanup", async () : Promise<any> => {
+  it.each([true, false])("rejects another candidate's failed aggregate with a top-level revision: %s", async (includeSourceRevision) => {
+    const repoRoot: any = await fixtureRoot();
+    const failed: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "candidate-mismatch" });
+    try {
+      await writeWorkerEvidence(failed.workspace, { accepted: false });
+      const aggregatePath = path.join(failed.workspace, "build", "reports", "platform-acceptance.json");
+      const aggregate = JSON.parse(await fs.readFile(aggregatePath, "utf8"));
+      const otherCandidate = candidateIdentity(failed.workspace, "f".repeat(40));
+      aggregate.candidateIdentity = otherCandidate;
+      aggregate.finalCandidateIdentity = otherCandidate;
+      aggregate.candidate_digest = otherCandidate.candidate_digest;
+      aggregate.sourceRevision = includeSourceRevision ? otherCandidate.source_revision : "";
+      await fs.writeFile(aggregatePath, `${JSON.stringify(aggregate)}\n`, "utf8");
+
+      await expect(publishAcceptanceFailureDiagnostic({
+        repoRoot,
+        paths: failed,
+        aggregateReportPath: "build/reports/platform-acceptance.json",
+        workerResult: { exitCode: 1, signal: "" }
+      })).rejects.toThrow("candidate does not match its worktree");
+      await expect(fs.access(path.join(repoRoot, ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT, failed.id)))
+        .rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await removeAcceptanceGenerationWorkspace(failed, { repoRoot });
+    }
+  });
+
+  it.each(["platform-acceptance.json", "npm-package-installability.json"])("rejects privacy-unsafe %s and still permits workspace cleanup", async (reportName) : Promise<any> => {
     const repoRoot: any = await fixtureRoot();
     const failed: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "privacy-rejected" });
     const failedWorkspace: any = failed.workspace;
@@ -473,7 +539,7 @@ describe("platform acceptance generation store", () : any => {
         "private-value",
         "@service.example.test/api"
       ].join("")];
-      await fs.writeFile(aggregatePath, `${JSON.stringify(aggregate)}\n`, "utf8");
+      await fs.writeFile(path.join(failed.workspace, "build/reports", reportName), `${JSON.stringify(aggregate)}\n`, "utf8");
 
       await expect(publishAcceptanceFailureDiagnostic({
         repoRoot,
@@ -676,7 +742,7 @@ describe("platform acceptance generation store", () : any => {
     const current: any = await resolveFixture(repoRoot);
     expect(validateAcceptedCandidateReceipt(current.receipt, {
       candidateDigest: current.receipt.candidateDigest,
-      selectedProfile: "enterprise-single-node",
+      selectedProfile: "single-node",
       sourceRevision: current.receipt.sourceRevision
     })).toEqual(current.receipt);
     expect(() : any => validateAcceptedCandidateReceipt({

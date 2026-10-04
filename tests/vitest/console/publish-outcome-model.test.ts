@@ -20,7 +20,7 @@ const client: any = vi.hoisted(() : any => ({
   removeUpstreamService: vi.fn(),
   listPublishedServices: vi.fn(),
   getPublishedService: vi.fn(),
-  waitForUpstreamServicePublication: vi.fn(),
+  observeUpstreamServicePublication: vi.fn(),
   checkUpstreamServiceRuntimeHealth: vi.fn(),
 }));
 const pageRefreshHandler: any = vi.hoisted(() : any => vi.fn());
@@ -77,7 +77,7 @@ beforeEach(() : any => {
     publication: publication(1),
     replayed: false,
   });
-  client.waitForUpstreamServicePublication.mockResolvedValue({
+  client.observeUpstreamServicePublication.mockResolvedValue({
     ok: true,
     setRevision: 1,
     service: {
@@ -155,6 +155,72 @@ describe("createPublishOutcomeModel stage transitions", () : any => {
   });
 });
 
+describe("createPublishOutcomeModel publication observation projection", () : any => {
+  it("retains the accepted publication across observer interruption and stop", () : any => {
+    const model: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    model.begin("publish-request");
+    model.advance();
+    model.acceptPublication({ serviceId: "svc_fixture", serviceRevision: 4, setRevision: 6 });
+
+    expect(model.acceptedPublication.value).toEqual({ serviceId: "svc_fixture", serviceRevision: 4, setRevision: 6 });
+    expect(model.observation.value).toBe("observing");
+
+    model.interruptObservation();
+    expect(model.observation.value).toBe("interrupted");
+    expect(model.acceptedPublication.value).toEqual({ serviceId: "svc_fixture", serviceRevision: 4, setRevision: 6 });
+    // An interruption is not a stage failure: the publication stage stays active.
+    expect(model.stages.value.map((stage: any) : string => stage.state)).toEqual(["done", "active", "pending"]);
+
+    model.beginObservation();
+    expect(model.observation.value).toBe("observing");
+
+    model.stopObservation();
+    expect(model.observation.value).toBe("stopped");
+    expect(model.acceptedPublication.value).not.toBe(null);
+
+    model.clearPublication();
+    expect(model.observation.value).toBe("idle");
+    expect(model.acceptedPublication.value).toBe(null);
+  });
+
+  it("clears a retained acceptance when a new run begins or the run resets", () : any => {
+    const model: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    model.begin("publish-request");
+    model.advance();
+    model.acceptPublication({ serviceId: "svc_fixture", serviceRevision: 1, setRevision: 1 });
+    model.interruptObservation();
+
+    model.begin("publish-request");
+    expect(model.acceptedPublication.value).toBe(null);
+    expect(model.observation.value).toBe("idle");
+
+    model.acceptPublication({ serviceId: "svc_fixture", serviceRevision: 2, setRevision: 2 });
+    model.resetRun();
+    expect(model.acceptedPublication.value).toBe(null);
+    expect(model.observation.value).toBe("idle");
+    expect(model.stages.value.map((stage: any) : string => stage.state)).toEqual(["pending", "pending", "pending"]);
+  });
+
+  it("projects an authoritative publication failure separately from a runtime-health failure", () : any => {
+    const failed: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    failed.begin("publish-request");
+    failed.advance();
+    failed.fail("gateway-publication");
+    expect(failed.stages.value.map((stage: any) : string => stage.state)).toEqual(["done", "failed", "pending"]);
+    expect(failed.health.value).toBe(null);
+
+    const unhealthy: any = createPublishOutcomeModel({ serviceId: () : string => "svc_fixture" });
+    unhealthy.begin("publish-request");
+    unhealthy.advance();
+    unhealthy.advance();
+    unhealthy.complete("runtime-health", { ok: false, endpoints: [{ endpoint: "x", ok: false, status: 0 }] });
+    // The publication stage is done; only the interpreted health carries the failure.
+    expect(unhealthy.stages.value.map((stage: any) : string => stage.state)).toEqual(["done", "done", "done"]);
+    expect(unhealthy.health.value.ok).toBe(false);
+    expect(unhealthy.health.value.checks[0].status).toBe("fail");
+  });
+});
+
 describe("interpretUpstreamHealth payload mapping", () : any => {
   it("maps each real endpoint record onto a per-check pass/fail record", () : any => {
     const payload: any = {
@@ -164,8 +230,8 @@ describe("interpretUpstreamHealth payload mapping", () : any => {
       endpointCount: 2,
       healthyEndpointCount: 1,
       endpoints: [
-        { endpoint: "https://primary.invalid:443", ok: true, status: 200 },
-        { endpoint: "https://secondary.invalid:443", ok: false, status: 503 },
+        { endpoint: { endpointId: "primary", weight: 1 }, ok: true, status: 200 },
+        { endpoint: { endpointId: "secondary", weight: 1 }, ok: false, status: 404 },
       ],
       latencyMs: 12,
       checkedAt: "2026-08-05T00:00:00.000Z",
@@ -175,14 +241,16 @@ describe("interpretUpstreamHealth payload mapping", () : any => {
     expect(interpreted.ok).toBe(false);
     expect(interpreted.checks).toHaveLength(2);
     expect(interpreted.checks[0]).toMatchObject({
-      id: "https://primary.invalid:443",
+      id: "primary",
       label: "checkEndpoint",
       status: "pass",
+      statusCode: 200,
     });
     expect(interpreted.checks[1]).toMatchObject({
-      id: "https://secondary.invalid:443",
+      id: "secondary",
       label: "checkEndpoint",
       status: "fail",
+      statusCode: 404,
     });
     // The failed endpoint carries a gateway-detail remediation with the service.
     expect(interpreted.checks[1].remediation).toEqual({
@@ -258,7 +326,20 @@ describe("interpretUpstreamHealth payload mapping", () : any => {
     );
     for (const locale of ["zh-CN", "en"] as const) {
       const group: any = consoleMessages[locale].publishOutcome;
-      for (const stage of ["stagePublishRequest", "stageGatewayPublication", "stageRuntimeHealth"]) {
+      for (const stage of [
+        "stagePublishRequest",
+        "stageGatewayPublication",
+        "stageRuntimeHealth",
+        "observationWaiting",
+        "observationInterrupted",
+        "observationStopped",
+        "observationStop",
+        "observationResume",
+        "observationPublished",
+        "publicationSuperseded",
+        "healthPassed",
+        "healthNotPassed",
+      ]) {
         expect(group[stage]).toBeTruthy();
       }
       for (const check of interpreted.checks) {
@@ -295,7 +376,7 @@ describe("view-level outcome rendering", () : any => {
       status: 503,
       endpointCount: 1,
       healthyEndpointCount: 0,
-      endpoints: [{ endpoint: "https://service.invalid:443", ok: false, status: 503 }],
+      endpoints: [{ endpoint: { endpointId: "primary", weight: 1 }, ok: false, status: 404 }],
       latencyMs: 15,
       checkedAt: "2026-08-05T00:00:00.000Z",
     });
@@ -322,7 +403,9 @@ describe("view-level outcome rendering", () : any => {
     expect(failCheck.exists()).toBe(true);
     expect(failCheck.text()).toContain(outcomeMessages.checkEndpoint);
     expect(failCheck.text()).toContain(outcomeMessages.statusFail);
-    expect(failCheck.text()).toContain("https://service.invalid:443");
+    expect(failCheck.text()).toContain("primary");
+    expect(failCheck.text()).toContain("HTTP 404");
+    expect(failCheck.text()).not.toContain("[object Object]");
     const link: any = failCheck.find("a.health-check-remediation");
     expect(link.exists()).toBe(true);
     expect(link.text()).toBe(outcomeMessages.remediateGatewayDetail);

@@ -21,7 +21,7 @@ concurrency:
 jobs:
   branch-flow:
     name: Branch flow policy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.21.0"
       - name: Verify branch flow
         run: node tools/scripts/verify-branch-flow.ts
       - name: Verify published tree

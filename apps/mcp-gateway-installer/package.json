@@ -1,0 +1,33 @@
+{
+  "name": "@meshrix/mcp-gateway-installer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gateway-only command-line profile for embedded Meshrix MCP gateway deployments.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "dependencies": {
+    "@meshrix/contracts": "0.1.0",
+    "@meshrix/gateway": "0.1.0",
+    "@meshrix/capabilities": "0.1.0",
+    "@meshrix/foundation": "0.1.0",
+    "@meshrix/protocols": "0.1.0"
+  },
+  "bin": {
+    "meshrix-gateway": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/cli.ts",
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "package.json"
+  ]
+}

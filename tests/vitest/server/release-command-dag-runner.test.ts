@@ -6,6 +6,8 @@ import {
   runReleaseCommandDag
 } from "../../../tools/server-scripts/lib/release-command-dag-runner.ts";
 
+import { redactAcceptanceCommandTail } from "../../../tools/server-scripts/verify-platform-acceptance.ts";
+
 function fixtureCommand(id?: any, source?: any, overrides: Record<string, any> = {}) : any {
   return {
     id,
@@ -34,6 +36,23 @@ async function run(commands?: any, overrides: Record<string, any> = {}) : Promis
 }
 
 describe("release command DAG runner", () : any => {
+  it("retains sanitized failure tails after a long warning prefix", async () => {
+    const failure = "AssertionError: hosted fixture failed";
+    const privatePath = ["/home", "synthetic-fixture", "private/result.json"].join("/");
+    const output = "npm warn configuration notice\n".repeat(200)
+      + `${privatePath}\nBearer synthetic-fixture-token\n${failure}`;
+    const result = await run([
+      fixtureCommand("failure-tail", `process.stderr.write(${JSON.stringify(output)}); process.exitCode = 1;`)
+    ], { redactTail: redactAcceptanceCommandTail });
+    const detail = result.results[0].errorTail;
+    expect(detail).toContain(failure);
+    expect(detail).toContain("<local-path>");
+    expect(detail).toContain("Bearer [redacted]");
+    expect(detail).not.toContain("synthetic-fixture-token");
+    expect(detail).not.toContain(privatePath);
+    expect(detail.length).toBeLessThanOrEqual(2_400);
+  });
+
   it("rejects duplicate ids, reports, missing dependencies, self-dependencies, and cycles", () : any => {
     const schedule: any = createReleaseCommandSchedule([
       fixtureCommand("duplicate", "", { report: "build/reports/shared.json" }),

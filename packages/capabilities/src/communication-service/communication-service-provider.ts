@@ -3,7 +3,7 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME
-} from "@meshrix/protocols/mcp/adapter/http-mcp-adapter";
+} from "@meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 
 export const COMMUNICATION_SERVICE_PROTOCOL_VERSION: any = "v0.0.1:platform:communication-service-1";
 export const COMMUNICATION_SERVICE_ID: any = "communication-service";
@@ -26,7 +26,7 @@ const DEFAULT_COMMUNICATION_SERVICES: readonly any[] = Object.freeze([
     externalProtocolVersion: MCP_PROTOCOL_VERSION,
     routeTarget: "mcp-server-side",
     capabilityId: "mcp-server-side",
-    modulePath: "packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+    modulePath: "packages/protocols/mcp/modern-downstream/index.ts",
     runtimeBoundary: "platform-capability",
     calledByAspects: ["downstream-client-aspect"],
     serverName: MCP_SERVER_NAME,

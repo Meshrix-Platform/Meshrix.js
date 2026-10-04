@@ -173,7 +173,7 @@ export const CONSOLE_ADMINISTRATION_PLATFORM_WORKFLOWS: readonly any[] = Object.
     stateTokens: ["loading", "loadError", "Capability Kernel", "Binding Guard", "alert", "history"],
     verifierFiles: [
       "tools/server-scripts/verify-production-health-console.ts",
-      "tools/server-scripts/verify-enterprise-observability-coverage.ts"
+      "tools/server-scripts/verify-observability-coverage.ts"
     ]
   }
 ]);

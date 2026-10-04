@@ -129,13 +129,11 @@ interface FinalProtectedSinkAttemptState {
   revalidateCurrentAuthority: AttemptAuthorityRevalidator;
   signal: AbortSignal | null;
   now: () => number;
-  expiresAt: number;
+  expiresAt: number | null;
 }
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const MAX_TEXT_BYTES = 256;
-const DEFAULT_ATTEMPT_TTL_MS = 15_000;
-const MAX_ATTEMPT_TTL_MS = 60_000;
 const FINAL_SINK_INPUT_DIGEST_SCHEMA = "v0.0.1:security:final-protected-sink-input-1";
 const BINDING_KEYS = Object.freeze(["audience", "context", "effect", "operationId", "requestDigest", "subject"]);
 const SUBJECT_KEYS = Object.freeze(["generation", "subjectId", "tenantId", "type"]);
@@ -260,6 +258,17 @@ function aborted(signal: AbortSignal | null | undefined): boolean {
   return signal?.aborted === true;
 }
 
+function attemptExpired(state: Readonly<FinalProtectedSinkAttemptState>): boolean {
+  let currentTime: number;
+  try {
+    currentTime = Number(state.now());
+  } catch {
+    return true;
+  }
+  return !Number.isFinite(currentTime)
+    || (state.expiresAt !== null && currentTime >= state.expiresAt);
+}
+
 function attemptDenied(code = "final_protected_sink_permit_denied"): never {
   deny(code, "Final protected sink authority was denied.");
 }
@@ -295,12 +304,21 @@ export function createFinalProtectedSinkAttempt({
   revalidateCurrentAuthority,
   signal = null,
   now = Date.now,
-  ttlMs = DEFAULT_ATTEMPT_TTL_MS
+  ttlMs
 }: CreateFinalProtectedSinkAttemptOptions = {}): FinalProtectedSinkAttempt {
   if (typeof revalidateCurrentAuthority !== "function" || typeof now !== "function") throw new TypeError("Final protected sink attempt dependencies are invalid.");
   const issuedAt = Number(now());
   if (!Number.isFinite(issuedAt)) throw new TypeError("Final protected sink attempt clock is invalid.");
-  const lifetime = Math.min(MAX_ATTEMPT_TTL_MS, Math.max(1, Number(ttlMs) || DEFAULT_ATTEMPT_TTL_MS));
+  let expiresAt: number | null = null;
+  if (ttlMs !== undefined) {
+    if (typeof ttlMs !== "number" || !Number.isSafeInteger(ttlMs) || ttlMs <= 0) {
+      throw new TypeError("Final protected sink attempt expiry is invalid.");
+    }
+    expiresAt = issuedAt + ttlMs;
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= issuedAt) {
+      throw new TypeError("Final protected sink attempt expiry is invalid.");
+    }
+  }
   const authority = normalizeAttemptAuthority({ audience, subject, operationId, requestDigest, context });
   const attempt = Object.freeze(Object.create(null)) as FinalProtectedSinkAttempt;
   finalProtectedSinkAttempts.set(attempt, Object.freeze({
@@ -313,7 +331,7 @@ export function createFinalProtectedSinkAttempt({
     revalidateCurrentAuthority,
     signal,
     now,
-    expiresAt: issuedAt + lifetime
+    expiresAt
   }));
   return attempt;
 }
@@ -324,7 +342,7 @@ export async function claimFinalProtectedSinkAttempt({ attempt, targetSelector, 
   finalProtectedSinkAttempts.delete(attempt);
   if (!state) attemptReplayDenied();
   const consumedAt = Number(state.now());
-  if (!Number.isFinite(consumedAt) || consumedAt >= state.expiresAt) attemptReplayDenied();
+  if (!Number.isFinite(consumedAt) || (state.expiresAt !== null && consumedAt >= state.expiresAt)) attemptReplayDenied();
   if (aborted(state.signal)) attemptDenied();
   if (selectorDigest(targetSelector) !== state.targetSelectorDigest) attemptDenied("final_protected_sink_permit_binding_invalid");
   if (typeof resolveCurrentResource !== "function") attemptDenied("final_protected_sink_permit_binding_invalid");
@@ -350,7 +368,7 @@ export async function claimFinalProtectedSinkAttempt({ attempt, targetSelector, 
       approval: state.approval,
       risk: state.risk,
       now: consumedAt,
-      ttlMs: Math.max(1, state.expiresAt - consumedAt)
+      ...(state.expiresAt === null ? {} : { ttlMs: Math.max(1, state.expiresAt - consumedAt) })
     });
   } catch {
     attemptDenied();
@@ -359,12 +377,12 @@ export async function claimFinalProtectedSinkAttempt({ attempt, targetSelector, 
   const guard = createFinalProtectedSinkPermitGuard({
     now: state.now,
     revalidateCurrentAuthority: async ({ consumptionReceipt }) => {
-      if (aborted(state.signal)) return Object.freeze({ allowed: false, revoked: false, currentBinding: normalizedBinding });
+      if (aborted(state.signal) || attemptExpired(state)) return Object.freeze({ allowed: false, revoked: false, currentBinding: normalizedBinding });
       const authority = await state.revalidateCurrentAuthority(Object.freeze({ binding: normalizedBinding, consumptionReceipt, signal: state.signal }));
+      if (aborted(state.signal) || attemptExpired(state)) return Object.freeze({ allowed: false, revoked: false, currentBinding: normalizedBinding });
       if (authority.allowed !== true || authority.revoked === true) return Object.freeze({ allowed: false, revoked: authority.revoked === true, currentBinding: normalizedBinding });
-      if (aborted(state.signal)) return Object.freeze({ allowed: false, revoked: false, currentBinding: normalizedBinding });
       const currentResource = await resolveCurrentResource(Object.freeze({ binding: normalizedBinding, signal: state.signal }));
-      if (aborted(state.signal)) return Object.freeze({ allowed: false, revoked: false, currentBinding: normalizedBinding });
+      if (aborted(state.signal) || attemptExpired(state)) return Object.freeze({ allowed: false, revoked: false, currentBinding: normalizedBinding });
       return Object.freeze({
         allowed: true,
         revoked: false,
@@ -379,7 +397,10 @@ export async function claimFinalProtectedSinkAttempt({ attempt, targetSelector, 
       });
     }
   });
-  return guard.consume({ binding: normalizedBinding, permit });
+  const receipt = await guard.consume({ binding: normalizedBinding, permit });
+  if (aborted(state.signal)) attemptDenied();
+  if (attemptExpired(state)) attemptReplayDenied();
+  return receipt;
 }
 
 export function createFinalProtectedSinkPermitGuard({ revalidateCurrentAuthority, now = Date.now }: CreateFinalProtectedSinkPermitGuardOptions = {}): FinalProtectedSinkPermitGuard {

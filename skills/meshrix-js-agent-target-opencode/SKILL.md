@@ -12,7 +12,7 @@ audience: usage
 - The existence of an OpenCode server API does not establish a Meshrix.js conversation or history adapter.
 
 Source: [vendor reference](https://opencode.ai/docs/config). Verification date and claim rules live in
-the [source index](../meshrix-js-agent-adaptation/references/official-sources-and-gap-closure.md).
+the [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md).
 
 ## Meshrix.js integration
 

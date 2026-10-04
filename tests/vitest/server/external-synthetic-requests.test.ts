@@ -1,9 +1,23 @@
 import fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import os from "node:os";
 import { createServer } from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// These are deterministic driver/reducer tests, not observations of the host or a deployment.
+const authority = vi.hoisted(() => ({
+  resourcesRemoved: vi.fn(async (_state: unknown) => {}),
+  environment: { architecture: "x64", nodeVersion: "24.16.0", platform: "linux", runner: "ubuntu-24.04", runnerEnvironment: "local" }
+}));
+vi.mock("../../../tools/server-scripts/lib/release-deployment/authority.ts", async (original) => ({
+  ...await original<typeof import("../../../tools/server-scripts/lib/release-deployment/authority.ts")>(),
+  observeReleaseDeploymentEnvironment: async () => ({ ...authority.environment }),
+  assertReleaseDeploymentResourcesRemoved: authority.resourcesRemoved
+}));
+beforeEach(() => { authority.resourcesRemoved.mockReset().mockResolvedValue(undefined); });
 
 import {
   RELEASE_DEPLOYMENT_SCENARIOS,
@@ -33,7 +47,7 @@ function sendJson(response: any, status: number, payload: any): void {
 }
 
 async function startOneOrigin({ malformedSuccess = false }: Record<string, any> = {}): Promise<any> {
-  const seen = { directProviderRoute: false, authorizedCalls: 0, requestIds: [] as number[] };
+  const seen = { directProviderRoute: false, targetHeaderObserved: false, authorizedCalls: 0, requestIds: [] as number[] };
   let providerFaultCalls = 0;
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://one-origin.invalid");
@@ -55,11 +69,11 @@ async function startOneOrigin({ malformedSuccess = false }: Record<string, any> 
       sendJson(response, 404, { error: "not found" });
       return;
     }
-    if (request.headers["x-meshrix.js-api-key"] !== CREDENTIAL ||
-      request.headers["x-meshrix.js-mcp-target"] !== "codex") {
+    if (request.headers["x-meshrix.js-api-key"] !== CREDENTIAL) {
       sendJson(response, 401, { error: { code: "credential_required" } });
       return;
     }
+    seen.targetHeaderObserved ||= request.headers["x-meshrix.js-mcp-target"] !== undefined;
     seen.authorizedCalls += 1;
     let text = "";
     for await (const chunk of request) text += chunk;
@@ -140,6 +154,7 @@ describe("external synthetic deployment requests", () => {
       expect(aggregate.scenarios["provider-fault"].expectedFault)
         .toBe(FAST_BUDGETS["provider-fault"].requests);
       expect(service.seen.directProviderRoute).toBe(false);
+      expect(service.seen.targetHeaderObserved).toBe(false);
       expect(service.seen.authorizedCalls).toBe(28);
       expect(new Set(service.seen.requestIds).size).toBe(28);
       expect([...service.seen.requestIds].sort((left, right) => left - right))
@@ -166,8 +181,9 @@ describe("external synthetic deployment requests", () => {
     }
   });
 
-  it("reduces only a complete cleanup-verified aggregate", async () => {
+  it("reduces only a complete aggregate after the cleanup authority verifies its state", async () => {
     const service = await startOneOrigin();
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-driver-reducer-test-"));
     try {
       const aggregate = await driveDeployment({
         originUrl: service.origin,
@@ -176,28 +192,39 @@ describe("external synthetic deployment requests", () => {
         anthropicTool: "upstream.release-smoke.anthropic-messages",
         budgets: FAST_BUDGETS,
       });
-      const receipt = await reduceDeploymentEvidence({
-        aggregate,
-        sourceRevision: "a".repeat(40),
-        candidateDigest: "b".repeat(64),
-        functionalReceiptDigest: "c".repeat(64),
-        cleanupVerified: true,
-      });
+      const resourceId = randomUUID();
+      const cleanupState = {
+        schemaVersion: "meshrix.release-deployment.cleanup/2", resourceId,
+        sourceRevision: "a".repeat(40), candidateDigest: "b".repeat(64),
+        containerName: `meshrix-release-smoke-${resourceId}`,
+        fixtureContainerName: `meshrix-release-fixture-${resourceId}`,
+        imageName: `meshrix-release-smoke:${resourceId}`,
+        networkName: `meshrix-release-network-${resourceId}`,
+        dataVolume: `meshrix-release-data-${resourceId}`,
+        backupVolume: `meshrix-release-backup-${resourceId}`,
+        tempRoot: path.join(os.tmpdir(), `meshrix-release-deployment-${resourceId}`)
+      };
+      const cleanupStatePath = path.join(scratch, "cleanup.json");
+      await fs.writeFile(cleanupStatePath, JSON.stringify(cleanupState), { mode: 0o600 });
+      const input = { aggregate, sourceRevision: cleanupState.sourceRevision,
+        candidateDigest: cleanupState.candidateDigest, functionalReceiptDigest: "c".repeat(64), cleanupStatePath };
+      const receipt = await reduceDeploymentEvidence(input);
+      expect(authority.resourcesRemoved).toHaveBeenCalledWith(cleanupState);
       assertReleaseDeploymentReceipt(receipt);
       expect(receipt.cleanup).toBe(true);
       expect(receipt.externalBoundary).toBe(true);
       expect(receipt.releaseDeploymentVerified).toBe(true);
       expect(receipt.capacityCertified).toBe(false);
       expect(receipt.privacy.containsRuntimeValues).toBe(false);
-      await expect(reduceDeploymentEvidence({
-        aggregate,
-        sourceRevision: "a".repeat(40),
-        candidateDigest: "b".repeat(64),
-        functionalReceiptDigest: "c".repeat(64),
-        cleanupVerified: false,
-      })).rejects.toMatchObject({ code: "release_reducer_cleanup_unverified" });
+      authority.resourcesRemoved.mockRejectedValueOnce(Object.assign(new Error("fixture resource still exists"), {
+        code: "release_reducer_cleanup_incomplete"
+      }));
+      await expect(reduceDeploymentEvidence(input)).rejects.toMatchObject({ code: "release_reducer_cleanup_incomplete" });
+      await expect(reduceDeploymentEvidence({ ...input, cleanupStatePath: "" }))
+        .rejects.toMatchObject({ code: "release_reducer_cleanup_state_invalid" });
     } finally {
       await service.close();
+      await fs.rm(scratch, { recursive: true, force: true });
     }
   });
 

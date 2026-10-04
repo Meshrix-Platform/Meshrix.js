@@ -1,36 +1,16 @@
 <script setup lang="ts">
+import { ElOption, ElSelect } from "element-plus";
 import { Moon, Sunny } from "@element-plus/icons-vue";
 import type { Component } from "vue";
+import type {
+  OptionBarEmits,
+  OptionBarIcon,
+  OptionBarModelValue,
+  OptionBarOption,
+  OptionBarProps,
+} from "./option-bar-types";
 
-type OptionBarValue = string | number | boolean;
-type OptionBarModelValue = OptionBarValue | OptionBarValue[];
-type OptionBarIcon = "moon" | "sun";
-type OptionBarOption = {
-  value: OptionBarValue;
-  label: string;
-  disabled?: boolean;
-  icon?: OptionBarIcon;
-  swatches?: string[];
-};
-
-const props = withDefaults(defineProps<{
-  modelValue: OptionBarModelValue;
-  options: OptionBarOption[];
-  label?: string;
-  placeholder?: string;
-  multiple?: boolean;
-  collapseTags?: boolean;
-  collapseTagsTooltip?: boolean;
-  filterable?: boolean;
-  teleported?: boolean;
-  persistent?: boolean;
-  popperClass?: string;
-  disabled?: boolean;
-  clearable?: boolean;
-  size?: string;
-  /** Values treated as "no selection" by Element Plus. Exclude "" so empty-string options can show their label. */
-  emptyValues?: Array<string | number | boolean | null | undefined>;
-}>(), {
+const props = withDefaults(defineProps<OptionBarProps>(), {
   label: "",
   placeholder: "",
   multiple: false,
@@ -46,10 +26,7 @@ const props = withDefaults(defineProps<{
   emptyValues: () => [null, undefined],
 });
 
-const emit = defineEmits<{
-  "update:modelValue": [value: OptionBarModelValue];
-  change: [value: OptionBarModelValue];
-}>();
+const emit = defineEmits<OptionBarEmits>();
 
 const optionIconComponents: Record<OptionBarIcon, Component> = {
   moon: Moon,
@@ -61,7 +38,7 @@ function optionIconComponent(icon?: OptionBarIcon) {
 }
 
 function optionIconForValue(value: unknown) {
-  const option = props.options.find((item: any) => Object.is(item.value, value));
+  const option = props.options.find((item) => Object.is(item.value, value));
   return optionIconComponent(option?.icon);
 }
 

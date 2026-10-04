@@ -56,6 +56,6 @@ for one declarative MCP field; it does not open a general execution channel.
 - `tests/vitest/server/upstream-publishing-raw-boundary.test.ts` passes
   (hostile corpus still rejected; the bounded exemption does not widen the
   attack surface).
-- `tests/vitest/server/upstream-service-publishing-candidate.test.ts` passes.
+- `tests/vitest/server/upstream-service-publishing-evidence.test.ts` passes.
 - Native OrbStack deployment of the change verifies with healthz 200 and
   console 200.

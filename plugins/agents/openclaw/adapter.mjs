@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import { MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, isDirectInvocation, run, runAdapterCli } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "openclaw", label: "OpenClaw", version: "0.0.1", packageName: "@meshrix/agent-openclaw-adapter", commandNames: ["openclaw", "ironclaw", "zeroclaw"], installMode: "external-client-adapter" });
+export const description = descriptor({ target: "openclaw", label: "OpenClaw", version: packageManifest.version, packageName: "@meshrix/agent-openclaw-adapter", commandNames: ["openclaw", "ironclaw", "zeroclaw"], installMode: "external-client-adapter" });
 async function installed(command) { const result = await run(command, ["mcp", "show", MCP_SERVER_NAME], { allowFailure: true }); return result.ok && /\blico\b/iu.test(result.stdout); }
 export const adapter = {
   description,

@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  assembleEnterpriseOfflineBundle,
-  ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS,
-  createEnterpriseOfflineBundleFixture,
-} from "./enterprise-single-node-offline-bundle.ts";
+  assembleSingleNodeOfflineBundle,
+  SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS,
+  createSingleNodeOfflineBundleFixture,
+} from "./single-node-offline-bundle.ts";
 import {
   OFFLINE_DELIVERY_FIRST_GOVERNED_CALL,
   OFFLINE_DELIVERY_INSTRUCTIONS_RELATIVE_PATH,
@@ -52,7 +52,7 @@ export function buildOfflineDeliveryInstructions(bundle?: any) : any {
   const platforms: any = Array.isArray(bundle?.platforms) ? [...bundle.platforms] : [];
   if (
     JSON.stringify(platforms)
-    !== JSON.stringify([...ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS])
+    !== JSON.stringify([...SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS])
   ) {
     failOfflineDelivery(
       "offline_delivery_platform_mismatch",
@@ -137,10 +137,10 @@ export async function produceOfflineDeliveryBundle({
         path.join(os.tmpdir(), "meshrix-offline-delivery-fixture-"),
       );
       ownedRoots.push(fixtureRoot);
-      resolvedMaterials = await createEnterpriseOfflineBundleFixture(fixtureRoot);
+      resolvedMaterials = await createSingleNodeOfflineBundleFixture(fixtureRoot);
       contractFixtureUsed = true;
     }
-    const bundle: any = await assembleEnterpriseOfflineBundle({
+    const bundle: any = await assembleSingleNodeOfflineBundle({
       sourceCandidate: resolvedMaterials.sourceCandidate,
       releaseImageAuthority: resolvedMaterials.releaseImageAuthority,
       releaseImageEvidence: resolvedMaterials.releaseImageEvidence,
@@ -162,7 +162,7 @@ export async function produceOfflineDeliveryBundle({
       hasProvenance: true,
       hasSignatures: true,
       hasInstructions: true,
-      platforms: Object.freeze([...ENTERPRISE_OFFLINE_BUNDLE_PLATFORMS]),
+      platforms: Object.freeze([...SINGLE_NODE_OFFLINE_BUNDLE_PLATFORMS]),
     });
   } finally {
     await Promise.all(

@@ -1,6 +1,6 @@
 ---
 name: meshrix-js-release-engineering-workflow
-description: Plan, implement, and verify substantial Meshrix.js delivery against the private repository release contract. This chapter belongs to $meshrix-js-developer-handbook. Published artifact shape belongs to $meshrix-js-release-artifact-contract.
+description: Plan, implement, and verify substantial Meshrix.js delivery against the repository release contract. This chapter belongs to $meshrix-js-developer-handbook. Published artifact shape belongs to $meshrix-js-release-artifact-contract.
 audience: development
 ---
 
@@ -21,29 +21,50 @@ to `$meshrix-js-user-handbook`.
 
 ## Implement and verify
 
-Update the canonical source first, migrate every owned consumer, regenerate
-derived facts, and remove superseded names, paths, compatibility layers,
-fixtures, tests, and documentation in the same change.
+Apply the common engineering workflow owned by `CONTRIBUTING.md`. Update the
+canonical source first, migrate every owned consumer, regenerate derived
+facts, and remove superseded names, paths, compatibility layers, fixtures,
+tests, and documentation in the same change.
 
 Use `$meshrix-js-regression-planner` to select focused checks and one final
 integration scope. Complete source review and in-scope repairs before final
-regression. A functional-completeness release still requires
-`npm run verify:acceptance` and its current required evidence; ordinary source
-or documentation work does not acquire that release claim automatically.
-Follow `docs/RUNBOOK.md` for the separate release deployment and publication
-requirements. Final-regression failures return to the developer for the repair
-and rerun decision rather than starting an automatic loop.
+regression. Repair in-scope failures found during final verification and rerun
+the affected checks. Normal npm publication uses the default `npm run ci:local`
+engineering scope to build and test the products, prepare the release archives,
+and qualify exact-artifact consumers on the native host platform. Hosted jobs
+install the lockfile-pinned Playwright Chromium browser and its system dependencies
+before verification. Container qualification remains independent of npm publication.
+`npm run verify:acceptance` remains an independent functional-acceptance workflow;
+its candidate receipts, provenance, and ledger do not gate npm publication.
+Follow `docs/RUNBOOK.md` for optional deployment and publication requirements.
 
-A protected resource, runtime-data probe, publication, or external effect
-requires explicit authorization and exact scope. Reuse existing authorization
-for the same target, operation, and effects; do not ask again for an unchanged
-authorized step.
+Follow `AGENTS.md` for execution authority. Local build, install, data
+migration, live acceptance, publication, push, and deployment are distinct
+actions with separate evidence and authorization boundaries.
 
 Offline delivery may run on Linux inside a virtual machine. Prefer Ubuntu;
 accept Debian. Do not treat that path as native Linux support or as `npm run
 verify:acceptance`.
 
 ## Release boundary
+
+`.github/workflows/release.yml` is the normal npm publication workflow. A
+`v*` tag push or manual dispatch from that tag checks out the selected source,
+confirms that its version matches package metadata, runs the applicable build
+and release tests, packs and smoke-tests the `meshrix.js` and
+`@meshrix/gateway` archives, publishes those archives to npm through standard
+GitHub Actions Trusted Publishing, and creates a GitHub Release.
+
+The release definition owns the version and Node/npm toolchain pins. Existing
+npm Trusted Publisher configuration uses the `release-candidate` GitHub
+environment. For first publication, the temporary `NPM_BOOTSTRAP_TOKEN`
+environment secret is exposed as `NODE_AUTH_TOKEN` to create packages that do
+not yet exist; configure Trusted Publishing once the packages exist and then
+remove the secret. Do not make stable-branch promotion a release prerequisite,
+or add cross-workflow run identifiers, custom OIDC probes, or
+candidate receipts as extra publication steps. Branch maintenance remains
+separate from npm publication. The [release runbook](../../docs/RUNBOOK.md#release-definition-and-publication)
+owns the exact operator steps.
 
 Commit only when covered by user authorization; treat push as a separate
 publication decision. Review the exact staged tree before commit and the exact

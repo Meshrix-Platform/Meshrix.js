@@ -1,4 +1,4 @@
 interface:
   display_name: "Meshrix.js"
-  short_description: "Maintain the private Meshrix.js platform"
-  default_prompt: "Use $meshrix-js to maintain the private Meshrix.js platform through its own contracts."
+  short_description: "Maintain the open-source Meshrix.js framework"
+  default_prompt: "Use $meshrix-js to maintain the open-source Meshrix.js framework through its own contracts."

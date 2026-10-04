@@ -16,9 +16,9 @@ renderer and generated report. Live Console evidence uses a 1440 × 1000 CSS
 viewport at 2× device scale, producing 2880 × 2000 PNG screenshots.
 The fixed ten-section structure includes in-document navigation, accessible
 section headings, table captions, and a mandatory interface catalog with
-runtime health beside published operations. A generated local report remains
-scoped but unbound until the external candidate receipt hashes its final bytes.
-The blank template also exposes synthetic-only slots for candidate scope,
+runtime health beside published operations. A generated local report describes
+the observed journey and does not establish npm release eligibility.
+The blank template also exposes synthetic-only slots for execution summary,
 publication/runtime health, the ordered client lifecycle, the visual evidence
 index, journey timings, and cleanup summary. Those slots contain no build
 locations or executed evidence.

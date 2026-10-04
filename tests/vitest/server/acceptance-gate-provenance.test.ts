@@ -39,13 +39,10 @@ describe("acceptance gate provenance substrate", () => {
     }
     const ids = new Set(PLATFORM_ACCEPTANCE_COMMANDS.map((command) => command.id));
     expect(ids).toContain("foundation-tests");
-    expect(ids).toContain("platform-acceptance-plan");
-    expect(ids).toContain("typecheck");
-    expect(ids).not.toContain("npm-package-installability");
-    const deploymentContainerCommand = PLATFORM_ACCEPTANCE_COMMANDS.find((command) =>
-      command.id === "deployment-container-flow"
-    );
-    expect(deploymentContainerCommand?.dependsOn).not.toContain("npm-package-installability");
+    expect(ids).toContain("npm-package-prepare");
+    expect(ids).toContain("npm-package-installability");
+    expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/npm-package-installability.json");
+    expect(ids).not.toContain("deployment-container-flow");
     expect(ACCEPTANCE_REQUIRED_REPORTS.length).toBeGreaterThan(0);
     expect(ACCEPTANCE_REQUIRED_REPORTS).toContain("build/reports/local-info-hygiene.json");
     expect(PLATFORM_ACCEPTANCE_REPORT_PATH).toBe("build/reports/platform-acceptance.json");
@@ -127,6 +124,33 @@ describe("acceptance gate provenance substrate", () => {
     } finally {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }
+  });
+
+  it("allows registered Core auxiliary reports while rejecting unrelated writes", () => {
+    const reports = [
+      "build/reports/repo-organization.json",
+      "build/reports/protocol-boundary.json"
+    ];
+    const registered = createCurrentRunReportDriftAudit({
+      beforeSnapshot: {},
+      afterSnapshot: Object.fromEntries(reports.map((report) => [report, "current"])),
+      allowedReports: [...ACCEPTANCE_REQUIRED_REPORTS, ...PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST]
+    });
+    expect(registered.consistent).toBe(true);
+    expect(registered.currentRunOrphans).toEqual([]);
+    for (const report of reports) expect(ACCEPTANCE_REQUIRED_REPORTS).not.toContain(report);
+
+    const unrelatedReports = [
+      "build/reports/deployment-container-flow.json",
+      "build/reports/unregistered-owner.json"
+    ];
+    const unrelated = createCurrentRunReportDriftAudit({
+      beforeSnapshot: {},
+      afterSnapshot: Object.fromEntries(unrelatedReports.map((report) => [report, "current"])),
+      allowedReports: [...ACCEPTANCE_REQUIRED_REPORTS, ...PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST]
+    });
+    expect(unrelated.consistent).toBe(false);
+    expect(unrelated.currentRunOrphans).toEqual(unrelatedReports);
   });
 
   it("fails closed on stale or unverifiable reports", () => {

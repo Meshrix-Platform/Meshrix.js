@@ -14,6 +14,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import packageManifest from "../../package.json" with { type: "json" };
 import { getTraceContext, traceDetails } from "./trace-context.ts";
 import { ServerConfig } from "#meshrix/server-config";
 import { OTEL_SEMANTIC_FIELDS } from "./otel-semantic-fields.ts";
@@ -22,7 +23,7 @@ import { OTEL_SEMANTIC_FIELDS } from "./otel-semantic-fields.ts";
 // Literal field names used in runtime log record instrumentation.
 const RUNTIME_LOG_OTEL_ATTRIBUTES: Readonly<Record<string, any>> = Object.freeze({
   "service.name": "meshrix-server",
-  "service.version": "0.0.1",
+  "service.version": packageManifest.version,
   "ci.workflow.name": null,
   "ci.job.name": null,
   "gen_ai.operation.name": null,
@@ -430,7 +431,7 @@ function normalizeEventRecord({ component, level, event, details }: Record<strin
     component,
     event: sanitizeString(event, 160),
     [OTEL_SEMANTIC_FIELDS.serviceName]: "meshrix-server",
-    [OTEL_SEMANTIC_FIELDS.serviceVersion]: process.env.npm_package_version || "0.0.1",
+    [OTEL_SEMANTIC_FIELDS.serviceVersion]: packageManifest.version,
     [OTEL_SEMANTIC_FIELDS.processPid]: process.pid,
     [OTEL_SEMANTIC_FIELDS.processCommand]: irreversibleSecurityDigest(process.argv, {
       namespace: "runtime-log:process-command"

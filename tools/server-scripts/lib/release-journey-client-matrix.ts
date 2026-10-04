@@ -6,8 +6,7 @@ import { MCP_TARGET_LABELS } from "../../../packages/protocols/mcp/adapter/gatew
 
 export async function createMatrixTargetEnvironment({
   workDir,
-  target,
-  adapterCacheRoot
+  target
 }: Record<string, any> = {}) : Promise<any> {
   const home: any = path.join(workDir, "client-homes", target);
   await fs.mkdir(home, { recursive: true, mode: 0o700 });
@@ -15,7 +14,6 @@ export async function createMatrixTargetEnvironment({
     HOME: home,
     KIMI_CODE_HOME: path.join(home, ".kimi-code"),
     MESHRIX_MCP_PROCESS_IDENTITY_STORE: "file",
-    MESHRIX_MCP_ADAPTER_CACHE: adapterCacheRoot,
     MESHRIX_MCP_DISCOVERY_FILE: path.join(workDir, "client-discovery", `${target}.json`)
   };
 }
@@ -25,7 +23,6 @@ export async function installMatrixTargetWithApiKey({
   target,
   clientCommand,
   baseUrl,
-  adapterCacheRoot,
   env,
   redact = (value?: any) : any => value
 }: Record<string, any> = {}) : Promise<any> {
@@ -35,7 +32,6 @@ export async function installMatrixTargetWithApiKey({
     "--target", target,
     "--url", baseUrl,
     "--json",
-    "--adapter-cache", adapterCacheRoot,
     "--client-command", clientCommand,
     "--discovery-file", env.MESHRIX_MCP_DISCOVERY_FILE,
     "--token-env", "MESHRIX_MCP_TOKEN",
@@ -82,7 +78,6 @@ export async function installMatrixTargetWithApiKey({
     label: MCP_TARGET_LABELS[target] || target,
     status: "installed",
     credentialSource: "pre-issued-api-key",
-    adapterCacheHit: installed.adapterCacheHit === true,
     postInstallVerification: "deferred_to_mcp_acceptance_matrix"
   };
 }
@@ -91,7 +86,6 @@ export async function uninstallMatrixTarget({
   connectorScript,
   target,
   env,
-  adapterCacheRoot = "",
   redact = (value?: any) : any => value
 }: Record<string, any> = {}) : Promise<any> {
   const args: any[] = [
@@ -100,9 +94,6 @@ export async function uninstallMatrixTarget({
     "--target", target,
     "--json"
   ];
-  if (adapterCacheRoot) {
-    args.push("--adapter-cache", adapterCacheRoot);
-  }
   const child: any = spawn(process.execPath, args, {
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"]

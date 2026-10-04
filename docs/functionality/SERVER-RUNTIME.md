@@ -119,6 +119,29 @@ of hiding a job. A malformed active-job payload is retained as a visible failed
 job with recovery diagnostics; an unreadable payload fails recovery without
 overwriting the original metadata.
 
+## Upload Workspace Materialization
+
+The materialization feature under
+`packages/server-runtime/src/jobs/upload-workspace-materialization/` owns one
+explicit durable state model (`model.ts`), one private SQLite schema and
+transaction store (`schema.ts`, `transaction-store.ts`), and one runtime that
+owns queue registration, deduplicated admission, ordered restart
+reconciliation, execution wiring, cancellation, and the queue/store lifetime
+(`runtime.ts`). `composition/upload-workspace-materialization-provider.ts` only
+asserts the root-owned workspace materialization port, injects the concrete
+ports, and returns the runtime. One component owns each database transaction
+and the queue: the runtime enqueues one deduplicated work item per request,
+reconciles persisted queued or running requests in request-ref order before new
+admission, keeps admitted work during shutdown, and does not close an injected
+transaction store. Concrete domain, store, queue, and composition ports are checked
+by TypeScript through the production wiring; untrusted publication receipts enter
+as unknown and are narrowed at their existing validation boundary. Close seals new
+calls, joins admitted API operations, drains queue handlers without an implicit
+deadline, then releases owned storage. Concurrent close callers share that barrier;
+a failed attempt preserves storage and permits a cleanup retry. An explicitly
+bounded queue observation never removes an active registration. Schema
+initialization failure closes only the store's own database handle.
+
 Storage backup and replacement restore treat `objects/.pending` as private
 atomic-write staging. Backup manifests accept only objects already published by
 rename, and replacement restore neither selects nor deletes an in-flight staged
@@ -161,6 +184,8 @@ this lifecycle before claiming supervised availability.
 The server composition binds the authenticated publishing application, dedicated manifest writer, validated observer-to-snapshot transaction, Operation Permission catalog replacement, scoped audience publication, and protocol-delivery session state without absorbing their domain logic. Deployment configuration supplies distinct manifest and mutable runtime-state roots. A control-plane writer publishes canonical manifests; the gateway runtime reads them through a read-only identity. Filesystem events only mark the manifest set dirty. A bounded scheduler validates a complete candidate revision, builds an immutable snapshot away from request handling, and swaps one reference after validation. Shutdown stops admission, observer scheduling, candidate builds, publication events, and protocol-delivery tracking in dependency order.
 
 Operation Permission, tag projection, downstream invalidation, and protocol acknowledgement state each retain their own revision authority. Composition coordinates only server-owned revision state and exposes redacted lag or failure facts; it does not share mutable registries between those owners or depend on a client implementation. An invalid candidate or failed server protocol stage preserves the documented last-known-good or fail-closed state and cannot expose a partial revision. Client adoption remains an independent compatibility fact and cannot block or promote the server runtime receipt.
+
+The declarative loader reads `<userDataPath>/upstream-config/services.json` and applies its entries independently through the authenticated publishing application. It asks that owner for the canonical service identity and current candidate/published credential references, prepares authenticated values through the external local-secret key provider, then submits one revision-checked create or replace containing the complete descriptor and typed reference. An unchanged credential is reused; a changed credential receives the next service-revision reference, leaving the old candidate and published values intact until the replacement becomes authoritative. Invalid input, unavailable custody, failed writes, and revision conflicts leave the effective service untouched and keep the unchanged file eligible for retry. Diagnostics expose fixed error categories only. The loader coalesces scans, owns one polling timer, reconciles unused secret references against both candidate and published snapshots, and joins in-flight work during close. Entries do not form an all-file transaction.
 
 ## Plugin Runtime
 

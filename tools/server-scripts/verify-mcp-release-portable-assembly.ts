@@ -4,16 +4,18 @@ import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import {
-  MCP_CONNECTOR_PACKAGE_NAME,
-  MCP_CONNECTOR_VERSION
-} from "../../packages/protocols/mcp/adapter/http-mcp-adapter.ts";
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import {
   MCP_STABLE_TOOL_NAME
 } from "../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts";
 import {
+  MCP_CLIENT_TARGETS,
   MCP_SUPPORTED_TARGETS
 } from "../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
 import {
@@ -29,7 +31,10 @@ import {
   verifyNodeRuntimeSignedChecksums,
   resolveBundledNodeVersion
 } from "./lib/mcp-release-portable.ts";
-import { scanPublicArtifact } from "./lib/public-artifact-boundary.ts";
+import {
+  scanPublicArtifact,
+  scanPublicArtifactFiles
+} from "./lib/public-artifact-boundary.ts";
 
 const execFileAsync: any = promisify(execFile);
 
@@ -61,11 +66,12 @@ const report: Record<string, any> = {
   sourceOfTruth: {
     releaseTargets: "packages/protocols/mcp/adapter/mcp-release-targets.ts",
     portableBuilder: "tools/server-scripts/lib/mcp-release-portable.ts",
-    connectorPackage: "packages/protocols/mcp/adapter/gateway-installer/package.json"
+    runtimePackage: "package.json"
   },
   tests: [],
   summary: {}
 };
+const testStatuses: any = new Map<any, any>();
 
 const pathNeedles: any = [...new Set<any>([
   tempRoot,
@@ -102,6 +108,7 @@ function assertNoLeak(value?: any, label: any = "payload") : any {
 }
 
 function record(name?: any, status?: any, evidence: Record<string, any> = {}) : any {
+  testStatuses.set(name, status);
   report.tests.push({ name, status, evidence: safeEvidence(evidence) });
 }
 
@@ -113,7 +120,13 @@ function failureEvidence(error?: any) : any {
   };
 }
 
-async function test(name?: any, fn?: any) : Promise<any> {
+async function test(name?: any, fn?: any, requirements: any[] = []) : Promise<any> {
+  const unavailable: any[] = requirements.filter((required?: any) : any => testStatuses.get(required) !== "passed");
+  if (unavailable.length > 0) {
+    record(name, "not-run", { requiresPassedTests: unavailable });
+    process.stdout.write(`  ${name} ... not-run\n`);
+    return;
+  }
   process.stdout.write(`  ${name} ... `);
   try {
     const evidence: any = await fn();
@@ -122,7 +135,6 @@ async function test(name?: any, fn?: any) : Promise<any> {
   } catch (error: any) {
     record(name, "failed", failureEvidence(error));
     console.log("FAIL");
-    throw error;
   }
 }
 
@@ -136,12 +148,17 @@ async function runPortable(executable?: any, args: any = []) : Promise<any> {
   const result: any = await execFileAsync(command, commandArgs, {
     cwd: path.dirname(executable),
     env: {
-      ...process.env,
+      PATH: process.env.PATH || "",
+      ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+      ...(process.env.WINDIR ? { WINDIR: process.env.WINDIR } : {}),
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       XDG_CONFIG_HOME: path.join(isolatedHome, ".config"),
       APPDATA: path.join(isolatedHome, "AppData", "Roaming"),
       LOCALAPPDATA: path.join(isolatedHome, "AppData", "Local"),
+      TMPDIR: tempRoot,
+      TMP: tempRoot,
+      TEMP: tempRoot,
       ANTIGRAVITY_MCP_CONFIG_ROOT: path.join(isolatedHome, "antigravity"),
       MESHRIX_MCP_DISCOVERY_FILE: path.join(tempRoot, "isolated", "servers.json"),
       MESHRIX_MCP_TOKEN: "",
@@ -179,6 +196,15 @@ async function listFiles(root?: any) : Promise<any> {
   return files.sort();
 }
 
+function portableRuntimeDependencyPaths(bundle?: any) : any[] {
+  return [
+    "app/node_modules/undici",
+    ...(bundle?.clientAdapterPackages || []).map((packageName?: any) =>
+      path.posix.join("app", "node_modules", ...String(packageName).split("/"))
+    )
+  ];
+}
+
 async function createNodeRuntimeFixture() : Promise<any> {
   const distributionRoot: any = path.join(tempRoot, "node-runtime-fixture");
   const executablePath: any = path.join(distributionRoot, "bin", "node");
@@ -203,8 +229,10 @@ async function createNodeRuntimeFixture() : Promise<any> {
 async function writeReport() : Promise<any> {
   report.finishedAt = new Date().toISOString();
   report.summary.testCount = report.tests.length;
-  report.summary.failedCount = report.tests.filter((item?: any) : any => item.status !== "passed").length;
-  report.summary.releaseReady = report.summary.failedCount === 0;
+  report.summary.failedCount = report.tests.filter((item?: any) : any => item.status === "failed").length;
+  report.summary.notRunCount = report.tests.filter((item?: any) : any => item.status === "not-run").length;
+  report.summary.releaseReady = report.summary.failedCount === 0 && report.summary.notRunCount === 0;
+  if (!report.summary.releaseReady) process.exitCode = 1;
   report.summary.reportLeakScan = true;
   assertNoLeak(report, "mcp release portable assembly report");
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
@@ -218,7 +246,8 @@ async function writeReport() : Promise<any> {
 try {
   const outputDir: any = path.join(tempRoot, "out");
   const extractDir: any = path.join(tempRoot, "extract");
-  const packageJson: any = await readJson(path.join(connectorRoot, "package.json"));
+  const packageJson: any = await readJson(path.join(projectRoot, "package.json"));
+  const contractsPackage: any = await readJson(path.join(projectRoot, "packages", "contracts", "package.json"));
   const target: any = currentPortableTarget();
   const bundledVersion: any = await resolveBundledNodeVersion();
   let bundle: any = null;
@@ -226,16 +255,25 @@ try {
   let executable: any = "";
   let nodeRuntimeFixture: any = null;
 
-  await test("connector package metadata matches runtime constants", async () : Promise<any> => {
-    assert.equal(packageJson.name, MCP_CONNECTOR_PACKAGE_NAME);
-    assert.equal(packageJson.version, MCP_CONNECTOR_VERSION);
-    for (const keyword of ["claude-code", "antigravity", "codex", "openclaw", "opencode", "pi"]) {
-      assert.equal(packageJson.keywords?.includes(keyword), true, `missing package keyword: ${keyword}`);
+  await test("root package metadata identifies the published MCP runtime", async () : Promise<any> => {
+    assert.equal(packageJson.name, MCP_NPM_PACKAGE_NAME);
+    assert.equal(packageJson.version, MCP_NPM_PACKAGE_VERSION);
+    assert.equal(packageJson.bin?.["meshrix-mcp"], "dist/apps/server/bin/meshrix-mcp.js");
+    assert.equal(packageJson.dependencies?.[contractsPackage.name], contractsPackage.version);
+    for (const targetEntry of MCP_CLIENT_TARGETS) {
+      assert.equal(packageJson.dependencies?.[targetEntry.adapter.packageName], packageJson.version);
+      assert.equal(
+        packageJson.bundleDependencies?.includes(targetEntry.adapter.packageName),
+        true,
+        `root bundle missing ${targetEntry.adapter.packageName}`
+      );
     }
     return {
       packageName: packageJson.name,
       packageVersion: packageJson.version,
-      releaseTargets: MCP_SUPPORTED_TARGETS
+      publicBin: "meshrix-mcp",
+      releaseTargets: MCP_SUPPORTED_TARGETS,
+      bundledAdapterCount: MCP_CLIENT_TARGETS.length
     };
   });
 
@@ -340,12 +378,7 @@ try {
       assert.notEqual(stat.mode & 0o111, 0, "portable executable bit missing");
     }
     const files: any = await listFiles(extractedRoot);
-    const platformEntrypoints: any = target.startsWith("windows-")
-      ? ["meshrix-mcp.ps1", "meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]
-      : ["meshrix-mcp", "meshrix-mcp-install.sh", "meshrix-mcp-uninstall.sh"];
-    if (target.startsWith("macos-")) {
-      platformEntrypoints.push("install.command", "uninstall.command", "doctor.command");
-    }
+    const platformEntrypoints: any = [bundle.executable];
     for (const required of [
       bundle.executable,
       "mcp-identity.ts",
@@ -353,11 +386,20 @@ try {
       "app/mcp-identity.ts",
       "app/bin/meshrix-mcp.ts",
       "app/mcp-release-targets.ts",
+      "app/gateway-installer/mcp-release-targets.ts",
+      "app/http-mcp-adapter-constants.ts",
       "app/package.json",
       "app/vendor/contracts/mcp-catalog-delivery.ts",
       "app/vendor/contracts/serialization/canonical-json.ts",
       "app/vendor/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+      "app/vendor/foundation/environment-compatibility/index.ts",
+      "app/vendor/foundation/environment-compatibility/host-runtime.ts",
       "app/vendor/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts",
+      "app/node_modules/undici/package.json",
+      "app/node_modules/undici/index.js",
+      "app/node_modules/undici/index-fetch.js",
+      "app/node_modules/undici/LICENSE",
+      "app/node_modules/undici/lib/web/fetch/LICENSE",
       "app/README.md",
       "app/LICENSE",
       "LICENSE",
@@ -372,7 +414,53 @@ try {
     }
     assert.equal(files.some((file?: any) : any => file.startsWith("runtime/")), true);
     const portablePackageJson: any = await readJson(path.join(extractedRoot, "app", "package.json"));
-    assert.equal(portablePackageJson.dependencies?.["@meshrix/contracts"], "0.0.1");
+    const portableUndiciPackageJson: any = await readJson(
+      path.join(extractedRoot, "app", "node_modules", "undici", "package.json")
+    );
+    assert.equal(portablePackageJson.name, packageJson.name);
+    assert.equal(portablePackageJson.version, packageJson.version);
+    assert.equal(portablePackageJson.dependencies?.undici, portableUndiciPackageJson.version);
+    assert.equal(portableUndiciPackageJson.name, "undici");
+    assert.equal(portableUndiciPackageJson.main, "index.js");
+    assert.equal(portableUndiciPackageJson.dependencies, undefined);
+    const expectedComponentPackages: any[] = [...new Set<any>([
+      ...MCP_CLIENT_TARGETS.map((targetEntry?: any) : any => targetEntry.adapter.packageName),
+      "@meshrix/client-adapter-kit"
+    ])].sort();
+    assert.deepEqual(bundle.clientAdapterPackages, expectedComponentPackages);
+    for (const packageName of expectedComponentPackages) {
+      const packageRelativeRoot: any = path.join("app", "node_modules", ...packageName.split("/"));
+      const componentManifest: any = await readJson(path.join(extractedRoot, packageRelativeRoot, "package.json"));
+      assert.equal(componentManifest.name, packageName);
+      assert.equal(componentManifest.version, packageJson.dependencies?.[packageName]);
+      assert.equal(portablePackageJson.dependencies?.[packageName], componentManifest.version);
+      assert.equal(componentManifest.license, packageJson.license);
+      for (const relativeFile of componentManifest.files || []) {
+        assert.equal(
+          files.includes(path.posix.join(packageRelativeRoot.split(path.sep).join("/"), relativeFile)),
+          true,
+          `missing declared component file: ${packageName}/${relativeFile}`
+        );
+      }
+    }
+    assert.equal(
+      portablePackageJson.dependencies?.["@meshrix/client-adapter-kit"],
+      packageJson.dependencies?.["@meshrix/client-adapter-kit"]
+    );
+    const sourceHttpClient: any = await fs.readFile(
+      path.join(connectorRoot, "lib", "cli", "http-json-client.ts"),
+      "utf8"
+    );
+    const portableHttpClient: any = await fs.readFile(
+      path.join(extractedRoot, "app", "lib", "cli", "http-json-client.ts"),
+      "utf8"
+    );
+    assert.equal(portableHttpClient, sourceHttpClient);
+    assert.match(sourceHttpClient, /from "undici";/u);
+    assert.equal(
+      portablePackageJson.imports?.["#meshrix/foundation/environment-compatibility/index"],
+      "./vendor/foundation/environment-compatibility/index.ts"
+    );
     assert.equal(
       portablePackageJson.imports?.["#meshrix/contracts/*"],
       "./vendor/contracts/*.ts"
@@ -403,44 +491,39 @@ try {
       rootName: bundle.rootName,
       fileCount: files.length,
       executable: bundle.executable,
-      contractsDependencyReady: true
+      vendoredContractsReady: true,
+      vendoredUndiciVersion: portableUndiciPackageJson.version,
+      clientAdapterPackageCount: expectedComponentPackages.length
     };
   });
 
-  await test("portable native entrypoints delegate to the bundled verified connector", async () : Promise<any> => {
-    const windowsTarget: any = target.startsWith("windows-");
-    const installer: any = path.join(
-      extractedRoot,
-      windowsTarget ? "meshrix-mcp-install.ps1" : "meshrix-mcp-install.sh"
-    );
-    const installSource: any = await fs.readFile(installer, "utf8");
-    if (windowsTarget) {
-      assert.match(installSource, /meshrix-mcp\.ps1/u);
-      assert.equal(/Invoke-Expression|\biex\b/iu.test(installSource), false);
+  await test("portable platform launcher only starts its sibling verified Node runtime", async () : Promise<any> => {
+    const launcher = path.join(extractedRoot, bundle.executable);
+    const launcherSource: any = await fs.readFile(launcher, "utf8");
+    if (target.startsWith("windows-")) {
+      assert.match(launcherSource, /runtime\\node\.exe/u);
+      assert.match(launcherSource, /app\\bin\\meshrix-mcp\.ts/u);
+      assert.match(launcherSource, /@args/u);
+      assert.equal(/Invoke-Expression|\biex\b/u.test(launcherSource), false);
     } else {
-      assert.match(installSource, /SCRIPT_DIR\/meshrix-mcp/u);
-      assert.equal(installSource.includes("eval "), false);
-      if (target.startsWith("macos-")) {
-        const installCommand: any = await fs.readFile(path.join(extractedRoot, "install.command"), "utf8");
-        assert.match(installCommand, /meshrix-mcp-install\.sh/u);
-      }
+      assert.match(launcherSource, /runtime\/node/u);
+      assert.match(launcherSource, /app\/bin\/meshrix-mcp\.ts/u);
+      assert.match(launcherSource, /"\$@"/u);
+      assert.equal(/curl|fetch|Invoke-WebRequest|registry/iu.test(launcherSource), false);
     }
-    const { stdout, stderr } = await runPortable(
-      installer,
-      windowsTarget ? ["-Command", "version", "-Json"] : ["version", "--json"]
-    );
+    const { stdout, stderr } = await runPortable(launcher, ["version", "--json"]);
     assertNoLeakText(stdout, "portable native version stdout");
     assertNoLeakText(stderr, "portable native version stderr");
     const payload: any = JSON.parse(stdout);
-    assert.equal(payload.packageName, MCP_CONNECTOR_PACKAGE_NAME);
-    assert.equal(payload.packageVersion, MCP_CONNECTOR_VERSION);
+    assert.equal(payload.packageName, MCP_NPM_PACKAGE_NAME);
+    assert.equal(payload.packageVersion, MCP_NPM_PACKAGE_VERSION);
     return {
-      delegatedToBundledConnector: true,
+      delegatedToSiblingNodeEntry: true,
       rawEvalAbsent: true
     };
   });
 
-  await test("Windows portable archive exposes PowerShell-only native entrypoints", async () : Promise<any> => {
+  await test("Windows portable archive exposes one PowerShell Node launcher", async () : Promise<any> => {
     const windowsOutputDir: any = path.join(tempRoot, "out-windows-contract");
     const windowsExtractDir: any = path.join(tempRoot, "extract-windows-contract");
     await fs.mkdir(windowsOutputDir, { recursive: true });
@@ -454,26 +537,25 @@ try {
     await extractTarball(windowsBundle.archivePath, windowsExtractDir);
     const windowsRoot: any = path.join(windowsExtractDir, windowsBundle.rootName);
     const files: any = await listFiles(windowsRoot);
-    for (const required of ["meshrix-mcp.ps1", "meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]) {
+    for (const required of ["meshrix-mcp.ps1"]) {
       assert.equal(files.includes(required), true, `missing Windows PowerShell entrypoint: ${required}`);
     }
     for (const prohibited of [
       "meshrix-mcp",
       "meshrix-mcp-install.sh",
       "meshrix-mcp-uninstall.sh",
-      "install.command",
-      "uninstall.command",
-      "doctor.command"
+      "meshrix-mcp-install.ps1",
+      "meshrix-mcp-uninstall.ps1"
     ]) {
       assert.equal(files.includes(prohibited), false, `unexpected Windows entrypoint: ${prohibited}`);
     }
     const readme: any = await fs.readFile(path.join(windowsRoot, "README.txt"), "utf8");
-    assert.match(readme, /Windows PowerShell install:/u);
-    assert.equal(readme.includes("./meshrix-mcp-install.sh"), false);
+    assert.match(readme, /meshrix-mcp\.ps1 register/u);
+    assert.equal(readme.includes("meshrix-mcp-install"), false);
     return {
-      powershellEntrypoints: 3,
+      powershellEntrypoints: 1,
       posixEntrypointsAbsent: true,
-      batchAliasesAbsent: files.every((file?: any) : any => !file.endsWith(".cmd"))
+      standaloneInstallerAssetsAbsent: true
     };
   });
 
@@ -486,6 +568,24 @@ try {
       await sha256(path.join(extractedRoot, "app", "LICENSE")),
       await sha256(path.join(connectorRoot, "LICENSE"))
     );
+    const undiciPackageJson: any = await readJson(
+      path.join(extractedRoot, "app", "node_modules", "undici", "package.json")
+    );
+    assert.equal(
+      await sha256(path.join(extractedRoot, "app", "node_modules", "undici", "LICENSE")),
+      await sha256(path.join(projectRoot, "node_modules", "undici", "LICENSE"))
+    );
+    const notices: any = await fs.readFile(path.join(extractedRoot, "THIRD_PARTY_NOTICES.txt"), "utf8");
+    assert.equal(
+      notices.includes(`Undici ${undiciPackageJson.version} runtime is bundled under app/node_modules/undici/`),
+      true
+    );
+    assert.equal(notices.includes("app/node_modules/undici/LICENSE"), true);
+    assert.equal(notices.includes("app/node_modules/undici/lib/web/fetch/LICENSE"), true);
+    assert.equal(
+      await sha256(path.join(extractedRoot, "app", "node_modules", "undici", "lib", "web", "fetch", "LICENSE")),
+      await sha256(path.join(projectRoot, "node_modules", "undici", "lib", "web", "fetch", "LICENSE"))
+    );
     for (const filename of ["LICENSE", "NOTICE"]) {
       assert.equal(
         await sha256(path.join(extractedRoot, "licenses", "node", filename)),
@@ -495,6 +595,8 @@ try {
     return {
       projectLicensePresent: true,
       connectorLicensePresent: true,
+      undiciLicensePresent: true,
+      undiciVersion: undiciPackageJson.version,
       nodeLegalFileCount: bundle.nodeLegalFiles.length,
       thirdPartyNoticeIndexPresent: true
     };
@@ -515,9 +617,57 @@ try {
     };
   });
 
+  await test("artifact policy admits only declared portable runtime packages", async () : Promise<any> => {
+    const portablePackagePath: any = "app/node_modules/undici/package.json";
+    const undeclared: any = await scanPublicArtifactFiles(extractedRoot, [portablePackagePath]);
+    assert.equal(undeclared.findings.some((finding?: any) : any =>
+      finding.ruleId === "repository_or_dependency_metadata"), true);
+    const broadDeclaration: any = await scanPublicArtifactFiles(extractedRoot, [portablePackagePath], {
+      allowedBundledDependencyPaths: ["app/node_modules"]
+    });
+    assert.equal(broadDeclaration.findings.some((finding?: any) : any =>
+      finding.ruleId === "repository_or_dependency_metadata"), true);
+    const declared: any = await scanPublicArtifactFiles(extractedRoot, [portablePackagePath], {
+      allowedBundledDependencyPaths: ["app/node_modules/undici"]
+    });
+    assert.deepEqual(declared.findings, []);
+    const firstAdapterPackage: any = MCP_CLIENT_TARGETS[0].adapter.packageName;
+    const firstAdapterRoot: any = path.posix.join("app", "node_modules", ...firstAdapterPackage.split("/"));
+    const declaredAdapter: any = await scanPublicArtifactFiles(
+      extractedRoot,
+      [path.posix.join(firstAdapterRoot, "package.json"), path.posix.join(firstAdapterRoot, "adapter.mjs")],
+      { allowedBundledDependencyPaths: portableRuntimeDependencyPaths(bundle) }
+    );
+    assert.deepEqual(declaredAdapter.findings, []);
+    return {
+      undeclaredPackageTreeRejected: true,
+      broadNodeModulesDeclarationRejected: true,
+      exactUndiciClosureAccepted: true,
+      exactAdapterClosureAccepted: true
+    };
+  }, ["portable archive extracts with executable and runtime files"]);
+
   await test("portable unpacked artifact passes privacy-safe public boundary scan", async () : Promise<any> => {
-    const scan: any = await scanPublicArtifact(extractedRoot, {
-      localNeedles: [projectRoot, tempRoot]
+    const allowedBundledDependencyPaths: any[] = portableRuntimeDependencyPaths(bundle);
+    const undeclaredPackageRoot: any = path.join(extractedRoot, "app", "node_modules", "@meshrix", "undeclared-probe");
+    await fs.mkdir(undeclaredPackageRoot, { recursive: true });
+    await fs.writeFile(path.join(undeclaredPackageRoot, "package.json"), "{\"name\":\"@meshrix/undeclared-probe\"}\n", "utf8");
+    let scan: any;
+    try {
+      const withUndeclaredPackage: any = await scanPublicArtifact(extractedRoot, {
+        localNeedles: [projectRoot, tempRoot],
+        allowedBundledDependencyPaths
+      });
+      assert.equal(withUndeclaredPackage.findings.some((finding?: any) : any => (
+        finding.ruleId === "repository_or_dependency_metadata"
+        && finding.relativePath === "app/node_modules/@meshrix/undeclared-probe"
+      )), true);
+    } finally {
+      await fs.rm(undeclaredPackageRoot, { recursive: true, force: true });
+    }
+    scan = await scanPublicArtifact(extractedRoot, {
+      localNeedles: [projectRoot, tempRoot],
+      allowedBundledDependencyPaths
     });
     assert.deepEqual(scan.findings, []);
     assert.equal(scan.ok, true);
@@ -525,9 +675,11 @@ try {
       scannedFileCount: scan.summary.scannedFileCount,
       scannedTextFileCount: scan.summary.scannedTextFileCount,
       skippedBinaryOrOversizedFileCount: scan.summary.skippedBinaryOrOversizedFileCount,
+      allowedRuntimeDependencyCount: allowedBundledDependencyPaths.length,
+      undeclaredPackageRejected: true,
       findingCount: scan.summary.findingCount
     };
-  });
+  }, ["portable archive extracts with executable and runtime files"]);
 
   await test("portable meshrix-mcp help exposes the release target set", async () : Promise<any> => {
     const { stdout, stderr } = await runPortable(executable, ["help"]);
@@ -541,22 +693,22 @@ try {
       stderrBytes: Buffer.byteLength(stderr),
       targetCount: MCP_SUPPORTED_TARGETS.length
     };
-  });
+  }, ["portable archive extracts with executable and runtime files"]);
 
   await test("portable meshrix-mcp version json matches stable MCP identity", async () : Promise<any> => {
     const { stdout, stderr } = await runPortable(executable, ["version", "--json"]);
     assertNoLeakText(stdout, "portable version stdout");
     assertNoLeakText(stderr, "portable version stderr");
     const payload: any = JSON.parse(stdout);
-    assert.equal(payload.packageName, MCP_CONNECTOR_PACKAGE_NAME);
-    assert.equal(payload.packageVersion, MCP_CONNECTOR_VERSION);
+    assert.equal(payload.packageName, MCP_NPM_PACKAGE_NAME);
+    assert.equal(payload.packageVersion, MCP_NPM_PACKAGE_VERSION);
     assert.equal(payload.stableToolName, MCP_STABLE_TOOL_NAME);
     return {
       packageName: payload.packageName,
       packageVersion: payload.packageVersion,
       stableToolName: payload.stableToolName
     };
-  });
+  }, ["portable archive extracts with executable and runtime files"]);
 
   await test("portable meshrix-mcp scan no-scan returns every release target without install", async () : Promise<any> => {
     const { stdout, stderr } = await runPortable(executable, ["scan", "--json", "--no-scan"]);
@@ -571,7 +723,64 @@ try {
       candidateCount: targets.length,
       targets
     };
-  });
+  }, ["portable archive extracts with executable and runtime files"]);
+
+  await test("portable connector resolves and describes every bundled adapter", async () : Promise<any> => {
+    const nodeExecutable: any = path.join(
+      extractedRoot,
+      "runtime",
+      target.startsWith("windows-") ? "node.exe" : "node"
+    );
+    const runnerUrl: any = pathToFileURL(path.join(extractedRoot, "app", "lib", "cli", "client-adapter-runner.ts")).href;
+    const targetsUrl: any = pathToFileURL(path.join(extractedRoot, "app", "mcp-release-targets.ts")).href;
+    const script: any = [
+      `const { describeClientAdapter } = await import(${JSON.stringify(runnerUrl)});`,
+      `const { MCP_SUPPORTED_TARGETS } = await import(${JSON.stringify(targetsUrl)});`,
+      "const described = [];",
+      "for (const target of MCP_SUPPORTED_TARGETS) {",
+      "  const { result, adapter } = await describeClientAdapter({ target });",
+      "  described.push({ target, packageName: adapter.packageName, version: adapter.version, descriptorTarget: result.target });",
+      "}",
+      "process.stdout.write(JSON.stringify(described));"
+    ].join("\n");
+    const result: any = await execFileAsync(nodeExecutable, [
+      "--experimental-strip-types",
+      "--input-type=module",
+      "--eval",
+      script
+    ], {
+      cwd: extractedRoot,
+      env: {
+        PATH: process.env.PATH || "",
+        ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+        ...(process.env.WINDIR ? { WINDIR: process.env.WINDIR } : {}),
+        HOME: path.join(tempRoot, "portable-adapter-home"),
+        USERPROFILE: path.join(tempRoot, "portable-adapter-home"),
+        XDG_CONFIG_HOME: path.join(tempRoot, "portable-adapter-home", ".config"),
+        APPDATA: path.join(tempRoot, "portable-adapter-home", "AppData", "Roaming"),
+        LOCALAPPDATA: path.join(tempRoot, "portable-adapter-home", "AppData", "Local"),
+        TMPDIR: tempRoot,
+        TMP: tempRoot,
+        TEMP: tempRoot
+      },
+      maxBuffer: 1024 * 1024
+    });
+    assertNoLeakText(result.stdout, "portable adapter descriptions stdout");
+    assertNoLeakText(result.stderr, "portable adapter descriptions stderr");
+    const described: any[] = JSON.parse(result.stdout);
+    assert.deepEqual(described.map((item?: any) : any => item.target).sort(), [...MCP_SUPPORTED_TARGETS].sort());
+    for (const item of described) {
+      const targetEntry: any = MCP_CLIENT_TARGETS.find((candidate?: any) : any => candidate.target === item.target);
+      assert.equal(item.packageName, targetEntry.adapter.packageName);
+      assert.equal(item.version, packageJson.version);
+      assert.equal(item.descriptorTarget, item.target);
+    }
+    return {
+      describedTargetCount: described.length,
+      standardNodePackageResolution: true,
+      boundedJsonStdioRoundTrip: true
+    };
+  }, ["portable archive extracts with executable and runtime files"]);
 } catch (error: any) {
   process.exitCode = 1;
   if (!report.tests.some((item?: any) : any => item.status === "failed")) {

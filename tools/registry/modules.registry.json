@@ -10,6 +10,7 @@
       "chineseName": "契约",
       "description": "Operation and module contracts.",
       "publicApi": [
+        "#meshrix/contracts/gateway",
         "#meshrix/contracts/mcp-catalog-delivery",
         "#meshrix/contracts/modules/model-usage",
         "#meshrix/contracts/operations/operation-decorators",
@@ -79,6 +80,7 @@
         "#meshrix/foundation/security/authorization/tag-store.port",
         "#meshrix/foundation/security/authorization/tag-tree",
         "#meshrix/foundation/security/final-protected-sink-permit",
+        "#meshrix/foundation/security/gateway-permit",
         "#meshrix/foundation/security/governed-execution-permit-authority",
         "#meshrix/foundation/security/local-path-boundary",
         "#meshrix/foundation/security/operation-audit",
@@ -116,6 +118,7 @@
         "#meshrix/agents/agent-memory/index",
         "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
         "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
+        "#meshrix/agents/service-events",
         "#meshrix/agents/upstream-gateway/index",
         "#meshrix/agents/workspace-asset-registry/index",
         "#meshrix/agents/workspace-contribution",
@@ -129,6 +132,8 @@
       "directory": "packages/capabilities",
       "description": "Operation Permission and capability catalog.",
       "publicApi": [
+        "#meshrix/capabilities/gateway-credentials",
+        "#meshrix/capabilities/gateway-policy",
         "#meshrix/capabilities/operation-permission-core/index",
         "#meshrix/capabilities/operation-permission-core/runtime-schema",
         "#meshrix/capabilities/operation-permission-core/store",
@@ -148,7 +153,10 @@
         "#meshrix/protocols/http/controllers/system-controller",
         "#meshrix/protocols/http/controllers/system-controller-foundation-handlers",
         "#meshrix/protocols/http/controllers/upstream-payload-transit-controller",
-        "#meshrix/protocols/mcp/adapter/http-mcp-adapter",
+        "#meshrix/protocols/mcp/adapter/gateway",
+        "#meshrix/protocols/mcp/legacy",
+        "#meshrix/protocols/mcp/modern-downstream",
+        "#meshrix/protocols/mcp/modern-upstream",
         "#meshrix/protocols/pubsub/event-bus"
       ]
     },
@@ -160,6 +168,7 @@
       "description": "Server composition runtime.",
       "publicApi": [
         "#meshrix/server-runtime/composition/composition-root",
+        "#meshrix/server-runtime/composition/gateway-composition",
         "#meshrix/server-runtime/composition/console-domain/operation-executor",
         "#meshrix/server-runtime/composition/console-domain/services",
         "#meshrix/server-runtime/composition/core-platform-provider",
@@ -185,6 +194,39 @@
         "#meshrix/server-runtime/state/upload-session-admission",
         "#meshrix/server-runtime/state/upload-session-store",
         "#meshrix/server-runtime/state/upload-session-support"
+      ]
+    },
+    {
+      "id": "gateway",
+      "kind": "domain",
+      "owner": "platform",
+      "directory": "packages/gateway",
+      "description": "Protocol-neutral gateway kernel, contracts, routing, admission, and continuation boundary.",
+      "publicApi": [
+        "#meshrix/gateway/index",
+        "#meshrix/gateway/schema",
+        "#meshrix/gateway/payload",
+        "#meshrix/gateway/results",
+        "#meshrix/gateway/catalog",
+        "#meshrix/gateway/routing",
+        "#meshrix/gateway/continuations",
+        "#meshrix/gateway/admission",
+        "#meshrix/gateway/context",
+        "#meshrix/gateway/transit",
+        "#meshrix/gateway/config",
+        "#meshrix/gateway/resources",
+        "#meshrix/gateway/prompts"
+      ],
+      "testSuites": [
+        "gateway.task-001"
+      ],
+      "dependsOn": [
+        "contracts",
+        "foundation",
+        "capabilities",
+        "agents",
+        "protocols-mcp",
+        "server-runtime"
       ]
     },
     {

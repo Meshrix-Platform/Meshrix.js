@@ -5,7 +5,10 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-Meshrix.js is designed for private deployment. Security reporting, authorization behavior, and audit evidence must be handled as operational facts, not public claims.
+Meshrix.js is an open-source TypeScript and Node.js framework. Security
+reporting, authorization behavior, and audit evidence must match the implemented
+boundaries and the exact candidate under review; a source scan or operational
+receipt alone does not establish a release security claim.
 
 ## Supported State
 
@@ -15,7 +18,7 @@ The repository is in pre-release state until the release gate is completed. Secu
 
 Do not report vulnerabilities through public issues.
 
-Use private vulnerability reporting in the repository host, or contact the maintainers through the published project contact channel. Include enough technical evidence for triage:
+Submit reports through the repository's [private vulnerability reporting form](https://github.com/Meshrix-Platform/Meshrix.js/security/advisories/new). Include enough technical evidence for triage:
 
 - affected component or operation;
 - reproduction steps;

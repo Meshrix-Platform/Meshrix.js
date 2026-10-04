@@ -3,18 +3,25 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
+import { REPO_ORGANIZATION_AUDIT_POLICY } from "../tools/registry/architecture-layout-facade.ts";
+
 const root: any = process.cwd();
 
 const scanRoots: any[] = [""];
 
+// Repository-internal roots that are never production source. Generated output
+// and dependency trees are excluded by the registry-owned policy below.
 const excludedPathPrefixes: any[] = [
   ".git/",
   ".codex-research/",
-  ".kilo/node_modules/",
-  "build/release/",
-  "node_modules/",
   "tests/fixtures/"
 ];
+
+// Canonical exclusion for dependency trees and generated output, owned by
+// tools/registry/repo-layout.registry.json (repoOrganizationAudit.ignoredPathParts).
+// Matching is segment-aware, so a dependency tree nested anywhere in the
+// repository is skipped instead of being scanned as source.
+const ignoredPathParts: any = REPO_ORGANIZATION_AUDIT_POLICY.ignoredPathParts;
 
 const scannedExtensions: any = new Set<any>([
   ".js",
@@ -79,6 +86,10 @@ function toPosix(value?: any) : any {
 
 function shouldSkip(relativePath?: any) : any {
   const normalized: any = toPosix(relativePath);
+  const wrapped: any = `/${normalized}/`;
+  if (ignoredPathParts.some((part?: any) : any => wrapped.includes(part))) {
+    return true;
+  }
   return excludedPathPrefixes.some((prefix?: any) : any => normalized.startsWith(prefix));
 }
 

@@ -397,6 +397,7 @@ export function createSystemControllerFoundationHandlers({
       params = {},
       operationLock = null,
       signal = null,
+      operationBudgetOwned = false,
       finalProtectedSinkPermit = null
     }: Record<string, any>) : Promise<any> {
       const method: any = String(operation?.http?.method || "POST").toUpperCase();
@@ -418,7 +419,8 @@ export function createSystemControllerFoundationHandlers({
           request,
           rawRequestBody: rawPublishingCommand ? requestBody : null,
           signal: operationLock?.signal || signal || null,
-          finalProtectedSinkPermit
+          finalProtectedSinkPermit,
+          operationBudgetOwned: operationBudgetOwned === true
         }),
         errorMessage: "上游网关操作失败。"
       });

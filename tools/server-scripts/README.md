@@ -117,6 +117,12 @@ infer failure from elapsed wall-clock time. Protocol request deadlines and
 bounded readiness probes remain local to the network or service interaction
 they protect and are not release-command verdicts.
 
+The unified test runner preserves completed command outcomes. Operator-cancelled
+commands are `cancelled`; selected commands not launched because of interruption,
+failure, or an incomplete prerequisite are `not_run` with a reason. Explicit
+non-strict platform exclusions remain `skipped`, but skipped or missing selected
+coverage cannot set `coverageReady` or `releaseReady`.
+
 Output is limited to the candidate identifier, bounded status, public
 `<server-url>` placeholder, health status classes, and the ordered stage result
 list. Deployment scripts must not emit credentials, private paths, machine

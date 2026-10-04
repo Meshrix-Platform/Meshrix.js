@@ -18,12 +18,14 @@ const entries = (await readdir(skillsRoot, { withFileTypes: true }))
   .sort();
 
 const usageSkills = [];
+const developmentSkills = [];
 for (const name of entries) {
   const skillPath = path.join(skillsRoot, name, "SKILL.md");
   const skill = await readFile(skillPath, "utf8");
   const audience = frontmatterAudience(skill);
   if (audience === "usage") usageSkills.push(name);
-  else if (audience !== "development") {
+  else if (audience === "development") developmentSkills.push(name);
+  else {
     throw new Error(`${name}: audience must be exactly usage or development`);
   }
 }
@@ -47,6 +49,7 @@ for (const name of usageSkills) {
 const manifest = {
   skills: usageSkills,
   count: usageSkills.length,
+  developmentSkills,
 };
 await writeFile(
   path.join(outputRoot, "manifest.json"),

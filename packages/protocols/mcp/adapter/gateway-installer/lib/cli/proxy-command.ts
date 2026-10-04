@@ -4,10 +4,9 @@ import {
   normalizeMcpProxySessionId
 } from "../mcp-proxy-session.ts";
 import { createBoundedStdioOutput } from "./bounded-stdio-output.ts";
-import { HTTP_TIMEOUT_MS } from "./constants.ts";
 import { normalizeTarget, option } from "./basic-utils.ts";
 import { loadMcpApiKeyCredential, loadMcpConnectorPreferences } from "./credential-store.ts";
-import { fetchJson } from "./http-json-client.ts";
+import { CALLER_OWNED_HTTP_LIFETIME, fetchJson, fetchResponse } from "./http-json-client.ts";
 import { authHeaders, optionsWithDiscoveredBaseUrl, registryBaseUrls, resolveApiKey } from "./discovery.ts";
 import { installerOptions } from "./installer-options.ts";
 import { redactSensitiveText } from "./installer-output-safety.ts";
@@ -15,7 +14,10 @@ import {
   mcpModernJsonRpcMessage,
   mcpModernRequestHeaders
 } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
-import { MCP_CONNECTOR_VERSION } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 
 export const MCP_STDIO_FRAMING_JSONL: any = "jsonl";
 export const MCP_STDIO_FRAMING_CONTENT_LENGTH: any = "content-length";
@@ -38,8 +40,8 @@ const MCP_UPDATE_NOTIFICATION_FILTER: any = Object.freeze({
 function modernizeOutgoingMcpMessage(message?: any) : any {
   return mcpModernJsonRpcMessage(message, {
     "io.modelcontextprotocol/clientInfo": {
-      name: "meshrix-mcp-connector",
-      version: MCP_CONNECTOR_VERSION
+      name: MCP_NPM_PACKAGE_NAME,
+      version: MCP_NPM_PACKAGE_VERSION
     }
   });
 }
@@ -167,15 +169,21 @@ export async function forwardProxyMessage({
   target,
   message,
   signal,
-  proxySessionId
+  proxySessionId,
+  timeoutMs,
+  dispatcherFactory,
+  fetchImpl
 }: Record<string, any>) : Promise<any> {
   const correlationSessionId: any = normalizeMcpProxySessionId(proxySessionId);
   const outgoing: any = modernizeOutgoingMcpMessage(message);
   const body: any = JSON.stringify(outgoing);
   const response: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
-    timeoutMs: HTTP_TIMEOUT_MS,
+    requestLifetime: CALLER_OWNED_HTTP_LIFETIME,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
     signal,
+    ...(dispatcherFactory ? { dispatcherFactory } : {}),
+    ...(fetchImpl ? { fetchImpl } : {}),
     headers: {
       ...authHeaders(token, target),
       ...mcpModernRequestHeaders(outgoing),
@@ -242,6 +250,7 @@ export function createProxyRequestDispatcher({
   }
   const activeRequests: any = new Map<any, any>();
   const pendingDispatches: any = new Set<any>();
+  const notificationControllers: any = new Set<any>();
   let cancellationReservations: any = 0;
   let stopped: any = false;
   let outputFailure: any = null;
@@ -310,6 +319,8 @@ export function createProxyRequestDispatcher({
     if (!reserved && !hasPendingCapacity()) {
       return false;
     }
+    const controller: any = new AbortController();
+    notificationControllers.add(controller);
     return trackDispatch((async () : Promise<any> => {
       try {
         await forwardMessage({
@@ -317,10 +328,13 @@ export function createProxyRequestDispatcher({
           token,
           target,
           message,
+          signal: controller.signal,
           proxySessionId: correlationSessionId
         });
       } catch {
         // JSON-RPC notifications are best-effort and never produce responses.
+      } finally {
+        notificationControllers.delete(controller);
       }
     })()) && true;
   }
@@ -430,6 +444,9 @@ export function createProxyRequestDispatcher({
       activeRequest.cancelled = true;
       activeRequest.controller.abort(requestCancellationError());
       releaseCancellationReservation(activeRequest);
+    }
+    for (const controller of notificationControllers) {
+      if (!controller.signal.aborted) controller.abort(requestCancellationError());
     }
   }
 
@@ -605,18 +622,28 @@ export async function resolveProxyCredentials(options: Record<string, any> = {})
 function abortableDelay(milliseconds?: any, signal?: any) : any {
   return new Promise((resolve?: any) : any => {
     if (signal?.aborted) return resolve(null);
-    const timer: any = setTimeout(resolve, milliseconds);
-    timer.unref?.();
-    signal?.addEventListener?.("abort", () : any => {
+    let settled: any = false;
+    const finish: any = () : any => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener?.("abort", onAbort);
       resolve(null);
-    }, { once: true });
+    };
+    const onAbort: any = () : any => finish();
+    const timer: any = setTimeout(finish, milliseconds);
+    timer.unref?.();
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+    if (signal?.aborted) finish();
   });
 }
 
-export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessionId, signal, onNotification, fetchImpl = fetch }: Record<string, any>) : Promise<any> {
+export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessionId, signal, onNotification, fetchImpl, dispatcherFactory }: Record<string, any>) : Promise<any> {
+  if (!signal) throw new TypeError("MCP update subscriptions require an owning AbortSignal.");
   let retryMs: any = 250;
   while (!signal?.aborted) {
+    let request: any = null;
+    let bodyCompleted: any = false;
     try {
       const outgoing: any = modernizeOutgoingMcpMessage({
         jsonrpc: "2.0",
@@ -625,9 +652,12 @@ export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessi
         params: { notifications: MCP_UPDATE_NOTIFICATION_FILTER }
       });
       const correlationSessionId: any = normalizeMcpProxySessionId(proxySessionId);
-      const response: any = await fetchImpl(`${baseUrl}/mcp`, {
+      request = await fetchResponse(`${baseUrl}/mcp`, {
         method: "POST",
+        requestLifetime: CALLER_OWNED_HTTP_LIFETIME,
         signal,
+        fetchImpl,
+        ...(dispatcherFactory ? { dispatcherFactory } : {}),
         headers: {
           ...authHeaders(token, target),
           ...mcpModernRequestHeaders(outgoing, { accept: "text/event-stream" }),
@@ -635,6 +665,7 @@ export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessi
         },
         body: JSON.stringify(outgoing)
       });
+      const response: any = request.response;
       if (!response.ok || !response.body) throw new Error(`MCP subscription failed with HTTP ${response.status}`);
       retryMs = 250;
       let buffer: any = "";
@@ -658,8 +689,11 @@ export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessi
           if (MCP_UPDATE_NOTIFICATIONS.includes(payload?.method)) onNotification(payload);
         }
       }
+      bodyCompleted = true;
     } catch (error: any) {
       if (signal?.aborted || error?.name === "AbortError") break;
+    } finally {
+      if (request) await request.dispose({ failed: !bodyCompleted });
     }
     await abortableDelay(retryMs, signal);
     retryMs = Math.min(retryMs * 2, 10_000);
@@ -667,8 +701,14 @@ export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessi
 }
 
 export async function proxyCommand(options: Record<string, any> = {}) : Promise<any> {
+  const signal: any = options.signal;
+  const stdin: any = options.stdin || process.stdin;
+  const writable: any = options.writable || process.stdout;
+  if (signal?.aborted) throw signal.reason || requestCancellationError();
   const credentials: any = await resolveProxyCredentials(options);
+  if (signal?.aborted) throw signal.reason || requestCancellationError();
   const resolved: any = await optionsWithDiscoveredBaseUrl(options);
+  if (signal?.aborted) throw signal.reason || requestCancellationError();
   const settings: any = installerOptions(resolved);
   const { target, token, autoUpdate } = credentials;
   const proxySessionId: any = createMcpProxySessionId();
@@ -676,10 +716,21 @@ export async function proxyCommand(options: Record<string, any> = {}) : Promise<
     baseUrl: settings.baseUrl,
     token,
     target,
-    proxySessionId
+    proxySessionId,
+    writable,
+    ...(options.forwardMessage ? { forwardMessage: options.forwardMessage } : {}),
+    ...(options.writeMessage ? { writeMessage: options.writeMessage } : {})
   });
   const subscriptionController: any = new AbortController();
+  const abortSubscription: any = () : any => {
+    if (!subscriptionController.signal.aborted) {
+      subscriptionController.abort(signal?.reason || requestCancellationError());
+    }
+  };
+  signal?.addEventListener("abort", abortSubscription, { once: true });
+  if (signal?.aborted) abortSubscription();
   const subscription: any = autoUpdate
+    && !subscriptionController.signal.aborted
     ? subscribeToMcpUpdates({
         baseUrl: settings.baseUrl,
         token,
@@ -693,20 +744,50 @@ export async function proxyCommand(options: Record<string, any> = {}) : Promise<
   const onData: any = (chunk?: any) : any => {
     transport.push(chunk);
   };
-  let onEnd: any;
-  const inputEnded: any = new Promise((resolve?: any) : any => {
-    onEnd = () : any => resolve(null);
-    process.stdin.once("end", onEnd);
+  let resolveShutdown: any;
+  let shutdownSettled: any = false;
+  const shutdownRequested: any = new Promise((resolve?: any) : any => {
+    resolveShutdown = resolve;
   });
-  process.stdin.on("data", onData);
-  const outputFailure: any = await Promise.race([inputEnded, transport.failure]);
-  if (outputFailure) {
-    process.stdin.removeListener("data", onData);
-    process.stdin.removeListener("end", onEnd);
-    process.stdin.pause();
+  const settleShutdown: any = (reason?: any) : any => {
+    if (shutdownSettled) return;
+    shutdownSettled = true;
+    resolveShutdown(reason);
+  };
+  const onEnd: any = () : any => settleShutdown({ type: "stdin-eof" });
+  const onAbort: any = () : any => settleShutdown({ type: "caller-cancelled" });
+  const onOutputFailure: any = (error?: any) : any => settleShutdown({ type: "output-failure", error });
+  stdin.once("end", onEnd);
+  stdin.on("data", onData);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  transport.failure.then(onOutputFailure);
+  if (stdin.readableEnded || stdin.destroyed) onEnd();
+  if (signal?.aborted) onAbort();
+
+  let shutdown: any;
+  let cleanupError: any = null;
+  try {
+    shutdown = await shutdownRequested;
+  } finally {
+    stdin.removeListener("data", onData);
+    stdin.removeListener("end", onEnd);
+    stdin.pause?.();
+    signal?.removeEventListener("abort", onAbort);
+    signal?.removeEventListener("abort", abortSubscription);
+    transport.stop();
+    if (!subscriptionController.signal.aborted) subscriptionController.abort(requestCancellationError());
+    try {
+      await transport.close();
+    } catch (error: any) {
+      cleanupError = error;
+    }
+    try {
+      await subscription;
+    } catch (error: any) {
+      cleanupError ||= error;
+    }
   }
-  subscriptionController.abort();
-  await transport.close();
-  await subscription;
+  if (shutdown?.type === "output-failure") throw shutdown.error;
+  if (cleanupError) throw cleanupError;
   return { ok: true, proxy: "closed" };
 }

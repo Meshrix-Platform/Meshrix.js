@@ -1,7 +1,23 @@
 {
-  "schemaVersion": "v0.0.1:meshrix:client-adapter-descriptor-1", "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
-  "target": "claude-code", "label": "Claude Code", "version": "0.0.1",
-  "packageName": "@meshrix/agent-claude-code-adapter", "entrypoint": "adapter.mjs",
-  "commandNames": ["claude"], "locations": ["local"],
-  "actions": ["describe", "scan", "install", "verify", "uninstall"], "installMode": "external-client-adapter"
+  "schemaVersion": "v0.0.1:meshrix:client-adapter-descriptor-1",
+  "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
+  "target": "claude-code",
+  "label": "Claude Code",
+  "version": "0.1.0",
+  "packageName": "@meshrix/agent-claude-code-adapter",
+  "entrypoint": "adapter.mjs",
+  "commandNames": [
+    "claude"
+  ],
+  "locations": [
+    "local"
+  ],
+  "actions": [
+    "describe",
+    "scan",
+    "install",
+    "verify",
+    "uninstall"
+  ],
+  "installMode": "external-client-adapter"
 }

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import {
   MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, homePath, isDirectInvocation,
   readJsonc, removeNamedEntry, run, runAdapterCli, writeJson
 } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "opencode", label: "OpenCode", version: "0.0.1", packageName: "@meshrix/agent-opencode-adapter", commandNames: ["opencode"], installMode: "external-client-adapter" });
+export const description = descriptor({ target: "opencode", label: "OpenCode", version: packageManifest.version, packageName: "@meshrix/agent-opencode-adapter", commandNames: ["opencode"], installMode: "external-client-adapter" });
 function configPath(request) { return String(request?.client?.configPath || homePath(".config", "opencode", "opencode.jsonc")); }
 async function installed(request) { const config = await readJsonc(configPath(request), {}); return Boolean(config?.mcp?.[MCP_SERVER_NAME]); }
 export const adapter = {

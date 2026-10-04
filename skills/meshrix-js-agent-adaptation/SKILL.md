@@ -55,6 +55,6 @@ schema. Missing evidence is not a verified absence. State any unverified scope
 precisely and continue work that does not depend on it. Do not claim unsupported
 conversation, history, or database behavior to complete an inventory.
 
-The [source index](references/official-sources-and-gap-closure.md) records vendor
+The [source index](../meshrix-js-instance-configuration/references/agent-adaptation-sources.md) records vendor
 sources and verification dates. Update the affected facts and canonical entry
 together; generate distribution and installation copies from those sources.

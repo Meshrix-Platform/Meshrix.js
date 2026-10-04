@@ -49,12 +49,16 @@ async function acknowledge(store?: any, outcome?: any) : Promise<any> {
 }
 
 async function waitForFile(filePath?: any) : Promise<any> {
-  for (let attempt: any = 0; attempt < 200; attempt += 1) {
+  // Bounded by wall clock, not by a fixed attempt count: the competitor is a
+  // freshly spawned Node process, and its startup time depends on how loaded
+  // the host is rather than on how many times we polled.
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
     try {
       await fs.access(filePath);
       return;
     } catch {
-      await new Promise((resolve?: any) : any => setTimeout(resolve, 5));
+      await new Promise((resolve?: any) : any => setTimeout(resolve, 25));
     }
   }
   throw new Error("competitor did not reach the publication barrier");

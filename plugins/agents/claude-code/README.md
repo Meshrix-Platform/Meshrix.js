@@ -4,9 +4,13 @@ Plugin ID: `agent-claude-code`
 
 Status: `stable`
 
-Package: `@meshrix/agent-claude-code-adapter`
+Internal component: `@meshrix/agent-claude-code-adapter`
 
 Group: `agents`
+
+This private first-party module is bundled with `meshrix.js` and included in
+the portable connector runtime. Both consumers use standard Node package
+resolution and invoke it only for an explicit target action.
 
 Claude Code MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
 

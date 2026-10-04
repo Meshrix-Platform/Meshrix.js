@@ -10,6 +10,7 @@ import { MCP_PRIORITY_INSTALL_TARGETS } from "../../../packages/protocols/mcp/ad
 const execFileAsync: any = promisify(execFile);
 export const projectRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 export const connectorRoot: any = path.join(projectRoot, "packages/protocols/mcp/adapter/gateway-installer");
+export const MCP_PORTABLE_ASSET_PREFIX: any = "meshrix-mcp-connector";
 export const PRIORITY_INSTALL_TARGET: any = MCP_PRIORITY_INSTALL_TARGETS.join(",");
 
 export function normalizeReleaseChannel(value?: any) : any {

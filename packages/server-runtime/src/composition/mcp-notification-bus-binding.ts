@@ -1,4 +1,4 @@
-import { configureMcpNotificationBus } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
+import { configureMcpNotificationBus } from "#meshrix/protocols/mcp/notifications";
 import {
   broadcastMcpNotification,
   registerMcpSseConnection,
@@ -7,7 +7,7 @@ import {
 } from "../state/sse-connection-state.ts";
 
 export function bindServerMcpNotificationBus() : any {
-  configureMcpNotificationBus({
+  return configureMcpNotificationBus({
     broadcastNotification: broadcastMcpNotification,
     registerSseConnection: registerMcpSseConnection,
     acknowledgeCatalogConvergence: acknowledgeMcpCatalogConvergence,

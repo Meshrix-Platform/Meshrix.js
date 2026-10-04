@@ -10,7 +10,7 @@ This skill owns the **downstream MCP protocol compatibility matrix** of the
 upstream service publishing journey: verifying each supported MCP protocol
 version through real or simulated consumers, installing the connector,
 invoking the debug operations, uninstalling, and keeping the matrix honest.
-The verification lanes and candidate receipt belong to
+The verification lanes and journey report belong to
 `$meshrix-js-release-journey-producer`; the portable HTML report contract
 belongs to `$meshrix-js-html-report-contract`.
 
@@ -18,7 +18,7 @@ belongs to `$meshrix-js-html-report-contract`.
 
 1. Run `git status --short` for every repository boundary before editing.
 2. Read [references/publishing-contract.md](../meshrix-js-upstream-service-publishing/references/publishing-contract.md) completely when changing the capability flow, state model, security boundary, event contract, protocol delivery, server gate, or client-matrix contract.
-3. Keep the matrix separate from the verification lanes and the report contract: this skill owns protocol-version detection, installation, invocation, uninstall, and the fallback rule; `$meshrix-js-release-journey-producer` owns the lanes and receipt; `$meshrix-js-html-report-contract` owns the report projection.
+3. Keep the matrix separate from the verification lanes and the report contract: this skill owns protocol-version detection, installation, invocation, uninstall, and the fallback rule; `$meshrix-js-release-journey-producer` owns Core verification and the optional integration journey; `$meshrix-js-html-report-contract` owns the report projection.
 
 ## Organize the matrix by MCP protocol version
 

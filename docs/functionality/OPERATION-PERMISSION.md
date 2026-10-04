@@ -81,6 +81,18 @@ accepts only strict `mxak1` credentials. Generic Grants continue to use
 `Authorization: Bearer` or `x-meshrix-tool-token`; the retired API-key-to-Grant
 header alias is not accepted.
 
+An admitted API Key effect remains reserved until its operation and transport
+cleanup settle; reservations do not expire on a timer. Admission consumes the
+configured use and rate allowance once. A call holding the final allowed use
+may finish after admission, while revalidation still checks the credential's
+actual expiry, lifecycle revision, current policy, and organization lineage.
+Closing the owning provider stops new admissions, cancels and drains its active
+calls, then clears ephemeral reservations before closing SQLite. A second
+active Operation Permission facade for the same database is rejected; stale
+ephemeral reservation state is rebuilt only after the existing storage runtime
+lease establishes process ownership and the same-process facade
+registry confirms that no active or poisoned owner holds the canonical database.
+
 One API Key may select Core operations and dynamic upstream operations for the
 same MCP connection. Resource restrictions are evaluated against the current
 operation rather than treated as a requirement to match an unrelated selected
@@ -139,6 +151,13 @@ and protected-sink checks still apply.
 ## Current External Execution Boundary
 
 Operation Permission v1 is the current external execution boundary. External agent clients call `/api/operation-permission/v1/execute`, `/api/operation-permission/v1/dry-run`, or `/api/operation-permission/v1/batch` with a grant token in `Authorization: Bearer <token>` or `x-meshrix-tool-token`; token policy handles grant state, scope, and binding decisions. MCP clients use the `/mcp` outlet projection for the same governed operations.
+
+For projected upstream operations, the internal catalog marks an omitted
+execution budget explicitly so shared execution defaults cannot add an
+unselected deadline. A configured positive operation timeout or MCP service
+`mcp.timeoutMs` remains effective; operations without this upstream marker
+retain their existing Operation Permission timeout behavior. The marker is
+execution metadata, not a nullable public configuration value.
 
 This is an authorization and operation-mediation boundary, not operating-system execution isolation. A governed executable workload additionally requires the target [Execution Sandbox](../architecture/EXECUTION-SANDBOX.md), which enforces the effective filesystem, process, network, secret, resource, output, and tenant restrictions. Missing sandbox enablement, backend configuration, an enforceable policy, or a current per-run grant keeps that workload denied; Operation Permission does not authorize a host-process fallback.
 

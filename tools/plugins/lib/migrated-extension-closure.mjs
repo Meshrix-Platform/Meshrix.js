@@ -22,8 +22,8 @@ export function assertMigratedExtensionClosure(registry) {
   })) throw new Error("migrated runtime plugin catalog entries are incomplete");
   if (MIGRATED_CLIENT_ADAPTER_IDS.some((id) => {
     const entry = byId.get(id);
-    return entry?.adapter !== true || entry?.release !== true;
-  })) throw new Error("migrated client adapter catalog entries are incomplete");
+    return entry?.adapter !== true || entry?.runtime !== false || entry?.release !== false;
+  })) throw new Error("bundled client adapter catalog entries are incomplete");
   return Object.freeze({
     runtimeCount: plugins.filter((entry) => entry.runtime === true).length,
     adapterCount: plugins.filter((entry) => entry.adapter === true).length,

@@ -7,6 +7,8 @@
 
 The gateway is the upstream service forwarding boundary and the runtime consumer of authenticated, revisioned service publications after they pass the control-plane, security, and acceptance contracts below.
 
+Optional first-party MCP client-adapter components ship with `meshrix.js` and are selected explicitly by the connector. Gateway embedding does not require those client integrations or their host applications.
+
 ## Current Runtime Status
 
 Authenticated maintainers publish closed service commands through `/api/gateway/v1/services` and its service-specific replace, disable, remove, and republish routes. Runtime HTTP, RPC, MCP, and console surfaces expose discovery, audit, metrics, publication state, and governed forwarding from the accepted immutable snapshot.
@@ -17,7 +19,7 @@ The production composition binds the control-plane application service, canonica
 
 The self-contained Node.js listener is the implemented embedded profile. It
 can accept HTTP directly for local, development, desktop-adjacent, and bounded
-private deployments without requiring an external reverse proxy.
+single-node deployments without requiring an external reverse proxy.
 
 For production deployments, an operator may place an independently admitted
 Nginx, Caddy, Envoy, or equivalent edge in front of Meshrix.js. The edge may own
@@ -40,9 +42,26 @@ The console can load a portable service document with kind
 `serviceKey` and the complete service `descriptor`. File selection and validation
 are local operations. Import loads the validated document into the editable
 draft. The ordinary **Publish** action is the only submission path: it submits
-the existing authenticated publishing command, waits for `server_published`,
-and then runs the service health check. Import never starts a service, installs
-a plugin, or embeds credential material.
+the existing authenticated publishing command and then observes the accepted
+publication until `server_published`, after which it runs the service health
+check. Import never starts a service, installs a plugin, or embeds credential
+material.
+
+The Console observes an accepted publication with one view-owned, cancellable
+observer per retained service id and accepted service revision. The observer
+owns its status-query request and interval timer and has no attempt or business
+deadline: a slow publication keeps observing until the retained revision
+publishes. Unmount, navigation, selection change, explicit stop, or replacement
+disposes the owned request and timer without cancelling the accepted server
+publication, which keeps running. A status-query failure only interrupts the
+observation and leaves the accepted state visible with an explicit resume
+action; resuming queries the retained revision again and a stale observer
+result never advances a newer selection. Only authoritative server facts settle
+the projection: the retained revision reaching `server_published` advances to
+the runtime health check, while the revision being superseded or removed is the
+separate authoritative failure. An observation interruption, an authoritative
+publication failure, and the independent runtime-health result are three
+distinct projections.
 
 Every HTTP or JSON-RPC operation now publishes an explicit `payloadTransport`
 contract. The request representation is explicit; an HTTP operation may omit
@@ -64,6 +83,18 @@ or install a plugin. Publish assigns an opaque server-side service id
 from the descriptor `serviceKey`, so grants bind to the id returned by the
 publish response.
 
+Each configured HTTP or JSON-RPC operation is published once to downstream MCP
+through its canonical Operation Permission projection. The registry's MCP
+`tools/list` and `tools/call` route is reserved for tools discovered from an
+upstream MCP service; it does not publish a second configured-operation tool.
+Calls to configured operations execute the registered Operation Permission
+operation and retain its final protected-sink permit at the upstream send. Their published
+input schema is the complete declared request schema, and caller arguments stay unchanged
+through validation, approval binding, and permit issuance; the registered executor maps
+them once to the operation's body, query, or JSON-RPC parameters after admission. A service-level
+MCP `tools/call` projection remains an internal authority record for discovered per-tool calls,
+not a second generic public tool.
+
 ## Upstream Service Publishing Contract
 
 One governed transaction preserves safe forwarding behavior:
@@ -78,6 +109,8 @@ One governed transaction preserves safe forwarding behavior:
 8. Expose authenticated catalog pull, acknowledgement, disconnect, timeout, and reconnect fencing through the published protocol. A neutral protocol peer verifies these server semantics; consumer cache replacement is independently owned.
 
 The mutation API returns `publishing` after the durable candidate is accepted. Authenticated service reads expose a separate `publication` object: `server_published` appears only when the durable published snapshot and the gateway, catalog, audience, and protocol-delivery revision chain agree; its terminal facts include the source revision and digest plus the catalog, audience, and protocol revisions. It never asserts client adoption. A protocol timeout disconnects and fences the affected session without rolling back authoritative server publication.
+
+The public command, result, publication, summary, and detail shapes are defined once in `packages/contracts/src/upstream-service-publishing.ts`: the closed authorized command union (`create`, `replace`, `disable`, `remove`, `republish`), the accepted mutation receipt with its candidate publication, the published service list/detail responses, and the separate publication union. A durable service state is `publishing`, `disabled`, or `removed`; the `publication` object is `publishing` or `server_published`, and only `server_published` carries terminal source, catalog, audience, and protocol facts. The Agents publishing ingress keeps raw command parsing, closed-field, ownership, expected-revision, idempotency, and typed-reference validation; the server-runtime operation executor only shapes the request/result transport against the typed application, and the Console client and views consume the same types instead of maintaining their own publishing schema. A portable import document keeps its own `PortableUpstreamServiceImport` semantics and is not a publishing command.
 
 The service-manifest authority is a private normalized SQLite index. A service
 commit updates one service row, one version row, one content-addressed manifest
@@ -105,9 +138,34 @@ Configured `credentialRefs` resolve through the local `secret://` store at forwa
 
 Network forwarding is deny-by-default for loopback, link-local, private, and otherwise restricted address ranges. A descriptor may set `allowLocalNetwork` only to reach an intentionally configured loopback or private-network service. Link-local ranges, recognized cloud metadata endpoints, unspecified addresses, carrier-grade NAT, benchmark, multicast, and reserved ranges remain denied under that opt-in. DNS preflight rejects the entire request when any answer is denied or when resolution yields no valid IP address. HTTP health checks, ordinary HTTP forwarding, and MCP Streamable HTTP sessions use the same DNS preflight and pinned-address transport so the validated address cannot be replaced by a second DNS result during connection establishment. Redirects are not followed implicitly. Response admission checks declared length before reading and enforces the configured limit incrementally while streaming; an oversized stream is cancelled before any partial body is projected.
 
+In Console service publishing, **Service information → Allow loopback or private-network access** edits this existing descriptor permission. It is off for a new service and is never enabled automatically from its URL. Enable it only for an intentionally configured local/private upstream, then publish the change. Existing imports, service edits and browser drafts preserve the explicit choice. If a local MCP service is published but its concrete tools are unavailable, check this setting before retrying tool discovery; a broad client grant does not bypass the upstream network policy.
+
 An MCP stdio upstream process receives only the portable execution baseline needed to start the configured command, descriptor-declared `mcp.env` values, and credential-reference environment bindings. It does not inherit unrelated server, provider, database, or operator environment variables. A service that needs an additional variable must declare that binding explicitly in its descriptor.
 
 Each upstream gateway registry owns one bounded MCP session manager. The supported execution isolation scope is the trusted governance principal plus grant. Meshrix.js does not isolate conversations by TCP connection or child process; different business contexts under the same principal need an explicit business handle. Discovery and health sessions are ephemeral: they reuse an initialized transport by service, purpose, and credential-reference revision, and idle or maximum-lifetime limits may reclaim them. Execution sessions are stateful: effective state is held across idle and maximum-lifetime timers and is not LRU-evicted to admit another caller. Missing trusted principal or grant identity fails closed instead of opening a shared empty-principal session. If an upstream stateful context disappears, that call returns an explicit state-loss error and does not replay the business operation; the same logical session cannot silently become a new upstream context. Only a new lifecycle boundary may rebuild: a newer service or credential generation, an explicit scope retirement, grant or API-key rotation or revocation, or a service disable, republish, delete, or credential-generation change. Those service events still retire every `svc:<serviceId>:…` scope. Grant token rotation, grant revoke or delete, and API-key rotate or revoke reuse the owning audience-refresh notification, match the event identity against the session grant or principal so the ordinary API-key path is not skipped, refuse reuse of the retired execution session, and reclaim it after in-flight requests drain. When execution sessions fill capacity, rejecting a new caller is an explicit capacity failure; existing callers keep their state and a small reserved ephemeral channel remains for catalog refresh and health. A state-lost logical session keeps consuming that execution ownership until an explicit release or a newer generation; the manager does not TTL- or LRU-forget the loss to admit another caller. Failed capacity admission does not leave scope metadata. Per-session and manager-wide concurrency limits reject excess work. Registry shutdown closes all owned sessions. Shared HTTP and stdio `tools/list` follow opaque upstream cursors exactly, including whitespace, until the catalog is complete; an invalid typed or repeated cursor fails closed instead of returning a partial catalog. Advertised MCP `inputSchema` is enforced on governed execution, including `$ref` siblings and local JSON Pointer escaping, while control-plane closed schemas stay strict.
+
+The Agents upstream-gateway feature consumes a narrow domain-owned schema port
+for synchronous budget inspection and isolated input validation; the
+composition root injects the Gateway-backed implementation, and Agents never
+imports Gateway internals or kernel error types. A registry owns one injected
+port for its lifetime: the Gateway-backed port reuses one lazily started,
+bounded Worker pool for schema calls, and registry shutdown closes that pool
+after active work settles. Worker module/Ajv initialization completes before a
+schema job begins its execution budget; hostile schema compilation and value
+validation remain inside the isolated Worker and the existing execution budget.
+Caller cancellation propagates through the port and releases the affected job.
+
+The registry factory and its public methods are typed by
+`packages/agents/src/upstream-gateway/registry-types.ts`: options are explicit
+per port, and the mutable runtime state is single-owned and modeled — the
+service map, the public tool-prefix index, the projected-operation route
+targets, MCP tool cache records, refresh flights with their waiter sets,
+config-preparation controllers, skill-hub subscriptions, endpoint traffic
+buckets, cursors and circuits. Manifest snapshot commits narrow the incoming
+snapshot before replacing those maps and return a typed diff; the durable
+runtime WAL is a discriminated `seed`/`delta` record with a typed audit/metric
+state. Unknown caller or provider input stays `unknown` until the existing
+normalization accepts it.
 
 This session manager is a server-side gateway transport, not a Meshrix MCP
 client product or an unmanaged connection API. Streamable HTTP sessions require
@@ -117,7 +175,19 @@ restricted-address denial, redirect handling, and administrator-controlled
 local-network policy as the rest of the gateway, and a construction path that
 omits that transport fails closed before opening a connection.
 
-The stdio transport keeps one initialized child process for concurrent requests and routes replies by JSON-RPC id. The Streamable HTTP transport performs the MCP initialize/initialized lifecycle, sends the negotiated `MCP-Protocol-Version` and any issued `MCP-Session-Id` on subsequent requests, parses SSE incrementally so notifications may precede the matching result, and uses `DELETE` for best-effort logical session shutdown. An ephemeral session may rebuild once after a session `404`; a stateful execution session returns state loss instead of replaying the call or opening a silent replacement context. Its notification callbacks use one bounded sequential queue per session (`64` messages and `1 MiB`); overflow makes the upstream session fatal instead of creating unbounded callback work. Descriptor or credential headers cannot replace the required JSON `Content-Type`, JSON/SSE `Accept`, session, or protocol headers. The implemented negotiated protocol revision is `2025-06-18`; an upstream that selects a different revision is rejected.
+The legacy stdio transport keeps one initialized child process for concurrent requests and routes replies by JSON-RPC id. The legacy Streamable HTTP session transport performs the MCP initialize/initialized lifecycle, sends the negotiated `MCP-Protocol-Version` and any issued `MCP-Session-Id` on subsequent requests, parses SSE incrementally so notifications may precede the matching result, and uses `DELETE` for best-effort logical session shutdown. An ephemeral session may rebuild once after a session `404`; a stateful execution session returns state loss instead of replaying the call or opening a silent replacement context. Its notification callbacks use one bounded sequential queue per session (`64` messages and `1 MiB`); overflow makes the upstream session fatal instead of creating unbounded callback work. Descriptor or credential headers cannot replace the required JSON `Content-Type`, JSON/SSE `Accept`, session, or protocol headers. At the transport boundary, an explicitly configured positive integer `mcp.timeoutMs` applies to initialization and each MCP business request (`tools/list`, `tools/call`, `resources/read`, `prompts/get`, and `completion/complete`); a positive integer per-call `requestOptions.timeoutMs` overrides it for that request. Explicit budgets must be whole milliseconds within the runtime timer range (1 through 2,147,483,647); invalid values are rejected instead of rounded, clamped, or replaced by an implicit deadline. If neither is supplied, the transport adds no business-request deadline, so caller cancellation or owning-session closure controls settlement. When a higher-level owner already applies the request budget through its cancellation signal, that owner explicitly supplies the internal `requestOptions.timeoutMs: null` marker and the manager forwards it so the session does not restart the budget. A normal cancellation signal without that marker continues to use configured `mcp.timeoutMs`; null is not a nullable descriptor setting. Initialization uses its configured budget or a separate 30-second setup fallback, while HTTP control notifications retain an independently bounded budget. Higher-level configuration normalization determines which explicit budget and cancellation signal reach this session manager. Meshrix's legacy upstream session transport supports `2025-03-26`, `2025-06-18` (the default), and `2025-11-25`. Separately, the platform's modern upstream HTTP path uses `server/discover` followed by `tools/list` for `2026-07-28` through the same configured pinned-DNS transport and credentials, without initialize/session handshakes. Catalog publication waits for a complete valid list across opaque cursors under the shared 64-page, 4,096-tool, and 8 MiB limits; malformed pages, invalid or repeated cursors, failed discovery, and cancellation never publish or cache a partial list. The existing registry cache, single-flight refresh, and independent waiter cancellation remain in force. Modern upstream stdio is not configured and returns an explicit unsupported-transport failure.
+
+Projected upstream business operations have no platform-imposed elapsed-time
+deadline when neither the operation nor the MCP service configures a positive
+request budget. Omitted budgets remain absent through normalization, catalog
+projection, and `executeTool`; caller cancellation or owned registry shutdown
+controls settlement. An explicitly configured positive operation timeout or
+`mcp.timeoutMs` remains effective. MCP initialization, health checks, and
+control notifications keep their separate setup or maintenance budgets and do
+not become business-operation defaults. Admission retains its FIFO and bounded
+capacity. A caller-supplied absolute queue deadline takes precedence over a
+configured operator queue budget; when both are absent, queue waiting has no
+elapsed-time deadline, and an expired waiter is checked again before dispatch.
 
 The downstream `/mcp` SSE stream requires a valid MCP grant. It admits at most
 `256` connections globally, `32` per direct remote address, and `16` per grant,
@@ -143,6 +213,22 @@ credential consumption and must present the same bound permit to the first
 credential, private-artifact, network, process, artifact-write, or other
 protected sink. A header check or controller-local policy call is not a
 substitute for sink-side consumption.
+
+For a published discovered upstream MCP `tools/call` classified as effectful, the
+platform records an operation intent against the exact consumed execution permit
+before execution-time credential resolution, call-scoped discovery, or session
+setup; the earlier read-only catalog projection does not create an effect intent.
+At the selected
+transport boundary it records a durable dispatch-admission receipt, then performs
+the current protected-sink check immediately before HTTP fetch or stdio write.
+The HTTP check runs after DNS admission; the stdio check runs after write-queue
+admission. Discovery, initialize handshakes, and read-only requests do not consume
+the effect's dispatch fence. The kernel records success or a known tool failure
+only after decoding and output-policy validation. A dispatch with a lost,
+malformed, or nonterminal response remains `in_doubt`; the same fenced invocation
+is not automatically resent after session recovery. A new explicit client call
+creates a new permit and intent, so this boundary does not claim exactly-once
+execution across arbitrary client retries.
 
 Streaming authorization may finish before bulk bytes are read, but approval or
 body-dependent policy must first stage a bounded, owner-bound artifact and bind
@@ -202,7 +288,7 @@ weight value per enabled endpoint and is removed with the service.
 
 Caller cancellation is carried from the downstream MCP HTTP request or Operation Permission execution context through the console executor and gateway registry to the selected upstream transport. HTTP cancel is the current request's response-stream or parent-signal abort; it does not scan other POSTs by JSON-RPC id, grant, process, session, or proxy-session header. The stdio connector aborts only its local dispatcher AbortController for that in-flight request and does not POST `notifications/cancelled` to the HTTP adapter. Standard MCP clients need no proxy session header. A cancelled in-flight upstream MCP request emits a best-effort `notifications/cancelled` message for its own upstream JSON-RPC id and terminates only that request; initialization is not cancellation-notified. Timeout and caller cancellation use fixed public reasons and are reported separately as `504` and `499`. The traffic slot is released in the forwarding `finally` path, while other requests sharing the same upstream session continue independently.
 
-Downstream HTTP MCP is the declared Streamable HTTP revision `2026-07-28`. Ordinary success results include `resultType: "complete"`. Discover advertises `supportedVersions` and server identity in `_meta["io.modelcontextprotocol/serverInfo"]`. Each request carries matching `_meta` and `MCP-Protocol-Version` / `Mcp-Method` headers (`Mcp-Name` for name-bearing methods). HTTP POST accepts exactly one JSON-RPC message; a batch is rejected before authorization or execution. Modern `initialize` is not a downstream method. The published and offline standalone connectors share `http-mcp-adapter-client-wire` through package exports and portable vendor assembly; they do not import the server protocol owner. Standard MCP clients authenticate by capability and do not need a private identity or proxy-session header. Upstream MCP forwarding keeps its own initialize/session revision (`2025-06-18`) and the stateful/ephemeral execution-session rules above. New support fields, standard-client admission, and configured business response policy remain in force.
+Downstream HTTP MCP is the declared Streamable HTTP revision `2026-07-28`. Ordinary success results include `resultType: "complete"`. Discover advertises `supportedVersions` and server identity in `_meta["io.modelcontextprotocol/serverInfo"]`. Every JSON-RPC request carries `params._meta["io.modelcontextprotocol/protocolVersion"]` and an object-valued `params._meta["io.modelcontextprotocol/clientCapabilities"]`. HTTP requests also carry matching `MCP-Protocol-Version` and `Mcp-Method` headers, plus `Mcp-Name` for name-bearing methods. The standalone stdio adapter enforces the same body metadata without requiring HTTP mirror headers. Authorization-scoped `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list`, and successful `resources/read` results carry `ttlMs: 0` and `cacheScope: "private"`. HTTP notifications receive an empty `202` acknowledgement; stdio emits no notification reply. HTTP POST accepts exactly one JSON-RPC message; a batch is rejected before authorization or execution. Modern `initialize` is not a downstream method. The published and offline standalone connectors share `http-mcp-adapter-client-wire` through package exports and portable vendor assembly; they do not import the server protocol owner. Standard MCP clients authenticate by capability and do not need a private identity or proxy-session header. Upstream forwarding has two implemented paths: modern HTTP performs `server/discover`, complete `tools/list` pagination, and governed `tools/call` at `2026-07-28` without initialize/session state, while the stateful/ephemeral initialize/session transport above is legacy `2025-06-18`; modern upstream stdio is not configured. New support fields, standard-client admission, and configured business response policy remain in force.
 
 The stdio connector dispatches concurrent local requests. Cancellation is that request's local AbortController; it does not POST `notifications/cancelled` and does not use a proxy-session header as a cross-request cancellation key. A connector-generated proxy session is optional correlation for connector-managed identity only. Its parser and dispatcher enforce finite frame, input-buffer, active-request, and pending-work limits. Its stdout writer performs at most one underlying write before `drain`, bounds queued messages and bytes, waits for output drain during close, and stops input and active work when output capacity or the drain deadline is exceeded. Capacity rejection uses a fixed JSON-RPC error, ordinary notifications are best-effort at capacity, and an admitted request reserves enough work capacity for its own local cancellation.
 
@@ -214,7 +300,9 @@ Server protocol conformance uses a neutral downstream peer generated from the MC
 
 Native downstream installation requires an administrator-issued scoped API Key supplied through the documented environment variable or protected standard input. The connector validates the key before I/O, stores only the environment-variable reference, and sends only `X-Meshrix.js-Api-Key`. The server authenticates the workload before catalog projection and routes every permitted call through canonical Operation Permission; optional pending-operation approval remains a separate post-authentication control. Local uninstall removes connector-managed configuration without a credential or server request.
 
-The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. The catalog accepts only explicit operator-supplied packages; all client commands, configuration formats, probes, installation code, and compatibility evidence remain outside Core. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
+Eligible API Key issuers receive current upstream MCP tool facts from `/api/operation-permission/v1/api-keys/issuer-scopes`. Each fact identifies one tool by service ID and public name and includes its capability, scopes, toolsets, and risk. A key policy grants only the exact discovered tool capabilities selected in the Console. The service-level `tools/call` Operation Permission record remains the internal execution authority; selecting that record or its toolset does not grant every discovered tool from the service. Discovery is reported as available, partial, or unavailable. Only confirmed tools are selectable; stale selections block issuance until removed or replaced by a current identity, and tools published after issuance remain outside that key’s capability set.
+
+The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. First-party adapter components are private modules bundled with `meshrix.js`; the connector resolves them from the installed root package and invokes them only for an explicit target action. Each component owns its client commands, configuration format, probes, and target-specific mutation behavior behind the bounded JSON-stdio contract. The connector owns target selection, authorization, credential custody, proxying, and install/uninstall orchestration. Client applications remain independent external products.
 
 The pre-release format-convert compatibility fixture projects one external
 `POST /v1/convert` route as
@@ -247,9 +335,10 @@ The upstream gateway E2E verifier publishes local fixture services through the d
 The upstream fixture transit verifier (`npm run verify:upstream-fixture-transit`) registers the self-contained fixture twice — once as a REST/HTTP external service with `responseSchema` and `publicResponseFields`, once as an MCP service over stdio with an HTTP-transport variant — then proves REST forwarding, MCP tool projection and transit, `state.increment` followed by `state.probe` in the same initialized stdio session, secret-store credential injection on both header and env paths, identity-proof redaction, downstream tool visibility, and denial paths (missing scope, destructive without approval). The managed-session transport tests additionally cover concurrent id routing, SSE notification/result interleaving, session headers and `404` rebuilding, cancellation without side effects, slot release, and isolation of a concurrent peer request.
 
 The downstream agent tool-loop and connector installation verifiers exercise
-independently released adapter compatibility. They may validate a real
-`meshrix-mcp proxy` or locally installed target, but their reports are outside
-the server functional DAG. Server cancellation and downstream protocol
+the first-party adapter components shipped in `meshrix.js` and the selected
+external client's compatibility. They may validate a real `meshrix-mcp proxy`
+or locally installed target, but their reports are outside the server
+functional DAG. Server cancellation and downstream protocol
 behavior are instead proven through the neutral protocol peer against `/mcp`,
 Operation Permission, the gateway registry, and the deterministic upstream
 fixture.
@@ -297,7 +386,7 @@ file-size budget and from any global Meshrix.js upload policy:
 ```bash
 npm run verify:upstream-gateway
 npm run verify:upstream-service-publishing
-npm run verify:release-journey -- --adapter-source <adapter-package-dir> --image-name <local-image>
+npm run verify:release-journey -- --image-name <local-image>
 npm run verify:upstream-fixture-transit
 npm run verify:console-gateway-mcp-workflows
 npx vitest run tests/vitest/server/http-mcp-adapter-cancellation.test.ts tests/vitest/server/mcp-sse-admission.test.ts tests/vitest/server/upstream-mcp-session-manager.test.ts tests/vitest/server/upstream-gateway-session-cancellation.test.ts tests/vitest/server/mcp-proxy-cancellation.test.ts

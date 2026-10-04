@@ -40,7 +40,7 @@
       "id": "agent-antigravity",
       "path": "plugins/agents/antigravity",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -48,7 +48,7 @@
       "summary": "Antigravity peer adapter plugin.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "antigravity",
         "packageName": "@meshrix/agent-antigravity-adapter",
@@ -60,7 +60,7 @@
       "id": "agent-claude-code",
       "path": "plugins/agents/claude-code",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -68,7 +68,7 @@
       "summary": "Claude Code peer adapter plugin.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "claude-code",
         "packageName": "@meshrix/agent-claude-code-adapter",
@@ -80,7 +80,7 @@
       "id": "agent-codex",
       "path": "plugins/agents/codex",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -88,7 +88,7 @@
       "summary": "Codex peer adapter plugin.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "codex",
         "packageName": "@meshrix/agent-codex-adapter",
@@ -100,7 +100,7 @@
       "id": "agent-kimi",
       "path": "plugins/agents/kimi",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -108,7 +108,7 @@
       "summary": "Kimi CLI peer adapter plugin.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "kimi",
         "packageName": "@meshrix/agent-kimi-adapter",
@@ -120,7 +120,7 @@
       "id": "agent-openclaw",
       "path": "plugins/agents/openclaw",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -128,7 +128,7 @@
       "summary": "OpenClaw peer adapter plugin.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "openclaw",
         "packageName": "@meshrix/agent-openclaw-adapter",
@@ -140,7 +140,7 @@
       "id": "agent-opencode",
       "path": "plugins/agents/opencode",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -148,7 +148,7 @@
       "summary": "OpenCode peer adapter plugin.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "opencode",
         "packageName": "@meshrix/agent-opencode-adapter",
@@ -160,7 +160,7 @@
       "id": "agent-pi",
       "path": "plugins/agents/pi",
       "status": "stable",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "group": "agents",
       "types": [
         "client-peer-plugin"
@@ -168,7 +168,7 @@
       "summary": "Official Pi extension package for the governed Meshrix MCP connector.",
       "runtime": false,
       "adapter": true,
-      "release": true,
+      "release": false,
       "adapterContract": {
         "target": "pi",
         "packageName": "@meshrix/agent-pi-adapter",

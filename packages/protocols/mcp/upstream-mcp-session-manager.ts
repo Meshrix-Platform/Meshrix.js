@@ -5,10 +5,12 @@ import {
   abortError,
   asArray,
   asObject,
+  collectCompleteMcpToolsList,
   fatalSessionError,
   isHttpMcpTransport,
   normalizeTransportConfig,
   positiveInt,
+  requestTimeoutMs as effectiveMcpRequestTimeoutMs,
   sessionIdentity,
   text,
   UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION
@@ -25,6 +27,15 @@ const EXECUTION_SCOPE_MARKER: any = ":exec:";
 
 function boundedInt(value?: any, fallback?: any, maximum: any = Number.MAX_SAFE_INTEGER) : any {
   return Math.min(positiveInt(value, fallback), maximum);
+}
+
+function validateRequestBudget(config?: any, requestOptions?: any) : any {
+  effectiveMcpRequestTimeoutMs(requestOptions, normalizeTransportConfig(config));
+}
+
+function forwardedRequestTimeout(requestOptions?: any) : any {
+  if (requestOptions.timeoutMs !== undefined) return { timeoutMs: requestOptions.timeoutMs };
+  return {};
 }
 
 function capacityError(message?: any, code?: any) : any {
@@ -626,68 +637,35 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
       });
     },
     async listTools(config: Record<string, any> = {}, requestOptions: Record<string, any> = {}) : Promise<any> {
+      validateRequestBudget(config, requestOptions);
       return execute(config, requestOptions.signal, async (session?: any) : Promise<any> => {
-        const maxPages: any = 64;
-        const maxTools: any = 4_096;
-        const maxBytes: any = 8 * 1024 * 1024;
-        const seenCursors: any = new Set<any>();
-        const tools: any[] = [];
-        let cursor: any = undefined;
-        let bytes: any = 0;
-        for (let page = 1; page <= maxPages; page += 1) {
-          const result: any = await session.request("tools/list", cursor === undefined ? {} : { cursor }, {
+        const tools: any = await collectCompleteMcpToolsList((cursor?: any) : Promise<any> =>
+          session.request("tools/list", cursor === undefined ? {} : { cursor }, {
             signal: requestOptions.signal,
-            onNotification: requestOptions.onNotification
-          });
-          const pageTools: any = asArray(result.tools).filter((tool?: any) : any => tool && typeof tool === "object");
-          bytes += Buffer.byteLength(JSON.stringify(pageTools), "utf8");
-          if (tools.length + pageTools.length > maxTools || bytes > maxBytes) {
-            throw Object.assign(new Error("Upstream MCP tools/list exceeded the complete-list admission limit."), {
-              code: "upstream_mcp_tools_list_limit",
-              status: 502
-            });
-          }
-          tools.push(...pageTools);
-          if (result.nextCursor === undefined) {
-            return {
-              protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
-              initialized: session.initialized,
-              tools
-            };
-          }
-          if (typeof result.nextCursor !== "string") {
-            throw Object.assign(new Error("Upstream MCP tools/list returned an invalid cursor."), {
-              code: "upstream_mcp_tools_list_cursor_invalid",
-              status: 502
-            });
-          }
-          const nextCursor: any = result.nextCursor;
-          if (seenCursors.has(nextCursor)) {
-            throw Object.assign(new Error("Upstream MCP tools/list returned a repeated cursor."), {
-              code: "upstream_mcp_tools_list_cursor_repeated",
-              status: 502
-            });
-          }
-          seenCursors.add(nextCursor);
-          cursor = nextCursor;
-        }
-        throw Object.assign(new Error("Upstream MCP tools/list exceeded the page admission limit."), {
-          code: "upstream_mcp_tools_list_page_limit",
-          status: 502
-        });
+            onNotification: requestOptions.onNotification,
+            ...forwardedRequestTimeout(requestOptions)
+          })
+        );
+        return {
+          protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
+          initialized: session.initialized,
+          tools
+        };
       });
     },
 
     async callTool(config: Record<string, any> = {}, call: Record<string, any> = {}, requestOptions: Record<string, any> = {}) : Promise<any> {
       const toolName: any = text(call.name);
       if (!toolName) throw new Error("Upstream MCP tools/call requires tool name.");
+      validateRequestBudget(config, requestOptions);
       return execute(config, requestOptions.signal, async (session?: any) : Promise<any> => {
         const result: any = await session.request("tools/call", {
           name: toolName,
           arguments: asObject(call.arguments)
         }, {
           signal: requestOptions.signal,
-          onNotification: requestOptions.onNotification
+          onNotification: requestOptions.onNotification,
+          ...forwardedRequestTimeout(requestOptions)
         });
         return {
           protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
@@ -695,6 +673,26 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
           result
         };
       });
+    },
+
+    async invokeGateway(config: Record<string, any> = {}, invocation: Record<string, any> = {}, requestOptions: Record<string, any> = {}) : Promise<any> {
+      const method: any = text(invocation.method);
+      if (!method || !["tools/call", "resources/read", "prompts/get", "completion/complete"].includes(method)) {
+        throw Object.assign(new Error("Upstream MCP method is not published for gateway execution."), { code: "upstream_mcp_method_denied", status: 403 });
+      }
+      validateRequestBudget(config, requestOptions);
+      return execute(config, requestOptions.signal, async (session?: any) : Promise<any> => ({
+        protocolVersion: UPSTREAM_MCP_CLIENT_PROTOCOL_VERSION,
+        initialized: session.initialized,
+        result: await session.request(method, asObject(invocation.params), {
+          signal: requestOptions.signal,
+          onNotification: requestOptions.onNotification,
+          ...forwardedRequestTimeout(requestOptions),
+          ...(method === "tools/call" && typeof requestOptions.beforeSend === "function"
+            ? { beforeSend: requestOptions.beforeSend }
+            : {})
+        })
+      }));
     },
 
     snapshot() : any {

@@ -16,6 +16,7 @@ import {
   validateDriverAggregate,
   validateScenarioBudgets,
 } from "./lib/release-deployment/contract.ts";
+import { observeReleaseDeploymentEnvironment } from "./lib/release-deployment/authority.ts";
 import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const MAX_CREDENTIAL_BYTES = 8 * 1024;
@@ -118,6 +119,10 @@ function isRecord(value: any): value is Record<string, any> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+export function standardClientHeaders(credential: string): Record<string, string> {
+  return { "X-Meshrix.js-Api-Key": credential };
+}
+
 function projectedToolPayload(payload: any, sequence: number): any {
   if (!isRecord(payload) || payload.jsonrpc !== "2.0" || payload.id !== sequence ||
     !isRecord(payload.result) || !isRecord(payload.result.structuredContent) ||
@@ -196,8 +201,7 @@ async function requestOnce({
         arguments: callArguments(protocol, scenario, sequence),
       },
     }, {
-      "X-Meshrix.js-Api-Key": credential,
-      "X-Meshrix.js-MCP-Target": "codex",
+      ...standardClientHeaders(credential),
     });
     const response = await fetch(`${origin}/mcp`, {
       method: "POST",
@@ -312,6 +316,7 @@ export async function driveDeployment({
   budgets = SCENARIO_BUDGETS,
   probe = true,
 }: Record<string, any> = {}): Promise<any> {
+  const executionEnvironment = await observeReleaseDeploymentEnvironment();
   validateScenarioBudgets(budgets);
   const origin = parseLoopbackOrigin(originUrl);
   const privateCredential = validateCredential(credential);
@@ -340,6 +345,7 @@ export async function driveDeployment({
   const aggregate = {
     schemaVersion: RELEASE_DEPLOYMENT_AGGREGATE_SCHEMA,
     externalBoundary: true,
+    executionEnvironment,
     scenarios,
   };
   const reasons = validateDriverAggregate(aggregate);
@@ -387,7 +393,7 @@ async function main(): Promise<void> {
   if (args.length === 1 && args[0] === "--self-test") {
     const budgets = validateScenarioBudgets();
     parseLoopbackOrigin("http://127.0.0.1:7228");
-    process.stdout.write(`${JSON.stringify({ ok: true, ...budgets, fixedWorkerPool: true })}\n`);
+    process.stdout.write(`${JSON.stringify({ ok: true, ...budgets })}\n`);
     return;
   }
   const options: Record<string, string> = {};

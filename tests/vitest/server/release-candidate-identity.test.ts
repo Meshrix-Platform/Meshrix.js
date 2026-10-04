@@ -40,7 +40,7 @@ function canonicalPackageIdentityInput(overrides: Record<string, any> = {}) : an
     releaseDefinitionSha256: RELEASE_DEFINITION_SHA256,
     packageLockSha256: PACKAGE_LOCK_SHA256,
     releasePackages: RELEASE_PACKAGES,
-    supportedProfiles: ["enterprise-single-node"],
+    supportedProfiles: ["single-node"],
     reportInventoryDigest: REPORT_INVENTORY_DIGEST,
     ...overrides
   };
@@ -77,7 +77,7 @@ describe("release source-candidate identity", () : any => {
       package_lock_sha256: PACKAGE_LOCK_SHA256,
       release_package_inventory_sha256: expect.any(String),
       report_inventory_digest: REPORT_INVENTORY_DIGEST,
-      supported_profiles: ["enterprise-single-node"]
+      supported_profiles: ["single-node"]
     });
     expect(normal.candidate_digest).toMatch(/^[a-f0-9]{64}$/u);
     expect(normal.release_package_inventory_sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -133,7 +133,7 @@ describe("release source-candidate identity", () : any => {
     }))).toThrow();
 
     expect(() : any => buildReleaseCandidateIdentity(canonicalPackageIdentityInput({
-      supportedProfiles: ["enterprise-single-node", "enterprise-ha"]
+      supportedProfiles: ["single-node", "multi-node"]
     }))).toThrow();
 
     expect(() : any => buildReleaseCandidateIdentity(canonicalPackageIdentityInput({

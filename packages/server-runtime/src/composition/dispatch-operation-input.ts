@@ -139,6 +139,7 @@ export async function invokeRegisteredOperation({
   authSession = null,
   operationLock = null,
   signal = null,
+  operationBudgetOwned = false,
   finalProtectedSinkPermit = null
 }: Record<string, any>) : Promise<any> {
   const controller: any = controllers[operation.target.controller];
@@ -169,6 +170,8 @@ export async function invokeRegisteredOperation({
     applyQueryParams(operation, url, callParams);
   }
   applyCoercion(operation, callParams);
+  // This server-owned marker is assigned after business input and query fields.
+  callParams.operationBudgetOwned = operationBudgetOwned === true;
   if (operationLock) {
     callParams.operationLock = operationLock;
   }

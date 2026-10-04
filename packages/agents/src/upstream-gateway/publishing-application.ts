@@ -13,10 +13,18 @@ import {
   UPSTREAM_SERVICE_ENDPOINT_FIELDS,
   UPSTREAM_SERVICE_OPERATION_FIELDS
 } from "@meshrix/contracts/upstream-service-publishing";
+import type {
+  UpstreamPublishingAction,
+  UpstreamServiceDetailResponse,
+  UpstreamServiceListResponse,
+  UpstreamServicePublication,
+  UpstreamServicePublishingResult
+} from "@meshrix/contracts/upstream-service-publishing";
 import {
   canonicalizeTypedReferenceManifest,
   SERVICE_MANIFEST_SCHEMA_VERSION
 } from "@meshrix/foundation/storage/storage-ports";
+import type { TypedManifestReference } from "@meshrix/foundation/storage/storage-ports";
 import { compileClosedJsonSchema } from "@meshrix/foundation/security/closed-json-schema";
 import { parseWithDuplicateRejection, rejectPollutionKeys, rejectUnsafeUnicode } from "./manifest-compiler.ts";
 import { compilePayloadTransport } from "./payload-contract.ts";
@@ -331,9 +339,8 @@ function validateRemoteUrl(value?: any, field?: any) : any {
   } catch {
     throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must be a remote URL.`);
   }
-  const hasExplicitPort: any = /^https?:\/\/(?:\[[^\]]+\]|[^/:?#]+):[0-9]{1,5}(?:[/?#]|$)/u.test(value);
-  if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || !hasExplicitPort) {
-    throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must use an HTTP transport with an explicit port and no embedded credentials.`);
+  if (!/^https?:\/\//iu.test(value) || !["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must use an HTTP(S) URL without embedded credentials.`);
   }
 }
 
@@ -376,11 +383,23 @@ function validateRemoteMcpDescriptor(descriptor?: any) : any {
   }
   const remoteUrl: any = mcp.url || mcp.endpoint || mcp.baseUrl || descriptor.baseUrl;
   validateRemoteUrl(remoteUrl, "descriptor.mcp.url");
+  validateOptionalExecutionTimeout(mcp.timeoutMs, "descriptor.mcp.timeoutMs");
   if (descriptor.operations !== undefined) {
     throw publishingError(
       "upstream_publishing_descriptor_invalid",
       400,
       "Developer-published MCP services derive tools/call from the remote catalog and do not accept operations arrays."
+    );
+  }
+}
+
+function validateOptionalExecutionTimeout(value?: any, field: any = "timeoutMs") : any {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647) {
+    throw publishingError(
+      "upstream_publishing_descriptor_invalid",
+      400,
+      `${field} must be a positive whole number of milliseconds within the supported timer range.`
     );
   }
 }
@@ -425,6 +444,7 @@ function validateDescriptorSafety(descriptor?: any) : any {
     for (const operation of descriptor.operations) {
       assertPlainObject(operation, "Publishing operation must be an object.");
       assertClosedFields(operation, OPERATION_FIELDS, "Publishing operation");
+      validateOptionalExecutionTimeout(operation.timeoutMs, "descriptor.operations.timeoutMs");
       if (typeof operation.operationKey !== "string" || !SAFE_KEY.test(operation.operationKey)) {
         throw publishingError("upstream_publishing_descriptor_invalid", 400, "Publishing operationKey is invalid.");
       }
@@ -509,13 +529,72 @@ function mapStorageError(error?: any) : any {
   return error;
 }
 
+/**
+ * Producer interface for the authenticated publishing application. Domain
+ * authority stays here: raw command parsing, closed-field checks, ownership,
+ * expected revisions, idempotency and typed-reference safety are applied
+ * before any durable effect, and this interface only exposes the accepted
+ * result, the published list, and the owner-scoped detail.
+ */
+export interface UpstreamPublishingSubject {
+  subjectId?: string;
+  scopes?: string[];
+}
+
+export interface UpstreamPublishingRequestOptions {
+  signal?: AbortSignal | null;
+}
+
+export interface UpstreamPublishingExecuteOptions extends UpstreamPublishingRequestOptions {
+  expectedAction?: UpstreamPublishingAction | "";
+  expectedServiceId?: string;
+}
+
+/**
+ * Authoritative owner context for the composition-owned declarative config
+ * loader. It is deliberately a read/preflight result; publication still goes
+ * through the normal revision-checked command path.
+ */
+export interface UpstreamConfigServicePreparation {
+  serviceId: string;
+  action: "create" | "replace";
+  expectedServiceRevision: number;
+  expectedSetRevision: number;
+  currentDescriptor: Readonly<Record<string, unknown>> | null;
+  currentReferences: readonly TypedManifestReference[];
+  publishedReferences: readonly TypedManifestReference[];
+}
+
+export interface UpstreamPublishingApplication {
+  prepareConfigFileService(
+    serviceKey: string,
+    descriptor: Readonly<Record<string, unknown>>,
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingRequestOptions
+  ): Promise<UpstreamConfigServicePreparation>;
+  list(
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingRequestOptions
+  ): Promise<UpstreamServiceListResponse>;
+  get(
+    serviceId: string,
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingRequestOptions
+  ): Promise<UpstreamServiceDetailResponse>;
+  execute(
+    rawCommand?: unknown,
+    subject?: UpstreamPublishingSubject | null,
+    options?: UpstreamPublishingExecuteOptions
+  ): Promise<UpstreamServicePublishingResult>;
+}
+
 export function createUpstreamPublishingApplication({
   writerPort,
   readerPort,
   publishedReaderPort = null,
   getPublicationFacts = () : any => null,
   auditPort
-}: Record<string, any>) : any {
+}: Record<string, any>) : UpstreamPublishingApplication {
   if (typeof writerPort?.commitManifestSet !== "function" || typeof readerPort?.getSnapshot !== "function") {
     throw new TypeError("Upstream publishing application requires durable writer and snapshot reader ports.");
   }
@@ -536,7 +615,7 @@ export function createUpstreamPublishingApplication({
     return authenticated.scopes.has("gateway:admin") || record.manifest?.metadata?.ownerRef === authenticated.ownerRef;
   }
 
-  function publicationFor(record?: any, candidateSnapshot?: any, publishedSnapshot?: any) : any {
+  function publicationFor(record?: any, candidateSnapshot?: any, publishedSnapshot?: any) : UpstreamServicePublication {
     const publicationRef: any = `urn:meshrix:upstream-publication:${digest(
       "upstream-publication",
       record.serviceId,
@@ -552,12 +631,12 @@ export function createUpstreamPublishingApplication({
       facts.sourceRevision === publishedSnapshot.setRevision &&
       facts.sourceDigest === publishedSnapshot.setDigest
     );
-    return Object.freeze({
-      publicationRef,
-      status: serverPublished ? "server_published" : "publishing",
-      candidateRevision: candidateSnapshot.setRevision,
-      candidateDigest: candidateSnapshot.setDigest,
-      ...(serverPublished ? {
+    if (serverPublished) {
+      return Object.freeze({
+        publicationRef,
+        status: "server_published",
+        candidateRevision: candidateSnapshot.setRevision,
+        candidateDigest: candidateSnapshot.setDigest,
         terminal: Object.freeze({
           sourceRevision: facts.sourceRevision,
           sourceDigest: facts.sourceDigest,
@@ -565,12 +644,56 @@ export function createUpstreamPublishingApplication({
           audienceRevision: facts.audienceRevision,
           protocolRevision: facts.protocolRevision
         })
-      } : {})
+      });
+    }
+    return Object.freeze({
+      publicationRef,
+      status: "publishing",
+      candidateRevision: candidateSnapshot.setRevision,
+      candidateDigest: candidateSnapshot.setDigest
     });
   }
 
   return Object.freeze({
-    async list(subject?: any, { signal }: Record<string, any> = {}) : Promise<any> {
+    async prepareConfigFileService(
+      serviceKey?: string,
+      inputDescriptor?: Readonly<Record<string, unknown>>,
+      subject?: UpstreamPublishingSubject | null,
+      { signal }: UpstreamPublishingRequestOptions = {}
+    ): Promise<UpstreamConfigServicePreparation> {
+      if (typeof publishedReaderPort?.getSnapshot !== "function") {
+        throw publishingError(
+          "upstream_publishing_publication_state_unavailable",
+          503,
+          "Configuration publication requires the authoritative published snapshot reader."
+        );
+      }
+      const authenticated: any = authenticate(subject);
+      if (!isUpstreamServiceKey(serviceKey)) {
+        throw publishingError("upstream_publishing_service_key_invalid", 400, "Configuration requires a canonical serviceKey.");
+      }
+      const serviceId: any = opaqueServiceId(authenticated.subjectId, serviceKey);
+      const ownerRef: any = `urn:meshrix:subject:${digest("upstream-owner", authenticated.subjectId)}`;
+      const snapshot: any = await readerPort.getSnapshot({ signal });
+      const existing: any = snapshot.getService(serviceId);
+      existingOwnership(existing, ownerRef);
+      const action: "create" | "replace" = existing ? "replace" : "create";
+      authorize(authenticated, action);
+      const descriptor: any = descriptorFromCommand({ action, descriptor: inputDescriptor }, existing);
+      const publishedSnapshot: any = await publishedReaderPort.getSnapshot({ signal });
+      const publishedRecord: any = publishedSnapshot?.getService?.(serviceId) || null;
+      existingOwnership(publishedRecord, ownerRef);
+      return Object.freeze({
+        serviceId,
+        action,
+        expectedServiceRevision: existing?.serviceRevision || 0,
+        expectedSetRevision: snapshot.setRevision,
+        currentDescriptor: existing?.manifest?.payload?.descriptor || null,
+        currentReferences: Object.freeze([...(existing?.manifest?.references || [])]),
+        publishedReferences: Object.freeze([...(publishedRecord?.manifest?.references || [])])
+      });
+    },
+    async list(subject?: UpstreamPublishingSubject | null, { signal }: UpstreamPublishingRequestOptions = {}) : Promise<UpstreamServiceListResponse> {
       const authenticated: any = readSubject(subject);
       const snapshot: any = await readerPort.getSnapshot({ signal });
       const publishedSnapshot: any = typeof publishedReaderPort?.getSnapshot === "function"
@@ -587,7 +710,7 @@ export function createUpstreamPublishingApplication({
         }));
       return Object.freeze({ ok: true, setRevision: snapshot.setRevision, services: Object.freeze(services) });
     },
-    async get(serviceId?: any, subject?: any, { signal }: Record<string, any> = {}) : Promise<any> {
+    async get(serviceId?: string, subject?: UpstreamPublishingSubject | null, { signal }: UpstreamPublishingRequestOptions = {}) : Promise<UpstreamServiceDetailResponse> {
       const authenticated: any = readSubject(subject);
       const snapshot: any = await readerPort.getSnapshot({ signal });
       const publishedSnapshot: any = typeof publishedReaderPort?.getSnapshot === "function"
@@ -614,7 +737,7 @@ export function createUpstreamPublishingApplication({
         })
       });
     },
-    async execute(rawCommand?: any, subject?: any, { signal, expectedAction = "", expectedServiceId = "" }: Record<string, any> = {}) : Promise<any> {
+    async execute(rawCommand?: unknown, subject?: UpstreamPublishingSubject | null, { signal, expectedAction = "", expectedServiceId = "" }: UpstreamPublishingExecuteOptions = {}) : Promise<UpstreamServicePublishingResult> {
       const authenticated: any = authenticate(subject);
       const command: any = parseCommand(rawCommand);
       if (expectedAction && command.action !== expectedAction) {

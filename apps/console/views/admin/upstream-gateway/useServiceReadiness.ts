@@ -69,10 +69,10 @@ const TOOL_CATALOG_PATH = "/admin/tool-list";
 const OPERATION_PERMISSION_PATH = "/admin/operation-permission";
 const API_KEY_DISTRIBUTION_PATH = "/admin/api-key-distribution";
 
-// The gateway audit endpoint records forward events (eventType
-// "upstream.forward.completed" per verify-upstream-gateway-e2e.ts).
-function isForwardEvent(item: UpstreamGatewayAuditItem): boolean {
-  return /^upstream\.forward\./u.test(String(item.eventType || ""));
+// HTTP forwarding and MCP tool calls have distinct audit namespaces at the
+// same gateway endpoint. Both are real observed call attempts.
+function isUpstreamCallEvent(item: UpstreamGatewayAuditItem): boolean {
+  return /^upstream\.(?:forward|mcp\.(?:call|gateway))\./u.test(String(item.eventType || ""));
 }
 
 /**
@@ -101,6 +101,11 @@ export function buildServiceReadinessStages(data: ServiceReadinessData): Service
   );
   const catalogToolIds = new Set(catalogTools.map((tool: any) => tool.id));
   const catalogToolsetIds = new Set(catalogTools.flatMap((tool: any) => tool.toolsets || []));
+  const coveringMcpKey = service.serviceProtocol === "mcp" && (apiKeys || []).some((record) =>
+    record.status === "active" && Date.parse(record.expiresAt) > Date.now()
+    && (record.policy?.serviceIds || []).includes(service.serviceId)
+    && (record.policy?.allowedTools || []).length > 0,
+  );
   const coveringGrant = (grants || []).some((grant: any) =>
     grant.enabled !== false &&
     ((grant.toolsets || []).some((toolsetId: any) => catalogToolsetIds.has(toolsetId)) ||
@@ -110,7 +115,7 @@ export function buildServiceReadinessStages(data: ServiceReadinessData): Service
     (record.policy?.serviceIds || []).includes(service.serviceId),
   );
   const callSeen = audit.some(
-    (item: any) => item.serviceId === service.serviceId && isForwardEvent(item),
+    (item: any) => item.serviceId === service.serviceId && isUpstreamCallEvent(item),
   );
 
   return [
@@ -126,8 +131,8 @@ export function buildServiceReadinessStages(data: ServiceReadinessData): Service
     ),
     stage(
       "grantExists",
-      catalog === null || grants === null ? "unknown" : coveringGrant ? "done" : "pending",
-      coveringGrant ? undefined : { path: OPERATION_PERMISSION_PATH },
+      coveringMcpKey || coveringGrant ? "done" : catalog === null || grants === null ? "unknown" : "pending",
+      coveringMcpKey || coveringGrant ? undefined : { path: service.serviceProtocol === "mcp" ? API_KEY_DISTRIBUTION_PATH : OPERATION_PERMISSION_PATH },
     ),
     stage(
       "keyIssued",

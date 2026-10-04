@@ -3,17 +3,16 @@ import { computed, ref, type ComputedRef, type Ref } from "vue";
 // Publish outcome model (REQ-017): a client-derivable stage projection over
 // the publish flow plus an interpreted runtime-health result. Stages are data
 // records (id + dictionary label key + one of four states) rendered by one
-// projection; transitions are a linear advance/fail enforced here — the State
-// pattern was rejected in design §9 for exactly this shape.
+// projection; transitions are a linear advance/fail enforced here.
 //
-// Server-contract verdict (design §8): the publish client exposes three
-// client-derivable boundaries — (1) the create/replace request (one opaque
-// call returning `PublishingResult`), (2) the gateway-publication polling loop
-// (`waitForUpstreamServicePublication`, sequential client-side calls), and
-// (3) the runtime health check. The plan's four-stage server model folds
-// "operation permission publication" inside the request/response contract, so
-// it is NOT a derivable boundary; finer staging needs a server contract
-// (flagged in the design artifact).
+// The publish client exposes three client-derivable boundaries — (1) the
+// create/replace/republish request (one opaque call returning
+// `UpstreamServicePublishingResult`), (2) the accepted-publication observation
+// (`observeUpstreamServicePublication`, one owned request/timer per retained
+// service revision), and (3) the runtime health check. The accepted server
+// publication and the client-owned observer lifetime are modeled separately: a
+// stopped, interrupted, replaced, or unavailable observer never changes the
+// accepted server state and never becomes a server-failure projection.
 
 export const PUBLISH_STAGE_IDS: readonly string[] = [
   "publish-request",
@@ -52,6 +51,7 @@ export type InterpretedHealthCheck = {
   /** Flat dictionary key into the `publishOutcome` group. */
   label: string;
   status: InterpretedHealthStatus;
+  statusCode?: number;
   remediation?: { route: string; query?: Record<string, string> };
 };
 
@@ -62,21 +62,50 @@ export type InterpretedHealth = {
   raw: unknown;
 };
 
-/** Flow handles the outcome model needs from the view (selection is N13's). */
+/** Flow handles the outcome model needs from the view; selection stays view-owned. */
 export type PublishFlowHandles = {
-  /** Current selection; read for the done-state handoff to N17. */
+  /** Current selection; read for the done-state handoff to the success next steps. */
   serviceId: () => string;
+};
+
+/**
+ * Client-owned observation lifetime. It never represents a server state: the
+ * accepted publication below is retained across every transition.
+ */
+export type PublishObservationStatus = "idle" | "observing" | "interrupted" | "stopped";
+
+/** The accepted server publication an observer tracks, independent of the observer. */
+export type AcceptedPublication = {
+  serviceId: string;
+  serviceRevision: number;
+  setRevision: number;
 };
 
 export type PublishOutcomeModel = {
   stages: Ref<PublishStage[]>;
   health: Ref<InterpretedHealth | null>;
-  /** All stages done — N17 attaches success next steps to this state. */
+  /** Retained accepted publication; only a newer run or selection clears it. */
+  acceptedPublication: Ref<AcceptedPublication | null>;
+  /** Client-only observer lifecycle for the accepted publication. */
+  observation: Ref<PublishObservationStatus>;
+  /** All stages done — the success next steps attach to this state. */
   done: ComputedRef<boolean>;
   begin: (stageId: string) => void;
   advance: () => void;
   complete: (stageId: string, payload?: unknown) => void;
   fail: (stageId: string, payload?: unknown) => void;
+  /** Records the accepted server publication and starts its observation. */
+  acceptPublication: (publication: AcceptedPublication) => void;
+  /** Resumes observation of the retained accepted publication. */
+  beginObservation: () => void;
+  /** Temporary client-side interruption; the accepted publication is retained. */
+  interruptObservation: () => void;
+  /** Explicit stop; the accepted publication is retained for a later resume. */
+  stopObservation: () => void;
+  /** Observer settled: the accepted publication is no longer observed. */
+  clearPublication: () => void;
+  /** Starts a fresh projection: pending stages, no health, no accepted publication. */
+  resetRun: () => void;
 };
 
 function isRecord(value: unknown): value is Record<string, any> {
@@ -107,11 +136,18 @@ export function interpretUpstreamHealth(payload: unknown, serviceId: string): In
   const endpoints: unknown[] = Array.isArray(record.endpoints) ? record.endpoints : [];
   for (const endpoint of endpoints) {
     const endpointRecord: Record<string, any> = isRecord(endpoint) ? endpoint : {};
+    const publicEndpoint: Record<string, any> = isRecord(endpointRecord.endpoint) ? endpointRecord.endpoint : {};
+    const endpointId = isRecord(endpointRecord.endpoint)
+      ? (typeof publicEndpoint.endpointId === "string" ? publicEndpoint.endpointId : "")
+      : (typeof endpointRecord.endpoint === "string" ? endpointRecord.endpoint : "");
     const healthy: boolean = endpointRecord.ok === true;
     checks.push({
-      id: String(endpointRecord.endpoint ?? ""),
+      id: endpointId,
       label: "checkEndpoint",
       status: healthy ? "pass" : "fail",
+      ...(Number.isSafeInteger(endpointRecord.status) && endpointRecord.status >= 100 && endpointRecord.status <= 599
+        ? { statusCode: endpointRecord.status }
+        : {}),
       ...(healthy ? {} : { remediation: gatewayDetailRemediation(serviceId) }),
     });
   }
@@ -146,16 +182,47 @@ export function createPublishOutcomeModel(flow: PublishFlowHandles): PublishOutc
     })),
   );
   const health: Ref<InterpretedHealth | null> = ref(null);
+  const acceptedPublication: Ref<AcceptedPublication | null> = ref(null);
+  const observation: Ref<PublishObservationStatus> = ref("idle");
 
   function stageById(stageId: string): PublishStage | undefined {
     return stages.value.find((stage) => stage.id === stageId);
   }
 
-  function reset(): void {
+  function clearPublication(): void {
+    acceptedPublication.value = null;
+    observation.value = "idle";
+  }
+
+  function resetRun(): void {
     for (const stage of stages.value) {
       stage.state = "pending";
     }
     health.value = null;
+    clearPublication();
+  }
+
+  function acceptPublication(publication: AcceptedPublication): void {
+    acceptedPublication.value = { ...publication };
+    observation.value = "observing";
+  }
+
+  function beginObservation(): void {
+    if (acceptedPublication.value) {
+      observation.value = "observing";
+    }
+  }
+
+  function interruptObservation(): void {
+    if (acceptedPublication.value) {
+      observation.value = "interrupted";
+    }
+  }
+
+  function stopObservation(): void {
+    if (acceptedPublication.value) {
+      observation.value = "stopped";
+    }
   }
 
   function begin(stageId: string): void {
@@ -168,7 +235,11 @@ export function createPublishOutcomeModel(flow: PublishFlowHandles): PublishOutc
       stages.value.some((stage) => stage.state === "failed") ||
       stages.value[0]?.state === "done";
     if (terminal) {
-      reset();
+      resetRun();
+    } else {
+      // A new publish run supersedes the previously retained observation; the
+      // accepted server publication it tracked is no longer the live target.
+      clearPublication();
     }
     for (let i = 0; i < stages.value.length; i += 1) {
       const stage = stages.value[i];
@@ -227,5 +298,21 @@ export function createPublishOutcomeModel(flow: PublishFlowHandles): PublishOutc
     () => stages.value.length > 0 && stages.value.every((stage) => stage.state === "done"),
   );
 
-  return { stages, health, done, begin, advance, complete, fail };
+  return {
+    stages,
+    health,
+    acceptedPublication,
+    observation,
+    done,
+    begin,
+    advance,
+    complete,
+    fail,
+    acceptPublication,
+    beginObservation,
+    interruptObservation,
+    stopObservation,
+    clearPublication,
+    resetRun,
+  };
 }

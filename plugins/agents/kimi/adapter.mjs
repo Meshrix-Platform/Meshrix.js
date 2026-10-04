@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import packageManifest from "./package.json" with { type: "json" };
 import os from "node:os";
 import path from "node:path";
 import {
@@ -6,7 +7,7 @@ import {
   readJsonc, removeNamedEntry, run, runAdapterCli, writeJson
 } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "kimi", label: "Kimi CLI", version: "0.0.1", packageName: "@meshrix/agent-kimi-adapter", commandNames: ["kimi"], installMode: "external-client-adapter" });
+export const description = descriptor({ target: "kimi", label: "Kimi CLI", version: packageManifest.version, packageName: "@meshrix/agent-kimi-adapter", commandNames: ["kimi"], installMode: "external-client-adapter" });
 function configPath(request) {
   const override = String(request?.client?.configPath || "").trim();
   if (override) return override;

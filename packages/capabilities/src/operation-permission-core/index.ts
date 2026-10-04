@@ -40,6 +40,7 @@ export async function createOperationPermissionPlatform({
   apiKeyVerifierKeyProvider = null,
   apiKeyClock = undefined,
   apiKeyRandomBytes = undefined,
+  readMcpToolSelection = null,
   logger = getRuntimeLogger()
 }: Record<string, any>) : Promise<any> {
   const registeredChangeHandlers: any = new Set<any>(
@@ -160,6 +161,7 @@ export async function createOperationPermissionPlatform({
         apiKeyDistributionProvider,
         authorizationStore,
         securityPermissions: effectiveSecurityPermissions,
+        readMcpToolSelection,
         catalog: () : any => registry.getCatalog()
       },
       securityPermissions: effectiveSecurityPermissions,

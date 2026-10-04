@@ -173,6 +173,13 @@ describe("service readiness strip", () : any => {
     expect(stageById(stages, "keyIssued").link).toEqual({ path: "/admin/api-key-distribution" });
   });
 
+  it("takes MCP users directly to scoped client-key authorization without fabricating readiness", () : any => {
+    const stages = stagesFor({ service: { ...serviceFixture(), serviceProtocol: "mcp" }, catalog: catalogFixture([]), grants: [], apiKeys: [] });
+    expect(stageById(stages, "grantExists").state).toBe("pending");
+    expect(stageById(stages, "grantExists").link).toEqual({ path: "/admin/api-key-distribution" });
+    expect(stageById(stages, "keyIssued").state).toBe("pending");
+  });
+
   it("derives grant exists through toolAllow and honors disabled grants", () : any => {
     const catalog = catalogFixture([
       { id: "inventory.get", serviceId: SERVICE_ID, toolsets: ["inventory-tools"] },
@@ -215,6 +222,29 @@ describe("service readiness strip", () : any => {
 
     const withoutPolicy: any = stagesFor({ apiKeys: [{ keyId: "key-x" }] });
     expect(stageById(withoutPolicy, "keyIssued").state).toBe("pending");
+  });
+
+  it("recognizes live scoped MCP-key authorization without requiring a separate generic grant", () => {
+    const key = apiKeyFixture();
+    key.policy.allowedTools = ["upstream.inventory.inspect_inventory"];
+    const mcpService = { ...serviceFixture(), serviceProtocol: "mcp" };
+    expect(stageById(stagesFor({ service: mcpService, apiKeys: [key] }), "grantExists").state).toBe("done");
+    for (const invalid of [
+      { ...key, status: "revoked" },
+      { ...key, status: "expired" },
+      { ...key, expiresAt: "2000-01-01T00:00:00Z" },
+      { ...key, policy: { ...key.policy, allowedTools: [] } },
+      { ...key, policy: { ...key.policy, serviceIds: ["other-service"] } },
+    ]) {
+      expect(stageById(stagesFor({ service: mcpService, catalog: catalogFixture([]), grants: [], apiKeys: [invalid] }), "grantExists").state).toBe("pending");
+    }
+  });
+
+  it("recognizes both actual MCP execution audit namespaces for the selected service only", () => {
+    expect(stageById(stagesFor({ audit: [auditFixture("upstream.mcp.call.completed")] }), "firstCallSeen").state).toBe("done");
+    expect(stageById(stagesFor({ audit: [auditFixture("upstream.mcp.gateway.completed")] }), "firstCallSeen").state).toBe("done");
+    expect(stageById(stagesFor({ audit: [auditFixture("upstream.mcp.call.completed", "other-service")] }), "firstCallSeen").state).toBe("pending");
+    expect(stageById(stagesFor({ audit: [auditFixture("upstream.mcp.gateway.completed", "other-service")] }), "firstCallSeen").state).toBe("pending");
   });
 
   it("derives first call seen from forward events only, for this service only", () : any => {

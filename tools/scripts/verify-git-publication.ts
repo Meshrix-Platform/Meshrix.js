@@ -4,12 +4,13 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { execFileSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
-
-import { isAuthorizedVendoredPackage } from "../generators/generate-supply-chain-artifacts.ts";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ZERO_OID: any = "0".repeat(40);
 const MAX_TEXT_BYTES: any = 5 * 1024 * 1024;
+const REPOSITORY_ROOT: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const PACTIUM_ARCHIVE_PATH: any = "vendor/pactium-0.8.0.tgz";
+const PACTIUM_ARCHIVE_INTEGRITY: any = "sha512-/Qs9JJ8ElyGcqEx1nf9+YH9to4rECAKkfXGu4RgR4tg5Z+JMgAFgOw7lXC5l/KGp69ZHf+Qro3L1sXjlKNKvNg==";
 const PRIVATE_PATH_PREFIXES: readonly any[] = Object.freeze([
   "build/",
   "cache/",
@@ -107,24 +108,19 @@ function integrityMatches(bytes?: any, integrity?: any) : any {
   return false;
 }
 
-function isAuthorizedVendoredBinary(lockfile?: any, candidatePath?: any, bytes?: any) : any {
-  for (const [packagePath, packageEntry] of Object.entries(lockfile?.packages || {})) {
-    if (!isAuthorizedVendoredPackage(lockfile, packagePath, packageEntry)) continue;
-    const resolved: any = String((packageEntry as Record<string, any>)?.resolved || "");
-    if (resolved.slice("file:".length) !== candidatePath) continue;
-    return integrityMatches(bytes, (packageEntry as Record<string, any>)?.integrity);
-  }
-  return false;
+function isAuthorizedVendoredBinary(candidatePath?: any, bytes?: any) : any {
+  if (candidatePath !== PACTIUM_ARCHIVE_PATH) return false;
+  return integrityMatches(bytes, PACTIUM_ARCHIVE_INTEGRITY);
 }
 
-function scanBytes(candidatePath?: any, bytes?: any, { lockfile = null }: Record<string, any> = {}) : any {
+function scanBytes(candidatePath?: any, bytes?: any) : any {
   const findings: any = scanPath(candidatePath);
   if (bytes.length > MAX_TEXT_BYTES) {
     findings.push(finding("oversized-publication-candidate", candidatePath));
     return findings;
   }
   if (bytes.includes(0)) {
-    if (isAuthorizedVendoredBinary(lockfile, candidatePath, bytes)) return findings;
+    if (isAuthorizedVendoredBinary(candidatePath, bytes)) return findings;
     findings.push(finding("binary-publication-candidate", candidatePath));
     return findings;
   }
@@ -172,37 +168,80 @@ function stagedPaths() : any {
   ]).split("\0").filter(Boolean);
 }
 
-function publicationLockfile(entries?: any) : any {
-  const lockEntry: any = entries.find((entry?: any) : any =>
-    entry.file === "package-lock.json" && entry.type !== "tree" && (entry.stage === undefined || entry.stage === "0")
-  );
-  if (!lockEntry) return null;
-  try {
-    return JSON.parse(git(["cat-file", "blob", lockEntry.oid]));
-  } catch {
-    return null;
+interface BlobEntry { oid: string; file: string; mode: string }
+
+/** Read Git's immutable objects in bounded batches, preserving bytes and per-path policy. */
+function* readBlobs<T extends BlobEntry>(entries: T[]): Generator<{ entry: T; bytes: Buffer | null }> {
+  if (!entries.length) return;
+  const objectIds = [...new Set(entries.map((entry) => entry.oid))];
+  const sizes = new Map<string, number>();
+  const metadata = String(git(["cat-file", "--batch-check"], { input: `${objectIds.join("\n")}\n` })).trimEnd().split("\n");
+  if (metadata.length !== objectIds.length) throw new Error("Incomplete Git object metadata");
+  for (const [index, line] of metadata.entries()) {
+    const [oid, type, sizeText] = line.split(" ");
+    const size = Number(sizeText);
+    if (oid !== objectIds[index] || type !== "blob" || !Number.isSafeInteger(size) || size < 0) {
+      throw new Error("Invalid Git blob metadata");
+    }
+    sizes.set(oid, size);
   }
+  let cursor = 0;
+  while (cursor < entries.length) {
+    const batch: T[] = [];
+    const requested = new Set<string>();
+    let expectedBytes = 0;
+    while (cursor < entries.length && batch.length < 256) {
+      const entry = entries[cursor];
+      const size = sizes.get(entry.oid)!;
+      const additionalBytes = size > MAX_TEXT_BYTES || requested.has(entry.oid) ? 0 : size;
+      if (batch.length && expectedBytes + additionalBytes > 8 * 1024 * 1024) break;
+      batch.push(entry);
+      cursor++;
+      expectedBytes += additionalBytes;
+      if (size <= MAX_TEXT_BYTES) requested.add(entry.oid);
+    }
+    const blobs = new Map<string, Buffer>();
+    if (requested.size) {
+      const output: Buffer = git(["cat-file", "--batch"], { encoding: "buffer", input: `${[...requested].join("\n")}\n` });
+      let offset = 0;
+      for (const oid of requested) {
+        const size = sizes.get(oid)!;
+        const header = Buffer.from(`${oid} blob ${size}\n`);
+        if (!output.subarray(offset, offset + header.length).equals(header)) throw new Error("Invalid Git blob header");
+        offset += header.length;
+        if (output[offset + size] !== 10) throw new Error("Incomplete Git blob body");
+        blobs.set(oid, output.subarray(offset, offset + size));
+        offset += size + 1;
+      }
+      if (offset !== output.length) throw new Error("Unexpected Git blob output");
+    }
+    for (const entry of batch) yield { entry, bytes: blobs.get(entry.oid) ?? null };
+  }
+}
+
+function scanBlob(entry: BlobEntry, bytes: Buffer | null): any[] {
+  if (bytes === null) return [...scanPath(entry.file), finding("oversized-publication-candidate", entry.file)];
+  const findings = scanBytes(entry.file, bytes);
+  if (entry.mode === "120000" && path.isAbsolute(bytes.toString("utf8"))) {
+    findings.push(finding("absolute-symbolic-link", entry.file));
+  }
+  return findings;
 }
 
 function verifyIndexEntries(
   entries?: any,
   label?: any,
-  { guardIndex = true, policyEntries = entries }: Record<string, any> = {}
+  { guardIndex = true }: Record<string, any> = {}
 ) : any {
   const before: any = guardIndex ? git(["write-tree"]).trim() : "";
   const findings: any[] = [];
-  const lockfile: any = publicationLockfile(policyEntries);
   for (const entry of entries) {
     if (entry.stage !== "0") {
       findings.push(finding("unmerged-index-entry", entry.file));
-      continue;
     }
-    const bytes: any = git(["cat-file", "blob", entry.oid], { encoding: "buffer" });
-    findings.push(...scanBytes(entry.file, bytes, { lockfile }));
-    if (entry.mode === "120000") {
-      const target: any = bytes.toString("utf8");
-      if (path.isAbsolute(target)) findings.push(finding("absolute-symbolic-link", entry.file));
-    }
+  }
+  for (const { entry, bytes } of readBlobs<BlobEntry>(entries.filter((entry: { stage: string }) => entry.stage === "0"))) {
+    findings.push(...scanBlob(entry, bytes));
   }
   if (guardIndex) {
     const after: any = git(["write-tree"]).trim();
@@ -221,7 +260,7 @@ export function verifyStaged() : any {
   verifyIndexEntries(
     entries.filter((entry?: any) : any => changed.has(entry.file)),
     "staged-changes",
-    { guardIndex: false, policyEntries: entries }
+    { guardIndex: false }
   );
 }
 
@@ -258,20 +297,20 @@ export function verifyOutgoingUpdates(input?: any) : any {
     const commits: any = git(["rev-list", ...range]).split(/\s+/u).filter(Boolean);
     for (const commit of commits) {
       const entries: any = treeEntries(commit);
-      const lockfile: any = publicationLockfile(entries);
       if (!scannedCommits.has(commit)) {
         scannedCommits.add(commit);
         findings.push(...scanBytes(`<commit-message:${commit.slice(0, 12)}>`, commitMessage(commit)));
       }
+      const unscanned: BlobEntry[] = [];
       for (const entry of entries) {
         findings.push(...scanPath(entry.file));
-        if (entry.type !== "blob" || scannedBlobs.has(entry.oid)) continue;
-        scannedBlobs.add(entry.oid);
-        const bytes: any = git(["cat-file", "blob", entry.oid], { encoding: "buffer" });
-        findings.push(...scanBytes(entry.file, bytes, { lockfile }));
-        if (entry.mode === "120000" && path.isAbsolute(bytes.toString("utf8"))) {
-          findings.push(finding("absolute-symbolic-link", entry.file));
-        }
+        const identity = `${entry.mode}\0${entry.file}\0${entry.oid}`;
+        if (entry.type !== "blob" || scannedBlobs.has(identity)) continue;
+        scannedBlobs.add(identity);
+        unscanned.push(entry);
+      }
+      for (const { entry, bytes } of readBlobs(unscanned)) {
+        findings.push(...scanBlob(entry, bytes));
       }
     }
   }
@@ -279,19 +318,9 @@ export function verifyOutgoingUpdates(input?: any) : any {
 }
 
 export function runSelfTest() : any {
-  const vendoredBytes: any = Buffer.from([0, 1, 2, 3]);
-  const vendoredPath: any = "vendor/pactium-0.8.0.tgz";
-  const vendoredResolution: any = `file:${vendoredPath}`;
-  const vendoredLockfile: any = {
-    packages: {
-      "": { dependencies: { pactium: vendoredResolution } },
-      "node_modules/pactium": {
-        version: "0.8.0",
-        resolved: vendoredResolution,
-        integrity: `sha512-${crypto.createHash("sha512").update(vendoredBytes).digest("base64")}`
-      }
-    }
-  };
+  const vendoredBytes: any = fs.readFileSync(path.join(REPOSITORY_ROOT, PACTIUM_ARCHIVE_PATH));
+  const mismatchedVendoredBytes: any = Buffer.from(vendoredBytes);
+  mismatchedVendoredBytes[0] ^= 1;
   const cases: any[] = [
     {
       label: "relative source path",
@@ -320,25 +349,22 @@ export function runSelfTest() : any {
       expected: ["private-publication-path"]
     },
     {
-      label: "lock-authorized vendored package",
-      file: vendoredPath,
+      label: "retained source archive matches its independent recorded integrity",
+      file: PACTIUM_ARCHIVE_PATH,
       bytes: vendoredBytes,
-      lockfile: vendoredLockfile,
       expected: []
     },
     {
-      label: "vendored package integrity mismatch",
-      file: vendoredPath,
-      bytes: Buffer.from([0, 1, 2, 4]),
-      lockfile: vendoredLockfile,
+      label: "retained source archive integrity mismatch",
+      file: PACTIUM_ARCHIVE_PATH,
+      bytes: mismatchedVendoredBytes,
       expected: ["binary-publication-candidate"]
     }
   ];
   for (const testCase of cases) {
     const actual: any = scanBytes(
       testCase.file || "fixture.txt",
-      testCase.bytes,
-      { lockfile: testCase.lockfile }
+      testCase.bytes
     ).map((item?: any) : any => item.rule);
     if (JSON.stringify(actual) !== JSON.stringify(testCase.expected)) {
       throw new Error(`Git publication self-test failed: ${testCase.label}`);

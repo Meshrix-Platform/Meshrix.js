@@ -4,12 +4,18 @@ import JsonConfigFileEditor from "../../../components/JsonConfigFileEditor.vue";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../components/ConsoleInlineAlert.vue";
 import HelpTooltip from "../../../components/HelpTooltip.vue";
+import FeatureToggle from "../../../components/FeatureToggle.vue";
 import MeshrixTabs, { type MeshrixTab } from "../../../components/MeshrixTabs.vue";
 import { useConsoleUrlState } from "../../../composables/use-console-url-state";
 import { pushConsoleToast } from "../../../composables/console-toast-controller";
 import { scrollElementIntoViewById } from "../../../composables/console-browser-effects";
 import { createConsoleFormValidation } from "../../../composables/console-form-validation";
 import { consoleMessages, currentConsoleLocale } from "../../../i18n/console";
+import {
+  isUpstreamServiceRemoteUrl,
+  UPSTREAM_MCP_REMOTE_TRANSPORTS,
+  UPSTREAM_MCP_PROTOCOL_VERSIONS,
+} from "@meshrix/contracts/upstream-service-publishing";
 import { descriptorObjectFields, type PublishDescriptorForm } from "./publish-form-model";
 
 defineOptions({ name: "PublishServiceForm" });
@@ -54,7 +60,7 @@ const OPERATION_FIELDS: readonly string[] = [
   "responseRepresentationMode", "responseMaxBytes", "responseMediaTypes",
 ];
 const TAB_FIELDS: Record<string, readonly string[]> = {
-  basic: ["serviceProtocol"],
+  basic: ["serviceProtocol", "mcpTransport", "mcpUrl", "mcpProtocolVersion"],
   operations: OPERATION_FIELDS,
   credentials: ["credentialSelection"],
 };
@@ -63,6 +69,9 @@ const TAB_ORDER: readonly string[] = ["basic", "operations", "credentials", "adv
 // control ids map to themselves.
 const FIELD_ELEMENT_IDS: Record<string, string> = {
   serviceProtocol: "upstream-service-protocol",
+  mcpTransport: "upstream-mcp-transport",
+  mcpUrl: "upstream-mcp-url",
+  mcpProtocolVersion: "upstream-mcp-protocol-version",
   credentialSelection: "upstream-service-saved-credential",
 };
 // Advanced JSON parse state: the escape path (JsonConfigFileEditor) owns its
@@ -85,7 +94,7 @@ function tabHasError(tabKey: string): boolean {
 
 const formTabs: ComputedRef<MeshrixTab[]> = computed(() => [
   { key: "basic", label: "Service information", draft: tabHasError("basic") },
-  { key: "operations", label: "Tool paths", draft: tabHasError("operations") },
+  ...(form.serviceProtocol === "mcp" ? [] : [{ key: "operations", label: "Tool paths", draft: tabHasError("operations") }]),
   { key: "credentials", label: "Access credentials", draft: tabHasError("credentials") },
   { key: "advanced", label: "Advanced JSON", draft: tabHasError("advanced") },
 ]);
@@ -100,6 +109,14 @@ watch(() => props.selectedServiceId, () => {
   credentialError.value = "";
 });
 
+watch(() => form.serviceProtocol, (protocol) => {
+  if (protocol === "mcp") {
+    if (activeTab.value === "operations") activeTab.value = "basic";
+    operationError.value = "";
+    for (const field of OPERATION_FIELDS) validation.clearFieldError(field);
+  }
+});
+
 const publishFormMessages = computed(() => consoleMessages[currentConsoleLocale.value].publishForm);
 
 function updateTags(event: Event) {
@@ -112,6 +129,29 @@ function saveObjectField(field: typeof descriptorObjectFields[number], value: un
     throw new Error(`${field} must be a JSON object.`);
   }
   form[field] = value as Record<string, unknown>;
+  if (field === "mcp") {
+    const mcp = value as Record<string, unknown>;
+    const transport = String(mcp.transport || "").toLowerCase();
+    form.mcpTransport = UPSTREAM_MCP_REMOTE_TRANSPORTS.some((supported) => supported === transport) ? "http" : "";
+    form.mcpUrl = String(mcp.url || mcp.endpoint || mcp.baseUrl || form.baseUrl || "");
+    form.mcpProtocolVersion = String(mcp.protocolVersion || "");
+  }
+}
+
+function validateMcpFields(): void {
+  for (const field of ["mcpTransport", "mcpUrl", "mcpProtocolVersion"]) {
+    validation.clearFieldError(field);
+  }
+  if (form.serviceProtocol !== "mcp") return;
+  if (form.mcpTransport !== "http") {
+    validation.setFieldError("mcpTransport", "Select the supported remote MCP transport.");
+  }
+  if (!isUpstreamServiceRemoteUrl(form.mcpUrl)) {
+    validation.setFieldError("mcpUrl", "Use an HTTP(S) URL without embedded credentials.");
+  }
+  if (!UPSTREAM_MCP_PROTOCOL_VERSIONS.some((version) => version === form.mcpProtocolVersion)) {
+    validation.setFieldError("mcpProtocolVersion", "Select a supported upstream MCP protocol version.");
+  }
 }
 
 function addOperation() {
@@ -291,6 +331,7 @@ function updateSelectedCredential() {
 // client-side validation failures were found — the parent view then leaves the
 // error to the form instead of raising the page-level alert.
 async function focusFirstInvalid(): Promise<boolean> {
+  validateMcpFields();
   const firstTab: string | null = TAB_ORDER.find((tab) => tabHasError(tab)) ?? null;
   if (!firstTab) {
     return false;
@@ -325,7 +366,7 @@ defineExpose({ focusFirstInvalid });
           <span class="console-form-field-required-marker" aria-hidden="true">*</span>
           <HelpTooltip
             aria-label="Protocol help"
-            text="The communication protocol Meshrix.js uses to call the external service. Choose HTTP for HTTP or REST endpoints, or JSON-RPC for JSON-RPC methods."
+            text="The communication protocol Meshrix.js uses to call the external service. Choose HTTP for REST endpoints, JSON-RPC for JSON-RPC methods, or MCP for a remote HTTP MCP server."
           />
         </div>
         <select
@@ -339,6 +380,7 @@ defineExpose({ focusFirstInvalid });
           <option value="">Select protocol</option>
           <option value="http">HTTP</option>
           <option value="json-rpc">JSON-RPC</option>
+          <option value="mcp">MCP (remote HTTP)</option>
         </select>
         <span
           v-if="validation.fieldError('serviceProtocol')"
@@ -347,27 +389,87 @@ defineExpose({ focusFirstInvalid });
           role="alert"
         >{{ validation.fieldError('serviceProtocol') }}</span>
       </div>
-      <div class="form-field">
+      <div v-if="form.serviceProtocol !== 'mcp'" class="form-field">
         <div class="field-label-row">
           <label for="upstream-service-url">Service URL *</label>
           <HelpTooltip
             aria-label="Service URL help"
-            text="The base address of the external service. Include http:// or https://, the host, and an explicit port. For example: https://api.example:443. Do not include credentials."
+            text="The base address of the external service. Include http:// or https:// and the host. The port is optional; omit it to use the scheme default or specify it explicitly. For example: https://api.example/v1. Do not include credentials."
             :max-width="420"
           />
         </div>
         <input id="upstream-service-url" v-model="form.baseUrl" type="text" placeholder="http://127.0.0.1:8080" />
       </div>
+      <div v-else class="mcp-fields">
+        <label class="form-field" for="upstream-mcp-transport">
+          <span>Remote MCP transport *</span>
+          <select
+            id="upstream-mcp-transport"
+            v-model="form.mcpTransport"
+            aria-required="true"
+            :aria-invalid="validation.fieldError('mcpTransport') ? 'true' : undefined"
+            :aria-describedby="validation.fieldError('mcpTransport') ? 'console-field-mcpTransport-error' : undefined"
+            @change="validation.clearFieldError('mcpTransport')"
+          >
+            <option value="">Select transport</option>
+            <option value="http">Streamable HTTP</option>
+          </select>
+          <span v-if="validation.fieldError('mcpTransport')" id="console-field-mcpTransport-error" class="console-form-field-error" role="alert">{{ validation.fieldError('mcpTransport') }}</span>
+        </label>
+        <label class="form-field" for="upstream-mcp-url">
+          <span>MCP endpoint URL *</span>
+          <input
+            id="upstream-mcp-url"
+            v-model="form.mcpUrl"
+            type="text"
+            placeholder="https://service.example/mcp"
+            aria-required="true"
+            :aria-invalid="validation.fieldError('mcpUrl') ? 'true' : undefined"
+            :aria-describedby="validation.fieldError('mcpUrl') ? 'console-field-mcpUrl-error' : undefined"
+            @input="validation.clearFieldError('mcpUrl')"
+          />
+          <span v-if="validation.fieldError('mcpUrl')" id="console-field-mcpUrl-error" class="console-form-field-error" role="alert">{{ validation.fieldError('mcpUrl') }}</span>
+        </label>
+        <label class="form-field" for="upstream-mcp-protocol-version">
+          <span>Upstream MCP protocol version *</span>
+          <select
+            id="upstream-mcp-protocol-version"
+            v-model="form.mcpProtocolVersion"
+            aria-required="true"
+            :aria-invalid="validation.fieldError('mcpProtocolVersion') ? 'true' : undefined"
+            :aria-describedby="validation.fieldError('mcpProtocolVersion') ? 'console-field-mcpProtocolVersion-error' : undefined"
+            @change="validation.clearFieldError('mcpProtocolVersion')"
+          >
+            <option value="">Select protocol version</option>
+            <option v-for="version in UPSTREAM_MCP_PROTOCOL_VERSIONS" :key="version" :value="version">{{ version }}</option>
+          </select>
+          <span v-if="validation.fieldError('mcpProtocolVersion')" id="console-field-mcpProtocolVersion-error" class="console-form-field-error" role="alert">{{ validation.fieldError('mcpProtocolVersion') }}</span>
+        </label>
+      </div>
+      <div class="form-field network-access-setting">
+        <div class="network-access-copy">
+          <span id="upstream-local-network-label">{{ publishFormMessages.localNetworkLabel }}</span>
+          <p id="upstream-local-network-help" class="form-help">{{ publishFormMessages.localNetworkHelp }}</p>
+        </div>
+        <FeatureToggle
+          :model-value="form.allowLocalNetwork === true"
+          :aria-label="publishFormMessages.localNetworkLabel"
+          aria-describedby="upstream-local-network-help"
+          :disabled="loading"
+          @update:model-value="form.allowLocalNetwork = $event"
+        />
+      </div>
       <div class="form-field">
         <div class="field-label-row">
-          <label for="upstream-service-key">Service identifier *</label>
+          <label for="upstream-service-key">{{ selectedServiceId ? publishFormMessages.publishedServiceIdentifier : "Service identifier *" }}</label>
           <HelpTooltip
             aria-label="Service identifier help"
-            text="A unique, stable identifier used by Meshrix.js to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication."
+            :text="selectedServiceId ? publishFormMessages.publishedServiceIdentifierHelp : 'A unique, stable identifier used by Meshrix.js to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication.'"
             :max-width="420"
           />
         </div>
-        <input id="upstream-service-key" v-model="form.serviceKey" type="text" placeholder="my-service" :disabled="!!selectedServiceId" />
+        <input v-if="selectedServiceId" id="upstream-service-key" :value="selectedServiceId" type="text" disabled />
+        <input v-else id="upstream-service-key" v-model="form.serviceKey" type="text" placeholder="my-service" />
       </div>
       <div class="form-field">
         <div class="field-label-row">
@@ -643,6 +745,11 @@ defineExpose({ focusFirstInvalid });
   flex-direction: column;
   gap: 0.75rem;
 }
+.mcp-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+}
 .form-help {
   margin: 0;
   color: var(--text-muted);
@@ -703,6 +810,20 @@ defineExpose({ focusFirstInvalid });
   align-items: center;
   gap: var(--space-1-5);
   width: fit-content;
+}
+.network-access-setting {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.network-access-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.network-access-setting :deep(.feature-toggle) {
+  flex-shrink: 0;
 }
 /* REQ-007 field contract rendered in this file's own field markup: the
    required marker and the per-field error region follow ConsoleFormField's
