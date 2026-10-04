@@ -181,14 +181,14 @@ describe("branch promotion workflow", () : any => {
     expect(release).toEqual({ ok: true, code: "stable-fast-forward-advanced-release" });
   });
 
-  it("admits PR promotion merges whose first parent is the exact upstream tip", () : any => {
+  it("admits PR promotion merges that have the exact upstream tip as a direct parent", () : any => {
     const stableMerge: any = verifyProtectedPushTopology({
       branch: "stable",
       before: "old-stable",
       after: "stable-merge-tip",
       branchTip: branchTips({ nightly: "nightly-tip" }),
       ancestor: () : any => true,
-      parentOf: () : any => "nightly-tip",
+      parentsOf: () : any => ["old-stable", "nightly-tip"],
     });
     expect(stableMerge).toEqual({ ok: true, code: "nightly-merge-advanced-stable" });
 
@@ -198,7 +198,7 @@ describe("branch promotion workflow", () : any => {
       after: "release-merge-tip",
       branchTip: branchTips({ stable: "stable-tip" }),
       ancestor: () : any => true,
-      parentOf: () : any => "stable-tip",
+      parentsOf: () : any => ["old-release", "stable-tip"],
     });
     expect(releaseMerge).toEqual({ ok: true, code: "stable-merge-advanced-release" });
 
@@ -208,7 +208,7 @@ describe("branch promotion workflow", () : any => {
       after: "stable-merge-tip",
       branchTip: branchTips({ nightly: "nightly-tip" }),
       ancestor: () : any => true,
-      parentOf: () : any => "feature-tip",
+      parentsOf: () : any => ["old-stable", "feature-tip"],
     });
     expect(wrongSourceMerge.ok).toBe(false);
     expect(wrongSourceMerge.code).toBe("promotion-source-tip-mismatch");
