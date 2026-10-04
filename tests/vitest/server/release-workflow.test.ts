@@ -29,7 +29,7 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain("release-definition.registry.json");
     expect(workflow.indexOf("npm install --global")).toBeLessThan(workflow.indexOf("run: npm ci"));
     expect(workflow).toContain("npm run release:prepare -- --check --tag \"$RELEASE_TAG\"");
-    expect(workflow).toContain("npm run ci:local -- --scope release");
+    expect(workflow).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
     expect(workflow).toContain("npm run release:publish-npm -- --artifact-dir build/release/npm-set");
     expect(workflow).toContain("NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}");
     expect(workflow).toContain('NPM_CONFIG_PROVENANCE: "true"');

@@ -34,8 +34,8 @@ describe("automatic local verification entry", () => {
       scope: "engineering",
       reportPath: "build/ci-diagnostics/local-ci/results.json"
     });
-    expect(parseLocalCiArguments(["--scope=release", "--report=build/ci-diagnostics/release.json"]))
-      .toMatchObject({ scope: "release", reportPath: "build/ci-diagnostics/release.json" });
+    expect(parseLocalCiArguments(["--scope=engineering", "--report=build/ci-diagnostics/release.json"]))
+      .toMatchObject({ scope: "engineering", reportPath: "build/ci-diagnostics/release.json" });
   });
 
   it("rejects platform selection, stage recursion, and report escape", () => {
@@ -45,7 +45,7 @@ describe("automatic local verification entry", () => {
       ["--worker", "core-public"],
       ["--report", "../../outside.json"],
       ["--report", ""],
-      ["--scope", "engineering", "--scope", "release"]
+      ["--scope", "engineering", "--scope", "changed"]
     ]) expect(() => parseLocalCiArguments(args)).toThrow();
   });
 

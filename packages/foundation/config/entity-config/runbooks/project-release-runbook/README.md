@@ -13,8 +13,8 @@ push or a manual run with an existing tag selected.
    release, or dispatch `release.yml` from the existing tag:
    `gh workflow run release.yml --ref vX.Y.Z`.
 3. The workflow checks the tag against package metadata, installs dependencies,
-   runs `npm run ci:local -- --scope release`, publishes the prepared package
-   archives, and creates a GitHub Release with generated notes. The release
+   runs `npm run ci:local`, publishes the prepared package
+   archives, and creates a GitHub Release with generated notes. The default engineering
    scope builds and tests the products, packs the archives, and checks that
    consumers can install and smoke-test them.
 

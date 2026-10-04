@@ -47,8 +47,8 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
 
-      - name: Run release acceptance and prepare the qualified npm archives
-        run: npm run ci:local -- --scope release --report build/ci-diagnostics/release-local-ci/results.json
+      - name: Build, test, and qualify the npm archives
+        run: npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json
 
       - name: Publish the qualified npm archives
         env:

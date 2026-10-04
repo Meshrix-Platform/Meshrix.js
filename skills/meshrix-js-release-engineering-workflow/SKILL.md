@@ -29,12 +29,13 @@ tests, and documentation in the same change.
 Use `$meshrix-js-regression-planner` to select focused checks and one final
 integration scope. Complete source review and in-scope repairs before final
 regression. Repair in-scope failures found during final verification and rerun
-the affected checks. Release acceptance uses `npm run verify:acceptance`; its
-existing profile runs exact-artifact npm consumer qualification on discovered
-available targets. At least one complete platform must qualify, and every
-selected target must pass. Ordinary source or documentation work does not
-acquire release claims automatically. Follow `docs/RUNBOOK.md` for optional
-deployment and publication requirements.
+the affected checks. Normal npm publication uses the default `npm run ci:local`
+engineering scope to build and test the products, prepare the release archives,
+and qualify exact-artifact consumers on discovered available targets. At least
+one complete platform must qualify, and every selected consumer target must pass.
+`npm run verify:acceptance` remains an independent functional-acceptance workflow;
+its candidate receipts, provenance, and ledger do not gate npm publication.
+Follow `docs/RUNBOOK.md` for optional deployment and publication requirements.
 
 Follow `AGENTS.md` for execution authority. Local build, install, data
 migration, live acceptance, publication, push, and deployment are distinct

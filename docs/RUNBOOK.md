@@ -761,7 +761,8 @@ npm run release:prepare -- --check
 ```
 
 The hosted workflow runs the non-mutating tag check and
-`npm run ci:local -- --scope release`. That maintained scope prepares the two
+`npm run ci:local`. Its default engineering scope builds and tests the products,
+prepares the two
 archives under `build/release/npm-set` and performs the package install smoke
 test; the publisher checks for conflicting published bytes for the exact
 version, then consumes those archives. Do not repeat separate packing,
@@ -877,21 +878,23 @@ journey evidence and does not issue a release receipt or gate npm publication.
 If the journey fails, its failed HTML projection omits screenshots, logs,
 receipts, and runtime values.
 
-The release workflow runs the maintained npm release preparation entry:
+The release workflow runs the same maintained engineering entry as CI:
 
 ```bash
-npm run ci:local -- --scope release
+npm run ci:local
 ```
 
-This scope runs the applicable Core build and release tests, prepares the
+The default `engineering-public` profile runs the applicable Core build and
+engineering tests, prepares the
 `meshrix.js` and `@meshrix/gateway` archives under `build/release/npm-set`, and
 installs and smoke-tests those archives in clean consumers. On success the same
 workflow publishes that directory to npm, then creates the GitHub Release. The
 release result does not depend on an optional deployment, system-specific test,
 or performance run.
 
-Use `npm run verify:acceptance:plan` to inspect the maintained Core test scope
-without executing it. A non-zero exit from the release scope means the build,
+`npm run verify:acceptance` and its planning command remain independent
+functional-acceptance tools; their candidate receipts, provenance, and ledger
+are not prerequisites for npm publication. A non-zero engineering exit means the build,
 tests, archive preparation, or consumer smoke test needs repair before that
 release can proceed.
 

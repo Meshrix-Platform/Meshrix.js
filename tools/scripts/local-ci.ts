@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 
 import { assertNoLeak } from "../server-scripts/lib/report-evidence-safety.ts";
 import { sanitizeVerificationLog } from "../server-scripts/localize-verify-failure.ts";
-import { loadReleaseDefinition } from "../server-scripts/lib/release-metadata.ts";
 import { sanitizeSensitiveReport } from "../server-scripts/lib/sensitive-report-scan.ts";
 import {
   runSuiteProcess,
@@ -23,7 +22,7 @@ export { sourceNodeEnvironment } from "./lib/unified-test-runner-execution.ts";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_ENGINEERING_PROFILE = "engineering-public";
 const CHANGED_PROFILE = "changed";
-const LOCAL_CI_SCOPES: readonly string[] = Object.freeze(["engineering", "release", "changed"]);
+const LOCAL_CI_SCOPES: readonly string[] = Object.freeze(["engineering", "changed"]);
 
 function isLocalCiScope(value: string): value is LocalCiOptions["scope"] {
   return LOCAL_CI_SCOPES.includes(value);
@@ -31,7 +30,7 @@ function isLocalCiScope(value: string): value is LocalCiOptions["scope"] {
 const NODE_SOURCE_CONDITION = "--conditions=source";
 
 export interface LocalCiOptions {
-  scope: "engineering" | "release" | "changed";
+  scope: "engineering" | "changed";
   reportPath: string | null;
   help: boolean;
 }
@@ -337,34 +336,6 @@ async function runTestProfile(profile: string, rawReportPath: string, rawLogPath
   return { execution, flows, summary, runnerReport };
 }
 
-async function runReleaseAcceptance(rawLogPath: string, signal: AbortSignal): Promise<{
-  execution: ChildExecution;
-  flow: SuiteResult;
-  profile: string;
-}> {
-  const definition = await loadReleaseDefinition(repoRoot);
-  const profile = String(definition?.acceptance?.profile || "").trim();
-  if (!profile) throw new Error("local_ci_release_profile_missing");
-  const acceptanceScript = path.join(repoRoot, "tools/server-scripts/verify-platform-acceptance.ts");
-  const execution = await executeNodeFlow([
-    acceptanceScript,
-    "--profile",
-    profile
-  ], rawLogPath, signal);
-  const receiptPath = path.join(repoRoot, "build/reports/accepted-candidate.json");
-  const acceptedCandidate = await readJson(receiptPath);
-  const passed = execution.exitCode === 0 && !execution.cancelled && acceptedCandidate !== null;
-  const flow: SuiteResult = {
-    id: "platform-acceptance",
-    profile,
-    status: execution.cancelled ? "cancelled" : passed ? "passed" : "failed",
-    ...(!passed && !execution.cancelled ? { reasonCode: "platform_acceptance_failed" } : {}),
-    ...(execution.durationMs !== undefined ? { durationMs: execution.durationMs } : {}),
-    ...(passed ? { evidence: ["build/reports/accepted-candidate.json"] } : {})
-  };
-  return { execution, flow, profile };
-}
-
 function currentNativeEnvironment(): Record<string, string> {
   const osName = process.platform === "win32" ? "windows" : process.platform;
   const architecture = process.arch === "x64" ? "amd64" : process.arch;
@@ -382,13 +353,12 @@ function helpText(): string {
     "",
     "Usage:",
     "  npm run ci:local",
-    "  npm run ci:local -- --scope release",
+    "  npm run ci:local -- --scope changed",
     "",
     "Options:",
     "  --scope engineering  Ordinary verification (default).",
     "  --scope changed      Only suites that declare the changed paths; reports whole-repository",
     "                       suites and uncovered changes instead of silently running less.",
-    "  --scope release      Release acceptance preparation; actual publication stays separate.",
     "  --report <repo-relative-path>  Write the structured result to a deterministic path."
   ].join("\n");
 }
@@ -439,69 +409,52 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
   let execution: ChildExecution | null = null;
   let outcome: ReturnType<typeof evaluateEngineeringOutcomes> | null = null;
   let environmentFacts: any = null;
-  let selectedProfile: string | null = options.scope === "release" ? null
-    : options.scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
+  let selectedProfile: string | null = options.scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
   let setupReasonCode: string | null = null;
   const scope = options.scope;
   const startedScope = options.scope;
 
   try {
-    if (scope === "release") {
-      const result = await runReleaseAcceptance(rawLogPath, cancellation.signal);
-      execution = result.execution;
-      flows = [result.flow];
-      selectedProfile = result.profile;
+    const profile = scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
+    const result = await runTestProfile(profile, rawRunnerReportPath, rawLogPath, cancellation.signal);
+    execution = result.execution;
+    flows = result.flows;
+    selectedProfile = profile;
+    outcome = result.summary;
+    if (!result.runnerReport) setupReasonCode = "runner_report_missing";
+    // A change-driven run that needs no suite is a real answer: the change touched
+    // nothing executable. The runner reports it by exiting zero without a report.
+    if (scope === CHANGED_PROFILE && !result.runnerReport && execution.exitCode === 0 && !execution.cancelled) {
+      setupReasonCode = null;
       outcome = {
-        status: result.flow.status === "cancelled" ? "cancelled" : result.flow.status === "passed" ? "passed" : "failed",
-        ...(result.flow.reasonCode ? { reasonCode: result.flow.reasonCode } : {}),
-        passed: result.flow.status === "passed" ? 1 : 0,
-        failed: result.flow.status === "failed" ? 1 : 0,
-        notRun: 0,
-        cancelled: result.flow.status === "cancelled" ? 1 : 0,
-        optionalNotRun: 0
+        status: "passed",
+        reasonCode: "changed_no_verification_required",
+        passed: 0, failed: 0, notRun: 0, cancelled: 0, optionalNotRun: 0
       };
-    } else {
-      const profile = scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
-      const result = await runTestProfile(profile, rawRunnerReportPath, rawLogPath, cancellation.signal);
-      execution = result.execution;
-      flows = result.flows;
-      selectedProfile = profile;
-      outcome = result.summary;
-      if (!result.runnerReport) setupReasonCode = "runner_report_missing";
-      // A change-driven run that needs no suite is a real answer: the change touched
-      // nothing executable. The runner reports it by exiting zero without a report.
-      if (scope === CHANGED_PROFILE && !result.runnerReport && execution.exitCode === 0 && !execution.cancelled) {
-        setupReasonCode = null;
-        outcome = {
-          status: "passed",
-          reasonCode: "changed_no_verification_required",
-          passed: 0, failed: 0, notRun: 0, cancelled: 0, optionalNotRun: 0
-        };
-      }
-      // Within this scope the runner writes no report only when it refuses an uncovered
-      // change: the profile declares no phases and its suites come from the registry.
-      if (scope === CHANGED_PROFILE && !result.runnerReport && execution.exitCode !== 0 && !execution.cancelled) {
-        setupReasonCode = "changed_selection_uncovered";
-        outcome = {
-          status: "failed",
-          reasonCode: setupReasonCode,
-          passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0
-        };
-      }
-      if (result.runnerReport?.environment) {
-        const observed = result.runnerReport.environment.localExecution;
-        environmentFacts = observed ? {
-          native: observed.native,
-          docker: observed.docker,
-          serviceCapabilities: result.runnerReport.environment.serviceCapabilities || {}
-        } : { native: currentNativeEnvironment() };
-      }
-      if (!outcome && execution.cancelled) {
-        outcome = { status: "cancelled", reasonCode: "runner_cancelled", passed: 0, failed: 0, notRun: 0, cancelled: 1, optionalNotRun: 0 };
-      }
-      if (!outcome && !execution.cancelled) {
-        outcome = { status: "failed", reasonCode: "runner_report_invalid", passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0 };
-      }
+    }
+    // Within this scope the runner writes no report only when it refuses an uncovered
+    // change: the profile declares no phases and its suites come from the registry.
+    if (scope === CHANGED_PROFILE && !result.runnerReport && execution.exitCode !== 0 && !execution.cancelled) {
+      setupReasonCode = "changed_selection_uncovered";
+      outcome = {
+        status: "failed",
+        reasonCode: setupReasonCode,
+        passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0
+      };
+    }
+    if (result.runnerReport?.environment) {
+      const observed = result.runnerReport.environment.localExecution;
+      environmentFacts = observed ? {
+        native: observed.native,
+        docker: observed.docker,
+        serviceCapabilities: result.runnerReport.environment.serviceCapabilities || {}
+      } : { native: currentNativeEnvironment() };
+    }
+    if (!outcome && execution.cancelled) {
+      outcome = { status: "cancelled", reasonCode: "runner_cancelled", passed: 0, failed: 0, notRun: 0, cancelled: 1, optionalNotRun: 0 };
+    }
+    if (!outcome && !execution.cancelled) {
+      outcome = { status: "failed", reasonCode: "runner_report_invalid", passed: 0, failed: 1, notRun: 0, cancelled: 0, optionalNotRun: 0 };
     }
   } catch {
     setupReasonCode = "local_ci_setup_failed";

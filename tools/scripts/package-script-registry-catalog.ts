@@ -53,9 +53,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/registry/tests.registry.json",
       "tools/registry/schema/test-suite.schema.json",
       "tools/server-scripts/lib/local-execution-environment.ts",
-      "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts",
-      "tools/server-scripts/verify-platform-acceptance.ts",
-      "tools/registry/release-definition.registry.json"
+      "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts"
     ],
     outputs: ["build/local-ci/**"],
   },
