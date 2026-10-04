@@ -437,6 +437,19 @@ describe("platform acceptance generation store", () : any => {
     const failed: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "retained-failure" });
     const failedWorkspace: any = failed.workspace;
     await writeWorkerEvidence(failed.workspace, { accepted: false });
+    const installability = {
+      summary: { releaseReady: false, reportLeakScan: true },
+      tests: [{
+        name: "packaged runtime",
+        status: "failed",
+        evidence: { targets: [{
+          kind: "native", platform: "linux/amd64", status: "failed",
+          reasonCode: "npm_package_consumer_runtime_failed",
+          evidence: { failures: [{ failureStage: "installed_runtime", errorCode: "npm_package_consumer_runtime_failed" }] }
+        }] }
+      }]
+    };
+    await fs.writeFile(path.join(failedWorkspace, "build/reports/npm-package-installability.json"), JSON.stringify(installability));
     const aggregatePath: any = path.join(failedWorkspace, "build", "reports", "platform-acceptance.json");
     const failedAggregate: any = JSON.parse(await fs.readFile(aggregatePath, "utf8"));
     failedAggregate.sourceRevision = "";
@@ -475,6 +488,10 @@ describe("platform acceptance generation store", () : any => {
     expect(retainedAggregate.summary.failedCommands).toEqual(["core-regression"]);
     expect(retainedAggregate.summary.missingEvidence).toEqual(["report-ready:build/reports/child.json"]);
     expect(retainedAggregate.reportWriteAudit).toEqual(failedAggregate.reportWriteAudit);
+    expect(JSON.parse(await fs.readFile(
+      path.join(repoRoot, ACCEPTANCE_FAILURE_DIAGNOSTIC_ROOT, "retained-failure", "npm-package-installability.json"),
+      "utf8"
+    ))).toEqual(installability);
     expect(await fs.readFile(path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER), "utf8"))
       .toBe(pointerBeforeFailure);
     expect((await resolveFixture(repoRoot)).pointer.generationId).toBe("accepted-before-failure");
@@ -507,7 +524,7 @@ describe("platform acceptance generation store", () : any => {
     }
   });
 
-  it("rejects a privacy-unsafe failed aggregate and still permits workspace cleanup", async () : Promise<any> => {
+  it.each(["platform-acceptance.json", "npm-package-installability.json"])("rejects privacy-unsafe %s and still permits workspace cleanup", async (reportName) : Promise<any> => {
     const repoRoot: any = await fixtureRoot();
     const failed: any = await createAcceptanceGenerationWorkspace(repoRoot, { id: "privacy-rejected" });
     const failedWorkspace: any = failed.workspace;
@@ -522,7 +539,7 @@ describe("platform acceptance generation store", () : any => {
         "private-value",
         "@service.example.test/api"
       ].join("")];
-      await fs.writeFile(aggregatePath, `${JSON.stringify(aggregate)}\n`, "utf8");
+      await fs.writeFile(path.join(failed.workspace, "build/reports", reportName), `${JSON.stringify(aggregate)}\n`, "utf8");
 
       await expect(publishAcceptanceFailureDiagnostic({
         repoRoot,

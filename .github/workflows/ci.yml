@@ -47,6 +47,7 @@ jobs:
           path: |
             build/ci-diagnostics/local-ci/results.json
             build/local-ci/
+            build/reports/npm-package-installability.json
           if-no-files-found: warn
           retention-days: 14
           overwrite: true
@@ -79,6 +80,7 @@ jobs:
           path: |
             build/ci-diagnostics/local-ci/results.json
             build/local-ci/
+            build/reports/npm-package-installability.json
           if-no-files-found: warn
           retention-days: 14
           overwrite: true

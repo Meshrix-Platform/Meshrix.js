@@ -40,6 +40,7 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain(`uses: ${uploadArtifactAction}`);
     expect(workflow).toContain("build/ci-diagnostics/release-local-ci/results.json");
     expect(workflow).toContain("build/local-ci/");
+    expect(workflow).toContain("build/reports/npm-package-installability.json");
     expect(workflow).toContain("build/acceptance-evidence/failures/");
 
     expect(ci).not.toContain('tags: ["v*"]');
@@ -62,6 +63,8 @@ describe("standard npm release workflow", () => {
       expect(section).toContain(`node-version: "${definition.github.nodeVersion}"`);
       expect(section).toContain(npmCliSetup);
       expect(section.indexOf(npmCliSetup)).toBeLessThan(section.indexOf("run: npm ci"));
+      expect(section).toContain("if: ${{ always() }}");
+      expect(section).toContain("build/reports/npm-package-installability.json");
     }
   });
 });

@@ -701,8 +701,8 @@ function validateFailedAggregateReport(aggregateReport?: any) : any {
   return Object.freeze({ selectedProfile });
 }
 
-async function readFailedAggregateReport(workspace?: any, aggregateReportPath?: any) : Promise<any> {
-  const logicalPath: any = normalizedLogicalPath(aggregateReportPath);
+async function readFailureDiagnosticReport(workspace?: any, reportPath?: any) : Promise<any> {
+  const logicalPath: any = normalizedLogicalPath(reportPath);
   let sourcePath: any;
   try {
     sourcePath = await assertPathHasNoSymlinkComponents(workspace, logicalPath, "file");
@@ -712,18 +712,24 @@ async function readFailedAggregateReport(workspace?: any, aggregateReportPath?: 
   }
   const stats: any = await fs.stat(sourcePath);
   if (stats.size > ACCEPTANCE_GENERATION_BUDGETS.maxEntryBytes) {
-    throw new Error("Acceptance failure diagnostic aggregate exceeds its byte budget");
+    throw new Error("Acceptance failure diagnostic report exceeds its byte budget");
   }
   const raw: any = await fs.readFile(sourcePath, "utf8");
-  let aggregateReport: any;
+  let report: any;
   try {
-    aggregateReport = JSON.parse(raw);
+    report = JSON.parse(raw);
   } catch {
-    throw new Error("Acceptance failure diagnostic aggregate JSON is invalid");
+    throw new Error("Acceptance failure diagnostic report JSON is invalid");
   }
-  validateFailedAggregateReport(aggregateReport);
-  assertNoSensitiveReportLeak(raw, "acceptance failure diagnostic aggregate report");
-  return Object.freeze({ logicalPath, raw, aggregateReport });
+  assertNoSensitiveReportLeak(raw, "acceptance failure diagnostic report");
+  return Object.freeze({ logicalPath, raw, report });
+}
+
+async function readFailedAggregateReport(workspace?: any, aggregateReportPath?: any) : Promise<any> {
+  const diagnostic = await readFailureDiagnosticReport(workspace, aggregateReportPath);
+  if (!diagnostic) return null;
+  validateFailedAggregateReport(diagnostic.report);
+  return Object.freeze({ ...diagnostic, aggregateReport: diagnostic.report });
 }
 
 function validateWorkerFailureResult(workerResult?: any) : any {
@@ -797,6 +803,10 @@ export async function publishAcceptanceFailureDiagnostic({
   if (aggregateRevision && aggregateRevision !== paths.sourceRevision) {
     throw new Error("Acceptance failure diagnostic candidate does not match its worktree");
   }
+  const npmInstallability = await readFailureDiagnosticReport(
+    paths?.workspace,
+    "build/reports/npm-package-installability.json"
+  );
   const targetName: any = "failure.json";
   const payload: any = `${JSON.stringify(createFailureEnvelope(paths, failureResult, aggregate?.aggregateReport), null, 2)}\n`;
 
@@ -807,6 +817,9 @@ export async function publishAcceptanceFailureDiagnostic({
     await writePrivateFileAtomic(targetPath, payload);
     if (aggregate) {
       await writePrivateFileAtomic(path.join(failurePaths.staged, "aggregate.json"), aggregate.raw);
+    }
+    if (npmInstallability) {
+      await writePrivateFileAtomic(path.join(failurePaths.staged, "npm-package-installability.json"), npmInstallability.raw);
     }
     await syncPathIfSupported(failurePaths.staged);
     await fs.rename(failurePaths.staged, failurePaths.committed);

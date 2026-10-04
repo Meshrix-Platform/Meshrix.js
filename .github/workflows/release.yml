@@ -75,6 +75,7 @@ jobs:
           path: |
             build/ci-diagnostics/release-local-ci/results.json
             build/local-ci/
+            build/reports/npm-package-installability.json
             build/acceptance-evidence/failures/
           if-no-files-found: warn
           retention-days: 14
