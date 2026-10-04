@@ -36,11 +36,11 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Use the repository-configured npm CLI for Trusted Publishing
         run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Check the tag against the release packages
         env:
@@ -75,6 +75,7 @@ jobs:
           path: |
             build/ci-diagnostics/release-local-ci/results.json
             build/local-ci/
+            build/acceptance-evidence/failures/
           if-no-files-found: warn
           retention-days: 14
           overwrite: true

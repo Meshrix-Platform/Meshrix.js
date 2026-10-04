@@ -31,8 +31,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24.21.0"
+          node-version: "24.16.0"
           cache: "npm"
+      - name: Use the repository-configured npm CLI
+        run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
       - name: Install dependencies
         run: npm ci
       - name: Run the maintained engineering entry
@@ -61,8 +63,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24.21.0"
+          node-version: "24.16.0"
           cache: "npm"
+      - name: Use the repository-configured npm CLI
+        run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
       - name: Install dependencies
         run: npm ci
       - name: Run the maintained engineering entry

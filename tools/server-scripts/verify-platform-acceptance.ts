@@ -68,6 +68,7 @@ import {
 } from "./lib/release-evidence-readiness.ts";
 import {
   assertNoSensitiveReportLeak,
+  redactReportText,
   sanitizeSensitiveError
 } from "./lib/sensitive-report-scan.ts";
 import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/private-file-atomic.ts";
@@ -121,8 +122,8 @@ function repoPath(relativePath?: any) : any {
   return path.join(repoRoot, relativePath);
 }
 
-function redactedTail(value: any = "") : any {
-  return sanitizeError(String(value || ""));
+export function redactAcceptanceCommandTail(value: any = "") : string {
+  return redactReportText(String(value || "")).replaceAll("[redacted-path]", "<local-path>").slice(-2_400);
 }
 
 function sanitizeError(error?: any) : any {
@@ -297,7 +298,7 @@ async function runAcceptanceWorker() : Promise<any> {
     env: commandEnv,
     logPrefix: "platform-acceptance",
     maxParallel: normalizedParallelism(commandEnv),
-    redactTail: redactedTail,
+    redactTail: redactAcceptanceCommandTail,
     repoRoot,
     resolveCommand: (item?: any) : any => ({
       ...resolveAcceptanceCommandInvocation(item.command, item.args),
