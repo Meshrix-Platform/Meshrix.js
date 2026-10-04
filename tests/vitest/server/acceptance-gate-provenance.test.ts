@@ -126,6 +126,33 @@ describe("acceptance gate provenance substrate", () => {
     }
   });
 
+  it("allows registered Core auxiliary reports while rejecting unrelated writes", () => {
+    const reports = [
+      "build/reports/repo-organization.json",
+      "build/reports/protocol-boundary.json"
+    ];
+    const registered = createCurrentRunReportDriftAudit({
+      beforeSnapshot: {},
+      afterSnapshot: Object.fromEntries(reports.map((report) => [report, "current"])),
+      allowedReports: [...ACCEPTANCE_REQUIRED_REPORTS, ...PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST]
+    });
+    expect(registered.consistent).toBe(true);
+    expect(registered.currentRunOrphans).toEqual([]);
+    for (const report of reports) expect(ACCEPTANCE_REQUIRED_REPORTS).not.toContain(report);
+
+    const unrelatedReports = [
+      "build/reports/deployment-container-flow.json",
+      "build/reports/unregistered-owner.json"
+    ];
+    const unrelated = createCurrentRunReportDriftAudit({
+      beforeSnapshot: {},
+      afterSnapshot: Object.fromEntries(unrelatedReports.map((report) => [report, "current"])),
+      allowedReports: [...ACCEPTANCE_REQUIRED_REPORTS, ...PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST]
+    });
+    expect(unrelated.consistent).toBe(false);
+    expect(unrelated.currentRunOrphans).toEqual(unrelatedReports);
+  });
+
   it("fails closed on stale or unverifiable reports", () => {
     const now = Date.now();
     const report = { generatedAt: new Date(now - 60_000).toISOString(), summary: {} };

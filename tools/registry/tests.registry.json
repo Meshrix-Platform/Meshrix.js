@@ -1265,7 +1265,8 @@
         "tests/vitest/server/required-report-validator.test.ts",
         "tests/vitest/server/verify-failure-localization.test.ts",
         "tests/vitest/server/npm-package-installability.test.ts",
-        "tests/vitest/server/single-node-reduce-existing.test.ts"
+        "tests/vitest/server/single-node-reduce-existing.test.ts",
+        "tests/vitest/server/acceptance-gate-provenance.test.ts"
       ],
       "sideEffects": "network-service",
       "requiredServices": [],
@@ -1288,6 +1289,7 @@
         "packages/protocols/mcp/adapter/gateway-installer/lib/cli/scan-local.ts",
         "packages/protocols/mcp/adapter/mcp-release-targets.ts",
         "packages/protocols/mcp/modern-downstream/discovery.ts",
+        "tests/vitest/server/acceptance-gate-provenance.test.ts",
         "tests/vitest/server/architecture-acceptance-boundaries.test.ts",
         "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.ts",
         "tests/vitest/server/deployment-lifecycle-state-machine.test.ts",
@@ -1320,6 +1322,7 @@
         "tools/generators/generate-architecture-diagram-digests.ts",
         "tools/generators/generate-supply-chain-artifacts.ts",
         "tools/registry/release-acceptance-standards.registry.json",
+        "tools/registry/tests.registry.json",
         "tools/server-scripts/capability-acceptance-checkpoint-reducer.ts",
         "tools/server-scripts/lib/local-execution-environment.ts",
         "tools/server-scripts/lib/lock-backed-npm-registry.ts",
@@ -1335,6 +1338,7 @@
         "tools/server-scripts/lib/platform-acceptance-generation-store.ts",
         "tools/server-scripts/lib/platform-acceptance-ledger-anchor.ts",
         "tools/server-scripts/lib/platform-acceptance-reducer.ts",
+        "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
         "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts",
         "tools/server-scripts/lib/plugin-runtime-capability-bindings.ts",
         "tools/server-scripts/lib/public-artifact-boundary.ts",

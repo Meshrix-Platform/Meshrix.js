@@ -535,6 +535,7 @@ async function runAcceptanceWorker() : Promise<any> {
     candidateIdentity,
     finalCandidateIdentity,
     reportEvidence,
+    reportWriteAudit,
     capabilityEvidenceExecution,
     blockedCommandValidation: blockedResultValidation,
     ledgerAnchor: {

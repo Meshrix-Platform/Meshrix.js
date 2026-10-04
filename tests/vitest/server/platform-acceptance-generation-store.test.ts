@@ -444,6 +444,11 @@ describe("platform acceptance generation store", () : any => {
     failedAggregate.summary.failedCommands = ["core-regression"];
     failedAggregate.summary.missingEvidenceCount = 1;
     failedAggregate.summary.missingEvidence = ["report-ready:build/reports/child.json"];
+    failedAggregate.reportWriteAudit = {
+      consistent: false,
+      currentRunOrphans: ["build/reports/unregistered-owner.json"],
+      currentRunOrphanCount: 1
+    };
     await fs.writeFile(aggregatePath, `${JSON.stringify(failedAggregate, null, 2)}\n`, "utf8");
     const diagnostic: any = await publishAcceptanceFailureDiagnostic({
       repoRoot,
@@ -469,6 +474,7 @@ describe("platform acceptance generation store", () : any => {
     expect(retained.candidateDigest).toBe(failedAggregate.candidate_digest);
     expect(retainedAggregate.summary.failedCommands).toEqual(["core-regression"]);
     expect(retainedAggregate.summary.missingEvidence).toEqual(["report-ready:build/reports/child.json"]);
+    expect(retainedAggregate.reportWriteAudit).toEqual(failedAggregate.reportWriteAudit);
     expect(await fs.readFile(path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER), "utf8"))
       .toBe(pointerBeforeFailure);
     expect((await resolveFixture(repoRoot)).pointer.generationId).toBe("accepted-before-failure");
