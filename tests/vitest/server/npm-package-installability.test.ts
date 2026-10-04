@@ -14,12 +14,14 @@ import { npmCliArgs, resolveNpmCliInvocation } from "../../../tools/server-scrip
 import { scanPublicArtifact, scanPublicArtifactFiles } from "../../../tools/server-scripts/lib/public-artifact-boundary.ts";
 
 import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/lock-backed-npm-registry.ts";
+import { createNpmPackageInstallabilityReadiness } from "../../../tools/server-scripts/lib/release-evidence-readiness.ts";
 import {
   assertPreparedProductBundleClosure,
   bundledPackageNamesInArtifact,
   failureCode,
   listInstallabilityTarballFiles,
-  prepareInstallabilityConsumer
+  prepareInstallabilityConsumer,
+  targetForTest
 } from "../../../tools/server-scripts/verify-npm-package-installability.ts";
 import {
   consumerFailureSummary,
@@ -124,6 +126,72 @@ async function createSyntheticArtifact(root?: any, { name = "pactium", version =
 }
 
 describe("npm artifact installability source", () : any => {
+  it("projects lock-backed registry evidence through runtime qualification into release readiness", () => {
+    const registryEvidence = {
+      lockBackedRegistryMirror: true,
+      mirroredPackageCount: 3,
+      mirroredArtifactCount: 8,
+      publicServerCliHelp: true,
+      publicServerBin: true
+    };
+    const native = { kind: "native", platform: "linux/amd64" };
+    const cliTarget = targetForTest(native, { status: "passed", evidence: registryEvidence }, "cli");
+    const runtimeTarget = targetForTest(native, { status: "passed", evidence: registryEvidence }, "runtime");
+    const dockerNotRun = targetForTest(
+      { kind: "local_docker" },
+      { status: "not_run", reasonCode: "docker_cli_missing" },
+      "runtime"
+    );
+    const report: any = {
+      schemaVersion: "v0.0.1:release:npm-package-installability-report-1",
+      verifier: "tools/server-scripts/verify-npm-package-installability.ts",
+      environment: {
+        native: { os: "linux", architecture: "amd64", platform: "linux/amd64", nodeVersion: "22.1.0" },
+        docker: { status: "unavailable", reasonCode: "docker_cli_missing" }
+      },
+      candidate: {
+        version: "0.0.1",
+        artifacts: [
+          {
+            name: "@meshrix/gateway", version: "0.0.1", filename: "meshrix-gateway-0.0.1.tgz", integrity: "sha512-YWJjZA=="
+          },
+          { name: "meshrix.js", version: "0.0.1", filename: "meshrix.js-0.0.1.tgz", integrity: "sha512-YWJjZA==" }
+        ]
+      },
+      tests: [
+        { name: "root package declares the complete version-locked workspace release set", status: "passed", evidence: {} },
+        { name: "release-set tarballs are source-portable and exclude host artifacts", status: "passed", evidence: {} },
+        { name: "clean consumer install runs the packaged CLI", status: "passed", evidence: { targets: [cliTarget, dockerNotRun] } },
+        { name: "installed framework starts and serves its default health contracts", status: "passed", evidence: { targets: [runtimeTarget, dockerNotRun] } }
+      ],
+      summary: {
+        releaseReady: true,
+        reportLeakScan: true,
+        testCount: 4,
+        failedCount: 0,
+        qualifiedPlatforms: [{ kind: "native", platform: "linux/amd64" }]
+      }
+    };
+
+    expect(runtimeTarget.evidence).toMatchObject({
+      lockBackedRegistryMirror: true,
+      mirroredPackageCount: 3,
+      mirroredArtifactCount: 8
+    });
+    expect(createNpmPackageInstallabilityReadiness(report).reasons).toEqual([]);
+
+    const incompleteReport = structuredClone(report);
+    incompleteReport.tests[3].evidence.targets[0] = targetForTest(
+      native,
+      { status: "passed", evidence: { publicServerBin: true } },
+      "runtime"
+    );
+    expect(createNpmPackageInstallabilityReadiness(incompleteReport).reasons).toEqual([
+      "npm-package-lock-backed-registry-mirror-missing",
+      "npm-package-lock-backed-registry-mirror-empty"
+    ]);
+  });
+
   it("qualifies the actual connector through signed discovery and current stateless MCP messages", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-installed-proxy-fixture-"));
     try {

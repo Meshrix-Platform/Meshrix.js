@@ -793,7 +793,8 @@ export async function publishAcceptanceFailureDiagnostic({
   const failurePaths: any = failureDiagnosticPaths(repoRoot, paths?.id);
   const failureResult: any = validateWorkerFailureResult(workerResult);
   const aggregate: any = await readFailedAggregateReport(paths?.workspace, aggregateReportPath);
-  if (aggregate?.aggregateReport?.sourceRevision && aggregate.aggregateReport.sourceRevision !== paths.sourceRevision) {
+  const aggregateRevision = aggregate?.aggregateReport?.candidateIdentity?.source_revision;
+  if (aggregateRevision && aggregateRevision !== paths.sourceRevision) {
     throw new Error("Acceptance failure diagnostic candidate does not match its worktree");
   }
   const targetName: any = "failure.json";
@@ -804,6 +805,9 @@ export async function publishAcceptanceFailureDiagnostic({
   try {
     const targetPath: any = path.join(failurePaths.staged, targetName);
     await writePrivateFileAtomic(targetPath, payload);
+    if (aggregate) {
+      await writePrivateFileAtomic(path.join(failurePaths.staged, "aggregate.json"), aggregate.raw);
+    }
     await syncPathIfSupported(failurePaths.staged);
     await fs.rename(failurePaths.staged, failurePaths.committed);
     await syncPathIfSupported(failurePaths.root);

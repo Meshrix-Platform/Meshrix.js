@@ -897,7 +897,7 @@ async function runDockerTarget({
   return result;
 }
 
-function targetForTest(target: Record<string, any>, observation: Record<string, any>, evidenceKind: "cli" | "runtime"): Record<string, any> {
+export function targetForTest(target: Record<string, any>, observation: Record<string, any>, evidenceKind: "cli" | "runtime"): Record<string, any> {
   if (observation.status === "not_run") return {
     kind: target.kind,
     ...(target.platform ? { platform: target.platform } : {}),
@@ -937,6 +937,9 @@ function targetForTest(target: Record<string, any>, observation: Record<string, 
       installedOfflineRestore: evidence.installedOfflineRestore === true,
       installedSchemaWorker: evidence.installedSchemaWorker === true,
       publicServerBin: evidence.publicServerBin === true,
+      lockBackedRegistryMirror: evidence.lockBackedRegistryMirror === true,
+      mirroredPackageCount: evidence.mirroredPackageCount || 0,
+      mirroredArtifactCount: evidence.mirroredArtifactCount || 0,
       failures: evidence.failures || [],
       runtime: evidence.runtime || {},
       npmVersion: evidence.npmVersion || evidence.toolchain?.npmVersion || "",

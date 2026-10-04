@@ -1057,8 +1057,10 @@ Exit code `0` means the selected scope passed; non-zero means it is incomplete.
 
 The acceptance orchestrator materializes the explicit Git commit in a detached
 private worktree. It never copies a dirty caller workspace, and a failed run
-retains one candidate-bound fixed-field failure envelope without moving the
-accepted-generation pointer. A successful run publishes one digest-bound
+retains a candidate-bound fixed-field `failure.json` envelope and, when available,
+its validated, privacy-scanned failed aggregate in `aggregate.json`, without
+moving the accepted-generation pointer. These files share one bounded, private,
+retained failure generation. A successful run publishes one digest-bound
 accepted-candidate receipt. The same generation owns the npm installability
 report, which records the exact archives and each selected native or local
 Docker consumer result. Stable and release authority bundles revalidate that
