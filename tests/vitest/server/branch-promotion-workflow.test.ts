@@ -181,6 +181,39 @@ describe("branch promotion workflow", () : any => {
     expect(release).toEqual({ ok: true, code: "stable-fast-forward-advanced-release" });
   });
 
+  it("admits PR promotion merges whose first parent is the exact upstream tip", () : any => {
+    const stableMerge: any = verifyProtectedPushTopology({
+      branch: "stable",
+      before: "old-stable",
+      after: "stable-merge-tip",
+      branchTip: branchTips({ nightly: "nightly-tip" }),
+      ancestor: () : any => true,
+      parentOf: () : any => "nightly-tip",
+    });
+    expect(stableMerge).toEqual({ ok: true, code: "nightly-merge-advanced-stable" });
+
+    const releaseMerge: any = verifyProtectedPushTopology({
+      branch: "release",
+      before: "old-release",
+      after: "release-merge-tip",
+      branchTip: branchTips({ stable: "stable-tip" }),
+      ancestor: () : any => true,
+      parentOf: () : any => "stable-tip",
+    });
+    expect(releaseMerge).toEqual({ ok: true, code: "stable-merge-advanced-release" });
+
+    const wrongSourceMerge: any = verifyProtectedPushTopology({
+      branch: "stable",
+      before: "old-stable",
+      after: "stable-merge-tip",
+      branchTip: branchTips({ nightly: "nightly-tip" }),
+      ancestor: () : any => true,
+      parentOf: () : any => "feature-tip",
+    });
+    expect(wrongSourceMerge.ok).toBe(false);
+    expect(wrongSourceMerge.code).toBe("promotion-source-tip-mismatch");
+  });
+
   it("rejects wrong sources, stale bases, and bootstrap pushes on protected branches", () : any => {
     const wrongStableSource: any = verifyProtectedPushTopology({
       branch: "stable",
