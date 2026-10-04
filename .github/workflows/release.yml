@@ -19,7 +19,7 @@ concurrency:
 jobs:
   release:
     name: Verify and publish release
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     environment: release-candidate
     permissions:
       contents: write

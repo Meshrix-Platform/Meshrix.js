@@ -18,6 +18,7 @@ describe("standard npm release workflow", () => {
 
     expect(workflow).toContain('tags: ["v*"]');
     expect(workflow).toContain("workflow_dispatch: {}");
+    expect(workflow).toContain("runs-on: macos-15");
     expect(workflow).toContain("ref: ${{ github.ref }}");
     expect(workflow).toContain("RELEASE_TAG: ${{ github.ref_name }}");
     expect(workflow).toContain(`node-version: "${definition.github.nodeVersion}"`);

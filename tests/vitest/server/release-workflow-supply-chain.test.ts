@@ -44,7 +44,7 @@ describe("release workflow supply-chain boundary", () : any => {
   it("supplies the actual workspace manifests before a clean container dependency install", async () => {
     const manifest = JSON.parse(read("package.json"));
     const directories = await resolveReleaseWorkspaceDirectories({ rootDir: ROOT, workspaces: manifest.workspaces });
-    const dependencyStage = read("Dockerfile").split("FROM deps AS npm-package-verifier")[0];
+    const dependencyStage = read("Dockerfile").split("FROM deps AS build")[0];
     const copied = [...dependencyStage.matchAll(/^COPY (.+) \.\/$|^COPY (\S+) \.\/\S+$/gmu)].flatMap((match) => (match[1] || match[2]).split(/\s+/u));
     for (const directory of directories) expect(copied, directory).toContain(`${directory}/package.json`);
   });
@@ -93,15 +93,13 @@ describe("release workflow supply-chain boundary", () : any => {
     }
   });
 
-  it("keeps the npm verifier cache content-addressed and project-isolated", () : any => {
+  it("keeps the dependency build cache project-isolated", () : any => {
     const dockerfile: any = read("Dockerfile");
     const cacheMount: any =
       "--mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm,sharing=locked";
-    expect(dockerfile.split(cacheMount)).toHaveLength(3);
+    expect(dockerfile.split(cacheMount)).toHaveLength(2);
     expect(dockerfile).toContain('--cache="${ROOTFS}var/cache/meshrix/npm"');
-    expect(dockerfile).toContain(
-      'cp -a "${ROOTFS}var/cache/meshrix/npm/_cacache" "${ROOTFS}opt/meshrix-npm-cache/_cacache"'
-    );
+
     expect(dockerfile).not.toContain("cp -a ${ROOTFS}var/cache/meshrix/npm/. ");
     expect(dockerfile).not.toContain(["", "root", ".npm"].join("/"));
   });

@@ -760,6 +760,11 @@ npm run verify:release-definition
 npm run release:prepare -- --check
 ```
 
+The Release workflow uses the macOS arm64 hosted runner as its representative
+npm qualification platform. Ubuntu CI remains independent; its result does not
+establish or invalidate macOS qualification. The hosted release must itself
+pass all applicable checks, including installed browser interaction.
+
 The hosted workflow runs the non-mutating tag check and
 `npm run ci:local`. Its default engineering scope builds and tests the products,
 prepares the two

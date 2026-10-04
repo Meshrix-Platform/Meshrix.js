@@ -19,6 +19,7 @@ import {
   assertPreparedProductBundleClosure,
   bundledPackageNamesInArtifact,
   failureCode,
+  normalizedConsumerFailures,
   listInstallabilityTarballFiles,
   lockfilePlaywrightChromiumExecutable,
   prepareInstallabilityConsumer,
@@ -368,7 +369,34 @@ describe("npm artifact installability source", () : any => {
     ["browserType.launch: Target page, context or browser has been closed", "npm_package_browser_launch_failed"],
     ["npm_package_ui_browser_error", "npm_package_ui_browser_error"]
   ])("classifies browser failures without raw diagnostics: %s", (message, errorCode) => {
-    expect(consumerFailureSummary(new Error(message))).toEqual({ success: false, errorCode });
+    expect(consumerFailureSummary(new Error(message))).toMatchObject({ success: false, errorCode });
+  });
+
+  it("retains a bounded redacted launch cause through the report projection", () => {
+    const localPath = ["", "home", "synthetic", "chrome"].join("/");
+    const secret = "ghp_" + "syntheticdiagnosticcredential";
+    const message = `browserType.launch: browser exited\n<launching> ${localPath} --private-switch=${secret}\n[pid=123][err] chrome_crashpad_handler: --database is required\n${localPath} ${["Bear", "er"].join("")} ${secret}`;
+    const failure = consumerFailureSummary(new Error(message));
+    expect(failure.launchDiagnostic).toContain("chrome_crashpad_handler: --database is required");
+    expect(failure.launchDiagnostic).not.toContain(localPath);
+    expect(failure.launchDiagnostic).not.toContain(secret);
+    expect(failure.launchDiagnostic).not.toContain("pid=123");
+    assertNoLeak(failure);
+    expect(normalizedConsumerFailures({ failures: [{ ...failure, failureStage: "ui_browser", failurePackageIndex: 0 }] }, ["meshrix.js"])[0])
+      .toMatchObject({ launchDiagnostic: failure.launchDiagnostic, packageName: "meshrix.js" });
+    expect(consumerFailureSummary(new Error("browserType.launch: " + "x".repeat(5000))).launchDiagnostic.length).toBeLessThanOrEqual(2400);
+  });
+
+  it("preserves the original browser failure when its diagnostic cannot be safely retained", () => {
+    const rejectedContent = ["-----", "BEGIN", " SYNTHETIC MATERIAL-----"].join("");
+    expect(consumerFailureSummary(new Error(`browserType.launch: ${rejectedContent}`))).toEqual({
+      success: false,
+      errorCode: "npm_package_browser_launch_failed"
+    });
+    expect(consumerFailureSummary(new Error("npm_package_ui_browser_error"))).toEqual({
+      success: false,
+      errorCode: "npm_package_ui_browser_error"
+    });
   });
 
   it("bounds consumer and controller failure diagnostics to published codes and stages", () : void => {

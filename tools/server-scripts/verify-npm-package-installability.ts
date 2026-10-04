@@ -503,7 +503,7 @@ async function resolveNpmCacheRoot(userConfig: string): Promise<string> {
   return cacheRoot;
 }
 
-function normalizedConsumerFailures(observed: any, packageNames: string[]): Record<string, any>[] {
+export function normalizedConsumerFailures(observed: any, packageNames: string[]): Record<string, any>[] {
   return (Array.isArray(observed?.failures) ? observed.failures : []).map((failure: any) => {
     const index = Number.isInteger(failure?.failurePackageIndex)
       && failure.failurePackageIndex >= 0
@@ -514,6 +514,7 @@ function normalizedConsumerFailures(observed: any, packageNames: string[]): Reco
       failureStage: NPM_PACKAGE_CONSUMER_FAILURE_STAGES.has(failure?.failureStage) ? failure.failureStage : "consumer_report_validation",
       errorCode: NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(failure?.errorCode) ? failure.errorCode : "npm_package_consumer_failed",
       packageIndex: index,
+      ...(typeof failure.launchDiagnostic === "string" ? { launchDiagnostic: failure.launchDiagnostic } : {}),
       ...(index === null ? {} : { packageName: packageNames[index] })
     };
   });

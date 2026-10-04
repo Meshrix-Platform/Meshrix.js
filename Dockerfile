@@ -47,32 +47,6 @@ RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm
       --fetch-retry-maxtimeout=300000 \
       --fetch-timeout=600000
 
-FROM deps AS npm-package-verifier
-
-RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm,sharing=locked \
-    test -d "${ROOTFS}var/cache/meshrix/npm/_cacache" \
-    && mkdir -p "${ROOTFS}opt/meshrix-npm-cache" \
-    && cp -a "${ROOTFS}var/cache/meshrix/npm/_cacache" "${ROOTFS}opt/meshrix-npm-cache/_cacache" \
-    && chmod -R a+rX "${ROOTFS}opt/meshrix-npm-cache"
-
-FROM npm-package-verifier AS npm-package-registry
-
-COPY dist/tools/server-scripts/lib/lock-backed-npm-registry.js ./dist/tools/server-scripts/lib/lock-backed-npm-registry.js
-COPY dist/tools/server-scripts/npm-registry-server.js ./dist/tools/server-scripts/npm-registry-server.js
-
-FROM ${NODE_BASE_IMAGE} AS npm-package-consumer
-
-ARG ROOTFS=/
-RUN --mount=type=cache,target=${ROOTFS}var/cache/apt,sharing=locked \
-    --mount=type=cache,target=${ROOTFS}var/lib/apt/lists,sharing=locked \
-    apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ chromium \
-    && rm -rf "${ROOTFS}var/lib/apt/lists"/*
-
-COPY dist/tools/server-scripts/npm-package-consumer.js /opt/meshrix/npm-package-consumer.js
-COPY dist/tools/server-scripts/lib/npm-cli-invocation.js /opt/meshrix/lib/npm-cli-invocation.js
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
 FROM deps AS build
 
 COPY apps/server ./apps/server

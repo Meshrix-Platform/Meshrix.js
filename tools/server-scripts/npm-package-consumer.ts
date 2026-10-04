@@ -8,6 +8,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { redactReportText, assertNoSensitiveReportLeak } from "@meshrix/foundation/observability/sensitive-report-scan";
 import { npmCliArgs, resolveNpmCliInvocation } from "./lib/npm-cli-invocation.ts";
 
 const execFileAsync: any = promisify(execFile);
@@ -115,15 +116,29 @@ export function consumerFailureSummary(error?: any) : Record<string, any> {
   if (NPM_PACKAGE_CONSUMER_FAILURE_CODES.has(message)) {
     return { success: false, errorCode: message };
   }
-  // Classify startup failures without retaining browser output or local paths.
+  const browserFailure = (errorCode: string): Record<string, any> => {
+    try {
+      const launchDiagnostic = redactReportText(message, {
+        dynamicNeedles: [process.env.HOME, process.env.TMPDIR, process.env.MESHRIX_CHROMIUM_EXECUTABLE].filter(Boolean)
+      }).split(/\r?\n/u)
+        .filter((line: string) => !line.includes("<launching>"))
+        .join("\n").replace(/\bpid=\d+\b/gu, "pid=[redacted]").slice(-2400);
+      assertNoSensitiveReportLeak(launchDiagnostic, "browser launch diagnostic");
+      return { success: false, errorCode, launchDiagnostic };
+    } catch {
+      // Optional diagnostics must not replace the original failure when privacy rejects them.
+      return { success: false, errorCode };
+    }
+  };
+  // Retain only bounded, redacted startup diagnostics; page/runtime output is excluded.
   if (/Executable doesn't exist/iu.test(message)) {
-    return { success: false, errorCode: "npm_package_browser_executable_missing" };
+    return browserFailure("npm_package_browser_executable_missing");
   }
   if (/Host system is missing dependencies|error while loading shared libraries|cannot open shared object file/iu.test(message)) {
-    return { success: false, errorCode: "npm_package_browser_system_dependencies_missing" };
+    return browserFailure("npm_package_browser_system_dependencies_missing");
   }
   if (/browserType\.launch/iu.test(message)) {
-    return { success: false, errorCode: "npm_package_browser_launch_failed" };
+    return browserFailure("npm_package_browser_launch_failed");
   }
 
   const output: any = `${String(error?.stdout || "")}\n${String(error?.stderr || "")}`;
