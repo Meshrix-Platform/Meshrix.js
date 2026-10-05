@@ -1,6 +1,17 @@
 import type { ConsolePhrasePair } from "../console-phrase-types";
 
 export const shellCorePhrasePairs: ConsolePhrasePair[] = [
+  // Scope-selector category labels stay ahead of same-English entries (e.g.
+  // ["系统", "System"]) so the reverse map keeps pointing at the plain zh term.
+  ["智能体 (Agent)", "Agent"],
+  ["上下文 (Context)", "Context"],
+  ["服务网关 (Gateway)", "Gateway"],
+  ["存储 (Storage)", "Storage"],
+  ["工具 (Tool)", "Tool"],
+  ["工作空间 (Workspace)", "Workspace"],
+  ["系统 (System)", "System"],
+  ["任务 (Jobs)", "Jobs"],
+  ["其它", "Other"],
   ["服务端控制台", "Server Console"],
   ["控制面板", "Control Panel"],
   ["工作台", "Workbench"],
@@ -441,4 +452,13 @@ export const shellCorePhrasePairs: ConsolePhrasePair[] = [
   ["打开", "Open"],
   ["导航", "Navigation"],
   ["当前位置", "Current location"],
+  ["存储对象", "Stored Objects"],
+  ["插件", "Plugins"],
+  ["已生效的插件保持勾选；已装载但未生效的插件以灰色显示。", "Effective plugins stay checked; loaded but ineffective plugins appear grayed out."],
+  ["待确认", "Pending Confirmation"],
+  ["拉起中", "Recovering"],
+  ["确认恢复", "Confirm Recovery"],
+  ["查看巡检", "View Inspection"],
+  ["确认中", "Confirming"],
+  ["确认关闭", "Confirm Close"],
 ];
