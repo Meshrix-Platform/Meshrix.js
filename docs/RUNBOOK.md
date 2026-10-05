@@ -779,7 +779,10 @@ settings, so store a temporary `NPM_BOOTSTRAP_TOKEN` secret in that environment.
 The workflow exposes it as `NODE_AUTH_TOKEN` only to the npm
 publish command. After both packages have been created and their Trusted
 Publishers are configured, delete the secret; subsequent releases authenticate
-with npm's standard GitHub Actions OIDC support.
+with npm's standard GitHub Actions OIDC support. The first publication
+(`v0.1.0`) completed that cycle: the bootstrap secret has been removed and the
+workflow now publishes through OIDC alone, so publishing the next release
+depends on both Trusted Publisher entries below existing.
 
 Create the temporary token from npm's profile menu under **Access Tokens →
 Generate New Token**. Choose a granular token with package publish permission,

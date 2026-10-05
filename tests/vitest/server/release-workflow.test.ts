@@ -33,7 +33,10 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain("npm run release:prepare -- --check --tag \"$RELEASE_TAG\"");
     expect(workflow).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
     expect(workflow).toContain("npm run release:publish-npm -- --artifact-dir build/release/npm-set");
-    expect(workflow).toContain("NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}");
+    // Trusted Publishing: the release workflow publishes through its OIDC
+    // identity and must not carry a long-lived npm token secret.
+    expect(workflow).not.toContain("NPM_BOOTSTRAP_TOKEN");
+    expect(workflow).not.toContain("NODE_AUTH_TOKEN");
     expect(workflow).toContain('NPM_CONFIG_PROVENANCE: "true"');
     expect(workflow).toContain('if gh release view "$RELEASE_TAG"');
     expect(workflow).toContain("gh release create \"$RELEASE_TAG\"");
