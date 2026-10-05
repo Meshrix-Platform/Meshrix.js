@@ -58,7 +58,8 @@ jobs:
 
       - name: Publish the qualified npm archives
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          # Trusted Publishing through the workflow's OIDC identity
+          # (`id-token: write` above); no long-lived npm token is used.
           NPM_CONFIG_PROVENANCE: "true"
         run: npm run release:publish-npm -- --artifact-dir build/release/npm-set
 
