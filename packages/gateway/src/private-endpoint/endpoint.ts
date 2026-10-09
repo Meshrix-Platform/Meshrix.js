@@ -38,6 +38,14 @@ export interface PrivateEndpointOptions {
   };
   readonly nonceFactory?: () => string;
   readonly now?: () => number;
+  /**
+   * Invoked each time the pinned inner-TLS channel finishes establishment —
+   * on both the session-admitted and session-restored rebuild paths. The
+   * operator profile uses this to attach the inner dispatch loop; the hook
+   * never fires before the mutual trust binding is proven, and a channel
+   * torn down by a later session event closes its own socket listeners.
+   */
+  readonly onInnerChannel?: (channel: InnerTlsChannel) => void;
 }
 
 export interface PrivateEndpoint {
@@ -86,7 +94,9 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
     void establishInnerChannel(device)
       .then((tls) => {
         void tls.established.then(() => {
-          // Channel live — any frames queued while it was down can drain now.
+          // Channel live — hand it to the profile's dispatch loop before any
+          // buffered inbound frames drain into its socket.
+          options.onInnerChannel?.(tls);
           session.flushInbound();
         }).catch(() => {
           if (channel === tls) channel = undefined;

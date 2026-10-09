@@ -172,6 +172,39 @@ peer agreement on valid messages, rejection of every invalid case, the session
 and rotation state machines, reachability/retry honesty, bounded frame
 accounting, and snapshot visibility.
 
+## Endpoint operator profile
+
+`apps/mcp-gateway-installer` ships the runnable endpoint side of this wire as
+`meshrix-gateway private-endpoint serve --config FILE` (with `private-endpoint
+check` for offline validation). The profile composes the existing governed
+gateway with `createPrivateGatewayEndpoint` over a real `wss:` WebSocket
+transport (`ws:` only for literal loopback fixtures) and supervises the session
+lifecycle the contract requires:
+
+- The endpoint state surface reports `reachable` only for a live admitted
+  session; otherwise new work receives `endpoint_unreachable` and nothing is
+  queued for later execution (`PRIVATE_RELAY_OFFLINE_NEW_CALL_QUEUES ===
+  false`).
+- Reconnects preserve session cursors through `session-reconnect`; a
+  retryable `session-rejected` is re-presented with the relay-expected
+  revocation revision on a fresh session driver, and non-retryable rejections,
+  `revoked` closes and protocol failures end the run with a typed outcome.
+- Operator-visible revocation and recovery-authority state distinguishes
+  locally staged changes from relay-acknowledged ones (`pending` until the
+  admission revision catches up — never "applied" off local staging).
+- Endpoint administration is not published through the relay: state and
+  control are served only on an optional loopback listener or inside the
+  pinned inner channel. Credentials, inner-TLS keys, grants, catalog data and
+  recovery secrets never appear in relay frames or status output.
+- `SIGTERM`/`SIGINT` send `session-close`, terminate the transport and drain
+  the gateway; no timer interrupts a healthy in-flight operation.
+
+The focused suite
+`tests/vitest/gateway/private-endpoint/endpoint-profile.test.ts` (registry id
+`gateway.private-endpoint-profile`) exercises configuration validation, the
+real WebSocket transport lifecycle, admit/reject/reconnect transitions, the
+honest state surface, inner-channel dispatch over pinned TLS and signal drain.
+
 ## Ownership
 
 | Concern | Owner |
@@ -180,6 +213,7 @@ accounting, and snapshot visibility.
 | Relay runtime admission/forwarding (Workerd/DO) | `NODE-RELAY-RUNTIME` |
 | Endpoint gateway transitions, operation recovery execution | `NODE-ENDPOINT-GATEWAY` |
 | Endpoint trust/recovery proof implementation | `NODE-ENDPOINT-GATEWAY` |
+| Endpoint packaging/start/stop/state surface | `NODE-ENDPOINT-PROFILE` (`apps/mcp-gateway-installer/src/private-endpoint/`) |
 | Vault storage implementation | `NODE-RELAY-RUNTIME` |
 
 No real cloud deployment, public service publication or hosted identity is

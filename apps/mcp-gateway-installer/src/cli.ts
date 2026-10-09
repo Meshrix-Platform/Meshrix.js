@@ -94,14 +94,14 @@ interface ServiceConfig {
   readonly authorization?: string;
   readonly toolRisk: Readonly<Record<string, "read" | "safe_write" | "destructive">>;
 }
-interface RuntimeConfig {
+export interface RuntimeConfig {
   readonly profile: "local" | "remote";
   readonly listen: { readonly host: string; readonly port: number };
   readonly services: readonly ServiceConfig[];
   readonly remoteAuth?: { readonly bearerTokenEnv: string; readonly tlsCertEnv: string; readonly tlsKeyEnv: string; readonly allowedServiceIds: readonly string[]; readonly allowedOrigins: readonly string[]; readonly allowLoopbackUpstreams: boolean; readonly expiresAt?: number };
 }
 
-async function loadConfig(path?: string): Promise<RuntimeConfig> {
+export async function loadConfig(path?: string): Promise<RuntimeConfig> {
   const provided = path ? JSON.parse(await readFile(path, "utf8")) as unknown : {};
   if (!record(provided)) throw configError("gateway_config_invalid", "Gateway configuration must be an object.");
   if (provided.profile !== undefined && provided.profile !== "local" && provided.profile !== "remote") throw configError("gateway_profile_unsupported", "Gateway profile is unsupported.");
@@ -170,7 +170,7 @@ async function loadConfig(path?: string): Promise<RuntimeConfig> {
   return Object.freeze({ profile, listen: { host, port }, services: Object.freeze(services), ...(remoteAuth ? { remoteAuth } : {}) });
 }
 
-async function version(): Promise<string> {
+export async function version(): Promise<string> {
   const manifest: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   if (!record(manifest) || typeof manifest.version !== "string") throw configError("gateway_package_invalid", "Installed package has no version.");
   return manifest.version;
@@ -213,7 +213,7 @@ function createDurablePermitAuthority(descriptors: readonly CatalogDescriptor[])
   });
 }
 
-async function createRuntime(config: RuntimeConfig, serverVersion: string, signal?: AbortSignal) {
+export async function createRuntime(config: RuntimeConfig, serverVersion: string, signal?: AbortSignal) {
   if (config.services.length === 0) throw configError("gateway_services_missing", "A serving gateway requires at least one configured upstream service.");
   const transports = new Map<string, UpstreamPort>();
   const descriptors: CatalogDescriptor[] = [];
@@ -292,7 +292,7 @@ async function createRuntime(config: RuntimeConfig, serverVersion: string, signa
     if (!authenticated(request.headers?.authorization)) throw Object.assign(new Error("Gateway credential is invalid."), { code: "gateway_auth_required", status: 401 });
     return context;
   } });
-  return { gateway, adapter, authenticated };
+  return { gateway, adapter, authenticated, descriptors, permits: permitOwner.authority };
 }
 
 async function requestJson(request: IncomingMessage, shutdownSignal?: AbortSignal): Promise<unknown> {
@@ -529,11 +529,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   const action = command === "serve"
     ? transport === "http" ? serveGateway(config) : transport === "stdio" ? serveStdioGatewayUntilStop(config) : Promise.reject(configError("gateway_transport_invalid", "Expected http or stdio."))
     : command === "check" || command === "health" ? runGatewayOnly({ config }).then((value) => { process.stdout.write(`${JSON.stringify(value)}\n`); })
+    : command === "private-endpoint" && process.argv[3] === "serve"
+      ? import("./private-endpoint/profile.ts").then((profile) => profile.servePrivateEndpoint(config))
+    : command === "private-endpoint" && process.argv[3] === "check"
+      ? import("./private-endpoint/profile.ts").then((profile) => profile.checkPrivateEndpoint({ config })).then((value) => { process.stdout.write(`${JSON.stringify(value)}\n`); })
     : command === "migrate" && ["preview", "apply", "restore"].includes(process.argv[3] ?? "")
       ? migrateGateway(process.argv[3] as "preview" | "apply" | "restore", option("--input") ?? "", {
           expectedRevision: option("--expected-revision"), backupRevision: option("--backup-revision"), backupPath: option("--backup")
         }).then((report) => { process.stdout.write(`${JSON.stringify(report)}\n`); })
-    : Promise.reject(configError("gateway_command_invalid", "Expected serve, check, or health."));
+    : Promise.reject(configError("gateway_command_invalid", "Expected serve, check, health, migrate, or private-endpoint."));
   action.then((result) => {
     if (result === CLI_STDOUT_CANCELLED) process.exit(0);
   }).catch((error: unknown) => { process.stderr.write(`${String((error as { code?: unknown })?.code ?? "gateway_failed")}\n`); process.exitCode = 1; });

@@ -84,3 +84,73 @@ configure CORS. A local TLS test may explicitly set
 are not supported, and inline secrets or unclassified tool effects remain
 rejected. This is a configured profile, not permission to deploy it or contact
 a real external provider in a local acceptance run.
+
+## Private-endpoint profile
+
+`private-endpoint serve --config FILE` runs the same governed gateway as the
+user-controlled receiving endpoint of a private-relay route: it connects out to
+the configured opaque relay over WebSocket, presents the endpoint admission,
+and serves the paired entry's inner-channel JSON-RPC against the existing
+upstream configuration. `private-endpoint check --config FILE` performs the
+full offline validation (file reads, protocol fields, material parsing) without
+opening a socket or contacting any peer, and prints one JSON summary line.
+
+The endpoint configuration is JSON:
+
+- `relay.url` — the relay WebSocket URL. `wss:` is required; `ws:` is accepted
+  only for a literal loopback host. The session path is derived as
+  `<url>/session/<tenantId>/<routeId>`.
+- `relay.credential` — an `env:NAME` binding for the enrolled bearer token.
+  Inline credentials are rejected and the value never appears in output.
+- `endpoint` — `tenantId`, `deviceId`, `routeId`, `mode` (`personal` |
+  `enterprise`), `admissionGeneration` (≥ 1), `revocationRevision` (≥ 0),
+  plus the paired-entry trust fields: `pairedIdentityKey` (base64url SPKI),
+  `pairedIdentityFingerprint` (the peer pin for the inner channel),
+  `trustGeneration`, `endpointPrincipalRef`, `capabilityGrantRef`, and the
+  optional `boundRecoveryKeyId`. `role` is fixed to `endpoint`.
+- `innerTls` — `key` and `cert` as `file:PATH` (resolved relative to the
+  config file) or `env:NAME` references. This is the TLS 1.3 identity the
+  inner pinned mutual-TLS channel terminates on; the material never crosses
+  the relay. `handshakeTimeoutMs` optionally bounds the inner handshake.
+- `recovery.authorities` — enrolled recovery authority records
+  (`recoveryKeyId`, `principalRef`, `publicKey`, `generation`); rotation
+  stays staged per endpoint and pending entries remain visible in the state
+  surface until acknowledged.
+- `recovery.signingKey` — optional `file:`/`env:` private-key reference used
+  for endpoint-side recovery acts.
+- `gateway.configPath` — the existing gateway configuration file that
+  declares upstream services; it is loaded with the same loader and policy
+  as the gateway-only profiles.
+- `reconnect` — optional `initialDelayMs`/`maxDelayMs` backoff bounds.
+- `admin.listen` — optional loopback-only (`127.0.0.1`/`::1`) state listener
+  exposing `GET /status` and `GET /healthz`. Endpoint administration is never
+  published through the relay: control arrives only through this direct local
+  surface or the authenticated inner channel.
+
+During `serve` the process writes one JSON state line per transition
+(`profile: "private-endpoint"`), including the readiness transition once the
+relay admits the session. The surface reports honest state only:
+
+- `reachability` is `reachable` only while an admitted session and a live
+  socket both exist; anything else reports `endpoint_unreachable`. New work
+  is never queued while the endpoint is unreachable.
+- `revocationPropagation` compares the locally staged revocation revision
+  with the revision the relay acknowledged at admission: `applied`,
+  `pending`, or `unknown` before the first admission. A local revocation is
+  never claimed complete before remote acknowledgement.
+- `recoveryAuthorities` lists each enrolled recovery key's staged state and
+  generation.
+
+Socket loss keeps the session cursors and reconnects through
+`session-reconnect`; a retryable rejection re-presents with the
+relay-expected revocation revision on a fresh session. `SIGTERM`/`SIGINT`
+send `session-close`, terminate the transport and drain the gateway; a
+non-retryable rejection, relay-issued `revoked` close, or a protocol-failure
+close ends the run with the typed outcome instead of hanging. Already
+dispatched in-flight work stays honestly uncertain — it is recoverable
+through the peer's `operation-query`/`operation-status` channel, which
+answers `not_started` only with typed evidence and reports
+`dispatched_in_doubt`, `in_progress` or `status_unavailable` for work whose
+outcome is unknown. No timer cuts off a healthy in-flight operation. The
+existing gateway-only `serve`/`check`/`health`/`migrate` commands are
+unchanged by this profile.

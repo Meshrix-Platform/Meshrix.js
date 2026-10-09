@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@meshrix/contracts": "0.1.0",
+    "@meshrix/entry-transport": "0.1.0",
     "@meshrix/gateway": "0.1.0",
     "@meshrix/capabilities": "0.1.0",
     "@meshrix/foundation": "0.1.0",
-    "@meshrix/protocols": "0.1.0"
+    "@meshrix/protocols": "0.1.0",
+    "undici": "^8.11.2"
   },
   "bin": {
     "meshrix-gateway": "./dist/cli.js"

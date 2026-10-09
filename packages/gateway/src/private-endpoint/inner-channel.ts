@@ -1,4 +1,4 @@
-import { createHash, type KeyObject } from "node:crypto";
+import { createHash, X509Certificate, type KeyObject } from "node:crypto";
 import { Duplex } from "node:stream";
 import { TLSSocket, connect as tlsConnect, type PeerCertificate, type TLSSocketOptions } from "node:tls";
 import { PRIVATE_RELAY_LIMITS, parsePrivateRelayMessage } from "@meshrix/contracts/private-relay";
@@ -21,10 +21,22 @@ export function spkiSha256Base64Url(key: KeyObject | Buffer | string): string {
 
 function peerSpkiPin(peer: PeerCertificate | undefined): string | null {
   const pubkey = peer?.pubkey;
-  if (!pubkey) return null;
-  const der = typeof pubkey === "object" && "export" in pubkey
-    ? (pubkey as unknown as KeyObject).export({ format: "der", type: "spki" })
-    : Buffer.from(pubkey as Buffer);
+  let der: Buffer | undefined;
+  if (pubkey) {
+    der = typeof pubkey === "object" && "export" in pubkey
+      ? (pubkey as unknown as KeyObject).export({ format: "der", type: "spki" })
+      : Buffer.from(pubkey as Buffer);
+  } else if (peer?.raw) {
+    // Node omits PeerCertificate.pubkey for some key types (e.g. Ed25519) —
+    // derive the SPKI from the raw DER certificate instead of failing closed
+    // on every such peer.
+    try {
+      der = new X509Certificate(peer.raw).publicKey.export({ format: "der", type: "spki" });
+    } catch {
+      return null;
+    }
+  }
+  if (!der) return null;
   return createHash("sha256").update(der).digest("base64url");
 }
 
