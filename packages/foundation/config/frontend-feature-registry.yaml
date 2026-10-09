@@ -98,6 +98,15 @@ routes:
           - admin.tag-management.projections.inspect
           - admin.tag-management.audit.inspect
 
+  - routePath: /admin/recording-governance
+    viewFile: apps/console/views/admin/RecordingGovernanceView.vue
+    features:
+      - featureId: admin.recording-governance
+        actions:
+          - admin.recording-governance.policy.inspect
+          - admin.recording-governance.policy.publish
+          - admin.recording-governance.sink.health
+
   - routePath: /admin/version-release
     viewFile: apps/console/views/admin/VersionReleaseView.vue
     features:

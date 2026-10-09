@@ -1,0 +1,5 @@
+{
+  "id": "recording:read",
+  "label": "Read recording governance",
+  "description": "Read the tenant recording policy, sink health and pending recording obligations."
+}

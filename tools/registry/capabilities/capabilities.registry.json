@@ -343,6 +343,24 @@
       "risk": "safe_write"
     },
     {
+      "id": "cap:api:recording_governance.policy.get",
+      "operationId": "recording_governance.policy.get",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:recording_governance.sink.health",
+      "operationId": "recording_governance.sink.health",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:recording_governance.policy.publish",
+      "operationId": "recording_governance.policy.publish",
+      "kind": "api",
+      "risk": "repair_write"
+    },
+    {
       "id": "cap:api:workspace.contribution.revoke",
       "operationId": "workspace.contribution.revoke",
       "kind": "api",

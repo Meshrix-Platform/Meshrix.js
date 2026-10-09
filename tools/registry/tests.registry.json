@@ -1340,6 +1340,40 @@
       ]
     },
     {
+      "id": "server-runtime.recording-governance-console",
+      "label": "Recording governance console policy CAS, tenant isolation, sink health and limitation display",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/recording-governance-console.test.ts",
+        "tests/vitest/console/recording-governance-view.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/contracts/src/recording",
+        "packages/contracts/src/operations/recording-governance-operation-definitions.ts",
+        "packages/foundation/src/recording",
+        "packages/server-runtime/src/composition/console-domain/recording-governance-provider.ts",
+        "packages/server-runtime/src/composition/console-domain/operation-executors/recording-governance-executor.ts",
+        "packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
+        "apps/console/lib/recording-governance-client.ts",
+        "apps/console/composables/console-recording-governance-controller.ts",
+        "apps/console/views/admin/RecordingGovernanceView.vue",
+        "apps/console/i18n/recording-governance.ts",
+        "tests/vitest/server/recording-governance-console.test.ts",
+        "tests/vitest/console/recording-governance-view.test.ts"
+      ]
+    },
+    {
       "id": "security.authorization-hardening",
       "label": "Authorization concurrency delegation replay and crash-safety regressions",
       "owner": "platform",

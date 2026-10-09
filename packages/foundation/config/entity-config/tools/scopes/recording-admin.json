@@ -1,0 +1,5 @@
+{
+  "id": "recording:admin",
+  "label": "Configure recording governance",
+  "description": "Publish recording policy revisions for the tenant under the caller's configurer role."
+}

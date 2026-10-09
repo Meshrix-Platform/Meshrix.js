@@ -25,6 +25,7 @@ const canRequestApiKeyDistribution = computed(() =>
 const showPermissionSection = computed(() =>
   canAccessAdminView("tagManagement") ||
   canAccessAdminView("organizationGovernance") ||
+  canAccessAdminView("recordingGovernance") ||
   (apiKeyDistributionEligible.value && canAccessAdminView("apiKeyDistribution"))
 );
 
@@ -60,6 +61,14 @@ watch(canRequestApiKeyDistribution, (allowed) => {
       href="#/admin/api-key-distribution"
       subtle
       @activate="openAdmin('apiKeyDistribution')"
+    />
+    <ConsoleSideNavLink
+      v-if="hasFeature('recording-governance') && canAccessAdminView('recordingGovernance')"
+      :active="activeRouteView === 'admin' && activeRouteAdminView === 'recordingGovernance'"
+      :label="msg.nav.recordingGovernance"
+      href="#/admin/recording-governance"
+      subtle
+      @activate="openAdmin('recordingGovernance')"
     />
   </section>
 </template>

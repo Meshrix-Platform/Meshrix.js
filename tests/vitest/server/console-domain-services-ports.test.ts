@@ -28,7 +28,13 @@ function operationProviders() : any {
     readinessBaselineProvider: { status() : any {} },
     executiveReportProvider: { preview() : any {} },
     sampleCapabilityPackStore: { list() : any {} },
-    securityAlertStore: { listAlerts() : any {} }
+    securityAlertStore: { listAlerts() : any {} },
+    recordingGovernanceProvider: {
+      describe() : any {},
+      publishPolicy() : any {},
+      sinkHealth() : any {},
+      close() : any {}
+    }
   };
 }
 

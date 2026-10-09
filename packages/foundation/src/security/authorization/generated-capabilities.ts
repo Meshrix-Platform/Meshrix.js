@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:74ee255852cd9366
+ * Hash: sha256:8de58f776e225d5c
  * Generated at: 2026-06-30T09:41:12.260Z
  *
  * To modify capabilities: edit source operation definitions or Operation Permission catalog mappings, then run the generator.
  */
-export const GENERATED_CAPABILITIES_HASH = "sha256:74ee255852cd9366";
+export const GENERATED_CAPABILITIES_HASH = "sha256:8de58f776e225d5c";
 
 export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:readiness.baseline.status",
@@ -67,6 +67,9 @@ export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:workspace.contribution.adopt",
   "cap:api:workspace.contribution.reject",
   "cap:api:workspace.contribution.request_changes",
+  "cap:api:recording_governance.policy.get",
+  "cap:api:recording_governance.sink.health",
+  "cap:api:recording_governance.policy.publish",
   "cap:api:workspace.contribution.revoke",
   "cap:api:workspace.proposal.create",
   "cap:api:workspace.proposal.apply",
@@ -607,6 +610,9 @@ export const CAPABILITY_RISK_MAP = Object.freeze({
   "cap:api:workspace.contribution.adopt": "safe_write",
   "cap:api:workspace.contribution.reject": "repair_write",
   "cap:api:workspace.contribution.request_changes": "safe_write",
+  "cap:api:recording_governance.policy.get": "read_only",
+  "cap:api:recording_governance.sink.health": "read_only",
+  "cap:api:recording_governance.policy.publish": "repair_write",
   "cap:api:workspace.contribution.revoke": "repair_write",
   "cap:api:workspace.proposal.create": "safe_write",
   "cap:api:workspace.proposal.apply": "repair_write",

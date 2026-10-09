@@ -1,8 +1,10 @@
 import { AUTHORIZATION_CONTRIBUTION_OPERATION_DEFINITIONS } from "./authorization-contribution-operation-definitions.ts";
+import { RECORDING_GOVERNANCE_OPERATION_DEFINITIONS } from "./recording-governance-operation-definitions.ts";
 import { WORKSPACE_ASSET_OPERATION_DEFINITIONS } from "./workspace-asset-operation-definitions.ts";
 
 export const PROTOCOL_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
   ...AUTHORIZATION_CONTRIBUTION_OPERATION_DEFINITIONS,
+  ...RECORDING_GOVERNANCE_OPERATION_DEFINITIONS,
   ...WORKSPACE_ASSET_OPERATION_DEFINITIONS
 ]);
 

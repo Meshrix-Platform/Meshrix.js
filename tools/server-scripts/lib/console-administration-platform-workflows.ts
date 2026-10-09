@@ -175,5 +175,44 @@ export const CONSOLE_ADMINISTRATION_PLATFORM_WORKFLOWS: readonly any[] = Object.
       "tools/server-scripts/verify-production-health-console.ts",
       "tools/server-scripts/verify-observability-coverage.ts"
     ]
+  },
+  {
+    id: "recording-governance",
+    title: "Recording policy and sink administration",
+    routePaths: ["/admin/recording-governance"],
+    viewKeys: ["recordingGovernance"],
+    featureIds: ["admin.recording-governance"],
+    actionIds: [
+      "admin.recording-governance.policy.inspect",
+      "admin.recording-governance.policy.publish",
+      "admin.recording-governance.sink.health"
+    ],
+    executorFeatureIds: ["recording-governance"],
+    operationIds: [
+      "recording_governance.policy.get",
+      "recording_governance.sink.health",
+      "recording_governance.policy.publish"
+    ],
+    sourceFiles: [
+      "apps/console/views/admin/RecordingGovernanceView.vue",
+      "apps/console/composables/console-recording-governance-controller.ts",
+      "apps/console/lib/recording-governance-client.ts",
+      "packages/server-runtime/src/composition/console-domain/operation-executor.ts",
+      "packages/server-runtime/src/composition/console-domain/operation-executors/recording-governance-executor.ts",
+      "packages/server-runtime/src/composition/console-domain/recording-governance-provider.ts"
+    ],
+    stateTokens: [
+      "loading",
+      "error",
+      "pendingObligations",
+      "incompleteObligations",
+      "revisionConflict",
+      "sinkState",
+      "decryptionAuthority",
+      "dirty"
+    ],
+    verifierFiles: [
+      "tests/vitest/server/recording-governance-console.test.ts"
+    ]
   }
 ]);

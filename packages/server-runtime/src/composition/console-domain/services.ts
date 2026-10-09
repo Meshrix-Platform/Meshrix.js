@@ -18,7 +18,8 @@ const CONSOLE_OPERATION_PROVIDER_METHODS: readonly any[] = Object.freeze([
   ["readinessBaselineProvider", "status"],
   ["executiveReportProvider", "preview"],
   ["sampleCapabilityPackStore", "list"],
-  ["securityAlertStore", "listAlerts"]
+  ["securityAlertStore", "listAlerts"],
+  ["recordingGovernanceProvider", "describe"]
 ]);
 
 function assertConsoleOperationProviders(providers?: any) : any {

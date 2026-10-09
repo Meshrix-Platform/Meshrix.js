@@ -29,6 +29,7 @@ import {
 import { createReadinessBaselineProvider } from "#meshrix/foundation/observability/readiness-baseline/baseline-provider";
 import { createSampleCapabilityPackStore } from "#meshrix/foundation/observability/sample-capability-pack";
 import { createSecurityAlertStore } from "#meshrix/foundation/security/security-alerts";
+import { createRecordingGovernanceProvider } from "./console-domain/recording-governance-provider.ts";
 import { bindOperationDispatcher } from "./dispatch-operation.ts";
 import { createArtifactTransitProvider, createWorkspaceArtifactFileStore } from "./artifact-transit-provider.ts";
 
@@ -394,6 +395,8 @@ export async function createServerConsoleOperationProviders({
     ownedResources.push(sampleCapabilityPackStore);
     const securityAlertStore: any = createSecurityAlertStore({ userDataPath });
     ownedResources.push(securityAlertStore);
+    const recordingGovernanceProvider: any = createRecordingGovernanceProvider({ userDataPath });
+    ownedResources.push(recordingGovernanceProvider);
     const executiveReportProvider: Readonly<Record<string, any>> = Object.freeze({
       preview: buildExecutiveReport,
       list: (input: Record<string, any> = {}) : any => executiveReportStore.list(input),
@@ -529,6 +532,7 @@ export async function createServerConsoleOperationProviders({
       executiveReportProvider,
       sampleCapabilityPackStore,
       securityAlertStore,
+      recordingGovernanceProvider,
       close() : any {
         if (closePromise) return closePromise;
         closePromise = (async () : Promise<any> => {

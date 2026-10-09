@@ -28,6 +28,7 @@ import { executeWorkspaceAuditOperation } from "./operation-executors/workspace-
 import { executeAuthorizationFacadeOperation } from "./operation-executors/authorization-facade-executor.ts";
 import { executeAgentSyncOperation } from "./operation-executors/agent-sync-executor.ts";
 import { executeOperationPermissionPassthroughOperation } from "./operation-executors/operation-permission-passthrough-executor.ts";
+import { executeRecordingGovernanceOperation } from "./operation-executors/recording-governance-executor.ts";
 import {
   executeContextRuntimeOperation,
   executeProtocolFacadeOperation,
@@ -320,6 +321,7 @@ export const CONSOLE_DOMAIN_OPERATION_EXECUTOR_REGISTRY: readonly any[] = Object
   { featureId: "agent-sync", handler: executeAgentSyncOperation },
   { featureId: "strategy-management", handler: executeStrategyManagementOperation },
   { featureId: "security-alerts", handler: executeSecurityAlertsOperation },
+  { featureId: "recording-governance", handler: executeRecordingGovernanceOperation },
   { featureId: "operation-permission-passthrough", handler: executeOperationPermissionPassthroughOperation },
   { featureId: "runtime-mount", handler: executeRuntimeMountOperation },
   { featureId: "discovery", handler: executeDiscoveryOperation },

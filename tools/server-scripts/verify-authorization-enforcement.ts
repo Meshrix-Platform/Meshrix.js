@@ -24,7 +24,8 @@ const REQUIRED_MUTATING_PREFIXES: readonly any[] = Object.freeze([
   "storage.",
   "jobs.",
   "tag_management.",
-  "operation_permission."
+  "operation_permission.",
+  "recording_governance."
 ]);
 
 const SENSITIVE_REPORT_PATTERNS: readonly any[] = Object.freeze([

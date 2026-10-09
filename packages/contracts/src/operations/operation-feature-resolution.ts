@@ -25,6 +25,7 @@ const FEATURE_BY_REGISTRY_FEATURE: Readonly<Record<string, any>> = Object.freeze
   jobs: "work-queue-core",
   uploads: "work-queue-core",
   tag_management: "tag-management",
+  recording_governance: "recording-governance",
   security_alerts: "security-alerts",
   gateway: "upstream-gateway",
   external_services: "upstream-gateway",

@@ -27,6 +27,7 @@ const OPERATION_TRAFFIC_MODEL_BY_FEATURE = Object.freeze({
   operation_permission: "gateway_transit",
   production: "gateway_transit",
   raw_objects: "gateway_transit",
+  recording_governance: "gateway_transit",
   runtime: "gateway_transit",
   security_alerts: "gateway_transit",
   settings: "gateway_transit",

@@ -112,6 +112,29 @@ export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
       tests: { suites: ["tools/server-scripts/verify-security-alert-lifecycle.ts"] }
     },
     {
+      featureId: "recording-governance",
+      label: "Recording governance",
+      group: "security",
+      required: true,
+      dependsOn: ["security-permissions"],
+      defaultEnabled: true,
+      server: {
+        operationFeatures: ["recording_governance"],
+        operationPrefixes: ["recording_governance."],
+        eventTopics: ["recording.policy.published"]
+      },
+      package: {
+        includePaths: [
+          "packages/contracts/src/recording",
+          "packages/foundation/src/recording",
+          "packages/server-runtime/src/composition/console-domain/recording-governance-provider.ts",
+          "packages/server-runtime/src/composition/console-domain/operation-executors/recording-governance-executor.ts"
+        ],
+        excludePaths: []
+      },
+      tests: { suites: ["server.recording-governance-console"] }
+    },
+    {
       featureId: "tag-management",
       label: "Tag Management",
       group: "security",

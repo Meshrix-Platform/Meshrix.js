@@ -657,6 +657,36 @@ export function createSystemControllerFoundationHandlers({
         context: authorizationFacadeContext(authSession, { request }),
         errorMessage: "检查工作空间资产权限失败。"
       });
+    },
+    async handleRecordingGovernancePolicyGet({ operation, url, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "recording_governance.policy.get",
+        input: protocolPayload(Buffer.alloc(0), url),
+        response,
+        authSession,
+        errorMessage: "读取录制策略失败。"
+      });
+    },
+    async handleRecordingGovernanceSinkHealth({ operation, url, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "recording_governance.sink.health",
+        input: protocolPayload(Buffer.alloc(0), url),
+        response,
+        authSession,
+        errorMessage: "读取录制汇集健康失败。"
+      });
+    },
+    async handleRecordingGovernancePolicyPublish({ operation, requestBody, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "recording_governance.policy.publish",
+        input: protocolPayload(requestBody),
+        response,
+        authSession,
+        errorMessage: "发布录制策略修订失败。"
+      });
     }
   };
 }

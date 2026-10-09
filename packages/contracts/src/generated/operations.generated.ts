@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:07282d7447a9f418
+ * Hash: sha256:c0892e8194cdfa92
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:07282d7447a9f418";
+export const GENERATED_OPERATIONS_HASH = "sha256:c0892e8194cdfa92";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -8977,6 +8977,673 @@ export const SERVER_API_OPERATIONS: any = [
     "otel": {
       "semanticGroup": "agent_workspace",
       "operationName": "workspace_contribution_request_changes"
+    },
+    "auditPolicy": {
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "recording_governance.policy.get",
+    "feature": "recording_governance",
+    "label": "读取录制策略",
+    "description": "Read the tenant's published recording policy with sink custody and pending-obligation truth.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleRecordingGovernancePolicyGet"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/recording-governance/v1/policy",
+      "query": [
+        {
+          "name": "tenantId",
+          "aliases": [
+            "tenant-id",
+            "tenantId"
+          ]
+        }
+      ],
+      "coerce": {},
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "recording_governance.policy.get",
+      "params": [],
+      "query": [
+        {
+          "name": "tenantId",
+          "aliases": [
+            "tenant-id",
+            "tenantId"
+          ]
+        }
+      ]
+    },
+    "cli": {
+      "command": [
+        "recording_governance",
+        "policy",
+        "get"
+      ],
+      "usage": "recording_governance policy get"
+    },
+    "requiredScopes": [
+      "recording:read"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._:-]{1,120}$"
+        }
+      }
+    },
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "recording-governance",
+      "security-authorization",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "readOnly": true,
+    "trafficModel": "gateway_transit",
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "recording_governance",
+      "resourceKind": "recording_governance",
+      "capabilityVerb": "get",
+      "effectKind": "read",
+      "fieldMap": {
+        "tenantId": [
+          "tenantId",
+          "tenant-id"
+        ]
+      }
+    },
+    "resourceContext": {
+      "capabilityDomain": "recording_governance",
+      "resourceKind": "recording_governance",
+      "capabilityVerb": "get",
+      "effectKind": "read",
+      "fieldMap": {
+        "tenantId": [
+          "tenantId",
+          "tenant-id"
+        ]
+      }
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "recording_governance.policy.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "recording_governance",
+      "operationName": "recording_governance_policy_get"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "recording_governance.sink.health",
+    "feature": "recording_governance",
+    "label": "录制汇集健康",
+    "description": "Report enterprise-local recording sink availability, capacity budgets and journal integrity.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleRecordingGovernanceSinkHealth"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/recording-governance/v1/sink/health",
+      "query": [
+        {
+          "name": "tenantId",
+          "aliases": [
+            "tenant-id",
+            "tenantId"
+          ]
+        },
+        {
+          "name": "integrity",
+          "aliases": [
+            "integrity"
+          ]
+        }
+      ],
+      "coerce": {
+        "integrity": "boolean"
+      },
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "recording_governance.sink.health",
+      "params": [],
+      "query": [
+        {
+          "name": "tenantId",
+          "aliases": [
+            "tenant-id",
+            "tenantId"
+          ]
+        },
+        {
+          "name": "integrity",
+          "aliases": [
+            "integrity"
+          ]
+        }
+      ]
+    },
+    "cli": {
+      "command": [
+        "recording_governance",
+        "sink",
+        "health"
+      ],
+      "usage": "recording_governance sink health"
+    },
+    "requiredScopes": [
+      "recording:read"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._:-]{1,120}$"
+        },
+        "integrity": {
+          "type": "boolean"
+        }
+      }
+    },
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "recording-governance",
+      "security-authorization",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "readOnly": true,
+    "trafficModel": "gateway_transit",
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "recording_governance",
+      "resourceKind": "recording_governance",
+      "capabilityVerb": "health",
+      "effectKind": "read",
+      "fieldMap": {
+        "tenantId": [
+          "tenantId",
+          "tenant-id"
+        ]
+      }
+    },
+    "resourceContext": {
+      "capabilityDomain": "recording_governance",
+      "resourceKind": "recording_governance",
+      "capabilityVerb": "health",
+      "effectKind": "read",
+      "fieldMap": {
+        "tenantId": [
+          "tenantId",
+          "tenant-id"
+        ]
+      }
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "recording_governance.sink.health",
+      "maxParallel": 64,
+      "cost": 1
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "recording_governance",
+      "operationName": "recording_governance_sink_health"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "recording_governance.policy.publish",
+    "feature": "recording_governance",
+    "label": "发布录制策略修订",
+    "description": "Publish a strictly advanced recording policy revision under the caller's configurer role.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleRecordingGovernancePolicyPublish"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/recording-governance/v1/policy",
+      "query": [],
+      "coerce": {},
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "recording_governance.policy.publish",
+      "body": "params",
+      "params": []
+    },
+    "cli": {
+      "command": [
+        "recording_governance",
+        "policy",
+        "publish"
+      ],
+      "usage": "recording_governance policy publish --body request.json"
+    },
+    "requiredScopes": [
+      "recording:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedRevision",
+        "policy"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._:-]{1,120}$"
+        },
+        "policy": {
+          "type": "object",
+          "required": [
+            "schemaVersion",
+            "kind",
+            "policyId",
+            "policyRevision",
+            "issuedAt",
+            "issuerRole",
+            "configurerRoles",
+            "categories"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "schemaVersion": {
+              "type": "string",
+              "const": "v0.0.1:recording:policy-1"
+            },
+            "kind": {
+              "type": "string",
+              "const": "recording-policy"
+            },
+            "policyId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+            },
+            "policyRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "issuedAt": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "issuerRole": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+            },
+            "configurerRoles": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+              }
+            },
+            "categories": {
+              "type": "object",
+              "maxProperties": 16,
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "obligation",
+                  "sinkRef",
+                  "fieldAllow",
+                  "fieldRedact",
+                  "eventAllow",
+                  "readerRoles",
+                  "configurerRoles",
+                  "retention",
+                  "capacity"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "obligation": {
+                    "type": "string",
+                    "enum": [
+                      "optional",
+                      "required_before_effect"
+                    ]
+                  },
+                  "sinkRef": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                  },
+                  "fieldAllow": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                    }
+                  },
+                  "fieldRedact": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                    }
+                  },
+                  "eventAllow": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                    }
+                  },
+                  "readerRoles": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                    }
+                  },
+                  "configurerRoles": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                    }
+                  },
+                  "retention": {
+                    "type": "object",
+                    "required": [
+                      "maxAgeSeconds",
+                      "maxRecords",
+                      "maxContentBytes",
+                      "maxIndexBytes"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "maxAgeSeconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31536000
+                      },
+                      "maxRecords": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "maxContentBytes": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1073741824
+                      },
+                      "maxIndexBytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1073741824
+                      }
+                    }
+                  },
+                  "capacity": {
+                    "type": "object",
+                    "required": [
+                      "maxBufferedRecords",
+                      "maxRecordBytes"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "maxBufferedRecords": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65536
+                      },
+                      "maxRecordBytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 262144
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "safety": {
+      "risk": "repair_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "recording:admin",
+      "requiresConfirmation": true,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "recording-governance",
+      "security-authorization",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "trafficModel": "gateway_transit",
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "recording_governance",
+      "resourceKind": "recording_governance",
+      "capabilityVerb": "publish",
+      "effectKind": "repair-write",
+      "fieldMap": {
+        "tenantId": [
+          "tenantId"
+        ]
+      }
+    },
+    "resourceContext": {
+      "capabilityDomain": "recording_governance",
+      "resourceKind": "recording_governance",
+      "capabilityVerb": "publish",
+      "effectKind": "repair-write",
+      "fieldMap": {
+        "tenantId": [
+          "tenantId"
+        ]
+      }
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "recording_governance.policy.publish",
+      "maxParallel": 1,
+      "cost": 2
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": true,
+      "recordOutput": false
+    },
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "repair_write",
+    "otel": {
+      "semanticGroup": "recording_governance",
+      "operationName": "recording_governance_policy_publish"
     },
     "auditPolicy": {
       "recordInput": true,

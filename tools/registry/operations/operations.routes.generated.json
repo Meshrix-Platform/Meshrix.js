@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
-  "routeCount": 570,
+  "routeCount": 576,
   "routes": [
     {
       "method": "GET",
@@ -898,6 +898,54 @@
       "operationId": "workspace.contribution.request_changes",
       "feature": "agent_workspace",
       "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/recording-governance/v1/policy",
+      "operationId": "recording_governance.policy.get",
+      "feature": "recording_governance",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "recording_governance.policy.get",
+      "operationId": "recording_governance.policy.get",
+      "feature": "recording_governance",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/recording-governance/v1/sink/health",
+      "operationId": "recording_governance.sink.health",
+      "feature": "recording_governance",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "recording_governance.sink.health",
+      "operationId": "recording_governance.sink.health",
+      "feature": "recording_governance",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/recording-governance/v1/policy",
+      "operationId": "recording_governance.policy.publish",
+      "feature": "recording_governance",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "recording_governance.policy.publish",
+      "operationId": "recording_governance.policy.publish",
+      "feature": "recording_governance",
+      "risk": "repair_write",
       "public": false
     },
     {

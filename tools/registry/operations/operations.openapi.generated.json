@@ -2658,6 +2658,285 @@
         }
       }
     },
+    "/api/recording-governance/v1/policy": {
+      "get": {
+        "operationId": "recording_governance.policy.get",
+        "summary": "Read the tenant's published recording policy with sink custody and pending-obligation truth.",
+        "tags": [
+          "recording_governance"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "operationId": "recording_governance.policy.publish",
+        "summary": "Publish a strictly advanced recording policy revision under the caller's configurer role.",
+        "tags": [
+          "recording_governance"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedRevision",
+                  "policy"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tenantId": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9._:-]{1,120}$"
+                  },
+                  "policy": {
+                    "type": "object",
+                    "required": [
+                      "schemaVersion",
+                      "kind",
+                      "policyId",
+                      "policyRevision",
+                      "issuedAt",
+                      "issuerRole",
+                      "configurerRoles",
+                      "categories"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "schemaVersion": {
+                        "type": "string",
+                        "const": "v0.0.1:recording:policy-1"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "const": "recording-policy"
+                      },
+                      "policyId": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                      },
+                      "policyRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "issuedAt": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "issuerRole": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                      },
+                      "configurerRoles": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                        }
+                      },
+                      "categories": {
+                        "type": "object",
+                        "maxProperties": 16,
+                        "additionalProperties": {
+                          "type": "object",
+                          "required": [
+                            "obligation",
+                            "sinkRef",
+                            "fieldAllow",
+                            "fieldRedact",
+                            "eventAllow",
+                            "readerRoles",
+                            "configurerRoles",
+                            "retention",
+                            "capacity"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "obligation": {
+                              "type": "string",
+                              "enum": [
+                                "optional",
+                                "required_before_effect"
+                              ]
+                            },
+                            "sinkRef": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                            },
+                            "fieldAllow": {
+                              "type": "array",
+                              "maxItems": 64,
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                              }
+                            },
+                            "fieldRedact": {
+                              "type": "array",
+                              "maxItems": 64,
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                              }
+                            },
+                            "eventAllow": {
+                              "type": "array",
+                              "maxItems": 64,
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                              }
+                            },
+                            "readerRoles": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 16,
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                              }
+                            },
+                            "configurerRoles": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 16,
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$"
+                              }
+                            },
+                            "retention": {
+                              "type": "object",
+                              "required": [
+                                "maxAgeSeconds",
+                                "maxRecords",
+                                "maxContentBytes",
+                                "maxIndexBytes"
+                              ],
+                              "additionalProperties": false,
+                              "properties": {
+                                "maxAgeSeconds": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 31536000
+                                },
+                                "maxRecords": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1000000
+                                },
+                                "maxContentBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 1073741824
+                                },
+                                "maxIndexBytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 1073741824
+                                }
+                              }
+                            },
+                            "capacity": {
+                              "type": "object",
+                              "required": [
+                                "maxBufferedRecords",
+                                "maxRecordBytes"
+                              ],
+                              "additionalProperties": false,
+                              "properties": {
+                                "maxBufferedRecords": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 65536
+                                },
+                                "maxRecordBytes": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 262144
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/recording-governance/v1/sink/health": {
+      "get": {
+        "operationId": "recording_governance.sink.health",
+        "summary": "Report enterprise-local recording sink availability, capacity budgets and journal integrity.",
+        "tags": [
+          "recording_governance"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/workspace/contributions/:contributionId/revoke": {
       "post": {
         "operationId": "workspace.contribution.revoke",

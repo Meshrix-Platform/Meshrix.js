@@ -644,7 +644,8 @@ export {
   CONSOLE_FEATURE_SCOPE_GRANTS,
   createConsoleRoleCatalog,
   buildConsoleOperationAuthorizationInput,
-  buildConsoleOperationAuthorizationContext
+  buildConsoleOperationAuthorizationContext,
+  normalizeTenantId
 } from "./console-auth-support.ts";
 
 export type ConsoleAuthOptions = Omit<ConsoleAuthResourceOptions, "consoleRoles"> & {
