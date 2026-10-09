@@ -458,11 +458,12 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
     /**
      * Obligations can only exist for `required_before_effect` categories —
      * the sink registers them on required terminal failure or a mid-flight
-     * policy off. A session that never touched one cannot owe anything, so
-     * the durable pending scan is skipped on the common optional-only path.
+     * policy off. A session that never touched one (and never failed a
+     * required write) cannot owe anything, so the durable pending scan is
+     * skipped on the common optional-only path.
      */
     function sessionPendingObligations(): UnknownRecord[] {
-      for (const category of touched) {
+      for (const category of new Set<string>([...touched, ...failures.keys()])) {
         if (REQUIRED_SET.has(category)) return pendingObligationsFor(operationRef);
       }
       return [];
