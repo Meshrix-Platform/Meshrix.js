@@ -46,6 +46,31 @@
       ]
     },
     {
+      "id": "entry-transport",
+      "name": "Entry Transport",
+      "directory": "packages/entry-transport",
+      "allowedDependsOn": [
+        "contracts",
+        "gateway"
+      ],
+      "forbiddenDependsOn": [
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "tools",
+        "skill-tools",
+        "model-gateway-contracts"
+      ]
+    },
+    {
       "id": "model-gateway-contracts",
       "name": "Model Gateway Service Contracts",
       "directory": "services/model-gateway/contracts",

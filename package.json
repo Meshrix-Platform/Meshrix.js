@@ -6,6 +6,7 @@
   "license": "Apache-2.0",
   "workspaces": [
     "packages/contracts",
+    "packages/entry-transport",
     "packages/gateway",
     "packages/foundation",
     "packages/agents",

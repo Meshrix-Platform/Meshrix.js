@@ -911,6 +911,32 @@
       "artifacts": []
     },
     {
+      "id": "gateway.private-endpoint-profile",
+      "label": "Private-endpoint installer profile: config validation, WSS relay transport lifecycle, honest reachability/revocation surface, inner-channel dispatch and signal drain",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/gateway/private-endpoint/endpoint-profile.test.ts"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/mcp-gateway-installer/src/private-endpoint",
+        "apps/mcp-gateway-installer/src/cli.ts",
+        "packages/gateway/src/private-endpoint",
+        "packages/contracts/src/private-relay",
+        "tests/vitest/gateway/private-endpoint"
+      ]
+    },
+    {
       "id": "runtime.resource-discipline",
       "label": "Resource ownership policy and deterministic persistence checks",
       "owner": "platform",
@@ -3077,6 +3103,31 @@
       "coverageContribution": false,
       "artifacts": [],
       "triggerPaths": ["packages/gateway/src", "tests/vitest/gateway"]
+    },
+    {
+      "id": "entry.transport",
+      "label": "Installed-entry private transport: WSS port, pinned inner mTLS, local MCP face and relay fault handling",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/entry-transport/entry-transport.test.ts"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/entry-transport",
+        "packages/gateway/src/private-endpoint",
+        "packages/contracts/src/private-relay",
+        "tests/vitest/entry-transport"
+      ]
     }
   ]
 }
