@@ -383,12 +383,17 @@ describe("dispatch operation recorder", () => {
 
   it("records start, terminal, governance, content and usage for a healthy dispatch", () => {
     const store = openStore(tempRoot(), policyWith());
-    const recorder = recorderFor(store);
+    const recorder = recorderFor(store, {
+      getAuthSession: () => ({ tenantId: "tenant.real.1", user: { subjectId: "subject.9" } })
+    });
     expect(recorder.admitBeforeEffect().ok).toBe(true);
     const settlement = recorder.settle({ status: "ok" });
     expect(settlement).not.toBeNull();
 
     const executions = listAll(store, "execution_history", recorder.operationRef);
+    // Tenant attribution binds at the first collection point — after the
+    // dispatch authorization has resolved — not at recorder construction.
+    expect(executions[0].tenantRef).toBe("tenant.real.1");
     expect(executions.map((r: any) => r.detail.event)).toEqual(["started", "completed"]);
     expect(executions[1].detail.effectClass).toBe("safe_write");
 

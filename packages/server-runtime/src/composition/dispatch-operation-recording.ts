@@ -94,7 +94,12 @@ export function createDispatchOperationRecorder({
   const operationRef = sanitizeRecordingRef(
     `op.${operation.id}.${firstText(traceContext?.requestId, traceContext?.traceId)}`
   ) || `op.${sanitizeRecordingRef(operation.id)}.${Date.now().toString(36)}`;
-  const subject = (() : UnknownRecord => {
+  const effectClass = effectClassFor(operation);
+  const startedAtMs = Date.now();
+  let lastSettlement: any = null;
+  let resolvedSession: any = null;
+
+  function subjectFacts(): UnknownRecord {
     const actor: any = getActor();
     const authSession: any = getAuthSession();
     const user: any = authSession?.user || actor?.user || actor || {};
@@ -103,18 +108,30 @@ export function createDispatchOperationRecorder({
       tenantId: firstText(user.tenantId, actor?.tenantId, authSession?.tenantId),
       grantId: firstText(user.grantId, actor?.grantId)
     };
-  })();
-  const tenantRef = sanitizeRecordingRef(
-    firstText(
-      subject.tenantId,
-      request?.__meshrixOperationRuntimeAuthorization?.subjectRef,
-      "tenant.local"
-    )
-  ) || "tenant.local";
-  const session: any = producer.session({ operationRef, tenantRef });
-  const effectClass = effectClassFor(operation);
-  const startedAtMs = Date.now();
-  let lastSettlement: any = null;
+  }
+
+  function tenantRefFor(): string {
+    const subject = subjectFacts();
+    return sanitizeRecordingRef(
+      firstText(
+        subject.tenantId,
+        request?.__meshrixOperationRuntimeAuthorization?.subjectRef,
+        "tenant.local"
+      )
+    ) || "tenant.local";
+  }
+
+  /**
+   * The session binds on first use — admission and settlement both run
+   * after authorization has resolved the actor, so tenant attribution
+   * reflects the authorized subject rather than a pre-auth placeholder.
+   */
+  function sessionFor(): any {
+    if (!resolvedSession) {
+      resolvedSession = producer.session({ operationRef, tenantRef: tenantRefFor() });
+    }
+    return resolvedSession;
+  }
 
   function decisionRef(): string {
     const authorization: any = request?.__meshrixOperationRuntimeAuthorization;
@@ -129,12 +146,13 @@ export function createDispatchOperationRecorder({
 
   function authorityRefs(): string[] {
     const authorization: any = request?.__meshrixOperationRuntimeAuthorization;
+    const subject = subjectFacts();
     const refs = compactStrings([
       authorization?.grantRef,
       authorization?.subjectRef,
       subject.subjectId,
       subject.grantId,
-      tenantRef
+      resolvedSession?.tenantRef || tenantRefFor()
     ]).map((value?: any) : any => sanitizeRecordingRef(value)).filter(Boolean);
     return refs.length > 0 ? refs : ["authority.platform-policy"];
   }
@@ -164,7 +182,7 @@ export function createDispatchOperationRecorder({
    * can run — or the dispatch is refused `recording_unavailable`.
    */
   function admitBeforeEffect(): any {
-    return session.admitBeforeEffect({
+    return sessionFor().admitBeforeEffect({
       builders: {
         execution_history: () : UnknownRecord => ({
           event: "started",
@@ -219,7 +237,7 @@ export function createDispatchOperationRecorder({
         const bytes = Buffer.from(canonicalJson(captured), "utf8");
         // Custody re-checks the live policy: an off flip between the admit
         // above and this put throws `category_disabled` and captures nothing.
-        const artifact = session.putArtifact({ bytes });
+        const artifact = sessionFor().putArtifact({ bytes });
         if (!artifact?.artifactRef) return null;
         return {
           detail: {
@@ -245,7 +263,7 @@ export function createDispatchOperationRecorder({
       [`operations.${operationStatus}`]: 1
     };
     try {
-      lastSettlement = session.settle({
+      lastSettlement = sessionFor().settle({
         operationStatus,
         builders,
         usageCounters
@@ -262,7 +280,7 @@ export function createDispatchOperationRecorder({
   function report(): any {
     return Object.freeze({
       operationRef,
-      tenantRef,
+      tenantRef: resolvedSession?.tenantRef || tenantRefFor(),
       outcomes: Object.freeze({ ...(lastSettlement?.outcomes || {}) }),
       pendingObligations: lastSettlement?.pendingObligations || []
     });
@@ -272,8 +290,8 @@ export function createDispatchOperationRecorder({
     admitBeforeEffect,
     settle,
     report,
-    session,
+    get session() : any { return resolvedSession || sessionFor(); },
     operationRef,
-    tenantRef
+    get tenantRef() : string { return resolvedSession?.tenantRef || tenantRefFor(); }
   });
 }

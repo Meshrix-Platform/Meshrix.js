@@ -28,7 +28,9 @@
  *   `required_before_effect` category at `pre_effect`; the sink takes a
  *   durable capacity reservation in that same decision, and a `reject`
  *   (`recording_unavailable`) refuses protected work *before* it starts.
- *   Optional categories admitted at `pre_effect` are best-effort only.
+ *   Optional categories are never written at `pre_effect` — they defer to
+ *   post-effect collection so no duplicate start record is paid for a
+ *   history entry no obligation requires.
  * - **Optional failure never cancels work.** Every sink call is isolated;
  *   optional shed/deny/write failures are reported on the result and via
  *   truthful `recording-outcome` derivation (`recording_degraded`,
@@ -124,11 +126,27 @@ export interface RecordingProducerOptions {
   maxPendingUsageBuckets?: number;
 }
 
+/**
+ * One gated collection call: the category+phase gate runs against the
+ * sink's live policy revision, then — only on `admit` — `build` constructs
+ * the category detail (or a `{detail, contentBytes}` envelope) for write.
+ */
+export interface RecordingCollectInput {
+  category?: unknown;
+  phase?: unknown;
+  role?: unknown;
+  fieldNames?: unknown;
+  eventCode?: unknown;
+  recordId?: unknown;
+  occurredAt?: unknown;
+  contentBytes?: unknown;
+  build?: ((admission: UnknownRecord) => unknown) | unknown;
+}
+
 interface PendingUsageBucket {
   tenantRef: string;
   bucketStartMs: number;
   counters: Record<string, number>;
-  operationRefs: Set<string>;
 }
 
 /**
@@ -148,6 +166,13 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
       ? Number(options.maxPendingUsageBuckets)
       : DEFAULT_MAX_PENDING_USAGE_BUCKETS;
   const pendingUsage = new Map<string, PendingUsageBucket>();
+  /**
+   * Selection lookups are memoized per live policy object only: `policy()`
+   * re-reads the sink on every call, so an off flip still surfaces a new
+   * object identity and re-parses, while repeated collection points under
+   * one revision never re-validate the same document.
+   */
+  const selectionsByPolicy = new WeakMap<UnknownRecord, Map<string, UnknownRecord | null>>();
   let closed = false;
 
   function iso(epochMs?: number): string {
@@ -168,8 +193,17 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
   function selectionFor(category: unknown): UnknownRecord | null {
     const current = policy();
     if (!current) return null;
-    const selection = recordingCategorySelectionFor(current, category);
-    return selection ? (selection as UnknownRecord) : null;
+    let byCategory = selectionsByPolicy.get(current);
+    if (!byCategory) {
+      byCategory = new Map();
+      selectionsByPolicy.set(current, byCategory);
+    }
+    const key = String(category ?? "");
+    if (!byCategory.has(key)) {
+      const selection = recordingCategorySelectionFor(current, key);
+      byCategory.set(key, selection ? (selection as UnknownRecord) : null);
+    }
+    return byCategory.get(key) ?? null;
   }
 
   /**
@@ -267,8 +301,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
       bucket = {
         tenantRef,
         bucketStartMs,
-        counters: {},
-        operationRefs: new Set<string>()
+        counters: {}
       };
       pendingUsage.set(key, bucket);
     }
@@ -276,9 +309,6 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
       if (Object.keys(bucket.counters).length >= USAGE_COUNTER_LIMIT
           && bucket.counters[counter] === undefined) continue;
       bucket.counters[counter] = (bucket.counters[counter] || 0) + delta;
-    }
-    if (typeof input.operationRef === "string" && input.operationRef) {
-      bucket.operationRefs.add(sanitizeRecordingRef(input.operationRef));
     }
     flushStaleUsage();
     return true;
@@ -414,18 +444,6 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
    * Per-operation recording session.                                  *
    * -------------------------------------------------------------- */
 
-  interface CollectInput {
-    category?: unknown;
-    phase?: unknown;
-    role?: unknown;
-    fieldNames?: unknown;
-    eventCode?: unknown;
-    recordId?: unknown;
-    occurredAt?: unknown;
-    contentBytes?: unknown;
-    build?: ((admission: UnknownRecord) => unknown) | unknown;
-  }
-
   function createSession(sessionInput: UnknownRecord = {}) {
     const operationRef = sanitizeRecordingRef(sessionInput.operationRef)
       || deterministicRef("op.", randomUUID());
@@ -435,6 +453,20 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
     const failures = new Map<string, { code: string; phase: string }>();
     const openReservationIds: string[] = [];
     let shedAtAdmission = new Set<string>();
+    const REQUIRED_SET: ReadonlySet<string> = new Set(RECORDING_REQUIRED_OBLIGATION_CATEGORIES);
+
+    /**
+     * Obligations can only exist for `required_before_effect` categories —
+     * the sink registers them on required terminal failure or a mid-flight
+     * policy off. A session that never touched one cannot owe anything, so
+     * the durable pending scan is skipped on the common optional-only path.
+     */
+    function sessionPendingObligations(): UnknownRecord[] {
+      for (const category of touched) {
+        if (REQUIRED_SET.has(category)) return pendingObligationsFor(operationRef);
+      }
+      return [];
+    }
 
     function releaseReservation(admission: UnknownRecord | null): void {
       const admissionId = String(admission?.admissionId || "");
@@ -486,7 +518,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
      */
     function writeAdmittedRecord(
       admission: UnknownRecord,
-      input: CollectInput
+      input: RecordingCollectInput
     ): UnknownRecord {
       const category = String(input.category);
       const phase = String(input.phase === "pre_effect" ? "pre_effect" : "post_effect");
@@ -584,7 +616,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
      * — only on `admit` — build and write. Every failure is isolated on the
      * result so optional categories can never fault the operation.
      */
-    function collect(input: CollectInput = {}): UnknownRecord {
+    function collect(input: RecordingCollectInput = {}): UnknownRecord {
       const category = String(input.category || "");
       const phase = input.phase === "pre_effect" ? "pre_effect" : "post_effect";
       const result: UnknownRecord = {
@@ -644,11 +676,14 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
     }
 
     /**
-     * The pre-effect collection point for required categories. Required
-     * categories are admitted first so a `reject` cannot leave a sibling
+     * The pre-effect collection point for required categories. Only
+     * `required_before_effect` selections are admitted here — optional
+     * categories defer to post-effect collection so they never pay a
+     * second durable write for a start record no obligation needs. Every
+     * required category admits first so a `reject` cannot leave a sibling
      * half-reserved; only then are admitted start records written. A denied
-     * or rejected *required* category returns `{ ok: false }` — the caller
-     * must refuse the effect — while optional admits/writes never block.
+     * or rejected required category returns `{ ok: false }` — the caller
+     * must refuse the effect.
      */
     function admitBeforeEffect(input: UnknownRecord = {}): UnknownRecord {
       const report: UnknownRecord = {
@@ -662,17 +697,14 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
       const current = policy();
       if (!current) return report; // no policy → nothing selected → nothing required
       const builders = asRecord(input.builders);
-      const plan: { category: string; required: boolean; build: unknown }[] = [];
+      const plan: { category: string; build: unknown }[] = [];
       for (const category of RECORDING_REQUIRED_OBLIGATION_CATEGORIES) {
-        const selection = recordingCategorySelectionFor(current, category);
-        if (!selection) continue; // off: no collection point at all
-        plan.push({
-          category,
-          required: String((selection as UnknownRecord).obligation) === "required_before_effect",
-          build: builders[category]
-        });
+        const selection = selectionFor(category);
+        if (!selection) continue; // off under the live revision: no collection point
+        if (String(selection.obligation) !== "required_before_effect") continue; // optional: post-effect only
+        plan.push({ category, build: builders[category] });
       }
-      const admitted: { category: string; required: boolean; build: unknown; admission: UnknownRecord }[] = [];
+      const admitted: { category: string; build: unknown; admission: UnknownRecord }[] = [];
       let blocked: UnknownRecord | null = null;
       for (const item of plan) {
         let admission: UnknownRecord | null = null;
@@ -685,38 +717,30 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
             role
           });
         } catch (error) {
-          if (item.required) {
-            blocked = {
-              category: item.category,
-              decision: "reject",
-              reason: "recording_unavailable",
-              errorCode: errorCode(error) || "sink_unavailable"
-            };
-          }
+          blocked = {
+            category: item.category,
+            decision: "reject",
+            reason: "recording_unavailable",
+            errorCode: errorCode(error) || "sink_unavailable"
+          };
           continue;
         }
         if (!admission) {
-          if (item.required) {
-            blocked = { category: item.category, decision: "reject", reason: "recording_unavailable" };
-          }
+          blocked = { category: item.category, decision: "reject", reason: "recording_unavailable" };
           continue;
         }
         (report.admissions as UnknownRecord)[item.category] = admission;
         touched.add(item.category);
         if (admission.decision !== "admit") {
-          if (item.required) {
-            blocked = {
-              category: item.category,
-              decision: String(admission.decision),
-              reason: String(admission.reason || "recording_unavailable"),
-              admission
-            };
-          }
+          blocked = {
+            category: item.category,
+            decision: String(admission.decision),
+            reason: String(admission.reason || "recording_unavailable"),
+            admission
+          };
           continue;
         }
-        if (admission.obligation === "required_before_effect") {
-          openReservationIds.push(String(admission.admissionId));
-        }
+        openReservationIds.push(String(admission.admissionId));
         admitted.push({ ...item, admission });
       }
       if (blocked) {
@@ -733,7 +757,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
           build: item.build
         });
         (report.results as UnknownRecord)[item.category] = result;
-        if (item.required && result.collected !== true) {
+        if (result.collected !== true) {
           for (const rest of admitted) releaseReservation(rest.admission);
           report.ok = false;
           report.blocked = {
@@ -822,7 +846,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
         operationStatus,
         results: Object.freeze(results),
         outcomes: Object.freeze(outcomes),
-        pendingObligations: Object.freeze(pendingObligationsFor(operationRef))
+        pendingObligations: Object.freeze(sessionPendingObligations())
       });
     }
 
@@ -833,7 +857,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
      * one clears). Never replays the effect — this is recording-only work.
      */
     function settlePending(input: UnknownRecord = {}): UnknownRecord {
-      const owed = pendingObligationsFor(operationRef);
+      const owed = sessionPendingObligations();
       const results: UnknownRecord = {};
       const outcomes: UnknownRecord = {};
       const builders = asRecord(input.builders);
@@ -863,7 +887,7 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
       settle,
       settlePending,
       putArtifact,
-      pendingObligations: () : UnknownRecord[] => pendingObligationsFor(operationRef),
+      pendingObligations: () : UnknownRecord[] => sessionPendingObligations(),
       outcomeFor: (input: UnknownRecord = {}) : UnknownRecord | null =>
         outcomeFor({ ...input, operationRef }),
       touched: () : string[] => [...touched]
