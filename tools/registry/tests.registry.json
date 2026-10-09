@@ -1288,6 +1288,30 @@
       "artifacts": []
     },
     {
+      "id": "foundation.enterprise-recording-sink",
+      "label": "Enterprise recording sink durable store, retention, admission and reconciliation",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/recording-sink-store.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/foundation/src/recording",
+        "packages/contracts/src/recording",
+        "tests/vitest/server/recording-sink-store.test.ts"
+      ]
+    },
+    {
       "id": "security.authorization-hardening",
       "label": "Authorization concurrency delegation replay and crash-safety regressions",
       "owner": "platform",

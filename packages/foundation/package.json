@@ -280,6 +280,11 @@
       "types": "./dist/proof/proof-substrate/register.d.ts",
       "default": "./dist/proof/proof-substrate/register.js"
     },
+    "./recording/sink-store": {
+      "source": "./src/recording/recording-sink-store.ts",
+      "types": "./dist/recording/recording-sink-store.d.ts",
+      "default": "./dist/recording/recording-sink-store.js"
+    },
     "./security/auth/console-auth": {
       "source": "./src/security/auth/console-auth.ts",
       "types": "./dist/security/auth/console-auth.d.ts",
