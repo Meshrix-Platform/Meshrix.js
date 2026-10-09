@@ -136,6 +136,21 @@
       "types": "./dist/plugins/verified-plugin-package.d.ts",
       "default": "./dist/plugins/verified-plugin-package.js"
     },
+    "./private-relay": {
+      "source": "./src/private-relay/index.ts",
+      "types": "./dist/private-relay/index.d.ts",
+      "default": "./dist/private-relay/index.js"
+    },
+    "./private-relay/session": {
+      "source": "./src/private-relay/private-relay-session.ts",
+      "types": "./dist/private-relay/private-relay-session.d.ts",
+      "default": "./dist/private-relay/private-relay-session.js"
+    },
+    "./private-relay/recovery": {
+      "source": "./src/private-relay/private-relay-recovery.ts",
+      "types": "./dist/private-relay/private-relay-recovery.d.ts",
+      "default": "./dist/private-relay/private-relay-recovery.js"
+    },
     "./serialization/canonical-json": {
       "source": "./src/serialization/canonical-json.ts",
       "types": "./dist/serialization/canonical-json.d.ts",

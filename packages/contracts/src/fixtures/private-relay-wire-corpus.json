@@ -1,0 +1,771 @@
+{
+  "schemaVersion": "v0.0.1:private-relay:corpus-1",
+  "session": {
+    "valid": {
+      "session-open": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-open",
+        "purpose": "forward",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.entry.1",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "personal",
+          "admissionGeneration": 7,
+          "revocationRevision": 12
+        },
+        "clientNonce": "cn.pr.session.0001nonce"
+      },
+      "session-open-recovery": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-open",
+        "purpose": "recover_device",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.fresh.9",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "personal",
+          "admissionGeneration": 7,
+          "revocationRevision": 12
+        },
+        "clientNonce": "cn.pr.session.0002nonce"
+      },
+      "session-admitted": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-admitted",
+        "sessionId": "sess.pr.1",
+        "purpose": "forward",
+        "admittedGeneration": 7,
+        "revocationRevision": 12,
+        "routeState": "reachable",
+        "limits": {
+          "maxFramePayloadBytes": 262144,
+          "maxOutstandingBytes": 4194304,
+          "maxBufferedFrames": 256,
+          "maxMessageRatePerSecond": 128
+        },
+        "reconnectGeneration": 3,
+        "serverNonce": "sn.pr.session.0001nonce"
+      },
+      "session-rejected": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-rejected",
+        "reason": "stale_revocation_revision",
+        "expectedRevocationRevision": 13,
+        "retryable": true
+      },
+      "route-bind": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "route-bind",
+        "sessionId": "sess.pr.2",
+        "routeId": "route.pr.1",
+        "admissionGeneration": 7
+      },
+      "route-query": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "route-query",
+        "routeId": "route.pr.1"
+      },
+      "route-status-unreachable": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "route-status",
+        "routeId": "route.pr.1",
+        "state": "unreachable",
+        "generation": 7
+      },
+      "frame": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "frame",
+        "sessionId": "sess.pr.1",
+        "routeId": "route.pr.1",
+        "seq": 41,
+        "messageId": "msg.pr.41",
+        "payload": "Q0lQSEVSVEVYVE9OTFlfMDAx",
+        "final": false
+      },
+      "frame-ack": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "frame-ack",
+        "routeId": "route.pr.1",
+        "upToSeq": 41
+      },
+      "frame-status-received": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "frame-status",
+        "routeId": "route.pr.1",
+        "messageId": "msg.pr.41",
+        "state": "received"
+      },
+      "flow-credit": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "flow-credit",
+        "routeId": "route.pr.1",
+        "grantBytes": 1048576,
+        "grantFrames": 64
+      },
+      "session-close": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-close",
+        "sessionId": "sess.pr.1",
+        "reason": "reconnect",
+        "finalCursors": { "toEndpoint": 41, "toEntry": 17 }
+      },
+      "session-reconnect": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-reconnect",
+        "previousSessionId": "sess.pr.1",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.entry.1",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "personal",
+          "admissionGeneration": 7,
+          "revocationRevision": 13
+        },
+        "lastAcknowledged": { "toEndpoint": 41, "toEntry": 17 },
+        "reconnectGeneration": 4,
+        "clientNonce": "cn.pr.session.0003nonce"
+      },
+      "session-restored": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-restored",
+        "sessionId": "sess.pr.3",
+        "reconnectGeneration": 4,
+        "gaps": [
+          { "fromSeq": 18, "toSeq": 19, "cause": "expired" }
+        ],
+        "limits": {
+          "maxFramePayloadBytes": 262144,
+          "maxOutstandingBytes": 4194304,
+          "maxBufferedFrames": 256,
+          "maxMessageRatePerSecond": 128
+        },
+        "cursors": { "toEndpoint": 41, "toEntry": 19 }
+      }
+    },
+    "invalid": {
+      "sessionOpenCarriesSemanticGrant": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-open",
+        "purpose": "forward",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.entry.1",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "personal",
+          "admissionGeneration": 7,
+          "revocationRevision": 12,
+          "grants": ["tools/call"]
+        },
+        "clientNonce": "cn.pr.session.0001nonce"
+      },
+      "sessionOpenProductNameTrust": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-open",
+        "purpose": "forward",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.entry.1",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "personal",
+          "admissionGeneration": 7,
+          "revocationRevision": 12
+        },
+        "clientNonce": "cn.pr.session.0001nonce",
+        "clientProductName": "trusted-client"
+      },
+      "sessionOpenWrongMode": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-open",
+        "purpose": "forward",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.entry.1",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "public",
+          "admissionGeneration": 7,
+          "revocationRevision": 12
+        },
+        "clientNonce": "cn.pr.session.0001nonce"
+      },
+      "sessionOpenZeroGeneration": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-open",
+        "purpose": "forward",
+        "admission": {
+          "tenantId": "tenant.pr.1",
+          "deviceId": "dev.pr.entry.1",
+          "routeId": "route.pr.1",
+          "role": "entry",
+          "mode": "personal",
+          "admissionGeneration": 0,
+          "revocationRevision": 12
+        },
+        "clientNonce": "cn.pr.session.0001nonce"
+      },
+      "frameCarriesPlaintext": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "frame",
+        "sessionId": "sess.pr.1",
+        "routeId": "route.pr.1",
+        "seq": 42,
+        "messageId": "msg.pr.42",
+        "payload": "Q0lQSEVSVEVYVE9OTFlfMDAx",
+        "final": false,
+        "content": "plaintext mcp call"
+      },
+      "frameMissingMessageId": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "frame",
+        "sessionId": "sess.pr.1",
+        "routeId": "route.pr.1",
+        "seq": 42,
+        "payload": "Q0lQSEVSVEVYVE9OTFlfMDAx",
+        "final": false
+      },
+      "framePaddedPayload": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "frame",
+        "sessionId": "sess.pr.1",
+        "routeId": "route.pr.1",
+        "seq": 42,
+        "messageId": "msg.pr.42",
+        "payload": "Q0lQSEVSVEVYVA==",
+        "final": false
+      },
+      "sessionRejectedInventedReason": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-rejected",
+        "reason": "banned_forever",
+        "expectedRevocationRevision": 13,
+        "retryable": false
+      },
+      "routeStatusSemanticDetail": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "route-status",
+        "routeId": "route.pr.1",
+        "state": "reachable",
+        "generation": 7,
+        "toolName": "catalog.inner.tool"
+      },
+      "sessionRestoredUnknownGapCause": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-restored",
+        "sessionId": "sess.pr.3",
+        "reconnectGeneration": 4,
+        "gaps": [
+          { "fromSeq": 18, "toSeq": 19, "cause": "operator_dropped" }
+        ],
+        "limits": {
+          "maxFramePayloadBytes": 262144,
+          "maxOutstandingBytes": 4194304,
+          "maxBufferedFrames": 256,
+          "maxMessageRatePerSecond": 128
+        },
+        "cursors": { "toEndpoint": 41, "toEntry": 19 }
+      },
+      "sessionRestoredInvertedGap": {
+        "schemaVersion": "v0.0.1:private-relay:wire-1",
+        "wireProtocol": "meshrix-private-relay/0",
+        "kind": "session-restored",
+        "sessionId": "sess.pr.3",
+        "reconnectGeneration": 4,
+        "gaps": [
+          { "fromSeq": 19, "toSeq": 18, "cause": "expired" }
+        ],
+        "limits": {
+          "maxFramePayloadBytes": 262144,
+          "maxOutstandingBytes": 4194304,
+          "maxBufferedFrames": 256,
+          "maxMessageRatePerSecond": 128
+        },
+        "cursors": { "toEndpoint": 41, "toEntry": 19 }
+      }
+    }
+  },
+  "recovery": {
+    "valid": {
+      "vault-fetch": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-fetch",
+        "vaultId": "vault.pr.1",
+        "purpose": "vault_fetch",
+        "fetchProof": {
+          "keyId": "rckey.pr.1",
+          "nonce": "fn.pr.fetch.0001nonce",
+          "issuedAt": "2026-10-09T10:00:00Z",
+          "signature": "sig_pr_fetch_0001"
+        }
+      },
+      "vault-snapshot": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-snapshot",
+        "vaultId": "vault.pr.1",
+        "revision": 5,
+        "generation": 3,
+        "snapshot": {
+          "algorithm": "XChaCha20-Poly1305",
+          "nonce": "sn.pr.vault.0001nonce",
+          "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+          "byteLength": 24
+        },
+        "publicVerifier": {
+          "keyId": "rckey.pr.1",
+          "algorithm": "Ed25519",
+          "publicKey": "pk_pr_recovery_0001"
+        }
+      },
+      "vault-fetch-refused": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-fetch-refused",
+        "vaultId": "vault.pr.1",
+        "refusal": "rate_limited",
+        "retryable": true
+      },
+      "vault-write": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-write",
+        "vaultId": "vault.pr.1",
+        "purpose": "vault_write",
+        "expectedRevision": 5,
+        "snapshot": {
+          "schemaVersion": "v0.0.1:private-relay:recovery-1",
+          "kind": "encrypted-recovery-snapshot",
+          "vaultId": "vault.pr.1",
+          "formatVersion": 1,
+          "generation": 3,
+          "revision": 6,
+          "snapshot": {
+            "algorithm": "XChaCha20-Poly1305",
+            "nonce": "sn.pr.vault.0002nonce",
+            "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+            "byteLength": 24
+          },
+          "publicVerifier": {
+            "keyId": "rckey.pr.1",
+            "algorithm": "Ed25519",
+            "publicKey": "pk_pr_recovery_0001"
+          }
+        },
+        "writeAuth": {
+          "writerKeyId": "dev.pr.entry.1",
+          "nonce": "wn.pr.write.0001nonce",
+          "snapshotDigest": "sha256:abababababababababababababababababababababababababababababababab",
+          "signature": "sig_pr_write_0001"
+        }
+      },
+      "vault-write-result-committed": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-write-result",
+        "vaultId": "vault.pr.1",
+        "outcome": "committed",
+        "currentRevision": 6,
+        "committedRevision": 6
+      },
+      "vault-write-result-conflict": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-write-result",
+        "vaultId": "vault.pr.1",
+        "outcome": "conflict",
+        "currentRevision": 7,
+        "committedRevision": 0
+      },
+      "recovery-request": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-request",
+        "purpose": "recover_device",
+        "endpointRouteId": "route.pr.1",
+        "freshDeviceId": "dev.pr.fresh.9",
+        "freshDevicePublicKey": "pk_pr_fresh_device_0009"
+      },
+      "recovery-challenge": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-challenge",
+        "challengeId": "ch.pr.1",
+        "purpose": "recover_device",
+        "endpointRouteId": "route.pr.1",
+        "principalRef": "prin.pr.1",
+        "generation": 3,
+        "nonce": "rn.pr.challenge.0001nonce",
+        "freshDevicePublicKey": "pk_pr_fresh_device_0009",
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "expiresAt": "2026-10-09T10:05:00Z",
+        "singleUse": true
+      },
+      "recovery-proof": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-proof",
+        "purpose": "recover_device",
+        "challengeId": "ch.pr.1",
+        "endpointRouteId": "route.pr.1",
+        "principalRef": "prin.pr.1",
+        "generation": 3,
+        "freshDeviceId": "dev.pr.fresh.9",
+        "freshDevicePublicKey": "pk_pr_fresh_device_0009",
+        "signature": "sig_pr_recovery_0001"
+      },
+      "recovery-result-enrolled": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-result",
+        "challengeId": "ch.pr.1",
+        "outcome": "enrolled",
+        "refusal": null,
+        "deviceAdmission": {
+          "deviceId": "dev.pr.fresh.9",
+          "admissionGeneration": 8,
+          "requiresMutualTlsRebind": true
+        }
+      },
+      "recovery-result-refused": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-result",
+        "challengeId": "ch.pr.1",
+        "outcome": "refused",
+        "refusal": "challenge_consumed",
+        "deviceAdmission": null
+      },
+      "rotation-begin": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "rotation-begin",
+        "rotationId": "rot.pr.1",
+        "recoveryKeyId": "rckey.pr.1",
+        "principalRef": "prin.pr.1",
+        "currentGeneration": 3,
+        "candidateGeneration": 4,
+        "candidatePublicKey": "pk_pr_recovery_0002",
+        "administrationProof": {
+          "keyId": "rcadmin.pr.1",
+          "nonce": "rn.pr.rotation.0001nonce",
+          "issuedAt": "2026-10-09T10:00:00Z",
+          "signature": "sig_pr_rotation_0001"
+        }
+      },
+      "rotation-state-acknowledging": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "rotation-state",
+        "rotationId": "rot.pr.1",
+        "state": "acknowledging",
+        "acknowledged": ["route.pr.1"],
+        "pending": ["route.pr.2"],
+        "globalComplete": false
+      },
+      "operation-query": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "operation-query",
+        "operationId": "op.pr.1",
+        "principalRef": "prin.pr.1",
+        "generation": 3
+      },
+      "operation-status-in-doubt": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "operation-status",
+        "operationId": "op.pr.1",
+        "state": "dispatched_in_doubt",
+        "notStartedEvidence": null,
+        "resultAvailability": "not_applicable",
+        "revision": 3
+      },
+      "operation-status-not-started": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "operation-status",
+        "operationId": "op.pr.1",
+        "state": "not_started",
+        "notStartedEvidence": "endpoint_refused_pre_dispatch",
+        "resultAvailability": "not_applicable",
+        "revision": 3
+      },
+      "operation-status-result-unavailable": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "operation-status",
+        "operationId": "op.pr.1",
+        "state": "completed_result_unavailable",
+        "notStartedEvidence": null,
+        "resultAvailability": "unavailable",
+        "revision": 3
+      },
+      "endpoint-trust-binding": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "endpoint-trust-binding",
+        "pairedIdentityKey": "pk_pr_endpoint_identity_0001",
+        "pairedIdentityFingerprint": "fp.pr.endpoint.0001",
+        "mode": "personal",
+        "role": "endpoint",
+        "trustGeneration": 3,
+        "endpointPrincipalRef": "prin.pr.1",
+        "capabilityGrantRef": "grantref.pr.1",
+        "boundRecoveryKeyId": "rckey.pr.1"
+      }
+    },
+    "invalid": {
+      "vaultFetchWrongPurpose": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-fetch",
+        "vaultId": "vault.pr.1",
+        "purpose": "recover_device",
+        "fetchProof": {
+          "keyId": "rckey.pr.1",
+          "nonce": "fn.pr.fetch.0001nonce",
+          "issuedAt": "2026-10-09T10:00:00Z",
+          "signature": "sig_pr_fetch_0001"
+        }
+      },
+      "recoveryProofVaultPurpose": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-proof",
+        "purpose": "vault_fetch",
+        "challengeId": "ch.pr.1",
+        "endpointRouteId": "route.pr.1",
+        "principalRef": "prin.pr.1",
+        "generation": 3,
+        "freshDeviceId": "dev.pr.fresh.9",
+        "freshDevicePublicKey": "pk_pr_fresh_device_0009",
+        "signature": "sig_pr_recovery_0001"
+      },
+      "recoveryChallengeReusable": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-challenge",
+        "challengeId": "ch.pr.1",
+        "purpose": "recover_device",
+        "endpointRouteId": "route.pr.1",
+        "principalRef": "prin.pr.1",
+        "generation": 3,
+        "nonce": "rn.pr.challenge.0001nonce",
+        "freshDevicePublicKey": "pk_pr_fresh_device_0009",
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "expiresAt": "2026-10-09T10:05:00Z",
+        "singleUse": false
+      },
+      "recoveryChallengeBackwardsExpiry": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "recovery-challenge",
+        "challengeId": "ch.pr.1",
+        "purpose": "recover_device",
+        "endpointRouteId": "route.pr.1",
+        "principalRef": "prin.pr.1",
+        "generation": 3,
+        "nonce": "rn.pr.challenge.0001nonce",
+        "freshDevicePublicKey": "pk_pr_fresh_device_0009",
+        "issuedAt": "2026-10-09T10:05:00Z",
+        "expiresAt": "2026-10-09T10:00:00Z",
+        "singleUse": true
+      },
+      "vaultWriteMissingCas": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-write",
+        "vaultId": "vault.pr.1",
+        "purpose": "vault_write",
+        "snapshot": {
+          "schemaVersion": "v0.0.1:private-relay:recovery-1",
+          "kind": "encrypted-recovery-snapshot",
+          "vaultId": "vault.pr.1",
+          "formatVersion": 1,
+          "generation": 3,
+          "revision": 6,
+          "snapshot": {
+            "algorithm": "XChaCha20-Poly1305",
+            "nonce": "sn.pr.vault.0002nonce",
+            "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+            "byteLength": 24
+          },
+          "publicVerifier": {
+            "keyId": "rckey.pr.1",
+            "algorithm": "Ed25519",
+            "publicKey": "pk_pr_recovery_0001"
+          }
+        },
+        "writeAuth": {
+          "writerKeyId": "dev.pr.entry.1",
+          "nonce": "wn.pr.write.0001nonce",
+          "snapshotDigest": "sha256:abababababababababababababababababababababababababababababababab",
+          "signature": "sig_pr_write_0001"
+        }
+      },
+      "vaultWriteAuthMissingDigest": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-write",
+        "vaultId": "vault.pr.1",
+        "purpose": "vault_write",
+        "expectedRevision": 5,
+        "snapshot": {
+          "schemaVersion": "v0.0.1:private-relay:recovery-1",
+          "kind": "encrypted-recovery-snapshot",
+          "vaultId": "vault.pr.1",
+          "formatVersion": 1,
+          "generation": 3,
+          "revision": 6,
+          "snapshot": {
+            "algorithm": "XChaCha20-Poly1305",
+            "nonce": "sn.pr.vault.0002nonce",
+            "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+            "byteLength": 24
+          },
+          "publicVerifier": {
+            "keyId": "rckey.pr.1",
+            "algorithm": "Ed25519",
+            "publicKey": "pk_pr_recovery_0001"
+          }
+        },
+        "writeAuth": {
+          "writerKeyId": "dev.pr.entry.1",
+          "nonce": "wn.pr.write.0001nonce",
+          "signature": "sig_pr_write_0001"
+        }
+      },
+      "snapshotCarriesConfiguration": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-snapshot",
+        "vaultId": "vault.pr.1",
+        "revision": 5,
+        "generation": 3,
+        "snapshot": {
+          "algorithm": "XChaCha20-Poly1305",
+          "nonce": "sn.pr.vault.0001nonce",
+          "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+          "byteLength": 24,
+          "config": "plaintext endpoint configuration"
+        },
+        "publicVerifier": {
+          "keyId": "rckey.pr.1",
+          "algorithm": "Ed25519",
+          "publicKey": "pk_pr_recovery_0001"
+        }
+      },
+      "snapshotOpaqueKeyMaterial": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-snapshot",
+        "vaultId": "vault.pr.1",
+        "revision": 5,
+        "generation": 3,
+        "snapshot": {
+          "algorithm": "XChaCha20-Poly1305",
+          "nonce": "sn.pr.vault.0001nonce",
+          "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+          "byteLength": 24
+        },
+        "publicVerifier": {
+          "keyId": "rckey.pr.1",
+          "algorithm": "Ed25519",
+          "publicKey": "pk_pr_recovery_0001"
+        },
+        "recoverySecret": "user-recovery-secret"
+      },
+      "operationStatusLostAckClaimsNotStarted": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "operation-status",
+        "operationId": "op.pr.1",
+        "state": "not_started",
+        "notStartedEvidence": "ack_lost",
+        "resultAvailability": "not_applicable",
+        "revision": 3
+      },
+      "operationStatusCompletedButResultGone": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "operation-status",
+        "operationId": "op.pr.1",
+        "state": "completed",
+        "notStartedEvidence": null,
+        "resultAvailability": "unavailable",
+        "revision": 3
+      },
+      "rotationStateClaimsGlobalComplete": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "rotation-state",
+        "rotationId": "rot.pr.1",
+        "state": "completed",
+        "acknowledged": ["route.pr.1"],
+        "pending": ["route.pr.2"],
+        "globalComplete": true
+      },
+      "rotationRegressesGeneration": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "rotation-begin",
+        "rotationId": "rot.pr.1",
+        "recoveryKeyId": "rckey.pr.1",
+        "principalRef": "prin.pr.1",
+        "currentGeneration": 3,
+        "candidateGeneration": 3,
+        "candidatePublicKey": "pk_pr_recovery_0002",
+        "administrationProof": {
+          "keyId": "rcadmin.pr.1",
+          "nonce": "rn.pr.rotation.0001nonce",
+          "issuedAt": "2026-10-09T10:00:00Z",
+          "signature": "sig_pr_rotation_0001"
+        }
+      },
+      "trustBindingUnknownMode": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "endpoint-trust-binding",
+        "pairedIdentityKey": "pk_pr_endpoint_identity_0001",
+        "pairedIdentityFingerprint": "fp.pr.endpoint.0001",
+        "mode": "federated",
+        "role": "endpoint",
+        "trustGeneration": 3,
+        "endpointPrincipalRef": "prin.pr.1",
+        "capabilityGrantRef": "grantref.pr.1",
+        "boundRecoveryKeyId": "rckey.pr.1"
+      },
+      "vaultWriteShortNonce": {
+        "schemaVersion": "v0.0.1:private-relay:recovery-1",
+        "kind": "vault-write",
+        "vaultId": "vault.pr.1",
+        "purpose": "vault_write",
+        "expectedRevision": 5,
+        "snapshot": {
+          "schemaVersion": "v0.0.1:private-relay:recovery-1",
+          "kind": "encrypted-recovery-snapshot",
+          "vaultId": "vault.pr.1",
+          "formatVersion": 1,
+          "generation": 3,
+          "revision": 6,
+          "snapshot": {
+            "algorithm": "XChaCha20-Poly1305",
+            "nonce": "sn.pr.vault.0002nonce",
+            "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
+            "byteLength": 24
+          },
+          "publicVerifier": {
+            "keyId": "rckey.pr.1",
+            "algorithm": "Ed25519",
+            "publicKey": "pk_pr_recovery_0001"
+          }
+        },
+        "writeAuth": {
+          "writerKeyId": "dev.pr.entry.1",
+          "nonce": "wn",
+          "snapshotDigest": "sha256:abababababababababababababababababababababababababababababababab",
+          "signature": "sig_pr_write_0001"
+        }
+      }
+    }
+  }
+}

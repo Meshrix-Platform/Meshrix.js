@@ -785,6 +785,25 @@
       "artifacts": []
     },
     {
+      "id": "contracts.private-relay-wire",
+      "label": "Private relay wire, trust and recovery contract",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/contracts/private-relay-contract.test.ts"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
       "id": "runtime.resource-discipline",
       "label": "Resource ownership policy and deterministic persistence checks",
       "owner": "platform",
