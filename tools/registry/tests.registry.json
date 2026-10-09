@@ -823,6 +823,25 @@
       "artifacts": []
     },
     {
+      "id": "gateway.private-endpoint",
+      "label": "Private gateway endpoint session, recovery and inner-TLS contract",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/gateway/private-endpoint/private-endpoint.test.ts"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
       "id": "runtime.resource-discipline",
       "label": "Resource ownership policy and deterministic persistence checks",
       "owner": "platform",

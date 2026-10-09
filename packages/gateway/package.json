@@ -76,6 +76,11 @@
       "source": "./src/prompts/index.ts",
       "types": "./dist/prompts/index.d.ts",
       "default": "./dist/prompts/index.js"
+    },
+    "./private-endpoint": {
+      "source": "./src/private-endpoint/index.ts",
+      "types": "./dist/private-endpoint/index.d.ts",
+      "default": "./dist/private-endpoint/index.js"
     }
   },
   "files": [
