@@ -34,6 +34,58 @@ function requestKey(id: unknown): string {
   return `${typeof id}:${String(id)}`;
 }
 
+/**
+ * Segment-list newline framer for the inner wire. Every received byte is
+ * scanned exactly once and a completed line is copied at most once —
+ * zero-copy when it arrives inside a single chunk. Concatenating the whole
+ * pending buffer on every chunk would turn a budget-filling line split
+ * across many chunks into super-linear copy work.
+ */
+function createLineFramer(): {
+  readonly bufferedBytes: number;
+  feed(chunk: Buffer, emit: (line: Buffer) => boolean): void;
+  clear(): void;
+} {
+  // Only newline-free tails are retained, so a discovered newline always
+  // terminates one line spanning every buffered segment plus this chunk's
+  // prefix.
+  const segments: Buffer[] = [];
+  let buffered = 0;
+  return {
+    get bufferedBytes() {
+      return buffered;
+    },
+    feed(chunk, emit) {
+      let rest = chunk;
+      for (;;) {
+        const newline = rest.indexOf(0x0a);
+        if (newline < 0) {
+          if (rest.length > 0) {
+            segments.push(rest);
+            buffered += rest.length;
+          }
+          return;
+        }
+        let line: Buffer;
+        if (buffered === 0) {
+          line = rest.subarray(0, newline);
+        } else {
+          segments.push(rest.subarray(0, newline));
+          line = Buffer.concat(segments, buffered + newline);
+          segments.length = 0;
+          buffered = 0;
+        }
+        rest = rest.subarray(newline + 1);
+        if (!emit(line) || rest.length === 0) return;
+      }
+    },
+    clear() {
+      segments.length = 0;
+      buffered = 0;
+    }
+  };
+}
+
 /** Synthetic outcome used when the endpoint-side dispatch itself throws. */
 export function innerDispatchFailedOutcome(): Record<string, unknown> {
   return {
@@ -83,7 +135,7 @@ export function createInnerRequestChannel(options: InnerRequestChannelOptions): 
   const maxPending = Math.max(1, options.maxPending ?? DEFAULT_MAX_PENDING_REQUESTS);
   const maxLineBytes = Math.max(256, options.maxLineBytes ?? INNER_LINE_MAX_BYTES);
   const pending = new Map<string, PendingRequest>();
-  let buffer = Buffer.alloc(0);
+  const lines = createLineFramer();
   let closed = false;
 
   function fail(error: EntryTransportError | ReturnType<typeof entryError>): void {
@@ -97,7 +149,7 @@ export function createInnerRequestChannel(options: InnerRequestChannelOptions): 
         : entryError("entry_never_dispatched", "The request never reached the relay transport; the operation was not started.", { effectOutcome: "not_started", cause: error }));
     }
     pending.clear();
-    buffer = Buffer.alloc(0);
+    lines.clear();
     if (!socket.destroyed) socket.destroy();
   }
 
@@ -125,24 +177,16 @@ export function createInnerRequestChannel(options: InnerRequestChannelOptions): 
 
   socket.on("data", (chunk: Buffer) => {
     if (closed) return;
-    buffer = Buffer.concat([buffer, chunk]);
-    if (buffer.byteLength > maxLineBytes) {
+    // The budget is checked on the aggregate buffered window before any line
+    // is extracted, so every emitted line is provably inside the cap.
+    if (lines.bufferedBytes + chunk.byteLength > maxLineBytes) {
       fail(entryError("entry_inner_protocol", "The endpoint exceeded the inner-channel line budget."));
       return;
     }
-    for (;;) {
-      const index = buffer.indexOf(0x0a);
-      if (index < 0) break;
-      const line = buffer.subarray(0, index);
-      buffer = buffer.subarray(index + 1);
-      if (line.byteLength > maxLineBytes) {
-        fail(entryError("entry_inner_protocol", "The endpoint exceeded the inner-channel line budget."));
-        return;
-      }
-      if (line.byteLength === 0) continue;
-      acceptLine(line);
-      if (closed) return;
-    }
+    lines.feed(chunk, (line) => {
+      if (line.byteLength > 0) acceptLine(line);
+      return !closed;
+    });
   });
   socket.once("error", (error) => fail(entryError("entry_inner_socket", "The inner channel socket failed.", { cause: error })));
   socket.once("close", () => fail(entryError("entry_inner_closed", "The inner channel closed.")));
@@ -238,7 +282,7 @@ export function createInnerDispatchLoop(options: InnerDispatchLoopOptions): Inne
   const socket = options.socket;
   const maxLineBytes = Math.max(256, options.maxLineBytes ?? INNER_LINE_MAX_BYTES);
   const maxPendingResponses = Math.max(1, options.maxPendingResponses ?? DEFAULT_MAX_PENDING_RESPONSES);
-  let buffer = Buffer.alloc(0);
+  const lines = createLineFramer();
   let closed = false;
   let writing = false;
   const queue: string[] = [];
@@ -247,7 +291,7 @@ export function createInnerDispatchLoop(options: InnerDispatchLoopOptions): Inne
     if (closed) return;
     closed = true;
     queue.length = 0;
-    buffer = Buffer.alloc(0);
+    lines.clear();
     options.onLost?.(error);
     if (!socket.destroyed) socket.destroy();
   }
@@ -315,20 +359,14 @@ export function createInnerDispatchLoop(options: InnerDispatchLoopOptions): Inne
 
   socket.on("data", (chunk: Buffer) => {
     if (closed) return;
-    buffer = Buffer.concat([buffer, chunk]);
-    if (buffer.byteLength > maxLineBytes) {
+    if (lines.bufferedBytes + chunk.byteLength > maxLineBytes) {
       destroy(entryError("entry_inner_protocol", "The peer exceeded the inner-channel line budget."));
       return;
     }
-    for (;;) {
-      const index = buffer.indexOf(0x0a);
-      if (index < 0) break;
-      const line = buffer.subarray(0, index);
-      buffer = buffer.subarray(index + 1);
-      if (line.byteLength === 0) continue;
-      acceptLine(line);
-      if (closed) return;
-    }
+    lines.feed(chunk, (line) => {
+      if (line.byteLength > 0) acceptLine(line);
+      return !closed;
+    });
   });
   socket.once("error", (error) => destroy(entryError("entry_inner_socket", "The inner channel socket failed.", { cause: error })));
   socket.once("close", () => destroy(entryError("entry_inner_closed", "The inner channel closed.")));
