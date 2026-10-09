@@ -1,0 +1,32 @@
+# Local development configuration for the Meshrix private relay Worker.
+# This file is NOT a deployment manifest: `wrangler dev --local` and the
+# vitest-pool-workers suite are the only supported consumers. Do not run
+# `wrangler deploy`; engineering checks use local Workerd only.
+name = "meshrix-private-relay"
+main = "src/index.ts"
+# Pinned to the bundled local workerd runtime's supported date (workerd
+# 2026-08-15 supports up to 2026-08-22); this is a local-only check surface.
+compatibility_date = "2026-08-15"
+# The shared wire contract uses Buffer.byteLength for bounded string checks;
+# nodejs_compat exposes the standard Buffer implementation in workerd.
+compatibility_flags = ["nodejs_compat"]
+
+# Local-only provisioning token for the administrative enrollment/revocation
+# and vault-provisioning routes. Synthetic placeholder for local checks;
+# production provisioning is a separate authorized delivery.
+[vars]
+RELAY_ADMIN_TOKEN = "local-only-synthetic-admin-token"
+RELAY_MAX_SESSION_MESSAGE_BYTES = "393216"
+RELAY_MAX_VAULT_MESSAGE_BYTES = "1572864"
+
+[durable_objects]
+bindings = [
+  { name = "RELAY_DIRECTORY", class_name = "RelayDirectoryDO" },
+  { name = "RELAY_SESSION", class_name = "RelaySessionDO" },
+  { name = "RECOVERY_VAULT", class_name = "RecoveryVaultDO" }
+]
+
+# SQLite-backed Durable Object storage for transactional relay state.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDirectoryDO", "RelaySessionDO", "RecoveryVaultDO"]

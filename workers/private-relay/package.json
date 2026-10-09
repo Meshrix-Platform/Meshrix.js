@@ -1,0 +1,23 @@
+{
+  "name": "@meshrix/private-relay-worker",
+  "version": "0.1.0",
+  "description": "Meshrix.js private relay Workerd/DO runtime: hibernating opaque forwarding sessions and bounded recovery-vault storage",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "wrangler dev --local",
+    "check": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/workers-types": "5.20261002.1",
+    "vitest": "^4.1.11",
+    "wrangler": "4.147.0"
+  }
+}

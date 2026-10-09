@@ -16,7 +16,8 @@
     "plugins/agents/*",
     "apps/server",
     "apps/mcp-gateway-installer",
-    "apps/console"
+    "apps/console",
+    "workers/*"
   ],
   "imports": {
     "#meshrix/agents/agent-memory/index": {
