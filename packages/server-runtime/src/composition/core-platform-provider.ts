@@ -134,6 +134,7 @@ export function createCorePlatformProvider({
   operationLockManager = null,
   operationConcurrencyScope = "",
   operationProofSubstrate = null,
+  recordingSink = null,
 }: Record<string, any> = {}) : any {
   const configuredSourceOperations: any = normalizeOperations(operations);
   const configuredRouteIndex: any = createOperationRouteIndex(configuredSourceOperations, {
@@ -193,6 +194,15 @@ export function createCorePlatformProvider({
       return {};
     }
     return operationProofSubstrate ? { operationProofSubstrate } : {};
+  }
+
+  // Selected-history recording port: the caller may still override per
+  // dispatch, but the composition-level durable sink is the default.
+  function recordingSinkForDispatch(input: Record<string, any> = {}) : any {
+    if (Object.hasOwn(input, "recordingSink")) {
+      return {};
+    }
+    return recordingSink ? { recordingSink } : {};
   }
 
   function describeOperationRegistry(input: Record<string, any> = {}) : any {
@@ -285,6 +295,7 @@ export function createCorePlatformProvider({
             "getFeatureRuntime",
             "getOperationLockManager",
             "getOperationProofSubstrate",
+            "getRecordingSink",
           ],
         },
         {
@@ -310,6 +321,7 @@ export function createCorePlatformProvider({
     getFeatureRuntime: () : any => featureRuntime,
     getOperationLockManager: () : any => operationLockManager,
     getOperationProofSubstrate: () : any => operationProofSubstrate,
+    getRecordingSink: () : any => recordingSink,
     listInterfaceCatalog: (input: Record<string, any> = {}) : any => listInterfaceCatalog(
       effectiveOperationSelection(input).operations,
     ),
@@ -338,6 +350,7 @@ export function createCorePlatformProvider({
         lockManager: operationLockManager,
         concurrencyScope: boundOperationConcurrencyScope,
         ...proofSubstrateForDispatch(input),
+        ...recordingSinkForDispatch(input),
       });
     },
     dispatchRpcOperation(input: Record<string, any> = {}) : any {
@@ -349,6 +362,7 @@ export function createCorePlatformProvider({
         lockManager: operationLockManager,
         concurrencyScope: boundOperationConcurrencyScope,
         ...proofSubstrateForDispatch(input),
+        ...recordingSinkForDispatch(input),
       });
     },
     createStartupSnapshotPort({ controllers }: Record<string, any> = {}) : any {

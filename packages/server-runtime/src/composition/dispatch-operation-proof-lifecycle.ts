@@ -37,7 +37,8 @@ export function createDispatchProofLifecycle({
   riskControlEnvelope = null,
   getActor = () : any => null,
   getAuthSession = () : any => null,
-  writeAuditOperation
+  writeAuditOperation,
+  recording = null
 }: Record<string, any> = {}) : any {
   let proofEntry: any = null;
 
@@ -275,18 +276,35 @@ export function createDispatchProofLifecycle({
   }
 
   async function finishProofWithAudit(entry: Record<string, any> = {}, proofPatch: Record<string, any> = {}) : Promise<any> {
-    const auditRecord: any = await writeAuditOperation(entry);
-    await finishProofLifecycle({
-      status: entry.status === "ok" ? "succeeded" : entry.status,
-      statusCode: entry.statusCode || proofPatch.statusCode || 0,
-      outcomeKind: proofPatch.outcomeKind || entry.status || "",
-      error: entry.error || proofPatch.error || "",
-      failed: entry.status === "failed" || proofPatch.failed === true,
-      denied: entry.status === "denied" || proofPatch.denied === true,
-      auditRecord,
-      receiptRefs: proofPatch.receiptRefs || [],
-      result: proofPatch.result || {}
-    });
+    let auditRecord: any = null;
+    try {
+      auditRecord = await writeAuditOperation(entry);
+      await finishProofLifecycle({
+        status: entry.status === "ok" ? "succeeded" : entry.status,
+        statusCode: entry.statusCode || proofPatch.statusCode || 0,
+        outcomeKind: proofPatch.outcomeKind || entry.status || "",
+        error: entry.error || proofPatch.error || "",
+        failed: entry.status === "failed" || proofPatch.failed === true,
+        denied: entry.status === "denied" || proofPatch.denied === true,
+        auditRecord,
+        receiptRefs: proofPatch.receiptRefs || [],
+        result: proofPatch.result || {}
+      });
+    } finally {
+      // Selected-history settlement is gated on the live recording revision
+      // at every collection point and can never rewrite the operation's real
+      // outcome — a recorder fault is swallowed so evidence/proof failures
+      // keep their existing semantics.
+      try {
+        recording?.settle?.({
+          status: entry.status || "",
+          statusCode: entry.statusCode || proofPatch.statusCode || 0,
+          error: entry.error || proofPatch.error || ""
+        });
+      } catch {
+        // Optional recording must never fault evidence settlement.
+      }
+    }
     return auditRecord;
   }
 

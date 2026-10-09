@@ -32,6 +32,7 @@ import {
 } from "./dispatch-operation-input.ts";
 import { withOperationLock } from "./operation-dispatch-lock.ts";
 import { createDispatchProofLifecycle } from "./dispatch-operation-proof-lifecycle.ts";
+import { createDispatchOperationRecorder } from "./dispatch-operation-recording.ts";
 import {
   DISPATCHER_RISK_CONTROL_IDS,
   appendDispatcherRiskGate,
@@ -205,6 +206,7 @@ export async function dispatchOperation({
   verifyProcessIdentity = null,
   operationAuditStore = null,
   operationProofSubstrate = null,
+  recordingSink = null,
   lockManager = null,
   concurrencyScope = "default",
   signal = null,
@@ -301,6 +303,18 @@ export async function dispatchOperation({
       });
       return auditRecord;
     };
+    const operationRecorder: any = createDispatchOperationRecorder({
+      recordingSink,
+      operation,
+      operationInput,
+      transport,
+      method,
+      url,
+      request,
+      traceContext,
+      getActor: () : any => actor,
+      getAuthSession: () : any => authSession
+    });
     const {
       ensureProofLifecycleStarted,
       finishProofWithAudit
@@ -317,7 +331,8 @@ export async function dispatchOperation({
       riskControlEnvelope,
       getActor: () : any => actor,
       getAuthSession: () : any => authSession,
-      writeAuditOperation
+      writeAuditOperation,
+      recording: operationRecorder
     });
     const startedAt: any = Date.now();
     notifyNarrowTransition(request, "operation.normalize", "normalized");
@@ -1303,7 +1318,20 @@ export async function dispatchOperation({
               }
             }
           }
-		          notifyNarrowTransition(request, "operation.execute_start", "executing");
+		          // Required recording admission is the last pre-effect collection point:
+	          // a `required_before_effect` category reserves durable sink capacity in
+	          // this decision, and a reject refuses the dispatch before any handler
+	          // or side effect can run. Optional categories admitted here are
+	          // best-effort and can never block.
+	          const recordingAdmission: any = await operationRecorder.admitBeforeEffect();
+	          if (recordingAdmission?.ok === false) {
+	            return executionAuthorizationDenied({
+	              status: 503,
+	              reasonCode: "recording_unavailable",
+	              error: "Required recording admission is unavailable."
+	            });
+	          }
+	          notifyNarrowTransition(request, "operation.execute_start", "executing");
 	          dispatchMayHaveStarted = true;
 	          notifySideEffectStart(request);
 	          appendRiskGate({

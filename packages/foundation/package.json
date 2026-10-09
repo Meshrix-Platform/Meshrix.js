@@ -280,6 +280,11 @@
       "types": "./dist/proof/proof-substrate/register.d.ts",
       "default": "./dist/proof/proof-substrate/register.js"
     },
+    "./recording/producer": {
+      "source": "./src/recording/recording-producer.ts",
+      "types": "./dist/recording/recording-producer.d.ts",
+      "default": "./dist/recording/recording-producer.js"
+    },
     "./recording/sink-store": {
       "source": "./src/recording/recording-sink-store.ts",
       "types": "./dist/recording/recording-sink-store.d.ts",

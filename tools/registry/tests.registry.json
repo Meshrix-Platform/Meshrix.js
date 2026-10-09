@@ -1312,6 +1312,34 @@
       ]
     },
     {
+      "id": "runtime.enterprise-recording-producers",
+      "label": "Enterprise recording producers, category gating and dispatch lifecycle wiring",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/recording-producers.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/foundation/src/recording",
+        "packages/contracts/src/recording",
+        "packages/server-runtime/src/composition/dispatch-operation-recording.ts",
+        "packages/server-runtime/src/composition/dispatch-operation-core.ts",
+        "packages/server-runtime/src/composition/dispatch-operation-proof-lifecycle.ts",
+        "packages/server-runtime/src/composition/gateway-composition.ts",
+        "tests/vitest/server/recording-producers.test.ts"
+      ]
+    },
+    {
       "id": "security.authorization-hardening",
       "label": "Authorization concurrency delegation replay and crash-safety regressions",
       "owner": "platform",

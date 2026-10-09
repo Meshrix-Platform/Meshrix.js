@@ -294,6 +294,7 @@ export async function createHttpApplicationAssembly({
     processIdentity,
     pluginInvocationAuthorizationAuthority,
     operationAuditStore,
+    recordingSink,
     operationLockManager,
     operationConcurrencyScope,
     protocolEventBus,
@@ -547,6 +548,7 @@ export async function createHttpApplicationAssembly({
     consoleAuth,
     securityPermissions,
     proofSubstrate: registeredOperationProofSubstrate,
+    recordingSink,
     readMcpToolSelection: ({ authorization, signal }: Record<string, any> = {}) => readAuthorizedMcpToolSelection({
       registry: consoleOperationProviders.upstreamGatewayRegistry,
       operationRegistry: operationPermissionPlatformRef?.registry,
@@ -630,6 +632,7 @@ export async function createHttpApplicationAssembly({
     toolSkillManagementProvider,
     upstreamGatewayRegistry: consoleOperationProviders.upstreamGatewayRegistry,
     operationProofSubstrate: registeredOperationProofSubstrate,
+    recordingSink,
     runtimeLogger,
     platformName: "meshrix-platform"
   });

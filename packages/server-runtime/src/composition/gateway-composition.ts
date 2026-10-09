@@ -15,6 +15,10 @@ import {
   MCP_DISPATCH_ADMISSION_RECEIPT_OPERATION_ID,
   MCP_DISPATCH_PARENT_INTENT_REF_PREFIX
 } from "@meshrix/foundation/proof/proof-substrate/index";
+import {
+  recordingProducerForPort,
+  sanitizeRecordingRef
+} from "@meshrix/foundation/recording/producer";
 import type {
   AuthenticatedContext,
   CatalogDescriptor,
@@ -63,6 +67,12 @@ export interface PlatformMcpGatewayOptions {
   readonly toolSkillManagementProvider: Record<string, any>;
   readonly upstreamGatewayRegistry?: Record<string, any> | null;
   readonly operationProofSubstrate?: Record<string, any> | null;
+  /**
+   * Enterprise recording port (durable sink or shared producer). Selected
+   * history only: the dispatch fence, intent and reconciliation stay at
+   * their own owners and are never gated by this port.
+   */
+  readonly recordingSink?: Record<string, any> | null;
   readonly runtimeLogger?: Record<string, any> | null;
   readonly platformName?: string;
 }
@@ -489,6 +499,7 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
   const toolProvider = options.toolSkillManagementProvider;
   const upstreamRegistry = options.upstreamGatewayRegistry || null;
   const operationProofSubstrate = options.operationProofSubstrate || null;
+  const recordingProducer = recordingProducerForPort(options.recordingSink);
   const logger = options.runtimeLogger || null;
   let publishedDescriptorSignature = "";
   const knownDescriptors = new Map<string, CatalogDescriptor>();
@@ -616,6 +627,110 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         status: 503
       });
     }
+    // Selected-history recording binds to the durable intent id; every
+    // collection point re-reads the sink's live policy revision, so an off
+    // flip mid-flight stops capture here and at settle without touching the
+    // proof intent or the dispatch fence.
+    const recordingSession: any = recordingProducer
+      ? recordingProducer.session({
+          operationRef: `op.mcp.${sanitizeRecordingRef(intent.pactium.intentId)}`,
+          tenantRef: sanitizeRecordingRef(text(context?.tenant)) || "tenant.local"
+        })
+      : null;
+    const recordingStartedAt = Date.now();
+    const recordingEffectClass = ["read", "safe_write", "destructive"].includes(text(route?.effectClass))
+      ? text(route?.effectClass)
+      : "unknown";
+    const recordingDecisionRef = (): string =>
+      sanitizeRecordingRef(text(authorization?.authorizationDecision?.decisionId || authorization?.decisionId))
+        || `decision.${sanitizeRecordingRef(operationId) || "upstream-mcp"}`;
+    const recordingAuthorityRefs = (): string[] => {
+      const refs = [
+        text(context?.principal),
+        text(authority.subject.subjectId),
+        text(authorization?.grant?.id || authorization?.grant?.revision),
+        sanitizeRecordingRef(text(context?.tenant)) || "tenant.local"
+      ].map((value) => sanitizeRecordingRef(value)).filter(Boolean);
+      return refs.length > 0 ? refs : ["authority.platform-policy"];
+    };
+    const recordingGovernanceEvent = (): string =>
+      isRecord(context?.metadata?.approval) && text(context.metadata.approval.status) === "approved"
+        ? "approval"
+        : "policy_decision";
+    const settleRecording = (completion: Record<string, any>): void => {
+      if (!recordingSession) return;
+      try {
+        const status = text(completion.status);
+        const operationStatus = status === "succeeded" ? "succeeded"
+          : status === "failed" ? "failed"
+          : status === "denied" ? "not_started"
+          : status === "in_doubt" ? "in_doubt" : "status_unavailable";
+        const durationMs = Math.max(0, Date.now() - recordingStartedAt);
+        const durationBucket = durationMs < 10 ? "lt_10ms" : durationMs < 100 ? "lt_100ms"
+          : durationMs < 1_000 ? "lt_1s" : durationMs < 10_000 ? "lt_10s" : "gte_10s";
+        const diagnosticsCode = status === "denied" ? "operation.dispatch.denied"
+          : status === "failed" ? "operation.dispatch.failed"
+          : status === "in_doubt" ? "operation.dispatch.in_doubt" : "";
+        const contentFieldNames = ((): string[] => {
+          const selection = recordingProducer?.selectionFor?.("content");
+          const allow = new Set((selection?.fieldAllow as readonly string[] | undefined) || []);
+          return Object.keys(inputArguments).filter((name) => allow.has(name));
+        })();
+        recordingSession.settle({
+          operationStatus,
+          usageCounters: {
+            "operations.dispatched": 1,
+            [`operations.${operationStatus}`]: 1
+          },
+          builders: {
+            ...(status === "succeeded" || status === "failed"
+              ? {
+                  execution_history: () => ({
+                    event: status === "succeeded" ? "completed" : "failed",
+                    effectClass: recordingEffectClass,
+                    durationBucket
+                  })
+                }
+              : {}),
+            governance_history: () => ({
+              governanceEvent: recordingGovernanceEvent(),
+              decisionRef: recordingDecisionRef(),
+              authorityRefs: recordingAuthorityRefs()
+            }),
+            ...(diagnosticsCode
+              ? {
+                  diagnostics: {
+                    eventCode: diagnosticsCode,
+                    build: () => ({ eventCode: diagnosticsCode, counters: { occurrences: 1 } })
+                  }
+                }
+              : {}),
+            content: {
+              fieldNames: contentFieldNames,
+              build: () => {
+                if (contentFieldNames.length === 0) return null;
+                const captured: Record<string, any> = {};
+                for (const name of contentFieldNames) captured[name] = inputArguments[name];
+                const bytes = Buffer.from(canonicalJson(captured), "utf8");
+                const artifact = recordingSession.putArtifact({ bytes });
+                if (!artifact?.artifactRef) return null;
+                return {
+                  detail: {
+                    fieldNames: contentFieldNames,
+                    contentDigest: artifact.contentDigest,
+                    artifactRefs: [artifact.artifactRef]
+                  },
+                  contentBytes: Number(artifact.byteSize) || bytes.length
+                };
+              }
+            }
+          }
+        });
+      } catch {
+        // Recording settlement is selected history: a recorder fault can never
+        // rewrite the permit's settled outcome or replay the effect.
+      }
+    };
     const finish = async (completion: Record<string, any>): Promise<void> => {
       if (typeof operationProofSubstrate.finishLifecycle !== "function") return;
       await operationProofSubstrate.finishLifecycle({
@@ -713,6 +828,31 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
     const lifecycle = {
       finalProtectedSinkPermit,
       async beginDispatch(): Promise<string> {
+        // Required recording admission reserves durable capacity *before* the
+        // dispatch fence and the upstream send; a reject refuses the effect
+        // while a still-running intent settles as denied, never dispatched.
+        if (recordingSession) {
+          const admission = await recordingSession.admitBeforeEffect({
+            builders: {
+              execution_history: () => ({
+                event: "started",
+                effectClass: recordingEffectClass,
+                durationBucket: "not_applicable"
+              }),
+              governance_history: () => ({
+                governanceEvent: recordingGovernanceEvent(),
+                decisionRef: recordingDecisionRef(),
+                authorityRefs: recordingAuthorityRefs()
+              })
+            }
+          });
+          if (admission?.ok === false) {
+            throw Object.assign(new Error("Required recording admission is unavailable."), {
+              code: "recording_unavailable",
+              status: 503
+            });
+          }
+        }
         const receipt = await operationProofSubstrate.recordReceipt({
           operationId: MCP_DISPATCH_ADMISSION_RECEIPT_OPERATION_ID,
           workspaceId,
@@ -741,11 +881,18 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         if (settled) return;
         settled = true;
         const receiptLedgerEventId = text(completion.receiptLedgerEventId) || dispatchReceiptLedgerEventId;
-        await finish({
-          ...completion,
-          receiptLedgerEventId,
-          status: completion.status || (dispatchStarted ? "in_doubt" : "denied")
-        });
+        try {
+          await finish({
+            ...completion,
+            receiptLedgerEventId,
+            status: completion.status || (dispatchStarted ? "in_doubt" : "denied")
+          });
+        } finally {
+          settleRecording({
+            ...completion,
+            status: completion.status || (dispatchStarted ? "in_doubt" : "denied")
+          });
+        }
       },
       get dispatchStarted(): boolean { return dispatchStarted; }
     };
@@ -1104,6 +1251,12 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
             // The persisted dispatch receipt remains conservatively in doubt if settlement fails.
           }
           activeMcpLifecycleByPermit.delete(permitId);
+        }
+        try {
+          recordingProducer?.flushUsage?.({ force: true });
+        } catch {
+          // Buffered usage aggregates are selected history: shutdown never
+          // fabricates or replays them once their window is closed.
         }
       }
     }

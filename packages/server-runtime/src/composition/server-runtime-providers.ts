@@ -93,6 +93,7 @@ export async function createServerOperationPermissionPlatform({
   consoleAuth,
   securityPermissions,
   proofSubstrate = null,
+  recordingSink = null,
   readMcpToolSelection = null,
   logger
 }: Record<string, any>) : Promise<any> {
@@ -112,6 +113,7 @@ export async function createServerOperationPermissionPlatform({
     consoleAuth,
     securityPermissions,
     proofSubstrate,
+    recordingSink,
     readMcpToolSelection,
     logger
   });

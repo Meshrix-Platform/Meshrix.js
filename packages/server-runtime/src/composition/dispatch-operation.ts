@@ -6,6 +6,7 @@ export {
   shouldProxyRegisteredApiRequest
 } from "./dispatch-operation-input.ts";
 export { bindOperationDispatcher } from "./operation-dispatch-binding.ts";
+export { createDispatchOperationRecorder } from "./dispatch-operation-recording.ts";
 export { dispatchOperation } from "./dispatch-operation-core.ts";
 export { dispatchRegisteredHttpOperation } from "./dispatch-operation-http.ts";
 export { dispatchRpcOperation } from "./dispatch-operation-rpc.ts";

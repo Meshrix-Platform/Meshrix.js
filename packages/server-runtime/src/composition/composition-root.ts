@@ -129,7 +129,8 @@ export async function createServerCompositionRoot({
   operationLockManager: injectedOperationLockManager = null,
   operationConcurrencyScope: requestedOperationConcurrencyScope = "",
   registerPluginRuntimeMeasurementSource = null,
-  pluginHostPorts = {}
+  pluginHostPorts = {},
+  recordingSink = null
 }: Record<string, any>) : Promise<any> {
   if (typeof requestedOperationConcurrencyScope !== "string") {
     throw new TypeError("operationConcurrencyScope must be a string when provided.");
@@ -460,7 +461,8 @@ export async function createServerCompositionRoot({
     featureRuntime: lifecycleFeatureRuntime,
     operationLockManager,
     operationConcurrencyScope,
-    operationProofSubstrate
+    operationProofSubstrate,
+    recordingSink
   });
   const storageProvider: any = createStorageProvider({
     userDataPath,
@@ -665,6 +667,7 @@ export async function createServerCompositionRoot({
     moduleManagement,
     dataStructureSubstrate,
     operationProofSubstrate,
+    recordingSink,
     consoleAuth,
     securityPermissions,
     deferredProtectedSinkAuthorityPort,
