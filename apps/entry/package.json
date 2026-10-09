@@ -1,0 +1,30 @@
+{
+  "name": "@meshrix/entry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Installed macOS/Windows GUI entry identity, custody, pairing and user-held-key recovery state/model layer.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@meshrix/contracts": "0.1.0"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

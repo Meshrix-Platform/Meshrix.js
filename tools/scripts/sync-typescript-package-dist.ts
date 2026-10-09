@@ -11,6 +11,7 @@ const copies: any = [
   ["dist/packages/protocols", "packages/protocols/dist"],
   ["dist/apps/server", "apps/server/dist"],
   ["dist/apps/mcp-gateway-installer/src", "apps/mcp-gateway-installer/dist"],
+  ["dist/apps/entry/src", "apps/entry/dist"],
 ] as const;
 
 const assetCopies: any = [

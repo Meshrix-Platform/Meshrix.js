@@ -71,6 +71,32 @@
       ]
     },
     {
+      "id": "entry-app",
+      "name": "Installed Entry Application Layer",
+      "directory": "apps/entry",
+      "allowedDependsOn": [
+        "contracts"
+      ],
+      "forbiddenDependsOn": [
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "gateway",
+        "entry-transport",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "tools",
+        "skill-tools",
+        "model-gateway-contracts"
+      ]
+    },
+    {
       "id": "model-gateway-contracts",
       "name": "Model Gateway Service Contracts",
       "directory": "services/model-gateway/contracts",

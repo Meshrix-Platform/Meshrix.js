@@ -17,6 +17,7 @@
     "plugins/agents/*",
     "apps/server",
     "apps/mcp-gateway-installer",
+    "apps/entry",
     "apps/console",
     "workers/*"
   ],

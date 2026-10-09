@@ -3105,6 +3105,33 @@
       "triggerPaths": ["packages/gateway/src", "tests/vitest/gateway"]
     },
     {
+      "id": "entry.identity-recovery",
+      "label": "Installed entry custody adapters, pairing model, recovery key/vault snapshots and fresh-device recovery",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/entry/entry-custody.test.ts",
+        "tests/vitest/entry/entry-pairing.test.ts",
+        "tests/vitest/entry/entry-recovery.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry",
+        "packages/contracts/src/private-relay",
+        "packages/gateway/src/private-endpoint",
+        "tests/vitest/entry"
+      ]
+    },
+    {
       "id": "entry.transport",
       "label": "Installed-entry private transport: WSS port, pinned inner mTLS, local MCP face and relay fault handling",
       "owner": "platform",
