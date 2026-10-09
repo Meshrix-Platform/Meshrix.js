@@ -804,6 +804,25 @@
       "artifacts": []
     },
     {
+      "id": "contracts.enterprise-recording",
+      "label": "Enterprise recording policy and lifecycle contract",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/contracts/recording-contract.test.ts"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
       "id": "runtime.resource-discipline",
       "label": "Resource ownership policy and deterministic persistence checks",
       "owner": "platform",

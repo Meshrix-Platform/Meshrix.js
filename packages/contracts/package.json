@@ -151,6 +151,21 @@
       "types": "./dist/private-relay/private-relay-recovery.d.ts",
       "default": "./dist/private-relay/private-relay-recovery.js"
     },
+    "./recording": {
+      "source": "./src/recording/index.ts",
+      "types": "./dist/recording/index.d.ts",
+      "default": "./dist/recording/index.js"
+    },
+    "./recording/policy": {
+      "source": "./src/recording/recording-policy.ts",
+      "types": "./dist/recording/recording-policy.d.ts",
+      "default": "./dist/recording/recording-policy.js"
+    },
+    "./recording/lifecycle": {
+      "source": "./src/recording/recording-lifecycle.ts",
+      "types": "./dist/recording/recording-lifecycle.d.ts",
+      "default": "./dist/recording/recording-lifecycle.js"
+    },
     "./serialization/canonical-json": {
       "source": "./src/serialization/canonical-json.ts",
       "types": "./dist/serialization/canonical-json.d.ts",

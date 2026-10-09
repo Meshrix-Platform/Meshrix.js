@@ -1,0 +1,1519 @@
+{
+  "schemaVersion": "v0.0.1:recording:corpus-1",
+  "policy": {
+    "valid": {
+      "recording-policy-empty": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 1,
+        "issuedAt": "2026-10-09T09:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {}
+      },
+      "recording-policy-required-execution": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "execution_history": {
+            "obligation": "required_before_effect",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            }
+          }
+        }
+      },
+      "recording-policy-full": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "content": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["input.summary", "output.summary"],
+            "fieldRedact": ["input.internalNote"],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 50000,
+              "maxContentBytes": 10485760,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            }
+          },
+          "diagnostics": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": ["upstream_timeout", "sink_retry"],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 2592000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 512,
+              "maxRecordBytes": 4096
+            }
+          },
+          "execution_history": {
+            "obligation": "required_before_effect",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 1000000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            }
+          },
+          "governance_history": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 15552000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            }
+          },
+          "usage": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["ops.completed", "ops.failed", "bytes.egress"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 1024,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      }
+    },
+    "invalid": {
+      "policyWrongSchemaVersion": {
+        "schemaVersion": "v0.0.1:recording:policy-0",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {}
+      },
+      "policyExtraTopLevelKey": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {},
+        "enforcementNote": "record everything"
+      },
+      "policyUnknownCategory": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "telemetry": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 2592000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 512,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyContentRequiredObligation": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "content": {
+            "obligation": "required_before_effect",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["input.summary"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 50000,
+              "maxContentBytes": 10485760,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            }
+          }
+        }
+      },
+      "policyContentEmptyFieldAllow": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "content": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 50000,
+              "maxContentBytes": 10485760,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            }
+          }
+        }
+      },
+      "policyDiagnosticsEmptyEventAllow": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "diagnostics": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 2592000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 512,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyUsageEmptyFieldAllow": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "usage": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 1024,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyDiagnosticsContentRetention": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "diagnostics": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": [],
+            "fieldRedact": [],
+            "eventAllow": ["upstream_timeout"],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 2592000,
+              "maxRecords": 100000,
+              "maxContentBytes": 4096,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 512,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyRevisionZero": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 0,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {}
+      },
+      "policySelectionSmugglesSecret": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "content": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["input.summary"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.auditor"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 50000,
+              "maxContentBytes": 10485760,
+              "maxIndexBytes": 1048576
+            },
+            "capacity": {
+              "maxBufferedRecords": 256,
+              "maxRecordBytes": 8192
+            },
+            "credentials": ["vault.ref.1"]
+          }
+        }
+      },
+      "policyEmptyReaderRoles": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "usage": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["ops.completed"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": [],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 1024,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyDuplicateReaderRoles": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "usage": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["ops.completed"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops", "role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 1024,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyRetentionZeroAge": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "usage": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["ops.completed"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 0,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            },
+            "capacity": {
+              "maxBufferedRecords": 1024,
+              "maxRecordBytes": 4096
+            }
+          }
+        }
+      },
+      "policyMissingCapacity": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": ["role.rec.admin"],
+        "categories": {
+          "usage": {
+            "obligation": "optional",
+            "sinkRef": "sink.rec.local.1",
+            "fieldAllow": ["ops.completed"],
+            "fieldRedact": [],
+            "eventAllow": [],
+            "readerRoles": ["role.rec.ops"],
+            "configurerRoles": ["role.rec.admin"],
+            "retention": {
+              "maxAgeSeconds": 7776000,
+              "maxRecords": 100000,
+              "maxContentBytes": 0,
+              "maxIndexBytes": 524288
+            }
+          }
+        }
+      },
+      "policyEmptyConfigurerRoles": {
+        "schemaVersion": "v0.0.1:recording:policy-1",
+        "kind": "recording-policy",
+        "policyId": "pol.rec.1",
+        "policyRevision": 3,
+        "issuedAt": "2026-10-09T10:00:00Z",
+        "issuerRole": "role.rec.admin",
+        "configurerRoles": [],
+        "categories": {}
+      }
+    }
+  },
+  "lifecycle": {
+    "valid": {
+      "recording-sink": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-sink",
+        "sinkId": "sink.rec.local.1",
+        "custody": "enterprise_local",
+        "durable": true,
+        "budgets": {
+          "maxRecordBytes": 8192,
+          "maxContentBytes": 1073741824,
+          "maxIndexBytes": 1048576,
+          "maxBufferedRecords": 256,
+          "maxPendingWrites": 512
+        }
+      },
+      "record-admission-admit-optional": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.1",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "admit",
+        "reason": "none"
+      },
+      "record-admission-admit-required": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.2",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "phase": "pre_effect",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "decision": "admit",
+        "reason": "none"
+      },
+      "record-admission-deny-disabled": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.3",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.3",
+        "category": "content",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": null,
+        "policyRevision": 3,
+        "decision": "deny",
+        "reason": "category_disabled"
+      },
+      "record-admission-deny-field": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.4",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.4",
+        "category": "content",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "deny",
+        "reason": "forbidden_field"
+      },
+      "record-admission-shed": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.5",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.5",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "shed",
+        "reason": "capacity_exceeded"
+      },
+      "record-admission-reject": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.6",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.6",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "phase": "pre_effect",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "decision": "reject",
+        "reason": "recording_unavailable"
+      },
+      "recording-record-content": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.1",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "content",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "fieldNames": ["input.summary", "output.summary"],
+          "contentDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "artifactRefs": ["art.rec.1"]
+        },
+        "indexBytes": 512,
+        "contentBytes": 2048
+      },
+      "recording-record-execution-started": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.2",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "pre_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "event": "started",
+          "effectClass": "safe_write",
+          "durationBucket": "not_applicable"
+        },
+        "indexBytes": 384,
+        "contentBytes": 0
+      },
+      "recording-record-execution-completed": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.3",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:02Z",
+        "detail": {
+          "event": "completed",
+          "effectClass": "read",
+          "durationBucket": "lt_100ms"
+        },
+        "indexBytes": 384,
+        "contentBytes": 0
+      },
+      "recording-record-governance": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.4",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.4",
+        "category": "governance_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:03Z",
+        "detail": {
+          "governanceEvent": "policy_decision",
+          "decisionRef": "dec.rec.1",
+          "authorityRefs": ["auth.rec.1", "grant.rec.2"]
+        },
+        "indexBytes": 448,
+        "contentBytes": 0
+      },
+      "recording-record-usage": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.5",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.5",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:05:00Z",
+        "detail": {
+          "counters": {
+            "ops.completed": 4,
+            "bytes.egress": 1024
+          },
+          "bucketStart": "2026-10-09T10:00:00Z"
+        },
+        "indexBytes": 320,
+        "contentBytes": 0
+      },
+      "recording-record-diagnostics": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.6",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.6",
+        "category": "diagnostics",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:04Z",
+        "detail": {
+          "eventCode": "upstream_timeout",
+          "counters": {
+            "retries": 2
+          }
+        },
+        "indexBytes": 256,
+        "contentBytes": 0
+      },
+      "recording-outcome-recorded": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "recorded",
+        "reason": "none",
+        "operationStatus": "succeeded",
+        "recordsWritten": 2,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:02Z"
+      },
+      "recording-outcome-terminal-pending": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.2",
+        "operationRef": "op.rec.7",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "terminal_record_pending",
+        "reason": "sink_write_failed",
+        "operationStatus": "succeeded",
+        "recordsWritten": 1,
+        "pendingTerminal": true,
+        "failure": {
+          "code": "sink_write_failed",
+          "phase": "post_effect"
+        },
+        "occurredAt": "2026-10-09T10:00:05Z"
+      },
+      "recording-outcome-degraded": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.3",
+        "operationRef": "op.rec.8",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "recording_degraded",
+        "reason": "sink_unavailable",
+        "operationStatus": "succeeded",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": {
+          "code": "sink_unavailable",
+          "phase": "post_effect"
+        },
+        "occurredAt": "2026-10-09T10:00:06Z"
+      },
+      "recording-outcome-not-recorded": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.4",
+        "operationRef": "op.rec.9",
+        "category": "diagnostics",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "not_recorded",
+        "reason": "category_disabled",
+        "operationStatus": "succeeded",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:07Z"
+      },
+      "recording-outcome-required-owed": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.5",
+        "operationRef": "op.rec.10",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "not_recorded",
+        "reason": "category_disabled",
+        "operationStatus": "failed",
+        "recordsWritten": 0,
+        "pendingTerminal": true,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:08Z"
+      },
+      "recording-outcome-shed": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.6",
+        "operationRef": "op.rec.11",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "shed",
+        "reason": "capacity_exceeded",
+        "operationStatus": "succeeded",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:09Z"
+      },
+      "recording-outcome-partial": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.7",
+        "operationRef": "op.rec.12",
+        "category": "governance_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "partially_recorded",
+        "reason": "category_disabled",
+        "operationStatus": "failed",
+        "recordsWritten": 1,
+        "pendingTerminal": true,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:10Z"
+      }
+    },
+    "invalid": {
+      "admissionShedOnRequired": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.1",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "decision": "shed",
+        "reason": "capacity_exceeded"
+      },
+      "admissionRejectPostEffect": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.2",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "decision": "reject",
+        "reason": "recording_unavailable"
+      },
+      "admissionRejectOptional": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.3",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "pre_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "reject",
+        "reason": "recording_unavailable"
+      },
+      "admissionAdmitWithReason": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.4",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "admit",
+        "reason": "capacity_exceeded"
+      },
+      "admissionDenyNoReason": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.5",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "deny",
+        "reason": "none"
+      },
+      "admissionRelabeledOperational": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.6",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "execution_history",
+        "evidenceClass": "minimal_correctness",
+        "phase": "pre_effect",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "decision": "admit",
+        "reason": "none"
+      },
+      "admissionUnknownDecision": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.7",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "allow",
+        "reason": "none"
+      },
+      "admissionMissingTenant": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "record-admission",
+        "admissionId": "adm.rec.bad.8",
+        "operationRef": "op.rec.1",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "phase": "post_effect",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "decision": "admit",
+        "reason": "none"
+      },
+      "recordContentPreEffect": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.1",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "content",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "pre_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "fieldNames": ["input.summary"],
+          "contentDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "artifactRefs": ["art.rec.1"]
+        },
+        "indexBytes": 512,
+        "contentBytes": 2048
+      },
+      "recordContentNoCustody": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.2",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "content",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "fieldNames": ["input.summary"],
+          "contentDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "artifactRefs": []
+        },
+        "indexBytes": 512,
+        "contentBytes": 2048
+      },
+      "recordDiagnosticsContentBytes": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.3",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "diagnostics",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:04Z",
+        "detail": {
+          "eventCode": "upstream_timeout",
+          "counters": {
+            "retries": 2
+          }
+        },
+        "indexBytes": 256,
+        "contentBytes": 128
+      },
+      "recordStartedWithDuration": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.4",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "pre_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "event": "started",
+          "effectClass": "safe_write",
+          "durationBucket": "lt_1s"
+        },
+        "indexBytes": 384,
+        "contentBytes": 0
+      },
+      "recordCompletedNoDuration": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.5",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:02Z",
+        "detail": {
+          "event": "completed",
+          "effectClass": "read",
+          "durationBucket": "not_applicable"
+        },
+        "indexBytes": 384,
+        "contentBytes": 0
+      },
+      "recordCarriesPayload": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.6",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "content",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "fieldNames": ["input.summary"],
+          "contentDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "artifactRefs": ["art.rec.1"],
+          "payload": "redacted-example"
+        },
+        "indexBytes": 512,
+        "contentBytes": 2048
+      },
+      "recordCarriesToken": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.7",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.1",
+        "category": "diagnostics",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:04Z",
+        "detail": {
+          "eventCode": "upstream_timeout",
+          "counters": {},
+          "token": "not-a-real-token-value"
+        },
+        "indexBytes": 256,
+        "contentBytes": 0
+      },
+      "recordUsageDetailOnGovernance": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.8",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.4",
+        "category": "governance_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 3,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "post_effect",
+        "occurredAt": "2026-10-09T10:00:03Z",
+        "detail": {
+          "counters": {
+            "ops.completed": 4
+          },
+          "bucketStart": "2026-10-09T10:00:00Z"
+        },
+        "indexBytes": 320,
+        "contentBytes": 0
+      },
+      "recordPolicyRevisionZero": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-record",
+        "recordId": "rec.bad.9",
+        "tenantRef": "tenant.rec.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "policyRevision": 0,
+        "sinkRef": "sink.rec.local.1",
+        "phase": "pre_effect",
+        "occurredAt": "2026-10-09T10:00:01Z",
+        "detail": {
+          "event": "started",
+          "effectClass": "safe_write",
+          "durationBucket": "not_applicable"
+        },
+        "indexBytes": 384,
+        "contentBytes": 0
+      },
+      "outcomeRecordedPendingTerminal": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.1",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "recorded",
+        "reason": "none",
+        "operationStatus": "succeeded",
+        "recordsWritten": 2,
+        "pendingTerminal": true,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:02Z"
+      },
+      "outcomeRecordedZeroWrites": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.2",
+        "operationRef": "op.rec.2",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "recorded",
+        "reason": "none",
+        "operationStatus": "succeeded",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:02Z"
+      },
+      "outcomeTerminalPendingFalse": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.3",
+        "operationRef": "op.rec.7",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "terminal_record_pending",
+        "reason": "sink_write_failed",
+        "operationStatus": "succeeded",
+        "recordsWritten": 1,
+        "pendingTerminal": false,
+        "failure": {
+          "code": "sink_write_failed",
+          "phase": "post_effect"
+        },
+        "occurredAt": "2026-10-09T10:00:05Z"
+      },
+      "outcomeTerminalPendingOptional": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.4",
+        "operationRef": "op.rec.8",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "terminal_record_pending",
+        "reason": "sink_write_failed",
+        "operationStatus": "succeeded",
+        "recordsWritten": 0,
+        "pendingTerminal": true,
+        "failure": {
+          "code": "sink_write_failed",
+          "phase": "post_effect"
+        },
+        "occurredAt": "2026-10-09T10:00:06Z"
+      },
+      "outcomeRequiredObligationClaimedMet": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.5",
+        "operationRef": "op.rec.10",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "not_recorded",
+        "reason": "category_disabled",
+        "operationStatus": "failed",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:08Z"
+      },
+      "outcomePostEffectUndoesEffect": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.6",
+        "operationRef": "op.rec.7",
+        "category": "execution_history",
+        "evidenceClass": "selected_history",
+        "obligation": "required_before_effect",
+        "policyRevision": 3,
+        "outcome": "terminal_record_pending",
+        "reason": "sink_write_failed",
+        "operationStatus": "not_started",
+        "recordsWritten": 1,
+        "pendingTerminal": true,
+        "failure": {
+          "code": "sink_write_failed",
+          "phase": "post_effect"
+        },
+        "occurredAt": "2026-10-09T10:00:05Z"
+      },
+      "outcomeDegradedNotStarted": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.7",
+        "operationRef": "op.rec.8",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "recording_degraded",
+        "reason": "sink_unavailable",
+        "operationStatus": "not_started",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": {
+          "code": "sink_unavailable",
+          "phase": "post_effect"
+        },
+        "occurredAt": "2026-10-09T10:00:06Z"
+      },
+      "outcomeUnknownOutcome": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.8",
+        "operationRef": "op.rec.9",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "lost",
+        "reason": "none",
+        "operationStatus": "succeeded",
+        "recordsWritten": 0,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:07Z"
+      },
+      "outcomeSmugglesSecret": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-outcome",
+        "outcomeId": "out.rec.bad.9",
+        "operationRef": "op.rec.9",
+        "category": "usage",
+        "evidenceClass": "selected_history",
+        "obligation": "optional",
+        "policyRevision": 3,
+        "outcome": "recorded",
+        "reason": "none",
+        "operationStatus": "succeeded",
+        "recordsWritten": 1,
+        "pendingTerminal": false,
+        "failure": null,
+        "occurredAt": "2026-10-09T10:00:07Z",
+        "secret": "not-a-real-secret"
+      },
+      "sinkHostedCustody": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-sink",
+        "sinkId": "sink.rec.hosted.1",
+        "custody": "hosted_archive",
+        "durable": true,
+        "budgets": {
+          "maxRecordBytes": 8192,
+          "maxContentBytes": 1073741824,
+          "maxIndexBytes": 1048576,
+          "maxBufferedRecords": 256,
+          "maxPendingWrites": 512
+        }
+      },
+      "sinkNotDurable": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-sink",
+        "sinkId": "sink.rec.local.2",
+        "custody": "enterprise_local",
+        "durable": false,
+        "budgets": {
+          "maxRecordBytes": 8192,
+          "maxContentBytes": 1073741824,
+          "maxIndexBytes": 1048576,
+          "maxBufferedRecords": 256,
+          "maxPendingWrites": 512
+        }
+      },
+      "sinkMissingBudgets": {
+        "schemaVersion": "v0.0.1:recording:lifecycle-1",
+        "kind": "recording-sink",
+        "sinkId": "sink.rec.local.3",
+        "custody": "enterprise_local",
+        "durable": true
+      }
+    }
+  },
+  "state": {
+    "sinkHealthy": {
+      "sinkRef": "sink.rec.local.1",
+      "available": true,
+      "bufferedRecords": 12,
+      "pendingWrites": 3,
+      "contentBytesRemaining": 1048576,
+      "indexBytesRemaining": 524288
+    },
+    "sinkFull": {
+      "sinkRef": "sink.rec.local.1",
+      "available": true,
+      "bufferedRecords": 1024,
+      "pendingWrites": 0,
+      "contentBytesRemaining": 1048576,
+      "indexBytesRemaining": 524288
+    },
+    "sinkIndexExhausted": {
+      "sinkRef": "sink.rec.local.1",
+      "available": true,
+      "bufferedRecords": 10,
+      "pendingWrites": 0,
+      "contentBytesRemaining": 1048576,
+      "indexBytesRemaining": 0
+    },
+    "sinkContentExhausted": {
+      "sinkRef": "sink.rec.local.1",
+      "available": true,
+      "bufferedRecords": 10,
+      "pendingWrites": 0,
+      "contentBytesRemaining": 0,
+      "indexBytesRemaining": 524288
+    },
+    "sinkDown": {
+      "sinkRef": "sink.rec.local.1",
+      "available": false,
+      "bufferedRecords": 0,
+      "pendingWrites": 0,
+      "contentBytesRemaining": 0,
+      "indexBytesRemaining": 0
+    },
+    "policyNextDisablesContent": {
+      "schemaVersion": "v0.0.1:recording:policy-1",
+      "kind": "recording-policy",
+      "policyId": "pol.rec.1",
+      "policyRevision": 4,
+      "issuedAt": "2026-10-09T11:00:00Z",
+      "issuerRole": "role.rec.admin",
+      "configurerRoles": ["role.rec.admin"],
+      "categories": {
+        "diagnostics": {
+          "obligation": "optional",
+          "sinkRef": "sink.rec.local.1",
+          "fieldAllow": [],
+          "fieldRedact": [],
+          "eventAllow": ["upstream_timeout", "sink_retry"],
+          "readerRoles": ["role.rec.ops"],
+          "configurerRoles": ["role.rec.admin"],
+          "retention": {
+            "maxAgeSeconds": 2592000,
+            "maxRecords": 100000,
+            "maxContentBytes": 0,
+            "maxIndexBytes": 524288
+          },
+          "capacity": {
+            "maxBufferedRecords": 512,
+            "maxRecordBytes": 4096
+          }
+        },
+        "execution_history": {
+          "obligation": "required_before_effect",
+          "sinkRef": "sink.rec.local.1",
+          "fieldAllow": [],
+          "fieldRedact": [],
+          "eventAllow": [],
+          "readerRoles": ["role.rec.auditor"],
+          "configurerRoles": ["role.rec.admin"],
+          "retention": {
+            "maxAgeSeconds": 7776000,
+            "maxRecords": 1000000,
+            "maxContentBytes": 0,
+            "maxIndexBytes": 1048576
+          },
+          "capacity": {
+            "maxBufferedRecords": 256,
+            "maxRecordBytes": 8192
+          }
+        },
+        "governance_history": {
+          "obligation": "optional",
+          "sinkRef": "sink.rec.local.1",
+          "fieldAllow": [],
+          "fieldRedact": [],
+          "eventAllow": [],
+          "readerRoles": ["role.rec.auditor"],
+          "configurerRoles": ["role.rec.admin"],
+          "retention": {
+            "maxAgeSeconds": 15552000,
+            "maxRecords": 100000,
+            "maxContentBytes": 0,
+            "maxIndexBytes": 1048576
+          },
+          "capacity": {
+            "maxBufferedRecords": 256,
+            "maxRecordBytes": 8192
+          }
+        },
+        "usage": {
+          "obligation": "optional",
+          "sinkRef": "sink.rec.local.1",
+          "fieldAllow": ["ops.completed", "ops.failed", "bytes.egress"],
+          "fieldRedact": [],
+          "eventAllow": [],
+          "readerRoles": ["role.rec.ops"],
+          "configurerRoles": ["role.rec.admin"],
+          "retention": {
+            "maxAgeSeconds": 7776000,
+            "maxRecords": 100000,
+            "maxContentBytes": 0,
+            "maxIndexBytes": 524288
+          },
+          "capacity": {
+            "maxBufferedRecords": 1024,
+            "maxRecordBytes": 4096
+          }
+        }
+      }
+    },
+    "recordStaleRevision": {
+      "schemaVersion": "v0.0.1:recording:lifecycle-1",
+      "kind": "recording-record",
+      "recordId": "rec.stale.1",
+      "tenantRef": "tenant.rec.1",
+      "operationRef": "op.rec.2",
+      "category": "execution_history",
+      "evidenceClass": "selected_history",
+      "policyRevision": 2,
+      "sinkRef": "sink.rec.local.1",
+      "phase": "pre_effect",
+      "occurredAt": "2026-10-09T09:30:01Z",
+      "detail": {
+        "event": "started",
+        "effectClass": "safe_write",
+        "durationBucket": "not_applicable"
+      },
+      "indexBytes": 384,
+      "contentBytes": 0
+    }
+  }
+}
