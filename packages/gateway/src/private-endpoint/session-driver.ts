@@ -243,12 +243,19 @@ export class PrivateRelaySession {
    */
   flushInbound(): number {
     let delivered = 0;
+    let lastSeq = 0;
     while (this.#pendingInbound.length > 0) {
       const head = this.#pendingInbound[0];
       if (!this.#deliverInbound(head.payload, head.messageId)) break;
       this.#pendingInbound.shift();
-      this.#ackInbound(head.seq);
+      this.#cursors = Object.freeze({ ...this.#cursors, toEndpoint: Math.max(this.#cursors.toEndpoint, head.seq) });
+      lastSeq = head.seq;
       delivered += 1;
+    }
+    // One cumulative ack per flush — a deep drain must not turn into a burst
+    // of inbound relay messages.
+    if (delivered > 0) {
+      this.#transport.send(createFrameAck({ routeId: this.#admission.routeId, upToSeq: lastSeq }));
     }
     return delivered;
   }
@@ -328,7 +335,10 @@ export class PrivateRelaySession {
           break;
         }
         if (this.#pendingInbound.length > 0) {
-          // Preserve ordering behind the undelivered head.
+          // Preserve ordering behind the undelivered head. A retransmitted seq
+          // that is already queued is dropped — double delivery would corrupt
+          // the inner TLS record stream.
+          if (this.#pendingInbound.some((pending) => pending.seq === seq)) break;
           if (this.#pendingInbound.length >= this.#limits.maxBufferedFrames) {
             this.failSession("capacity_exceeded");
             break;

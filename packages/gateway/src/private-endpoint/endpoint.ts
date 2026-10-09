@@ -263,7 +263,11 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
               ?? Promise.resolve(null)) as GatewayOutcome;
             break;
           case "catalog": {
-            const page = options.gateway.catalog(context, undefined);
+            const page = options.gateway.catalog(context, {
+              ...(typeof params.cursor === "string" ? { cursor: params.cursor } : {}),
+              ...(typeof params.limit === "number" && Number.isFinite(params.limit) ? { limit: params.limit } : {}),
+              ...(typeof params.search === "string" ? { search: params.search } : {})
+            });
             outcome = { kind: "complete", value: page } as unknown as GatewayOutcome;
             break;
           }
