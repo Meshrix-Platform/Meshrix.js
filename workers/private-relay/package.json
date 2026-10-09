@@ -11,7 +11,9 @@
   "scripts": {
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "wrangler deploy --dry-run",
     "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy --env staging",
     "check": "npm run typecheck && npm run test"
   },
   "devDependencies": {

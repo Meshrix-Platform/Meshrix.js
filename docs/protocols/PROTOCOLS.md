@@ -24,7 +24,7 @@ through registered operations or explicit facades bound by `packages/server-runt
 | Downstream client aspect | `packages/protocols/downstream-client-aspect/` | Shared downstream MCP client protocol helpers. |
 | Plugin package | [Plugin Package and Loading](PLUGIN-PACKAGE-AND-LOADING.md) | Closed one-plugin bundle admission, source-neutral acquisition, verified custody, and lifecycle contribution publication. |
 | Plugin external service | Core Host contract plus upstream HTTP/MCP adapters | Operation-scoped, configured external-service invocation with authorization, bounded projection, cancellation, and sanitized errors. |
-| Private relay | [Private Relay Wire Protocol](private-relay.md) (`packages/contracts/src/private-relay/`) | Versioned opaque-relay session, endpoint trust and recovery wire contracts for Workers private forwarding. |
+| Private relay | [Private Relay Wire Protocol](private-relay.md) (`packages/contracts/src/private-relay/`) | Versioned opaque-relay session, endpoint trust and recovery wire contracts for Workers private forwarding; [operations profile](private-relay-operations.md) for the `workers/private-relay` runtime. |
 | Enterprise recording | [Enterprise Recording Policy Contract](recording.md) (`packages/contracts/src/recording/`) | Versioned recording policy, sink, admission and outcome contracts distinguishing selected histories from minimal correctness state. |
 | Pubsub | `packages/protocols/pubsub/` | Runtime notifications for console and operator workflows. |
 | Common | `packages/protocols/common/` | Shared protocol helpers used by the families above. |

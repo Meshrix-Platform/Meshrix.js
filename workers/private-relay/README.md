@@ -9,8 +9,13 @@ same deployment. It implements the wire contract published in
 
 **Scope boundary.** Local engineering checks only. There is no Cloudflare
 account, deployment, hosted identity or production provisioning in this
-package. `wrangler.toml` exists solely for `wrangler dev --local` and the
-vitest-pool-workers suite (real local Workerd + Miniflare).
+package. `wrangler.toml` serves `wrangler dev --local`, `wrangler deploy
+--dry-run` and the vitest-pool-workers suite (real local Workerd + Miniflare);
+its `[env.staging]` profile is a placeholder-only environment-separation
+shape — see
+[`docs/protocols/private-relay-operations.md`](../../docs/protocols/private-relay-operations.md)
+for the operational runbook (build/test/deploy boundary, privacy projection,
+error taxonomy and cost honesty).
 
 ## Architecture
 
@@ -95,9 +100,12 @@ real per-operation counts, no invented monthly cost figures.
 
 | Command | Purpose |
 | --- | --- |
-| `npm test` | vitest-pool-workers suite in real local Workerd |
-| `npm run typecheck` | `tsc -p tsconfig.json --noEmit` |
+| `npm test` | vitest-pool-workers suite in real local Workerd (registry: `workers.private-relay-workerd`) |
+| `npm run typecheck` | `tsc -p tsconfig.json --noEmit` (registry: `workers.private-relay-typecheck`) |
+| `npm run build` | `wrangler deploy --dry-run` — bundles and validates config, exits before upload (registry: `workers.private-relay-build`) |
+| `npm run check` | `typecheck` + `test` composite |
 | `npm run dev` | `wrangler dev --local` (never `wrangler deploy`) |
+| `npm run deploy` | `wrangler deploy --env staging` — deploy *shape* for a separately authorized delivery only; **never run by any check** (staging `account_id` is a placeholder) |
 
 ## Deliberate skeleton boundaries (flagged honestly)
 

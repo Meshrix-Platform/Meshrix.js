@@ -12,7 +12,10 @@ trust, semantics and plaintext live exclusively at the endpoints.
 
 This file owns protocol shape and semantics. Runtime implementations (Workerd
 relay, endpoint gateway, installed entry) are separate deliveries and consume
-these schemas rather than redefining them.
+these schemas rather than redefining them. The actual Workerd relay's
+build/check/deploy boundary, privacy projection, operational error taxonomy
+and cost honesty live in
+[Private Relay Operations](private-relay-operations.md).
 
 ## Schema versions
 

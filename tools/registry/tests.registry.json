@@ -804,6 +804,75 @@
       "artifacts": []
     },
     {
+      "id": "workers.private-relay-typecheck",
+      "label": "Private relay Worker TypeScript surface check",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "workers/private-relay",
+        "run",
+        "typecheck"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "workers/private-relay",
+        "packages/contracts/src/private-relay"
+      ]
+    },
+    {
+      "id": "workers.private-relay-build",
+      "label": "Private relay Worker bundle compile via wrangler deploy --dry-run (local only, never uploads)",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "workers/private-relay",
+        "run",
+        "build"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "workers/private-relay",
+        "packages/contracts/src/private-relay"
+      ]
+    },
+    {
+      "id": "workers.private-relay-workerd",
+      "label": "Private relay Workerd/Durable Objects runtime suite (vitest-pool-workers, local workerd only)",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "workers/private-relay",
+        "run",
+        "test"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "workers/private-relay",
+        "packages/contracts/src/private-relay"
+      ]
+    },
+    {
       "id": "contracts.enterprise-recording",
       "label": "Enterprise recording policy and lifecycle contract",
       "owner": "platform",

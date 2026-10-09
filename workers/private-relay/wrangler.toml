@@ -30,3 +30,36 @@ bindings = [
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RelayDirectoryDO", "RelaySessionDO", "RecoveryVaultDO"]
+
+# ── Named environment: staging (shape only, no real account) ────────────────
+# Wrangler named environments do NOT inherit top-level bindings, vars or
+# migrations, so the staging profile restates them deliberately. `main`,
+# `compatibility_date` and `compatibility_flags` remain inherited from the
+# top-level configuration.
+#
+# Every account/token value below is a placeholder. No Cloudflare account is
+# configured anywhere in this package: `npm run deploy` is the documented
+# deploy shape for a separately authorized delivery only and is never invoked
+# by build, typecheck or test commands. Filling in a real account_id or admin
+# token is an authorized deployment change, not an engineering-check edit.
+[env.staging]
+name = "meshrix-private-relay-staging"
+account_id = "PLACEHOLDER-REPLACE-ONLY-IN-AUTHORIZED-DEPLOYMENT"
+
+[env.staging.vars]
+RELAY_MAX_SESSION_MESSAGE_BYTES = "393216"
+RELAY_MAX_VAULT_MESSAGE_BYTES = "1572864"
+# RELAY_ADMIN_TOKEN is intentionally absent here: a real deployment provides
+# it through `wrangler secret put` under authorized ownership; provisioning
+# tokens are never committed as vars.
+
+[env.staging.durable_objects]
+bindings = [
+  { name = "RELAY_DIRECTORY", class_name = "RelayDirectoryDO" },
+  { name = "RELAY_SESSION", class_name = "RelaySessionDO" },
+  { name = "RECOVERY_VAULT", class_name = "RecoveryVaultDO" }
+]
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDirectoryDO", "RelaySessionDO", "RecoveryVaultDO"]
