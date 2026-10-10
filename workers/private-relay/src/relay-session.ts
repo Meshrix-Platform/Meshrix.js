@@ -19,7 +19,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { RELAY_RUNTIME_LIMITS, RECOVERY_SESSION_LIMITS, integerEnv, mailboxPolicyFromEnv } from "./env.ts";
+import { RELAY_RUNTIME_LIMITS, RECOVERY_SESSION_LIMITS, integerEnv, mailboxPolicyFromEnv, metricsDurableEnabled } from "./env.ts";
 import { jsonResponse, readBoundedJson } from "./http.ts";
 import { directoryObjectName, mailboxObjectName, sha256Hex } from "./ids.ts";
 import { RelayCounters } from "./metrics.ts";
@@ -144,7 +144,7 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
   private meta: SessionMeta | null = null;
   private sessions = new Map<string, SessionRecord>();
   private conns = new Map<WebSocket, ConnState>();
-  private counters = new RelayCounters();
+  private counters = new RelayCounters(undefined, { durable: metricsDurableEnabled(this.env) });
   private cursorsDirty = false;
   private cursorWriteChain: Promise<void> = Promise.resolve();
   private nextCursorCheckpointAt = 0;
@@ -160,7 +160,7 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
         ctx.storage.list<SessionRecord>({ prefix: SESSION_PREFIX }),
       ]);
       if (meta) this.meta = meta;
-      if (counters) this.counters = new RelayCounters(counters as Record<string, number>);
+      if (counters) this.counters = new RelayCounters(counters as Record<string, number>, { durable: metricsDurableEnabled(this.env) });
       const now = Date.now();
       for (const record of sessionRecords.values()) {
         this.sessions.set(record.sessionId, record);

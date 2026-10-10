@@ -98,6 +98,14 @@ key becomes one `counter` metric `meshrix_relay_<counter>` labeled
   per-event counters that honestly reset on eviction; the label exists so
   dashboards never read them as durable.
 
+The scope label is the tier each reported value actually occupies. When a
+deployment disables counter persistence (`RELAY_METRICS_DURABLE = "0"` —
+the Workers shape; see the package README), every counted value lives in
+memory and reports `scope="ephemeral"`, including `DURABLE_KEYS` counters;
+previously persisted values keep `scope="durable"` until the object is
+evicted. With persistence disabled, `flush()` is a guaranteed no-op — zero
+counter writes to Durable Object storage and no counter write billing.
+
 The fan-out is bounded and enumeration-driven: the tenant directory
 reports its own counters plus `GET /internal/inventory` — the same
 deduplicated route/device derivation the revoke path uses, sliced to

@@ -16,7 +16,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { RELAY_RUNTIME_LIMITS, integerEnv } from "./env.ts";
+import { RELAY_RUNTIME_LIMITS, integerEnv, metricsDurableEnabled } from "./env.ts";
 import { jsonResponse, readBoundedJson } from "./http.ts";
 import { sha256Hex } from "./ids.ts";
 import { RelayCounters } from "./metrics.ts";
@@ -70,7 +70,7 @@ interface NonceStore {
 
 export class RecoveryVaultDO extends DurableObject<PrivateRelayEnv> {
   private meta: VaultMeta | null = null;
-  private counters = new RelayCounters();
+  private counters = new RelayCounters(undefined, { durable: metricsDurableEnabled(this.env) });
   private fetchWindowStart = 0;
   private fetchWindowCount = 0;
 
@@ -83,7 +83,7 @@ export class RecoveryVaultDO extends DurableObject<PrivateRelayEnv> {
         ctx.storage.get("counters"),
       ]);
       if (meta) this.meta = meta;
-      if (counters) this.counters = new RelayCounters(counters as Record<string, number>);
+      if (counters) this.counters = new RelayCounters(counters as Record<string, number>, { durable: metricsDurableEnabled(this.env) });
     });
   }
 

@@ -29,7 +29,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { mailboxPolicyFromEnv } from "./env.ts";
+import { mailboxPolicyFromEnv, metricsDurableEnabled } from "./env.ts";
 import type { MailboxRetentionPolicyValues } from "./env.ts";
 import { jsonResponse, readBoundedJson } from "./http.ts";
 import { directoryObjectName, sha256Hex } from "./ids.ts";
@@ -150,7 +150,7 @@ type PeerOutcome =
 
 export class MailboxDO extends DurableObject<PrivateRelayEnv> {
   private meta: MailboxMeta | null = null;
-  private counters = new RelayCounters();
+  private counters = new RelayCounters(undefined, { durable: metricsDurableEnabled(this.env) });
 
   constructor(ctx: DurableObjectState, env: PrivateRelayEnv) {
     super(ctx, env);
@@ -161,7 +161,7 @@ export class MailboxDO extends DurableObject<PrivateRelayEnv> {
         ctx.storage.get("counters"),
       ]);
       if (meta) this.meta = meta;
-      if (counters) this.counters = new RelayCounters(counters as Record<string, number>);
+      if (counters) this.counters = new RelayCounters(counters as Record<string, number>, { durable: metricsDurableEnabled(this.env) });
     });
   }
 

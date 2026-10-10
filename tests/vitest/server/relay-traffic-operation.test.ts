@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const EXPOSITION: string = [
@@ -35,6 +39,7 @@ beforeEach(() : any => {
   vi.resetModules();
   vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "");
   vi.stubEnv("MESHRIX_RELAY_ADMIN_TOKEN", "");
+  vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", "");
 });
 
 afterEach(() : any => {
@@ -164,5 +169,133 @@ describe("system.relay_traffic executor", () : any => {
 
     expect(response.status).toBe(200);
     expect(response.payload).toMatchObject({ configured: true, error: "relay_unreachable", status: 401 });
+  });
+});
+
+describe("system.relay_traffic history persistence", () : any => {
+  const makeTempDir: any = () : any => fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-relay-traffic-"));
+
+  it("writes the ring to MESHRIX_RELAY_TRAFFIC_PERSIST on each append and reloads it fresh", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const base: any = 1_700_000_000_000;
+    vi.setSystemTime(base);
+    const dir: any = makeTempDir();
+    const file: any = path.join(dir, "history.json");
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", file);
+    stubMetricsFetch();
+    let execute: any = await loadExecutor();
+    const run: any = () : Promise<any> => execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    await run();
+    vi.setSystemTime(base + 20_000);
+    await run();
+
+    expect(fs.existsSync(file)).toBe(true);
+    const persisted: any = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(persisted).toHaveLength(2);
+    expect(persisted[0].t).toBe(base);
+    expect(persisted[0].sums.meshrix_relay_sessions_admitted).toBe(6);
+    expect(persisted[1].t).toBe(base + 20_000);
+    // Atomic-ish write: the tmp file is renamed away, not left behind.
+    expect(fs.readdirSync(dir).sort()).toEqual(["history.json"]);
+
+    // Fresh module state reloads the persisted ring; the restored last
+    // sample time also keeps the append interval honest (no re-append at
+    // the same instant), and a later tick appends after it.
+    vi.resetModules();
+    execute = await loadExecutor();
+    let response: any = await run();
+    expect(response.status).toBe(200);
+    expect(response.payload.history).toHaveLength(2);
+    expect(response.payload.history[0].t).toBe(base);
+    expect(response.payload.history[0].sums.meshrix_relay_bytes_in).toBe(2048);
+
+    vi.setSystemTime(base + 40_000);
+    response = await run();
+    expect(response.payload.history).toHaveLength(3);
+    expect(response.payload.history[2].t).toBe(base + 40_000);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("resolves the literal \"1\" to <userDataPath>/relay-traffic-history.json", async () : Promise<any> => {
+    const dir: any = makeTempDir();
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", "1");
+    stubMetricsFetch();
+    const execute: any = await loadExecutor();
+
+    const response: any = await execute({
+      operationId: "system.relay_traffic",
+      input: {},
+      context: { userDataPath: dir }
+    });
+
+    expect(response.status).toBe(200);
+    const file: any = path.join(dir, "relay-traffic-history.json");
+    expect(fs.existsSync(file)).toBe(true);
+    const persisted: any = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0].sums.meshrix_relay_sessions_admitted).toBe(6);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("keeps the ring in memory when \"1\" has no userDataPath", async () : Promise<any> => {
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", "1");
+    stubMetricsFetch();
+    const execute: any = await loadExecutor();
+
+    const response: any = await execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    expect(response.status).toBe(200);
+    expect(response.payload.history).toHaveLength(1);
+  });
+
+  it("tolerates malformed persisted content and drops invalid entries", async () : Promise<any> => {
+    const dir: any = makeTempDir();
+    const file: any = path.join(dir, "history.json");
+    fs.writeFileSync(file, JSON.stringify([
+      "junk",
+      { t: "not-a-number", sums: {} },
+      { t: 1234, sums: { meshrix_relay_bytes_in: 42, bogus: "x" } },
+      { t: 9999, sums: "not-an-object" }
+    ]), "utf8");
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", file);
+    stubMetricsFetch();
+    const execute: any = await loadExecutor();
+
+    const response: any = await execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    expect(response.status).toBe(200);
+    // Only the well-formed entry is restored; non-finite sums are dropped
+    // and the fresh fetch appends normally after it.
+    expect(response.payload.history).toHaveLength(2);
+    expect(response.payload.history[0]).toEqual({ t: 1234, sums: { meshrix_relay_bytes_in: 42 } });
+    expect(response.payload.history[1].sums.meshrix_relay_sessions_admitted).toBe(6);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("keeps serving the in-memory ring when the file cannot be written", async () : Promise<any> => {
+    const dir: any = makeTempDir();
+    const blocker: any = path.join(dir, "blocker");
+    fs.writeFileSync(blocker, "x", "utf8");
+    // A path through a regular file makes every write fail (ENOTDIR).
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", path.join(blocker, "history.json"));
+    stubMetricsFetch();
+    const execute: any = await loadExecutor();
+
+    const response: any = await execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    expect(response.status).toBe(200);
+    expect(response.payload.history).toHaveLength(1);
+    expect(response.payload.history[0].sums.meshrix_relay_sessions_admitted).toBe(6);
+
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

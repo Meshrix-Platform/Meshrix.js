@@ -1,4 +1,7 @@
 
+import fs from "node:fs";
+import path from "node:path";
+
 import {
   buildConsoleState,
   buildRuntimeInfo
@@ -38,9 +41,99 @@ import {
 const RELAY_TRAFFIC_FETCH_TIMEOUT_MS: any = 8_000;
 const RELAY_TRAFFIC_HISTORY_INTERVAL_MS: any = 15_000;
 const RELAY_TRAFFIC_HISTORY_LIMIT: any = 240;
+const RELAY_TRAFFIC_HISTORY_FILE_NAME: any = "relay-traffic-history.json";
 
 const relayTrafficHistory: Array<{ t: number; sums: Record<string, number> }> = [];
 let relayTrafficHistoryAppendedAt: any = 0;
+// The file the ring was last loaded from ("" = not loaded yet). Resolution
+// is per-call so the "1" shorthand can follow context.userDataPath.
+let relayTrafficHistoryLoadedFrom: any = "";
+
+/**
+ * `MESHRIX_RELAY_TRAFFIC_PERSIST` selects where the history ring survives:
+ * unset → the ring stays in-process only (default); a file path → the ring
+ * is written there on every append; the literal `"1"` → the default
+ * `<userDataPath>/relay-traffic-history.json` when the caller supplies a
+ * userDataPath. An unresolvable value honestly means in-memory only.
+ */
+function relayTrafficPersistPath(context: any) : any {
+  const raw: any = String(process.env.MESHRIX_RELAY_TRAFFIC_PERSIST || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (raw === "1") {
+    const userDataPath: any = String(context?.userDataPath || "").trim();
+    return userDataPath ? path.join(userDataPath, RELAY_TRAFFIC_HISTORY_FILE_NAME) : "";
+  }
+  return raw;
+}
+
+/**
+ * Load a previously persisted ring (validated: entries must be
+ * `{t:number, sums:Record<string,number>}`; malformed entries and values are
+ * dropped, anything unparseable means starting empty). Runs once per
+ * resolved file; the restored last-sample time keeps the append interval
+ * honest across restarts.
+ */
+function loadRelayTrafficHistory(filePath: any) : any {
+  if (!filePath || relayTrafficHistoryLoadedFrom === filePath) {
+    return;
+  }
+  relayTrafficHistoryLoadedFrom = filePath;
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return;
+  }
+  if (!Array.isArray(parsed)) {
+    return;
+  }
+  const restored: any = [];
+  for (const entry of parsed) {
+    const t: any = Number(entry?.t);
+    const sums: any = entry?.sums;
+    if (!Number.isFinite(t) || !sums || typeof sums !== "object" || Array.isArray(sums)) {
+      continue;
+    }
+    const cleanSums: Record<string, number> = {};
+    for (const [name, value] of Object.entries(sums)) {
+      const numeric: any = Number(value);
+      if (Number.isFinite(numeric)) {
+        cleanSums[name] = numeric;
+      }
+    }
+    restored.push({ t, sums: cleanSums });
+  }
+  if (!restored.length) {
+    return;
+  }
+  relayTrafficHistory.splice(
+    0,
+    relayTrafficHistory.length,
+    ...restored.slice(-RELAY_TRAFFIC_HISTORY_LIMIT)
+  );
+  relayTrafficHistoryAppendedAt = restored[restored.length - 1].t;
+}
+
+/**
+ * Persist the whole ring (≤240 small entries) via a tmp+rename write so a
+ * torn file is never observed. A persistence failure must never break the
+ * operation — the in-memory ring keeps serving.
+ */
+function persistRelayTrafficHistory(filePath: any) : any {
+  if (!filePath) {
+    return;
+  }
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const temporaryPath: any = `${filePath}.${process.pid}.tmp`;
+    fs.writeFileSync(temporaryPath, `${JSON.stringify(relayTrafficHistory)}\n`, "utf8");
+    fs.renameSync(temporaryPath, filePath);
+  } catch {
+    // Honest degradation: keep serving the in-memory ring.
+  }
+}
 
 function parseExpositionLabelSet(source: any) : any {
   const labels: Record<string, string> = {};
@@ -146,7 +239,7 @@ function relayMetricSums(metrics: any = []) : any {
   return sums;
 }
 
-function recordRelayTrafficHistory(sums: any = {}, now: any = Date.now()) : any {
+function recordRelayTrafficHistory(sums: any = {}, now: any = Date.now(), persistPath: any = "") : any {
   if (now - relayTrafficHistoryAppendedAt < RELAY_TRAFFIC_HISTORY_INTERVAL_MS) {
     return;
   }
@@ -155,13 +248,16 @@ function recordRelayTrafficHistory(sums: any = {}, now: any = Date.now()) : any 
   if (relayTrafficHistory.length > RELAY_TRAFFIC_HISTORY_LIMIT) {
     relayTrafficHistory.splice(0, relayTrafficHistory.length - RELAY_TRAFFIC_HISTORY_LIMIT);
   }
+  persistRelayTrafficHistory(persistPath);
 }
 
-async function loadRelayTrafficMetrics() : Promise<any> {
+async function loadRelayTrafficMetrics(context: any = {}) : Promise<any> {
   const metricsUrl: any = String(process.env.MESHRIX_RELAY_METRICS_URL || "").trim();
   if (!metricsUrl) {
     return result(200, { configured: false });
   }
+  const persistPath: any = relayTrafficPersistPath(context);
+  loadRelayTrafficHistory(persistPath);
   const adminToken: any = String(process.env.MESHRIX_RELAY_ADMIN_TOKEN || "").trim();
   let response: any = null;
   try {
@@ -188,7 +284,7 @@ async function loadRelayTrafficMetrics() : Promise<any> {
     });
   }
   const metrics: any = parseRelayMetricsExposition(await response.text());
-  recordRelayTrafficHistory(relayMetricSums(metrics));
+  recordRelayTrafficHistory(relayMetricSums(metrics), Date.now(), persistPath);
   return result(200, {
     configured: true,
     fetchedAt: new Date().toISOString(),
@@ -224,7 +320,7 @@ export async function executeSystemObservationOperation({ operationId, input = {
   }
 
   if (id === "system.relay_traffic") {
-    return loadRelayTrafficMetrics();
+    return loadRelayTrafficMetrics(context);
   }
 
   const checkpointTreeApi: any = context.checkpointTreeApi;

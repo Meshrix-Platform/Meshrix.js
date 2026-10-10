@@ -171,7 +171,24 @@ monitoring stack): set `MESHRIX_RELAY_METRICS_URL` to the relay's
 `MESHRIX_RELAY_ADMIN_TOKEN` to the admin bearer credential when the
 endpoint requires one. `system.relay_traffic`
 (`GET /api/system/relay-traffic`) then returns the parsed series plus a
-bounded in-process history for the ops-monitor Relay 流量 panel.
+bounded in-process history for the ops-monitor Relay 流量 panel. The
+history ring is in-memory by default; set `MESHRIX_RELAY_TRAFFIC_PERSIST`
+to a file path to keep it across server restarts (`"1"` uses the default
+`<userDataPath>/relay-traffic-history.json`).
+
+### Counter persistence is a deployment choice (`RELAY_METRICS_DURABLE`)
+
+Durable counter writes are billed Durable Object storage writes. Workers
+mode therefore sets `RELAY_METRICS_DURABLE = "0"` in the staging profile —
+every counter stays on the in-memory tier, `flush()` becomes a guaranteed
+no-op and **zero counter writes reach DO SQLite**. The exposition and the
+counters endpoint keep serving real values, honestly labeled
+`scope="ephemeral"` (the scope label is the tier a value actually occupies;
+a durable-class counter routed to memory reports `ephemeral`, and
+previously persisted data keeps its `durable` label). Self-hosted and local
+shapes keep the default durable tier — the top-level `[vars]` deliberately
+leaves the var unset — and `"0"`/`"false"`/`"off"` (case-insensitive) are
+the recognized off values.
 
 ## Scripts
 

@@ -65,6 +65,12 @@ RELAY_MAX_VAULT_MESSAGE_BYTES = "1572864"
 RELAY_MAILBOX_CAPACITY_BYTES = "16777216"
 RELAY_MAILBOX_RETENTION_MS = "2592000000"
 RELAY_MAILBOX_MAX_ITEMS = "4096"
+# Workers mode never persists billing counters: every flushed counter write
+# is a billed Durable Object storage write, so counters stay in memory here
+# (zero counter writes to DO SQLite). The /admin/metrics exposition still
+# serves the real values, honestly labeled scope="ephemeral". Self-hosted
+# shapes keep the durable default (top-level [vars] intentionally unset).
+RELAY_METRICS_DURABLE = "0"
 # RELAY_ADMIN_TOKEN is intentionally absent here: a real deployment provides
 # it through `wrangler secret put` under authorized ownership; provisioning
 # tokens are never committed as vars.

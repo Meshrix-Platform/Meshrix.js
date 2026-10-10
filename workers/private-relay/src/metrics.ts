@@ -133,18 +133,34 @@ export function counterScope(key: RelayCounterKey): RelayCounterScope {
   return DURABLE_KEYS.includes(key) ? "durable" : "ephemeral";
 }
 
+export interface RelayCountersOptions {
+  /**
+   * Whether durable-tier keys flush to the object's SQLite storage
+   * (default `true`). When `false`, `count()` routes **every** key to the
+   * in-memory tier — honest semantics: disabled means nothing survives
+   * eviction, so no hidden durable map is kept. The durable map then keeps
+   * only whatever was loaded at construction, `dirty` is never set and
+   * `flush()` is a guaranteed no-op → zero counter writes to DO storage.
+   */
+  durable?: boolean;
+}
+
 export class RelayCounters {
   private durable: RelayCountersShape;
   private ephemeral: RelayCountersShape = emptyCounters();
   private dirty = false;
+  private readonly durableEnabled: boolean;
 
-  constructor(persisted?: Partial<RelayCountersShape> | null) {
+  constructor(persisted?: Partial<RelayCountersShape> | null, options?: RelayCountersOptions) {
+    // Previously persisted counters still load when present: disabling
+    // persistence freezes the durable tier rather than erasing history.
     this.durable = { ...emptyCounters(), ...(persisted ?? {}) };
+    this.durableEnabled = options?.durable !== false;
   }
 
   count(key: RelayCounterKey, amount: number = 1): void {
     if (!Number.isFinite(amount) || amount <= 0) return;
-    if (DURABLE_KEYS.includes(key)) {
+    if (this.durableEnabled && DURABLE_KEYS.includes(key)) {
       this.durable[key] += amount;
       this.dirty = true;
     } else {
@@ -257,25 +273,41 @@ function escapeLabelValue(value: string): string {
 
 /**
  * Render the text exposition format (`text/plain; version=0.0.4`): one
- * HELP/TYPE pair per counter, then every scraped object's sample under the
- * scope the counter actually lives in (`durable` keys report the
- * SQLite-flushed tier, `ephemeral` keys the in-memory tier). Samples carry
- * counts and opaque ids only.
+ * HELP/TYPE pair per counter, then every scraped object's samples labeled
+ * by the tier each value actually occupies. The `scope` label is derived
+ * from the scraped tier data itself — never a mode flag:
+ * - a durable-class key reports `scope="durable"` when the SQLite-flushed
+ *   tier holds its count (the normal durable deployment);
+ * - it reports `scope="ephemeral"` when a persistence-disabled object
+ *   routed the count to the in-memory tier — the same value, honestly
+ *   labeled as not surviving eviction;
+ * - an object that disabled persistence after accumulating durable data
+ *   can hold counts in both tiers for one key; both are emitted so the
+ *   previously persisted values stay visible;
+ * - an untouched counter reports its declared tier at 0.
+ * Samples carry counts and opaque ids only.
  */
 export function renderPrometheusExposition(samples: RelayMetricSample[]): string {
   const lines: string[] = [];
   for (const key of RELAY_COUNTER_KEYS) {
     const name = counterMetricName(key);
-    const scope = counterScope(key);
+    const declared = counterScope(key);
     lines.push(`# HELP ${name} ${COUNTER_HELP[key]}`);
     lines.push(`# TYPE ${name} counter`);
     for (const sample of samples) {
-      const value = scope === "durable" ? sample.durable[key] : sample.ephemeral[key];
       const { object, tenant, route, device } = sample.labels;
-      lines.push(
-        `${name}{object="${escapeLabelValue(object)}",tenant="${escapeLabelValue(tenant)}",`
-        + `route="${escapeLabelValue(route)}",device="${escapeLabelValue(device)}",scope="${scope}"} ${value}`,
-      );
+      const labels = `${name}{object="${escapeLabelValue(object)}",tenant="${escapeLabelValue(tenant)}",`
+        + `route="${escapeLabelValue(route)}",device="${escapeLabelValue(device)}"`;
+      if (declared === "ephemeral") {
+        lines.push(`${labels},scope="ephemeral"} ${sample.ephemeral[key]}`);
+        continue;
+      }
+      if (sample.durable[key] > 0 || sample.ephemeral[key] === 0) {
+        lines.push(`${labels},scope="durable"} ${sample.durable[key]}`);
+      }
+      if (sample.ephemeral[key] > 0) {
+        lines.push(`${labels},scope="ephemeral"} ${sample.ephemeral[key]}`);
+      }
     }
   }
   return `${lines.join("\n")}\n`;

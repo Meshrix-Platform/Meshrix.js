@@ -21,6 +21,12 @@ export interface PrivateRelayEnv {
   RELAY_MAILBOX_RETENTION_MS?: string;
   /** Deployment-selected bound on stored messages per partition. */
   RELAY_MAILBOX_MAX_ITEMS?: string;
+  /**
+   * `"0"`/`"false"`/`"off"` → billing counters never persist; every tier is
+   * kept ephemeral (zero counter writes to Durable Object SQLite storage).
+   * Any other value — including unset — keeps the durable tier.
+   */
+  RELAY_METRICS_DURABLE?: string;
 }
 
 declare global {
@@ -80,6 +86,21 @@ export function integerEnv(value: string | undefined, fallback: number, minimum:
   const parsed = Number.parseInt(value, 10);
   if (!Number.isSafeInteger(parsed)) return fallback;
   return Math.min(Math.max(parsed, minimum), maximum);
+}
+
+/**
+ * Whether billing counters keep a SQLite-flushed durable tier (default
+ * `true` — the self-hosted/local shape). `RELAY_METRICS_DURABLE` values
+ * `"0"`, `"false"` and `"off"` (case-insensitive) disable persistence: every
+ * counter is kept in memory only, so Workers-mode deployments perform zero
+ * counter writes into Durable Object storage — the values are never billed
+ * writes, and the exposition reports them under `scope="ephemeral"`.
+ */
+export function metricsDurableEnabled(env: PrivateRelayEnv): boolean {
+  const raw = env.RELAY_METRICS_DURABLE;
+  if (typeof raw !== "string" || !raw.trim()) return true;
+  const normalized = raw.trim().toLowerCase();
+  return normalized !== "0" && normalized !== "false" && normalized !== "off";
 }
 
 /**

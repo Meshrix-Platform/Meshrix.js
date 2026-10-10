@@ -15,7 +15,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { RELAY_RUNTIME_LIMITS } from "./env.ts";
+import { RELAY_RUNTIME_LIMITS, metricsDurableEnabled } from "./env.ts";
 import { jsonResponse, readBoundedJson } from "./http.ts";
 import { isOpaqueId, randomToken, sha256Hex } from "./ids.ts";
 import { RelayCounters } from "./metrics.ts";
@@ -59,7 +59,7 @@ const CRED_PREFIX = "cred:";
 
 export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
   private meta: DirectoryMeta | null = null;
-  private counters = new RelayCounters();
+  private counters = new RelayCounters(undefined, { durable: metricsDurableEnabled(this.env) });
 
   constructor(ctx: DurableObjectState, env: PrivateRelayEnv) {
     super(ctx, env);
@@ -70,7 +70,7 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
         ctx.storage.get("counters"),
       ]);
       if (meta) this.meta = meta;
-      if (counters) this.counters = new RelayCounters(counters as Record<string, number>);
+      if (counters) this.counters = new RelayCounters(counters as Record<string, number>, { durable: metricsDurableEnabled(this.env) });
     });
   }
 
