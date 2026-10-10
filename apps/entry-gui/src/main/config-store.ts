@@ -82,6 +82,12 @@ export interface EntryGuiConfig {
   readonly rotations: readonly StoredRotation[];
   readonly mcp: { readonly managedConfigPath: string | null };
   readonly pairingServiceDefault: string | null;
+  /**
+   * Opt-in peer messaging switch — non-secret fact only. `enabled:false` is
+   * the default; peer identities, sessions, outbox and inbox live under the
+   * owned `peer/` data directory, never in this document.
+   */
+  readonly peer: { readonly enabled: boolean };
 }
 
 export function emptyEntryGuiConfig(): EntryGuiConfig {
@@ -93,7 +99,8 @@ export function emptyEntryGuiConfig(): EntryGuiConfig {
     journal: null,
     rotations: [],
     mcp: { managedConfigPath: null },
-    pairingServiceDefault: null
+    pairingServiceDefault: null,
+    peer: { enabled: false }
   };
 }
 
@@ -246,7 +253,8 @@ export function parseEntryGuiConfig(value: unknown): EntryGuiConfig | null {
       ? value.rotations.map(parseRotation).filter((entry): entry is StoredRotation => entry !== null)
       : [],
     mcp: { managedConfigPath: boundedText(mcp.managedConfigPath, 1024) },
-    pairingServiceDefault: boundedText(value.pairingServiceDefault)
+    pairingServiceDefault: boundedText(value.pairingServiceDefault),
+    peer: { enabled: isRecord(value.peer) && value.peer.enabled === true }
   };
 }
 

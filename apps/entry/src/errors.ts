@@ -30,7 +30,11 @@ export type EntryErrorCode =
   | "pairing_state_invalid"
   | "recovery_state_invalid"
   | "rotation_state_invalid"
-  | "device_record_invalid";
+  | "device_record_invalid"
+  | "peer_disabled"
+  | "peer_identity_invalid"
+  | "peer_unavailable"
+  | "peer_message_invalid";
 
 export interface EntryError extends Error {
   readonly code: EntryErrorCode;

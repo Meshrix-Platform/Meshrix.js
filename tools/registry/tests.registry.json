@@ -3351,6 +3351,67 @@
         "packages/contracts/src/private-relay",
         "tests/vitest/peer-client"
       ]
+    },
+    {
+      "id": "peer.product-wiring",
+      "label": "Peer product wiring: endpoint+entry runtimes over the shared admitted session channel (admission gating, disabled blocks, Signal request/progress/result with honest receipts, disconnect/resume dedup, revocation refusal and per-connection store purge)",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/peer-integration/peer-product-wiring.test.ts"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry-gui/src/main",
+        "apps/entry-gui/src/shared",
+        "apps/mcp-gateway-installer/src/private-endpoint",
+        "packages/entry-transport",
+        "packages/peer-client",
+        "packages/peer-crypto",
+        "packages/contracts/src/private-relay",
+        "tests/vitest/peer-client",
+        "tests/vitest/peer-integration"
+      ]
+    },
+    {
+      "id": "peer.workerd-e2e",
+      "label": "Peer mailbox real Workerd E2E: two enrolled device identities exchange Signal-encrypted request/progress/result through a wrangler-dev private relay (resume, dedup, receipt honesty, revocation refusal, retention-gap tombstones)",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/peer-integration/peer-workerd-e2e.test.ts"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry-gui/src/main",
+        "apps/entry-gui/src/shared",
+        "apps/mcp-gateway-installer/src/private-endpoint",
+        "packages/entry-transport",
+        "packages/peer-client",
+        "packages/peer-crypto",
+        "packages/contracts/src/private-relay",
+        "tests/vitest/peer-client",
+        "tests/vitest/peer-integration",
+        "workers/private-relay"
+      ]
     }
   ]
 }

@@ -44,3 +44,17 @@ export {
   type EntryRecoveryChannelOptions,
   type EntryRecoveryRoundTripPort
 } from "./recovery-channel.ts";
+export {
+  createPeerSessionChannel,
+  isPeerSchemaMessage,
+  peerChannelNotAdmittedError,
+  peerGapView,
+  peerIdForRouteDevice,
+  peerInboxView,
+  peerOutboxView,
+  routePeerDirectory,
+  type PeerGapView,
+  type PeerInboxView,
+  type PeerOutboxView,
+  type PeerRouteScope
+} from "./peer-channel.ts";

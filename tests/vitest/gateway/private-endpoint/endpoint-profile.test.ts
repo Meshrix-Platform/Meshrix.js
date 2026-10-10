@@ -294,13 +294,13 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
 
 const CREDENTIAL_ENV = "MESHRIX_TEST_PRIVATE_RELAY_CREDENTIAL";
 
-async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  expect(predicate()).toBe(true);
+  expect(await predicate()).toBe(true);
 }
 
 interface Fixture {
@@ -1060,3 +1060,291 @@ async function connectPeer(url: string): Promise<PeerClient> {
     close: () => ws.close()
   };
 }
+
+// ---------------------------------------------------------------------------
+// Peer messaging wiring: the optional peer block activates EndpointPeerRuntime
+// on the SAME admitted session; peer-schema kinds ride the wire next to
+// session/recovery frames and the loopback admin listener exposes the
+// operator surface (status/inbox/send/ack-outcome/reconcile/sync/pair-safety).
+// ---------------------------------------------------------------------------
+
+import {
+  PRIVATE_RELAY_PEER_SCHEMA_VERSION,
+  createPeerAcked,
+  createPeerBundle,
+  createPeerBundlePublished,
+  createPeerMessages,
+  createPeerRetentionPolicy,
+  createPeerStatus
+} from "@meshrix/contracts/private-relay";
+import { loadPrivateEndpointConfig } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/config.ts";
+
+/** Answer every peer wire request like a cooperative mailbox would. */
+function peerAnsweringRelay(): RelayHooks {
+  const answer = (conn: TestWsConn, payload: Record<string, unknown>) => {
+    conn.send(JSON.stringify(payload));
+  };
+  return {
+    onAny(conn, message) {
+      if (message.schemaVersion !== PRIVATE_RELAY_PEER_SCHEMA_VERSION) return;
+      const routeId = String(message.routeId ?? "route.pr.1");
+      const deviceId = String(message.deviceId ?? "dev.pr.endpoint.1");
+      switch (message.kind) {
+        case "peer-bundle-publish": {
+          const bundle = message.bundle as { bundleId?: string; revision?: number } | undefined;
+          answer(conn, createPeerBundlePublished({
+            routeId, deviceId,
+            bundleId: String(bundle?.bundleId ?? "bundle.unknown"),
+            outcome: "published",
+            currentRevision: Number(bundle?.revision ?? 1),
+            refusal: null
+          }) as Record<string, unknown>);
+          return;
+        }
+        case "peer-bundle-fetch":
+          answer(conn, createPeerBundle({
+            routeId,
+            deviceId: String(message.peerDeviceId ?? deviceId),
+            state: "unpublished", bundle: null, refusal: null
+          }) as Record<string, unknown>);
+          return;
+        case "peer-fetch":
+          answer(conn, createPeerMessages({
+            routeId, deviceId,
+            messages: [],
+            nextAfterSeq: Number(message.afterSeq ?? 0),
+            more: false, gaps: []
+          }) as Record<string, unknown>);
+          return;
+        case "peer-ack": {
+          const received = Array.isArray(message.received) ? message.received as { messageId: string; position: number }[] : [];
+          const reports = Array.isArray(message.reports) ? message.reports as { kind: string; messageId: string; position: number; detail: string | null }[] : [];
+          answer(conn, createPeerAcked({
+            routeId, deviceId,
+            recorded: [
+              ...received.map((entry) => ({ kind: "received" as const, source: "recipient" as const, messageId: entry.messageId, position: entry.position, detail: null })),
+              ...reports.map((entry) => ({ kind: entry.kind, source: "agent" as const, messageId: entry.messageId, position: entry.position, detail: entry.detail ?? null }))
+            ],
+            refused: []
+          }) as Record<string, unknown>);
+          return;
+        }
+        case "peer-receipt": {
+          const messageIds = Array.isArray(message.messageIds) ? message.messageIds.map(String) : [];
+          answer(conn, createPeerStatus({
+            routeId, deviceId,
+            statuses: messageIds.map((messageId) => ({ messageId, position: 0, receipts: [] }))
+          }) as Record<string, unknown>);
+          return;
+        }
+        case "peer-retention-policy":
+          answer(conn, createPeerRetentionPolicy({
+            routeId, deviceId,
+            mailboxCapacityBytes: 16_777_216,
+            mailboxRetentionMs: 2_592_000_000,
+            mailboxMaxItems: 4_096
+          }) as Record<string, unknown>);
+          return;
+        default:
+          return;
+      }
+    }
+  };
+}
+
+describe("private endpoint peer wiring", () => {
+  const savedPeer = process.env[CREDENTIAL_ENV];
+  function withCredential<T>(fn: () => Promise<T>): Promise<T> {
+    process.env[CREDENTIAL_ENV] = "test-relay-credential";
+    return fn().finally(() => {
+      if (savedPeer === undefined) delete process.env[CREDENTIAL_ENV];
+      else process.env[CREDENTIAL_ENV] = savedPeer;
+    });
+  }
+
+  it("parses the peer block disabled-by-default, resolves storage and validates peerId", () => withCredential(async () => {
+    const absent = await writeFixture("wss://relay.example.invalid");
+    try {
+      const config = await loadPrivateEndpointConfig(absent.configPath);
+      expect(config.peer).toBeUndefined();
+    } finally {
+      await rm(absent.dir, { recursive: true, force: true });
+    }
+
+    const disabled = await writeFixture("wss://relay.example.invalid", { peer: { enabled: false } });
+    try {
+      const config = await loadPrivateEndpointConfig(disabled.configPath);
+      expect(config.peer).toBeUndefined();
+    } finally {
+      await rm(disabled.dir, { recursive: true, force: true });
+    }
+
+    const enabled = await writeFixture("wss://relay.example.invalid", { peer: { enabled: true } });
+    try {
+      const config = await loadPrivateEndpointConfig(enabled.configPath);
+      expect(config.peer?.storageDir).toBe(join(enabled.dir, "peer-state"));
+    } finally {
+      await rm(enabled.dir, { recursive: true, force: true });
+    }
+
+    const relative = await writeFixture("wss://relay.example.invalid", { peer: { enabled: true, storageDir: "peer-state-rel" } });
+    try {
+      const config = await loadPrivateEndpointConfig(relative.configPath);
+      expect(config.peer?.storageDir).toBe(join(relative.dir, "peer-state-rel"));
+    } finally {
+      await rm(relative.dir, { recursive: true, force: true });
+    }
+
+    const badPeerId = await writeFixture("wss://relay.example.invalid", { peer: { enabled: true, peerId: "peer id with spaces" } });
+    try {
+      await expect(loadPrivateEndpointConfig(badPeerId.configPath)).rejects.toMatchObject({ code: "private_endpoint_peer_invalid" });
+    } finally {
+      await rm(badPeerId.dir, { recursive: true, force: true });
+    }
+
+    const badEnabled = await writeFixture("wss://relay.example.invalid", { peer: { enabled: "yes" } });
+    try {
+      await expect(loadPrivateEndpointConfig(badEnabled.configPath)).rejects.toMatchObject({ code: "private_endpoint_peer_invalid" });
+    } finally {
+      await rm(badEnabled.dir, { recursive: true, force: true });
+    }
+  }));
+
+  it("serializes peer-schema messages onto the shared session channel", async () => {
+    const relay = await startFakeRelay();
+    try {
+      const transport = new RelayWebSocketTransport({ url: `${relay.url}/session/tenant.pr.1/route.pr.1` });
+      const received: Record<string, unknown>[] = [];
+      transport.setHandlers({ onMessage: (m) => received.push(m as Record<string, unknown>) });
+      expect(transport.connect()).toBe(true);
+      transport.send(createPeerRetentionPolicy({
+        routeId: "route.pr.1",
+        deviceId: "dev.pr.endpoint.1",
+        mailboxCapacityBytes: 1,
+        mailboxRetentionMs: 1,
+        mailboxMaxItems: 1
+      }) as Record<string, unknown>);
+      await waitFor(() => relay.seen.some((entry) => entry.message.kind === "peer-retention-policy"));
+      const seen = relay.seen.find((entry) => entry.message.kind === "peer-retention-policy")!.message;
+      expect(seen.schemaVersion).toBe(PRIVATE_RELAY_PEER_SCHEMA_VERSION);
+      transport.terminate();
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it("exposes the peer operator surface on the loopback admin listener", () => withCredential(async () => {
+    const relay = await startFakeRelay(peerAnsweringRelay());
+    const adminPort = await freePort();
+    const peerDir = "peer-state-fixture";
+    const fixture = await writeFixture(relay.url, {
+      admin: { listen: { host: "127.0.0.1", port: adminPort } },
+      peer: { enabled: true, storageDir: peerDir }
+    });
+    const identity = enrolledIdentity(fixture, ["dev.pr.endpoint.2"]);
+    const runtime = fakeRuntime();
+    const controller = new AbortController();
+    const lines: string[] = [];
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: identity,
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => runtime
+      });
+      await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
+      const surfacePeer = (parseSurfaces(lines).at(-1) as PrivateEndpointSurface).peer;
+      expect(surfacePeer.enabled).toBe(true);
+      expect(surfacePeer.peerId).toBe("peer:tenant.pr.1:route.pr.1:dev.pr.endpoint.1");
+
+      // The runtime really drove the wire: a bundle publish went out over
+      // the SAME admitted session the frames ride.
+      await waitFor(() => relay.seen.some((entry) => entry.message.kind === "peer-bundle-publish"));
+
+      const admin = async (route: string, init?: RequestInit) => {
+        const response = await fetch(`http://127.0.0.1:${adminPort}${route}`, init);
+        return { status: response.status, body: await response.json() as Record<string, unknown> };
+      };
+
+      // Policy pull and the initial bundle publish are asynchronous behind
+      // admission — poll the operator surface until both have landed.
+      let peerStatus!: { status: number; body: Record<string, unknown> };
+      await waitFor(async () => {
+        peerStatus = await admin("/peer/status");
+        if (peerStatus.status !== 200) return false;
+        const body = peerStatus.body as { retentionPolicy?: unknown; localBundle?: { revision: number } | null };
+        return body.retentionPolicy != null && (body.localBundle?.revision ?? 0) >= 1;
+      });
+      expect(peerStatus.body.enabled).toBe(true);
+      expect(peerStatus.body.peerId).toBe("peer:tenant.pr.1:route.pr.1:dev.pr.endpoint.1");
+      expect(peerStatus.body.sessionLive).toBe(true);
+      expect((peerStatus.body.retentionPolicy as { mailboxMaxItems: number }).mailboxMaxItems).toBe(4096);
+      expect((peerStatus.body.localBundle as { revision: number }).revision).toBeGreaterThanOrEqual(1);
+
+      const inbox = await admin("/peer/inbox");
+      expect(inbox.status).toBe(200);
+      expect(inbox.body.entries).toEqual([]);
+
+      // A send to an unpublished peer fails honestly through the real wire.
+      const send = await admin("/peer/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ peerDeviceId: "dev.pr.entry.9", text: "hello" })
+      });
+      expect(send.status).toBe(400);
+      expect(send.body.error).toBe("peer_client_bundle_unavailable");
+
+      const sync = await admin("/peer/sync", { method: "POST" });
+      expect(sync.status).toBe(200);
+      expect((sync.body as { cursor: number }).cursor).toBe(0);
+
+      const reconcile = await admin("/peer/reconcile", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({})
+      });
+      expect(reconcile.status).toBe(200);
+      expect(reconcile.body.reconciled).toBe(true);
+
+      // Safety evidence is never invented: an unobserved peer reports nulls.
+      const safety = await admin("/peer/pair-safety?peerDeviceId=dev.pr.entry.9");
+      expect(safety.status).toBe(200);
+      expect(safety.body.safetyNumber).toBeNull();
+
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }), 30_000);
+
+  it("answers peer_disabled on /peer routes when the block is absent", () => withCredential(async () => {
+    const relay = await startFakeRelay();
+    const adminPort = await freePort();
+    const fixture = await writeFixture(relay.url, { admin: { listen: { host: "127.0.0.1", port: adminPort } } });
+    const identity = enrolledIdentity(fixture, ["dev.pr.endpoint.2"]);
+    const controller = new AbortController();
+    const lines: string[] = [];
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: identity,
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => fakeRuntime()
+      });
+      // The admin listener binds before the first surface emission.
+      await waitFor(() => lines.length > 0);
+      const response = await fetch(`http://127.0.0.1:${adminPort}/peer/status`);
+      expect(response.status).toBe(404);
+      expect((await response.json() as { error: string }).error).toBe("peer_disabled");
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }), 30_000);
+});

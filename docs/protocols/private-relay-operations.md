@@ -125,6 +125,55 @@ admission/revocation/counter authority is preserved. A replayed or
 lower-generation reconnect is rejected with `authority_stale`/`expired` rather
 than reviving stale state.
 
+## Peer mailbox operations
+
+The peer mailbox kinds (`private-relay-peer.ts`, schema
+`v0.0.1:private-relay:peer-1`) ride the same credential-admitted `forward`
+session sockets as frame traffic — there is no second peer listener or
+connection to provision. Each `(tenantId, routeId, deviceId)` recipient
+partition is one SQLite-backed `MailboxDO`; peer requests are bound to the
+session identity and re-authorized against the directory per operation.
+
+**Deployment knobs** (`wrangler.toml` vars, clamped to
+`PRIVATE_RELAY_PEER_LIMITS`; advertised to devices as
+`peer-retention-policy` at session admission and re-served on pull):
+
+| Variable | Effect |
+| --- | --- |
+| `RELAY_MAILBOX_CAPACITY_BYTES` | Per-partition stored-envelope byte budget; send-time eviction of the oldest envelopes writes `capacity_truncated` gap tombstones |
+| `RELAY_MAILBOX_RETENTION_MS` | Envelope age bound; the partition alarm expires envelopes and writes `expired` tombstones |
+| `RELAY_MAILBOX_MAX_ITEMS` | Per-partition item count bound; enforced with capacity eviction |
+
+**Peer wire failure surface.** Refusals are typed where the response shape
+allows: `peer-bundle-published`/`peer-bundle`/`peer-acked` carry
+`PRIVATE_RELAY_PEER_REFUSALS` / `PRIVATE_RELAY_PEER_ACK_REFUSALS` values
+(`unpaired`, `revoked`, `format_unsupported`, …); `peer-send` reports
+`accepted` / `duplicate` / `conflict` and a revoked or unpaired send is
+dropped — the sender reconciles honestly through `peer-status` (position
+`0`, empty receipts), never through an invented acceptance. A revoked
+device's session socket is closed by the directory path, so peer requests
+from it cannot reach a partition. Retention loss is observable, never
+silent: `peer-messages.gaps` carries `{fromSeq, toSeq, cause, messageIds}`
+tombstones and `peer-status` answers evicted ids with position `0`.
+
+**Client-side surface.** `createPeerSessionChannel` gates outbound peer
+requests on live session admission (`peer_channel_not_admitted` when down);
+durable outbox entries stay `pending` rather than fabricating positions.
+Endpoint operators use the loopback admin routes under `/peer/`; the entry
+product exposes `peer.*` ops through its authenticated loopback API. Both
+surfaces are record-only and require explicit application-outcome calls —
+see the product-surfaces section of
+[the wire protocol](private-relay.md#peer-messaging-mailbox) and the
+respective app READMEs for the exact routes and ops.
+
+**Verification suites** (`tools/registry/tests.registry.json`):
+`workers.private-relay-workerd` covers mailbox runtime semantics on real
+local Workerd; `peer.product-wiring` covers endpoint/entry runtime wiring
+against a scripted relay; `peer.workerd-e2e` runs two enrolled device
+identities exchanging Signal-encrypted request/progress/result through a
+real `wrangler dev` relay including disconnect-resume, dedup, receipt
+honesty, revoked-device refusal and retention-gap visibility.
+
 ## Capability and cost honesty
 
 - **Runtime**: three SQLite-backed Durable Objects behind one Worker. Accepted

@@ -65,6 +65,7 @@ import {
   createEntryMcpBridge,
   createEntryRecoveryChannel,
   createWssRelayTransport,
+  isPeerSchemaMessage,
   type EntryMcpBridge,
   type EntryRecoveryChannelOptions,
   type EntryRecoveryRoundTripPort,
@@ -91,6 +92,7 @@ import { custodyDeviceSigner, issueDeviceCertificate } from "./device-cert.ts";
 import { HttpPairingChannel, type PairingEnrollmentExtras } from "./pairing-channel.ts";
 import { buildMcpStdioSnippet, managedMcpConfigPath, writeManagedMcpConfig } from "./mcp-config.ts";
 import { ownedPathsFor, type EntryLifecyclePaths } from "./lifecycle.ts";
+import { EntryPeerRuntime, peerStoreDirFor } from "./peer.ts";
 
 /** The endpoint admin surface: pairing exchange plus the recovery-access provisioning seam. */
 export interface PairingChannelLike extends PairingEndpointPort {
@@ -355,6 +357,8 @@ export class EntryProductService {
   #pendingRecovery: PendingRecoverySecret | null = null;
   #recoveryMaterial: RecoveryMaterial | null = null;
   #sessions = new Map<string, LiveSession>();
+  /** Per-connection peer messaging runtimes — created only when `config.peer.enabled`. */
+  #peers = new Map<string, EntryPeerRuntime>();
   /** Recovery channels with in-flight exchanges — closed on stop so nothing pends forever. */
   #openRecoveryChannels = new Set<RecoveryChannelLike>();
   #rotationManager!: RecoveryRotationManager;
@@ -446,6 +450,12 @@ export class EntryProductService {
     // before creating a channel, so nothing joins the set after it is closed.
     this.#started = false;
     this.#apply({ type: "lifecycle.state", state: "stopping" });
+    // Detach peer channels first: a session close mid-teardown must never
+    // still route wire messages into a runtime that is going away.
+    for (const peer of this.#peers.values()) {
+      try { await peer.close(); } catch { /* best-effort */ }
+    }
+    this.#peers.clear();
     for (const live of this.#sessions.values()) {
       try { live.session.close("normal"); } catch { /* best-effort */ }
       try { live.transport.close(); } catch { /* best-effort */ }
@@ -485,7 +495,9 @@ export class EntryProductService {
       const value = await this.#dispatch(op, args);
       return { ok: true, value };
     } catch (error) {
-      const code = isEntryError(error) ? String(error.code) : "unexpected";
+      // Typed codes survive honestly: entry codes, peer-client/peer-crypto
+      // codes and the peer-channel gate code all carry `error.code`.
+      const code = errorCode(error);
       return { ok: false, error: { code, message: (error as Error).message } };
     }
   }
@@ -527,6 +539,29 @@ export class EntryProductService {
           recoveryText: String(a.recoveryText ?? ""),
           serviceUrl: typeof a.serviceUrl === "string" ? a.serviceUrl : undefined
         });
+      case "peer.status":
+        return this.peerStatus(String(a.connectionId ?? ""));
+      case "peer.send":
+        return this.peerSend({
+          connectionId: String(a.connectionId ?? ""),
+          peerDeviceId: String(a.peerDeviceId ?? ""),
+          text: typeof a.text === "string" ? a.text : undefined,
+          plaintextBase64url: typeof a.plaintextBase64url === "string" ? a.plaintextBase64url : undefined,
+          messageId: typeof a.messageId === "string" ? a.messageId : undefined
+        });
+      case "peer.inbox":
+        return this.peerInbox(String(a.connectionId ?? ""), a.limit === undefined ? undefined : Number(a.limit));
+      case "peer.sync":
+        return this.peerSync(String(a.connectionId ?? ""));
+      case "peer.ackOutcome":
+        return this.peerAckOutcome({
+          connectionId: String(a.connectionId ?? ""),
+          messageId: String(a.messageId ?? ""),
+          outcome: a.outcome as "accepted_by_agent" | "completed" | "rejected",
+          detailBase64url: typeof a.detailBase64url === "string" ? a.detailBase64url : undefined
+        });
+      case "peer.pairSafety":
+        return this.peerPairSafety({ connectionId: String(a.connectionId ?? ""), peerDeviceId: String(a.peerDeviceId ?? "") });
       case "mcp.snippet":
         return this.mcpSnippet();
       case "mcp.writeConfig":
@@ -699,7 +734,18 @@ export class EntryProductService {
       ?? new EntryRelaySession(sessionOptions);
     const bridge = createEntryMcpBridge({ session });
     this.#sessions.set(connectionId, { session, transport, bridge });
-    attachTransport(transport, session);
+    // Optional peer runtime: a store fault never blocks the relay session —
+    // peer ops report the error honestly instead of wedging the connection.
+    let peer: EntryPeerRuntime | null = null;
+    try {
+      peer = await this.#peerRuntimeFor(stored);
+    } catch (error) {
+      this.#notice(`Peer messaging failed to initialize for ${connectionId}: ${errorCode(error)}.`);
+    }
+    if (peer) {
+      peer.attachChannel((message) => transport.send(message));
+    }
+    attachTransport(transport, session, peer);
 
     // connect() resolves only when the pinned inner channel is live; an
     // offline endpoint leaves the session admitted-but-unlinked — the view
@@ -731,11 +777,20 @@ export class EntryProductService {
     this.#requireStarted();
     const stored = this.#requireConnection(input.connectionId);
     const live = this.#sessions.get(input.connectionId);
+    const peer = this.#peers.get(input.connectionId);
+    if (peer) {
+      try { await peer.close(); } catch { /* best-effort */ }
+      this.#peers.delete(input.connectionId);
+    }
     try { live?.session.close("normal"); } catch { /* dead */ }
     try { live?.transport.close(); } catch { /* dead */ }
     this.#sessions.delete(input.connectionId);
-    // Only entry-owned refs are deleted — custody files under entry-gui.*
-    // and the config record. Nothing outside the owned boundary is touched.
+    // Only entry-owned refs are deleted — custody files under entry-gui.*,
+    // the per-connection peer store and the config record. Nothing outside
+    // the owned boundary is touched.
+    if (peer || this.#store.config.peer.enabled) {
+      await EntryPeerRuntime.removeStore(peerStoreDirFor(this.paths().dataDir, input.connectionId)).catch(() => undefined);
+    }
     await deleteDeviceKey({ custody: this.#custody, deviceId: stored.deviceId });
     await this.#custody.deleteSecret({ ref: stored.relayCredentialRef }).catch(() => undefined);
 
@@ -1210,6 +1265,90 @@ export class EntryProductService {
   }
 
   /* ---------------------------------------------------------------- */
+  /* Peer messaging — opt-in durable Signal-encrypted mailbox channel   */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * The peer runtime for a connection — created lazily so `peer.status` /
+   * `peer.inbox` answer even before the first live session. Disabled peers
+   * refuse with `peer_disabled`; a runtime that failed to initialize earlier
+   * surfaces the honest error rather than a phantom "ok".
+   */
+  async #peerRuntimeFor(stored: StoredConnection): Promise<EntryPeerRuntime> {
+    if (!this.#store.config.peer.enabled) {
+      throw entryError("peer_disabled", "Peer messaging is disabled; enable it in the entry configuration to use peer ops.");
+    }
+    const existing = this.#peers.get(stored.connectionId);
+    if (existing) return existing;
+    const runtime = await EntryPeerRuntime.create({
+      storeDir: peerStoreDirFor(this.paths().dataDir, stored.connectionId),
+      route: {
+        tenantId: stored.tenantId,
+        routeId: stored.routeId,
+        deviceId: stored.deviceId
+      }
+    });
+    this.#peers.set(stored.connectionId, runtime);
+    // If a session is already admitted, the runtime must not miss the gate.
+    const live = this.#sessions.get(stored.connectionId);
+    if (live) {
+      runtime.attachChannel((message) => live.transport.send(message));
+      if (live.session.state === "admitted" || live.session.state === "streaming") {
+        runtime.onSessionAdmitted();
+      }
+    }
+    return runtime;
+  }
+
+  async #requirePeerRuntime(connectionId: string): Promise<{ stored: StoredConnection; runtime: EntryPeerRuntime }> {
+    this.#requireStarted();
+    const stored = this.#requireConnection(connectionId);
+    return { stored, runtime: await this.#peerRuntimeFor(stored) };
+  }
+
+  async peerStatus(connectionId: string) {
+    const { runtime } = await this.#requirePeerRuntime(connectionId);
+    return runtime.status();
+  }
+
+  async peerSend(input: {
+    readonly connectionId: string;
+    readonly peerDeviceId: string;
+    readonly text?: string;
+    readonly plaintextBase64url?: string;
+    readonly messageId?: string;
+  }) {
+    const { runtime } = await this.#requirePeerRuntime(input.connectionId);
+    return runtime.sendMessage(input);
+  }
+
+  async peerInbox(connectionId: string, limit?: number) {
+    const { runtime } = await this.#requirePeerRuntime(connectionId);
+    return { entries: await runtime.inbox(limit ?? 64) };
+  }
+
+  /** Explicit mailbox pull — the fetch op; pushes also arrive unsolicited. */
+  async peerSync(connectionId: string) {
+    const { runtime } = await this.#requirePeerRuntime(connectionId);
+    return runtime.sync();
+  }
+
+  async peerAckOutcome(input: {
+    readonly connectionId: string;
+    readonly messageId: string;
+    readonly outcome: "accepted_by_agent" | "completed" | "rejected";
+    readonly detailBase64url?: string;
+  }) {
+    const { runtime } = await this.#requirePeerRuntime(input.connectionId);
+    return runtime.reportOutcome(input);
+  }
+
+  async peerPairSafety(input: { readonly connectionId: string; readonly peerDeviceId: string }) {
+    const { runtime } = await this.#requirePeerRuntime(input.connectionId);
+    return runtime.pairSafety(input.peerDeviceId);
+  }
+
+  /* ---------------------------------------------------------------- */
   /* MCP setup                                                          */
   /* ---------------------------------------------------------------- */
 
@@ -1452,7 +1591,11 @@ function pairingOutcomePhase(state: PairingState): Exclude<GuiPairingPhase, "idl
 }
 
 function errorCode(error: unknown): string {
-  return isEntryError(error) ? String(error.code) : (error as Error).name;
+  if (isEntryError(error)) return String(error.code);
+  // Peer-client/crypto and channel errors all carry a stable string `code`.
+  const tagged = (error as { code?: unknown }).code;
+  if (typeof tagged === "string" && tagged) return tagged;
+  return "unexpected";
 }
 
 function rawEd25519Public(privateKey: KeyObject): Uint8Array {
@@ -1460,10 +1603,34 @@ function rawEd25519Public(privateKey: KeyObject): Uint8Array {
   return new Uint8Array(raw);
 }
 
-/** Wire the transport's delivery callbacks onto the session (handles both shapes). */
-function attachTransport(transport: EntryTransportLike, session: EntrySessionLike): void {
-  const onMessage = (message: Readonly<Record<string, unknown>>) => session.handleMessage(message);
-  const onClose = () => session.handleTransportClose();
+/**
+ * Wire the transport's delivery callbacks onto the session (handles both
+ * shapes). Peer-schema messages demux to the peer runtime BEFORE the session
+ * driver: they are request/response kinds on the same admitted channel and
+ * the session layer must never interpret them. Admission/close transitions
+ * open and close the peer channel gate so sends never ride a dead session.
+ */
+function attachTransport(transport: EntryTransportLike, session: EntrySessionLike, peer?: EntryPeerRuntime | null): void {
+  const onMessage = (message: Readonly<Record<string, unknown>>) => {
+    if (peer && isPeerSchemaMessage(message)) {
+      peer.handleInbound(message);
+      return;
+    }
+    const kind = session.handleMessage(message);
+    if (peer) {
+      const state = session.state;
+      if ((kind === "session-admitted" || kind === "session-restored")
+        && (state === "admitted" || state === "streaming")) {
+        peer.onSessionAdmitted();
+      } else if ((kind === "session-close" && state === "closed") || kind === "session-rejected") {
+        peer.onSessionClosed();
+      }
+    }
+  };
+  const onClose = () => {
+    peer?.onSessionClosed();
+    session.handleTransportClose();
+  };
   if (transport.handlers) {
     transport.handlers.onMessage = onMessage;
     transport.handlers.onSocketClose = () => onClose();

@@ -9,6 +9,7 @@ import {
   parseEndpointTrustBinding,
   parseRelayAdmissionBinding
 } from "@meshrix/contracts/private-relay";
+import { PEER_ID_PATTERN } from "@meshrix/peer-crypto";
 import type { RelayAdmissionInput } from "@meshrix/gateway/private-endpoint";
 
 /**
@@ -76,6 +77,26 @@ export interface PrivateEndpointConfig {
   };
   /** Optional loopback-only admin/state listener (direct local control channel). */
   readonly adminListen?: { readonly host: string; readonly port: number };
+  /** Opt-in peer messaging block — absent (or disabled) means the peer stack is never started. */
+  readonly peer?: PrivateEndpointPeerConfig;
+}
+
+/**
+ * Endpoint-side peer messaging configuration (`"peer"` section).
+ *
+ *  - `enabled` — must be literally `true` to activate; every other shape is
+ *    either a disabled block or a configuration error.
+ *  - `storageDir` — durable peer state root (Signal crypto store + client
+ *    outbox/inbox), resolved relative to the config file. Default
+ *    `<configDir>/peer-state`. Owner-only permissions are enforced by the
+ *    file stores at creation.
+ *  - `peerId` — optional explicit crypto peer id. The default derives
+ *    `peer:<tenantId>:<routeId>:<deviceId>` from the admission identity so a
+ *    remote operator can predict and verify the binding out of band.
+ */
+export interface PrivateEndpointPeerConfig {
+  readonly storageDir: string;
+  readonly peerId?: string;
 }
 
 function boundedOpaqueId(value: unknown, label: string): string {
@@ -319,6 +340,36 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
     adminListen = Object.freeze({ host, port });
   }
 
+  // --- optional peer messaging ---------------------------------------------
+  const peerSection = provided.peer;
+  let peerConfig: PrivateEndpointPeerConfig | undefined;
+  if (peerSection !== undefined) {
+    if (!record(peerSection)) {
+      throw endpointConfigError("private_endpoint_peer_invalid", "The peer section must be an object.");
+    }
+    if (peerSection.enabled !== undefined && peerSection.enabled !== true && peerSection.enabled !== false) {
+      throw endpointConfigError("private_endpoint_peer_invalid", "peer.enabled must be a boolean.");
+    }
+    if (peerSection.enabled === true) {
+      const storageDir = peerSection.storageDir === undefined
+        ? resolve(baseDir, "peer-state")
+        : (() => {
+            if (typeof peerSection.storageDir !== "string" || !peerSection.storageDir) {
+              throw endpointConfigError("private_endpoint_peer_invalid", "peer.storageDir must be a non-empty path.");
+            }
+            return isAbsolute(peerSection.storageDir) ? peerSection.storageDir : resolve(baseDir, peerSection.storageDir);
+          })();
+      let peerId: string | undefined;
+      if (peerSection.peerId !== undefined) {
+        if (typeof peerSection.peerId !== "string" || !PEER_ID_PATTERN.test(peerSection.peerId)) {
+          throw endpointConfigError("private_endpoint_peer_invalid", "peer.peerId must satisfy the peer identifier contract.");
+        }
+        peerId = peerSection.peerId;
+      }
+      peerConfig = Object.freeze({ storageDir, ...(peerId ? { peerId } : {}) });
+    }
+  }
+
   return Object.freeze({
     relayBaseUrl: base,
     sessionUrl: `${base.origin}${base.pathname === "/" ? "" : base.pathname.replace(/\/$/u, "")}/session/${admission.tenantId}/${admission.routeId}`,
@@ -329,6 +380,7 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
     recovery: Object.freeze({ authorities: Object.freeze(authorities), ...(signingKey ? { signingKey } : {}) }),
     gatewayConfigPath,
     reconnect: Object.freeze({ initialDelayMs, maxDelayMs }),
-    ...(adminListen ? { adminListen } : {})
+    ...(adminListen ? { adminListen } : {}),
+    ...(peerConfig ? { peer: peerConfig } : {})
   });
 }

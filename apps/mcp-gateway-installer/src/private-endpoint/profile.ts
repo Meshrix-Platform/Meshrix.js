@@ -1,7 +1,7 @@
 import { createPrivateKey, createPublicKey, sign as cryptoSign, verify as cryptoVerify } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AuthenticatedContext, CatalogDescriptor, Gateway, GatewayOutcome, PermitAuthorityPort } from "@meshrix/contracts/gateway";
-import { createInnerDispatchLoop, type InnerDispatchLoop } from "@meshrix/entry-transport";
+import { createInnerDispatchLoop, isPeerSchemaMessage, type InnerDispatchLoop } from "@meshrix/entry-transport";
 import {
   createEndpointIdentityStore,
   createPrivateGatewayEndpoint,
@@ -15,6 +15,7 @@ import {
 } from "@meshrix/gateway/private-endpoint";
 import { createRuntime, loadConfig, version as packageVersion, type RuntimeConfig } from "../cli.ts";
 import { endpointConfigError, loadPrivateEndpointConfig } from "./config.ts";
+import { EndpointPeerRuntime } from "./peer.ts";
 import { RelayWebSocketTransport, type RelaySocketFactory } from "./transport.ts";
 
 /**
@@ -164,6 +165,8 @@ export interface PrivateEndpointSurface {
   readonly operationsTracked: number;
   readonly endpointRestarts: number;
   readonly droppedOutboundMessages: number;
+  /** Peer messaging block — `enabled:false` when the optional peer config is absent. */
+  readonly peer: { readonly enabled: boolean; readonly peerId: string | null; readonly live: boolean };
 }
 
 /** Validate a private-endpoint configuration without connecting anywhere. */
@@ -191,7 +194,10 @@ export async function checkPrivateEndpoint(options: { readonly config?: string }
     }),
     relay: Object.freeze({ host: config.relayBaseUrl.host, secure: config.relayBaseUrl.protocol === "wss:" }),
     services: gateway.services.length,
-    recoveryAuthorities: config.recovery.authorities.length
+    recoveryAuthorities: config.recovery.authorities.length,
+    peer: config.peer
+      ? Object.freeze({ enabled: true, peerId: config.peer.peerId ?? null, storageDir: config.peer.storageDir })
+      : Object.freeze({ enabled: false })
   });
 }
 
@@ -273,6 +279,29 @@ export async function servePrivateEndpointProfile(
 
   let admission = config.admission;
   let endpoint = buildEndpoint(admission);
+
+  // --- optional peer messaging ----------------------------------------------
+  // The peer runtime shares the SAME admitted forward session: outbound peer
+  // requests ride `transport.send` behind an admission gate reading the live
+  // endpoint binding, and inbound peer-schema messages are demuxed in
+  // `onRelayMessage` before the session driver ever sees them. Absent config
+  // means the stack is never started and peer kinds are ignored by contract.
+  const peer = config.peer === undefined
+    ? null
+    : await EndpointPeerRuntime.create({
+        peer: config.peer,
+        route: {
+          tenantId: config.admission.tenantId,
+          routeId: config.admission.routeId,
+          deviceId: config.admission.deviceId
+        },
+        send: (message) => transport.send(message),
+        sessionLive: () => {
+          const state = endpoint.session.state;
+          return state === "admitted" || state === "streaming";
+        }
+      });
+
   let endpointRestarts = 0;
   let lastAdmitted: { admittedGeneration: number; revocationRevision: number } | null = null;
   let terminal: { outcome: PrivateEndpointServeResult["outcome"]; code: string; detail: string } | undefined;
@@ -334,7 +363,12 @@ export async function servePrivateEndpointProfile(
       recoveryAuthorities: Object.freeze(identity.recoveryAuthorities().map((record) => Object.freeze({ recoveryKeyId: record.recoveryKeyId, state: record.state, generation: record.generation }))),
       operationsTracked: endpoint.operationRecovery.ledger.size(),
       endpointRestarts,
-      droppedOutboundMessages: transport.droppedSends
+      droppedOutboundMessages: transport.droppedSends,
+      peer: Object.freeze({
+        enabled: peer !== null,
+        peerId: peer?.peerId ?? null,
+        live: peer !== null && (endpoint.session.state === "admitted" || endpoint.session.state === "streaming")
+      })
     });
   }
 
@@ -394,6 +428,13 @@ export async function servePrivateEndpointProfile(
   }
 
   function onRelayMessage(message: unknown): void {
+    // Peer mailbox kinds never reach the session driver — they are
+    // request/response traffic on the same admitted channel and land on the
+    // peer client's own parser/correlator.
+    if (isPeerSchemaMessage(message)) {
+      peer?.handleInbound(message);
+      return;
+    }
     const kind = typeof message === "object" && message !== null && !Array.isArray(message)
       ? (message as { kind?: unknown }).kind
       : undefined;
@@ -403,6 +444,7 @@ export async function servePrivateEndpointProfile(
     endpoint.handleRelayMessage(message);
     const sessionState = endpoint.session.state;
     if (kind === "session-admitted" && (sessionState === "admitted" || sessionState === "streaming")) {
+      peer?.onSessionLive();
       reconnectAttempts = 0;
       lastAdmitted = {
         admittedGeneration: Number((message as { admittedGeneration?: unknown }).admittedGeneration ?? 0),
@@ -410,7 +452,9 @@ export async function servePrivateEndpointProfile(
       };
     } else if (kind === "session-restored" && sessionState === "admitted") {
       reconnectAttempts = 0;
+      peer?.onSessionLive();
     } else if (kind === "session-rejected" && sessionState === "rejected") {
+      peer?.onSessionDown();
       const reason = String((message as { reason?: unknown }).reason ?? "unknown");
       const retryable = (message as { retryable?: unknown }).retryable === true;
       const expected = Number((message as { expectedRevocationRevision?: unknown }).expectedRevocationRevision);
@@ -428,6 +472,7 @@ export async function servePrivateEndpointProfile(
         terminal = { outcome: "rejected", code: "private_endpoint_admission_rejected", detail: reason };
       }
     } else if (kind === "session-close" && sessionState === "closed") {
+      peer?.onSessionDown();
       const closeReason = String((message as { reason?: unknown }).reason ?? "");
       if (closeReason === "revoked") {
         terminal = { outcome: "revoked", code: "private_endpoint_revoked", detail: "The relay closed the session as revoked." };
@@ -444,6 +489,7 @@ export async function servePrivateEndpointProfile(
   }
 
   function onSocketDown(detail: { hadOpened: boolean }): void {
+    peer?.onSessionDown();
     const state = endpoint.session.state;
     if (state === "admitted" || state === "streaming" || state === "open_sent") {
       // Preserve cursors for an honest reconnect; the session-close this emits
@@ -475,6 +521,7 @@ export async function servePrivateEndpointProfile(
     if (reconnectTimer !== undefined) cancelSchedule(reconnectTimer);
     for (const loop of innerLoops) loop.close();
     innerLoops.clear();
+    if (peer) await peer.close().catch(() => {});
     try {
       endpoint.close("normal");
     } catch { /* closing is best-effort */ }
@@ -489,19 +536,134 @@ export async function servePrivateEndpointProfile(
   }
 
   // --- optional loopback admin/state surface ------------------------------
+  const sendJson = (response: ServerResponse, status: number, body: unknown): void => {
+    const payload = JSON.stringify(body ?? null);
+    response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(payload) });
+    response.end(payload);
+  };
+  const readJsonBody = (request: IncomingMessage, maxBytes = 256 * 1024): Promise<unknown> => new Promise((resolvePromise, rejectPromise) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    request.on("data", (chunk: Buffer) => {
+      size += chunk.byteLength;
+      if (size > maxBytes) {
+        rejectPromise(Object.assign(new Error("request body too large"), { statusCode: 413 }));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      try {
+        resolvePromise(chunks.length === 0 ? {} : JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        rejectPromise(Object.assign(new Error("request body is not valid JSON"), { statusCode: 400 }));
+      }
+    });
+    request.on("error", rejectPromise);
+  });
+
+  /**
+   * Loopback admin routes — the endpoint operator surface.
+   * Peer ops exist only when `peer.enabled` activated the runtime; disabled
+   * peers answer 404 `peer_disabled` rather than a generic not-found.
+   */
+  async function handleAdminRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const route = (request.url ?? "").split("?")[0];
+    if (route === "/status" && request.method === "GET") {
+      sendJson(response, 200, surface());
+      return;
+    }
+    if (route === "/healthz" && request.method === "GET") {
+      sendJson(response, 200, { status: stopping ? "stopping" : "ok" });
+      return;
+    }
+    if (route.startsWith("/peer/")) {
+      if (peer === null) {
+        sendJson(response, 404, { error: "peer_disabled", message: "Peer messaging is not enabled in this endpoint configuration." });
+        return;
+      }
+      try {
+        if (route === "/peer/status" && request.method === "GET") {
+          sendJson(response, 200, await peer.status());
+          return;
+        }
+        if (route === "/peer/inbox" && request.method === "GET") {
+          const query = new URL(request.url ?? "", "http://loopback.invalid");
+          const limit = query.searchParams.get("limit");
+          sendJson(response, 200, { entries: await peer.inbox(limit === null ? 64 : Number(limit)) });
+          return;
+        }
+        if (route === "/peer/pair-safety" && request.method === "GET") {
+          const query = new URL(request.url ?? "", "http://loopback.invalid");
+          const peerDeviceId = query.searchParams.get("peerDeviceId") ?? "";
+          if (!peerDeviceId) {
+            sendJson(response, 400, { error: "peer_device_required", message: "pair-safety requires ?peerDeviceId=" });
+            return;
+          }
+          sendJson(response, 200, await peer.pairSafety(peerDeviceId));
+          return;
+        }
+        if (request.method === "POST") {
+          let body: unknown;
+          try {
+            body = await readJsonBody(request);
+          } catch (error) {
+            sendJson(response, (error as { statusCode?: number }).statusCode ?? 400, { error: "peer_request_invalid", message: (error as Error).message });
+            return;
+          }
+          const args = (body ?? {}) as Record<string, unknown>;
+          if (route === "/peer/send") {
+            const entry = await peer.sendMessage({
+              peerDeviceId: String(args.peerDeviceId ?? ""),
+              text: typeof args.text === "string" ? args.text : undefined,
+              plaintextBase64url: typeof args.plaintextBase64url === "string" ? args.plaintextBase64url : undefined,
+              messageId: typeof args.messageId === "string" ? args.messageId : undefined
+            });
+            sendJson(response, 200, entry);
+            return;
+          }
+          if (route === "/peer/ack-outcome") {
+            const result = await peer.reportOutcome({
+              messageId: String(args.messageId ?? ""),
+              outcome: args.outcome as "accepted_by_agent" | "completed" | "rejected",
+              detailBase64url: typeof args.detailBase64url === "string" ? args.detailBase64url : undefined
+            });
+            sendJson(response, 200, result);
+            return;
+          }
+          if (route === "/peer/reconcile") {
+            const messageIds = Array.isArray(args.messageIds) ? args.messageIds.map(String) : undefined;
+            await peer.client.reconcile(messageIds);
+            sendJson(response, 200, { reconciled: true, messageIds: messageIds ?? null });
+            return;
+          }
+          if (route === "/peer/sync") {
+            sendJson(response, 200, await peer.sync());
+            return;
+          }
+        }
+        sendJson(response, 404, { error: "peer_route_unknown" });
+      } catch (error) {
+        const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "peer_failed";
+        sendJson(response, 400, { error: code, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+    sendJson(response, 404, { error: "route_unknown" });
+  }
+
   if (config.adminListen) {
     adminServer = createServer((request, response) => {
-      if (request.url === "/status" && request.method === "GET") {
-        response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-        response.end(`${JSON.stringify(surface())}\n`);
-        return;
-      }
-      if (request.url === "/healthz" && request.method === "GET") {
-        response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-        response.end(JSON.stringify({ status: stopping ? "stopping" : "ok" }));
-        return;
-      }
-      response.writeHead(404).end();
+      void handleAdminRequest(request, response).catch((error: unknown) => {
+        if (!response.headersSent) {
+          const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "internal_error";
+          response.writeHead(500, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+          response.end(JSON.stringify({ error: code }));
+          return;
+        }
+        response.end();
+      });
     });
     await new Promise<void>((resolve, reject) => {
       adminServer!.once("error", reject);

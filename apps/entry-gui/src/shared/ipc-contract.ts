@@ -67,6 +67,12 @@ export const GUI_OPS = Object.freeze([
   "recovery.importText",
   "mcp.snippet",
   "mcp.writeConfig",
+  "peer.status",
+  "peer.send",
+  "peer.inbox",
+  "peer.sync",
+  "peer.ackOutcome",
+  "peer.pairSafety",
   "lifecycle.ownedPaths",
   "app.stop"
 ] as const);
@@ -90,6 +96,38 @@ export interface ConnectionArgs {
 export interface ConnectionRevokeArgs extends ConnectionArgs {
   /** Best-effort remote revocation through the pairing surface. */
   readonly remote?: boolean;
+}
+
+/**
+ * Peer messaging op args. `peerDeviceId` is the counterparty's wire device
+ * id — the crypto peer binding is derived locally, never supplied by the
+ * caller. The payload is exactly one of `text` (UTF-8) or
+ * `plaintextBase64url`. `peer.ackOutcome` records an EXPLICIT application
+ * receipt (`accepted_by_agent` | `completed` | `rejected`): evidence
+ * supplied by the operator or local agent, never derived from mailbox
+ * acknowledgements — the receipt honesty invariant forbids it.
+ */
+export interface PeerStatusArgs extends ConnectionArgs {}
+
+export interface PeerSendArgs extends ConnectionArgs {
+  readonly peerDeviceId: string;
+  readonly text?: string;
+  readonly plaintextBase64url?: string;
+  readonly messageId?: string;
+}
+
+export interface PeerInboxArgs extends ConnectionArgs {
+  readonly limit?: number;
+}
+
+export interface PeerAckOutcomeArgs extends ConnectionArgs {
+  readonly messageId: string;
+  readonly outcome: "accepted_by_agent" | "completed" | "rejected";
+  readonly detailBase64url?: string;
+}
+
+export interface PeerPairSafetyArgs extends ConnectionArgs {
+  readonly peerDeviceId: string;
 }
 
 export interface RecoveryImportArgs {

@@ -267,6 +267,52 @@ authority path).
   the oldest envelopes at send time. Both write tombstones; `peer-status`
   reconciles truncated ids as position `0` with empty receipts.
 
+### Product surfaces (`NODE-PEER-INTEGRATION`)
+
+`PeerClient` (`packages/peer-client`) is the embedded runtime on both ends
+of a route. It owns durable file stores — Signal crypto state, the durable
+outbox, the deduplicated inbox with its committed cursor, pending
+application reports and learned retention-gap tombstones — under a
+caller-chosen state directory, and it speaks only the peer-schema kinds on
+the caller-supplied session channel.
+
+`createPeerSessionChannel` (`packages/entry-transport/peer-channel.ts`)
+binds that client to the **same** admitted `forward` session the frame
+channel rides: outbound peer requests are gated on session admission and
+raise the typed `peer_channel_not_admitted` error instead of silently
+entering a stale generation. `isPeerSchemaMessage` lets each product demux
+peer kinds to `PeerClient.handleInboundMessage` before its session driver
+interprets frame/recovery traffic, so no second connection exists.
+`peerIdForRouteDevice` derives the deterministic crypto identity
+`peer:<tenantId>:<routeId>:<deviceId>`; `routePeerDirectory` resolves the
+same id for a counterparty device, so safety numbers are always computed
+from pinned identities and route bindings — never from wire-supplied ids.
+
+- **Endpoint** (`private-endpoint` profile, opt-in `peer` config block):
+  `EndpointPeerRuntime` stores state under `peer.storageDir` (default
+  `<configDir>/peer-state`, owner-only) and exposes the loopback admin
+  routes `/peer/status`, `/peer/inbox`, `/peer/pair-safety`,
+  `/peer/send`, `/peer/ack-outcome`, `/peer/reconcile` and `/peer/sync`.
+  When the block is absent or disabled the routes answer `404
+  peer_disabled` and no peer traffic is emitted or accepted.
+- **Entry product** (`@meshrix/entry-gui`): `EntryPeerRuntime` keeps a
+  per-connection store at `<dataDir>/peer/<connectionId>/`, exposed
+  through the closed IPC op set `peer.status`, `peer.send`, `peer.inbox`,
+  `peer.sync`, `peer.ackOutcome` and `peer.pairSafety`. Revoking or
+  uninstalling a connection deletes only that connection's peer store.
+
+Both runtimes are **record-only**: inbound messages are durably recorded
+and surfaced, never executed. Application outcomes travel only through the
+explicit `peer-ack` `reports` field (`accepted_by_agent` / `completed` /
+`rejected`), submitted by a host that actually consumed the message; the
+peer layer itself never fabricates an application receipt, never upgrades
+a mailbox `accepted`/`received` into one, and reports undecryptable
+envelopes as stored `decryptError` evidence rather than plaintext guesses.
+
+Explicit boundary of this integration: no agent execution of peer content,
+no group or fan-out messaging, and no bundled host dispatch — a host
+integration remains a separately authorized, explicitly injected handler.
+
 ## Neutral wire corpus
 
 `private-relay-wire-corpus.json` holds synthetic valid and invalid exemplars

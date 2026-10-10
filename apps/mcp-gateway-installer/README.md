@@ -126,6 +126,33 @@ The endpoint configuration is JSON:
   exposing `GET /status` and `GET /healthz`. Endpoint administration is never
   published through the relay: control arrives only through this direct local
   surface or the authenticated inner channel.
+- `peer` — optional peer-messaging block (`{ "enabled": true,
+  "storageDir"?: PATH, "peerId"?: ID }`). `storageDir` defaults to
+  `peer-state/` beside the config file (relative paths resolve there too)
+  and holds the durable Signal crypto state plus the client
+  outbox/inbox/cursor stores under owner-only permissions. `peerId`
+  overrides the derived `peer:<tenantId>:<routeId>:<deviceId>` identity;
+  it must satisfy the peer identifier contract. Absent or
+  `enabled: false` means the peer stack is never started.
+
+When `peer.enabled` is on and `admin.listen` is configured, the same
+loopback listener exposes the endpoint operator peer surface —
+`GET /peer/status`, `GET /peer/inbox?limit=`, `GET /peer/pair-safety?peerDeviceId=`,
+`POST /peer/send` (`peerDeviceId` plus exactly one of `text` or
+`plaintextBase64url`), `POST /peer/ack-outcome` (`messageId` plus an
+`accepted_by_agent` / `completed` / `rejected` outcome), `POST /peer/sync`
+and `POST /peer/reconcile`. With the block disabled every `/peer/` route
+answers `404 peer_disabled`. Peer requests ride the single admitted relay
+session — they are refused with `peer_channel_not_admitted` while the
+session is down, never queued into a stale generation. Inbound messages
+are durably recorded and surfaced through `/peer/inbox`; the runtime never
+executes peer content, and an application outcome reaches the wire only
+through an explicit `/peer/ack-outcome` call from a host that actually
+consumed it. `peer.status` reports the learned retention policy, durable
+cursor, outbox projections, inbox count and observed retention-gap
+tombstones honestly — including `decryptError` evidence for envelopes that
+cannot be decrypted — and `/peer/pair-safety` returns `null` evidence for
+peers whose identity was never observed.
 
 During `serve` the process writes one JSON state line per transition
 (`profile: "private-endpoint"`), including the readiness transition once the

@@ -1,6 +1,10 @@
 import { WebSocket as UndiciWebSocket } from "undici";
 import type { RelayTransportPort } from "@meshrix/gateway/private-endpoint";
-import { encodePrivateRelayMessage, parsePrivateRelayRecoveryMessage } from "@meshrix/contracts/private-relay";
+import {
+  encodePrivateRelayMessage,
+  encodePrivateRelayPeerMessage,
+  parsePrivateRelayRecoveryMessage
+} from "@meshrix/contracts/private-relay";
 
 /**
  * RelayTransportPort over a real WebSocket client.
@@ -255,6 +259,10 @@ export class RelayWebSocketTransport implements RelayTransportPort {
     // Recovery/operation kinds are validated by the recovery parser — anything
     // else never reaches the wire, matching relay-side rejection.
     if (parsePrivateRelayRecoveryMessage(message)) return JSON.stringify(message);
+    // Peer mailbox kinds share the admitted session channel; the contract
+    // encoder is the authority — a non-peer object still drops loudly.
+    const peerWire = encodePrivateRelayPeerMessage(message);
+    if (peerWire) return peerWire;
     this.#droppedSends += 1;
     return null;
   }

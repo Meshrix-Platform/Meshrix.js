@@ -46,6 +46,19 @@ bindings. Electron is not used anywhere in this package.
   face on stdin/stdout with no listener at all.
 - Revocation deletes only entry-owned custody refs and config; remote
   enforcement is reported as pending until the endpoint confirms.
+- Opt-in peer messaging (`"peer": { "enabled": true }` in
+  `entry-gui.config.json`) attaches a durable Signal-encrypted mailbox
+  client to each admitted private-relay session — the same connection the
+  session frames ride, never a second socket. Per-connection state
+  (crypto, outbox, deduplicated inbox, cursor, gap tombstones) lives under
+  `<dataDir>/peer/<connectionId>/` and is deleted when that connection is
+  revoked or removed. The closed op set exposes `peer.status`,
+  `peer.send`, `peer.inbox`, `peer.sync`, `peer.ackOutcome` and
+  `peer.pairSafety` for the renderer and local agents. Inbound messages
+  are recorded, never executed; an application outcome reaches the wire
+  only through an explicit `peer.ackOutcome` call, and while the session
+  is down sends fail with `peer_channel_not_admitted` rather than queuing
+  silently.
 
 ## Build & packaging
 
