@@ -11,6 +11,7 @@
     "manifests": [
       "package.json",
       "packages/contracts/package.json",
+      "packages/entry-transport/package.json",
       "packages/gateway/package.json",
       "packages/foundation/package.json",
       "packages/agents/package.json",
@@ -29,7 +30,10 @@
       "plugins/agents/pi/package.json",
       "apps/server/package.json",
       "apps/mcp-gateway-installer/package.json",
-      "apps/console/package.json"
+      "apps/entry/package.json",
+      "apps/entry-gui/package.json",
+      "apps/console/package.json",
+      "workers/private-relay/package.json"
     ]
   },
   "container": {

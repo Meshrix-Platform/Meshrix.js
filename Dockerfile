@@ -55,6 +55,8 @@ FROM deps AS build
 
 COPY apps/server ./apps/server
 COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
+COPY apps/entry ./apps/entry
+COPY apps/entry-gui ./apps/entry-gui
 COPY apps/console ./apps/console
 COPY packages ./packages
 COPY plugins/agents ./plugins/agents
@@ -72,6 +74,8 @@ COPY skills ./skills
 
 COPY apps/server ./apps/server
 COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
+COPY apps/entry ./apps/entry
+COPY apps/entry-gui ./apps/entry-gui
 COPY apps/console ./apps/console
 COPY packages ./packages
 COPY plugins/agents ./plugins/agents
