@@ -3326,6 +3326,31 @@
         "packages/peer-crypto",
         "tests/vitest/peer-crypto"
       ]
+    },
+    {
+      "id": "peer.client",
+      "label": "Peer client: durable outbox lifecycle (lost-reply reconcile, duplicate retry, conflict honesty), deduplicated inbox with cursor resume and gap tombstones, real X3DH+ratchet round trip over the session channel, identity-change re-pair gating and file-store restart",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/peer-client/peer-client.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/peer-client",
+        "packages/peer-crypto",
+        "packages/contracts/src/private-relay",
+        "tests/vitest/peer-client"
+      ]
     }
   ]
 }

@@ -10,9 +10,11 @@ const copies: any = [
   ["dist/packages/server-runtime/src", "packages/server-runtime/dist"],
   ["dist/packages/protocols", "packages/protocols/dist"],
   ["dist/packages/peer-crypto/src", "packages/peer-crypto/dist"],
+  ["dist/packages/peer-client/src", "packages/peer-client/dist"],
   ["dist/apps/server", "apps/server/dist"],
   ["dist/apps/mcp-gateway-installer/src", "apps/mcp-gateway-installer/dist"],
   ["dist/apps/entry/src", "apps/entry/dist"],
+  ["dist/apps/entry-gui/src", "apps/entry-gui/dist"],
 ] as const;
 
 const assetCopies: any = [

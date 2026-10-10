@@ -10,6 +10,7 @@
     "packages/gateway",
     "packages/foundation",
     "packages/peer-crypto",
+    "packages/peer-client",
     "packages/agents",
     "packages/capabilities",
     "packages/protocols",

@@ -1,0 +1,41 @@
+{
+  "name": "@meshrix/peer-client",
+  "version": "0.1.0",
+  "description": "Device-side durable peer messaging client: sender-scoped outbox with receipt reconciliation, deduplicated inbox with cursor resume and gap tombstones, and a host-neutral dispatch surface over the private-relay peer mailbox.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@meshrix/contracts": "0.1.0",
+    "@meshrix/foundation": "0.1.0",
+    "@meshrix/peer-crypto": "0.1.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/peer-client"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true
+}

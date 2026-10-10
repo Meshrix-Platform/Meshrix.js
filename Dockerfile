@@ -19,6 +19,7 @@ COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/entry-transport/package.json ./packages/entry-transport/package.json
 COPY packages/foundation/package.json ./packages/foundation/package.json
 COPY packages/gateway/package.json ./packages/gateway/package.json
+COPY packages/peer-client/package.json ./packages/peer-client/package.json
 COPY packages/peer-crypto/package.json ./packages/peer-crypto/package.json
 COPY packages/protocols/package.json ./packages/protocols/package.json
 COPY packages/server-runtime/package.json ./packages/server-runtime/package.json

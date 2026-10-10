@@ -57,6 +57,7 @@ const WORKSPACE_PACKAGE_DIRS: [string, string][] = [
   ["capabilities", "packages/capabilities"],
   ["protocols", "packages/protocols"],
   ["peer-crypto", "packages/peer-crypto"],
+  ["peer-client", "packages/peer-client"],
   ["server-runtime", "packages/server-runtime"],
   ["ui-console", "packages/ui-console"],
 ];

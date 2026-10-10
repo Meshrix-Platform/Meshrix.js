@@ -100,6 +100,36 @@
       ]
     },
     {
+      "id": "peer-client",
+      "name": "Peer Client",
+      "directory": "packages/peer-client",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "peer-crypto"
+      ],
+      "forbiddenDependsOn": [
+        "gateway",
+        "entry-transport",
+        "entry-app",
+        "entry-gui-app",
+        "model-gateway-contracts",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "gateway-installer-app",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "skill-tools",
+        "tools"
+      ]
+    },
+    {
       "id": "entry-app",
       "name": "Installed Entry Application Layer",
       "directory": "apps/entry",
