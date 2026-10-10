@@ -88,6 +88,10 @@ export class EntryRelaySession {
   #pump: RelayFrameDuplex | undefined;
   #tls: InnerTlsChannel | undefined;
   #channel: InnerRequestChannel | undefined;
+  /** Sender session the live channel is bound to; an endpoint reconnect replaces it. */
+  #boundPeerSessionId: string | undefined;
+  /** True once route-status reported the endpoint detached until the next reachable notice. */
+  #peerDetached = false;
   #readyWaiters = new Set<ReadyWaiter>();
   #statusQueries = new Map<string, PendingStatusQuery>();
 
@@ -100,13 +104,36 @@ export class EntryRelaySession {
       nonceFactory: options.nonceFactory,
       handlers: {
         onAdmitted: () => this.#establishChannel(),
-        onFrame: (payload) => (this.#pump ? this.#pump.feed(payload) : false),
+        onFrame: (payload, _messageId, peerSessionId) => {
+          // The relay forwards the sender's sessionId verbatim. An endpoint
+          // session replacement means a fresh TLS endpoint on its side — the
+          // channel bound to the previous session answers nothing, so rebuild
+          // and re-handshake before feeding the new peer's records.
+          if (this.#boundPeerSessionId !== undefined && peerSessionId !== this.#boundPeerSessionId) {
+            this.#establishChannel();
+          }
+          this.#boundPeerSessionId = peerSessionId;
+          return this.#pump ? this.#pump.feed(payload) : false;
+        },
         onRejected: (reason, retryable) => {
           const error = entryError("entry_admission_rejected", `The relay rejected the session admission (${reason}).`, { effectOutcome: "not_started" });
           this.#settleReady(error);
           options.onRejected?.(reason, retryable);
         },
         onRouteStatus: (routeId, state, generation) => {
+          if (state === "unreachable") {
+            // The endpoint session is gone — the inner channel is dead weight.
+            // Settle connect waiters honestly instead of burning the budget.
+            this.#peerDetached = true;
+            this.#teardownChannel("entry_endpoint_detached");
+            this.#settleReady(entryError("endpoint_unreachable", "The private endpoint detached from the route.", { effectOutcome: "not_started" }));
+          } else if (state === "reachable" && this.#peerDetached) {
+            // A fresh endpoint session re-handshakes from zero.
+            this.#peerDetached = false;
+            if (this.#session.state === "admitted" || this.#session.state === "streaming") {
+              this.#establishChannel();
+            }
+          }
           options.onRouteState?.(routeId, state, generation);
         },
         onClosed: (reason) => {
@@ -308,6 +335,7 @@ export class EntryRelaySession {
     const channel = this.#channel;
     this.#channel = undefined;
     this.#tls = undefined;
+    this.#boundPeerSessionId = undefined;
     const pump = this.#pump;
     this.#pump = undefined;
     channel?.close(code);

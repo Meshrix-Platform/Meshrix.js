@@ -66,6 +66,7 @@ function admittedMessage(overrides: Record<string, unknown> = {}) {
     routeState: "reachable",
     limits: { ...RELAY_LIMIT_FIELDS },
     reconnectGeneration: 1,
+    cursors: { toEndpoint: 0, toEntry: 0 },
     serverNonce: "sn.test.session.0001nonce",
     ...overrides
   };
@@ -260,6 +261,71 @@ describe("relay session driver", () => {
     // Retransmit of a delivered seq is acked idempotently, not re-delivered.
     session.handleMessage(inboundFrame(1));
     expect(delivered).toEqual(["AAAA"]);
+  });
+
+  it("continues outbound numbering from the route cursors in session-admitted", () => {
+    // Route cursors outlive sessions: a fresh session resuming at seq 1 is
+    // indistinguishable from a replay and the relay drops it silently — the
+    // exact failure observed when a second entry session replaced the first.
+    const transport = new FakeTransport();
+    const session = createPrivateRelaySession({ transport, admission: ADMISSION });
+    session.open();
+    session.handleMessage(admittedMessage({ cursors: { toEndpoint: 5, toEntry: 41 } }));
+    expect(session.sendPayload("AAAA").accepted).toBe(true);
+    // Endpoint role writes the toEntry direction.
+    expect(transport.sent.find((m) => m.kind === "frame")?.seq).toBe(42);
+  });
+
+  it("numbers an entry-role outbound stream from the toEndpoint cursor", () => {
+    const transport = new FakeTransport();
+    const session = createPrivateRelaySession({
+      transport, admission: { ...ADMISSION, role: "entry" }
+    });
+    session.open();
+    session.handleMessage(admittedMessage({ cursors: { toEndpoint: 17, toEntry: 3 } }));
+    expect(session.sendPayload("AAAA").accepted).toBe(true);
+    expect(transport.sent.find((m) => m.kind === "frame")?.seq).toBe(18);
+  });
+
+  it("dedups entry-role inbound against the toEntry cursor, not toEndpoint", () => {
+    const transport = new FakeTransport();
+    const delivered: string[] = [];
+    const session = createPrivateRelaySession({
+      transport, admission: { ...ADMISSION, role: "entry" },
+      handlers: { onFrame: (payload) => (delivered.push(payload), true) }
+    });
+    session.open();
+    session.handleMessage(admittedMessage({ cursors: { toEndpoint: 0, toEntry: 7 } }));
+    // seq 5 already delivered under the entry role's inbound direction —
+    // a replay is acked idempotently, not re-delivered.
+    session.handleMessage({ ...inboundFrame(5), sessionId: "sess.peer.1" });
+    expect(delivered).toEqual([]);
+    expect(transport.sent.find((m) => m.kind === "frame-ack")?.upToSeq).toBe(5);
+    session.handleMessage({ ...inboundFrame(8), sessionId: "sess.peer.1" });
+    expect(delivered).toEqual(["AAAA"]);
+    expect(transport.sent.filter((m) => m.kind === "frame-ack").at(-1)?.upToSeq).toBe(8);
+  });
+
+  it("drops withheld inbound frames when the peer session is replaced", () => {
+    const transport = new FakeTransport();
+    const seenPeers: string[] = [];
+    let accepts = false;
+    const session = createPrivateRelaySession({
+      transport, admission: ADMISSION,
+      handlers: { onFrame: (_payload, _messageId, sessionId) => (seenPeers.push(sessionId), accepts) }
+    });
+    session.open();
+    session.handleMessage(admittedMessage());
+    session.handleMessage(inboundFrame(1)); // queued — channel not accepting
+    expect(seenPeers).toEqual(["sess.test.1"]);
+    // A replaced peer session's bytes must not queue behind dead ones: feeding
+    // the old session's TLS records into a rebuilt channel would corrupt it.
+    session.handleMessage({ ...inboundFrame(2), sessionId: "sess.test.2" });
+    expect(seenPeers).toEqual(["sess.test.1", "sess.test.2"]);
+    accepts = true;
+    expect(session.flushInbound()).toBe(1);
+    // Only the new session's frame delivers; the old one stays un-acked.
+    expect(transport.sent.find((m) => m.kind === "frame-ack")?.upToSeq).toBe(2);
   });
 
   it("ends the session with a typed failure when the bounded inbound queue is exhausted", () => {

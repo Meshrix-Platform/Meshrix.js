@@ -346,6 +346,7 @@ export function parseSessionAdmitted(value?: unknown) {
     routeState: (entry) => enumValue(entry, PRIVATE_RELAY_ROUTE_STATES),
     limits: (entry) => parseRelayLimits(entry) || FAIL,
     reconnectGeneration: positiveRevision,
+    cursors: (entry) => parseSequenceCursors(entry) || FAIL,
     serverNonce: (entry) => nonceToken(entry)
   }));
 }
@@ -572,6 +573,7 @@ export function createSessionAdmitted(value: Record<string, unknown> = {}) {
     routeState: value.routeState,
     limits: value.limits,
     reconnectGeneration: value.reconnectGeneration,
+    cursors: value.cursors,
     serverNonce: value.serverNonce
   }), "Private relay session-admitted does not satisfy the wire contract.");
 }

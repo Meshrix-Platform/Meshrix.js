@@ -178,6 +178,12 @@ async function startWsServer(onConnection: (conn: TestWsConn) => void): Promise<
     socket.setNoDelay(true);
     const conn = wsConnection(socket, request);
     connections.push(conn);
+    // A closed conn must leave the roster — otherwise peer selection keeps
+    // forwarding live traffic into a dead socket and the run goes silent.
+    conn.onClose(() => {
+      const index = connections.indexOf(conn);
+      if (index >= 0) connections.splice(index, 1);
+    });
     onConnection(conn);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -220,6 +226,10 @@ interface FakeRelay extends WsServer {
 
 async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
   const seen: FakeRelay["seen"] = [];
+  const connRoles = new Map<TestWsConn, string>();
+  // Route-level sequence cursors persist across session replacement exactly
+  // like the real DO — they force a fresh session to continue numbering.
+  const routeCursors = { toEndpoint: 0, toEntry: 0 };
   const base = await startWsServer((conn) => {
     conn.onMessage((data) => {
       let message: Record<string, unknown>;
@@ -230,6 +240,7 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
       if (kind === "session-open") {
         if (hooks.onSessionOpen) { hooks.onSessionOpen(conn, message); return; }
         const admission = message.admission as Record<string, unknown>;
+        connRoles.set(conn, String(admission?.role));
         conn.send(JSON.stringify({
           schemaVersion: PRIVATE_RELAY_SCHEMA_VERSION,
           wireProtocol: PRIVATE_RELAY_WIRE_PROTOCOL,
@@ -241,6 +252,7 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
           routeState: "reachable",
           limits: { ...RELAY_LIMIT_FIELDS },
           reconnectGeneration: 1,
+          cursors: { ...routeCursors },
           serverNonce: "sn.relay.fixture.00000001"
         }));
         return;
@@ -255,11 +267,15 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
           reconnectGeneration: message.reconnectGeneration,
           gaps: [],
           limits: { ...RELAY_LIMIT_FIELDS },
-          cursors: { toEndpoint: 0, toEntry: 0 }
+          cursors: { ...routeCursors }
         }));
         return;
       }
       if (kind === "session-close") { conn.close(1000, "ack"); return; }
+      if (kind === "frame") {
+        const direction = connRoles.get(conn) === "entry" ? "toEndpoint" : "toEntry";
+        routeCursors[direction] = Math.max(routeCursors[direction], Number(message.seq) || 0);
+      }
       // Channel traffic (frames, recovery, operation status) is forwarded to the peer verbatim.
       const other = base.connections.find((candidate) => candidate !== conn);
       other?.send(data);
@@ -725,6 +741,7 @@ describe("private endpoint profile serve", () => {
           routeState: "reachable",
           limits: { ...RELAY_LIMIT_FIELDS },
           reconnectGeneration: 1,
+          cursors: { toEndpoint: 0, toEntry: 0 },
           serverNonce: "sn.relay.fixture.retry001"
         };
         conn.send(JSON.stringify(admitted));
@@ -834,11 +851,14 @@ describe("inner channel control routing", () => {
       const serverPin = spkiSha256Base64Url(createPublicKey({ key: fixture.endpointCert, format: "pem" }));
       const peer = await connectPeer(relay.url);
       try {
+        // The frame's sessionId is the *sender's* session — the relay forwards
+        // it verbatim and the endpoint binds its inner channel to it.
+        const peerSessionId = String((peer.received.find((m) => m.kind === "session-admitted") as { sessionId: string }).sessionId);
         let seq = 1;
         const pump = createRelayFrameDuplex({
           sendFrame: (payload) => {
             peer.send(JSON.stringify(createFrame({
-              sessionId,
+              sessionId: peerSessionId,
               routeId: "route.pr.1",
               seq: seq,
               messageId: `msg.entry.${seq}`,
@@ -885,6 +905,91 @@ describe("inner channel control routing", () => {
       } finally {
         peer.close();
       }
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }), 30_000);
+
+  // Regression: a second entry session replaces the first while the endpoint's
+  // own session stays streaming. The endpoint must rebind its inner channel to
+  // the new peer session — silently feeding the new handshake into the dead
+  // channel was the observed cross-machine failure.
+  it("re-establishes the inner channel for a replaced entry session", () => withCredential(async () => {
+    const relay = await startFakeRelay();
+    const fixture = await writeFixture(relay.url);
+    const runtime = fakeRuntime({
+      invoke: async (_context: unknown, invocation: { params?: unknown }) =>
+        ({ kind: "complete", value: { echo: invocation.params } })
+    });
+    const controller = new AbortController();
+    const lines: string[] = [];
+    const serverPin = spkiSha256Base64Url(createPublicKey({ key: fixture.endpointCert, format: "pem" }));
+
+    const connectEntry = async () => {
+      const peer = await connectPeer(relay.url);
+      const admitted = peer.received.find((m) => m.kind === "session-admitted") as { sessionId: string; cursors?: { toEndpoint?: number } };
+      const peerSessionId = String(admitted.sessionId);
+      // Honor the route cursor exactly like the real driver: a fresh session
+      // continues numbering past the relay's recorded position.
+      let seq = Number(admitted.cursors?.toEndpoint ?? 0) + 1;
+      const pump = createRelayFrameDuplex({
+        sendFrame: (payload) => {
+          peer.send(JSON.stringify(createFrame({
+            sessionId: peerSessionId,
+            routeId: "route.pr.1",
+            seq,
+            messageId: `msg.entry.${seq}`,
+            payload
+          })));
+          seq += 1;
+          return true;
+        }
+      });
+      peer.onMessage = (message) => {
+        if (message.kind === "frame") pump.feed(String(message.payload));
+      };
+      const client = createInnerTlsClient({
+        socket: pump,
+        key: fixture.entryKey,
+        cert: fixture.entryCert,
+        pinnedPeerSpki: [serverPin],
+        handshakeTimeoutMs: 10_000
+      });
+      await client.established;
+      return { peer, client, requests: createInnerRequestChannel({ socket: client.socket }) };
+    };
+
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: enrolledIdentity(fixture),
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => runtime
+      });
+      await waitFor(() => parseSurfaces(lines).at(-1)?.reachability === "reachable");
+
+      // First entry session: full handshake + a real dispatched call.
+      const first = await connectEntry();
+      const r1 = await first.requests.request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "svc/tool", arguments: { a: 1 } } }) as { kind?: string; value?: { echo?: { a?: number } } };
+      expect(r1?.kind).toBe("complete");
+      expect(r1?.value?.echo?.a).toBe(1);
+      // The entry session ends silently — the endpoint's own session stays
+      // streaming, exactly like the failed cross-machine run.
+      first.client.close();
+      first.peer.close();
+
+      // Replacement session: handshake must land on a fresh inner channel.
+      const second = await connectEntry();
+      const r2 = await second.requests.request({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "svc/tool", arguments: { a: 2 } } }) as { kind?: string; value?: { echo?: { a?: number } } };
+      expect(r2?.kind).toBe("complete");
+      expect(r2?.value?.echo?.a).toBe(2);
+      second.client.close();
+      second.peer.close();
+
       controller.abort();
       expect((await run).outcome).toBe("stopped");
     } finally {

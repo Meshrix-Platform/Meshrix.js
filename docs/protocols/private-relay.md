@@ -75,6 +75,12 @@ initiated --open--> open_sent --admit--> admitted --frame--> streaming
 transitions return `null`, and `assertRelaySessionTransition` throws
 `PRIVATE_RELAY_SESSION_TRANSITION_REJECTED`.
 
+- `session-admitted` carries the route `cursors` alongside the relay limits.
+  Route sequence cursors outlive individual sessions: a fresh session that
+  restarted outbound numbering at `1` would be indistinguishable from a replay
+  and silently dropped while the route cursor survives, so senders continue
+  their direction's numbering from the reported cursor (`toEndpoint` for the
+  entry role, `toEntry` for the endpoint role).
 - `session-reconnect` re-presents the full `RelayAdmissionBinding` plus
   `lastAcknowledged` sequence cursors and `reconnectGeneration`. Reconnect
   always re-checks current authorization and revocation revision; revocation is
@@ -93,6 +99,14 @@ transitions return `null`, and `assertRelaySessionTransition` throws
 budget; `admitOutboundFrame`/`acknowledgeFrames` implement the accounting and
 return `null` on over-limit admission or ack mismatch — the contract for
 slow-reader backpressure.
+
+The relay forwards each `frame` verbatim, so the delivered `sessionId` is the
+*sender's* live session. A peer reconnect replaces it: receivers bind the
+pinned inner channel to the inbound peer session and rebuild it on change —
+bytes queued under the dead session are dropped rather than fed into the fresh
+TLS record stream. On the entry side, a `route-status` transition to
+`unreachable` tears the dead channel down and the next `reachable` notice
+re-handshakes onto the endpoint's new session generation.
 
 Endpoint availability is decided at admission time:
 

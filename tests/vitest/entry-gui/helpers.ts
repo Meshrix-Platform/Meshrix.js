@@ -124,6 +124,9 @@ export class RelayHub {
   readonly conns = new Set<HubConn>();
   #seq = 0;
   #generation = 0;
+  // Route-level sequence cursors persist across session replacement — the
+  // property that forces a fresh session to continue numbering, not restart.
+  #routeCursors = { toEndpoint: 0, toEntry: 0 };
   #holds = new Map<MemoryRelayTransport, WireMessage[]>();
   #tamper = new Map<MemoryRelayTransport, (message: WireMessage) => WireMessage | null>();
   #drops = new Map<MemoryRelayTransport, number>();
@@ -263,6 +266,7 @@ export class RelayHub {
           routeState: peer ? "reachable" : "unreachable",
           limits: { ...LIMITS },
           reconnectGeneration: 1,
+          cursors: { ...this.#routeCursors },
           serverNonce: `sn.hub.${String(++this.#seq).padStart(16, "0")}`
         });
         this.#notifyRouteChange(conn);
@@ -283,7 +287,7 @@ export class RelayHub {
           reconnectGeneration: message.reconnectGeneration,
           gaps: [],
           limits: { ...LIMITS },
-          cursors: { toEndpoint: 0, toEntry: 0 }
+          cursors: { ...this.#routeCursors }
         });
         this.#notifyRouteChange(conn);
         break;
@@ -316,6 +320,11 @@ export class RelayHub {
         if (kind === "frame" && !peer.transport.alive) {
           transport.deliverToApp(this.#routeStatus(conn, "unreachable"));
           return;
+        }
+        // Route cursors survive session replacement exactly like the real DO.
+        if (kind === "frame") {
+          const direction = conn.role === "entry" ? "toEndpoint" : "toEntry";
+          this.#routeCursors[direction] = Math.max(this.#routeCursors[direction], Number(message.seq) || 0);
         }
         peer.transport.deliverToApp(message);
         if (kind === "route-bind" || kind === "route-query") {

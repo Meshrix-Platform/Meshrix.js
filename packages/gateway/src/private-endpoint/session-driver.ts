@@ -37,10 +37,13 @@ export interface RelayTransportPort {
 export interface RelaySessionHandlers {
   /**
    * Inbound opaque frame payload (base64url) destined for the inner channel.
+   * `sessionId` is the *sender's* session, forwarded verbatim by the relay —
+   * a peer reconnect replaces it, which is the signal that any inner channel
+   * bound to the previous peer session must be rebuilt before feeding.
    * Must return true only when the payload was durably accepted by the inner
    * channel buffer; false keeps the frame queued and withholds its ack.
    */
-  onFrame?(payload: string, messageId: string): boolean;
+  onFrame?(payload: string, messageId: string, sessionId: string): boolean;
   /** Session admitted; carries relay-issued limits and cursors. */
   onAdmitted?(admission: Readonly<Record<string, unknown>>): void;
   /** Session rejected by the relay; carries the typed reason. */
@@ -82,7 +85,11 @@ export class PrivateRelaySession {
   #accounting: Readonly<{ outstandingBytes: number; outstandingFrames: number }> = Object.freeze({ outstandingBytes: 0, outstandingFrames: 0 });
   #sentFrames: Array<{ seq: number; payloadBytes: number }> = [];
   /** Inbound frames accepted by the wire but not yet deliverable to the inner channel; acks are withheld until delivered. */
-  #pendingInbound: Array<{ seq: number; messageId: string; payload: string }> = [];
+  #pendingInbound: Array<{ seq: number; messageId: string; payload: string; sessionId: string }> = [];
+  /** Sender session of the inbound frame stream; a change invalidates every queued payload because they are dead peer bytes. */
+  #inboundPeerSessionId: string | null = null;
+  /** Highest outbound seq the peer acknowledged — reported as lastAcknowledged on reconnect. */
+  #outboundAcked = 0;
   #nextSeq = 1;
   #sessionId: string | null = null;
   #reconnectGeneration = 0;
@@ -101,6 +108,16 @@ export class PrivateRelaySession {
     this.#admission = options.admission;
     this.#purpose = options.purpose ?? "forward";
     this.#nonceFactory = options.nonceFactory ?? (() => `nonce.${Math.random().toString(36).slice(2)}.${Date.now().toString(36)}`);
+  }
+
+  /** Route direction carrying frames this side receives. Endpoint reads `toEndpoint`, entry reads `toEntry`. */
+  get #inboundCursorKey(): "toEndpoint" | "toEntry" {
+    return this.#admission.role === "endpoint" ? "toEndpoint" : "toEntry";
+  }
+
+  /** Route direction carrying frames this side sends. Endpoint writes `toEntry`, entry writes `toEndpoint`. */
+  get #outboundCursorKey(): "toEndpoint" | "toEntry" {
+    return this.#admission.role === "endpoint" ? "toEntry" : "toEndpoint";
   }
 
   get state(): RelaySessionState {
@@ -150,10 +167,16 @@ export class PrivateRelaySession {
     const admission = input.revocationRevision !== undefined
       ? { ...this.#admission, revocationRevision: input.revocationRevision }
       : this.#admission;
+    // Each direction reports its own truth: inbound is what we durably
+    // delivered, outbound is what the peer acked — never the other side's value.
+    const lastAcknowledged = input.lastAcknowledged ?? {
+      toEndpoint: this.#inboundCursorKey === "toEndpoint" ? this.#cursors.toEndpoint : this.#outboundAcked,
+      toEntry: this.#inboundCursorKey === "toEntry" ? this.#cursors.toEntry : this.#outboundAcked
+    };
     this.#transport.send(createSessionReconnect({
       previousSessionId: this.#sessionId ?? "unknown",
       admission,
-      lastAcknowledged: input.lastAcknowledged ?? this.#cursors,
+      lastAcknowledged,
       reconnectGeneration: this.#reconnectGeneration + 1,
       clientNonce: this.#nonceFactory()
     }));
@@ -246,9 +269,10 @@ export class PrivateRelaySession {
     let lastSeq = 0;
     while (this.#pendingInbound.length > 0) {
       const head = this.#pendingInbound[0];
-      if (!this.#deliverInbound(head.payload, head.messageId)) break;
+      if (!this.#deliverInbound(head.payload, head.messageId, head.sessionId)) break;
       this.#pendingInbound.shift();
-      this.#cursors = Object.freeze({ ...this.#cursors, toEndpoint: Math.max(this.#cursors.toEndpoint, head.seq) });
+      const key = this.#inboundCursorKey;
+      this.#cursors = Object.freeze({ ...this.#cursors, [key]: Math.max(this.#cursors[key], head.seq) });
       lastSeq = head.seq;
       delivered += 1;
     }
@@ -261,20 +285,35 @@ export class PrivateRelaySession {
   }
 
   #ackInbound(seq: number): void {
-    this.#cursors = Object.freeze({ ...this.#cursors, toEndpoint: Math.max(this.#cursors.toEndpoint, seq) });
+    const key = this.#inboundCursorKey;
+    this.#cursors = Object.freeze({ ...this.#cursors, [key]: Math.max(this.#cursors[key], seq) });
     // frame-ack is the only client→relay receipt kind the relay runtime
     // accepts; frame-status/flow-credit are relay-originated and would be
     // dropped (and billed) as invalid inbound messages.
     this.#transport.send(createFrameAck({ routeId: this.#admission.routeId, upToSeq: seq }));
   }
 
-  #deliverInbound(payload: string, messageId: string): boolean {
+  #deliverInbound(payload: string, messageId: string, sessionId: string): boolean {
     if (!this.#handlers.onFrame) return false;
     try {
-      return this.#handlers.onFrame(payload, messageId) === true;
+      return this.#handlers.onFrame(payload, messageId, sessionId) === true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Adopt the relay's route cursors and continue outbound numbering past them.
+   * Route cursors outlive individual sessions; a fresh session resuming seq at
+   * 1 would have every frame dropped as replay while the route cursor survives.
+   */
+  #applyRouteCursors(cursors: { toEndpoint?: number; toEntry?: number } | undefined): void {
+    if (!cursors) return;
+    this.#cursors = Object.freeze({
+      toEndpoint: Number(cursors.toEndpoint ?? 0),
+      toEntry: Number(cursors.toEntry ?? 0)
+    });
+    this.#nextSeq = Math.max(this.#nextSeq, this.#cursors[this.#outboundCursorKey] + 1);
   }
 
   /**
@@ -293,6 +332,7 @@ export class PrivateRelaySession {
         this.#limits = parsed.limits as typeof DEFAULT_LIMITS;
         this.#reconnectGeneration = Number(parsed.reconnectGeneration);
         this.#routeState = String(parsed.routeState);
+        this.#applyRouteCursors(parsed.cursors as { toEndpoint?: number; toEntry?: number } | undefined);
         this.#transition("admit");
         this.#handlers.onAdmitted?.(parsed);
         break;
@@ -307,13 +347,7 @@ export class PrivateRelaySession {
         this.#sessionId = String(parsed.sessionId);
         this.#reconnectGeneration = Number(parsed.reconnectGeneration);
         this.#limits = parsed.limits as typeof DEFAULT_LIMITS;
-        const cursors = parsed.cursors as { toEndpoint?: number; toEntry?: number } | undefined;
-        if (cursors) {
-          this.#cursors = Object.freeze({
-            toEndpoint: Number(cursors.toEndpoint ?? 0),
-            toEntry: Number(cursors.toEntry ?? 0)
-          });
-        }
+        this.#applyRouteCursors(parsed.cursors as { toEndpoint?: number; toEntry?: number } | undefined);
         this.#transition("restore");
         this.#handlers.onAdmitted?.(parsed);
         break;
@@ -329,7 +363,16 @@ export class PrivateRelaySession {
         const seq = Number(parsed.seq);
         const messageId = String(parsed.messageId);
         const payload = String(parsed.payload);
-        if (seq <= this.#cursors.toEndpoint) {
+        const peerSessionId = String(parsed.sessionId);
+        if (this.#inboundPeerSessionId !== null && peerSessionId !== this.#inboundPeerSessionId) {
+          // The peer session was replaced: every queued payload is dead bytes
+          // from the old session — feeding them into a rebuilt inner channel
+          // would corrupt the fresh TLS record stream. They stay un-acked;
+          // the sender's superseded session cannot retry them anyway.
+          this.#pendingInbound = [];
+        }
+        this.#inboundPeerSessionId = peerSessionId;
+        if (seq <= this.#cursors[this.#inboundCursorKey]) {
           // Retransmit of an already-delivered frame — ack idempotently.
           this.#ackInbound(seq);
           break;
@@ -343,13 +386,13 @@ export class PrivateRelaySession {
             this.failSession("capacity_exceeded");
             break;
           }
-          this.#pendingInbound.push({ seq, messageId, payload });
+          this.#pendingInbound.push({ seq, messageId, payload, sessionId: peerSessionId });
           break;
         }
-        if (this.#deliverInbound(payload, messageId)) {
+        if (this.#deliverInbound(payload, messageId, peerSessionId)) {
           this.#ackInbound(seq);
         } else {
-          this.#pendingInbound.push({ seq, messageId, payload });
+          this.#pendingInbound.push({ seq, messageId, payload, sessionId: peerSessionId });
         }
         break;
       }
@@ -358,6 +401,7 @@ export class PrivateRelaySession {
         if (accounting) {
           this.#sentFrames = this.#sentFrames.filter((frame) => frame.seq > Number(parsed.upToSeq));
           this.#accounting = accounting;
+          this.#outboundAcked = Math.max(this.#outboundAcked, Number(parsed.upToSeq));
         }
         break;
       }

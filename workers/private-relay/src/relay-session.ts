@@ -604,6 +604,7 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
         routeState,
         limits,
         reconnectGeneration,
+        cursors: { ...this.meta.routeCursors },
         serverNonce: `sn.${sessionId.slice(-16)}relaynonce`,
       })));
     } else {

@@ -129,6 +129,9 @@ class RelayHub {
   readonly conns = new Set<HubConn>();
   #seq = 0;
   #generation = 0;
+  // Route-level sequence cursors persist across session replacement — the
+  // property that forces a fresh session to continue numbering, not restart.
+  #routeCursors = { toEndpoint: 0, toEntry: 0 };
   #holds = new Map<MemoryRelayTransport, WireMessage[]>();
   #tamper = new Map<MemoryRelayTransport, (message: WireMessage) => WireMessage | null>();
   #drops = new Map<MemoryRelayTransport, number>();
@@ -236,6 +239,7 @@ class RelayHub {
           routeState: peer ? "reachable" : "unreachable",
           limits: { ...LIMITS },
           reconnectGeneration: 1,
+          cursors: { ...this.#routeCursors },
           serverNonce: `sn.hub.${String(++this.#seq).padStart(16, "0")}`
         });
         this.#notifyRouteChange(conn);
@@ -257,7 +261,7 @@ class RelayHub {
           reconnectGeneration: message.reconnectGeneration,
           gaps: [],
           limits: { ...LIMITS },
-          cursors: { ...conn.cursors }
+          cursors: { ...this.#routeCursors }
         });
         // A restore carries no routeState — the relay pushes fresh
         // reachability to the restorer as well as to the peer.
@@ -284,6 +288,9 @@ class RelayHub {
           transport.deliverToApp(this.#routeStatus(conn, "unreachable"));
           return;
         }
+        // Route cursors survive session replacement exactly like the real DO.
+        const direction = conn.role === "entry" ? "toEndpoint" : "toEntry";
+        this.#routeCursors[direction] = Math.max(this.#routeCursors[direction], Number(message.seq) || 0);
         peer.transport.deliverToApp(message);
         break;
       }
@@ -662,22 +669,18 @@ describe("entry session against the real private endpoint composition", () => {
       expect(answer?.error?.data?.code).toBe("endpoint_unreachable");
       expect(answer?.error?.data?.effectOutcome).toBe("not_started");
 
-      // The endpoint attaches: the relay reports the route; the channel cannot
-      // complete because the ClientHello records were dropped while offline —
-      // the session honestly closes rather than pretending a channel exists.
-      const { endpoint, transport: epTransport } = makeEndpoint(hub, certs);
+      // The connect() waiter fails fast with the typed reason — but the relay
+      // session itself stays alive: only the peer was absent, and killing the
+      // session would destroy cursors the route still honors.
+      const connectError = await connecting;
+      expect(connectError?.code).toBe("endpoint_unreachable");
+      expect(["admitted", "streaming"]).toContain(entry.state);
+
+      // The endpoint attaches: the route-status reachable notice rebuilds the
+      // inner channel on the *live* session — no reconnect round-trip needed.
+      const { endpoint } = makeEndpoint(hub, certs);
       endpoint.open();
-      await connecting;
-      expect(entry.state).toBe("closed");
-
-      // The entry's session-close was relayed to the endpoint and closed its
-      // fresh session too — restore it first so a clean inner channel is
-      // waiting when the entry's new generation handshake lands.
-      await epTransport.reopen();
-      expect(endpoint.reconnect()).toBe(true);
-      await waitFor(() => ["admitted", "streaming"].includes(endpoint.session.state));
-
-      await entry.reconnect();
+      await waitFor(() => entry.channelEstablished);
       expect(entry.acceptsNewWork).toBe(true);
       const pending = handle({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "svc/tool", arguments: {} } });
       // The real endpoint's hidden inner socket does not run a dispatch loop

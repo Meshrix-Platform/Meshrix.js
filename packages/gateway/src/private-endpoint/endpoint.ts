@@ -131,6 +131,8 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
 
   let channel: InnerTlsChannel | undefined;
   let pump: RelayFrameDuplex | undefined;
+  /** Sender session the live inner channel is bound to; a peer reconnect replaces it. */
+  let boundPeerSessionId: string | undefined;
   let device: EndpointDeviceRecord | undefined;
 
   function ensureInnerChannel(): void {
@@ -169,7 +171,19 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
         // session must rebuild the inner channel to honor its cursors.
         ensureInnerChannel();
       },
-      onFrame(payload) {
+      onFrame(payload, _messageId, peerSessionId) {
+        // The relay forwards the sender's sessionId verbatim. A replaced peer
+        // session starts a fresh TLS handshake — the channel bound to the
+        // previous session is dead weight even before its socket reports
+        // destroyed, and feeding it the new ClientHello poisons nothing but
+        // answers nothing either.
+        if (boundPeerSessionId !== undefined && peerSessionId !== boundPeerSessionId) {
+          channel?.close();
+          channel = undefined;
+          pump = undefined;
+        }
+        boundPeerSessionId = peerSessionId;
+        if (!channel || channel.socket.destroyed) ensureInnerChannel();
         // The driver withholds the frame ack until this returns true, so a
         // full inner-channel buffer produces bounded queueing, not data loss.
         return pump ? pump.feed(payload) : false;
@@ -181,6 +195,7 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
         channel?.close();
         channel = undefined;
         pump = undefined;
+        boundPeerSessionId = undefined;
       }
     }
   });
@@ -200,6 +215,10 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
       handshakeTimeoutMs: options.innerTls.handshakeTimeoutMs
     });
     channel = tls;
+    // Frames withheld while the channel was down belong to this peer session —
+    // drain them into the new pump now, or a queued ClientHello can never
+    // complete the handshake it is waiting on.
+    session.flushInbound();
     return tls;
   }
 
@@ -221,6 +240,7 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
       channel?.close();
       channel = undefined;
       pump = undefined;
+      boundPeerSessionId = undefined;
       return session.close(reason);
     },
 

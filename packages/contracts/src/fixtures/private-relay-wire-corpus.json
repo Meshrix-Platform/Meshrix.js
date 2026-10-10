@@ -50,6 +50,10 @@
           "maxMessageRatePerSecond": 128
         },
         "reconnectGeneration": 3,
+        "cursors": {
+          "toEndpoint": 41,
+          "toEntry": 17
+        },
         "serverNonce": "sn.pr.session.0001nonce"
       },
       "session-rejected": {
@@ -122,7 +126,10 @@
         "kind": "session-close",
         "sessionId": "sess.pr.1",
         "reason": "reconnect",
-        "finalCursors": { "toEndpoint": 41, "toEntry": 17 }
+        "finalCursors": {
+          "toEndpoint": 41,
+          "toEntry": 17
+        }
       },
       "session-reconnect": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -138,7 +145,10 @@
           "admissionGeneration": 7,
           "revocationRevision": 13
         },
-        "lastAcknowledged": { "toEndpoint": 41, "toEntry": 17 },
+        "lastAcknowledged": {
+          "toEndpoint": 41,
+          "toEntry": 17
+        },
         "reconnectGeneration": 4,
         "clientNonce": "cn.pr.session.0003nonce"
       },
@@ -149,7 +159,11 @@
         "sessionId": "sess.pr.3",
         "reconnectGeneration": 4,
         "gaps": [
-          { "fromSeq": 18, "toSeq": 19, "cause": "expired" }
+          {
+            "fromSeq": 18,
+            "toSeq": 19,
+            "cause": "expired"
+          }
         ],
         "limits": {
           "maxFramePayloadBytes": 262144,
@@ -157,7 +171,10 @@
           "maxBufferedFrames": 256,
           "maxMessageRatePerSecond": 128
         },
-        "cursors": { "toEndpoint": 41, "toEntry": 19 }
+        "cursors": {
+          "toEndpoint": 41,
+          "toEntry": 19
+        }
       }
     },
     "invalid": {
@@ -174,7 +191,9 @@
           "mode": "personal",
           "admissionGeneration": 7,
           "revocationRevision": 12,
-          "grants": ["tools/call"]
+          "grants": [
+            "tools/call"
+          ]
         },
         "clientNonce": "cn.pr.session.0001nonce"
       },
@@ -284,7 +303,11 @@
         "sessionId": "sess.pr.3",
         "reconnectGeneration": 4,
         "gaps": [
-          { "fromSeq": 18, "toSeq": 19, "cause": "operator_dropped" }
+          {
+            "fromSeq": 18,
+            "toSeq": 19,
+            "cause": "operator_dropped"
+          }
         ],
         "limits": {
           "maxFramePayloadBytes": 262144,
@@ -292,7 +315,10 @@
           "maxBufferedFrames": 256,
           "maxMessageRatePerSecond": 128
         },
-        "cursors": { "toEndpoint": 41, "toEntry": 19 }
+        "cursors": {
+          "toEndpoint": 41,
+          "toEntry": 19
+        }
       },
       "sessionRestoredInvertedGap": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -301,7 +327,11 @@
         "sessionId": "sess.pr.3",
         "reconnectGeneration": 4,
         "gaps": [
-          { "fromSeq": 19, "toSeq": 18, "cause": "expired" }
+          {
+            "fromSeq": 19,
+            "toSeq": 18,
+            "cause": "expired"
+          }
         ],
         "limits": {
           "maxFramePayloadBytes": 262144,
@@ -309,7 +339,10 @@
           "maxBufferedFrames": 256,
           "maxMessageRatePerSecond": 128
         },
-        "cursors": { "toEndpoint": 41, "toEntry": 19 }
+        "cursors": {
+          "toEndpoint": 41,
+          "toEntry": 19
+        }
       }
     }
   },
@@ -475,8 +508,12 @@
         "kind": "rotation-state",
         "rotationId": "rot.pr.1",
         "state": "acknowledging",
-        "acknowledged": ["route.pr.1"],
-        "pending": ["route.pr.2"],
+        "acknowledged": [
+          "route.pr.1"
+        ],
+        "pending": [
+          "route.pr.2"
+        ],
         "globalComplete": false
       },
       "operation-query": {
@@ -702,8 +739,12 @@
         "kind": "rotation-state",
         "rotationId": "rot.pr.1",
         "state": "completed",
-        "acknowledged": ["route.pr.1"],
-        "pending": ["route.pr.2"],
+        "acknowledged": [
+          "route.pr.1"
+        ],
+        "pending": [
+          "route.pr.2"
+        ],
         "globalComplete": true
       },
       "rotationRegressesGeneration": {
