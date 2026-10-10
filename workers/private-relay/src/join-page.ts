@@ -60,7 +60,7 @@ export const JOIN_PAGE_HTML = `<!doctype html>
   <div class="card">
     <form id="f">
       <label for="invite">Invitation code</label>
-      <input type="text" id="invite" name="invite" autocomplete="off" spellcheck="false" placeholder="inv1.…" required />
+      <input type="text" id="invite" name="invite" autocomplete="off" spellcheck="false" placeholder="inv2.…" required />
       <label for="device" style="margin-top:14px">Device ID <span style="text-transform:none">(yours to choose — identifies this device)</span></label>
       <input type="text" id="device" name="device" autocomplete="off" spellcheck="false" placeholder="dev.my-laptop.01" required />
       <button id="go" type="submit">Redeem invitation</button>
