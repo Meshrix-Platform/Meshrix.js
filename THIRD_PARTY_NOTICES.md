@@ -15,6 +15,12 @@ particular:
 - `vendor/pactium-0.8.0.tgz` is a separate source archive under
   GPL-3.0-or-later. It is not the `pactium@0.8.1` runtime dependency, and its
   terms remain distinct in any artifact that includes it.
+- The workspace-local dependency `@signalapp/libsignal-client@0.104.0` (used by
+  `packages/peer-crypto` for device-side Signal protocol operations) is
+  distributed under AGPL-3.0-only as declared by its package metadata and
+  pinned in `package-lock.json`. Its terms remain distinct in any artifact
+  that includes it, and it is never replaced by an unvetted substitute
+  implementation.
 
 Other dependency license and notice files are preserved with their package
 metadata and the corresponding distribution assets. Project-owned Apache-2.0

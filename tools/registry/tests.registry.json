@@ -3303,6 +3303,29 @@
         "packages/contracts/src/private-relay",
         "tests/vitest/entry-gui"
       ]
+    },
+    {
+      "id": "peer.crypto",
+      "label": "Peer crypto layer: PQXDH prekey exchange, Double Ratchet round trip, out-of-order/duplicate/tamper handling, identity-pin honesty and durable store reload",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/peer-crypto/peer-crypto.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/peer-crypto",
+        "tests/vitest/peer-crypto"
+      ]
     }
   ]
 }

@@ -9,6 +9,7 @@
     "packages/entry-transport",
     "packages/gateway",
     "packages/foundation",
+    "packages/peer-crypto",
     "packages/agents",
     "packages/capabilities",
     "packages/protocols",

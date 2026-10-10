@@ -1,0 +1,40 @@
+{
+  "name": "@meshrix/peer-crypto",
+  "version": "0.1.0",
+  "description": "Device-side Signal protocol layer for one-to-one peer messaging: PQXDH prekey exchange, Double Ratchet sessions, pinned peer identities and a durable crypto store.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@meshrix/foundation": "0.1.0",
+    "@signalapp/libsignal-client": "0.104.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/peer-crypto"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true
+}

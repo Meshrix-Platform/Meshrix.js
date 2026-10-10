@@ -14,6 +14,7 @@
       "packages/entry-transport/package.json",
       "packages/gateway/package.json",
       "packages/foundation/package.json",
+      "packages/peer-crypto/package.json",
       "packages/agents/package.json",
       "packages/capabilities/package.json",
       "packages/protocols/package.json",
