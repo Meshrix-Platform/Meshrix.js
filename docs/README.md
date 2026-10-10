@@ -96,6 +96,7 @@ documents specify the detailed behavior.
 | Operation Permission | [OPERATION-PERMISSION.md](functionality/OPERATION-PERMISSION.md) |
 | Security and authorization | [SECURITY-AUTHORIZATION.md](functionality/SECURITY-AUTHORIZATION.md) (`docs/functionality/SECURITY-AUTHORIZATION.md`) |
 | Operations and observability | [OPERATIONS-OBSERVABILITY.md](functionality/OPERATIONS-OBSERVABILITY.md) |
+| Enterprise recording | [ENTERPRISE-RECORDING.md](functionality/ENTERPRISE-RECORDING.md) |
 | Format conversion | [format-convert.md](functionality/format-convert.md) |
 
 ## Verification

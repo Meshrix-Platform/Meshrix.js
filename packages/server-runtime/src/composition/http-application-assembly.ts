@@ -378,7 +378,11 @@ export async function createHttpApplicationAssembly({
     operationAuditStore,
     getListenUrl: () : any => listenUrl,
     getAgentWorkspace: () : any => agentWorkspaceRef,
-    secretKeyProvider: localSecretKeyProvider
+    secretKeyProvider: localSecretKeyProvider,
+    // One recording authority owns the stores the Console governs and the
+    // producers write to; injecting keeps policy revisions and sink identity
+    // shared instead of a second, diverging store set.
+    recordingGovernanceProvider: compositionRoot.recordingGovernanceProvider
   });
   registerStartupCleanup({ close: () : any => consoleOperationProviders.close() });
   const settingsPort: Readonly<Record<string, any>> = Object.freeze({

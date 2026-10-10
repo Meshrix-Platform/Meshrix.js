@@ -131,6 +131,31 @@ function firstDefined(values?: any) : any {
   return values.find((value?: any) : any => value !== undefined && value !== null && value !== "");
 }
 
+/**
+ * The self-hosted recording configuration source: `runtime.recording` in the
+ * runtime-instance JSON is forwarded verbatim into `runtimeOptions.recording`
+ * so the composition root remains the single normalization/validation owner.
+ * A plain-object check here only guards the JSON shape; field validation is
+ * not duplicated.
+ */
+function resolveRecordingRuntimeOptions(runtimeConfig: any = {}) : any {
+  if (runtimeConfig === undefined || runtimeConfig === null) return undefined;
+  if (typeof runtimeConfig !== "object" || Array.isArray(runtimeConfig)) {
+    throw new TypeError("Runtime configuration must be an object.");
+  }
+  const runtime: any = runtimeConfig.runtime;
+  if (runtime === undefined || !Object.hasOwn(runtime, "recording")) return undefined;
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+    throw new TypeError("runtime must be an object when provided.");
+  }
+  const recording: any = runtime.recording;
+  if (recording === undefined || recording === null) return undefined;
+  if (typeof recording !== "object" || Array.isArray(recording)) {
+    throw new TypeError("runtime.recording must be an object when provided.");
+  }
+  return Object.freeze(structuredClone(recording));
+}
+
 function configValue(config?: any, keys: any = []) : any {
   return firstDefined(keys.map((key?: any) : any => nestedValue(config, key)));
 }
@@ -297,6 +322,7 @@ Options:
   --edition                 功能 edition：core|standard|integrations
   --feature-profile         自定义功能 profile JSON 路径
   ${ENABLED_PLUGINS_CONFIG_PATH}  仅在 runtime-config JSON 中使用的插件 ID 数组；缺省或空数组均不加载插件
+  runtime.recording         企业自托管录制配置（root/sinkId/budgets/reservationTtlMs/policy 标识）；由组合根统一校验
   --server-id               服务实例 ID
   --server-label            服务实例标签
   --bootstrap-url           客户端引导地址
@@ -420,6 +446,7 @@ const runtimeOptions: Record<string, any> = {
   enabledPlugins: resolveEnabledPluginSelection(runtimeConfigObject),
   pluginArtifactTrustedPublicKeys: resolvePluginArtifactTrustedPublicKeys(runtimeConfigObject),
   pluginConfigurations: resolvePluginConfigurations(runtimeConfigObject),
+  recording: resolveRecordingRuntimeOptions(runtimeConfigObject),
   deploymentProfileId: resolveDeploymentProfileId(runtimeConfigObject),
   cwd: projectRoot,
   mountModules: {}

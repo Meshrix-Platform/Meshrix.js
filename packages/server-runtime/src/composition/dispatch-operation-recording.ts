@@ -147,13 +147,15 @@ export function createDispatchOperationRecorder({
   function authorityRefs(): string[] {
     const authorization: any = request?.__meshrixOperationRuntimeAuthorization;
     const subject = subjectFacts();
-    const refs = compactStrings([
+    // Distinct refs only: the lifecycle contract requires unique authority
+    // ids, and grant/subject facts legitimately repeat one identity.
+    const refs = [...new Set<string>(compactStrings([
       authorization?.grantRef,
       authorization?.subjectRef,
       subject.subjectId,
       subject.grantId,
       resolvedSession?.tenantRef || tenantRefFor()
-    ]).map((value?: any) : any => sanitizeRecordingRef(value)).filter(Boolean);
+    ]).map((value?: any) : any => sanitizeRecordingRef(value)).filter((value?: any) : value is string => Boolean(value)))];
     return refs.length > 0 ? refs : ["authority.platform-policy"];
   }
 
@@ -167,7 +169,13 @@ export function createDispatchOperationRecorder({
   }
 
   function contentFields(): string[] {
-    const selection: any = producer.selectionFor("content");
+    // The tenant-scoped selection is looked up under the producing tenant:
+    // single-sink producers ignore the second argument, while the composed
+    // tenant router resolves that tenant's own live policy revision.
+    const selection: any = producer.selectionFor(
+      "content",
+      resolvedSession?.tenantRef || tenantRefFor()
+    );
     if (!selection) return [];
     const allow = new Set<string>((selection.fieldAllow as readonly string[]) || []);
     if (!allow.size || !operationInput || typeof operationInput !== "object" || Array.isArray(operationInput)) {

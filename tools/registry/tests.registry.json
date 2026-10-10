@@ -1374,6 +1374,39 @@
       ]
     },
     {
+      "id": "server-runtime.enterprise-recording-profile",
+      "label": "Enterprise self-hosted recording profile: composition wiring, one configuration source, policy publication, reopen, admission refusal and audit separation",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/enterprise-recording-profile.test.ts"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/contracts/src/recording",
+        "packages/foundation/src/recording",
+        "packages/server-runtime/src/composition/recording-authority.ts",
+        "packages/server-runtime/src/composition/composition-root.ts",
+        "packages/server-runtime/src/composition/server-runtime-providers.ts",
+        "packages/server-runtime/src/composition/http-application-assembly.ts",
+        "packages/server-runtime/src/composition/console-domain/recording-governance-provider.ts",
+        "packages/server-runtime/src/composition/dispatch-operation-recording.ts",
+        "packages/server-runtime/src/composition/gateway-composition.ts",
+        "tools/server-scripts/start-server.ts",
+        "tests/vitest/server/enterprise-recording-profile.test.ts",
+        "docs/functionality/ENTERPRISE-RECORDING.md"
+      ]
+    },
+    {
       "id": "security.authorization-hardening",
       "label": "Authorization concurrency delegation replay and crash-safety regressions",
       "owner": "platform",

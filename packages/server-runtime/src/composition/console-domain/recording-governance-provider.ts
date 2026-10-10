@@ -12,6 +12,7 @@
  * payloads.
  */
 import { createHash } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 
 import {
@@ -21,7 +22,8 @@ import {
 } from "@meshrix/contracts/recording";
 import {
   createRecordingSinkStore,
-  RecordingSinkError
+  RecordingSinkError,
+  RECORDING_SINK_DATABASE_FILE
 } from "@meshrix/foundation/recording/sink-store";
 import { normalizeTenantId } from "@meshrix/foundation/security/auth/console-auth";
 
@@ -88,64 +90,108 @@ export function normalizeRecordingTenantId(value?: unknown): string {
 /**
  * Deterministic per-tenant store directory. The tenant id is hashed into the
  * directory name so the path can never escape the recording root and tenant
- * identities never appear in filesystem layout.
+ * identities never appear in filesystem layout. `recordingRoot` is the
+ * resolved parent that owns every `tenant-*` store directory.
  */
-export function recordingTenantRoot(userDataPath: unknown, tenantId: unknown): string {
-  const root = String(userDataPath || "").trim();
+export function recordingTenantRoot(recordingRoot: unknown, tenantId: unknown): string {
+  const root = String(recordingRoot || "").trim();
   if (!root) {
     throw new RecordingGovernanceError(
       "recording_governance_unavailable",
-      "Recording governance requires an explicit userDataPath."
+      "Recording governance requires an explicit recording root."
     );
   }
   const digest = createHash("sha256").update(String(tenantId)).digest("hex").slice(0, 24);
-  return path.join(path.resolve(root), RECORDING_ROOT_DIR, `tenant-${digest}`);
+  return path.join(path.resolve(root), `tenant-${digest}`);
+}
+
+/**
+ * True when the tenant already owns a durable store under `recordingRoot` —
+ * an open store or a `recording-sink.sqlite` left by an earlier process. The
+ * probe never creates storage, so callers can distinguish "recorded before"
+ * from "never provisioned" without side effects.
+ */
+export function recordingTenantStoreExists(recordingRoot: unknown, tenantId: unknown): boolean {
+  let rootPath = "";
+  try {
+    rootPath = recordingTenantRoot(recordingRoot, tenantId);
+  } catch {
+    return false;
+  }
+  try {
+    return fs.statSync(path.join(rootPath, RECORDING_SINK_DATABASE_FILE)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export function createRecordingGovernanceProvider(options: Record<string, unknown> = {}) {
   const userDataPath = String(options.userDataPath || "").trim();
-  if (!userDataPath) {
-    throw new TypeError("Recording governance provider requires an explicit userDataPath.");
+  const configuredRoot = String(options.recordingRoot || "").trim();
+  if (!userDataPath && !configuredRoot) {
+    throw new TypeError("Recording governance provider requires an explicit userDataPath or recordingRoot.");
   }
+  const recordingRoot = configuredRoot
+    ? path.resolve(configuredRoot)
+    : path.join(path.resolve(userDataPath), RECORDING_ROOT_DIR);
   const now = typeof options.now === "function" ? (options.now as () => number) : () => Date.now();
   const sinkFactory = typeof options.sinkFactory === "function"
     ? (options.sinkFactory as (input: UnknownRecord) => UnknownRecord)
     : null;
+  const sinkOptions = isPlainObjectInput(options.sink) ? options.sink : {};
+  const policyOptions = isPlainObjectInput(options.policy) ? options.policy : {};
+  const reservationTtlMs = options.reservationTtlMs;
   const stores = new Map<string, any>();
 
   function genesisPolicy(): UnknownRecord {
     return createEmptyRecordingPolicy({
-      policyId: RECORDING_POLICY_ID,
+      policyId: String(policyOptions.policyId || "").trim() || RECORDING_POLICY_ID,
       policyRevision: 1,
       issuedAt: new Date(now()).toISOString(),
-      issuerRole: GENESIS_ISSUER_ROLE,
-      configurerRoles: [...GENESIS_CONFIGURER_ROLES]
+      issuerRole: String(policyOptions.issuerRole || "").trim() || GENESIS_ISSUER_ROLE,
+      configurerRoles: Array.isArray(policyOptions.configurerRoles) && policyOptions.configurerRoles.length > 0
+        ? policyOptions.configurerRoles.map((role) => String(role))
+        : [...GENESIS_CONFIGURER_ROLES]
     }) as unknown as UnknownRecord;
   }
 
   function defaultSink(): UnknownRecord {
     return createRecordingSink({
-      sinkId: RECORDING_SINK_ID,
+      sinkId: String(sinkOptions.sinkId || "").trim() || RECORDING_SINK_ID,
       custody: "enterprise_local",
       durable: true,
-      budgets: { ...DEFAULT_SINK_BUDGETS }
+      budgets: {
+        ...DEFAULT_SINK_BUDGETS,
+        ...(isPlainObjectInput(sinkOptions.budgets) ? sinkOptions.budgets : {})
+      }
     }) as unknown as UnknownRecord;
+  }
+
+  function hasStore(tenantId: unknown): boolean {
+    const normalized = normalizeRecordingTenantId(tenantId);
+    return stores.has(normalized) || recordingTenantStoreExists(recordingRoot, normalized);
   }
 
   function storeFor(tenantId: unknown): any {
     const normalized = normalizeRecordingTenantId(tenantId);
     const existing = stores.get(normalized);
     if (existing) return existing;
-    const rootPath = recordingTenantRoot(userDataPath, normalized);
+    const rootPath = recordingTenantRoot(recordingRoot, normalized);
     let store: any = null;
     try {
+      // A store that already holds a policy reopens it; supplying the genesis
+      // policy again would clash with the persisted revision. Only a fresh
+      // root receives the initial policy — publishPolicy is the sole revision
+      // path from then on.
+      const persisted = recordingTenantStoreExists(recordingRoot, normalized);
       store = sinkFactory
         ? sinkFactory({ rootPath, tenantId: normalized })
         : createRecordingSinkStore({
             rootPath,
             sink: defaultSink(),
-            policy: genesisPolicy(),
-            now
+            ...(persisted ? {} : { policy: genesisPolicy() }),
+            now,
+            ...(reservationTtlMs === undefined ? {} : { reservationTtlMs })
           });
     } catch (error: unknown) {
       throw classifiedPolicyError(error);
@@ -297,6 +343,8 @@ export function createRecordingGovernanceProvider(options: Record<string, unknow
     publishPolicy,
     sinkHealth,
     storeFor,
+    hasStore,
+    recordingRoot,
     close
   });
 }

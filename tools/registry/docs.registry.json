@@ -70,6 +70,12 @@
       "description": "Server runtime composition, feature manifests, and operational boundaries."
     },
     {
+      "id": "docs.functionality.enterprise-recording",
+      "path": "docs/functionality/ENTERPRISE-RECORDING.md",
+      "source": "packages/server-runtime/src/composition",
+      "description": "Enterprise self-hosted recording profile: local durable sink, organization-controlled decryption, policy governance, and retired path custody."
+    },
+    {
       "id": "docs.functionality.workspace-assets",
       "path": "docs/functionality/WORKSPACE-ASSETS.md",
       "source": "tools/registry/internal-platform-capability-matrix.json",

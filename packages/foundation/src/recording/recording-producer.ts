@@ -190,7 +190,13 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
   }
 
   /** The live category selection under the current policy revision. */
-  function selectionFor(category: unknown): UnknownRecord | null {
+  /**
+   * `tenantRef` is accepted for tenant-routing facades: a producer bound to
+   * one sink ignores it, while a composed router resolves that tenant's own
+   * live policy revision before answering.
+   */
+  function selectionFor(category: unknown, tenantRef?: unknown): UnknownRecord | null {
+    void tenantRef;
     const current = policy();
     if (!current) return null;
     let byCategory = selectionsByPolicy.get(current);
@@ -212,8 +218,8 @@ export function createRecordingProducer(options: RecordingProducerOptions = {}) 
    * this before maintaining any in-memory buffer so a disabled category
    * collects nothing — no serialization, no buffering, no copies.
    */
-  function categoryEnabled(category: unknown): boolean {
-    return selectionFor(category) !== null;
+  function categoryEnabled(category: unknown, tenantRef?: unknown): boolean {
+    return selectionFor(category, tenantRef) !== null;
   }
 
   function usageOperationRef(bucket: PendingUsageBucket): string {

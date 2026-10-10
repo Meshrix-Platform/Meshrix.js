@@ -38,6 +38,7 @@ import { createStorageProvider } from "#meshrix/foundation/storage/storage-provi
 import { createDevopsProvider } from "#meshrix/server-runtime/composition/devops-provider";
 import { registerDevopsPlatformServices } from "#meshrix/server-runtime/composition/devops-register";
 import { createPlatformRegistry } from "./platform-registry.ts";
+import { createEnterpriseRecordingAuthority } from "./recording-authority.ts";
 import {
   createPluginLifecycleStatePort,
   discoverPluginLifecycleStateIds
@@ -130,7 +131,8 @@ export async function createServerCompositionRoot({
   operationConcurrencyScope: requestedOperationConcurrencyScope = "",
   registerPluginRuntimeMeasurementSource = null,
   pluginHostPorts = {},
-  recordingSink = null
+  recordingSink = null,
+  recordingAuthority: injectedRecordingAuthority = null
 }: Record<string, any>) : Promise<any> {
   if (typeof requestedOperationConcurrencyScope !== "string") {
     throw new TypeError("operationConcurrencyScope must be a string when provided.");
@@ -453,6 +455,22 @@ export async function createServerCompositionRoot({
     logger: runtimeLogger
   });
   resourceClosers.push(() : any => queueApplicationPort.close());
+  // The enterprise recording authority is the single configuration owner for
+  // the self-hosted profile: it normalizes `runtimeOptions.recording`, runs
+  // the one-time retired-path recognition, owns the tenant-scoped governance
+  // provider and exposes the shared producer facade the gateway, dispatch
+  // runtime and Console all use. An explicitly injected recordingSink or
+  // authority is a test override, not a second configuration source.
+  const recordingAuthority: any = injectedRecordingAuthority ||
+    (recordingSink ? null : createEnterpriseRecordingAuthority({
+      userDataPath,
+      recording: runtimeOptions.recording,
+      logger: runtimeLogger
+    }));
+  if (recordingAuthority) {
+    resourceClosers.push(() : any => recordingAuthority.close());
+  }
+  const composedRecordingSink: any = recordingSink || recordingAuthority?.recordingSink || null;
   const coreProvider: any = createCorePlatformProvider({
     operations: activeApiOperations,
     getOperations: getActiveApiOperations,
@@ -462,7 +480,7 @@ export async function createServerCompositionRoot({
     operationLockManager,
     operationConcurrencyScope,
     operationProofSubstrate,
-    recordingSink
+    recordingSink: composedRecordingSink
   });
   const storageProvider: any = createStorageProvider({
     userDataPath,
@@ -667,7 +685,9 @@ export async function createServerCompositionRoot({
     moduleManagement,
     dataStructureSubstrate,
     operationProofSubstrate,
-    recordingSink,
+    recordingSink: composedRecordingSink,
+    recordingAuthority,
+    recordingGovernanceProvider: recordingAuthority?.recordingGovernanceProvider || null,
     consoleAuth,
     securityPermissions,
     deferredProtectedSinkAuthorityPort,

@@ -128,11 +128,18 @@ export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
           "packages/contracts/src/recording",
           "packages/foundation/src/recording",
           "packages/server-runtime/src/composition/console-domain/recording-governance-provider.ts",
-          "packages/server-runtime/src/composition/console-domain/operation-executors/recording-governance-executor.ts"
+          "packages/server-runtime/src/composition/console-domain/operation-executors/recording-governance-executor.ts",
+          "packages/server-runtime/src/composition/recording-authority.ts",
+          "docs/functionality/ENTERPRISE-RECORDING.md"
         ],
         excludePaths: []
       },
-      tests: { suites: ["server.recording-governance-console"] }
+      tests: {
+        suites: [
+          "server.recording-governance-console",
+          "server-runtime.enterprise-recording-profile"
+        ]
+      }
     },
     {
       featureId: "tag-management",

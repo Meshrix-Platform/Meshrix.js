@@ -645,12 +645,15 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
       sanitizeRecordingRef(text(authorization?.authorizationDecision?.decisionId || authorization?.decisionId))
         || `decision.${sanitizeRecordingRef(operationId) || "upstream-mcp"}`;
     const recordingAuthorityRefs = (): string[] => {
-      const refs = [
+      // One authority fact per distinct actor ref: the lifecycle contract
+      // requires unique ids and the principal and subject legitimately share
+      // one identity on a self-hosted call.
+      const refs = [...new Set([
         text(context?.principal),
         text(authority.subject.subjectId),
         text(authorization?.grant?.id || authorization?.grant?.revision),
         sanitizeRecordingRef(text(context?.tenant)) || "tenant.local"
-      ].map((value) => sanitizeRecordingRef(value)).filter(Boolean);
+      ].map((value) => sanitizeRecordingRef(value)).filter(Boolean))];
       return refs.length > 0 ? refs : ["authority.platform-policy"];
     };
     const recordingGovernanceEvent = (): string =>
@@ -672,7 +675,10 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
           : status === "failed" ? "operation.dispatch.failed"
           : status === "in_doubt" ? "operation.dispatch.in_doubt" : "";
         const contentFieldNames = ((): string[] => {
-          const selection = recordingProducer?.selectionFor?.("content");
+          // Tenant-scoped selection: single-sink producers ignore the second
+          // argument; the composed tenant router resolves this session's own
+          // live policy revision.
+          const selection = recordingProducer?.selectionFor?.("content", recordingSession?.tenantRef);
           const allow = new Set((selection?.fieldAllow as readonly string[] | undefined) || []);
           return Object.keys(inputArguments).filter((name) => allow.has(name));
         })();

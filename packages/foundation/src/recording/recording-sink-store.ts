@@ -71,7 +71,9 @@ import { runMigrations } from "../storage/sqlite-migrations.ts";
 type UnknownRecord = Record<string, unknown>;
 
 const SINK_STORE_SCHEMA_VERSION = "v0.0.1:recording:sink-store-1";
-const DATABASE_FILE = "recording-sink.sqlite";
+/** Persisted store filename — exported so owners can recognize (never delete) an existing store without opening it. */
+export const RECORDING_SINK_DATABASE_FILE = "recording-sink.sqlite";
+const DATABASE_FILE = RECORDING_SINK_DATABASE_FILE;
 const ARTIFACT_DIR = "artifacts";
 const GENESIS_DIGEST = `sha256:${"0".repeat(64)}`;
 const ARTIFACT_REF_PREFIX = "art.";

@@ -260,7 +260,8 @@ export async function createServerConsoleOperationProviders({
   operationAuditStore,
   getListenUrl = () : any => "",
   getAgentWorkspace = () : any => null,
-  secretKeyProvider = null
+  secretKeyProvider = null,
+  recordingGovernanceProvider: injectedRecordingGovernanceProvider = null
 }: Record<string, any>) : Promise<any> {
   let contributionRegistry: any = null;
   const ownedResources: any[] = [];
@@ -395,8 +396,15 @@ export async function createServerConsoleOperationProviders({
     ownedResources.push(sampleCapabilityPackStore);
     const securityAlertStore: any = createSecurityAlertStore({ userDataPath });
     ownedResources.push(securityAlertStore);
-    const recordingGovernanceProvider: any = createRecordingGovernanceProvider({ userDataPath });
-    ownedResources.push(recordingGovernanceProvider);
+    // The composition root injects the authority-owned provider so the Console
+    // and the producer facade share one tenant store set and one policy
+    // revision history. The fallback keeps direct callers (tests, embedding
+    // hosts) on the same default recording root under userDataPath.
+    const recordingGovernanceProvider: any = injectedRecordingGovernanceProvider ||
+      createRecordingGovernanceProvider({ userDataPath });
+    if (!injectedRecordingGovernanceProvider) {
+      ownedResources.push(recordingGovernanceProvider);
+    }
     const executiveReportProvider: Readonly<Record<string, any>> = Object.freeze({
       preview: buildExecutiveReport,
       list: (input: Record<string, any> = {}) : any => executiveReportStore.list(input),
