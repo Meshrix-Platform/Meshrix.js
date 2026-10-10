@@ -50,14 +50,22 @@ new_sqlite_classes = ["MailboxDO"]
 # `compatibility_date` and `compatibility_flags` remain inherited from the
 # top-level configuration.
 #
-# Every account/token value below is a placeholder. No Cloudflare account is
-# configured anywhere in this package: `npm run deploy` is the documented
-# deploy shape for a separately authorized delivery only and is never invoked
-# by build, typecheck or test commands. Filling in a real account_id or admin
-# token is an authorized deployment change, not an engineering-check edit.
+# Staging is the authorized Cloudflare deployment shape (Workers Free plan,
+# account 4463b244…175e1): `wrangler deploy --env staging` publishes the real
+# worker and creates the relay.meshrix.io custom-domain route; the edge
+# certificate is Cloudflare-provisioned. RELAY_ADMIN_TOKEN is a real secret
+# installed via `wrangler secret put` — it is never committed as a var.
 [env.staging]
 name = "meshrix-private-relay-staging"
-account_id = "PLACEHOLDER-REPLACE-ONLY-IN-AUTHORIZED-DEPLOYMENT"
+account_id = "4463b244fa145a838d0a3b44bdb175e1"
+workers_dev = true
+
+# Custom domain on the user's own zone: Cloudflare issues and renews the
+# edge certificate automatically — no ACME, no manual generation. The DNS
+# record is created by `wrangler deploy` (Workers Routes: write scope).
+[[env.staging.routes]]
+pattern = "relay.meshrix.io"
+custom_domain = true
 
 [env.staging.vars]
 RELAY_MAX_SESSION_MESSAGE_BYTES = "393216"
