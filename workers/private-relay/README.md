@@ -155,6 +155,16 @@ per-message counters are in-memory. Read via
 `GET /admin/counters/<session|directory|vault|mailbox>/...` —
 real per-operation counts, no invented monthly cost figures.
 
+`GET /admin/metrics?tenant=<tenantId>[&vault=<vaultId>]` exports the same
+counters as a Prometheus text exposition (`text/plain; version=0.0.4`):
+`meshrix_relay_<counter>` series labeled `object`, `tenant`, `route`,
+`device` and `scope` (`durable` for the SQLite-flushed tier, `ephemeral`
+for in-memory counters). The tenant directory's bounded
+`/internal/inventory` enumeration drives the fan-out over session and
+mailbox objects; vault objects are scraped only for explicit `vault` ids
+and summed into one series. Counts and opaque ids only — never payloads,
+credentials, digests or nonces.
+
 ## Scripts
 
 | Command | Purpose |

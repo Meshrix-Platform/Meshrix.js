@@ -116,6 +116,23 @@ const DURABLE_KEYS: readonly RelayCounterKey[] = Object.freeze([
   "mailboxBundlesPublished",
 ]);
 
+/** Every counter key in declared order — the exposition iterates this set. */
+export const RELAY_COUNTER_KEYS: readonly RelayCounterKey[] = Object.freeze(
+  Object.keys(emptyCounters()) as RelayCounterKey[],
+);
+
+export type RelayCounterScope = "durable" | "ephemeral";
+
+/**
+ * Which tier a counter honestly belongs to: durable keys flush to the
+ * object's SQLite storage at bounded transitions; every other key lives in
+ * memory only and resets on eviction. Exposition labels by this mapping
+ * rather than pretending per-frame counters survive restart.
+ */
+export function counterScope(key: RelayCounterKey): RelayCounterScope {
+  return DURABLE_KEYS.includes(key) ? "durable" : "ephemeral";
+}
+
 export class RelayCounters {
   private durable: RelayCountersShape;
   private ephemeral: RelayCountersShape = emptyCounters();
@@ -149,4 +166,117 @@ export class RelayCounters {
     }
     return merged;
   }
+
+  /**
+   * Three-way view for the internal counters endpoint: `counters` is the
+   * merged shape the /admin/counters JSON route has always returned, while
+   * `durable`/`ephemeral` expose the honest tier split the Prometheus
+   * exposition scopes by — merged values alone could not show which counts
+   * survive eviction.
+   */
+  tieredSnapshot(): { counters: RelayCountersShape; durable: RelayCountersShape; ephemeral: RelayCountersShape } {
+    return {
+      counters: this.snapshot(),
+      durable: { ...this.durable },
+      ephemeral: { ...this.ephemeral },
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prometheus text exposition (version 0.0.4)
+// ---------------------------------------------------------------------------
+
+/** Which object class a scraped counter set belongs to. */
+export type RelayMetricObject = "session" | "mailbox" | "directory" | "vault";
+
+/**
+ * One scraped object's counters plus its exposition labels. Label values are
+ * opaque routing ids and fixed enumerations only — never payloads, nonces,
+ * signatures, credential material or digests.
+ */
+export interface RelayMetricSample {
+  labels: {
+    object: RelayMetricObject;
+    tenant: string;
+    /** Empty for `directory` and `vault` objects. */
+    route: string;
+    /** Empty unless `object` is `mailbox`. */
+    device: string;
+  };
+  durable: RelayCountersShape;
+  ephemeral: RelayCountersShape;
+}
+
+const COUNTER_HELP: Record<RelayCounterKey, string> = {
+  storageReads: "Durable Object storage read operations.",
+  storageWrites: "Durable Object storage write operations.",
+  storageDeletes: "Durable Object storage delete operations.",
+  alarmRuns: "Scheduled alarm invocations.",
+  webSocketEvents: "WebSocket message, close and error events handled.",
+  httpRequests: "Internal HTTP requests handled by the object.",
+  messagesIn: "Wire messages received from connected sockets.",
+  messagesOut: "Wire messages sent to connected sockets.",
+  bytesIn: "Wire bytes received from connected sockets.",
+  bytesOut: "Wire bytes sent to connected sockets.",
+  framesForwarded: "Opaque frames forwarded to the peer socket.",
+  framesDropped: "Frames refused by bounded queues or admission limits.",
+  flowCreditsGranted: "Flow-credit grants emitted to senders.",
+  rateLimitDrops: "Messages dropped by the inbound message rate limit.",
+  sessionsAdmitted: "Sessions admitted after directory authority checks.",
+  sessionsRejected: "Session opens rejected with a typed reason.",
+  sessionsClosed: "Sessions closed or superseded by a newer connection.",
+  sessionsRevoked: "Sessions terminated by a revocation push.",
+  sessionsRestored: "Sessions restored through reconnect.",
+  directoryChecks: "Directory authority lookups performed.",
+  vaultReads: "Vault snapshot reads served.",
+  vaultWritesCommitted: "Vault writes committed by compare-and-swap.",
+  vaultWritesConflicting: "Vault writes reporting a revision conflict.",
+  vaultWritesRefused: "Vault writes refused before commit.",
+  vaultFetches: "Vault fetch requests handled.",
+  vaultFetchRefusals: "Vault fetch requests refused.",
+  mailboxAccepted: "Peer envelopes accepted into a mailbox partition.",
+  mailboxDuplicate: "Peer sends answered by the stored idempotent outcome.",
+  mailboxConflict: "Peer sends refused as id/envelope conflicts.",
+  mailboxFetched: "Peer mailbox pages fetched.",
+  mailboxAcked: "Peer acknowledgements durably recorded.",
+  mailboxExpired: "Mailbox entries expired or capacity-truncated.",
+  mailboxRefusals: "Mailbox requests refused with a typed reason.",
+  mailboxBundlesPublished: "Peer prekey bundles published.",
+  mailboxBundlesFetched: "Peer prekey bundles fetched.",
+};
+
+/** `sessionsAdmitted` → `meshrix_relay_sessions_admitted`. */
+export function counterMetricName(key: RelayCounterKey): string {
+  return `meshrix_relay_${key.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`)}`;
+}
+
+function escapeLabelValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n");
+}
+
+/**
+ * Render the text exposition format (`text/plain; version=0.0.4`): one
+ * HELP/TYPE pair per counter, then every scraped object's sample under the
+ * scope the counter actually lives in (`durable` keys report the
+ * SQLite-flushed tier, `ephemeral` keys the in-memory tier). Samples carry
+ * counts and opaque ids only.
+ */
+export function renderPrometheusExposition(samples: RelayMetricSample[]): string {
+  const lines: string[] = [];
+  for (const key of RELAY_COUNTER_KEYS) {
+    const name = counterMetricName(key);
+    const scope = counterScope(key);
+    lines.push(`# HELP ${name} ${COUNTER_HELP[key]}`);
+    lines.push(`# TYPE ${name} counter`);
+    for (const sample of samples) {
+      const value = scope === "durable" ? sample.durable[key] : sample.ephemeral[key];
+      const { object, tenant, route, device } = sample.labels;
+      lines.push(
+        `${name}{object="${escapeLabelValue(object)}",tenant="${escapeLabelValue(tenant)}",`
+        + `route="${escapeLabelValue(route)}",device="${escapeLabelValue(device)}",scope="${scope}"} ${value}`,
+      );
+    }
+  }
+  return `${lines.join("\n")}\n`;
 }

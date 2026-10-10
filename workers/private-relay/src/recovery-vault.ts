@@ -100,7 +100,7 @@ export class RecoveryVaultDO extends DurableObject<PrivateRelayEnv> {
         return await this.handleProvision(request);
       }
       if (request.method === "GET" && url.pathname === "/internal/counters") {
-        return jsonResponse({ counters: this.counters.snapshot() });
+        return jsonResponse(this.counters.tieredSnapshot());
       }
       if (request.method === "GET" && url.pathname === "/internal/state") {
         this.counters.count("storageReads");

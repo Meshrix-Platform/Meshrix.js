@@ -117,7 +117,10 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
         return await this.handleRoutePeer(request);
       }
       if (request.method === "GET" && url.pathname === "/internal/counters") {
-        return jsonResponse({ counters: this.counters.snapshot() });
+        return jsonResponse(this.counters.tieredSnapshot());
+      }
+      if (request.method === "GET" && url.pathname === "/internal/inventory") {
+        return await this.handleInventory();
       }
       if (request.method === "GET" && url.pathname === "/state") {
         return await this.handleState();
@@ -401,6 +404,32 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
       ok: true,
       admissionGeneration: device.admissionGeneration,
       revocationRevision: meta.revocationRevision,
+    });
+  }
+
+  /**
+   * Bounded enumeration of this tenant's routes and enrolled devices for
+   * metrics fan-out. Uses the same list-prefix derivation the revoke path
+   * builds `affectedRouteIds`/`affectedDevices` with — deduplicated sets
+   * sliced to the tenant enrollment bounds — so enumeration can never exceed
+   * the limits the directory itself enforces. Revoked tombstones stay
+   * enumerated: their session/mailbox objects may still hold counters.
+   */
+  private async handleInventory(): Promise<Response> {
+    this.counters.count("storageReads", 2);
+    const [devices, routes] = await Promise.all([
+      this.ctx.storage.list<DeviceRecord>({ prefix: DEVICE_PREFIX }),
+      this.ctx.storage.list<RouteRecord>({ prefix: ROUTE_PREFIX }),
+    ]);
+    const affectedRoutes = new Set<string>();
+    const affectedDevices = new Map<string, { routeId: string; deviceId: string }>();
+    for (const route of routes.values()) affectedRoutes.add(route.routeId);
+    for (const device of devices.values()) {
+      affectedDevices.set(device.deviceId, { routeId: device.routeId, deviceId: device.deviceId });
+    }
+    return jsonResponse({
+      routes: [...affectedRoutes].slice(0, RELAY_RUNTIME_LIMITS.maxRoutesPerTenant),
+      devices: [...affectedDevices.values()].slice(0, RELAY_RUNTIME_LIMITS.maxDevicesPerTenant),
     });
   }
 

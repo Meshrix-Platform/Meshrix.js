@@ -68,7 +68,7 @@ either impossible (ciphertext is never decoded) or deliberately uncollected.
 | Transport metadata | Message/frame **sizes and counts**, per-direction outstanding bytes/frames, frame sequence ids, ack cursors, connection/disconnection **timing**, pending-socket age, alarm schedule |
 | Vault metadata | Opaque vault locator, generation, revision, ciphertext length, ciphertext `sha256` digest, writer/recovery **public** verifier material, single-use nonce **digests** (not nonces) |
 | Provider-side transport facts inherent to terminating TLS/WebSocket | Peer IP and connection timing at the edge — collected by Cloudflare, not read, logged or persisted by this Worker's code |
-| Billing counters | Per-operation reads/writes/events/bytes via `GET /admin/counters/...` — counts only |
+| Billing counters | Per-operation reads/writes/events/bytes via `GET /admin/counters/...` and the Prometheus text exposition at `GET /admin/metrics` — counts and opaque ids only |
 
 | The relay never sees | Why |
 | --- | --- |
@@ -80,6 +80,40 @@ either impossible (ciphertext is never decoded) or deliberately uncollected.
 Socket attachments persist rebuildable routing tags only; durable writes are
 confined to bounded transition checkpoints (admit, close, throttled cursor
 checkpoints, vault commits) — never per frame.
+
+### Metrics exposition
+
+`GET /admin/metrics?tenant=<tenantId>[&vault=<vaultId>]` sits on the same
+local admin surface as `/admin/counters` (identical `RELAY_ADMIN_TOKEN`
+bearer check) and returns a Prometheus text exposition
+(`text/plain; version=0.0.4`) instead of JSON. Each `RelayCountersShape`
+key becomes one `counter` metric `meshrix_relay_<counter>` labeled
+`object` (`session`/`mailbox`/`directory`/`vault`), `tenant`, `route`
+(empty for directory/vault), `device` (empty unless mailbox) and `scope`:
+
+- `scope="durable"` — the SQLite-flushed tier (`DURABLE_KEYS` in
+  `src/metrics.ts`): storage and admission/revocation/vault/mailbox
+  transition counters that survive hibernation eviction.
+- `scope="ephemeral"` — the in-memory tier: per-message, per-byte and
+  per-event counters that honestly reset on eviction; the label exists so
+  dashboards never read them as durable.
+
+The fan-out is bounded and enumeration-driven: the tenant directory
+reports its own counters plus `GET /internal/inventory` — the same
+deduplicated route/device derivation the revoke path uses, sliced to
+`RELAY_RUNTIME_LIMITS.maxRoutesPerTenant`/`maxDevicesPerTenant` — and every
+enumerated `session:<tenant>/<route>` and `mailbox:<tenant>/<route>/<device>`
+object's `/internal/counters` is scraped in parallel. Vault objects have no
+tenant registry, so they are scraped only for explicit `vault` query ids
+(bounded by the same slice) and summed into one `object="vault"` series —
+the label set carries no vault id. Scraping instantiates named objects that
+were never active; they report their real (near-zero) counts, never
+invented values. Revoked tombstones stay enumerated because their objects
+may still hold counters.
+
+The exposition carries counts and opaque routing ids only — no payload
+bytes, plaintext, nonces, signatures, credential digests or tokens appear
+in metric names, label values or help text.
 
 ## Operational error taxonomy
 

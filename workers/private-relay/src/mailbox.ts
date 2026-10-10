@@ -226,7 +226,7 @@ export class MailboxDO extends DurableObject<PrivateRelayEnv> {
         return await this.handleApplyRevocation(request);
       }
       if (request.method === "GET" && url.pathname === "/internal/counters") {
-        return jsonResponse({ counters: this.counters.snapshot() });
+        return jsonResponse(this.counters.tieredSnapshot());
       }
       if (request.method === "GET" && url.pathname === "/internal/state") {
         const meta = await this.requireMeta();

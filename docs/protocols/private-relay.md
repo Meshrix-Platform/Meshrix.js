@@ -379,6 +379,7 @@ honest state surface, inner-channel dispatch over pinned TLS and signal drain.
 | Peer mailbox wire schemas, corpus, receipt taxonomy | `NODE-PEER-WIRE` (`packages/contracts/src/private-relay/private-relay-peer.ts`) |
 | Mailbox Durable Object runtime | `NODE-MAILBOX-RUNTIME` |
 | Relay runtime admission/forwarding (Workerd/DO) | `NODE-RELAY-RUNTIME` |
+| Relay metrics exposition, directory inventory fan-out | `NODE-METRICS-EXPORT` (`workers/private-relay/`) |
 | Endpoint gateway transitions, operation recovery execution | `NODE-ENDPOINT-GATEWAY` |
 | Endpoint trust/recovery proof implementation | `NODE-ENDPOINT-GATEWAY` |
 | Endpoint packaging/start/stop/state surface | `NODE-ENDPOINT-PROFILE` (`apps/mcp-gateway-installer/src/private-endpoint/`) |

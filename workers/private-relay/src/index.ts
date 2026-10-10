@@ -11,6 +11,9 @@
  *   GET  /admin/tenants/:tenantId/directory         operator view (digests hidden)
  *   POST /admin/vaults/:vaultId/provision           writer/recovery key provisioning
  *   GET  /admin/counters/:object/:key               per-object operation counters
+ *   GET  /admin/metrics?tenant=<id>[&vault=<id>]    Prometheus text exposition
+ *                                                   fanned out over the tenant's
+ *                                                   enumerated objects
  *
  * The admin surface is a local-provisioning boundary guarded by the
  * RELAY_ADMIN_TOKEN var (synthetic in wrangler.toml for local checks). It is
@@ -21,6 +24,8 @@ import type { PrivateRelayEnv } from "./env.ts";
 import { RELAY_RUNTIME_LIMITS } from "./env.ts";
 import { bearerToken, jsonResponse } from "./http.ts";
 import { constantTimeEqual, directoryObjectName, isOpaqueId, mailboxObjectName, sessionObjectName, vaultObjectName } from "./ids.ts";
+import type { RelayCounterKey, RelayCountersShape, RelayMetricSample } from "./metrics.ts";
+import { RELAY_COUNTER_KEYS, emptyCounters, renderPrometheusExposition } from "./metrics.ts";
 
 export { RelayDirectoryDO } from "./relay-directory.ts";
 export { RelaySessionDO } from "./relay-session.ts";
@@ -77,6 +82,124 @@ async function propagateRevocation(
     });
     await response.arrayBuffer();
   }));
+}
+
+/**
+ * Read one object's `/internal/counters` into the honest tier split. The
+ * merged `counters` member is intentionally ignored — scope labels must come
+ * from the real tiers. Unknown keys and non-numeric values are dropped; a
+ * payload missing the split contributes nothing rather than fake a tier.
+ */
+function normalizeCounterTier(value: unknown): RelayCountersShape | null {
+  if (!value || typeof value !== "object") return null;
+  const shape = emptyCounters();
+  for (const key of RELAY_COUNTER_KEYS) {
+    const raw = (value as Record<RelayCounterKey, unknown>)[key];
+    if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) shape[key] = raw;
+  }
+  return shape;
+}
+
+async function scrapeCounterTiers(stub: DurableObjectStub, url: string): Promise<{ durable: RelayCountersShape; ephemeral: RelayCountersShape } | null> {
+  try {
+    const response = await stub.fetch(url);
+    const payload = await response.json().catch(() => null) as {
+      durable?: unknown;
+      ephemeral?: unknown;
+    } | null;
+    if (!response.ok || !payload) return null;
+    const durable = normalizeCounterTier(payload.durable);
+    const ephemeral = normalizeCounterTier(payload.ephemeral);
+    if (!durable || !ephemeral) return null;
+    return { durable, ephemeral };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prometheus text exposition for one tenant: the directory's own counters
+ * plus its bounded inventory drive the fan-out — every enumerated route's
+ * session object and every enumerated device's mailbox partition is scraped
+ * through `/internal/counters`. Vault objects have no tenant-scoped
+ * registry, so they are included only for explicit `vault` query ids and
+ * are summed into one `object="vault"` series (the exposition label set
+ * carries no vault id). Values are counts labeled by opaque ids; nothing
+ * else leaves the objects.
+ */
+async function handleAdminMetrics(url: URL, env: PrivateRelayEnv): Promise<Response> {
+  const tenantId = url.searchParams.get("tenant") ?? "";
+  if (!isOpaqueId(tenantId)) return jsonResponse({ error: "identity_ambiguous" }, 400);
+  const vaultIds = [...new Set(url.searchParams.getAll("vault"))]
+    .slice(0, RELAY_RUNTIME_LIMITS.maxRoutesPerTenant);
+  for (const vaultId of vaultIds) {
+    if (!isOpaqueId(vaultId)) return jsonResponse({ error: "identity_ambiguous" }, 400);
+  }
+
+  const directory = env.RELAY_DIRECTORY.get(env.RELAY_DIRECTORY.idFromName(directoryObjectName(tenantId)));
+  const [directoryCountersResponse, inventoryResponse] = await Promise.all([
+    scrapeCounterTiers(directory, "http://directory.internal/internal/counters"),
+    directory.fetch("http://directory.internal/internal/inventory").catch(() => null),
+  ]);
+  const inventory = inventoryResponse?.ok
+    ? await inventoryResponse.json() as { routes?: string[]; devices?: { routeId: string; deviceId: string }[] }
+    : { routes: [], devices: [] };
+  const routeIds = (Array.isArray(inventory.routes) ? inventory.routes : [])
+    .filter(isOpaqueId)
+    .slice(0, RELAY_RUNTIME_LIMITS.maxRoutesPerTenant);
+  const devices = (Array.isArray(inventory.devices) ? inventory.devices : [])
+    .filter((device) => isOpaqueId(device?.routeId) && isOpaqueId(device?.deviceId))
+    .slice(0, RELAY_RUNTIME_LIMITS.maxDevicesPerTenant);
+
+  const samples: RelayMetricSample[] = [];
+  if (directoryCountersResponse) {
+    samples.push({
+      labels: { object: "directory", tenant: tenantId, route: "", device: "" },
+      ...directoryCountersResponse,
+    });
+  }
+
+  // `Promise.all` preserves declaration order — sessions by route, then
+  // mailboxes — so exposition ordering stays deterministic. Vault objects
+  // share the fixed (object,tenant,route,device) label set, so their
+  // counters are summed into a single object-class series instead of
+  // emitting duplicate label sets.
+  const [fanned, vaultScrapes] = await Promise.all([
+    Promise.all([
+      ...routeIds.map(async (routeId) => {
+        const stub = env.RELAY_SESSION.get(env.RELAY_SESSION.idFromName(sessionObjectName(tenantId, routeId)));
+        const tiers = await scrapeCounterTiers(stub, "http://session.internal/internal/counters");
+        return tiers ? { labels: { object: "session" as const, tenant: tenantId, route: routeId, device: "" }, ...tiers } : null;
+      }),
+      ...devices.map(async ({ routeId, deviceId }) => {
+        const stub = env.RELAY_MAILBOX.get(env.RELAY_MAILBOX.idFromName(mailboxObjectName(tenantId, routeId, deviceId)));
+        const tiers = await scrapeCounterTiers(stub, "http://mailbox.internal/internal/counters");
+        return tiers ? { labels: { object: "mailbox" as const, tenant: tenantId, route: routeId, device: deviceId }, ...tiers } : null;
+      }),
+    ]),
+    Promise.all(vaultIds.map((vaultId) => {
+      const stub = env.RECOVERY_VAULT.get(env.RECOVERY_VAULT.idFromName(vaultObjectName(vaultId)));
+      return scrapeCounterTiers(stub, "http://vault.internal/internal/counters");
+    })),
+  ]);
+  for (const sample of fanned) if (sample) samples.push(sample);
+  const vaultTotals = { durable: emptyCounters(), ephemeral: emptyCounters() };
+  let vaultSeen = false;
+  for (const tiers of vaultScrapes) {
+    if (!tiers) continue;
+    vaultSeen = true;
+    for (const key of RELAY_COUNTER_KEYS) {
+      vaultTotals.durable[key] += tiers.durable[key];
+      vaultTotals.ephemeral[key] += tiers.ephemeral[key];
+    }
+  }
+  if (vaultSeen) {
+    samples.push({ labels: { object: "vault", tenant: tenantId, route: "", device: "" }, ...vaultTotals });
+  }
+
+  return new Response(renderPrometheusExposition(samples), {
+    headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
+  });
 }
 
 export default {
@@ -184,6 +307,9 @@ export default {
         if (!isOpaqueId(first)) return jsonResponse({ error: "not_found" }, 404);
         const stub = env.RECOVERY_VAULT.get(env.RECOVERY_VAULT.idFromName(vaultObjectName(first)));
         return stub.fetch("http://vault.internal/internal/counters");
+      }
+      if (path === "/admin/metrics" && request.method === "GET") {
+        return await handleAdminMetrics(url, env);
       }
       const vaultStateMatch = path.match(/^\/admin\/vaults\/([^/]+)\/state$/u);
       if (vaultStateMatch && request.method === "GET") {

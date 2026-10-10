@@ -271,7 +271,7 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
       }
       if (request.method === "GET" && url.pathname === "/internal/counters") {
         await this.cursorWriteChain;
-        return jsonResponse({ counters: this.counters.snapshot() });
+        return jsonResponse(this.counters.tieredSnapshot());
       }
       if (request.method === "GET" && url.pathname === "/internal/state") {
         return jsonResponse({
