@@ -25,11 +25,13 @@ RELAY_ADMIN_SURFACE = "local"
 # `wrangler secret put RELAY_TICKET_SECRET`; self-hosted private surfaces
 # may also omit it (bare-token shape).
 RELAY_TICKET_SECRET = "local-only-synthetic-ticket-secret"
-# Synthetic invite key for local checks only: mint invite tickets through
-# `tools/invite-mint.mjs` and redeem at /join. Public deployments install a
-# real `wrangler secret put RELAY_INVITE_SECRET`; self-hosted private
-# surfaces may omit it (redemption then stays fully closed).
-RELAY_INVITE_SECRET = "local-only-synthetic-invite-secret"
+# Synthetic invite *verification* key for local checks only — an Ed25519
+# public key (base64url raw), so committing it is correct even on real
+# deployments: the relay can verify invitations but can never mint them.
+# The matching synthetic private key lives in test/helpers.ts for the
+# suite; real issuers generate their own pair via `tools/invite-mint.mjs
+# keygen` and publish only the public half. Unset → redemption closed.
+RELAY_INVITE_PUBLIC_KEY = "s62QRUuvbgXe-pM7WyyHBtjiMS-XWVrZ4IMOEwgWRHg"
 RELAY_MAX_SESSION_MESSAGE_BYTES = "393216"
 RELAY_MAX_VAULT_MESSAGE_BYTES = "1572864"
 # Deployment-selected peer mailbox retention policy: finite byte capacity,
@@ -103,11 +105,17 @@ RELAY_METRICS_DURABLE = "0"
 # RELAY_ADMIN_SURFACE unset, so /admin/* does not exist on the edge at all
 # (404 — stronger than a credential gate). When the operator needs remote
 # admin on this deployment, the correct shape is a Cloudflare
-# Access-protected hostname plus RELAY_ADMIN_SURFACE="access", which also
-# demands the Cf-Access-Jwt-Assertion header (workers.dev bypass gets 404).
+# Access-protected hostname plus RELAY_ADMIN_SURFACE="access" with a
+# verified JWT (RELAY_ACCESS_TEAM + RELAY_ACCESS_AUD); workers.dev is
+# disabled, so there is no bypass route.
 # RELAY_ADMIN_TOKEN is intentionally absent here: a real deployment provides
 # it through `wrangler secret put` under authorized ownership; provisioning
 # tokens are never committed as vars.
+# Invite admission is key-separated: staging needs only the issuer's
+# Ed25519 *public* key as RELAY_INVITE_PUBLIC_KEY (a var — public material),
+# while the signing private key stays offline with the invitation
+# authority. RELAY_TICKET_SECRET remains the one secret requiring
+# `wrangler secret put`.
 
 [env.staging.durable_objects]
 bindings = [

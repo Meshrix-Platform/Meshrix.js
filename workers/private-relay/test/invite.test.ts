@@ -9,18 +9,23 @@
 import { env, SELF } from "cloudflare:test";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { issueInviteTicket } from "../src/invite.ts";
-import { ADMIN_TOKEN, RELAY_ORIGIN, ROUTE_1, TENANT_A, WsClient } from "./helpers.ts";
+import { importInviteSigningKey, issueInviteTicket } from "../src/invite.ts";
+import { ADMIN_TOKEN, INVITE_PRIVATE_KEY_PKCS8, RELAY_ORIGIN, ROUTE_1, TENANT_A, WsClient } from "./helpers.ts";
 
-const SECRET = env.RELAY_INVITE_SECRET as string;
-const ORIGINAL_SECRET = env.RELAY_INVITE_SECRET;
+const ORIGINAL_PUBLIC_KEY = env.RELAY_INVITE_PUBLIC_KEY;
+let issuerKey: Promise<CryptoKey> | null = null;
+
+function signingKey(): Promise<CryptoKey> {
+  issuerKey ??= importInviteSigningKey(INVITE_PRIVATE_KEY_PKCS8);
+  return issuerKey;
+}
 
 afterEach(() => {
-  env.RELAY_INVITE_SECRET = ORIGINAL_SECRET;
+  env.RELAY_INVITE_PUBLIC_KEY = ORIGINAL_PUBLIC_KEY;
 });
 
-async function mint(overrides: Record<string, unknown> = {}): Promise<string> {
-  return issueInviteTicket(SECRET, {
+async function mint(overrides: Record<string, unknown> = {}, key?: CryptoKey): Promise<string> {
+  return issueInviteTicket(key ?? await signingKey(), {
     tenantId: TENANT_A,
     routeId: `route.invite.${Math.random().toString(36).slice(2, 8)}`,
     role: "entry",
@@ -47,9 +52,16 @@ describe("invite-only join surface", () => {
   });
 
   it("rejects a forged invitation at the edge before object work", async () => {
-    const response = await redeem("inv1.Zm9yZ2Vk.forgedforgedforgedforged1", "dev.x.1");
+    const response = await redeem("inv2.Zm9yZ2Vk.forgedforgedforgedforged1", "dev.x.1");
     expect(response.status).toBe(401);
     expect((await response.json() as { error?: string }).error).toBe("invite_invalid");
+
+    // A ticket signed by a DIFFERENT Ed25519 key — real signature, wrong
+    // authority — is just as dead. The relay holds a verification key,
+    // so minting requires the issuer's private key, not relay access.
+    const foreign = await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign"]) as CryptoKeyPair;
+    const foreignMint = await mint({}, foreign.privateKey);
+    expect((await redeem(foreignMint, "dev.x.1b")).status).toBe(401);
   });
 
   it("rejects expired invitations", async () => {
@@ -84,9 +96,9 @@ describe("invite-only join surface", () => {
     expect((await redeem(invite, "dev.multi.2")).status).toBe(410); // invite_spent — one slot, one mint
   });
 
-  it("rejects redemption entirely when the invite secret is unset", async () => {
-    delete env.RELAY_INVITE_SECRET;
-    const response = await redeem("inv1.anything.anythinganythinganything1", "dev.x.4");
+  it("rejects redemption entirely when no verification key is configured", async () => {
+    delete env.RELAY_INVITE_PUBLIC_KEY;
+    const response = await redeem("inv2.anything.anythinganythinganything1", "dev.x.4");
     expect(response.status).toBe(401);
   });
 

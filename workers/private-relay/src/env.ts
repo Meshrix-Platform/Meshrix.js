@@ -40,11 +40,15 @@ export interface PrivateRelayEnv {
    */
   RELAY_TICKET_SECRET?: string;
   /**
-   * HMAC key for invitation tickets (`src/invite.ts`). Set it to open the
-   * invite-only join surface (`/join` + `/invite/redeem`); unset keeps
-   * redemption fully closed — there is no open registration anywhere.
+   * Ed25519 public verification key for invitation tickets
+   * (`src/invite.ts`), base64url raw 32 bytes. It is a verification key,
+   * not a credential — committing it in `vars` is correct, and the relay
+   * can never mint invitations from it. The signing private key lives
+   * only with the invitation authority (offline mint or the closed
+   * activation service). Unset keeps redemption fully closed — there is
+   * no open registration anywhere.
    */
-  RELAY_INVITE_SECRET?: string;
+  RELAY_INVITE_PUBLIC_KEY?: string;
   /**
    * Cloudflare Access team name for the `"access"` admin surface
    * (`src/access.ts`) — forms `https://{team}.cloudflareaccess.com`.

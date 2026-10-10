@@ -15,6 +15,13 @@ import { snapshotCiphertextDigest, vaultFetchTranscript, vaultWriteTranscript } 
 
 export const ADMIN_TOKEN = "local-only-synthetic-admin-token";
 export const RELAY_ORIGIN = "https://relay.test";
+/**
+ * Synthetic local-only invite signing key (PKCS8, base64url) whose public
+ * half is the `RELAY_INVITE_PUBLIC_KEY` var in the committed local
+ * profile. Used only by the test suite to mint tickets — a real issuer's
+ * private key never enters this repository.
+ */
+export const INVITE_PRIVATE_KEY_PKCS8 = "MC4CAQAwBQYDK2VwBCIEIN4gE0_2Doc0lS9J575qYulQEh4Dtl4U7gd2JONu_pMF";
 
 export const TENANT_A = "tenant.pr.1";
 export const TENANT_B = "tenant.pr.2";

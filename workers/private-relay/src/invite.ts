@@ -2,33 +2,33 @@
  * Invitation tickets — the invite-only admission contract.
  *
  * There is no open registration: the only way a new device enters a route
- * is a signed invitation minted offline by the operator
- * (`tools/invite-mint.mjs`) holding `RELAY_INVITE_SECRET`. The public
- * `/invite/redeem` route verifies the HMAC tag with zero storage, so
- * forged invitations die at the worker edge without instantiating a
- * Durable Object — the same cost posture as session tickets. Replay is
- * bounded by the directory object, which spends each `jti` in a
- * transaction and honors the minted `uses` count.
+ * is a signed invitation minted by the invitation authority holding the
+ * Ed25519 *private* key (`tools/invite-mint.mjs` for self-hosted issuance;
+ * a hosted activation service is a separate codebase). The relay holds
+ * only the public verification key — `RELAY_INVITE_PUBLIC_KEY` is a var,
+ * not a secret, and safe to commit — so a compromised relay can verify
+ * invitations but can never mint them. `/invite/redeem` verifies the
+ * signature with zero storage, so forged invitations die at the worker
+ * edge without instantiating a Durable Object — the same cost posture as
+ * session tickets. Replay is bounded by the directory object, which
+ * spends each `jti` in a transaction under single-slot semantics.
  *
- * Wire format: `inv1.<base64url(json-claims)>.<tag24>` where claims are
- * `{ j: jti, t: tenantId, r: routeId, role, m?: mode, e: expiryMs }`.
- * Single-use by slot semantics — a route holds exactly one device per
- * role, so one `jti` can only ever mint once. The tag is
- * `base64url(HMAC-SHA256(secret, payload)[:18])` —
- * identical construction to session tickets but a different secret and
- * domain, so a session credential can never be forged into an invite.
+ * Wire format: `inv2.<base64url(json-claims)>.<sig>` where claims are
+ * `{ j: jti, t: tenantId, r: routeId, role, m?: mode, e: expiryMs }` and
+ * `sig` is the base64url Ed25519 signature (64 bytes) over
+ * `INVITE_DOMAIN + payload`. Single-use by slot semantics — a route holds
+ * exactly one device per role, so one `jti` can only ever mint once.
  *
- * Unset secret = invite redemption closed entirely (no surface, not even
- * a verifying one). Private deployments mint through the same CLI with
- * their own secret.
+ * Unset public key = invite redemption closed entirely (no surface, not
+ * even a verifying one).
  */
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { base64UrlToBytes, bytesToBase64Url, constantTimeEqual, isOpaqueId, randomToken, utf8Bytes } from "./ids.ts";
+import { base64UrlToBytes, bytesToBase64Url, isOpaqueId, randomToken, utf8Bytes } from "./ids.ts";
 
 const INVITE_DOMAIN = "meshrix-relay-invite:";
-const INVITE_TAG_LENGTH = 24;
-const INVITE_PREFIX = "inv1.";
+const INVITE_PREFIX = "inv2.";
+const ED25519_SIGNATURE_BYTES = 64;
 
 export interface InviteClaims {
   /** Single-use token id — replay-guarded inside the directory object. */
@@ -44,21 +44,16 @@ export const INVITE_LIMITS = Object.freeze({
   maxLifetimeMs: 30 * 24 * 60 * 60 * 1000,
 });
 
-async function inviteTag(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    utf8Bytes(secret) as BufferSource,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, utf8Bytes(`${INVITE_DOMAIN}${payload}`) as BufferSource);
-  return bytesToBase64Url(new Uint8Array(signature).slice(0, 18));
+/** Import an operator-held Ed25519 signing key (PKCS8, base64url). */
+export function importInviteSigningKey(pkcs8Base64Url: string): Promise<CryptoKey> {
+  const der = base64UrlToBytes(pkcs8Base64Url);
+  if (!der) return Promise.reject(new Error("invalid_pkcs8"));
+  return crypto.subtle.importKey("pkcs8", der as BufferSource, { name: "Ed25519" }, false, ["sign"]);
 }
 
-/** Mint an invite ticket (operator-side; also used by the mint CLI's twin). */
+/** Mint an invite ticket (issuer-side; also used by the mint CLI). */
 export async function issueInviteTicket(
-  secret: string,
+  privateKey: CryptoKey,
   input: {
     tenantId: string;
     routeId: string;
@@ -77,7 +72,12 @@ export async function issueInviteTicket(
     e: input.expiresAt,
   };
   const payload = bytesToBase64Url(utf8Bytes(JSON.stringify(claims)));
-  return `${INVITE_PREFIX}${payload}.${await inviteTag(secret, payload)}`;
+  const signature = await crypto.subtle.sign(
+    "Ed25519",
+    privateKey,
+    utf8Bytes(`${INVITE_DOMAIN}${payload}`) as BufferSource,
+  );
+  return `${INVITE_PREFIX}${payload}.${bytesToBase64Url(new Uint8Array(signature))}`;
 }
 
 export interface VerifiedInvite {
@@ -87,24 +87,41 @@ export interface VerifiedInvite {
 
 /**
  * Edge-of-worker verification: returns the parsed claims when the ticket
- * is well-formed, correctly tagged and unexpired — `null` otherwise.
- * `null` on a missing secret too: redemption stays closed where no invite
- * authority exists.
+ * is well-formed, correctly signed by the configured verification key and
+ * unexpired — `null` otherwise. `null` on a missing public key too:
+ * redemption stays closed where no invite authority is configured.
  */
 export async function verifyInviteTicket(
   env: PrivateRelayEnv,
   invite: string,
   now: number = Date.now(),
 ): Promise<VerifiedInvite | null> {
-  const secret = env.RELAY_INVITE_SECRET;
-  if (!secret || typeof invite !== "string" || !invite.startsWith(INVITE_PREFIX)) return null;
+  const publicKeyValue = env.RELAY_INVITE_PUBLIC_KEY;
+  if (!publicKeyValue || typeof invite !== "string" || !invite.startsWith(INVITE_PREFIX)) return null;
   const rest = invite.slice(INVITE_PREFIX.length);
   const separator = rest.lastIndexOf(".");
   if (separator < 1) return null;
   const payload = rest.slice(0, separator);
-  const tag = rest.slice(separator + 1);
-  if (tag.length !== INVITE_TAG_LENGTH || !/^[A-Za-z0-9_-]+$/u.test(tag)) return null;
-  if (!constantTimeEqual(tag, await inviteTag(secret, payload))) return null;
+  const signature = base64UrlToBytes(rest.slice(separator + 1));
+  if (!signature || signature.length !== ED25519_SIGNATURE_BYTES) return null;
+
+  const publicKeyBytes = base64UrlToBytes(publicKeyValue);
+  if (!publicKeyBytes || publicKeyBytes.length !== 32) return null;
+  const publicKey = await crypto.subtle.importKey(
+    "raw",
+    publicKeyBytes as BufferSource,
+    { name: "Ed25519" },
+    false,
+    ["verify"],
+  ).catch(() => null);
+  if (!publicKey) return null;
+  const valid = await crypto.subtle.verify(
+    "Ed25519",
+    publicKey,
+    signature as BufferSource,
+    utf8Bytes(`${INVITE_DOMAIN}${payload}`) as BufferSource,
+  ).catch(() => false);
+  if (!valid) return null;
 
   const raw = base64UrlToBytes(payload);
   if (!raw) return null;

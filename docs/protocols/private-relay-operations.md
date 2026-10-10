@@ -39,10 +39,12 @@ suites in `tools/registry/tests.registry.json` invoke them from the root.
   staging deployment existed, passed live verification, and was then deleted
   after a public-surface security review — nothing is live now. A redeploy is
   a separately authorized operation: it requires the operator-held
-  Cloudflare login plus `wrangler secret put` for `RELAY_TICKET_SECRET` and
-  `RELAY_INVITE_SECRET` (and `RELAY_ADMIN_TOKEN` only when an admin surface is
-  intentionally enabled — the public shape keeps it off). Secrets are never
-  committed as `vars`.
+  Cloudflare login, `RELAY_INVITE_PUBLIC_KEY` as a `vars` value (the issuer's
+  Ed25519 *public* key — public material, safe to commit), plus
+  `wrangler secret put` for `RELAY_TICKET_SECRET` (and `RELAY_ADMIN_TOKEN`
+  only when an admin surface is intentionally enabled — the public shape
+  keeps it off). Invite signing private keys are never committed and never
+  live on the relay.
 - Public posture for any internet-reachable deploy: `RELAY_ADMIN_SURFACE`
   unset/`"off"` (the `/admin/*` plane does not exist), ticketed credentials,
   HTTPS enforcement with security headers, invite-only admission. Remote
@@ -61,9 +63,10 @@ suites in `tools/registry/tests.registry.json` invoke them from the root.
   (`meshrix-private-relay-staging`), the real authorized `account_id`, the
   `relay.meshrix.io` custom-domain route and restated
   bindings/vars/migrations (Wrangler named environments do not inherit them).
-  `RELAY_ADMIN_TOKEN`, `RELAY_TICKET_SECRET` and `RELAY_INVITE_SECRET` are
-  intentionally absent from staging vars — they install via
-  `wrangler secret put` under authorized ownership.
+  `RELAY_ADMIN_TOKEN` and `RELAY_TICKET_SECRET` are intentionally absent from
+  staging vars — they install via `wrangler secret put` under authorized
+  ownership. `RELAY_INVITE_PUBLIC_KEY` is the issuer's Ed25519 public
+  verification key: it belongs in `vars` (it is public by construction).
 
 ## Privacy projection: what the relay can and cannot see
 
