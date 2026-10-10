@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "inlineSources": false
+  },
+  "include": [
+    "src/index.ts",
+    "src/shared/**/*.ts",
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts"
+  ],
+  "exclude": [
+    "src/renderer/**",
+    "dist",
+    "node_modules"
+  ]
+}

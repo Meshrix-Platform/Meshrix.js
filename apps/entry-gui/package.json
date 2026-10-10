@@ -1,0 +1,46 @@
+{
+  "name": "@meshrix/entry-gui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Installed macOS/Windows entry product — Electron main process plus Vue renderer over @meshrix/entry and @meshrix/entry-transport.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/main/electron-entry.js",
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.3.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && vue-tsc --noEmit -p tsconfig.web.json",
+    "build:renderer": "vite build --config vite.config.ts",
+    "dev": "electron .",
+    "pack:dir": "npm run build:renderer && electron-builder --config electron-builder.yml --dir",
+    "dist": "npm run build:renderer && electron-builder --config electron-builder.yml --mac --win --publish never"
+  },
+  "dependencies": {
+    "@meshrix/contracts": "0.1.0",
+    "@meshrix/entry": "0.1.0",
+    "@meshrix/entry-transport": "0.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "electron": "44.4.5",
+    "electron-builder": "26.16.1",
+    "vite": "^8.1.4",
+    "vue": "^3.5.32"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "src/preload/index.cjs",
+    "electron-builder.yml",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

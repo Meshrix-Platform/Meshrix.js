@@ -1,0 +1,44 @@
+# Meshrix Entry — macOS/Windows packaging for the installed entry product.
+#
+# `npm run dist -w @meshrix/entry-gui` produces a signed-ready directory,
+# a macOS .dmg/.zip and a Windows .nsis/.zip under release/. Publishing is
+# never configured: `--publish never` is baked into the npm script and no
+# provider block exists here. Run `npm run build:node` at the repository root
+# first so `dist/` holds the compiled main process and workspace dependency
+# bundles.
+appId: com.meshrix.entry
+productName: Meshrix Entry
+copyright: Copyright © Meshrix Platform contributors
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - dist/**
+  - src/preload/index.cjs
+  - package.json
+  - "!**/*.map"
+
+# The entry product owns its credentials through the platform custody layer;
+# no asar-unpacked native secrets exist. Keep packaging deterministic.
+asar: true
+
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  artifactName: "${productName}-${version}-mac-${arch}.${ext}"
+
+win:
+  target:
+    - nsis
+    - zip
+  artifactName: "${productName}-${version}-win-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

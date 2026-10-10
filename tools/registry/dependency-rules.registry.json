@@ -97,6 +97,33 @@
       ]
     },
     {
+      "id": "entry-gui-app",
+      "name": "Installed Entry GUI Product",
+      "directory": "apps/entry-gui",
+      "allowedDependsOn": [
+        "contracts",
+        "entry-app",
+        "entry-transport",
+        "gateway"
+      ],
+      "forbiddenDependsOn": [
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "tools",
+        "skill-tools",
+        "model-gateway-contracts"
+      ]
+    },
+    {
       "id": "model-gateway-contracts",
       "name": "Model Gateway Service Contracts",
       "directory": "services/model-gateway/contracts",

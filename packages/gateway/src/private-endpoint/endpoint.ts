@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import type { Duplex } from "node:stream";
 import type { AuthenticatedContext, Gateway, GatewayOutcome, Invocation, PermitAuthorityPort } from "@meshrix/contracts/gateway";
@@ -71,6 +72,53 @@ const JSON_RPC_METHODS: Readonly<Record<string, "invoke" | "readResource" | "get
   "resources/list": "catalog",
   "prompts/list": "catalog"
 });
+
+/**
+ * DER prefix of an Ed25519 SubjectPublicKeyInfo: `SEQUENCE { SEQUENCE {
+ * OID id-Ed25519 (RFC 8410) }, BIT STRING 00 <32-byte key> }`. The inner-channel trust
+ * anchor is `sha256(spki-der)`; an enrolled record may carry the raw 32-byte
+ * Ed25519 key (pairing/recovery bindings) or the `fp.` fingerprint form, so
+ * both normalize onto the same digest here. Derivation only rewrites stored
+ * material — it can never introduce a key the operator did not enroll.
+ */
+const ED25519_SPKI_DER_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+function pinCandidatesFromStoredIdentity(value: string): string[] {
+  const candidates = new Set<string>();
+  if (!value) return [];
+  candidates.add(value);
+  if (value.startsWith("fp.")) candidates.add(value.slice(3));
+  try {
+    const raw = Buffer.from(value, "base64url");
+    if (raw.byteLength === 32) {
+      candidates.add(createHash("sha256").update(Buffer.concat([ED25519_SPKI_DER_PREFIX, raw])).digest("base64url"));
+    }
+  } catch {
+    // Not base64url — the stored form is opaque; only exact-length keys derive.
+  }
+  return [...candidates];
+}
+
+/**
+ * The acceptable peer pins for the inner channel: every enrolled, non-revoked
+ * entry-role binding plus the admitted device's own paired identity. Each
+ * stored field yields its raw form, its `fp.`-stripped form, and — when it is
+ * a raw Ed25519 key — the derived SPKI pin, so paired and recovered devices
+ * both bind by public-key digest.
+ */
+export function pinnedPeerSpkiCandidates(identity: EndpointIdentityStore, currentDevice: EndpointDeviceRecord): string[] {
+  const pins = new Set<string>();
+  const collect = (record: EndpointDeviceRecord) => {
+    if (record.revoked) return;
+    for (const pin of pinCandidatesFromStoredIdentity(record.pairedIdentityKey)) pins.add(pin);
+    for (const pin of pinCandidatesFromStoredIdentity(record.pairedIdentityFingerprint)) pins.add(pin);
+  };
+  collect(currentDevice);
+  for (const record of identity.devices()) {
+    if (record.role === "entry") collect(record);
+  }
+  return [...pins];
+}
 
 export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): PrivateEndpoint {
   const identity = options.identity ?? createEndpointIdentityStore();
@@ -148,7 +196,7 @@ export function createPrivateGatewayEndpoint(options: PrivateEndpointOptions): P
       socket: pump as unknown as Duplex,
       key: options.innerTls.key,
       cert: options.innerTls.cert,
-      pinnedPeerSpki: [currentDevice.pairedIdentityKey, currentDevice.pairedIdentityFingerprint],
+      pinnedPeerSpki: pinnedPeerSpkiCandidates(identity, currentDevice),
       handshakeTimeoutMs: options.innerTls.handshakeTimeoutMs
     });
     channel = tls;

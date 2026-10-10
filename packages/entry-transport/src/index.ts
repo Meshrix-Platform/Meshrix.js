@@ -38,3 +38,9 @@ export {
   type EntryLoopbackHttp,
   type EntryLoopbackHttpOptions
 } from "./loopback-http.ts";
+export {
+  EntryRecoveryChannel,
+  createEntryRecoveryChannel,
+  type EntryRecoveryChannelOptions,
+  type EntryRecoveryRoundTripPort
+} from "./recovery-channel.ts";

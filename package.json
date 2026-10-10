@@ -18,6 +18,7 @@
     "apps/server",
     "apps/mcp-gateway-installer",
     "apps/entry",
+    "apps/entry-gui",
     "apps/console",
     "workers/*"
   ],

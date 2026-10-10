@@ -49,6 +49,7 @@ export {
 } from "./recovery-flow.ts";
 export {
   createPrivateGatewayEndpoint,
+  pinnedPeerSpkiCandidates,
   type PrivateEndpoint,
   type PrivateEndpointOptions
 } from "./endpoint.ts";

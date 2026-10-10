@@ -49,6 +49,17 @@ export interface RotationEndpointStatus {
   readonly detail?: string;
 }
 
+/**
+ * A built `rotation-begin` wire message bound to one endpoint. Persisted with
+ * the rotation record so an in-flight rotation can be re-delivered after a
+ * restart — the payload carries only public keys and an administration
+ * signature, never secret material.
+ */
+export interface RotationOutboundMessage {
+  readonly endpointRouteId: string;
+  readonly message: Record<string, unknown>;
+}
+
 export interface RecoveryRotation {
   readonly rotationId: string;
   readonly incumbentKeyId: string;
@@ -59,6 +70,8 @@ export interface RecoveryRotation {
   readonly principalRef: string;
   readonly state: RotationState;
   readonly endpoints: readonly RotationEndpointStatus[];
+  /** The per-endpoint `rotation-begin` payloads — replayable for redelivery. */
+  readonly outbound: readonly RotationOutboundMessage[];
   readonly startedAt: string;
   readonly updatedAt: string;
 }
@@ -137,6 +150,11 @@ export class RecoveryRotationManager {
     return this.#store.load(rotationId);
   }
 
+  /** Every persisted rotation record, including terminal ones. */
+  loadAll(): readonly RecoveryRotation[] {
+    return this.#store.loadAll();
+  }
+
   /**
    * Stage a replacement: generates (or accepts) the candidate secret, derives
    * its material, and emits a `rotation-begin` per endpoint. Nothing is
@@ -162,8 +180,23 @@ export class RecoveryRotationManager {
       : generateRecoveryKey({ vaultId: input.vaultId });
     const candidateMaterial = deriveRecoveryMaterial(candidate.secret);
     const nowIso = new Date(this.#now()).toISOString();
+    const rotationId = randomOpaqueId("rot.entry", 8);
+    const messages = input.endpointRouteIds.map((endpointRouteId) => createRotationBegin({
+      rotationId: `${rotationId}:${endpointRouteId}`,
+      recoveryKeyId: input.incumbent.signing.keyId,
+      principalRef: input.principalRef,
+      currentGeneration: input.incumbentGeneration,
+      candidateGeneration: input.incumbentGeneration + 1,
+      candidatePublicKey: candidateMaterial.signing.publicKey,
+      administrationProof: administrationProof({
+        material: input.incumbent,
+        vaultId: input.vaultId,
+        now: this.#now(),
+        nonce: this.#nonceFactory()
+      })
+    }) as Record<string, unknown>);
     const rotation: RecoveryRotation = Object.freeze({
-      rotationId: randomOpaqueId("rot.entry", 8),
+      rotationId,
       incumbentKeyId: input.incumbent.signing.keyId,
       incumbentGeneration: input.incumbentGeneration,
       candidateKeyId: candidateMaterial.signing.keyId,
@@ -175,23 +208,13 @@ export class RecoveryRotationManager {
         endpointRouteId,
         state: "pending" as const
       }))),
+      outbound: Object.freeze(input.endpointRouteIds.map((endpointRouteId, index) => Object.freeze({
+        endpointRouteId,
+        message: messages[index]
+      }))),
       startedAt: nowIso,
       updatedAt: nowIso
     });
-    const messages = input.endpointRouteIds.map((endpointRouteId) => createRotationBegin({
-      rotationId: `${rotation.rotationId}:${endpointRouteId}`,
-      recoveryKeyId: rotation.incumbentKeyId,
-      principalRef: rotation.principalRef,
-      currentGeneration: rotation.incumbentGeneration,
-      candidateGeneration: rotation.candidateGeneration,
-      candidatePublicKey: rotation.candidatePublicKey,
-      administrationProof: administrationProof({
-        material: input.incumbent,
-        vaultId: input.vaultId,
-        now: this.#now(),
-        nonce: this.#nonceFactory()
-      })
-    }) as Record<string, unknown>);
     this.#store.save(rotation);
     return { rotation, messages, candidate };
   }
@@ -249,6 +272,19 @@ export class RecoveryRotationManager {
     }
     this.#store.save(rotation);
     return rotation;
+  }
+
+  /**
+   * The built `rotation-begin` payloads for endpoints that have not yet
+   * acknowledged — the redelivery surface. Re-sending an identical wire
+   * message is idempotent on the endpoint (staging the same candidate twice
+   * is a no-op), so a retry only replays the failed deliveries and keeps
+   * every completed acknowledgement intact.
+   */
+  pendingOutbound(rotationId: string): readonly RotationOutboundMessage[] {
+    const rotation = this.#require(rotationId);
+    return rotation.outbound.filter((entry) =>
+      rotation.endpoints.find((endpoint) => endpoint.endpointRouteId === entry.endpointRouteId)?.state !== "acknowledged");
   }
 
   /**

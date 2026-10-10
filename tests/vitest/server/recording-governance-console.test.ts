@@ -159,7 +159,7 @@ describe("recording governance provider", (): any => {
       tenantId: "t1",
       expectedRevision: 1,
       configurerRole: "owner",
-      policy: { ...nextPolicy(current, {}), schemaVersion: "v0.0.1:other" }
+      policy: { ...nextPolicy(current, {}), schemaVersion: "other" }
     })).toThrowError(expect.objectContaining({ code: "recording_policy_invalid" }));
   });
 

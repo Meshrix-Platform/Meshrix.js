@@ -536,7 +536,7 @@ describe("WSS relay transport", () => {
   it("refuses plaintext ws to non-loopback relays and credential URLs", () => {
     const onMessage = () => {};
     expect(() => createWssRelayTransport({ url: "ws://relay.example.internal/socket", onMessage })).toThrow(/insecure|ws:\/\//);
-    expect(() => createWssRelayTransport({ url: "wss://user:pass@relay.example.internal/socket", onMessage })).toThrow(/credential|must not carry/);
+    expect(() => createWssRelayTransport({ url: "wss://user:pass@relay.example.invalid/socket", onMessage })).toThrow(/credential|must not carry/);
     expect(() => createWssRelayTransport({ url: "http://relay.example.internal/socket", onMessage })).toThrow(/wss/);
   });
 
