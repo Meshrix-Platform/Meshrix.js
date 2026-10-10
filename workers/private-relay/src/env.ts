@@ -39,6 +39,12 @@ export interface PrivateRelayEnv {
    * bare-token private shape — acceptable only on non-public surfaces.
    */
   RELAY_TICKET_SECRET?: string;
+  /**
+   * HMAC key for invitation tickets (`src/invite.ts`). Set it to open the
+   * invite-only join surface (`/join` + `/invite/redeem`); unset keeps
+   * redemption fully closed — there is no open registration anywhere.
+   */
+  RELAY_INVITE_SECRET?: string;
 }
 
 declare global {

@@ -25,6 +25,11 @@ RELAY_ADMIN_SURFACE = "local"
 # `wrangler secret put RELAY_TICKET_SECRET`; self-hosted private surfaces
 # may also omit it (bare-token shape).
 RELAY_TICKET_SECRET = "local-only-synthetic-ticket-secret"
+# Synthetic invite key for local checks only: mint invite tickets through
+# `tools/invite-mint.mjs` and redeem at /join. Public deployments install a
+# real `wrangler secret put RELAY_INVITE_SECRET`; self-hosted private
+# surfaces may omit it (redemption then stays fully closed).
+RELAY_INVITE_SECRET = "local-only-synthetic-invite-secret"
 RELAY_MAX_SESSION_MESSAGE_BYTES = "393216"
 RELAY_MAX_VAULT_MESSAGE_BYTES = "1572864"
 # Deployment-selected peer mailbox retention policy: finite byte capacity,

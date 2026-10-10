@@ -23,7 +23,9 @@
 import type { PrivateRelayEnv } from "./env.ts";
 import { RELAY_RUNTIME_LIMITS, adminSurfaceMode, integerEnv } from "./env.ts";
 import { verifySessionCredential } from "./ticket.ts";
-import { bearerToken, jsonResponse } from "./http.ts";
+import { verifyInviteTicket } from "./invite.ts";
+import { JOIN_PAGE_HTML } from "./join-page.ts";
+import { bearerToken, jsonResponse, readBoundedJson } from "./http.ts";
 import { constantTimeEqual, directoryObjectName, isOpaqueId, mailboxObjectName, sessionObjectName, vaultObjectName } from "./ids.ts";
 import type { RelayCounterKey, RelayCountersShape, RelayMetricSample } from "./metrics.ts";
 import { RELAY_COUNTER_KEYS, emptyCounters, renderPrometheusExposition } from "./metrics.ts";
@@ -248,6 +250,46 @@ export default {
 
     if (request.method === "GET" && path === "/healthz") {
       return jsonResponse({ ok: true, service: "meshrix-private-relay" });
+    }
+
+    // --- Invite-only join surface -------------------------------------
+    // The page is a static invite-redemption UI; redemption itself is a
+    // signed-ticket check at the worker edge (zero storage on a forgery)
+    // and a transaction-bound spend inside the tenant directory object.
+    if (request.method === "GET" && path === "/join") {
+      return new Response(JOIN_PAGE_HTML, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'",
+        },
+      });
+    }
+    if (request.method === "POST" && path === "/invite/redeem") {
+      const body = await readBoundedJson(request, 16_384) as Record<string, unknown> | null;
+      const invite = typeof body?.invite === "string" ? body.invite.trim() : "";
+      const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim() : "";
+      const verified = invite ? await verifyInviteTicket(env, invite) : null;
+      if (!verified || !isOpaqueId(deviceId)) {
+        return unauthenticatedRequest(request, 401, "invite_invalid");
+      }
+      const { claims } = verified;
+      const stub = env.RELAY_DIRECTORY.get(env.RELAY_DIRECTORY.idFromName(directoryObjectName(claims.tenantId)));
+      const enrolled = await stub.fetch("http://directory.internal/internal/redeem-invite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jti: claims.jti,
+          tenantId: claims.tenantId,
+          routeId: claims.routeId,
+          role: claims.role,
+          mode: claims.mode,
+          deviceId,
+        }),
+      });
+      if (!enrolled.ok) return enrolled;
+      const payload = await enrolled.json<Record<string, unknown>>();
+      return jsonResponse({ ...payload, tenantId: claims.tenantId });
     }
 
     // --- Endpoint socket upgrade -------------------------------------

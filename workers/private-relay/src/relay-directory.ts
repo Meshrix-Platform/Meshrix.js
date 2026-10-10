@@ -57,6 +57,8 @@ const DEVICE_PREFIX = "dev:";
 const ROUTE_PREFIX = "route:";
 /** Credential-digest index: cred:<sha256 hex> -> deviceId (never the secret). */
 const CRED_PREFIX = "cred:";
+/** Invitation spend ledger: inv:<jti> -> {usesLeft, deviceIds} (bounded). */
+const INVITE_PREFIX = "inv:";
 
 export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
   private meta: DirectoryMeta | null = null;
@@ -105,6 +107,9 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
       if (request.method === "POST" && url.pathname === "/enroll") {
         return await this.handleEnroll(request);
       }
+      if (request.method === "POST" && url.pathname === "/internal/redeem-invite") {
+        return await this.handleRedeemInvite(request);
+      }
       if (request.method === "POST" && url.pathname === "/revoke") {
         return await this.handleRevoke(request);
       }
@@ -133,39 +138,40 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
   }
 
   /**
-   * Enroll a device into a route slot. Returns the opaque bearer credential
-   * exactly once; only its sha256 digest is retained.
+   * Shared enrollment core — one source of truth for the check set and the
+   * put set. Runs inside a caller-supplied storage transaction so the
+   * invite-redeem path can bind a ticket spend to the enrollment atomically.
+   * Returns the opaque bearer credential exactly once; only its sha256
+   * digest is retained.
    */
-  private async handleEnroll(request: Request): Promise<Response> {
-    const meta = await this.requireMeta();
-    const body = await readBoundedJson(request, 16_384);
-    if (!body || typeof body !== "object") return jsonResponse({ error: "invalid_body" }, 400);
-    const { deviceId, routeId, role, mode } = body as Record<string, unknown>;
-    if (!isOpaqueId(deviceId) || !isOpaqueId(routeId)) {
-      return jsonResponse({ error: "identity_ambiguous" }, 400);
-    }
-    if (role !== "entry" && role !== "endpoint") return jsonResponse({ error: "invalid_role" }, 400);
-    if (mode !== "personal" && mode !== "enterprise") return jsonResponse({ error: "mode_mismatch" }, 400);
-
+  private async enrollDeviceInTxn(
+    store: {
+      get<T>(key: string): Promise<T | undefined>;
+      put(key: string, value: unknown): Promise<void>;
+    },
+    meta: DirectoryMeta,
+    input: { deviceId: string; routeId: string; role: "entry" | "endpoint"; mode: "personal" | "enterprise" },
+  ): Promise<{ error: string; status: number } | { body: Record<string, unknown> }> {
+    const { deviceId, routeId, role, mode } = input;
     this.counters.count("storageReads", 2);
     const [existingDevice, route] = await Promise.all([
-      this.ctx.storage.get<DeviceRecord>(`${DEVICE_PREFIX}${deviceId}`),
-      this.ctx.storage.get<RouteRecord>(`${ROUTE_PREFIX}${routeId}`),
+      store.get<DeviceRecord>(`${DEVICE_PREFIX}${deviceId}`),
+      store.get<RouteRecord>(`${ROUTE_PREFIX}${routeId}`),
     ]);
-    if (existingDevice) return jsonResponse({ error: "already_enrolled" }, 409);
+    if (existingDevice) return { error: "already_enrolled", status: 409 };
 
     if (meta.deviceCount >= RELAY_RUNTIME_LIMITS.maxDevicesPerTenant) {
-      return jsonResponse({ error: "capacity_exceeded" }, 429);
+      return { error: "capacity_exceeded", status: 429 };
     }
     if (!route) {
       if (meta.routeCount >= RELAY_RUNTIME_LIMITS.maxRoutesPerTenant) {
-        return jsonResponse({ error: "capacity_exceeded" }, 429);
+        return { error: "capacity_exceeded", status: 429 };
       }
     } else {
-      if (route.mode !== mode) return jsonResponse({ error: "mode_mismatch" }, 400);
-      if (route.revoked) return jsonResponse({ error: "revoked" }, 403);
+      if (route.mode !== mode) return { error: "mode_mismatch", status: 400 };
+      if (route.revoked) return { error: "revoked", status: 403 };
       const slot = role === "entry" ? route.entryDeviceId : route.endpointDeviceId;
-      if (slot) return jsonResponse({ error: "role_occupied" }, 409);
+      if (slot) return { error: "role_occupied", status: 409 };
     }
 
     meta.admissionGenerationCounter += 1;
@@ -197,21 +203,77 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
     else nextRoute.endpointDeviceId = deviceId;
 
     this.counters.count("storageWrites", 4);
-    await this.ctx.storage.transaction(async (txn) => {
-      await txn.put(META_KEY, meta);
-      await txn.put(`${DEVICE_PREFIX}${deviceId}`, device);
-      await txn.put(`${ROUTE_PREFIX}${routeId}`, nextRoute);
-      await txn.put(`${CRED_PREFIX}${credentialDigest}`, deviceId);
+    await store.put(META_KEY, meta);
+    await store.put(`${DEVICE_PREFIX}${deviceId}`, device);
+    await store.put(`${ROUTE_PREFIX}${routeId}`, nextRoute);
+    await store.put(`${CRED_PREFIX}${credentialDigest}`, deviceId);
+    return {
+      body: {
+        deviceId,
+        routeId,
+        role,
+        mode,
+        credential,
+        admissionGeneration: device.admissionGeneration,
+        revocationRevision: meta.revocationRevision,
+      },
+    };
+  }
+
+  /**
+   * Enroll a device into a route slot (operator/admin path). The shared
+   * core runs inside a storage transaction for an atomic write set.
+   */
+  private async handleEnroll(request: Request): Promise<Response> {
+    const meta = await this.requireMeta();
+    const body = await readBoundedJson(request, 16_384);
+    if (!body || typeof body !== "object") return jsonResponse({ error: "invalid_body" }, 400);
+    const { deviceId, routeId, role, mode } = body as Record<string, unknown>;
+    if (!isOpaqueId(deviceId) || !isOpaqueId(routeId)) {
+      return jsonResponse({ error: "identity_ambiguous" }, 400);
+    }
+    if (role !== "entry" && role !== "endpoint") return jsonResponse({ error: "invalid_role" }, 400);
+    if (mode !== "personal" && mode !== "enterprise") return jsonResponse({ error: "mode_mismatch" }, 400);
+    const outcome = await this.ctx.storage.transaction((txn) =>
+      this.enrollDeviceInTxn(txn, meta, { deviceId, routeId, role, mode }));
+    return "error" in outcome ? jsonResponse({ error: outcome.error }, outcome.status) : jsonResponse(outcome.body);
+  }
+
+  /**
+   * Spend a verified invitation: the outer fetch already validated the HMAC
+   * ticket, so this handler binds the one-time `jti` spend to the
+   * enrollment in a single transaction — an invite can never over-issue
+   * beyond its minted `uses`, and replayed tickets fail closed.
+   */
+  private async handleRedeemInvite(request: Request): Promise<Response> {
+    const meta = await this.requireMeta();
+    const body = await readBoundedJson(request, 16_384);
+    if (!body || typeof body !== "object") return jsonResponse({ error: "invalid_body" }, 400);
+    const { jti, tenantId, routeId, role, mode, deviceId } = body as Record<string, unknown>;
+    if (!isOpaqueId(jti) || !isOpaqueId(deviceId) || !isOpaqueId(routeId)) {
+      return jsonResponse({ error: "identity_ambiguous" }, 400);
+    }
+    if (tenantId !== meta.tenantId) return jsonResponse({ error: "tenant_mismatch" }, 403);
+    if (role !== "entry" && role !== "endpoint") return jsonResponse({ error: "invalid_role" }, 400);
+    if (mode !== "personal" && mode !== "enterprise") return jsonResponse({ error: "mode_mismatch" }, 400);
+    const inviteKey = `${INVITE_PREFIX}${jti}`;
+    const outcome = await this.ctx.storage.transaction(async (txn) => {
+      this.counters.count("storageReads");
+      const invite = await txn.get<{ redeemedBy: string; redeemedAt: string }>(inviteKey);
+      // Single-use by slot semantics: a route holds exactly one device per
+      // role, so one jti can only ever mint once.
+      if (invite) {
+        return invite.redeemedBy === deviceId
+          ? ({ error: "already_redeemed", status: 409 } as const)
+          : ({ error: "invite_spent", status: 410 } as const);
+      }
+      const enrolled = await this.enrollDeviceInTxn(txn, meta, { deviceId, routeId, role, mode });
+      if ("error" in enrolled) return enrolled;
+      this.counters.count("storageWrites");
+      await txn.put(inviteKey, { redeemedBy: deviceId, redeemedAt: new Date().toISOString() });
+      return enrolled;
     });
-    return jsonResponse({
-      deviceId,
-      routeId,
-      role,
-      mode,
-      credential,
-      admissionGeneration: device.admissionGeneration,
-      revocationRevision: meta.revocationRevision,
-    });
+    return "error" in outcome ? jsonResponse({ error: outcome.error }, outcome.status) : jsonResponse(outcome.body);
   }
 
   /**
