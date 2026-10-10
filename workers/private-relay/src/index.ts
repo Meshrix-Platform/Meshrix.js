@@ -21,7 +21,7 @@
  */
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { RELAY_RUNTIME_LIMITS } from "./env.ts";
+import { RELAY_RUNTIME_LIMITS, adminSurfaceMode } from "./env.ts";
 import { bearerToken, jsonResponse } from "./http.ts";
 import { constantTimeEqual, directoryObjectName, isOpaqueId, mailboxObjectName, sessionObjectName, vaultObjectName } from "./ids.ts";
 import type { RelayCounterKey, RelayCountersShape, RelayMetricSample } from "./metrics.ts";
@@ -240,8 +240,19 @@ export default {
       return stub.fetch(forward);
     }
 
-    // --- Local admin surface ------------------------------------------
+    // --- Admin control plane ------------------------------------------
+    // Closed by deployment choice, not just by credential: `off` (the
+    // default) answers 404 so the surface does not exist on public routes;
+    // `access` additionally requires the Access JWT header so direct
+    // workers.dev hits cannot bypass the edge gate.
     if (path.startsWith("/admin/")) {
+      const surface = adminSurfaceMode(env);
+      if (surface === "off") {
+        return jsonResponse({ error: "not_found" }, 404);
+      }
+      if (surface === "access" && !request.headers.get("cf-access-jwt-assertion")) {
+        return jsonResponse({ error: "not_found" }, 404);
+      }
       if (!adminAuthorized(request, env)) {
         return jsonResponse({ error: "unauthorized" }, 401);
       }

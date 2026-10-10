@@ -27,6 +27,11 @@ export interface PrivateRelayEnv {
    * Any other value — including unset — keeps the durable tier.
    */
   RELAY_METRICS_DURABLE?: string;
+  /**
+   * Exposure of the `/admin/*` control plane — see `adminSurfaceMode`.
+   * Unset/unknown is the closed default: the surface does not exist.
+   */
+  RELAY_ADMIN_SURFACE?: string;
 }
 
 declare global {
@@ -101,6 +106,32 @@ export function metricsDurableEnabled(env: PrivateRelayEnv): boolean {
   if (typeof raw !== "string" || !raw.trim()) return true;
   const normalized = raw.trim().toLowerCase();
   return normalized !== "0" && normalized !== "false" && normalized !== "off";
+}
+
+/**
+ * Deployment-selected exposure of the `/admin/*` control plane. The default
+ * is deliberately closed — a public route must never carry a control
+ * surface by accident:
+ *
+ * - `"off"` (also unset/unknown — fail-closed): every `/admin/*` request
+ *   returns 404; the surface does not exist at this deployment. Required
+ *   posture for anything reachable from the public internet.
+ * - `"local"`: bearer-gated admin for private/self-hosted shapes only —
+ *   loopback, LAN, tailnet, `wrangler dev`. Never a public route.
+ * - `"access"`: bearer-gated admin that additionally requires a
+ *   `Cf-Access-Jwt-Assertion` header, so the surface exists only behind a
+ *   Cloudflare Access-protected hostname. Direct `*.workers.dev` hits
+ *   bypass Access and get 404 — the worker must never trust the route
+ *   alone. Cloudflare Access performs the real JWT verification at the
+ *   edge; this check is the defense-in-depth layer.
+ */
+export type RelayAdminSurface = "off" | "local" | "access";
+
+export function adminSurfaceMode(env: PrivateRelayEnv): RelayAdminSurface {
+  const raw = env.RELAY_ADMIN_SURFACE;
+  if (typeof raw !== "string" || !raw.trim()) return "off";
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "local" || normalized === "access" ? normalized : "off";
 }
 
 /**
