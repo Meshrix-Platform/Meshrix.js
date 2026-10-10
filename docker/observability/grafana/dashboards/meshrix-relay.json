@@ -1,0 +1,110 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "tags": ["meshrix", "private-relay"],
+  "timezone": "browser",
+  "title": "Meshrix Private Relay",
+  "uid": "meshrix-relay",
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Sessions admitted (durable)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(meshrix_relay_sessions_admitted{object=\"session\",scope=\"durable\"})", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Sessions rejected / revoked",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sum(meshrix_relay_sessions_rejected{scope=\"durable\"})", "refId": "A", "legendFormat": "rejected" },
+        { "expr": "sum(meshrix_relay_sessions_revoked{scope=\"durable\"})", "refId": "B", "legendFormat": "revoked" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "textMode": "value_and_name" }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Mailbox accepted (durable)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(meshrix_relay_mailbox_accepted{scope=\"durable\"})", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Ephemeral series note",
+      "description": "scope=\"ephemeral\" counters reset to zero whenever a Durable Object is evicted. Drops in absolute panels are hibernation, not data loss.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(meshrix_relay_http_requests{scope=\"ephemeral\"})", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Message traffic rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum by (object) (rate(meshrix_relay_messages_in[5m]))", "refId": "A", "legendFormat": "{{object}} in" },
+        { "expr": "sum by (object) (rate(meshrix_relay_messages_out[5m]))", "refId": "B", "legendFormat": "{{object}} out" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 12, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Byte throughput",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "sum by (object) (rate(meshrix_relay_bytes_in[5m]))", "refId": "A", "legendFormat": "{{object}} in" },
+        { "expr": "sum by (object) (rate(meshrix_relay_bytes_out[5m]))", "refId": "B", "legendFormat": "{{object}} out" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "drawStyle": "line", "fillOpacity": 12, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Frames forwarded vs dropped",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "sum(rate(meshrix_relay_frames_forwarded{scope=\"ephemeral\"}[5m]))", "refId": "A", "legendFormat": "forwarded" },
+        { "expr": "sum(rate(meshrix_relay_frames_dropped{scope=\"ephemeral\"}[5m]))", "refId": "B", "legendFormat": "dropped" },
+        { "expr": "sum(rate(meshrix_relay_rate_limit_drops{scope=\"ephemeral\"}[5m]))", "refId": "C", "legendFormat": "rate-limited" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 12, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Mailbox operations per device",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "sum by (device) (rate(meshrix_relay_mailbox_accepted{object=\"mailbox\",scope=\"durable\"}[5m]))", "refId": "A", "legendFormat": "{{device}} accepted" },
+        { "expr": "sum by (device) (rate(meshrix_relay_mailbox_fetched{object=\"mailbox\"}[5m]))", "refId": "B", "legendFormat": "{{device}} fetched" },
+        { "expr": "sum by (device) (rate(meshrix_relay_mailbox_expired{object=\"mailbox\",scope=\"durable\"}[5m]))", "refId": "C", "legendFormat": "{{device}} expired" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 12, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Session lifecycle events (rate)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "sum by (route) (rate(meshrix_relay_sessions_admitted{object=\"session\",scope=\"durable\"}[5m]))", "refId": "A", "legendFormat": "{{route}} admitted" },
+        { "expr": "sum by (route) (rate(meshrix_relay_sessions_restored{object=\"session\",scope=\"durable\"}[5m]))", "refId": "B", "legendFormat": "{{route}} restored" },
+        { "expr": "sum by (route) (rate(meshrix_relay_sessions_closed{object=\"session\",scope=\"durable\"}[5m]))", "refId": "C", "legendFormat": "{{route}} closed" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 12, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Durable Object storage ops (rate)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        { "expr": "sum by (object) (rate(meshrix_relay_storage_reads{scope=\"durable\"}[5m]))", "refId": "A", "legendFormat": "{{object}} reads" },
+        { "expr": "sum by (object) (rate(meshrix_relay_storage_writes{scope=\"durable\"}[5m]))", "refId": "B", "legendFormat": "{{object}} writes" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 12, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    }
+  ]
+}

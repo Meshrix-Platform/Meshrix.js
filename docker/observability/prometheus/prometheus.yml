@@ -1,0 +1,39 @@
+# Prometheus scrape configuration for a self-hosted Meshrix deployment.
+#
+# The private relay exposes GET /admin/metrics?tenant=<tenantId> (Prometheus
+# text exposition aggregating every Durable Object counter for the tenant).
+# Vault objects have no registry: pass explicit vault ids via a `vault`
+# param if you want them included.
+#
+# Scrape cost note: each scrape fans out to one request per Durable Object in
+# the tenant (bounded by RELAY_RUNTIME_LIMITS). 30s is a sane default for a
+# private lab; raise the interval if DO wake cost matters.
+#
+# scope="durable" series are SQLite-flushed counters; scope="ephemeral"
+# series reset to zero whenever a Durable Object is evicted — dashboard
+# rate() panels already handle resets correctly.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: meshrix-relay
+    metrics_path: /admin/metrics
+    params:
+      tenant: ["tenant.peer.remote.1"]   # lab tenant; replace per deployment
+    scheme: http
+    authorization:
+      credentials_file: /run/secrets/relay_admin_token
+    static_configs:
+      - targets: ["meshrix-relay:8791"]
+
+  # The private endpoint's loopback /metrics surface is bound to the host
+  # that runs the endpoint; it is only scrapeable when reachable on this
+  # network (e.g. endpoint colocated in the same compose project or bound
+  # to a tailnet interface). Configure the target per deployment.
+  - job_name: meshrix-endpoint
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: []   # e.g. ["100.x.x.x:<port>"]; empty until endpoint binds remotely
