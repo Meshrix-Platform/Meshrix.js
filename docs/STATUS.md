@@ -1,126 +1,81 @@
 # Meshrix.js Status
 
-Status is determined from candidate-bound evidence, not from a calendar
-snapshot, roadmap, or completed planning workspace.
-
-This document records whether the current product can be used. Product
-completion is decided by working runtime behavior, the functional acceptance
-gate, and a healthy deployed instance. Publication channels, compatibility
-matrices, and environment-qualification programs do not block deployment or
-ordinary use.
+Status follows the source, published artifacts and candidate-bound verification.
+A plan describes intended work; completing a plan does not establish a working
+deployment or extend an earlier candidate's acceptance to later source.
 
 ## Current product state
 
 | Dimension | Current status |
 | --- | --- |
-| **Product direction** | Complete the first `0.1.0` open-source npm release of the Meshrix.js platform and programmable gateway. The first release claim covers the exact npm artifacts and the available platforms that actually pass their consumer checks; optional container deployment claims keep separate evidence. |
-| **Implementation** | Core includes the Server, Web Console, security, storage, jobs, governed operation dispatch, plugin contract, and standard MCP ingress. Optional plugins, independent services, external providers, model services, Agent products, and named-client scenarios retain separate opt-in lifecycles. |
-| **Verification** | `npm test` is the core public regression. `npm run verify:acceptance` is the single product-level functional gate. Focused checks are used only to repair concrete failures before that final gate. |
-| **Operation** | Existing production evidence describes an earlier accepted Core candidate. It does not establish the current gateway candidate's deployment or present service health. A supported deployment uses one `runtime-ui` process with one public origin: Console at `<server-url>/`, API at `<server-url>/api/`, and health at `<server-url>/api/healthz`. |
-| **Publication** | The source repository is public. Project-owned source is licensed under Apache-2.0; dependency licenses apply separately. The current release definition is a candidate, and no public release is recorded in [release history](releases/README.md). |
+| **Published products** | `meshrix.js@0.1.0` and `@meshrix/gateway@0.1.0` are published. GitHub release `v0.1.0` is available. See [release history](releases/README.md) for the public references. |
+| **Implementation** | The Node.js platform includes the Server, Web Console, storage, jobs, governed operation dispatch, standard MCP ingress and the plugin contract. Optional plugins, independent services and external clients keep their own lifecycles. |
+| **Current source** | Post-release source changes require their own affected verification. Published `0.1.0` artifacts, prior source checks and earlier deployed instances do not establish the present candidate's runtime or cloud readiness. |
+| **Deployment** | The maintained Node.js and container paths remain the current implementation. The private relay now has a verified staging deployment on Cloudflare Workers (Free plan): `meshrix-private-relay-staging` serving `wss://relay.meshrix.io` and its `workers.dev` fallback, with a complete peer conversation e2e (enrollment, Signal-encrypted exchange, receipt chain, offline replay, dedup, revocation) passing against the live staging route. This is isolated staging evidence under `DELIVERY-PRIVATE-CLOUD-VALIDATION`, not a published or publicly admitted service. Native SQLite, filesystem and process assumptions for the broader Node.js platform still require deliberate runtime adapters. |
+| **Privacy and enterprise operation** | The existing semantic gateway interprets invocation data. Transport TLS, a private network and encrypted secret storage do not establish forwarding that hides content from the operator. Authenticated personal endpoint pairing, operator-blind content forwarding and independently selectable enterprise recording categories are planned capabilities, not current release claims. |
+| **Verification** | Use the repository-owned verification workflow and the smallest affected engineering closure. The product-level functional gate is `npm run verify:acceptance`; benchmarks require current same-candidate backend, Console, standard MCP and normal-shutdown evidence. |
 
-## Production-use evidence
+## Publication and support boundary
 
-Run `npm run verify:production-closure` to reduce the current accepted
-generation, existing-target Linux deployment receipt, live Core checks, active
-service state, and branch-promotion receipt. A pass is valid only when every
-input binds the same immutable commit and candidate digest. The generated
-report remains under `build/`; it is operational evidence rather than a second
-roadmap or product authority.
+The published `0.1.0` products cover the single-node Core platform with Web
+Console, standard MCP access, governed upstream services and the independently
+embeddable gateway within their documented artifact and environment support.
+Hosted Workers operation, application-layer operator blindness, multi-node
+availability and a dedicated enterprise deployment are separate qualification
+claims. Project-owned source is Apache-2.0; independent dependency and asset
+licenses remain applicable.
 
-Nightly, stable, and release branch equality is candidate-promotion evidence;
-it is not a tag, package publication, image publication, GitHub Release, or
-public release asset. Subsequent source changes do not inherit an earlier
-candidate's acceptance or deployment claim.
+The standard release workflow builds, checks, packs and smoke-installs the two
+products from a selected version tag, then performs npm publication and creates
+the GitHub Release. The first publication is complete; subsequent source work
+must preserve actual published contracts and use the normal release path. A
+local build, a branch comparison or an npm archive does not publish a new version.
 
-Public package publication is required for the current public-release outcome;
-it does not retroactively invalidate the earlier Core acceptance. Broad
-operating-system qualification, named-client certification, cloud matrices, and
-multi-node operation retain their separate evidence boundaries.
+## Development direction
 
-## Gateway convergence candidate
+The current programme prioritizes product completeness, reliability, privacy,
+operational control, efficiency and first-use quality. Initial shared hosting
+targets Cloudflare Workers. Enterprise operators should be able to self-host the
+platform and control recording categories, destinations and retention using their
+own resources. Dedicated Workers, Containers or other infrastructure follow an
+actual deployment requirement.
 
-The repository contains the focused `@meshrix/gateway` candidate and its
-modern/legacy MCP adapters. The gateway work in
-[PR #82](https://github.com/Meshrix-Platform/Meshrix.js/pull/82) is a development
-candidate, not an accepted release. The current bounded functional evidence binds
-candidate `df7dd9b9e49b2ec98dc32810c777e5ffb14f302b`. Later changes require
-new affected evidence; they do not inherit this candidate's result.
+Personal privacy depends on authenticated endpoints holding decryption keys,
+not on a server-side audit switch. A content-blind relay can still observe
+connection metadata or retain ciphertext. Enterprise content processing and
+audit explicitly trust the organization's selected administrator and endpoint.
+The future recording design must distinguish execution state required for
+authorization and recovery from optional retained audit, and migrate the owning
+contracts with its implementation. The current
+[minimum-evidence contract](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+continues to describe the existing implementation boundary; planned changes are
+not already implemented behavior.
 
-Focused deterministic gateway tests cover protocol, authorization, cancellation,
-durable effect boundaries, crash recovery, and lifecycle behavior. The prior MIT
-dependency candidate passed its Node build and clean-container installation of
-all 18 unmodified public packages, including packaged Core startup, native
-storage, and health/bootstrap/RPC contracts. The first live diagnostic exposed
-Console onboarding and gateway dispatch defects. Their corrections also address
-discovery, scoped MCP tool selection, and unchosen request deadlines across the
-platform and optional connector. The corrected candidate completed a bounded Linux
-Core/Console/standard-MCP route: service publication, exact tool selection and
-catalogs, an authorized upstream read, omitted-operation refusal, UI revocation,
-revoked-client refusal, and normal shutdown and cleanup. These are recorded
-observations for that candidate and configuration, not a new run or proof of
-an autonomous Agent development task.
+Reliable autonomous Peer communication and useful gateway discovery, CLI and
+result-consumption improvements remain in the current programme. Receiving a
+message does not authorize execution or remote control. Exact cryptographic,
+storage and host-integration choices remain open until their owning design work
+establishes them. The private repository-local planning entry is
+`docs/plans/Programme.json`; no future milestone is activated by reading it.
 
-Changed source and artifacts require their own affected verification. The current
-priority is actual first-use effectiveness and removal of avoidable user friction;
-engineering checks and real user-task evidence remain separate. Benchmark work
-requires the same candidate's actual backend, Console, standard MCP-to-upstream,
-and orderly shutdown evidence as defined in
+## Evidence and remaining qualification
+
+Earlier candidate evidence includes deterministic gateway authorization,
+cancellation, durable-effect and recovery checks, plus a bounded Core, Console
+and standard MCP upstream journey. Those observations remain bound to their
+original source and configuration. Historical failed attempts remain failed;
+publication does not rewrite those attempts or prove every future environment.
+
+The current source needs its own affected verification and functional evidence
+before performance work, as defined in
 [the repository rules](../AGENTS.md#functional-availability-before-benchmarking-and-optimization).
-Those prerequisites are recorded for the named Linux candidate; full-repository
-acceptance, final distribution qualification and publication remain separate.
+There is no current evidence here for comparative industry-leading performance,
+absence of all security vulnerabilities, a complete operator-blind Workers
+deployment or actual autonomous host wake-up.
 
-## Public-release acceptance
-
-The release scope is the existing single-node Core platform with Web Console,
-standard MCP access, governed upstream services, and the independently embeddable
-gateway. Optional integrations remain opt-in. Hosted operation and multi-node
-availability are not claims of this release.
-
-The release-preparation run for commit `cbfb255d` completed Core regression,
-npm archive preparation and consumer qualification, upstream service publishing,
-standard MCP transit, Console browser checks, and storage restore. Its final
-evidence reduction failed, so these command results do not establish an accepted
-release candidate. The original failed aggregate was not retained, so its complete
-missing-evidence inventory cannot be reconstructed. Source review reproduced an
-npm report defect: the runtime projection omitted registry-mirror evidence that
-the consumer collected. The corrected producer preserves those observations;
-failure persistence retains the validated, privacy-scanned aggregate and checks
-its candidate identity against the source workspace. Deterministic checks cover
-readiness with complete and incomplete consumer evidence, cleanup, privacy
-rejection and candidate mismatch. These engineering results do not replace a new
-candidate-bound acceptance result; the earlier run remains failed. The subsequent
-`5f942ef2` candidate passed the complete local release scope and produced an
-accepted generation. That result describes its source revision only.
-
-The current release workflow uses one selected version tag to build, test, pack,
-and smoke-install both npm products, then invokes standard npm publication and
-creates the GitHub Release. External journey receipts and prior workflow authority
-bundles are not publication prerequisites. The simplification at `aef59e1b` has
-focused engineering coverage and successful clean native installs of both prepared
-npm products. Additional Docker verification was stopped at the
-scope boundary and has no completed verdict. The normal publication workflow runs
-its own release checks when invoked. No npm or GitHub publication is recorded here.
-
-The first hosted attempt, run `37211672824` for `v0.0.1`, failed during local release
-checks before publication; its detailed failure report was unavailable. The failed
-tag was removed and the original tag protections restored. The `0.1.0` source
-preparation fixes the isolated Podman fixture's dependency on an installed binary,
-retains sanitized workflow diagnostics, synchronizes production version metadata,
-and passes focused release checks and both npm archive builds. These local results
-do not establish the unavailable hosted failure's sole cause or a successful
-`0.1.0` hosted publication.
-
-| Boundary | Required result | Current candidate evidence |
-| --- | --- | --- |
-| Runtime and protocol | Use the exact Node range in `package.json`; enforce MCP `2026-07-28` on the modern HTTP boundary and isolate the declared legacy profiles. Any conforming client can use authorized capabilities without a product-name allowlist. | Focused adapter and production-route checks verify required metadata, HTTP header mirrors, stdio transport behavior, notification responses, and private cache metadata. Independent HTTP client fixtures also cover the modern wire contract. Full candidate acceptance remains pending. |
-| Authorization and lifecycle | Reject untrusted supplied browser origins before CLI dispatch, preserve native clients without Origin, propagate cancellation, and close active streams and owned upstream resources normally. Standalone request lifetime follows caller and service cancellation rather than a separate fixed operation deadline. | Focused checks pass for Origin rejection, cancellation, HTTP stream shutdown, stdio output backpressure and owned-child cleanup. Protected upstream dispatch rechecks authority after discovery, session initialization, DNS resolution, or queued writes; controlled revocation checks observe zero effect calls. |
-| Recovery | Authorized non-read remote effects require durable pre-effect intent, a durable dispatch boundary, and conservative uncertain outcomes that never authorize blind replay. Preserve the documented offline storage-restore boundary. Optional public gateway receipt lookup and continuation-key restoration are separate capabilities. | Standalone serving uses its owned SQLite intent ledger; discovered platform MCP effects use the existing operation-proof lifecycle and durable dispatch receipt. Deterministic process tests pass for completion, storage failure, crash/reopen uncertainty, no automatic resend, and read calls without effect records. Terminal outcomes follow result validation. The `cbfb255d` installed-consumer and storage-restore commands completed; full candidate acceptance and an operator live drill remain separate claims. |
-| Distribution | Ship the canonical npm package set and test the unchanged candidate artifacts in clean consumers on the native host platform. One complete qualified platform is sufficient for npm publication; container qualification remains independent. The `runtime-ui` OCI image and platform-specific deployment claims are separate optional scopes. | The corrected `5f942ef2` candidate passed the local release scope, including both npm products and installed consumers. The current workflow builds, packs and checks both products within its publication run. Historical dependency and 18-package container results remain tied to their original candidate. The independent source archive retains `pactium@0.8.0` under its original GPL-3.0-or-later identity. No OCI deployment or public npm publication follows from local package qualification. |
-| Functional acceptance | Complete source review and deterministic engineering verification, then obtain candidate-bound evidence for the actual backend, Console action, standard MCP upstream operation, and normal cleanup. | The initial isolated diagnostic found adoption-blocking defects and remains a failed attempt. The repaired `df7dd9b` candidate subsequently passed the bounded actual Linux Core/Console/standard-MCP route, selected-tool and denial checks, UI revocation and normal cleanup. This is functional-availability evidence for that scenario, not the complete product-level acceptance gate or autonomous Agent task evidence. New user-journey improvements require affected engineering checks and actual revalidation. |
-| Performance and public claims | Publish reproducible measurements tied to immutable candidate and comparison versions, equivalent capabilities and security settings, synthetic workloads, resource limits, and observed failures. | No current candidate-bound comparison establishes industry-leading throughput, latency, or reliability. One contained comparison completed its direct reference, but Meshrix.js admission errors left fixed-load legs incomplete and the comparator did not satisfy the selected discovery contract. No comparative ranking follows. Functional prerequisites are recorded for the named candidate; further work must diagnose the actual limitation and retain all failed results. Comparative performance does not replace user-journey effectiveness. |
-| Public entry points | Provide accurate source setup, security reporting, release status, license information, and canonical documentation through `meshrix.io`; verify the selected HTTPS host. | Website source explains service connection, scoped client access, Core/Console and the standalone gateway, with source setup, documentation, security, and release-status links. Static checks and a local desktop/mobile browser observation passed. Local preview is not deployment evidence; hosted HTTPS availability and public release artifacts remain unverified. |
-
-These are finite release acceptance conditions. Task ownership and execution
-receipts belong to the delivery workflow; this document records product status.
-Update each evidence statement when its owning verification has actually passed.
+Future real-cloud verification proceeds through authorized isolated targets and
+the actual Workers runtime before public rollout. A private-network laboratory
+can test endpoints and failure behavior, but it does not substitute for Workers
+qualification. Real Agent conversations and live use belong to separately
+assigned acceptance tasks. Deployment, procurement, publication and access to
+private runtime data remain their own authorization boundaries.
