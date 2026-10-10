@@ -21,12 +21,13 @@ error taxonomy and cost honesty).
 
 | Durable Object | Identity | Owns |
 | --- | --- | --- |
-| `RelayDirectoryDO` | `directory:<tenantId>` | Tenant enrollment authority: device bindings (credential digest only), route membership, monotonic `revocationRevision`, `admissionGeneration` |
-| `RelaySessionDO` | `session:<tenantId>/<routeId>` | Hibernating accepted sockets, admission/reconnect rechecks, bounded ordered opaque frame forwarding, backpressure, revocation push |
+| `RelayDirectoryDO` | `directory:<tenantId>` | Tenant enrollment authority: device bindings (credential digest only), route membership, monotonic `revocationRevision`, `admissionGeneration`, route-peer pairing resolution |
+| `RelaySessionDO` | `session:<tenantId>/<routeId>` | Hibernating accepted sockets, admission/reconnect rechecks, bounded ordered opaque frame forwarding, backpressure, revocation push, peer-mailbox channel dispatch and live delivery pushes |
 | `RecoveryVaultDO` | `vault:<vaultId>` | Committed encrypted snapshot (ciphertext + public verifier + opaque metadata), staged CAS replacement, writer-key set, recovery fetch verifier, single-use proof-nonce digests |
+| `MailboxDO` | `mailbox:<tenantId>/<routeId>/<deviceId>` | Per-recipient peer mailbox partition: monotonic positions, opaque envelopes, sender-scoped idempotency, typed receipts, prekey bundle, retention/capacity truncation tombstones |
 
-All three use SQLite-backed Durable Object storage
-(`new_sqlite_classes` migration) for transactional state.
+All four use SQLite-backed Durable Object storage
+(`new_sqlite_classes` migrations; the mailbox ships under the `peer` tag).
 
 ### Privacy / opacity invariants
 
@@ -40,6 +41,11 @@ All three use SQLite-backed Durable Object storage
 - Vault storage holds ciphertext, public verification material, writer key
   references and proof-nonce **digests** only. A snapshot is never accepted
   as semantic authority and never reduces generation state.
+- Mailbox partitions store opaque Signal-family envelopes, positions,
+  envelope **hashes**, typed receipts, ids and counters only. The test
+  suite audits every stored object against the contract's
+  `containsForbiddenPeerKeys` boundary — plaintext, grants, tool names,
+  credentials and agent intent never reach durable state.
 
 ### Session admission
 
@@ -57,7 +63,58 @@ All three use SQLite-backed Durable Object storage
    then answers `session-restored` with typed cursor gaps.
 3. `recover_device`-purpose sessions admit only the recovery message kinds
    (`recoveryChannelAdmitsOnlyRecovery`) on an independent, tighter budget —
-   forwarding frames on a recovery channel is a protocol error.
+   forwarding frames or peer mailbox traffic on a recovery channel is a
+   protocol error.
+
+### Peer mailbox
+
+`forward`-purpose sessions additionally dispatch the peer wire
+(`v0.0.1:private-relay:peer-1`) as request/response on the same admitted
+socket. The session object binds every request to the credential-authenticated
+identity (`tenantId`/`routeId`/`deviceId` must equal the session binding —
+a mismatch is a protocol error), picks the owning partition and stamps the
+session's `revocationRevision`/`admissionGeneration`; `MailboxDO`
+re-validates the binding and the route pairing against the directory before
+touching durable state.
+
+- **Partitions** — one `MailboxDO` per `(tenantId, routeId, deviceId)`
+  recipient slot. `peer-send`/`peer-bundle-fetch` are routed to the named
+  peer's partition; `peer-bundle-publish`/`peer-fetch`/`peer-ack` hit the
+  caller's own; `peer-receipt` resolves the paired peer through the
+  directory so sender status queries land on the recipient partition.
+- **Sends** — `peer-send` commits `{position, senderDeviceId, messageId,
+  envelope}` transactionally with a `mailbox`-issued `accepted` receipt and
+  a sender-scoped idempotency binding `(sender, messageId) → (position,
+  envelopeHash)`. Same-id/same-envelope replays the stored `accepted`
+  outcome (`duplicate`); same-id/different-envelope is a typed `conflict`.
+  Positions are monotonic per partition and never rewind, even across
+  object eviction.
+- **Fetches** — `peer-fetch` is an indexed cursor read (`afterSeq`,
+  bounded `limit`) returning strictly ascending positions, `nextAfterSeq`,
+  `more` and `gaps` tombstones covering every truncated range in the page —
+  a cursor never silently advances past lost messages.
+- **Acks** — `peer-ack` records `received` receipts (advancing the durable
+  recipient cursor) and verbatim `source:"agent"` application reports in
+  one transaction; every requested id is either `recorded` or `refused`
+  with `message_unknown`/`position_mismatch`/`authority_stale`/`revoked`.
+  A revoked partition refuses each entry honestly.
+- **Status** — `peer-receipt` returns per-messageId `position` (`0` =
+  unknown) plus recorded receipts, `accepted`/`received`/application kinds
+  kept independent.
+- **Bundles** — a device publishes its prekey bundle into its own
+  partition with monotonic `revision` (`published` first, `superseded` on
+  replacement, `refused` with `stale_revision`/`revoked`/`peer_unpaired`
+  otherwise); fetches are allowed only for the device's paired route peer.
+- **Wakeup** — a committed send pushes the next `peer-messages` page to
+  the recipient's live session socket; `peer-fetch` pull remains the
+  supported fallback for disconnected or lagging recipients.
+- **Retention** — the deployment policy (`RELAY_MAILBOX_CAPACITY_BYTES`,
+  `RELAY_MAILBOX_RETENTION_MS`, `RELAY_MAILBOX_MAX_ITEMS`, bounded by
+  `PRIVATE_RELAY_PEER_LIMITS`) is advertised at session admission via
+  `peer-retention-policy` and re-served on pull. Capacity overflow evicts
+  the oldest envelopes; a single scheduled alarm expires by retention —
+  both write `expired`/`capacity_truncated` tombstones and only exist
+  while data is stored.
 
 ### Flow control and backpressure
 
@@ -91,9 +148,11 @@ unreachable endpoints (`PRIVATE_RELAY_OFFLINE_NEW_CALL_QUEUES === false`).
 
 Each object counts storage reads/writes/deletes, websocket/HTTP events,
 messages and bytes, admitted/rejected/closed/restored sessions, forwarded
-and dropped frames, granted flow credits and vault operations. Durable
-counters flush only at bounded transitions; per-message counters are
-in-memory. Read via `GET /admin/counters/<session|directory|vault>/...` —
+and dropped frames, granted flow credits, vault operations and mailbox
+operations (`accepted`/`duplicate`/`conflict`/`fetched`/`acked`/`expired`/
+`refusals`/`bundles`). Durable counters flush only at bounded transitions;
+per-message counters are in-memory. Read via
+`GET /admin/counters/<session|directory|vault|mailbox>/...` —
 real per-operation counts, no invented monthly cost figures.
 
 ## Scripts

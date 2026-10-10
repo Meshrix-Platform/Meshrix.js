@@ -6,8 +6,11 @@
 
 import { env, SELF } from "cloudflare:test";
 
-import { PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION } from "../../../packages/contracts/src/private-relay/index.ts";
-import { base64UrlToBytes, bytesToBase64Url, sha256Hex, utf8Bytes } from "../src/ids.ts";
+import {
+  PRIVATE_RELAY_PEER_SCHEMA_VERSION,
+  PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION,
+} from "../../../packages/contracts/src/private-relay/index.ts";
+import { base64UrlToBytes, bytesToBase64Url, mailboxObjectName, sha256Hex, utf8Bytes } from "../src/ids.ts";
 import { snapshotCiphertextDigest, vaultFetchTranscript, vaultWriteTranscript } from "../src/vault-crypto.ts";
 
 export const ADMIN_TOKEN = "local-only-synthetic-admin-token";
@@ -340,6 +343,116 @@ export function randomCiphertext(byteLength = 48): string {
     crypto.getRandomValues(bytes.subarray(offset, Math.min(offset + 65_536, bytes.length)));
   }
   return bytesToBase64Url(bytes);
+}
+
+// ---------------------------------------------------------------------------
+// Peer mailbox wire builders (schema v0.0.1:private-relay:peer-1)
+// ---------------------------------------------------------------------------
+
+const PEER_PROTOCOL = "meshrix-private-relay/0";
+
+function peerEnvelope(kind: string, extras: Record<string, unknown>): Record<string, unknown> {
+  return {
+    schemaVersion: PRIVATE_RELAY_PEER_SCHEMA_VERSION,
+    wireProtocol: PEER_PROTOCOL,
+    kind,
+    ...extras,
+  };
+}
+
+let peerCounter = 0;
+export function freshPeerId(prefix = "msg.peer"): string {
+  peerCounter += 1;
+  return `${prefix}.${Date.now().toString(36)}.${peerCounter}id`;
+}
+
+export function peerEnvelopeObject(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    format: "signal-pqxdh",
+    headers: {
+      messageType: "session",
+      senderBundleId: "bnd.test.sender.1",
+      recipientBundleId: "bnd.test.recipient.1",
+      prekeyId: null,
+      signedPrekeyId: null,
+      baseKeyId: null,
+    },
+    ciphertext: `Q0lQSEVSVGVYVHN5bnRoZXRpYw${peerCounter}${Math.random().toString(36).slice(2, 10)}`,
+    ...overrides,
+  };
+}
+
+export function peerBundleObject(deviceId: string, revision: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    format: "signal-pqxdh",
+    bundleId: `bnd.test.${deviceId.slice(-8)}.${revision}`,
+    revision,
+    material: `QlVORExFbWF0ZXJpYWw${revision}${Math.random().toString(36).slice(2, 10)}`,
+    ...overrides,
+  };
+}
+
+export function peerSendMessage(
+  tenantId: string, routeId: string, deviceId: string, peerDeviceId: string,
+  messageId: string, envelope: Record<string, unknown>,
+): Record<string, unknown> {
+  return peerEnvelope("peer-send", { tenantId, routeId, deviceId, peerDeviceId, messageId, envelope });
+}
+
+export function peerFetchMessage(
+  tenantId: string, routeId: string, deviceId: string, afterSeq: number, limit = 64,
+): Record<string, unknown> {
+  return peerEnvelope("peer-fetch", { tenantId, routeId, deviceId, afterSeq, limit });
+}
+
+export function peerAckMessage(
+  tenantId: string, routeId: string, deviceId: string,
+  received: { messageId: string; position: number }[],
+  reports: Record<string, unknown>[] = [],
+): Record<string, unknown> {
+  return peerEnvelope("peer-ack", { tenantId, routeId, deviceId, received, reports });
+}
+
+export function peerReceiptQueryMessage(
+  tenantId: string, routeId: string, deviceId: string, messageIds: string[],
+): Record<string, unknown> {
+  return peerEnvelope("peer-receipt", { tenantId, routeId, deviceId, messageIds });
+}
+
+export function peerBundlePublishMessage(
+  tenantId: string, routeId: string, deviceId: string, bundle: Record<string, unknown>,
+): Record<string, unknown> {
+  return peerEnvelope("peer-bundle-publish", { tenantId, routeId, deviceId, bundle });
+}
+
+export function peerBundleFetchMessage(
+  tenantId: string, routeId: string, deviceId: string, peerDeviceId: string,
+): Record<string, unknown> {
+  return peerEnvelope("peer-bundle-fetch", { tenantId, routeId, deviceId, peerDeviceId });
+}
+
+export function peerAgentReport(
+  kind: string, messageId: string, position: number, detail: string | null = null,
+): Record<string, unknown> {
+  return { kind, source: "agent", messageId, position, detail };
+}
+
+/** Durable Object stub for one recipient partition. */
+export function mailboxStub(tenantId: string, routeId: string, deviceId: string) {
+  return env.RELAY_MAILBOX.get(env.RELAY_MAILBOX.idFromName(mailboxObjectName(tenantId, routeId, deviceId)));
+}
+
+/** Direct internal request to a partition (exercises the session reach-in). */
+export async function mailboxPeerCall(
+  tenantId: string, routeId: string, ownerDeviceId: string,
+  admission: Record<string, unknown>, message: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const stub = mailboxStub(tenantId, routeId, ownerDeviceId);
+  const response = await stub.fetch("http://mailbox.internal/internal/peer", {
+    method: "POST",
+    body: JSON.stringify({ admission, message }),
+  });
+  return response.json() as Promise<Record<string, unknown>>;
 }
 
 export { bytesToBase64Url, base64UrlToBytes, sha256Hex, utf8Bytes };

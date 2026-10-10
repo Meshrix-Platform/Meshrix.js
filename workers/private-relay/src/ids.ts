@@ -23,6 +23,14 @@ export function vaultObjectName(vaultId: string): string {
   return `vault:${vaultId}`;
 }
 
+/**
+ * Peer mailbox partition: one Durable Object per enrolled
+ * (tenantId, routeId, deviceId) recipient slot.
+ */
+export function mailboxObjectName(tenantId: string, routeId: string, deviceId: string): string {
+  return `mailbox:${tenantId}/${routeId}/${deviceId}`;
+}
+
 const encoder = new TextEncoder();
 
 export function utf8Bytes(value: string): Uint8Array {

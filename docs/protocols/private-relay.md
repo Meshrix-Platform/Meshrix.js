@@ -232,6 +232,41 @@ reconcile the lost `messageIds` through `peer-status` (position `0`, empty
 receipts). A disconnected receiver resumes from `afterSeq` plus its
 unacknowledged ids; unknown delivery state stays explicit.
 
+### Mailbox runtime behavior (`NODE-MAILBOX-RUNTIME`)
+
+The Workerd runtime implements this wire inside
+`workers/private-relay` as `MailboxDO` — one SQLite-backed Durable Object
+per `(tenantId, routeId, deviceId)` recipient partition. Peer kinds travel
+as request/response on the same admitted `forward`-purpose session socket
+the frame channel uses; they are never forwarded peer-to-peer and never
+admitted on a `recover_device` channel. The session object binds each
+request to the credential-authenticated identity (a `tenantId`/`routeId`/
+`deviceId` mismatch is a protocol error) and stamps the live
+`revocationRevision`/`admissionGeneration`; the partition re-validates the
+binding and resolves the route pairing through the tenant directory, the
+same admission authority the session uses — revocation is pushed to live
+sockets *and* to partitions, so a revoked owner answers honestly where the
+wire carries a refusal (`peer-bundle-published`/`peer-bundle`/`peer-acked`
+`refused`) and drops where it cannot (`peer-send`/`peer-fetch` have no
+refusal outcome; the revoked device's socket is already closed by the
+authority path).
+
+- `peer-send` routes to the `peerDeviceId` partition; `peer-fetch`/
+  `peer-ack`/`peer-bundle-publish` hit the caller's own; `peer-bundle-fetch`
+  hits the named peer's; `peer-receipt` resolves the paired peer through
+  the directory. Position is a per-partition monotonic counter, commits are
+  transactional, and cursor reads are indexed range scans on position.
+- A committed send pushes the next `peer-messages` page to the recipient's
+  live socket (event-driven wakeup); `peer-fetch` pull remains the
+  supported fallback.
+- `peer-retention-policy` is pushed on session admission and re-served on
+  pull; the values come from `RELAY_MAILBOX_CAPACITY_BYTES`,
+  `RELAY_MAILBOX_RETENTION_MS` and `RELAY_MAILBOX_MAX_ITEMS` (clamped to
+  `PRIVATE_RELAY_PEER_LIMITS`), never an invented default.
+- Expiry runs on one scheduled alarm while data exists; capacity evicts
+  the oldest envelopes at send time. Both write tombstones; `peer-status`
+  reconciles truncated ids as position `0` with empty receipts.
+
 ## Neutral wire corpus
 
 `private-relay-wire-corpus.json` holds synthetic valid and invalid exemplars

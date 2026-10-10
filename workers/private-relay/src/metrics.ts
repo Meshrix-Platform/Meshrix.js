@@ -40,6 +40,15 @@ export interface RelayCountersShape {
   vaultWritesRefused: number;
   vaultFetches: number;
   vaultFetchRefusals: number;
+  mailboxAccepted: number;
+  mailboxDuplicate: number;
+  mailboxConflict: number;
+  mailboxFetched: number;
+  mailboxAcked: number;
+  mailboxExpired: number;
+  mailboxRefusals: number;
+  mailboxBundlesPublished: number;
+  mailboxBundlesFetched: number;
 }
 
 export type RelayCounterKey = keyof RelayCountersShape;
@@ -72,6 +81,15 @@ export function emptyCounters(): RelayCountersShape {
     vaultWritesRefused: 0,
     vaultFetches: 0,
     vaultFetchRefusals: 0,
+    mailboxAccepted: 0,
+    mailboxDuplicate: 0,
+    mailboxConflict: 0,
+    mailboxFetched: 0,
+    mailboxAcked: 0,
+    mailboxExpired: 0,
+    mailboxRefusals: 0,
+    mailboxBundlesPublished: 0,
+    mailboxBundlesFetched: 0,
   };
 }
 
@@ -89,6 +107,13 @@ const DURABLE_KEYS: readonly RelayCounterKey[] = Object.freeze([
   "vaultWritesRefused",
   "vaultFetches",
   "vaultFetchRefusals",
+  "mailboxAccepted",
+  "mailboxDuplicate",
+  "mailboxConflict",
+  "mailboxAcked",
+  "mailboxExpired",
+  "mailboxRefusals",
+  "mailboxBundlesPublished",
 ]);
 
 export class RelayCounters {

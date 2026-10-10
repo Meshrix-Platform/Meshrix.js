@@ -19,12 +19,13 @@
 import { DurableObject } from "cloudflare:workers";
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { RELAY_RUNTIME_LIMITS, RECOVERY_SESSION_LIMITS, integerEnv } from "./env.ts";
+import { RELAY_RUNTIME_LIMITS, RECOVERY_SESSION_LIMITS, integerEnv, mailboxPolicyFromEnv } from "./env.ts";
 import { jsonResponse, readBoundedJson } from "./http.ts";
-import { directoryObjectName, sha256Hex } from "./ids.ts";
+import { directoryObjectName, mailboxObjectName, sha256Hex } from "./ids.ts";
 import { RelayCounters } from "./metrics.ts";
 import {
   PRIVATE_RELAY_LIMITS,
+  PRIVATE_RELAY_PEER_LIMITS,
   parsePrivateRelayMessage,
   encodePrivateRelayMessage,
   createSessionAdmitted,
@@ -35,6 +36,10 @@ import {
   createFlowCredit,
   parsePrivateRelayRecoveryMessage,
   recoveryChannelAdmitsOnlyRecovery,
+  parsePrivateRelayPeerMessage,
+  encodePrivateRelayPeerMessage,
+  createPeerRetentionPolicy,
+  createPeerStatus,
 } from "../../../packages/contracts/src/private-relay/index.ts";
 
 const META_KEY = "meta";
@@ -111,6 +116,8 @@ interface ConnState {
   sentFrames: { seq: number; payloadBytes: number }[];
   outstandingBytes: number;
   dropsInRow: number;
+  /** Highest mailbox position already pushed to this connection. */
+  mailboxPushSeq: number;
   lastSeenAt: number;
 }
 
@@ -203,6 +210,7 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
       sentFrames: [],
       outstandingBytes: 0,
       dropsInRow: 0,
+      mailboxPushSeq: 0,
       lastSeenAt: now,
     };
   }
@@ -617,6 +625,11 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
         cursors: { ...this.meta.routeCursors },
       })));
     }
+    // The peer mailbox policy advertisement travels with (re)admission on
+    // forward sessions — the enrollment-time carrier the wire contract
+    // designates, so a device learns the finite retention bounds before it
+    // ever opens its mailbox.
+    if (purposeFinal === "forward") this.pushMailboxPolicy(conn);
     // The newly admitted socket already learned the route state in-band;
     // only peers need a change notice.
     this.notifyRouteStateChange(conn);
@@ -635,6 +648,20 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
   ): Promise<void> {
     const purpose = conn.attachment.purpose ?? "forward";
     if (!kind) {
+      // Peer mailbox kinds are not session-wire messages either; they are
+      // request/response over the same admitted channel and are dispatched
+      // to the per-recipient MailboxDO — never forwarded peer-to-peer.
+      const peer = rawParsed === null ? null : parsePrivateRelayPeerMessage(rawParsed);
+      const peerKind = (peer as { kind?: string } | null)?.kind ?? null;
+      if (peerKind) {
+        if (purpose !== "forward") {
+          // A recovery-purpose channel must never carry mailbox traffic.
+          this.closeConn(conn, "protocol_error", CLOSE_PROTOCOL_ERROR);
+          return;
+        }
+        await this.handlePeerMessage(conn, peerKind, peer as Record<string, unknown>);
+        return;
+      }
       // Recovery-channel kinds are not session-wire messages.
       const recovery = rawParsed === null ? null : parsePrivateRelayRecoveryMessage(rawParsed);
       const recoveryKind = (recovery as { kind?: string } | null)?.kind ?? null;
@@ -680,6 +707,179 @@ export class RelaySessionDO extends DurableObject<PrivateRelayEnv> {
       default:
         this.rejectOrDrop(conn);
         return;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Peer mailbox dispatch (request/response on the admitted channel)
+  // ------------------------------------------------------------------
+
+  /**
+   * The deployment's finite mailbox retention policy, advertised at
+   * admission and re-served on `peer-retention-policy` pulls so a client
+   * that missed the push can recover it without polling storage.
+   */
+  private pushMailboxPolicy(conn: ConnState): void {
+    this.sendMessage(conn, encodePrivateRelayPeerMessage(createPeerRetentionPolicy({
+      routeId: conn.attachment.routeId,
+      deviceId: conn.attachment.deviceId,
+      ...mailboxPolicyFromEnv(this.env),
+    })));
+  }
+
+  /**
+   * Resolve this device's paired route peer through the tenant directory —
+   * the same admission authority the mailbox consults. Returns null when
+   * the route has no second enrolled device or the pairing is broken.
+   */
+  private async routePeerDeviceId(attachment: ConnAttachment): Promise<string | null> {
+    this.counters.count("directoryChecks");
+    const directory = this.env.RELAY_DIRECTORY.get(
+      this.env.RELAY_DIRECTORY.idFromName(directoryObjectName(attachment.tenantId)),
+    );
+    const response = await directory.fetch("http://directory/internal/route-peer", {
+      method: "POST",
+      body: JSON.stringify({ routeId: attachment.routeId, deviceId: attachment.deviceId }),
+    });
+    const result = await response.json() as { ok?: boolean; peerDeviceId?: string | null };
+    return result.ok === true && typeof result.peerDeviceId === "string" ? result.peerDeviceId : null;
+  }
+
+  /**
+   * Forward one peer wire request to its owning mailbox partition and relay
+   * the typed response on the same connection. The stamped admission is the
+   * credential-authenticated session identity — the mailbox re-checks the
+   * binding against it and the directory, so a message claiming a foreign
+   * tenantId/routeId/deviceId is refused as a protocol violation.
+   */
+  private async handlePeerMessage(conn: ConnState, kind: string, message: Record<string, unknown>): Promise<void> {
+    const identity = conn.attachment;
+    // `peer-retention-policy` is mailbox→device shaped (no tenantId); every
+    // other request kind binds the full session identity exactly.
+    if (message.routeId !== identity.routeId
+      || message.deviceId !== identity.deviceId
+      || (kind !== "peer-retention-policy" && message.tenantId !== identity.tenantId)) {
+      this.closeConn(conn, "protocol_error", CLOSE_PROTOCOL_ERROR);
+      return;
+    }
+    if (kind === "peer-retention-policy") {
+      // Pull fallback for the admission-time advertisement.
+      this.pushMailboxPolicy(conn);
+      return;
+    }
+
+    let ownerDeviceId: string;
+    if (kind === "peer-send" || kind === "peer-bundle-fetch") {
+      ownerDeviceId = message.peerDeviceId as string;
+    } else if (kind === "peer-receipt") {
+      // Receipt status lives in the recipient partition — the paired peer.
+      const peerDeviceId = await this.routePeerDeviceId(identity);
+      if (!peerDeviceId) {
+        // No paired peer: every queried send is honestly unknown.
+        this.sendMessage(conn, encodePrivateRelayPeerMessage(createPeerStatus({
+          routeId: identity.routeId,
+          deviceId: identity.deviceId,
+          statuses: (message.messageIds as string[]).map((messageId) => ({
+            messageId, position: 0, receipts: [],
+          })),
+        })));
+        return;
+      }
+      ownerDeviceId = peerDeviceId;
+    } else {
+      // bundle-publish / fetch / ack operate on the caller's own partition.
+      ownerDeviceId = identity.deviceId;
+    }
+
+    const stub = this.env.RELAY_MAILBOX.get(
+      this.env.RELAY_MAILBOX.idFromName(mailboxObjectName(identity.tenantId, identity.routeId, ownerDeviceId)),
+    );
+    const response = await stub.fetch("http://mailbox.internal/internal/peer", {
+      method: "POST",
+      body: JSON.stringify({
+        admission: {
+          tenantId: identity.tenantId,
+          routeId: identity.routeId,
+          deviceId: identity.deviceId,
+          role: identity.role,
+          revocationRevision: identity.revocationRevision ?? 0,
+          admissionGeneration: identity.admittedGeneration ?? 0,
+          sessionId: identity.sessionId ?? "",
+        },
+        message,
+      }),
+    });
+    const outcome = await response.json() as {
+      ok?: boolean;
+      drop?: boolean;
+      response?: Record<string, unknown>;
+    };
+    if (outcome.ok !== true || outcome.drop === true || !outcome.response) return;
+    const encoded = encodePrivateRelayPeerMessage(outcome.response);
+    this.sendMessage(conn, encoded);
+
+    if (kind === "peer-send" && outcome.response.outcome === "accepted") {
+      // Event-driven wakeup: a newly durably stored envelope is pushed to
+      // the recipient's live session; pull via peer-fetch remains the
+      // supported fallback for a disconnected or lagging recipient.
+      await this.notifyMailboxPeer(conn, message.peerDeviceId as string);
+    }
+    if (kind === "peer-fetch" && typeof outcome.response.nextAfterSeq === "number") {
+      conn.mailboxPushSeq = Math.max(conn.mailboxPushSeq, outcome.response.nextAfterSeq);
+    }
+  }
+
+  /**
+   * Push the next mailbox page to the recipient's live connection after a
+   * committed send. Uses the recipient's own admitted-session stamp; a
+   * recipient without a live socket simply pulls on its next fetch.
+   */
+  private async notifyMailboxPeer(sender: ConnState, recipientDeviceId: string): Promise<void> {
+    for (const other of this.conns.values()) {
+      if (other === sender || !other.admitted || other.attachment.deviceId !== recipientDeviceId) continue;
+      const identity = other.attachment;
+      const stub = this.env.RELAY_MAILBOX.get(
+        this.env.RELAY_MAILBOX.idFromName(mailboxObjectName(identity.tenantId, identity.routeId, recipientDeviceId)),
+      );
+      const response = await stub.fetch("http://mailbox.internal/internal/peer", {
+        method: "POST",
+        body: JSON.stringify({
+          admission: {
+            tenantId: identity.tenantId,
+            routeId: identity.routeId,
+            deviceId: identity.deviceId,
+            role: identity.role,
+            revocationRevision: identity.revocationRevision ?? 0,
+            admissionGeneration: identity.admittedGeneration ?? 0,
+            sessionId: identity.sessionId ?? "",
+          },
+          message: {
+            schemaVersion: "v0.0.1:private-relay:peer-1",
+            wireProtocol: "meshrix-private-relay/0",
+            kind: "peer-fetch",
+            tenantId: identity.tenantId,
+            routeId: identity.routeId,
+            deviceId: identity.deviceId,
+            afterSeq: other.mailboxPushSeq,
+            limit: PRIVATE_RELAY_PEER_LIMITS.maxPageMessages,
+          },
+        }),
+      });
+      const outcome = await response.json() as {
+        ok?: boolean;
+        drop?: boolean;
+        response?: Record<string, unknown> & { nextAfterSeq?: number; messages?: unknown[]; gaps?: unknown[] };
+      };
+      if (outcome.ok !== true || outcome.drop === true || !outcome.response) return;
+      const page = outcome.response;
+      const delivered = (page.messages?.length ?? 0) > 0 || (page.gaps?.length ?? 0) > 0;
+      if (delivered) {
+        this.sendMessage(other, encodePrivateRelayPeerMessage(page));
+      }
+      if (typeof page.nextAfterSeq === "number") {
+        other.mailboxPushSeq = Math.max(other.mailboxPushSeq, page.nextAfterSeq);
+      }
+      return;
     }
   }
 

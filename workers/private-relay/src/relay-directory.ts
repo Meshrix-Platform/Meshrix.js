@@ -113,6 +113,9 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
       if (request.method === "POST" && url.pathname === "/internal/admission-check") {
         return await this.handleAdmissionCheck(request);
       }
+      if (request.method === "POST" && url.pathname === "/internal/route-peer") {
+        return await this.handleRoutePeer(request);
+      }
       if (request.method === "GET" && url.pathname === "/internal/counters") {
         return jsonResponse({ counters: this.counters.snapshot() });
       }
@@ -220,6 +223,7 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
     const now = new Date().toISOString();
     meta.revocationRevision += 1;
     const affectedRoutes = new Set<string>();
+    const affectedDevices = new Map<string, { routeId: string; deviceId: string }>();
     const writes: [string, unknown][] = [[META_KEY, meta]];
 
     if (all === true) {
@@ -237,6 +241,7 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
         device.revoked = true;
         device.revokedAt = now;
         writes.push([key, device]);
+        affectedDevices.set(device.deviceId, { routeId: device.routeId, deviceId: device.deviceId });
       }
     } else if (isOpaqueId(deviceId)) {
       this.counters.count("storageReads");
@@ -248,6 +253,7 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
         writes.push([`${DEVICE_PREFIX}${deviceId}`, device]);
       }
       affectedRoutes.add(device.routeId);
+      affectedDevices.set(device.deviceId, { routeId: device.routeId, deviceId: device.deviceId });
     } else if (isOpaqueId(routeId)) {
       this.counters.count("storageReads");
       const route = await this.ctx.storage.get<RouteRecord>(`${ROUTE_PREFIX}${routeId}`);
@@ -257,6 +263,9 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
         writes.push([`${ROUTE_PREFIX}${routeId}`, route]);
       }
       affectedRoutes.add(route.routeId);
+      for (const member of [route.entryDeviceId, route.endpointDeviceId]) {
+        if (member) affectedDevices.set(member, { routeId: route.routeId, deviceId: member });
+      }
     } else {
       return jsonResponse({ error: "invalid_body" }, 400);
     }
@@ -268,9 +277,50 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
     return jsonResponse({
       revocationRevision: meta.revocationRevision,
       affectedRouteIds: [...affectedRoutes].slice(0, RELAY_RUNTIME_LIMITS.maxRoutesPerTenant),
+      affectedDevices: [...affectedDevices.values()].slice(0, RELAY_RUNTIME_LIMITS.maxDevicesPerTenant),
       deviceId: isOpaqueId(deviceId) ? deviceId : null,
       routeId: isOpaqueId(routeId) ? routeId : null,
       all: all === true,
+    });
+  }
+
+  /**
+   * Resolve the paired route peer for a mailbox partition: returns the other
+   * enrolled slot's deviceId plus both sides' current revoked flags. Used by
+   * MailboxDO to verify that a caller naming a peer is that peer's live
+   * route partner — never a cross-route or self-declared pairing.
+   */
+  private async handleRoutePeer(request: Request): Promise<Response> {
+    await this.requireMeta();
+    const body = (await readBoundedJson(request, 8_192)) as Record<string, unknown> | null;
+    const { routeId, deviceId } = body ?? {};
+    if (!isOpaqueId(routeId) || !isOpaqueId(deviceId)) {
+      return jsonResponse({ ok: false, reason: "identity_ambiguous" });
+    }
+    this.counters.count("storageReads", 2);
+    const [route, device] = await Promise.all([
+      this.ctx.storage.get<RouteRecord>(`${ROUTE_PREFIX}${routeId}`),
+      this.ctx.storage.get<DeviceRecord>(`${DEVICE_PREFIX}${deviceId}`),
+    ]);
+    if (!route || route.revoked) {
+      return jsonResponse({ ok: false, reason: "revoked" });
+    }
+    if (!device || device.routeId !== routeId
+      || (route.entryDeviceId !== deviceId && route.endpointDeviceId !== deviceId)) {
+      return jsonResponse({ ok: false, reason: "peer_unpaired" });
+    }
+    const peerDeviceId = route.entryDeviceId === deviceId ? route.endpointDeviceId : route.entryDeviceId;
+    let peerRevoked = false;
+    if (peerDeviceId) {
+      this.counters.count("storageReads");
+      const peerDevice = await this.ctx.storage.get<DeviceRecord>(`${DEVICE_PREFIX}${peerDeviceId}`);
+      peerRevoked = peerDevice?.revoked ?? true;
+    }
+    return jsonResponse({
+      ok: true,
+      peerDeviceId,
+      peerRevoked,
+      deviceRevoked: device.revoked,
     });
   }
 

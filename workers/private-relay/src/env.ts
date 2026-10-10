@@ -8,12 +8,19 @@ export interface PrivateRelayEnv {
   RELAY_DIRECTORY: DurableObjectNamespace;
   RELAY_SESSION: DurableObjectNamespace;
   RECOVERY_VAULT: DurableObjectNamespace;
+  RELAY_MAILBOX: DurableObjectNamespace;
   /** Local provisioning token for admin routes (local dev/tests only). */
   RELAY_ADMIN_TOKEN?: string;
   /** Ingress bound for a single session-channel message in bytes. */
   RELAY_MAX_SESSION_MESSAGE_BYTES?: string;
   /** Ingress bound for a single vault API message body in bytes. */
   RELAY_MAX_VAULT_MESSAGE_BYTES?: string;
+  /** Deployment-selected mailbox byte capacity per recipient partition. */
+  RELAY_MAILBOX_CAPACITY_BYTES?: string;
+  /** Deployment-selected mailbox retention in milliseconds. */
+  RELAY_MAILBOX_RETENTION_MS?: string;
+  /** Deployment-selected bound on stored messages per partition. */
+  RELAY_MAILBOX_MAX_ITEMS?: string;
 }
 
 declare global {
@@ -73,4 +80,47 @@ export function integerEnv(value: string | undefined, fallback: number, minimum:
   const parsed = Number.parseInt(value, 10);
   if (!Number.isSafeInteger(parsed)) return fallback;
   return Math.min(Math.max(parsed, minimum), maximum);
+}
+
+/**
+ * Deployment-selected mailbox retention policy. There is no invented
+ * implicit default: committed `[vars]` pin these values for the local
+ * deployment shape, and every bound stays inside
+ * `PRIVATE_RELAY_PEER_LIMITS` (≤ 1 GiB / ≤ 365 d / ≤ 1 000 000 items).
+ * `mailboxRetentionFloorMs` bounds the *envelope* size that can ever fit:
+ * a partition whose capacity is smaller than one envelope refuses to store.
+ */
+export const RELAY_MAILBOX_DEFAULTS = Object.freeze({
+  mailboxCapacityBytes: 16_777_216,
+  mailboxRetentionMs: 2_592_000_000,
+  mailboxMaxItems: 4_096,
+});
+
+export interface MailboxRetentionPolicyValues {
+  mailboxCapacityBytes: number;
+  mailboxRetentionMs: number;
+  mailboxMaxItems: number;
+}
+
+export function mailboxPolicyFromEnv(env: PrivateRelayEnv): MailboxRetentionPolicyValues {
+  return {
+    mailboxCapacityBytes: integerEnv(
+      env.RELAY_MAILBOX_CAPACITY_BYTES,
+      RELAY_MAILBOX_DEFAULTS.mailboxCapacityBytes,
+      1,
+      1_073_741_824,
+    ),
+    mailboxRetentionMs: integerEnv(
+      env.RELAY_MAILBOX_RETENTION_MS,
+      RELAY_MAILBOX_DEFAULTS.mailboxRetentionMs,
+      1,
+      31_536_000_000,
+    ),
+    mailboxMaxItems: integerEnv(
+      env.RELAY_MAILBOX_MAX_ITEMS,
+      RELAY_MAILBOX_DEFAULTS.mailboxMaxItems,
+      1,
+      1_000_000,
+    ),
+  };
 }

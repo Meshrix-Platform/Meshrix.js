@@ -20,11 +20,12 @@
 import type { PrivateRelayEnv } from "./env.ts";
 import { RELAY_RUNTIME_LIMITS } from "./env.ts";
 import { bearerToken, jsonResponse } from "./http.ts";
-import { constantTimeEqual, directoryObjectName, isOpaqueId, sessionObjectName, vaultObjectName } from "./ids.ts";
+import { constantTimeEqual, directoryObjectName, isOpaqueId, mailboxObjectName, sessionObjectName, vaultObjectName } from "./ids.ts";
 
 export { RelayDirectoryDO } from "./relay-directory.ts";
 export { RelaySessionDO } from "./relay-session.ts";
 export { RecoveryVaultDO } from "./recovery-vault.ts";
+export { MailboxDO } from "./mailbox.ts";
 
 function adminAuthorized(request: Request, env: PrivateRelayEnv): boolean {
   const configured = env.RELAY_ADMIN_TOKEN;
@@ -36,7 +37,14 @@ function adminAuthorized(request: Request, env: PrivateRelayEnv): boolean {
 async function propagateRevocation(
   env: PrivateRelayEnv,
   tenantId: string,
-  outcome: { revocationRevision: number; affectedRouteIds: string[]; deviceId: string | null; routeId: string | null; all: boolean },
+  outcome: {
+    revocationRevision: number;
+    affectedRouteIds: string[];
+    affectedDevices?: { routeId: string; deviceId: string }[];
+    deviceId: string | null;
+    routeId: string | null;
+    all: boolean;
+  },
 ): Promise<void> {
   const routes = outcome.affectedRouteIds.slice(0, RELAY_RUNTIME_LIMITS.maxRoutesPerTenant);
   const routeRevoked = outcome.all || outcome.routeId !== null;
@@ -52,6 +60,21 @@ async function propagateRevocation(
     });
     // Drain the small body: an unconsumed response stream keeps the session
     // object referenced and delays hibernation/eviction accounting.
+    await response.arrayBuffer();
+  }));
+  // Mailbox partitions learn owner revocation through the same push so
+  // stale-session races still answer honestly (bundles, acks) or drop.
+  const devices = (outcome.affectedDevices ?? []).slice(0, RELAY_RUNTIME_LIMITS.maxDevicesPerTenant);
+  await Promise.all(devices.map(async ({ routeId, deviceId }) => {
+    const stub = env.RELAY_MAILBOX.get(env.RELAY_MAILBOX.idFromName(mailboxObjectName(tenantId, routeId, deviceId)));
+    const response = await stub.fetch("http://mailbox/internal/apply-revocation", {
+      method: "POST",
+      body: JSON.stringify({
+        revocationRevision: outcome.revocationRevision,
+        deviceId: outcome.deviceId,
+        routeRevoked,
+      }),
+    });
     await response.arrayBuffer();
   }));
 }
@@ -138,13 +161,20 @@ export default {
         const stub = env.RECOVERY_VAULT.get(env.RECOVERY_VAULT.idFromName(vaultObjectName(vaultId)));
         return stub.fetch(new Request("http://vault.internal/internal/provision", request));
       }
-      const countersMatch = path.match(/^\/admin\/counters\/(session|directory|vault)\/([^/]+)(?:\/([^/]+))?$/u);
+      const countersMatch = path.match(/^\/admin\/counters\/(session|directory|vault|mailbox)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?$/u);
       if (countersMatch && request.method === "GET") {
-        const [, kind, first, second] = countersMatch;
+        const [, kind, first, second, third] = countersMatch;
         if (kind === "session") {
           if (!second || !isOpaqueId(first) || !isOpaqueId(second)) return jsonResponse({ error: "not_found" }, 404);
           const stub = env.RELAY_SESSION.get(env.RELAY_SESSION.idFromName(sessionObjectName(first, second)));
           return stub.fetch("http://session.internal/internal/counters");
+        }
+        if (kind === "mailbox") {
+          if (!second || !third || !isOpaqueId(first) || !isOpaqueId(second) || !isOpaqueId(third)) {
+            return jsonResponse({ error: "not_found" }, 404);
+          }
+          const stub = env.RELAY_MAILBOX.get(env.RELAY_MAILBOX.idFromName(mailboxObjectName(first, second, third)));
+          return stub.fetch("http://mailbox.internal/internal/counters");
         }
         if (kind === "directory") {
           if (!isOpaqueId(first)) return jsonResponse({ error: "not_found" }, 404);
