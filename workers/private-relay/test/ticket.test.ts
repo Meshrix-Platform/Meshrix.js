@@ -8,7 +8,7 @@
 import { env, SELF } from "cloudflare:test";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ADMIN_TOKEN, enroll, RELAY_ORIGIN, ROUTE_1, TENANT_A, WsClient } from "./helpers.ts";
+import { ADMIN_TOKEN, enroll, RELAY_ORIGIN, ROUTE_1, TENANT_A, TENANT_B, WsClient } from "./helpers.ts";
 
 const ORIGINAL_SECRET = env.RELAY_TICKET_SECRET;
 
@@ -47,6 +47,20 @@ describe("session credential tickets", () => {
     const { status, ws } = await WsClient.tryConnect(TENANT_A, "route.ticket.2", enrolled.credential);
     expect(status).toBe(101);
     ws?.close();
+  });
+
+  it("binds the ticket to its tenant+route: a real credential fails on another path", async () => {
+    // A valid credential is only honored on its own upgrade path — the tag
+    // covers tenantId:routeId:token, so borrowing it cross-scope dies at
+    // the edge instead of paying a directory lookup.
+    const enrolled = await enroll(TENANT_A, "dev.ticket.scope", "route.ticket.scope", "entry");
+    const foreignRoute = await WsClient.tryConnect(TENANT_A, ROUTE_1, enrolled.credential);
+    expect(foreignRoute.status).toBe(401);
+    const foreignTenant = await WsClient.tryConnect(TENANT_B, "route.ticket.scope", enrolled.credential);
+    expect(foreignTenant.status).toBe(401);
+    const own = await WsClient.tryConnect(TENANT_A, "route.ticket.scope", enrolled.credential);
+    expect(own.status).toBe(101);
+    own.ws?.close();
   });
 
   it("throttles a source after sustained pre-check failures", async () => {

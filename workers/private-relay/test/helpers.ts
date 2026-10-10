@@ -10,7 +10,7 @@ import {
   PRIVATE_RELAY_PEER_SCHEMA_VERSION,
   PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION,
 } from "../../../packages/contracts/src/private-relay/index.ts";
-import { base64UrlToBytes, bytesToBase64Url, mailboxObjectName, sha256Hex, utf8Bytes } from "../src/ids.ts";
+import { base64UrlToBytes, bytesToBase64Url, mailboxObjectName, sha256Hex, utf8Bytes, vaultObjectName } from "../src/ids.ts";
 import { snapshotCiphertextDigest, vaultFetchTranscript, vaultWriteTranscript } from "../src/vault-crypto.ts";
 
 export const ADMIN_TOKEN = "local-only-synthetic-admin-token";
@@ -327,8 +327,29 @@ export async function vaultWriteMessage(
   };
 }
 
+let vaultPostSourceCounter = 0;
 export async function vaultPost(vaultId: string, message: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  // Unique source per call: the public edge counts every well-formed
+  // attempt toward a per-source bound, so a suite of same-source posts
+  // would otherwise throttle itself.
+  vaultPostSourceCounter += 1;
   const response = await SELF.fetch(`${RELAY_ORIGIN}/vault/${vaultId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": `192.0.2.${vaultPostSourceCounter % 250}` },
+    body: JSON.stringify(message),
+  });
+  return { status: response.status, body: await response.json() as Record<string, unknown> };
+}
+
+/**
+ * Durable-Object-level post, bypassing the public edge: refusal semantics
+ * (proof_invalid/not_found/purpose_denied) are the object's contract —
+ * the edge deliberately normalizes them into one refusal, so tests that
+ * exercise the semantics call the object directly.
+ */
+export async function vaultPostDirect(vaultId: string, message: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  const stub = env.RECOVERY_VAULT.get(env.RECOVERY_VAULT.idFromName(vaultObjectName(vaultId)));
+  const response = await stub.fetch("http://vault.internal/vault", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(message),

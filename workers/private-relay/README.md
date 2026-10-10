@@ -7,12 +7,14 @@ same deployment. It implements the wire contract published in
 (`NODE-PRIVATE-WIRE`, commit `562204d6`) and is the runtime owner assigned to
 `NODE-RELAY-RUNTIME` in `docs/plans/workers-privacy`.
 
-**Scope boundary.** Local engineering checks only. There is no Cloudflare
-account, deployment, hosted identity or production provisioning in this
-package. `wrangler.toml` serves `wrangler dev --local`, `wrangler deploy
---dry-run` and the vitest-pool-workers suite (real local Workerd + Miniflare);
-its `[env.staging]` profile is a placeholder-only environment-separation
-shape — see
+**Scope boundary.** Local engineering checks are the default —
+`wrangler.toml` serves `wrangler dev --local`, `wrangler deploy --dry-run`
+and the vitest-pool-workers suite (real local Workerd + Miniflare). The
+`[env.staging]` profile is the authorized Cloudflare deploy shape (real
+account id, `relay.meshrix.io` custom-domain route): a staging deployment
+existed and passed a complete live peer-e2e, then was deliberately deleted
+after a public-surface security review — **nothing is live on Cloudflare
+now**, and redeploying is a separately authorized operation. See
 [`docs/protocols/private-relay-operations.md`](../../docs/protocols/private-relay-operations.md)
 for the operational runbook (build/test/deploy boundary, privacy projection,
 error taxonomy and cost honesty).
@@ -199,7 +201,7 @@ the recognized off values.
 | `npm run build` | `wrangler deploy --dry-run` — bundles and validates config, exits before upload (registry: `workers.private-relay-build`) |
 | `npm run check` | `typecheck` + `test` composite |
 | `npm run dev` | `wrangler dev --local` (never `wrangler deploy`) |
-| `npm run deploy` | `wrangler deploy --env staging` — deploy *shape* for a separately authorized delivery only; **never run by any check** (staging `account_id` is a placeholder) |
+| `npm run deploy` | `wrangler deploy --env staging` — real authorized deploy shape (real `account_id`, custom-domain route); **never run by any check**, redeploy requires explicit authorization plus `wrangler secret put` secrets |
 
 ## Deliberate skeleton boundaries (flagged honestly)
 

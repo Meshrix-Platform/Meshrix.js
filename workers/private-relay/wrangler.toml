@@ -72,7 +72,10 @@ new_sqlite_classes = ["MailboxDO"]
 [env.staging]
 name = "meshrix-private-relay-staging"
 account_id = "4463b244fa145a838d0a3b44bdb175e1"
-workers_dev = true
+# No workers.dev route: it would be an unmanaged entry point that never
+# traverses the custom domain's protections (Access policy, WAF posture).
+# relay.meshrix.io is the only intentional way in.
+workers_dev = false
 # No per-version preview URLs: they would be an unmanaged extra entry
 # point serving this worker outside the intentional routes.
 preview_urls = false

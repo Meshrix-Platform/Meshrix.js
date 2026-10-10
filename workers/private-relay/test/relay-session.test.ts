@@ -132,13 +132,16 @@ describe("relay session admission and forwarding", () => {
 
   it("rejects cross-tenant credentials and mismatched admission identities", async () => {
     const entry = await enroll(TENANT_A, "dev.test.entry.xtenant", ROUTE_1, "entry");
-    // Credential valid in tenant A cannot open a socket under tenant B.
+    // Credential valid in tenant A cannot open a socket under tenant B —
+    // the ticket binds tenant:route:token, so cross-scope upgrades die at
+    // the worker edge (401) before any object lookup, instead of reaching
+    // the object-level 403 they used to.
     const denied = await WsClient.tryConnect(TENANT_B, ROUTE_1, entry.credential);
-    expect(denied.status).toBe(403);
+    expect(denied.status).toBe(401);
     // A credential bound to ROUTE_2 cannot be replayed on ROUTE_1.
     const other = await enroll(TENANT_A, "dev.test.entry.otherRoute", ROUTE_2, "entry");
     const deniedRoute = await WsClient.tryConnect(TENANT_A, ROUTE_1, other.credential);
-    expect(deniedRoute.status).toBe(403);
+    expect(deniedRoute.status).toBe(401);
     // Presented admission differing from credentialed identity is rejected.
     const ws = await WsClient.connect(TENANT_A, ROUTE_1, entry.credential);
     ws.send(sessionOpenMessage({

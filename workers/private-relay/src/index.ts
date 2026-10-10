@@ -24,6 +24,7 @@ import type { PrivateRelayEnv } from "./env.ts";
 import { RELAY_RUNTIME_LIMITS, adminSurfaceMode, integerEnv } from "./env.ts";
 import { verifySessionCredential } from "./ticket.ts";
 import { verifyInviteTicket } from "./invite.ts";
+import { verifyAccessJwt } from "./access.ts";
 import { JOIN_PAGE_HTML } from "./join-page.ts";
 import { bearerToken, jsonResponse, readBoundedJson } from "./http.ts";
 import { constantTimeEqual, directoryObjectName, isOpaqueId, mailboxObjectName, sessionObjectName, vaultObjectName } from "./ids.ts";
@@ -43,41 +44,61 @@ function adminAuthorized(request: Request, env: PrivateRelayEnv): boolean {
 }
 
 /**
- * In-process damper for requests that fail pre-object checks. Each isolate
- * keeps a small per-source-IP failure bucket so sustained forging from one
- * address is throttled instead of looping at full request volume. Honest
- * scope: a damper inside one isolate, not a fleet-wide limiter —
- * distributed abuse is the edge/WAF layer's job (the separately designed
- * public-admission work).
+ * In-process damper for requests that hit unauthenticated or pre-object
+ * paths. Each isolate keeps a small per-source-IP bucket so sustained
+ * forging from one address is throttled instead of looping at full
+ * request volume. Honest scope: a damper inside one isolate, not a
+ * fleet-wide limiter — distributed abuse is the edge/WAF layer's job (the
+ * separately designed public-admission work).
  */
-const PRE_CHECK_FAILURE_LIMIT = 30;
-const PRE_CHECK_FAILURE_WINDOW_MS = 60_000;
-const PRE_CHECK_FAILURE_MAX_SOURCES = 10_000;
-const preCheckFailures = new Map<string, { count: number; resetAt: number }>();
+const SOURCE_ATTEMPT_LIMIT = 30;
+const SOURCE_ATTEMPT_WINDOW_MS = 60_000;
+const SOURCE_ATTEMPT_MAX_SOURCES = 10_000;
+const sourceAttempts = new Map<string, { count: number; resetAt: number }>();
 
-function preCheckFailureOverLimit(request: Request): boolean {
+function sourceAttemptOverLimit(request: Request): boolean {
   const ip = request.headers.get("cf-connecting-ip") ?? "local";
   const now = Date.now();
-  let bucket = preCheckFailures.get(ip);
+  let bucket = sourceAttempts.get(ip);
   if (!bucket || bucket.resetAt <= now) {
-    bucket = { count: 0, resetAt: now + PRE_CHECK_FAILURE_WINDOW_MS };
-    preCheckFailures.set(ip, bucket);
+    bucket = { count: 0, resetAt: now + SOURCE_ATTEMPT_WINDOW_MS };
+    sourceAttempts.set(ip, bucket);
   }
   bucket.count += 1;
-  if (preCheckFailures.size > PRE_CHECK_FAILURE_MAX_SOURCES) {
-    for (const [key, entry] of preCheckFailures) {
-      if (entry.resetAt <= now) preCheckFailures.delete(key);
+  if (sourceAttempts.size > SOURCE_ATTEMPT_MAX_SOURCES) {
+    for (const [key, entry] of sourceAttempts) {
+      if (entry.resetAt <= now) sourceAttempts.delete(key);
     }
-    if (preCheckFailures.size > PRE_CHECK_FAILURE_MAX_SOURCES) preCheckFailures.clear();
+    if (sourceAttempts.size > SOURCE_ATTEMPT_MAX_SOURCES) sourceAttempts.clear();
   }
-  return bucket.count > PRE_CHECK_FAILURE_LIMIT;
+  return bucket.count > SOURCE_ATTEMPT_LIMIT;
 }
 
 function unauthenticatedRequest(request: Request, status: number, error: string): Response {
-  if (preCheckFailureOverLimit(request)) {
+  if (sourceAttemptOverLimit(request)) {
     return jsonResponse({ error: "rate_limited" }, 429);
   }
   return jsonResponse({ error }, status);
+}
+
+/**
+ * Uniform response hardening for the public surface: HSTS (long-lived —
+ * clients must not get a cleartext downgrade after first contact),
+ * nosniff, and a default no-store so wire data is never cached. WebSocket
+ * upgrade responses pass through untouched — mutating a 101 would break
+ * the socket handoff.
+ */
+function withSecurityHeaders(response: Response): Response {
+  if (response.status === 101 || response.webSocket) return response;
+  const headers = new Headers(response.headers);
+  headers.set("strict-transport-security", "max-age=63072000; includeSubDomains");
+  headers.set("x-content-type-options", "nosniff");
+  if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 async function propagateRevocation(
@@ -243,8 +264,7 @@ async function handleAdminMetrics(url: URL, env: PrivateRelayEnv): Promise<Respo
   });
 }
 
-export default {
-  async fetch(request: Request, env: PrivateRelayEnv): Promise<Response> {
+async function handleRequest(request: Request, env: PrivateRelayEnv): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -310,7 +330,7 @@ export default {
       // cost on public routes.
       const auth = request.headers.get("authorization") ?? "";
       const presented = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-      if (!presented || !(await verifySessionCredential(env, presented))) {
+      if (!presented || !(await verifySessionCredential(env, presented, { tenantId, routeId }))) {
         return unauthenticatedRequest(request, 401, "unauthorized");
       }
       const stub = env.RELAY_SESSION.get(
@@ -327,20 +347,36 @@ export default {
     if (vaultMatch && request.method === "POST") {
       const vaultId = vaultMatch[1];
       if (!isOpaqueId(vaultId)) return unauthenticatedRequest(request, 404, "not_found");
-      // Bounded pre-check before the object exists: a declared oversized
-      // body is refused without paying an instantiation for it.
-      const declaredBytes = Number(request.headers.get("content-length") ?? "0");
-      if (Number.isFinite(declaredBytes) && declaredBytes > integerEnv(env.RELAY_MAX_VAULT_MESSAGE_BYTES, RELAY_RUNTIME_LIMITS.defaultMaxVaultMessageBytes, 1, 16 * 1024 * 1024)) {
-        return unauthenticatedRequest(request, 413, "request_too_large");
+      // Every well-formed attempt is counted against its source *before*
+      // the object exists — the post-hoc "count the refusal" pass used to
+      // let the 31st forged POST still pay one instantiation. The bound
+      // is generous for real clients (vault ops are rare per device) and
+      // caps forged-flood cost at the damper's per-source allowance.
+      if (sourceAttemptOverLimit(request)) {
+        return jsonResponse({ error: "rate_limited" }, 429);
+      }
+      // Declared size must exist and fit the bound before instantiation:
+      // a missing Content-Length used to skip the check entirely and let
+      // the object pay the cost of truncating the body instead.
+      const rawLength = request.headers.get("content-length");
+      if (rawLength === null) return jsonResponse({ error: "length_required" }, 411);
+      const declaredBytes = Number(rawLength);
+      const maxVaultBytes = integerEnv(env.RELAY_MAX_VAULT_MESSAGE_BYTES, RELAY_RUNTIME_LIMITS.defaultMaxVaultMessageBytes, 1, 16 * 1024 * 1024);
+      if (!Number.isFinite(declaredBytes) || declaredBytes < 0) {
+        return jsonResponse({ error: "invalid_body" }, 400);
+      }
+      if (declaredBytes > maxVaultBytes) {
+        return jsonResponse({ error: "request_too_large" }, 413);
       }
       const stub = env.RECOVERY_VAULT.get(env.RECOVERY_VAULT.idFromName(vaultObjectName(vaultId)));
       const forward = new Request("http://vault.internal/vault", request);
       const response = await stub.fetch(forward);
-      // A forged-but-well-formed POST still pays one instantiation before
-      // the object refuses it — count the refusal so a repeating source is
-      // throttled ahead of the object on subsequent attempts.
-      if (response.status >= 400 && preCheckFailureOverLimit(request)) {
-        return jsonResponse({ error: "rate_limited" }, 429);
+      // Existence oracle: the object distinguishes an unprovisioned vault
+      // (404 not_found) from a provisioned vault with an invalid proof
+      // (403 proof_invalid). Collapsing both into one refusal — status
+      // and body — keeps probing from mapping which vault ids exist.
+      if (response.status === 404 || response.status === 403) {
+        return jsonResponse({ error: "refused" }, 403);
       }
       return response;
     }
@@ -348,14 +384,15 @@ export default {
     // --- Admin control plane ------------------------------------------
     // Closed by deployment choice, not just by credential: `off` (the
     // default) answers 404 so the surface does not exist on public routes;
-    // `access` additionally requires the Access JWT header so direct
-    // workers.dev hits cannot bypass the edge gate.
+    // `access` requires a *verified* Access JWT — header presence alone is
+    // forgeable on routes that never traverse an Access policy (workers.dev
+    // is disabled on the public shape regardless).
     if (path.startsWith("/admin/")) {
       const surface = adminSurfaceMode(env);
       if (surface === "off") {
         return jsonResponse({ error: "not_found" }, 404);
       }
-      if (surface === "access" && !request.headers.get("cf-access-jwt-assertion")) {
+      if (surface === "access" && !(await verifyAccessJwt(env, request))) {
         return jsonResponse({ error: "not_found" }, 404);
       }
       if (!adminAuthorized(request, env)) {
@@ -438,5 +475,24 @@ export default {
     }
 
     return jsonResponse({ error: "not_found" }, 404);
+}
+
+export default {
+  async fetch(request: Request, env: PrivateRelayEnv): Promise<Response> {
+    // HTTPS enforcement at the Cloudflare edge: the visitor scheme arrives
+    // in `cf-visitor` (absent on local runtimes, where plain http is
+    // correct for wrangler dev and vitest). A cleartext hit gets a
+    // permanent redirect before any routing — bearer credentials must
+    // never traverse plaintext. (The audit-confirmed finding: plain http
+    // used to answer /healthz identically, so a client that ever fell back
+    // to http:// would send Authorization headers in cleartext.)
+    const visitor = request.headers.get("cf-visitor");
+    if (visitor?.includes('"scheme":"http"')) {
+      const target = new URL(request.url);
+      target.protocol = "https:";
+      return Response.redirect(target.toString(), 308);
+    }
+    const response = await handleRequest(request, env);
+    return withSecurityHeaders(response);
   },
 } satisfies ExportedHandler<PrivateRelayEnv>;

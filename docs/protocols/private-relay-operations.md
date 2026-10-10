@@ -33,14 +33,21 @@ suites in `tools/registry/tests.registry.json` invoke them from the root.
   or `npm run deploy`. The `build` script is `wrangler deploy --dry-run`,
   which performs the same bundler/config validation and exits before upload —
   it is the only deploy-shaped command any check executes.
-- `npm run deploy` targets the `staging` environment in `wrangler.toml`, whose
-  `account_id` is the placeholder
-  `PLACEHOLDER-REPLACE-ONLY-IN-AUTHORIZED-DEPLOYMENT`. A real deploy is a
-  separately authorized delivery: it requires an authorized account id, an
-  operator-held `CLOUDFLARE_API_TOKEN`, and `RELAY_ADMIN_TOKEN` provisioned
-  through `wrangler secret put` (never as a committed `vars` value).
-- The staging block is a config **shape** for environment separation review —
-  it contains no real account data and claims no cloud availability.
+- `npm run deploy` targets the `staging` environment in `wrangler.toml`, which
+  carries the real authorized deploy shape (account id, `relay.meshrix.io`
+  custom-domain route, `workers_dev = false`, `preview_urls = false`). A
+  staging deployment existed, passed live verification, and was then deleted
+  after a public-surface security review — nothing is live now. A redeploy is
+  a separately authorized operation: it requires the operator-held
+  Cloudflare login plus `wrangler secret put` for `RELAY_TICKET_SECRET` and
+  `RELAY_INVITE_SECRET` (and `RELAY_ADMIN_TOKEN` only when an admin surface is
+  intentionally enabled — the public shape keeps it off). Secrets are never
+  committed as `vars`.
+- Public posture for any internet-reachable deploy: `RELAY_ADMIN_SURFACE`
+  unset/`"off"` (the `/admin/*` plane does not exist), ticketed credentials,
+  HTTPS enforcement with security headers, invite-only admission. Remote
+  admin, when needed, rides `RELAY_ADMIN_SURFACE="access"` with a verified
+  Cloudflare Access JWT (`RELAY_ACCESS_TEAM` + `RELAY_ACCESS_AUD`).
 
 ## Environment separation
 
@@ -51,9 +58,12 @@ suites in `tools/registry/tests.registry.json` invoke them from the root.
   synthetic local-only value; Durable Object state stays in local
   SQLite/Miniflare.
 - **`[env.staging]`** — distinct Worker name
-  (`meshrix-private-relay-staging`), placeholder `account_id`, and restated
+  (`meshrix-private-relay-staging`), the real authorized `account_id`, the
+  `relay.meshrix.io` custom-domain route and restated
   bindings/vars/migrations (Wrangler named environments do not inherit them).
-  `RELAY_ADMIN_TOKEN` is intentionally absent from staging vars.
+  `RELAY_ADMIN_TOKEN`, `RELAY_TICKET_SECRET` and `RELAY_INVITE_SECRET` are
+  intentionally absent from staging vars — they install via
+  `wrangler secret put` under authorized ownership.
 
 ## Privacy projection: what the relay can and cannot see
 

@@ -17,6 +17,7 @@ import {
   randomCiphertext,
   vaultFetchMessage,
   vaultPost,
+  vaultPostDirect,
   vaultWriteMessage,
   type VaultKeys,
 } from "./helpers.ts";
@@ -85,7 +86,7 @@ describe("recovery vault CAS storage", () => {
     expect(next.body.committedRevision).toBe(2);
 
     // Unregistered writer key: no escalation path.
-    const unregistered = await vaultPost(VAULT_1, await vaultWriteMessage(VAULT_1, writer2, 2, snapshot(3)));
+    const unregistered = await vaultPostDirect(VAULT_1, await vaultWriteMessage(VAULT_1, writer2, 2, snapshot(3)));
     expect(unregistered.body.outcome).toBe("refused");
   });
 
@@ -99,14 +100,14 @@ describe("recovery vault CAS storage", () => {
     const regressed = makeSnapshot(VAULT_1, 2, 2, randomCiphertext(64), {
       keyId: recovery.keyId, algorithm: recovery.algorithm, publicKey: recovery.publicKey,
     });
-    const regression = await vaultPost(VAULT_1, await vaultWriteMessage(VAULT_1, writer, 1, regressed));
+    const regression = await vaultPostDirect(VAULT_1, await vaultWriteMessage(VAULT_1, writer, 1, regressed));
     expect(regression.body.outcome).toBe("refused");
 
     const tampered = await vaultWriteMessage(VAULT_1, writer, 1,
       makeSnapshot(VAULT_1, 3, 2, randomCiphertext(64), {
         keyId: recovery.keyId, algorithm: recovery.algorithm, publicKey: recovery.publicKey,
       }), { writeAuth: { snapshotDigest: "sha256:" + "0".repeat(64) } });
-    const digested = await vaultPost(VAULT_1, tampered);
+    const digested = await vaultPostDirect(VAULT_1, tampered);
     expect(digested.body.outcome).toBe("refused");
   });
 
@@ -119,7 +120,7 @@ describe("recovery vault CAS storage", () => {
 
     // Wrong purpose on the wire kind.
     const wrongPurpose = await vaultFetchMessage(VAULT_1, recovery, { purpose: "recover_device" });
-    const refused = await vaultPost(VAULT_1, wrongPurpose);
+    const refused = await vaultPostDirect(VAULT_1, wrongPurpose);
     expect(refused.body.kind).toBe("vault-fetch-refused");
     expect(refused.body.refusal).toBe("purpose_denied");
 
@@ -127,12 +128,12 @@ describe("recovery vault CAS storage", () => {
     const fetch = await vaultFetchMessage(VAULT_1, recovery);
     const first = await vaultPost(VAULT_1, fetch);
     expect(first.body.kind).toBe("vault-snapshot");
-    const replay = await vaultPost(VAULT_1, fetch);
+    const replay = await vaultPostDirect(VAULT_1, fetch);
     expect(replay.body.refusal).toBe("proof_invalid");
 
     // A proof signed by the writer key under the recovery keyId fails.
     const foreign = await vaultFetchMessage(VAULT_1, { ...writer, keyId: recovery.keyId });
-    const foreignResult = await vaultPost(VAULT_1, foreign);
+    const foreignResult = await vaultPostDirect(VAULT_1, foreign);
     expect(foreignResult.body.refusal).toBe("proof_invalid");
   });
 
@@ -190,7 +191,7 @@ describe("recovery vault CAS storage", () => {
 
   it("refuses fetch before provisioning and without a committed snapshot", async () => {
     const recovery = await generateVaultKeys("rckey.test.x");
-    const fetched = await vaultPost(VAULT_1, await vaultFetchMessage(VAULT_1, recovery));
+    const fetched = await vaultPostDirect(VAULT_1, await vaultFetchMessage(VAULT_1, recovery));
     expect(fetched.body.refusal).toBe("not_found");
   });
 });

@@ -178,7 +178,10 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
     meta.deviceCount += 1;
     if (!route) meta.routeCount += 1;
     const now = new Date().toISOString();
-    const credential = await issueSessionCredential(this.env, randomToken());
+    const credential = await issueSessionCredential(this.env, randomToken(), {
+      tenantId: meta.tenantId,
+      routeId,
+    });
     const credentialDigest = await sha256Hex(credential);
     const device: DeviceRecord = {
       deviceId,

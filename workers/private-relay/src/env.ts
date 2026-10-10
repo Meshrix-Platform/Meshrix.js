@@ -45,6 +45,17 @@ export interface PrivateRelayEnv {
    * redemption fully closed — there is no open registration anywhere.
    */
   RELAY_INVITE_SECRET?: string;
+  /**
+   * Cloudflare Access team name for the `"access"` admin surface
+   * (`src/access.ts`) — forms `https://{team}.cloudflareaccess.com`.
+   * Required for that mode; without it the surface stays closed.
+   */
+  RELAY_ACCESS_TEAM?: string;
+  /**
+   * Access application AUD tag the JWT must carry. Required for `"access"`
+   * mode; without it the surface stays closed.
+   */
+  RELAY_ACCESS_AUD?: string;
 }
 
 declare global {
@@ -132,11 +143,12 @@ export function metricsDurableEnabled(env: PrivateRelayEnv): boolean {
  * - `"local"`: bearer-gated admin for private/self-hosted shapes only —
  *   loopback, LAN, tailnet, `wrangler dev`. Never a public route.
  * - `"access"`: bearer-gated admin that additionally requires a
- *   `Cf-Access-Jwt-Assertion` header, so the surface exists only behind a
- *   Cloudflare Access-protected hostname. Direct `*.workers.dev` hits
- *   bypass Access and get 404 — the worker must never trust the route
- *   alone. Cloudflare Access performs the real JWT verification at the
- *   edge; this check is the defense-in-depth layer.
+ *   cryptographically verified Cloudflare Access JWT
+ *   (`verifyAccessJwt`: RS256 against the team JWKS, matching issuer,
+ *   unexpired, configured AUD). Header *presence* alone is forgeable —
+ *   notably `*.workers.dev` never traverses the custom domain's Access
+ *   policy — so the worker verifies the assertion itself. The mode is
+ *   fail-closed without `RELAY_ACCESS_TEAM`+`RELAY_ACCESS_AUD`.
  */
 export type RelayAdminSurface = "off" | "local" | "access";
 

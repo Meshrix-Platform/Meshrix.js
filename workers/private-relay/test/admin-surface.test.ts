@@ -3,8 +3,9 @@
  * the deployment explicitly opens it. `off` (unset/unknown) returns 404 so
  * a public route carries no admin surface at all; `local` is the private
  * bearer-gated shape (the committed [vars] default these tests run under);
- * `access` additionally demands the Cf-Access-Jwt-Assertion header so
- * direct workers.dev hits cannot bypass the Cloudflare Access edge gate.
+ * `access` additionally demands a verified Access JWT (RS256 signature
+ * against the team JWKS, matching issuer/audience, unexpired) — header
+ * presence alone is forgeable and gets 404 like everything else.
  */
 
 import { env, SELF } from "cloudflare:test";
@@ -58,14 +59,18 @@ describe("admin control-plane surface gating", () => {
     expect(direct.status).toBe(404);
   });
 
-  it("access mode still requires the bearer after the Access header", async () => {
+  it("access mode verifies the JWT itself: self-attached headers get 404, never the bearer check", async () => {
+    // The audit finding: header *presence* is forgeable on routes that
+    // never traverse an Access policy. Verification now requires a real
+    // RS256 signature + issuer + audience — a self-attached garbage header
+    // dies at the JWT check before the bearer is ever consulted.
     env.RELAY_ADMIN_SURFACE = "access";
     const headerOnly = await SELF.fetch(`${RELAY_ORIGIN}/admin/tenants/${TENANT_A}/directory`, {
       headers: { "cf-access-jwt-assertion": "edge-verified-jwt" },
     });
-    expect(headerOnly.status).toBe(401);
+    expect(headerOnly.status).toBe(404);
     const gated = await adminRequest({ "cf-access-jwt-assertion": "edge-verified-jwt" });
-    expect(gated.status).toBe(200);
+    expect(gated.status).toBe(404);
   });
 
   it("the gate does not affect liveness or the session data plane", async () => {
