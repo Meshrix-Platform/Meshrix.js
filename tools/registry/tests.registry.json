@@ -3274,6 +3274,35 @@
         "packages/contracts/src/private-relay",
         "tests/vitest/entry-transport"
       ]
+    },
+    {
+      "id": "entry.gui",
+      "label": "Installed entry GUI: redacted state model, loopback API contract/allowlist + bearer-token auth, product service, real-loop recovery, rotation and pinned mTLS rebind",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/entry-gui/entry-gui-model.test.ts",
+        "tests/vitest/entry-gui/entry-gui-ipc.test.ts",
+        "tests/vitest/entry-gui/entry-gui-integration.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry-gui",
+        "apps/entry",
+        "packages/entry-transport",
+        "packages/gateway/src/private-endpoint",
+        "packages/contracts/src/private-relay",
+        "tests/vitest/entry-gui"
+      ]
     }
   ]
 }

@@ -5,8 +5,8 @@
  * only ever removes what it owns: its data dir, the config file, the managed
  * MCP snippet file and per-connection custody refs (`entry-gui.*` and
  * `dev.entry.*` minted by pairing/recovery). Platform install/uninstall notes
- * live in electron-builder.yml + README; this module is the runtime source
- * for the "what will be removed" display.
+ * live in src-tauri/tauri.conf.json + README; this module is the runtime
+ * source for the "what will be removed" display.
  */
 import { join } from "node:path";
 

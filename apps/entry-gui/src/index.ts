@@ -2,14 +2,25 @@
  * @meshrix/entry-gui — installed macOS/Windows entry product.
  *
  * Public surface for tests and tooling: the secret-free state contract, the
- * deterministic model, the IPC envelope and the main-process product service.
- * The Electron bootstrap (`main/electron-entry.ts`) and the sandboxed
- * preload (`preload/index.cjs`) are runtime entry points, not library
- * exports.
+ * deterministic model, the loopback API contract, the main-process product
+ * service and the loopback server/client transport. The Node service entry
+ * (`main/service-entry.ts`) and the Tauri shell (`src-tauri/`) are runtime
+ * entry points, not library exports.
  */
 export * from "./shared/gui-state.ts";
 export * from "./shared/gui-model.ts";
 export * from "./shared/ipc-contract.ts";
+export {
+  GuiLoopbackClient,
+  guiBridgeConfig,
+  type GuiBridgeConfig
+} from "./shared/loopback-client.ts";
+export {
+  createEntryGuiLoopbackServer,
+  type EntryGuiLoopbackServer,
+  type EntryGuiLoopbackServerOptions,
+  type EntryGuiServiceApi
+} from "./main/loopback-server.ts";
 export {
   EntryProductService,
   createEntryProductService,

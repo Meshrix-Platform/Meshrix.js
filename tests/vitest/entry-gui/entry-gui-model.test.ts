@@ -1,7 +1,7 @@
 /**
  * Pure reducer + secret-scan tests for the entry GUI state model.
  *
- * No Electron, no filesystem: the model is the same code the trusted main
+ * No shell, no filesystem: the model is the same code the trusted backend
  * process drives and the sandboxed renderer consumes, so every honesty rule
  * is exercisable here — pairing phases, endpoint trust fields carried
  * verbatim, reachability that never fabricates a channel, one-shot reveal

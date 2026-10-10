@@ -1,14 +1,17 @@
 /**
- * Entry product service IPC tests — the trusted main-process composition,
- * exercised end-to-end through `dispatch` with in-memory endpoint doubles.
+ * Entry product service API tests — the trusted backend composition,
+ * exercised end-to-end through `dispatch` and over the real loopback HTTP
+ * transport (`loopback-server.ts` + `loopback-client.ts`).
  *
- * These tests pin the security boundary the Electron shell relies on:
+ * These tests pin the security boundary the Tauri shell relies on:
  *   - every emitted snapshot passes the secret-free scan;
  *   - the one-shot recovery reveal contract;
  *   - relay credentials/device keys live only in custody;
  *   - revocation honestly distinguishes applied vs pending;
  *   - config persistence carries no secret material;
- *   - the IPC op allowlist matches the preload whitelist exactly.
+ *   - the loopback API enforces the closed op allowlist and the per-launch
+ *     bearer token — off-allowlist ops and bad/missing auth never reach
+ *     dispatch.
  */
 import { mkdir, mkdtemp, readFile, rm, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -29,9 +32,13 @@ import {
   EntryConfigStore,
   EntryProductService,
   GUI_OPS,
+  GuiLoopbackClient,
   assertGuiStateSecretFree,
+  createEntryGuiLoopbackServer,
+  guiBridgeConfig,
   managedMcpConfigPath,
   scanGuiStateForSecrets,
+  type EntryGuiLoopbackServer,
   type GuiOp,
   type GuiState,
   type PairingChannelLike,
@@ -54,15 +61,26 @@ import {
 
 const dirs: string[] = [];
 const liveServices: EntryProductService[] = [];
+const liveServers: EntryGuiLoopbackServer[] = [];
 afterEach(async () => {
   // Stop before teardown: service.stop() now drains the config write queue, and
   // fire-and-forget refreshes/publishes settle on the fake surfaces quickly.
+  for (const server of liveServers.splice(0)) await server.close().catch(() => undefined);
   for (const service of liveServices.splice(0)) await service.stop().catch(() => undefined);
   await new Promise((resolve) => setTimeout(resolve, 60));
   for (const dir of dirs.splice(0)) {
     await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
+
+/** Serve one service over the real loopback transport with a fresh token. */
+async function makeLoopback(service: EntryProductService): Promise<{ client: GuiLoopbackClient; server: EntryGuiLoopbackServer; token: string }> {
+  const token = randomBytes(24).toString("hex");
+  const server = createEntryGuiLoopbackServer({ service, token });
+  await server.listen();
+  liveServers.push(server);
+  return { client: new GuiLoopbackClient(guiBridgeConfig({ port: server.port, token })), server, token };
+}
 
 function verifierOf(material: RecoveryMaterial) {
   return { keyId: material.signing.keyId, algorithm: "Ed25519" as const, publicKey: material.signing.publicKey };
@@ -213,17 +231,73 @@ describe("config store durability", () => {
   });
 });
 
-describe("ipc contract — allowlist parity", () => {
-  it("the preload whitelist is exactly the contract op set, in order", async () => {
-    const preloadPath = path.resolve(__dirname, "../../../apps/entry-gui/src/preload/index.cjs");
-    const source = await readFile(preloadPath, "utf8");
-    const opsMatch = source.match(/const OPS = Object\.freeze\(\[([\s\S]*?)\]\)/u);
-    expect(opsMatch).toBeTruthy();
-    const preloadOps = [...opsMatch![1].matchAll(/"([^"]+)"/gu)].map((m) => m[1]);
-    expect(preloadOps).toEqual([...GUI_OPS]);
-    // Channel names match the shared contract constants.
-    expect(source).toContain('"meshrix-entry"');
-    expect(source).toContain('"meshrix-entry:state"');
+describe("loopback api contract — auth and allowlist", () => {
+  it("rejects requests without the per-launch bearer token before touching the service", async () => {
+    const seeded = await makeService();
+    await seeded.service.start();
+    const { server, token } = await makeLoopback(seeded.service);
+    const url = `http://127.0.0.1:${server.port}/meshrix-entry`;
+
+    const noAuth = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "state.get" }) });
+    expect(noAuth.status).toBe(401);
+    const wrongAuth = await fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${"wrong-token-wrong-token"}`, "content-type": "application/json" },
+      body: JSON.stringify({ op: "state.get" })
+    });
+    expect(wrongAuth.status).toBe(401);
+    // Authenticated but off-contract routes answer 404; GET is refused.
+    const badRoute = await fetch(`http://127.0.0.1:${server.port}/meshrix-entry/other`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: "{}"
+    });
+    expect(badRoute.status).toBe(404);
+    const wrongMethod = await fetch(url, { method: "GET", headers: { authorization: `Bearer ${token}` } });
+    expect(wrongMethod.status).toBe(405);
+  });
+
+  it("denies ops outside the contract allowlist over the wire", async () => {
+    const seeded = await makeService();
+    await seeded.service.start();
+    const { client } = await makeLoopback(seeded.service);
+    const denied = await client.invoke("not.an.op" as GuiOp);
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.error.code).toBe("ipc_op_denied");
+  });
+
+  it("dispatches every allowlisted op over real HTTP to a structured result", async () => {
+    const seeded = await makeService();
+    await seeded.service.start();
+    const { client } = await makeLoopback(seeded.service);
+    for (const op of GUI_OPS) {
+      const result = await client.invoke(op, {});
+      expect(typeof result.ok).toBe("boolean");
+      if (!result.ok) {
+        expect(result.error.code).toMatch(/^[a-z_]+$/u);
+        expect(result.error.code).not.toBe("unexpected");
+      }
+    }
+  });
+
+  it("pushes redacted snapshots through the long-poll state route", async () => {
+    const seeded = await makeService();
+    await seeded.service.start();
+    const { client } = await makeLoopback(seeded.service);
+    const seen: GuiState[] = [];
+    const unsubscribe = client.subscribeState((state) => {
+      seen.push(state);
+    });
+    try {
+      // The first poll (after: 0) returns the current snapshot immediately.
+      await waitFor(() => seen.length >= 1, 5_000);
+      const baseline = seen.length;
+      await seeded.service.dispatch("pairing.submitInvite", { inviteText: INVITE_TEXT });
+      await waitFor(() => seen.length > baseline && seen[seen.length - 1].pairing.phase === "challenge_issued", 5_000);
+      for (const state of seen) assertGuiStateSecretFree(state);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("dispatches every allowlisted op to a structured result", async () => {

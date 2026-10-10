@@ -165,7 +165,7 @@ export interface EntryProductServiceOptions {
   /** Owned data directory — the only place the app writes. */
   readonly dataDir: string;
   readonly appVersion?: string;
-  /** Executable path used in the stdio MCP snippet (electron app.getPath("exe")). */
+  /** Executable path used in the stdio MCP snippet (the installed app binary that forwards `--mcp-stdio` to the sidecar). */
   readonly appExePath?: string;
   readonly custody?: CustodyAdapter;
   readonly custodyPlatform?: CustodyPlatform;

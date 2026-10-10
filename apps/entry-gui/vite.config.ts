@@ -6,8 +6,10 @@ import { defineConfig } from "vite";
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
 
 /**
- * Renderer-only build for the installed entry GUI. The Electron main and
- * preload are plain tsc output; this config owns the sandboxed Vue bundle.
+ * Renderer-only build for the installed entry GUI. The Node sidecar service
+ * is plain tsc output bundled by `build:service` (esbuild →
+ * `dist/service/entry-service.mjs`); this config owns the Vue bundle the
+ * Tauri webview loads (`../dist/renderer` in `src-tauri/tauri.conf.json`).
  */
 export default defineConfig({
   plugins: [vue()],

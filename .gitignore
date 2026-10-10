@@ -31,7 +31,8 @@ crash-*
 /build/
 /dist/
 **/dist/
-apps/entry-gui/release/
+apps/entry-gui/src-tauri/binaries/node*
+apps/entry-gui/src-tauri/resources/
 /cache/
 /outputs/
 /reports/production-readiness/
