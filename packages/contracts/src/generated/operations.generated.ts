@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:c0892e8194cdfa92
+ * Hash: sha256:574cd61e3bb67e4d
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:c0892e8194cdfa92";
+export const GENERATED_OPERATIONS_HASH = "sha256:574cd61e3bb67e4d";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -15921,9 +15921,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -16124,9 +16122,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -16323,9 +16319,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -16532,9 +16526,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -16749,9 +16741,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -16966,9 +16956,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -17183,9 +17171,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -17401,9 +17387,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -17603,9 +17587,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -17813,9 +17795,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -18012,9 +17992,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -18637,9 +18615,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -18857,9 +18833,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19049,9 +19023,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 64,
       "cost": 1
     },
-    "execution": {
-      "timeoutMs": 30000
-    },
+    "execution": {},
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -35658,6 +35630,123 @@ export const SERVER_API_OPERATIONS: any = [
     "otel": {
       "semanticGroup": "system",
       "operationName": "system_background_processes"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "system.relay_traffic",
+    "feature": "system",
+    "label": "私有 Relay 流量监控指标",
+    "target": {
+      "controller": "system",
+      "method": "handleGetRelayTraffic"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/system/relay-traffic",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "system.relay_traffic"
+    },
+    "cli": {
+      "command": [
+        "system",
+        "relay-traffic"
+      ],
+      "usage": "system relay-traffic"
+    },
+    "requiredScopes": [
+      "console:read"
+    ],
+    "trafficModel": "gateway_transit",
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": false,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": true,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "system",
+      "resourceKind": "system",
+      "capabilityVerb": "relay-traffic",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "system",
+      "resourceKind": "system",
+      "capabilityVerb": "relay-traffic",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.relay_traffic",
+      "maxParallel": 64,
+      "cost": 1
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "私有 Relay 流量监控指标",
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "system",
+      "operationName": "system_relay_traffic"
     },
     "auditPolicy": {
       "recordInput": false,

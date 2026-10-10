@@ -101,8 +101,12 @@ const {
   monitorAlertState,
   monitorAlertSummary,
   recentMonitorAlertHistory,
+  relayTrafficState,
   saveMonitorAlertConfig,
 } = useServerConsoleShellContext().monitoring;
+const {
+  refreshRelayTraffic,
+} = useServerConsoleShellContext().refresh;
 const {
   isBusy,
 } = useServerConsoleShellContext().runtime;
@@ -165,6 +169,8 @@ const {
     processRelationText,
     processRelationBullets,
     processTypeLabel,
+    refreshRelayTraffic,
+    relayTrafficState,
     saveMonitorAlertConfig,
     shouldIncludeMonitorAlertLifecycle,
     visibleMonitorAlerts,

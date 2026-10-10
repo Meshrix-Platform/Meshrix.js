@@ -1309,6 +1309,12 @@
       "risk": "read_only"
     },
     {
+      "id": "cap:api:system.relay_traffic",
+      "operationId": "system.relay_traffic",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
       "id": "cap:api:system.checkpoint_trees.list",
       "operationId": "system.checkpoint_trees.list",
       "kind": "api",

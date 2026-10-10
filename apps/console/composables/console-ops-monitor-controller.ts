@@ -6,9 +6,11 @@ import {
   recoverBackgroundSupervisor as recoverBackgroundSupervisorRequest,
   saveMonitorAlertConfig as saveMonitorAlertConfigRequest,
 } from "../lib/ops-monitor-client";
+import { getRelayTraffic } from "../lib/relay-traffic-client";
 import type {
   BackgroundProcessStatus,
   MonitorAlertState,
+  RelayTrafficResponse,
   ServerConsoleState,
 } from "../lib/types";
 import type { WorkQueueRow } from "../types/app";
@@ -30,6 +32,7 @@ export function createConsoleOpsMonitorController(
   const backgroundProcessStatus: any = ref<BackgroundProcessStatus | null>(null);
   const monitorAlertState: any = ref<MonitorAlertState | null>(null);
   const monitorAlertConfigText: any = ref("");
+  const relayTrafficState: any = ref<RelayTrafficResponse | null>(null);
 
   const backgroundProcesses: any = computed(() : any => backgroundProcessStatus.value?.processes || []);
   const backgroundSupervisorLabel: any = computed(() : any => {
@@ -205,6 +208,26 @@ export function createConsoleOpsMonitorController(
     }
   }
 
+  async function refreshRelayTraffic(refreshOptions: { silent?: boolean } = {}) : Promise<any> {
+    if (!options.canReadOperations.value) {
+      return;
+    }
+    if (!refreshOptions.silent) {
+      options.setBusy("relay-traffic:refresh");
+    }
+    options.error.value = "";
+    try {
+      relayTrafficState.value = await getRelayTraffic();
+    } catch (nextError: any) {
+      options.error.value =
+        nextError instanceof Error ? nextError.message : "刷新 Relay 流量指标失败。";
+    } finally {
+      if (!refreshOptions.silent) {
+        options.clearBusy("relay-traffic:refresh");
+      }
+    }
+  }
+
   async function saveMonitorAlertConfig() : Promise<any> {
     if (!options.canAdminOperations.value) {
       options.error.value = "当前账号没有维护配置权限。";
@@ -238,6 +261,8 @@ export function createConsoleOpsMonitorController(
     recentMonitorAlertHistory,
     refreshBackgroundProcesses,
     refreshMonitorAlerts,
+    refreshRelayTraffic,
+    relayTrafficState,
     recoverBackgroundSupervisor,
     saveMonitorAlertConfig,
     workQueueRows,

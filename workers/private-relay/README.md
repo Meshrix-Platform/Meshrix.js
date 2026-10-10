@@ -165,6 +165,14 @@ mailbox objects; vault objects are scraped only for explicit `vault` ids
 and summed into one series. Counts and opaque ids only — never payloads,
 credentials, digests or nonces.
 
+The Meshrix Console renders this exposition natively (no external
+monitoring stack): set `MESHRIX_RELAY_METRICS_URL` to the relay's
+`/admin/metrics` URL on the platform server, and
+`MESHRIX_RELAY_ADMIN_TOKEN` to the admin bearer credential when the
+endpoint requires one. `system.relay_traffic`
+(`GET /api/system/relay-traffic`) then returns the parsed series plus a
+bounded in-process history for the ops-monitor Relay 流量 panel.
+
 ## Scripts
 
 | Command | Purpose |

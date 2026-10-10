@@ -26,10 +26,182 @@ import {
   sampleCapabilityPackStoreFor
 } from "./registry-services.ts";
 
+// --- Relay traffic metrics (system.relay_traffic) ------------------------------
+//
+// The private relay worker exports `GET /admin/metrics` as Prometheus text
+// exposition v0.0.4 (`meshrix_relay_*` counters labeled object/tenant/route/
+// device/scope). The console reads it through this operation instead of a
+// dedicated monitoring stack: env-configured URL + admin bearer token, a small
+// parser, and a bounded in-process ring so the panel can draw recent-history
+// sparklines without any TSDB.
+
+const RELAY_TRAFFIC_FETCH_TIMEOUT_MS: any = 8_000;
+const RELAY_TRAFFIC_HISTORY_INTERVAL_MS: any = 15_000;
+const RELAY_TRAFFIC_HISTORY_LIMIT: any = 240;
+
+const relayTrafficHistory: Array<{ t: number; sums: Record<string, number> }> = [];
+let relayTrafficHistoryAppendedAt: any = 0;
+
+function parseExpositionLabelSet(source: any) : any {
+  const labels: Record<string, string> = {};
+  let index = 0;
+  const text: any = String(source || "");
+  while (index < text.length) {
+    const nameStart: any = index;
+    while (index < text.length && text[index] !== "=") {
+      index += 1;
+    }
+    const name: any = text.slice(nameStart, index).trim();
+    index += 1;
+    if (text[index] !== "\"") {
+      break;
+    }
+    index += 1;
+    let value = "";
+    while (index < text.length && text[index] !== "\"") {
+      if (text[index] === "\\") {
+        index += 1;
+        const escaped: any = text[index];
+        value += escaped === "n" ? "\n" : escaped;
+        index += 1;
+      } else {
+        value += text[index];
+        index += 1;
+      }
+    }
+    index += 1;
+    if (name) {
+      labels[name] = value;
+    }
+    while (index < text.length && (text[index] === "," || text[index] === " ")) {
+      index += 1;
+    }
+  }
+  return labels;
+}
+
+function parseRelayMetricsExposition(body: any) : any {
+  const metrics: any = new Map<string, any>();
+  const metricFor: any = (name: any) : any => {
+    let metric: any = metrics.get(name);
+    if (!metric) {
+      metric = { name, help: "", type: "", samples: [] };
+      metrics.set(name, metric);
+    }
+    return metric;
+  };
+  for (const rawLine of String(body || "").split("\n")) {
+    const line: any = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    if (line.startsWith("#")) {
+      const helpMatch: any = /^#\s+HELP\s+(\S+)\s*(.*)$/u.exec(line);
+      if (helpMatch) {
+        metricFor(helpMatch[1]).help = helpMatch[2] || "";
+      }
+      const typeMatch: any = /^#\s+TYPE\s+(\S+)\s*(\S*)/u.exec(line);
+      if (typeMatch) {
+        metricFor(typeMatch[1]).type = typeMatch[2] || "";
+      }
+      continue;
+    }
+    const braceIndex: any = line.indexOf("{");
+    let name = "";
+    let labelsText = "";
+    let rest = "";
+    if (braceIndex >= 0) {
+      const closeIndex: any = line.lastIndexOf("}");
+      if (closeIndex < 0) {
+        continue;
+      }
+      name = line.slice(0, braceIndex);
+      labelsText = line.slice(braceIndex + 1, closeIndex);
+      rest = line.slice(closeIndex + 1).trim();
+    } else {
+      const spaceIndex: any = line.search(/\s/u);
+      name = spaceIndex < 0 ? line : line.slice(0, spaceIndex);
+      rest = spaceIndex < 0 ? "" : line.slice(spaceIndex + 1).trim();
+    }
+    const value: any = Number(rest.split(/\s+/u)[0]);
+    if (!name || !Number.isFinite(value)) {
+      continue;
+    }
+    metricFor(name).samples.push({
+      labels: parseExpositionLabelSet(labelsText),
+      value
+    });
+  }
+  return [...metrics.values()];
+}
+
+function relayMetricSums(metrics: any = []) : any {
+  const sums: Record<string, number> = {};
+  for (const metric of metrics) {
+    sums[metric.name] = (metric.samples || []).reduce(
+      (total: any, sample: any) : any => total + Number(sample?.value || 0),
+      0
+    );
+  }
+  return sums;
+}
+
+function recordRelayTrafficHistory(sums: any = {}, now: any = Date.now()) : any {
+  if (now - relayTrafficHistoryAppendedAt < RELAY_TRAFFIC_HISTORY_INTERVAL_MS) {
+    return;
+  }
+  relayTrafficHistory.push({ t: now, sums: { ...sums } });
+  relayTrafficHistoryAppendedAt = now;
+  if (relayTrafficHistory.length > RELAY_TRAFFIC_HISTORY_LIMIT) {
+    relayTrafficHistory.splice(0, relayTrafficHistory.length - RELAY_TRAFFIC_HISTORY_LIMIT);
+  }
+}
+
+async function loadRelayTrafficMetrics() : Promise<any> {
+  const metricsUrl: any = String(process.env.MESHRIX_RELAY_METRICS_URL || "").trim();
+  if (!metricsUrl) {
+    return result(200, { configured: false });
+  }
+  const adminToken: any = String(process.env.MESHRIX_RELAY_ADMIN_TOKEN || "").trim();
+  let response: any = null;
+  try {
+    response = await fetch(metricsUrl, {
+      headers: {
+        accept: "text/plain",
+        ...(adminToken ? { authorization: `Bearer ${adminToken}` } : {})
+      },
+      signal: AbortSignal.timeout(RELAY_TRAFFIC_FETCH_TIMEOUT_MS)
+    });
+  } catch {
+    return result(200, {
+      configured: true,
+      error: "relay_unreachable",
+      history: [...relayTrafficHistory]
+    });
+  }
+  if (!response.ok) {
+    return result(200, {
+      configured: true,
+      error: "relay_unreachable",
+      status: Number(response.status || 0),
+      history: [...relayTrafficHistory]
+    });
+  }
+  const metrics: any = parseRelayMetricsExposition(await response.text());
+  recordRelayTrafficHistory(relayMetricSums(metrics));
+  return result(200, {
+    configured: true,
+    fetchedAt: new Date().toISOString(),
+    metrics,
+    history: [...relayTrafficHistory]
+  });
+}
+
 export async function executeSystemObservationOperation({ operationId, input = {}, context }: Record<string, any>) : Promise<any> {
   const id: any = String(operationId || "");
   const handledOperations: any = new Set<any>([
     "system.background_processes",
+    "system.relay_traffic",
     "system.checkpoint_trees.list",
     "system.checkpoint_trees.get",
     "workspace.checkpoint.tree.list",
@@ -49,6 +221,10 @@ export async function executeSystemObservationOperation({ operationId, input = {
       return error;
     }
     return result(200, await devopsProvider.getBackgroundProcessStatus({ userDataPath: context.userDataPath }));
+  }
+
+  if (id === "system.relay_traffic") {
+    return loadRelayTrafficMetrics();
   }
 
   const checkpointTreeApi: any = context.checkpointTreeApi;

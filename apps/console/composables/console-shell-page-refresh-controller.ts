@@ -30,6 +30,7 @@ type ConsoleShellPageRefreshControllerOptions = {
   refreshBackgroundProcesses: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshDashboardAlertsSnapshot: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshMonitorAlerts: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
+  refreshRelayTraffic: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshOperationPermissionPendingOperations: () => MaybePromise<unknown>;
   refreshState: (options?: RefreshStateOptions) => MaybePromise<unknown>;
   refreshOperationPermission: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
@@ -101,6 +102,7 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
         await Promise.all([
           options.refreshBackgroundProcesses({ silent: true }),
           options.refreshMonitorAlerts({ silent: true }),
+          options.refreshRelayTraffic({ silent: true }),
         ]);
         return;
       case "productionHealth":

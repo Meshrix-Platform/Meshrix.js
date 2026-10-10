@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
-  "routeCount": 576,
+  "routeCount": 578,
   "routes": [
     {
       "method": "GET",
@@ -3472,6 +3472,22 @@
       "method": "RPC",
       "path": "system.background_processes",
       "operationId": "system.background_processes",
+      "feature": "system",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/relay-traffic",
+      "operationId": "system.relay_traffic",
+      "feature": "system",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "system.relay_traffic",
+      "operationId": "system.relay_traffic",
       "feature": "system",
       "risk": "read_only",
       "public": false

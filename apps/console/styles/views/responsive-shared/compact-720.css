@@ -103,6 +103,8 @@
   .maintenance-schedule-table .job-row,
   .ops-process-table .job-table-header,
   .ops-process-table .job-row,
+  .relay-traffic-table .job-table-header,
+  .relay-traffic-table .job-row,
   .work-queue-table .job-table-header,
   .work-queue-table .job-row,
   .tool-list-table .job-table-header,

@@ -24,6 +24,14 @@ export function createSystemControllerOpsObservationHandlers({
         errorMessage: "读取后台进程状态失败。"
       });
     },
+    async handleGetRelayTraffic({ operation, response }: Record<string, any>) : Promise<any> {
+      await sendConsoleDomainOperation({
+        operationId: operation?.id || "system.relay_traffic",
+        response,
+        context: {},
+        errorMessage: "读取 Relay 流量指标失败。"
+      });
+    },
     async handleListCheckpointTrees({ operation, url, response }: Record<string, any>) : Promise<any> {
       await sendConsoleDomainOperation({
         operationId: operation?.id || "system.checkpoint_trees.list",

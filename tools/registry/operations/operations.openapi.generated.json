@@ -11748,6 +11748,31 @@
         }
       }
     },
+    "/api/system/relay-traffic": {
+      "get": {
+        "operationId": "system.relay_traffic",
+        "summary": "私有 Relay 流量监控指标",
+        "tags": [
+          "system"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/system/checkpoint-trees": {
       "get": {
         "operationId": "system.checkpoint_trees.list",

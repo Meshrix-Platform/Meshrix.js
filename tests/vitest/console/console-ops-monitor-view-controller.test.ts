@@ -116,6 +116,8 @@ function createFixture(overrides: Record<string, any> = {}) : any {
       history: recentMonitorAlertHistory.value,
     }),
     recentMonitorAlertHistory,
+    refreshRelayTraffic: vi.fn(async () : Promise<any> => undefined),
+    relayTrafficState: ref(null),
     saveMonitorAlertConfig: vi.fn(async () : Promise<any> => undefined),
     };
 

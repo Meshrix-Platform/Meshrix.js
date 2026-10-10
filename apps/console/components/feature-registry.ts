@@ -60,6 +60,7 @@ export const componentFeatureRegistry: readonly ComponentTierDeclaration[] = Obj
   { path: "apps/console/components/admin/ops-monitor/OpsMonitorAlertsPanel.vue", feature: "ops-monitor" },
   { path: "apps/console/components/admin/ops-monitor/OpsMonitorProcessTable.vue", feature: "ops-monitor" },
   { path: "apps/console/components/admin/ops-monitor/OpsMonitorSummaryCard.vue", feature: "ops-monitor" },
+  { path: "apps/console/components/admin/ops-monitor/RelayTrafficPanel.vue", feature: "ops-monitor" },
   { path: "apps/console/components/admin/production-health/ProductionCoverageWarning.vue", feature: "production-health" },
   { path: "apps/console/components/admin/production-health/ProductionGateTable.vue", feature: "production-health" },
   { path: "apps/console/components/admin/production-health/ProductionHealthBottomGrid.vue", feature: "production-health" },

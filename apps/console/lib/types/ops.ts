@@ -179,3 +179,29 @@ export type MonitorAlertState = {
   activeAlerts: MonitorAlertItem[];
   history: MonitorAlertItem[];
 };
+
+export type RelayMetricSample = {
+  labels: Record<string, string>;
+  value: number;
+};
+
+export type RelayMetricSeries = {
+  name: string;
+  help: string;
+  type: string;
+  samples: RelayMetricSample[];
+};
+
+export type RelayTrafficHistoryPoint = {
+  t: number;
+  sums: Record<string, number>;
+};
+
+export type RelayTrafficResponse = {
+  configured: boolean;
+  fetchedAt?: string;
+  error?: string;
+  status?: number;
+  metrics?: RelayMetricSeries[];
+  history?: RelayTrafficHistoryPoint[];
+};

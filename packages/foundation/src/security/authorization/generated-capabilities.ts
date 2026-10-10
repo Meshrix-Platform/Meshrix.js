@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:8de58f776e225d5c
+ * Hash: sha256:f1cce01116c45712
  * Generated at: 2026-06-30T09:41:12.260Z
  *
  * To modify capabilities: edit source operation definitions or Operation Permission catalog mappings, then run the generator.
  */
-export const GENERATED_CAPABILITIES_HASH = "sha256:8de58f776e225d5c";
+export const GENERATED_CAPABILITIES_HASH = "sha256:f1cce01116c45712";
 
 export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:readiness.baseline.status",
@@ -228,6 +228,7 @@ export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:storage.backups.restore_preview",
   "cap:api:storage.backups.restore",
   "cap:api:system.background_processes",
+  "cap:api:system.relay_traffic",
   "cap:api:system.checkpoint_trees.list",
   "cap:api:system.checkpoint_trees.get",
   "cap:api:system.monitor_alerts.get",
@@ -771,6 +772,7 @@ export const CAPABILITY_RISK_MAP = Object.freeze({
   "cap:api:storage.backups.restore_preview": "read_only",
   "cap:api:storage.backups.restore": "repair_write",
   "cap:api:system.background_processes": "read_only",
+  "cap:api:system.relay_traffic": "read_only",
   "cap:api:system.checkpoint_trees.list": "read_only",
   "cap:api:system.checkpoint_trees.get": "read_only",
   "cap:api:system.monitor_alerts.get": "read_only",

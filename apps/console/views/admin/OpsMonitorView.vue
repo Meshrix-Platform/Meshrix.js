@@ -2,6 +2,7 @@
 import OpsMonitorAlertsPanel from "../../components/admin/ops-monitor/OpsMonitorAlertsPanel.vue";
 import OpsMonitorProcessTable from "../../components/admin/ops-monitor/OpsMonitorProcessTable.vue";
 import OpsMonitorSummaryCard from "../../components/admin/ops-monitor/OpsMonitorSummaryCard.vue";
+import RelayTrafficPanel from "../../components/admin/ops-monitor/RelayTrafficPanel.vue";
 import { useOpsMonitorViewConsole } from "../../composables/console-ops-monitor-view-controller";
 import { provideOpsMonitorView } from "../../composables/opsMonitorViewContext";
 
@@ -14,5 +15,6 @@ provideOpsMonitorView(opsMonitorView);
     <OpsMonitorSummaryCard />
     <OpsMonitorProcessTable />
     <OpsMonitorAlertsPanel />
+    <RelayTrafficPanel />
   </section>
 </template>

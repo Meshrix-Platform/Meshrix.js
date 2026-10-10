@@ -10,12 +10,20 @@ const opsMonitorClientMock: any = vi.hoisted(() : any => ({
   saveMonitorAlertConfig: vi.fn(),
 }));
 
+const relayTrafficClientMock: any = vi.hoisted(() : any => ({
+  getRelayTraffic: vi.fn(),
+}));
+
 vi.mock("../../../apps/console/lib/ops-monitor-client", () : any => ({
   acknowledgeMonitorAlert: opsMonitorClientMock.acknowledgeMonitorAlert,
   getBackgroundProcesses: opsMonitorClientMock.getBackgroundProcesses,
   getMonitorAlerts: opsMonitorClientMock.getMonitorAlerts,
   recoverBackgroundSupervisor: opsMonitorClientMock.recoverBackgroundSupervisor,
   saveMonitorAlertConfig: opsMonitorClientMock.saveMonitorAlertConfig,
+}));
+
+vi.mock("../../../apps/console/lib/relay-traffic-client", () : any => ({
+  getRelayTraffic: relayTrafficClientMock.getRelayTraffic,
 }));
 
 function makeBackgroundProcessStatus(overrides: Record<string, unknown> = {}) : any {
@@ -150,10 +158,12 @@ describe("console ops monitor controller", () : any => {
 
     await controller.refreshBackgroundProcesses();
     await controller.refreshMonitorAlerts();
+    await controller.refreshRelayTraffic();
 
     expect(canReadOperations.value).toBe(false);
     expect(opsMonitorClientMock.getBackgroundProcesses).not.toHaveBeenCalled();
     expect(opsMonitorClientMock.getMonitorAlerts).not.toHaveBeenCalled();
+    expect(relayTrafficClientMock.getRelayTraffic).not.toHaveBeenCalled();
     expect(error.value).toBe("");
   });
 
@@ -227,6 +237,44 @@ describe("console ops monitor controller", () : any => {
     expect(setBusy).toHaveBeenNthCalledWith(2, "monitor-alerts:refresh");
     expect(clearBusy).toHaveBeenCalledTimes(2);
     expect(error.value).toBe("");
+  });
+
+  it("刷新 Relay 流量指标时写入状态、区分静默分支并透传错误", async () : Promise<any> => {
+    const { controller, clearBusy, setBusy, error } = createFixture();
+    const relayTraffic = {
+      configured: true,
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      metrics: [
+        {
+          name: "meshrix_relay_sessions_admitted",
+          help: "Sessions admitted.",
+          type: "counter",
+          samples: [
+            {
+              labels: { object: "session", tenant: "t-1", route: "r-1", device: "", scope: "durable" },
+              value: 4,
+            },
+          ],
+        },
+      ],
+      history: [{ t: 1_767_225_600_000, sums: { meshrix_relay_sessions_admitted: 4 } }],
+    };
+
+    relayTrafficClientMock.getRelayTraffic.mockResolvedValueOnce(relayTraffic);
+    await controller.refreshRelayTraffic({ silent: true });
+    expect(setBusy).not.toHaveBeenCalled();
+    expect(controller.relayTrafficState.value).toEqual(relayTraffic);
+
+    relayTrafficClientMock.getRelayTraffic.mockResolvedValueOnce({ configured: false });
+    await controller.refreshRelayTraffic();
+    expect(setBusy).toHaveBeenLastCalledWith("relay-traffic:refresh");
+    expect(clearBusy).toHaveBeenLastCalledWith("relay-traffic:refresh");
+    expect(controller.relayTrafficState.value).toEqual({ configured: false });
+    expect(error.value).toBe("");
+
+    relayTrafficClientMock.getRelayTraffic.mockRejectedValueOnce(new Error("traffic fetch failed"));
+    await controller.refreshRelayTraffic();
+    expect(error.value).toBe("traffic fetch failed");
   });
 
   it("确认告警支持权限分支、成功刷新状态与失败文案", async () : Promise<any> => {

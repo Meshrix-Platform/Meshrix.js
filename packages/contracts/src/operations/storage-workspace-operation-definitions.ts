@@ -146,6 +146,16 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS: readonly any[] = Object.fr
       requiredScopes: ["console:read"]
     },
 {
+      id: "system.relay_traffic",
+      feature: "system",
+      label: "私有 Relay 流量监控指标",
+      target: { controller: "system", method: "handleGetRelayTraffic" },
+      http: { method: "GET", path: "/api/system/relay-traffic", localInForwardMode: true },
+      rpc: { method: "system.relay_traffic" },
+      cli: { command: ["system", "relay-traffic"], usage: "system relay-traffic" },
+      requiredScopes: ["console:read"]
+    },
+{
       id: "system.checkpoint_trees.list",
       feature: "system",
       label: "长任务 checkpoint tree 列表",
