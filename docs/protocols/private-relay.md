@@ -23,6 +23,7 @@ and cost honesty live in
 | --- | --- | --- |
 | Session/admission wire | `PRIVATE_RELAY_SCHEMA_VERSION` | `v0.0.1:private-relay:wire-1` |
 | Recovery/vault wire | `PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION` | `v0.0.1:private-relay:recovery-1` |
+| Peer mailbox wire | `PRIVATE_RELAY_PEER_SCHEMA_VERSION` | `v0.0.1:private-relay:peer-1` |
 | Wire protocol tag | `PRIVATE_RELAY_WIRE_PROTOCOL` | `meshrix-private-relay/0` |
 
 All messages are strict exact-key JSON objects. Unknown, missing, extra or
@@ -168,6 +169,69 @@ capability grant reference. They travel only inside the authenticated inner
 channel or approved endpoint storage and are never copied into relay
 admission or telemetry.
 
+## Peer messaging mailbox
+
+The peer wire (`private-relay-peer.ts`, schema `v0.0.1:private-relay:peer-1`)
+adds reliable one-to-one agent messaging: a per-recipient mailbox partition
+that stores only Signal-family ciphertext envelopes, durable positions and
+typed receipts. One device pairs with exactly one peer on its route; the
+mailbox runtime re-checks the same directory admission authority session
+sockets use, and request messages carry `tenantId`/`routeId`/`deviceId` only
+so that authority can bind them — the wire itself never selects a tenant or a
+route, and a `targetTenantId`-style steering field fails exact-key parsing.
+
+Wire kinds (`PRIVATE_RELAY_PEER_KINDS`):
+
+| Kind | Direction | Semantics |
+| --- | --- | --- |
+| `peer-bundle-publish` → `peer-bundle-published` | device → mailbox → device | Publish the device's Signal prekey bundle (`format` from `PRIVATE_RELAY_PEER_SIGNAL_PROFILES`, `bundleId`, monotonic `revision`, opaque public `material`). Response reports `published`/`superseded`/`refused` with a typed `PRIVATE_RELAY_PEER_REFUSALS` reason. |
+| `peer-bundle-fetch` → `peer-bundle` | device → mailbox → device | Fetch the paired peer's current bundle. Response reports `available` + bundle, `unpublished` (honest absence), or `refused` + typed refusal. |
+| `peer-send` → `peer-accepted` | sender → mailbox → sender | Enqueue an encrypted envelope into the recipient partition. Response reports `accepted`/`duplicate`/`conflict` plus the durable `position`; accepted/duplicate carries the `accepted` receipt, conflict carries none. |
+| `peer-fetch` → `peer-messages` | recipient → mailbox → recipient | Cursor page (`afterSeq`, bounded `limit`) returning stored messages in strictly ascending position order, `nextAfterSeq` resume cursor, `more` continuation flag and `gaps` tombstones. |
+| `peer-ack` → `peer-acked` | recipient → mailbox → recipient | Idempotently record `received` acknowledgements plus optional application-level `reports`. Response returns `recorded` receipts and `refused` entries with `PRIVATE_RELAY_PEER_ACK_REFUSALS`; `peerAckFullyRecorded` requires every requested id to be recorded or explicitly refused — never silently dropped or invented. |
+| `peer-receipt` → `peer-status` | sender → mailbox → sender | Query receipt status for sender-scoped `messageIds`. Each status reports `position` (`0` = unknown, never inventing receipts) plus the recorded receipt list. |
+| `peer-retention-policy` | mailbox → device | Enrollment-time advertisement of the deployment-selected finite `mailboxCapacityBytes`, `mailboxRetentionMs` and `mailboxMaxItems`. Shape only — runtime enforcement and cleanup scheduling belong to the mailbox delivery. |
+
+The `PeerEnvelope` is `format` + `headers` + `ciphertext`. Headers carry only
+session metadata the peer crypto layer owns — `messageType`
+(`prekey`/`session`), sender/recipient bundle ids and nullable prekey
+references — so the mailbox can route and store without ever reading
+plaintext. `PRIVATE_RELAY_PEER_MAILBOX_SEES_PLAINTEXT === false` and
+`containsForbiddenPeerKeys` reject a message carrying `grants`, `plaintext`,
+tool names, credentials or agent-intent fields at any nesting depth
+(`assertPeerEnvelopeCipherOnly`).
+
+Sender-scoped `messageId` is the deduplication key within
+(tenant, route, sender, recipient): a resend with identical envelope bytes is
+an idempotent `retry` answered by the stored `accepted` receipt (`duplicate`
+outcome); the same id with different bytes is a typed `conflict`
+(`peerSendReplayClass`). The stored first write decides the binding — a send
+cannot smuggle a body digest or a conflict-resolution field to overwrite it.
+
+Receipt taxonomy (`PRIVATE_RELAY_PEER_RECEIPT_KINDS`):
+
+- `accepted` — issued by the mailbox (`source: "mailbox"`) when the envelope
+  is durably stored.
+- `received` — issued by the authenticated recipient (`source: "recipient"`)
+  when its inbox entry is durably recorded.
+- `accepted_by_agent`, `completed`, `rejected` — independent application
+  reports (`source: "agent"`) submitted through `peer-ack` `reports`. They are
+  never inferred from mailbox acknowledgements:
+  `PRIVATE_RELAY_PEER_APP_RECEIPTS_FROM_ACKS === false`, and the parser pins
+  each kind to its only honest source. A mailbox `accepted` or a recipient
+  `received` says nothing about agent execution — delivery acknowledgement is
+  not consumption evidence, mirroring
+  `PRIVATE_RELAY_ACK_IS_CONSUMPTION_PROOF === false`.
+
+Retention is deployment-selected and explicit (no invented default):
+expiry or capacity truncation removes envelopes but produces observable
+`gaps` tombstones — `{fromSeq, toSeq, cause, messageIds}` with typed
+`PRIVATE_RELAY_PEER_GAP_CAUSES` (`expired`, `capacity_truncated`) — so a
+cursor never silently advances past lost messages, and a sender can still
+reconcile the lost `messageIds` through `peer-status` (position `0`, empty
+receipts). A disconnected receiver resumes from `afterSeq` plus its
+unacknowledged ids; unknown delivery state stays explicit.
+
 ## Neutral wire corpus
 
 `private-relay-wire-corpus.json` holds synthetic valid and invalid exemplars
@@ -177,14 +241,21 @@ payloads, invented reject reasons, inverted or unknown-cause gaps, cross-purpose
 proofs, reusable/expired challenges, missing CAS fields, snapshots carrying
 configuration or secrets, lost-ack-as-not-started, completed-without-result,
 global-complete rotation claims, generation regressions, unknown trust modes,
-and short nonces. All fixtures are neutral — no real credentials, plaintext,
-or machine-private data.
+and short nonces. The `peer` section covers every mailbox kind plus hostile
+shapes: cross-tenant steering fields, a replayed messageId carrying a smuggled
+body-digest claim, envelopes smuggling `grants`/`plaintext`, invented or
+mailbox-derived receipt kinds, self-addressed sends, negative sequence
+cursors, oversized fields, non-monotonic pages, empty ack batches, and
+zero-valued retention. All fixtures are neutral — no real credentials,
+plaintext, or machine-private data.
 
 The focused suite `tests/vitest/contracts/private-relay-contract.test.ts`
 (registry id `contracts.private-relay-wire`) enforces exact-key parsing,
 peer agreement on valid messages, rejection of every invalid case, the session
 and rotation state machines, reachability/retry honesty, bounded frame
-accounting, and snapshot visibility.
+accounting, and snapshot visibility. For the peer wire it additionally pins
+the receipt taxonomy, sender-scoped idempotency/conflict, ack coverage
+honesty and the ciphertext-only envelope boundary.
 
 ## Endpoint operator profile
 
@@ -224,6 +295,8 @@ honest state surface, inner-channel dispatch over pinned TLS and signal drain.
 | Concern | Owner |
 | --- | --- |
 | Wire schemas, corpus, limits, state tables | `NODE-PRIVATE-WIRE` (`packages/contracts/src/private-relay/`) |
+| Peer mailbox wire schemas, corpus, receipt taxonomy | `NODE-PEER-WIRE` (`packages/contracts/src/private-relay/private-relay-peer.ts`) |
+| Mailbox Durable Object runtime | `NODE-MAILBOX-RUNTIME` |
 | Relay runtime admission/forwarding (Workerd/DO) | `NODE-RELAY-RUNTIME` |
 | Endpoint gateway transitions, operation recovery execution | `NODE-ENDPOINT-GATEWAY` |
 | Endpoint trust/recovery proof implementation | `NODE-ENDPOINT-GATEWAY` |

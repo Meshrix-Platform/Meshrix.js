@@ -151,6 +151,11 @@
       "types": "./dist/private-relay/private-relay-recovery.d.ts",
       "default": "./dist/private-relay/private-relay-recovery.js"
     },
+    "./private-relay/peer": {
+      "source": "./src/private-relay/private-relay-peer.ts",
+      "types": "./dist/private-relay/private-relay-peer.d.ts",
+      "default": "./dist/private-relay/private-relay-peer.js"
+    },
     "./recording": {
       "source": "./src/recording/index.ts",
       "types": "./dist/recording/index.d.ts",

@@ -18,26 +18,47 @@ import {
   PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION,
   PRIVATE_RELAY_ROTATION_STATES,
   PRIVATE_RELAY_OPERATION_STATES,
+  PRIVATE_RELAY_PEER_ACK_REFUSALS,
+  PRIVATE_RELAY_PEER_APPLICATION_RECEIPT_KINDS,
+  PRIVATE_RELAY_PEER_APP_RECEIPTS_FROM_ACKS,
+  PRIVATE_RELAY_PEER_GAP_CAUSES,
+  PRIVATE_RELAY_PEER_KINDS,
+  PRIVATE_RELAY_PEER_LIMITS,
+  PRIVATE_RELAY_PEER_MAILBOX_RECEIPT_KINDS,
+  PRIVATE_RELAY_PEER_MAILBOX_SEES_PLAINTEXT,
+  PRIVATE_RELAY_PEER_RECEIPT_KINDS,
+  PRIVATE_RELAY_PEER_SCHEMA_VERSION,
+  PRIVATE_RELAY_PEER_SEND_OUTCOMES,
   admitOutboundFrame,
   acknowledgeFrames,
   agreePrivateRelayPeers,
   assertOfflineCallHandling,
   assertOperationStatusHonest,
+  assertPeerEnvelopeCipherOnly,
+  assertPeerReceiptIndependent,
   assertRecoveryPurposeSeparation,
   assertRelayAdmissionOnlyRouting,
   assertRelaySessionTransition,
   assertRotationNotGlobal,
   assertSnapshotServiceVisibility,
+  containsForbiddenPeerKeys,
   containsForbiddenRelayKeys,
   containsForbiddenSnapshotKeys,
   createPrivateRelayPeer,
   decodePrivateRelayMessage,
+  decodePrivateRelayPeerMessage,
   endpointReachabilityForNewWork,
   encodePrivateRelayMessage,
+  encodePrivateRelayPeerMessage,
   initialFrameAccounting,
   operationRetryPermitted,
   parsePrivateRelayMessage,
+  parsePrivateRelayPeerMessage,
   parsePrivateRelayRecoveryMessage,
+  peerAckFullyRecorded,
+  peerReceiptIsApplicationReport,
+  peerReceiptIsMailboxIssued,
+  peerSendReplayClass,
   recoveryChannelAdmitsOnlyRecovery,
   relaySessionTransition,
   rotationTransition,
@@ -228,6 +249,109 @@ describe("private relay wire contract", () : any => {
     for (const state of PRIVATE_RELAY_ROTATION_STATES) {
       expect(typeof rotationTransition(state, "unknown_event")).toBe("object");
     }
+  });
+
+  it("freezes peer messaging kinds, the receipt taxonomy and bounded mailbox limits", () : any => {
+    expect(PRIVATE_RELAY_PEER_SCHEMA_VERSION).toBe("v0.0.1:private-relay:peer-1");
+    expect([...PRIVATE_RELAY_PEER_KINDS].sort()).toEqual([
+      "peer-accepted", "peer-ack", "peer-acked", "peer-bundle", "peer-bundle-fetch",
+      "peer-bundle-publish", "peer-bundle-published", "peer-fetch", "peer-messages",
+      "peer-receipt", "peer-retention-policy", "peer-send", "peer-status"
+    ]);
+    expect([...PRIVATE_RELAY_PEER_RECEIPT_KINDS].sort()).toEqual([
+      "accepted", "accepted_by_agent", "completed", "received", "rejected"
+    ]);
+    expect([...PRIVATE_RELAY_PEER_MAILBOX_RECEIPT_KINDS].sort()).toEqual(["accepted", "received"]);
+    expect([...PRIVATE_RELAY_PEER_APPLICATION_RECEIPT_KINDS].sort()).toEqual([
+      "accepted_by_agent", "completed", "rejected"
+    ]);
+    expect([...PRIVATE_RELAY_PEER_SEND_OUTCOMES].sort()).toEqual(["accepted", "conflict", "duplicate"]);
+    expect([...PRIVATE_RELAY_PEER_GAP_CAUSES].sort()).toEqual(["capacity_truncated", "expired"]);
+    expect(PRIVATE_RELAY_PEER_APP_RECEIPTS_FROM_ACKS).toBe(false);
+    expect(PRIVATE_RELAY_PEER_MAILBOX_SEES_PLAINTEXT).toBe(false);
+    expect(PRIVATE_RELAY_PEER_LIMITS.maxEnvelopeBytes).toBe(65_536);
+    expect(PRIVATE_RELAY_PEER_LIMITS.maxPageMessages).toBe(64);
+    expect(PRIVATE_RELAY_PEER_LIMITS.maxAckEntries).toBe(64);
+  });
+
+  it("lets neutral peers agree on every frozen peer mailbox message", () : any => {
+    const kinds: any[] = [];
+    for (const [name, message] of Object.entries(corpus.peer.valid)) {
+      const parsed: any = parsePrivateRelayPeerMessage(message);
+      expect(parsed, name).toBeTruthy();
+      const encoded: any = encodePrivateRelayPeerMessage(message);
+      expect(encoded, name).toBeTruthy();
+      expect(decodePrivateRelayPeerMessage(encoded), name).toEqual(parsed);
+      kinds.push((parsed as any).kind);
+    }
+    expect([...new Set<any>(kinds)].sort()).toEqual([...PRIVATE_RELAY_PEER_KINDS].sort());
+  });
+
+  it("rejects every invalid peer message in the neutral corpus", () : any => {
+    for (const [name, message] of Object.entries(corpus.peer.invalid)) {
+      expect(parsePrivateRelayPeerMessage(message), name).toBeNull();
+      expect(decodePrivateRelayPeerMessage(JSON.stringify(message)), name).toBeNull();
+    }
+  });
+
+  it("keeps peer envelopes to ciphertext plus session headers and rejects semantic or plaintext fields", () : any => {
+    expect(assertPeerEnvelopeCipherOnly(corpus.peer.valid["peer-send"])).toBe(true);
+    expect(containsForbiddenPeerKeys(corpus.peer.invalid.peerSendSmuggledSemanticGrants)).toBe(true);
+    expect(containsForbiddenPeerKeys(corpus.peer.invalid.peerSendCarriesPlaintextField)).toBe(true);
+    expect(() : any => assertPeerEnvelopeCipherOnly(
+      corpus.peer.invalid.peerSendSmuggledSemanticGrants
+    )).toThrow();
+    expect(() : any => assertPeerEnvelopeCipherOnly(
+      corpus.peer.invalid.peerSendCarriesPlaintextField
+    )).toThrow();
+    expect(containsForbiddenPeerKeys(corpus.peer.valid["peer-send"])).toBe(false);
+  });
+
+  it("enforces sender-scoped idempotent resend and typed conflict rejection", () : any => {
+    const send: any = corpus.peer.valid["peer-send"];
+    expect(peerSendReplayClass(send, corpus.peer.valid["peer-send-retry"])).toBe("retry");
+    expect(peerSendReplayClass(send, corpus.peer.valid["peer-send-conflict"])).toBe("conflict");
+    expect(peerSendReplayClass(send, { ...send, messageId: "msg.pr.999" })).toBe("distinct");
+    expect(peerSendReplayClass(send, corpus.peer.invalid.peerSendSelfAddressed)).toBeNull();
+    const conflict: any = corpus.peer.valid["peer-accepted-conflict"];
+    expect(conflict.outcome).toBe("conflict");
+    expect(conflict.receipt).toBeNull();
+    const accepted: any = corpus.peer.valid["peer-accepted"];
+    expect(accepted.receipt.kind).toBe("accepted");
+    expect(peerReceiptIsMailboxIssued(accepted.receipt)).toBe(true);
+  });
+
+  it("keeps application receipts independent of mailbox acknowledgements", () : any => {
+    const ackReports: any = corpus.peer.valid["peer-ack"].reports;
+    expect(assertPeerReceiptIndependent(ackReports[0])).toBe(true);
+    expect(peerReceiptIsApplicationReport(ackReports[0])).toBe(true);
+    for (const status of corpus.peer.valid["peer-status"].statuses as any[]) {
+      for (const receipt of status.receipts) expect(assertPeerReceiptIndependent(receipt)).toBe(true);
+    }
+    expect(() : any => assertPeerReceiptIndependent(
+      corpus.peer.invalid.peerAcceptedDerivesAgentReceipt.receipt
+    )).toThrow();
+    expect(() : any => assertPeerReceiptIndependent(
+      corpus.peer.invalid.peerStatusReceiptDerivedFromAck.statuses[0].receipts[0]
+    )).toThrow();
+    expect(() : any => assertPeerReceiptIndependent(
+      corpus.peer.invalid.peerAckInventedReceiptKind.reports[0]
+    )).toThrow();
+  });
+
+  it("records acknowledged sends without silent drops or invented outcomes", () : any => {
+    expect(peerAckFullyRecorded(corpus.peer.valid["peer-ack"], corpus.peer.valid["peer-acked"])).toBe(true);
+    const dropped: any = {
+      ...corpus.peer.valid["peer-acked"],
+      recorded: corpus.peer.valid["peer-acked"].recorded.slice(1)
+    };
+    expect(peerAckFullyRecorded(corpus.peer.valid["peer-ack"], dropped)).toBe(false);
+    const invented: any = {
+      ...corpus.peer.valid["peer-acked"],
+      refused: [...corpus.peer.valid["peer-acked"].refused, { messageId: "msg.pr.777", refusal: "message_unknown" }]
+    };
+    expect(peerAckFullyRecorded(corpus.peer.valid["peer-ack"], invented)).toBe(false);
+    for (const refusal of PRIVATE_RELAY_PEER_ACK_REFUSALS) expect(typeof refusal).toBe("string");
   });
 
   it("round-trips encoded frames and rejects tampered bytes", () : any => {
