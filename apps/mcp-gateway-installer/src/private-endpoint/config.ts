@@ -77,6 +77,13 @@ export interface PrivateEndpointConfig {
   };
   /** Optional loopback-only admin/state listener (direct local control channel). */
   readonly adminListen?: { readonly host: string; readonly port: number };
+  /**
+   * Optional environment variable carrying the admin bearer token. When set,
+   * every loopback admin route (`/status`, `/healthz`, `/metrics`, `/peer/*`)
+   * requires `Authorization: Bearer <token>`; when absent the surface stays
+   * loopback-only with no credential check, exactly as before.
+   */
+  readonly adminTokenEnv?: string;
   /** Opt-in peer messaging block — absent (or disabled) means the peer stack is never started. */
   readonly peer?: PrivateEndpointPeerConfig;
 }
@@ -328,6 +335,7 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
   // --- optional loopback admin surface ---------------------------------------
   const admin = provided.admin;
   let adminListen: PrivateEndpointConfig["adminListen"];
+  let adminTokenEnv: string | undefined;
   if (admin !== undefined) {
     if (!record(admin) || !record(admin.listen)) {
       throw endpointConfigError("private_endpoint_admin_invalid", "Admin section needs a listen object.");
@@ -338,6 +346,9 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
     }
     const port = admin.listen.port === undefined ? 0 : safeInteger(admin.listen.port, "Admin listen port", 0, 65_535);
     adminListen = Object.freeze({ host, port });
+    if (admin.token !== undefined) {
+      adminTokenEnv = environmentBinding(admin.token, "Admin bearer token");
+    }
   }
 
   // --- optional peer messaging ---------------------------------------------
@@ -381,6 +392,7 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
     gatewayConfigPath,
     reconnect: Object.freeze({ initialDelayMs, maxDelayMs }),
     ...(adminListen ? { adminListen } : {}),
+    ...(adminTokenEnv ? { adminTokenEnv } : {}),
     ...(peerConfig ? { peer: peerConfig } : {})
   });
 }

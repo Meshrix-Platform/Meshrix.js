@@ -1,6 +1,7 @@
-import { createPrivateKey, createPublicKey, sign as cryptoSign, verify as cryptoVerify } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, timingSafeEqual, verify as cryptoVerify } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AuthenticatedContext, CatalogDescriptor, Gateway, GatewayOutcome, PermitAuthorityPort } from "@meshrix/contracts/gateway";
+import { PRIVATE_RELAY_SESSION_STATES } from "@meshrix/contracts/private-relay";
 import { createInnerDispatchLoop, isPeerSchemaMessage, type InnerDispatchLoop } from "@meshrix/entry-transport";
 import {
   createEndpointIdentityStore,
@@ -167,6 +168,166 @@ export interface PrivateEndpointSurface {
   readonly droppedOutboundMessages: number;
   /** Peer messaging block — `enabled:false` when the optional peer config is absent. */
   readonly peer: { readonly enabled: boolean; readonly peerId: string | null; readonly live: boolean };
+}
+
+/** Already-tracked counters the exposition needs beyond the `/status` surface. */
+export interface EndpointMetricsExtras {
+  /** Outbound messages queued behind a still-connecting socket generation. */
+  readonly transportQueuedMessages?: number;
+  /** Transport socket generation (connect attempts since profile start). */
+  readonly transportGeneration?: number;
+  /** Durable peer inbox depth — only present when the peer block is enabled. */
+  readonly peerInboxDepth?: number;
+  /** Durable peer outbox depth — only present when the peer block is enabled. */
+  readonly peerOutboxDepth?: number;
+}
+
+interface EndpointMetricSpec {
+  readonly name: string;
+  readonly help: string;
+  readonly type: "counter" | "gauge";
+  readonly samples: readonly { readonly labels?: Readonly<Record<string, string>>; readonly value: number }[];
+}
+
+function metricLabelValue(value: string): string {
+  return value.replace(/\\/gu, "\\\\").replace(/"/gu, "\\\"").replace(/\n/gu, "\\n");
+}
+
+function metricStateSamples<T extends string>(states: readonly T[], current: string): { labels: { state: string }; value: number }[] {
+  return states.map((state) => ({ labels: { state }, value: state === current ? 1 : 0 }));
+}
+
+const TRANSPORT_STATES = Object.freeze(["idle", "connecting", "open", "closed"]);
+
+/**
+ * Prometheus text exposition (v0.0.4) of the endpoint's existing counters.
+ *
+ * This is a narrow read of the same point-in-time surface `GET /status`
+ * emits, plus the transport's already-tracked queue/generation counters and
+ * the durable peer store depths. No new per-operation instrumentation is
+ * added, and the output carries only counters and bounded enum labels —
+ * never payloads, plaintext, key or digest material, tokens, session ids,
+ * device ids or peer ids.
+ */
+export function renderEndpointMetrics(surface: PrivateEndpointSurface, extras: EndpointMetricsExtras = {}): string {
+  const specs: EndpointMetricSpec[] = [
+    {
+      name: "meshrix_endpoint_session_state",
+      help: "Private-relay session driver state; the active state carries value 1.",
+      type: "gauge",
+      samples: metricStateSamples(PRIVATE_RELAY_SESSION_STATES, surface.session)
+    },
+    {
+      name: "meshrix_endpoint_transport_state",
+      help: "Relay transport socket state; the active state carries value 1.",
+      type: "gauge",
+      samples: metricStateSamples(TRANSPORT_STATES, surface.transport)
+    },
+    {
+      name: "meshrix_endpoint_accepts_new_work",
+      help: "Whether a new call would dispatch right now (1 = reachable, 0 = endpoint_unreachable).",
+      type: "gauge",
+      samples: [{ value: surface.acceptsNewWork ? 1 : 0 }]
+    },
+    {
+      name: "meshrix_endpoint_reconnect_generation",
+      help: "Reconnect generation acknowledged by the relay for the current session.",
+      type: "gauge",
+      samples: [{ value: surface.reconnectGeneration }]
+    },
+    {
+      name: "meshrix_endpoint_operations_tracked",
+      help: "Operations currently tracked by the endpoint recovery ledger.",
+      type: "gauge",
+      samples: [{ value: surface.operationsTracked }]
+    },
+    {
+      name: "meshrix_endpoint_restarts_total",
+      help: "Endpoint session-driver rebuilds since this profile run started.",
+      type: "counter",
+      samples: [{ value: surface.endpointRestarts }]
+    },
+    {
+      name: "meshrix_endpoint_dropped_outbound_messages_total",
+      help: "Outbound relay messages dropped because no live socket generation could carry them.",
+      type: "counter",
+      samples: [{ value: surface.droppedOutboundMessages }]
+    },
+    {
+      name: "meshrix_endpoint_local_revocation_revision",
+      help: "Endpoint owner's current local revocation revision.",
+      type: "gauge",
+      samples: [{ value: surface.localRevocationRevision }]
+    }
+  ];
+  if (surface.admittedRevocationRevision !== null) {
+    specs.push({
+      name: "meshrix_endpoint_admitted_revocation_revision",
+      help: "Revocation revision the relay acknowledged with the last admission.",
+      type: "gauge",
+      samples: [{ value: surface.admittedRevocationRevision }]
+    });
+  }
+  if (extras.transportQueuedMessages !== undefined) {
+    specs.push({
+      name: "meshrix_endpoint_transport_queued_messages",
+      help: "Outbound messages queued behind a still-connecting socket generation.",
+      type: "gauge",
+      samples: [{ value: extras.transportQueuedMessages }]
+    });
+  }
+  if (extras.transportGeneration !== undefined) {
+    specs.push({
+      name: "meshrix_endpoint_transport_generation",
+      help: "Transport socket generation (connect attempts since profile start).",
+      type: "gauge",
+      samples: [{ value: extras.transportGeneration }]
+    });
+  }
+  if (surface.device !== null) {
+    specs.push({
+      name: "meshrix_endpoint_device_trust_generation",
+      help: "Trust generation of the admitted endpoint device.",
+      type: "gauge",
+      samples: [{ value: surface.device.trustGeneration }]
+    });
+  }
+  if (surface.peer.enabled) {
+    specs.push({
+      name: "meshrix_endpoint_peer_live",
+      help: "Whether the peer channel currently rides a live admitted session (1 = live).",
+      type: "gauge",
+      samples: [{ value: surface.peer.live ? 1 : 0 }]
+    });
+    if (extras.peerInboxDepth !== undefined) {
+      specs.push({
+        name: "meshrix_endpoint_peer_inbox_depth",
+        help: "Entries in the durable peer inbox store.",
+        type: "gauge",
+        samples: [{ value: extras.peerInboxDepth }]
+      });
+    }
+    if (extras.peerOutboxDepth !== undefined) {
+      specs.push({
+        name: "meshrix_endpoint_peer_outbox_depth",
+        help: "Entries in the durable peer outbox store.",
+        type: "gauge",
+        samples: [{ value: extras.peerOutboxDepth }]
+      });
+    }
+  }
+  const lines: string[] = [];
+  for (const spec of specs) {
+    lines.push(`# HELP ${spec.name} ${spec.help}`);
+    lines.push(`# TYPE ${spec.name} ${spec.type}`);
+    for (const sample of spec.samples) {
+      const labels = sample.labels === undefined
+        ? ""
+        : `{${Object.entries(sample.labels).map(([key, value]) => `${key}="${metricLabelValue(value)}"`).join(",")}}`;
+      lines.push(`${spec.name}${labels} ${sample.value}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 /** Validate a private-endpoint configuration without connecting anywhere. */
@@ -536,10 +697,24 @@ export async function servePrivateEndpointProfile(
   }
 
   // --- optional loopback admin/state surface ------------------------------
+  // Optional bearer authority for the whole surface: when `admin.token` binds
+  // a credential env var, every route — /status, /healthz, /metrics, /peer/* —
+  // requires it. The header is hashed before comparison (same pattern as the
+  // entry product's loopback server) so the token itself is never stored and
+  // mismatched lengths cannot short-circuit the equality check.
+  const adminToken = config.adminTokenEnv === undefined ? undefined : process.env[config.adminTokenEnv];
+  if (config.adminTokenEnv !== undefined && !adminToken) {
+    throw endpointConfigError("private_endpoint_credential_missing", "Admin bearer token environment binding is unavailable.");
+  }
+  const adminAuthHash = adminToken === undefined ? undefined : createHash("sha256").update(`Bearer ${adminToken}`).digest();
   const sendJson = (response: ServerResponse, status: number, body: unknown): void => {
     const payload = JSON.stringify(body ?? null);
     response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(payload) });
     response.end(payload);
+  };
+  const sendText = (response: ServerResponse, status: number, body: string): void => {
+    response.writeHead(status, { "Content-Type": "text/plain; version=0.0.4", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(body) });
+    response.end(body);
   };
   const readJsonBody = (request: IncomingMessage, maxBytes = 256 * 1024): Promise<unknown> => new Promise((resolvePromise, rejectPromise) => {
     const chunks: Buffer[] = [];
@@ -569,6 +744,14 @@ export async function servePrivateEndpointProfile(
    * peers answer 404 `peer_disabled` rather than a generic not-found.
    */
   async function handleAdminRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    if (adminAuthHash !== undefined) {
+      const header = request.headers.authorization;
+      const provided = typeof header === "string" ? createHash("sha256").update(header).digest() : null;
+      if (provided === null || !timingSafeEqual(provided, adminAuthHash)) {
+        sendJson(response, 401, { error: "admin_unauthorized", message: "Missing or invalid bearer token." });
+        return;
+      }
+    }
     const route = (request.url ?? "").split("?")[0];
     if (route === "/status" && request.method === "GET") {
       sendJson(response, 200, surface());
@@ -576,6 +759,23 @@ export async function servePrivateEndpointProfile(
     }
     if (route === "/healthz" && request.method === "GET") {
       sendJson(response, 200, { status: stopping ? "stopping" : "ok" });
+      return;
+    }
+    if (route === "/metrics" && request.method === "GET") {
+      let extras: EndpointMetricsExtras = {
+        transportQueuedMessages: transport.queuedMessages,
+        transportGeneration: transport.generation
+      };
+      if (peer !== null) {
+        // Depths ride the same durable store reads /peer/status performs; a
+        // store failure omits the gauges honestly rather than failing the
+        // whole scrape.
+        try {
+          const peerStatus = await peer.status();
+          extras = { ...extras, peerInboxDepth: peerStatus.inboxCount, peerOutboxDepth: peerStatus.outbox.length };
+        } catch { /* omit peer depth gauges */ }
+      }
+      sendText(response, 200, renderEndpointMetrics(surface(), extras));
       return;
     }
     if (route.startsWith("/peer/")) {

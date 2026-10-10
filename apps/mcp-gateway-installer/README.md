@@ -123,9 +123,17 @@ The endpoint configuration is JSON:
   as the gateway-only profiles.
 - `reconnect` — optional `initialDelayMs`/`maxDelayMs` backoff bounds.
 - `admin.listen` — optional loopback-only (`127.0.0.1`/`::1`) state listener
-  exposing `GET /status` and `GET /healthz`. Endpoint administration is never
-  published through the relay: control arrives only through this direct local
-  surface or the authenticated inner channel.
+  exposing `GET /status`, `GET /healthz` and `GET /metrics`. The metrics
+  route renders the same existing counters as `/status` (operations tracked,
+  dropped outbound sends, restarts, session/reconnect state, revocation
+  revisions, transport queue depth, peer inbox/outbox depths when the peer
+  block is enabled) as a Prometheus `text/plain; version=0.0.4` exposition
+  under the `meshrix_endpoint_*` names — counters and enum labels only, never
+  payloads, identifiers, keys or credentials. `admin.token` optionally binds
+  an `env:NAME` credential; when set, every admin route requires
+  `Authorization: Bearer <token>` (401 otherwise). Endpoint administration is
+  never published through the relay: control arrives only through this direct
+  local surface or the authenticated inner channel.
 - `peer` — optional peer-messaging block (`{ "enabled": true,
   "storageDir"?: PATH, "peerId"?: ID }`). `storageDir` defaults to
   `peer-state/` beside the config file (relative paths resolve there too)

@@ -23,7 +23,7 @@ import { createFrame } from "@meshrix/contracts/private-relay";
 import { createInnerRequestChannel } from "@meshrix/entry-transport";
 import type { Gateway } from "@meshrix/contracts/gateway";
 
-import { checkPrivateEndpoint, servePrivateEndpointProfile, type PrivateEndpointSurface } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/profile.ts";
+import { checkPrivateEndpoint, renderEndpointMetrics, servePrivateEndpointProfile, type PrivateEndpointSurface } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/profile.ts";
 import { RelayWebSocketTransport } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/transport.ts";
 
 // ---------------------------------------------------------------------------
@@ -1347,4 +1347,269 @@ describe("private endpoint peer wiring", () => {
       await rm(fixture.dir, { recursive: true, force: true });
     }
   }), 30_000);
+});
+
+// ---------------------------------------------------------------------------
+// Metrics exposition: GET /metrics on the same loopback admin surface renders
+// the existing profile counters as Prometheus text — never payloads, secrets
+// or identifiers — and inherits the surface's (optional) bearer authority.
+// ---------------------------------------------------------------------------
+
+const ADMIN_TOKEN_ENV = "MESHRIX_TEST_ENDPOINT_ADMIN_TOKEN";
+
+interface ExpositionSample {
+  readonly labels: Readonly<Record<string, string>>;
+  readonly value: number;
+}
+
+interface ExpositionMetric {
+  help?: string;
+  type?: string;
+  readonly samples: ExpositionSample[];
+}
+
+/** Minimal v0.0.4 text-exposition parser: HELP/TYPE lines plus samples. */
+function parseExposition(body: string): Map<string, ExpositionMetric> {
+  const metrics = new Map<string, ExpositionMetric>();
+  for (const rawLine of body.split("\n")) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+    const meta = line.match(/^# (HELP|TYPE) ([^\s]+) (.*)$/u);
+    if (meta) {
+      const metric = metrics.get(meta[2] as string) ?? { samples: [] };
+      if (meta[1] === "HELP") metric.help = meta[3];
+      else metric.type = meta[3];
+      metrics.set(meta[2] as string, metric);
+      continue;
+    }
+    const sample = line.match(/^([^\s{]+)(?:\{([^}]*)\})? ([^\s]+)$/u);
+    expect(sample, `unparseable exposition line: ${line}`).not.toBeNull();
+    const labels: Record<string, string> = {};
+    for (const pair of (sample?.[2] ?? "").split(",")) {
+      if (!pair) continue;
+      const label = pair.match(/^([^=]+)="(.*)"$/u);
+      expect(label, `unparseable label pair: ${pair}`).not.toBeNull();
+      labels[label![1] as string] = (label![2] as string).replace(/\\n/gu, "\n").replace(/\\"/gu, "\"").replace(/\\\\/gu, "\\");
+    }
+    const name = sample![1] as string;
+    const metric = metrics.get(name) ?? { samples: [] };
+    metric.samples.push({ labels, value: Number(sample![3]) });
+    metrics.set(name, metric);
+  }
+  return metrics;
+}
+
+function scalarSample(metrics: Map<string, ExpositionMetric>, name: string): number | undefined {
+  const metric = metrics.get(name);
+  if (!metric || metric.samples.length !== 1 || Object.keys(metric.samples[0]!.labels).length !== 0) return undefined;
+  return metric.samples[0]!.value;
+}
+
+describe("private endpoint metrics exposition", () => {
+  const savedCredential = process.env[CREDENTIAL_ENV];
+  const savedAdminToken = process.env[ADMIN_TOKEN_ENV];
+  function withCredentials<T>(fn: () => Promise<T>, adminToken?: string): Promise<T> {
+    process.env[CREDENTIAL_ENV] = "test-relay-credential";
+    if (adminToken === undefined) delete process.env[ADMIN_TOKEN_ENV];
+    else process.env[ADMIN_TOKEN_ENV] = adminToken;
+    return fn().finally(() => {
+      if (savedCredential === undefined) delete process.env[CREDENTIAL_ENV];
+      else process.env[CREDENTIAL_ENV] = savedCredential;
+      if (savedAdminToken === undefined) delete process.env[ADMIN_TOKEN_ENV];
+      else process.env[ADMIN_TOKEN_ENV] = savedAdminToken;
+    });
+  }
+
+  it("renders a surface snapshot without any listener or profile run", () => {
+    const text = renderEndpointMetrics(Object.freeze({
+      profile: "private-endpoint",
+      session: "admitted",
+      transport: "open",
+      routeState: "reachable",
+      reachability: "reachable",
+      acceptsNewWork: true,
+      sessionId: "sess.should.never.appear.1",
+      reconnectGeneration: 2,
+      admittedRevocationRevision: 4,
+      localRevocationRevision: 6,
+      revocationPropagation: "pending",
+      device: { deviceId: "dev.should.never.appear.1", revoked: false, trustGeneration: 3 },
+      recoveryAuthorities: [],
+      operationsTracked: 5,
+      endpointRestarts: 1,
+      droppedOutboundMessages: 7,
+      peer: { enabled: false, peerId: null, live: false }
+    }) as PrivateEndpointSurface);
+    const metrics = parseExposition(text);
+    expect(scalarSample(metrics, "meshrix_endpoint_operations_tracked")).toBe(5);
+    expect(scalarSample(metrics, "meshrix_endpoint_dropped_outbound_messages_total")).toBe(7);
+    expect(scalarSample(metrics, "meshrix_endpoint_restarts_total")).toBe(1);
+    expect(scalarSample(metrics, "meshrix_endpoint_accepts_new_work")).toBe(1);
+    expect(scalarSample(metrics, "meshrix_endpoint_reconnect_generation")).toBe(2);
+    expect(scalarSample(metrics, "meshrix_endpoint_admitted_revocation_revision")).toBe(4);
+    expect(scalarSample(metrics, "meshrix_endpoint_local_revocation_revision")).toBe(6);
+    expect(scalarSample(metrics, "meshrix_endpoint_device_trust_generation")).toBe(3);
+    expect(metrics.get("meshrix_endpoint_session_state")?.type).toBe("gauge");
+    expect(metrics.get("meshrix_endpoint_dropped_outbound_messages_total")?.type).toBe("counter");
+    const sessionStates = metrics.get("meshrix_endpoint_session_state")!.samples;
+    expect(sessionStates.find((s) => s.labels.state === "admitted")?.value).toBe(1);
+    expect(sessionStates.filter((s) => s.value === 1)).toHaveLength(1);
+    expect(metrics.get("meshrix_endpoint_transport_state")!.samples.find((s) => s.labels.state === "open")?.value).toBe(1);
+    // Every emitted line is a comment or a meshrix_endpoint_* sample; HELP is always present.
+    for (const line of text.trimEnd().split("\n")) {
+      expect(line.startsWith("#") || line.startsWith("meshrix_endpoint_")).toBe(true);
+    }
+    // Privacy: no opaque identifiers, ids or secret-looking material ever render.
+    expect(text).not.toContain("sess.should.never.appear.1");
+    expect(text).not.toContain("dev.should.never.appear.1");
+    expect(text).not.toMatch(/credential|token|key|secret|digest|plaintext|payload/iu);
+  });
+
+  it("serves the exposition on the loopback admin listener and agrees with /status", () => withCredentials(async () => {
+    const relay = await startFakeRelay();
+    const adminPort = await freePort();
+    const fixture = await writeFixture(relay.url, { admin: { listen: { host: "127.0.0.1", port: adminPort } } });
+    const controller = new AbortController();
+    const lines: string[] = [];
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: enrolledIdentity(fixture),
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => fakeRuntime()
+      });
+      await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
+
+      const status = await fetch(`http://127.0.0.1:${adminPort}/status`).then((response) => response.json() as Promise<PrivateEndpointSurface>);
+      const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("text/plain; version=0.0.4");
+      const text = await response.text();
+      const metrics = parseExposition(text);
+
+      // The exposition is a read of the same counters /status reports.
+      expect(scalarSample(metrics, "meshrix_endpoint_operations_tracked")).toBe(status.operationsTracked);
+      expect(scalarSample(metrics, "meshrix_endpoint_dropped_outbound_messages_total")).toBe(status.droppedOutboundMessages);
+      expect(scalarSample(metrics, "meshrix_endpoint_restarts_total")).toBe(status.endpointRestarts);
+      expect(scalarSample(metrics, "meshrix_endpoint_reconnect_generation")).toBe(status.reconnectGeneration);
+      expect(scalarSample(metrics, "meshrix_endpoint_accepts_new_work")).toBe(1);
+      expect(scalarSample(metrics, "meshrix_endpoint_admitted_revocation_revision")).toBe(status.admittedRevocationRevision ?? undefined);
+      expect(metrics.get("meshrix_endpoint_session_state")!.samples.find((s) => s.labels.state === status.session)?.value).toBe(1);
+      // Peer block is disabled: the peer gauges stay absent rather than faking zero.
+      expect(metrics.has("meshrix_endpoint_peer_live")).toBe(false);
+      expect(metrics.has("meshrix_endpoint_peer_inbox_depth")).toBe(false);
+
+      // Privacy allowlist: only counters and enum labels — never credentials,
+      // key material, the session id, device ids or the admin token env name.
+      expect(text).not.toContain("test-relay-credential");
+      expect(text).not.toContain("BEGIN PRIVATE KEY");
+      expect(text).not.toContain(ADMIN_TOKEN_ENV);
+      if (status.sessionId) expect(text).not.toContain(status.sessionId);
+      if (status.device) expect(text).not.toContain(status.device.deviceId);
+      for (const metric of metrics.values()) {
+        for (const sample of metric.samples) {
+          for (const labelName of Object.keys(sample.labels)) expect(labelName).toBe("state");
+        }
+      }
+
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }), 30_000);
+
+  it("enforces the configured admin bearer token uniformly, including /metrics", () => withCredentials(async () => {
+    const relay = await startFakeRelay();
+    const adminPort = await freePort();
+    const fixture = await writeFixture(relay.url, {
+      admin: { listen: { host: "127.0.0.1", port: adminPort }, token: `env:${ADMIN_TOKEN_ENV}` }
+    });
+    const controller = new AbortController();
+    const lines: string[] = [];
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: enrolledIdentity(fixture),
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => fakeRuntime()
+      });
+      await waitFor(() => lines.length > 0);
+
+      for (const route of ["/metrics", "/status", "/healthz"]) {
+        expect((await fetch(`http://127.0.0.1:${adminPort}${route}`)).status).toBe(401);
+        expect((await fetch(`http://127.0.0.1:${adminPort}${route}`, { headers: { authorization: "Bearer wrong-token" } })).status).toBe(401);
+      }
+      const authed = { authorization: "Bearer test-admin-token" };
+      const metricsResponse = await fetch(`http://127.0.0.1:${adminPort}/metrics`, { headers: authed });
+      expect(metricsResponse.status).toBe(200);
+      const text = await metricsResponse.text();
+      expect(parseExposition(text).has("meshrix_endpoint_operations_tracked")).toBe(true);
+      expect(text).not.toContain("test-admin-token");
+      expect((await fetch(`http://127.0.0.1:${adminPort}/status`, { headers: authed })).status).toBe(200);
+
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }, "test-admin-token"), 30_000);
+
+  it("includes durable peer depths only when the peer block is enabled", () => withCredentials(async () => {
+    const relay = await startFakeRelay(peerAnsweringRelay());
+    const adminPort = await freePort();
+    const fixture = await writeFixture(relay.url, {
+      admin: { listen: { host: "127.0.0.1", port: adminPort } },
+      peer: { enabled: true, storageDir: "peer-state-metrics" }
+    });
+    const controller = new AbortController();
+    const lines: string[] = [];
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: enrolledIdentity(fixture),
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => fakeRuntime()
+      });
+      await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
+
+      const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`);
+      expect(response.status).toBe(200);
+      const metrics = parseExposition(await response.text());
+      expect(scalarSample(metrics, "meshrix_endpoint_peer_live")).toBe(1);
+      expect(scalarSample(metrics, "meshrix_endpoint_peer_inbox_depth")).toBe(0);
+      expect(scalarSample(metrics, "meshrix_endpoint_peer_outbox_depth")).toBe(0);
+
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }), 30_000);
+
+  it("validates the admin token binding without serving", () => withCredentials(async () => {
+    const literal = await writeFixture("wss://relay.example.invalid", {
+      admin: { listen: { host: "127.0.0.1", port: 0 }, token: "inline-secret" }
+    });
+    try {
+      await expect(checkPrivateEndpoint({ config: literal.configPath })).rejects.toMatchObject({ code: "private_endpoint_credential_invalid" });
+    } finally {
+      await rm(literal.dir, { recursive: true, force: true });
+    }
+    delete process.env[ADMIN_TOKEN_ENV];
+    const missing = await writeFixture("wss://relay.example.invalid", {
+      admin: { listen: { host: "127.0.0.1", port: 0 }, token: `env:${ADMIN_TOKEN_ENV}` }
+    });
+    try {
+      await expect(checkPrivateEndpoint({ config: missing.configPath })).rejects.toMatchObject({ code: "private_endpoint_credential_missing" });
+    } finally {
+      await rm(missing.dir, { recursive: true, force: true });
+    }
+  }, "test-admin-token"));
 });
