@@ -32,6 +32,13 @@ export interface PrivateRelayEnv {
    * Unset/unknown is the closed default: the surface does not exist.
    */
   RELAY_ADMIN_SURFACE?: string;
+  /**
+   * HMAC key for session-credential tickets (`src/ticket.ts`). Set it on
+   * anything reachable from the public internet: forged upgrades are then
+   * rejected before they can instantiate Durable Objects. Unset keeps the
+   * bare-token private shape — acceptable only on non-public surfaces.
+   */
+  RELAY_TICKET_SECRET?: string;
 }
 
 declare global {

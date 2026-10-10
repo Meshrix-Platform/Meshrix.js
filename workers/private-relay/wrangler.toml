@@ -20,6 +20,11 @@ RELAY_ADMIN_TOKEN = "local-only-synthetic-admin-token"
 # (loopback, LAN, tailnet, local checks). Unset would mean "off" — the
 # closed default every public deployment must keep.
 RELAY_ADMIN_SURFACE = "local"
+# Synthetic ticket key for local checks only: lets the stateless credential
+# gate run end-to-end in tests/dev. Public deployments use a real
+# `wrangler secret put RELAY_TICKET_SECRET`; self-hosted private surfaces
+# may also omit it (bare-token shape).
+RELAY_TICKET_SECRET = "local-only-synthetic-ticket-secret"
 RELAY_MAX_SESSION_MESSAGE_BYTES = "393216"
 RELAY_MAX_VAULT_MESSAGE_BYTES = "1572864"
 # Deployment-selected peer mailbox retention policy: finite byte capacity,
@@ -63,6 +68,9 @@ new_sqlite_classes = ["MailboxDO"]
 name = "meshrix-private-relay-staging"
 account_id = "4463b244fa145a838d0a3b44bdb175e1"
 workers_dev = true
+# No per-version preview URLs: they would be an unmanaged extra entry
+# point serving this worker outside the intentional routes.
+preview_urls = false
 
 # Custom domain on the user's own zone: Cloudflare issues and renews the
 # edge certificate automatically — no ACME, no manual generation. The DNS

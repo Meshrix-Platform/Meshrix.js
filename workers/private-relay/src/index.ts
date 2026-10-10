@@ -21,7 +21,8 @@
  */
 
 import type { PrivateRelayEnv } from "./env.ts";
-import { RELAY_RUNTIME_LIMITS, adminSurfaceMode } from "./env.ts";
+import { RELAY_RUNTIME_LIMITS, adminSurfaceMode, integerEnv } from "./env.ts";
+import { verifySessionCredential } from "./ticket.ts";
 import { bearerToken, jsonResponse } from "./http.ts";
 import { constantTimeEqual, directoryObjectName, isOpaqueId, mailboxObjectName, sessionObjectName, vaultObjectName } from "./ids.ts";
 import type { RelayCounterKey, RelayCountersShape, RelayMetricSample } from "./metrics.ts";
@@ -37,6 +38,44 @@ function adminAuthorized(request: Request, env: PrivateRelayEnv): boolean {
   if (typeof configured !== "string" || configured.length < 16) return false;
   const presented = bearerToken(request);
   return presented !== null && constantTimeEqual(presented, configured);
+}
+
+/**
+ * In-process damper for requests that fail pre-object checks. Each isolate
+ * keeps a small per-source-IP failure bucket so sustained forging from one
+ * address is throttled instead of looping at full request volume. Honest
+ * scope: a damper inside one isolate, not a fleet-wide limiter —
+ * distributed abuse is the edge/WAF layer's job (the separately designed
+ * public-admission work).
+ */
+const PRE_CHECK_FAILURE_LIMIT = 30;
+const PRE_CHECK_FAILURE_WINDOW_MS = 60_000;
+const PRE_CHECK_FAILURE_MAX_SOURCES = 10_000;
+const preCheckFailures = new Map<string, { count: number; resetAt: number }>();
+
+function preCheckFailureOverLimit(request: Request): boolean {
+  const ip = request.headers.get("cf-connecting-ip") ?? "local";
+  const now = Date.now();
+  let bucket = preCheckFailures.get(ip);
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + PRE_CHECK_FAILURE_WINDOW_MS };
+    preCheckFailures.set(ip, bucket);
+  }
+  bucket.count += 1;
+  if (preCheckFailures.size > PRE_CHECK_FAILURE_MAX_SOURCES) {
+    for (const [key, entry] of preCheckFailures) {
+      if (entry.resetAt <= now) preCheckFailures.delete(key);
+    }
+    if (preCheckFailures.size > PRE_CHECK_FAILURE_MAX_SOURCES) preCheckFailures.clear();
+  }
+  return bucket.count > PRE_CHECK_FAILURE_LIMIT;
+}
+
+function unauthenticatedRequest(request: Request, status: number, error: string): Response {
+  if (preCheckFailureOverLimit(request)) {
+    return jsonResponse({ error: "rate_limited" }, 429);
+  }
+  return jsonResponse({ error }, status);
 }
 
 async function propagateRevocation(
@@ -221,6 +260,17 @@ export default {
       if (request.headers.get("upgrade") !== "websocket") {
         return jsonResponse({ error: "websocket_required" }, 426);
       }
+      // Stateless cost gate: every upgrade that reaches a Durable Object
+      // instantiates it (session + directory lookup = billed compute and
+      // storage reads). A ticketed credential is verified here with zero
+      // storage; forged upgrades die before any object exists. The DO
+      // remains the admission authority — this only bounds unauthenticated
+      // cost on public routes.
+      const auth = request.headers.get("authorization") ?? "";
+      const presented = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+      if (!presented || !(await verifySessionCredential(env, presented))) {
+        return unauthenticatedRequest(request, 401, "unauthorized");
+      }
       const stub = env.RELAY_SESSION.get(
         env.RELAY_SESSION.idFromName(sessionObjectName(tenantId, routeId)),
       );
@@ -234,10 +284,23 @@ export default {
     const vaultMatch = path.match(/^\/vault\/([^/]+)$/u);
     if (vaultMatch && request.method === "POST") {
       const vaultId = vaultMatch[1];
-      if (!isOpaqueId(vaultId)) return jsonResponse({ error: "not_found" }, 404);
+      if (!isOpaqueId(vaultId)) return unauthenticatedRequest(request, 404, "not_found");
+      // Bounded pre-check before the object exists: a declared oversized
+      // body is refused without paying an instantiation for it.
+      const declaredBytes = Number(request.headers.get("content-length") ?? "0");
+      if (Number.isFinite(declaredBytes) && declaredBytes > integerEnv(env.RELAY_MAX_VAULT_MESSAGE_BYTES, RELAY_RUNTIME_LIMITS.defaultMaxVaultMessageBytes, 1, 16 * 1024 * 1024)) {
+        return unauthenticatedRequest(request, 413, "request_too_large");
+      }
       const stub = env.RECOVERY_VAULT.get(env.RECOVERY_VAULT.idFromName(vaultObjectName(vaultId)));
       const forward = new Request("http://vault.internal/vault", request);
-      return stub.fetch(forward);
+      const response = await stub.fetch(forward);
+      // A forged-but-well-formed POST still pays one instantiation before
+      // the object refuses it — count the refusal so a repeating source is
+      // throttled ahead of the object on subsequent attempts.
+      if (response.status >= 400 && preCheckFailureOverLimit(request)) {
+        return jsonResponse({ error: "rate_limited" }, 429);
+      }
+      return response;
     }
 
     // --- Admin control plane ------------------------------------------

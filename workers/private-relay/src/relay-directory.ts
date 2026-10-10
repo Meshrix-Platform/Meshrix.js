@@ -18,6 +18,7 @@ import type { PrivateRelayEnv } from "./env.ts";
 import { RELAY_RUNTIME_LIMITS, metricsDurableEnabled } from "./env.ts";
 import { jsonResponse, readBoundedJson } from "./http.ts";
 import { isOpaqueId, randomToken, sha256Hex } from "./ids.ts";
+import { issueSessionCredential } from "./ticket.ts";
 import { RelayCounters } from "./metrics.ts";
 
 interface DirectoryMeta {
@@ -171,7 +172,7 @@ export class RelayDirectoryDO extends DurableObject<PrivateRelayEnv> {
     meta.deviceCount += 1;
     if (!route) meta.routeCount += 1;
     const now = new Date().toISOString();
-    const credential = randomToken();
+    const credential = await issueSessionCredential(this.env, randomToken());
     const credentialDigest = await sha256Hex(credential);
     const device: DeviceRecord = {
       deviceId,
