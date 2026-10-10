@@ -10,10 +10,13 @@ WORKDIR app
 COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE THIRD_PARTY_NOTICES.md ./
 COPY apps/server/package.json ./apps/server/package.json
 COPY apps/mcp-gateway-installer/package.json ./apps/mcp-gateway-installer/package.json
+COPY apps/entry/package.json ./apps/entry/package.json
+COPY apps/entry-gui/package.json ./apps/entry-gui/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY packages/agents/package.json ./packages/agents/package.json
 COPY packages/capabilities/package.json ./packages/capabilities/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY packages/entry-transport/package.json ./packages/entry-transport/package.json
 COPY packages/foundation/package.json ./packages/foundation/package.json
 COPY packages/gateway/package.json ./packages/gateway/package.json
 COPY packages/protocols/package.json ./packages/protocols/package.json
@@ -28,6 +31,7 @@ COPY plugins/agents/meshrix-self-maintenance/package.json ./plugins/agents/meshr
 COPY plugins/agents/openclaw/package.json ./plugins/agents/openclaw/package.json
 COPY plugins/agents/opencode/package.json ./plugins/agents/opencode/package.json
 COPY plugins/agents/pi/package.json ./plugins/agents/pi/package.json
+COPY workers/private-relay/package.json ./workers/private-relay/package.json
 COPY vendor ./vendor
 RUN rm -f "${ROOTFS}etc/apt/apt.conf.d/docker-clean"
 

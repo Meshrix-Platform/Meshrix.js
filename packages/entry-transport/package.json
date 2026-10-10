@@ -37,7 +37,5 @@
   "bugs": {
     "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
   },
-  "publishConfig": {
-    "access": "public"
-  }
+  "private": true
 }

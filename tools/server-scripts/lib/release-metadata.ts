@@ -4,8 +4,15 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const definitionPath: any = "tools/registry/release-definition.registry.json";
-const AGENT_PLUGIN_WORKSPACE_PATTERN: any = "plugins/agents/*";
-const AGENT_PLUGIN_WORKSPACE_DIRECTORY: any = "plugins/agents";
+/**
+ * Workspace entries that may expand a directory boundary instead of naming
+ * one package. Every other glob form stays rejected: release membership must
+ * remain an explicit, reviewed list.
+ */
+const GOVERNED_WORKSPACE_BOUNDARIES: any = new Map([
+  ["plugins/agents/*", "plugins/agents"],
+  ["workers/*", "workers"]
+]);
 const RELEASE_SEMVER_PATTERN: any =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$/u;
 
@@ -98,32 +105,33 @@ export async function resolveReleaseWorkspaceDirectories({
   const repositoryRoot: any = path.resolve(rootDir);
   const directories: any[] = [];
   for (const workspace of workspaces) {
-    if (workspace !== AGENT_PLUGIN_WORKSPACE_PATTERN) {
+    const boundary: any = GOVERNED_WORKSPACE_BOUNDARIES.get(workspace);
+    if (boundary === undefined) {
       directories.push(normalizeRelativeDirectory(workspace));
       continue;
     }
 
     let entries: any[];
     try {
-      entries = await fs.readdir(path.join(repositoryRoot, AGENT_PLUGIN_WORKSPACE_DIRECTORY), {
+      entries = await fs.readdir(path.join(repositoryRoot, boundary), {
         withFileTypes: true
       });
     } catch {
       throw releaseMetadataError(
         "release_set_workspace_path_invalid",
-        "The agent plugin workspace boundary must resolve to repository package directories."
+        "Governed workspace boundaries must resolve to repository package directories."
       );
     }
     const matches: any[] = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const directory: any = `${AGENT_PLUGIN_WORKSPACE_DIRECTORY}/${entry.name}`;
+      const directory: any = `${boundary}/${entry.name}`;
       if (await containsPackageManifest(repositoryRoot, directory)) matches.push(directory);
     }
     if (matches.length === 0) {
       throw releaseMetadataError(
         "release_set_workspace_path_invalid",
-        "The agent plugin workspace boundary must resolve to repository package directories."
+        "Governed workspace boundaries must resolve to repository package directories."
       );
     }
     directories.push(...matches.sort((left?: any, right?: any) : any => left.localeCompare(right)));
