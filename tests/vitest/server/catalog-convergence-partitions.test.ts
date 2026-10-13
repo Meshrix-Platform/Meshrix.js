@@ -16,6 +16,7 @@ import {
 } from "../../../packages/server-runtime/src/state/sse-connection-state.ts";
 import {
   configureMcpNotificationBus,
+  registerMcpGatewaySubscription,
   broadcastAudienceCatalogInvalidation,
   broadcastMcpToolListChanged
 } from "../../../packages/protocols/mcp/notifications.ts";
@@ -134,6 +135,83 @@ describe("MCP catalog convergence partitions", () : any => {
     });
     expect(affected.response.chunks.join("")).not.toMatch(/tools\"\s*:/);
     expect(other.response.chunks.join("")).toBe("");
+  });
+
+  it("requires exact grant matching for gateway subscriptions, including API Keys", () : any => {
+    const matching: any[] = [];
+    const other: any[] = [];
+    const unscoped: any[] = [];
+    const unregister: any[] = [
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "api-key-a",
+        publish: (event?: any) : any => matching.push(event)
+      }),
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "api-key-b",
+        publish: (event?: any) : any => other.push(event)
+      }),
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "",
+        publish: (event?: any) : any => unscoped.push(event)
+      })
+    ];
+
+    try {
+      broadcastMcpToolListChanged({
+        grantId: "api-key-a",
+        sourceRevision: 2,
+        catalogRevision: "catalog-2",
+        audienceRevision: 2,
+        partitionKeys: ["partition-a"],
+        grantIdDigests: [grantDigest("api-key-a")],
+        grantPartitions: new Map([[grantDigest("api-key-a"), ["partition-a"]]])
+      });
+      expect(matching).toHaveLength(1);
+      expect(other).toHaveLength(0);
+      expect(unscoped).toHaveLength(0);
+      expect(matching[0].payload.change.affectedPartitions).toEqual(["partition-a"]);
+    } finally {
+      unregister.forEach((remove?: any) : any => remove());
+    }
+  });
+
+  it("fans audience invalidations only to matching grants and hides other grant partitions", () : any => {
+    const first: any[] = [];
+    const second: any[] = [];
+    const unregister: any[] = [
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "grant-first",
+        publish: (event?: any) : any => first.push(event)
+      }),
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "grant-second",
+        publish: (event?: any) : any => second.push(event)
+      })
+    ];
+
+    try {
+      broadcastAudienceCatalogInvalidation({
+        sourceRevision: 1,
+        catalogRevision: "catalog-1",
+        audienceRevision: 1,
+        affectedPartitions: ["partition-first", "partition-second"],
+        partitions: new Map<any, any>([
+          ["partition-first", { grantIdDigest: grantDigest("grant-first") }],
+          ["partition-second", { grantIdDigest: grantDigest("grant-second") }]
+        ])
+      });
+      expect(first).toHaveLength(1);
+      expect(second).toHaveLength(1);
+      expect(first[0].payload.change.affectedPartitions).toEqual(["partition-first"]);
+      expect(second[0].payload.change.affectedPartitions).toEqual(["partition-second"]);
+    } finally {
+      unregister.forEach((remove?: any) : any => remove());
+    }
   });
 
   it("binds partition keys after registration and scopes grant-digest fan-out", () : any => {

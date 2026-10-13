@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createMcpCatalogInvalidation } from "#meshrix/contracts/mcp-catalog-delivery";
 
 const EMPTY_DELIVERY: Readonly<Record<string, any>> = Object.freeze({
@@ -21,6 +22,31 @@ const EVENT_TYPE_BY_NOTIFICATION_METHOD: Readonly<Record<string, string>> = Obje
   "notifications/resources/updated": "resource/updated",
   "notifications/meshrix/gateway/state_changed": "gateway/state_changed"
 });
+
+function grantDigest(value?: any) : string {
+  const grantId: any = String(value || "").trim();
+  return grantId ? createHash("sha256").update(grantId).digest("base64url") : "";
+}
+
+function normalizedStrings(values?: any) : string[] {
+  return [...new Set<string>(
+    (Array.isArray(values) ? values : [])
+      .map((value?: any) : string => String(value || "").trim())
+      .filter(Boolean)
+  )];
+}
+
+function grantPartitionMap(value?: any) : Map<string, string[]> {
+  if (value instanceof Map) {
+    return new Map<string, string[]>([...value.entries()].map(([digest, partitions]: any[]): [string, string[]] => [
+      String(digest || "").trim(), normalizedStrings(partitions)
+    ]).filter(([digest]) => Boolean(digest)));
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return new Map();
+  return new Map<string, string[]>(Object.entries(value)
+    .map(([digest, partitions]) => [String(digest || "").trim(), normalizedStrings(partitions)] as [string, string[]])
+    .filter(([digest]) => Boolean(digest)));
+}
 
 export function configureMcpNotificationBus({
   broadcastNotification = null,
@@ -85,14 +111,40 @@ function publishConfiguredGatewaySubscription(payload?: any, options: Record<str
   const event: any = gatewayEventFromNotification(payload);
   if (!event) return { matchedGatewaySubscriptionCount: 0, deliveredGatewaySubscriptionCount: 0 };
   const scopedGrantId: any = String(options.grantId || "").trim();
+  const targetGrantDigests: any = new Set<any>(normalizedStrings(options.grantIdDigests));
+  const affectedPartitions: any = normalizedStrings(options.partitionKeys);
+  const partitionsByGrant: any = grantPartitionMap(options.grantPartitions);
   let matched = 0;
   let delivered = 0;
   for (const subscription of [...gatewaySubscriptions]) {
-    if (scopedGrantId && subscription.grantId && subscription.grantId !== scopedGrantId) continue;
+    const subscriptionGrantId: any = String(subscription.grantId || "").trim();
+    const subscriptionDigest: any = grantDigest(subscriptionGrantId);
+    if (scopedGrantId) {
+      if (subscriptionGrantId !== scopedGrantId) continue;
+    } else if (targetGrantDigests.size > 0 || affectedPartitions.length > 0) {
+      if (!subscriptionDigest || !targetGrantDigests.has(subscriptionDigest)) continue;
+    }
     if (subscription.methods.size > 0 && !subscription.methods.has(String(payload.method))) continue;
     matched += 1;
     try {
-      subscription.publish(event);
+      let deliveredEvent: any = event;
+      if (event.type === "tools/list_changed" && affectedPartitions.length > 0) {
+        const grantPartitions: any[] = partitionsByGrant.get(subscriptionDigest) || [];
+        const visiblePartitions: any = grantPartitions.length > 0
+          ? affectedPartitions.filter((partition?: any) : any => grantPartitions.includes(partition))
+          : [];
+        deliveredEvent = {
+          ...event,
+          payload: {
+            ...event.payload,
+            change: {
+              ...(event.payload?.change || {}),
+              affectedPartitions: visiblePartitions
+            }
+          }
+        };
+      }
+      subscription.publish(deliveredEvent);
       delivered += 1;
     } catch {
       gatewaySubscriptions.delete(subscription);
@@ -148,6 +200,7 @@ export function broadcastMcpToolListChanged({
   includePrivate = true,
   partitionKeys = null,
   grantIdDigests = null,
+  grantPartitions = null,
   sourceRevision = null,
   catalogRevision = null,
   audienceRevision = null,
@@ -170,6 +223,7 @@ export function broadcastMcpToolListChanged({
     includePrivate,
     partitionKeys,
     grantIdDigests,
+    grantPartitions,
     coalesceKey: coalesceKey || (revisionChain.audienceRevision !== undefined ? `audience:${revisionChain.audienceRevision}` : "")
   });
   return {
@@ -197,6 +251,7 @@ export function broadcastAudienceCatalogInvalidation({
       .filter(Boolean)
   )].sort();
   const grantIdDigests: any[] = [];
+  const grantPartitions: any = new Map<any, any>();
   const current: any = partitions instanceof Map ? partitions : new Map<any, any>(partitions || []);
   const previous: any = previousPartitions instanceof Map
     ? previousPartitions
@@ -204,13 +259,19 @@ export function broadcastAudienceCatalogInvalidation({
   for (const key of partitionKeys) {
     const part: any = current.get(key) || previous.get(key);
     const digest: any = String(part?.grantIdDigest || "").trim();
-    if (digest) grantIdDigests.push(digest);
+    if (digest) {
+      grantIdDigests.push(digest);
+      const keys: any = grantPartitions.get(digest) || [];
+      keys.push(key);
+      grantPartitions.set(digest, keys);
+    }
   }
   return broadcastMcpToolListChanged({
     reasonCode,
     includePrivate: true,
     partitionKeys,
     grantIdDigests: [...new Set<any>(grantIdDigests)],
+    grantPartitions,
     sourceRevision,
     catalogRevision,
     audienceRevision,

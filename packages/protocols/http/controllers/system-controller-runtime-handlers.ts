@@ -132,12 +132,13 @@ export function createSystemControllerRuntimeHandlers({
         errorMessage: "读取运行基线状态失败。"
       });
     },
-    async handleSubscribeEvents({ operation, request, url, response }: Record<string, any>) : Promise<any> {
+    async handleSubscribeEvents({ operation, request, url, response, authSession }: Record<string, any>) : Promise<any> {
       await sendConsoleDomainOperation({
         operationId: operation?.id || "events.subscribe",
         input: queryPayload(url),
         response,
         context: {
+          ...runtimeWorkflowContext(authSession),
           protocolEventBus,
           request,
           response,
@@ -172,12 +173,13 @@ export function createSystemControllerRuntimeHandlers({
         errorMessage: "发布智能体同步事件失败。"
       });
     },
-    async handleAgentSyncSubscribe({ operation, request, url, response }: Record<string, any>) : Promise<any> {
+    async handleAgentSyncSubscribe({ operation, request, url, response, authSession }: Record<string, any>) : Promise<any> {
       await sendConsoleDomainOperation({
         operationId: operation?.id || "agent_sync.subscribe",
         input: queryPayload(url),
         response,
         context: {
+          ...runtimeWorkflowContext(authSession),
           protocolEventBus,
           request,
           response,
@@ -186,7 +188,7 @@ export function createSystemControllerRuntimeHandlers({
         errorMessage: "订阅智能体同步事件失败。"
       });
     },
-    async handleDiscoveryCheckIn({ requestBody, response }: Record<string, any>) : Promise<any> {
+    async handleDiscoveryCheckIn({ request, requestBody, response }: Record<string, any>) : Promise<any> {
       await sendConsoleDomainOperation({
         operationId: "discovery.check_in",
         input: parseJsonBody(requestBody),
@@ -194,9 +196,23 @@ export function createSystemControllerRuntimeHandlers({
         context: {
           ...runtimeWorkflowContext(),
           discoveryState: getDiscoveryState(),
-          protocolEventBus
+          protocolEventBus,
+          request
         },
         errorMessage: "客户端迁移登记失败。"
+      });
+    },
+    async handleCreateDiscoveryEnrollmentToken({ operation, requestBody, authSession, response }: Record<string, any>) : Promise<any> {
+      await sendConsoleDomainOperation({
+        operationId: operation?.id || "discovery.clients.enrollment_token",
+        input: requestBody.length > 0 ? parseJsonBody(requestBody) : {},
+        response,
+        context: {
+          ...runtimeWorkflowContext(authSession),
+          discoveryState: getDiscoveryState(),
+          protocolEventBus
+        },
+        errorMessage: "签发客户端登记令牌失败。"
       });
     },
     async handleListDiscoveryClients({ operation, response }: Record<string, any>) : Promise<any> {

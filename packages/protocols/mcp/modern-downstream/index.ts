@@ -27,6 +27,20 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+function subscriptionGrantId(context: AuthenticatedContext): string {
+  const grant = isPlainRecord(context.grant) ? context.grant : {};
+  const authorization = isPlainRecord(context.metadata?.authorization)
+    ? context.metadata.authorization
+    : {};
+  if (authorization.credentialKind === "scoped_api_key") {
+    const apiKeyAuthorization = isPlainRecord(authorization.apiKeyAuthorization)
+      ? authorization.apiKeyAuthorization
+      : {};
+    return String(apiKeyAuthorization.workloadPrincipalId || grant.principal || context.principal || "").trim();
+  }
+  return String(grant.id || grant.grantId || "").trim();
+}
+
 function isGatewayFailure(value: GatewayOutcome): value is Extract<GatewayOutcome, { readonly kind: "failure" }> {
   return value.kind === "failure";
 }
@@ -372,7 +386,7 @@ export class ModernDownstreamAdapter {
     const subscriptionId = requestedId === "" ? subscription.id : requestedId;
     const unregisterNotificationPort = registerMcpGatewaySubscription({
       methods,
-      grantId: (context.grant as Record<string, unknown>)?.id ?? (context.grant as Record<string, unknown>)?.grantId,
+      grantId: subscriptionGrantId(context),
       publish: (event: SubscriptionEvent) => {
         (this.#gateway as Gateway & { publishEvent?: (eventContext: AuthenticatedContext, value: SubscriptionEvent) => void }).publishEvent?.(context, event);
       }

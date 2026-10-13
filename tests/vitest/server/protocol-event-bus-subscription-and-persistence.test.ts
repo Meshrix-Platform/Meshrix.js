@@ -22,19 +22,41 @@ function logger() : any {
   };
 }
 
+async function waitFor(predicate?: any, timeoutMs: any = 1_000) : Promise<any> {
+  const startedAt: any = Date.now();
+  while (!await predicate()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("timed out waiting for condition");
+    }
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 1));
+  }
+}
+
 function openBus(userDataPath?: any, options: Record<string, any> = {}) : any {
   const eventStore: any = createSqliteProtocolEventStore({
     userDataPath,
     policy: options.storePolicy
   });
+  const readCalls: any[] = [];
+  const observedStore: any = {
+    publish: (...args: any[]) : any => eventStore.publish(...args),
+    async read(...args: any[]) : Promise<any> {
+      const result = await eventStore.read(...args);
+      readCalls.push({ options: args[0], revision: result.revision });
+      return result;
+    },
+    getLatest: (...args: any[]) : any => eventStore.getLatest(...args),
+    getStats: (...args: any[]) : any => eventStore.getStats(...args)
+  };
   const bus: any = createProtocolEventBus({
-    eventStore,
+    eventStore: observedStore,
     logger: options.logger || logger(),
     ...options.busPolicy
   });
   return {
     bus,
     eventStore,
+    readCalls,
     async close() : Promise<any> {
       await bus.close();
       eventStore.close();
@@ -134,13 +156,62 @@ describe("protocol event bus subscription and persistence", () : any => {
     });
   });
 
-  it("wakes a local subscriber immediately and observes another process by revision polling", async () : Promise<any> => {
+  it("applies event authorization to retained history and snapshots", async () : Promise<any> => {
+    await withTempUserData(async (userDataPath?: any) : Promise<any> => {
+      const runtime: any = openBus(userDataPath);
+      try {
+        await runtime.bus.publish("jobs.job", { job: { id: "job-a", ownerSubjectId: "subject-a" } });
+        await runtime.bus.publish("jobs.job", { job: { id: "job-b", ownerSubjectId: "subject-b" } });
+
+        const page: any = await runtime.bus.subscribe({
+          cursor: 0,
+          topics: ["jobs.job"],
+          includeSnapshot: true,
+          authorizeEvent: (event?: any) : any => event.payload?.job?.ownerSubjectId === "subject-a"
+        });
+
+        expect(page.events.map((event?: any) : any => event.payload.job.id)).toEqual(["job-a"]);
+        expect(page.snapshots).toEqual([]);
+        expect(JSON.stringify(page)).not.toContain("subject-b");
+      } finally {
+        await runtime.close();
+      }
+    });
+  });
+
+  it("skips unauthorized live events and continues waiting for an authorized event", async () : Promise<any> => {
+    await withTempUserData(async (userDataPath?: any) : Promise<any> => {
+      const runtime: any = openBus(userDataPath, {
+        busPolicy: { pollMinMs: 10, pollMaxMs: 20 }
+      });
+      try {
+        const seed: any = await runtime.bus.publish("jobs.job", { job: { id: "seed", ownerSubjectId: "subject-a" } });
+        const pending: any = runtime.bus.subscribe({
+          cursor: seed.offset,
+          topics: ["jobs.job"],
+          timeoutMs: 2_000,
+          authorizeEvent: (event?: any) : any => event.payload?.job?.ownerSubjectId === "subject-a"
+        });
+        await waitFor(async () : Promise<any> => (await runtime.bus.getStats()).waiters === 1);
+        await runtime.bus.publish("jobs.job", { job: { id: "foreign", ownerSubjectId: "subject-b" } });
+        await runtime.bus.publish("jobs.job", { job: { id: "owned", ownerSubjectId: "subject-a" } });
+
+        await expect(pending).resolves.toMatchObject({
+          events: [expect.objectContaining({ payload: { job: { id: "owned", ownerSubjectId: "subject-a" } } })]
+        });
+      } finally {
+        await runtime.close();
+      }
+    });
+  });
+
+  it("wakes local subscribers immediately and observes another SQLite connection by scheduled page polling", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
       const firstRuntime: any = openBus(userDataPath, {
-        busPolicy: { pollMinMs: 5, pollMaxMs: 20 }
+        busPolicy: { pollMinMs: 50, pollMaxMs: 50 }
       });
       const secondRuntime: any = openBus(userDataPath, {
-        busPolicy: { pollMinMs: 5, pollMaxMs: 20 }
+        busPolicy: { pollMinMs: 50, pollMaxMs: 50 }
       });
       try {
         const seed: any = await firstRuntime.bus.publish("ready", { seed: true });
@@ -149,17 +220,21 @@ describe("protocol event bus subscription and persistence", () : any => {
           topics: ["ready"],
           timeoutMs: 2_000
         });
-        await new Promise((resolve?: any) : any => setTimeout(resolve, 10));
+        await waitFor(async () : Promise<any> => (await firstRuntime.bus.getStats()).waiters === 1);
+        const readsBeforeLocalPublish = firstRuntime.readCalls.length;
         const local: any = await firstRuntime.bus.publish("ready", { local: true });
         await expect(localPending).resolves.toMatchObject({
           events: [expect.objectContaining({ offset: local.offset })]
         });
+        expect(firstRuntime.readCalls).toHaveLength(readsBeforeLocalPublish);
 
         const remotePending: any = firstRuntime.bus.subscribe({
           cursor: local.offset,
           topics: ["ready"],
           timeoutMs: 2_000
         });
+        await waitFor(async () : Promise<any> => (await firstRuntime.bus.getStats()).waiters === 1);
+        const readsBeforeRemotePublish = firstRuntime.readCalls.length;
         const remote: any = await secondRuntime.bus.publish("ready", { remote: true });
         await expect(remotePending).resolves.toMatchObject({
           events: [expect.objectContaining({
@@ -167,6 +242,10 @@ describe("protocol event bus subscription and persistence", () : any => {
             payload: { remote: true }
           })]
         });
+        const remotePollReads = firstRuntime.readCalls.slice(readsBeforeRemotePublish);
+        expect(remotePollReads.length).toBeGreaterThan(0);
+        expect(remotePollReads.some(({ revision }: any) : any => revision === 3)).toBe(true);
+        expect(remotePollReads.every(({ options }: any) : any => options.includeRevision !== false)).toBe(true);
         expect(new Set<any>([seed.offset, local.offset, remote.offset]).size).toBe(3);
 
         const concurrent: any = await Promise.all(

@@ -42,13 +42,17 @@ export interface ProtocolEventStore {
     event: Readonly<ProtocolEvent>;
     revision: number;
   }>;
-  read(options?: { cursor?: number; topics?: readonly string[]; limit?: number }): Promise<{
+  read(options?: { cursor?: number; topics?: readonly string[]; limit?: number; includeRevision?: true }): Promise<{
     events: ProtocolEvent[];
     nextCursor: number;
     revision: number;
   }>;
+  read(options: { cursor?: number; topics?: readonly string[]; limit?: number; includeRevision: false }): Promise<{
+    events: ProtocolEvent[];
+    nextCursor: number;
+    revision?: never;
+  }>;
   getLatest(topics?: readonly string[]): Promise<ProtocolEvent[]>;
-  getRevision(): Promise<number>;
   getStats(): Promise<object>;
 }
 
@@ -88,6 +92,7 @@ export interface ProtocolEventSubscribeOptions extends ProtocolEventReadOptions 
   timeoutMs?: number;
   includeSnapshot?: boolean;
   signal?: AbortSignal | null;
+  authorizeEvent?: (event: Readonly<ProtocolEvent>) => boolean | Promise<boolean>;
 }
 
 export interface ProtocolEventPage {
@@ -196,7 +201,7 @@ function requireEventStore(eventStore: ProtocolEventStore | undefined): Protocol
   if (!eventStore) {
     throw new TypeError("ProtocolEventStore.publish is required.");
   }
-  for (const method of ["publish", "read", "getLatest", "getRevision", "getStats"] as const) {
+  for (const method of ["publish", "read", "getLatest", "getStats"] as const) {
     if (typeof eventStore[method] !== "function") {
       throw new TypeError(`ProtocolEventStore.${method} is required.`);
     }
@@ -578,16 +583,65 @@ export function createProtocolEventBus({
   }
 
   async function readEvents(input: ProtocolEventReadOptions = {}): Promise<ProtocolEventPage> {
-    const { revision: _revision, responseBytes: _responseBytes, ...result } = await readWithRevision(input);
-    return result;
+    const normalizedTopics = normalizeTopics(input.topics, topicLimit);
+    const cursor = Math.max(0, Number(input.cursor || 0) || 0);
+    const page = await store.read({
+      cursor,
+      topics: normalizedTopics,
+      limit: limitValue(input.limit),
+      includeRevision: false
+    });
+    const bounded = boundEventPage({
+      cursor,
+      nextCursor: page.nextCursor,
+      events: page.events,
+      revision: 0
+    }, responseByteLimit);
+    return {
+      cursor: bounded.cursor,
+      nextCursor: bounded.nextCursor,
+      topics: normalizedTopics,
+      events: bounded.events
+    };
+  }
+
+  async function authorizePageEvents(
+    page: InternalEventPage,
+    authorizeEvent: ProtocolEventSubscribeOptions["authorizeEvent"],
+    responseCursor = page.cursor
+  ): Promise<InternalEventPage> {
+    if (!authorizeEvent) return { ...page, cursor: responseCursor };
+    const authorizedEvents: ProtocolEvent[] = [];
+    for (const event of page.events) {
+      if (await authorizeEvent(event)) authorizedEvents.push(event);
+    }
+    const bounded = boundEventPage({
+      cursor: responseCursor,
+      nextCursor: page.nextCursor,
+      events: authorizedEvents,
+      revision: page.revision
+    }, responseByteLimit);
+    return {
+      ...bounded,
+      topics: page.topics,
+      responseBytes: bounded.responseBytes
+    };
   }
 
   async function getSnapshotPage(
     topics: readonly string[] = [],
-    byteBudget = responseByteLimit
+    byteBudget = responseByteLimit,
+    authorizeEvent?: ProtocolEventSubscribeOptions["authorizeEvent"]
   ): Promise<Omit<InternalEventPage, "topics">> {
     const normalizedTopics = normalizeTopics(topics, topicLimit);
-    const events = await store.getLatest(normalizedTopics);
+    let events = await store.getLatest(normalizedTopics);
+    if (authorizeEvent) {
+      const authorizedEvents: ProtocolEvent[] = [];
+      for (const event of events) {
+        if (await authorizeEvent(event)) authorizedEvents.push(event);
+      }
+      events = authorizedEvents;
+    }
     return boundEventPage({ cursor: 0, nextCursor: Number(events.at(-1)?.offset || 0), events, revision: 0 }, byteBudget);
   }
 
@@ -595,9 +649,13 @@ export function createProtocolEventBus({
     return (await getSnapshotPage(topics)).events;
   }
 
-  async function addSnapshots(result: InternalEventPage, normalizedTopics: readonly string[]): Promise<void> {
+  async function addSnapshots(
+    result: InternalEventPage,
+    normalizedTopics: readonly string[],
+    authorizeEvent?: ProtocolEventSubscribeOptions["authorizeEvent"]
+  ): Promise<void> {
     const remainingBytes = Math.max(2, responseByteLimit - Number(result.responseBytes || 2) + 2);
-    result.snapshots = (await getSnapshotPage(normalizedTopics, remainingBytes)).events;
+    result.snapshots = (await getSnapshotPage(normalizedTopics, remainingBytes, authorizeEvent)).events;
   }
 
   async function subscribe({
@@ -606,14 +664,24 @@ export function createProtocolEventBus({
     timeoutMs = 0,
     limit = DEFAULT_LIMIT,
     includeSnapshot = false,
-    signal = null
+    signal = null,
+    authorizeEvent
   }: ProtocolEventSubscribeOptions = {}): Promise<ProtocolEventPage> {
     const safeTimeoutMs = timeoutValue(timeoutMs);
     const subscribeStartedAt = Date.now();
     const normalizedTopics = normalizeTopics(topics, topicLimit);
-    const read = (): Promise<InternalEventPage> => readWithRevision({ cursor, topics: normalizedTopics, limit });
+    const responseCursor = cursor;
+    let scanCursor = cursor;
+    const read = async (): Promise<InternalEventPage> => {
+      const page = await readWithRevision({ cursor: scanCursor, topics: normalizedTopics, limit });
+      const authorized = await authorizePageEvents(page, authorizeEvent, responseCursor);
+      if (authorizeEvent && authorized.events.length === 0 && page.nextCursor > scanCursor) {
+        scanCursor = page.nextCursor;
+      }
+      return authorized;
+    };
     let result = await read();
-    if (includeSnapshot) await addSnapshots(result, normalizedTopics);
+    if (includeSnapshot) await addSnapshots(result, normalizedTopics, authorizeEvent);
     if (closed || result.events.length > 0 || safeTimeoutMs <= 0 || signal?.aborted) {
       const { revision: _revision, responseBytes: _responseBytes, ...publicResult } = result;
       return publicResult;
@@ -631,28 +699,28 @@ export function createProtocolEventBus({
       const waiter = registerWaiter(normalizedTopics, deadline, Math.min(deadline, Date.now() + pollMs));
       const abort = (): void => scheduleWaiter(waiter, "abort");
       signal?.addEventListener("abort", abort, { once: true });
-      const recent = readRecent(cursor, normalizedTopics, limit, lastRevision);
+      const recent = readRecent(scanCursor, normalizedTopics, limit, lastRevision);
       if (recent?.events.length) scheduleWaiter(waiter, "ring");
-      if (!waiter.scheduled) {
-        const revision = await store.getRevision();
-        if (revision !== lastRevision) scheduleWaiter(waiter, "revision");
-      }
       await waiter.promise;
       removeWaiterIndex(waiter);
       signal?.removeEventListener("abort", abort);
       if (closed || signal?.aborted || Date.now() >= deadline || waiter.reason === "deadline") break;
 
-      const mustReadStore = waiter.reason === "poll" || waiter.reason === "revision";
-      const ringPage = mustReadStore ? null : readRecent(cursor, normalizedTopics, limit, lastRevision);
+      const mustReadStore = waiter.reason === "poll";
+      const ringPage = mustReadStore ? null : readRecent(scanCursor, normalizedTopics, limit, lastRevision);
       if (ringPage) {
-        result = {
-          cursor,
+        const page: InternalEventPage = {
+          cursor: scanCursor,
           nextCursor: ringPage.nextCursor,
           topics: normalizedTopics,
           events: ringPage.events,
           responseBytes: ringPage.responseBytes,
           revision: ringPage.revision
         };
+        result = await authorizePageEvents(page, authorizeEvent, responseCursor);
+        if (authorizeEvent && result.events.length === 0 && page.nextCursor > scanCursor) {
+          scanCursor = page.nextCursor;
+        }
       } else {
         result = await read();
       }
@@ -660,7 +728,7 @@ export function createProtocolEventBus({
       if (result.events.length > 0) break;
       pollMs = Math.min(maximumPollMs, pollMs * 2);
     }
-    if (includeSnapshot) await addSnapshots(result, normalizedTopics);
+    if (includeSnapshot) await addSnapshots(result, normalizedTopics, authorizeEvent);
     logger?.debug?.("event.subscribe.completed", {
       cursor: result.cursor,
       nextCursor: result.nextCursor,

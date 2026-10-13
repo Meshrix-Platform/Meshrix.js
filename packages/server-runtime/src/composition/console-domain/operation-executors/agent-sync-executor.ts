@@ -6,6 +6,39 @@ import {
   result
 } from "./shared.ts";
 
+function record(value?: any) : Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function eventAuthorizer(context: Record<string, any> = {}) : any {
+  const uploadSessionAccess = new Map<string, Promise<any>>();
+  return async (event: Record<string, any> = {}) : Promise<boolean> => {
+    const payload: any = record(event.payload);
+    if (event.topic === "jobs.job" || event.topic === "jobs.deleted") {
+      const job: any = record(payload.job);
+      return Boolean(job.id) && typeof context.canAccessJob === "function" &&
+        context.canAccessJob(job, context.authSession) === true;
+    }
+    if (event.topic === "uploads.session" || event.topic === "uploads.trace") {
+      const session: any = record(payload.session);
+      const sessionId: any = String(session.sessionId || payload.sessionId || "").trim();
+      if (!sessionId) {
+        return event.topic === "uploads.trace" &&
+          typeof context.canAccessAllUploadSessions === "function" &&
+          context.canAccessAllUploadSessions() === true;
+      }
+      if (typeof context.canAccessUploadSession !== "function") return false;
+      let access: any = uploadSessionAccess.get(sessionId);
+      if (!access) {
+        access = Promise.resolve(context.canAccessUploadSession(sessionId)).then((allowed?: any) : any => allowed === true);
+        uploadSessionAccess.set(sessionId, access);
+      }
+      return access;
+    }
+    return true;
+  };
+}
+
 export function defaultAgentSyncPolicy() : any {
   return {
     async loadAgentSyncConfig() : Promise<any> {
@@ -138,7 +171,8 @@ export async function executeAgentSyncOperation({ operationId, input = {}, conte
       timeoutMs,
       limit,
       includeSnapshot,
-      signal: context.request?.aborted ? AbortSignal.abort() : abortController.signal
+      signal: context.request?.aborted ? AbortSignal.abort() : abortController.signal,
+      authorizeEvent: eventAuthorizer(context)
     });
     if (context.response?.destroyed) {
       return result(200, { __responseHandled: true });
@@ -171,7 +205,8 @@ export async function executeAgentSyncOperation({ operationId, input = {}, conte
     timeoutMs,
     limit,
     includeSnapshot,
-    signal: context.request?.aborted ? AbortSignal.abort() : undefined
+    signal: context.request?.aborted ? AbortSignal.abort() : abortController.signal,
+    authorizeEvent: eventAuthorizer(context)
   });
   if (context.response?.destroyed) {
     return result(200, { __responseHandled: true });

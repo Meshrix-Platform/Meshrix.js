@@ -3,6 +3,10 @@ import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
 import { createModernDownstreamAdapter } from "../../../packages/protocols/mcp/modern-downstream/index.ts";
+import {
+  broadcastMcpToolListChanged,
+  configureMcpNotificationBus
+} from "../../../packages/protocols/mcp/notifications.ts";
 import { createHttpServerRequestHandler } from "../../../apps/server/runtime/http-server-routes.ts";
 import { context, modernHttpRequest } from "../gateway/support.ts";
 
@@ -36,7 +40,7 @@ class CapturedResponse extends EventEmitter {
   }
 }
 
-function routeHandler(adapter: ReturnType<typeof createModernDownstreamAdapter>) {
+function routeHandler(adapter: ReturnType<typeof createModernDownstreamAdapter>, overrides: Record<string, any> = {}) {
   return createHttpServerRequestHandler({
     activeApiOperations: [],
     consoleAuth: {},
@@ -51,7 +55,6 @@ function routeHandler(adapter: ReturnType<typeof createModernDownstreamAdapter>)
       markSocketActive: vi.fn(),
       markSocketIdle: vi.fn()
     },
-    loginRateLimiter: { shouldAllow: () => ({ allowed: true }) },
     operationAuditStore: null,
     operationConcurrencyScope: "mcp-contract-route-test",
     proxyApiRequest: vi.fn(),
@@ -66,7 +69,8 @@ function routeHandler(adapter: ReturnType<typeof createModernDownstreamAdapter>)
     toolSkillManagementProvider: {},
     platformMcpGatewayAdapter: adapter,
     upstreamGatewayRegistryForMcp: null,
-    ipRateLimiter: { shouldAllow: () => ({ allowed: true }) }
+    ipRateLimiter: { shouldAllow: () => ({ allowed: true }) },
+    ...overrides
   });
 }
 
@@ -88,6 +92,114 @@ async function post(handler: ReturnType<typeof routeHandler>, message: Record<st
 }
 
 describe("ordinary production /mcp route enforces the modern request contract", () => {
+  it("binds API Key notification subscriptions to their audience workload principal", async () => {
+    const delivered: Array<{ context: any; event: any }> = [];
+    let subscriptionSequence = 0;
+    const gateway: any = {
+      subscribe: vi.fn(() => ({
+        id: `subscription-${++subscriptionSequence}`,
+        events: {
+          [Symbol.asyncIterator]: () => ({ next: async () => new Promise(() => {}) })
+        },
+        close: vi.fn()
+      })),
+      publishEvent: (eventContext?: any, event?: any) => delivered.push({ context: eventContext, event })
+    };
+    const apiKeyContext = (workloadPrincipalId: string, keyId: string) => ({
+      ...context,
+      principal: workloadPrincipalId,
+      grant: Object.freeze({ revision: `policy-${workloadPrincipalId}`, routes: "all" }),
+      metadata: Object.freeze({
+        authorization: Object.freeze({
+          credentialKind: "scoped_api_key",
+          apiKeyAuthorization: Object.freeze({ keyId, workloadPrincipalId })
+        })
+      })
+    });
+    const firstContext: any = apiKeyContext("workload-a", "key-a");
+    const secondContext: any = apiKeyContext("workload-b", "key-b");
+    const firstAdapter = createModernDownstreamAdapter({ gateway });
+    const secondAdapter = createModernDownstreamAdapter({ gateway });
+    let first: any;
+    let second: any;
+    configureMcpNotificationBus();
+    try {
+      first = await firstAdapter.handle({
+        ...modernHttpRequest("subscriptions/listen", "sub-a", { notifications: { toolsListChanged: true } }),
+        context: firstContext
+      });
+      second = await secondAdapter.handle({
+        ...modernHttpRequest("subscriptions/listen", "sub-b", { notifications: { toolsListChanged: true } }),
+        context: secondContext
+      });
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+
+      broadcastMcpToolListChanged({
+        grantId: "workload-a",
+        sourceRevision: 1,
+        catalogRevision: "catalog-a",
+        audienceRevision: 1
+      });
+
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0].context).toBe(firstContext);
+      expect(delivered[0].event.type).toBe("tools/list_changed");
+    } finally {
+      first?.close?.();
+      second?.close?.();
+      configureMcpNotificationBus();
+    }
+  });
+
+  it("records a denied health request instead of suppressing it as probe noise", async () => {
+    const appendHttpRequestMetric = vi.fn(async (_entry: any) => {});
+    const adapter = createModernDownstreamAdapter({ gateway: { catalog: () => ({ items: [] }) } as any, authenticate: () => context });
+    const handler = routeHandler(adapter, {
+      ipRateLimiter: { shouldAllow: () => ({ allowed: false, retryAfterSec: 1 }) },
+      getOperationPermissionPlatform: () => ({ store: { appendHttpRequestMetric } })
+    });
+    const request: any = Readable.from([]);
+    request.method = "GET"; request.url = "/api/healthz"; request.headers = {};
+    request.socket = { remoteAddress: "127.0.0.1", encrypted: false };
+    const response = new CapturedResponse();
+    await handler(request, response);
+    expect(response.statusCode).toBe(429);
+    expect(appendHttpRequestMetric).toHaveBeenCalledOnce();
+    expect(appendHttpRequestMetric.mock.calls[0]?.[0]).toMatchObject({ statusCode: 429, completionStatus: "completed" });
+  });
+
+  it("rejects a disallowed browser origin before reading the request body", async () => {
+    const catalog = vi.fn(() => ({ items: [] }));
+    const authenticate = vi.fn(() => context);
+    const adapter = createModernDownstreamAdapter({ gateway: { catalog } as any, authenticate });
+    const handler = routeHandler(adapter);
+    let bodyReadCount = 0;
+    const request: any = new Readable({
+      read() {
+        bodyReadCount += 1;
+        this.push(Buffer.from("{}"));
+        this.push(null);
+      }
+    });
+    request.method = "POST";
+    request.url = "/mcp";
+    request.headers = {
+      origin: "https://untrusted.invalid",
+      "content-type": "application/json",
+      "content-length": "2"
+    };
+    request.socket = { remoteAddress: "127.0.0.1", encrypted: false };
+    const response = new CapturedResponse();
+
+    await handler(request, response);
+
+    expect(response.statusCode).toBe(403);
+    expect(bodyReadCount).toBe(0);
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(catalog).not.toHaveBeenCalled();
+  });
+
   it("rejects bad request metadata before authorization and side effects, then serves a conforming client", async () => {
     const catalog = vi.fn(() => ({ items: [] }));
     const authenticate = vi.fn(() => context);
