@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  isUpstreamCredentialHeaderName,
+  isUpstreamServiceOrigin,
+  normalizeUpstreamMcpContextHeaders,
+  normalizeUpstreamMcpHttpRequestHeaders,
+  resolveUpstreamCredentialMaterial
+} from "@meshrix/contracts/upstream-service-publishing";
 
 const secretResolution: any = vi.hoisted(() : any => ({
   resolve: vi.fn(async ({ secretRef, expectedRevision }: Record<string, any>) : Promise<any> => ({
@@ -25,6 +32,95 @@ import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-s
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("upstream publishing sensitive-reference custody", () : any => {
+  it("shares literal context and resolved-header rules with target-neutral runtimes", () : any => {
+    expect(normalizeUpstreamMcpContextHeaders({ "X-Workspace": "$WORKSPACE_ID" })).toEqual({
+      "x-workspace": "$WORKSPACE_ID"
+    });
+    expect(() => normalizeUpstreamMcpContextHeaders({ "X-Api-Key": "synthetic-credential" }))
+      .toThrow(expect.objectContaining({ code: "upstream_mcp_headers_invalid" }));
+    expect(() => normalizeUpstreamMcpContextHeaders({ Host: "alternate.example.test" }))
+      .toThrow(expect.objectContaining({ code: "upstream_mcp_headers_invalid" }));
+    expect(normalizeUpstreamMcpHttpRequestHeaders({ Authorization: "Bearer synthetic-credential" }))
+      .toEqual({ authorization: "Bearer synthetic-credential" });
+    expect(isUpstreamCredentialHeaderName("x-project-token")).toBe(true);
+    expect(isUpstreamCredentialHeaderName("x-project-id")).toBe(false);
+    expect(isUpstreamCredentialHeaderName("x-author-id")).toBe(false);
+    expect(isUpstreamCredentialHeaderName("x-auth-token")).toBe(true);
+    expect(isUpstreamCredentialHeaderName("x_api_key")).toBe(true);
+    expect(isUpstreamServiceOrigin("https://service.invalid:8443")).toBe(true);
+    expect(isUpstreamServiceOrigin("https://service.invalid:443")).toBe(false);
+    expect(isUpstreamServiceOrigin("https://service.invalid/path")).toBe(false);
+  });
+
+  it("validates every credential binding before lookup and normalizes returned payloads once", async () : Promise<any> => {
+    const bindings: any[] = [
+      {
+        reference: "secret://vault/first",
+        revision: 3,
+        origin: "https://service.invalid",
+        operationKey: "records.read",
+        scopes: ["records:read"]
+      },
+      {
+        reference: "secret://vault/second",
+        revision: 4,
+        origin: "https://service.invalid",
+        operationKey: "records.read",
+        scopes: ["records:write"]
+      }
+    ];
+    const resolveSecretPayload = vi.fn(async () : Promise<any> => ({ payload: { headers: { "x-api-key": "synthetic-material" } } }));
+
+    await expect(resolveUpstreamCredentialMaterial({
+      bindings,
+      targetOrigin: "https://service.invalid",
+      tenantId: "synthetic-tenant",
+      operationKey: "records.read",
+      requiredScopes: ["records:read"],
+      resolveSecretPayload
+    })).rejects.toMatchObject({ status: 403, reasonCode: "upstream_credential_binding_denied" });
+    expect(resolveSecretPayload).not.toHaveBeenCalled();
+
+    const binding = { ...bindings[0], scopes: ["records:read"] };
+    const signal = new AbortController().signal;
+    resolveSecretPayload.mockImplementationOnce(async (...args: any[]) : Promise<any> => {
+      expect(args).toMatchObject([
+        binding,
+        "https://service.invalid",
+        "synthetic-tenant",
+        signal,
+        "records.read",
+        ["records:read"]
+      ]);
+      return {
+        secretRef: binding.reference,
+        revision: binding.revision,
+        payload: {
+          headers: { Authorization: "Bearer synthetic-material" },
+          env: JSON.parse('{"__proto__":"synthetic-env","SYNTHETIC_ENV":"synthetic-env"}')
+        }
+      };
+    });
+    const result: any = await resolveUpstreamCredentialMaterial({
+      bindings: [binding],
+      targetOrigin: "https://service.invalid",
+      tenantId: "synthetic-tenant",
+      operationKey: "records.read",
+      requiredScopes: ["records:read"],
+      signal,
+      resolveSecretPayload
+    });
+    expect(result).toMatchObject({
+      headers: { authorization: "Bearer synthetic-material" },
+      env: { SYNTHETIC_ENV: "synthetic-env" },
+      credentialRefCount: 1,
+      resolvedCredentialRefCount: 1,
+      credentialRevisions: [{ secretRef: binding.reference, revision: binding.revision }]
+    });
+    expect(Object.getPrototypeOf(result.env)).toBe(Object.prototype);
+    expect(Object.hasOwn(result.env, "__proto__")).toBe(true);
+  });
+
   it("does not reflect duplicate caller-controlled keys in parser errors", () : any => {
     const marker: any = "synthetic-sensitive-key";
     let message: any = "";
@@ -93,6 +189,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       revision: 7,
       use: "request-auth",
       operationKey: "records.read",
+      origin: "https://service.invalid",
       host: "service.invalid",
       protocol: "https",
       scopes: ["records:read"]
@@ -135,11 +232,21 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       expectedRevision: 7,
       expectedScope: expect.objectContaining({
         serviceId: service.serviceId,
+        origin: "https://service.invalid",
         host: "service.invalid",
         protocol: "https",
         requiredScopes: ["records:read"]
       })
     }));
+
+    secretResolution.resolve.mockClear();
+    const otherOrigin: any = await resolveCredentialMaterial({
+      service,
+      operation: { operationKey: "records.read", requiredScopes: ["records:read"] },
+      targetUrl: new URL("https://service.invalid:8443/api")
+    });
+    expect(otherOrigin).toMatchObject({ credentialRefCount: 0, resolvedCredentialRefCount: 0 });
+    expect(secretResolution.resolve).not.toHaveBeenCalled();
   });
 
   it("does not project resolved environment material into remote MCP configuration", async () : Promise<any> => {
@@ -151,7 +258,8 @@ describe("upstream publishing sensitive-reference custody", () : any => {
           type: "credential",
           reference: "secret://vault/fixture",
           revision: 1,
-          use: "request-auth"
+          use: "request-auth",
+          origin: "https://service.invalid"
         }],
         mcp: {
           transport: "streamable-http",

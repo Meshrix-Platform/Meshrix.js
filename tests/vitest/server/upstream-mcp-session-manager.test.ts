@@ -1,11 +1,35 @@
+import { EventEmitter } from "node:events";
 import http from "node:http";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
+import { createHttpMcpSession } from "../../../packages/protocols/mcp/upstream-mcp-http-session.ts";
 
 const managers: any = new Set<any>();
 const servers: any = new Set<any>();
+
+it.each([
+  ["oversized JSON", "application/json", "x".repeat(8 * 1024 * 1024 + 1)],
+  ["malformed SSE", "text/event-stream", "data: invalid-json\n\n"]
+])("cancels an open %s response before releasing its HTTP transport", async (_label, contentType, body) => {
+  const events: string[] = [];
+  const response = new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(body));
+      // Keep the peer's response open after the rejected content.
+    },
+    cancel() { events.push("body-cancelled"); }
+  }), { headers: { "content-type": contentType } });
+  await expect(createHttpMcpSession({ transport: "http", url: "https://mcp.example.test/mcp" }, {
+    fetchTransport: async () => ({
+      response,
+      close: async () => { events.push("transport-closed"); }
+    })
+  })).rejects.toMatchObject({ code: "UPSTREAM_MCP_PROTOCOL_ERROR" });
+  expect(events).toEqual(["body-cancelled", "transport-closed"]);
+  expect(response.body?.locked).toBe(false);
+});
 
 function listenLoopback(server?: any) : any {
   return new Promise((resolve?: any, reject?: any) : any => {
@@ -27,13 +51,97 @@ function delay(ms?: any) : any {
   return new Promise((resolve?: any) : any => setTimeout(resolve, ms));
 }
 
+function deferred() : any {
+  let resolve: any;
+  let reject: any;
+  const promise: any = new Promise((accept?: any, decline?: any) : any => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
+}
+
+function gatedInitializeTransport() : any {
+  const started: any = deferred();
+  const release: any = deferred();
+  const aborted: any = deferred();
+  const state: Record<string, any> = { initializeAttempts: 0, signal: null };
+  const fetchTransport: any = async (url?: any, init?: any, context: Record<string, any> = {}) : Promise<any> => {
+    await context.beforeFetch?.();
+    const request: any = JSON.parse(String(init?.body || "{}"));
+    if (request.method === "initialize") {
+      state.initializeAttempts += 1;
+      state.signal = init.signal;
+      started.resolve();
+      await new Promise((resolve?: any, reject?: any) : any => {
+        let settled: any = false;
+        const finish: any = (callback?: any, value?: any) : any => {
+          if (settled) return;
+          settled = true;
+          init.signal?.removeEventListener("abort", onAbort);
+          callback(value);
+        };
+        const onAbort: any = () : any => {
+          aborted.resolve();
+          finish(reject, Object.assign(new Error("synthetic initialize transport aborted"), { name: "AbortError" }));
+        };
+        init.signal?.addEventListener("abort", onAbort, { once: true });
+        release.promise.then(() : any => finish(resolve));
+        if (init.signal?.aborted) onAbort();
+      });
+    }
+    return { response: await fetch(url, init) };
+  };
+  return { fetchTransport, started, release, aborted, state };
+}
+
+function gatedInitializeStdioLauncher() : any {
+  const started: any = deferred();
+  const release: any = deferred();
+  const state: Record<string, any> = { initializeAttempts: 0, methods: [] };
+  const child: any = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stdout.setEncoding = () : any => {};
+  child.stderr = new EventEmitter();
+  child.stderr.setEncoding = () : any => {};
+  child.stdin = {
+    writable: true,
+    write(value?: any, _encoding?: any, callback?: any) : any {
+      const message: any = JSON.parse(String(value));
+      state.methods.push(message.method);
+      queueMicrotask(() : any => callback?.());
+      const respond: any = (result?: any) : any => child.stdout.emit("data", Buffer.from(`${JSON.stringify({ jsonrpc: "2.0", id: message.id, result })}\n`));
+      if (message.method === "initialize") {
+        state.initializeAttempts += 1;
+        started.resolve();
+        release.promise.then(() : any => respond({
+          protocolVersion: "2025-06-18",
+          capabilities: { tools: {} },
+          serverInfo: { name: "fixture", version: "1" }
+        }));
+      } else if (message.method === "tools/list") {
+        respond({ tools: [] });
+      }
+      return true;
+    },
+    end() : any { child.emit("exit", 0, null); },
+    ref() : any {},
+    unref() : any {}
+  };
+  child.ref = () : any => {};
+  child.unref = () : any => {};
+  child.kill = () : any => { child.emit("exit", 0, null); return true; };
+  return { stdioLauncher: { launch: () : any => child }, started, release, state };
+}
+
 function createLoopbackHttpManager(options: Record<string, any> = {}) : any {
+  const fetchTransport: any = options.fetchTransport || (async (url?: any, init?: any, context: Record<string, any> = {}) : Promise<any> => {
+    await context.beforeFetch?.();
+    return { response: await fetch(url, init) };
+  });
   return createUpstreamMcpSessionManager({
     ...options,
-    fetchTransport: async (url?: any, init?: any, context: Record<string, any> = {}) : Promise<any> => {
-      await context.beforeFetch?.();
-      return { response: await fetch(url, init) };
-    }
+    fetchTransport
   });
 }
 
@@ -151,7 +259,8 @@ async function createHttpFixture({
     deletions: [],
     clientResponses: [],
     state: 0,
-    recovered: false
+    recovered: false,
+    resourceReadRecovered: false
   };
   let nextSessionId: any = 1;
   const activeSessions: any = new Set<any>();
@@ -240,6 +349,21 @@ async function createHttpFixture({
         jsonrpc: "2.0",
         id: message.id,
         result: { tools: [{ name: "fixture.echo", inputSchema: { type: "object" } }] }
+      });
+      return;
+    }
+    if (message.method === "resources/read") {
+      if (!evidence.resourceReadRecovered) {
+        evidence.resourceReadRecovered = true;
+        activeSessions.delete(sessionId);
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      jsonResponse(response, 200, {
+        jsonrpc: "2.0",
+        id: message.id,
+        result: { contents: [{ uri: message.params.uri, mimeType: "text/plain", text: "recovered" }] }
       });
       return;
     }
@@ -538,10 +662,22 @@ describe("upstream MCP managed sessions", () : any => {
     expect(nonBlockingNotification.result.structuredContent.name).toBe("non-blocking-callback");
     expect(callbackDidRun).toContain("notifications/progress");
 
+    await expect(manager.callTool(config, { name: "recover" })).rejects.toMatchObject({
+      code: "UPSTREAM_MCP_SESSION_NOT_FOUND"
+    });
+    expect(fixture.evidence.initializations).toHaveLength(1);
     const recovered: any = await manager.callTool(config, { name: "recover" });
     expect(recovered.result.structuredContent.name).toBe("recover");
     expect(fixture.evidence.initializations).toHaveLength(2);
     expect(fixture.evidence.calls.filter((call?: any) : any => call.name === "recover")).toHaveLength(2);
+
+    const recoveredRead: any = await manager.invokeGateway(config, {
+      method: "resources/read",
+      params: { uri: "fixture://resource" }
+    });
+    expect(recoveredRead.result.contents[0].text).toBe("recovered");
+    expect(fixture.evidence.initializations).toHaveLength(3);
+    expect(fixture.evidence.calls.filter((call?: any) : any => call.method === "resources/read")).toHaveLength(2);
 
     const controller: any = new AbortController();
     const cancelled: any = manager.callTool(config, { name: "cancel-http" }, { signal: controller.signal });
@@ -560,7 +696,7 @@ describe("upstream MCP managed sessions", () : any => {
     expect(closedTransports).toBe(openedTransports);
   });
 
-  it("does not resend a tools/call after session recovery replays its durable dispatch fence", async () : Promise<any> => {
+  it("does not replay a tools/call after a session disappears after dispatch", async () : Promise<any> => {
     const fixture: any = await createHttpFixture();
     const manager: any = createLoopbackHttpManager({ idleTtlMs: 5000 });
     managers.add(manager);
@@ -580,10 +716,20 @@ describe("upstream MCP managed sessions", () : any => {
         admissions += 1;
         if (admissions > 1) throw Object.assign(new Error("dispatch receipt already exists"), { code: "dispatch_receipt_replayed" });
       }
-    })).rejects.toMatchObject({ mcpSessionFatal: true });
-    expect(admissions).toBe(2);
+    })).rejects.toMatchObject({
+      code: "UPSTREAM_MCP_SESSION_NOT_FOUND",
+      mcpSessionFatal: true
+    });
+    expect(admissions).toBe(1);
     expect(fixture.evidence.calls.filter((call: any) => call.name === "recover-effect")).toHaveLength(1);
     expect(fixture.evidence.effectCount).toBe(1);
+    expect(fixture.evidence.initializations).toHaveLength(1);
+
+    const independentCall: any = await manager.callTool(config, { name: "recover-effect" });
+    expect(independentCall.result.structuredContent.value).toBe(2);
+    expect(fixture.evidence.effectCount).toBe(2);
+    expect(fixture.evidence.calls.filter((call: any) => call.name === "recover-effect")).toHaveLength(2);
+    expect(fixture.evidence.initializations).toHaveLength(2);
   });
 
   it("runs stdio admission after queued writes are ready and never writes an aborted queued call", async () : Promise<any> => {
@@ -728,13 +874,166 @@ describe("upstream MCP managed sessions", () : any => {
     expect(fixture.evidence.deletions).toContain("session-1");
   });
 
-  it("uses the injected header environment and waits for active requests during close", async () : Promise<any> => {
+  it("lets viable HTTP initialization and initialized control finish beyond the implicit 30-second window", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const initializeStarted: any = deferred();
+    const initializeRelease: any = deferred();
+    const initializedNotificationStarted: any = deferred();
+    const initializedNotificationRelease: any = deferred();
+    const state: Record<string, any> = { initializeSignal: null, notificationSignal: null, methods: [] };
+    const fetchTransport: any = async (_url?: any, init?: any) : Promise<any> => {
+      const message: any = JSON.parse(String(init?.body || "{}"));
+      state.methods.push(message.method);
+      if (message.method === "initialize") {
+        state.initializeSignal = init.signal;
+        initializeStarted.resolve();
+        await initializeRelease.promise;
+        return {
+          response: new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            id: message.id,
+            result: { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "fixture", version: "1" } }
+          }), { status: 200, headers: { "content-type": "application/json", "mcp-session-id": "slow-session" } })
+        };
+      }
+      if (message.method === "notifications/initialized") {
+        state.notificationSignal = init.signal;
+        initializedNotificationStarted.resolve();
+        await initializedNotificationRelease.promise;
+        return { response: new Response(null, { status: 202 }) };
+      }
+      if (message.method === "tools/list") {
+        return {
+          response: new Response(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { tools: [] } }), {
+            status: 200,
+            headers: { "content-type": "application/json", "mcp-session-id": "slow-session" }
+          })
+        };
+      }
+      throw new Error(`Unexpected synthetic MCP method: ${message.method}`);
+    };
+    const manager: any = createLoopbackHttpManager({
+      fetchTransport,
+      idleTtlMs: 120_000,
+      maxLifetimeMs: 120_000
+    });
+    managers.add(manager);
+    const listing: any = manager.listTools({ transport: "streamable-http", url: "http://fixture.invalid/mcp" });
+
+    try {
+      await initializeStarted.promise;
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(state.initializeSignal.aborted).toBe(false);
+
+      initializeRelease.resolve();
+      await initializedNotificationStarted.promise;
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(state.notificationSignal.aborted).toBe(false);
+
+      initializedNotificationRelease.resolve();
+      await expect(listing).resolves.toMatchObject({ tools: [] });
+      expect(state.methods).toEqual(["initialize", "notifications/initialized", "tools/list"]);
+    } finally {
+      initializeRelease.resolve();
+      initializedNotificationRelease.resolve();
+      await Promise.allSettled([listing]);
+      await manager.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it("lets viable stdio initialization finish beyond the implicit 30-second window", async () : Promise<any> => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const gate: any = gatedInitializeStdioLauncher();
+    const manager: any = createUpstreamMcpSessionManager({
+      stdioLauncher: gate.stdioLauncher,
+      idleTtlMs: 120_000,
+      maxLifetimeMs: 120_000
+    });
+    managers.add(manager);
+    let settled: any = false;
+    const listing: any = manager.listTools({ transport: "stdio", command: "fixture" })
+      .finally(() : any => { settled = true; });
+    void listing.catch((error?: any) : any => gate.started.reject(error));
+
+    try {
+      await gate.started.promise;
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(settled).toBe(false);
+      expect(gate.state.initializeAttempts).toBe(1);
+
+      gate.release.resolve();
+      await expect(listing).resolves.toMatchObject({ tools: [] });
+      expect(gate.state.methods).toEqual(["initialize", "notifications/initialized", "tools/list"]);
+    } finally {
+      gate.release.resolve();
+      await Promise.allSettled([listing]);
+      await manager.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a shared initialization alive while another caller still owns it", async () : Promise<any> => {
+    const fixture: any = await createHttpFixture();
+    const gate: any = gatedInitializeTransport();
+    const manager: any = createLoopbackHttpManager({ fetchTransport: gate.fetchTransport });
+    managers.add(manager);
+    const config: Record<string, any> = {
+      transport: "streamable-http",
+      url: fixture.url,
+      sessionKey: "shared-initialization-cancellation",
+      sessionScope: "shared-initialization-cancellation"
+    };
+    const firstController: any = new AbortController();
+    const first: any = manager.listTools(config, { signal: firstController.signal });
+    const second: any = manager.listTools(config);
+
+    // Queue a harmless pool operation behind both acquires so the second caller
+    // has joined the in-progress creation before the first caller is cancelled.
+    await manager.retireScope("unrelated-pool-lock-barrier");
+    await gate.started.promise;
+    firstController.abort();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    expect(gate.state.signal.aborted).toBe(false);
+
+    gate.release.resolve();
+    const listed: any = await second;
+    expect(listed.tools).toHaveLength(1);
+    expect(gate.state.initializeAttempts).toBe(1);
+    expect(fixture.evidence.initializations).toHaveLength(1);
+    expect(fixture.evidence.calls.filter((call?: any) : any => call.method === "tools/list")).toHaveLength(1);
+  });
+
+  it("aborts setup when the last caller cancels before HTTP initialization is sent", async () : Promise<any> => {
+    const fixture: any = await createHttpFixture();
+    const gate: any = gatedInitializeTransport();
+    const manager: any = createLoopbackHttpManager({ fetchTransport: gate.fetchTransport });
+    managers.add(manager);
+    const controller: any = new AbortController();
+    const listed: any = manager.listTools({
+      transport: "streamable-http",
+      url: fixture.url,
+      sessionKey: "orphaned-initialization-cancellation",
+      sessionScope: "orphaned-initialization-cancellation"
+    }, { signal: controller.signal });
+
+    await gate.started.promise;
+    controller.abort();
+    await expect(listed).rejects.toMatchObject({ name: "AbortError" });
+    await gate.aborted.promise;
+    await manager.close();
+
+    expect(gate.state.initializeAttempts).toBe(1);
+    expect(fixture.evidence.initializations).toHaveLength(0);
+    expect(fixture.evidence.calls).toHaveLength(0);
+    expect(manager.snapshot()).toMatchObject({ state: "closed", sessionCount: 0, creatingSessionCount: 0 });
+  });
+
+  it("keeps MCP HTTP headers literal and waits for active requests during close", async () : Promise<any> => {
     const fixture: any = await createHttpFixture();
     const envName: any = "MCP_SESSION_HEADER_FIXTURE";
-    const previous: any = process.env[envName];
-    process.env[envName] = "ambient-placeholder";
     const manager: any = createLoopbackHttpManager({
-      env: { [envName]: "injected-placeholder" }
+      env: { [envName]: "synthetic-header-environment-value" }
     });
     managers.add(manager);
     const config: Record<string, any> = {
@@ -748,20 +1047,16 @@ describe("upstream MCP managed sessions", () : any => {
       sessionKey: "injected-environment-generation",
       sessionScope: "injected-environment-service"
     };
-    try {
-      await manager.listTools(config);
-      expect(fixture.evidence.initializations[0].authorization).toBe("injected-placeholder");
-      expect(fixture.evidence.initializations[0].contentType).toBe("application/json");
-      expect(fixture.evidence.initializations[0].accept).toBe("application/json, text/event-stream");
-      const slowOutcome: any = manager.callTool(config, { name: "slow-close" })
-        .then(() : any => null, (error?: any) : any => error);
-      await delay(10);
-      await manager.close();
-      await expect(slowOutcome).resolves.toMatchObject({ name: "AbortError" });
-      expect(manager.snapshot()).toMatchObject({ state: "closed", inFlightRequestCount: 0 });
-    } finally {
-      if (previous === undefined) delete process.env[envName];
-      else process.env[envName] = previous;
-    }
+    await manager.listTools(config);
+    expect(fixture.evidence.initializations[0].authorization).toBe(`$${envName}`);
+    expect(fixture.evidence.initializations[0].authorization).not.toBe("synthetic-header-environment-value");
+    expect(fixture.evidence.initializations[0].contentType).toBe("application/json");
+    expect(fixture.evidence.initializations[0].accept).toBe("application/json, text/event-stream");
+    const slowOutcome: any = manager.callTool(config, { name: "slow-close" })
+      .then(() : any => null, (error?: any) : any => error);
+    await delay(10);
+    await manager.close();
+    await expect(slowOutcome).resolves.toMatchObject({ name: "AbortError" });
+    expect(manager.snapshot()).toMatchObject({ state: "closed", inFlightRequestCount: 0 });
   });
 });

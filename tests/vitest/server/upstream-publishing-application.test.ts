@@ -548,11 +548,122 @@ describe("upstream publishing application", () : any => {
     expect(detail.service.descriptor).toEqual(Object.fromEntries(
       (Object.entries(descriptor) as [string, any][]).filter(([key]: any[]) : any => key !== "references")
     ));
-    expect(detail.service.references).toEqual([...descriptor.references].sort((left?: any, right?: any) : any =>
+    expect(detail.service.references).toEqual(descriptor.references.map((reference?: any) : any => reference.type === "credential"
+      ? { ...reference, origin: "https://service.invalid" }
+      : reference).sort((left?: any, right?: any) : any =>
       JSON.stringify(left).localeCompare(JSON.stringify(right))
     ));
     expect((await application.list(subject("developer-two", ["gateway:read"]))).services).toEqual([]);
     await expect(application.get(created.serviceId, subject("developer-two", ["gateway:read"])))
       .rejects.toMatchObject({ code: "upstream_publishing_owner_required", statusCode: 403 });
+  });
+
+  it("rejects unreachable target classes and undeclared local targets before persistence", async () : Promise<any> => {
+    const { application, commitManifestSet } = await harness();
+    const httpDescriptor = (baseUrl: any, allowLocalNetwork?: any) : any => ({
+      serviceProtocol: "http",
+      baseUrl,
+      ...(allowLocalNetwork === undefined ? {} : { allowLocalNetwork }),
+      references: [],
+      operations: [{
+        operationKey: "read", method: "GET", path: "/read",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    });
+    const admin = subject("admin-one", ["gateway:admin"]);
+    let key = 0;
+    for (const [baseUrl, allowLocalNetwork, actor] of [
+      ["http://169.254.169.254/latest/meta-data", undefined, admin],
+      ["http://169.254.169.254/latest/meta-data", true, admin],
+      ["http://metadata.google.internal/", true, admin],
+      ["http://0.0.0.0/", true, admin],
+      ["http://100.64.0.1/", true, admin],
+      ["http://127.0.0.1:8080/", undefined, admin],
+      ["http://localhost:8080/", undefined, admin],
+      ["http://10.0.0.9/", undefined, admin],
+      ["http://[::1]/", undefined, admin],
+      ["http://[fd00::1]/", undefined, admin]
+    ] as const) {
+      key += 1;
+      await expect(application.execute(
+        command({ descriptor: httpDescriptor(baseUrl, allowLocalNetwork), idempotencyKey: `target-${key}` }),
+        actor
+      )).rejects.toMatchObject({
+        code: "upstream_publishing_target_restricted",
+        statusCode: 400
+      });
+    }
+    expect(commitManifestSet).not.toHaveBeenCalled();
+  });
+
+  it("requires gateway:admin to declare local-network services", async () : Promise<any> => {
+    const { application, commitManifestSet } = await harness();
+    const descriptor = (allowLocalNetwork?: any) : any => ({
+      serviceProtocol: "http",
+      baseUrl: "http://127.0.0.1:8080/",
+      ...(allowLocalNetwork === undefined ? {} : { allowLocalNetwork }),
+      references: [],
+      operations: [{
+        operationKey: "read", method: "GET", path: "/read",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    });
+    const maintainer = subject("maintainer-one", ["gateway:write", "gateway:maintain"]);
+
+    await expect(application.execute(
+      command({ descriptor: descriptor(true), idempotencyKey: "local-denied" }),
+      maintainer
+    )).rejects.toMatchObject({ code: "upstream_publishing_scope_required", statusCode: 403 });
+    expect(commitManifestSet).not.toHaveBeenCalled();
+
+    const created: any = await application.execute(
+      command({ descriptor: descriptor(true), idempotencyKey: "local-allowed" }),
+      subject("maintainer-one", ["gateway:admin"])
+    );
+    expect(created.ok).toBe(true);
+
+    // Without gateway:admin the same subject cannot retarget the local service
+    // to a different local target while inheriting its allowLocalNetwork flag.
+    await expect(application.execute(JSON.stringify({
+      schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+      action: "replace",
+      serviceId: created.serviceId,
+      expectedServiceRevision: created.serviceRevision,
+      expectedSetRevision: created.setRevision,
+      idempotencyKey: "local-retarget",
+      descriptor: {
+        serviceProtocol: "http",
+        baseUrl: "http://10.0.0.9/",
+        references: [],
+        operations: [{
+          operationKey: "read", method: "GET", path: "/read",
+          payloadTransport: structuredJsonPayloadTransport()
+        }]
+      }
+    }), maintainer)).rejects.toMatchObject({
+      code: "upstream_publishing_scope_required",
+      statusCode: 403
+    });
+
+    // Public targets stay on the ordinary write scopes.
+    const publicDescriptor: any = {
+      serviceProtocol: "http",
+      baseUrl: "https://service.invalid:443",
+      references: [],
+      operations: [{
+        operationKey: "read", method: "GET", path: "/read",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    };
+    const published: any = await application.execute(
+      command({
+        serviceKey: "public-inventory",
+        descriptor: publicDescriptor,
+        idempotencyKey: "public-ok",
+        expectedSetRevision: created.setRevision
+      }),
+      maintainer
+    );
+    expect(published.ok).toBe(true);
   });
 });

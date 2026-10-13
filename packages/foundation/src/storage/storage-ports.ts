@@ -18,7 +18,7 @@ export interface ManifestResourceBudget {
   maxWriteBytes: number;
   maxFiles: number;
   maxCleanupEntries: number;
-  maxOperationMs: number;
+  maxOperationMs?: number;
 }
 
 export interface TypedManifestReference {
@@ -27,6 +27,7 @@ export interface TypedManifestReference {
   revision: number;
   use: string;
   operationKey?: string;
+  origin?: string;
   host?: string;
   protocol?: string;
   scopes?: string[];
@@ -96,12 +97,13 @@ const REFERENCE_KEYS = new Set<string>([
   "revision",
   "use",
   "operationKey",
+  "origin",
   "host",
   "protocol",
   "scopes"
 ]);
 
-const DEFAULT_BUDGET: Readonly<ManifestResourceBudget> = Object.freeze({
+const DEFAULT_BUDGET: Readonly<Omit<ManifestResourceBudget, "maxOperationMs">> = Object.freeze({
   maxManifestBytes: 256 * 1024,
   maxManifestNodes: 10_000,
   maxReferenceCount: 128,
@@ -111,11 +113,10 @@ const DEFAULT_BUDGET: Readonly<ManifestResourceBudget> = Object.freeze({
   maxReadBytes: 32 * 1024 * 1024,
   maxWriteBytes: 4 * 1024 * 1024,
   maxFiles: 8_256,
-  maxCleanupEntries: 256,
-  maxOperationMs: 30_000
+  maxCleanupEntries: 256
 });
 
-const HARD_BUDGET: Readonly<ManifestResourceBudget> = Object.freeze({
+const HARD_BUDGET: Readonly<ManifestResourceBudget & { maxOperationMs: number }> = Object.freeze({
   maxManifestBytes: 1024 * 1024,
   maxManifestNodes: 50_000,
   maxReferenceCount: 512,
@@ -129,7 +130,10 @@ const HARD_BUDGET: Readonly<ManifestResourceBudget> = Object.freeze({
   maxOperationMs: 120_000
 });
 
-const BUDGET_KEYS = new Set<keyof ManifestResourceBudget>(Object.keys(DEFAULT_BUDGET) as Array<keyof ManifestResourceBudget>);
+const BUDGET_KEYS = new Set<keyof ManifestResourceBudget>([
+  ...Object.keys(DEFAULT_BUDGET) as Array<keyof ManifestResourceBudget>,
+  "maxOperationMs"
+]);
 
 export function serviceManifestError(code: string, message: string, cause?: unknown): ServiceManifestError {
   const error = new Error(message, cause ? { cause } : undefined) as ServiceManifestError;
@@ -221,7 +225,8 @@ export function normalizeManifestResourceBudget(input: unknown = {}): Readonly<M
   }
   const normalized = {} as ManifestResourceBudget;
   for (const key of BUDGET_KEYS) {
-    const value = input[key] ?? DEFAULT_BUDGET[key];
+    const value = input[key] ?? (key === "maxOperationMs" ? undefined : DEFAULT_BUDGET[key]);
+    if (key === "maxOperationMs" && value === undefined) continue;
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > HARD_BUDGET[key]) {
       throw serviceManifestError(
         "storage_manifest_budget_invalid",
@@ -290,6 +295,19 @@ function normalizeReference(reference: unknown): TypedManifestReference {
       pattern: SAFE_TOKEN_PATTERN
     });
   }
+  if (reference.origin !== undefined) {
+    const originValue = normalizeSafeString(reference.origin, "reference origin", { maxLength: 512 });
+    let origin: URL;
+    try {
+      origin = new URL(originValue);
+    } catch {
+      throw serviceManifestError("storage_manifest_reference_invalid", "Service manifest reference origin is invalid.");
+    }
+    if (!(["http:", "https:"].includes(origin.protocol) && origin.origin === originValue && !origin.username && !origin.password)) {
+      throw serviceManifestError("storage_manifest_reference_invalid", "Service manifest reference origin must be canonical HTTP(S).");
+    }
+    normalized.origin = originValue;
+  }
   if (reference.host !== undefined) {
     normalized.host = normalizeSafeString(reference.host, "reference host", {
       maxLength: 253,
@@ -320,6 +338,13 @@ function normalizeReference(reference: unknown): TypedManifestReference {
       );
     }
     normalized.scopes = scopes.sort();
+  }
+  if (normalized.origin) {
+    const origin = new URL(normalized.origin);
+    if ((normalized.host !== undefined && normalized.host !== origin.hostname.toLowerCase()) ||
+        (normalized.protocol !== undefined && normalized.protocol !== origin.protocol.slice(0, -1))) {
+      throw serviceManifestError("storage_manifest_reference_invalid", "Service manifest reference target fields do not match its origin.");
+    }
   }
   return normalized;
 }

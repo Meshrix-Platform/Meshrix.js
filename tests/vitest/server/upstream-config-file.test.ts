@@ -12,6 +12,7 @@ import {
 } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { createUpstreamConfigFileLoader } from "../../../packages/server-runtime/src/composition/upstream-config-file.ts";
 import {
+  initializeLocalSecret,
   listLocalSecretEntries,
   resolveLocalSecretPayload
 } from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
@@ -40,6 +41,10 @@ const authorityContext = Object.freeze({
   policyRevision: "1",
   riskRevision: "1",
   workloadGeneration: authoritySubject.generation
+});
+const loaderSubject = Object.freeze({
+  subjectId: "meshrix:config-file",
+  scopes: ["gateway:admin", "gateway:maintain", "gateway:write", "gateway:read"]
 });
 
 function deferred<T = void>() {
@@ -205,6 +210,63 @@ async function currentRecord(store: ReturnType<typeof createServiceManifestStore
   return { snapshot, record: snapshot.listServices()[0] || null };
 }
 
+async function prepareFailedAuthRotation(
+  runtime: Awaited<ReturnType<typeof harness>>,
+  loader: ReturnType<typeof createUpstreamConfigFileLoader>
+) {
+  const original = {
+    name: "fixture-auth-service",
+    type: "mcp",
+    url: "https://fixture.example.invalid:443/mcp",
+    auth: { type: "bearer", token: MARKER_A }
+  };
+  await writeConfig(runtime.userDataPath, [original]);
+  await loader.start();
+  await runtime.observer.scan();
+
+  const published = (await runtime.store.getCandidateSnapshot()).listServices()[0];
+  const publishedReference = (published.manifest.references as Array<{ reference: string }>)[0];
+  runtime.setFault("before-commit");
+  await writeConfig(runtime.userDataPath, [{
+    ...original,
+    auth: { type: "bearer", token: MARKER_B }
+  }]);
+  await loader.scan();
+
+  expect(loader.lastError?.code).toBe("publication.conflict");
+  expect(runtime.commands).toHaveLength(2);
+  const failedCommand = runtime.commands.at(-1)!;
+  const abandonedReference = failedCommand.descriptor.references.find((entry: any) => entry.type === "credential");
+  expect(abandonedReference).toBeDefined();
+  expect(abandonedReference.reference).not.toBe(publishedReference.reference);
+  const entries = await listLocalSecretEntries({ dataDir: runtime.userDataPath });
+  expect(entries.find((entry) => entry.secretRef === abandonedReference.reference)?.status).toBe("active");
+  return { published, publishedReference, abandonedReference };
+}
+
+async function createUnrelatedActiveSecret(runtime: Awaited<ReturnType<typeof harness>>): Promise<string> {
+  const secretRef = "secret://meshrix/test/unrelated-config-secret";
+  await initializeLocalSecret({
+    dataDir: runtime.userDataPath,
+    keyProvider: runtime.keyProvider!,
+    target: {
+      provider: "meshrix",
+      family: "http-header",
+      authType: "header",
+      secretRef,
+      scope: {
+        serviceId: "unrelated-service",
+        scopes: ["gateway:write"],
+        allowedHosts: ["unrelated.example"],
+        allowedProtocols: ["https"],
+        allowedOrigins: ["https://unrelated.example"]
+      }
+    },
+    payload: { headers: { authorization: ["Bearer", "unrelated-synthetic-value"].join(" ") } }
+  });
+  return secretRef;
+}
+
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
@@ -242,7 +304,12 @@ describe("declarative upstream config publication", () => {
     expect(snapshot.setRevision).toBe(1);
     expect(record?.manifest.references).toHaveLength(1);
     const oldReference = record!.manifest.references[0];
-    expect(oldReference).toMatchObject({ type: "credential", revision: 1, use: "request-auth" });
+    expect(oldReference).toMatchObject({
+      type: "credential",
+      revision: 1,
+      use: "request-auth",
+      origin: `http://127.0.0.1:${port}`
+    });
     expect(JSON.stringify(record!.manifest)).not.toContain(MARKER_A);
 
     await runtime.observer.scan();
@@ -259,7 +326,10 @@ describe("declarative upstream config publication", () => {
 
     await loader.scan();
     expect(runtime.commands).toHaveLength(1);
-    await writeConfig(runtime.userDataPath, [{ ...service, auth: { type: "bearer", token: MARKER_B } }]);
+    await writeConfig(runtime.userDataPath, [{
+      ...service,
+      auth: { type: "bearer", token: MARKER_B }
+    }]);
     await loader.scan();
     expect(runtime.commands).toHaveLength(2);
     expect(JSON.stringify(runtime.commands)).not.toContain(MARKER_B);
@@ -274,6 +344,7 @@ describe("declarative upstream config publication", () => {
       expectedScope: {
         serviceId: record!.serviceId,
         requiredScopes: ["gateway:write"],
+        origin: `http://127.0.0.1:${port}`,
         host: "127.0.0.1",
         protocol: "http"
       },
@@ -329,9 +400,84 @@ describe("declarative upstream config publication", () => {
     expect(runtime.commands).toHaveLength(1);
   });
 
+  it("publishes the File Parser multipart descriptor with only a typed secret reference", async () => {
+    const runtime = await harness();
+    const loader = runtime.makeLoader();
+    const portable = JSON.parse(await fs.readFile(
+      new URL("../../../docs/examples/file-parser-format-convert.upstream.json", import.meta.url),
+      "utf8"
+    ));
+    const name = portable.serviceKey as string;
+    const descriptor = portable.descriptor as Record<string, any>;
+    const preparation = await runtime.application.prepareConfigFileService(name, descriptor, loaderSubject);
+    const reference = descriptor.references[0];
+    await initializeLocalSecret({
+      dataDir: runtime.userDataPath,
+      keyProvider: runtime.keyProvider,
+      target: {
+        provider: "meshrix",
+        family: "http-header",
+        authType: "header",
+        secretRef: reference.reference,
+        scope: {
+          serviceId: preparation.serviceId,
+          scopes: ["gateway:write"],
+          allowedHosts: ["format-convert"],
+          allowedProtocols: ["http"],
+          allowedOrigins: ["http://format-convert:8080"]
+        }
+      },
+      payload: { headers: { authorization: `Bearer ${MARKER_A}` } }
+    });
+    await writeConfig(runtime.userDataPath, [{ name, descriptor }]);
+    await loader.start();
+    await runtime.observer.scan();
+
+    const record = (await runtime.store.getCandidateSnapshot()).getService(preparation.serviceId)!;
+    const publishedDescriptor = record.manifest.payload.descriptor as Record<string, any>;
+    expect(publishedDescriptor.operations.map((operation: any) => ({
+      path: operation.path,
+      requestMode: operation.payloadTransport.request.mode,
+      responseMode: operation.payloadTransport.response.mode
+    }))).toEqual([
+      { path: "/v1/convert", requestMode: "artifact_multipart", responseMode: "artifact" },
+      { path: "/v1/convert", requestMode: "artifact_multipart", responseMode: "artifact" }
+    ]);
+    expect(record.manifest.references).toEqual([{
+      ...reference,
+      origin: "http://format-convert:8080"
+    }]);
+    expect(JSON.stringify(record.manifest)).not.toContain(MARKER_A);
+    expect(loader.lastError).toBeNull();
+  });
+
+  it("rejects unsupported inline credential modes without reflecting credential input", async () => {
+    const runtime = await harness();
+    const diagnostics: unknown[] = [];
+    const loader = runtime.makeLoader({ onError: (error: unknown) => diagnostics.push(error) });
+    const raw = JSON.stringify({ services: [{
+      name: "fixture-auth-service",
+      type: "mcp",
+      url: "https://fixture.example.invalid:443/mcp",
+      auth: { type: "basic", token: MARKER_A }
+    }] });
+    const directory = path.join(runtime.userDataPath, "upstream-config");
+    await fs.mkdir(directory, { recursive: true });
+    const configPath = path.join(directory, "services.json");
+    await fs.writeFile(configPath, raw);
+    await loader.start();
+
+    expect(loader.lastError?.code).toBe("config.invalid");
+    expect(runtime.commands).toEqual([]);
+    expect((await runtime.store.getCandidateSnapshot()).setRevision).toBe(0);
+    expect(await fs.readFile(configPath, "utf8")).toBe(raw);
+    expect(JSON.stringify(loader.lastError)).not.toContain(MARKER_A);
+    expect(JSON.stringify(diagnostics)).not.toContain(MARKER_A);
+  });
+
   it("refuses authenticated publication without usable external custody and keeps diagnostics redacted", async () => {
     const cases = [
-      { keyProvider: null, expectedCode: "credential.provider_required" },
+      { keyProvider: null, expectedCode: "credential.custody_unavailable" },
       {
         keyProvider: {
           protocolVersion: "fixture",
@@ -344,15 +490,19 @@ describe("declarative upstream config publication", () => {
       }
     ];
     for (const entry of cases) {
-      const runtime = await harness({ keyProvider: entry.keyProvider });
+      const runtime = await harness();
       const diagnostics: unknown[] = [];
-      const loader = runtime.makeLoader({ onError: (error: unknown) => diagnostics.push(error) });
-      await writeConfig(runtime.userDataPath, [{
+      const service = {
         name: "fixture-auth-service",
         type: "mcp",
         url: "https://fixture.example.invalid:443/mcp",
         auth: { type: "bearer", token: MARKER_A }
-      }]);
+      };
+      const loader = runtime.makeLoader({
+        localSecretKeyProvider: entry.keyProvider,
+        onError: (error: unknown) => diagnostics.push(error)
+      });
+      await writeConfig(runtime.userDataPath, [service]);
       await loader.start();
       expect(runtime.commands).toEqual([]);
       expect((await runtime.store.getCandidateSnapshot()).setRevision).toBe(0);
@@ -384,6 +534,7 @@ describe("declarative upstream config publication", () => {
 
   it("retries the same unchanged config after external custody recovers", async () => {
     const innerProvider = createMemoryLocalSecretKeyProvider();
+    const runtime = await harness({ keyProvider: innerProvider });
     let available = false;
     const provider = {
       protocolVersion: innerProvider.protocolVersion,
@@ -395,14 +546,14 @@ describe("declarative upstream config publication", () => {
       close() { innerProvider.close(); },
       describe() { return { protocolVersion: innerProvider.protocolVersion, custody: "external-file", configured: true }; }
     } as any;
-    const runtime = await harness({ keyProvider: provider });
-    const loader = runtime.makeLoader();
-    await writeConfig(runtime.userDataPath, [{
+    const service = {
       name: "fixture-auth-service",
       type: "mcp",
       url: "https://fixture.example.invalid:443/mcp",
       auth: { type: "bearer", token: MARKER_A }
-    }]);
+    };
+    const loader = runtime.makeLoader({ localSecretKeyProvider: provider });
+    await writeConfig(runtime.userDataPath, [service]);
     await loader.start();
     expect(runtime.commands).toEqual([]);
     expect(loader.lastError?.code).toBe("credential.custody_unavailable");
@@ -430,7 +581,10 @@ describe("declarative upstream config publication", () => {
     const originalReference = initial.manifest.references[0];
 
     runtime.setFault("before-commit");
-    await writeConfig(runtime.userDataPath, [{ ...original, auth: { type: "bearer", token: MARKER_B } }]);
+    await writeConfig(runtime.userDataPath, [{
+      ...original,
+      auth: { type: "bearer", token: MARKER_B }
+    }]);
     await loader.scan();
     expect(loader.lastError?.code).toBe("publication.conflict");
     expect(runtime.commands).toHaveLength(2);
@@ -438,6 +592,20 @@ describe("declarative upstream config publication", () => {
     expect(afterFailure.serviceRevision).toBe(1);
     expect(afterFailure.manifest.references).toEqual([originalReference]);
     expect((await runtime.store.getSnapshot()).getService(initial.serviceId)?.manifest.references).toEqual([originalReference]);
+    const preservedCredential = await resolveLocalSecretPayload({
+      dataDir: runtime.userDataPath,
+      secretRef: originalReference.reference,
+      expectedRevision: originalReference.revision,
+      expectedScope: {
+        serviceId: initial.serviceId,
+        requiredScopes: ["gateway:read", "gateway:write"],
+        origin: "https://fixture.example.invalid",
+        host: "fixture.example.invalid",
+        protocol: "https"
+      },
+      keyProvider: runtime.keyProvider
+    });
+    expect(preservedCredential.payload.headers.authorization).toBe(`Bearer ${MARKER_A}`);
 
     await loader.scan();
     expect(runtime.commands).toHaveLength(3);
@@ -445,6 +613,62 @@ describe("declarative upstream config publication", () => {
     expect(recovered.serviceRevision).toBe(2);
     expect(recovered.manifest.references[0].reference).not.toBe(originalReference.reference);
     expect(recovered.manifest.references[0].revision).toBe(1);
+    const replacementCredential = await resolveLocalSecretPayload({
+      dataDir: runtime.userDataPath,
+      secretRef: recovered.manifest.references[0].reference,
+      expectedRevision: recovered.manifest.references[0].revision,
+      expectedScope: {
+        serviceId: initial.serviceId,
+        requiredScopes: ["gateway:read", "gateway:write"],
+        origin: "https://fixture.example.invalid",
+        host: "fixture.example.invalid",
+        protocol: "https"
+      },
+      keyProvider: runtime.keyProvider
+    });
+    expect(replacementCredential.payload.headers.authorization).toBe(`Bearer ${MARKER_B}`);
+    expect(loader.lastError).toBeNull();
+  });
+
+  it("revokes an abandoned candidate credential after its config file disappears", async () => {
+    const runtime = await harness();
+    const loader = runtime.makeLoader();
+    const { published, publishedReference, abandonedReference } = await prepareFailedAuthRotation(runtime, loader);
+    const unrelatedReference = await createUnrelatedActiveSecret(runtime);
+
+    await fs.rm(loader.configPath);
+    await loader.scan();
+
+    const entries = await listLocalSecretEntries({ dataDir: runtime.userDataPath });
+    expect(entries.find((entry) => entry.secretRef === abandonedReference.reference)?.status).toBe("revoked");
+    expect(entries.find((entry) => entry.secretRef === publishedReference.reference)?.status).toBe("active");
+    expect(entries.find((entry) => entry.secretRef === unrelatedReference)?.status).toBe("active");
+    expect((await runtime.store.getCandidateSnapshot()).getService(published.serviceId)?.manifest.references)
+      .toEqual([publishedReference]);
+    expect((await runtime.store.getSnapshot()).getService(published.serviceId)?.manifest.references)
+      .toEqual([publishedReference]);
+    expect(runtime.commands).toHaveLength(2);
+    expect(loader.lastError).toBeNull();
+  });
+
+  it("revokes an abandoned candidate credential when its service leaves a valid config", async () => {
+    const runtime = await harness();
+    const loader = runtime.makeLoader();
+    const { published, publishedReference, abandonedReference } = await prepareFailedAuthRotation(runtime, loader);
+    const unrelatedReference = await createUnrelatedActiveSecret(runtime);
+
+    await writeConfig(runtime.userDataPath, []);
+    await loader.scan();
+
+    const entries = await listLocalSecretEntries({ dataDir: runtime.userDataPath });
+    expect(entries.find((entry) => entry.secretRef === abandonedReference.reference)?.status).toBe("revoked");
+    expect(entries.find((entry) => entry.secretRef === publishedReference.reference)?.status).toBe("active");
+    expect(entries.find((entry) => entry.secretRef === unrelatedReference)?.status).toBe("active");
+    expect((await runtime.store.getCandidateSnapshot()).getService(published.serviceId)?.manifest.references)
+      .toEqual([publishedReference]);
+    expect((await runtime.store.getSnapshot()).getService(published.serviceId)?.manifest.references)
+      .toEqual([publishedReference]);
+    expect(runtime.commands).toHaveLength(2);
     expect(loader.lastError).toBeNull();
   });
 
@@ -480,8 +704,7 @@ describe("declarative upstream config publication", () => {
     const configured = {
       name: "fixture-auth-service",
       type: "mcp",
-      url: "https://fixture.example.invalid:443/mcp",
-      auth: { type: "bearer", token: MARKER_A }
+      url: "https://fixture.example.invalid:443/mcp"
     };
     await writeConfig(runtime.userDataPath, [configured]);
     await loader.start();
@@ -504,8 +727,7 @@ describe("declarative upstream config publication", () => {
     await writeConfig(runtime.userDataPath, [{
       name: "fixture-auth-service",
       type: "mcp",
-      url: "https://fixture.example.invalid:443/mcp",
-      auth: { type: "bearer", token: MARKER_A }
+      url: "https://fixture.example.invalid:443/mcp"
     }]);
     runtime.setFault("after-commit");
 
@@ -560,8 +782,7 @@ describe("declarative upstream config publication", () => {
     await writeConfig(runtime.userDataPath, [{
       name: "fixture-auth-service",
       type: "mcp",
-      url: "https://fixture.example.invalid:443/mcp",
-      auth: { type: "bearer", token: MARKER_A }
+      url: "https://fixture.example.invalid:443/mcp"
     }]);
     const entered = deferred();
     const release = deferred();
@@ -597,8 +818,7 @@ describe("declarative upstream config publication", () => {
     await writeConfig(runtime.userDataPath, [{
       name: "fixture-auth-service",
       type: "mcp",
-      url: "https://fixture.example.invalid:443/mcp",
-      auth: { type: "bearer", token: MARKER_A }
+      url: "https://fixture.example.invalid:443/mcp"
     }]);
     const entered = deferred();
     const release = deferred();

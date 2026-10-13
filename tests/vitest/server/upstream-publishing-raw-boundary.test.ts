@@ -15,6 +15,7 @@ import { createConsoleAuth } from "../../../packages/foundation/src/security/aut
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "../../../tools/server-scripts/capability-kernel-test-env.ts";
 import { createUpstreamPublishingHostileCorpus } from "../../../tools/server-scripts/lib/upstream-publishing-hostile-corpus.ts";
+import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
 
 const resources: any[] = [];
 
@@ -69,6 +70,8 @@ async function startProductionServer() : Promise<any> {
   resources.push(async () : Promise<any> => restoreKernel());
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-raw-boundary-"));
   resources.push(() : any => fs.rm(userDataPath, { recursive: true, force: true }));
+  const keyCustody: any = await provisionVerifierLocalSecretKey();
+  resources.push(() : any => keyCustody.close());
   const tagStore: any = createTagStoreAdapter({ userDataPath });
   const auth: any = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });
   const owner: any = await auth.ensureInitialOwner();
@@ -112,7 +115,7 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
         mcp: {
           transport: "http",
           url: `${fixture.url}/mcp`,
-          headers: { "x-fixture-context": "alpha" }
+          headers: { "x-fixture-context": "$FIXTURE_CONTEXT" }
         }
       }
     };
@@ -128,8 +131,120 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
     });
     expect(detail.status).toBe(200);
     expect((await detail.json()).service.descriptor.mcp.headers).toEqual({
-      "x-fixture-context": "alpha"
+      "x-fixture-context": "$FIXTURE_CONTEXT"
     });
+  });
+
+  it("rejects credential, transport-owned, and malformed MCP headers before publication", async () : Promise<any> => {
+    const fixture: any = await startFixture();
+    const { server, session } = await startProductionServer();
+    const collection: any = `${server.url}/api/gateway/v1/services`;
+    const cases: Array<Record<string, string>> = [
+      { "x-api-key": "synthetic-inline-credential" },
+      { "x-project-token": "synthetic-inline-token" },
+      { Authorization: "Bearer synthetic-inline-credential" },
+      { Host: "alternate.example.test" },
+      { "x-fixture-context": "alpha\r\nbeta" }
+    ];
+
+    for (let index = 0; index < cases.length; index += 1) {
+      const command: UpstreamServiceCreateCommand = {
+        schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+        action: "create",
+        expectedServiceRevision: 0,
+        expectedSetRevision: 0,
+        idempotencyKey: `fixture-rejected-mcp-header-${index}`,
+        serviceKey: `fixture-rejected-header-${index}`,
+        descriptor: {
+          serviceProtocol: "mcp",
+          label: "Fixture rejected header",
+          allowLocalNetwork: true,
+          mcp: {
+            transport: "http",
+            url: `${fixture.url}/mcp`,
+            headers: cases[index]
+          }
+        }
+      };
+      const response: any = await fetch(collection, {
+        method: "POST",
+        headers: session.write,
+        body: JSON.stringify(command)
+      });
+      expect(response.status).toBe(400);
+    }
+
+    const publications: any = await fetch(collection, { headers: session.read });
+    expect(await publications.json()).toMatchObject({ ok: true, setRevision: 0, services: [] });
+    expect(fixture.calls()).toBe(0);
+  });
+
+  it("keeps credential references bound to the complete origin including port", async () : Promise<any> => {
+    const first: any = await startFixture();
+    const second: any = await startFixture();
+    const { server, session } = await startProductionServer();
+    const collection: any = `${server.url}/api/gateway/v1/services`;
+    const reference = {
+      type: "credential",
+      reference: "secret://fixture/origin-bound",
+      revision: 1,
+      use: "request-auth",
+      host: "127.0.0.1",
+      protocol: "http"
+    };
+    const create: UpstreamServiceCreateCommand = {
+      schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+      action: "create",
+      expectedServiceRevision: 0,
+      expectedSetRevision: 0,
+      idempotencyKey: "fixture-origin-bound-credential-create",
+      serviceKey: "fixture-origin-bound-credential",
+      descriptor: {
+        serviceProtocol: "mcp",
+        label: "Fixture origin-bound credential",
+        allowLocalNetwork: true,
+        references: [reference],
+        mcp: { transport: "http", url: `${first.url}/mcp` }
+      }
+    };
+    const created: any = await fetch(collection, {
+      method: "POST",
+      headers: session.write,
+      body: JSON.stringify(create)
+    });
+    expect(created.status).toBe(202);
+    const published: any = await created.json();
+    const detail: any = await fetch(`${collection}/${encodeURIComponent(published.serviceId)}`, {
+      headers: session.read
+    });
+    expect((await detail.json()).service.references).toEqual([{
+      ...reference,
+      origin: new URL(first.url).origin
+    }]);
+
+    const replace = {
+      schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+      action: "replace",
+      serviceId: published.serviceId,
+      expectedServiceRevision: 1,
+      expectedSetRevision: 1,
+      idempotencyKey: "fixture-origin-bound-credential-port-change",
+      descriptor: {
+        serviceProtocol: "mcp",
+        label: "Fixture origin-bound credential",
+        allowLocalNetwork: true,
+        references: [reference],
+        mcp: { transport: "http", url: `${second.url}/mcp` }
+      }
+    };
+    const replaced: any = await fetch(collection, {
+      method: "POST",
+      headers: session.write,
+      body: JSON.stringify(replace)
+    });
+    expect(replaced.status).toBe(400);
+    expect(first.calls()).toBe(0);
+    expect(second.calls()).toBe(0);
   });
 
   it("rejects the bounded corpus through REST and JSON-RPC with zero publication or network side effects", async () : Promise<any> => {

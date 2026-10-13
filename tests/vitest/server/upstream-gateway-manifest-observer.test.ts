@@ -85,6 +85,7 @@ describe("upstream manifest observer", () : any => {
         reference: "secret://vault/read",
         revision: 3,
         operationKey: "read",
+        origin: "https://service.invalid",
         host: "service.invalid",
         protocol: "https",
         scopes: ["gateway:read"]
@@ -161,7 +162,67 @@ describe("upstream manifest observer", () : any => {
     expect(await observer.scan()).toEqual({ outcome: "rejected", setRevision: 2 });
     expect(await observer.reapplyAccepted()).toEqual({ outcome: "rejected", setRevision: 2 });
     expect(accepted).toEqual([2]);
-    expect(errors).toHaveLength(3);
+    expect(errors).toHaveLength(1);
+    await observer.close();
+  });
+
+  it("reports one persistent error per continuous failure category and reports again after recovery", async () : Promise<any> => {
+    let currentError: any = Object.assign(new Error("storage unavailable"), { code: "storage_unavailable" });
+    const onError: any = vi.fn();
+    const onSnapshot: any = vi.fn();
+    const observer: any = createUpstreamManifestObserver({
+      readerPort: {
+        getSnapshot: async () : Promise<any> => {
+          if (currentError) throw currentError;
+          return snapshot(1, [record()]);
+        }
+      },
+      onSnapshot,
+      onError,
+      pollIntervalMs: 60_000
+    });
+
+    expect(await observer.start()).toEqual({ outcome: "rejected", setRevision: -1 });
+    expect(await observer.scan()).toEqual({ outcome: "rejected", setRevision: -1 });
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    currentError = Object.assign(new Error("storage busy"), { code: "storage_busy" });
+    expect(await observer.scan()).toEqual({ outcome: "rejected", setRevision: -1 });
+    expect(onError).toHaveBeenCalledTimes(2);
+
+    currentError = null;
+    expect(await observer.scan()).toEqual({ outcome: "accepted", setRevision: 1 });
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+
+    currentError = Object.assign(new Error("storage unavailable"), { code: "storage_unavailable" });
+    expect(await observer.scan()).toEqual({ outcome: "rejected", setRevision: 1 });
+    expect(onError).toHaveBeenCalledTimes(3);
+    expect(onError.mock.calls.map(([event]: any[]) => event)).toEqual([
+      { reasonCode: "manifest_candidate_rejected", errorCode: "storage_unavailable" },
+      { reasonCode: "manifest_candidate_rejected", errorCode: "storage_busy" },
+      { reasonCode: "manifest_candidate_rejected", errorCode: "storage_unavailable" }
+    ]);
+    await observer.close();
+  });
+
+  it("retries an unchanged failure report when its callback does not complete", async () : Promise<any> => {
+    let attempts: any = 0;
+    const failure: any = Object.assign(new Error("storage unavailable"), { code: "storage_unavailable" });
+    const observer: any = createUpstreamManifestObserver({
+      readerPort: { getSnapshot: async () : Promise<any> => { throw failure; } },
+      onSnapshot: vi.fn(),
+      onError: async () : Promise<any> => {
+        attempts++;
+        if (attempts === 1) throw new Error("audit sink unavailable");
+      },
+      pollIntervalMs: 60_000
+    });
+
+    await observer.start();
+    await observer.scan();
+    expect(attempts).toBe(2);
+    await observer.scan();
+    expect(attempts).toBe(2);
     await observer.close();
   });
 
@@ -210,7 +271,7 @@ describe("upstream manifest observer", () : any => {
     failCallback = false;
     expect(await observer.scan()).toEqual({ outcome: "accepted", setRevision: 2 });
     expect(accepted).toEqual([1, 2]);
-    expect(errors).toHaveLength(2);
+    expect(errors).toHaveLength(1);
     await observer.close();
   });
 
@@ -247,7 +308,7 @@ describe("upstream manifest observer", () : any => {
     current = Object.freeze({ ...snapshot(2, [record({ revision: 2 })]), serviceCount: 2 });
     expect(await observer.scan()).toEqual({ outcome: "rejected", setRevision: -1 });
     expect(onSnapshot).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(1);
     await observer.close();
   });
 

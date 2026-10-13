@@ -38,6 +38,7 @@ export interface UpstreamGatewayCredentialReference {
   revision: number;
   use: string;
   operationKey: string;
+  origin?: string;
   host: string;
   protocol: string;
   scopes: string[];

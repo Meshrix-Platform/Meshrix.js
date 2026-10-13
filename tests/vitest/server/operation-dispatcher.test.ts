@@ -354,6 +354,31 @@ describe("operation dispatcher behavior", () : any => {
     })).resolves.toMatchObject({ ok: false, statusCode: 400 });
     expect(okResponse.json().error).toContain("input schema is invalid");
 
+    const unauthorizedSchemaResponse: any = createResponse();
+    const authorizeBeforeSchema = vi.fn(async () : Promise<any> => ({
+      ok: false,
+      status: 403,
+      error: "operation denied",
+      authorizationDecision: { allowed: false, reasonCode: "operation_denied" }
+    }));
+    await expect(dispatchOperation({
+      operation: baseOperation({
+        inputSchema: {
+          type: "object",
+          properties: { value: { type: "string", pattern: "(?=unsafe)" } }
+        }
+      }),
+      controllers: controllers(() : any => {}),
+      request: {},
+      response: unauthorizedSchemaResponse,
+      input: { value: "unsafe" },
+      url: new URL("http://127.0.0.1/api/unit/dispatch"),
+      authorizeOperation: authorizeBeforeSchema,
+      logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    })).resolves.toMatchObject({ ok: false, statusCode: 403 });
+    expect(authorizeBeforeSchema).toHaveBeenCalledTimes(1);
+    expect(unauthorizedSchemaResponse.json().error).toBe("operation denied");
+
     const arrayResponse: any = createResponse();
     await expect(dispatchOperation({
       operation: baseOperation(),

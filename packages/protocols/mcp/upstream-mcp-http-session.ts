@@ -2,8 +2,6 @@ import {
   abortError,
   assertNegotiatedProtocolVersion,
   assertJsonRpcResponse,
-  DEFAULT_MCP_CONTROL_TIMEOUT_MS,
-  DEFAULT_MCP_INITIALIZE_TIMEOUT_MS,
   fatalSessionError,
   initializeParams,
   jsonRpcNotification,
@@ -16,10 +14,10 @@ import {
   protocolError,
   requestTimeoutMs,
   requestedProtocolVersion,
-  resolveStringRecord,
   text,
   timeoutError
 } from "./upstream-mcp-transport-common.ts";
+import { normalizeUpstreamMcpHttpRequestHeaders } from "@meshrix/contracts/upstream-service-publishing";
 
 const MAX_RESPONSE_CHARS: any = 8 * 1024 * 1024;
 const CANCELLATION_TIMEOUT_MS: any = 1000;
@@ -30,11 +28,8 @@ export const UPSTREAM_MCP_HTTP_NOTIFICATION_LIMITS: Readonly<Record<string, any>
   queueCharacters: 1024 * 1024
 });
 
-function normalizedHeaders(record: Record<string, any> = {}, env: any = process.env) : any {
-  return Object.fromEntries(
-    (Object.entries(resolveStringRecord(record, env)) as [string, any][])
-      .map(([key, value]: any[]) : any => [key.toLowerCase(), value])
-  );
+function normalizedHeaders(record: Record<string, any> = {}) : any {
+  return normalizeUpstreamMcpHttpRequestHeaders(record);
 }
 
 function safeCancelReason(timedOut?: any) : any {
@@ -60,6 +55,7 @@ async function readBoundedText(response?: any) : Promise<any> {
     result += decoder.decode();
     return result;
   } finally {
+    await reader.cancel().catch(() : any => undefined);
     reader.releaseLock();
   }
 }
@@ -167,6 +163,7 @@ async function readSseResponse(
     }
     throw protocolError("Upstream MCP event stream ended before the matching response.");
   } finally {
+    await reader.cancel().catch(() : any => undefined);
     reader.releaseLock();
   }
 }
@@ -184,7 +181,7 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
     error.status = 500;
     throw error;
   }
-  const customHeaders: any = normalizedHeaders(normalized.headers, options.env || process.env);
+  const customHeaders: any = normalizedHeaders(normalized.headers);
   let nextId: any = 1;
   let sessionId: any = "";
   let protocolVersion: any = requestedProtocolVersion(normalized);
@@ -264,14 +261,21 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
     return result;
   }
 
-  async function postOneWay(payload?: any, method?: any, timeoutMs: any = normalized.timeoutMs) : Promise<any> {
+  async function postOneWay(payload?: any, method?: any, timeoutMs: any = normalized.timeoutMs, signal?: AbortSignal) : Promise<any> {
     if (closed) throw fatalSessionError("Upstream MCP http session is closed.");
+    if (signal?.aborted) throw abortError();
     const controller: any = new AbortController();
-    const timeout: any = setTimeout(
-      () : any => controller.abort(),
-      positiveInt(timeoutMs, DEFAULT_MCP_CONTROL_TIMEOUT_MS)
-    );
-    timeout.unref?.();
+    let callerAborted: any = false;
+    const abortListener: any = () : any => {
+      callerAborted = true;
+      controller.abort();
+    };
+    signal?.addEventListener("abort", abortListener, { once: true });
+    const controlTimeoutMs: any = positiveInt(timeoutMs, 0);
+    const timeout: any = controlTimeoutMs > 0
+      ? setTimeout(() : any => controller.abort(), controlTimeoutMs)
+      : null;
+    timeout?.unref?.();
     let transportFetch: any = null;
     try {
       transportFetch = await openTransportFetch({
@@ -300,21 +304,23 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
       }
       await response.body?.cancel().catch(() : any => undefined);
     } catch (error: any) {
+      if (callerAborted) throw abortError();
       if (error?.mcpSessionFatal) throw error;
       if (controller.signal.aborted) throw timeoutError(method);
       throw fatalSessionError("Upstream MCP notification could not be sent.", error);
     } finally {
       await closeTransportFetch(transportFetch);
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortListener);
     }
   }
 
-  async function postNotification(method?: any, params: Record<string, any> = {}, timeoutMs: any = normalized.timeoutMs) : Promise<any> {
-    return postOneWay(jsonRpcNotification(method, params), method, timeoutMs);
+  async function postNotification(method?: any, params: Record<string, any> = {}, timeoutMs: any = normalized.timeoutMs, signal?: AbortSignal) : Promise<any> {
+    return postOneWay(jsonRpcNotification(method, params), method, timeoutMs, signal);
   }
 
-  async function respondToServerRequest(message?: any) : Promise<any> {
-    await postOneWay(serverRequestResponse(message), "server-request-response", CANCELLATION_TIMEOUT_MS);
+  async function respondToServerRequest(message?: any, signal?: AbortSignal) : Promise<any> {
+    await postOneWay(serverRequestResponse(message), "server-request-response", normalized.timeoutMs, signal);
   }
 
   async function sendCancellation(id?: any, timedOut?: any) : Promise<any> {
@@ -391,7 +397,7 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
           response,
           id,
           requestOptions.onNotification,
-          respondToServerRequest,
+          (message?: any) : any => respondToServerRequest(message, controller.signal),
           enqueueNotification
         )
         : parseJson(await readBoundedText(response));
@@ -399,11 +405,11 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
       if (requestOptions.signal?.aborted || timedOut || callerAborted) throw abortError();
       return result;
     } catch (error: any) {
-      if (error?.mcpSessionNotFound) throw error;
       if (timedOut || callerAborted || controller.signal.aborted) {
         if (cancelNotification) await sendCancellation(id, timedOut);
         throw timedOut ? timeoutError(method) : abortError();
       }
+      if (error?.mcpSessionNotFound) throw error;
       if (error?.mcpJsonRpcError) throw error;
       if (error?.mcpSessionFatal) {
         fatal = true;
@@ -445,17 +451,13 @@ export async function createHttpMcpSession(config: Record<string, any> = {}, opt
   }
 
   try {
-    const initializeTimeoutMs: any = positiveInt(
-      normalized.timeoutMs,
-      DEFAULT_MCP_INITIALIZE_TIMEOUT_MS
-    );
     initializedResult = await request("initialize", initializeParams(normalized), {
-      timeoutMs: initializeTimeoutMs,
-      cancelNotification: false
+      cancelNotification: false,
+      ...(options.signal ? { signal: options.signal } : {})
     });
     protocolVersion = assertNegotiatedProtocolVersion(initializedResult, protocolVersion);
     initialized = true;
-    await postNotification("notifications/initialized", {});
+    await postNotification("notifications/initialized", {}, normalized.timeoutMs, options.signal);
   } catch (error: any) {
     await deleteLogicalSession();
     closed = true;

@@ -1,4 +1,5 @@
 import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
+import { normalizeUpstreamMcpContextHeaders } from "@meshrix/contracts/upstream-service-publishing";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { ServerConfig } from "@meshrix/foundation/config/server-config";
@@ -445,6 +446,32 @@ export function normalizeMcpTransport(value?: any) : any {
   return transport === "stdio" ? "stdio" : transport;
 }
 
+function serviceOrigin(value?: any) : string {
+  try {
+    const url = new URL(text(value));
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.origin : "";
+  } catch {
+    return "";
+  }
+}
+
+function credentialReferenceOrigin(reference: Record<string, any> = {}, origins: readonly string[] = []) : string {
+  if (text(reference.origin)) return text(reference.origin);
+  const host = text(reference.host).toLowerCase();
+  const protocol = text(reference.protocol).toLowerCase();
+  const matches = [...new Set(origins)].filter((origin) => {
+    try {
+      const url = new URL(origin);
+      const originHost = url.hostname.replace(/^\[|\]$/gu, "").toLowerCase();
+      return (!host || originHost === host) &&
+        (!protocol || url.protocol.slice(0, -1) === protocol);
+    } catch {
+      return false;
+    }
+  });
+  return matches.length === 1 ? matches[0]! : "";
+}
+
 export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Record<string, any> = {}, { serviceId = "" }: Record<string, any> = {}) : UpstreamGatewayMcpConfig {
   const source: any = object(input.mcp || input.upstreamMcp || input);
   const previous: any = object(existing.mcp);
@@ -453,10 +480,8 @@ export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Re
   const env: any = Object.fromEntries((Object.entries(rawEnv) as [string, any][])
     .map(([key, value]: any[]) : any => [text(key), text(value)])
     .filter(([key]: any[]) : any => key));
-  const rawHeaders: any = object(source.headers || previous.headers);
-  const headers: any = Object.fromEntries((Object.entries(rawHeaders) as [string, any][])
-    .map(([key, value]: any[]) : any => [text(key), text(value)])
-    .filter(([key]: any[]) : any => key));
+  const rawHeaders: any = source.headers === undefined ? previous.headers : source.headers;
+  const headers: any = normalizeUpstreamMcpContextHeaders(rawHeaders === undefined ? {} : rawHeaders);
   const rawTimeoutMs: any = Object.hasOwn(source, "timeoutMs") ? source.timeoutMs : previous.timeoutMs;
   const timeoutMs: any = normalizeOptionalTimeoutMs(rawTimeoutMs, "mcp.timeoutMs");
   return {
@@ -567,6 +592,11 @@ export function normalizeService(input: Record<string, any> = {}, existing: Upst
       requiredScopes: input.requiredScopes || (serviceProtocol === "mcp" ? ["gateway:write"] : undefined)
     }, 0, { serviceProtocol })
   ];
+  const credentialOrigins = serviceProtocol === "mcp"
+    ? [serviceOrigin(mcp?.url)]
+    : endpoints.length > 0
+      ? endpoints.map((endpoint?: any) : any => serviceOrigin(endpoint.baseUrl))
+      : [serviceOrigin(input.baseUrl || existing.baseUrl)];
   const credentialReferences: any = asArray(input.credentialReferences || existing.credentialReferences)
     .filter((entry?: any) : any => entry && typeof entry === "object" && !Array.isArray(entry))
     .map((entry?: any) : any => ({
@@ -575,15 +605,35 @@ export function normalizeService(input: Record<string, any> = {}, existing: Upst
       revision: Number(entry.revision || 0),
       use: text(entry.use),
       operationKey: text(entry.operationKey),
+      origin: credentialReferenceOrigin(entry, credentialOrigins),
       host: text(entry.host).toLowerCase(),
       protocol: text(entry.protocol).toLowerCase(),
       scopes: asArray(entry.scopes).map(text).filter(Boolean)
     }));
-  const credentialRefs: any[] = [...new Set<any>([
+  const declaredCredentialRefs: any[] = [
     ...asArray(input.credentialRefs),
     ...asArray(input.credentialRef),
     ...asArray(input.secretRefs),
-    ...asArray(input.secretRef),
+    ...asArray(input.secretRef)
+  ].map(text).filter(Boolean);
+  const coveredReferences: any = new Set<string>(credentialReferences.map((entry?: any) : any => entry.reference));
+  for (const reference of declaredCredentialRefs) {
+    if (coveredReferences.has(reference)) continue;
+    coveredReferences.add(reference);
+    credentialReferences.push({
+      type: "credential",
+      reference,
+      revision: 0,
+      use: "",
+      operationKey: "",
+      origin: credentialReferenceOrigin({ reference }, credentialOrigins),
+      host: "",
+      protocol: "",
+      scopes: []
+    });
+  }
+  const credentialRefs: any[] = [...new Set<any>([
+    ...declaredCredentialRefs,
     ...credentialReferences.map((entry?: any) : any => entry.reference)
   ].map(text).filter(Boolean))];
   const timestamp: any = nowIso();

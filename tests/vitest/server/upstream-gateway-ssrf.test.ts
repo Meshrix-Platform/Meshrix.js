@@ -14,6 +14,9 @@ import {
   structuredJsonPayloadTransport,
   structuredUpstreamServiceFixture
 } from "../../helpers/upstream-runtime-snapshot.ts";
+import { activatePlugin as activateModelGateway } from "../../../plugins/model-gateway/runtime.mjs";
+import { createPluginContributionController } from "../../../packages/server-runtime/src/composition/plugin-contribution-controller.ts";
+import { createCapturedResponse, parseCapturedResult } from "../../../packages/server-runtime/src/composition/dispatch-operation-captured-response.ts";
 import {
   initializeLocalSecret
 } from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
@@ -115,6 +118,43 @@ async function startFixtureServer() : Promise<any> {
   };
 }
 
+async function startHeldFixtureServer() : Promise<any> {
+  const requestReceived = deferred();
+  const peerClosed = deferred();
+  const release = deferred();
+  const hits: any[] = [];
+  const server: any = http.createServer(async (request?: any, response?: any) : Promise<any> => {
+    const chunks: any[] = [];
+    request.on("data", (chunk?: any) : any => chunks.push(chunk));
+    request.on("aborted", () : any => peerClosed.resolve());
+    response.on("close", () : any => peerClosed.resolve());
+    await new Promise((resolve?: any) : any => request.on("end", resolve));
+    const body = Buffer.concat(chunks).toString("utf8");
+    hits.push({ method: request.method, pathname: new URL(request.url || "/", "http://127.0.0.1").pathname, body });
+    requestReceived.resolve();
+    await release.promise;
+    if (!response.destroyed) sendJson(response, 200, { ok: true });
+  });
+  await listenLoopback(server);
+  cleanupTasks.push(async () : Promise<any> => {
+    release.resolve();
+    await new Promise((resolve?: any) : any => server.close(resolve));
+  });
+  return {
+    hits,
+    requestReceived: requestReceived.promise,
+    peerClosed: peerClosed.promise,
+    release,
+    baseUrl: `http://127.0.0.1:${server.address().port}`
+  };
+}
+
+function deferred() : any {
+  let resolve: any;
+  const promise: Promise<void> = new Promise((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
 async function createRegistry(services?: any) : Promise<any> {
   const { registry } = await createRegistryWithDataDir(services);
   return registry;
@@ -185,6 +225,7 @@ async function writeLocalSecret({ userDataPath, serviceId, baseUrl, secretKeyPro
         serviceId,
         allowedHosts: [endpoint.hostname],
         allowedProtocols: [endpoint.protocol.replace(/:$/, "")],
+        allowedOrigins: [endpoint.origin],
         scopes: ["gateway:read", "gateway:write"]
       }
     },
@@ -223,6 +264,100 @@ afterEach(async () : Promise<any> => {
 });
 
 describe("upstream gateway SSRF boundary", () : any => {
+  it("maps a published Model Gateway deadline through the plugin Host facade into one cancellable HTTP request", async () : Promise<any> => {
+    const fixture: any = await startHeldFixtureServer();
+    const serviceId = "model-gateway-timeout-fixture";
+    const { registry } = await createRegistryWithDataDir([{
+      serviceId,
+      baseUrl: fixture.baseUrl,
+      allowLocalNetwork: true,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [{
+        operationKey: "model_gateway.call",
+        method: "POST",
+        path: "/v1/chat/completions",
+        risk: "safe_write",
+        requiredScopes: ["gateway:write"]
+      }]
+    }]);
+    const runtime: any = await activateModelGateway({
+      manifest: { id: "model-gateway" },
+      context: { configuration: { enabled: true, serviceRef: serviceId, timeoutMs: 150 } }
+    });
+    cleanupTasks.push(() => runtime.close());
+    const operationId = "model_gateway.call";
+    const implementation = runtime.contributions.operations[operationId];
+    const operationRecord = Object.freeze({
+      pluginId: "model-gateway",
+      kind: "operations",
+      id: operationId,
+      implementation
+    });
+    const pluginRegistry = Object.freeze({
+      requireOperation: (id: string) => id === operationId ? operationRecord : null
+    });
+    const controller = createPluginContributionController({
+      registry: pluginRegistry,
+      hostPorts: { externalService: registry }
+    });
+    const response: any = createCapturedResponse();
+    const execution = controller.executePluginOperation({
+      operation: { id: operationId },
+      input: {
+        modelRef: "model.synthetic",
+        providerRef: "provider.synthetic",
+        inputRefs: ["input.synthetic"],
+        idempotencyKey: "retry.synthetic",
+        deadlineMs: 1_000,
+        stream: false
+      },
+      authSession: {
+        user: {
+          userId: "synthetic-subject",
+          tenantId: "synthetic-tenant",
+          scopes: ["gateway:write", "model:call"]
+        }
+      },
+      request: {
+        __meshrixToolRuntimeAuthorization: {
+          ok: true,
+          grant: {
+            id: "synthetic-grant",
+            scopes: ["gateway:write", "model:call"],
+            capabilities: [],
+            metadata: { policyRevision: "synthetic-policy" }
+          },
+          policy: { decisionId: "synthetic-risk-decision" }
+        }
+      },
+      response
+    });
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
+    try {
+      await Promise.race([
+        execution,
+        new Promise<never>((_resolve, reject) => {
+          watchdog = setTimeout(() => reject(new Error("Explicit Model Gateway request budget did not settle.")), 5_000);
+        })
+      ]);
+    } finally {
+      if (watchdog) clearTimeout(watchdog);
+      fixture.release.resolve();
+    }
+    await fixture.requestReceived;
+    await fixture.peerClosed;
+
+    expect(response.statusCode).toBe(504);
+    expect(parseCapturedResult({ operation: { id: operationId }, captured: response })).toMatchObject({
+      ok: false,
+      error: { code: "model_gateway_timeout" }
+    });
+    expect(fixture.hits).toHaveLength(1);
+    expect(fixture.hits[0].pathname).toBe("/v1/chat/completions");
+    expect(JSON.parse(fixture.hits[0].body)).not.toHaveProperty("deadlineMs");
+    expect(fixture.hits[0].body).toContain("model.synthetic");
+  });
+
   it("requires an explicit service policy before reaching a restricted local target", async () : Promise<any> => {
     const fixture: any = await startFixtureServer();
     const registry: any = await createRegistry([{
@@ -562,6 +697,91 @@ describe("upstream gateway SSRF boundary", () : any => {
     expect(forwarded.response.json.search).toBe("?q=1");
     expect(forwarded.response.json.allowedHeader).toBe("");
     expect(fixture.hits).toHaveLength(1);
+  });
+
+  it("injects only the Core-bound Skill Hub subject into the trusted service request", async () => {
+    const fixture = await startFixtureServer();
+    const serviceId = "skill-hub-admission-fixture";
+    const operationId = "skill_hub.fixture.get";
+    const registry = await createRegistry([{ serviceId, baseUrl: fixture.baseUrl,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      headers: { "X-Meshrix-Skill-Hub-Subject": "untrusted-configured-subject" },
+      operations: [{ operationKey: operationId, method: "POST", path: "/api/fixture", risk: "read_only", requiredScopes: ["gateway:read"] }]
+    }]);
+    const subjectRef = `skill_hub_subject_${"a".repeat(64)}`;
+    const governance = { authorizationContextDigest: "authorization-fixture", riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" };
+    await registry.requestPluginExternalService({ pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
+      governance, input: { meshrixContext: { principal: { subjectRef } } } }, { subject });
+    expect(fixture.hits[0].headers["x-meshrix-skill-hub-subject"]).toBe(subjectRef);
+    expect(JSON.parse(fixture.hits[0].body).meshrixContext.principal.subjectRef).toBe(subjectRef);
+    await registry.forward({ serviceId, operationKey: operationId, body: { meshrixContext: { principal: { subjectRef } } },
+      requestHeaders: { "x-meshrix-skill-hub-subject": subjectRef } }, subject);
+    expect(fixture.hits[1].headers).not.toHaveProperty("x-meshrix-skill-hub-subject");
+    await expect(registry.requestPluginExternalService({ pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
+      governance, input: { meshrixContext: { principal: { subjectRef: "caller-subject" } } } }, { subject })).rejects.toMatchObject({ status: 403 });
+    expect(fixture.hits).toHaveLength(2);
+  });
+
+  it("refreshes the Skill Hub catalog on SSE connect and reconnect without replaying committed requests", async () => {
+    const updates: Record<string, any>[] = [];
+    const receivedEvent = deferred();
+    const reconnected = deferred();
+    const cursors: string[] = [];
+    const subscriptions: http.ServerResponse[] = [];
+    let calls = 0;
+    const server = http.createServer(async (request, response) => {
+      const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/v1/events") {
+        cursors.push(url.searchParams.get("cursor") || "");
+        subscriptions.push(response);
+        response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store" });
+        response.flushHeaders();
+        if (subscriptions.length === 1) {
+          response.write(`id: 7\nevent: skill-hub.catalog.changed\ndata: ${JSON.stringify({
+            eventType: "skill-hub.catalog.changed", eventId: 7, serviceRevision: 7, operationId: "skill_hub.publish"
+          })}\n\n`);
+        }
+        return;
+      }
+      for await (const _chunk of request) { /* consume the one authorized request */ }
+      calls += 1;
+      sendJson(response, 200, { ok: true });
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(async () => {
+      for (const response of subscriptions) response.end();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Fixture did not bind a TCP port.");
+    const serviceId = "skill-hub-events-fixture";
+    const operationId = "skill_hub.fixture.get";
+    const { registry } = await createRegistryWithDataDir([{
+      serviceId, baseUrl: `http://127.0.0.1:${address.port}`,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [{ operationKey: operationId, method: "POST", path: "/api/fixture", risk: "read_only", requiredScopes: ["gateway:read"] }]
+    }], {
+      publishSkillHubUpdate(update: Record<string, any>) {
+        updates.push(update);
+        if (update.operationId === "skill_hub.publish") receivedEvent.resolve();
+        if (update.operationId === "skill_hub.catalog.refresh" && update.revision === 7) reconnected.resolve();
+      }
+    });
+    const response = await registry.requestPluginExternalService({
+      pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
+      governance: { authorizationContextDigest: "authorization-fixture", riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" },
+      input: { meshrixContext: { principal: { subjectRef: `skill_hub_subject_${"a".repeat(64)}` } } }
+    }, { subject });
+    expect(response.ok).toBe(true);
+    await receivedEvent.promise;
+    expect(updates[0]).toMatchObject({ operationId: "skill_hub.catalog.refresh", revision: 0 });
+    subscriptions[0].end();
+    await reconnected.promise;
+    expect(cursors).toEqual(["0", "7"]);
+    expect(updates.map((item) => item.operationId)).toEqual([
+      "skill_hub.catalog.refresh", "skill_hub.publish", "skill_hub.catalog.refresh"
+    ]);
+    expect(calls).toBe(1);
   });
 
   it("maps a plugin external-service request through its exact published operation", async () : Promise<any> => {

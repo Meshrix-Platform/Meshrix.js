@@ -181,10 +181,49 @@ export interface TypedServiceReference {
   revision: number;
   use: string;
   operationKey?: string;
+  /** Canonical HTTP(S) origin (scheme, host and effective port) authorized for this binding. */
+  origin?: string;
   host?: string;
   protocol?: string;
   scopes?: string[];
 }
+
+/** Credential reference data accepted by the shared upstream material resolver. */
+export interface UpstreamCredentialMaterialBinding {
+  readonly type?: string;
+  readonly reference: string;
+  readonly revision?: number;
+  readonly operationKey?: string;
+  readonly origin?: string;
+  readonly host?: string;
+  readonly protocol?: string;
+  readonly scopes?: readonly string[];
+}
+
+/** Plaintext payload returned by a runtime-specific secret authority adapter. */
+export interface UpstreamCredentialPayloadResolution {
+  readonly payload: unknown;
+  readonly secretRef?: string;
+  readonly revision?: number;
+}
+
+/** The env projection is for configured local stdio only; remote MCP callers use headers alone. */
+export interface UpstreamCredentialMaterial {
+  readonly headers: Record<string, string>;
+  readonly env: Record<string, string>;
+  readonly credentialRefCount: number;
+  readonly resolvedCredentialRefCount: number;
+  readonly credentialRevisions: readonly Readonly<{ secretRef: string; revision: number }>[];
+}
+
+export type UpstreamCredentialPayloadResolver = (
+  binding: Readonly<UpstreamCredentialMaterialBinding>,
+  targetOrigin: string,
+  tenantId: string,
+  signal?: AbortSignal,
+  operationKey?: string,
+  requiredScopes?: readonly string[]
+) => Promise<UpstreamCredentialPayloadResolution>;
 
 export interface UpstreamMcpDescriptor {
   transport: typeof UPSTREAM_MCP_REMOTE_TRANSPORTS[number];
@@ -403,7 +442,7 @@ const MCP_DESCRIPTOR_FIELDS = new Set(UPSTREAM_MCP_DESCRIPTOR_FIELDS);
 const MCP_REMOTE_TRANSPORTS = new Set<string>(UPSTREAM_MCP_REMOTE_TRANSPORTS);
 const MCP_PROTOCOL_VERSIONS = new Set<string>(UPSTREAM_MCP_PROTOCOL_VERSIONS);
 const REFERENCE_FIELDS = new Set([
-  "type", "reference", "revision", "use", "operationKey", "host", "protocol", "scopes"
+  "type", "reference", "revision", "use", "operationKey", "origin", "host", "protocol", "scopes"
 ]);
 const REFERENCE_SCHEMES: Readonly<Record<TypedServiceReference["type"], ReadonlySet<string>>> = Object.freeze({
   credential: new Set(["credential", "secret"]),
@@ -411,8 +450,35 @@ const REFERENCE_SCHEMES: Readonly<Record<TypedServiceReference["type"], Readonly
   "private-key": new Set(["private-key"]),
   "trust-anchor": new Set(["trust-anchor"])
 });
-const SENSITIVE_MCP_HEADER_NAME = /(?:password|passphrase|secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|authorization|cookie|api[_-]?key|credential|private[_-]?key|certificate)/iu;
+const SENSITIVE_MCP_HEADER_NAME = /(?:^|[-_])(?:password|passcode|passphrase|secret|token|auth(?:orization)?|cookie|session|api[_-]?key|credential|private[_-]?key|certificate|bearer)(?:$|[-_])/iu;
 const INLINE_SECRET_VALUE = /-----BEGIN [A-Z0-9 ]+-----|\b(?:Bearer|Basic)\s+[A-Za-z0-9+/=_-]{8,}|\b(?:gh[pousr]_|github_pat_|sk-)[A-Za-z0-9._-]{8,}\b|\bxox[baprs]-[A-Za-z0-9-]{8,}\b|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b|^[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/iu;
+const MCP_HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u;
+const MCP_RESERVED_HEADER_NAMES = new Set([
+  "host",
+  "content-length",
+  "transfer-encoding",
+  "connection",
+  "proxy-connection",
+  "keep-alive",
+  "proxy-authorization",
+  "proxy-authenticate",
+  "te",
+  "trailer",
+  "upgrade",
+  "expect",
+  "accept",
+  "content-type",
+  "mcp-session-id",
+  "mcp-protocol-version",
+  "x-meshrix-skill-hub-subject"
+]);
+const UTF8_ENCODER = new TextEncoder();
+
+function invalidMcpRequestHeaders(): Error & { code: string } {
+  return Object.assign(new Error("MCP request headers are invalid."), {
+    code: "upstream_mcp_headers_invalid"
+  });
+}
 
 export function isUpstreamPublishingAction(value?: unknown) {
   return typeof value === "string" && UPSTREAM_PUBLISHING_ACTIONS.includes(value);
@@ -432,6 +498,374 @@ export function isUpstreamResponseRepresentationMode(value?: unknown): value is 
 
 export function isUpstreamServiceKey(value?: unknown): value is string {
   return typeof value === "string" && SAFE_SERVICE_KEY.test(value);
+}
+
+function normalizeMcpHeaders(value: unknown, { contextOnly }: { contextOnly: boolean }): Record<string, string> {
+  if (!isPlainObject(value)) throw invalidMcpRequestHeaders();
+  const output: Record<string, string> = {};
+  const seen = new Set<string>();
+  let totalBytes = 0;
+  for (const [rawName, rawValue] of Object.entries(value)) {
+    const name = rawName.toLowerCase();
+    if (rawName.length > 128 || !MCP_HEADER_NAME_PATTERN.test(rawName) ||
+        rawName === "__proto__" || rawName === "prototype" || rawName === "constructor" ||
+        seen.has(name) ||
+        (contextOnly && (MCP_RESERVED_HEADER_NAMES.has(name) || SENSITIVE_MCP_HEADER_NAME.test(name)))) {
+      throw invalidMcpRequestHeaders();
+    }
+    if (MCP_RESERVED_HEADER_NAMES.has(name)) continue;
+    if (typeof rawValue !== "string" || rawValue.length > 8_192 || rawValue.normalize("NFC") !== rawValue ||
+        /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/u.test(rawValue) ||
+        (contextOnly && (
+          rawValue.length === 0 ||
+          /\$\{|\{\{|<%|\bfile:\/\//u.test(rawValue) ||
+          INLINE_SECRET_VALUE.test(rawValue)
+        ))) {
+      throw invalidMcpRequestHeaders();
+    }
+    totalBytes += UTF8_ENCODER.encode(name).byteLength + UTF8_ENCODER.encode(rawValue).byteLength + 4;
+    if (seen.size >= 64 || totalBytes > 32 * 1024) {
+      throw invalidMcpRequestHeaders();
+    }
+    seen.add(name);
+    output[name] = rawValue;
+  }
+  return output;
+}
+
+/** Validate declarative MCP context headers. Values, including `$NAME`, remain literal data. */
+export function normalizeUpstreamMcpContextHeaders(value: unknown = {}): Record<string, string> {
+  return normalizeMcpHeaders(value, { contextOnly: true });
+}
+
+/** Validate complete HTTP MCP request headers after credentials have been resolved. */
+export function normalizeUpstreamMcpHttpRequestHeaders(value: unknown = {}): Record<string, string> {
+  return normalizeMcpHeaders(value, { contextOnly: false });
+}
+
+/** Identify request headers that must not cross a change of upstream origin. */
+export function isUpstreamCredentialHeaderName(value: unknown): boolean {
+  return typeof value === "string" && SENSITIVE_MCP_HEADER_NAME.test(value.toLowerCase());
+}
+
+export function isUpstreamServiceOrigin(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 512) return false;
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && url.origin === value;
+  } catch {
+    return false;
+  }
+}
+
+const SECRET_REFERENCE_PATTERN = /^secret:\/\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._~-]*)*$/u;
+const CREDENTIAL_ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const CREDENTIAL_ENV_MAX_ENTRIES = 1_024;
+const CREDENTIAL_ENV_MAX_VALUE_LENGTH = 65_536;
+const CREDENTIAL_ENV_MAX_TOTAL_BYTES = 1024 * 1024;
+
+function credentialMaterialError(reasonCode: string, status: number): Error & { status: number; reasonCode: string } {
+  const message = reasonCode === "upstream_credential_material_invalid"
+    ? "Upstream credential material is invalid."
+    : reasonCode === "upstream_credential_resolution_failed"
+      ? "Upstream gateway credential resolution failed."
+      : "Upstream credential binding was denied.";
+  return Object.assign(new Error(message), { status, reasonCode });
+}
+
+function cancelledCredentialResolution(): Error & { code: string } {
+  return Object.assign(new Error("Upstream credential resolution was cancelled."), {
+    name: "AbortError",
+    code: "ABORT_ERR"
+  });
+}
+
+function secretMaterialText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  const material = String(value);
+  if (/[\r\n\u0000]/u.test(material)) {
+    throw credentialMaterialError("upstream_credential_material_invalid", 503);
+  }
+  return material;
+}
+
+function secretPayloadObject(value: unknown): Record<string, unknown> {
+  if (!isPlainObject(value)) {
+    throw credentialMaterialError("upstream_credential_material_invalid", 503);
+  }
+  return value;
+}
+
+function secretPayloadHeaders(payload: Record<string, unknown>): Record<string, string> {
+  const headers: Record<string, string> = Object.create(null);
+  const add = (rawName: unknown, rawValue: unknown, { overwrite = true } = {}) => {
+    if (rawValue === undefined || rawValue === null) return;
+    const name = typeof rawName === "string" ? rawName.toLowerCase() : "";
+    const value = secretMaterialText(rawValue);
+    if (!name || !value) {
+      throw credentialMaterialError("upstream_credential_material_invalid", 503);
+    }
+    if (overwrite || headers[name] === undefined) headers[name] = value;
+  };
+  const rawHeaders = payload.headers ?? payload.header;
+  if (rawHeaders !== undefined && rawHeaders !== null) {
+    if (!isPlainObject(rawHeaders)) {
+      throw credentialMaterialError("upstream_credential_material_invalid", 503);
+    }
+    for (const [name, value] of Object.entries(rawHeaders)) add(name, value);
+  }
+  const explicitHeaderValue = payload.headerValue ?? payload.value;
+  if (payload.headerName !== undefined || explicitHeaderValue !== undefined) {
+    add(payload.headerName || payload.name, explicitHeaderValue);
+  }
+  for (const key of ["authorization", "authHeader"]) {
+    if (payload[key] !== undefined) add("authorization", payload[key], { overwrite: false });
+  }
+  let bearerToken = "";
+  for (const key of ["bearerToken", "accessToken", "token"]) {
+    const candidate = secretMaterialText(payload[key]);
+    if (candidate) {
+      bearerToken = candidate;
+      break;
+    }
+  }
+  if (!bearerToken && isPlainObject(payload.oauth)) {
+    bearerToken = secretMaterialText(payload.oauth.accessToken);
+  }
+  if (bearerToken && headers.authorization === undefined) {
+    add("authorization", /^Bearer\s+/iu.test(bearerToken) ? bearerToken : `Bearer ${bearerToken}`);
+  }
+  let apiKey = "";
+  for (const key of ["apiKey", "api_key", "key"]) {
+    const candidate = secretMaterialText(payload[key]);
+    if (candidate) {
+      apiKey = candidate;
+      break;
+    }
+  }
+  if (apiKey && headers["x-api-key"] === undefined) add("x-api-key", apiKey);
+  try {
+    return normalizeUpstreamMcpHttpRequestHeaders(headers);
+  } catch {
+    throw credentialMaterialError("upstream_credential_material_invalid", 503);
+  }
+}
+
+function secretPayloadEnvironment(payload: Record<string, unknown>): Record<string, string> {
+  const env: Record<string, string> = Object.create(null);
+  let totalBytes = 0;
+  let entryCount = 0;
+  const add = (name: string, rawValue: unknown) => {
+    if (!CREDENTIAL_ENV_NAME_PATTERN.test(name)) return;
+    const value = secretMaterialText(rawValue);
+    if (!value) return;
+    const entryBytes = UTF8_ENCODER.encode(name).byteLength + UTF8_ENCODER.encode(value).byteLength;
+    if (name.length > 256 || value.length > CREDENTIAL_ENV_MAX_VALUE_LENGTH ||
+        !Number.isSafeInteger(totalBytes + entryBytes) ||
+        totalBytes + entryBytes > CREDENTIAL_ENV_MAX_TOTAL_BYTES) {
+      throw credentialMaterialError("upstream_credential_material_invalid", 503);
+    }
+    if (env[name] === undefined) {
+      if (entryCount >= CREDENTIAL_ENV_MAX_ENTRIES) {
+        throw credentialMaterialError("upstream_credential_material_invalid", 503);
+      }
+      env[name] = value;
+      totalBytes += entryBytes;
+      entryCount += 1;
+    }
+  };
+  const rawEnv = payload.env ?? payload.environment;
+  if (rawEnv !== undefined && rawEnv !== null) {
+    if (!isPlainObject(rawEnv)) {
+      throw credentialMaterialError("upstream_credential_material_invalid", 503);
+    }
+    for (const [name, value] of Object.entries(rawEnv)) add(name, value);
+  }
+  const explicitName = payload.envName ?? payload.environmentName;
+  if (typeof explicitName === "string") add(explicitName, payload.envValue ?? payload.value);
+  return Object.fromEntries(Object.entries(env));
+}
+
+function credentialOriginScope(origin: string): { host: string; protocol: string } {
+  const url = new URL(origin);
+  return {
+    host: url.hostname.replace(/^\[|\]$/gu, "").toLowerCase(),
+    protocol: url.protocol.slice(0, -1).toLowerCase()
+  };
+}
+
+function bindingMatchesOperation(
+  binding: Readonly<UpstreamCredentialMaterialBinding>,
+  operationKey: string
+): boolean {
+  if (binding.operationKey !== undefined && typeof binding.operationKey !== "string") {
+    throw credentialMaterialError("upstream_credential_binding_denied", 403);
+  }
+  const bindingOperationKey = typeof binding.operationKey === "string" ? binding.operationKey.trim() : "";
+  if (bindingOperationKey.length > 128) {
+    throw credentialMaterialError("upstream_credential_binding_denied", 403);
+  }
+  return !bindingOperationKey || bindingOperationKey === operationKey;
+}
+
+function selectCredentialBindings(
+  bindings: readonly UpstreamCredentialMaterialBinding[],
+  targetOrigin: string,
+  operationKey: string,
+  requiredScopes: readonly string[]
+): Readonly<UpstreamCredentialMaterialBinding>[] {
+  const target = credentialOriginScope(targetOrigin);
+  const operationScopeSet = new Set(requiredScopes);
+  const selected: Readonly<UpstreamCredentialMaterialBinding>[] = [];
+  for (const rawBinding of bindings) {
+    if (!isPlainObject(rawBinding)) {
+      throw credentialMaterialError("upstream_credential_binding_denied", 403);
+    }
+    const binding = rawBinding as Readonly<UpstreamCredentialMaterialBinding>;
+    if (!bindingMatchesOperation(binding, operationKey)) continue;
+    if (binding.type !== undefined && binding.type !== "credential") {
+      throw credentialMaterialError("upstream_credential_authority_unsupported", 503);
+    }
+    const bindingOrigin = typeof binding.origin === "string" ? binding.origin : "";
+    if (bindingOrigin) {
+      if (!isUpstreamServiceOrigin(bindingOrigin)) {
+        throw credentialMaterialError("upstream_credential_binding_denied", 403);
+      }
+      if (bindingOrigin !== targetOrigin) continue;
+    } else {
+      const bindingHost = typeof binding.host === "string" ? binding.host.toLowerCase() : "";
+      const bindingProtocol = typeof binding.protocol === "string" ? binding.protocol.toLowerCase() : "";
+      const hostMatches = !bindingHost || bindingHost === target.host;
+      const protocolMatches = !bindingProtocol || bindingProtocol === target.protocol;
+      if (!hostMatches || !protocolMatches) continue;
+      throw credentialMaterialError("upstream_credential_binding_origin_required", 403);
+    }
+    const reference = typeof binding.reference === "string" ? binding.reference : "";
+    if (!SECRET_REFERENCE_PATTERN.test(reference) || reference.split("/").some((segment) => segment === "." || segment === "..")) {
+      throw credentialMaterialError("upstream_credential_authority_unsupported", 503);
+    }
+    // Internal normalized legacy references use zero to mean "resolve current";
+    // portable/published typed references require a positive revision.
+    if (binding.revision !== undefined && (!Number.isSafeInteger(binding.revision) || Number(binding.revision) < 0)) {
+      throw credentialMaterialError("upstream_credential_binding_denied", 403);
+    }
+    if ((binding.host !== undefined && typeof binding.host !== "string") ||
+        (binding.protocol !== undefined && typeof binding.protocol !== "string")) {
+      throw credentialMaterialError("upstream_credential_binding_denied", 403);
+    }
+    const bindingHost = typeof binding.host === "string" ? binding.host.toLowerCase() : "";
+    const bindingProtocol = typeof binding.protocol === "string" ? binding.protocol.toLowerCase() : "";
+    if ((bindingHost && bindingHost !== target.host) ||
+        (bindingProtocol && bindingProtocol !== target.protocol) ||
+        (binding.scopes !== undefined && (!Array.isArray(binding.scopes) || binding.scopes.some((scope) => typeof scope !== "string"))) ||
+        (binding.scopes || []).some((scope) => !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(scope) || !operationScopeSet.has(scope))) {
+      throw credentialMaterialError("upstream_credential_binding_denied", 403);
+    }
+    selected.push(binding);
+  }
+  return selected;
+}
+
+/** Resolve only exact-origin, operation-authorized credential bindings through an injected secret authority. */
+export async function resolveUpstreamCredentialMaterial({
+  bindings,
+  targetOrigin,
+  operationKey = "",
+  requiredScopes = [],
+  tenantId = "",
+  signal,
+  resolveSecretPayload
+}: {
+  readonly bindings: readonly UpstreamCredentialMaterialBinding[];
+  readonly targetOrigin: string;
+  readonly operationKey?: string;
+  readonly requiredScopes?: readonly string[];
+  readonly tenantId?: string;
+  readonly signal?: AbortSignal;
+  readonly resolveSecretPayload: UpstreamCredentialPayloadResolver;
+}): Promise<UpstreamCredentialMaterial> {
+  if (!Array.isArray(bindings) || !Array.isArray(requiredScopes) ||
+      requiredScopes.some((scope) => typeof scope !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(scope)) ||
+      typeof operationKey !== "string" || operationKey.length > 128 || typeof resolveSecretPayload !== "function") {
+    throw credentialMaterialError("upstream_credential_binding_denied", 403);
+  }
+  const operation = operationKey.trim();
+  const scopes = [...requiredScopes];
+  const operationCandidates: UpstreamCredentialMaterialBinding[] = [];
+  for (const binding of bindings) {
+    if (!isPlainObject(binding)) throw credentialMaterialError("upstream_credential_binding_denied", 403);
+    const typedBinding = binding as unknown as UpstreamCredentialMaterialBinding;
+    if (bindingMatchesOperation(typedBinding, operation)) operationCandidates.push(typedBinding);
+  }
+  if (operationCandidates.length === 0) {
+    return { headers: {}, env: {}, credentialRefCount: 0, resolvedCredentialRefCount: 0, credentialRevisions: [] };
+  }
+  if (!isUpstreamServiceOrigin(targetOrigin) || typeof tenantId !== "string" || tenantId.length > 256) {
+    throw credentialMaterialError("upstream_credential_binding_denied", 403);
+  }
+  const selected = selectCredentialBindings(operationCandidates, targetOrigin, operation, scopes);
+  if (selected.length === 0) {
+    return { headers: {}, env: {}, credentialRefCount: 0, resolvedCredentialRefCount: 0, credentialRevisions: [] };
+  }
+  const materialHeaders: Record<string, string> = Object.create(null);
+  const materialEnv: Record<string, string> = Object.create(null);
+  const credentialRevisions: Array<{ secretRef: string; revision: number }> = [];
+  const assertNotCancelled = () => {
+    if (signal?.aborted) throw cancelledCredentialResolution();
+  };
+  assertNotCancelled();
+  for (const binding of selected) {
+    assertNotCancelled();
+    let resolved: UpstreamCredentialPayloadResolution;
+    try {
+      resolved = await resolveSecretPayload(binding, targetOrigin, tenantId, signal, operation, scopes);
+    } catch (error: unknown) {
+      if (signal?.aborted) throw cancelledCredentialResolution();
+      const candidate = error as { code?: unknown; status?: unknown; reasonCode?: unknown } | null;
+      const rawCode = typeof candidate?.reasonCode === "string"
+        ? candidate.reasonCode
+        : typeof candidate?.code === "string"
+          ? candidate.code
+          : "upstream_credential_resolution_failed";
+      const reasonCode = /^[a-z][a-z0-9_]{0,127}$/u.test(rawCode)
+        ? rawCode
+        : "upstream_credential_resolution_failed";
+      const status = candidate?.status === 403 || candidate?.code === "local_secret_scope_denied" ? 403 : 503;
+      throw Object.assign(credentialMaterialError(reasonCode, status), {
+        credentialRefCount: selected.length,
+        resolvedCredentialRefCount: credentialRevisions.length
+      });
+    }
+    assertNotCancelled();
+    const resolvedRevision = resolved?.revision ?? binding.revision;
+    if (!isPlainObject(resolved) ||
+        (resolved.secretRef !== undefined && resolved.secretRef !== binding.reference) ||
+        !Number.isSafeInteger(resolvedRevision) || Number(resolvedRevision) < 1 ||
+        (Number(binding.revision) > 0 && resolvedRevision !== binding.revision)) {
+      throw credentialMaterialError("upstream_credential_resolution_failed", 503);
+    }
+    const payload = secretPayloadObject(resolved.payload);
+    const headers = secretPayloadHeaders(payload);
+    const env = secretPayloadEnvironment(payload);
+    for (const [name, value] of Object.entries(headers)) {
+      if (materialHeaders[name] === undefined) materialHeaders[name] = value;
+    }
+    for (const [name, value] of Object.entries(env)) {
+      if (materialEnv[name] === undefined) materialEnv[name] = value;
+    }
+    credentialRevisions.push({
+      secretRef: binding.reference,
+      revision: Number(resolvedRevision)
+    });
+  }
+  assertNotCancelled();
+  return {
+    headers: Object.fromEntries(Object.entries(materialHeaders)),
+    env: Object.fromEntries(Object.entries(materialEnv)),
+    credentialRefCount: selected.length,
+    resolvedCredentialRefCount: credentialRevisions.length,
+    credentialRevisions
+  };
 }
 
 function isPlainObject(value?: unknown): value is Record<string, unknown> {
@@ -528,6 +962,11 @@ function validatePortableReference(value: unknown, index: number): void {
       !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(value.operationKey))) {
     throw new Error(`descriptor.references[${index}].operationKey is invalid.`);
   }
+  if (value.origin !== undefined) {
+    if (!isUpstreamServiceOrigin(value.origin)) {
+      throw new Error(`descriptor.references[${index}].origin is invalid.`);
+    }
+  }
   if (value.host !== undefined && (typeof value.host !== "string" || value.host.length > 253 ||
       !/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/u.test(value.host))) {
     throw new Error(`descriptor.references[${index}].host is invalid.`);
@@ -535,6 +974,13 @@ function validatePortableReference(value: unknown, index: number): void {
   if (value.protocol !== undefined && (typeof value.protocol !== "string" ||
       !/^[a-z][a-z0-9+.-]{0,31}$/u.test(value.protocol))) {
     throw new Error(`descriptor.references[${index}].protocol is invalid.`);
+  }
+  if (typeof value.origin === "string") {
+    const origin = new URL(value.origin);
+    if ((value.host !== undefined && String(value.host).toLowerCase() !== origin.hostname.toLowerCase()) ||
+        (value.protocol !== undefined && String(value.protocol).toLowerCase() !== origin.protocol.slice(0, -1))) {
+      throw new Error(`descriptor.references[${index}] target fields must match its origin.`);
+    }
   }
   if (value.scopes !== undefined) {
     if (!Array.isArray(value.scopes) || value.scopes.length > 128 || value.scopes.some((scope) =>
@@ -561,22 +1007,7 @@ function validatePortableMcpDescriptor(value: unknown, descriptor: Record<string
     throw new Error("MCP descriptors derive tools from the remote catalog and cannot include operations.");
   }
   if (value.headers !== undefined) {
-    if (!isPlainObject(value.headers)) throw new Error("descriptor.mcp.headers must be an object of declarative request headers.");
-    for (const [name, headerValue] of Object.entries(value.headers)) {
-      if (!name || name.length > 128 || name.normalize("NFC") !== name ||
-          /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/u.test(name) ||
-          name === "__proto__" || name === "prototype" || name === "constructor") {
-        throw new Error("MCP request header names are invalid.");
-      }
-      if (SENSITIVE_MCP_HEADER_NAME.test(name)) {
-        throw new Error("Sensitive header names must use a typed credential reference.");
-      }
-      if (typeof headerValue !== "string" || !headerValue || headerValue.normalize("NFC") !== headerValue || headerValue.length > 8_192 ||
-          /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/u.test(headerValue) ||
-          /\$\{|\{\{|<%|\bfile:\/\//u.test(headerValue) || INLINE_SECRET_VALUE.test(headerValue)) {
-        throw new Error("MCP request headers must contain non-sensitive declarative string values.");
-      }
-    }
+    normalizeUpstreamMcpContextHeaders(value.headers);
   }
   for (const field of ["toolNamePrefix", "prefix"]) {
     if (value[field] !== undefined && typeof value[field] !== "string") {

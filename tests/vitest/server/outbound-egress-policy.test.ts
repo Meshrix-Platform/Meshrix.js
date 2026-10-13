@@ -82,6 +82,42 @@ describe("Outbound egress policy", () : any => {
     });
   });
 
+  it("requires TLS for non-local HTTP targets and preserves explicitly allowed private HTTP", async () : Promise<any> => {
+    expect(evaluateOutboundEgressUrl({ url: "https://api.example.test/mcp" })).toMatchObject({ ok: true });
+    expect(evaluateOutboundEgressUrl({ url: "http://api.example.test/mcp" })).toMatchObject({
+      ok: false,
+      reason: "plaintext_remote_transport"
+    });
+
+    const privateService = await evaluateOutboundEgressUrlWithDns({
+      url: "http://format-convert:8080/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      lookup: async () : Promise<any> => [{ address: "10.20.30.40", family: 4 }]
+    });
+    expect(privateService).toMatchObject({ ok: true, reason: "allowed" });
+
+    const mixedAnswers = await evaluateOutboundEgressUrlWithDns({
+      url: "http://api.example.test/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      lookup: async () : Promise<any> => [
+        { address: "10.20.30.40", family: 4 },
+        { address: "203.0.113.10", family: 4 }
+      ]
+    });
+    expect(mixedAnswers).toMatchObject({ ok: false, reason: "plaintext_remote_transport" });
+
+    const fetchImpl: any = vi.fn(async () : Promise<any> => new Response("unexpected"));
+    await expect(fetchWithPinnedDns({
+      url: "http://api.example.test/mcp",
+      lookup: async () : Promise<any> => [{ address: "203.0.113.10", family: 4 }],
+      fetchImpl
+    })).rejects.toMatchObject({
+      code: "outbound_egress_denied",
+      decision: { reason: "plaintext_remote_transport" }
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("fails closed when DNS resolves hostnames to restricted addresses", async () : Promise<any> => {
     const lookup: any = vi.fn(async () : Promise<any> => [
       { address: "203.0.113.10", family: 4 },
@@ -120,6 +156,26 @@ describe("Outbound egress policy", () : any => {
         }
       }
     });
+  });
+
+  it("validates localhost-name DNS answers before local-network egress", async () => {
+    const fetchImpl: any = vi.fn(async () => new Response("unexpected"));
+    await expect(fetchWithPinnedDns({
+      url: "http://service.localhost/mcp",
+      policyPreset: "security.development-local",
+      lookup: async () => [{ address: "169.254.169.254", family: 4 }],
+      fetchImpl
+    })).rejects.toMatchObject({ code: "outbound_egress_denied", decision: { reason: "restricted_dns_address_cloud-metadata" } });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const result = await fetchWithPinnedDns({
+      url: "http://service.localhost/mcp",
+      policyPreset: "security.development-local",
+      lookup: async () => [{ address: "127.0.0.1", family: 4 }],
+      fetchImpl
+    });
+    expect(result.pinnedDns).toMatchObject({ address: "127.0.0.1", family: 4 });
+    await result.response.body?.cancel();
+    await result.close();
   });
 
   it("allows explicit loopback/private DNS targets but denies any link-local answer", async () : Promise<any> => {
@@ -394,7 +450,14 @@ describe("Outbound egress policy", () : any => {
       maxRedirects: 5,
       init: {
         method: "POST",
-        headers: { authorization: "Bearer synthetic", "content-type": "application/json" },
+        headers: {
+          authorization: "Bearer synthetic",
+          "x-api-key": "synthetic-api-key",
+          "x-project-token": "synthetic-project-token",
+          "x-project-id": "synthetic-project",
+          "x-meshrix-gateway-service": "synthetic-service",
+          "content-type": "application/json"
+        },
         body: "{}"
       }
     });
@@ -404,6 +467,10 @@ describe("Outbound egress policy", () : any => {
       expect(calls[0].init.redirect).toBe("manual");
       expect(calls[1].init).toMatchObject({ method: "GET", redirect: "manual" });
       expect(calls[1].init.headers.authorization).toBeUndefined();
+      expect(calls[1].init.headers["x-api-key"]).toBeUndefined();
+      expect(calls[1].init.headers["x-project-token"]).toBeUndefined();
+      expect(calls[1].init.headers["x-meshrix-gateway-service"]).toBeUndefined();
+      expect(calls[1].init.headers["x-project-id"]).toBe("synthetic-project");
       expect(calls[1].init.body).toBeUndefined();
       expect(lookup).toHaveBeenCalledTimes(2);
     } finally {

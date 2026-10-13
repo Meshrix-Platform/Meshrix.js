@@ -352,74 +352,57 @@ export async function dispatchOperation({
         : summarizeForLog(operationInput, { maxDepth: 4, maxArrayItems: 8, maxObjectKeys: 50 })
     });
 
-    const schema: any = validateInputSchema(operation, operationInput);
-    if (!schema.ok) {
+    const admissionTargetSelector: any = finalProtectedSinkTargetSelector(
+      operation,
+      operationInput
+    );
+    if (
+      admissionTargetSelector &&
+      (!firstText(admissionTargetSelector.operationKey) ||
+        !firstText(admissionTargetSelector.serviceId))
+    ) {
       appendRiskGate({
         controlId: DISPATCHER_RISK_CONTROL_IDS.admit,
         decision: "deny",
-        reasonCode: "schema_invalid",
-        statusCode: schema.status || 400,
+        reasonCode: "final_protected_sink_target_invalid",
+        statusCode: 400,
         details: {
-          error: schema.error
+          phase: "admission"
         }
       });
       await finishProofWithAudit({
         operationAuditStore,
         operation,
         transport,
+        authSession,
         actor,
         input: operationInput,
         status: "denied",
-        statusCode: schema.status || 400,
-        error: schema.error
+        statusCode: 400,
+        error: "Protected sink target identity is incomplete."
       });
       logOperation(logger, "warn", operationEventName(transport, "denied"), {
         requestId: requestIdFromRequest(request),
         operationId: operation.id,
-        reason: "schema",
-        error: schema.error,
-        status: schema.status || 400
+        reason: "sink_target",
+        error: "Protected sink target identity is incomplete.",
+        status: 400
       });
-      const declaredSchemaError: any = operation.http?.schemaError;
-      sendOperationDenied(
-        response,
-        schema.status || declaredSchemaError?.status || 400,
-        declaredSchemaError?.code
-          ? {
-              ...(declaredSchemaError.responseBase || {}),
-              code: declaredSchemaError.code,
-              error: schema.error
-            }
-          : {
-              error: schema.error,
-              operationId: operation.id,
-              traceId: traceContext.traceId
-            }
-      );
+      sendOperationDenied(response, 400, {
+        error: "受保护操作的目标标识不完整。",
+        traceId: traceContext.traceId
+      });
       notifyNarrowTransition(request, "operation.policy_deny", "policy_denied");
       return {
         ok: false,
         handled: true,
-        statusCode: schema.status || 400,
+        statusCode: 400,
         operation,
         input: operationInput,
         traceContext,
         riskControl: riskControlEnvelope
       };
     }
-
-    appendRiskGate({
-      controlId: DISPATCHER_RISK_CONTROL_IDS.admit,
-      decision: "allow",
-      reasonCode: "schema_valid",
-      details: {
-        schema: "valid"
-      }
-    });
-    const admissionTargetSelector: any = finalProtectedSinkTargetSelector(
-      operation,
-      operationInput
-    );
     const authorizationOperationForPhase: any = (phase?: any) : any => {
       if (
         !admissionTargetSelector ||
@@ -954,6 +937,75 @@ export async function dispatchOperation({
         riskControl: riskControlEnvelope
       };
     }
+
+    // Establish caller authorization before invoking operation-supplied schemas.
+    // This keeps schema details and validation work behind the same governed
+    // operation boundary; the validator itself also has linear pattern cost.
+    const schema: any = validateInputSchema(operation, operationInput);
+    if (!schema.ok) {
+      appendRiskGate({
+        controlId: DISPATCHER_RISK_CONTROL_IDS.admit,
+        decision: "deny",
+        reasonCode: "schema_invalid",
+        statusCode: schema.status || 400,
+        details: {
+          error: schema.error
+        }
+      });
+      await finishProofWithAudit({
+        operationAuditStore,
+        operation,
+        transport,
+        authSession,
+        actor,
+        input: operationInput,
+        status: "denied",
+        statusCode: schema.status || 400,
+        error: schema.error
+      });
+      logOperation(logger, "warn", operationEventName(transport, "denied"), {
+        requestId: requestIdFromRequest(request),
+        operationId: operation.id,
+        reason: "schema",
+        error: schema.error,
+        status: schema.status || 400
+      });
+      const declaredSchemaError: any = operation.http?.schemaError;
+      sendOperationDenied(
+        response,
+        schema.status || declaredSchemaError?.status || 400,
+        declaredSchemaError?.code
+          ? {
+              ...(declaredSchemaError.responseBase || {}),
+              code: declaredSchemaError.code,
+              error: schema.error
+            }
+          : {
+              error: schema.error,
+              operationId: operation.id,
+              traceId: traceContext.traceId
+            }
+      );
+      notifyNarrowTransition(request, "operation.policy_deny", "policy_denied");
+      return {
+        ok: false,
+        handled: true,
+        statusCode: schema.status || 400,
+        operation,
+        input: operationInput,
+        traceContext,
+        riskControl: riskControlEnvelope
+      };
+    }
+
+    appendRiskGate({
+      controlId: DISPATCHER_RISK_CONTROL_IDS.admit,
+      decision: "allow",
+      reasonCode: "schema_valid",
+      details: {
+        schema: "valid"
+      }
+    });
 
     const safety: any = evaluateOperationSafety({
       operation,

@@ -8,8 +8,6 @@ export const MCP_SUPPORTED_PROTOCOL_VERSIONS: readonly any[] = Object.freeze([
   "2025-03-26",
   MCP_DEFAULT_PROTOCOL_VERSION
 ]);
-export const DEFAULT_MCP_INITIALIZE_TIMEOUT_MS: any = 30_000;
-export const DEFAULT_MCP_CONTROL_TIMEOUT_MS: any = 30_000;
 const MAX_MCP_REQUEST_TIMEOUT_MS: any = 2_147_483_647;
 export const MCP_TOOLS_LIST_LIMITS: Readonly<Record<string, number>> = Object.freeze({
   pages: 64,

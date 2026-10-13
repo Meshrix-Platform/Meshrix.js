@@ -1,5 +1,6 @@
 import dns from "node:dns/promises";
 import net from "node:net";
+import { isUpstreamCredentialHeaderName } from "@meshrix/contracts/upstream-service-publishing";
 import { Agent, fetch as undiciFetch, request as undiciRequest } from "undici";
 
 export const OUTBOUND_EGRESS_DECISION_VERSION = "v0.0.1:security:outbound-egress-decision-1";
@@ -154,6 +155,10 @@ export interface OutboundRedirectDecision {
 }
 
 const LOCAL_NETWORK_ADDRESS_CATEGORIES = new Set<AddressCategory>(["loopback", "private"]);
+const CROSS_ORIGIN_INTERNAL_HEADER_NAMES = new Set([
+  "x-meshrix-gateway-service",
+  "x-meshrix-skill-hub-subject"
+]);
 const CLOUD_METADATA_HOSTS = new Set<string>(["instance-data.ec2.internal", "metadata.google.internal", "metadata.goog"]);
 const CLOUD_METADATA_IPV4_ADDRESSES = new Set<string>(["169.254.169.254", "169.254.170.2", "169.254.170.23"]);
 const AWS_METADATA_IPV6 = 0xfd000ec2000000000000000000000254n;
@@ -276,6 +281,14 @@ function outboundHostAllowed(host: { category?: AddressCategory; addressCategory
   return allowLocal && LOCAL_NETWORK_ADDRESS_CATEGORIES.has(category);
 }
 
+function plaintextHttpMayReachLocalHost(host: OutboundHostClassification, allowLocal = false): boolean {
+  if (!allowLocal) return false;
+  if (LOCAL_NETWORK_ADDRESS_CATEGORIES.has(host.category)) return true;
+  // A hostname can only be accepted provisionally here. Runtime egress performs
+  // DNS validation and requires every answer to be loopback/private before use.
+  return host.kind === "hostname" && host.category === "hostname";
+}
+
 export function evaluateOutboundEgressUrl({ url = "", policyPreset = "", policies = {}, label = "outbound.url" }: OutboundEgressOptions = {}): OutboundEgressDecision {
   const normalizedUrl = String(url).trim();
   let parsed: URL;
@@ -289,9 +302,11 @@ export function evaluateOutboundEgressUrl({ url = "", policyPreset = "", policie
   const allowLocalForConfiguredModelService = policies.egress?.allowLocalForConfiguredModelService === true;
   const allowLocal = localEgressAllowed({ policyPreset, policies });
   const blocked = !outboundHostAllowed(host, allowLocal);
+  const plaintextRemote = parsed.protocol === "http:" && !plaintextHttpMayReachLocalHost(host, allowLocal);
+  const ok = !blocked && !plaintextRemote;
   return {
     schemaVersion: OUTBOUND_EGRESS_DECISION_VERSION,
-    ok: !blocked,
+    ok,
     label,
     url: parsed.toString(),
     protocol: parsed.protocol.replace(/:$/, ""),
@@ -304,7 +319,11 @@ export function evaluateOutboundEgressUrl({ url = "", policyPreset = "", policie
     allowLocalForConfiguredModelService,
     allowLoopbackAndPrivate: allowLocal,
     allowLinkLocal: false,
-    reason: blocked ? `restricted_address_${host.metadataEndpoint ? "cloud-metadata" : host.category}` : "allowed"
+    reason: blocked
+      ? `restricted_address_${host.metadataEndpoint ? "cloud-metadata" : host.category}`
+      : plaintextRemote
+        ? "plaintext_remote_transport"
+        : "allowed"
   };
 }
 
@@ -351,6 +370,9 @@ function createPinnedDnsDispatcher(decision: OutboundRuntimeEgressDecision, resp
   const address = String(pinned?.address || "").trim();
   const family = Number(pinned?.family || net.isIP(address) || 0);
   const dispatcher = new Agent({
+    // Bound only TCP/TLS establishment. Response headers and body remain
+    // governed by the operation's explicit budget or owner cancellation.
+    connectTimeout: 10_000,
     ...(pinned?.address ? {
       connect: {
         lookup(hostname, options, callback) {
@@ -379,7 +401,7 @@ function createPinnedDnsDispatcher(decision: OutboundRuntimeEgressDecision, resp
 export async function evaluateOutboundEgressUrlWithDns({ lookup = defaultDnsLookup, ...options }: OutboundEgressOptions & { lookup?: DnsLookup } = {}): Promise<OutboundRuntimeEgressDecision> {
   const decision = evaluateOutboundEgressUrl(options);
   if (!decision.ok) return { ...decision, dns: { status: "skipped", reason: "host_decision_denied" } };
-  if (decision.hostKind !== "hostname" || decision.addressCategory !== "hostname") return { ...decision, dns: { status: "skipped", reason: "literal_address" } };
+  if (decision.hostKind !== "hostname") return { ...decision, dns: { status: "skipped", reason: "literal_address" } };
   let records: unknown;
   try {
     records = await lookup(decision.host ?? "", { all: true, verbatim: true });
@@ -389,11 +411,22 @@ export async function evaluateOutboundEgressUrlWithDns({ lookup = defaultDnsLook
   const addresses = normalizeDnsLookupRecords(records);
   const restricted = addresses.filter((record) => record.restricted);
   const denied = addresses.filter((record) => !outboundHostAllowed(record, decision.allowLoopbackAndPrivate === true));
-  const blocked = addresses.length === 0 || denied.length > 0;
+  const plaintextRemote = decision.protocol === "http" && !(
+    addresses.length > 0 &&
+    decision.allowLoopbackAndPrivate === true &&
+    addresses.every((record) => LOCAL_NETWORK_ADDRESS_CATEGORIES.has(record.addressCategory))
+  );
+  const blocked = addresses.length === 0 || denied.length > 0 || plaintextRemote;
   return {
     ...decision,
     ok: !blocked,
-    reason: addresses.length === 0 ? "dns_no_addresses" : blocked ? `restricted_dns_address_${denied[0]?.metadataEndpoint ? "cloud-metadata" : denied[0]?.addressCategory}` : "allowed",
+    reason: addresses.length === 0
+      ? "dns_no_addresses"
+      : denied.length > 0
+        ? `restricted_dns_address_${denied[0]?.metadataEndpoint ? "cloud-metadata" : denied[0]?.addressCategory}`
+        : plaintextRemote
+          ? "plaintext_remote_transport"
+          : "allowed",
     dns: { status: "resolved", host: decision.host, addresses, addressCount: addresses.length, restrictedAddressCount: restricted.length, deniedAddressCount: denied.length }
   };
 }
@@ -474,7 +507,11 @@ function redirectInit(init: RedirectRequestInit, sourceUrl: string, targetUrl: s
   const method = switchToGet ? "GET" : sourceMethod;
   const headers = new Headers(init?.headers as HeadersInit | undefined);
   if (new URL(sourceUrl).origin !== new URL(targetUrl).origin) {
-    for (const name of ["authorization", "cookie", "proxy-authorization"]) headers.delete(name);
+    for (const name of [...headers.keys()]) {
+      if (isUpstreamCredentialHeaderName(name) || CROSS_ORIGIN_INTERNAL_HEADER_NAMES.has(name)) {
+        headers.delete(name);
+      }
+    }
   }
   if (switchToGet) {
     for (const name of ["content-length", "content-type", "transfer-encoding"]) headers.delete(name);

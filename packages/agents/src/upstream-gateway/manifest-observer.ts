@@ -123,6 +123,7 @@ export function createUpstreamManifestObserver({
   const interval: number = Math.max(10, Math.min(Number(pollIntervalMs || DEFAULT_POLL_INTERVAL_MS), 60_000));
   let acceptedSetRevision: number = -1;
   let acceptedSetDigest: string = "";
+  let lastReportedFailure: string | null = null;
   let building: boolean = false;
   let pending: boolean = false;
   let closed: boolean = false;
@@ -131,9 +132,14 @@ export function createUpstreamManifestObserver({
   const lifecycleAbort: AbortController = new AbortController();
 
   async function report(error?: any, reasonCode: string = "manifest_observation_failed") : Promise<void> {
+    const errorCode: string = String(error?.code || "manifest_observation_failed");
+    const failureKey: string = `${reasonCode}\0${errorCode}`;
+    if (failureKey === lastReportedFailure) return;
     try {
-      await onError?.(Object.freeze({ reasonCode, errorCode: String(error?.code || "manifest_observation_failed") }));
+      await onError?.(Object.freeze({ reasonCode, errorCode }));
+      lastReportedFailure = failureKey;
     } catch {
+      lastReportedFailure = null;
       // Observation reporting cannot replace the retry path.
     }
   }
@@ -171,6 +177,7 @@ export function createUpstreamManifestObserver({
           throw new Error("Upstream manifest set revision conflicts with its accepted digest.");
         }
         if (!force) {
+          lastReportedFailure = null;
           return Object.freeze({ outcome: "unchanged", setRevision: acceptedSetRevision });
         }
       }
@@ -180,6 +187,7 @@ export function createUpstreamManifestObserver({
       if (closed) return Object.freeze({ outcome: "closed", setRevision: acceptedSetRevision });
       acceptedSetRevision = candidate.setRevision;
       acceptedSetDigest = candidate.setDigest;
+      lastReportedFailure = null;
       return Object.freeze({
         outcome: force ? "reapplied" : "accepted",
         setRevision: acceptedSetRevision

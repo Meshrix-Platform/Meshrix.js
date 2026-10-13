@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   isUpstreamPublishingAction,
+  normalizeUpstreamMcpContextHeaders,
   isUpstreamServiceKey,
   UPSTREAM_ARTIFACT_PART_FIELDS,
   UPSTREAM_MULTIPART_FIELDS,
@@ -26,8 +27,10 @@ import {
 } from "@meshrix/foundation/storage/storage-ports";
 import type { TypedManifestReference } from "@meshrix/foundation/storage/storage-ports";
 import { compileClosedJsonSchema } from "@meshrix/foundation/security/closed-json-schema";
+import { classifyOutboundHost } from "@meshrix/foundation/security/outbound-egress-policy";
 import { parseWithDuplicateRejection, rejectPollutionKeys, rejectUnsafeUnicode } from "./manifest-compiler.ts";
 import { compilePayloadTransport } from "./payload-contract.ts";
+import { object, text } from "./support.ts";
 
 export { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "@meshrix/contracts/upstream-service-publishing";
 
@@ -319,7 +322,7 @@ function descriptorFromCommand(command?: any, existing?: any) : any {
         "Publishing descriptor requires an explicit HTTP, JSON-RPC, or MCP serviceProtocol."
       );
     }
-    validateDescriptorSafety(descriptor);
+    validateDescriptorSafety(descriptor, effectiveAllowLocalNetwork(descriptor, existing, command.action));
     return descriptor;
   }
   const priorDescriptor: any = existing?.manifest?.payload?.descriptor;
@@ -342,6 +345,66 @@ function validateRemoteUrl(value?: any, field?: any) : any {
   if (!/^https?:\/\//iu.test(value) || !["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
     throw publishingError("upstream_publishing_descriptor_invalid", 400, `${field} must use an HTTP(S) URL without embedded credentials.`);
   }
+}
+
+// Address classes the runtime egress policy never reaches, regardless of
+// descriptor.allowLocalNetwork: publishing them would only store a dead target.
+const UNREACHABLE_TARGET_CATEGORIES: any = new Set<any>([
+  "cloud-metadata",
+  "link-local",
+  "multicast",
+  "reserved",
+  "unspecified",
+  "invalid",
+  "benchmark",
+  "carrier-grade-nat"
+]);
+// Address classes reachable only when the descriptor declares allowLocalNetwork.
+const LOCAL_TARGET_CATEGORIES: any = new Set<any>(["loopback", "private"]);
+
+function validateReachableTargetUrl(value?: any, field?: any, allowLocalNetwork?: any) : any {
+  let parsed: any;
+  try {
+    parsed = new URL(String(value || ""));
+  } catch {
+    return;
+  }
+  const host: any = classifyOutboundHost(parsed.hostname);
+  if (host.metadataEndpoint === true || UNREACHABLE_TARGET_CATEGORIES.has(host.category)) {
+    throw publishingError(
+      "upstream_publishing_target_restricted",
+      400,
+      `${field} targets an address class the gateway cannot reach.`
+    );
+  }
+  if (LOCAL_TARGET_CATEGORIES.has(host.category) && allowLocalNetwork !== true) {
+    throw publishingError(
+      "upstream_publishing_target_restricted",
+      400,
+      `${field} targets a local network address and requires descriptor.allowLocalNetwork.`
+    );
+  }
+}
+
+// Publishing a local-network upstream widens the runtime egress policy for that
+// service, so the declaration is gated on gateway administration authority
+// rather than on the ordinary write scopes.
+function authorizeLocalNetworkDescriptor(subject?: any, allowLocalNetwork?: any) : any {
+  if (allowLocalNetwork !== true) return;
+  if (subject.scopes.has("gateway:admin") || subject.scopes.has("runtime:admin")) return;
+  throw publishingError(
+    "upstream_publishing_scope_required",
+    403,
+    "Publishing a local-network upstream service requires gateway:admin."
+  );
+}
+
+function effectiveAllowLocalNetwork(descriptor?: any, existing?: any, action?: any) : any {
+  // A create defines its own authority boundary; only merges onto an existing
+  // service (replace, or republish carrying a descriptor) can inherit the flag.
+  return descriptor?.allowLocalNetwork === undefined
+    ? action !== "create" && existing?.manifest?.payload?.descriptor?.allowLocalNetwork === true
+    : descriptor.allowLocalNetwork === true;
 }
 
 function rejectExecutableContent(value?: any, path: any = "descriptor") : any {
@@ -370,7 +433,7 @@ function rejectExecutableContent(value?: any, path: any = "descriptor") : any {
   }
 }
 
-function validateRemoteMcpDescriptor(descriptor?: any) : any {
+function validateRemoteMcpDescriptor(descriptor?: any, allowLocalNetwork?: any) : any {
   const mcp: any = assertPlainObject(descriptor.mcp, "Publishing MCP descriptor must be an object.");
   assertClosedFields(mcp, MCP_DESCRIPTOR_FIELDS, "Publishing MCP descriptor");
   const transport: any = String(mcp.transport || "http").trim().toLowerCase();
@@ -383,6 +446,16 @@ function validateRemoteMcpDescriptor(descriptor?: any) : any {
   }
   const remoteUrl: any = mcp.url || mcp.endpoint || mcp.baseUrl || descriptor.baseUrl;
   validateRemoteUrl(remoteUrl, "descriptor.mcp.url");
+  validateReachableTargetUrl(remoteUrl, "descriptor.mcp.url", allowLocalNetwork);
+  try {
+    normalizeUpstreamMcpContextHeaders(mcp.headers === undefined ? {} : mcp.headers);
+  } catch {
+    throw publishingError(
+      "upstream_publishing_mcp_headers_invalid",
+      400,
+      "MCP request context headers are invalid or contain credential material; bind credentials through typed references."
+    );
+  }
   validateOptionalExecutionTimeout(mcp.timeoutMs, "descriptor.mcp.timeoutMs");
   if (descriptor.operations !== undefined) {
     throw publishingError(
@@ -404,14 +477,17 @@ function validateOptionalExecutionTimeout(value?: any, field: any = "timeoutMs")
   }
 }
 
-function validateDescriptorSafety(descriptor?: any) : any {
+function validateDescriptorSafety(descriptor?: any, allowLocalNetwork?: any) : any {
   rejectExecutableContent(descriptor);
   validateDescriptorPolicies(descriptor);
+  if (descriptor.references !== undefined && !Array.isArray(descriptor.references)) {
+    throw publishingError("upstream_publishing_descriptor_invalid", 400, "descriptor.references must be an array.");
+  }
   if (descriptor.allowLocalNetwork !== undefined && typeof descriptor.allowLocalNetwork !== "boolean") {
     throw publishingError("upstream_publishing_descriptor_invalid", 400, "descriptor.allowLocalNetwork must be boolean.");
   }
   if (descriptor.serviceProtocol === "mcp") {
-    validateRemoteMcpDescriptor(descriptor);
+    validateRemoteMcpDescriptor(descriptor, allowLocalNetwork);
     return;
   }
   if (!Array.isArray(descriptor.operations) || descriptor.operations.length === 0) {
@@ -424,7 +500,10 @@ function validateDescriptorSafety(descriptor?: any) : any {
   if (descriptor.baseUrl === undefined && (!Array.isArray(descriptor.endpoints) || descriptor.endpoints.length === 0)) {
     throw publishingError("upstream_publishing_descriptor_invalid", 400, "Publishing descriptor requires an explicit remote endpoint.");
   }
-  if (descriptor.baseUrl !== undefined) validateRemoteUrl(descriptor.baseUrl, "descriptor.baseUrl");
+  if (descriptor.baseUrl !== undefined) {
+    validateRemoteUrl(descriptor.baseUrl, "descriptor.baseUrl");
+    validateReachableTargetUrl(descriptor.baseUrl, "descriptor.baseUrl", allowLocalNetwork);
+  }
   if (descriptor.endpoints !== undefined) {
     if (!Array.isArray(descriptor.endpoints)) {
       throw publishingError("upstream_publishing_descriptor_invalid", 400, "descriptor.endpoints must be an array.");
@@ -433,6 +512,7 @@ function validateDescriptorSafety(descriptor?: any) : any {
       assertPlainObject(endpoint, "Publishing endpoint must be an object.");
       assertClosedFields(endpoint, ENDPOINT_FIELDS, "Publishing endpoint");
       validateRemoteUrl(endpoint.baseUrl, "descriptor.endpoints.baseUrl");
+      validateReachableTargetUrl(endpoint.baseUrl, "descriptor.endpoints.baseUrl", allowLocalNetwork);
       validateClosedPolicy(endpoint.trafficPolicy, POLICY_FIELDS.trafficPolicy, "descriptor.endpoints.trafficPolicy");
       validateClosedPolicy(endpoint.circuitBreaker, POLICY_FIELDS.circuitBreaker, "descriptor.endpoints.circuitBreaker");
     }
@@ -490,17 +570,81 @@ function existingOwnership(existing?: any, ownerRef?: any) : any {
   }
 }
 
+function descriptorOrigins(descriptor?: any) : string[] {
+  const mcp: any = object(descriptor?.mcp);
+  const endpoints: any[] = Array.isArray(descriptor?.endpoints) ? descriptor.endpoints : [];
+  const candidates: any[] = descriptor?.serviceProtocol === "mcp"
+    ? [mcp.url, mcp.endpoint, mcp.baseUrl, descriptor?.baseUrl]
+    : [descriptor?.baseUrl, ...endpoints.map((endpoint) => endpoint?.baseUrl)];
+  return [...new Set<string>(candidates.flatMap((candidate) => {
+    if (typeof candidate !== "string") return [];
+    try {
+      const url = new URL(candidate);
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? [url.origin] : [];
+    } catch {
+      return [];
+    }
+  }))];
+}
+
+function credentialReferenceOrigin(reference?: any, descriptor?: any) : string {
+  if (text(reference?.origin)) return text(reference.origin);
+  const host = text(reference?.host).toLowerCase();
+  const protocol = text(reference?.protocol).toLowerCase();
+  const matches = descriptorOrigins(descriptor).filter((origin) => {
+    const url = new URL(origin);
+    return (!host || url.hostname.replace(/^\[|\]$/gu, "").toLowerCase() === host) &&
+      (!protocol || url.protocol.slice(0, -1) === protocol);
+  });
+  return matches.length === 1 ? matches[0]! : "";
+}
+
+function bindCredentialReferenceOrigins(references: readonly any[], descriptor: any, existing?: any) : any[] {
+  if (!Array.isArray(references)) {
+    throw publishingError("upstream_publishing_descriptor_invalid", 400, "Credential references must be an array.");
+  }
+  const allowedOrigins = new Set(descriptorOrigins(descriptor));
+  const previousReferences: any[] = Array.isArray(existing?.manifest?.references) ? existing.manifest.references : [];
+  const previousDescriptor: any = existing?.manifest?.payload?.descriptor || null;
+  return references.map((reference?: any) : any => {
+    if (reference?.type !== "credential") return reference;
+    const previous = previousReferences.find((candidate) => candidate?.reference === reference.reference);
+    const previousOrigin = previous ? credentialReferenceOrigin(previous, previousDescriptor) : "";
+    if (previous && !previousOrigin) {
+      throw publishingError(
+        "upstream_publishing_credential_origin_invalid",
+        400,
+        "An existing credential reference cannot be rebound because its original origin is ambiguous."
+      );
+    }
+    const origin = previous
+      ? reference.origin || previousOrigin
+      : credentialReferenceOrigin(reference, descriptor);
+    if (!origin || !allowedOrigins.has(origin) || (previousOrigin && previousOrigin !== origin)) {
+      throw publishingError(
+        "upstream_publishing_credential_origin_invalid",
+        400,
+        "Credential references must remain bound to the exact upstream origin. Use a new typed reference to change the target."
+      );
+    }
+    return Object.freeze({ ...reference, origin });
+  });
+}
+
 function nextManifest({ command, descriptor, existing, ownerRef, serviceKeyRef }: Record<string, any>) : any {
   const state: any = command.action === "disable"
     ? "disabled"
     : command.action === "remove"
       ? "removed"
       : "publishing";
-  const references: any = state === "removed"
+  const selectedReferences: any = state === "removed"
     ? []
     : descriptor.references === undefined
       ? existing?.manifest?.references || []
       : descriptor.references;
+  const references: any = state === "removed"
+    ? []
+    : bindCredentialReferenceOrigins(selectedReferences, descriptor, existing);
   const projectedDescriptor: any = state === "removed"
     ? null
     : Object.fromEntries((Object.entries(descriptor) as [string, any][]).filter(([key]: any[]) : any => key !== "references"));
@@ -680,6 +824,10 @@ export function createUpstreamPublishingApplication({
       const action: "create" | "replace" = existing ? "replace" : "create";
       authorize(authenticated, action);
       const descriptor: any = descriptorFromCommand({ action, descriptor: inputDescriptor }, existing);
+      authorizeLocalNetworkDescriptor(
+        authenticated,
+        effectiveAllowLocalNetwork(inputDescriptor, existing, action)
+      );
       const publishedSnapshot: any = await publishedReaderPort.getSnapshot({ signal });
       const publishedRecord: any = publishedSnapshot?.getService?.(serviceId) || null;
       existingOwnership(publishedRecord, ownerRef);
@@ -757,6 +905,16 @@ export function createUpstreamPublishingApplication({
       }
       existingOwnership(existing, ownerRef);
       const descriptor: any = descriptorFromCommand(command, existing);
+      // A republish without a descriptor re-activates prior truth and grants no
+      // new local-network authority; every descriptor-bearing mutation is
+      // authorized on the effective flag (including a flag inherited from the
+      // existing service on replace).
+      if (command.descriptor !== undefined) {
+        authorizeLocalNetworkDescriptor(
+          authenticated,
+          effectiveAllowLocalNetwork(command.descriptor, existing, command.action)
+        );
+      }
       const serviceKeyRef: any = existing?.manifest?.metadata?.serviceKeyRef ||
         `urn:meshrix:service-key:${digest("upstream-service-key", command.serviceKey)}`;
       const manifest: any = canonicalizeTypedReferenceManifest(

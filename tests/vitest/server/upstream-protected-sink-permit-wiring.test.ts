@@ -40,6 +40,7 @@ import {
   compileUpstreamOperationProjection
 } from "../../../packages/agents/src/upstream-gateway/operation-projection.ts";
 import {
+  hash,
   normalizeService
 } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import {
@@ -67,10 +68,14 @@ const SUBJECT: Readonly<Record<string, any>> = Object.freeze({
   tenantId: "final-effect-tenant",
   type: "console-user"
 });
+const ECHO_TOOL_CAPABILITY: string = "cap:upstream:final-effect-fixture:tools-call-echo";
+const ECHO_CREDENTIAL_BINDING: string = `credential:${hash(SECRET_REF, 16)}`;
 const SUBJECT_WITH_SCOPES: Readonly<Record<string, any>> = Object.freeze({
   ...SUBJECT,
   roleId: "owner",
-  scopes: Object.freeze(["gateway:read", "gateway:write"])
+  scopes: Object.freeze(["gateway:read", "gateway:write"]),
+  dynamicCapabilities: Object.freeze([ECHO_TOOL_CAPABILITY]),
+  allowedSecretBindings: Object.freeze([ECHO_CREDENTIAL_BINDING])
 });
 const AUTH_SESSION: Readonly<Record<string, any>> = Object.freeze({
   sessionId: "final-effect-session",
@@ -393,7 +398,7 @@ async function startUpstreamPeer(name?: any, events?: any) : Promise<any> {
   };
 }
 
-async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawService: Record<string, any> = serviceDescriptor(baseUrl)) : Promise<any> {
+async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawService: Record<string, any> = serviceDescriptor(baseUrl), { extraOrigins = [] }: Record<string, any> = {}) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(
     path.join(os.tmpdir(), "meshrix-final-effect-wiring-")
   );
@@ -432,6 +437,7 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawSer
       scope: {
         allowedHosts: [target.hostname],
         allowedProtocols: [target.protocol.replace(/:$/u, "")],
+        allowedOrigins: [target.origin, ...extraOrigins],
         scopes: rawService.serviceProtocol === "mcp"
           ? ["gateway:read", "gateway:write"]
           : ["gateway:write"],
@@ -1626,7 +1632,9 @@ describe("governed upstream final-effect permit wiring", () : any => {
       const original: any = await startUpstreamPeer(`original-${driftKind}`, events);
       const replacement: any = await startUpstreamPeer(`replacement-${driftKind}`, events);
       const { credentialReads, registry } =
-        await createCredentialBoundRegistry(events, original.baseUrl);
+        await createCredentialBoundRegistry(events, original.baseUrl, undefined, {
+          extraOrigins: [new URL(replacement.baseUrl).origin]
+        });
       const originalRawService: any = serviceDescriptor(original.baseUrl);
       const originalIdentity: Record<string, any> = {
         manifestDigest: fingerprint(originalRawService),

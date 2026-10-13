@@ -183,6 +183,7 @@ function descriptor(fixtureUrl?: any, label: any = "Verifier service", tagPolicy
       revision: 1,
       use: "request-auth",
       operationKey: "echo",
+      origin: endpoint.origin,
       host: endpoint.hostname,
       protocol: endpoint.protocol.replace(/:$/u, ""),
       scopes: ["gateway:write"]
@@ -575,7 +576,8 @@ async function main() : Promise<any> {
         serviceId,
         scopes: ["gateway:write"],
         allowedHosts: [new URL(fixture.url).hostname],
-        allowedProtocols: [new URL(fixture.url).protocol.replace(/:$/u, "")]
+        allowedProtocols: [new URL(fixture.url).protocol.replace(/:$/u, "")],
+        allowedOrigins: [new URL(fixture.url).origin]
       }
     },
     payload: {

@@ -44,36 +44,46 @@ afterEach(async () => {
 
 async function controlledPeer() {
   const requests: PeerRequest[] = [];
-  let supportedVersions: unknown[] = ["2026-07-28"];
   let listMode: "valid" | "malformed" | "null-cursor" = "valid";
-  const discoveryGates: Array<{
+  let mismatchToolCallResponseId = false;
+  let nextToolCallJsonRpcError = false;
+  let nextToolCallHttpError = false;
+  let nextToolCallHttpErrorClose: ReturnType<typeof deferred<boolean>> | null = null;
+  let hasNextToolCallResult = false;
+  let nextToolCallResult: unknown;
+  let nextToolCallSseResponse: { closed: ReturnType<typeof deferred<boolean>> } | null = null;
+  const requestGates: Array<{
+    method: string;
+    authorization?: string;
     gate: ReturnType<typeof deferred>;
     started: ReturnType<typeof deferred<number>>;
     canceled: ReturnType<typeof deferred>;
     setCanceled(): void;
     wasCanceled(): boolean;
   }> = [];
-  let calls = 0;
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const wire = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     requests.push({ method: String(wire.method), id: wire.id, params: wire.params || {}, headers: request.headers });
+    const gateIndex = requestGates.findIndex((candidate) =>
+      candidate.method === wire.method &&
+      (candidate.authorization === undefined || candidate.authorization === request.headers.authorization)
+    );
+    const heldRequest = gateIndex < 0 ? undefined : requestGates.splice(gateIndex, 1)[0];
+    heldRequest?.started.resolve(requests.length);
+    if (heldRequest) {
+      response.once("close", () => {
+        if (!response.writableEnded) {
+          heldRequest.setCanceled();
+          heldRequest.canceled.resolve();
+        }
+      });
+      await heldRequest.gate.promise;
+    }
+    if (response.destroyed) return;
     if (wire.method === "server/discover") {
-      calls += 1;
-      const heldDiscovery = discoveryGates.shift();
-      heldDiscovery?.started.resolve(calls);
-      if (heldDiscovery) {
-        response.once("close", () => {
-          if (!response.writableEnded) {
-            heldDiscovery.setCanceled();
-            heldDiscovery.canceled.resolve();
-          }
-        });
-        await heldDiscovery.gate.promise;
-      }
-      if (response.destroyed) return;
-      responseBody(response, wire.id, { resultType: "complete", supportedVersions });
+      responseBody(response, wire.id, { resultType: "complete", supportedVersions: ["2026-07-28"] });
       return;
     }
     if (wire.method === "tools/list") {
@@ -96,7 +106,58 @@ async function controlledPeer() {
       return;
     }
     if (wire.method === "tools/call") {
-      responseBody(response, wire.id, {
+      if (nextToolCallHttpError) {
+        nextToolCallHttpError = false;
+        response.writeHead(502, { "content-type": "application/json" });
+        const closed = nextToolCallHttpErrorClose;
+        nextToolCallHttpErrorClose = null;
+        let finishErrorBody: ReturnType<typeof setTimeout> | undefined;
+        response.once("close", () => {
+          clearTimeout(finishErrorBody);
+          closed?.resolve(!response.writableEnded);
+        });
+        response.write(JSON.stringify({ error: "synthetic-provider-detail" }));
+        if (closed) finishErrorBody = setTimeout(() => response.end(), 200);
+        else response.end();
+        return;
+      }
+      if (nextToolCallJsonRpcError) {
+        nextToolCallJsonRpcError = false;
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: wire.id,
+          error: { code: -32000, message: "synthetic-provider-detail" }
+        }));
+        return;
+      }
+      if (hasNextToolCallResult) {
+        hasNextToolCallResult = false;
+        responseBody(response, wire.id, nextToolCallResult);
+        return;
+      }
+      if (nextToolCallSseResponse) {
+        const { closed } = nextToolCallSseResponse;
+        nextToolCallSseResponse = null;
+        response.writeHead(200, { "content-type": "text/event-stream; charset=utf-8" });
+        response.once("close", () => {
+          clearTimeout(finishSse);
+          closed.resolve(!response.writableEnded);
+        });
+        response.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", method: "notifications/progress", params: { progress: 1 } })}\n\n`);
+        response.write(`event: message\ndata: ${JSON.stringify({
+          jsonrpc: "2.0",
+          id: wire.id,
+          result: {
+            resultType: "complete",
+            content: [{ type: "text", text: "modern-peer" }],
+            structuredContent: { accepted: true, value: wire.params.arguments?.value }
+          }
+        })}\n\n`);
+        const finishSse = setTimeout(() => response.end(), 200);
+        return;
+      }
+      responseBody(response, mismatchToolCallResponseId ? `${wire.id}-mismatch` : wire.id, {
         resultType: "complete",
         content: [{ type: "text", text: "modern-peer" }],
         structuredContent: { accepted: true, value: wire.params.arguments?.value }
@@ -112,14 +173,33 @@ async function controlledPeer() {
   return {
     url: `http://127.0.0.1:${address.port}/mcp`,
     requests,
-    setSupportedVersions(versions: unknown[]) { supportedVersions = versions; },
     setListMode(mode: typeof listMode) { listMode = mode; },
-    holdNextDiscovery() {
+    mismatchNextToolCallResponseId() { mismatchToolCallResponseId = true; },
+    failNextToolCallWithJsonRpcError() { nextToolCallJsonRpcError = true; },
+    failNextToolCallWithHttpError() { nextToolCallHttpError = true; },
+    failNextToolCallWithOpenHttpErrorBody() {
+      const closed = deferred<boolean>();
+      nextToolCallHttpError = true;
+      nextToolCallHttpErrorClose = closed;
+      return closed.promise;
+    },
+    returnNextToolCallResult(result: unknown) {
+      nextToolCallResult = result;
+      hasNextToolCallResult = true;
+    },
+    streamNextToolCallResponseAsSse() {
+      const closed = deferred<boolean>();
+      nextToolCallSseResponse = { closed };
+      return closed.promise;
+    },
+    holdNextRequest(method: string, authorization?: string) {
       const gate = deferred();
       const started = deferred<number>();
       const canceled = deferred();
       let didCancel = false;
-      discoveryGates.push({
+      requestGates.push({
+        method,
+        ...(authorization === undefined ? {} : { authorization }),
         gate,
         started,
         canceled,
@@ -161,6 +241,7 @@ async function credentialRegistryFor(peer: Awaited<ReturnType<typeof controlledP
       serviceId: "modern-peer",
       allowedHosts: [new URL(peer.url).hostname],
       allowedProtocols: ["http"],
+      allowedOrigins: [new URL(peer.url).origin],
       scopes: ["gateway:read"]
     }
   };
@@ -204,8 +285,20 @@ async function credentialRegistryFor(peer: Awaited<ReturnType<typeof controlledP
   };
 }
 
-describe("configured modern upstream MCP discovery", () => {
-  it("discovers, collects a complete paginated catalog, caches it, then calls the peer through the registry", async () => {
+describe("configured modern upstream MCP catalog", () => {
+  // Governed callers hold the explicit upstream tool capability; the capability
+  // check is the gate for every subject type, not just typed grants.
+  const CALLER = {
+    type: "operator",
+    subjectId: "synthetic-caller",
+    grantId: "synthetic-grant",
+    scopes: ["gateway:admin"],
+    dynamicCapabilities: [
+      "cap:upstream:modern-peer:tools-call-echo",
+      "cap:upstream:modern-peer:tools-call-status"
+    ]
+  } as const;
+  it("collects a complete paginated catalog, caches it, then calls the peer directly through the registry", async () => {
     const peer = await controlledPeer();
     const registry = await registryFor(peer.url);
 
@@ -215,44 +308,52 @@ describe("configured modern upstream MCP discovery", () => {
       "upstream.modern-peer.status"
     ]);
     expect(peer.requests.map((request) => request.method)).toEqual([
-      "server/discover",
       "tools/list",
       "tools/list"
     ]);
-    expect(peer.requests[0].headers["mcp-method"]).toBe("server/discover");
     expect(peer.requests[0].headers["mcp-protocol-version"]).toBe("2026-07-28");
-    expect(peer.requests[1].params.cursor).toBeUndefined();
-    expect(peer.requests[2].params.cursor).toBe("page two");
+    expect(peer.requests[0].params.cursor).toBeUndefined();
+    expect(peer.requests[1].params.cursor).toBe("page two");
     expect(peer.requests.every((request) => request.method !== "initialize")).toBe(true);
 
     await registry.listMcpTools({ serviceId: "modern-peer" });
-    expect(peer.requests).toHaveLength(3);
+    expect(peer.requests).toHaveLength(2);
 
     const called = await registry.callMcpToolByPublicName(
       "upstream.modern-peer.echo",
       { arguments: { value: "works" } },
-      { type: "operator", subjectId: "synthetic-caller", grantId: "synthetic-grant", scopes: ["gateway:admin"] }
+      CALLER
     );
     expect(called).toMatchObject({ ok: true, response: { structuredContent: { accepted: true, value: "works" } } });
     expect(peer.requests.map((request) => request.method)).toEqual([
-      "server/discover",
       "tools/list",
       "tools/list",
-      "server/discover",
       "tools/call"
     ]);
     expect(peer.requests.at(-1)?.params).toMatchObject({ name: "echo", arguments: { value: "works" } });
     expect(peer.requests.at(-1)?.headers["mcp-method"]).toBe("tools/call");
   });
 
-  it("does not cache failed discovery, malformed pages, or incomplete catalogs", async () => {
+  it("reads the matching SSE response frame and cancels the still-open stream", async () => {
     const peer = await controlledPeer();
     const registry = await registryFor(peer.url);
+    await registry.listMcpTools({ serviceId: "modern-peer" });
+    const streamClosedBeforeServerEnd = peer.streamNextToolCallResponseAsSse();
 
-    peer.setSupportedVersions(["2025-06-18"]);
-    await expect(registry.listMcpTools({ serviceId: "modern-peer" }))
-      .rejects.toMatchObject({ reasonCode: "upstream_mcp_discovery_failed" });
-    peer.setSupportedVersions(["2026-07-28"]);
+    const called = await registry.callMcpToolByPublicName(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    );
+
+    expect(called).toMatchObject({ ok: true, response: { structuredContent: { accepted: true, value: "works" } } });
+    expect(await streamClosedBeforeServerEnd).toBe(true);
+    expect(peer.requests.map((request) => request.method)).toEqual(["tools/list", "tools/list", "tools/call"]);
+  });
+
+  it("does not cache malformed pages or incomplete catalogs", async () => {
+    const peer = await controlledPeer();
+    const registry = await registryFor(peer.url);
 
     peer.setListMode("malformed");
     await expect(registry.listMcpTools({ serviceId: "modern-peer" }))
@@ -267,13 +368,146 @@ describe("configured modern upstream MCP discovery", () => {
       "upstream.modern-peer.echo",
       "upstream.modern-peer.status"
     ]);
-    expect(peer.requests.filter((request) => request.method === "server/discover")).toHaveLength(4);
+    expect(peer.requests.map((request) => request.method)).toEqual([
+      "tools/list",
+      "tools/list",
+      "tools/list",
+      "tools/list"
+    ]);
   });
 
-  it("releases a canceled in-flight modern discovery and permits a fresh complete refresh", async () => {
+  it("rejects a successful tools/call response whose JSON-RPC id does not match", async () => {
     const peer = await controlledPeer();
     const registry = await registryFor(peer.url);
-    const held = peer.holdNextDiscovery();
+    await registry.listMcpTools({ serviceId: "modern-peer" });
+    peer.mismatchNextToolCallResponseId();
+    const beforeMetrics = registry.getMetrics();
+
+    await expect(registry.callMcpToolByPublicName(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    )).rejects.toMatchObject({ message: "Upstream MCP forwarding failed." });
+
+    expect(peer.requests.map((request) => request.method)).toEqual(["tools/list", "tools/list", "tools/call"]);
+    const afterMetrics = registry.getMetrics();
+    expect(afterMetrics.totalFailureCount).toBe(beforeMetrics.totalFailureCount + 1);
+    expect(afterMetrics.totalForwardCount).toBe(beforeMetrics.totalForwardCount + 1);
+    const callAudits = registry.listAudit({ serviceId: "modern-peer" }).items
+      .filter((event: any) => event.operationKey === "tools/call");
+    expect(callAudits.map((event: any) => event.eventType)).toContain("upstream.mcp.gateway.failed");
+    expect(callAudits.map((event: any) => event.eventType)).not.toContain("upstream.mcp.gateway.completed");
+  });
+
+  it.each([
+    { name: "null result", result: null, reasonCode: "upstream_mcp_response_invalid" },
+    { name: "missing result type", result: {}, reasonCode: "upstream_mcp_response_invalid" },
+    { name: "complete result without content", result: { resultType: "complete" }, reasonCode: "upstream_mcp_response_invalid" },
+    { name: "unnegotiated result type", result: { resultType: "unnegotiated" }, reasonCode: "upstream_mcp_result_type_unnegotiated" }
+  ])("rejects a modern tools/call with $name as a failed operation", async ({ result, reasonCode }) => {
+    const peer = await controlledPeer();
+    const registry = await registryFor(peer.url);
+    await registry.listMcpTools({ serviceId: "modern-peer" });
+    peer.returnNextToolCallResult(result);
+    const beforeMetrics = registry.getMetrics();
+
+    await expect(registry.callMcpToolByPublicName(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    )).rejects.toMatchObject({
+      message: "Upstream MCP forwarding failed.",
+      status: 502,
+      reasonCode
+    });
+
+    expect(peer.requests.map((request) => request.method)).toEqual(["tools/list", "tools/list", "tools/call"]);
+    const afterMetrics = registry.getMetrics();
+    expect(afterMetrics.totalFailureCount).toBe(beforeMetrics.totalFailureCount + 1);
+    expect(afterMetrics.totalForwardCount).toBe(beforeMetrics.totalForwardCount + 1);
+    const callAudits = registry.listAudit({ serviceId: "modern-peer" }).items
+      .filter((event: any) => event.operationKey === "tools/call");
+    expect(callAudits.map((event: any) => event.eventType)).toContain("upstream.mcp.gateway.failed");
+    expect(callAudits.map((event: any) => event.eventType)).not.toContain("upstream.mcp.gateway.completed");
+  });
+
+  it("projects JSON-RPC peer errors as bounded failures without provider text", async () => {
+    const peer = await controlledPeer();
+    const registry = await registryFor(peer.url);
+    await registry.listMcpTools({ serviceId: "modern-peer" });
+    peer.failNextToolCallWithJsonRpcError();
+
+    await expect(registry.callMcpToolByPublicName(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    )).rejects.toMatchObject({
+      message: "Upstream MCP forwarding failed.",
+      status: 502,
+      reasonCode: "upstream_jsonrpc_error"
+    });
+
+    const callAudits = registry.listAudit({ serviceId: "modern-peer" }).items
+      .filter((event: any) => event.operationKey === "tools/call");
+    expect(callAudits.map((event: any) => event.eventType)).toContain("upstream.mcp.gateway.failed");
+    expect(callAudits.map((event: any) => event.eventType)).not.toContain("upstream.mcp.gateway.completed");
+    expect(JSON.stringify(callAudits)).not.toContain("synthetic-provider-detail");
+  });
+
+  it("redacts HTTP error bodies while recording a failed modern call", async () => {
+    const peer = await controlledPeer();
+    const registry = await registryFor(peer.url);
+    await registry.listMcpTools({ serviceId: "modern-peer" });
+    peer.failNextToolCallWithHttpError();
+
+    const result = await registry.executePublishedMcpRoute(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    );
+
+    expect(result.status).toBe(502);
+    expect(JSON.stringify(result)).not.toContain("synthetic-provider-detail");
+    expect(result.body).toMatchObject({ error: { message: "Upstream MCP request failed." } });
+    peer.failNextToolCallWithHttpError();
+    await expect(registry.callMcpToolByPublicName(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    )).rejects.toMatchObject({
+      message: "Upstream MCP forwarding failed.",
+      status: 502,
+      reasonCode: "upstream_mcp_call_failed"
+    });
+    const callAudits = registry.listAudit({ serviceId: "modern-peer" }).items
+      .filter((event: any) => event.operationKey === "tools/call");
+    expect(callAudits.map((event: any) => event.eventType)).toContain("upstream.mcp.gateway.failed");
+    expect(callAudits.map((event: any) => event.eventType)).not.toContain("upstream.mcp.gateway.completed");
+    expect(JSON.stringify(callAudits)).not.toContain("synthetic-provider-detail");
+  });
+
+  it("cancels an unnecessary HTTP failure body without waiting to read it", async () => {
+    const peer = await controlledPeer();
+    const registry = await registryFor(peer.url);
+    await registry.listMcpTools({ serviceId: "modern-peer" });
+    const bodyCanceledBeforeServerEnd = peer.failNextToolCallWithOpenHttpErrorBody();
+
+    const result = await registry.executePublishedMcpRoute(
+      "upstream.modern-peer.echo",
+      { arguments: { value: "works" } },
+      CALLER
+    );
+
+    expect(result.status).toBe(502);
+    expect(JSON.stringify(result)).not.toContain("synthetic-provider-detail");
+    expect(await bodyCanceledBeforeServerEnd).toBe(true);
+    expect(peer.requests.map((request) => request.method)).toEqual(["tools/list", "tools/list", "tools/call"]);
+  });
+
+  it("releases a canceled catalog request and permits a fresh complete refresh", async () => {
+    const peer = await controlledPeer();
+    const registry = await registryFor(peer.url);
+    const held = peer.holdNextRequest("tools/list");
     const controller = new AbortController();
     const refresh = registry.listMcpTools({ serviceId: "modern-peer" }, { signal: controller.signal });
     await held.started;
@@ -288,8 +522,7 @@ describe("configured modern upstream MCP discovery", () => {
       "upstream.modern-peer.status"
     ]);
     expect(peer.requests.map((request) => request.method)).toEqual([
-      "server/discover",
-      "server/discover",
+      "tools/list",
       "tools/list",
       "tools/list"
     ]);
@@ -298,7 +531,7 @@ describe("configured modern upstream MCP discovery", () => {
   it("cancels an abandoned refresh when its credential-preparing follower also leaves", async () => {
     const peer = await controlledPeer();
     const { registry, holdNextKeyLoad } = await credentialRegistryFor(peer);
-    const heldDiscovery = peer.holdNextDiscovery();
+    const heldCatalogRequest = peer.holdNextRequest("tools/list", "Bearer initial-token");
     const creatorController = new AbortController();
     const creator = registry.listMcpTools({ serviceId: "modern-peer" }, { signal: creatorController.signal });
     const followerController = new AbortController();
@@ -306,7 +539,7 @@ describe("configured modern upstream MCP discovery", () => {
     const pending = [creator];
 
     try {
-      await heldDiscovery.started;
+      await heldCatalogRequest.started;
       const keyLoad = holdNextKeyLoad();
       heldKeyLoad = keyLoad;
       const currentFollower = registry.listMcpTools({ serviceId: "modern-peer" }, { signal: followerController.signal });
@@ -316,37 +549,36 @@ describe("configured modern upstream MCP discovery", () => {
       const creatorCanceled = expect(creator).rejects.toMatchObject({ reasonCode: "upstream_mcp_cancelled" });
       creatorController.abort();
       await creatorCanceled;
-      expect(heldDiscovery.wasCanceled()).toBe(false);
+      expect(heldCatalogRequest.wasCanceled()).toBe(false);
 
       const followerCanceled = expect(currentFollower).rejects.toMatchObject({ reasonCode: "upstream_mcp_cancelled" });
       followerController.abort();
       await followerCanceled;
-      await heldDiscovery.canceled;
+      await heldCatalogRequest.canceled;
 
-      heldDiscovery.gate.resolve();
+      heldCatalogRequest.gate.resolve();
       keyLoad.gate.resolve();
       await keyLoad.settled;
 
       const fresh = await registry.listMcpTools({ serviceId: "modern-peer" });
       expect(fresh.items.map((tool: any) => tool.name)).toContain("upstream.modern-peer.echo");
       expect(peer.requests.map((request) => request.method)).toEqual([
-        "server/discover",
-        "server/discover",
+        "tools/list",
         "tools/list",
         "tools/list"
       ]);
     } finally {
-      heldDiscovery.gate.resolve();
+      heldCatalogRequest.gate.resolve();
       heldKeyLoad?.gate.resolve();
       if (heldKeyLoad) await heldKeyLoad.settled;
       await Promise.allSettled(pending);
     }
   });
 
-  it("cancels and settles an owned modern discovery when the registry closes", async () => {
+  it("cancels and settles an owned catalog request when the registry closes", async () => {
     const peer = await controlledPeer();
     const registry = await registryFor(peer.url);
-    const held = peer.holdNextDiscovery();
+    const held = peer.holdNextRequest("tools/list");
     const refresh = registry.listMcpTools({ serviceId: "modern-peer" });
     try {
       await held.started;
@@ -356,14 +588,14 @@ describe("configured modern upstream MCP discovery", () => {
       held.gate.resolve();
       await closing;
       await canceled;
-      expect(peer.requests.map((request) => request.method)).toEqual(["server/discover"]);
+      expect(peer.requests.map((request) => request.method)).toEqual(["tools/list"]);
     } finally {
       held.gate.resolve();
       await Promise.allSettled([refresh]);
     }
   });
 
-  it("does not start a late discovery after close wins a credential-resolution wait", async () => {
+  it("does not start a late catalog request after close wins a credential-resolution wait", async () => {
     const peer = await controlledPeer();
     const { registry, holdNextKeyLoad } = await credentialRegistryFor(peer);
     const held = holdNextKeyLoad();
@@ -414,7 +646,7 @@ describe("configured modern upstream MCP discovery", () => {
     await rotate("rotated-token");
     const rotated = await registry.listMcpTools({ serviceId: "modern-peer" });
     expect(rotated.items.map((tool: any) => tool.name)).toContain("upstream.modern-peer.rotated");
-    expect(peer.requests.filter((request) => request.method === "server/discover")).toHaveLength(2);
+    expect(peer.requests.filter((request) => request.method === "tools/list")).toHaveLength(4);
     expect(peer.requests.filter((request) => request.method === "tools/list").map((request) => request.headers.authorization))
       .toEqual(["Bearer initial-token", "Bearer initial-token", "Bearer rotated-token", "Bearer rotated-token"]);
   });
@@ -422,34 +654,34 @@ describe("configured modern upstream MCP discovery", () => {
   it("keeps concurrent refreshes for distinct credential generations independent", async () => {
     const peer = await controlledPeer();
     const { registry, rotate } = await credentialRegistryFor(peer);
-    const initialDiscovery = peer.holdNextDiscovery();
+    const initialCatalogRequest = peer.holdNextRequest("tools/list", "Bearer initial-token");
     const initialRefresh = registry.listMcpTools({ serviceId: "modern-peer" });
-    let releaseRotatedDiscovery: (() => void) | null = null;
+    let releaseRotatedCatalogRequest: (() => void) | null = null;
     const pending = [initialRefresh];
 
     try {
-      await initialDiscovery.started;
+      await initialCatalogRequest.started;
       await rotate("rotated-token");
-      const rotatedDiscovery = peer.holdNextDiscovery();
-      releaseRotatedDiscovery = () => rotatedDiscovery.gate.resolve();
+      const rotatedCatalogRequest = peer.holdNextRequest("tools/list", "Bearer rotated-token");
+      releaseRotatedCatalogRequest = () => rotatedCatalogRequest.gate.resolve();
       const rotatedRefresh = registry.listMcpTools({ serviceId: "modern-peer" });
       pending.push(rotatedRefresh);
-      await rotatedDiscovery.started;
+      await rotatedCatalogRequest.started;
 
-      initialDiscovery.gate.resolve();
+      initialCatalogRequest.gate.resolve();
       const initial = await initialRefresh;
       expect(initial.items.map((tool: any) => tool.name)).toContain("upstream.modern-peer.echo");
-      expect(rotatedDiscovery.wasCanceled()).toBe(false);
+      expect(rotatedCatalogRequest.wasCanceled()).toBe(false);
 
-      rotatedDiscovery.gate.resolve();
+      rotatedCatalogRequest.gate.resolve();
       const rotated = await rotatedRefresh;
       expect(rotated.items.map((tool: any) => tool.name)).toContain("upstream.modern-peer.rotated");
-      expect(peer.requests.filter((request) => request.method === "server/discover")).toHaveLength(2);
-      expect(peer.requests.filter((request) => request.method === "tools/list").map((request) => request.headers.authorization))
-        .toEqual(["Bearer initial-token", "Bearer initial-token", "Bearer rotated-token", "Bearer rotated-token"]);
+      expect(peer.requests.filter((request) => request.method === "tools/list")).toHaveLength(4);
+      expect(peer.requests.filter((request) => request.method === "tools/list").map((request) => request.headers.authorization).sort())
+        .toEqual(["Bearer initial-token", "Bearer initial-token", "Bearer rotated-token", "Bearer rotated-token"].sort());
     } finally {
-      initialDiscovery.gate.resolve();
-      releaseRotatedDiscovery?.();
+      initialCatalogRequest.gate.resolve();
+      releaseRotatedCatalogRequest?.();
       await Promise.allSettled(pending);
     }
   });

@@ -20,7 +20,6 @@ import {
   revokeLocalSecret,
   rotateLocalSecret
 } from "@meshrix/foundation/security/secrets/local-secret-store";
-import { assertLocalSecretKeyReady } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
 import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
 
 const CONFIG_DIRECTORY = "upstream-config";
@@ -34,8 +33,8 @@ const POLLUTION_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const SAFE_NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,63}(?:\/[A-Za-z][A-Za-z0-9_.-]{0,63}){0,3}$/u;
 const SAFE_HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/u;
 const SAFE_BEARER_TOKEN = /^[A-Za-z0-9._~+/-]+=*$/u;
-const SENSITIVE_HEADER_NAME = /(?:^|[-_])(?:authorization|proxy-authorization|auth|cookie|set-cookie|session|api[-_]?key|private[-_]?key|client[-_]?secret|access[-_]?token|refresh[-_]?token|token|credential|secret|password|bearer)(?:$|[-_])/iu;
 const CONFIG_SECRET_ROOT = "secret://meshrix/upstream-config/";
+const SENSITIVE_HEADER_NAME = /(?:^|[-_])(?:authorization|proxy-authorization|auth|cookie|set-cookie|session|api[-_]?key|private[-_]?key|client[-_]?secret|access[-_]?token|refresh[-_]?token|token|credential|secret|password|bearer)(?:$|[-_])/iu;
 const LOADER_SUBJECT: UpstreamPublishingSubject = Object.freeze({
   subjectId: "meshrix:config-file",
   scopes: ["gateway:admin", "gateway:maintain", "gateway:write", "gateway:read"]
@@ -43,8 +42,9 @@ const LOADER_SUBJECT: UpstreamPublishingSubject = Object.freeze({
 
 type ConfigService = Readonly<{
   name: string;
-  type: "http" | "json-rpc" | "mcp";
-  url: string;
+  descriptor: Readonly<Record<string, unknown>> | null;
+  type: "http" | "json-rpc" | "mcp" | null;
+  url: string | null;
   auth: Readonly<{ type: "bearer"; token: string }> | null;
   headers: Readonly<Record<string, string>>;
 }>;
@@ -53,6 +53,11 @@ type SafeLoaderError = Readonly<{ code: string; message: string }>;
 type LoaderResult = Readonly<{ ok: true; applied: number }>;
 type SecretEntry = Awaited<ReturnType<typeof listLocalSecretEntries>>[number];
 type TypedReference = UpstreamConfigServicePreparation["currentReferences"][number];
+type CleanupTarget = Readonly<{
+  service: ConfigService;
+  descriptor: Readonly<Record<string, unknown>>;
+  hasInlineAuth: boolean;
+}>;
 
 interface LoaderOptions {
   userDataPath?: string;
@@ -75,7 +80,6 @@ class ConfigLoaderFailure extends Error {
 const SAFE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
   "config.invalid": "Upstream service configuration is invalid.",
   "config.read_failed": "Upstream service configuration could not be read.",
-  "credential.provider_required": "An external credential key provider is required for authenticated upstream services.",
   "credential.custody_unavailable": "External credential custody is unavailable.",
   "credential.reference_conflict": "Credential state changed concurrently; the configuration will be retried.",
   "publication.conflict": "Upstream service publication changed concurrently; the configuration will be retried.",
@@ -161,13 +165,29 @@ function parseConfig(raw: string): readonly ConfigService[] {
   const services = root.services.map((candidate): ConfigService => {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) fail("config.invalid");
     const entry = candidate as Record<string, unknown>;
-    if (Object.keys(entry).some((key) => !["name", "type", "url", "auth", "headers"].includes(key))) {
-      fail("config.invalid");
-    }
     if (typeof entry.name !== "string" || !SAFE_NAME.test(entry.name) || seenNames.has(entry.name)) {
       fail("config.invalid");
     }
     seenNames.add(entry.name);
+
+    if (Object.hasOwn(entry, "descriptor")) {
+      if (Object.keys(entry).some((key) => key !== "name" && key !== "descriptor")) fail("config.invalid");
+      if (!entry.descriptor || typeof entry.descriptor !== "object" || Array.isArray(entry.descriptor)) {
+        fail("config.invalid");
+      }
+      return Object.freeze({
+        name: entry.name,
+        descriptor: Object.freeze({ ...(entry.descriptor as Record<string, unknown>) }),
+        type: null,
+        url: null,
+        auth: null,
+        headers: Object.freeze({})
+      });
+    }
+
+    if (Object.keys(entry).some((key) => !["name", "type", "url", "auth", "headers"].includes(key))) {
+      fail("config.invalid");
+    }
 
     if (entry.type !== "http" && entry.type !== "json-rpc" && entry.type !== "mcp") fail("config.invalid");
     if (typeof entry.url !== "string") fail("config.invalid");
@@ -227,6 +247,7 @@ function parseConfig(raw: string): readonly ConfigService[] {
       name: entry.name,
       type: entry.type,
       url,
+      descriptor: null,
       auth,
       headers: Object.freeze(headers)
     });
@@ -235,6 +256,8 @@ function parseConfig(raw: string): readonly ConfigService[] {
 }
 
 function descriptorFor(service: ConfigService): Readonly<Record<string, unknown>> {
+  if (service.descriptor) return service.descriptor;
+  if (!service.type || !service.url) fail("config.invalid");
   const base = {
     serviceProtocol: service.type,
     label: service.name,
@@ -246,14 +269,14 @@ function descriptorFor(service: ConfigService): Readonly<Record<string, unknown>
       ...base,
       mcp: Object.freeze({
         transport: "http",
-        url: service.url,
+        url: service.url!,
         ...(Object.keys(service.headers).length > 0 ? { headers: service.headers } : {})
       })
     });
   }
   return Object.freeze({
     ...base,
-    baseUrl: service.url,
+    baseUrl: service.url!,
     operations: Object.freeze([Object.freeze({
       operationKey: "default",
       method: "POST",
@@ -272,18 +295,32 @@ function ownerSecretNamespace(serviceId: string): string {
   return `${CONFIG_SECRET_ROOT}${owner}/`;
 }
 
-function namespaceForConfigSecret(secretRef: string): string | null {
-  if (!secretRef.startsWith(CONFIG_SECRET_ROOT)) return null;
-  const owner = secretRef.slice(CONFIG_SECRET_ROOT.length).split("/", 1)[0];
-  return /^[a-f0-9]{32}$/u.test(owner) ? `${CONFIG_SECRET_ROOT}${owner}/` : null;
+function targetHost(url: URL): string {
+  return url.hostname.replace(/^\[|\]$/gu, "");
 }
 
-function credentialReference(serviceId: string, serviceRevision: number): string {
-  return `${ownerSecretNamespace(serviceId)}r${serviceRevision}`;
+function credentialReference(serviceId: string, serviceRevision: number, url: URL): string {
+  const scope = createHash("sha256")
+    .update(url.hostname.toLowerCase())
+    .update("\0")
+    .update(url.protocol.slice(0, -1))
+    .update(url.port ? `\0${url.port}` : "")
+    .digest("hex")
+    .slice(0, 16);
+  return `${ownerSecretNamespace(serviceId)}r${serviceRevision}-${scope}`;
+}
+
+function namespaceForConfigSecret(secretRef: string): string | null {
+  if (!secretRef.startsWith(CONFIG_SECRET_ROOT)) return null;
+  const [owner = "", suffix = ""] = secretRef.slice(CONFIG_SECRET_ROOT.length).split("/", 2);
+  return /^[a-f0-9]{32}$/u.test(owner) && /^r[1-9][0-9]*(?:-[a-f0-9]{16})?$/u.test(suffix)
+    ? `${CONFIG_SECRET_ROOT}${owner}/`
+    : null;
 }
 
 function isLoaderCredentialReference(reference: string, namespace: string): boolean {
-  return reference.startsWith(namespace);
+  if (!reference.startsWith(namespace)) return false;
+  return /^r[1-9][0-9]*(?:-[a-f0-9]{16})?$/u.test(reference.slice(namespace.length));
 }
 
 function secretTarget(serviceId: string, reference: string, url: URL) {
@@ -295,8 +332,9 @@ function secretTarget(serviceId: string, reference: string, url: URL) {
     scope: Object.freeze({
       serviceId,
       scopes: Object.freeze(["gateway:read", "gateway:write"]),
-      allowedHosts: Object.freeze([url.hostname]),
-      allowedProtocols: Object.freeze([url.protocol.slice(0, -1)])
+      allowedHosts: Object.freeze([targetHost(url)]),
+      allowedProtocols: Object.freeze([url.protocol.slice(0, -1)]),
+      allowedOrigins: Object.freeze([url.origin])
     })
   });
 }
@@ -307,7 +345,8 @@ function typedCredentialReference(reference: string, revision: number, url: URL)
     reference,
     revision,
     use: "request-auth",
-    host: url.hostname,
+    origin: url.origin,
+    ...(url.hostname.includes(":") ? {} : { host: targetHost(url) }),
     protocol: url.protocol.slice(0, -1),
     scopes: []
   });
@@ -331,12 +370,116 @@ function sameReferences(left: readonly TypedReference[], right: readonly TypedRe
       revision: entry.revision,
       use: entry.use,
       operationKey: entry.operationKey || "",
+      origin: entry.origin || "",
       host: entry.host || "",
       protocol: entry.protocol || "",
       scopes: [...(entry.scopes || [])].sort()
     }))
     .sort((a, b) => a.reference.localeCompare(b.reference) || a.revision - b.revision);
   return isDeepStrictEqual(normalize(left), normalize(right));
+}
+
+function declaredReferences(descriptor: Readonly<Record<string, unknown>>): readonly TypedReference[] | null {
+  if (!Object.hasOwn(descriptor, "references")) return null;
+  if (!Array.isArray(descriptor.references)) fail("config.invalid");
+  return descriptor.references as readonly TypedReference[];
+}
+
+function descriptorWithoutReferences(descriptor: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  if (!Object.hasOwn(descriptor, "references")) return descriptor;
+  const { references: _references, ...domainDescriptor } = descriptor;
+  return Object.freeze(domainDescriptor);
+}
+
+function descriptorUrl(descriptor: UpstreamConfigServicePreparation["currentDescriptor"]): URL | null {
+  if (!descriptor) return null;
+  const mcp = descriptor.mcp && typeof descriptor.mcp === "object"
+    ? descriptor.mcp as Record<string, unknown>
+    : null;
+  const firstEndpoint = Array.isArray(descriptor.endpoints)
+    ? descriptor.endpoints[0] as Record<string, unknown> | undefined
+    : undefined;
+  const candidate = descriptor.serviceProtocol === "mcp"
+    ? mcp?.url || mcp?.endpoint || mcp?.baseUrl
+    : descriptor.baseUrl || firstEndpoint?.baseUrl;
+  if (typeof candidate !== "string") return null;
+  try {
+    return new URL(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function descriptorOrigins(descriptor: Readonly<Record<string, unknown>> | null | undefined): readonly string[] {
+  if (!descriptor) return [];
+  const mcp = descriptor.mcp && typeof descriptor.mcp === "object"
+    ? descriptor.mcp as Record<string, unknown>
+    : null;
+  const endpoints = Array.isArray(descriptor.endpoints)
+    ? descriptor.endpoints as ReadonlyArray<Record<string, unknown>>
+    : [];
+  const candidates = descriptor.serviceProtocol === "mcp"
+    ? [mcp?.url, mcp?.endpoint, mcp?.baseUrl, descriptor.baseUrl]
+    : [descriptor.baseUrl, ...endpoints.map((endpoint) => endpoint.baseUrl)];
+  return Object.freeze([...new Set(candidates.flatMap((candidate) => {
+    if (typeof candidate !== "string") return [];
+    try {
+      const url = new URL(candidate);
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? [url.origin] : [];
+    } catch {
+      return [];
+    }
+  }))]);
+}
+
+function matchingCredentialOrigin(reference: TypedReference, descriptor: Readonly<Record<string, unknown>> | null | undefined): string {
+  if (reference.origin) return reference.origin;
+  const host = (reference.host || "").toLowerCase();
+  const protocol = (reference.protocol || "").toLowerCase();
+  const matches = descriptorOrigins(descriptor).filter((origin) => {
+    const url = new URL(origin);
+    return (!host || url.hostname.replace(/^\[|\]$/gu, "").toLowerCase() === host) &&
+      (!protocol || url.protocol.slice(0, -1) === protocol);
+  });
+  return matches.length === 1 ? matches[0]! : "";
+}
+
+function bindCredentialReferenceOrigins(
+  references: readonly TypedReference[],
+  descriptor: Readonly<Record<string, unknown>> | null | undefined,
+  previousReferences: readonly TypedReference[] = [],
+  previousDescriptor: Readonly<Record<string, unknown>> | null = null
+): readonly TypedReference[] {
+  const allowedOrigins = new Set(descriptorOrigins(descriptor));
+  return Object.freeze(references.map((reference) => {
+    if (reference.type !== "credential") return reference;
+    const previous = previousReferences.find((candidate) => candidate.reference === reference.reference);
+    const previousOrigin = previous
+      ? matchingCredentialOrigin(previous, previousDescriptor)
+      : "";
+    if (previous && !previousOrigin) fail("credential.reference_conflict");
+    const origin = previous
+      ? reference.origin || previousOrigin
+      : matchingCredentialOrigin(reference, descriptor);
+    if (!origin || !allowedOrigins.has(origin) || (previousOrigin && previousOrigin !== origin)) {
+      fail("credential.reference_conflict");
+    }
+    return Object.freeze({ ...reference, origin });
+  }));
+}
+
+function bindingHostProtocol(reference: TypedReference): Readonly<{ host: string; protocol: string }> {
+  try {
+    const origin = new URL(reference.origin || "");
+    const host = reference.host || targetHost(origin);
+    const protocol = reference.protocol || origin.protocol.slice(0, -1);
+    if (host.toLowerCase() !== targetHost(origin).toLowerCase() || protocol.toLowerCase() !== origin.protocol.slice(0, -1)) {
+      fail("credential.custody_unavailable");
+    }
+    return Object.freeze({ host, protocol });
+  } catch {
+    fail("credential.custody_unavailable");
+  }
 }
 
 function desiredBearer(service: ConfigService): string {
@@ -348,6 +491,7 @@ async function resolveExistingCredential({
   secretRef,
   revision,
   serviceId,
+  origin,
   host,
   protocol,
   keyProvider
@@ -356,6 +500,7 @@ async function resolveExistingCredential({
   secretRef: string;
   revision: number;
   serviceId: string;
+  origin: string;
   host: string;
   protocol: string;
   keyProvider: LocalSecretKeyProvider;
@@ -367,6 +512,7 @@ async function resolveExistingCredential({
     expectedScope: Object.freeze({
       serviceId,
       requiredScopes: Object.freeze(["gateway:read", "gateway:write"]),
+      origin,
       host,
       protocol
     }),
@@ -394,13 +540,13 @@ async function prepareCredential({
   secretEntries: Map<string, SecretEntry>;
 }): Promise<TypedReference | null> {
   const namespace = ownerSecretNamespace(preparation.serviceId);
-  const serviceUrl = new URL(service.url);
+  const serviceUrl = new URL(service.url || "");
   const currentCredentialReferences = preparation.currentReferences.filter((entry) =>
     entry.type === "credential" && isLoaderCredentialReference(entry.reference, namespace)
   );
 
   if (!service.auth) return null;
-  if (!keyProvider) fail("credential.provider_required");
+  if (!keyProvider) fail("credential.custody_unavailable");
 
   if (currentCredentialReferences.length > 1) fail("credential.reference_conflict");
   if (currentCredentialReferences.length === 1) {
@@ -413,7 +559,8 @@ async function prepareCredential({
         secretRef: bound.reference,
         revision: bound.revision,
         serviceId: preparation.serviceId,
-        host: bound.host || previousUrl.hostname,
+        origin: bound.origin || previousUrl.origin,
+        host: bound.host || targetHost(previousUrl),
         protocol: bound.protocol || previousUrl.protocol.slice(0, -1),
         keyProvider
       });
@@ -422,14 +569,19 @@ async function prepareCredential({
     }
     if (
       resolved.authorization === desiredBearer(service) &&
-      (bound.host || previousUrl.hostname) === serviceUrl.hostname &&
+      (bound.origin || previousUrl.origin) === serviceUrl.origin &&
+      (bound.host || targetHost(previousUrl)) === targetHost(serviceUrl) &&
       (bound.protocol || previousUrl.protocol.slice(0, -1)) === serviceUrl.protocol.slice(0, -1)
     ) {
       return typedCredentialReference(bound.reference, resolved.revision, serviceUrl);
     }
   }
 
-  const nextReference = credentialReference(preparation.serviceId, preparation.expectedServiceRevision + 1);
+  const nextReference = credentialReference(
+    preparation.serviceId,
+    preparation.expectedServiceRevision + 1,
+    serviceUrl
+  );
   const alreadyReferenced = [...preparation.currentReferences, ...preparation.publishedReferences]
     .some((entry) => entry.reference === nextReference);
   const existing = secretEntries.get(nextReference);
@@ -437,6 +589,7 @@ async function prepareCredential({
   const payload = Object.freeze({ headers: Object.freeze({ authorization: desiredBearer(service) }) });
 
   if (existing && existing.status !== "active") fail("credential.custody_unavailable");
+  if (alreadyReferenced && !existing) fail("credential.reference_conflict");
   if (existing && alreadyReferenced) {
     try {
       const resolved = await resolveExistingCredential({
@@ -444,7 +597,8 @@ async function prepareCredential({
         secretRef: nextReference,
         revision: existing.revision,
         serviceId: preparation.serviceId,
-        host: serviceUrl.hostname,
+        origin: serviceUrl.origin,
+        host: targetHost(serviceUrl),
         protocol: serviceUrl.protocol.slice(0, -1),
         keyProvider
       });
@@ -464,7 +618,8 @@ async function prepareCredential({
         secretRef: nextReference,
         revision: existing.revision,
         serviceId: preparation.serviceId,
-        host: serviceUrl.hostname,
+        origin: serviceUrl.origin,
+        host: targetHost(serviceUrl),
         protocol: serviceUrl.protocol.slice(0, -1),
         keyProvider
       });
@@ -473,10 +628,7 @@ async function prepareCredential({
       }
     } catch (error) {
       if (errorCode(error) !== "local_secret_scope_denied") {
-        // Only an unbound preparation is eligible for replacement; referenced
-        // entries take the conflict path above and remain untouched.
-        const canRotate = existing.credentialConfigured && existing.revision > 0;
-        if (!canRotate) fail("credential.custody_unavailable");
+        fail("credential.custody_unavailable");
       }
     }
     try {
@@ -551,21 +703,6 @@ async function authoritativePreparation(
   return application.prepareConfigFileService(service.name, descriptor, LOADER_SUBJECT);
 }
 
-function descriptorUrl(descriptor: UpstreamConfigServicePreparation["currentDescriptor"]): URL | null {
-  if (!descriptor) return null;
-  const candidate = descriptor.serviceProtocol === "mcp"
-    ? (descriptor.mcp as Record<string, unknown> | undefined)?.url
-    : descriptor.baseUrl || (Array.isArray(descriptor.endpoints)
-      ? (descriptor.endpoints[0] as Record<string, unknown> | undefined)?.baseUrl
-      : undefined);
-  if (typeof candidate !== "string") return null;
-  try {
-    return new URL(candidate);
-  } catch {
-    return null;
-  }
-}
-
 function publicationMatches(
   preparation: UpstreamConfigServicePreparation,
   descriptor: Readonly<Record<string, unknown>>,
@@ -606,37 +743,105 @@ export function createUpstreamConfigFileLoader({
   let closePromise: Promise<void> | null = null;
   let lastAcceptedFingerprint: string | null = null;
   let lastError: SafeLoaderError | null = null;
-  const cleanupTargets = new Map<string, Readonly<{ serviceKey: string; descriptor: Readonly<Record<string, unknown>> }>>();
+  let secretEntries = new Map<string, SecretEntry>();
+  let secretEntriesLoaded = false;
+  const cleanupTargets = new Map<string, CleanupTarget>();
+  const pendingPreparationReferences = new Set<string>();
+
+  async function loadSecretEntries(refresh = false): Promise<void> {
+    if (secretEntriesLoaded && !refresh) return;
+    const entries = await listLocalSecretEntries({ dataDir: userDataPath });
+    secretEntries = new Map(entries.map((entry) => [entry.secretRef, entry]));
+    secretEntriesLoaded = true;
+  }
 
   async function prepareService(
     service: ConfigService,
-    descriptor: Readonly<Record<string, unknown>>,
-    secretEntries: Map<string, SecretEntry>
+    suppliedDescriptor: Readonly<Record<string, unknown>>
   ): Promise<Readonly<{ preparation: UpstreamConfigServicePreparation; references: readonly TypedReference[] }> | null> {
-    const preparation = await authoritativePreparation(application, service, descriptor);
+    const preparation = await authoritativePreparation(application, service, suppliedDescriptor);
     if (closed) return null;
-    cleanupTargets.set(service.name, Object.freeze({ serviceKey: service.name, descriptor }));
     const namespace = ownerSecretNamespace(preparation.serviceId);
-    const credential = await prepareCredential({
-      service,
-      preparation,
-      userDataPath,
-      keyProvider: localSecretKeyProvider,
-      secretEntries
-    });
+    const hasOwnedReferences = [...preparation.currentReferences, ...preparation.publishedReferences]
+      .some((reference) => reference.type === "credential" && isLoaderCredentialReference(reference.reference, namespace));
+    if (service.auth || hasOwnedReferences || cleanupTargets.has(service.name)) {
+      cleanupTargets.set(service.name, Object.freeze({
+        service: Object.freeze({ ...service, auth: null }),
+        descriptor: suppliedDescriptor,
+        hasInlineAuth: Boolean(service.auth)
+      }));
+    }
+
+    const declared = service.descriptor ? declaredReferences(service.descriptor) : null;
+    let generatedCredential: TypedReference | null = null;
+    let references: readonly TypedReference[];
+    if (service.descriptor) {
+      references = declared || preparation.currentReferences;
+    } else {
+      if (service.auth && service.url) {
+        pendingPreparationReferences.add(credentialReference(
+          preparation.serviceId,
+          preparation.expectedServiceRevision + 1,
+          new URL(service.url)
+        ));
+      }
+      generatedCredential = await prepareCredential({
+        service,
+        preparation,
+        userDataPath,
+        keyProvider: localSecretKeyProvider,
+        secretEntries
+      });
+      references = referencesForPublication(preparation.currentReferences, namespace, generatedCredential);
+    }
+    references = bindCredentialReferenceOrigins(
+      references,
+      suppliedDescriptor,
+      preparation.currentReferences,
+      preparation.currentDescriptor
+    );
+
+    const credentials = references.filter((reference) => reference.type === "credential");
+    if (credentials.length > 0) {
+      if (!localSecretKeyProvider) fail("credential.custody_unavailable");
+      try {
+        for (const reference of credentials) {
+          if (
+            generatedCredential &&
+            generatedCredential.reference === reference.reference &&
+            generatedCredential.revision === reference.revision
+          ) continue;
+          if (!reference.origin) fail("credential.custody_unavailable");
+          const target = bindingHostProtocol(reference);
+          await resolveLocalSecretPayload({
+            dataDir: userDataPath,
+            secretRef: reference.reference,
+            expectedRevision: reference.revision,
+            expectedScope: Object.freeze({
+              serviceId: preparation.serviceId,
+              requiredScopes: Object.freeze([...(reference.scopes || [])]),
+              origin: reference.origin,
+              host: target.host,
+              protocol: target.protocol
+            }),
+            keyProvider: localSecretKeyProvider
+          });
+        }
+      } catch {
+        fail("credential.custody_unavailable");
+      }
+    }
     if (closed) return null;
     return Object.freeze({
       preparation,
-      references: referencesForPublication(preparation.currentReferences, namespace, credential)
+      references: Object.freeze([...references].sort((left, right) => left.reference.localeCompare(right.reference)))
     });
   }
 
-  async function applyService(
-    service: ConfigService,
-    secretEntries: Map<string, SecretEntry>
-  ): Promise<boolean> {
-    const descriptor = descriptorFor(service);
-    const prepared = await prepareService(service, descriptor, secretEntries);
+  async function applyService(service: ConfigService): Promise<boolean> {
+    const suppliedDescriptor = descriptorFor(service);
+    const descriptor = descriptorWithoutReferences(suppliedDescriptor);
+    const prepared = await prepareService(service, suppliedDescriptor);
     if (!prepared || closed) return false;
     const { preparation, references } = prepared;
 
@@ -649,7 +854,7 @@ export function createUpstreamConfigFileLoader({
         if (closed) return false;
         let observed: UpstreamConfigServicePreparation;
         try {
-          observed = await authoritativePreparation(application, service, descriptor);
+          observed = await authoritativePreparation(application, service, suppliedDescriptor);
         } catch {
           throw error;
         }
@@ -657,23 +862,51 @@ export function createUpstreamConfigFileLoader({
       }
     }
 
-    const latest = await authoritativePreparation(application, service, descriptor);
+    const latest = await authoritativePreparation(application, service, suppliedDescriptor);
     if (!publicationMatches(latest, descriptor, references)) fail("publication.conflict");
-    cleanupTargets.set(service.name, Object.freeze({ serviceKey: service.name, descriptor }));
     return true;
   }
 
-  async function reconcileCleanup(secretEntries = new Map<string, SecretEntry>()): Promise<boolean> {
-    if (cleanupTargets.size === 0 || closed) return true;
-    let allClean = true;
-    const entries = secretEntries.size > 0
-      ? [...secretEntries.values()]
-      : await listLocalSecretEntries({ dataDir: userDataPath });
-    if (secretEntries.size === 0) {
-      for (const entry of entries) secretEntries.set(entry.secretRef, entry);
+  async function applyConfig(raw: string): Promise<number | null> {
+    pendingPreparationReferences.clear();
+    const services = parseConfig(raw);
+    reflectDesiredCleanupTargets(services);
+    if (services.some((service) => service.auth)) await loadSecretEntries(true);
+    let applied = 0;
+    for (const service of services) {
+      if (closed) return null;
+      if (!await applyService(service)) return null;
+      applied += 1;
     }
+    if (closed) return null;
+    return applied;
+  }
+
+  function reflectDesiredCleanupTargets(services: readonly ConfigService[]): void {
+    const servicesByName = new Map(services.map((service) => [service.name, service]));
+    for (const [serviceKey, target] of cleanupTargets) {
+      const desired = servicesByName.get(serviceKey);
+      if (!desired) {
+        if (target.hasInlineAuth) {
+          cleanupTargets.set(serviceKey, Object.freeze({ ...target, hasInlineAuth: false }));
+        }
+        continue;
+      }
+
+      cleanupTargets.set(serviceKey, Object.freeze({
+        service: Object.freeze({ ...desired, auth: null }),
+        descriptor: descriptorFor(desired),
+        hasInlineAuth: Boolean(desired.auth)
+      }));
+    }
+  }
+
+  async function reconcileCleanup(): Promise<boolean> {
+    if (cleanupTargets.size === 0 || closed) return true;
+    await loadSecretEntries();
+
     const entriesByNamespace = new Map<string, SecretEntry[]>();
-    for (const entry of entries) {
+    for (const entry of secretEntries.values()) {
       const namespace = namespaceForConfigSecret(entry.secretRef);
       if (!namespace) continue;
       const group = entriesByNamespace.get(namespace);
@@ -681,81 +914,78 @@ export function createUpstreamConfigFileLoader({
       else entriesByNamespace.set(namespace, [entry]);
     }
 
+    let allClean = true;
     for (const [serviceKey, target] of cleanupTargets) {
       if (closed) return false;
-      const preparation = await application.prepareConfigFileService(
-        target.serviceKey,
-        target.descriptor,
-        LOADER_SUBJECT
-      );
+      const preparation = await authoritativePreparation(application, target.service, target.descriptor);
       const namespace = ownerSecretNamespace(preparation.serviceId);
-      const candidateRefs = new Set(preparation.currentReferences.map((entry) => entry.reference));
+      const currentRefs = new Set(preparation.currentReferences.map((entry) => entry.reference));
       const publishedRefs = new Set(preparation.publishedReferences.map((entry) => entry.reference));
-      const pendingPreparationRef = credentialReference(
-        preparation.serviceId,
-        preparation.expectedServiceRevision + 1
-      );
+      const protectedRefs = new Set([...currentRefs, ...publishedRefs, ...pendingPreparationReferences]);
+      if (target.hasInlineAuth && target.service.url) {
+        protectedRefs.add(credentialReference(
+          preparation.serviceId,
+          preparation.expectedServiceRevision + 1,
+          new URL(target.service.url)
+        ));
+      }
+
       const ownedEntries = entriesByNamespace.get(namespace) || [];
-      const protectedRefs = new Set([
-        ...candidateRefs,
-        ...publishedRefs,
-        pendingPreparationRef
-      ]);
       let pending = false;
       for (const entry of ownedEntries) {
         if (entry.status !== "active") continue;
         if (protectedRefs.has(entry.secretRef)) {
-          if (publishedRefs.has(entry.secretRef) && !candidateRefs.has(entry.secretRef)) pending = true;
+          if (publishedRefs.has(entry.secretRef) && !currentRefs.has(entry.secretRef)) pending = true;
+          if (
+            pendingPreparationReferences.has(entry.secretRef) &&
+            !currentRefs.has(entry.secretRef) &&
+            !publishedRefs.has(entry.secretRef)
+          ) pending = true;
           continue;
         }
         if (closed) return false;
+
+        const latest = await authoritativePreparation(application, target.service, target.descriptor);
+        const latestCurrentRefs = new Set(latest.currentReferences.map((reference) => reference.reference));
+        const latestPublishedRefs = new Set(latest.publishedReferences.map((reference) => reference.reference));
+        const latestPendingReference = target.hasInlineAuth && target.service.url
+          ? credentialReference(
+            latest.serviceId,
+            latest.expectedServiceRevision + 1,
+            new URL(target.service.url)
+          )
+          : "";
+        if (
+          latestCurrentRefs.has(entry.secretRef) ||
+          latestPublishedRefs.has(entry.secretRef) ||
+          pendingPreparationReferences.has(entry.secretRef) ||
+          latestPendingReference === entry.secretRef
+        ) {
+          pending = true;
+          continue;
+        }
+
         try {
-          await revokeLocalSecret({
+          const revoked = await revokeLocalSecret({
             dataDir: userDataPath,
             secretRef: entry.secretRef,
             expectedRevision: entry.revision
           });
-          const revoked = Object.freeze({ ...entry, status: "revoked", credentialConfigured: false, revision: entry.revision + 1 }) as SecretEntry;
-          secretEntries.set(entry.secretRef, revoked);
+          secretEntries.set(entry.secretRef, revoked.secret as SecretEntry);
         } catch (error) {
-          if (errorCode(error) === "local_secret_revision_conflict") {
-            pending = true;
-            allClean = false;
+          const code = errorCode(error);
+          if (code === "local_secret_not_configured" || code === "local_secret_revoked") {
+            secretEntries.delete(entry.secretRef);
             continue;
           }
-          if (errorCode(error) === "local_secret_revoked") continue;
           pending = true;
           allClean = false;
+          if (code === "local_secret_revision_conflict") secretEntriesLoaded = false;
         }
       }
       if (!pending) cleanupTargets.delete(serviceKey);
     }
     return allClean;
-  }
-
-  async function applyConfig(raw: string): Promise<number | null> {
-    const services = parseConfig(raw);
-    if (services.some((service) => service.auth)) {
-      if (!localSecretKeyProvider) fail("credential.provider_required");
-      try {
-        await assertLocalSecretKeyReady({ dataDir: userDataPath, keyProvider: localSecretKeyProvider });
-      } catch {
-        fail("credential.custody_unavailable");
-      }
-    }
-
-    const secrets = services.some((service) => service.auth)
-      ? await listLocalSecretEntries({ dataDir: userDataPath })
-      : [];
-    const secretEntries = new Map(secrets.map((entry) => [entry.secretRef, entry]));
-    let applied = 0;
-    for (const service of services) {
-      if (closed) return null;
-      if (!await applyService(service, secretEntries)) return null;
-      applied += 1;
-    }
-    if (closed) return null;
-    return applied;
   }
 
   async function readConfig(): Promise<string | null> {
@@ -774,6 +1004,8 @@ export function createUpstreamConfigFileLoader({
       if (closed) return;
       if (raw === null) {
         lastAcceptedFingerprint = null;
+        pendingPreparationReferences.clear();
+        reflectDesiredCleanupTargets([]);
       } else {
         const currentFingerprint = fingerprint(raw);
         if (currentFingerprint !== lastAcceptedFingerprint) {
@@ -785,25 +1017,23 @@ export function createUpstreamConfigFileLoader({
       }
 
       if (closed) return;
-      const cleanupSucceeded = await reconcileCleanup();
-      if (closed) return;
-      if (cleanupSucceeded) lastError = null;
-      else {
-        lastError = Object.freeze({ code: "credential.custody_unavailable", message: SAFE_MESSAGES["credential.custody_unavailable"] });
+      if (!await reconcileCleanup()) {
+        lastError = Object.freeze({
+          code: "credential.custody_unavailable",
+          message: SAFE_MESSAGES["credential.custody_unavailable"]
+        });
         notify(onError, lastError, null);
+      } else {
+        lastError = null;
       }
     } catch (error) {
       if (closed) return;
       lastError = publicFailure(error);
       notify(onError, lastError, null);
       try {
-        // Reconcile only against the authoritative candidate and published
-        // reference sets. The next deterministic reference remains reusable
-        // for an unchanged retry; references made stale by concurrent commits
-        // can be revoked with their actual revision.
         await reconcileCleanup();
       } catch {
-        // Preserve the original safe failure; the next scan retries cleanup.
+        // Preserve the original safe failure; a later scan can retry cleanup.
       }
     }
   }
