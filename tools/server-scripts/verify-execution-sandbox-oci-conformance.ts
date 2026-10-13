@@ -34,7 +34,7 @@ const REPORT_PATH: any = "build/reports/execution-sandbox-oci-conformance.json";
 const VERIFIER: any = "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts";
 const REPO_ROOT: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 export const PINNED_OCI_CONFORMANCE_IMAGE: any =
-  "docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203";
+  "docker.io/library/node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20";
 const PINNED_IMAGE: any = PINNED_OCI_CONFORMANCE_IMAGE;
 const OCI_ENGINE_READY_TIMEOUT_MS: any = 120_000;
 const OCI_ENGINE_READY_INTERVAL_MS: any = 2_500;

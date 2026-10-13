@@ -110,7 +110,7 @@ function selfTestAggregate(): any {
     externalBoundary: true,
     executionEnvironment: {
       architecture: "x64",
-      nodeVersion: "24.16.0",
+      nodeVersion: "24.21.0",
       platform: "linux",
       runner: "ubuntu-24.04",
       runnerEnvironment: "github-hosted",

@@ -158,8 +158,12 @@ export async function runClientAdapter({
   const executed: any = await runWithInput(process.execPath, [installed.entrypoint, action], input, {
     allowFailure: true,
     cleanEnv: true,
+    maxOutputBytes: CLIENT_ADAPTER_MAX_MESSAGE_BYTES,
     timeoutMs: INSTALL_COMMAND_TIMEOUT_MS
   });
+  if (executed.outputLimitExceeded) {
+    throw adapterError("CLIENT_ADAPTER_RESPONSE_TOO_LARGE", "Client adapter response exceeded the protocol limit.");
+  }
   if (!executed.ok) {
     throw adapterError("CLIENT_ADAPTER_PROCESS_FAILED", redactSensitiveText(executed.stderr || "Client adapter process failed."));
   }
